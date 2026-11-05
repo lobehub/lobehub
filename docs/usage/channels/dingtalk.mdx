@@ -25,8 +25,10 @@ By connecting a DingTalk channel to your LobeHub agent, members of your organiza
 
 LobeHub supports two connection modes for DingTalk robots:
 
-- **WebSocket (Recommended)** — Uses DingTalk's **Stream mode** (Stream 模式): LobeHub keeps an outbound long-lived connection to DingTalk, so no public callback URL is required. This is DingTalk's recommended mode and the default for new bots.
+- **WebSocket** — Uses DingTalk's **Stream mode** (Stream 模式): LobeHub keeps an outbound long-lived connection to DingTalk, so no public callback URL is required. This is DingTalk's recommended mode and the default for new bots.
 - **Webhook** — Uses DingTalk's **HTTP callback** (HTTP 回调) mode: DingTalk posts each message to a LobeHub callback URL. Use this mode if your robot already has a message receiving address configured.
+
+> **LobeHub Cloud:** Only Webhook mode is available for DingTalk for now. Set the robot to **HTTP 回调**. Self-hosted deployments can use either mode, unless they run an external message gateway.
 
 > **Note:** The mode you select in LobeHub must match the **message receiving mode** (消息接收模式) set on the robot in the DingTalk developer console.
 
@@ -58,8 +60,8 @@ LobeHub supports two connection modes for DingTalk robots:
 
   On the robot configuration page, set **消息接收模式** (Message Receiving Mode):
 
-  - **Stream 模式** (Stream mode) — Recommended. Matches LobeHub's default **WebSocket** connection mode. No callback address is needed.
-  - **HTTP 回调** (HTTP callback) — Only if you plan to use LobeHub's **Webhook** mode. You will paste the LobeHub callback URL here after Step 2.
+  - **Stream 模式** (Stream mode) — Matches LobeHub's default **WebSocket** connection mode. No callback address is needed. Not available on LobeHub Cloud yet.
+  - **HTTP 回调** (HTTP callback) — For LobeHub's **Webhook** mode, including all robots on LobeHub Cloud. You will paste the LobeHub callback URL here after Step 2.
 
   Save the robot configuration.
 
@@ -96,7 +98,7 @@ LobeHub supports two connection modes for DingTalk robots:
 
   ### Save Configuration
 
-  Click **Save Configuration**. LobeHub checks the credentials against DingTalk's access token endpoint before saving:
+  Click **Save Configuration**. LobeHub saves the bot, then connects it by checking the credentials against DingTalk's access token endpoint:
 
   - An invalid Client ID or Client Secret is rejected with an error.
   - Permission, network, and rate-limit problems reported by DingTalk are shown so you can fix them and try again.
@@ -202,8 +204,9 @@ See the [Channels overview](/docs/usage/channels/overview#direct-message-policy)
 
 ## Troubleshooting
 
-- **Save rejected with invalid credentials:** Copy the Client ID and Client Secret again from **凭证与基础信息** without extra spaces.
-- **Save fails with a permission or network error:** Check that the app is not disabled, that any IP allowlist on the app allows LobeHub, and try again later if DingTalk reports rate limiting.
+- **Connection fails with invalid credentials:** Copy the Client ID and Client Secret again from **凭证与基础信息** without extra spaces.
+- **Connection fails with a permission or network error:** Check that the app is not disabled, that any IP allowlist on the app allows LobeHub, and try again later if DingTalk reports rate limiting.
+- **Connecting fails and asks you to switch the connection mode:** WebSocket mode is not available on this deployment. Switch to **Webhook** and set the robot to **HTTP 回调**.
 - **Bot not receiving messages (WebSocket mode):** Confirm the robot's message receiving mode is **Stream 模式** and the app version containing the robot has been published.
 - **Bot not receiving messages (Webhook mode):** Confirm the robot uses **HTTP 回调** and the message receiving address matches the **Webhook URL** shown in LobeHub.
 - **Robot cannot be found:** Check the app's visibility range (可见范围) includes the user, and that the app has been published.

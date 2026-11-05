@@ -164,10 +164,12 @@ export async function disconnectStaleConnections(
 
         // An enabled persistent-mode row that shows up in `actual` but not
         // in `desired` is one of two things, and only one of them is stale.
+        const definition = row && platformRegistry.getPlatform(row.platform);
         const livePersistentRow =
           row?.enabled &&
-          resolveConnectionMode(platformRegistry.getPlatform(row.platform), row.settings) !==
-            'webhook';
+          // Never desired, so "enabled during sync" can't explain it: it is stale.
+          !definition?.messageGatewayUnsupported &&
+          resolveConnectionMode(definition, row.settings) !== 'webhook';
 
         if (livePersistentRow) {
           const owner = resolveMessageGatewayHost(row.platform);

@@ -675,6 +675,15 @@ export interface PlatformDefinition {
   /** The unique identifier of the platform. */
   id: string;
 
+  /**
+   * The external message gateway has no handler for this platform, so it cannot
+   * hold the platform's persistent connection. With the gateway enabled, only
+   * webhook mode works and persistent modes are refused with an actionable error.
+   * In-process connections (gateway disabled) are unaffected. Remove the flag once
+   * the gateway ships a handler.
+   */
+  messageGatewayUnsupported?: boolean;
+
   /** The name of the platform. */
   name: string;
 

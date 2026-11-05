@@ -112,6 +112,7 @@ export {
   resolveBotConcurrency,
   resolveBotProviderConfig,
   resolveConnectionMode,
+  restrictPlatformToWebhook,
   withResolvedConcurrencySettings,
 } from './utils';
 export type { BotProviderFieldValues, FieldFormatViolation } from './validateFieldFormats';

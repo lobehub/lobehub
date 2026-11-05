@@ -11,6 +11,8 @@ export const dingtalk: PlatformDefinition = {
   name: 'DingTalk',
   connectionMode: DEFAULT_DINGTALK_CONNECTION_MODE,
   description: 'Connect a DingTalk robot',
+  // The message gateway has no Stream handler yet (protocol-spec §11.4).
+  messageGatewayUnsupported: true,
   documentation: {
     portalUrl: 'https://open-dev.dingtalk.com/',
     setupGuideUrl: channelDocUrl('dingtalk'),

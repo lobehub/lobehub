@@ -171,8 +171,17 @@ export const botPlatformsModule = () => ({
       ? settings.watchKeywords.filter((e: any) => typeof e?.keyword === 'string' && e.keyword)
       : [],
   platformRegistry: {
-    getPlatform: (platform: string) => ({ id: platform }),
-    listPlatforms: () => [{ id: 'discord' }, { id: 'telegram' }, { id: 'wechat' }],
+    getPlatform: (platform: string) => ({
+      id: platform,
+      messageGatewayUnsupported: platform === 'dingtalk',
+      name: platform,
+    }),
+    listPlatforms: () => [
+      { id: 'dingtalk', messageGatewayUnsupported: true, name: 'DingTalk' },
+      { id: 'discord' },
+      { id: 'telegram' },
+      { id: 'wechat' },
+    ],
   },
   resolveConnectionMode: mockResolveConnectionMode,
 });
