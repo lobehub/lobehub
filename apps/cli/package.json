@@ -47,6 +47,7 @@
     "@lobechat/tool-runtime": "workspace:*",
     "@lobechat/types": "workspace:*",
     "@lobechat/utils": "workspace:*",
+    "@modelcontextprotocol/client": "~2.4.0",
     "@trpc/client": "^11.18.0",
     "@types/node": "^24.13.2",
     "@types/semver": "^7.7.1",
