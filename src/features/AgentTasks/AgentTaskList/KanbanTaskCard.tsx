@@ -1,7 +1,6 @@
-// oxlint-disable-next-line stylex-migration/no-plain-css -- the card forces its cursor onto every descendant, including lobe-ui Block, Tag, Avatar and selector trigger internals that set their own pointer cursor; no slot or xstyle reaches all of them
-import './KanbanTaskCard.css';
-
 import { useDraggable } from '@dnd-kit/core';
+// oxlint-disable-next-line stylex-migration/no-emotion-styles -- cursor must reach every lobe-ui descendant of the card
+import { createStaticStyles } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
@@ -12,8 +11,6 @@ import { sx } from '@/styles/sx';
 import type { TaskItemRouteScope } from '../features/AgentTaskItem';
 import AgentTaskItem from '../features/AgentTaskItem';
 import TaskItemSkeleton from './TaskItemSkeleton';
-
-const CARD_SCOPE_CLASS = 'lobe-kanban-column-14c7298e-card';
 
 const styles = stylex.create({
   card: {
@@ -32,6 +29,18 @@ const styles = stylex.create({
   },
 });
 
+const fallback = createStaticStyles(({ css }) => ({
+  card: css`
+    & * {
+      cursor: default;
+    }
+
+    &:active * {
+      cursor: grabbing;
+    }
+  `,
+}));
+
 export const DraggableTaskCard = memo<{ routeScope?: TaskItemRouteScope; task: TaskListItem }>(
   ({ routeScope, task }) => {
     const { attributes, isDragging, listeners, setNodeRef } = useDraggable({
@@ -42,7 +51,7 @@ export const DraggableTaskCard = memo<{ routeScope?: TaskItemRouteScope; task: T
     return (
       <div
         ref={setNodeRef}
-        {...sx([styles.card, isDragging && styles.dragging], CARD_SCOPE_CLASS)}
+        {...sx([styles.card, isDragging && styles.dragging], fallback.card)}
         {...listeners}
         {...attributes}
       >
@@ -58,7 +67,7 @@ export const DraggableTaskCard = memo<{ routeScope?: TaskItemRouteScope; task: T
 );
 
 export const SkeletonTaskCard = () => (
-  <div {...sx([styles.card], CARD_SCOPE_CLASS)}>
+  <div {...sx([styles.card], fallback.card)}>
     <TaskItemSkeleton className={stylex.props(styles.surface).className} variant={'compact'} />
   </div>
 );

@@ -1,8 +1,5 @@
 'use client';
 
-// oxlint-disable-next-line stylex-migration/no-plain-css -- needs lobe-ui slot: Breadcrumb.list (the <ol> keeps flex-wrap: wrap and no prop reaches it)
-import '@/features/AgentTasks/shared/breadcrumb.css';
-
 import { Breadcrumb, Icon, Text } from '@lobehub/ui';
 import { ChevronRight } from 'lucide-react';
 import { memo } from 'react';

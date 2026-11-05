@@ -1,7 +1,14 @@
-// oxlint-disable-next-line stylex-migration/no-plain-css -- needs lobe-ui slot: Form.label (FormKit Field renders the <label> and its FormTitle with no classNames or styles entry for them)
-import './TasksGroupConfig.css';
-
-import { ActionIcon, Flexbox, Icon, Popover, Select, Switch, Tabs } from '@lobehub/ui';
+import {
+  ActionIcon,
+  // oxlint-disable-next-line stylex-migration/no-emotion-styles -- needs lobe-ui slot: Form.label
+  createStaticStyles,
+  Flexbox,
+  Icon,
+  Popover,
+  Select,
+  Switch,
+  Tabs,
+} from '@lobehub/ui';
 import { Form, type FormFieldProps, useForm } from '@lobehub/ui/form';
 import {
   ArrowDownWideNarrow,
@@ -39,6 +46,18 @@ interface TasksHeaderProps {
   pinnedOptions?: readonly TaskListPinnedOption[];
   setOptions: (updater: (prev: TaskListViewOptions) => TaskListViewOptions) => void;
 }
+
+const fallback = createStaticStyles(({ css, cssVar }) => {
+  return {
+    form: css`
+      label,
+      label * {
+        font-size: 13px !important;
+        color: ${cssVar.colorTextSecondary} !important;
+      }
+    `,
+  };
+});
 
 const TasksGroupConfig = memo<TasksHeaderProps>(({ options, pinnedOptions, setOptions }) => {
   const [isViewConfigOpen, setIsViewConfigOpen] = useState(false);
@@ -260,7 +279,7 @@ const TasksGroupConfig = memo<TasksHeaderProps>(({ options, pinnedOptions, setOp
         }
       />
       <Form
-        className={'lobe-tasks-group-config-4e0dc256-form'}
+        className={fallback.form}
         form={form}
         items={viewMode === 'kanban' ? boardFormItems : formItems}
         itemsType={'flat'}

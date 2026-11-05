@@ -1,9 +1,0 @@
-/* The card is a drag handle, so every descendant shows the card's cursor
-   instead of the pointer its own component sets. */
-.lobe-kanban-column-14c7298e-card * {
-  cursor: default;
-}
-
-.lobe-kanban-column-14c7298e-card:active * {
-  cursor: grabbing;
-}

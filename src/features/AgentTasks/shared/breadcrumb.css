@@ -1,7 +1,0 @@
-/* lobe-ui Breadcrumb renders its <ol> with flex-wrap: wrap and exposes no
-   slot for it, so keeping the trail on one line still needs this rule. */
-.lobe-breadcrumb-30cde0ed-breadcrumb ol {
-  flex-wrap: nowrap;
-  align-items: center;
-  min-width: 0;
-}

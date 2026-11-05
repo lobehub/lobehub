@@ -1,7 +1,7 @@
+// oxlint-disable-next-line stylex-migration/no-emotion-styles -- needs lobe-ui slot: Breadcrumb.list
+import { createStaticStyles, cx } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-
-const BREADCRUMB_SCOPE_CLASS = 'lobe-breadcrumb-30cde0ed-breadcrumb';
 
 export const breadcrumbStyles = stylex.create({
   crumb: {
@@ -32,14 +32,24 @@ export const breadcrumbStyles = stylex.create({
   },
 });
 
+const fallback = createStaticStyles(({ css }) => ({
+  breadcrumb: css`
+    ol {
+      flex-wrap: nowrap;
+      align-items: center;
+      min-width: 0;
+    }
+  `,
+}));
+
 export const breadcrumbClassNames = {
   item: stylex.props(breadcrumbStyles.item).className,
   separator: stylex.props(breadcrumbStyles.separator).className,
 };
 
-export const breadcrumbRootClassName = [
-  BREADCRUMB_SCOPE_CLASS,
+export const breadcrumbRootClassName = cx(
   stylex.props(breadcrumbStyles.root).className,
-].join(' ');
+  fallback.breadcrumb,
+);
 
 export const breadcrumbCrumbClassName = stylex.props(breadcrumbStyles.crumb).className;

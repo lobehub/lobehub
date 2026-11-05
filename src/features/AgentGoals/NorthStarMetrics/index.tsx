@@ -1,10 +1,17 @@
 'use client';
 
-// oxlint-disable-next-line stylex-migration/no-plain-css -- the dashed target line styles recharts' own <path name="target"> elements inside SparkAreaChart, which has no per-series stroke or fill prop
-import './index.css';
-
 import { SparkAreaChart } from '@lobehub/charts';
-import { Button, Flexbox, Icon, Skeleton, Text, Tooltip, useTheme } from '@lobehub/ui';
+import {
+  Button,
+  // oxlint-disable-next-line stylex-migration/no-emotion-styles -- recharts series paths inside SparkAreaChart take no className
+  createStaticStyles,
+  Flexbox,
+  Icon,
+  Skeleton,
+  Text,
+  Tooltip,
+  useTheme,
+} from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
@@ -56,6 +63,18 @@ const styles = stylex.create({
   stale: { color: cssVar.colorWarning },
 });
 
+const fallback = createStaticStyles(({ css }) => ({
+  spark: css`
+    & path[name='target'] {
+      stroke-dasharray: 3 3;
+    }
+
+    & path.recharts-area-area[name='target'] {
+      fill: none;
+    }
+  `,
+}));
+
 const MetricCard = memo<{ canEdit: boolean; card: NorthStarCard; goalId: string }>(
   ({ canEdit, card, goalId }) => {
     const { t } = useTranslation('chat');
@@ -100,7 +119,7 @@ const MetricCard = memo<{ canEdit: boolean; card: NorthStarCard; goalId: string 
             <SparkAreaChart
               autoMinValue
               categories={['value', 'target']}
-              className={'lobe-north-star-metrics-94e4dc78-spark'}
+              className={fallback.spark}
               // The chart ids its SVG gradient by the color string, so it needs a
               // literal theme color: a `var(--…)` id breaks the `url(#…)` fill.
               colors={[card.met ? theme.colorSuccess : theme.colorInfo, theme.colorTextQuaternary]}

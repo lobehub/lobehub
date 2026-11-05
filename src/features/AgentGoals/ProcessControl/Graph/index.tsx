@@ -1,8 +1,6 @@
 'use client';
 
 import '@xyflow/react/dist/style.css';
-// oxlint-disable-next-line stylex-migration/no-plain-css -- styles @xyflow/react's own DOM (edge paths, edge labels, controls, attribution) and the edge <g> it renders, including html[data-theme] dark overrides; React Flow exposes no class or style prop for those parts
-import './canvas.css';
 
 import type { GoalGraphEdge } from '@lobechat/types';
 import { experimentMembers } from '@lobechat/utils/goalGraph';

@@ -1,7 +1,0 @@
-/* Targets the <label> elements the antd-backed Form renders, which StyleX
-   cannot reach. */
-.lobe-tasks-group-config-4e0dc256-form label,
-.lobe-tasks-group-config-4e0dc256-form label * {
-  font-size: 13px !important;
-  color: var(--lobe-color-text-secondary) !important;
-}
