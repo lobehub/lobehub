@@ -741,6 +741,49 @@ export class DocumentReviewModel {
     const workspaceId = this.requireWorkspaceId();
     return this.db.transaction(async (trx) => {
       const tx = trx as LobeChatDatabase;
+
+      // Serialize the revision read with body writes. `DocumentService.updateDocument`
+      // locks the document row, commits the body, then drops checked results to
+      // `needs_recheck`, so this path takes the same order: document row first,
+      // result row second. An unlocked read of `documents.updated_at` can see the
+      // previous committed version while an autosave still holds its uncommitted
+      // body update; the verdict would then commit as `passed` for the old body and
+      // the autosave would skip the now-`passed` row. Waiting on the document lock
+      // makes the autosave either commit first (caught by `isVerdictStale` below) or
+      // start after this verdict.
+      if (params.event === 'check' && params.expectedRevisions?.documentUpdatedAt !== undefined) {
+        const [target] = await tx
+          .select({ sessionId: documentReviewCheckResults.sessionId })
+          .from(documentReviewCheckResults)
+          .where(
+            and(
+              eq(documentReviewCheckResults.id, id),
+              eq(documentReviewCheckResults.workspaceId, workspaceId),
+            ),
+          )
+          .limit(1);
+        const [parentSession] = target
+          ? await tx
+              .select({ documentId: documentReviewSessions.documentId })
+              .from(documentReviewSessions)
+              .where(eq(documentReviewSessions.id, target.sessionId))
+              .limit(1)
+          : [];
+        if (parentSession) {
+          await tx
+            .select({ id: documents.id })
+            .from(documents)
+            .where(
+              and(
+                eq(documents.id, parentSession.documentId),
+                eq(documents.workspaceId, workspaceId),
+              ),
+            )
+            .limit(1)
+            .for('update');
+        }
+      }
+
       const [current] = await tx
         .select()
         .from(documentReviewCheckResults)

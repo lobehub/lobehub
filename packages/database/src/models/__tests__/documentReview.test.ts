@@ -387,6 +387,55 @@ describe('DocumentReviewModel', () => {
       expect((await model.findCheckResultById(id))?.status).toBe('needs_recheck');
     });
 
+    it('waits for an uncommitted body write before committing a verdict', async () => {
+      const { checks } = await setupChecklist();
+      const id = checks[0].id;
+      await model.transitionCheck(id, { event: 'check', outcome: 'failed' });
+
+      const [document] = await serverDB
+        .select({ updatedAt: documents.updatedAt })
+        .from(documents)
+        .where(eq(documents.id, documentId));
+      const expectedRevisions = { documentUpdatedAt: document.updatedAt };
+
+      // Park an autosave the way `DocumentService.updateDocument` holds it: the
+      // document row is written but not committed. While that write is in flight
+      // the committed revision still matches `expectedRevisions`, so a verdict
+      // committed without the document lock would land as `passed` for the body
+      // the save is replacing. Holding the same lock forces the verdict to see the
+      // committed revision or start after it.
+      let releaseSave = () => {};
+      const released = new Promise<void>((resolve) => {
+        releaseSave = resolve;
+      });
+      let signalSaved = () => {};
+      const saved = new Promise<void>((resolve) => {
+        signalSaved = resolve;
+      });
+
+      const save = serverDB.transaction(async (trx) => {
+        await trx
+          .update(documents)
+          .set({ updatedAt: new Date(document.updatedAt.getTime() + 1000) })
+          .where(eq(documents.id, documentId));
+        signalSaved();
+        await released;
+      });
+      await saved;
+
+      const verdict = model.transitionCheck(id, {
+        event: 'check',
+        expectedRevisions,
+        outcome: 'passed',
+      });
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      releaseSave();
+      await save;
+
+      expect((await verdict)?.status).toBe('needs_recheck');
+      expect((await model.findCheckResultById(id))?.status).toBe('needs_recheck');
+    });
+
     it('switching the session rule set discards stale results', async () => {
       const { session } = await setupChecklist();
       const other = await model.createRuleSet({ documentId, rules: RULES, title: 'Other' });
@@ -501,6 +550,54 @@ describe('DocumentReviewModel', () => {
       await expect(model.createRuleSet({ documentId, title: 'x' })).rejects.toThrow(
         DOCUMENT_REVIEW_DOCUMENT_NOT_FOUND,
       );
+      expect(
+        await serverDB
+          .select({ id: documentReviewSessions.id })
+          .from(documentReviewSessions)
+          .where(eq(documentReviewSessions.documentId, documentId)),
+      ).toEqual([]);
+    });
+
+    it('waits for an uncommitted transfer before deciding the session workspace', async () => {
+      // `transferTo` holds the document row until it commits. A caller that opens
+      // a session while that row is locked has to wait and then fail the workspace
+      // comparison; reading `workspace_id` before the lock would insert a session
+      // into the workspace the document has just left. The transfer is parked on a
+      // gate here so the create attempt is guaranteed to arrive mid-flight — the
+      // sequenced test above passes even without the row lock.
+      let releaseTransfer = () => {};
+      const released = new Promise<void>((resolve) => {
+        releaseTransfer = resolve;
+      });
+      let signalLocked = () => {};
+      const locked = new Promise<void>((resolve) => {
+        signalLocked = resolve;
+      });
+
+      const transfer = serverDB.transaction(async (trx) => {
+        await trx
+          .update(documents)
+          .set({ workspaceId: otherWorkspaceId })
+          .where(eq(documents.id, documentId));
+        signalLocked();
+        await released;
+      });
+      await locked;
+
+      // Observe the outcome from the start: a rejection raised as the transfer
+      // commits must not surface as an unhandled rejection.
+      const created = model.createSession({ documentId }).then(
+        () => null,
+        (error: Error) => error,
+      );
+
+      // Give the create attempt time to reach the row lock before the transfer
+      // commits. Without the lock it resolves here and the assertion below fails.
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      releaseTransfer();
+      await transfer;
+
+      expect((await created)?.message).toBe(DOCUMENT_REVIEW_DOCUMENT_NOT_FOUND);
       expect(
         await serverDB
           .select({ id: documentReviewSessions.id })
