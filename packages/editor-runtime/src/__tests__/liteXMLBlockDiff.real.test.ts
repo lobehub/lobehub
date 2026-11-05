@@ -128,6 +128,33 @@ describe('diffLiteXMLBlocks against a real editor', () => {
   );
 
   it.each([DiffAction.Accept, DiffAction.Reject])(
+    'reviews a paragraph rewritten without its id as one modification, action %s',
+    async (action) => {
+      const page = await setup(
+        'intro\n\n所以这块我们到现在也还没想清楚。至少我觉得，资源的使用权限得分开看。\n\ntail',
+      );
+      const before = page.markdownOf();
+      const rewritten =
+        'intro\n\n所以这块我们到现在也还没想清楚。表面上是在分资源的使用权限。\n\n我隐约觉得，这碰到了最根本的关系。\n\ntail';
+      const { result } = await page.apply((xml) =>
+        xml.replace(
+          /<p id="[^"]+">(?:(?!<\/p>)[\s\S])*至少我觉得[\s\S]*?<\/p>/,
+          '<p>所以这块我们到现在也还没想清楚。表面上是在分资源的使用权限。</p><p>我隐约觉得，这碰到了最根本的关系。</p>',
+        ),
+      );
+
+      expect(result.successCount).toBe(result.totalCount);
+      const json = JSON.stringify(page.json());
+      expect(json).toContain('"diffType":"modify"');
+      expect(json).not.toContain('"diffType":"remove"');
+      expect(page.markdownOf()).toBe(rewritten);
+      await page.resolve(action);
+      expect(JSON.stringify(page.json())).not.toContain('"type":"diff"');
+      expect(page.markdownOf()).toBe(action === DiffAction.Accept ? rewritten : before);
+    },
+  );
+
+  it.each([DiffAction.Accept, DiffAction.Reject])(
     'preserves nested list structure when resolving action %s',
     async (action) => {
       const page = await setup('- parent\n    - nested\n- tail');

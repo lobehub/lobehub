@@ -125,11 +125,15 @@ export class ChannelService {
     return { agentId: input.agentId, config, description: input.description, name: input.name };
   }
 
+  /** A group starts with Agents, workspace people, both, or only its creator. */
   create = async (input: {
     agents: ChannelAgentSelection[];
     projectId?: string;
     title: string;
+    userIds?: string[];
   }) => {
+    // The creator joins as owner anyway; naming them is not an invitation to notify about.
+    const userIds = (input.userIds ?? []).filter((id) => id !== this.userId);
     // The project must be readable in this scope, the same visibility as the project list.
     if (input.projectId && !(await this.projectModel.findById(input.projectId)))
       throw new ChannelError('NOT_FOUND', 'Project not found');
@@ -137,7 +141,15 @@ export class ChannelService {
     const agents = await pMap(input.agents, (agent) => this.resolveAgent(agent), {
       concurrency: 5,
     });
-    return this.repository.create({ agents, projectId: input.projectId, title: input.title });
+    const access = await this.repository.create({
+      agents,
+      projectId: input.projectId,
+      title: input.title,
+      userIds,
+    });
+    // Invited people see the new Channel without waiting for their next poll.
+    if (userIds.length) await this.changed(access.channel.id);
+    return access;
   };
 
   /**

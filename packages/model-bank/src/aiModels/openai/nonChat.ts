@@ -36,6 +36,7 @@ export const openaiEmbeddingModels: AIEmbeddingModelCard[] = [
       'An efficient, cost-effective next-generation embedding model for retrieval and RAG scenarios.',
     displayName: 'Text Embedding 3 Small',
     id: 'text-embedding-3-small',
+    isOfficial: true,
     maxDimension: 1536,
     pricing: {
       currency: 'USD',
@@ -118,6 +119,7 @@ export const openaiASRModels: AIASRModelCard[] = [
       'GPT-4o Transcribe is a speech-to-text model that transcribes audio with GPT-4o, improving word error rate, language ID, and accuracy over the original Whisper model.',
     displayName: 'GPT-4o Transcribe',
     id: 'gpt-4o-transcribe',
+    isOfficial: true,
     maxOutput: 2000,
     pricing: {
       units: [
@@ -135,6 +137,7 @@ export const openaiASRModels: AIASRModelCard[] = [
     displayName: 'GPT-4o Mini Transcribe',
     enabled: true,
     id: 'gpt-4o-mini-transcribe',
+    isOfficial: true,
     maxOutput: 2000,
     pricing: {
       units: [
@@ -155,6 +158,7 @@ export const openaiImageModels: AIImageModelCard[] = [
     displayName: 'GPT Image 2.5 Sunburst',
     enabled: true,
     id: 'gpt-image-2.5-sunburst',
+    isOfficial: true,
     parameters: gptImage2Schema,
     pricing: {
       // Token rates match GPT Image 2; OpenAI publishes no per-image estimate for GPT Image 2.5,
@@ -177,6 +181,7 @@ export const openaiImageModels: AIImageModelCard[] = [
     displayName: 'GPT Image 2.5 Flare',
     enabled: true,
     id: 'gpt-image-2.5-flare',
+    isOfficial: true,
     parameters: gptImage2Schema,
     pricing: {
       // Token rates match GPT Image 2; OpenAI publishes no per-image estimate for GPT Image 2.5,
@@ -199,6 +204,7 @@ export const openaiImageModels: AIImageModelCard[] = [
     displayName: 'GPT Image 2',
     enabled: true,
     id: 'gpt-image-2',
+    isOfficial: true,
     parameters: gptImage2Schema,
     pricing: {
       // Medium quality at 1024x1024: ~1767 output tokens * $30/M = $0.053 per image.
@@ -220,6 +226,7 @@ export const openaiImageModels: AIImageModelCard[] = [
       'An enhanced GPT Image 1 model with 4× faster generation, more precise editing, and improved text rendering.',
     displayName: 'GPT Image 1.5',
     id: 'gpt-image-1.5',
+    isOfficial: true,
     parameters: gptImage1Schema,
     pricing: {
       approximatePricePerImage: 0.034,
@@ -239,6 +246,7 @@ export const openaiImageModels: AIImageModelCard[] = [
     description: 'ChatGPT native multimodal image generation model.',
     displayName: 'GPT Image 1',
     id: 'gpt-image-1',
+    isOfficial: true,
     parameters: gptImage1Schema,
     pricing: {
       approximatePricePerImage: 0.042,

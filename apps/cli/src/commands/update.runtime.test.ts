@@ -71,7 +71,7 @@ describe('update with a running connector', () => {
       .join('\n');
     expect(output).toContain('0.0.65');
     expect(output).toContain('0.0.71');
-    expect(output).toContain('sudo systemctl --no-block restart lobehub-connect.service');
+    expect(output).toContain('lh connect restart --manager system');
     expect(output).toContain('tasks');
     expect(spawn).not.toHaveBeenCalled();
   });
@@ -86,7 +86,7 @@ describe('update with a running connector', () => {
       .flat()
       .join('\n');
     expect(output).toContain('unknown');
-    expect(output).toContain('sudo systemctl --no-block restart lobehub-connect.service');
+    expect(output).toContain('lh connect restart --manager system');
     expect(spawn).not.toHaveBeenCalled();
   });
 
@@ -123,9 +123,10 @@ describe('update with a running connector', () => {
     const output = [...vi.mocked(log.info).mock.calls, ...vi.mocked(log.warn).mock.calls]
       .flat()
       .join('\n');
-    expect(output).toContain('Successfully installed CLI 0.0.72');
+    expect(output).toContain('CLI installation updated: 0.0.71 → 0.0.72');
+    expect(output).toContain('Running connectors were not restarted');
     expect(output).toContain('running 0.0.65; installed CLI is 0.0.72');
-    expect(output).toContain('sudo systemctl --no-block restart lobehub-connect.service');
+    expect(output).toContain('lh connect restart --manager system');
     expect(spawn).toHaveBeenCalledTimes(1);
     expect(spawn.mock.calls[0].slice(0, 2)).toEqual([
       'npm',

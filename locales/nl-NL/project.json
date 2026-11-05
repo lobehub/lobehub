@@ -116,8 +116,6 @@
   "knowledgeBases.searchPlaceholder": "Zoek bibliotheken",
   "knowledgeBases.updateFailed": "Kon de bibliotheek niet bijwerken",
   "list.deleteAction": "Project verwijderen",
-  "list.deleteConfirmDescription": "Verwijder “{{name}}”? De projecttaken, doelen, onderwerpen en koppelingen worden permanent verwijderd.",
-  "list.deleteConfirmTitle": "Project verwijderen?",
   "list.deleteError": "Het project kon niet worden verwijderd.",
   "list.deleteSuccess": "“{{name}}” verwijderd",
   "list.emptyDescription": "Maak je eerste project om doelen, taken en middelen te organiseren.",

@@ -91,6 +91,7 @@ export type {
   StreamChunkData,
   StreamChunkType,
   StreamStartData,
+  StreamStartParentMessage,
   SubAgentProgressData,
   TerminalSessionStatus,
   ToolEndData,

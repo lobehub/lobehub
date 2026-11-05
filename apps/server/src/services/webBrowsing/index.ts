@@ -132,6 +132,7 @@ export class WebBrowsingDocumentService {
             editorData: snapshot.editorData,
             saveSource: 'llm_call',
             title,
+            writeSource: 'system',
           },
           { userId: this.userId, workspaceId: this.workspaceId },
         );

@@ -2,7 +2,9 @@
 
 import { DEFAULT_INBOX_AVATAR, DEFAULT_INBOX_TITLE } from '@lobechat/const';
 import { agentDisplayName } from '@lobechat/types';
-import { Avatar, createStaticStyles, Spin } from '@lobehub/ui';
+import { Avatar, Spin } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { type CSSProperties } from 'react';
 import { memo } from 'react';
 
@@ -17,32 +19,27 @@ import { operationSelectors } from '@/store/chat/selectors';
 
 import { usePreservedAgentUrl } from './usePreservedAgentUrl';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  runningBadge: css`
-    pointer-events: none;
-
-    position: absolute;
-    inset-block-end: -3px;
-    inset-inline-end: -3px;
-
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-
-    width: 14px;
-    height: 14px;
-    border: 1.5px solid ${cssVar.colorBgContainer};
-    border-radius: 999px;
-
-    color: ${cssVar.colorWarning};
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  wrapper: css`
-    position: relative;
-    display: inline-flex;
-  `,
-}));
+const styles = stylex.create({
+  runningBadge: {
+    pointerEvents: 'none',
+    position: 'absolute',
+    insetBlockEnd: '-3px',
+    insetInlineEnd: '-3px',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '14px',
+    height: '14px',
+    borderWidth: '1.5px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBgContainer,
+    borderRadius: '999px',
+    color: cssVar.colorWarning,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  wrapper: { position: 'relative', display: 'inline-flex' },
+});
 
 interface InboxItemProps {
   className?: string;
@@ -77,9 +74,9 @@ const InboxItem = memo<InboxItemProps>(({ className, style }) => {
         title={inboxAgentTitle}
         icon={
           isLoading ? (
-            <span className={styles.wrapper}>
+            <span {...stylex.props(styles.wrapper)}>
               {avatarNode}
-              <span className={styles.runningBadge}>
+              <span {...stylex.props(styles.runningBadge)}>
                 <Spin size={9} style={{ color: 'inherit' }} />
               </span>
             </span>

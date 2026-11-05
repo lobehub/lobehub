@@ -78,6 +78,12 @@ vi.mock('./EditorCanvas', () => ({
   default: () => <div data-testid="editor-canvas" />,
 }));
 
+vi.mock('@/features/EditorCanvas/CharLimitBanner', () => ({
+  default: ({ documentId }: { documentId?: string }) => (
+    <div data-document-id={documentId} data-testid="char-limit-banner" />
+  ),
+}));
+
 vi.mock('./TodoList', () => ({
   default: () => <div data-testid="todo-list" />,
 }));
@@ -165,6 +171,7 @@ describe('DocumentBody', () => {
     /** @example Neither editor mounts. */
     expect(screen.queryByTestId('highlight-editor')).toBeNull();
     expect(screen.queryByTestId('editor-canvas')).toBeNull();
+    expect(screen.queryByTestId('char-limit-banner')).toBeNull();
   });
 
   beforeEach(() => {
@@ -196,6 +203,7 @@ describe('DocumentBody', () => {
 
     expect(screen.getByTestId('highlight-editor')).toHaveValue('raw log content');
     expect(screen.queryByTestId('editor-canvas')).toBeNull();
+    expect(screen.getByTestId('char-limit-banner')).toBeDefined();
   });
 
   it('renders EditorCanvas for markdown files', () => {
@@ -205,6 +213,7 @@ describe('DocumentBody', () => {
 
     expect(screen.getByTestId('editor-canvas')).toBeDefined();
     expect(screen.queryByTestId('highlight-editor')).toBeNull();
+    expect(screen.getByTestId('char-limit-banner').dataset.documentId).toBe('document-1');
   });
 
   it('renders an HTML page in a sandboxed frame without mounting either editor', () => {
@@ -221,6 +230,7 @@ describe('DocumentBody', () => {
     expect(frame.getAttribute('srcdoc')).toContain('<h1>Goal report</h1>');
     expect(frame.getAttribute('sandbox')).not.toContain('allow-same-origin');
     expect(screen.queryByTestId('editor-canvas')).toBeNull();
+    expect(screen.queryByTestId('char-limit-banner')).toBeNull();
     expect(screen.queryByTestId('highlight-editor')).toBeNull();
   });
 

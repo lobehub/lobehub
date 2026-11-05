@@ -97,7 +97,6 @@
   "moveToTrash": "Mover canal a la papelera",
   "moveToTrashConfirm": "¿Mover “{{title}}” a la papelera? Las respuestas se detendrán. Puedes restaurar el canal y su historial desde la papelera. Los agentes y archivos se conservarán.",
   "moveToTrashSuccess": "Canal movido a la papelera",
-  "nameAutoPlaceholder": "Déjalo en blanco para nombrarlo según sus miembros",
   "nameOptional": "Nombre del canal (opcional)",
   "noDevice": "Sin dispositivo",
   "noDevices": "No hay dispositivos conectados. Conecta uno y luego elígelo aquí.",

@@ -42,6 +42,7 @@ import {
   PR_STATE_VISUAL,
 } from '@/features/AgentSidebar/Topic/List/Item/metaCardData';
 import { useRepoType } from '@/features/ChatInput/ControlBar/useRepoType';
+import { useImLayout } from '@/features/NavRail/useImLayout';
 import { getPortalViewWidth } from '@/features/Portal/portalWidth';
 import TopicCommentsSidebar from '@/features/Portal/TopicComments/Sidebar';
 import RightPanel from '@/features/RightPanel';
@@ -122,6 +123,19 @@ const styles = stylex.create({
     backgroundImage: 'none',
     boxShadow: cssVar.boxShadowTertiary,
   },
+  overviewPanelDocked: {
+    height: '100%',
+    maxHeight: 'none',
+    margin: '0',
+    borderWidth: 'medium',
+    borderStyle: 'none',
+    borderColor: 'currentcolor',
+    borderInlineStartWidth: '1px',
+    borderInlineStartStyle: 'solid',
+    borderInlineStartColor: cssVar.colorBorderSecondary,
+    borderRadius: '0',
+    boxShadow: 'none',
+  },
   overviewSlot: {
     overflow: 'hidden',
     display: 'flex',
@@ -165,6 +179,7 @@ interface AgentWorkingSidebarProps {
 
 const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) => {
   const { t } = useTranslation(['chat', 'setting']);
+  const imLayout = useImLayout();
   // Keep the panel frame + tabs on the navigation commit; the pane contents
   // mount in a deferred follow-up pass behind a skeleton.
   const contentReady = useDeferredMount();
@@ -899,13 +914,15 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
     toggleTerminalPanel,
   ]);
 
-  const overviewWidth = Math.min(OVERVIEW_PANEL_WIDTH, widthBudget - 32);
+  // The floating card keeps a 16px margin on each side; the docked panel has none.
+  const overviewGutter = imLayout ? 0 : 32;
+  const overviewWidth = Math.min(OVERVIEW_PANEL_WIDTH, widthBudget - overviewGutter);
   const overviewPanel = (
     <OverviewSlot>
       <AnimatePresence initial={false}>
         {showWorkingOverview && overviewFits && (
           <m.div
-            animate={{ width: overviewWidth + 32 }}
+            animate={{ width: overviewWidth + overviewGutter }}
             {...stylex.props(styles.overviewSlot)}
             exit={{ transition: overviewExitTransition, width: 0 }}
             initial={{ width: 0 }}
@@ -913,12 +930,14 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
           >
             <m.div
               animate={{ opacity: 1, x: 0 }}
-              className={stylex.props(styles.overviewPanel).className}
               exit={{ opacity: 0, transition: overviewExitTransition, x: 12 }}
               initial={{ opacity: 0, x: 12 }}
               role={'complementary'}
               style={{ width: overviewWidth }}
               transition={OVERVIEW_TRANSITION}
+              className={
+                stylex.props(styles.overviewPanel, imLayout && styles.overviewPanelDocked).className
+              }
             >
               <Flexbox className={stylex.props(styles.overviewBody).className}>
                 <Overview

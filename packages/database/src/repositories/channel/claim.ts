@@ -15,6 +15,7 @@ import {
 import type { Transaction } from '../../type';
 import { createNanoId } from '../../utils/idGenerator';
 import { notTrashed } from '../../utils/softDelete';
+import { uniqueViolationConstraint } from '../../utils/uniqueViolation';
 import { resolveExecutionConfig } from './agent';
 import { findThread } from './delivery';
 import { buildManifest } from './manifest';
@@ -41,16 +42,6 @@ export interface ChannelClaim {
 }
 
 const DIRECTORY_LOCK = 'channel_jobs_active_directory_unique';
-
-const uniqueViolation = (error: unknown): string | undefined => {
-  const pgError = error as {
-    cause?: { code?: string; constraint?: string };
-    code?: string;
-    constraint?: string;
-  };
-  const code = pgError.cause?.code ?? pgError.code;
-  return code === '23505' ? (pgError.cause?.constraint ?? pgError.constraint ?? '') : undefined;
-};
 
 /** Records why a queued job cannot start; clients read the code, never the text. */
 const block = async (
@@ -354,7 +345,7 @@ export const claimJob = async (
       return { job: updated, topic };
     });
   } catch (error) {
-    const constraint = uniqueViolation(error);
+    const constraint = uniqueViolationConstraint(error);
     if (constraint === undefined) throw error;
     if (constraint === DIRECTORY_LOCK)
       await block(tx, job, 'directory_locked', 'Another run is using this directory');
