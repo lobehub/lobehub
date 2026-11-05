@@ -9,6 +9,7 @@ import {
   partlyForwarded,
 } from './forwarded';
 import type { InnerNode } from './inner';
+import { keptEmotionRules } from './kept';
 import { bindKnobs, parseExpression } from './knobs';
 import { movedStylesheets } from './moved';
 import { neutralOmitted } from './neutral';
@@ -111,6 +112,17 @@ const conditionKnobs = (chains: Record<Side, StyleElement[]>, properties: SidePr
     : undefined;
 };
 
+const alignedProofs = <T extends { head: string }>(
+  proofs: Map<string, T>,
+  chains: Record<Side, StyleElement[]>,
+) =>
+  chains.base.length === chains.head.length
+    ? chains.base.flatMap((item, index) => {
+        const proof = proofs.get(item.id);
+        return proof && proof.head === chains.head[index].id ? [{ index, proof }] : [];
+      })
+    : [];
+
 const groupByOwner = (elements: StyleElement[]) => {
   const owners = new Map<string, StyleElement[]>();
   for (const element of elements)
@@ -171,6 +183,7 @@ export const planFile = (
     ),
   );
   const moved = movedStylesheets(base, head, pairs);
+  const kept = keptEmotionRules(base, head, pairs);
 
   const cases = pairs.map(([left, right]): PlanCase => {
     const chains = { base: chainOf(left, byId.base), head: chainOf(right, byId.head) };
@@ -180,15 +193,10 @@ export const planFile = (
     const forward = forwardOf.get(right);
     const param = paramOf.get(right);
     const resolved = new Set(forward ? [left, right] : []);
-    const movedAt =
-      chains.base.length === chains.head.length
-        ? chains.base.flatMap((item, index) => {
-            const proof = moved.get(item.id);
-            return proof && proof.head === chains.head[index].id ? [{ index, proof }] : [];
-          })
-        : [];
-    const movedItems = new Set(
-      movedAt.flatMap(({ index }) => [chains.base[index], chains.head[index]]),
+    const movedAt = alignedProofs(moved, chains);
+    const keptAt = alignedProofs(kept, chains);
+    const provenItems = new Set(
+      [...movedAt, ...keptAt].flatMap(({ index }) => [chains.base[index], chains.head[index]]),
     );
     if (left.tag !== right.tag) flags.add('TAG_CHANGED');
     const realItems = realItemsOf(chains, config.realComponents);
@@ -203,7 +211,7 @@ export const planFile = (
         (covered.has(item.id) ||
           (!!forward && item.id === left.parent) ||
           (isReplaced && item.id === left.parent && childCovered(item, left, base.rules)));
-      const inner = item.flags.includes('INNER_TARGET') && (reached || movedItems.has(item));
+      const inner = item.flags.includes('INNER_TARGET') && (reached || provenItems.has(item));
       if (inner && reached && !isReplaced && !forward && !evidence.includes('DESCENDANT_RENDERED'))
         evidence.push('DESCENDANT_RENDERED');
       item.flags.forEach((flag) => !(inner && flag === 'INNER_TARGET') && flags.add(flag));
@@ -232,6 +240,7 @@ export const planFile = (
       evidence.push('PLACEMENT_PRESERVED');
     }
     if (movedAt.length) evidence.push('STYLESHEET_MOVED');
+    if (keptAt.length) evidence.push('EMOTION_RULE_KEPT');
     if (realItems.size) evidence.push('REAL_COMPONENT_RENDERED');
     const samples = realItems.size ? sampleTargets(chains, { base, head }) : [];
     const omitted = neutralOmitted(chains);
@@ -245,11 +254,9 @@ export const planFile = (
         return tags.length ? [[side, tags]] : [];
       }),
     );
-    const inner = Object.fromEntries(
-      movedAt
-        .filter(({ proof }) => proof.nodes.length)
-        .map(({ index, proof }) => [index, proof.nodes]),
-    );
+    const inner: Record<string, InnerNode[]> = {};
+    for (const { index, proof } of [...movedAt, ...keptAt])
+      if (proof.nodes.length) inner[index] = [...(inner[index] ?? []), ...proof.nodes];
     const structural = flags.size > 0;
     const variables = new Map<string, PlanVariable>();
     for (const side of ['base', 'head'] as const)

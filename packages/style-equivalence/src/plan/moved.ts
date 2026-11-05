@@ -30,7 +30,7 @@ const literalTokens = (element: StyleElement) => {
   return tokens;
 };
 
-const normalize = (selector: string, from?: string, to?: string) => {
+export const normalizeSelector = (selector: string, from?: string, to?: string) => {
   let count = 0;
   try {
     const result = selectorParser((root) => {
@@ -50,10 +50,10 @@ const normalize = (selector: string, from?: string, to?: string) => {
 const emitted = (rules: StyleRule[]) => rules.filter((rule) => rule.declarations?.length);
 
 const sameRule = (base: StyleRule, head: StyleRule, token: string) => {
-  const selector = normalize(base.selector, SELF, token);
+  const selector = normalizeSelector(base.selector, SELF, token);
   return (
     !!selector &&
-    selector === normalize(head.selector) &&
+    selector === normalizeSelector(head.selector) &&
     !base.conditions.some((condition) => condition.startsWith('@layer')) &&
     JSON.stringify(base.conditions) === JSON.stringify(head.conditions) &&
     JSON.stringify(base.declarations) === JSON.stringify(head.declarations)

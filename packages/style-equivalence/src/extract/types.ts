@@ -40,6 +40,7 @@ export interface StyleElement {
 export interface StyleRule {
   conditions: string[];
   declarations?: string[];
+  interpolations?: string[];
   owned: Record<string, string>;
   selector: string;
   slot?: string;

@@ -8,13 +8,11 @@ const PLACEHOLDER = /^__I\d+__$/;
 
 const conditionsOf = (node: Rule) => {
   const conditions: string[] = [];
-  for (
-    let parent: Container | undefined = node.parent;
-    parent;
-    parent = parent.parent as Container
-  ) {
+  for (let parent: Container | undefined = node; parent; parent = parent.parent as Container) {
     if (parent.type === 'atrule')
       conditions.unshift(`@${(parent as AtRule).name} ${(parent as AtRule).params}`);
+    if (parent.type === 'rule' && PLACEHOLDER.test((parent as Rule).selector.trim()))
+      conditions.unshift((parent as Rule).selector.trim());
     if (parent.type === 'root') break;
   }
   return conditions;
@@ -89,8 +87,18 @@ export const templateSlotRules = (symbol: string, factory: ts.CallExpression): S
     const value = property.initializer;
     if (!ts.isTaggedTemplateExpression(value)) continue;
     const slot = `${symbol}.${property.name.getText()}`;
+    const interpolations = ts.isTemplateExpression(value.template)
+      ? value.template.templateSpans.map((span) =>
+          span.expression.getText().replaceAll(/\s+/g, ' ').trim(),
+        )
+      : [];
     for (const rule of parseRules(templateText(value.template), `.${SELF}`).rules)
-      rules.push({ ...rule, owned: { [SELF]: slot }, slot });
+      rules.push({
+        ...rule,
+        ...(interpolations.length ? { interpolations } : {}),
+        owned: { [SELF]: slot },
+        slot,
+      });
   }
   return rules;
 };
