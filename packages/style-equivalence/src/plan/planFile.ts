@@ -8,6 +8,7 @@ import {
   type ForwardPlan,
   partlyForwarded,
 } from './forwarded';
+import { globalRulesChanged } from './globalRules';
 import type { InnerNode } from './inner';
 import { keptEmotionRules } from './kept';
 import { bindKnobs, parseExpression } from './knobs';
@@ -365,7 +366,10 @@ export const planFile = (
   return {
     cases,
     file,
-    gaps: fileGaps(base.gaps, head.gaps),
+    gaps: [
+      ...fileGaps(base.gaps, head.gaps),
+      ...[globalRulesChanged(base, head)].filter((gap): gap is string => !!gap),
+    ],
     ...(Object.keys(unpairedStandIns).length ? { standIns: unpairedStandIns } : {}),
     unpaired: [
       ...unpairedBase.map((element) => ({ elementId: element.id, side: 'base' as const })),

@@ -105,7 +105,7 @@ const placementOf = (element: StyleElement, slot: string) => {
   return found.length === 1 && only[0] !== '?' ? JSON.stringify(only) : undefined;
 };
 
-const slotsOf = (rule: StyleRule) =>
+export const slotsOf = (rule: StyleRule) =>
   classNamesIn(rule.selector).flatMap((name) =>
     [rule.owned[name], rule.stylesheet ? `global.${name}` : undefined].filter(
       (slot): slot is string => !!slot,
@@ -135,7 +135,7 @@ const tokenValue = (expression: string) => {
   return token ? `var(--lobe-${kebab(token[1])})` : `\${${expression}}`;
 };
 
-const resolve = (text: string, rule: StyleRule) =>
+export const resolve = (text: string, rule: StyleRule) =>
   text.replaceAll(/__I(\d+)__/g, (match, index: string) => {
     const value = rule.interpolationValues?.[Number(index)];
     if (typeof value === 'string') return value;
@@ -153,7 +153,7 @@ const hostSelector = (rule: StyleRule, slot: string) =>
     ? normalizeSelector(rule.selector, slot.slice('global.'.length), SELF)
     : normalizeSelector(resolve(rule.selector, rule));
 
-const signature = (rule: StyleRule, selector: string) =>
+export const signature = (rule: StyleRule, selector: string) =>
   JSON.stringify({
     conditions: rule.conditions.map((condition) => resolve(condition, rule)),
     declarations: rule.declarations?.map((declaration) => resolve(declaration, rule)),

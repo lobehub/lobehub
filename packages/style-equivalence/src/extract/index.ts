@@ -3,6 +3,7 @@ import ts from 'typescript';
 import { collectChildren, literalOf } from './children';
 import { parseRules } from './css';
 import { applicationIn, componentOfStatement, forwardsOf } from './forward';
+import { globalStyleRules } from './globalStyles';
 import {
   declaredLocally,
   isJsxNode,
@@ -391,10 +392,12 @@ export const extractFile = (
     element.flags = [...found].sort();
   }
 
+  const globalRules = globalStyleRules(ast, (specifier) => options.readModule?.(file, specifier));
   return {
     elements,
     file,
     gaps,
+    ...(globalRules.length ? { globalRules } : {}),
     outsideReferences,
     ...(plain.length ? { plain } : {}),
     prelude: top.prelude(),

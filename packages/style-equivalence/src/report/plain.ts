@@ -117,6 +117,8 @@ export const askSentence = (item: { category: string; flags: string[] }, context
       '改之前和改之后只有一侧给这个元素传了 style={…}，另一侧把它去掉了。截图里看不出运行时样式，看一下代码里是不是漏传了。',
     );
   if (names.has('STYLE_OUTSIDE_JSX')) lines.push('这个文件在 JSX 之外也用到了样式，工具比较不了。');
+  if (names.has('GLOBAL_RULES_CHANGED'))
+    lines.push('这个文件的全局样式规则两侧对不上，看一下少掉或改掉的那几条是不是有意的。');
   const gaps = [...names].filter((name) => GAPS[name]).map((name) => GAPS[name]);
   if (gaps.length) lines.push(`这条样式只在${gaps.join('、')}下生效，工具触发不了。`);
   if (!lines.length) lines.push('工具对这一项有拿不准的地方，看一下左右是不是一样。');

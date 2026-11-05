@@ -9,6 +9,7 @@ export const REVIEW_PASS = 'REVIEW_PASS';
 
 const AGENT_FLAGS = new Set([
   'CONTAINER_UNMODELED',
+  'GLOBAL_RULES_CHANGED',
   'MEDIA_UNMODELED',
   'PLACEMENT_NEUTRAL_PROP',
   'PLACEMENT_SUBSTITUTED',
@@ -42,7 +43,7 @@ const needsPerson = (item: VerdictEntry) =>
 
 const needsAgent = (item: VerdictEntry, combos: number | undefined) =>
   item.category === 'needs-signoff' &&
-  (item.flags.some((flag) => AGENT_FLAGS.has(flag)) ||
+  (item.flags.some((flag) => AGENT_FLAGS.has(flag.split(':')[0])) ||
     (item.flags.includes('VARIABLE_UNMODELED') && (combos ?? 1) <= 1));
 
 const canPassItem = (item: VerdictEntry) =>

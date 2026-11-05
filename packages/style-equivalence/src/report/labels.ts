@@ -54,13 +54,26 @@ export const partlyForwardedDetail = (detail: string) => {
   return { components: listed(components), tag };
 };
 
+const globalCounts = (detail: string) => {
+  const [removed = '0', added = '0'] = detail.split('/');
+  return { added, removed };
+};
+
 const DETAIL_LABELS: Record<string, (detail: string) => string> = {
+  GLOBAL_RULES_CHANGED: (detail) => {
+    const { added, removed } = globalCounts(detail);
+    return `全局样式规则变了（少了 ${removed} 条，多了 ${added} 条）`;
+  },
   FORWARDED_CALLER_UNCHECKED: (detail) => `有调用方没比较：${listed(detail)}`,
   INNER_TARGET_PARTLY_FORWARDED: (detail) =>
     `只证明了传进组件的那个 ${partlyForwardedDetail(detail).tag}`,
 };
 
 const DETAIL_EXPLANATIONS: Record<string, (detail: string) => string> = {
+  GLOBAL_RULES_CHANGED: (detail) => {
+    const { added, removed } = globalCounts(detail);
+    return `文件里不挂在任何元素上的全局规则（createGlobalStyle、引入的全局 CSS）两侧不一致：改之前有 ${removed} 条在改之后找不到原样的对应，改之后有 ${added} 条是新的。原样保留的规则会自动证明，这里要确认差别是有意的。`;
+  },
   FORWARDED_CALLER_UNCHECKED: (detail) =>
     `组件内部这个元素按「调用方没有传这个样式」渲染并比较了。仓库里还有这些文件提到了这个属性，但工具没有逐一比较它们传进来的样式：${listed(detail)}。`,
   INNER_TARGET_PARTLY_FORWARDED: (detail) => {
