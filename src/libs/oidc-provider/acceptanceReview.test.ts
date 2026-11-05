@@ -180,3 +180,14 @@ describe('extensionCorsDecision', () => {
     ).toBeNull();
   });
 });
+
+describe('origin-bound acceptance resources', () => {
+  const BOUND =
+    'urn:lobehub:acceptance:7f0c9a7e-0000-4000-8000-000000000001:https%3A%2F%2Fpr-12.preview.app';
+
+  it('issues an eight hour JWT for an acceptance bound to its preview origin', () => {
+    expect(
+      reviewResourceServer('lobehub-acceptance', BOUND, BOUND, { route: 'authorization' }),
+    ).toMatchObject({ accessTokenTTL: 8 * 60 * 60, audience: BOUND });
+  });
+});

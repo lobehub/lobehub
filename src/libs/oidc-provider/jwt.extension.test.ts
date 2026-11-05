@@ -61,6 +61,22 @@ describe('extension-issued review tokens', () => {
   });
 });
 
+describe('origin-bound acceptance tokens', () => {
+  it('read back the preview origin they were issued for', async () => {
+    const { verifyAcceptanceReviewJWT } = await import('./jwt');
+    const id = '7f0c9a7e-0000-4000-8000-000000000001';
+    const token = await sign(
+      { client_id: 'lobehub-acceptance' },
+      `urn:lobehub:acceptance:${id}:https%3A%2F%2Fpr-12.preview.app`,
+    );
+
+    expect(await verifyAcceptanceReviewJWT(token)).toMatchObject({
+      acceptanceId: id,
+      acceptanceOrigin: 'https://pr-12.preview.app',
+    });
+  });
+});
+
 describe('extension access tokens', () => {
   const AUDIENCE = 'urn:lobehub:acceptance-extension';
 

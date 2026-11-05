@@ -112,23 +112,22 @@ describe('site review tokens', () => {
         },
       });
 
-    it('accepts a site token the extension minted, whatever Origin its worker sends', async () => {
-      const fromWorker = await extensionCall(
+    it('checks the Origin of a site token the extension handed to the page', async () => {
+      const onSite = await extensionCall(ownerId, 'lobehub-acceptance-extension', ORIGIN);
+      expect(onSite.status).toBe(200);
+      expect(await onSite.json()).toMatchObject({ site: { id: site.id } });
+      const elsewhere = await extensionCall(
         ownerId,
         'lobehub-acceptance-extension',
         EXTENSION_ORIGIN,
       );
-      expect(fromWorker.status).toBe(200);
-      expect(await fromWorker.json()).toMatchObject({ site: { id: site.id } });
-      expect((await extensionCall(ownerId, 'lobehub-acceptance-extension')).status).toBe(200);
+      expect(elsewhere.status).toBe(403);
+      expect(await elsewhere.json()).toMatchObject({ error: { code: 'FORBIDDEN' } });
+      expect((await extensionCall(ownerId, 'lobehub-acceptance-extension')).status).toBe(403);
     });
 
     it('still checks access for an extension-minted token', async () => {
-      const response = await extensionCall(
-        guestId,
-        'lobehub-acceptance-extension',
-        EXTENSION_ORIGIN,
-      );
+      const response = await extensionCall(guestId, 'lobehub-acceptance-extension', ORIGIN);
       expect(response.status).toBe(403);
       expect(await response.json()).toMatchObject({ error: { code: 'SITE_ACCESS_REVOKED' } });
     });

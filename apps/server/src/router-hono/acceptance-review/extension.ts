@@ -1,5 +1,5 @@
-import { ACCEPTANCE_REVIEW_RESOURCE_PREFIX, siteReviewResource } from '@lobechat/const';
-import { and, desc, eq, inArray, isNull, ne, notInArray, or, type SQL } from 'drizzle-orm';
+import { acceptanceReviewResource, siteReviewResource } from '@lobechat/const';
+import { and, desc, eq, inArray, isNull, ne, notInArray, or, type SQL, sql } from 'drizzle-orm';
 import type { PgColumn } from 'drizzle-orm/pg-core';
 import type { Context, MiddlewareHandler } from 'hono';
 import { z } from 'zod';
@@ -16,6 +16,7 @@ import {
 import type { LobeChatDatabase } from '@/database/type';
 import { signAcceptanceReviewToken, verifyAcceptanceExtensionJWT } from '@/libs/oidc-provider/jwt';
 import { resolveReviewAccess } from '@/server/services/acceptanceReview/access';
+import { latestPreviewOrigin } from '@/server/services/acceptanceReview/previewOrigin';
 import { findSiteForOrigin } from '@/server/services/projectReview/sites';
 
 import type { ReviewEnv } from './auth';
@@ -104,7 +105,12 @@ const latestPreviewUrls = async (db: LobeChatDatabase, acceptanceIds: string[]) 
       metadata: verifyRuns.metadata,
     })
     .from(verifyRuns)
-    .where(inArray(verifyRuns.acceptanceId, acceptanceIds))
+    .where(
+      and(
+        inArray(verifyRuns.acceptanceId, acceptanceIds),
+        sql`${verifyRuns.metadata}->>'previewUrl' IS NOT NULL`,
+      ),
+    )
     .orderBy(verifyRuns.acceptanceId, desc(verifyRuns.roundIndex));
   const urls = new Map<string, string>();
   for (const round of rounds) {
@@ -203,13 +209,21 @@ const tokenRequestSchema = z.union([
     origin: z.string().refine(isOrigin, 'origin must be a bare origin'),
     siteId: z.string(),
   }),
-  z.object({ acceptanceId: z.string().uuid() }),
+  z.object({
+    acceptanceId: z.string().uuid(),
+    origin: z.string().refine(isOrigin, 'origin must be a bare origin'),
+  }),
 ]);
 
 export const mintExtensionToken = async (c: ExtensionContext) => {
   const parsed = tokenRequestSchema.safeParse(await c.req.json().catch(() => undefined));
   if (!parsed.success)
-    return reviewError(c, 400, 'INVALID_INPUT', 'Expected { siteId, origin } or { acceptanceId }');
+    return reviewError(
+      c,
+      400,
+      'INVALID_INPUT',
+      'Expected { siteId, origin } or { acceptanceId, origin }',
+    );
   const db = c.get('db');
   const userId = c.get('userId');
 
@@ -225,12 +239,15 @@ export const mintExtensionToken = async (c: ExtensionContext) => {
     );
   }
 
-  const access = await resolveReviewAccess(db, userId, parsed.data.acceptanceId);
+  const { acceptanceId, origin } = parsed.data;
+  const access = await resolveReviewAccess(db, userId, acceptanceId);
   if (!access) return reviewError(c, 404, 'NOT_FOUND', 'Acceptance not found');
   if (!access.can.comment) return reviewError(c, 403, 'FORBIDDEN', 'No access to this acceptance');
+  if (origin !== (await latestPreviewOrigin(db, acceptanceId)))
+    return reviewError(c, 403, 'WRONG_ORIGIN', 'Open this acceptance from its preview address');
   return c.json(
     await signAcceptanceReviewToken({
-      resource: `${ACCEPTANCE_REVIEW_RESOURCE_PREFIX}${access.acceptance.id}`,
+      resource: acceptanceReviewResource(access.acceptance.id, origin),
       userId,
     }),
   );

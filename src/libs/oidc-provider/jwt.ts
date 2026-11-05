@@ -3,7 +3,7 @@ import {
   ACCEPTANCE_EXTENSION_RESOURCE,
   ACCEPTANCE_REVIEW_SCOPE,
   ACCEPTANCE_REVIEW_TOKEN_TTL_SECONDS,
-  acceptanceIdFromReviewResource,
+  acceptanceReviewFromResource,
   siteReviewFromResource,
 } from '@lobechat/const';
 import {
@@ -236,7 +236,8 @@ export const validateOIDCJWT = async (token: string) => {
 export const verifyAcceptanceReviewJWT = async (token: string) => {
   const publicKeys = await getVerificationKeys();
   const { payload } = await verifyJwt(token, publicKeys);
-  const acceptanceId = acceptanceIdFromReviewResource(payload.aud);
+  const acceptance = acceptanceReviewFromResource(payload.aud);
+  const acceptanceId = acceptance?.acceptanceId;
   const site = siteReviewFromResource(payload.aud);
   const clientId = payload.client_id as string | undefined;
   if (
@@ -245,7 +246,14 @@ export const verifyAcceptanceReviewJWT = async (token: string) => {
     !payload.sub
   )
     throw new Error('Not an acceptance review token');
-  return { acceptanceId, clientId, expiresAt: payload.exp, site, userId: payload.sub };
+  return {
+    acceptanceId,
+    acceptanceOrigin: acceptance?.origin,
+    clientId,
+    expiresAt: payload.exp,
+    site,
+    userId: payload.sub,
+  };
 };
 
 export const verifyAcceptanceExtensionJWT = async (token: string) => {

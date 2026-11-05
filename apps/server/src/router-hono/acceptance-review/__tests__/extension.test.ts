@@ -159,16 +159,18 @@ describe('extension endpoints', () => {
       expect(body.acceptances.map((a: { id: string }) => a.id)).not.toContain(site.acceptanceId);
     });
 
-    it("uses only the latest round's preview URL", async () => {
-      const staleId = await acceptance(
-        { status: 'delivered', workspaceId },
-        'https://old.example/',
+    it('falls back to the most recent round that has a preview', async () => {
+      const repairingId = await acceptance(
+        { status: 'repairing', workspaceId },
+        'https://pr-7.preview.fieldnotes.app/',
       );
       await serverDB
         .insert(verifyRuns)
-        .values({ acceptanceId: staleId, metadata: {}, roundIndex: 2, userId: ownerId });
+        .values({ acceptanceId: repairingId, metadata: {}, roundIndex: 2, userId: ownerId });
       const body = await (await get(ownerId, '/targets')).json();
-      expect(body.acceptances.map((a: { id: string }) => a.id)).not.toContain(staleId);
+      expect(body.acceptances.find((a: { id: string }) => a.id === repairingId)).toMatchObject({
+        previewUrl: 'https://pr-7.preview.fieldnotes.app/',
+      });
     });
 
     it('shows an outsider nothing from the workspace', async () => {
@@ -200,16 +202,24 @@ describe('extension endpoints', () => {
     });
 
     it('mints an acceptance token for one the user can comment on', async () => {
-      const response = await post(ownerId, { acceptanceId: openId });
+      const origin = 'https://pr-12.preview.fieldnotes.app';
+      const response = await post(ownerId, { acceptanceId: openId, origin });
       expect(response.status).toBe(200);
       expect((await response.json()).token).toBe(
-        `minted|${ownerId}|urn:lobehub:acceptance:${openId}`,
+        `minted|${ownerId}|urn:lobehub:acceptance:${openId}:${encodeURIComponent(origin)}`,
       );
     });
 
     it('refuses sites and acceptances the user cannot access', async () => {
       expect((await post(guestId, { origin: ORIGIN, siteId: site.id })).status).toBe(403);
-      expect((await post(guestId, { acceptanceId: openId })).status).toBe(404);
+      expect(
+        (
+          await post(guestId, {
+            acceptanceId: openId,
+            origin: 'https://pr-12.preview.fieldnotes.app',
+          })
+        ).status,
+      ).toBe(404);
     });
 
     it('refuses an origin the site does not list, and malformed bodies', async () => {
@@ -218,6 +228,16 @@ describe('extension endpoints', () => {
       ).toBe(404);
       expect((await post(ownerId, { siteId: site.id })).status).toBe(400);
       expect((await post(ownerId, {})).status).toBe(400);
+      expect((await post(ownerId, { acceptanceId: openId })).status).toBe(400);
+    });
+
+    it('refuses an acceptance token for an origin other than its preview', async () => {
+      const response = await post(ownerId, {
+        acceptanceId: openId,
+        origin: 'https://evil.example',
+      });
+      expect(response.status).toBe(403);
+      expect(await response.json()).toMatchObject({ error: { code: 'WRONG_ORIGIN' } });
     });
   });
 });
