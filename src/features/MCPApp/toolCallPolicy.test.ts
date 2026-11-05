@@ -166,6 +166,37 @@ describe('getAppToolCallPolicy', () => {
       expect(toolStore.syncConnectorTools).toHaveBeenCalledTimes(1);
     });
 
+    it('lets parallel view calls wait for the same resync instead of refusing the later ones', async () => {
+      connectors.set('parallel-app', { ...connector('auto'), id: 'conn_parallel' });
+      let finish!: () => void;
+      toolStore.syncConnectorTools.mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            finish = () => {
+              connectors.set('parallel-app', {
+                ...connector('auto'),
+                id: 'conn_parallel',
+                tools: ['load_page', 'load_more'].map((toolName) => ({
+                  metadata: { visibility: ['app'] },
+                  permission: 'auto',
+                  toolName,
+                })),
+              });
+              resolve();
+            };
+          }),
+      );
+
+      const first = getAppToolCallPolicy('parallel-app', 'load_page');
+      const second = getAppToolCallPolicy('parallel-app', 'load_more');
+      await vi.waitFor(() => expect(toolStore.syncConnectorTools).toHaveBeenCalledTimes(1));
+      finish();
+
+      expect(await first).toBe('allow');
+      expect(await second).toBe('allow');
+      expect(toolStore.syncConnectorTools).toHaveBeenCalledTimes(1);
+    });
+
     it('refuses a view a connector tool only the model may call', async () => {
       connectors.set('mail', {
         ...connector('auto'),

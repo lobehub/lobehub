@@ -166,24 +166,33 @@ const revalidateConnectors = async (agentId: string | undefined): Promise<boolea
   }
 };
 
-// Connectors whose tools a view's call already synced again on this page
-const resyncedConnectors = new Set<string>();
+// The resync a view's call started for each connector on this page, settled or not
+const connectorResyncs = new Map<string, Promise<boolean>>();
 
 /**
  * Sync a connector's tools again, once per page, so a list synced before MCP
  * Apps was on picks up the tools its server offers only to views (stdio ones
- * too, which only this desktop can list). Whether it ran.
+ * too, which only this desktop can list). Calls made meanwhile wait for the
+ * same sync. Whether it succeeded.
  */
-const resyncConnectorTools = async (connectorId: string): Promise<boolean> => {
-  if (resyncedConnectors.has(connectorId)) return false;
-  resyncedConnectors.add(connectorId);
-  try {
-    await getToolStoreState().syncConnectorTools(connectorId);
-    return true;
-  } catch (error) {
-    console.warn('[MCPApp] failed to sync the tools of a connector for a view tool call:', error);
-    return false;
+const resyncConnectorTools = (connectorId: string): Promise<boolean> => {
+  let resync = connectorResyncs.get(connectorId);
+  if (!resync) {
+    resync = getToolStoreState()
+      .syncConnectorTools(connectorId)
+      .then(
+        () => true,
+        (error) => {
+          console.warn(
+            '[MCPApp] failed to sync the tools of a connector for a view tool call:',
+            error,
+          );
+          return false;
+        },
+      );
+    connectorResyncs.set(connectorId, resync);
   }
+  return resync;
 };
 
 export const getAppToolCallPolicy = async (
