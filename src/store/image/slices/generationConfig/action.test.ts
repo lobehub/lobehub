@@ -59,6 +59,12 @@ const sizeOnlyModelSchema: ModelParamsSchema = {
   size: { default: 'auto', enum: ['auto', '1024x1024'] },
 };
 
+const backgroundModelSchema: ModelParamsSchema = {
+  prompt: { default: '' },
+  imageUrls: { default: [] },
+  background: { default: 'auto', enum: ['auto', 'opaque', 'transparent'] },
+};
+
 const testImageModels: AIImageModelCard[] = [
   {
     id: 'flux/schnell',
@@ -92,6 +98,13 @@ const testImageModels: AIImageModelCard[] = [
     parameters: sizeOnlyModelSchema,
     releasedAt: '2024-01-01',
   },
+  {
+    id: 'background-model',
+    displayName: 'Background Model',
+    type: 'image',
+    parameters: backgroundModelSchema,
+    releasedAt: '2024-01-01',
+  },
 ];
 
 const mockProviders = [
@@ -114,6 +127,11 @@ const mockProviders = [
     id: 'size-only-provider',
     name: 'Size Only Provider',
     children: [testImageModels[3]],
+  },
+  {
+    id: 'background-provider',
+    name: 'Background Provider',
+    children: [testImageModels[4]],
   },
 ];
 
@@ -399,6 +417,26 @@ describe('GenerationConfigAction', () => {
 
       expect(result.current.parameters?.seed).toBeNull();
       expect(result.current.parameters?.imageUrl).toBeUndefined();
+    });
+
+    it('should keep background only when the target model supports it', () => {
+      const { result } = renderHook(() => useImageStore());
+
+      act(() => {
+        result.current.reuseSettings('background-model', 'background-provider', {
+          background: 'transparent',
+          prompt: 'reuse prompt',
+        });
+      });
+      expect(result.current.parameters?.background).toBe('transparent');
+
+      act(() => {
+        result.current.reuseSettings('size-only-model', 'size-only-provider', {
+          background: 'transparent',
+          prompt: 'reuse prompt',
+        });
+      });
+      expect(result.current.parameters?.background).toBeUndefined();
     });
 
     it('should drop settings that are unsupported by the target model schema', () => {
