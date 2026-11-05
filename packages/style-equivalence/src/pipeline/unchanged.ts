@@ -17,6 +17,8 @@ import {
 
 export const CHAIN_CLEARABLE = new Set(['COMBINATIONS_PAIRWISE', 'VARIABLE_UNMODELED']);
 
+const CALLER_FLAGS = ['FORWARDED_CALLER_UNCHECKED', 'INNER_TARGET_PARTLY_FORWARDED'];
+
 const MAX_DEPTH = 4;
 
 const topLevelOf = (sf: ts.SourceFile) => {
@@ -100,9 +102,13 @@ export const markUnchangedChains = (
     const texts = sites.map(slotClosure);
     return sites.length && texts.every((text) => text !== undefined) ? texts.join('\n') : undefined;
   };
+  const sameRules =
+    JSON.stringify([pair.base.rules, pair.base.globalRules ?? [], pair.base.gaps]) ===
+    JSON.stringify([pair.head.rules, pair.head.globalRules ?? [], pair.head.gaps]);
   for (const entry of plan.cases) {
-    if (!entry.flags.includes('VARIABLE_UNMODELED')) continue;
-    if (!entry.flags.every((flag) => CHAIN_CLEARABLE.has(flag))) continue;
+    if (entry.flags.some((flag) => CALLER_FLAGS.some((prefix) => flag.startsWith(prefix))))
+      continue;
+    if (!sameRules && !entry.flags.every((flag) => CHAIN_CLEARABLE.has(flag))) continue;
     const left = chainSignature(pair.base, entry.elementIds.base);
     const right = chainSignature(pair.head, entry.elementIds.head);
     if (!left || !right || left.text !== right.text) continue;
@@ -111,7 +117,12 @@ export const markUnchangedChains = (
       return before !== undefined && before === closure('head', slot);
     });
     if (!same) continue;
+    if (!entry.flags.length && !sameRules) continue;
     entry.flags = [];
-    entry.evidence = [...(entry.evidence ?? []), 'STYLE_CHAIN_UNCHANGED'];
+    entry.evidence = [
+      ...(entry.evidence ?? []),
+      'STYLE_CHAIN_UNCHANGED',
+      ...(sameRules ? ['FILE_RULES_UNCHANGED'] : []),
+    ];
   }
 };
