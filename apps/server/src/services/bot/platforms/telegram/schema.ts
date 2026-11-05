@@ -7,6 +7,7 @@ import {
   makeGroupPolicyFields,
   makeGuestPolicyField,
   makeUserIdField,
+  processingMessageField,
   reactionModeField,
   watchKeywordsField,
 } from '../const';
@@ -95,6 +96,7 @@ export const schema: FieldSchema[] = [
         type: 'boolean',
       },
       displayToolCallsField,
+      processingMessageField,
       reactionModeField,
       makeDmPolicyField({ policy: 'open' }),
       makeGuestPolicyField({ policy: 'open' }),
