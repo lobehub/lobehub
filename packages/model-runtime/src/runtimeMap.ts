@@ -2,6 +2,7 @@ import { LobeAi21AI } from './providers/ai21';
 import { Lobe302AI } from './providers/ai302';
 import { LobeAi360AI } from './providers/ai360';
 import { LobeAiHubMixAI } from './providers/aihubmix';
+import { LobeAIStupidLevelAI } from './providers/aistupidlevel';
 import { LobeAkashChatAI } from './providers/akashchat';
 import { LobeAntGroupAI } from './providers/antgroup';
 import { LobeAnthropicAI } from './providers/anthropic';
@@ -91,6 +92,7 @@ export const providerRuntimeMap = {
   ai302: Lobe302AI,
   ai360: LobeAi360AI,
   aihubmix: LobeAiHubMixAI,
+  aistupidlevel: LobeAIStupidLevelAI,
   akashchat: LobeAkashChatAI,
   antgroup: LobeAntGroupAI,
   anthropic: LobeAnthropicAI,
