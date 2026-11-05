@@ -4,6 +4,7 @@ import type {
   LinearSyncJobView,
   LinearSyncResult,
 } from '@lobechat/types';
+import { isLinearNoProject } from '@lobechat/types';
 import { TRPCClientError } from '@trpc/client';
 import type { TFunction } from 'i18next';
 
@@ -14,6 +15,32 @@ export const linearSyncErrorMessage = (error: unknown, t: TFunction<'integration
   error instanceof TRPCClientError && error.message === RECONNECT_REQUIRED
     ? t('linear.sync.error.reconnect')
     : t('linear.sync.error.generic');
+
+/**
+ * How a scope's Linear project reads: its name, "No project", or — for a
+ * whole-team scope — `allLabel` when given (a rule omits it, showing the team alone).
+ */
+export const linearScopeProjectLabel = (
+  scope: { linearProjectId: string | null; linearProjectName: string | null },
+  t: TFunction<'integration'>,
+  options: { withAll?: boolean } = {},
+): string | undefined => {
+  if (isLinearNoProject(scope.linearProjectId)) return t('linear.sync.filter.noProject');
+  if (scope.linearProjectId) return scope.linearProjectName ?? undefined;
+  return options.withAll ? t('linear.sync.filter.allProjects') : undefined;
+};
+
+/**
+ * Whether the scope step may move on. "All projects" waits for the team's
+ * project list, since without it the choice may be a mistake; "No project"
+ * needs only the team, so a failed or slow list does not block it.
+ */
+export const canLeaveLinearScopeStep = (
+  filter: { linearProjectId: string | null; teamId: string | null },
+  projects: { error?: unknown; isLoading: boolean },
+): boolean =>
+  !!filter.teamId &&
+  (isLinearNoProject(filter.linearProjectId) || (!projects.isLoading && !projects.error));
 
 /** All skipped issues; the stored list stops at its cap, and older results lack the count. */
 export const linearSyncSkippedCount = (result: LinearSyncResult): number =>
