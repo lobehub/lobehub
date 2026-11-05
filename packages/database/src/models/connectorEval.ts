@@ -75,6 +75,11 @@ export const normalizeEvalConnectorPatch = async (
         : { metadata: withoutEvalConnectorMarker(patch.metadata) }),
     };
 
+  if (patch.agentId || patch.metadata?.mountedByAgentId) {
+    throw new EvalConnectorUpdateError(
+      'Evaluation connections cannot be assigned to a normal Agent.',
+    );
+  }
   const result = { ...patch };
   if (patch.mcpServerUrl != null) {
     let safeUrl = false;

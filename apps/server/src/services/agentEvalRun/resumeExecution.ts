@@ -47,6 +47,7 @@ export async function executeResumedTrajectory(
   const run = await deps.runModel.findById(runId);
   await assertCaseConnectorBindings(
     deps,
+    run?.datasetId,
     environment,
     run?.config?.connectorSnapshots?.[testCaseId],
     true,
@@ -231,6 +232,7 @@ export async function executeResumedThreadTrajectory(
   const run = await deps.runModel.findById(runId);
   await assertCaseConnectorBindings(
     deps,
+    run?.datasetId,
     environment,
     run?.config?.connectorSnapshots?.[testCaseId],
     true,

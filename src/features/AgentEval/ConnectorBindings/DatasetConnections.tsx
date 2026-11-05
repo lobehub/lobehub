@@ -10,6 +10,7 @@ import { agentEvalService } from '@/services/agentEval';
 import { useEvalStore } from '@/store/eval';
 
 import { hasPartialConnectorBindings } from './bindings';
+import { openConnectionEditor } from './ConnectionEditor';
 import { ConnectorBindings } from './index';
 
 type Requirements = Awaited<
@@ -86,6 +87,7 @@ const DatasetConnectionsEditor = ({
         {!!error && <AsyncError error={error} variant="inline" />}
         {partial && <Text type="danger">{t('connections.completeScope')}</Text>}
         <ConnectorBindings
+          datasetId={datasetId}
           disabled={saving}
           requirements={requirements}
           value={value}
@@ -110,10 +112,14 @@ export const DatasetConnections = ({
     s.useFetchEvalConnectors,
   ]);
   const { data, error, isLoading, mutate } = fetchBindings(datasetId);
-  const { data: connectors, error: connectorError, mutate: refreshConnectors } = fetchConnectors();
+  const {
+    data: connectors,
+    error: connectorError,
+    mutate: refreshConnectors,
+  } = fetchConnectors(datasetId);
   if (isLoading) return <Spin />;
   if (error) return <AsyncError error={error} variant="inline" onRetry={() => void mutate()} />;
-  if (!data?.requirements.length) return null;
+  if (!data) return null;
   const missing =
     connectors &&
     data.requirements.reduce(
@@ -122,7 +128,11 @@ export const DatasetConnections = ({
         requirement.services.filter(
           (service) =>
             !connectors.some(
-              (connection) => connection.id === requirement.bindings[service]?.connectorId,
+              (connection) =>
+                connection.id === requirement.bindings[service]?.connectorId &&
+                connection.isEnabled &&
+                connection.mcpConnectionType === 'http' &&
+                connection.mcpServerUrl,
             ),
         ).length,
       0,
@@ -149,6 +159,83 @@ export const DatasetConnections = ({
             variant="inline"
             onRetry={() => void refreshConnectors()}
           />
+        )}
+        {connectors?.length === 0 && <Text type="secondary">{t('connections.empty')}</Text>}
+        <Flexbox gap={16} style={{ maxHeight: 400, overflowY: 'auto' }}>
+          {(connectors ?? []).map((connection) => {
+            const usages = data.requirements.filter((requirement) =>
+              Object.values(requirement.bindings).some(
+                (binding) => binding.connectorId === connection.id,
+              ),
+            );
+            return (
+              <Flexbox
+                horizontal
+                align="center"
+                gap={12}
+                justify="space-between"
+                key={connection.id}
+                wrap="wrap"
+              >
+                <Flexbox flex={1} gap={4} style={{ minWidth: 0, overflowWrap: 'anywhere' }}>
+                  <Text>{connection.name}</Text>
+                  {!connection.isEnabled && (
+                    <Text type="secondary">{t('connections.disabled')}</Text>
+                  )}
+                  <Text fontSize={13} type="secondary">
+                    {connection.mcpServerUrl ?? '--'}
+                  </Text>
+                  <Text fontSize={13} type="secondary">
+                    {t(
+                      connection.hasCredentials ? 'connections.authSaved' : 'connections.authNone',
+                    )}
+                    {' · '}
+                    {t(
+                      connection.status === 'connected'
+                        ? 'connections.statusConnected'
+                        : connection.status === 'error'
+                          ? 'connections.statusError'
+                          : 'connections.statusDisconnected',
+                    )}
+                  </Text>
+                  <Text fontSize={13} type="secondary">
+                    {usages.length
+                      ? usages.map((item) => item.name).join(' · ')
+                      : t('connections.unbound')}
+                  </Text>
+                </Flexbox>
+                {editable && (
+                  <Button
+                    onClick={() =>
+                      openConnectionEditor({
+                        datasetId,
+                        id: connection.id,
+                        onSaved: async () => {
+                          await Promise.all([mutate(), refreshConnectors()]);
+                        },
+                        title: connection.name,
+                      })
+                    }
+                  >
+                    {t('connections.edit')}
+                  </Button>
+                )}
+              </Flexbox>
+            );
+          })}
+        </Flexbox>
+        {editable && (
+          <Button
+            onClick={() =>
+              openConnectionEditor({
+                datasetId,
+                onSaved: refreshConnectors,
+                title: t('connections.create'),
+              })
+            }
+          >
+            {t('connections.create')}
+          </Button>
         )}
         <Text fontSize={13} type="secondary">
           {t('connections.datasetHint')}

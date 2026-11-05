@@ -5,7 +5,7 @@ import debug from 'debug';
 
 import {
   AgentEvalConnectorService,
-  EvalConnectorBindingError,
+  getEvalConnectorDatasetId,
 } from '@/server/services/agentEvalConnector';
 
 import type { AgentHook } from '../hooks';
@@ -26,15 +26,19 @@ export const createEvalConnectorHook = (
     if (!Object.hasOwn(snapshots, identifier)) {
       if (context.legacyIdentifiers?.includes(identifier)) {
         mock({
-          content:
-            'This evaluation uses an unbound mock. Bind its Environment to an MCP connection and create a new experiment.',
+          content: 'The tool connection is unavailable.',
           success: false,
         });
       }
       return;
     }
     try {
-      const service = new AgentEvalConnectorService(deps.db, deps.userId, deps.workspaceId);
+      const service = new AgentEvalConnectorService(
+        deps.db,
+        deps.userId,
+        getEvalConnectorDatasetId(snapshots),
+        deps.workspaceId,
+      );
       const result = await service.execute(identifier, snapshots, {
         apiName,
         args: typeof args === 'string' ? args : JSON.stringify(args),
@@ -55,10 +59,7 @@ export const createEvalConnectorHook = (
       );
       // Provider errors can contain URLs and headers; expose only our safe diagnostics.
       mock({
-        content:
-          error instanceof EvalConnectorBindingError
-            ? error.message
-            : 'Mock tool call failed. Check the selected connection and its credentials.',
+        content: 'The tool connection is unavailable. Please try again later.',
         success: false,
       });
     }

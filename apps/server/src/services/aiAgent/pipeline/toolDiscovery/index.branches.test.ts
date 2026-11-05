@@ -80,6 +80,9 @@ const { connectorToolState } = vi.hoisted(() => ({
 // Permission patching builds its own model rather than using `deps`.
 vi.mock('@/database/models/connectorTool', () => ({
   ConnectorToolModel: class {
+    static forEvaluation() {
+      return new this();
+    }
     queryByConnector = vi.fn(async () => connectorToolState.tools);
   },
 }));
@@ -562,6 +565,7 @@ describe('discoverTools — exact eval mock bindings', () => {
       const snapshots = {
         [alias]: {
           connectorId: 'fixed-uuid',
+          datasetId: 'dataset',
           fingerprint: 'fixed-contract',
           transport: 'mcp' as const,
         },

@@ -1,6 +1,7 @@
 import { mergeRouters } from '@/libs/trpc/lambda';
 
 import { benchmarkRouter } from './benchmarks';
+import { evalConnectorRouter } from './connectors';
 import { datasetConnectionRouter } from './datasetConnections';
 import { datasetRouter } from './datasets';
 import { environmentRouter } from './environments';
@@ -13,6 +14,7 @@ export const agentEvalRouter = mergeRouters(
   experimentRouter,
   datasetRouter,
   datasetConnectionRouter,
+  evalConnectorRouter,
   environmentRouter,
   testCaseRouter,
   runRouter,

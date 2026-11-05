@@ -3,14 +3,19 @@ import type {
   AgentEvalDatasetPackageBindings,
   EvalCaseEnvironment,
 } from '@lobechat/types';
-import { and, eq, inArray, isNotNull, isNull, ne, or } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, isNull, ne, or, sql } from 'drizzle-orm';
 
 import {
   AgentEvalDatasetWriteError,
   assertWritableEvalDatasets,
 } from '../../models/agentEval/datasetAccess';
 import { activeEvalTestCases } from '../../models/agentEval/testCase';
-import { agentEvalDatasets, agentEvalEnvironments, agentEvalTestCases } from '../../schemas';
+import {
+  agentEvalDatasets,
+  agentEvalEnvironments,
+  agentEvalTestCases,
+  userConnectors,
+} from '../../schemas';
 import type { LobeChatDatabase, Transaction } from '../../type';
 import { buildWorkspaceWhere, normalizeWorkspaceId } from '../../utils/workspace';
 import {
@@ -36,6 +41,7 @@ export class AgentEvalDatasetConnectorRepo {
     db: LobeChatDatabase | Transaction,
     datasetId: string,
     includeSystem = false,
+    lockEnvironments = false,
   ) => {
     const [dataset] = await db
       .select({ id: agentEvalDatasets.id })
@@ -79,24 +85,26 @@ export class AgentEvalDatasetConnectorRepo {
         cases.flatMap((testCase) => (testCase.environmentId ? [testCase.environmentId] : [])),
       ),
     ];
+    const environmentQuery = db
+      .select()
+      .from(agentEvalEnvironments)
+      .where(
+        and(
+          inArray(agentEvalEnvironments.id, ids),
+          includeSystem
+            ? or(
+                buildWorkspaceWhere(this.scope, agentEvalEnvironments),
+                isNull(agentEvalEnvironments.userId),
+              )
+            : and(
+                buildWorkspaceWhere(this.scope, agentEvalEnvironments),
+                isNotNull(agentEvalEnvironments.userId),
+              ),
+        ),
+      )
+      .orderBy(agentEvalEnvironments.id);
     const environments = ids.length
-      ? await db
-          .select()
-          .from(agentEvalEnvironments)
-          .where(
-            and(
-              inArray(agentEvalEnvironments.id, ids),
-              includeSystem
-                ? or(
-                    buildWorkspaceWhere(this.scope, agentEvalEnvironments),
-                    isNull(agentEvalEnvironments.userId),
-                  )
-                : and(
-                    buildWorkspaceWhere(this.scope, agentEvalEnvironments),
-                    isNotNull(agentEvalEnvironments.userId),
-                  ),
-            ),
-          )
+      ? await (lockEnvironments ? environmentQuery.for('update') : environmentQuery)
       : [];
     return { cases, environments };
   };
@@ -143,7 +151,8 @@ export class AgentEvalDatasetConnectorRepo {
   updateBindings = async (datasetId: string, selections: AgentEvalDatasetPackageBindings) =>
     this.db.transaction(async (tx) => {
       await assertWritableEvalDatasets(tx, this.scope, [datasetId]);
-      const rows = await this.read(tx, datasetId);
+      // Serialize binding with case assignment before checking cross-Dataset references.
+      const rows = await this.read(tx, datasetId, false, true);
       const requirements = this.requirements(rows);
       for (const [scope, selected] of [
         ['environment', selections.environmentBindings],
@@ -164,6 +173,7 @@ export class AgentEvalDatasetConnectorRepo {
                 and(
                   eq(agentEvalTestCases.environmentId, id),
                   ne(agentEvalTestCases.datasetId, datasetId),
+                  activeEvalTestCases(),
                 ),
               )
               .limit(1);
@@ -173,6 +183,30 @@ export class AgentEvalDatasetConnectorRepo {
               );
           }
         }
+      const connectionIds = [
+        ...new Set(
+          [
+            ...Object.values(selections.environmentBindings ?? {}),
+            ...Object.values(selections.caseBindings ?? {}),
+          ].flatMap((bindings) => Object.values(bindings).map((binding) => binding.connectorId)),
+        ),
+      ];
+      if (connectionIds.length) {
+        const connections = await tx
+          .select({ id: userConnectors.id })
+          .from(userConnectors)
+          .where(
+            and(
+              inArray(userConnectors.id, connectionIds),
+              buildWorkspaceWhere(this.scope, userConnectors),
+              sql`${userConnectors.metadata} -> 'agentEval' ->> 'datasetId' = ${datasetId}`,
+            ),
+          );
+        if (connections.length !== connectionIds.length)
+          throw new AgentEvalDatasetPackageImportError(
+            'A connection is unavailable or belongs to another Dataset',
+          );
+      }
       for (const environment of rows.environments) {
         const bindings = selections.environmentBindings?.[environment.id];
         if (!bindings) continue;

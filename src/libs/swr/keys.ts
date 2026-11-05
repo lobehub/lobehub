@@ -387,7 +387,12 @@ export const discoverKeys = {
 
 // ---- agent eval ---------------------------------------------------------
 export const evalKeys = {
-  connectors: def('eval:connectors', () => ['eval:connectors']),
+  connectors: def('eval:connectors', (datasetId: string) => ['eval:connectors', datasetId]),
+  connector: def('eval:connector', (datasetId: string, id: string) => [
+    'eval:connector',
+    datasetId,
+    id,
+  ]),
   datasetConnectorBindings: def('eval:datasetConnectorBindings', (id: string) => [
     'eval:datasetConnectorBindings',
     id,

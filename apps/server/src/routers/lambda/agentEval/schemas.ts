@@ -1,3 +1,4 @@
+import { evalToolManifestsSchema } from '@lobechat/types';
 import { z } from 'zod';
 
 import { evalMemoryFixtureSchema } from '@/server/services/agentEvalRun/evalMemory.schema';
@@ -59,6 +60,7 @@ export const evalCaseEnvironmentSchema = z
   .object({
     agent: evalCaseAgentConfigSchema.optional(),
     connectorBindings: evalConnectorBindingsSchema.optional(),
+    toolManifests: evalToolManifestsSchema.optional(),
     envPrompt: z.string().optional(),
     memory: evalMemoryFixtureSchema.optional(),
     mock: z

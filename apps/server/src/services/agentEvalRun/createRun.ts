@@ -175,7 +175,7 @@ export async function createRun(
   );
   const testCases = isExternal ? datasetCases : selectCases(datasetCases, config?.caseSelection);
   if (!isExternal && testCases.length === 0) throw new Error(RUN_EMPTY_SELECTION);
-  config.connectorSnapshots = await snapshotCaseConnectors(deps, testCases);
+  config.connectorSnapshots = await snapshotCaseConnectors(deps, datasetId, testCases);
 
   const { mode: _mode, ...restParams } = params;
   try {

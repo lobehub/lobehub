@@ -268,6 +268,7 @@ const DatasetImportContent: FC<DatasetImportContentProps> = ({
           benchmarkName={benchmarkName}
           benchmarks={benchmarks}
           bindings={connectionBindings}
+          datasetId={datasetId}
           disabled={importing}
           existingDataset={!!datasetId}
           name={packageName}

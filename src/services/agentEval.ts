@@ -85,8 +85,32 @@ class AgentEvalService {
   // ============================================
   // Environments
   // ============================================
-  async listEvalConnectors() {
-    return lambdaClient.agentEval.listEvalConnectors.query();
+  async listEvalConnectors(datasetId: string) {
+    return lambdaClient.agentEval.listEvalConnectors.query({ datasetId });
+  }
+
+  async getEvalConnector(datasetId: string, id: string) {
+    return lambdaClient.agentEval.getEvalConnector.query({ datasetId, id });
+  }
+
+  async saveEvalConnector(params: {
+    datasetId: string;
+    id?: string;
+    isEnabled?: boolean;
+    name: string;
+    mcpServerUrl: string;
+    credentials?:
+      | { type: 'bearer'; token: string }
+      | { type: 'header'; headers: Record<string, string> }
+      | null;
+  }) {
+    return params.id
+      ? lambdaClient.agentEval.updateEvalConnector.mutate({ ...params, id: params.id })
+      : lambdaClient.agentEval.createEvalConnector.mutate(params);
+  }
+
+  async testEvalConnector(datasetId: string, id: string) {
+    return lambdaClient.agentEval.testEvalConnector.mutate({ datasetId, id });
   }
 
   async getDatasetConnectorBindings(datasetId: string) {

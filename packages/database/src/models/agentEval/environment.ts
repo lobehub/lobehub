@@ -1,9 +1,34 @@
-import type { AgentEvalEnvironmentInsert, EvalCaseEnvironment } from '@lobechat/types';
+import type {
+  AgentEvalEnvironmentInsert,
+  EvalCaseEnvironment,
+  EvalConnectorBindings,
+} from '@lobechat/types';
 import { and, count, desc, eq, inArray, isNull, or } from 'drizzle-orm';
 
 import { agentEvalEnvironments, agentEvalTestCases } from '../../schemas';
 import { type LobeChatDatabase } from '../../type';
 import { buildWorkspaceWhere } from '../../utils/workspace';
+
+export class AgentEvalEnvironmentBindingError extends Error {
+  constructor() {
+    super(
+      'Environment connections changed. Reload the environment and manage its connections in the Dataset.',
+    );
+    this.name = 'AgentEvalEnvironmentBindingError';
+  }
+}
+
+/** JSONB key order and an explicit default transport do not change a binding. */
+export const hasSameEvalConnectorBindings = (
+  left: EvalConnectorBindings = {},
+  right: EvalConnectorBindings = {},
+) => {
+  const identity = (bindings: EvalConnectorBindings) =>
+    Object.entries(bindings)
+      .map(([alias, binding]) => [alias, binding.connectorId, binding.transport ?? 'mcp'])
+      .sort();
+  return JSON.stringify(identity(left)) === JSON.stringify(identity(right));
+};
 
 /**
  * Reusable case environments. Owned like test cases: by the user, or by the
@@ -114,11 +139,33 @@ export class AgentEvalEnvironmentModel {
       name: string;
     }>,
   ) => {
-    const [result] = await this.db
-      .update(agentEvalEnvironments)
-      .set({ ...value, updatedAt: new Date() })
-      .where(and(eq(agentEvalEnvironments.id, id), this.mutableOwnership()))
-      .returning();
-    return result;
+    return this.db.transaction(async (tx) => {
+      const predicate = and(eq(agentEvalEnvironments.id, id), this.mutableOwnership());
+      const [current] = await tx
+        .select()
+        .from(agentEvalEnvironments)
+        .where(predicate)
+        .limit(1)
+        .for('update');
+      if (!current) return;
+
+      let config = value.config;
+      if (config) {
+        if (
+          config.connectorBindings !== undefined &&
+          !hasSameEvalConnectorBindings(config.connectorBindings, current.config.connectorBindings)
+        )
+          throw new AgentEvalEnvironmentBindingError();
+        // Dataset connection repair takes the same row lock. Merge only after
+        // acquiring it, so an older persona form cannot overwrite repaired bindings.
+        config = { ...config, connectorBindings: current.config.connectorBindings };
+      }
+      const [result] = await tx
+        .update(agentEvalEnvironments)
+        .set({ ...value, config, updatedAt: new Date() })
+        .where(predicate)
+        .returning();
+      return result;
+    });
   };
 }

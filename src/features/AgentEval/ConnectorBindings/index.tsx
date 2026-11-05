@@ -6,18 +6,19 @@ import type {
 } from '@lobechat/types';
 import { Button, Flexbox, Select, Spin, Text } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
-import { useId, useState } from 'react';
+import { useId } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
-import CustomConnectorModal from '@/features/Connectors/CustomConnectorModal';
 import { useEvalStore } from '@/store/eval';
 
 import { setConnectorBinding } from './bindings';
+import { openConnectionEditor } from './ConnectionEditor';
 
 const styles = stylex.create({ groups: { maxHeight: 400, overflowY: 'auto' } });
 
 interface ConnectorBindingsProps {
+  datasetId?: string;
   disabled?: boolean;
   onChange: (bindings: AgentEvalDatasetPackageBindings) => void;
   requirements: AgentEvalDatasetPackageConnectionRequirement[];
@@ -26,6 +27,7 @@ interface ConnectorBindingsProps {
 
 /** Only exact connection IDs cross this form. URL and credentials stay in the connection manager. */
 export const ConnectorBindings = ({
+  datasetId,
   disabled,
   onChange,
   requirements,
@@ -33,9 +35,14 @@ export const ConnectorBindings = ({
 }: ConnectorBindingsProps) => {
   const { t } = useTranslation('eval');
   const id = useId();
-  const [creating, setCreating] = useState(false);
   const fetchConnectors = useEvalStore((s) => s.useFetchEvalConnectors);
-  const { data, error, isLoading, isValidating, mutate } = fetchConnectors();
+  const { data, error, isLoading, isValidating, mutate } = fetchConnectors(datasetId);
+  const available = data?.filter(
+    (connection) =>
+      connection.isEnabled && connection.mcpConnectionType === 'http' && connection.mcpServerUrl,
+  );
+
+  if (!datasetId) return <Text type="secondary">{t('connections.datasetOnly')}</Text>;
 
   return (
     <Flexbox gap={12}>
@@ -73,7 +80,8 @@ export const ConnectorBindings = ({
                   const binding = bindings?.[service];
                   const provided = requirement.providedServices?.includes(service);
                   const missing =
-                    !!binding && !data?.some((connection) => connection.id === binding.connectorId);
+                    !!binding &&
+                    !available?.some((connection) => connection.id === binding.connectorId);
                   const fieldId = `${id}-${groupIndex}-${index}`;
                   return (
                     <Flexbox gap={6} key={service}>
@@ -92,8 +100,8 @@ export const ConnectorBindings = ({
                           ...(missing
                             ? [{ label: t('connections.unavailable'), value: binding.connectorId }]
                             : []),
-                          ...(data ?? []).map((connection) => ({
-                            label: `${connection.name} · ${connection.identifier}`,
+                          ...(available ?? []).map((connection) => ({
+                            label: connection.name,
                             value: connection.id,
                           })),
                         ]}
@@ -140,24 +148,22 @@ export const ConnectorBindings = ({
           })}
         </Flexbox>
       )}
-      {!isLoading && data?.length === 0 && <Text type="secondary">{t('connections.empty')}</Text>}
+      {!isLoading && available?.length === 0 && (
+        <Text type="secondary">{t('connections.empty')}</Text>
+      )}
       <Flexbox horizontal gap={8} wrap="wrap">
-        <Button disabled={disabled} onClick={() => setCreating(true)}>
+        <Button
+          disabled={disabled}
+          onClick={() =>
+            openConnectionEditor({ datasetId, onSaved: mutate, title: t('connections.create') })
+          }
+        >
           {t('connections.create')}
         </Button>
         <Button disabled={disabled} loading={isValidating} onClick={() => void mutate()}>
           {t('connections.refresh')}
         </Button>
       </Flexbox>
-      {creating && (
-        <CustomConnectorModal
-          open
-          onClose={() => {
-            setCreating(false);
-            void mutate();
-          }}
-        />
-      )}
     </Flexbox>
   );
 };

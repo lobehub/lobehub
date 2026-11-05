@@ -6,6 +6,7 @@
 import type { AgentMemoryChatConfig, LobeAgentChatConfig } from '../agent/chatConfig';
 import type { ImportedMessage } from '../export';
 import type { EvalMemoryFixture, EvalMemorySnapshot } from './evalMemory';
+import type { EvalToolManifest, EvalToolManifests } from './toolManifest';
 
 export type { RubricType as EvalMode } from './rubric';
 
@@ -29,7 +30,11 @@ export type EvalConnectorBindings = Record<string, EvalConnectorBinding>;
 
 /** Server-captured connection identity and tool contract used by a run. */
 export interface EvalConnectorSnapshot extends EvalConnectorBinding {
+  /** Frozen owning Dataset; absent only on legacy runs, which cannot resume. */
+  datasetId?: string;
   fingerprint: string;
+  /** Frozen original contract; absent on legacy runs, which must not resume with a new surface. */
+  manifest?: EvalToolManifest;
 }
 
 export type EvalConnectorSnapshots = Record<string, EvalConnectorSnapshot>;
@@ -152,6 +157,8 @@ export interface EvalCaseEnvironment {
   /** IANA timezone `sessionDate` renders in; UTC when absent. */
   timezone?: string;
   toolForwarding?: EvalToolForwardingConfig;
+  /** Original model-visible contracts, independent of mock connection discovery. */
+  toolManifests?: EvalToolManifests;
 }
 
 /**

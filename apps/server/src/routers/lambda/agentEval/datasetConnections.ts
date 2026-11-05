@@ -40,7 +40,11 @@ export const datasetConnectionRouter = router({
         ...Object.values(input.environmentBindings ?? {}),
         ...Object.values(input.caseBindings ?? {}),
       ])
-        await validateEvalConnectorBindings(ctx.evalConnectorService, bindings);
+        await validateEvalConnectorBindings(
+          ctx.evalConnectorServiceForDataset,
+          bindings,
+          input.datasetId,
+        );
       try {
         return await ctx.datasetConnectorRepo.updateBindings(input.datasetId, input);
       } catch (error) {

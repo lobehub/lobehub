@@ -81,8 +81,9 @@ export const testCaseRouter = router({
     .mutation(async ({ input, ctx }) => {
       try {
         await validateEvalConnectorBindings(
-          ctx.evalConnectorService,
+          ctx.evalConnectorServiceForDataset,
           input.content.environment?.connectorBindings,
+          input.datasetId,
         );
         const result = await ctx.testCaseModel.create(input);
         if (!result) {
@@ -157,8 +158,9 @@ export const testCaseRouter = router({
       try {
         for (const testCase of input.cases)
           await validateEvalConnectorBindings(
-            ctx.evalConnectorService,
+            ctx.evalConnectorServiceForDataset,
             testCase.content.environment?.connectorBindings,
+            input.datasetId,
           );
         const testCases = input.cases.map((c) => ({
           ...c,
@@ -209,8 +211,11 @@ export const testCaseRouter = router({
       let result;
       try {
         await validateEvalConnectorBindings(
-          ctx.evalConnectorService,
+          ctx.evalConnectorServiceForDataset,
           data.content?.environment?.connectorBindings,
+          data.content?.environment?.connectorBindings
+            ? (await ctx.testCaseModel.findById(id))?.datasetId
+            : undefined,
         );
         result = await ctx.testCaseModel.update(id, data);
       } catch (error) {

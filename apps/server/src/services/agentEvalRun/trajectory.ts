@@ -31,6 +31,7 @@ export async function loadTrajectoryData(deps: EvalRunDeps, runId: string, testC
   const environment = testCase.content.environment;
   await assertCaseConnectorBindings(
     deps,
+    run.datasetId,
     environment,
     run.config?.connectorSnapshots?.[testCaseId],
   );
@@ -103,6 +104,7 @@ async function executeTrajectoryCore(
 
   await assertCaseConnectorBindings(
     deps,
+    run.datasetId,
     environment,
     run.config?.connectorSnapshots?.[testCaseId],
   );
@@ -309,6 +311,7 @@ export async function executeTrajectoryOnDemand(
   const environment = testCase.content.environment;
   await assertCaseConnectorBindings(
     deps,
+    run.datasetId,
     environment,
     run.config?.connectorSnapshots?.[testCaseId],
     true,

@@ -119,7 +119,11 @@ export const importDatasetPackageProcedure = agentEvalProcedureWrite
         ...Object.values(bindings.environmentBindings ?? {}),
         ...Object.values(bindings.caseBindings ?? {}),
       ])
-        await validateEvalConnectorBindings(ctx.evalConnectorService, selection);
+        await validateEvalConnectorBindings(
+          ctx.evalConnectorServiceForDataset,
+          selection,
+          input.datasetId,
+        );
       const repo = new AgentEvalDatasetPackageRepo(
         ctx.serverDB,
         ctx.userId,

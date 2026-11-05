@@ -37,23 +37,37 @@ const fixture = async (bound = true) => {
     .insert(agentEvalDatasets)
     .values({ identifier: 'private-dataset', name: 'Private dataset', userId })
     .returning();
-  const connectorModel = new ConnectorModel(serverDB, userId, undefined, gateKeeper);
+  const connectorModel = ConnectorModel.forEvaluation(
+    serverDB,
+    userId,
+    dataset.id,
+    undefined,
+    gateKeeper,
+  );
   const connector = await connectorModel.create({
     credentials: JSON.stringify({ type: 'bearer', token: 'private-token' }),
     identifier: 'private-mock',
     isEnabled: true,
     mcpConnectionType: 'http',
     mcpServerUrl: 'https://private.test/mcp',
+    metadata: { agentEval: { datasetId: dataset.id } },
     name: 'Private mock',
     sourceType: 'custom',
     status: 'disconnected',
   });
   const environment = await new AgentEvalEnvironmentModel(serverDB, userId).create({
-    datasetId: dataset.id,
     identifier: 'fixture',
     name: 'Fixture',
     config: {
       mock: { services: ['notion'] },
+      toolManifests: {
+        notion: {
+          identifier: 'notion',
+          type: 'mcp',
+          meta: { title: 'Notion' },
+          api: [{ name: 'read', description: '', parameters: { type: 'object' } }],
+        },
+      },
       ...(bound && { connectorBindings: { notion: { connectorId: connector.id } } }),
     },
   });
@@ -99,6 +113,7 @@ describe('run-bound mock connections', () => {
       cases.map((testCase) => testCase.id).sort(),
     );
     expect(run.config?.connectorSnapshots?.[cases[0].id].notion.connectorId).toBe(connector.id);
+    expect(run.config?.connectorSnapshots?.[cases[0].id].notion.datasetId).toBe(dataset.id);
     expect(JSON.stringify(run.config)).not.toMatch(/private-token|private.test|credentials/);
     expect(listRawTools).toHaveBeenCalledOnce();
     expect((await service.createRun(params)).id).toBe(run.id);
@@ -118,7 +133,10 @@ describe('run-bound mock connections', () => {
     const service = new AgentEvalRunService(serverDB, userId);
     const run = await service.createRun({ datasetId: dataset.id, mode: 'external' });
     await service.assertConnectorBindings(run);
-    await connectorModel.update(connector.id, { mcpServerUrl: 'https://different.test/mcp' });
+    await connectorModel.update(connector.id, {
+      credentials: null,
+      mcpServerUrl: 'https://different.test/mcp',
+    });
     await expect(service.assertConnectorBindings(run)).rejects.toThrow('changed');
     const [saved] = await serverDB.select().from(agentEvalRuns).where(eq(agentEvalRuns.id, run.id));
     expect(saved.config?.connectorSnapshots).toEqual(run.config?.connectorSnapshots);
@@ -133,6 +151,7 @@ describe('run-bound mock connections', () => {
       isEnabled: true,
       mcpConnectionType: 'http',
       mcpServerUrl: 'https://second.test/mcp',
+      metadata: { agentEval: { datasetId: dataset.id } },
       name: 'Second mock',
       sourceType: 'custom',
       status: 'disconnected',
@@ -148,6 +167,23 @@ describe('run-bound mock connections', () => {
             input: 'Read the fixture',
             environment: {
               mock: { services: aliases },
+              toolManifests: Object.fromEntries(
+                aliases.map((identifier) => [
+                  identifier,
+                  {
+                    identifier,
+                    type: 'mcp',
+                    meta: { title: identifier },
+                    api: [
+                      {
+                        name: 'read',
+                        description: 'Original read',
+                        parameters: { type: 'object' },
+                      },
+                    ],
+                  },
+                ]),
+              ),
               connectorBindings: {
                 [aliases[0]]: { connectorId: connector.id },
                 [aliases[1]]: { connectorId: second.id, transport: 'mcp' },
@@ -164,8 +200,13 @@ describe('run-bound mock connections', () => {
     const snapshots = run.config!.connectorSnapshots!;
     expect(Object.keys(snapshots[cases[0].id]).sort()).toEqual(['docs', 'notion']);
     expect(Object.keys(snapshots[cases[1].id]).sort()).toEqual(['gmail', 'linear']);
-    expect(snapshots[cases[0].id].notion).toEqual(snapshots[cases[1].id].linear);
-    expect(snapshots[cases[0].id].docs).toEqual(snapshots[cases[1].id].gmail);
+    expect(snapshots[cases[0].id].notion.connectorId).toEqual(
+      snapshots[cases[1].id].linear.connectorId,
+    );
+    expect(snapshots[cases[1].id].linear.manifest?.identifier).toBe('linear');
+    expect(snapshots[cases[0].id].docs.connectorId).toEqual(
+      snapshots[cases[1].id].gmail.connectorId,
+    );
 
     await service.assertConnectorBindings(run);
     expect(listRawTools).toHaveBeenCalledTimes(4);

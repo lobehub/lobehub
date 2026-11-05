@@ -139,6 +139,7 @@ export async function executeThreadTrajectory(
     envPrompt?: string;
     run: {
       config?: EvalRunConfig | null;
+      datasetId: string;
       targetAgentId?: string | null;
     };
     runId: string;
@@ -156,6 +157,7 @@ export async function executeThreadTrajectory(
   const { envPrompt, environment, run, runId, testCaseId, threadId, topicId } = params;
   await assertCaseConnectorBindings(
     deps,
+    run.datasetId,
     environment,
     run.config?.connectorSnapshots?.[testCaseId],
   );

@@ -124,6 +124,7 @@ export async function canResumeTrajectory(
   try {
     await assertCaseConnectorBindings(
       deps,
+      run.datasetId,
       testCase.content.environment,
       run.config?.connectorSnapshots?.[params.testCaseId],
     );

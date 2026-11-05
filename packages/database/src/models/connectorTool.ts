@@ -1,4 +1,4 @@
-import { and, eq, inArray, ne, notInArray, sql } from 'drizzle-orm';
+import { and, eq, exists, inArray, ne, notInArray, sql } from 'drizzle-orm';
 
 import type {
   ConnectorToolPermission,
@@ -6,9 +6,14 @@ import type {
   ToolCRUDType,
   UserConnectorToolItem,
 } from '../schemas';
-import { ConnectorToolPermission as Permission, userConnectorTools } from '../schemas';
+import {
+  ConnectorToolPermission as Permission,
+  userConnectors,
+  userConnectorTools,
+} from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
+import { connectorAccessScope } from './connectorScope';
 
 export interface SyncToolInput {
   crudType: ToolCRUDType;
@@ -26,6 +31,19 @@ export class ConnectorToolModel {
   private userId: string;
   private db: LobeChatDatabase;
   private workspaceId?: string;
+  private evaluationDatasetId?: string;
+
+  static forEvaluation(
+    db: LobeChatDatabase,
+    userId: string,
+    datasetId: string,
+    workspaceId?: string,
+  ) {
+    if (!datasetId) throw new Error('A Dataset is required for evaluation tools');
+    const model = new ConnectorToolModel(db, userId, workspaceId);
+    model.evaluationDatasetId = datasetId;
+    return model;
+  }
 
   constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.db = db;
@@ -34,7 +52,27 @@ export class ConnectorToolModel {
   }
 
   private ownership = () =>
-    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, userConnectorTools);
+    and(
+      buildWorkspaceWhere(
+        { userId: this.userId, workspaceId: this.workspaceId },
+        userConnectorTools,
+      ),
+      exists(
+        this.db
+          .select({ id: userConnectors.id })
+          .from(userConnectors)
+          .where(
+            and(
+              eq(userConnectors.id, userConnectorTools.userConnectorId),
+              connectorAccessScope(
+                this.db,
+                { userId: this.userId, workspaceId: this.workspaceId },
+                this.evaluationDatasetId,
+              ),
+            ),
+          ),
+      ),
+    );
 
   findById = async (toolId: string): Promise<UserConnectorToolItem | undefined> => {
     const [row] = await this.db
@@ -55,6 +93,20 @@ export class ConnectorToolModel {
    */
   upsertMany = async (userConnectorId: string, tools: SyncToolInput[]): Promise<void> => {
     if (tools.length === 0) return;
+    const [parent] = await this.db
+      .select({ id: userConnectors.id })
+      .from(userConnectors)
+      .where(
+        and(
+          eq(userConnectors.id, userConnectorId),
+          connectorAccessScope(
+            this.db,
+            { userId: this.userId, workspaceId: this.workspaceId },
+            this.evaluationDatasetId,
+          ),
+        ),
+      );
+    if (!parent) throw new Error('Connection not available');
 
     const values: NewUserConnectorTool[] = tools.map((t) =>
       buildWorkspacePayload(

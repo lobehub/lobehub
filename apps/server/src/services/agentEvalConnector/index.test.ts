@@ -1,10 +1,11 @@
 import type { EvalConnectorBindings } from '@lobechat/types';
+import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '@/database/core/getTestDB';
 import { ConnectorModel } from '@/database/models/connector';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
-import { users, workspaces } from '@/database/schemas';
+import { agentEvalDatasets, userConnectors, users, workspaces } from '@/database/schemas';
 import { syncConnectorToolsById } from '@/server/services/connector/sync';
 
 import {
@@ -32,8 +33,24 @@ vi.mock('@/server/modules/KeyVaultsEncrypt', () => ({
 
 const db = await getTestDB();
 const userId = 'eval-connector-user';
-const model = () => new ConnectorModel(db, userId, undefined, mocked.gateKeeper);
-const service = () => new AgentEvalConnectorService(db, userId);
+const datasetId = 'eval-connector-dataset';
+const model = () =>
+  ConnectorModel.forEvaluation(db, userId, datasetId, undefined, mocked.gateKeeper);
+const service = () => new AgentEvalConnectorService(db, userId, datasetId);
+const originals = (bindings: EvalConnectorBindings) =>
+  Object.fromEntries(
+    Object.keys(bindings).map((identifier) => [
+      identifier,
+      {
+        identifier,
+        type: 'mcp' as const,
+        meta: { title: identifier, description: 'Original service' },
+        api: [{ name: 'read', description: 'Read a fixture', parameters: { type: 'object' } }],
+      },
+    ]),
+  );
+const check = (bindings: EvalConnectorBindings) =>
+  service().checkBindings(bindings, originals(bindings));
 const rawTools = [{ description: 'Read a fixture', inputSchema: { type: 'object' }, name: 'read' }];
 const create = async (token = 'alpha-secret', url = 'https://mock.test/mcp/dataset/notion') =>
   model().create({
@@ -42,6 +59,7 @@ const create = async (token = 'alpha-secret', url = 'https://mock.test/mcp/datas
     isEnabled: true,
     mcpConnectionType: 'http',
     mcpServerUrl: url,
+    metadata: { agentEval: { datasetId } },
     name: 'Private fixture',
     sourceType: 'custom',
     status: 'disconnected',
@@ -51,6 +69,16 @@ beforeEach(async () => {
   vi.clearAllMocks();
   await db.delete(users);
   await db.insert(users).values([{ id: userId }, { id: 'other-eval-user' }]);
+  await db.insert(agentEvalDatasets).values([
+    { id: datasetId, identifier: datasetId, name: 'Dataset', userId },
+    { id: 'other-dataset', identifier: 'other-dataset', name: 'Other Dataset', userId },
+    {
+      id: 'foreign-dataset',
+      identifier: 'foreign-dataset',
+      name: 'Foreign Dataset',
+      userId: 'other-eval-user',
+    },
+  ]);
   mocked.listRawTools.mockResolvedValue(rawTools);
   mocked.callTool.mockResolvedValue({ content: 'fixture-result', success: true });
   mocked.fetch.mockImplementation(async () => new Response('', { status: 404 }));
@@ -61,6 +89,111 @@ afterEach(async () => {
 });
 
 describe('evaluation connector binding', () => {
+  it('lists and resolves only this Dataset connections, excluding ordinary and same-owner other Dataset rows', async () => {
+    const own = await create();
+    const ordinary = await new ConnectorModel(db, userId).create({
+      identifier: 'notion',
+      isEnabled: true,
+      mcpConnectionType: 'http',
+      mcpServerUrl: 'https://real.test/mcp',
+      name: 'Notion',
+      sourceType: 'custom',
+      status: 'connected',
+    });
+    const other = await ConnectorModel.forEvaluation(db, userId, 'other-dataset').create({
+      identifier: 'other-mock',
+      isEnabled: true,
+      mcpConnectionType: 'http',
+      mcpServerUrl: 'https://mock.test/mcp/other/notion',
+      metadata: { agentEval: { datasetId: 'other-dataset' } },
+      name: 'Notion',
+      sourceType: 'custom',
+      status: 'connected',
+    });
+    expect((await service().listAvailableConnectors()).map(({ id }) => id)).toEqual([own.id]);
+    for (const connector of [ordinary, other]) {
+      const bindings = { notion: { connectorId: connector.id } };
+      await expect(service().validateBindings(bindings)).rejects.toThrow('unavailable');
+      await expect(service().checkBindings(bindings)).rejects.toThrow('unavailable');
+    }
+    expect(mocked.listRawTools).not.toHaveBeenCalled();
+    expect(mocked.callTool).not.toHaveBeenCalled();
+  });
+
+  it('fails closed on missing, mixed, or wrong frozen Dataset scopes before execution', async () => {
+    const own = await create();
+    const { snapshots } = await check({ notion: { connectorId: own.id } });
+    const legacy = { notion: { ...snapshots.notion, datasetId: undefined } };
+    const other = { notion: { ...snapshots.notion, datasetId: 'other-dataset' } };
+    const mixed = { ...snapshots, other: other.notion };
+    for (const snapshot of [legacy, other, mixed]) {
+      await expect(
+        service().execute('notion', snapshot, { apiName: 'read', args: '{}' }),
+      ).rejects.toBeInstanceOf(EvalConnectorBindingError);
+    }
+    expect(mocked.callTool).not.toHaveBeenCalled();
+  });
+
+  it('does not expose or execute a foreign Dataset even for a matching connector marker', async () => {
+    const foreign = await ConnectorModel.forEvaluation(
+      db,
+      'other-eval-user',
+      'foreign-dataset',
+    ).create({
+      identifier: 'foreign-mock',
+      isEnabled: true,
+      mcpConnectionType: 'http',
+      mcpServerUrl: 'https://mock.test/mcp/foreign/notion',
+      metadata: { agentEval: { datasetId: 'foreign-dataset' } },
+      name: 'Notion',
+      sourceType: 'custom',
+      status: 'connected',
+    });
+    const unavailableService = new AgentEvalConnectorService(db, userId, 'foreign-dataset');
+    expect(await unavailableService.listAvailableConnectors()).toEqual([]);
+    await expect(
+      unavailableService.validateBindings({ notion: { connectorId: foreign.id } }),
+    ).rejects.toThrow('unavailable');
+    const own = await create();
+    await db
+      .update(userConnectors)
+      .set({ metadata: { agentEval: { datasetId: 'foreign-dataset' } } })
+      .where(eq(userConnectors.id, own.id));
+    // Matching connection owner + marker cannot substitute for Dataset access.
+    await expect(
+      unavailableService.validateBindings({ notion: { connectorId: own.id } }),
+    ).rejects.toThrow('unavailable');
+    expect(await unavailableService.listAvailableConnectors()).toEqual([]);
+    expect(mocked.listRawTools).not.toHaveBeenCalled();
+  });
+
+  it('rejects legacy snapshots instead of deriving a new model contract from the mock', async () => {
+    const connector = await create();
+    const bindings = { notion: { connectorId: connector.id } };
+    const { snapshots } = await service().checkBindings(bindings);
+    await expect(service().resolveBindings(bindings, snapshots)).rejects.toThrow(
+      'no original tool contract',
+    );
+    expect(mocked.callTool).not.toHaveBeenCalled();
+  });
+
+  it('uses the frozen original tool surface, never the connection display name', async () => {
+    const connector = await create();
+    await model().update(connector.id, { name: 'LobeBench Mock · private-name' });
+    const bindings = { notion: { connectorId: connector.id } };
+    const original = {
+      identifier: 'notion',
+      type: 'mcp' as const,
+      meta: { title: 'Notion', description: 'Search and edit your workspace.' },
+      api: [{ name: 'read', description: 'Read a page.', parameters: { type: 'object' } }],
+      systemRole: 'Use the original workspace tools.',
+    };
+    const { snapshots, manifests } = await service().checkBindings(bindings, { notion: original });
+    expect(manifests).toEqual([original]);
+    expect(snapshots.notion.manifest).toEqual(original);
+    expect(JSON.stringify({ manifests, snapshots })).not.toContain('LobeBench Mock');
+  });
+
   it('bounds batch preflights to four connections and serializes transports of the same connection', async () => {
     const connections = [];
     for (let i = 0; i < 8; i++) {
@@ -126,13 +259,15 @@ describe('evaluation connector binding', () => {
   it('syncs an imported connection and freezes only its UUID and tool fingerprint', async () => {
     const connector = await create();
     const bindings = { notion: { connectorId: connector.id } };
-    const { snapshots, manifests } = await service().checkBindings(bindings);
+    const { snapshots, manifests } = await check(bindings);
     expect(manifests[0].identifier).toBe('notion');
     expect(manifests[0].api.map((tool) => tool.name)).toEqual(['read']);
     expect(snapshots.notion).toEqual({
       connectorId: connector.id,
+      datasetId,
       fingerprint: expect.any(String),
       transport: 'mcp',
+      manifest: originals(bindings).notion,
     });
     expect(JSON.stringify({ snapshots, manifests })).not.toMatch(
       /alpha-secret|https:|mcpParams|Authorization/,
@@ -147,7 +282,7 @@ describe('evaluation connector binding', () => {
     const first = await create('first-secret');
     const second = await create('second-secret');
     const bindings = { first: { connectorId: first.id }, second: { connectorId: second.id } };
-    const { snapshots } = await service().checkBindings(bindings);
+    const { snapshots } = await check(bindings);
     await service().execute('first', snapshots, { apiName: 'read', args: '{}' });
     await service().execute('second', snapshots, { apiName: 'read', args: '{}' });
     await model().update(first.id, {
@@ -184,11 +319,12 @@ describe('evaluation connector binding', () => {
       );
     }
     for (const patch of [
-      { metadata: { mountedByAgentId: 'another-agent' } },
-      { metadata: {}, isEnabled: false },
+      { metadata: { agentEval: { datasetId }, mountedByAgentId: 'another-agent' } },
+      { metadata: { agentEval: { datasetId } }, isEnabled: false },
       { isEnabled: true, mcpConnectionType: 'stdio' as const },
     ]) {
-      await model().update(own.id, patch);
+      // Legacy rows can predate the model's stronger write restrictions.
+      await db.update(userConnectors).set(patch).where(eq(userConnectors.id, own.id));
       await expect(service().validateBindings({ notion: { connectorId: own.id } })).rejects.toThrow(
         'unavailable',
       );
@@ -199,13 +335,16 @@ describe('evaluation connector binding', () => {
   it('blocks target and tool-permission drift instead of silently following a changed connection', async () => {
     const connector = await create();
     const bindings = { notion: { connectorId: connector.id } };
-    const { snapshots } = await service().checkBindings(bindings);
-    await model().update(connector.id, { mcpServerUrl: 'https://other.test/mcp/dataset/notion' });
+    const { snapshots } = await check(bindings);
+    await model().update(connector.id, {
+      credentials: null,
+      mcpServerUrl: 'https://other.test/mcp/dataset/notion',
+    });
     await expect(
       service().execute('notion', snapshots, { apiName: 'read', args: '{}' }),
     ).rejects.toThrow('changed');
     await model().update(connector.id, { mcpServerUrl: 'https://mock.test/mcp/dataset/notion' });
-    const tools = new ConnectorToolModel(db, userId);
+    const tools = ConnectorToolModel.forEvaluation(db, userId, datasetId);
     const [tool] = await tools.queryByConnector(connector.id);
     await tools.updatePermission(tool.id, 'needs_approval');
     await expect(
@@ -220,17 +359,17 @@ describe('evaluation connector binding', () => {
     async (permission) => {
       const connector = await create();
       const bindings = { notion: { connectorId: connector.id } };
-      await service().checkBindings(bindings);
-      const tools = new ConnectorToolModel(db, userId);
+      await check(bindings);
+      const tools = ConnectorToolModel.forEvaluation(db, userId, datasetId);
       const [tool] = await tools.queryByConnector(connector.id);
       await tools.updatePermission(tool.id, permission);
-      await expect(service().checkBindings(bindings)).rejects.toThrow('automatically permitted');
+      await expect(check(bindings)).rejects.toThrow('automatically permitted');
       expect((await tools.queryByConnector(connector.id))[0].permission).toBe(permission);
       mocked.listRawTools.mockResolvedValue([]);
-      await expect(service().checkBindings(bindings)).rejects.toThrow('automatically permitted');
+      await expect(check(bindings)).rejects.toThrow('automatically permitted');
       expect((await tools.queryByConnector(connector.id))[0].permission).toBe(permission);
       mocked.listRawTools.mockResolvedValue(rawTools);
-      await expect(service().checkBindings(bindings)).rejects.toThrow('automatically permitted');
+      await expect(check(bindings)).rejects.toThrow('automatically permitted');
       expect((await tools.queryByConnector(connector.id))[0].permission).toBe(permission);
     },
   );
@@ -238,15 +377,15 @@ describe('evaluation connector binding', () => {
   it('prunes missing auto tools only on explicit evaluation sync', async () => {
     const connector = await create();
     const bindings = { notion: { connectorId: connector.id } };
-    await service().checkBindings(bindings);
-    const tools = new ConnectorToolModel(db, userId);
+    await check(bindings);
+    const tools = ConnectorToolModel.forEvaluation(db, userId, datasetId);
     mocked.listRawTools.mockResolvedValue([]);
     await syncConnectorToolsById(connector.id, {
       connectorModel: model(),
       connectorToolModel: tools,
     });
     expect(await tools.queryByConnector(connector.id)).toHaveLength(1);
-    await expect(service().checkBindings(bindings)).rejects.toThrow('automatically permitted');
+    await expect(check(bindings)).rejects.toThrow('automatically permitted');
     expect(await tools.queryByConnector(connector.id)).toEqual([]);
   });
 
@@ -256,7 +395,7 @@ describe('evaluation connector binding', () => {
       'connection-secret',
       'https://mock.test/prefix/mcp/dataset/notion',
     );
-    const { snapshots } = await service().checkBindings({
+    const { snapshots } = await check({
       logicalAlias: { connectorId: connector.id, transport: 'lobe-bench' },
     });
     mocked.fetch.mockResolvedValueOnce(
@@ -288,7 +427,7 @@ describe('evaluation connector binding', () => {
         new Response('', { headers: { Location: 'https://other.test/steal' }, status }),
       );
       await expect(
-        service().checkBindings({ notion: { connectorId: connector.id, transport: 'lobe-bench' } }),
+        check({ notion: { connectorId: connector.id, transport: 'lobe-bench' } }),
       ).rejects.toThrow(`HTTP ${status}`);
       expect(mocked.fetch).toHaveBeenCalledOnce();
       expect(mocked.fetch.mock.calls[0][1].redirect).toBe('manual');
@@ -301,12 +440,12 @@ describe('evaluation connector binding', () => {
     mocked.listRawTools.mockRejectedValue(
       new Error('upstream printed alpha-secret and its private URL'),
     );
-    await expect(
-      service().checkBindings({ notion: { connectorId: connector.id } }),
-    ).rejects.toThrow('Could not verify');
-    await expect(
-      service().checkBindings({ notion: { connectorId: connector.id } }),
-    ).rejects.not.toThrow('alpha-secret');
+    await expect(check({ notion: { connectorId: connector.id } })).rejects.toThrow(
+      'Could not verify',
+    );
+    await expect(check({ notion: { connectorId: connector.id } })).rejects.not.toThrow(
+      'alpha-secret',
+    );
   });
 
   it.each(['TimeoutError', 'AbortError'])(

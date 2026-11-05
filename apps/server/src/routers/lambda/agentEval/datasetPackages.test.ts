@@ -33,7 +33,7 @@ vi.mock('./procedures', async () => {
   const procedure = publicProcedure.use((opts) =>
     opts.next({
       ctx: {
-        evalConnectorService: { validateBindings: mocks.validateBindings },
+        evalConnectorServiceForDataset: () => ({ validateBindings: mocks.validateBindings }),
         fileUploadService: {
           assertActiveOrLegacy: mocks.assertActiveOrLegacy,
           releaseBestEffort: mocks.releaseBestEffort,

@@ -2,6 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentEvalDatasetWriteError } from '@/database/models/agentEval/datasetAccess';
+import { AgentEvalEnvironmentBindingError } from '@/database/models/agentEval/environment';
 import { createCallerFactory } from '@/libs/trpc/lambda';
 import { EvalConnectorBindingError } from '@/server/services/agentEvalConnector';
 
@@ -19,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   validateBindings: vi.fn(),
   createEnvironment: vi.fn(),
   updateEnvironment: vi.fn(),
+  findEnvironment: vi.fn(),
 }));
 
 vi.mock('./procedures', async () => {
@@ -26,10 +28,15 @@ vi.mock('./procedures', async () => {
   const procedure = publicProcedure.use((opts) =>
     opts.next({
       ctx: {
-        evalConnectorService: { validateBindings: mocks.validateBindings },
-        environmentModel: { create: mocks.createEnvironment, update: mocks.updateEnvironment },
+        evalConnectorServiceForDataset: () => ({ validateBindings: mocks.validateBindings }),
+        environmentModel: {
+          create: mocks.createEnvironment,
+          findById: mocks.findEnvironment,
+          update: mocks.updateEnvironment,
+        },
         datasetModel: { create: mocks.createDataset, update: mocks.updateDataset },
         testCaseModel: {
+          findById: vi.fn().mockResolvedValue({ datasetId: 'dataset' }),
           create: mocks.create,
           batchCreate: mocks.batchCreate,
           update: mocks.update,
@@ -51,9 +58,42 @@ beforeEach(() => {
     mock.mockRejectedValue(new AgentEvalDatasetWriteError());
   }
   mocks.validateBindings.mockResolvedValue(undefined);
+  mocks.findEnvironment.mockResolvedValue({ config: {} });
 });
 
 describe('mock connection write access', () => {
+  it('leaves omitted bindings for the atomic model merge and accepts explicit unchanged bindings', async () => {
+    const connectorBindings = { mock: { connectorId: '5d9f523a-7180-4d3e-9242-906abc41a612' } };
+    mocks.findEnvironment.mockResolvedValue({ config: { connectorBindings } });
+    mocks.updateEnvironment.mockResolvedValue({ id: 'env' });
+    await environments.updateEnvironment({ config: { timezone: 'UTC' }, id: 'env' });
+    expect(mocks.updateEnvironment).toHaveBeenCalledWith('env', {
+      config: { timezone: 'UTC' },
+    });
+    expect(mocks.findEnvironment).not.toHaveBeenCalled();
+    await environments.updateEnvironment({ config: { connectorBindings }, id: 'env' });
+    expect(mocks.updateEnvironment).toHaveBeenCalledTimes(2);
+    // JSONB ordering and an explicit default transport do not change the binding.
+    await environments.updateEnvironment({
+      config: { connectorBindings: { mock: { transport: 'mcp', ...connectorBindings.mock } } },
+      id: 'env',
+    });
+    expect(mocks.updateEnvironment).toHaveBeenCalledTimes(3);
+    await expect(
+      environments.updateEnvironment({ config: { connectorBindings: {} }, id: 'env' }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect(mocks.updateEnvironment).toHaveBeenCalledTimes(3);
+  });
+
+  it('reports a concurrent Dataset binding repair as a conflict', async () => {
+    const connectorBindings = { mock: { connectorId: '5d9f523a-7180-4d3e-9242-906abc41a612' } };
+    mocks.findEnvironment.mockResolvedValue({ config: { connectorBindings } });
+    mocks.updateEnvironment.mockRejectedValue(new AgentEvalEnvironmentBindingError());
+    await expect(
+      environments.updateEnvironment({ config: { connectorBindings }, id: 'env' }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+  });
+
   it('rejects inaccessible bindings on every direct environment or case write path', async () => {
     const environment = {
       connectorBindings: { mock: { connectorId: '5d9f523a-7180-4d3e-9242-906abc41a612' } },

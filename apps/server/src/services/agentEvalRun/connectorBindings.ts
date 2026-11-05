@@ -38,25 +38,35 @@ export const getCaseConnectorBindings = (
 
 export async function snapshotCaseConnectors(
   deps: EvalRunDeps,
+  datasetId: string,
   testCases: Array<{ content: { environment?: EvalCaseEnvironment }; id: string }>,
 ) {
   const snapshots: Record<string, EvalConnectorSnapshots> = {};
-  const service = new AgentEvalConnectorService(deps.db, deps.userId, deps.workspaceId);
+  const service = new AgentEvalConnectorService(deps.db, deps.userId, datasetId, deps.workspaceId);
   const casesWithBindings = testCases
     .map((testCase) => ({
       bindings: getCaseConnectorBindings(testCase.content.environment),
+      contracts: testCase.content.environment?.toolManifests,
       id: testCase.id,
     }))
     .filter(({ bindings }) => Object.keys(bindings).length > 0);
+  for (const { bindings, contracts } of casesWithBindings) {
+    if (Object.keys(bindings).some((id) => !contracts?.[id])) {
+      throw new EvalConnectorBindingError(
+        'Add the original tool contracts to the Dataset Environment before running.',
+      );
+    }
+  }
   await service.checkBindingGroups(casesWithBindings.map(({ bindings }) => bindings));
   const resolved = new Map<string, Promise<{ snapshots: EvalConnectorSnapshots }>>();
-  for (const { bindings, id } of casesWithBindings) {
-    const cacheKey = JSON.stringify(
+  for (const { bindings, contracts, id } of casesWithBindings) {
+    const cacheKey = JSON.stringify([
       Object.entries(bindings).sort(([a], [b]) => a.localeCompare(b)),
-    );
+      contracts,
+    ]);
     let resolution = resolved.get(cacheKey);
     if (!resolution) {
-      resolution = service.resolveBindings(bindings);
+      resolution = service.resolveBindings(bindings, undefined, contracts);
       resolved.set(cacheKey, resolution);
     }
     snapshots[id] = (await resolution).snapshots;
@@ -67,22 +77,23 @@ export async function snapshotCaseConnectors(
 /** Validate the immutable target before changing evidence or starting a new attempt. */
 export async function assertCaseConnectorBindings(
   deps: EvalRunDeps,
+  datasetId: string | undefined,
   environment: EvalCaseEnvironment | undefined,
   expected: EvalConnectorSnapshots | undefined,
   checkConnection = false,
 ) {
   const bindings = getCaseConnectorBindings(environment);
   if (!Object.keys(bindings).length && !Object.keys(expected ?? {}).length) return;
-  if (!expected) {
+  if (!expected || !datasetId) {
     throw new EvalConnectorBindingError(
       'This run has no frozen mock connection bindings. Configure its Environment and create a new experiment.',
     );
   }
-  const service = new AgentEvalConnectorService(deps.db, deps.userId, deps.workspaceId);
-  await service.resolveBindings(bindings, expected);
+  const service = new AgentEvalConnectorService(deps.db, deps.userId, datasetId, deps.workspaceId);
+  await service.resolveBindings(bindings, expected, environment?.toolManifests);
   if (checkConnection) {
     await service.checkBindings(bindings);
-    await service.resolveBindings(bindings, expected);
+    await service.resolveBindings(bindings, expected, environment?.toolManifests);
   }
 }
 
@@ -111,14 +122,19 @@ export async function assertRunConnectorBindings(
     const key = JSON.stringify([bindings, expected]);
     if (checked.has(key)) continue;
     checked.add(key);
-    await assertCaseConnectorBindings(deps, environment, expected);
+    await assertCaseConnectorBindings(deps, run.datasetId, environment, expected);
     checks.push({ bindings, environment, expected });
   }
-  const service = new AgentEvalConnectorService(deps.db, deps.userId, deps.workspaceId);
+  const service = new AgentEvalConnectorService(
+    deps.db,
+    deps.userId,
+    run.datasetId,
+    deps.workspaceId,
+  );
   await service.checkBindingGroups(checks.map(({ bindings }) => bindings));
   // Discovery can change tool schemas. Every original alias and frozen contract
   // must still match after synchronization, even when its probe was shared.
   for (const { environment, expected } of checks) {
-    await assertCaseConnectorBindings(deps, environment, expected);
+    await assertCaseConnectorBindings(deps, run.datasetId, environment, expected);
   }
 }

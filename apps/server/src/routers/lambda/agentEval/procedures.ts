@@ -9,6 +9,8 @@ import {
   AgentEvalRunTopicModel,
   AgentEvalTestCaseModel,
 } from '@/database/models/agentEval';
+import { ConnectorModel } from '@/database/models/connector';
+import { ConnectorToolModel } from '@/database/models/connectorTool';
 import { AgentEvalDatasetConnectorRepo } from '@/database/repositories/agentEvalDatasetPackage/datasetConnectorBindings';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
@@ -24,7 +26,26 @@ export const agentEvalProcedure = wsCompatProcedure.use(serverDatabase).use(asyn
   return opts.next({
     ctx: {
       benchmarkModel: new AgentEvalBenchmarkModel(ctx.serverDB, ctx.userId, wsId),
-      evalConnectorService: new AgentEvalConnectorService(ctx.serverDB, ctx.userId, wsId),
+      evalConnectorServiceForDataset: (datasetId: string) =>
+        new AgentEvalConnectorService(ctx.serverDB, ctx.userId, datasetId, wsId),
+      evalConnectorModelsForDataset: async (datasetId: string) => {
+        const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
+        return {
+          connectorModel: ConnectorModel.forEvaluation(
+            ctx.serverDB,
+            ctx.userId,
+            datasetId,
+            wsId,
+            gateKeeper,
+          ),
+          connectorToolModel: ConnectorToolModel.forEvaluation(
+            ctx.serverDB,
+            ctx.userId,
+            datasetId,
+            wsId,
+          ),
+        };
+      },
       evalConnectorGateKeeper: {
         encrypt: async (plaintext: string) =>
           (await KeyVaultsGateKeeper.initWithEnvKey()).encrypt(plaintext),

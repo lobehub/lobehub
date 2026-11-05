@@ -31,6 +31,7 @@ function expected(): Array<
     ['checkProviders', 'query', 12],
     ['createBenchmark', 'mutation', 13],
     ['createDataset', 'mutation', 13],
+    ['createEvalConnector', 'mutation', 13],
     ['createEnvironment', 'mutation', 13],
     ['createExperiment', 'mutation', 13],
     ['createRun', 'mutation', 13],
@@ -45,6 +46,7 @@ function expected(): Array<
     ['getBenchmark', 'query', 12],
     ['getDataset', 'query', 12],
     ['getDatasetConnectorBindings', 'query', 12],
+    ['getEvalConnector', 'query', 12],
     ['getEnvironment', 'query', 12],
     ['getExperiment', 'query', 12],
     ['getResumableCases', 'query', 12],
@@ -57,7 +59,7 @@ function expected(): Array<
     ['listBenchmarks', 'query', 12],
     ['listDatasets', 'query', 12],
     ['listEnvironments', 'query', 11],
-    ['listEvalConnectors', 'query', 11],
+    ['listEvalConnectors', 'query', 12],
     ['listExperiments', 'query', 11],
     ['listRuns', 'query', 12],
     ['listTestCases', 'query', 12],
@@ -68,14 +70,18 @@ function expected(): Array<
     ['retryRunCase', 'mutation', 13],
     ['retryRunErrors', 'mutation', 13],
     ['startRun', 'mutation', 13],
+    ['testEvalConnector', 'mutation', 13],
     ['updateBenchmark', 'mutation', 13],
     ['updateDataset', 'mutation', 13],
     ['updateDatasetConnectorBindings', 'mutation', 13],
+    ['updateEvalConnector', 'mutation', 13],
     ['updateEnvironment', 'mutation', 13],
     ['updateExperiment', 'mutation', 13],
     ['updateRun', 'mutation', 13],
     ['updateRunMetrics', 'mutation', 13],
     ['updateRunStatus', 'mutation', 13],
     ['updateTestCase', 'mutation', 13],
-  ];
+  ].sort(([a], [b]) => String(a).localeCompare(String(b))) as Array<
+    [string, 'mutation' | 'query' | 'subscription', number]
+  >;
 }

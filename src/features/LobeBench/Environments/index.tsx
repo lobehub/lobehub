@@ -1,10 +1,6 @@
 'use client';
 
-import type {
-  EvalCaseEnvironment,
-  EvalConnectorBindings,
-  EvalMemoryFixture,
-} from '@lobechat/types';
+import type { EvalCaseEnvironment, EvalMemoryFixture } from '@lobechat/types';
 import {
   Block,
   Button,
@@ -27,7 +23,6 @@ import { Plus } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { ConnectorBindings } from '@/features/AgentEval/ConnectorBindings';
 import { isBuiltInRow } from '@/features/LobeBench/lobeBench';
 import { useClientDataSWR } from '@/libs/swr';
 import { agentEvalService } from '@/services/agentEval';
@@ -163,7 +158,6 @@ const LobeBenchEnvironments = memo(() => {
   const [sessionDate, setSessionDate] = useState('');
   const [timezone, setTimezone] = useState('');
   const [envPrompt, setEnvPrompt] = useState('');
-  const [connectorBindings, setConnectorBindings] = useState<EvalConnectorBindings>({});
   const [mockServices, setMockServices] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -184,7 +178,6 @@ const LobeBenchEnvironments = memo(() => {
     setTimezone(config.timezone ?? '');
     setEnvPrompt(config.envPrompt ?? '');
     setMockServices(joinList(config.mock?.services));
-    setConnectorBindings(config.connectorBindings ?? {});
   }, [editing]);
 
   // A rejected save names each bad field: the server answers with the
@@ -244,14 +237,13 @@ const LobeBenchEnvironments = memo(() => {
       ...(persona.trim() && { systemRole: persona.trim() }),
     };
     return {
+      ...(editing?.row?.config?.toolManifests && {
+        toolManifests: editing.row.config.toolManifests,
+      }),
       ...(editing?.row?.config?.toolForwarding && {
         toolForwarding: editing.row.config.toolForwarding,
       }),
-      connectorBindings: Object.fromEntries(
-        services
-          .filter((service) => connectorBindings[service])
-          .map((service) => [service, connectorBindings[service]]),
-      ),
+      connectorBindings: editing?.row?.id ? editing.row.config?.connectorBindings : undefined,
       ...(Object.keys(agent).length > 0 && { agent }),
       ...(envPrompt.trim() && { envPrompt: envPrompt.trim() }),
       ...(memory && { memory }),
@@ -469,19 +461,7 @@ const LobeBenchEnvironments = memo(() => {
               />
             </Flexbox>
             {splitList(mockServices).length > 0 && (
-              <ConnectorBindings
-                disabled={readOnly}
-                value={{ environmentBindings: { current: connectorBindings } }}
-                requirements={[
-                  {
-                    key: 'current',
-                    name: name || t('connections.environment'),
-                    scope: 'environment',
-                    services: splitList(mockServices),
-                  },
-                ]}
-                onChange={(value) => setConnectorBindings(value.environmentBindings?.current ?? {})}
-              />
+              <Text type="secondary">{t('connections.datasetOnly')}</Text>
             )}
             <Flexbox gap={10}>
               <Flexbox horizontal align={'center'} gap={12} justify={'space-between'}>

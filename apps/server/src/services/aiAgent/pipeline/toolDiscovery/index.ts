@@ -34,12 +34,16 @@ import { buildConnectorManifests } from '@/libs/mcp/buildConnectorManifests';
 import { getServerFeatureFlagsStateFromRuntimeConfig } from '@/server/featureFlags';
 import type { ServerAgentToolsContext } from '@/server/modules/Mecha';
 import { createServerAgentToolsEngine } from '@/server/modules/Mecha';
-import { AgentEvalConnectorService } from '@/server/services/agentEvalConnector';
+import {
+  AgentEvalConnectorService,
+  getEvalConnectorDatasetId,
+} from '@/server/services/agentEvalConnector';
 import { isAgentSignalEnabledForUser } from '@/server/services/agentSignal/featureGate';
 import { resolveUnsupportedMessageApis } from '@/server/services/bot/platforms/messageCapabilities';
 import { deviceGateway } from '@/server/services/deviceGateway';
 
 import { buildAllowedBuiltinTools } from '../../deviceToolRegistry';
+import { applyFrozenEvalManifests } from '../../evalGate/frozenManifests';
 import {
   filterPluginsByShareGate,
   getShareGrantActivatedPluginIds,
@@ -146,14 +150,17 @@ export const discoverTools = async (
   let operationAgentGroup: AgentGroupConfig | undefined;
   const isBotConversation = !!(botContext || discordContext);
   const boundConnectorIds = new Set(Object.keys(evalConnectorSnapshots ?? {}));
-  const boundConnectorManifests = evalConnectorSnapshots
-    ? (
-        await new AgentEvalConnectorService(deps.db, deps.userId, deps.workspaceId).resolveBindings(
-          evalConnectorSnapshots,
-          evalConnectorSnapshots,
-        )
-      ).manifests
-    : [];
+  const boundConnectorManifests =
+    evalConnectorSnapshots && boundConnectorIds.size
+      ? (
+          await new AgentEvalConnectorService(
+            deps.db,
+            deps.userId,
+            getEvalConnectorDatasetId(evalConnectorSnapshots),
+            deps.workspaceId,
+          ).resolveBindings(evalConnectorSnapshots, evalConnectorSnapshots)
+        ).manifests
+      : [];
 
   // Device-tool access (`canUseDevice` / `deviceAccessReason`) was resolved
   // once before the hetero early exit; the decision flows into the
@@ -552,7 +559,10 @@ export const discoverTools = async (
     // read off here and await it at the end: it is one Market round trip, and
     // every step of the run reads the answer back off the operation instead of
     // asking again.
-    if (toolsResult.enabledToolIds?.includes(CredsIdentifier)) {
+    if (
+      toolsResult.enabledToolIds?.includes(CredsIdentifier) &&
+      !boundConnectorIds.has(CredsIdentifier)
+    ) {
       credentialFactsPromise = readCredentialFacts(deps);
     }
 
@@ -703,6 +713,26 @@ export const discoverTools = async (
       ...toolManifestMap[RemoteDeviceManifest.identifier],
       systemRole: generateSystemPrompt(onlineDevices),
     };
+  }
+
+  if (!disableTools && boundConnectorManifests.length > 0) {
+    const frozenToolSet = {
+      activatableToolIds: [],
+      enabledToolIds: toolsResult.enabledToolIds,
+      executorMap: toolExecutorMap,
+      manifestMap: toolManifestMap,
+      sourceMap: toolSourceMap,
+      tools,
+    };
+    applyFrozenEvalManifests(
+      frozenToolSet,
+      boundConnectorManifests.filter(
+        (manifest) =>
+          (!exclusivePluginIds || exclusivePluginIds.includes(manifest.identifier)) &&
+          !requestedDisabledPluginIds.includes(manifest.identifier),
+      ),
+    );
+    tools = frozenToolSet.tools;
   }
 
   return {

@@ -60,7 +60,7 @@ export class AgentEvalTestCaseModel {
     return this.db.transaction(async (tx) => {
       const datasets = await assertWritableEvalDatasets(tx, this.scope(), [params.datasetId]);
       await assertEvalDatasetCasesMutable(tx, datasets);
-      await assertReadableEvalEnvironments(tx, this.scope(), [params.environmentId]);
+      await assertReadableEvalEnvironments(tx, this.scope(), [params]);
       let finalParams: NewAgentEvalTestCase = {
         ...params,
         userId: this.userId,
@@ -93,11 +93,7 @@ export class AgentEvalTestCaseModel {
         cases.map((c) => c.datasetId),
       );
       await assertEvalDatasetCasesMutable(tx, datasets);
-      await assertReadableEvalEnvironments(
-        tx,
-        this.scope(),
-        cases.map((c) => c.environmentId),
-      );
+      await assertReadableEvalEnvironments(tx, this.scope(), cases);
       const withUserId = cases.map((c) => ({
         ...c,
         userId: this.userId,
@@ -213,7 +209,14 @@ export class AgentEvalTestCaseModel {
       if (!testCase) return undefined;
       const datasets = await assertWritableEvalDatasets(tx, this.scope(), [testCase.datasetId]);
       await assertEvalDatasetCasesMutable(tx, datasets);
-      await assertReadableEvalEnvironments(tx, this.scope(), [value.environmentId]);
+      await assertReadableEvalEnvironments(tx, this.scope(), [
+        {
+          content: { ...testCase.content, ...value.content },
+          datasetId: testCase.datasetId,
+          environmentId:
+            value.environmentId === undefined ? testCase.environmentId : value.environmentId,
+        },
+      ]);
       const { content, ...data } = value;
       const [result] = await tx
         .update(agentEvalTestCases)

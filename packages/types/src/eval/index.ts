@@ -11,3 +11,4 @@ export * from './evaluation';
 export * from './ragas';
 export * from './rows';
 export * from './rubric';
+export * from './toolManifest';

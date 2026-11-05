@@ -9,7 +9,12 @@ import { createEvalConnectorHook } from './evalConnectorHook';
 
 const deps = { db: {} as never, userId: 'user' };
 const snapshots = {
-  notion: { connectorId: 'connector-id', fingerprint: 'contract', transport: 'mcp' as const },
+  notion: {
+    connectorId: 'connector-id',
+    datasetId: 'dataset',
+    fingerprint: 'contract',
+    transport: 'mcp' as const,
+  },
 };
 const event = () => ({
   apiName: 'search',
@@ -40,7 +45,23 @@ describe('evaluation connection hook', () => {
     const call = event();
     await hook.handler!(call as never);
     expect(call.mock).toHaveBeenCalledWith({
-      content: expect.stringContaining('unbound mock'),
+      content: 'The tool connection is unavailable.',
+      success: false,
+    });
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it('intercepts legacy snapshots without falling through to the ordinary tool executor', async () => {
+    const execute = vi.spyOn(AgentEvalConnectorService.prototype, 'execute');
+    const hook = createEvalConnectorHook(
+      deps,
+      { notion: { ...snapshots.notion, datasetId: undefined } },
+      {},
+    );
+    const call = event();
+    await hook.handler!(call as never);
+    expect(call.mock).toHaveBeenCalledWith({
+      content: 'The tool connection is unavailable. Please try again later.',
       success: false,
     });
     expect(execute).not.toHaveBeenCalled();
@@ -53,7 +74,7 @@ describe('evaluation connection hook', () => {
     expect(call.mock).not.toHaveBeenCalled();
   });
 
-  it('does not expose provider credentials in errors but retains actionable binding errors', async () => {
+  it('does not expose provider credentials in errors or evaluation routing details in errors', async () => {
     const execute = vi.spyOn(AgentEvalConnectorService.prototype, 'execute');
     const hook = createEvalConnectorHook(deps, snapshots, {});
     const call = event();
@@ -65,7 +86,7 @@ describe('evaluation connection hook', () => {
     );
     await hook.handler!(call as never);
     expect(call.mock).toHaveBeenLastCalledWith({
-      content: 'The mock connection or its tools changed.',
+      content: 'The tool connection is unavailable. Please try again later.',
       success: false,
     });
   });

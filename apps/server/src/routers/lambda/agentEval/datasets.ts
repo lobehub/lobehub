@@ -51,7 +51,7 @@ export const datasetRouter = router({
         const { cases, ...dataset } = input;
         for (const testCase of cases ?? [])
           await validateEvalConnectorBindings(
-            ctx.evalConnectorService,
+            ctx.evalConnectorServiceForDataset,
             testCase.content.environment?.connectorBindings,
           );
         const result = await ctx.datasetModel.create(dataset, cases);

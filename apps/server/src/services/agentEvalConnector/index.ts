@@ -1,9 +1,14 @@
 import { createHash } from 'node:crypto';
 
 import type { LobeChatDatabase } from '@lobechat/database';
-import { buildConnectorManifest } from '@lobechat/mecha';
 import { ssrfSafeFetch } from '@lobechat/ssrf-safe-fetch';
-import type { EvalConnectorBindings, EvalConnectorSnapshots, ToolManifest } from '@lobechat/types';
+import type {
+  EvalConnectorBindings,
+  EvalConnectorSnapshots,
+  EvalToolManifests,
+  ToolManifest,
+} from '@lobechat/types';
+import { evalToolManifestSchema } from '@lobechat/types';
 import { isRecord } from '@lobechat/utils/object';
 import debug from 'debug';
 import pMap from 'p-map';
@@ -24,8 +29,20 @@ export class EvalConnectorBindingError extends Error {
 
 const unavailable = () =>
   new EvalConnectorBindingError(
-    'The selected mock connection is unavailable. Choose an enabled HTTP connection in this scope that is not assigned to an Agent.',
+    'The selected mock connection is unavailable. Choose an enabled HTTP connection in this Dataset that is not assigned to an Agent.',
   );
+
+/** Persisted runs must name one Dataset before any connection can be resolved. */
+export const getEvalConnectorDatasetId = (snapshots: EvalConnectorSnapshots): string => {
+  const bindings = Object.values(snapshots);
+  const datasetId = bindings[0]?.datasetId;
+  if (!datasetId || bindings.some((binding) => binding.datasetId !== datasetId)) {
+    throw new EvalConnectorBindingError(
+      'This run has no consistent frozen Dataset connection scope. Create a new experiment.',
+    );
+  }
+  return datasetId;
+};
 
 const bindingLabel = (identifier: string, connectorId: string) => {
   const id = /^[\w-]{1,128}$/.test(connectorId) ? connectorId : 'unavailable';
@@ -82,10 +99,12 @@ export class AgentEvalConnectorService {
   constructor(
     private readonly db: LobeChatDatabase,
     private readonly userId: string,
+    private readonly datasetId: string,
     private readonly workspaceId?: string,
   ) {
-    this.connectorModel = new ConnectorModel(db, userId, workspaceId);
-    this.toolModel = new ConnectorToolModel(db, userId, workspaceId);
+    if (!datasetId) throw unavailable();
+    this.connectorModel = ConnectorModel.forEvaluation(db, userId, datasetId, workspaceId);
+    this.toolModel = ConnectorToolModel.forEvaluation(db, userId, datasetId, workspaceId);
   }
 
   async listAvailableConnectors() {
@@ -110,7 +129,17 @@ export class AgentEvalConnectorService {
     }
   }
 
-  async resolveBindings(bindings: EvalConnectorBindings = {}, expected?: EvalConnectorSnapshots) {
+  async resolveBindings(
+    bindings: EvalConnectorBindings = {},
+    expected?: EvalConnectorSnapshots,
+    contracts?: EvalToolManifests,
+  ) {
+    if (
+      expected &&
+      Object.keys(expected).length &&
+      getEvalConnectorDatasetId(expected) !== this.datasetId
+    )
+      throw unavailable();
     await this.validateBindings(bindings);
     const snapshots: EvalConnectorSnapshots = Object.create(null);
     const manifests: ToolManifest[] = [];
@@ -122,10 +151,22 @@ export class AgentEvalConnectorService {
       if (!isEligible(connector)) throw unavailable();
       const tools = await this.toolModel.queryByConnector(connector.id);
       const transport = binding.transport ?? 'mcp';
+      const original = contracts?.[identifier] ?? expected?.[identifier]?.manifest;
+      if ((expected || contracts) && !original) {
+        throw new EvalConnectorBindingError(
+          'This run has no original tool contract. Add the contract to its Environment and create a new experiment.',
+        );
+      }
+      const manifest = original ? evalToolManifestSchema.parse(original) : undefined;
+      if (manifest && manifest.identifier !== identifier) {
+        throw new EvalConnectorBindingError('The tool contract does not match its binding.');
+      }
       const fingerprint = createHash('sha256')
         .update(
           stable({
+            ...(manifest && { manifest }),
             connectorId: connector.id,
+            datasetId: this.datasetId,
             mcpServerUrl: connector.mcpServerUrl,
             tools: tools
               .map(({ description, inputSchema, permission, toolName }) => ({
@@ -139,26 +180,34 @@ export class AgentEvalConnectorService {
           }),
         )
         .digest('hex');
-      const snapshot = { connectorId: connector.id, fingerprint, transport };
+      const snapshot = {
+        connectorId: connector.id,
+        datasetId: this.datasetId,
+        fingerprint,
+        transport,
+        ...(manifest && { manifest }),
+      };
       if (expected && stable(expected[identifier]) !== stable(snapshot)) {
         throw new EvalConnectorBindingError(
           `${bindingLabel(identifier, connector.id)}: The mock connection or its tools changed. Create a new experiment with the current connection.`,
         );
       }
-      const manifest = buildConnectorManifest({
-        identifier,
-        isEnabled: true,
-        name: connector.name,
-        tools: tools.filter((tool) => tool.permission === 'auto'),
-      });
-      if (!manifest?.api.length) {
+      const permitted = new Set(
+        tools.filter((tool) => tool.permission === 'auto').map((tool) => tool.toolName),
+      );
+      if (!permitted.size) {
         throw new EvalConnectorBindingError(
-          `${bindingLabel(identifier, connector.id)}: The mock connection has no automatically permitted tools. Sync its tools and review their permissions.`,
+          `${bindingLabel(identifier, connector.id)}: The connection has no automatically permitted tools.`,
+        );
+      }
+      if (manifest?.api.some((api) => !permitted.has(api.name))) {
+        throw new EvalConnectorBindingError(
+          `${bindingLabel(identifier, connector.id)}: The connection does not provide all original tools with automatically permitted access.`,
         );
       }
       snapshots[identifier] = snapshot;
       // Deliberately no mcpParams: operation state may retain this manifest.
-      manifests.push(manifest as ToolManifest);
+      if (manifest) manifests.push(manifest as ToolManifest);
     }
     return { manifests, snapshots };
   }
@@ -206,11 +255,18 @@ export class AgentEvalConnectorService {
   }
 
   /** Authenticated discovery is run before creation, not inferred from cached health. */
-  async checkBindings(bindings: EvalConnectorBindings = {}) {
+  async checkBindings(bindings: EvalConnectorBindings = {}, contracts?: EvalToolManifests) {
     await this.validateBindings(bindings);
-    if (Object.keys(bindings).length === 0) return this.resolveBindings(bindings);
+    if (Object.keys(bindings).length === 0)
+      return this.resolveBindings(bindings, undefined, contracts);
     const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
-    const connectorModel = new ConnectorModel(this.db, this.userId, this.workspaceId, gateKeeper);
+    const connectorModel = ConnectorModel.forEvaluation(
+      this.db,
+      this.userId,
+      this.datasetId,
+      this.workspaceId,
+      gateKeeper,
+    );
     for (const [identifier, binding] of Object.entries(bindings)) {
       try {
         const publicRow = await this.connectorModel.findPublicById(binding.connectorId);
@@ -276,7 +332,7 @@ export class AgentEvalConnectorService {
         );
       }
     }
-    return this.resolveBindings(bindings);
+    return this.resolveBindings(bindings, undefined, contracts);
   }
 
   private authHeaders(clientParams: ReturnType<typeof buildConnectorMcpParams>) {
@@ -302,6 +358,7 @@ export class AgentEvalConnectorService {
       stepIndex?: number;
     },
   ) {
+    if (getEvalConnectorDatasetId(bindings) !== this.datasetId) throw unavailable();
     const binding = Object.hasOwn(bindings, identifier) ? bindings[identifier] : undefined;
     if (!binding) throw unavailable();
     const approved = await this.connectorModel.findPublicById(binding.connectorId);
@@ -314,7 +371,13 @@ export class AgentEvalConnectorService {
       throw new EvalConnectorBindingError('This tool is not permitted for unattended evaluation.');
     }
     const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
-    const credentialModel = new ConnectorModel(this.db, this.userId, this.workspaceId, gateKeeper);
+    const credentialModel = ConnectorModel.forEvaluation(
+      this.db,
+      this.userId,
+      this.datasetId,
+      this.workspaceId,
+      gateKeeper,
+    );
     let connector = await credentialModel.findById(binding.connectorId);
     if (
       !connector ||

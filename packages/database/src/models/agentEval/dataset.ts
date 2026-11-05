@@ -1,8 +1,13 @@
 import type { AgentEvalTestCaseInsert } from '@lobechat/types';
-import { and, asc, count, desc, eq, inArray, isNotNull, isNull, or } from 'drizzle-orm';
+import { and, asc, count, desc, eq, inArray, isNotNull, isNull, or, sql } from 'drizzle-orm';
 import isEqual from 'fast-deep-equal';
 
-import { agentEvalDatasets, agentEvalTestCases, type NewAgentEvalDataset } from '../../schemas';
+import {
+  agentEvalDatasets,
+  agentEvalTestCases,
+  type NewAgentEvalDataset,
+  userConnectors,
+} from '../../schemas';
 import { type LobeChatDatabase } from '../../type';
 import { buildWorkspaceWhere, normalizeWorkspaceId } from '../../utils/workspace';
 import {
@@ -64,11 +69,6 @@ export class AgentEvalDatasetModel {
   ) =>
     this.db.transaction(async (tx) => {
       const fixed = await isFixedLobeBenchDataset(tx, params);
-      await assertReadableEvalEnvironments(
-        tx,
-        { userId: this.userId, workspaceId: this.workspaceId },
-        cases?.map((testCase) => testCase.environmentId) ?? [],
-      );
       const [result] = await tx
         .insert(agentEvalDatasets)
         .values({
@@ -79,6 +79,11 @@ export class AgentEvalDatasetModel {
         })
         .returning();
       if (cases?.length) {
+        await assertReadableEvalEnvironments(
+          tx,
+          { userId: this.userId, workspaceId: this.workspaceId },
+          cases.map((testCase) => ({ ...testCase, datasetId: result.id })),
+        );
         await tx.insert(agentEvalTestCases).values(
           cases.map((testCase, index) => ({
             ...testCase,
@@ -96,9 +101,31 @@ export class AgentEvalDatasetModel {
    * Delete a dataset by id
    */
   delete = async (id: string) => {
-    return this.db
-      .delete(agentEvalDatasets)
-      .where(and(eq(agentEvalDatasets.id, id), this.mutableOwnership()));
+    return this.db.transaction(async (tx) => {
+      const [dataset] = await tx
+        .select({ id: agentEvalDatasets.id })
+        .from(agentEvalDatasets)
+        .where(and(eq(agentEvalDatasets.id, id), this.mutableOwnership()))
+        .for('update');
+      if (dataset) {
+        // The Dataset marker has no FK. Remove its private credentials in the
+        // same transaction; connection tools cascade through their existing FK.
+        await tx
+          .delete(userConnectors)
+          .where(
+            and(
+              buildWorkspaceWhere(
+                { userId: this.userId, workspaceId: this.workspaceId },
+                userConnectors,
+              ),
+              sql`${userConnectors.metadata} -> 'agentEval' ->> 'datasetId' = ${dataset.id}`,
+            ),
+          );
+      }
+      return tx
+        .delete(agentEvalDatasets)
+        .where(and(eq(agentEvalDatasets.id, id), this.mutableOwnership()));
+    });
   };
 
   /**

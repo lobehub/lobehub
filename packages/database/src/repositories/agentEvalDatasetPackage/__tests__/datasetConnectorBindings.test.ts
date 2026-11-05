@@ -9,6 +9,7 @@ import {
   agentEvalDatasets,
   agentEvalEnvironments,
   agentEvalTestCases,
+  userConnectors,
   users,
 } from '../../../schemas';
 import { AgentEvalDatasetConnectorRepo } from '../datasetConnectorBindings';
@@ -40,7 +41,22 @@ const pack = (): AgentEvalDatasetPackage => ({
   format: 'lobehub-eval-dataset',
   version: 1,
 });
-const importPackage = () => packageRepo.importPackage({ package: pack(), sha256: 'c'.repeat(64) });
+const importPackage = async () => {
+  const result = await packageRepo.importPackage({ package: pack(), sha256: 'c'.repeat(64) });
+  await db
+    .insert(userConnectors)
+    .values({
+      id: connector.connectorId,
+      identifier: 'eval-private',
+      name: 'Eval',
+      sourceType: 'custom',
+      status: 'connected',
+      userId,
+      metadata: { agentEval: { datasetId: result.datasetId } },
+    })
+    .onConflictDoNothing();
+  return result;
+};
 
 beforeEach(async () => {
   await db.insert(users).values([{ id: userId }, { id: otherId }]);
@@ -54,6 +70,18 @@ afterEach(async () => {
 });
 
 describe('installed dataset connector bindings', () => {
+  it('rejects a connection from another Dataset even within the same account', async () => {
+    await importPackage();
+    const second = await importPackage();
+    const { requirements } = await repository.getBindings(second.datasetId);
+    await expect(
+      repository.updateBindings(second.datasetId, {
+        environmentBindings: { [requirements[0].key]: { notion: connector } },
+      }),
+    ).rejects.toThrow('another Dataset');
+    expect((await repository.getBindings(second.datasetId)).requirements[0].bindings).toEqual({});
+  });
+
   it('reads built-in dataset requirements while keeping built-in datasets and environments read-only', async () => {
     const { datasetId } = await importPackage();
     const before = await repository.getBindings(datasetId);
@@ -158,6 +186,22 @@ describe('installed dataset connector bindings', () => {
       }),
     ).rejects.toThrow('shared with another dataset');
     expect((await repository.getBindings(first.datasetId)).requirements[0].bindings).toEqual({});
+  });
+
+  it('allows repair when the other Dataset only has retired references to the environment', async () => {
+    const first = await importPackage();
+    const second = await importPackage();
+    const { requirements } = await repository.getBindings(first.datasetId);
+    await db
+      .update(agentEvalTestCases)
+      .set({ environmentId: requirements[0].key, metadata: { retired: true } })
+      .where(eq(agentEvalTestCases.datasetId, second.datasetId));
+    await repository.updateBindings(first.datasetId, {
+      environmentBindings: { [requirements[0].key]: { notion: connector } },
+    });
+    expect((await repository.getBindings(first.datasetId)).requirements[0].bindings).toEqual({
+      notion: connector,
+    });
   });
 
   it('does not present inherited targets as bound when a case explicitly overrides its bindings', async () => {

@@ -31,6 +31,9 @@ export const mergeCaseEnvironment = (
     ...(shared.mock || own.mock
       ? { mock: { services: own.mock?.services ?? shared.mock?.services ?? [] } }
       : {}),
+    ...(shared.toolManifests || own.toolManifests
+      ? { toolManifests: { ...shared.toolManifests, ...own.toolManifests } }
+      : {}),
     ...(shared.toolForwarding || own.toolForwarding
       ? { toolForwarding: { ...shared.toolForwarding, ...own.toolForwarding } }
       : {}),

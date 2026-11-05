@@ -35,6 +35,7 @@ interface DatasetPackagePreviewProps {
   benchmarkName: string;
   benchmarks: DatasetPackageBenchmark[];
   bindings: AgentEvalDatasetPackageBindings;
+  datasetId?: string;
   disabled?: boolean;
   existingDataset?: boolean;
   name: string;
@@ -53,6 +54,7 @@ export const DatasetPackagePreview = ({
   benchmarkId,
   benchmarkName,
   benchmarks,
+  datasetId,
   disabled,
   existingDataset,
   name,
@@ -122,6 +124,7 @@ export const DatasetPackagePreview = ({
                 title: t('connections.optional'),
                 children: (
                   <ConnectorBindings
+                    datasetId={datasetId}
                     disabled={disabled}
                     value={bindings}
                     requirements={preview.connectionRequirements.filter(

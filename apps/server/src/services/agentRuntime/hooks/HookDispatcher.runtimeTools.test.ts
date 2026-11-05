@@ -21,7 +21,12 @@ vi.mock('@/database/server', () => ({ getServerDB: async () => ({}) }));
 const operationId = 'queued-eval-operation';
 const alias = 'lobe-web-browsing';
 const snapshots = {
-  [alias]: { connectorId: 'exact-connection', fingerprint: 'frozen', transport: 'mcp' as const },
+  [alias]: {
+    connectorId: 'exact-connection',
+    datasetId: 'dataset',
+    fingerprint: 'frozen',
+    transport: 'mcp' as const,
+  },
 };
 const event = {
   apiName: 'search',

@@ -7,12 +7,18 @@ import {
 } from '@/server/services/agentEvalConnector';
 
 export const validateEvalConnectorBindings = async (
-  service: Pick<AgentEvalConnectorService, 'validateBindings'>,
+  serviceForDataset: (datasetId: string) => Pick<AgentEvalConnectorService, 'validateBindings'>,
   bindings?: EvalConnectorBindings,
+  datasetId?: string,
 ) => {
-  if (!bindings) return;
+  if (!bindings || !Object.keys(bindings).length) return;
+  if (!datasetId)
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message: 'Manage evaluation connections within their Dataset.',
+    });
   try {
-    await service.validateBindings(bindings);
+    await serviceForDataset(datasetId).validateBindings(bindings);
   } catch (error) {
     if (error instanceof EvalConnectorBindingError) {
       throw new TRPCError({ code: error.code, message: error.message });
