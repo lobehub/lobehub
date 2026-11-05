@@ -97,7 +97,7 @@ export class CodexThreadSession {
   private canFallback: boolean;
   private closedByHost = false;
   private cumulativeUsage?: UsageData;
-  private interruptRequested = false;
+  private startupInterrupted = false;
   private lastOperationId?: string;
   private model?: string;
   private running = false;
@@ -126,7 +126,7 @@ export class CodexThreadSession {
     if (this.running) throw new Error('Codex thread already has a running turn');
 
     this.running = true;
-    this.interruptRequested = false;
+    this.startupInterrupted = false;
     this.lastOperationId = options.operationId;
     this.emitStatus('starting', options.operationId);
     const traceUnsubscribers: Array<() => void> = [];
@@ -143,6 +143,10 @@ export class CodexThreadSession {
       }
       await this.ensureThread();
       if (this.closedByHost) return;
+      if (this.startupInterrupted) {
+        this.emitStatus('idle', options.operationId);
+        return;
+      }
       const threadId = this.threadId;
       if (!threadId) throw new Error('Codex thread is not attached');
       traceUnsubscribers.push(this.options.client.onRawMessage(threadId, options.onRawMessage));
@@ -161,7 +165,7 @@ export class CodexThreadSession {
         adapter,
         askUserBridge: options.askUserBridge,
         completion,
-        interruptRequested: this.interruptRequested,
+        interruptRequested: false,
         notificationQueue: Promise.resolve(),
         operationId: options.operationId,
         resolve: resolveTurn,
@@ -194,6 +198,11 @@ export class CodexThreadSession {
       this.emitStatus('idle', options.operationId);
     } catch (error) {
       if (this.closedByHost) return;
+      // A startup error after Stop must not cause the host to replay the prompt via exec.
+      if (this.startupInterrupted) {
+        this.emitStatus('idle', options.operationId);
+        return;
+      }
       if (this.activeTurn?.transportInterrupted) {
         await this.activeTurn.notificationQueue;
         if (this.activeTurn.notificationError) {
@@ -210,16 +219,18 @@ export class CodexThreadSession {
       this.activeTurn?.askUserBridge?.cancelAll('session_ended');
       for (const unsubscribe of traceUnsubscribers) unsubscribe();
       this.activeTurn = undefined;
-      this.interruptRequested = false;
+      this.startupInterrupted = false;
       this.running = false;
     }
   }
 
   async interrupt(): Promise<void> {
     if (!this.running) return;
-    this.interruptRequested = true;
     const activeTurn = this.activeTurn;
-    if (!activeTurn) return;
+    if (!activeTurn) {
+      this.startupInterrupted = true;
+      return;
+    }
 
     activeTurn.interruptRequested = true;
     activeTurn.askUserBridge?.cancelAll('session_ended');
@@ -241,7 +252,6 @@ export class CodexThreadSession {
   close(): void {
     if (this.closedByHost) return;
     this.closedByHost = true;
-    this.interruptRequested = true;
     if (this.activeTurn) {
       this.activeTurn.interruptRequested = true;
       if (this.activeTurn.turnId) {
