@@ -100,6 +100,7 @@ describe('AgentStateManager', () => {
       const state = {
         cost: { total: 1 },
         messages: [{ content: 'x'.repeat(1000), id: 'msg-1', role: 'user' }],
+        origin: { agentId: 'agent-1', topicId: 'topic-1' },
         status: 'running' as const,
         stepCount: 1,
       };
@@ -111,6 +112,25 @@ describe('AgentStateManager', () => {
       // Other fields are retained.
       expect(JSON.parse(serialized).status).toBe('running');
     });
+
+    it.each([undefined, { agentId: 'agent-1' }, { topicId: 'topic-1' }])(
+      'keeps private transcripts without a rehydratable origin: %j',
+      async (origin) => {
+        const messages = [{ content: 'private transcript', id: 'private-1', role: 'user' }];
+        const state = { messages, origin, status: 'running', stepCount: 1 };
+        await stateManager.saveAgentState('private-op', state as any);
+        const serialized = redisMock.setex.mock.calls.at(-1)?.[2] as string;
+        expect(JSON.parse(serialized).messages).toEqual(messages);
+
+        await stateManager.saveStepResult('private-op', {
+          executionTime: 1,
+          newState: state as any,
+          stepIndex: 1,
+        });
+        const stepState = pipelineMock.setex.mock.calls.at(-1)?.[2] as string;
+        expect(JSON.parse(stepState).messages).toEqual(messages);
+      },
+    );
 
     it('keeps the full messages array when an ephemeral (id-less) message is present', async () => {
       const state = {
@@ -184,6 +204,7 @@ describe('AgentStateManager', () => {
         newState: {
           cost: { total: 1 },
           messages: [{ content: 'x'.repeat(1000), id: 'msg-1', role: 'user' }],
+          origin: { agentId: 'agent-1', topicId: 'topic-1' },
           status: 'done' as const,
           stepCount: 1,
         },
