@@ -325,6 +325,7 @@ export const registerBuiltinToolSurfaces = (): void => {
     [KIMI_CODE_IDENTIFIER]: KimiCodeRenders as Record<string, BuiltinRender>,
     codex: {
       ...CodexRenders,
+      [ClaudeCodeApiName.AskUserQuestion]: ClaudeCodeRenders[ClaudeCodeApiName.AskUserQuestion],
       command_execution: RunCommandRender as BuiltinRender,
     },
     [GithubIdentifier]: GithubRenders,
@@ -411,7 +412,10 @@ export const registerBuiltinToolSurfaces = (): void => {
     },
     [PI_IDENTIFIER]: heterogeneousCliInspectors,
     [KIMI_CODE_IDENTIFIER]: KimiCodeInspectors,
-    'codex': CodexInspectors,
+    'codex': {
+      ...CodexInspectors,
+      [ClaudeCodeApiName.AskUserQuestion]: ClaudeCodeInspectors[ClaudeCodeApiName.AskUserQuestion],
+    },
     [GithubIdentifier]: GithubInspectors,
     [LinearIdentifier]: LinearInspectors,
     [TwitterIdentifier]: TwitterInspectors,
@@ -458,6 +462,10 @@ export const registerBuiltinToolSurfaces = (): void => {
       BuiltinIntervention
     >,
     [ClaudeCodeIdentifier]: ClaudeCodeInterventions as Record<string, BuiltinIntervention>,
+    codex: {
+      [ClaudeCodeApiName.AskUserQuestion]:
+        ClaudeCodeInterventions[ClaudeCodeApiName.AskUserQuestion],
+    },
     [COPILOT_IDENTIFIER]: {
       [ClaudeCodeApiName.AskUserQuestion]:
         ClaudeCodeInterventions[ClaudeCodeApiName.AskUserQuestion],

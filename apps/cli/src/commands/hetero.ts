@@ -138,6 +138,7 @@ const spawnAgentOrRuntime = (
 ): Promise<Awaited<ReturnType<typeof spawnAgent>>> => {
   if (nativeCodex)
     return createCodexAgentHandle({
+      askUserBridge: spawnOpts.askUserBridge,
       clientVersion: cliVersion,
       args: spawnOpts.extraArgs ?? [],
       commandPath: spawnOpts.command!,
@@ -743,15 +744,10 @@ const exec = async (options: ExecOptions): Promise<void> => {
 
   // ─── AskUserQuestion MCP — remote Human-in-the-loop ────────────────────────
   //
-  // Mount the same `lobe_cc` MCP server the desktop app uses, but resolve the
-  // bridge over the server's Redis stream instead of Electron IPC:
-  //   - request out: `bridge.events()` ride the normal ingest sink → server
-  //     `heteroIngest` → Redis stream → renderer shows the AskUserQuestion card.
-  //   - response back: the sandbox can't read Redis, so a long-poll pulls the
-  //     `agent_intervention_response` off the stream (published by the browser's
-  //     `submitHeteroIntervention`) and resolves the pending bridge call.
-  // The bridge's own 5-min timeout is the backstop, so a dropped poll or an
-  // absent user never strands CC.
+  // MCP and native Codex share the desktop's AskUserBridge. Requests flow
+  // through durable ingest to the question card; long-poll returns browser
+  // answers from the server's Redis stream to the blocked native callback.
+  // The bridge timeout bounds the wait, including native Codex requests.
   const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
   let askServer: LobeBuiltinMcpServer | undefined;
   let askBridge: AskUserBridge | undefined;
@@ -760,6 +756,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
   if (
     serverIngest &&
     (agentType === 'claude-code' ||
+      (agentType === 'codex' && options.codexAppServer) ||
       agentType === 'copilot' ||
       agentType === 'cursor' ||
       agentType === 'droid' ||
@@ -768,6 +765,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
     serverIngester
   ) {
     if (
+      agentType === 'codex' ||
       agentType === 'copilot' ||
       agentType === 'cursor' ||
       agentType === 'devin' ||
