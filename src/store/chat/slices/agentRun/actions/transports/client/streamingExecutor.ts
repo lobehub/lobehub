@@ -643,7 +643,6 @@ export class StreamingExecutorActionImpl {
     const modelRuntimeConfig = {
       model,
       provider: provider!,
-      // TODO: Support dedicated compression model from chatConfig.compressionModelId
       compressionModel: { model, provider: provider! },
     };
     // ===========================================
