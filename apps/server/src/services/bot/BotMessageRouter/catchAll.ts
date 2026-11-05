@@ -83,6 +83,8 @@ export const registerCatchAllHandler = (bot: Chat<any>, ctx: BotHandlerContext):
       if (message.author.isBot === true) return;
       // Blank events (recalls, unsupported types, whitespace) carry nothing for the agent. Drop them
       // before the access gates, commands and wake judgement, all of which can reply or call a model.
+      // No wake decision record either: `record()` would run the shadow policies, the classifier
+      // included, on the blank text.
       const burst = mergeSkippedMessages(message, context);
       if (isEmptyInboundMessage(burst)) {
         log(
@@ -93,7 +95,6 @@ export const registerCatchAllHandler = (bot: Chat<any>, ctx: BotHandlerContext):
           message.id,
           (context?.skipped?.length ?? 0) + 1,
         );
-        observe('catchAll', burst, thread, 'skip', 'empty-message');
         return;
       }
 

@@ -93,7 +93,6 @@ export type BotWakeReason =
   | 'addressed'
   | 'command'
   | 'direct-message'
-  | 'empty-message'
   | 'explicit-mention'
   | 'followup-window'
   | 'in-duty'
@@ -118,7 +117,6 @@ const KIND_BY_REASON: Record<BotWakeReason, BotWakeKind> = {
   'addressed': 'mention',
   'command': 'mention',
   'direct-message': 'mention',
-  'empty-message': 'mention',
   'explicit-mention': 'mention',
   'followup-window': 'followup',
   'in-duty': 'followup',
@@ -150,7 +148,6 @@ const TAG_BY_REASON: Record<BotWakeReason, string> = {
   'addressed': 'addressed',
   'command': 'command',
   'direct-message': 'dm',
-  'empty-message': 'empty',
   'explicit-mention': 'mention',
   'followup-window': 'followup',
   'in-duty': 'duty',

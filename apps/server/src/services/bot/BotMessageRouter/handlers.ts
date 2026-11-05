@@ -470,6 +470,8 @@ export function registerHandlers(
     await trackThreadParticipants(thread, [...(context?.skipped ?? []), message]);
     // Blank events (recalls, unsupported types, whitespace) carry nothing for the agent. Drop them
     // before the access gates, commands and wake judgement, all of which can reply or call a model.
+    // No wake decision record either: `record()` would run the shadow policies, the classifier
+    // included, on the blank text.
     const burst = mergeSkippedMessages(message, context);
     if (isEmptyInboundMessage(burst)) {
       log(
@@ -480,7 +482,6 @@ export function registerHandlers(
         message.id,
         (context?.skipped?.length ?? 0) + 1,
       );
-      observe('onNewMention', burst, thread, 'skip', 'empty-message');
       return;
     }
 
@@ -617,6 +618,8 @@ export function registerHandlers(
     if (message.author.isBot === true) return;
     // Blank events (recalls, unsupported types, whitespace) carry nothing for the agent. Drop them
     // before the access gates, commands and wake judgement, all of which can reply or call a model.
+    // No wake decision record either: `record()` would run the shadow policies, the classifier
+    // included, on the blank text.
     const burst = mergeSkippedMessages(message, context);
     if (isEmptyInboundMessage(burst)) {
       log(
@@ -627,7 +630,6 @@ export function registerHandlers(
         message.id,
         (context?.skipped?.length ?? 0) + 1,
       );
-      observe('onSubscribedMessage', burst, thread, 'skip', 'empty-message', true);
       return;
     }
     const replyLocale = detectReplyLocale(message);
