@@ -115,12 +115,14 @@ export const decideVerdict = ({
   if (blocking) reasons.push(`blocking ${blocking}`);
   const differences = open((item) => item.category === 'difference');
   if (differences.length) reasons.push(`difference ${differences.length}`);
-  const unsigned = open(
-    (item) => item.category === 'needs-signoff' || item.category === 'unpaired',
-  );
-  if (unsigned.length) {
+  for (const [category, label] of [
+    ['needs-signoff', 'needs sign-off'],
+    ['unpaired', 'unpaired'],
+  ] as const) {
+    const unsigned = open((item) => item.category === category);
+    if (!unsigned.length) continue;
     const stale = unsigned.filter((item) => item.signoff === 'stale').length;
-    reasons.push(`needs sign-off ${unsigned.length}${stale ? ` (${stale} stale)` : ''}`);
+    reasons.push(`${label} ${unsigned.length}${stale ? ` (${stale} stale)` : ''}`);
   }
   const hashes = new Map(items.map((item) => [item.key, item.hash]));
   const openReworks = [...(reworks?.values() ?? [])].filter(
