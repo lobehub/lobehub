@@ -16,6 +16,7 @@ import {
   workspaceTeams,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
+import { WorkspaceAuditLogModel } from '../workspaceAuditLog';
 import { WorkspaceMemberModel } from '../workspaceMember';
 
 const serverDB: LobeChatDatabase = await getTestDB();
@@ -694,13 +695,12 @@ describe('WorkspaceMemberModel', () => {
     });
   });
 
-  describe('reusable link invitations', () => {
-    it('rotateLinkInvitation creates a reusable link and revokes the previous one atomically', async () => {
+  describe('share link invitations', () => {
+    it('createLinkInvitation creates reusable links; several can be live at once', async () => {
       const model = new WorkspaceMemberModel(serverDB, inviterId);
 
-      const first = await model.rotateLinkInvitation({ expiresAt: null, workspaceId });
-      expect(first.revokedIds).toEqual([]);
-      expect(first.invitation).toMatchObject({
+      const first = await model.createLinkInvitation({ expiresAt: null, workspaceId });
+      expect(first).toMatchObject({
         email: null,
         expiresAt: null,
         inviterId,
@@ -708,65 +708,99 @@ describe('WorkspaceMemberModel', () => {
         role: 'member',
         status: 'pending',
       });
-      expect(first.invitation.token).toHaveLength(32);
+      expect(first.token).toHaveLength(32);
 
       const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-      const second = await model.rotateLinkInvitation({ expiresAt, role: 'viewer', workspaceId });
-      expect(second.revokedIds).toEqual([first.invitation.id]);
-      expect(second.invitation.token).not.toBe(first.invitation.token);
-      expect(second.invitation.role).toBe('viewer');
-      expect(second.invitation.expiresAt?.getTime()).toBe(expiresAt.getTime());
+      const second = await model.createLinkInvitation({ expiresAt, role: 'viewer', workspaceId });
+      expect(second.token).not.toBe(first.token);
+      expect(second.expiresAt?.getTime()).toBe(expiresAt.getTime());
 
-      expect((await model.findInvitationByToken(first.invitation.token))?.status).toBe('revoked');
-      expect((await model.findLatestLinkInvitation(workspaceId))?.id).toBe(second.invitation.id);
+      // Both stay live: creating a link does not revoke the others.
+      expect((await model.listLinkInvitations(workspaceId)).map((row) => row.id)).toEqual([
+        second.id,
+        first.id,
+      ]);
+      expect(await model.countLinkInvitations(workspaceId)).toBe(2);
     });
 
-    it('enforces at most one active link per workspace at the database level', async () => {
+    it('listLinkInvitations leaves out revoked, expired, single-use and other workspaces', async () => {
       const model = new WorkspaceMemberModel(serverDB, inviterId);
-      await model.rotateLinkInvitation({ expiresAt: null, workspaceId });
+      const live = await model.createLinkInvitation({ expiresAt: null, workspaceId });
+      const revoked = await model.createLinkInvitation({ expiresAt: null, workspaceId });
+      await model.revokeLinkInvitation(workspaceId, revoked.id);
+      await model.createLinkInvitation({ expiresAt: new Date(Date.now() - 1000), workspaceId });
+      await model.createInvitation({ workspaceId });
+      await new WorkspaceMemberModel(serverDB, otherUserId).createLinkInvitation({
+        expiresAt: null,
+        workspaceId: otherWorkspaceId,
+      });
 
-      await expect(
-        serverDB.insert(workspaceInvitations).values({
-          inviterId,
-          reusable: true,
-          token: 'second-active-link',
-          workspaceId,
-        }),
-      ).rejects.toThrow();
-
-      // Other workspaces and single-use invitations are unaffected.
-      const other = new WorkspaceMemberModel(serverDB, otherUserId);
-      await expect(
-        other.rotateLinkInvitation({ expiresAt: null, workspaceId: otherWorkspaceId }),
-      ).resolves.toBeDefined();
-      await expect(model.createInvitation({ workspaceId })).resolves.toBeDefined();
+      expect((await model.listLinkInvitations(workspaceId)).map((row) => row.id)).toEqual([
+        live.id,
+      ]);
+      expect(await model.countLinkInvitations(workspaceId)).toBe(1);
     });
 
-    it('revokeLinkInvitations revokes the active link and is a no-op when none exists', async () => {
+    it('revokeLinkInvitation revokes only that live link of that workspace', async () => {
       const model = new WorkspaceMemberModel(serverDB, inviterId);
-      expect(await model.revokeLinkInvitations(workspaceId)).toEqual([]);
-      expect(await model.findLatestLinkInvitation(workspaceId)).toBeUndefined();
-      const { invitation } = await model.rotateLinkInvitation({ expiresAt: null, workspaceId });
+      const a = await model.createLinkInvitation({ expiresAt: null, workspaceId });
+      const b = await model.createLinkInvitation({ expiresAt: null, workspaceId });
       const single = await model.createInvitation({ workspaceId });
 
-      expect(await model.revokeLinkInvitations(workspaceId)).toEqual([invitation.id]);
-      // The revoked link is still reported, so callers can show "revoked".
-      expect(await model.findLatestLinkInvitation(workspaceId)).toMatchObject({
-        id: invitation.id,
-        status: 'revoked',
-      });
-      // Single-use invitations are left alone.
+      // Wrong workspace, single-use invitation and unknown id are no-ops.
+      expect(await model.revokeLinkInvitation(otherWorkspaceId, a.id)).toBe(false);
+      expect(await model.revokeLinkInvitation(workspaceId, single.id)).toBe(false);
+      expect(await model.revokeLinkInvitation(workspaceId, 'missing')).toBe(false);
+
+      expect(await model.revokeLinkInvitation(workspaceId, a.id)).toBe(true);
+      expect(await model.revokeLinkInvitation(workspaceId, a.id)).toBe(false);
+
+      expect((await model.findInvitationByToken(a.token))?.status).toBe('revoked');
+      expect((await model.findInvitationByToken(b.token))?.status).toBe('pending');
       expect((await model.findInvitationByToken(single.token))?.status).toBe('pending');
     });
 
-    it('listPendingInvitations excludes reusable links', async () => {
+    it('listPendingInvitations excludes share links', async () => {
       const model = new WorkspaceMemberModel(serverDB, inviterId);
       const single = await model.createInvitation({ workspaceId });
-      await model.rotateLinkInvitation({ expiresAt: null, workspaceId });
+      await model.createLinkInvitation({ expiresAt: null, workspaceId });
 
       const rows = await model.listPendingInvitations(workspaceId);
 
       expect(rows.map((row) => row.id)).toEqual([single.id]);
+    });
+
+    it('countJoinsByInvitation counts member.joined entries per invitation', async () => {
+      const audit = new WorkspaceAuditLogModel(serverDB);
+      const join = (invitationId: string, userId: string) =>
+        audit.create({
+          action: 'member.joined',
+          metadata: { invitationId, source: 'link' },
+          resourceId: userId,
+          resourceType: 'member',
+          userId,
+          workspaceId,
+        });
+      await join('link-a', inviterId);
+      await join('link-a', otherUserId);
+      await join('link-b', inviterId);
+      await audit.create({
+        action: 'invitation.revoked',
+        metadata: { invitationId: 'link-a' },
+        resourceId: 'link-a',
+        resourceType: 'invitation',
+        userId: inviterId,
+        workspaceId,
+      });
+
+      const counts = await audit.countJoinsByInvitation(workspaceId, [
+        'link-a',
+        'link-b',
+        'link-c',
+      ]);
+
+      expect(Object.fromEntries(counts)).toEqual({ 'link-a': 2, 'link-b': 1 });
+      expect((await audit.countJoinsByInvitation(workspaceId, [])).size).toBe(0);
     });
   });
 

@@ -7,6 +7,7 @@ import {
   desc,
   eq,
   exists,
+  gt,
   inArray,
   isNotNull,
   isNull,
@@ -345,81 +346,83 @@ export class WorkspaceMemberModel {
     });
   };
 
-  // ===== Reusable link invitations ===== //
+  // ===== Reusable link invitations (share links) ===== //
 
   /**
-   * The workspace's current reusable link: the live (`pending`) one when it
-   * exists, otherwise the most recently revoked one so callers can tell
-   * "revoked" from "never created". A live link may already be past
-   * `expiresAt`; callers decide how to present that.
+   * The workspace's live share links, newest first: reusable, not revoked and
+   * not past `expiresAt`. A workspace may hold several at once.
    */
-  findLatestLinkInvitation = async (workspaceId: string) => {
-    return this.db.query.workspaceInvitations.findFirst({
-      orderBy: [
-        desc(sql`${workspaceInvitations.status} = 'pending'`),
-        desc(workspaceInvitations.createdAt),
-      ],
+  listLinkInvitations = async (workspaceId: string, now = new Date()) => {
+    return this.db.query.workspaceInvitations.findMany({
+      orderBy: [desc(workspaceInvitations.createdAt)],
       where: and(
         eq(workspaceInvitations.workspaceId, workspaceId),
         eq(workspaceInvitations.reusable, true),
+        eq(workspaceInvitations.status, 'pending'),
+        or(isNull(workspaceInvitations.expiresAt), gt(workspaceInvitations.expiresAt, now)),
       ),
     });
   };
 
+  /** Number of live share links, for the per-workspace cap. */
+  countLinkInvitations = async (workspaceId: string, now = new Date()) => {
+    const [row] = await this.db
+      .select({ value: count() })
+      .from(workspaceInvitations)
+      .where(
+        and(
+          eq(workspaceInvitations.workspaceId, workspaceId),
+          eq(workspaceInvitations.reusable, true),
+          eq(workspaceInvitations.status, 'pending'),
+          or(isNull(workspaceInvitations.expiresAt), gt(workspaceInvitations.expiresAt, now)),
+        ),
+      );
+    return row?.value ?? 0;
+  };
+
   /**
-   * Replace the workspace's reusable link with a fresh token. The previous
-   * link is revoked in the same transaction, so it stops working the moment
-   * the new one exists. `expiresAt: null` creates a link that never expires.
+   * Create a share link: a reusable invitation any signed-in user can accept
+   * until it expires or is revoked. `expiresAt: null` never expires.
    */
-  rotateLinkInvitation = async (params: {
+  createLinkInvitation = async (params: {
     expiresAt: Date | null;
     role?: MemberRole;
     workspaceId: string;
   }) => {
-    return this.db.transaction(async (tx) => {
-      const revoked = await tx
-        .update(workspaceInvitations)
-        .set({ status: 'revoked', updatedAt: new Date() })
-        .where(
-          and(
-            eq(workspaceInvitations.workspaceId, params.workspaceId),
-            eq(workspaceInvitations.reusable, true),
-            eq(workspaceInvitations.status, 'pending'),
-          ),
-        )
-        .returning({ id: workspaceInvitations.id });
-
-      const [invitation] = await tx
-        .insert(workspaceInvitations)
-        .values({
-          expiresAt: params.expiresAt,
-          inviterId: this.userId,
-          reusable: true,
-          role: params.role ?? 'member',
-          // Long-lived and shared publicly, so draw the token from a CSPRNG.
-          token: secureNanoid(32),
-          workspaceId: params.workspaceId,
-        })
-        .returning();
-
-      return { invitation, revokedIds: revoked.map((row) => row.id) };
-    });
+    const [invitation] = await this.db
+      .insert(workspaceInvitations)
+      .values({
+        expiresAt: params.expiresAt,
+        inviterId: this.userId,
+        reusable: true,
+        role: params.role ?? 'member',
+        // Long-lived and shared publicly, so draw the token from a CSPRNG.
+        token: secureNanoid(32),
+        workspaceId: params.workspaceId,
+      })
+      .returning();
+    return invitation;
   };
 
-  /** Revoke the workspace's reusable link. Returns the ids that were revoked. */
-  revokeLinkInvitations = async (workspaceId: string) => {
+  /**
+   * Revoke one share link of the workspace. Returns whether a live link was
+   * revoked (false for an unknown id, another workspace's link, a single-use
+   * invitation, or a link that was already revoked).
+   */
+  revokeLinkInvitation = async (workspaceId: string, id: string) => {
     const rows = await this.db
       .update(workspaceInvitations)
       .set({ status: 'revoked', updatedAt: new Date() })
       .where(
         and(
+          eq(workspaceInvitations.id, id),
           eq(workspaceInvitations.workspaceId, workspaceId),
           eq(workspaceInvitations.reusable, true),
           eq(workspaceInvitations.status, 'pending'),
         ),
       )
       .returning({ id: workspaceInvitations.id });
-    return rows.map((row) => row.id);
+    return rows.length > 0;
   };
 
   revokeInvitation = async (id: string) => {
