@@ -22,9 +22,20 @@ import type { ChatItemProps } from './type';
 const LOCATE_HIGHLIGHT = ':is([data-message-locate-highlight])';
 const REDUCED_MOTION = '@media (prefers-reduced-motion: reduce)';
 
+const backgroundReset = {
+  backgroundAttachment: 'initial',
+  backgroundClip: 'initial',
+  backgroundImage: 'initial',
+  backgroundOrigin: 'initial',
+  backgroundPositionX: 'initial',
+  backgroundPositionY: 'initial',
+  backgroundRepeat: 'initial',
+  backgroundSize: 'initial',
+} as const;
+
 const locateHighlight = stylex.keyframes({
-  '0%, 100%': { backgroundColor: 'transparent' },
-  '15%, 55%': { backgroundColor: cssVar.colorPrimaryBg },
+  '0%, 100%': { ...backgroundReset, backgroundColor: 'transparent' },
+  '15%, 55%': { ...backgroundReset, backgroundColor: cssVar.colorPrimaryBg },
 });
 
 const styles = stylex.create({
