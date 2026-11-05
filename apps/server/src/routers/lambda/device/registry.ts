@@ -19,6 +19,7 @@ import { filterAuthorizedDevicePresence } from '@/server/services/deviceGateway/
 
 import { loadAgentDeviceBindings, loadDeviceBoundAgents } from '../deviceBoundAgents';
 import { preserveWorkspaceCache } from '../deviceWorkingDirs';
+import { reportManagedDevicesRemoved } from './managedDeviceRemoval';
 import { deviceProcedure } from './procedures';
 
 /**
@@ -371,7 +372,8 @@ export const registryRouter = router({
   removeDevice: deviceProcedure
     .input(z.object({ deviceId: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      await ctx.deviceModel.delete(input.deviceId);
+      const removed = await ctx.deviceModel.delete(input.deviceId);
+      await reportManagedDevicesRemoved(removed);
       return { success: true };
     }),
   status: deviceProcedure.query(async ({ ctx }) => {
