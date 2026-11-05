@@ -3,7 +3,6 @@
 import { readEvidenceChapters } from '@lobechat/const/verify';
 import type { AcceptanceReviewAnnotation } from '@lobechat/types';
 import { Flexbox, Image, useResponsive } from '@lobehub/ui';
-import * as stylex from '@stylexjs/stylex';
 import { memo, type ReactNode } from 'react';
 
 import AudioPlayer from '@/features/AudioPlayer';
@@ -58,11 +57,10 @@ const comparisonContent = (item: AcceptanceEvidence, action?: ReactNode, video?:
     <Image
       preview
       alt={item.description ?? item.fileName ?? item.type}
-      classNames={{ image: stylex.props(comparisonMedia.image).className }}
       loading={'lazy'}
       src={item.fileUrl!}
       style={{ aspectRatio: imageRatio(item), borderRadius: 0, width: '100%' }}
-      variant={'borderless'}
+      {...comparisonMedia.image}
     />
   );
   if (!action) return image;

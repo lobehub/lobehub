@@ -114,7 +114,7 @@ const styles = stylex.create({
   content: { flex: '1', minWidth: '0' },
 });
 
-export const comparisonMedia = stylex.create({
+const comparisonMediaStyles = stylex.create({
   image: {
     display: 'block',
     width: '100%',
@@ -130,6 +130,14 @@ export const comparisonMedia = stylex.create({
     borderRadius: 0,
   },
 });
+
+export const comparisonMedia = {
+  image: {
+    classNames: { image: stylex.props(comparisonMediaStyles.image).className },
+    variant: 'borderless' as const,
+  },
+  video: comparisonMediaStyles.video,
+};
 
 export interface EvidenceComparisonSide {
   /** Caption in the tinted band — the comparison label, or the evidence description. */

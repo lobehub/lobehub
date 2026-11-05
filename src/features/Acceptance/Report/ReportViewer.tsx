@@ -608,6 +608,7 @@ const EvidenceItem = memo<{
   const isTerminal = isTerminalEvidence(e);
   const isDocument = Boolean(e.fileUrl) && !isMedia && e.type !== 'audio' && !isTerminal;
   const isInlineProse = Boolean(e.content) && markdownTextEvidenceTypes.has(e.type);
+  const videoProps = stylex.props(styles.evidenceVideo, flat && comparisonMedia.video);
   const hideLabel =
     isTerminal ||
     isDocument ||
@@ -637,18 +638,13 @@ const EvidenceItem = memo<{
           <Image
             preview
             alt={e.description ?? label}
-            classNames={flat ? { image: stylex.props(comparisonMedia.image).className } : undefined}
             src={e.fileUrl}
             style={{ maxWidth: '100%', ...(flat && { borderRadius: 0, width: '100%' }) }}
-            variant={flat ? 'borderless' : 'outlined'}
+            {...(flat ? comparisonMedia.image : { variant: 'outlined' as const })}
           />
         </Flexbox>
       ) : e.fileUrl && e.type === 'video' ? (
-        <video
-          controls
-          {...stylex.props(styles.evidenceVideo, flat && comparisonMedia.video)}
-          src={e.fileUrl}
-        />
+        <video controls {...videoProps} src={e.fileUrl} />
       ) : e.fileUrl && e.type === 'audio' ? (
         // The same waveform player the conversation renders — one audio dialect
         // across the product, plus the download the reviewer needs to keep the
