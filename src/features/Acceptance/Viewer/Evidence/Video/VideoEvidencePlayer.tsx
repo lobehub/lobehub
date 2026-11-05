@@ -1,5 +1,6 @@
 'use client';
 
+// oxlint-disable-next-line stylex-migration/no-plain-css -- needs lobe-ui slot: Video.Controls frameNumber (the frame readout span Controls renders with no className)
 import './styles.css';
 
 import { isFullFrameRect } from '@lobechat/const/verify';
@@ -23,7 +24,7 @@ import { useTranslation } from 'react-i18next';
 
 import { sx } from '@/styles/sx';
 
-import { floatingActionHostMarker } from '../../markers.stylex';
+import { floatingActionHostMarker, videoPlayerMarker } from '../../markers.stylex';
 import FloatingCommentAction from '../FloatingCommentAction';
 import { noteKeyOf, toClaimMarkers, toNoteMarkers, toSections } from './chapters';
 import { readStoredRate, storeRate } from './playbackRate';
@@ -35,6 +36,47 @@ import { frameOf } from './videoTime';
 
 const MAX_HEIGHT = 360;
 const MIN_PLAYER_WIDTH = 480;
+
+const playerStyles = stylex.create({
+  root: {
+    display: { 'default': null, ':fullscreen': 'flex' },
+    flexDirection: { 'default': null, ':fullscreen': 'column' },
+    borderRadius: { 'default': null, ':fullscreen': 0 },
+  },
+  controls: {
+    flex: { default: null, [stylex.when.ancestor(':fullscreen', videoPlayerMarker)]: 'none' },
+  },
+  stage: {
+    containerType: {
+      default: null,
+      [stylex.when.ancestor(':fullscreen', videoPlayerMarker)]: 'size',
+    },
+    flex: { default: null, [stylex.when.ancestor(':fullscreen', videoPlayerMarker)]: '1' },
+    alignItems: {
+      default: null,
+      [stylex.when.ancestor(':fullscreen', videoPlayerMarker)]: 'center',
+    },
+    minWidth: { default: null, [stylex.when.ancestor(':fullscreen', videoPlayerMarker)]: 0 },
+    minHeight: { default: null, [stylex.when.ancestor(':fullscreen', videoPlayerMarker)]: 0 },
+  },
+  frame: {
+    flex: { default: null, [stylex.when.ancestor(':fullscreen', videoPlayerMarker)]: 'none' },
+    width: {
+      default: null,
+      [stylex.when.ancestor(':fullscreen', videoPlayerMarker)]:
+        'min(100cqw, calc(100cqh * var(--acceptance-video-aspect)))',
+    },
+    maxWidth: {
+      default: 'var(--acceptance-video-frame-width)',
+      [stylex.when.ancestor(':fullscreen', videoPlayerMarker)]: 'none',
+    },
+    height: {
+      default: null,
+      [stylex.when.ancestor(':fullscreen', videoPlayerMarker)]:
+        'min(100cqh, calc(100cqw / var(--acceptance-video-aspect)))',
+    },
+  },
+});
 
 export interface VideoEvidencePlayerHandle {
   focus: (time: AcceptanceCommentTime, options?: { reveal?: boolean }) => void;
@@ -192,7 +234,7 @@ export const VideoEvidencePlayer = memo<VideoEvidencePlayerProps>(
           })}
         >
           <Video.Root
-            className={`${'lobe-video-3f6c2110-player'} ${'lobe-video-3f6c2110-compact-controls'}`}
+            className={`${stylex.props(playerStyles.root, videoPlayerMarker).className} lobe-video-3f6c2110-compact-controls`}
             defaultPlaybackRate={defaultRate}
             markers={markers}
             maxHeight={frameMaxHeight ? undefined : MAX_HEIGHT}
@@ -215,8 +257,8 @@ export const VideoEvidencePlayer = memo<VideoEvidencePlayerProps>(
               if (key !== undefined) onMarkClick?.(key);
             }}
           >
-            <div data-acceptance-video-stage {...stylex.props(styles.stage)}>
-              <Video.Frame className={'lobe-video-3f6c2110-frame'}>
+            <div data-acceptance-video-stage {...stylex.props(styles.stage, playerStyles.stage)}>
+              <Video.Frame className={stylex.props(playerStyles.frame).className}>
                 {onRegion ? (
                   <CommentSurface
                     active={activeMark}
@@ -232,7 +274,7 @@ export const VideoEvidencePlayer = memo<VideoEvidencePlayerProps>(
                 <Video.LoadError />
               </Video.Frame>
             </div>
-            <Video.Controls frameStep />
+            <Video.Controls frameStep className={stylex.props(playerStyles.controls).className} />
           </Video.Root>
           {onComment && (
             <FloatingCommentAction

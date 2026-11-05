@@ -12,3 +12,4 @@ export const floatingActionHostMarker = stylex.defineMarker();
 export const goalCardMarker = stylex.defineMarker();
 export const titleRowMarker = stylex.defineMarker();
 export const roundCardMarker = stylex.defineMarker();
+export const videoPlayerMarker = stylex.defineMarker();

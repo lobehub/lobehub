@@ -1,3 +1,4 @@
+// oxlint-disable-next-line stylex-migration/no-plain-css -- needs lobe-ui slot: createModal.classNames.panel (the popup's inner panel div, which createModal renders without a className)
 import './rejectModalShell.css';
 
 import * as stylex from '@stylexjs/stylex';
@@ -17,6 +18,9 @@ const phone = '@media (width <= 767px)';
  * presentation or the other.
  */
 const styles = stylex.create({
+  mobilePopup: {
+    maxWidth: { default: null, [phone]: '100vw' },
+  },
   mobileClose: {
     insetBlockStart: { default: null, [phone]: 'max(4px, env(safe-area-inset-top))' },
     insetInlineEnd: { default: null, [phone]: '4px' },
@@ -51,6 +55,7 @@ export const checkRejectModalShell = (evidenceCount: number) => {
       content: stylex.props(styles.mobileContent).className,
       header: stylex.props(styles.mobileHeader).className,
       popup: [
+        stylex.props(styles.mobilePopup).className,
         'lobe-reject-modal-shell-5f6eda7d-modal-popup',
         'lobe-reject-modal-shell-5f6eda7d-mobile-popup',
         evidenceCount > 0 && 'lobe-reject-modal-shell-5f6eda7d-modal-popup-media',

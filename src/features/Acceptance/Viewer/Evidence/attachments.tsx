@@ -1,7 +1,5 @@
 'use client';
 
-import './attachments.css';
-
 import type { AcceptanceAttachment } from '@lobechat/types';
 import { Button, Flexbox, Icon, Image, Spin, toast, Upload, useResponsive } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
@@ -11,7 +9,6 @@ import { type ClipboardEvent, memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useFileStore } from '@/store/file';
-import { sx } from '@/styles/sx';
 
 /** 10MB — a screenshot, not a video; keeps the reject payload light. */
 const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024;
@@ -60,6 +57,20 @@ const styles = stylex.create({
     maxWidth: 'min(100%, 360px)',
     height: 'auto',
     maxHeight: '220px',
+  },
+  thumbImage: {
+    display: 'block',
+    width: '100%',
+    height: '100%',
+    objectFit: 'cover',
+  },
+  thumbImageLarge: {
+    cursor: 'zoom-in',
+    width: 'auto',
+    maxWidth: 'min(100%, 360px)',
+    height: 'auto',
+    maxHeight: '220px',
+    objectFit: 'contain',
   },
   thumbLoading: {
     display: 'flex',
@@ -176,8 +187,13 @@ export const AttachmentStrip = memo<AttachmentStripProps>(
     return (
       <Flexbox horizontal gap={8} wrap={'wrap'}>
         {attachments.map((attachment) => (
-          <div key={attachment.id} {...sx([styles.thumb], 'lobe-attachments-a50411c3-thumb')}>
-            <Image alt={attachment.name ?? ''} preview={false} src={attachment.url} />
+          <div key={attachment.id} {...stylex.props(styles.thumb)}>
+            <Image
+              alt={attachment.name ?? ''}
+              classNames={{ image: stylex.props(styles.thumbImage).className }}
+              preview={false}
+              src={attachment.url}
+            />
             {!disabled && (
               <button
                 aria-label={t('acceptance.review.removeAttachment')}
@@ -191,7 +207,7 @@ export const AttachmentStrip = memo<AttachmentStripProps>(
           </div>
         ))}
         {uploading && (
-          <div {...sx([styles.thumb, styles.thumbLoading], 'lobe-attachments-a50411c3-thumb')}>
+          <div {...stylex.props(styles.thumb, styles.thumbLoading)}>
             <Spin size="small" />
           </div>
         )}
@@ -260,14 +276,16 @@ export const AttachmentThumbs = memo<AttachmentThumbsProps>(({ attachments, size
       {usable.map((attachment) => (
         <div
           key={attachment.id}
-          {...sx(
-            [styles.thumb, size === 'comment' && styles.thumbLarge],
-            size === 'comment'
-              ? `${'lobe-attachments-a50411c3-thumb'} ${'lobe-attachments-a50411c3-thumb-large'}`
-              : 'lobe-attachments-a50411c3-thumb',
-          )}
+          {...stylex.props(styles.thumb, size === 'comment' && styles.thumbLarge)}
         >
-          <Image alt={attachment.name ?? ''} src={attachment.url!} />
+          <Image
+            alt={attachment.name ?? ''}
+            src={attachment.url!}
+            classNames={{
+              image: stylex.props(styles.thumbImage, size === 'comment' && styles.thumbImageLarge)
+                .className,
+            }}
+          />
         </div>
       ))}
     </Flexbox>

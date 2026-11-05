@@ -1,3 +1,4 @@
+// oxlint-disable-next-line stylex-migration/no-plain-css -- the edge label renderer and controls buttons are DOM @xyflow/react renders inside ReactFlow with no className or slot for them
 import './FlowCanvas.css';
 
 import { Flexbox } from '@lobehub/ui';

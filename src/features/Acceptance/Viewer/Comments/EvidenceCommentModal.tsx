@@ -1,5 +1,6 @@
 'use client';
 
+// oxlint-disable-next-line stylex-migration/no-plain-css -- needs lobe-ui slot: createModal.classNames.panel (the popup's inner panel div, which createModal renders without a className)
 import './EvidenceCommentModal.css';
 
 import type { AcceptanceCommentTime, AcceptanceReviewAnnotation } from '@lobechat/types';
@@ -36,10 +37,17 @@ import { VideoCommentEditor } from './VideoCommentEditor';
 
 const MODAL_WIDTH = 'min(1180px, calc(100vw - 48px))';
 
-// The popup's chrome lives in EvidenceCommentModal.css, which repeats MODAL_WIDTH.
+// The popup's inner panel is sized in EvidenceCommentModal.css, which repeats MODAL_WIDTH.
 const phone = '@media (width <= 767px)';
 
 const styles = stylex.create({
+  popup: {
+    alignItems: { default: null, [phone]: 'stretch' },
+    justifyContent: { default: null, [phone]: 'stretch' },
+    width: { default: null, [phone]: '100vw' },
+    maxWidth: { default: null, [phone]: '100vw' },
+    height: { default: null, [phone]: '100dvh' },
+  },
   header: {
     minHeight: { default: null, [phone]: '56px' },
     paddingBlockStart: { default: null, [phone]: 'max(12px, env(safe-area-inset-top))' },
@@ -331,7 +339,7 @@ export const openEvidenceCommentModal = (options: EvidenceCommentModalProps) =>
     classNames: {
       close: stylex.props(styles.close).className,
       header: stylex.props(styles.header).className,
-      popup: 'lobe-evidence-comment-modal-fa2b0329-popup',
+      popup: `${stylex.props(styles.popup).className} lobe-evidence-comment-modal-fa2b0329-popup`,
     },
     footer: null,
     maskClosable: true,

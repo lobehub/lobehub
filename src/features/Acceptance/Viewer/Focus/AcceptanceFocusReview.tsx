@@ -1,7 +1,5 @@
 'use client';
 
-import './AcceptanceFocusReview.css';
-
 import type { AcceptanceChecklistItem } from '@lobechat/types';
 import { Button, Flexbox, Icon, Text, useResponsive } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
@@ -9,8 +7,6 @@ import * as stylex from '@stylexjs/stylex';
 import { ArrowLeft, ChevronDown, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-
-import { sx } from '@/styles/sx';
 
 import {
   type AcceptanceCheck,
@@ -207,10 +203,7 @@ const AcceptanceFocusReview = ({
           )}
         </Flexbox>
         {(md || outlineOpen) && (
-          <Flexbox
-            flex={1}
-            {...sx([styles.outlineList], 'lobe-acceptance-focus-review-416dc1e9-outline-list')}
-          >
+          <Flexbox flex={1} {...stylex.props(styles.outlineList)}>
             <FocusOutline
               checks={orderedChecks}
               focusedCheckId={focusedCheck.id}
