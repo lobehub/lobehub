@@ -882,6 +882,9 @@ importers:
       diff:
         specifier: ^8.0.4
         version: 8.0.4
+      es-toolkit:
+        specifier: ^1.50.0
+        version: 1.52.0
       fast-glob:
         specifier: ^3.3.3
         version: 3.3.3

@@ -8,33 +8,24 @@ import {
   defaultSearchProjectFiles,
   type DeviceControlDeps,
   DeviceMetricsSampler,
-  executeDeviceRpc,
   pushMetrics,
 } from '@lobechat/device-control';
-import { BROWSER_IDENTIFIER } from '@lobechat/device-control/agent-browser';
-import { COMPUTER_USE_IDENTIFIER } from '@lobechat/device-control/computer-use';
-import type {
-  AgentRunRequestMessage,
-  RpcRequestMessage,
-  SystemInfoRequestMessage,
-  ToolCallRequestMessage,
-} from '@lobechat/device-gateway-client';
 import { GatewayClient } from '@lobechat/device-gateway-client';
 import { listHeterogeneousAgentModels } from '@lobechat/heterogeneous-agents/models';
-import {
-  createRuntimeProbeCache,
-  type RuntimeProbeCache,
-} from '@lobechat/heterogeneous-agents/runtimeProbeCache';
-import { executeDeviceOperation } from '@lobechat/local-file-shell/shell';
+import { createRuntimeProbeCache } from '@lobechat/heterogeneous-agents/runtimeProbeCache';
 import type { Command } from 'commander';
 
-import { createLambdaClient } from '../api/client';
-import { scheduleProactiveRefresh } from '../auth/proactiveRefresh';
-import { resolveToken } from '../auth/resolveToken';
-import { CLI_API_KEY_ENV } from '../constants/auth';
-import { CLI_CONNECT_SERVICE_NAME, CLI_DISPLAY_NAME, CLI_PRIMARY_BIN } from '../constants/identity';
-import { getCliInstallationPath } from '../daemon/installation';
-import { CliMaintenance } from '../daemon/maintenance';
+import { createLambdaClient } from '../../api/client';
+import { scheduleProactiveRefresh } from '../../auth/proactiveRefresh';
+import { resolveToken } from '../../auth/resolveToken';
+import { CLI_API_KEY_ENV } from '../../constants/auth';
+import {
+  CLI_CONNECT_SERVICE_NAME,
+  CLI_DISPLAY_NAME,
+  CLI_PRIMARY_BIN,
+} from '../../constants/identity';
+import { getCliInstallationPath } from '../../daemon/installation';
+import { CliMaintenance } from '../../daemon/maintenance';
 import {
   appendLog,
   getLogPath,
@@ -47,25 +38,27 @@ import {
   stopDaemon,
   stopDaemonAndWait,
   writeStatus,
-} from '../daemon/manager';
-import { listTasks } from '../daemon/taskRegistry';
-import { spawnHeteroAgentRun } from '../device/agentRun';
+} from '../../daemon/manager';
+import { listTasks } from '../../daemon/taskRegistry';
+import { ActivityReporter } from '../../device/activityHook';
 import {
   describeDeviceGateway,
   describeDeviceGatewayFailure,
   rememberGatewayOverride,
   resolveCliDeviceGateway,
-} from '../device/gatewayEndpoint';
+} from '../../device/gatewayEndpoint';
+import { MANAGED_GATEWAY_ENV } from '../../device/managed';
 import {
   mintWorkspaceConnectToken,
   registerDevice,
   registerWorkspaceDevice,
   resolveDeviceIdentity,
   resolveWorkspaceDeviceIdentity,
-} from '../device/register';
-import { collectSystemInfo, probeNativeRuntimes } from '../device/systemInfo';
-import { TerminalSessionManager } from '../device/terminal';
-import { cliVersion } from '../pkg';
+} from '../../device/register';
+import { probeNativeRuntimes } from '../../device/systemInfo';
+import { TerminalSessionManager } from '../../device/terminal';
+import { redactUrlCredentials } from '../../doctor/redact';
+import { cliVersion } from '../../pkg';
 import {
   CONNECT_RETRYABLE_EXIT_CODE,
   getWorkspaceFailureExitCode,
@@ -73,23 +66,24 @@ import {
   startConnectService,
   stopConnectService,
   uninstallConnectService,
-} from '../service/connect';
-import { getServiceRestartCommand, readConnectServices } from '../service/status';
+} from '../../service/connect';
+import { getServiceRestartCommand, readConnectServices } from '../../service/status';
 import {
   addWorkspaceEnrollment,
   loadOrCreateConnectionId,
   loadWorkspaceEnrollments,
   removeWorkspaceEnrollment,
   resolveDeviceMetricsBacklogPath,
-} from '../settings';
-import { executeToolCall } from '../tools';
-import { closeBrowserSessions, executeBrowserCall, resolveBrowserDevice } from '../tools/browser';
-import { executeComputerUseCall, resolveComputerUseDevice } from '../tools/computerUse';
-import { cleanupAllProcesses, getActiveShellCount } from '../tools/shell';
-import { log, setVerbose } from '../utils/logger';
-import { sweepLocalTraces } from '../utils/traceMaintenance';
-import { restartConnector } from './connectRestart';
-import { printConnectStatus } from './connectStatus';
+} from '../../settings';
+import { closeBrowserSessions, resolveBrowserDevice } from '../../tools/browser';
+import { resolveComputerUseDevice } from '../../tools/computerUse';
+import { cleanupAllProcesses, getActiveShellCount } from '../../tools/shell';
+import { log, setVerbose } from '../../utils/logger';
+import { sweepLocalTraces } from '../../utils/traceMaintenance';
+import { restartConnector } from '../connectRestart';
+import { printConnectStatus } from '../connectStatus';
+import { bindGatewayClientHandlers, type GatewayHandlerContext } from './handlers';
+import { getManagedFlagConflicts, startManagedDevice } from './managed';
 
 /** Longest a clean stop waits to push pending device health samples. */
 const SHUTDOWN_METRICS_FLUSH_MS = 3000;
@@ -104,6 +98,8 @@ interface ConnectOptions {
   daemonChild?: boolean;
   deviceId?: string;
   gateway?: string;
+  /** Run as a managed cloud device; identity and credentials come from the environment. */
+  managed?: boolean;
   manager?: string;
   /** With --workspace: enroll into the shared pool visible to every member (default: private). */
   public?: boolean;
@@ -126,6 +122,10 @@ export function registerConnectCommand(program: Command) {
       '--public',
       'With --workspace: enroll into the shared pool visible to every member (default: private, visible only to you)',
     )
+    .option(
+      '--managed',
+      'Run as a managed cloud device: read the device id, secret, server and gateway from LOBEHUB_MANAGED_DEVICE_ID, LOBEHUB_MANAGED_DEVICE_SECRET, LOBEHUB_SERVER and LOBEHUB_DEVICE_GATEWAY_URL',
+    )
     .option('--auv <binary>', 'Offer Computer Use by running this AUV binary (`auv invoke`)')
     .option(
       '--agent-browser <binary>',
@@ -137,6 +137,15 @@ export function registerConnectCommand(program: Command) {
     .option('--service-child', 'Internal: runs as the system service child process')
     .action(async (options: ConnectOptions) => {
       if (options.verbose) setVerbose(true);
+
+      if (options.managed) {
+        const conflicts = getManagedFlagConflicts(options);
+        if (conflicts.length > 0) {
+          log.error(`--managed cannot be combined with ${conflicts.join(', ')}.`);
+          process.exit(1);
+          return;
+        }
+      }
 
       // --daemon: spawn detached child and exit
       if (options.daemon) {
@@ -351,6 +360,7 @@ function buildDaemonArgs(options: ConnectOptions): string[] {
   if (options.deviceId) args.push('--device-id', options.deviceId);
   if (options.workspace) args.push('--workspace', options.workspace);
   if (options.public) args.push('--public');
+  if (options.managed) args.push('--managed');
   if (options.auv) args.push('--auv', path.resolve(options.auv));
   if (options.agentBrowser) args.push('--agent-browser', path.resolve(options.agentBrowser));
   if (options.verbose) args.push('--verbose');
@@ -359,9 +369,6 @@ function buildDaemonArgs(options: ConnectOptions): string[] {
 }
 
 async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
-  const unavailableExitCode = options.workspace ? CONNECT_RETRYABLE_EXIT_CODE : undefined;
-  let auth = await resolveToken({ ...options, unavailableExitCode });
-
   const info = (msg: string) => {
     if (isDaemonChild) appendLog(msg);
     else log.info(msg);
@@ -372,20 +379,36 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
     else log.error(msg);
   };
 
+  const debug = (msg: string) => {
+    if (!isDaemonChild) log.debug(msg);
+    else if (options.verbose) appendLog(`[DEBUG] ${msg}`);
+  };
+
+  // Managed cloud device: identity, server, gateway and credentials all come
+  // from the environment the platform injected; the stored login is unused.
+  const managed = options.managed ? await startManagedDevice({ debug, error, info }) : undefined;
+
+  const unavailableExitCode = options.workspace ? CONNECT_RETRYABLE_EXIT_CODE : undefined;
+  let auth = managed ? managed.auth : await resolveToken({ ...options, unavailableExitCode });
+
   // Resolved once per process, against the server the token belongs to. The
   // client's own reconnects and every workspace share connection reuse it.
-  const gateway = await resolveCliDeviceGateway({
-    override: options.gateway,
-    serverUrl: auth.serverUrl,
-  });
+  const gateway = managed
+    ? ({ endpoint: { source: 'override', url: managed.config.gatewayUrl }, ok: true } as const)
+    : await resolveCliDeviceGateway({
+        override: options.gateway,
+        serverUrl: auth.serverUrl,
+      });
   if (!gateway.ok) {
     const { detail, fix } = describeDeviceGatewayFailure(gateway, auth.serverUrl);
     // Thrown, so a daemon parent reports it as the startup error too.
     throw new Error(`${detail} ${fix}`);
   }
   const resolvedGatewayUrl = gateway.endpoint.url;
-  const gatewayDescription = describeDeviceGateway(gateway.endpoint);
-  if (rememberGatewayOverride(auth.serverUrl, gateway.endpoint)) {
+  const gatewayDescription = managed
+    ? `${redactUrlCredentials(resolvedGatewayUrl)} (${MANAGED_GATEWAY_ENV})`
+    : describeDeviceGateway(gateway.endpoint);
+  if (!managed && rememberGatewayOverride(auth.serverUrl, gateway.endpoint)) {
     info(
       `Saved ${resolvedGatewayUrl} as the device gateway for ${auth.serverUrl}; later runs use it ahead of the server's own address.`,
     );
@@ -410,13 +433,20 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
   // workspace-derived deviceId. `auth` stays the admin's identity — used only to
   // (re-)mint the connect token and register the row.
   const workspaceId = options.workspace;
+  // The gateway principal of a managed device: its token's workspace, or its owner.
+  const managedWorkspaceId = managed?.principal.workspaceId;
 
   // Resolve a stable device identity. An explicit `--device-id` wins (lets a
   // user pin a VM to a fixed identity); otherwise derive from the machine id so
   // the same machine maps to one device across reconnects.
-  const identity = workspaceId
-    ? resolveWorkspaceDeviceIdentity(workspaceId, options.deviceId, loadOrCreateConnectionId())
-    : resolveDeviceIdentity(auth.userId, options.deviceId);
+  // A managed device has no derived identity: the platform registered its row
+  // and fixed its id, so it never registers itself.
+  const identity = managed
+    ? undefined
+    : workspaceId
+      ? resolveWorkspaceDeviceIdentity(workspaceId, options.deviceId, loadOrCreateConnectionId())
+      : resolveDeviceIdentity(auth.userId, options.deviceId);
+  const deviceId = managed?.config.deviceId ?? identity?.deviceId ?? options.deviceId;
 
   // The token the gateway socket authenticates with. Re-minted on refresh for
   // workspace devices (see `refreshConnectToken`).
@@ -436,6 +466,9 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
 
   // Re-resolve the admin auth and, for workspace mode, re-mint the connect token.
   const refreshConnectToken = async (): Promise<string | undefined> => {
+    // `refreshNow` reports the new token through `onToken`, which updates
+    // `auth`, `connectToken` and the client.
+    if (managed) return (await managed.session.refreshNow()).token;
     const refreshed = await resolveToken({ unavailableExitCode });
     if (!refreshed) return undefined;
     auth = refreshed;
@@ -455,15 +488,27 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
   const client = new GatewayClient({
     channel,
     connectionId: loadOrCreateConnectionId(),
-    deviceId: identity?.deviceId ?? options.deviceId,
+    deviceId,
     gatewayUrl: resolvedGatewayUrl,
     logger: isDaemonChild ? createDaemonLogger() : log,
     serverUrl: auth.serverUrl,
     token: connectToken,
     tokenType: connectTokenType,
-    userId: workspaceId ? undefined : auth.userId,
-    workspaceId,
+    userId: managed ? managed.principal.userId : workspaceId ? undefined : auth.userId,
+    workspaceId: managed ? managedWorkspaceId : workspaceId,
   });
+
+  if (managed) {
+    // Only the next (re)connection authenticates with the token, so a refresh
+    // never closes the socket: tool calls, agent runs and tunnels keep running.
+    managed.events.onToken = (token) => {
+      connectToken = token.token;
+      auth = { ...auth, token: token.token };
+      client.updateToken(token.token);
+      debug('Refreshed the managed device token');
+    };
+    managed.events.onFatal = (err) => exitManaged(err.message);
+  }
 
   // Print device info
   info(`─── ${CLI_DISPLAY_NAME} ───`);
@@ -471,7 +516,12 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
   info(`  Hostname  : ${os.hostname()}`);
   info(`  Platform  : ${process.platform}`);
   info(`  Gateway   : ${gatewayDescription}`);
-  info(`  Auth      : ${auth.tokenType}`);
+  info(`  Auth      : ${managed ? 'managed device token' : auth.tokenType}`);
+  if (managed) {
+    info(
+      `  Principal : ${managedWorkspaceId ? `workspace ${managedWorkspaceId}` : `user ${managed.principal.userId}`}`,
+    );
+  }
   info(`  Mode      : ${isDaemonChild ? 'daemon' : 'foreground'}`);
   info('───────────────────');
 
@@ -526,9 +576,11 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
   // touches it.
   const terminals = new TerminalSessionManager({ logger: { warn: (message) => info(message) } });
 
+  const countActiveTasks = () =>
+    getActiveShellCount() + listTasks().filter((task) => isProcessAlive(task.pid)).length;
+
   const maintenance = new CliMaintenance({
-    activeTasks: () =>
-      getActiveShellCount() + listTasks().filter((task) => isProcessAlive(task.pid)).length,
+    activeTasks: countActiveTasks,
     daemon:
       !!options.daemonChild && !options.serviceChild && process.env.LOBEHUB_CONNECT_SERVICE !== '1',
     restartArgs: buildDaemonArgs(options).slice(1),
@@ -558,13 +610,26 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
   // agent dispatch alike, and each probe starts a Codex app-server process.
   const nativeRuntimes = createRuntimeProbeCache(probeNativeRuntimes);
 
+  // Tool calls and RPCs report themselves through `begin()`; agent runs (which
+  // outlive their dispatch), background shells and tunnels are polled.
+  const activity = managed?.config.activityCommand
+    ? new ActivityReporter({
+        command: managed.config.activityCommand,
+        isBusy: () => countActiveTasks() > 0 || client.activeTunnelCount > 0,
+        logger: { debug },
+      })
+    : undefined;
+
   const handlerContext: GatewayHandlerContext = {
+    activity,
     browser,
     computerUse,
     deps: deviceControlDeps,
     error,
     // Read at dispatch time — `auth` may be refreshed mid-session.
     getAuth: () => auth,
+    // The managed token authenticates with the gateway only, never the server API.
+    getToolAuth: () => (managed ? undefined : auth),
     info,
     isDaemonChild,
     maintenance,
@@ -574,7 +639,23 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
 
   // Request handlers (system info / tool calls / device RPCs / agent runs) —
   // shared with the workspace-share connections opened via `enrollWorkspace`.
-  bindGatewayClientHandlers(client, handlerContext, workspaceId);
+  bindGatewayClientHandlers(client, handlerContext, workspaceId ?? managedWorkspaceId);
+
+  // A scheduled refresh and an auth handler can both reach a final answer from
+  // the one shared token exchange; stop only once.
+  let managedExiting = false;
+  const exitManaged = (message: string) => {
+    if (managedExiting) return;
+    managedExiting = true;
+    error(message);
+    cleanup();
+    process.exit(1);
+  };
+
+  // Managed mode: one token refresh per rejected connection. A token the
+  // gateway rejects right after it was issued will not get better by retrying,
+  // so exit and let the platform restart the agent.
+  let managedAuthRetried = false;
 
   // Machine health (CPU / memory / load) for the device page. Samples go to
   // the device gateway over this socket (the gateway is their only store);
@@ -582,11 +663,12 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
   // back, so the stretch around a drop is visible afterwards. Each batch is
   // mirrored to this machine's workspace-share connections so a shared
   // device's workspace row has the same history.
-  const metricsSampler = identity
+  const metricsDeviceId = identity?.deviceId ?? managed?.config.deviceId;
+  const metricsSampler = metricsDeviceId
     ? new DeviceMetricsSampler({
         isConnected: () => client.connectionStatus === 'connected',
         logger: { warn: (msg) => info(msg) },
-        storagePath: resolveDeviceMetricsBacklogPath(identity.deviceId),
+        storagePath: resolveDeviceMetricsBacklogPath(metricsDeviceId),
         upload: (samples) =>
           pushMetrics(
             client,
@@ -597,6 +679,7 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
     : undefined;
 
   client.on('connected', () => {
+    managedAuthRetried = false;
     updateStatus('connected');
     void metricsSampler?.flush();
     // A (re)connection reprobes so an upgraded or downgraded Codex is reported, and
@@ -742,7 +825,8 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
       }, 500);
       return { success: true };
     };
-  } else {
+  } else if (!managed) {
+    // A managed device belongs to one principal; it is never shared into a workspace.
     deviceControlDeps.enrollWorkspace = async ({
       identityOnly,
       token: wsToken,
@@ -813,26 +897,45 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
   // personal device it refreshes the user token. Scheduling watches the actual
   // connect token, so the workspace token's shorter life is respected.
   const startProactiveRefresh = (): (() => void) | null =>
-    scheduleProactiveRefresh(
-      connectToken,
-      connectTokenType,
-      async () => {
-        const newToken = await refreshConnectToken();
-        if (newToken) {
-          client.updateToken(newToken);
-          cancelRefreshTimer = startProactiveRefresh();
-        }
-        return newToken;
-      },
-      info,
-      error,
-    );
+    // A managed token session schedules its own refreshes.
+    managed
+      ? null
+      : scheduleProactiveRefresh(
+          connectToken,
+          connectTokenType,
+          async () => {
+            const newToken = await refreshConnectToken();
+            if (newToken) {
+              client.updateToken(newToken);
+              cancelRefreshTimer = startProactiveRefresh();
+            }
+            return newToken;
+          },
+          info,
+          error,
+        );
   let cancelRefreshTimer = startProactiveRefresh();
 
   // Handle auth failed — attempt token refresh once before giving up
   // (e.g., auto-reconnect may send an expired JWT before proactive refresh fires)
   let authFailedRefreshAttempted = false;
   client.on('auth_failed', async (reason) => {
+    if (managed) {
+      if (managedAuthRetried) {
+        exitManaged(`The gateway rejected the managed device token: ${reason}`);
+        return;
+      }
+      managedAuthRetried = true;
+      info(`Authentication failed (${reason}). Getting a new managed device token...`);
+      try {
+        await managed.session.refreshNow();
+        await client.reconnect();
+      } catch (err) {
+        exitManaged((err as Error).message);
+      }
+      return;
+    }
+
     let exitCode = 1;
     if (connectTokenType === 'jwt' && !authFailedRefreshAttempted) {
       authFailedRefreshAttempted = true;
@@ -886,6 +989,10 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
       if (workspaceId) exitCode = getWorkspaceFailureExitCode(err);
     }
 
+    if (managed) {
+      exitManaged('Could not get a new managed device token.');
+      return;
+    }
     error("Could not refresh token. Run 'lh login' to re-authenticate.");
     cleanup();
     process.exit(exitCode);
@@ -911,6 +1018,8 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
   const cleanup = () => {
     info('Shutting down...');
     cancelRefreshTimer?.();
+    managed?.session.stop();
+    activity?.stop();
     cleanupAllProcesses();
     // Kill every remote-terminal shell this daemon started, so a stopping
     // `lh connect` does not leave orphaned PTYs behind on the machine.
@@ -978,183 +1087,14 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
   await reportDaemonStartupReady();
 
   await metricsSampler?.start();
+  activity?.start();
 
   // Connect
   await client.connect();
 
   // Personal mode: re-open any workspace share connections from a previous run.
   // Best-effort after the main connection — a failed restore never blocks it.
-  if (!workspaceId) void restoreWorkspaceEnrollments();
-}
-
-/** Everything a gateway connection's request handlers need from the host process. */
-interface GatewayHandlerContext {
-  /** Present when an `agent-browser` binary enabled the browser tool on this device. */
-  browser?: Awaited<ReturnType<typeof resolveBrowserDevice>>;
-  /** Present when `--auv` enabled Computer Use on this device. */
-  computerUse?: Awaited<ReturnType<typeof resolveComputerUseDevice>>;
-  deps: DeviceControlDeps;
-  error: (msg: string) => void;
-  /** Read at dispatch time — the underlying auth may be refreshed mid-session. */
-  getAuth: () => Awaited<ReturnType<typeof resolveToken>>;
-  info: (msg: string) => void;
-  isDaemonChild: boolean;
-  maintenance: CliMaintenance;
-  /** Process-wide native runtime probe, shared by every gateway connection. */
-  nativeRuntimes: RuntimeProbeCache;
-  recordRequest: () => void;
-}
-
-/**
- * Bind the request handlers shared by every gateway connection this process
- * owns — the personal connection and any workspace-share connections opened via
- * the `enrollWorkspace` RPC — so a workspace principal exposes exactly the same
- * tool / RPC / agent-run surface as the personal one.
- */
-function bindGatewayClientHandlers(
-  client: GatewayClient,
-  ctx: GatewayHandlerContext,
-  connectionWorkspaceId?: string,
-) {
-  const {
-    browser,
-    computerUse,
-    deps,
-    error,
-    getAuth,
-    info,
-    isDaemonChild,
-    maintenance,
-    recordRequest,
-  } = ctx;
-
-  // Handle system info requests
-  client.on('system_info_request', async (request: SystemInfoRequestMessage) => {
-    info(`Received system_info_request: requestId=${request.requestId}`);
-    const systemInfo = await collectSystemInfo(ctx.nativeRuntimes, computerUse, browser);
-    client.sendSystemInfoResponse({
-      requestId: request.requestId,
-      result: { success: true, systemInfo },
-    });
-  });
-
-  // Handle tool call requests
-  client.on('tool_call_request', async (request: ToolCallRequestMessage) => {
-    recordRequest();
-    const { operationId, requestId, timeout, toolCall } = request;
-    if (isDaemonChild) {
-      appendLog(
-        `[TOOL] ${toolCall.apiName}${operationId ? ` op=${operationId}` : ''} (${requestId})`,
-      );
-    } else {
-      log.toolCall(toolCall.apiName, requestId, toolCall.arguments, operationId);
-    }
-
-    // Timed on the DEVICE's clock. The server can only see the whole dispatch
-    // round trip, so reporting this back is what separates a slow tool from
-    // slow transport.
-    const startedAt = performance.now();
-    const result = await executeDeviceOperation({ apiName: toolCall.apiName, operationId }, () =>
-      maintenance.run(() =>
-        // Computer Use's `runCommand` shares its apiName with the shell tool, and
-        // the browser's apis (`click`, `screenshot`, …) are routed by identifier too.
-        toolCall.identifier === COMPUTER_USE_IDENTIFIER
-          ? executeComputerUseCall(computerUse, toolCall.apiName, toolCall.arguments, timeout)
-          : toolCall.identifier === BROWSER_IDENTIFIER
-            ? executeBrowserCall(browser, toolCall.apiName, toolCall.arguments, timeout)
-            : executeToolCall(toolCall.apiName, toolCall.arguments, timeout, getAuth()),
-      ),
-    ).catch((err: Error) => ({
-      content: '',
-      error: err.message,
-      state: undefined,
-      success: false,
-    }));
-    const executionTimeMs = Math.round(performance.now() - startedAt);
-
-    if (isDaemonChild) {
-      appendLog(
-        `[RESULT] ${result.success ? 'OK' : 'FAIL'} ${executionTimeMs}ms${operationId ? ` op=${operationId}` : ''} (${requestId})`,
-      );
-    } else {
-      log.toolResult(requestId, result.success, result.content, operationId);
-    }
-
-    client.sendToolCallResponse({
-      requestId,
-      result: {
-        content: result.content,
-        error: result.error,
-        executionTimeMs,
-        state: result.state,
-        success: result.success,
-      },
-    });
-  });
-
-  // Handle generic server-internal device RPCs (git / workspace / file ops).
-  // Shares the `@lobechat/device-control` dispatcher with the desktop app so the
-  // CLI exposes the same remote-device control surface.
-  client.on('rpc_request', async (request: RpcRequestMessage) => {
-    const { method, params, requestId } = request;
-    if (isDaemonChild) appendLog(`[RPC] ${method} (${requestId})`);
-    else info(`Received rpc_request: method=${method} (${requestId})`);
-
-    try {
-      const run = () => executeDeviceRpc(method, params, deps);
-      const isMaintenance = ['getCliUpdateState', 'checkCliUpdate', 'restartCli'].includes(method);
-      const data = await (isMaintenance ? run() : maintenance.run(run));
-      client.sendRpcResponse({ requestId, result: { data, success: true } });
-      if (method === 'restartCli') maintenance.afterResponse();
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      if (isDaemonChild) appendLog(`[RPC ERROR] ${method}: ${message} (${requestId})`);
-      else error(`rpc_request method=${method} failed: ${message}`);
-      client.sendRpcResponse({ requestId, result: { error: message, success: false } });
-    }
-  });
-
-  // Handle gateway-dispatched agent runs (heterogeneous agents, e.g. Claude
-  // Code). Mirrors the desktop app: spawn `lh hetero exec`, which owns the full
-  // execution + server-ingest pipeline. Ack with the spawn outcome — `accepted`
-  // once the child starts, `rejected` if it fails to spawn (e.g. bad cwd) — so
-  // a failed dispatch surfaces as an error instead of a stuck assistant message.
-  client.on('agent_run_request', async (request: AgentRunRequestMessage) => {
-    recordRequest();
-    info(
-      `Received agent_run_request: operationId=${request.operationId} type=${request.agentType}`,
-    );
-    try {
-      const ack = await maintenance.run(() =>
-        spawnHeteroAgentRun(
-          {
-            agentId: request.agentId,
-            agentType: request.agentType,
-            assistantMessageId: request.assistantMessageId,
-            args: request.args,
-            claudeAccountRouting: request.claudeAccountRouting,
-            cwd: request.cwd,
-            imageList: request.imageList,
-            jwt: request.jwt,
-            operationId: request.operationId,
-            prompt: request.prompt,
-            resumeFallbackSystemContext: request.resumeFallbackSystemContext,
-            resumeSessionId: request.resumeSessionId,
-            serverUrl: getAuth().serverUrl,
-            systemContext: request.systemContext,
-            topicId: request.topicId,
-            workspaceId: request.ingestWorkspaceId ?? request.workspaceId ?? connectionWorkspaceId,
-          },
-          { error, info },
-        ),
-      );
-      client.sendAgentRunAck({ operationId: request.operationId, ...ack });
-    } catch (err) {
-      const reason = err instanceof Error ? err.message : String(err);
-      error(`agent_run_request failed: ${reason}`);
-      client.sendAgentRunAck({ operationId: request.operationId, reason, status: 'rejected' });
-    }
-  });
+  if (!workspaceId && !managed) void restoreWorkspaceEnrollments();
 }
 
 function createDaemonLogger() {
