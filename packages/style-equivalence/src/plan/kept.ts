@@ -3,13 +3,16 @@ import ts from 'typescript';
 import type { FileExtraction, StyleElement, StyleRule } from '../extract';
 import { SELF } from '../extract/css';
 import { classNamesIn } from '../extract/selectors';
+import { elementsOf } from './descendants';
 import { type InnerNode, innerTargets } from './inner';
 import { normalizeSelector } from './moved';
 import { parseSelectorList } from './selectorTree';
 
 export interface KeptProof {
+  exhaustive: boolean;
   head: string;
   nodes: InnerNode[];
+  placement?: string;
 }
 
 const TRANSPARENT = new Set([
@@ -69,8 +72,13 @@ const placementOf = (element: StyleElement, slot: string) => {
   const found: string[][] = [];
   for (const binding of element.bindings) {
     const source = ts.createSourceFile('t.ts', `(${binding.expr});`, ts.ScriptTarget.Latest, true);
+    const token = slot.startsWith('global.') ? slot.slice('global.'.length) : undefined;
+    const matches = (node: ts.Node) =>
+      token
+        ? ts.isStringLiteralLike(node) && node.text.split(/\s+/).includes(token)
+        : ts.isPropertyAccessExpression(node) && compact(node) === slot;
     const visit = (node: ts.Node) => {
-      if (ts.isPropertyAccessExpression(node) && compact(node) === slot) {
+      if (matches(node)) {
         const path = pathFrom(node);
         if (!path) return found.push(['?']);
         const keyed = path.some((segment) => segment.startsWith('key:'));
@@ -104,51 +112,116 @@ const descendant = (rule: StyleRule) =>
     nodes.some((node) => node.type === 'combinator'),
   );
 
+const kebab = (name: string) =>
+  name
+    .replaceAll(/([a-z\d])([A-Z])/g, '$1-$2')
+    .replaceAll(/([A-Z]+)([A-Z][a-z])/g, '$1-$2')
+    .replaceAll(/([a-z])(\d)/g, '$1-$2')
+    .toLowerCase();
+
+const tokenValue = (expression: string) => {
+  const token = /^cssVar\.(\w+)$/.exec(expression);
+  return token ? `var(--lobe-${kebab(token[1])})` : `\${${expression}}`;
+};
+
 const resolve = (text: string, rule: StyleRule) =>
   text.replaceAll(/__I(\d+)__/g, (match, index: string) => {
     const expression = rule.interpolations?.[Number(index)];
-    return expression === undefined ? match : `\${${expression}}`;
+    return expression === undefined ? match : tokenValue(expression);
   });
 
-const signature = (rule: StyleRule) => {
-  const selector = normalizeSelector(resolve(rule.selector, rule));
-  return (
-    selector &&
-    JSON.stringify({
-      conditions: rule.conditions.map((condition) => resolve(condition, rule)),
-      declarations: rule.declarations?.map((declaration) => resolve(declaration, rule)),
-      selector,
-    })
-  );
+const hostSlot = (rule: StyleRule, element: StyleElement) => {
+  const slots = [...new Set(slotsOf(rule).filter((slot) => element.slots.includes(slot)))];
+  return slots.length === 1 ? slots[0] : undefined;
 };
+
+const hostSelector = (rule: StyleRule, slot: string) =>
+  rule.stylesheet
+    ? normalizeSelector(rule.selector, slot.slice('global.'.length), SELF)
+    : normalizeSelector(resolve(rule.selector, rule));
+
+const signature = (rule: StyleRule, selector: string) =>
+  JSON.stringify({
+    conditions: rule.conditions.map((condition) => resolve(condition, rule)),
+    declarations: rule.declarations?.map((declaration) => resolve(declaration, rule)),
+    selector,
+  });
+
+const literalTokens = (element: StyleElement) =>
+  element.bindings.flatMap((binding) => {
+    const source = ts.createSourceFile('t.ts', `(${binding.expr});`, ts.ScriptTarget.Latest, true);
+    const tokens: string[] = [];
+    const visit = (node: ts.Node) => {
+      if (ts.isStringLiteralLike(node)) tokens.push(...node.text.split(/\s+/).filter(Boolean));
+      ts.forEachChild(node, visit);
+    };
+    visit(source);
+    return tokens;
+  });
+
+const singleClassName = (element: StyleElement) => {
+  const [binding] = element.bindings;
+  return element.bindings.length === 1 && !binding.spread && binding.prop === 'className'
+    ? binding.expr.replaceAll(/\s+/g, '')
+    : undefined;
+};
+
+const placementSwap = (base: StyleElement, head: StyleElement, slots: [string, string]) => {
+  const [left, right] = [singleClassName(base), singleClassName(head)];
+  const own = slots[0].startsWith('global.')
+    ? left === JSON.stringify(slots[0].slice('global.'.length))
+    : left === slots[0];
+  return own && right === slots[1] ? base.bindings[0].expr : undefined;
+};
+
+interface Context {
+  base: FileExtraction;
+  head: FileExtraction;
+}
 
 const proveElement = (
   base: StyleElement,
   head: StyleElement,
-  rules: { base: StyleRule[]; head: StyleRule[] },
+  { base: before, head: after }: Context,
 ): KeptProof | undefined => {
-  const required = rulesOn(base, rules.base).filter(descendant);
-  const kept = rulesOn(head, rules.head);
+  const all = rulesOn(base, before.rules);
+  const required = all.filter(descendant);
+  const kept = rulesOn(head, after.rules);
   if (!required.length || required.length !== kept.length) return undefined;
-  const matched = required.every((left, index) => {
+  const selectors: string[] = [];
+  const slots = new Set<string>();
+  const users = (slot: string) =>
+    elementsOf(before).filter((element) => element.slots.includes(slot)).length;
+  for (const [index, left] of required.entries()) {
     const right = kept[index];
-    if (!left.slot || !right.slot || left.stylesheet || right.stylesheet) return false;
-    const signed = signature(left);
-    const placement = placementOf(base, left.slot);
-    return (
-      !!signed &&
-      signed === signature(right) &&
-      !!placement &&
-      placement === placementOf(head, right.slot)
-    );
-  });
-  const nodes = matched
-    ? innerTargets(
-        required.map((rule) => rule.selector),
-        SELF,
-      )
-    : undefined;
-  return nodes?.length ? { head: head.id, nodes } : undefined;
+    const leftSlot = hostSlot(left, base);
+    const rightSlot = hostSlot(right, head);
+    if (!leftSlot || !rightSlot || !right.slot || right.stylesheet) return undefined;
+    if (left.stylesheet ? !leftSlot.startsWith('global.') || users(leftSlot) !== 1 : !left.slot)
+      return undefined;
+    const selector = hostSelector(left, leftSlot);
+    const placement = placementOf(base, leftSlot);
+    if (
+      !selector ||
+      selector !== hostSelector(right, rightSlot) ||
+      signature(left, selector) !== signature(right, selector) ||
+      !placement ||
+      placement !== placementOf(head, rightSlot)
+    )
+      return undefined;
+    selectors.push(selector);
+    slots.add(`${leftSlot}\n${rightSlot}`);
+  }
+  const nodes = innerTargets(selectors, SELF);
+  if (!nodes?.length) return undefined;
+  const pairs = [...slots].map((entry) => entry.split('\n') as [string, string]);
+  const globals = new Set(pairs.flatMap(([slot]) => (slot.startsWith('global.') ? [slot] : [])));
+  const exhaustive =
+    all.length === required.length &&
+    literalTokens(base).every((token) => globals.has(`global.${token}`)) &&
+    !literalTokens(head).length;
+  const placement = pairs.length === 1 ? placementSwap(base, head, pairs[0]) : undefined;
+  return { exhaustive, head: head.id, nodes, ...(placement ? { placement } : {}) };
 };
 
 export const keptEmotionRules = (
@@ -158,7 +231,7 @@ export const keptEmotionRules = (
 ) => {
   const proofs = new Map<string, KeptProof>();
   for (const [left, right] of pairs) {
-    const proof = proveElement(left, right, { base: base.rules, head: head.rules });
+    const proof = proveElement(left, right, { base, head });
     if (proof) proofs.set(left.id, proof);
   }
   return proofs;

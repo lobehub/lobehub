@@ -118,6 +118,11 @@ const joinTerms = (sources: readonly ts.Expression[], ctx: Context) => {
 function termsOf(raw: ts.Expression, ctx: Context): string[] | undefined {
   const node = unwrap(raw);
   if (EMPTY.has(compact(node))) return [];
+  if (ts.isStringLiteralLike(node))
+    return node.text
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((token) => JSON.stringify(token));
   if (ts.isIdentifier(node)) {
     ctx.unit.slots.add(node.text);
     return [node.text];
