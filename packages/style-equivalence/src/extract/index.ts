@@ -11,7 +11,6 @@ import {
   mergeKinds,
   usageKinds,
   valueIdentifierNodes,
-  valueIdentifiers,
 } from './identifiers';
 import { classifyRules, classNamesIn, foreignClassNames } from './selectors';
 import { collectTables } from './tables';
@@ -46,6 +45,30 @@ const GLOBALS = new Set([
 ]);
 
 const CLASS_PROPS = new Set(['...', 'className', 'classNames']);
+
+const aliasDeclaration = (declaration: ts.VariableDeclaration, symbols: Set<string>) =>
+  ts.isIdentifier(declaration.name) &&
+  declaration.initializer &&
+  ts.isIdentifier(declaration.initializer) &&
+  symbols.has(declaration.initializer.text) &&
+  !symbols.has(declaration.name.text) &&
+  ts.isVariableDeclarationList(declaration.parent) &&
+  declaration.parent.flags & ts.NodeFlags.Const
+    ? declaration.initializer.text
+    : undefined;
+
+const aliasOf = (node: ts.Identifier, symbols: Set<string>) => {
+  for (let scope: ts.Node = node.parent; scope; scope = scope.parent) {
+    if (!ts.isBlock(scope) && !ts.isSourceFile(scope)) continue;
+    for (const statement of scope.statements)
+      if (ts.isVariableStatement(statement))
+        for (const declaration of statement.declarationList.declarations)
+          if (ts.isIdentifier(declaration.name) && declaration.name.text === node.text)
+            return aliasDeclaration(declaration, symbols);
+    if (ts.isSourceFile(scope)) return undefined;
+  }
+  return undefined;
+};
 
 const ownerOf = (statement: ts.Statement, ast: ts.SourceFile) => {
   if (ts.isVariableStatement(statement))
@@ -84,8 +107,11 @@ export const extractFile = (
   const derived = new Map<string, string>();
   const isStyleName = (name: string) => top.styleSymbols.has(name) || markers.has(name);
   const referencesStyle = (node: ts.Node, prop?: string) =>
-    [...valueIdentifiers(node, { skipJsx: true })].some(
-      (name) => isStyleName(name) || (CLASS_PROPS.has(prop ?? '') && derived.has(name)),
+    valueIdentifierNodes(node, { skipJsx: true }).some(
+      (identifier) =>
+        isStyleName(identifier.text) ||
+        !!aliasOf(identifier, top.styleSymbols) ||
+        (CLASS_PROPS.has(prop ?? '') && derived.has(identifier.text)),
     );
   const slotsOf = (node: ts.Node) => {
     const slots = new Set<string>();
@@ -94,9 +120,12 @@ export const extractFile = (
       if (
         ts.isPropertyAccessExpression(current) &&
         ts.isIdentifier(current.expression) &&
-        top.styleSymbols.has(current.expression.text)
+        (top.styleSymbols.has(current.expression.text) ||
+          aliasOf(current.expression, top.styleSymbols))
       )
-        slots.add(`${current.expression.text}.${current.name.text}`);
+        slots.add(
+          `${top.styleSymbols.has(current.expression.text) ? current.expression.text : aliasOf(current.expression, top.styleSymbols)}.${current.name.text}`,
+        );
       ts.forEachChild(current, visit);
     };
     if (!isJsxNode(node)) ts.forEachChild(node, visit);
@@ -290,10 +319,16 @@ export const extractFile = (
       if (bindings.length) {
         const tag = opening.tagName.getText(ast);
         const names = new Set<string>();
+        const used = new Map<string, string>();
         for (const expression of expressions)
           for (const node of valueIdentifierNodes(expression, { skipJsx: true })) {
             const name = node.text;
             if (GLOBALS.has(name)) continue;
+            const alias = aliasOf(node, top.styleSymbols);
+            if (alias) {
+              used.set(name, alias);
+              continue;
+            }
             if (declaredLocally(node)) names.add(name);
             else if (markers.has(name)) top.require(name);
             else if (!top.styleSymbols.has(name) && !top.require(name)) names.add(name);
@@ -335,6 +370,7 @@ export const extractFile = (
           bindings.filter((binding) => binding.spread).length
             ? { foreignSpread: true }
             : {}),
+          ...(used.size ? { aliases: Object.fromEntries([...used].sort()) } : {}),
           tag,
           variables: [...names].sort().map((name) => ({
             kind: mergeKinds(kinds.get(name) ?? ['unknown']),
@@ -380,7 +416,11 @@ export const extractFile = (
           (ts.isPropertyAccessExpression(parent) && parent.name === node) ||
           (ts.isPropertyAssignment(parent) && parent.name === node) ||
           (ts.isJsxAttribute(parent) && parent.name === node);
-        if (!nameOnly)
+        const aliased =
+          ts.isVariableDeclaration(parent) &&
+          parent.initializer === node &&
+          aliasDeclaration(parent, top.styleSymbols) === node.text;
+        if (!nameOnly && !aliased)
           outsideReferences.push(
             `${node.text}@${ast.getLineAndCharacterOfPosition(node.getStart(ast)).line + 1}`,
           );

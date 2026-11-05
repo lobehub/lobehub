@@ -102,6 +102,11 @@ const unpairedEntry = (
   const expressions = chain.flatMap((item) => item.bindings.map((binding) => binding.expr));
   const declared = new Set<string>();
   const lines: string[] = [];
+  for (const [alias, symbol] of chain.flatMap((item) => Object.entries(item.aliases ?? {}))) {
+    if (declared.has(alias)) continue;
+    declared.add(alias);
+    lines.push(`const ${alias} = ${symbol};`);
+  }
   for (const variable of chain.flatMap((item) => item.variables)) {
     if (declared.has(variable.name)) continue;
     declared.add(variable.name);
@@ -167,6 +172,12 @@ export const generateModule = (
       );
     }
     const expressions = chain.flatMap((item) => item.bindings.map((binding) => binding.expr));
+    for (const item of chain)
+      for (const [alias, symbol] of Object.entries(item.aliases ?? {})) {
+        if (declared.has(alias)) continue;
+        declared.add(alias);
+        lines.push(`const ${alias} = ${symbol};`);
+      }
     for (const item of chain)
       for (const variable of item.variables) {
         if (declared.has(variable.name)) continue;
