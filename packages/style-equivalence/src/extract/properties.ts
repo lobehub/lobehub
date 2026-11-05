@@ -83,3 +83,29 @@ export const objectSlotProperties = (symbol: string, factory: ts.CallExpression)
   }
   return found;
 };
+
+const objectConditions = (object: ts.ObjectLiteralExpression, into: Set<string>) => {
+  for (const property of object.properties) {
+    if (!ts.isPropertyAssignment(property)) continue;
+    const key = keyOf(property.name);
+    if (key?.startsWith(':')) into.add(key);
+    const nested = unwrap(property.initializer);
+    if (ts.isObjectLiteralExpression(nested)) objectConditions(nested, into);
+  }
+};
+
+export const objectSlotConditions = (symbol: string, factory: ts.CallExpression) => {
+  const found: Record<string, string[]> = {};
+  const [argument] = factory.arguments;
+  const object = argument && unwrap(argument);
+  if (!object || !ts.isObjectLiteralExpression(object)) return found;
+  for (const property of object.properties) {
+    if (!ts.isPropertyAssignment(property)) continue;
+    const slot = keyOf(property.name);
+    const style = styleObjectOf(property.initializer);
+    const conditions = new Set<string>();
+    if (style) objectConditions(style, conditions);
+    if (slot !== undefined && conditions.size) found[`${symbol}.${slot}`] = [...conditions].sort();
+  }
+  return found;
+};

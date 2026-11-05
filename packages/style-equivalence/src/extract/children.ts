@@ -99,7 +99,7 @@ const plainAttributes = (opening: ts.JsxOpeningLikeElement, ast: ts.SourceFile) 
 export const collectChildren = (
   styled: Map<ts.Node, StyleElement>,
   ast: ts.SourceFile,
-  requireTag: (tag: string) => void,
+  classifyTag: (tag: string) => boolean,
 ) => {
   const plain: StyleElement[] = [];
   for (const [node, element] of styled) {
@@ -111,7 +111,7 @@ export const collectChildren = (
       const tag = opening.tagName.getText(ast);
       const { literalProps, opaque } = plainAttributes(opening, ast);
       const id = `${element.id}/${index}`;
-      requireTag(tag);
+      const real = classifyTag(tag);
       const tags = subtreeTags(child, ast);
       plain.push({
         bindings: [],
@@ -120,6 +120,7 @@ export const collectChildren = (
         literalProps,
         owner: element.owner,
         parent: element.id,
+        ...(real ? { real } : {}),
         slots: [],
         ...(Object.keys(tags).length ? { subtreeTags: tags } : {}),
         tag,

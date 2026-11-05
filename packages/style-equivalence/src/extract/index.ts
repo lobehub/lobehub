@@ -61,6 +61,21 @@ export const extractFile = (
   );
   const markers = new Set(options.adapters.flatMap((adapter) => adapter.markerIdentifiers));
   const layout = new Set(options.layoutComponents);
+  const isReal = (tag: string) => {
+    const component = options.realComponents?.[tag];
+    const statement = top.importOf.get(tag);
+    if (!component || !statement || !ts.isStringLiteral(statement.moduleSpecifier)) return false;
+    if (statement.moduleSpecifier.text !== component.source) return false;
+    const named = statement.importClause?.namedBindings;
+    return (
+      !!named &&
+      ts.isNamedImports(named) &&
+      named.elements.some(
+        (element) =>
+          element.name.text === tag && (element.propertyName ?? element.name).text === tag,
+      )
+    );
+  };
   const isStyleName = (name: string) => top.styleSymbols.has(name) || markers.has(name);
   const referencesStyle = (node: ts.Node) =>
     [...valueIdentifiers(node, { skipJsx: true })].some(isStyleName);
@@ -84,11 +99,13 @@ export const extractFile = (
   const gaps: string[] = [];
   const rules: StyleRule[] = [];
   const slotProperties: Record<string, string[]> = {};
+  const slotConditions: Record<string, string[]> = {};
   for (const [symbol, factory] of top.styleFactories)
     for (const adapter of options.adapters)
       if (adapter.recognizeFactory(factory)) {
         rules.push(...(adapter.rulesOf?.(symbol, factory) ?? []));
         Object.assign(slotProperties, adapter.propertiesOf?.(symbol, factory));
+        Object.assign(slotConditions, adapter.conditionsOf?.(symbol, factory));
       }
   const globalClasses = new Set<string>();
   for (const { binding, source } of top.stylesheets) {
@@ -203,7 +220,8 @@ export const extractFile = (
         for (const expression of expressions)
           for (const [name, list] of usageKinds(expression, names))
             kinds.set(name, [...(kinds.get(name) ?? []), ...list]);
-        if (layout.has(tag)) top.require(tag);
+        const real = isReal(tag);
+        if (layout.has(tag) || real) top.require(tag);
         const id = `${owner}#${ordinal++}`;
         const tokens = new Set<string>();
         const collectTokens = (node: ts.Node) => {
@@ -223,6 +241,7 @@ export const extractFile = (
           literalProps,
           owner,
           parent,
+          ...(real ? { real } : {}),
           ...(runtimeStyle && !opening.attributes.properties.some(ts.isJsxSpreadAttribute)
             ? { runtimeStyle }
             : {}),
@@ -247,7 +266,9 @@ export const extractFile = (
   }
 
   const plain = collectChildren(styled, ast, (tag) => {
-    if (layout.has(tag)) top.require(tag);
+    const real = isReal(tag);
+    if (layout.has(tag) || real) top.require(tag);
+    return real;
   });
 
   const outsideReferences: string[] = [];
@@ -296,6 +317,7 @@ export const extractFile = (
     ...(plain.length ? { plain } : {}),
     prelude: top.prelude(),
     rules,
+    ...(Object.keys(slotConditions).length ? { slotConditions } : {}),
     slotProperties,
     styleSymbols: [...top.styleSymbols].sort(),
     tables: collectTables(ast),

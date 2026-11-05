@@ -118,6 +118,7 @@ const writeMutant = async (
       layoutComponents: context.config.layoutComponents,
       readModule: moduleReader(context.headRoot, context.config.aliases),
       readStylesheet: stylesheetReader(context.headRoot),
+      realComponents: context.config.realComponents,
     });
   }
   if (site.kind === 'import') {

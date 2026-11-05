@@ -23,6 +23,7 @@ export interface StyleElement {
   literalProps: Record<string, LiteralValue>;
   owner: string;
   parent?: string;
+  real?: boolean;
   runtimeStyle?: string;
   slots: string[];
   styleExpr?: string;
@@ -50,12 +51,14 @@ export interface FileExtraction {
   plain?: StyleElement[];
   prelude: string;
   rules: StyleRule[];
+  slotConditions?: Record<string, string[]>;
   slotProperties?: Record<string, string[]>;
   styleSymbols: string[];
   tables?: Record<string, string[]>;
 }
 
 export interface StyleAdapter {
+  conditionsOf?: (symbol: string, factory: ts.CallExpression) => Record<string, string[]>;
   importedStyleSymbols?: (source: string, clause: ts.ImportClause) => string[];
   markerIdentifiers: string[];
   name: string;
@@ -68,9 +71,17 @@ export interface StyleAdapter {
   ) => StylesheetBinding | undefined;
 }
 
+export interface RealComponent {
+  leaf?: boolean;
+  sample?: (content: string) => string;
+  source: string;
+  tag?: { default: string; prop: string };
+}
+
 export interface ExtractOptions {
   adapters: StyleAdapter[];
   layoutComponents: string[];
   readModule?: (fromFile: string, specifier: string) => string | undefined;
   readStylesheet?: (fromFile: string, specifier: string) => string | undefined;
+  realComponents?: Record<string, RealComponent>;
 }

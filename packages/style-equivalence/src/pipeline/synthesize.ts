@@ -61,6 +61,7 @@ export const synthesize = async (
         layoutComponents: config.layoutComponents,
         readModule: moduleReader(roots[side], config.aliases),
         readStylesheet: stylesheetReader(roots[side]),
+        realComponents: config.realComponents,
       });
     };
     const pair = { base: await read('base'), head: await read('head') };

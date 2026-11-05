@@ -1,10 +1,11 @@
-import type { FileExtraction, StyleElement, VariableKind } from '../extract';
+import type { FileExtraction, RealComponent, StyleElement, VariableKind } from '../extract';
 import { mergeKinds, valueIdentifiers } from '../extract/identifiers';
 import { type Combo, combosFor, DOMAIN_COMBO_LIMIT } from './combos';
 import { childCovered, elementsOf, parentCovered, replacedDescendants } from './descendants';
 import type { InnerNode } from './inner';
 import { bindKnobs, parseExpression } from './knobs';
 import { movedStylesheets } from './moved';
+import { neutralOmitted } from './neutral';
 import { alignElements } from './pair';
 import {
   isIntrinsicTag,
@@ -13,6 +14,7 @@ import {
   type SideProperties,
 } from './placement';
 import { runtimeStyleProbe, styleDropped } from './probes';
+import { realItemsOf, sampleTargets } from './real';
 import { tableDomain } from './tables';
 
 export { isIntrinsicTag } from './placement';
@@ -44,6 +46,8 @@ export interface PlanCase {
   inner?: Record<string, InnerNode[]>;
   key: string;
   knobs?: string[];
+  neutralOmitted?: number[];
+  samples?: InnerNode[];
   variables: PlanVariable[];
 }
 
@@ -56,6 +60,7 @@ export interface FilePlan {
 
 export interface PlanConfig {
   layoutComponents: string[];
+  realComponents?: Record<string, RealComponent>;
 }
 
 export const chainOf = (element: StyleElement, byId: Map<string, StyleElement>) => {
@@ -160,9 +165,12 @@ export const planFile = (
       movedAt.flatMap(({ index }) => [chains.base[index], chains.head[index]]),
     );
     if (left.tag !== right.tag) flags.add('TAG_CHANGED');
+    const realItems = realItemsOf(chains, config.realComponents);
     for (const item of [...chains.base, ...chains.head]) {
-      if (!isIntrinsicTag(item.tag) && !layout.has(item.tag)) flags.add('PLACEMENT_SUBSTITUTED');
-      if (item.bindings.some((binding) => !binding.spread && binding.prop !== 'className'))
+      const real = realItems.has(item);
+      if (!isIntrinsicTag(item.tag) && !layout.has(item.tag) && !real)
+        flags.add('PLACEMENT_SUBSTITUTED');
+      if (!real && item.bindings.some((binding) => !binding.spread && binding.prop !== 'className'))
         flags.add('PLACEMENT_NEUTRAL_PROP');
       const reached =
         chains.base.includes(item) &&
@@ -193,6 +201,9 @@ export const planFile = (
       evidence.push('PLACEMENT_PRESERVED');
     }
     if (movedAt.length) evidence.push('STYLESHEET_MOVED');
+    if (realItems.size) evidence.push('REAL_COMPONENT_RENDERED');
+    const samples = realItems.size ? sampleTargets(chains, { base, head }) : [];
+    const omitted = neutralOmitted(chains);
     const inner = Object.fromEntries(
       movedAt
         .filter(({ proof }) => proof.nodes.length)
@@ -266,6 +277,8 @@ export const planFile = (
       ...(Object.keys(inner).length ? { inner } : {}),
       key: `${file}|${left.id}`,
       ...(knobs ? { knobs } : {}),
+      ...(omitted.length ? { neutralOmitted: omitted } : {}),
+      ...(samples.length ? { samples } : {}),
       variables: modeled,
     };
   });

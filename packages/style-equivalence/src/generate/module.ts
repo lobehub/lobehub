@@ -1,8 +1,15 @@
-import type { FileExtraction, LiteralValue, StyleBinding, StyleElement } from '../extract';
+import type {
+  FileExtraction,
+  LiteralValue,
+  RealComponent,
+  StyleBinding,
+  StyleElement,
+} from '../extract';
 import { elementsOf } from '../plan/descendants';
 import type { InnerNode } from '../plan/inner';
 import { bindKnobs } from '../plan/knobs';
 import { chainOf, type FilePlan, isIntrinsicTag, type Side } from '../plan/planFile';
+import { rendersReal } from '../plan/real';
 import { innerMarkup } from './inner';
 
 export const SAMPLE_TEXT = 'Ag 文本 Text';
@@ -12,6 +19,7 @@ const VOID_TAGS = new Set(['area', 'br', 'col', 'embed', 'hr', 'img', 'input', '
 export interface GenerateConfig {
   cxFallback?: { name: string; source: string };
   layoutComponents: string[];
+  realComponents?: Record<string, RealComponent>;
 }
 
 const placementTag = (element: StyleElement, layout: Set<string>) =>
@@ -31,13 +39,20 @@ interface ChainContext {
   exprOf: (binding: StyleBinding) => string;
   inner?: Record<string, InnerNode[]>;
   layout: Set<string>;
+  omitted?: number[];
   probed: Set<string>;
+  real?: Record<string, RealComponent>;
+  samples?: InnerNode[];
 }
+
+const sampleContent = (samples: InnerNode[] | undefined) =>
+  samples?.length ? innerMarkup(samples, SAMPLE_TEXT) : `{${JSON.stringify(SAMPLE_TEXT)}}`;
 
 const renderChain = (chain: StyleElement[], context: ChainContext, depth = 0): string => {
   const { exprOf, layout, probed } = context;
   const [element, ...rest] = chain;
-  const tag = placementTag(element, layout);
+  const real = rendersReal(element, !rest.length, context.real);
+  const tag = real ? element.tag : placementTag(element, layout);
   const substituted = tag !== element.tag;
   const attributes = [`data-synthetic-element=${JSON.stringify(element.id)}`];
   for (const [name, value] of Object.entries(element.literalProps))
@@ -46,13 +61,16 @@ const renderChain = (chain: StyleElement[], context: ChainContext, depth = 0): s
   for (const binding of element.bindings) {
     const expr = exprOf(binding);
     if (binding.spread) attributes.push(`{...(${expr})}`);
-    else if (binding.prop === 'className') attributes.push(`className={${expr}}`);
-    else neutral.push(`{__neutral(${JSON.stringify(binding.prop)}, ${expr})}`);
+    else if (binding.prop === 'className' || real) attributes.push(`${binding.prop}={${expr}}`);
+    else if (!context.omitted?.includes(depth))
+      neutral.push(`{__neutral(${JSON.stringify(binding.prop)}, ${expr})}`);
   }
   if (element.runtimeStyle && probed.has(element.runtimeStyle))
     attributes.push(`style={${element.runtimeStyle}}`);
+  const component = real ? context.real?.[element.tag] : undefined;
+  if (component?.sample) attributes.push(component.sample(sampleContent(context.samples)));
   const open = `<${tag} ${attributes.join(' ')}`;
-  if (VOID_TAGS.has(tag)) return `<>${open} />${neutral.join('')}</>`;
+  if (VOID_TAGS.has(tag) || component?.leaf) return `<>${open} />${neutral.join('')}</>`;
   const inner = rest.length
     ? renderChain(rest, context, depth + 1)
     : `{${JSON.stringify(SAMPLE_TEXT)}}`;
@@ -106,7 +124,7 @@ const unpairedEntry = (
           (readsThrough(expressions, variable.name) ? '__opaque' : 'undefined'));
     lines.push(`const ${variable.name} = ${value};`);
   }
-  return `${JSON.stringify(key)}: () => { ${lines.join(' ')} return (${renderChain(chain, { exprOf: (binding) => binding.expr, layout, probed: new Set() })}); }`;
+  return `${JSON.stringify(key)}: () => { ${lines.join(' ')} return (${renderChain(chain, { exprOf: (binding) => binding.expr, layout, probed: new Set(), real: config.realComponents })}); }`;
 };
 
 export const generateModule = (
@@ -168,7 +186,16 @@ export const generateModule = (
             : `const ${variable.name} = ${readsThrough(expressions, variable.name) ? '__opaque' : 'undefined'};`,
         );
       }
-    return `${JSON.stringify(entry.key)}: (__v: Record<string, boolean | string>) => { ${lines.join(' ')} return (${renderChain(chain, { exprOf: (binding) => bound.get(binding)!, inner: entry.inner, layout, probed })}); }`;
+    const context = {
+      exprOf: (binding: StyleBinding) => bound.get(binding)!,
+      inner: entry.inner,
+      layout,
+      omitted: entry.neutralOmitted,
+      probed,
+      real: config.realComponents,
+      samples: entry.samples,
+    };
+    return `${JSON.stringify(entry.key)}: (__v: Record<string, boolean | string>) => { ${lines.join(' ')} return (${renderChain(chain, context)}); }`;
   });
   const unpaired = plan.unpaired
     .filter((entry) => entry.side === side && byId.has(entry.elementId))

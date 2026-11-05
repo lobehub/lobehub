@@ -116,3 +116,27 @@ export const innerTargets = (selectors: string[], scope: string) => {
   }
   return finish(root);
 };
+
+const hasArguments = (nodes: SelectorNode[], found: SelectorNode[][]) => {
+  for (const node of nodes) {
+    if (node.type === 'pseudo' && node.value === ':has')
+      for (const argument of node.nodes ?? []) found.push(argument.nodes ?? []);
+    if (node.nodes) hasArguments(node.nodes, found);
+  }
+};
+
+export const hasTargets = (selectors: string[]) => {
+  const found: SelectorNode[][] = [];
+  for (const text of selectors)
+    for (const selector of parseSelectorList(text) ?? []) hasArguments(selector, found);
+  const targets = new Map<string, InnerNode>();
+  for (const parts of found) {
+    const [first, ...after] = parts;
+    const inner = first?.type === 'combinator' && first.value?.trim() === '>' ? after : parts;
+    if (!inner.length || inner.some((item) => item.type === 'combinator')) continue;
+    const trie = compoundOf(inner, true);
+    const nodes = trie && finish(new Map([['', trie]]));
+    if (nodes) for (const node of nodes) targets.set(JSON.stringify(node), node);
+  }
+  return [...targets.values()];
+};
