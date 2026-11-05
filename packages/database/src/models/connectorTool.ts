@@ -1,4 +1,4 @@
-import { and, eq, inArray, ne, notInArray, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, ne, notInArray, sql } from 'drizzle-orm';
 
 import type {
   ConnectorToolPermission,
@@ -37,6 +37,17 @@ export class ConnectorToolModel {
 
   private ownership = () =>
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, userConnectorTools);
+
+  /**
+   * Deterministic tool order: grouped by connector, sorted by toolName within it.
+   * Tool lists feed the model's tool schema array, so they must not follow the
+   * physical row order, which changes whenever `upsertMany` rewrites a row.
+   * Unstable tool order invalidates provider prompt caches between runs.
+   */
+  private toolOrder = () => [
+    asc(userConnectorTools.userConnectorId),
+    asc(userConnectorTools.toolName),
+  ];
 
   findById = async (toolId: string): Promise<UserConnectorToolItem | undefined> => {
     const [row] = await this.db
@@ -125,7 +136,8 @@ export class ConnectorToolModel {
     return this.db
       .select()
       .from(userConnectorTools)
-      .where(and(eq(userConnectorTools.userConnectorId, userConnectorId), this.ownership()));
+      .where(and(eq(userConnectorTools.userConnectorId, userConnectorId), this.ownership()))
+      .orderBy(...this.toolOrder());
   };
 
   /**
@@ -144,7 +156,8 @@ export class ConnectorToolModel {
           inArray(userConnectorTools.userConnectorId, connectorIds),
           ne(userConnectorTools.permission, Permission.disabled),
         ),
-      );
+      )
+      .orderBy(...this.toolOrder());
   };
 
   /**
@@ -157,7 +170,8 @@ export class ConnectorToolModel {
     return this.db
       .select()
       .from(userConnectorTools)
-      .where(and(this.ownership(), inArray(userConnectorTools.userConnectorId, connectorIds)));
+      .where(and(this.ownership(), inArray(userConnectorTools.userConnectorId, connectorIds)))
+      .orderBy(...this.toolOrder());
   };
 
   /**
