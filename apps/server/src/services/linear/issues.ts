@@ -4,6 +4,7 @@ import type {
   LinearProjectSummary,
   LinearTeamSummary,
 } from '@lobechat/types';
+import { isLinearNoProject } from '@lobechat/types';
 
 import { linearGraphql } from './client';
 
@@ -91,6 +92,7 @@ export const listLinearProjects = async (
 };
 
 export interface LinearIssueFilter {
+  /** A Linear project, `LINEAR_NO_PROJECT_ID` for issues in none, or empty for the whole team. */
   linearProjectId?: string | null;
   stateTypes: LinearIssueStateType[];
   teamId: string;
@@ -99,13 +101,15 @@ export interface LinearIssueFilter {
 /**
  * A project filters by project alone: a Linear project can belong to several
  * teams, and its issues may all live in a team other than the chosen one.
+ * "No project" keeps the team and drops every issue that has a project.
  */
-const toIssueFilter = ({ linearProjectId, stateTypes, teamId }: LinearIssueFilter) => ({
-  state: { type: { in: stateTypes } },
-  ...(linearProjectId
-    ? { project: { id: { eq: linearProjectId } } }
-    : { team: { id: { eq: teamId } } }),
-});
+const toIssueFilter = ({ linearProjectId, stateTypes, teamId }: LinearIssueFilter) => {
+  const state = { type: { in: stateTypes } };
+  const team = { id: { eq: teamId } };
+  if (isLinearNoProject(linearProjectId)) return { project: { null: true }, state, team };
+  if (linearProjectId) return { project: { id: { eq: linearProjectId } }, state };
+  return { state, team };
+};
 
 /** Ids of every team a project belongs to; none when the project does not exist. */
 export const getLinearProjectTeamIds = async (

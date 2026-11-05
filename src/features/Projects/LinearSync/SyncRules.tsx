@@ -23,7 +23,12 @@ import AsyncError from '@/components/AsyncError';
 import { linearKeys } from '@/features/Integrations/Linear/swrKeys';
 import { linearService } from '@/services/linear';
 
-import { formatLinearSyncResult, isActiveLinearSyncJob, linearSyncErrorMessage } from './utils';
+import {
+  formatLinearSyncResult,
+  isActiveLinearSyncJob,
+  linearScopeProjectLabel,
+  linearSyncErrorMessage,
+} from './utils';
 
 const styles = stylex.create({
   list: {
@@ -156,7 +161,7 @@ const SyncRules = memo<SyncRulesProps>(({ connections, jobs, onJobStarted, proje
             >
               <Flexbox flex={1} gap={4} style={{ minWidth: 0 }}>
                 <Text ellipsis weight={500}>
-                  {[organizationOf(rule), rule.teamName, rule.linearProjectName]
+                  {[organizationOf(rule), rule.teamName, linearScopeProjectLabel(rule, t)]
                     .filter(Boolean)
                     .join(' › ')}
                 </Text>

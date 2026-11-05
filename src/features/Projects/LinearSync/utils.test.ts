@@ -1,4 +1,5 @@
 import type { LinearSyncResult } from '@lobechat/types';
+import { LINEAR_NO_PROJECT_ID } from '@lobechat/types';
 import type { TFunction } from 'i18next';
 import { describe, expect, it } from 'vitest';
 
@@ -6,6 +7,7 @@ import {
   formatLinearSyncResult,
   isActiveLinearSyncJob,
   linearIssueListCounts,
+  linearScopeProjectLabel,
   linearSyncJobErrorMessage,
   linearSyncJobProgress,
 } from './utils';
@@ -130,5 +132,23 @@ describe('linearIssueListCounts', () => {
       linearIssueListCounts({ hasMore: true, loaded: 100, total: { capped: false, count: 100 } }, t)
         .total,
     ).toBe('linear.sync.list.countAtLeast:100');
+  });
+});
+
+describe('linearScopeProjectLabel', () => {
+  it('names the project, says No project, or falls back to All projects only when asked', () => {
+    const scope = (linearProjectId: string | null, linearProjectName: string | null = null) => ({
+      linearProjectId,
+      linearProjectName,
+    });
+
+    expect(linearScopeProjectLabel(scope('p-1', 'Mobile'), t)).toBe('Mobile');
+    expect(linearScopeProjectLabel(scope(LINEAR_NO_PROJECT_ID), t)).toBe(
+      'linear.sync.filter.noProject',
+    );
+    expect(linearScopeProjectLabel(scope(null), t)).toBeUndefined();
+    expect(linearScopeProjectLabel(scope(null), t, { withAll: true })).toBe(
+      'linear.sync.filter.allProjects',
+    );
   });
 });
