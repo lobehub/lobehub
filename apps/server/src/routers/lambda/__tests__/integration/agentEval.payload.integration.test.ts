@@ -145,7 +145,7 @@ describe('Agent Eval UI payloads', () => {
     await cleanupTestUser(serverDB, userId);
   });
 
-  it('keeps fifty frozen contracts in storage while omitting them from every UI run response', async () => {
+  it('keeps fifty frozen contracts in storage while omitting them from run and experiment reads', async () => {
     const caller = agentEvalRouter.createCaller(createTestContext(userId));
     const [list, detail, results, progress, experiments, experiment] = await Promise.all([
       caller.listRuns({ datasetId }),
@@ -178,6 +178,24 @@ describe('Agent Eval UI payloads', () => {
     expect(Buffer.byteLength(JSON.stringify(stored))).toBeGreaterThan(1_500_000);
   });
 
+  it('omits frozen contracts from benchmark recent-run previews', async () => {
+    const caller = agentEvalRouter.createCaller(createTestContext(userId));
+    const benchmarks = await caller.listBenchmarks({ includeSystem: false });
+
+    expect(benchmarks).toHaveLength(1);
+    expect(benchmarks[0].recentRuns).toHaveLength(1);
+    const run = benchmarks[0].recentRuns[0];
+    expect(!!run.config?.connectorSnapshots).toBe(false);
+    expect(run.config).toEqual(settings);
+    expect(run.id).toBe(runId);
+    expect(benchmarks[0]).toMatchObject({ datasetCount: 1, runCount: 1, testCaseCount: 50 });
+    expect(JSON.stringify(benchmarks)).not.toContain(manifestMarker);
+    expect(Buffer.byteLength(JSON.stringify(benchmarks))).toBeLessThan(10_000);
+
+    const stored = await new AgentEvalRunModel(serverDB, userId).findById(runId);
+    expect(stored?.config).toEqual(frozenConfig);
+  });
+
   it('preserves server-owned frozen settings when a client edits the returned summary config', async () => {
     const caller = agentEvalRouter.createCaller(createTestContext(userId));
     const detail = await caller.getRunDetails({ id: runId });
@@ -194,6 +212,7 @@ describe('Agent Eval UI payloads', () => {
     const otherCaller = agentEvalRouter.createCaller(createTestContext(otherUserId));
     expect((await otherCaller.listRuns({ datasetId })).data).toEqual([]);
     expect((await otherCaller.listExperiments()).data).toEqual([]);
+    expect(await otherCaller.listBenchmarks({ includeSystem: false })).toEqual([]);
     await Promise.all([
       expect(otherCaller.getRunDetails({ id: runId })).rejects.toMatchObject({ code: 'NOT_FOUND' }),
       expect(otherCaller.getRunResults({ id: runId })).rejects.toMatchObject({ code: 'NOT_FOUND' }),
