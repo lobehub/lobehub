@@ -152,7 +152,7 @@ describe('lh task --label', () => {
     expect(printed).toContain('"name": "Bug"');
   });
 
-  it('edit puts the previous labels back when the field edit fails', async () => {
+  it('edit undoes only its own label change when the field edit fails', async () => {
     client.task.detail.query.mockResolvedValue({
       data: {
         labels: [
@@ -161,19 +161,26 @@ describe('lh task --label', () => {
         ],
       },
     });
-    client.taskLabel.changeForTask.mutate.mockResolvedValue([{ id: 'feat', name: 'Feature' }]);
-    client.taskLabel.setForTask.mutate.mockResolvedValue([]);
+    // Feature swaps out Bug; `other` was added meanwhile by someone else.
+    client.taskLabel.changeForTask.mutate
+      .mockResolvedValueOnce([
+        { id: 'feat', name: 'Feature' },
+        { id: 'fe', name: 'Frontend' },
+        { id: 'other', name: 'Other' },
+      ])
+      .mockResolvedValueOnce([]);
     client.task.update.mutate.mockRejectedValue(new Error('heartbeatInterval too small'));
 
     await expect(
       run('edit', 'T-1', '--label', 'Type/Feature', '--heartbeat-interval', '1'),
     ).rejects.toThrow('heartbeatInterval too small');
 
-    expect(client.taskLabel.changeForTask.mutate).toHaveBeenCalled();
-    expect(client.taskLabel.setForTask.mutate).toHaveBeenCalledWith({
-      labelIds: ['bug', 'fe'],
+    expect(client.taskLabel.changeForTask.mutate).toHaveBeenLastCalledWith({
+      add: ['bug'],
+      remove: ['feat'],
       taskId: 'T-1',
     });
+    expect(client.taskLabel.setForTask.mutate).not.toHaveBeenCalled();
   });
 
   it('edit does not touch labels again when the combined edit succeeds', async () => {

@@ -2056,7 +2056,7 @@
   "taskLabels.actions.create": "新建标签",
   "taskLabels.actions.createGroup": "新建标签组",
   "taskLabels.actions.more": "更多操作",
-  "taskLabels.delete.desc": "将从 {{count}} 个任务上移除此标签，且无法恢复。",
+  "taskLabels.delete.desc": "将从所有带有此标签的任务上移除它，其中你可见的未归档任务有 {{count}} 个。此操作无法撤销。",
   "taskLabels.delete.groupDesc": "将删除该标签组及组内所有标签，并从任务上移除，且无法恢复。",
   "taskLabels.delete.title": "删除「{{name}}」？",
   "taskLabels.empty": "还没有任务标签，新建一个来整理任务吧",

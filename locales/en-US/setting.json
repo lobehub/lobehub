@@ -2056,7 +2056,7 @@
   "taskLabels.actions.create": "New label",
   "taskLabels.actions.createGroup": "New group",
   "taskLabels.actions.more": "More actions",
-  "taskLabels.delete.desc": "Removes this label from {{count}} tasks. This cannot be undone.",
+  "taskLabels.delete.desc": "Removes this label from every task that carries it, including {{count}} unarchived tasks you can see. This cannot be undone.",
   "taskLabels.delete.groupDesc": "Deletes the group and every label in it, and removes them from tasks. This cannot be undone.",
   "taskLabels.delete.title": "Delete “{{name}}”?",
   "taskLabels.empty": "No task labels yet. Create one to organize your tasks.",

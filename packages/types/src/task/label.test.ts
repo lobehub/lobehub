@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { describeUnresolvedTaskLabels, formatTaskLabelPath, resolveTaskLabelRefs } from './label';
+import {
+  describeUnresolvedTaskLabels,
+  formatTaskLabelPath,
+  invertTaskLabelChange,
+  resolveTaskLabelRefs,
+} from './label';
 
 const registry = [
   { id: 'g-type', isGroup: true, name: 'Type', parentId: null },
@@ -48,5 +53,25 @@ describe('formatTaskLabelPath', () => {
   it('prefixes the group name', () => {
     expect(formatTaskLabelPath(registry[1], registry)).toBe('Type/Bug');
     expect(formatTaskLabelPath(registry[3], registry)).toBe('Frontend');
+  });
+});
+
+describe('invertTaskLabelChange', () => {
+  it('undoes only the applied delta, including implicit group swaps', () => {
+    // before: Bug (Type) + Frontend; add Feature (swaps Bug), remove Frontend
+    const undo = invertTaskLabelChange(
+      ['bug', 'fe'],
+      { add: ['feat'], remove: ['fe'] },
+      ['feat', 'other'], // `other` was added concurrently by someone else
+    );
+
+    expect(undo).toEqual({ add: ['bug', 'fe'], remove: ['feat'] });
+  });
+
+  it('does not remove a label that was already there', () => {
+    expect(invertTaskLabelChange(['bug'], { add: ['bug'] }, ['bug'])).toEqual({
+      add: [],
+      remove: [],
+    });
   });
 });

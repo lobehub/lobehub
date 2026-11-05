@@ -27,6 +27,7 @@ const setup = () => {
     removeFromTask: vi.fn().mockResolvedValue([]),
   };
   const taskCaller = {
+    detail: vi.fn().mockResolvedValue({ data: { labels: [] } }),
     list: vi.fn().mockResolvedValue({ data: [], total: 0 }),
     update: vi.fn().mockResolvedValue({ data: task }),
   };
@@ -110,24 +111,42 @@ describe('task tool labels', () => {
     expect(taskLabelCaller.removeFromTask).not.toHaveBeenCalled();
   });
 
-  it('editTask waits for every write before reporting a label failure', async () => {
+  it('editTask writes nothing else when the label change fails', async () => {
     const { runtime, taskCaller, taskLabelCaller } = setup();
-    let updateDone = false;
-    taskCaller.update.mockImplementation(
-      () =>
-        new Promise((resolve) =>
-          setTimeout(() => {
-            updateDone = true;
-            resolve({ data: task });
-          }, 20),
-        ),
-    );
     taskLabelCaller.changeForTask.mockRejectedValueOnce(new Error('label deleted'));
 
     await expect(
       runtime.editTask({ addLabels: ['Feature'], identifier: 'T-1', name: 'Renamed' }),
     ).rejects.toThrow('label deleted');
-    expect(updateDone).toBe(true);
+    expect(taskCaller.update).not.toHaveBeenCalled();
+  });
+
+  it('editTask undoes only its own label change when a later write fails', async () => {
+    const { runtime, taskCaller, taskLabelCaller } = setup();
+    taskCaller.detail.mockResolvedValue({ data: { labels: [{ id: 'bug' }, { id: 'fe' }] } });
+    // Feature swaps out Bug; `other` was added concurrently by someone else.
+    taskLabelCaller.changeForTask
+      .mockResolvedValueOnce([{ id: 'feat' }, { id: 'fe' }, { id: 'other' }])
+      .mockResolvedValueOnce([]);
+    taskCaller.update.mockRejectedValueOnce(new Error('update failed'));
+
+    await expect(
+      runtime.editTask({ addLabels: ['Feature'], identifier: 'T-1', name: 'Renamed' }),
+    ).rejects.toThrow('update failed');
+    expect(taskLabelCaller.changeForTask).toHaveBeenLastCalledWith({
+      add: ['bug'],
+      remove: ['feat'],
+      taskId: 'task-1',
+    });
+  });
+
+  it('editTask with only labels does not read the task first', async () => {
+    const { runtime, taskCaller } = setup();
+
+    const result = await runtime.editTask({ addLabels: ['Feature'], identifier: 'T-1' });
+
+    expect(result.success).toBe(true);
+    expect(taskCaller.detail).not.toHaveBeenCalled();
   });
 
   it('listTasks filters by label and group names', async () => {

@@ -172,3 +172,30 @@ export const describeUnresolvedTaskLabels = (
       return suggestions.length > 0 ? `${head} (did you mean: ${suggestions.join(', ')}?)` : head;
     })
     .join('\n');
+
+/**
+ * The label change that undoes one applied `changeForTask`, touching only what
+ * that call itself changed — never a full-set replacement, so labels another
+ * client added or removed meanwhile survive the rollback.
+ *
+ * - `before`: label ids on the task right before the change
+ * - `add` / `remove`: the delta that was applied
+ * - `after`: label ids the change returned
+ *
+ * Grouped siblings the change swapped out implicitly (in `before`, gone from
+ * `after`, not asked to be removed) are restored too.
+ */
+export const invertTaskLabelChange = (
+  before: readonly string[],
+  { add = [], remove = [] }: { add?: readonly string[]; remove?: readonly string[] },
+  after: readonly string[],
+): { add: string[]; remove: string[] } => {
+  const beforeSet = new Set(before);
+  const afterSet = new Set(after);
+  return {
+    // Put back what this change took away, explicitly or by a group swap.
+    add: before.filter((id) => !afterSet.has(id)),
+    // Take away only what this change itself brought in.
+    remove: [...new Set(add)].filter((id) => !beforeSet.has(id) && afterSet.has(id)),
+  };
+};

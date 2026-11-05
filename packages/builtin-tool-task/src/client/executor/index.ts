@@ -26,7 +26,6 @@ import debug from 'debug';
 import { getActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { getWorkspaceMembers } from '@/business/client/hooks/useWorkspaceMembers';
 import { taskService } from '@/services/task';
-import { taskLabelService } from '@/services/taskLabel';
 import { getChatStoreState } from '@/store/chat';
 import { getTaskStoreState } from '@/store/task';
 import { findSubtaskParentId } from '@/store/task/slices/detail/reducer';
@@ -55,7 +54,7 @@ import type {
   UpdateTaskCommentParams,
 } from '../../types';
 import { TaskApiName } from '../../types';
-import { resolveLabelIdsOrThrow } from './labelIds';
+import { applyTaskLabelDelta, resolveLabelIdsOrThrow } from './labelIds';
 import { settleAll } from './settleAll';
 
 const log = debug('lobe-task:executor');
@@ -440,6 +439,7 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
     },
     ctx?: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
+    let undoLabels: (() => Promise<void>) | undefined;
     try {
       log('[TaskExecutor] editTask - params:', params);
       const [add, remove] = await Promise.all([
@@ -453,6 +453,11 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
       const store = getTaskStoreState();
       const changes: string[] = [];
       const ops: Promise<unknown>[] = [];
+      // Labels first: a label failure then writes nothing else, and a later
+      // failure undoes just this label change (see the catch below).
+      const { addLabels: _a, identifier: _i, removeLabels: _r, ...otherEdits } = params;
+      const hasOtherEdits = Object.values(otherEdits).some((value) => value !== undefined);
+      undoLabels = await applyTaskLabelDelta(identifier, { add, remove }, hasOtherEdits);
 
       const updateData: {
         description?: string;
@@ -547,10 +552,7 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
       };
       if (addDependencies?.length) await applyDependencies(addDependencies, false);
       if (removeDependencies?.length) await applyDependencies(removeDependencies, true);
-      if (remove.length || add.length) {
-        const labelWrite = taskLabelService.changeForTask(identifier, { add, remove });
-        ops.push(labelWrite.then(() => store.refreshTaskList()));
-      }
+      if (remove.length || add.length) ops.push(store.refreshTaskList());
       if (remove.length) changes.push(`labels removed: ${params.removeLabels!.join(', ')}`);
       if (add.length) changes.push(`labels added: ${params.addLabels!.join(', ')}`);
 
@@ -562,6 +564,7 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
         success: true,
       };
     } catch (error) {
+      await undoLabels?.();
       log('[TaskExecutor] editTask - error:', error);
       const message = error instanceof Error ? error.message : 'Failed to edit task';
       return {

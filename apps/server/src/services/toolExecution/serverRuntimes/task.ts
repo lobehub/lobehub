@@ -26,6 +26,7 @@ import {
   priorityLabel,
 } from '@lobechat/prompts';
 import type { TaskAutomationMode, TaskStatus } from '@lobechat/types';
+import { invertTaskLabelChange } from '@lobechat/types';
 import { formatInvalidScheduleMessage, validateScheduleUpdate } from '@lobechat/utils/cronEval';
 import pMap from 'p-map';
 
@@ -423,6 +424,31 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
       const removeLabels = await resolveLabels(args.removeLabels);
       if (removeLabels.error) return { content: removeLabels.error, success: false };
 
+      // Labels first, in one transaction (removals apply first, so "swap Bug
+      // for Feature" ends with Feature): a label failure then writes nothing
+      // else. If a later write of this edit fails, only this label change is
+      // undone — not the whole set replaced — so a concurrent edit survives.
+      const labelDelta = { add: addLabels.ids, remove: removeLabels.ids };
+      let undoLabels = async () => {};
+      if (labelDelta.add.length > 0 || labelDelta.remove.length > 0) {
+        const labelCaller = deps.taskLabelCaller!;
+        const { addLabels: _a, identifier: _i, removeLabels: _r, ...otherArgs } = args;
+        const hasOtherEdits = Object.values(otherArgs).some((value) => value !== undefined);
+        const before = hasOtherEdits
+          ? ((await taskCaller().detail({ id: task.id })).data?.labels ?? []).map((l) => l.id)
+          : undefined;
+        const after = (await labelCaller.changeForTask({ ...labelDelta, taskId: task.id })).map(
+          (label) => label.id,
+        );
+        if (before) {
+          undoLabels = async () => {
+            const undo = invertTaskLabelChange(before, labelDelta, after);
+            if (undo.add.length === 0 && undo.remove.length === 0) return;
+            await labelCaller.changeForTask({ ...undo, taskId: task.id }).catch(() => {});
+          };
+        }
+      }
+
       const updateData: {
         assigneeAgentId?: string | null;
         assigneeUserId?: string | null;
@@ -526,28 +552,13 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
         );
       }
 
-      // One transaction; removals apply first, so "swap Bug for Feature" in one
-      // call ends with Feature, and a failure leaves the labels untouched.
-      if (removeLabels.ids.length > 0 || addLabels.ids.length > 0) {
-        const labelCaller = deps.taskLabelCaller!;
-        ops.push(
-          (async () => {
-            await labelCaller.changeForTask({
-              add: addLabels.ids,
-              remove: removeLabels.ids,
-              taskId: task.id,
-            });
-            if (removeLabels.ids.length > 0) {
-              changes.push(`labels removed: ${args.removeLabels!.join(', ')}`);
-            }
-            if (addLabels.ids.length > 0) {
-              changes.push(`labels added: ${args.addLabels!.join(', ')}`);
-            }
-          })(),
-        );
+      if (removeLabels.ids.length > 0) {
+        changes.push(`labels removed: ${args.removeLabels!.join(', ')}`);
       }
+      if (addLabels.ids.length > 0) changes.push(`labels added: ${args.addLabels!.join(', ')}`);
 
-      if (ops.length === 0 && depResults.length === 0) {
+      const hasLabelEdit = labelDelta.add.length > 0 || labelDelta.remove.length > 0;
+      if (ops.length === 0 && depResults.length === 0 && !hasLabelEdit) {
         return { content: 'No fields provided; nothing to update.', success: false };
       }
 
@@ -560,7 +571,10 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
       const failedOp = [...opResults, ...depSettled].find(
         (result): result is PromiseRejectedResult => result.status === 'rejected',
       );
-      if (failedOp) throw failedOp.reason;
+      if (failedOp) {
+        await undoLabels();
+        throw failedOp.reason;
+      }
       const depErrors = depSettled.map((result) =>
         result.status === 'fulfilled' ? result.value : undefined,
       );

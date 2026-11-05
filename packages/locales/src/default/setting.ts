@@ -4875,7 +4875,8 @@ When I am ___, I need ___
   'taskLabels.actions.addToGroup': 'Add label to group',
   'taskLabels.actions.create': 'New label',
   'taskLabels.actions.createGroup': 'New group',
-  'taskLabels.delete.desc': 'Removes this label from {{count}} tasks. This cannot be undone.',
+  'taskLabels.delete.desc':
+    'Removes this label from every task that carries it, including {{count}} unarchived tasks you can see. This cannot be undone.',
   'taskLabels.delete.groupDesc':
     'Deletes the group and every label in it, and removes them from tasks. This cannot be undone.',
   'taskLabels.delete.title': 'Delete “{{name}}”?',

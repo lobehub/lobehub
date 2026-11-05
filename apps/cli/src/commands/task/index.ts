@@ -1,4 +1,4 @@
-import { TASK_LIST_FILTER_NONE } from '@lobechat/types';
+import { invertTaskLabelChange, TASK_LIST_FILTER_NONE } from '@lobechat/types';
 import type { Command } from 'commander';
 import pc from 'picocolors';
 
@@ -720,22 +720,30 @@ export function registerTaskCommand(program: Command) {
         // Labels have their own endpoint; apply them (in one transaction)
         // after input validation and before any field / status edit, so a bad
         // label fails the command before anything moves. When the field /
-        // status edit then fails, the previous label set is put back, so the
-        // command never half-applies.
+        // status edit then fails, this command's own label change is undone
+        // (not the whole set replaced), so a teammate's concurrent label edit
+        // survives and the command never half-applies.
         const hasOtherEdits = hasFieldEdits || !!options.status;
         const previousLabelIds =
           hasLabelEdits && hasOtherEdits
             ? ((await client.task.detail.query({ id })).data?.labels ?? []).map((l) => l.id)
             : undefined;
+        let labels: Awaited<ReturnType<typeof client.taskLabel.changeForTask.mutate>> | undefined;
         const restoreLabelsOnFailure = async (error: unknown): Promise<never> => {
-          if (previousLabelIds) {
-            await client.taskLabel.setForTask
-              .mutate({ labelIds: previousLabelIds, taskId: id })
-              .catch(() => log.warn(`Labels on ${id} were changed but could not be restored.`));
+          if (previousLabelIds && labels) {
+            const undo = invertTaskLabelChange(
+              previousLabelIds,
+              { add: addLabelIds, remove: removeLabelIds },
+              labels.map((label) => label.id),
+            );
+            if (undo.add.length > 0 || undo.remove.length > 0) {
+              await client.taskLabel.changeForTask
+                .mutate({ ...undo, taskId: id })
+                .catch(() => log.warn(`Labels on ${id} were changed but could not be restored.`));
+            }
           }
           throw error;
         };
-        let labels: Awaited<ReturnType<typeof client.taskLabel.changeForTask.mutate>> | undefined;
         if (hasLabelEdits) {
           labels = await client.taskLabel.changeForTask.mutate({
             add: addLabelIds,
