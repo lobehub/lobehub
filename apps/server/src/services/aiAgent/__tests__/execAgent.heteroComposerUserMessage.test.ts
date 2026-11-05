@@ -314,6 +314,7 @@ describe('AiAgentService.execAgent - hetero runs keep the composer-authored user
         toolCallId: 'call-1',
       },
     ],
+    mcpAppSource: { identifier: 'weather-demo' },
     pageSelections: [
       {
         content: 'Selected page paragraph',

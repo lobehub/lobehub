@@ -429,6 +429,16 @@ const TopicItemRow = memo<TopicItemRowProps>(
         {t('draft')}
       </Text>
     ) : undefined;
+    // On a two-line row (title + working directory) the hint sits under the
+    // leading avatar instead, so it no longer eats into the title width.
+    const draftBelowIcon = hasDraft ? (
+      <Text
+        fontSize={10}
+        style={{ color: cssVar.colorError, flex: 'none', lineHeight: 1, whiteSpace: 'nowrap' }}
+      >
+        {t('draft')}
+      </Text>
+    ) : undefined;
 
     // Codex-style hover detail card: when the topic carries git context, hovering
     // the row reveals a card on the right with repo / branch / worktree / PR / CI —
@@ -625,7 +635,6 @@ const TopicItemRow = memo<TopicItemRowProps>(
           description={workingDirectoryNode}
           href={href}
           icon={leadingIconNode}
-          slots={{ titlePrefix: draftPrefix }}
           title={title === '...' ? <DotsLoading gap={3} size={4} /> : title}
           titleColor={cssVar.colorText}
           actions={() => (
@@ -657,6 +666,9 @@ const TopicItemRow = memo<TopicItemRowProps>(
                 />
               )}
             </>
+          }
+          slots={
+            workingDirectoryNode ? { iconBelow: draftBelowIcon } : { titlePrefix: draftPrefix }
           }
           onClick={handleClick}
           onDoubleClick={() => void handleDoubleClick()}

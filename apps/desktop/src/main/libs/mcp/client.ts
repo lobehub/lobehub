@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import type { Readable } from 'node:stream';
 
+import { getMcpToolVisibility, isMcpToolVisibleTo } from '@lobechat/const/mcpApp';
 import { toRecord } from '@lobechat/utils/object';
 import type { Progress, Transport } from '@modelcontextprotocol/client';
 import {
@@ -86,6 +87,9 @@ export interface StdioSpawnFailureInput {
 /** Per-stream cap for pre-check output so a noisy command cannot balloon the
  * Electron main process heap while the 5s pre-check window runs. */
 const PRECHECK_OUTPUT_CAP_BYTES = 64 * 1024;
+
+/** After a failed tool listing, MCP App lookups give up at once for this long. */
+const TOOL_LISTING_RETRY_MS = 60_000;
 
 /** Grace window between `exit` and `close` before the pre-check classifies
  * on the data captured so far — a grandchild holding the stdio pipes can
@@ -359,16 +363,54 @@ export class MCPClient {
    * "Connection closed" is the only way to surface an actionable error.
    */
   private stdioParams?: { args?: string[]; command: string; env?: Record<string, string> };
+  /** tool name → `ui://` resource URI, filled from the last `listTools` */
+  private uiResourceUris?: Map<string, string>;
+  /**
+   * The tools a view may call (`_meta.ui.visibility` with "app", or unset), from
+   * the same listing. An allow-list: a name the listing didn't name is refused.
+   */
+  private appVisibleTools?: Set<string>;
+  /** Tools only views may call (`_meta.ui.visibility` without "model"), from the same listing */
+  private modelHiddenTools?: Set<string>;
+  /** When the last listing for these lookups failed, while none has succeeded */
+  private toolListingFailedAt?: number;
 
-  constructor(params: MCPClientParams) {
+  constructor(
+    params: MCPClientParams,
+    {
+      mcpApps = false,
+    }: {
+      /**
+       * Announce MCP Apps (SEP-1865), so servers expose their interactive views.
+       * Only for users with the `mcp_apps` flag: a server may answer an
+       * announcing client with app-specific results instead of its text fallback.
+       */
+      mcpApps?: boolean;
+    } = {},
+  ) {
     this.mcp = new Client(
       { name: 'lobehub-desktop-mcp-client', version: '1.0.0' },
       {
+        ...(mcpApps && {
+          capabilities: {
+            extensions: {
+              'io.modelcontextprotocol/ui': { mimeTypes: ['text/html;profile=mcp-app'] },
+            },
+          },
+        }),
         // Do not add a probe subprocess/timeout to stdio installations or calls.
         versionNegotiation: { mode: params.type === 'http' ? 'auto' : 'legacy' },
         inputRequired: { autoFulfill: false },
       },
     );
+    // A server whose tools changed (a view's visibility, its `ui://` resource)
+    // voids what its last listing taught; the next lookup lists them again
+    this.mcp.setNotificationHandler('notifications/tools/list_changed', () => {
+      this.uiResourceUris = undefined;
+      this.appVisibleTools = undefined;
+      this.modelHiddenTools = undefined;
+      this.toolListingFailedAt = undefined;
+    });
 
     switch (params.type) {
       case 'http': {
@@ -725,7 +767,82 @@ export class MCPClient {
 
   async listTools() {
     const { tools } = await this.mcp.listTools();
+    this.uiResourceUris = new Map(
+      (tools || []).flatMap((tool) => {
+        const meta = tool._meta as Record<string, any> | undefined;
+        const uri = meta?.ui?.resourceUri ?? meta?.['ui/resourceUri'];
+        return typeof uri === 'string' && uri.startsWith('ui://')
+          ? [[tool.name, uri] as const]
+          : [];
+      }),
+    );
+    this.appVisibleTools = new Set(
+      (tools || [])
+        .filter((tool) => isMcpToolVisibleTo(getMcpToolVisibility(tool._meta), 'app'))
+        .map((tool) => tool.name),
+    );
+    this.modelHiddenTools = new Set(
+      (tools || [])
+        .filter((tool) => !isMcpToolVisibleTo(getMcpToolVisibility(tool._meta), 'model'))
+        .map((tool) => tool.name),
+    );
     return (tools || []) as McpTool[];
+  }
+
+  /**
+   * List the tools once for the MCP App lookups below. A failed listing is not
+   * retried for {@link TOOL_LISTING_RETRY_MS}: each lookup fails at once
+   * meanwhile, so a server that can't list them doesn't add a listing wait
+   * (or two) before every tool call.
+   */
+  private async ensureToolsListed() {
+    if (this.appVisibleTools) return;
+    const failedAt = this.toolListingFailedAt;
+    if (failedAt !== undefined && Date.now() - failedAt < TOOL_LISTING_RETRY_MS) {
+      throw new Error('The MCP server could not list its tools recently');
+    }
+    try {
+      await this.listTools();
+      this.toolListingFailedAt = undefined;
+    } catch (error) {
+      this.toolListingFailedAt = Date.now();
+      throw error;
+    }
+  }
+
+  /**
+   * Whether the server keeps `toolName` from the model: its
+   * `_meta.ui.visibility` lacks "model", so only its views may call it.
+   */
+  async isToolHiddenFromModel(toolName: string): Promise<boolean> {
+    await this.ensureToolsListed();
+
+    return !!this.modelHiddenTools?.has(toolName);
+  }
+
+  /**
+   * Whether an MCP App view may call `toolName`: the listing named it, with a
+   * `_meta.ui.visibility` that includes "app" or is unset. Lists tools once per
+   * client to learn it.
+   */
+  async isToolCallableByApp(toolName: string): Promise<boolean> {
+    await this.ensureToolsListed();
+
+    return !!this.appVisibleTools?.has(toolName);
+  }
+
+  /**
+   * The MCP Apps `ui://` resource a tool renders its result with, if any.
+   * Lists tools once per client to learn it.
+   */
+  async getToolUiResourceUri(toolName: string): Promise<string | undefined> {
+    await this.ensureToolsListed();
+
+    return this.uiResourceUris?.get(toolName);
+  }
+
+  async readResource(uri: string) {
+    return this.mcp.readResource({ uri });
   }
 
   async listResources() {

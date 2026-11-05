@@ -6,6 +6,7 @@ import type { ReviewEnv } from './auth';
 import { reviewAuth } from './auth';
 import { handleReviewError, reviewError } from './errors';
 import { streamEvents } from './events';
+import { extensionAuth, getExtensionTargets, mintExtensionToken } from './extension';
 import {
   createComment,
   decide,
@@ -40,6 +41,8 @@ app.use(
 );
 app.get('/sites/:siteId', getSiteInfo);
 app.post('/sites/:siteId/beacon', recordSiteBeacon);
+app.get('/extension/targets', extensionAuth, getExtensionTargets);
+app.post('/extension/token', extensionAuth, mintExtensionToken);
 app.use('*', reviewAuth);
 app.onError(handleReviewError);
 app.notFound((c) => reviewError(c, 404, 'NOT_FOUND', 'Not found'));

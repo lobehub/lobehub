@@ -64,6 +64,12 @@ export class ChunkService {
     } catch (e) {
       console.error('[embeddingFileChunks] error:', e);
 
+      // The async procedure ran and rejected the task itself (for example, a business
+      // middleware recorded that the vector quota is full). Keep that error: the generic
+      // APP_URL hint below is only right when the request never reached the server.
+      const task = await this.asyncTaskModel.findById(asyncTaskId);
+      if (task?.status === AsyncTaskStatus.Error) return asyncTaskId;
+
       await this.asyncTaskModel.update(asyncTaskId, {
         error: new AsyncTaskError(
           AsyncTaskErrorType.TaskTriggerError,

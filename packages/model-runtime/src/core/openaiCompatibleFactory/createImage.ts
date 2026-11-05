@@ -1,4 +1,3 @@
-import { cleanObject } from '../../utils/object';
 import createDebug from 'debug';
 import type { RuntimeImageGenParamsValue } from 'model-bank';
 import type OpenAI from 'openai';
@@ -9,10 +8,12 @@ import type {
   CreateImageResponse,
 } from '../../types/image';
 import { getModelPricing } from '../../utils/getModelPricing';
+import { cleanObject } from '../../utils/object';
 import { referenceImageUrlToBase64 } from '../../utils/referenceImageCache';
 import { parseDataUri } from '../../utils/uriParser';
 import { convertImageUrlToFile } from '../contextBuilders/openai';
 import { convertOpenAIImageUsage } from '../usageConverters/openai';
+import { applyImageOutputParams, resolveImageOutputMimeType } from './imageOutputParams';
 
 const log = createDebug('lobe-image:openai-compatible');
 
@@ -63,6 +64,8 @@ async function generateByImageMode(
   // https://platform.openai.com/docs/api-reference/images/createEdit
   const isImageEdit = Array.isArray(userInput.image) && userInput.image.length > 0;
   log('isImageEdit: %O, userInput.image: %O', isImageEdit, userInput.image);
+  // Validate output controls before downloading reference images: GIF + edit fails anyway.
+  applyImageOutputParams(userInput, { isImageEdit });
   // If there are imageUrls parameters, convert them to File objects
   if (isImageEdit) {
     try {
@@ -126,8 +129,12 @@ async function generateByImageMode(
 
   // Handle base64 format response
   if (imageData.b64_json) {
-    // Determine the image's MIME type, default to PNG
-    const mimeType = 'image/png'; // OpenAI image generation defaults to PNG format
+    // GIF/JPEG/WebP outputs must keep their real MIME type: storage derives the file extension
+    // and served Content-Type from it, so a GIF labelled PNG would no longer animate.
+    const mimeType = resolveImageOutputMimeType(
+      (img as { output_format?: string }).output_format,
+      userInput.output_format,
+    );
 
     // Convert base64 string to complete data URL
     imageUrl = `data:${mimeType};base64,${imageData.b64_json}`;

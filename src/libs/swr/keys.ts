@@ -565,6 +565,22 @@ export const fileKeys = {
 // header is `portal:` not `document:`.
 // =========================================================================
 
+// ---- MCP Apps (interactive tool result views) -----------------------------
+export const mcpAppKeys = {
+  resource: def(
+    'mcpApp:resource',
+    (
+      identifier: string,
+      uri: string,
+      {
+        agentId,
+        onThisDevice = false,
+        server,
+      }: { agentId?: string; onThisDevice?: boolean; server?: string },
+    ) => ['mcpApp:resource', identifier, uri, agentId ?? null, onThisDevice, server ?? null],
+  ),
+};
+
 // ---- api key (settings/apikey) -------------------------------------------
 export const apiKeyKeys = {
   list: def('apiKey:list', () => ['apiKey:list']),

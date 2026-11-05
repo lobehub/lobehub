@@ -38,4 +38,22 @@ describe('OIDC default clients', () => {
     expect(names['lobehub-desktop']).toBe('Acme Desktop');
     expect(names['lobehub-mobile']).toBe('Acme Mobile');
   });
+
+  it('register the browser extension as a public PKCE client that can stay signed in', async () => {
+    vi.resetModules();
+    const { defaultClients } = await import('./config');
+    const client = defaultClients.find((c) => c.client_id === 'lobehub-acceptance-extension');
+
+    expect(client).toMatchObject({
+      grant_types: ['authorization_code', 'refresh_token'],
+      response_types: ['code'],
+      token_endpoint_auth_method: 'none',
+    });
+    expect(client?.redirect_uris).toContain(
+      'https://fjgpjfdackkmgdldjiebkhkdacbibhnb.chromiumapp.org/oidc',
+    );
+    expect(client?.scope?.split(' ')).toEqual(
+      expect.arrayContaining(['openid', 'profile', 'offline_access', 'acceptance:extension']),
+    );
+  });
 });
