@@ -2,8 +2,6 @@
 
 import {
   Center,
-  createStaticStyles,
-  cssVar,
   Flexbox,
   Icon,
   Input,
@@ -14,6 +12,8 @@ import {
   useModalContext,
 } from '@lobehub/ui';
 import { Form, useForm, useWatch } from '@lobehub/ui/form';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { CheckIcon } from 'lucide-react';
 import { type FC, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -37,83 +37,58 @@ const CATEGORY_LABELS: Record<string, string> = {
   'tool-use': 'Tool Use',
 };
 
-const styles = createStaticStyles(({ css }) => ({
-  // Section heading above a labeled group of fields/cards.
-  sectionLabel: css`
-    font-size: ${cssVar.fontSizeSM};
-    font-weight: 500;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  // Selectable preset card — tonal, bordered, with a hover wash, a visible
-  // focus ring, and a primary-tinted selected state.
-  presetCard: css`
-    cursor: pointer;
-
-    position: relative;
-
-    padding: 12px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadius};
-
-    background: ${cssVar.colorBgContainer};
-
-    transition:
-      border-color 0.15s ease,
-      background 0.15s ease;
-
-    &:hover {
-      border-color: ${cssVar.colorBorder};
-      background: ${cssVar.colorFillTertiary};
-    }
-
-    &:focus-visible {
-      outline: 2px solid ${cssVar.colorPrimary};
-      outline-offset: -2px;
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      transition: none;
-    }
-  `,
-  presetCardSelected: css`
-    border-color: ${cssVar.colorPrimaryBorder};
-    background: ${cssVar.colorPrimaryBg};
-
-    &:hover {
-      border-color: ${cssVar.colorPrimaryBorder};
-      background: ${cssVar.colorPrimaryBg};
-    }
-  `,
-  presetGrid: css`
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px;
-  `,
-  presetIcon: css`
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadius};
-    background: ${cssVar.colorBgElevated};
-  `,
-  // Required / optional field hint, numbers and field names in mono.
-  presetMeta: css`
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: ${cssVar.fontSizeSM};
-    color: ${cssVar.colorTextTertiary};
-  `,
-  selectedMark: css`
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    width: 18px;
-    height: 18px;
-    border-radius: 999px;
-
-    color: ${cssVar.colorBgContainer};
-
-    background: ${cssVar.colorPrimary};
-  `,
-}));
+const styles = stylex.create({
+  sectionLabel: { fontSize: cssVar.fontSizeSM, fontWeight: 500, color: cssVar.colorTextSecondary },
+  presetCard: {
+    cursor: 'pointer',
+    position: 'relative',
+    padding: '12px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: { 'default': cssVar.colorBorderSecondary, ':hover': cssVar.colorBorder },
+    borderRadius: cssVar.borderRadius,
+    backgroundColor: { 'default': cssVar.colorBgContainer, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': 'none', ':hover': 'none' },
+    transition: {
+      'default': 'border-color 0.15s ease, background 0.15s ease',
+      '@media (prefers-reduced-motion: reduce)': 'none',
+    },
+    outlineWidth: { 'default': null, ':focus-visible': '2px' },
+    outlineStyle: { 'default': null, ':focus-visible': 'solid' },
+    outlineColor: { 'default': null, ':focus-visible': cssVar.colorPrimary },
+    outlineOffset: { 'default': null, ':focus-visible': '-2px' },
+  },
+  presetCardSelected: {
+    borderColor: { 'default': cssVar.colorPrimaryBorder, ':hover': cssVar.colorPrimaryBorder },
+    backgroundColor: { 'default': cssVar.colorPrimaryBg, ':hover': cssVar.colorPrimaryBg },
+    backgroundImage: { 'default': 'none', ':hover': 'none' },
+  },
+  presetGrid: { display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '8px' },
+  presetIcon: {
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadius,
+    backgroundColor: cssVar.colorBgElevated,
+    backgroundImage: 'none',
+  },
+  presetMeta: {
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: cssVar.fontSizeSM,
+    color: cssVar.colorTextTertiary,
+  },
+  selectedMark: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '18px',
+    height: '18px',
+    borderRadius: '999px',
+    color: cssVar.colorBgContainer,
+    backgroundColor: cssVar.colorPrimary,
+    backgroundImage: 'none',
+  },
+});
 
 export interface DatasetCreateContentProps {
   benchmarkId: string;
@@ -235,19 +210,19 @@ const DatasetCreateContent: FC<DatasetCreateContentProps> = ({
       {/* Preset picker — selectable cards grouped by category, the bold upgrade
           over the previous single dropdown. */}
       <Flexbox gap={12} style={{ marginBlockStart: 4 }}>
-        <span className={styles.sectionLabel}>{t('dataset.create.preset.label')}</span>
+        <span {...stylex.props(styles.sectionLabel)}>{t('dataset.create.preset.label')}</span>
         {orderedCategories.map(([category, presets]) => (
           <Flexbox gap={8} key={category}>
             <Text color={cssVar.colorTextTertiary} fontSize={12}>
               {CATEGORY_LABELS[category] || category}
             </Text>
-            <div className={styles.presetGrid}>
+            <div {...stylex.props(styles.presetGrid)}>
               {presets.map((preset) => {
                 const isSelected = selectedPreset === preset.id;
                 return (
                   <div
                     aria-pressed={isSelected}
-                    className={`${styles.presetCard} ${isSelected ? styles.presetCardSelected : ''}`}
+                    {...stylex.props(styles.presetCard, isSelected && styles.presetCardSelected)}
                     key={preset.id}
                     role="button"
                     tabIndex={0}
@@ -260,7 +235,12 @@ const DatasetCreateContent: FC<DatasetCreateContentProps> = ({
                     }}
                   >
                     <Flexbox horizontal align="flex-start" gap={12}>
-                      <Center className={styles.presetIcon} flex="none" height={36} width={36}>
+                      <Center
+                        className={stylex.props(styles.presetIcon).className}
+                        flex="none"
+                        height={36}
+                        width={36}
+                      >
                         <Icon icon={preset.icon} size={18} />
                       </Center>
                       <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
@@ -272,7 +252,7 @@ const DatasetCreateContent: FC<DatasetCreateContentProps> = ({
                         </Text>
                       </Flexbox>
                       {isSelected && (
-                        <span className={styles.selectedMark}>
+                        <span {...stylex.props(styles.selectedMark)}>
                           <Icon icon={CheckIcon} size={12} />
                         </span>
                       )}
@@ -289,7 +269,7 @@ const DatasetCreateContent: FC<DatasetCreateContentProps> = ({
             <Text fontSize={12} type="secondary">
               {DATASET_PRESETS[selectedPreset].formatDescription}
             </Text>
-            <Text className={styles.presetMeta}>
+            <Text className={stylex.props(styles.presetMeta).className}>
               <strong>Required:</strong> {DATASET_PRESETS[selectedPreset].requiredFields.join(', ')}
               {DATASET_PRESETS[selectedPreset].optionalFields.length > 0 && (
                 <>

@@ -1,6 +1,7 @@
 'use client';
 
-import { createStaticStyles, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useParams } from 'react-router';
 
@@ -15,13 +16,9 @@ import RunsSection from './RunsSection';
 import ScopedDatasetsSection from './ScopedDatasetsSection';
 import { useExperimentActions } from './useExperimentActions';
 
-const styles = createStaticStyles(({ css }) => ({
-  container: css`
-    overflow-y: auto;
-    padding-block: 24px;
-    padding-inline: 32px;
-  `,
-}));
+const styles = stylex.create({
+  container: { overflowY: 'auto', paddingBlock: '24px', paddingInline: '32px' },
+});
 
 /**
  * Experiment workspace page. Thin orchestrator: one fetch populates the single
@@ -43,7 +40,12 @@ const ExperimentDetailPage = memo(() => {
   }
 
   return (
-    <Flexbox className={styles.container} gap={24} height="100%" width="100%">
+    <Flexbox
+      className={stylex.props(styles.container).className}
+      gap={24}
+      height="100%"
+      width="100%"
+    >
       <ExperimentHeader experiment={experiment} />
       <ExperimentStats datasetCount={experiment.datasets.length} experiment={experiment} />
       <BenchmarksSection actions={actions} experiment={experiment} />

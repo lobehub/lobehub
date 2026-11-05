@@ -1,7 +1,9 @@
 'use client';
 
 import type { AgentEvalExperimentDetail } from '@lobechat/types';
-import { ActionIcon, Block, createStaticStyles, Empty, Flexbox } from '@lobehub/ui';
+import { ActionIcon, Block, Empty, Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronRight, Database } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -11,28 +13,20 @@ import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import DatasetRow from './DatasetRow';
 import type { useExperimentActions } from './useExperimentActions';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  cardBody: css`
-    padding-block: 4px;
-    padding-inline: 8px;
-  `,
-  cardHeader: css`
-    min-height: 56px;
-    padding-inline: 24px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-
-    font-size: 16px;
-    font-weight: 600;
-  `,
-  listCard: css`
-    border-radius: ${cssVar.borderRadiusLG};
-  `,
-  sectionTitle: css`
-    margin: 0;
-    font-size: 16px;
-    font-weight: 600;
-  `,
-}));
+const styles = stylex.create({
+  cardBody: { paddingBlock: '4px', paddingInline: '8px' },
+  cardHeader: {
+    minHeight: '56px',
+    paddingInline: '24px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+    fontSize: '16px',
+    fontWeight: 600,
+  },
+  listCard: { borderRadius: cssVar.borderRadiusLG },
+  sectionTitle: { margin: '0', fontSize: '16px', fontWeight: 600 },
+});
 
 interface BenchmarksSectionProps {
   actions: ReturnType<typeof useExperimentActions>;
@@ -56,13 +50,17 @@ const BenchmarksSection = memo<BenchmarksSectionProps>(({ actions, experiment })
 
   return (
     <Flexbox gap={12}>
-      <h3 className={styles.sectionTitle}>{t('experiment.detail.benchmarks')}</h3>
+      <h3 {...stylex.props(styles.sectionTitle)}>{t('experiment.detail.benchmarks')}</h3>
       {groups.map(({ benchmark, datasets }) => (
-        <Block className={styles.listCard} key={benchmark.id} variant={'outlined'}>
+        <Block
+          className={stylex.props(styles.listCard).className}
+          key={benchmark.id}
+          variant={'outlined'}
+        >
           <Flexbox
             horizontal
             align={'center'}
-            className={styles.cardHeader}
+            className={stylex.props(styles.cardHeader).className}
             justify={'space-between'}
           >
             <span>{benchmark.name}</span>
@@ -70,7 +68,7 @@ const BenchmarksSection = memo<BenchmarksSectionProps>(({ actions, experiment })
               <ActionIcon icon={ChevronRight} size={'small'} />
             </WorkspaceLink>
           </Flexbox>
-          <div className={styles.cardBody}>
+          <div {...stylex.props(styles.cardBody)}>
             {datasets.length === 0 ? (
               <Empty description={t('experiment.detail.benchmarksEmpty')} icon={Database} />
             ) : (

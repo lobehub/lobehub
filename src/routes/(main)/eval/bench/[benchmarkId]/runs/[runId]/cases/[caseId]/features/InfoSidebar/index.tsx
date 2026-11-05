@@ -2,81 +2,63 @@
 
 import type { EvalRubricScore } from '@lobechat/types';
 import { formatCost, formatShortenNumber } from '@lobechat/utils';
-import {
-  Accordion,
-  createStaticStyles,
-  cssVar,
-  Flexbox,
-  Highlighter,
-  Tag,
-  Text,
-} from '@lobehub/ui';
+import { Accordion, Flexbox, Highlighter, Tag, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import SegmentBar from '../../../../../../../../features/SegmentBar';
 
-const styles = createStaticStyles(({ css }) => ({
-  container: css`
-    border-inline-start: 1px solid ${cssVar.colorBorderSecondary};
-    background: ${cssVar.colorBgContainer};
-  `,
-  // Reading block for free-text values (input / expected).
-  copyBlock: css`
-    font-size: ${cssVar.fontSize};
-    line-height: 1.5;
-    color: ${cssVar.colorText};
-  `,
-  infoItem: css`
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-
-    padding-block: 4px;
-    padding-inline: 0;
-  `,
-  infoLabel: css`
-    font-size: ${cssVar.fontSize};
-    color: ${cssVar.colorTextSecondary};
-  `,
-  infoValue: css`
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: ${cssVar.fontSize};
-    color: ${cssVar.colorText};
-  `,
-  // The headline score for the panel — large mono number on a tonal surface.
-  scoreCard: css`
-    padding: 12px;
-    border-radius: ${cssVar.borderRadius};
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  scoreValue: css`
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: ${cssVar.fontSizeHeading3};
-    font-weight: 600;
-    line-height: 1;
-    color: ${cssVar.colorText};
-  `,
-  // Divider between titled sections — tonal hairline, not a heavy rule.
-  section: css`
-    padding-block-end: 16px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  rubricName: css`
-    font-size: ${cssVar.fontSize};
-    font-weight: 500;
-  `,
-  rubricReason: css`
-    font-size: ${cssVar.fontSizeSM};
-    line-height: 1.5;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  rubricScore: css`
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: ${cssVar.fontSizeSM};
-    color: ${cssVar.colorTextSecondary};
-  `,
-}));
+const styles = stylex.create({
+  container: {
+    borderInlineStartWidth: '1px',
+    borderInlineStartStyle: 'solid',
+    borderInlineStartColor: cssVar.colorBorderSecondary,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  copyBlock: { fontSize: cssVar.fontSize, lineHeight: 1.5, color: cssVar.colorText },
+  infoItem: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBlock: '4px',
+    paddingInline: '0',
+  },
+  infoLabel: { fontSize: cssVar.fontSize, color: cssVar.colorTextSecondary },
+  infoValue: {
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: cssVar.fontSize,
+    color: cssVar.colorText,
+  },
+  scoreCard: {
+    padding: '12px',
+    borderRadius: cssVar.borderRadius,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  scoreValue: {
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: cssVar.fontSizeHeading3,
+    fontWeight: 600,
+    lineHeight: 1,
+    color: cssVar.colorText,
+  },
+  section: {
+    paddingBlockEnd: '16px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+  rubricName: { fontSize: cssVar.fontSize, fontWeight: 500 },
+  rubricReason: { fontSize: cssVar.fontSizeSM, lineHeight: 1.5, color: cssVar.colorTextSecondary },
+  rubricScore: {
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: cssVar.fontSizeSM,
+    color: cssVar.colorTextSecondary,
+  },
+});
 
 /**
  * Common eval result data used for display.
@@ -148,23 +130,23 @@ const InfoSidebar = memo<InfoSidebarProps>(({ testCase, evalResult, passed, scor
 
   return (
     <Flexbox
-      className={styles.container}
+      className={stylex.props(styles.container).className}
       gap={16}
       padding={16}
       style={{ height: '100%', overflowY: 'auto', width: 320 }}
     >
       {/* Failure reason — error states surface at the top of the panel */}
       {evalResult?.error && (
-        <Flexbox className={styles.section} gap={8}>
+        <Flexbox className={stylex.props(styles.section).className} gap={8}>
           <SectionTitle>{t('caseDetail.failureReason')}</SectionTitle>
-          <Text className={styles.copyBlock} type="danger">
+          <Text className={stylex.props(styles.copyBlock).className} type="danger">
             {evalResult.error}
           </Text>
         </Flexbox>
       )}
 
       {/* Test Case */}
-      <Flexbox className={styles.section} gap={12}>
+      <Flexbox className={stylex.props(styles.section).className} gap={12}>
         <SectionTitle>{t('caseDetail.section.testCase')}</SectionTitle>
 
         {testCase?.content?.input && (
@@ -172,7 +154,9 @@ const InfoSidebar = memo<InfoSidebarProps>(({ testCase, evalResult, passed, scor
             <Text fontSize={12} type="secondary">
               {t('caseDetail.input')}
             </Text>
-            <Text className={styles.copyBlock}>{testCase.content.input}</Text>
+            <Text className={stylex.props(styles.copyBlock).className}>
+              {testCase.content.input}
+            </Text>
           </Flexbox>
         )}
 
@@ -181,7 +165,9 @@ const InfoSidebar = memo<InfoSidebarProps>(({ testCase, evalResult, passed, scor
             <Text fontSize={12} type="secondary">
               {t('caseDetail.expected')}
             </Text>
-            <Text className={styles.copyBlock}>{testCase.content.expected}</Text>
+            <Text className={stylex.props(styles.copyBlock).className}>
+              {testCase.content.expected}
+            </Text>
           </Flexbox>
         )}
 
@@ -199,13 +185,13 @@ const InfoSidebar = memo<InfoSidebarProps>(({ testCase, evalResult, passed, scor
 
       {/* Scoring Details */}
       {(hasRubricScores || score !== undefined) && (
-        <Flexbox className={styles.section} gap={12}>
+        <Flexbox className={stylex.props(styles.section).className} gap={12}>
           <SectionTitle>{t('caseDetail.section.scoring')}</SectionTitle>
 
           {/* Deterministic modes: just show eval mode + pass/fail */}
           {allDeterministic && hasRubricScores && (
-            <div className={styles.infoItem}>
-              <span className={styles.infoValue}>
+            <div {...stylex.props(styles.infoItem)}>
+              <span {...stylex.props(styles.infoValue)}>
                 {t(`evalMode.${getEvalModeFromRubricId(rubricScores[0].rubricId)}` as any)}
               </span>
               <Tag color={passed ? 'success' : 'error'}>
@@ -218,9 +204,9 @@ const InfoSidebar = memo<InfoSidebarProps>(({ testCase, evalResult, passed, scor
           {!allDeterministic && (
             <>
               {hasScore && (
-                <Flexbox className={styles.scoreCard} gap={8}>
+                <Flexbox className={stylex.props(styles.scoreCard).className} gap={8}>
                   <Flexbox horizontal align="flex-end" gap={8} justify="space-between">
-                    <span className={styles.scoreValue}>{score.toFixed(2)}</span>
+                    <span {...stylex.props(styles.scoreValue)}>{score.toFixed(2)}</span>
                     <Text fontSize={12} type="secondary">
                       {t('caseDetail.score')}
                     </Text>
@@ -240,15 +226,17 @@ const InfoSidebar = memo<InfoSidebarProps>(({ testCase, evalResult, passed, scor
                   styles={{ trigger: { paddingInline: 12 } }}
                   items={scoredRubrics.map((s) => ({
                     children: s.reason ? (
-                      <span className={styles.rubricReason}>{s.reason}</span>
+                      <span {...stylex.props(styles.rubricReason)}>{s.reason}</span>
                     ) : null,
                     key: s.rubricId,
                     title: (
                       <Flexbox horizontal align="center" gap={8} justify="space-between">
-                        <span className={styles.rubricName}>
+                        <span {...stylex.props(styles.rubricName)}>
                           {t(`evalMode.${getEvalModeFromRubricId(s.rubricId)}` as any)}
                         </span>
-                        <span className={styles.rubricScore}>{(s.score * 100).toFixed(0)}%</span>
+                        <span {...stylex.props(styles.rubricScore)}>
+                          {(s.score * 100).toFixed(0)}%
+                        </span>
                       </Flexbox>
                     ),
                   }))}
@@ -264,36 +252,40 @@ const InfoSidebar = memo<InfoSidebarProps>(({ testCase, evalResult, passed, scor
         <SectionTitle>{t('caseDetail.section.runtime')}</SectionTitle>
 
         {evalResult?.duration !== undefined && evalResult.duration !== null && (
-          <div className={styles.infoItem}>
-            <span className={styles.infoLabel}>{t('caseDetail.duration')}</span>
-            <span className={styles.infoValue}>{(evalResult.duration / 1000).toFixed(1)}s</span>
+          <div {...stylex.props(styles.infoItem)}>
+            <span {...stylex.props(styles.infoLabel)}>{t('caseDetail.duration')}</span>
+            <span {...stylex.props(styles.infoValue)}>
+              {(evalResult.duration / 1000).toFixed(1)}s
+            </span>
           </div>
         )}
 
         {evalResult?.steps !== undefined && evalResult.steps !== null && (
-          <div className={styles.infoItem}>
-            <span className={styles.infoLabel}>{t('caseDetail.steps')}</span>
-            <span className={styles.infoValue}>{evalResult.steps}</span>
+          <div {...stylex.props(styles.infoItem)}>
+            <span {...stylex.props(styles.infoLabel)}>{t('caseDetail.steps')}</span>
+            <span {...stylex.props(styles.infoValue)}>{evalResult.steps}</span>
           </div>
         )}
 
         {evalResult?.cost !== undefined && evalResult.cost !== null && (
-          <div className={styles.infoItem}>
-            <span className={styles.infoLabel}>{t('caseDetail.cost')}</span>
-            <span className={styles.infoValue}>${formatCost(evalResult.cost)}</span>
+          <div {...stylex.props(styles.infoItem)}>
+            <span {...stylex.props(styles.infoLabel)}>{t('caseDetail.cost')}</span>
+            <span {...stylex.props(styles.infoValue)}>${formatCost(evalResult.cost)}</span>
           </div>
         )}
 
         {evalResult?.tokens !== undefined && evalResult.tokens !== null && (
-          <div className={styles.infoItem}>
-            <span className={styles.infoLabel}>{t('caseDetail.tokens')}</span>
-            <span className={styles.infoValue}>{formatShortenNumber(evalResult.tokens)}</span>
+          <div {...stylex.props(styles.infoItem)}>
+            <span {...stylex.props(styles.infoLabel)}>{t('caseDetail.tokens')}</span>
+            <span {...stylex.props(styles.infoValue)}>
+              {formatShortenNumber(evalResult.tokens)}
+            </span>
           </div>
         )}
 
         {evalResult?.completionReason && (
-          <div className={styles.infoItem}>
-            <span className={styles.infoLabel}>{t('caseDetail.completionReason')}</span>
+          <div {...stylex.props(styles.infoItem)}>
+            <span {...stylex.props(styles.infoLabel)}>{t('caseDetail.completionReason')}</span>
             <Tag>{evalResult.completionReason}</Tag>
           </div>
         )}

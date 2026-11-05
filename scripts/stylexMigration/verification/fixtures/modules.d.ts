@@ -97,6 +97,47 @@ declare module 'verification:component' {
     selected: boolean;
     onToggle: () => void;
   }>;
+  export const EvalCaptureContent: ComponentType<{
+    draft: {
+      actualOutput: string;
+      context: Array<{ content: string; role: string }>;
+      input: string;
+    };
+    formId: string;
+    onSaved: () => void;
+  }>;
+  export const EvalRunCreateFooter: ComponentType<{
+    loading: boolean;
+    onCreateAndStart: () => void;
+    onCreateOnly: () => void;
+  }>;
+  export const EvalTestCaseTable: ComponentType<{
+    datasetEvalMode?: string;
+    diffFilter: 'all' | 'easy' | 'medium' | 'hard';
+    onDelete?: () => void;
+    onDiffFilterChange: () => void;
+    onEdit?: () => void;
+    onPageChange: () => void;
+    onPreview?: () => void;
+    onSearchChange: () => void;
+    pagination: { current: number; pageSize: number };
+    readOnly?: boolean;
+    search: string;
+    selectedId?: string;
+    testCases: unknown[];
+    total: number;
+  }>;
+  export const EvalTestCaseDetail: ComponentType<{
+    datasetName?: string;
+    testCase: {
+      content?: { expected?: string; input?: string };
+      datasetId: string;
+      evalConfig?: Record<string, unknown> | null;
+      evalMode?: string | null;
+      id: string;
+      metadata?: Record<string, unknown> | null;
+    };
+  }>;
   export const OptionRow: ComponentType<{
     active: boolean;
     desc: string;

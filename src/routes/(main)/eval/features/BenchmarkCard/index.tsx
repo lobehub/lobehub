@@ -1,6 +1,8 @@
 'use client';
 
-import { Button, createStaticStyles, cssVar, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
+import { Button, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import {
   Activity,
   ArrowRight,
@@ -47,115 +49,91 @@ const getSystemIcon = (id: string) => {
   return SYSTEM_ICONS[hash % SYSTEM_ICONS.length];
 };
 
-const styles = createStaticStyles(({ css }) => ({
-  card: css`
-    height: 100%;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorBgContainer};
-
-    transition: border-color 0.15s ease;
-
-    &:hover {
-      border-color: ${cssVar.colorBorder};
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      transition: none;
-    }
-  `,
-  // Tonal hero band that carries the headline metric — the first thing the eye
-  // lands on, separated from the identity row by a subtle fill.
-  metricBand: css`
-    padding: 16px;
-    border-radius: ${cssVar.borderRadius};
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  metricValue: css`
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: ${cssVar.fontSizeHeading2};
-    font-weight: 600;
-    line-height: 1;
-    color: ${cssVar.colorText};
-  `,
-  ctaBand: css`
-    padding-block: 24px;
-    padding-inline: 16px;
-    border: 1px dashed ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadius};
-
-    text-align: center;
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  detailLink: css`
-    display: flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-
-    width: 28px;
-    height: 28px;
-    border-radius: ${cssVar.borderRadiusSM};
-
-    color: ${cssVar.colorTextTertiary};
-
-    transition:
-      color 0.15s ease,
-      background 0.15s ease;
-
-    &:hover {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillTertiary};
-    }
-
-    &:focus-visible {
-      outline: 2px solid ${cssVar.colorPrimary};
-      outline-offset: -2px;
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      transition: none;
-    }
-  `,
-  iconBox: css`
-    display: flex;
-    flex-shrink: 0;
-    align-items: center;
-    justify-content: center;
-
-    width: 40px;
-    height: 40px;
-    border-radius: ${cssVar.borderRadius};
-  `,
-  name: css`
-    font-size: ${cssVar.fontSizeLG};
-    font-weight: 600;
-    color: ${cssVar.colorText};
-    text-decoration: none;
-
-    transition: color 0.15s ease;
-
-    &:hover {
-      color: ${cssVar.colorPrimary};
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      transition: none;
-    }
-  `,
-  statDivider: css`
-    width: 1px;
-    height: 24px;
-    background: ${cssVar.colorBorderSecondary};
-  `,
-  statValue: css`
-    font-family: ${cssVar.fontFamilyCode};
-    font-weight: 600;
-    color: ${cssVar.colorText};
-  `,
-}));
+const styles = stylex.create({
+  card: {
+    height: '100%',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: { 'default': cssVar.colorBorderSecondary, ':hover': cssVar.colorBorder },
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+    transition: {
+      'default': 'border-color 0.15s ease',
+      '@media (prefers-reduced-motion: reduce)': 'none',
+    },
+  },
+  metricBand: {
+    padding: '16px',
+    borderRadius: cssVar.borderRadius,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  metricValue: {
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: cssVar.fontSizeHeading2,
+    fontWeight: 600,
+    lineHeight: 1,
+    color: cssVar.colorText,
+  },
+  ctaBand: {
+    paddingBlock: '24px',
+    paddingInline: '16px',
+    borderWidth: '1px',
+    borderStyle: 'dashed',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadius,
+    textAlign: 'center',
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  detailLink: {
+    display: 'flex',
+    flex: 'none',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '28px',
+    height: '28px',
+    borderRadius: cssVar.borderRadiusSM,
+    color: { 'default': cssVar.colorTextTertiary, ':hover': cssVar.colorText },
+    transition: {
+      'default': 'color 0.15s ease, background 0.15s ease',
+      '@media (prefers-reduced-motion: reduce)': 'none',
+    },
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+    outlineWidth: { 'default': null, ':focus-visible': '2px' },
+    outlineStyle: { 'default': null, ':focus-visible': 'solid' },
+    outlineColor: { 'default': null, ':focus-visible': cssVar.colorPrimary },
+    outlineOffset: { 'default': null, ':focus-visible': '-2px' },
+  },
+  iconBox: {
+    display: 'flex',
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '40px',
+    height: '40px',
+    borderRadius: cssVar.borderRadius,
+  },
+  name: {
+    fontSize: cssVar.fontSizeLG,
+    fontWeight: 600,
+    color: { 'default': cssVar.colorText, ':hover': cssVar.colorPrimary },
+    textDecoration: 'none',
+    transition: {
+      'default': 'color 0.15s ease',
+      '@media (prefers-reduced-motion: reduce)': 'none',
+    },
+  },
+  statDivider: {
+    width: '1px',
+    height: '24px',
+    backgroundColor: cssVar.colorBorderSecondary,
+    backgroundImage: 'none',
+  },
+  statValue: { fontFamily: cssVar.fontFamilyCode, fontWeight: 600, color: cssVar.colorText },
+});
 
 interface BenchmarkCardProps {
   bestScore?: number;
@@ -173,7 +151,7 @@ interface BenchmarkCardProps {
 // One labeled figure in the stat strip (big mono number over a quiet label).
 const Stat = memo<{ label: string; value: number | string }>(({ value, label }) => (
   <Flexbox gap={2}>
-    <Text className={styles.statValue} fontSize={16}>
+    <Text className={stylex.props(styles.statValue).className} fontSize={16}>
       {value}
     </Text>
     <Text color={cssVar.colorTextTertiary} fontSize={12}>
@@ -214,13 +192,18 @@ const BenchmarkCard = memo<BenchmarkCardProps>(
     const latestRun = recentRuns?.[0];
 
     return (
-      <Flexbox className={styles.card} gap={16} justify={'space-between'} padding={20}>
+      <Flexbox
+        className={stylex.props(styles.card).className}
+        gap={16}
+        justify={'space-between'}
+        padding={20}
+      >
         <Flexbox gap={16}>
           {/* Identity */}
           <Flexbox horizontal align={'flex-start'} gap={12} justify={'space-between'}>
             <Flexbox horizontal align={'center'} gap={12} style={{ minWidth: 0 }}>
               <div
-                className={styles.iconBox}
+                className={stylex.props(styles.iconBox).className}
                 style={{ background: isUser ? cssVar.colorSuccessBg : cssVar.colorPrimaryBg }}
               >
                 <Icon
@@ -230,7 +213,10 @@ const BenchmarkCard = memo<BenchmarkCardProps>(
                 />
               </div>
               <Flexbox gap={2} style={{ minWidth: 0 }}>
-                <WorkspaceLink className={styles.name} to={`/eval/bench/${id}`}>
+                <WorkspaceLink
+                  className={stylex.props(styles.name).className}
+                  to={`/eval/bench/${id}`}
+                >
                   {name}
                 </WorkspaceLink>
                 {description && (
@@ -240,14 +226,17 @@ const BenchmarkCard = memo<BenchmarkCardProps>(
                 )}
               </Flexbox>
             </Flexbox>
-            <WorkspaceLink className={styles.detailLink} to={`/eval/bench/${id}`}>
+            <WorkspaceLink
+              className={stylex.props(styles.detailLink).className}
+              to={`/eval/bench/${id}`}
+            >
               <Icon icon={ArrowRight} size={16} />
             </WorkspaceLink>
           </Flexbox>
 
           {/* Hero metric band — headline pass rate + trend, or a focused CTA */}
           {!hasDatasets ? (
-            <Flexbox align={'center'} className={styles.ctaBand} gap={8}>
+            <Flexbox align={'center'} className={stylex.props(styles.ctaBand).className} gap={8}>
               <Icon icon={Database} size={24} style={{ color: cssVar.colorTextQuaternary }} />
               <Flexbox align={'center'} gap={2}>
                 <Text color={cssVar.colorTextTertiary}>{t('benchmark.card.noDataset')}</Text>
@@ -265,11 +254,11 @@ const BenchmarkCard = memo<BenchmarkCardProps>(
             <Flexbox
               horizontal
               align={'center'}
-              className={styles.metricBand}
+              className={stylex.props(styles.metricBand).className}
               justify={'space-between'}
             >
               <Flexbox gap={4}>
-                <span className={styles.metricValue}>{(bestRate * 100).toFixed(0)}%</span>
+                <span {...stylex.props(styles.metricValue)}>{(bestRate * 100).toFixed(0)}%</span>
                 <Flexbox horizontal align={'center'} gap={8}>
                   <Text color={cssVar.colorTextTertiary} fontSize={12}>
                     {t('benchmark.card.bestPassRate')}
@@ -280,7 +269,7 @@ const BenchmarkCard = memo<BenchmarkCardProps>(
               {trend.length > 1 && <Sparkline values={trend} />}
             </Flexbox>
           ) : (
-            <Flexbox align={'center'} className={styles.ctaBand} gap={8}>
+            <Flexbox align={'center'} className={stylex.props(styles.ctaBand).className} gap={8}>
               <Icon icon={FlaskConical} size={24} style={{ color: cssVar.colorTextQuaternary }} />
               <Flexbox align={'center'} gap={2}>
                 <Text color={cssVar.colorTextTertiary}>{t('benchmark.card.empty')}</Text>
@@ -301,13 +290,13 @@ const BenchmarkCard = memo<BenchmarkCardProps>(
         <Flexbox gap={16}>
           <Flexbox horizontal align={'center'} gap={20}>
             <Stat label={t('sidebar.datasets')} value={datasetCount} />
-            <span className={styles.statDivider} />
+            <span {...stylex.props(styles.statDivider)} />
             <Stat label={t('benchmark.card.casesLabel')} value={testCaseCount || 0} />
-            <span className={styles.statDivider} />
+            <span {...stylex.props(styles.statDivider)} />
             <Stat label={t('benchmark.card.evalsLabel')} value={allRunCount} />
             {bestScore !== undefined && (
               <>
-                <span className={styles.statDivider} />
+                <span {...stylex.props(styles.statDivider)} />
                 <Stat label={t('benchmark.card.bestScore')} value={bestScore.toFixed(1)} />
               </>
             )}

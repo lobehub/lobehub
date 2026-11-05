@@ -1,6 +1,8 @@
 'use client';
 
-import { createStaticStyles, cssVar, Flexbox, Icon } from '@lobehub/ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronRight } from 'lucide-react';
 import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -8,49 +10,37 @@ import { useTranslation } from 'react-i18next';
 import { buildTranscript, type TranscriptMessage } from './buildTranscript';
 import MessageBlock from './MessageBlock';
 
-const styles = createStaticStyles(({ css }) => ({
-  boundary: css`
-    display: flex;
-    gap: 8px;
-    align-items: center;
-
-    font-size: ${cssVar.fontSizeSM};
-    color: ${cssVar.colorTextQuaternary};
-
-    &::after {
-      content: '';
-      flex: 1;
-      height: 1px;
-      background: ${cssVar.colorSplit};
-    }
-  `,
-  chevron: css`
-    transition: transform 0.15s ease;
-  `,
-  chevronOpen: css`
-    transform: rotate(90deg);
-  `,
-  toggle: css`
-    cursor: pointer;
-
-    display: flex;
-    gap: 6px;
-    align-items: center;
-    align-self: flex-start;
-
-    padding: 0;
-    border: none;
-
-    font-size: ${cssVar.fontSizeSM};
-    color: ${cssVar.colorTextTertiary};
-
-    background: transparent;
-
-    &:hover {
-      color: ${cssVar.colorText};
-    }
-  `,
-}));
+const styles = stylex.create({
+  boundary: {
+    'display': 'flex',
+    'gap': '8px',
+    'alignItems': 'center',
+    'fontSize': cssVar.fontSizeSM,
+    'color': cssVar.colorTextQuaternary,
+    '::after': {
+      content: "''",
+      flex: '1',
+      height: '1px',
+      backgroundColor: cssVar.colorSplit,
+      backgroundImage: 'none',
+    },
+  },
+  chevron: { transition: 'transform 0.15s ease' },
+  chevronOpen: { transform: 'rotate(90deg)' },
+  toggle: {
+    cursor: 'pointer',
+    display: 'flex',
+    gap: '6px',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    padding: '0',
+    borderStyle: 'none',
+    fontSize: cssVar.fontSizeSM,
+    color: { 'default': cssVar.colorTextTertiary, ':hover': cssVar.colorText },
+    backgroundColor: 'transparent',
+    backgroundImage: 'none',
+  },
+});
 
 export interface TranscriptProps {
   input: string;
@@ -76,11 +66,19 @@ const Transcript = memo<TranscriptProps>(({ input, inputSlot, messages }) => {
   return (
     <Flexbox gap={12}>
       {hasBoundary && (
-        <button className={styles.toggle} type="button" onClick={() => setExpanded((v) => !v)}>
+        <button
+          {...stylex.props(styles.toggle)}
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+        >
           <Icon
-            className={expanded ? `${styles.chevron} ${styles.chevronOpen}` : styles.chevron}
             icon={ChevronRight}
             size={14}
+            className={
+              expanded
+                ? stylex.props(styles.chevron, styles.chevronOpen).className
+                : stylex.props(styles.chevron).className
+            }
           />
           {t('testCaseDetail.context', { count: context.length })}
         </button>
@@ -90,7 +88,7 @@ const Transcript = memo<TranscriptProps>(({ input, inputSlot, messages }) => {
           {context.map((turn, index) => (
             <MessageBlock muted content={turn.text} key={index} role={turn.role} />
           ))}
-          <div className={styles.boundary}>{t('testCaseDetail.boundary')}</div>
+          <div {...stylex.props(styles.boundary)}>{t('testCaseDetail.boundary')}</div>
         </>
       )}
       {inputSlot ?? <MessageBlock badge="input" content={input} role="user" />}

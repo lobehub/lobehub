@@ -2,7 +2,9 @@
 
 import type { EvalRunTopicResult } from '@lobechat/types';
 import { formatCost, formatShortenNumber } from '@lobechat/utils';
-import { ActionIcon, createStaticStyles, cssVar, Flexbox, Text } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import {
   ArrowLeft,
   ChevronLeft,
@@ -15,73 +17,58 @@ import {
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-const styles = createStaticStyles(({ css }) => ({
-  backLink: css`
-    cursor: pointer;
-
-    align-self: flex-start;
-
-    border-radius: ${cssVar.borderRadiusSM};
-
-    color: ${cssVar.colorTextTertiary};
-
-    transition: color 0.15s ease;
-
-    &:hover {
-      color: ${cssVar.colorText};
-    }
-
-    &:focus-visible {
-      outline: 2px solid ${cssVar.colorPrimary};
-      outline-offset: 2px;
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      transition: none;
-    }
-  `,
-  header: css`
-    padding-block: 16px;
-    padding-inline: 16px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  metricCard: css`
-    gap: 8px;
-
-    padding-block: 8px;
-    padding-inline: 8px 16px;
-    border-radius: ${cssVar.borderRadiusSM};
-
-    font-size: ${cssVar.fontSizeSM};
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  metricIcon: css`
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    width: 28px;
-    height: 28px;
-    border-radius: ${cssVar.borderRadiusSM};
-
-    color: ${cssVar.colorTextTertiary};
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  metricLabel: css`
-    font-size: ${cssVar.fontSizeSM};
-    line-height: 1;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  metricValue: css`
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: ${cssVar.fontSize};
-    font-weight: 500;
-    line-height: 1.4;
-    color: ${cssVar.colorText};
-  `,
-}));
+const styles = stylex.create({
+  backLink: {
+    cursor: 'pointer',
+    alignSelf: 'flex-start',
+    borderRadius: cssVar.borderRadiusSM,
+    color: { 'default': cssVar.colorTextTertiary, ':hover': cssVar.colorText },
+    transition: {
+      'default': 'color 0.15s ease',
+      '@media (prefers-reduced-motion: reduce)': 'none',
+    },
+    outlineWidth: { 'default': null, ':focus-visible': '2px' },
+    outlineStyle: { 'default': null, ':focus-visible': 'solid' },
+    outlineColor: { 'default': null, ':focus-visible': cssVar.colorPrimary },
+    outlineOffset: { 'default': null, ':focus-visible': '2px' },
+  },
+  header: {
+    paddingBlock: '16px',
+    paddingInline: '16px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+  metricCard: {
+    gap: '8px',
+    paddingBlock: '8px',
+    paddingInlineStart: '8px',
+    paddingInlineEnd: '16px',
+    borderRadius: cssVar.borderRadiusSM,
+    fontSize: cssVar.fontSizeSM,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  metricIcon: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '28px',
+    height: '28px',
+    borderRadius: cssVar.borderRadiusSM,
+    color: cssVar.colorTextTertiary,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+  metricLabel: { fontSize: cssVar.fontSizeSM, lineHeight: 1, color: cssVar.colorTextTertiary },
+  metricValue: {
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: cssVar.fontSize,
+    fontWeight: 500,
+    lineHeight: 1.4,
+    color: cssVar.colorText,
+  },
+});
 
 interface CaseHeaderProps {
   caseNumber: number;
@@ -120,14 +107,14 @@ const CaseHeader = memo<CaseHeaderProps>(
     ].filter((m) => m.value !== null);
 
     return (
-      <Flexbox className={styles.header} gap={16}>
+      <Flexbox className={stylex.props(styles.header).className} gap={16}>
         {/* Identity row: breadcrumb back + case number + prev/next nav */}
         <Flexbox horizontal align="center" gap={8} justify="space-between">
           <Flexbox gap={4}>
             <Flexbox
               horizontal
               align="center"
-              className={styles.backLink}
+              className={stylex.props(styles.backLink).className}
               gap={4}
               role="button"
               tabIndex={0}
@@ -156,13 +143,18 @@ const CaseHeader = memo<CaseHeaderProps>(
         {metrics.length > 0 && (
           <Flexbox horizontal align="center" gap={8} wrap="wrap">
             {metrics.map((m) => (
-              <Flexbox horizontal align="center" className={styles.metricCard} key={m.label}>
-                <div className={styles.metricIcon}>
+              <Flexbox
+                horizontal
+                align="center"
+                className={stylex.props(styles.metricCard).className}
+                key={m.label}
+              >
+                <div {...stylex.props(styles.metricIcon)}>
                   <m.icon size={14} />
                 </div>
                 <Flexbox gap={0}>
-                  <span className={styles.metricLabel}>{m.label}</span>
-                  <span className={styles.metricValue}>{m.value}</span>
+                  <span {...stylex.props(styles.metricLabel)}>{m.label}</span>
+                  <span {...stylex.props(styles.metricValue)}>{m.value}</span>
                 </Flexbox>
               </Flexbox>
             ))}

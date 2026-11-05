@@ -5,8 +5,6 @@ import type { AgentEvalRunStatus, EvalRunInputConfig } from '@lobechat/types';
 import {
   Accordion,
   ActionIcon,
-  createStaticStyles,
-  cssVar,
   Flexbox,
   Input,
   InputNumber,
@@ -15,6 +13,8 @@ import {
   useModalContext,
 } from '@lobehub/ui';
 import { Form, useForm, useWatch } from '@lobehub/ui/form';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { SquareArrowOutUpRight } from 'lucide-react';
 import { type FC, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -29,14 +29,14 @@ import { datasetSelectors, useEvalStore } from '@/store/eval';
 
 const MAX_TIMEOUT_MINUTES = 240;
 
-const styles = createStaticStyles(({ css }) => ({
-  hint: css`
-    display: inline-block;
-    margin-block-start: 4px;
-    font-size: ${cssVar.fontSizeSM};
-    color: ${cssVar.colorTextQuaternary};
-  `,
-}));
+const styles = stylex.create({
+  hint: {
+    display: 'inline-block',
+    marginBlockStart: '4px',
+    fontSize: cssVar.fontSizeSM,
+    color: cssVar.colorTextQuaternary,
+  },
+});
 
 interface AgentOption {
   avatar?: string | null;
@@ -248,7 +248,9 @@ const RunEditContent: FC<RunEditContentProps> = ({ formId, onLoadingChange, run 
                   name="k"
                   style={{ paddingBlock: 0 }}
                   extra={
-                    <span className={styles.hint}>{t('run.config.k.hint', { k: kValue })}</span>
+                    <span {...stylex.props(styles.hint)}>
+                      {t('run.config.k.hint', { k: kValue })}
+                    </span>
                   }
                 >
                   <InputNumber
@@ -261,10 +263,12 @@ const RunEditContent: FC<RunEditContentProps> = ({ formId, onLoadingChange, run 
                   />
                 </Form.Field>
                 <Form.Field
-                  extra={<span className={styles.hint}>{t('run.config.maxSteps.hint')}</span>}
                   label={t('run.config.maxSteps')}
                   name="maxSteps"
                   style={{ paddingBlock: 0 }}
+                  extra={
+                    <span {...stylex.props(styles.hint)}>{t('run.config.maxSteps.hint')}</span>
+                  }
                 >
                   <InputNumber
                     disabled={isFinished}

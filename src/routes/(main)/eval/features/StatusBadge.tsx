@@ -1,11 +1,15 @@
 'use client';
 
-import { createStaticStyles, Icon } from '@lobehub/ui';
+import { Icon } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Activity, CheckCircle2, Clock, Hourglass, Pause, XCircle } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-const statusConfig: Record<string, { cls: string; icon: any }> = {
+type ToneKey = 'default' | 'error' | 'primary' | 'success' | 'warning';
+
+const statusConfig: Record<string, { cls: ToneKey; icon: any }> = {
   aborted: { cls: 'default', icon: Pause },
   completed: { cls: 'success', icon: CheckCircle2 },
   external: { cls: 'warning', icon: Hourglass },
@@ -15,32 +19,21 @@ const statusConfig: Record<string, { cls: string; icon: any }> = {
   running: { cls: 'primary', icon: Activity },
 };
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  default: css`
-    color: ${cssVar.colorTextTertiary};
-  `,
-  error: css`
-    color: ${cssVar.colorError};
-  `,
-  primary: css`
-    color: ${cssVar.colorPrimary};
-  `,
-  success: css`
-    color: ${cssVar.colorSuccess};
-  `,
-  warning: css`
-    color: ${cssVar.colorWarning};
-  `,
-  wrapper: css`
-    display: inline-flex;
-    gap: 4px;
-    align-items: center;
-
-    font-size: ${cssVar.fontSizeSM};
-    font-weight: 500;
-    line-height: 1;
-  `,
-}));
+const styles = stylex.create({
+  default: { color: cssVar.colorTextTertiary },
+  error: { color: cssVar.colorError },
+  primary: { color: cssVar.colorPrimary },
+  success: { color: cssVar.colorSuccess },
+  warning: { color: cssVar.colorWarning },
+  wrapper: {
+    display: 'inline-flex',
+    gap: '4px',
+    alignItems: 'center',
+    fontSize: cssVar.fontSizeSM,
+    fontWeight: 500,
+    lineHeight: 1,
+  },
+});
 
 interface StatusBadgeProps {
   status: string;
@@ -51,7 +44,7 @@ const StatusBadge = memo<StatusBadgeProps>(({ status }) => {
   const config = statusConfig[status] || statusConfig.idle;
 
   return (
-    <span className={`${styles.wrapper} ${(styles as any)[config.cls] || styles.default}`}>
+    <span {...stylex.props(styles.wrapper, styles[config.cls])}>
       <Icon icon={config.icon} size={12} />
       {t(`run.status.${status}` as any)}
     </span>

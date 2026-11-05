@@ -1,14 +1,8 @@
 'use client';
 
-import {
-  Button,
-  confirmModal,
-  createStaticStyles,
-  cssVar,
-  Flexbox,
-  Text,
-  toast,
-} from '@lobehub/ui';
+import { Button, confirmModal, Flexbox, Text, toast } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ArrowLeft, Database, Pencil, Plus, Trash2 } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -32,70 +26,57 @@ import SegmentBar from '../../features/SegmentBar';
 import { createTestCaseCreateModal } from '../../features/TestCaseCreateModal';
 import { createTestCaseEditModal } from '../../features/TestCaseEditModal';
 
-const styles = createStaticStyles(({ css }) => ({
-  backLink: css`
-    display: inline-flex;
-    gap: 4px;
-    align-items: center;
-
-    width: fit-content;
-
-    font-size: ${cssVar.fontSize};
-    color: ${cssVar.colorTextTertiary};
-    text-decoration: none;
-
-    transition: color 0.15s ease;
-
-    &:hover {
-      color: ${cssVar.colorText};
-    }
-
-    &:focus-visible {
-      outline: 2px solid ${cssVar.colorPrimary};
-      outline-offset: 2px;
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      transition: none;
-    }
-  `,
-  header: css`
-    display: flex;
-    flex-shrink: 0;
-    align-items: center;
-    justify-content: center;
-
-    width: 40px;
-    height: 40px;
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorPrimaryBg};
-  `,
-  // Summary hero — leads the dataset detail with its headline case count as a
-  // large mono figure, mirroring the benchmark/run result heroes.
-  heroBand: css`
-    padding: 20px;
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  heroValue: css`
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: ${cssVar.fontSizeHeading2};
-    font-weight: 600;
-    line-height: 1;
-    color: ${cssVar.colorText};
-  `,
-  summaryDot: css`
-    width: 8px;
-    height: 8px;
-    border-radius: 999px;
-  `,
-  tableWrapper: css`
-    overflow: hidden;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadius};
-  `,
-}));
+const styles = stylex.create({
+  backLink: {
+    display: 'inline-flex',
+    gap: '4px',
+    alignItems: 'center',
+    width: 'fit-content',
+    fontSize: cssVar.fontSize,
+    color: { 'default': cssVar.colorTextTertiary, ':hover': cssVar.colorText },
+    textDecoration: 'none',
+    transition: {
+      'default': 'color 0.15s ease',
+      '@media (prefers-reduced-motion: reduce)': 'none',
+    },
+    outlineWidth: { 'default': null, ':focus-visible': '2px' },
+    outlineStyle: { 'default': null, ':focus-visible': 'solid' },
+    outlineColor: { 'default': null, ':focus-visible': cssVar.colorPrimary },
+    outlineOffset: { 'default': null, ':focus-visible': '2px' },
+  },
+  header: {
+    display: 'flex',
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '40px',
+    height: '40px',
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorPrimaryBg,
+    backgroundImage: 'none',
+  },
+  heroBand: {
+    padding: '20px',
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  heroValue: {
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: cssVar.fontSizeHeading2,
+    fontWeight: 600,
+    lineHeight: 1,
+    color: cssVar.colorText,
+  },
+  summaryDot: { width: '8px', height: '8px', borderRadius: '999px' },
+  tableWrapper: {
+    overflow: 'hidden',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadius,
+  },
+});
 
 const DatasetDetail = memo(() => {
   const { t } = useTranslation('eval');
@@ -232,7 +213,7 @@ const DatasetDetail = memo(() => {
           >
             {/* Back link */}
             <WorkspaceLink
-              className={styles.backLink}
+              className={stylex.props(styles.backLink).className}
               to={benchmarkId ? `/eval/bench/${benchmarkId}` : '/eval'}
             >
               <ArrowLeft size={16} />
@@ -242,7 +223,7 @@ const DatasetDetail = memo(() => {
             {/* Header */}
             <Flexbox horizontal align="start" justify="space-between">
               <Flexbox horizontal align="start" gap={12}>
-                <div className={styles.header}>
+                <div {...stylex.props(styles.header)}>
                   <Database size={20} style={{ color: cssVar.colorPrimary }} />
                 </div>
                 <Flexbox gap={4}>
@@ -271,12 +252,12 @@ const DatasetDetail = memo(() => {
             <Flexbox
               horizontal
               align="center"
-              className={styles.heroBand}
+              className={stylex.props(styles.heroBand).className}
               gap={16}
               justify="space-between"
             >
               <Flexbox gap={6}>
-                <span className={styles.heroValue}>{total}</span>
+                <span {...stylex.props(styles.heroValue)}>{total}</span>
                 <Text color={cssVar.colorTextTertiary} fontSize={12}>
                   {t('dataset.detail.testCases')}
                 </Text>
@@ -288,7 +269,7 @@ const DatasetDetail = memo(() => {
                     {(['easy', 'medium', 'hard'] as const).map((d) => (
                       <Flexbox horizontal align="center" gap={6} key={d}>
                         <span
-                          className={styles.summaryDot}
+                          className={stylex.props(styles.summaryDot).className}
                           style={{
                             background:
                               d === 'easy'
@@ -315,7 +296,7 @@ const DatasetDetail = memo(() => {
                 <Text type="secondary">{t('dataset.detail.caseCount', { count: total })}</Text>
               </Flexbox>
 
-              <div className={styles.tableWrapper}>
+              <div {...stylex.props(styles.tableWrapper)}>
                 <TestCaseTable
                   datasetEvalMode={dataset?.evalMode}
                   diffFilter={diffFilter}

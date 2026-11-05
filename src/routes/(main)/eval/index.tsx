@@ -1,6 +1,8 @@
 'use client';
 
-import { Button, createStaticStyles, cssVar, Empty, Flexbox, Skeleton, Text } from '@lobehub/ui';
+import { Button, Empty, Flexbox, Skeleton, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Database, FlaskConical, Plus } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -13,66 +15,56 @@ import BenchmarkCard from './features/BenchmarkCard';
 import { createCreateBenchmarkModal } from './features/CreateBenchmarkModal';
 import { createExperimentModal, ExperimentSummaryCard } from './features/Experiments';
 
-const styles = createStaticStyles(({ css }) => ({
-  container: css`
-    overflow-y: auto;
-    padding-block: 24px;
-    padding-inline: 32px;
-  `,
-  grid: css`
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(480px, 1fr));
-    gap: 20px;
-  `,
-  datasetRow: css`
-    display: flex;
-    gap: 12px;
-    align-items: center;
-
-    padding-block: 14px;
-    padding-inline: 16px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    color: inherit;
-    text-decoration: none;
-
-    transition: border-color 0.15s ease;
-
-    &:hover {
-      border-color: ${cssVar.colorBorder};
-    }
-  `,
-  datasetIcon: css`
-    display: flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-
-    width: 32px;
-    height: 32px;
-    border-radius: 10px;
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  skeletonCard: css`
-    padding: 20px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorBgContainer};
-  `,
-  title: css`
-    margin: 0;
-    line-height: 1.3;
-  `,
-}));
+const styles = stylex.create({
+  container: { overflowY: 'auto', paddingBlock: '24px', paddingInline: '32px' },
+  grid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(480px, 1fr))',
+    gap: '20px',
+  },
+  datasetRow: {
+    display: 'flex',
+    gap: '12px',
+    alignItems: 'center',
+    paddingBlock: '14px',
+    paddingInline: '16px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: { 'default': cssVar.colorBorderSecondary, ':hover': cssVar.colorBorder },
+    borderRadius: cssVar.borderRadiusLG,
+    color: 'inherit',
+    textDecoration: 'none',
+    transition: 'border-color 0.15s ease',
+  },
+  datasetIcon: {
+    display: 'flex',
+    flex: 'none',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '32px',
+    height: '32px',
+    borderRadius: '10px',
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+  skeletonCard: {
+    padding: '20px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  title: { margin: '0', lineHeight: 1.3 },
+});
 
 // Loading placeholder that reuses the benchmark-card chrome so loading → loaded
 // is a content swap, not a relayout (ux §4.1).
 const SkeletonGrid = memo(() => (
-  <div className={styles.grid}>
+  <div {...stylex.props(styles.grid)}>
     {[0, 1, 2, 3].map((i) => (
-      <Flexbox className={styles.skeletonCard} gap={16} key={i}>
+      <Flexbox className={stylex.props(styles.skeletonCard).className} gap={16} key={i}>
         <Flexbox horizontal gap={12}>
           <Skeleton.Avatar shape={'square'} size={36} />
           <Flexbox flex={1} gap={8}>
@@ -140,11 +132,22 @@ const EvalOverview = memo(() => {
   );
 
   return (
-    <Flexbox className={styles.container} gap={32} height={'100%'} width={'100%'}>
+    <Flexbox
+      className={stylex.props(styles.container).className}
+      gap={32}
+      height={'100%'}
+      width={'100%'}
+    >
       {/* Header */}
       <Flexbox horizontal align={'center'} gap={16} justify={'space-between'}>
         <Flexbox gap={4} style={{ minWidth: 0 }}>
-          <Text ellipsis as={'h1'} className={styles.title} fontSize={30} weight={600}>
+          <Text
+            ellipsis
+            as={'h1'}
+            className={stylex.props(styles.title).className}
+            fontSize={30}
+            weight={600}
+          >
             {t('overview.title')}
           </Text>
           <Text type={'secondary'}>{t('overview.subtitle')}</Text>
@@ -176,7 +179,7 @@ const EvalOverview = memo(() => {
           loading={<SkeletonGrid />}
           onRetry={() => mutateExperiments()}
         >
-          <div className={styles.grid}>
+          <div {...stylex.props(styles.grid)}>
             {experimentList.map((experiment) => (
               <ExperimentSummaryCard experiment={experiment} key={experiment.id} />
             ))}
@@ -200,7 +203,7 @@ const EvalOverview = memo(() => {
           loading={<SkeletonGrid />}
           onRetry={() => mutate()}
         >
-          <div className={styles.grid}>
+          <div {...stylex.props(styles.grid)}>
             {benchmarkList.map((benchmark: any) => (
               <BenchmarkCard
                 bestScore={benchmark.bestScore}
@@ -228,7 +231,7 @@ const EvalOverview = memo(() => {
           {t('overview.sections.datasets.title')}
         </Text>
         {allDatasets && allDatasets.length > 0 ? (
-          <div className={styles.grid}>
+          <div {...stylex.props(styles.grid)}>
             {allDatasets.map(
               (dataset: {
                 benchmarkId?: string | null;
@@ -237,11 +240,11 @@ const EvalOverview = memo(() => {
                 name: string;
               }) => (
                 <WorkspaceLink
-                  className={styles.datasetRow}
+                  className={stylex.props(styles.datasetRow).className}
                   key={dataset.id}
                   to={`/eval/datasets/${dataset.id}`}
                 >
-                  <div className={styles.datasetIcon}>
+                  <div {...stylex.props(styles.datasetIcon)}>
                     <Database size={16} style={{ color: cssVar.colorTextSecondary }} />
                   </div>
                   <Flexbox gap={2} style={{ minWidth: 0 }}>

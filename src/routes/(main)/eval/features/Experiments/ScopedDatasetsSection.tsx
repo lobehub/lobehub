@@ -1,6 +1,8 @@
 'use client';
 
-import { Block, createStaticStyles, Empty, Flexbox } from '@lobehub/ui';
+import { Block, Empty, Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Database } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -8,18 +10,10 @@ import { useTranslation } from 'react-i18next';
 import DatasetRow from './DatasetRow';
 import type { useExperimentActions } from './useExperimentActions';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  listCard: css`
-    padding-block: 4px;
-    padding-inline: 8px;
-    border-radius: ${cssVar.borderRadiusLG};
-  `,
-  sectionTitle: css`
-    margin: 0;
-    font-size: 16px;
-    font-weight: 600;
-  `,
-}));
+const styles = stylex.create({
+  listCard: { paddingBlock: '4px', paddingInline: '8px', borderRadius: cssVar.borderRadiusLG },
+  sectionTitle: { margin: '0', fontSize: '16px', fontWeight: 600 },
+});
 
 interface ScopedDatasetsSectionProps {
   actions: ReturnType<typeof useExperimentActions>;
@@ -32,8 +26,8 @@ const ScopedDatasetsSection = memo<ScopedDatasetsSectionProps>(({ actions }) => 
 
   return (
     <Flexbox gap={12}>
-      <h3 className={styles.sectionTitle}>{t('experiment.detail.datasetsScoped')}</h3>
-      <Block className={styles.listCard} variant={'outlined'}>
+      <h3 {...stylex.props(styles.sectionTitle)}>{t('experiment.detail.datasetsScoped')}</h3>
+      <Block className={stylex.props(styles.listCard).className} variant={'outlined'}>
         {scopedDatasets.length === 0 ? (
           <Empty description={t('experiment.detail.datasetsScopedEmpty')} icon={Database} />
         ) : (

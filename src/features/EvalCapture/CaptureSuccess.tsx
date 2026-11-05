@@ -1,21 +1,22 @@
 'use client';
 
-import { Center, createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Center, Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Check } from 'lucide-react';
 import { type FC } from 'react';
 import { useTranslation } from 'react-i18next';
 
-const styles = createStaticStyles(({ css }) => ({
-  mark: css`
-    width: 56px;
-    height: 56px;
-    border-radius: 50%;
-
-    color: ${cssVar.colorSuccess};
-
-    background: ${cssVar.colorSuccessBg};
-  `,
-}));
+const styles = stylex.create({
+  mark: {
+    width: '56px',
+    height: '56px',
+    borderRadius: '50%',
+    color: cssVar.colorSuccess,
+    backgroundColor: cssVar.colorSuccessBg,
+    backgroundImage: 'none',
+  },
+});
 
 export interface CaptureSuccessProps {
   datasetName: string;
@@ -26,7 +27,7 @@ const CaptureSuccess: FC<CaptureSuccessProps> = ({ datasetName }) => {
 
   return (
     <Center gap={16} paddingBlock={40}>
-      <Center className={styles.mark}>
+      <Center className={stylex.props(styles.mark).className}>
         <Icon icon={Check} size={26} />
       </Center>
       <Flexbox align="center" gap={6}>

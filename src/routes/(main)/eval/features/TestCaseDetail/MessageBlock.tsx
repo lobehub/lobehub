@@ -1,47 +1,39 @@
 'use client';
 
-import { createStaticStyles, cssVar, Flexbox, Tag } from '@lobehub/ui';
+import { Flexbox, Tag } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-const styles = createStaticStyles(({ css }) => ({
-  body: css`
-    overflow-y: auto;
-
-    /* Each turn is capped so a long one cannot push the rest of the
-       transcript out of view; the full text stays reachable inside. */
-    max-height: 240px;
-    padding-block: 10px;
-    padding-inline: 12px;
-    border-radius: 10px;
-
-    font-size: ${cssVar.fontSize};
-    line-height: 1.75;
-    white-space: pre-wrap;
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  bodyMuted: css`
-    overflow-y: auto;
-
-    max-height: 120px;
-    padding-block: 8px;
-    padding-inline: 12px;
-    border-radius: 10px;
-
-    font-size: ${cssVar.fontSizeSM};
-    line-height: 1.7;
-    color: ${cssVar.colorTextTertiary};
-    white-space: pre-wrap;
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  head: css`
-    font-size: ${cssVar.fontSizeSM};
-    font-weight: 500;
-    color: ${cssVar.colorTextTertiary};
-  `,
-}));
+const styles = stylex.create({
+  body: {
+    overflowY: 'auto',
+    maxHeight: '240px',
+    paddingBlock: '10px',
+    paddingInline: '12px',
+    borderRadius: '10px',
+    fontSize: cssVar.fontSize,
+    lineHeight: 1.75,
+    whiteSpace: 'pre-wrap',
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  bodyMuted: {
+    overflowY: 'auto',
+    maxHeight: '120px',
+    paddingBlock: '8px',
+    paddingInline: '12px',
+    borderRadius: '10px',
+    fontSize: cssVar.fontSizeSM,
+    lineHeight: 1.7,
+    color: cssVar.colorTextTertiary,
+    whiteSpace: 'pre-wrap',
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  head: { fontSize: cssVar.fontSizeSM, fontWeight: 500, color: cssVar.colorTextTertiary },
+});
 
 export interface MessageBlockProps {
   badge?: string;
@@ -64,11 +56,11 @@ const MessageBlock = memo<MessageBlockProps>(({ badge, content, muted, role }) =
 
   return (
     <Flexbox gap={5}>
-      <Flexbox horizontal align="center" className={styles.head} gap={6}>
+      <Flexbox horizontal align="center" className={stylex.props(styles.head).className} gap={6}>
         <span>{roleKey ? t(roleKey as any) : role}</span>
         {badge && <Tag size="small">{badge}</Tag>}
       </Flexbox>
-      <div className={muted ? styles.bodyMuted : styles.body}>{content}</div>
+      <div {...stylex.props(muted ? styles.bodyMuted : styles.body)}>{content}</div>
     </Flexbox>
   );
 });

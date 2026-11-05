@@ -1,48 +1,45 @@
 'use client';
 
 import { BarChart } from '@lobehub/charts';
-import { createStaticStyles, cssVar, Flexbox, useTheme } from '@lobehub/ui';
+import { Flexbox, useTheme } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import ScatterPlot from './ScatterPlot';
 import StatusDonut from './StatusDonut';
 
-const styles = createStaticStyles(({ css }) => ({
-  chartCard: css`
-    padding: 16px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorBgContainer};
-  `,
-  chartTitle: css`
-    margin-block-end: 12px;
-    font-size: ${cssVar.fontSizeSM};
-    font-weight: 500;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  legendDot: css`
-    width: 8px;
-    height: 8px;
-    border-radius: 999px;
-  `,
-  legendText: css`
-    font-size: ${cssVar.fontSizeSM};
-    color: ${cssVar.colorTextSecondary};
-  `,
-  totalCount: css`
-    padding-block: 1px;
-    padding-inline: 8px;
-    border-radius: ${cssVar.borderRadiusXS};
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: ${cssVar.fontSizeSM};
-    font-weight: 600;
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillSecondary};
-  `,
-}));
+const styles = stylex.create({
+  chartCard: {
+    padding: '16px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  chartTitle: {
+    marginBlockEnd: '12px',
+    fontSize: cssVar.fontSizeSM,
+    fontWeight: 500,
+    color: cssVar.colorTextSecondary,
+  },
+  legendDot: { width: '8px', height: '8px', borderRadius: '999px' },
+  legendText: { fontSize: cssVar.fontSizeSM, color: cssVar.colorTextSecondary },
+  totalCount: {
+    paddingBlock: '1px',
+    paddingInline: '8px',
+    borderRadius: cssVar.borderRadiusXS,
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: cssVar.fontSizeSM,
+    fontWeight: 600,
+    color: cssVar.colorTextSecondary,
+    backgroundColor: cssVar.colorFillSecondary,
+    backgroundImage: 'none',
+  },
+});
 
 interface BenchmarkChartsProps {
   benchmarkId: string;
@@ -117,8 +114,8 @@ const BenchmarkCharts = memo<BenchmarkChartsProps>(({ results, benchmarkId, runI
   return (
     <Flexbox horizontal gap={16} style={{ height: 320 }}>
       {/* Chart 1: Status Donut */}
-      <Flexbox className={styles.chartCard} flex={1}>
-        <div className={styles.chartTitle}>{t('run.chart.passFailError')}</div>
+      <Flexbox className={stylex.props(styles.chartCard).className} flex={1}>
+        <div {...stylex.props(styles.chartTitle)}>{t('run.chart.passFailError')}</div>
         <Flexbox align="center" flex={1} justify="center">
           <StatusDonut
             errorCases={errorCases}
@@ -129,23 +126,32 @@ const BenchmarkCharts = memo<BenchmarkChartsProps>(({ results, benchmarkId, runI
       </Flexbox>
 
       {/* Chart 2: Scatter Plot */}
-      <Flexbox className={styles.chartCard} flex={2}>
+      <Flexbox className={stylex.props(styles.chartCard).className} flex={2}>
         <Flexbox horizontal justify={'space-between'} style={{ marginBlockEnd: 12 }}>
-          <span className={styles.chartTitle} style={{ marginBlockEnd: 0 }}>
+          <span className={stylex.props(styles.chartTitle).className} style={{ marginBlockEnd: 0 }}>
             {t('run.chart.latencyTokenDistribution')}
           </span>
           <Flexbox horizontal gap={12} style={{ fontSize: cssVar.fontSizeSM }}>
             <Flexbox horizontal align={'center'} gap={4}>
-              <div className={styles.legendDot} style={{ background: theme.colorSuccess }} />
-              <span className={styles.legendText}>{t('run.chart.pass')}</span>
+              <div
+                className={stylex.props(styles.legendDot).className}
+                style={{ background: theme.colorSuccess }}
+              />
+              <span {...stylex.props(styles.legendText)}>{t('run.chart.pass')}</span>
             </Flexbox>
             <Flexbox horizontal align={'center'} gap={4}>
-              <div className={styles.legendDot} style={{ background: theme.colorFill }} />
-              <span className={styles.legendText}>{t('run.chart.fail')}</span>
+              <div
+                className={stylex.props(styles.legendDot).className}
+                style={{ background: theme.colorFill }}
+              />
+              <span {...stylex.props(styles.legendText)}>{t('run.chart.fail')}</span>
             </Flexbox>
             <Flexbox horizontal align={'center'} gap={4}>
-              <div className={styles.legendDot} style={{ background: theme.colorWarning }} />
-              <span className={styles.legendText}>{t('run.chart.error')}</span>
+              <div
+                className={stylex.props(styles.legendDot).className}
+                style={{ background: theme.colorWarning }}
+              />
+              <span {...stylex.props(styles.legendText)}>{t('run.chart.error')}</span>
             </Flexbox>
           </Flexbox>
         </Flexbox>
@@ -153,10 +159,15 @@ const BenchmarkCharts = memo<BenchmarkChartsProps>(({ results, benchmarkId, runI
       </Flexbox>
 
       {/* Chart 3: Histogram */}
-      <Flexbox className={styles.chartCard} flex={1}>
-        <Flexbox horizontal align="center" className={styles.chartTitle} gap={8}>
+      <Flexbox className={stylex.props(styles.chartCard).className} flex={1}>
+        <Flexbox
+          horizontal
+          align="center"
+          className={stylex.props(styles.chartTitle).className}
+          gap={8}
+        >
           <span>{t('run.chart.latencyDistribution')}</span>
-          <span className={styles.totalCount}>{results.length}</span>
+          <span {...stylex.props(styles.totalCount)}>{results.length}</span>
         </Flexbox>
         <BarChart
           stack

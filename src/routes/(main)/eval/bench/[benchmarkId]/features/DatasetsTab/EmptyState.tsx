@@ -1,30 +1,30 @@
-import { Block, Button, createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Block, Button, Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Database, Plus } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-const styles = createStaticStyles(({ css }) => ({
-  emptyCard: css`
-    align-items: center;
-    justify-content: center;
-
-    padding-block: 64px;
-    padding-inline: 24px;
-    border-radius: ${cssVar.borderRadiusLG};
-  `,
-  iconBox: css`
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    width: 56px;
-    height: 56px;
-    margin-block-end: 16px;
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorPrimaryBg};
-  `,
-}));
+const styles = stylex.create({
+  emptyCard: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingBlock: '64px',
+    paddingInline: '24px',
+    borderRadius: cssVar.borderRadiusLG,
+  },
+  iconBox: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '56px',
+    height: '56px',
+    marginBlockEnd: '16px',
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorPrimaryBg,
+    backgroundImage: 'none',
+  },
+});
 
 interface EmptyStateProps {
   onAddDataset: () => void;
@@ -34,8 +34,8 @@ const EmptyState = memo<EmptyStateProps>(({ onAddDataset }) => {
   const { t } = useTranslation('eval');
 
   return (
-    <Block className={styles.emptyCard} variant={'outlined'}>
-      <div className={styles.iconBox}>
+    <Block className={stylex.props(styles.emptyCard).className} variant={'outlined'}>
+      <div {...stylex.props(styles.iconBox)}>
         <Icon icon={Database} size={24} style={{ color: cssVar.colorPrimary }} />
       </div>
       <Flexbox align="center" gap={4}>

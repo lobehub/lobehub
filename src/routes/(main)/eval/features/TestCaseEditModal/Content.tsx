@@ -2,8 +2,6 @@
 
 import {
   Accordion,
-  createStaticStyles,
-  cssVar,
   Flexbox,
   Input,
   Select,
@@ -13,19 +11,21 @@ import {
   useModalContext,
 } from '@lobehub/ui';
 import { Form, useForm, useWatch } from '@lobehub/ui/form';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { type FC } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { agentEvalService } from '@/services/agentEval';
 
-const styles = createStaticStyles(({ css }) => ({
-  sectionLabel: css`
-    margin-block-end: 12px;
-    font-size: ${cssVar.fontSizeSM};
-    font-weight: 500;
-    color: ${cssVar.colorTextSecondary};
-  `,
-}));
+const styles = stylex.create({
+  sectionLabel: {
+    marginBlockEnd: '12px',
+    fontSize: cssVar.fontSizeSM,
+    fontWeight: 500,
+    color: cssVar.colorTextSecondary,
+  },
+});
 
 export interface TestCaseEditContentProps {
   formId: string;
@@ -97,7 +97,7 @@ const TestCaseEditContent: FC<TestCaseEditContentProps> = ({
 
   return (
     <Form form={form} id={formId} layout="vertical">
-      <div className={styles.sectionLabel}>{t('caseDetail.section.testCase')}</div>
+      <div {...stylex.props(styles.sectionLabel)}>{t('caseDetail.section.testCase')}</div>
       <Form.Field required label={t('testCase.create.input.label')} name="input">
         <TextArea
           autoSize={{ maxRows: 6, minRows: 3 }}
@@ -114,7 +114,7 @@ const TestCaseEditContent: FC<TestCaseEditContentProps> = ({
           placeholder={t('testCase.create.expected.placeholder')}
         />
       </Form.Field>
-      <div className={styles.sectionLabel} style={{ marginBlockStart: 4 }}>
+      <div className={stylex.props(styles.sectionLabel).className} style={{ marginBlockStart: 4 }}>
         {t('caseDetail.section.scoring')}
       </div>
       <Form.Field label={t('evalMode.label')} name="evalMode">
