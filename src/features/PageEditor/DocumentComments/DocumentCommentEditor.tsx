@@ -1,3 +1,4 @@
+// oxlint-disable-next-line stylex-migration/no-plain-css -- the rules target Lexical editor content (contenteditable children, placeholder, pasted images) that EditorCanvas renders with no slot or xstyle
 import './styles.css';
 
 import type { DocumentCommentJson } from '@lobechat/types';
@@ -15,7 +16,9 @@ import {
   type TopicCommentEditorValue,
 } from '@/features/Portal/TopicComments/editorUtils';
 import { useWorkspaceCommentMentionOption } from '@/features/Portal/TopicComments/useWorkspaceCommentMentionOption';
+import { sx } from '@/styles/sx';
 
+import { styles } from './styles';
 import { useFreezeHeightWhileResizingImage } from './useFreezeHeightWhileResizingImage';
 
 export type DocumentCommentEditorValue = TopicCommentEditorValue;
@@ -94,10 +97,9 @@ const DocumentCommentEditor = memo<DocumentCommentEditorProps>(
     return (
       <div
         ref={rootRef}
-        className={cx(
-          'lobe-document-comments-2aa32e1f-comment-editor',
-          flush && 'lobe-document-comments-2aa32e1f-comment-editor-flush',
-          mentionPlainClassName,
+        {...sx(
+          [styles.commentEditor, flush && styles.commentEditorFlush],
+          cx('lobe-document-comments-2aa32e1f-comment-editor', mentionPlainClassName),
         )}
       >
         <EditorCanvas
@@ -117,7 +119,7 @@ const DocumentCommentEditor = memo<DocumentCommentEditorProps>(
             // padding lives here: the editor forwards this style to its
             // absolutely positioned placeholder as well, so a horizontal
             // padding would push the placeholder 8px past the caret. The
-            // inline padding sits on `moduleStyles.commentEditor` instead.
+            // inline padding sits on `styles.commentEditor` instead.
             paddingBlock: '6px 10px',
           }}
           onContentChange={() => onChange?.(readTopicCommentEditorValue(editor))}

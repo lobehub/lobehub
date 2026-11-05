@@ -1,3 +1,4 @@
+// oxlint-disable-next-line stylex-migration/no-plain-css -- the rules target images inside RichTextMessage (Lexical renderer) and lobe-ui Markdown output, which expose no slot or xstyle for the figure/img they render
 import './styles.css';
 
 import type { DocumentCommentItem } from '@lobechat/types';

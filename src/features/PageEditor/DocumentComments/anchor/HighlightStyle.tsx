@@ -1,5 +1,6 @@
 'use client';
 
+// oxlint-disable-next-line stylex-migration/no-plain-css -- ::highlight() registries are document-level pseudo-elements with no element to attach a StyleX class to
 import './HighlightStyle.css';
 
 /**

@@ -36,11 +36,12 @@ describe('RESIZED_IMAGE_SELECTOR', () => {
   });
 });
 
-describe('styles.module.css', () => {
-  const css = readFileSync(path.resolve(__dirname, 'styles.module.css'), 'utf8').replaceAll(
-    '"',
-    "'",
-  );
+describe('styles.css', () => {
+  const css = readFileSync(path.resolve(__dirname, 'styles.css'), 'utf8')
+    .replaceAll('"', "'")
+    .replaceAll(/\s+/g, ' ')
+    .replaceAll(/\(\s/g, '(')
+    .replaceAll(/\s\)/g, ')');
 
   it('carries the resized-image selector (StyleX cannot interpolate it)', () => {
     expect(css).toContain(`img:not(${RESIZED_IMAGE_SELECTOR.replaceAll('"', "'")})`);

@@ -1,5 +1,6 @@
 'use client';
 
+// oxlint-disable-next-line stylex-migration/no-plain-css -- docx-preview generates .docx-wrapper and its section.docx pages inside the container; no prop reaches that DOM
 import './DocxPane.css';
 
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';

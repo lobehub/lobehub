@@ -1,6 +1,11 @@
 /* Descendant rules over DOM that StyleX cannot reach (the Lexical editor and
    the rendered comment markdown). Heights and RESIZED_IMAGE mirror
-   styles.ts; styles.test.ts keeps them in sync. */
+   styles.ts; styles.test.ts keeps them in sync. The resized-image selector
+   mirrors RESIZED_IMAGE_SELECTOR verbatim (complex :not() would lower its
+   specificity), and the comment-content and comment-editor scopes never nest,
+   so their img rules cannot cascade into each other. */
+/* stylelint-disable selector-not-notation, no-descending-specificity */
+
 /* Published comments render images as left-aligned thumbnails: the
    renderer inlines the stored (natural) width, which would otherwise span
    the whole column. The zoomable image wraps its <img> in a couple of
@@ -25,16 +30,6 @@
   ) {
   width: auto !important;
   max-height: 480px;
-}
-
-.lobe-document-comments-2aa32e1f-comment-editor {
-  min-width: 0;
-
-  /* Horizontal breathing room for the editor body, on top of ChatInput's own
-     12px. Kept out of the editor's style prop: the editor forwards that prop
-     to its absolutely positioned placeholder too, so any inline padding
-     there would push the placeholder past the caret. */
-  padding-inline: 16px;
 }
 
 /* The placeholder carries a 4px top margin meant to mirror a paragraph's
@@ -88,10 +83,4 @@
   ) {
   width: auto !important;
   max-height: 400px;
-}
-
-/* Beside the text the box is narrow and the caret should start where the
-   action bar's first icon starts: ChatInput's own 12px is the whole inset. */
-.lobe-document-comments-2aa32e1f-comment-editor-flush {
-  padding-inline: 0;
 }

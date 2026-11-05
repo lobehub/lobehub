@@ -1,5 +1,6 @@
 'use client';
 
+// oxlint-disable-next-line stylex-migration/no-plain-css -- the dashed target series is a recharts path inside @lobehub/charts LineChart, which has no per-series stroke prop
 import './Body.css';
 
 import { LineChart } from '@lobehub/charts';

@@ -4,7 +4,7 @@ import * as stylex from '@stylexjs/stylex';
 /** Max rendered height of an image inside the comment composer / edit box. */
 export const COMMENT_EDITOR_IMAGE_MAX_HEIGHT = 400;
 // The descendant rules that use these heights, and RESIZED_IMAGE_SELECTOR below,
-// live in styles.module.css (StyleX cannot reach the editor's DOM); styles.test.ts
+// live in styles.css (StyleX cannot reach the editor's DOM); styles.test.ts
 // keeps the two in sync.
 /** Max rendered height of an image inside a published comment. */
 export const COMMENT_CONTENT_IMAGE_MAX_HEIGHT = 480;
@@ -138,6 +138,8 @@ export const styles = stylex.create({
     paddingBlockEnd: 0,
     paddingInline: 0,
   },
+  commentEditor: { minWidth: 0, paddingInline: '16px' },
+  commentEditorFlush: { paddingInline: 0 },
   composer: {
     minWidth: 0,
     transition: `border-color ${cssVar.motionDurationFast}, box-shadow ${cssVar.motionDurationFast}`,
