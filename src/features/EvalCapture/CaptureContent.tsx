@@ -199,12 +199,10 @@ const CaptureContent: FC<CaptureContentProps> = ({ draft, formId, onLoadingChang
           <Flexbox horizontal align="center" gap={10}>
             <span {...stylex.props(styles.msgHead)}>{t('capture.actual')}</span>
             <Segmented
+              className={stylex.props(styles.kind).className}
+              classNames={{ item: stylex.props(styles.kindItem).className }}
               size="small"
               value={kind}
-              classNames={{
-                item: stylex.props(styles.kindItem).className,
-                root: stylex.props(styles.kind).className,
-              }}
               options={[
                 { label: t('capture.kind.negative'), value: 'negative' },
                 { label: t('capture.kind.positive'), value: 'positive' },
