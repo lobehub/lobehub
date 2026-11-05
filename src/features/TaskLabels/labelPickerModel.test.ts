@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildTaskLabelPickerSections,
   canCreateTaskLabel,
+  pickedLabelIds,
   resolveTaskLabelRefs,
   toggleTaskLabelSelection,
   toTaskLabelRef,
@@ -80,5 +81,14 @@ describe('resolveTaskLabelRefs', () => {
       'bug',
     ]);
     expect(resolveTaskLabelRefs(registry, undefined)).toEqual([]);
+  });
+});
+
+describe('pickedLabelIds', () => {
+  it('prefers picked labels, falls back to pending ids, else omits the key', () => {
+    const bug = { color: null, id: 'bug', name: 'Bug', parentId: null };
+    expect(pickedLabelIds([bug], ['fe'])).toEqual({ labelIds: ['bug'] });
+    expect(pickedLabelIds([], ['fe'])).toEqual({ labelIds: ['fe'] });
+    expect(pickedLabelIds([], undefined)).toEqual({});
   });
 });

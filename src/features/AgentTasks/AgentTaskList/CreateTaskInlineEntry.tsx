@@ -27,7 +27,7 @@ import {
   getAttachmentFileIdsFromEditor,
   pickAndInsertAttachments,
 } from '@/features/EditorCanvas/editorAttachments';
-import { resolveTaskLabelRefs } from '@/features/TaskLabels/labelPickerModel';
+import { pickedLabelIds, resolveTaskLabelRefs } from '@/features/TaskLabels/labelPickerModel';
 import TaskLabelChips from '@/features/TaskLabels/TaskLabelChips';
 import TaskLabelPicker from '@/features/TaskLabels/TaskLabelPicker';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -392,6 +392,8 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
   const resetComposer = useCallback(() => {
     setPriority(0);
     setLabels([]);
+    // A restore still waiting for the registry belongs to the draft just sent.
+    pendingDraftLabelIdsRef.current = undefined;
     setAssigneeAgentId(agentId);
     setMemberChoice(undefined);
     setInstruction('');
@@ -460,7 +462,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
           ...(execution ? { config: { execution: toTaskExecutionConfigPatch(execution) } } : {}),
           editorData: draft.editorJson,
           instruction: draft.instruction,
-          ...(labels.length > 0 ? { labelIds: labels.map((label) => label.id) } : {}),
+          ...pickedLabelIds(labels, pendingDraftLabelIdsRef.current),
           name: draft.name,
           parentTaskId,
           priority: priority || undefined,

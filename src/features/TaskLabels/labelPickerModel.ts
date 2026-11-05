@@ -63,6 +63,19 @@ export const resolveTaskLabelRefs = (
 };
 
 /**
+ * The `labelIds` to create a task with: the picked labels, or — when nothing
+ * is picked yet because the registry has not loaded — the ids still waiting to
+ * be resolved (the server validates them). Empty → no key.
+ */
+export const pickedLabelIds = (
+  picked: TaskLabelRef[],
+  pending: readonly string[] | undefined,
+): { labelIds?: string[] } => {
+  if (picked.length > 0) return { labelIds: picked.map((label) => label.id) };
+  return pending?.length ? { labelIds: [...pending] } : {};
+};
+
+/**
  * Toggle one label in a selection. Picking a grouped label replaces the
  * sibling from the same group (one label per group, as the server enforces).
  */

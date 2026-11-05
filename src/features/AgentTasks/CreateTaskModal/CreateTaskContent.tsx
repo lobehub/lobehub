@@ -26,7 +26,7 @@ import {
   pickAndInsertAttachments,
 } from '@/features/EditorCanvas/editorAttachments';
 import { releaseEditorSelection } from '@/features/EditorCanvas/releaseEditorSelection';
-import { resolveTaskLabelRefs } from '@/features/TaskLabels/labelPickerModel';
+import { pickedLabelIds, resolveTaskLabelRefs } from '@/features/TaskLabels/labelPickerModel';
 import TaskLabelChips from '@/features/TaskLabels/TaskLabelChips';
 import TaskLabelPicker from '@/features/TaskLabels/TaskLabelPicker';
 import { usePermission } from '@/hooks/usePermission';
@@ -224,7 +224,7 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
           ...(isScheduled ? toScheduledCreateParams(scheduleDraft, config) : { config }),
           editorData: editorJson,
           instruction: instruction || title.trim(),
-          ...(labels.length > 0 ? { labelIds: labels.map((label) => label.id) } : {}),
+          ...pickedLabelIds(labels, pendingDefaultLabelIdsRef.current),
           name: title.trim() || undefined,
           priority: priority || undefined,
           projectId,
