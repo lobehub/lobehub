@@ -76,11 +76,16 @@ export interface PlanConfig {
   realComponents?: Record<string, RealComponent>;
 }
 
+const declarationFree = (element: StyleElement) =>
+  !element.slots.length &&
+  element.bindings.every((binding) => binding.spread) &&
+  isIntrinsicTag(element.tag);
+
 export const chainOf = (element: StyleElement, byId: Map<string, StyleElement>) => {
   const chain: StyleElement[] = [];
   let current: StyleElement | undefined = element;
   while (current) {
-    chain.unshift(current);
+    if (current === element || !declarationFree(current)) chain.unshift(current);
     current = current.parent ? byId.get(current.parent) : undefined;
   }
   return chain;
