@@ -161,12 +161,12 @@ const TaskBulkActionsPanel = memo<TaskBulkActionsPanelProps>(({ onClose, tasks }
   };
 
   const assignAgent = (agent: SidebarAgentItem) => {
-    rememberAssignee(agent.id);
     const action = { kind: 'update', patch: { assigneeAgentId: agent.id } } as const;
     const targets = privateAgentIds.has(agent.id)
       ? pickTasksToPrivatize(selectedTasks, userId)
       : [];
     if (targets.length === 0) {
+      rememberAssignee(agent.id);
       act(action);
       return;
     }
@@ -184,6 +184,8 @@ const TaskBulkActionsPanel = memo<TaskBulkActionsPanelProps>(({ onClose, tasks }
       okButtonProps: { danger: true },
       okText: t('taskList.bulk.assignPrivate.ok'),
       onOk: () => {
+        // Recent records what was assigned, so a cancelled pick leaves it alone.
+        rememberAssignee(agent.id);
         void run(action, {
           prepare: (ids) => {
             const selected = new Set(ids);

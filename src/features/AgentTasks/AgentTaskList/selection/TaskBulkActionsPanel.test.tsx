@@ -135,6 +135,7 @@ describe('TaskBulkActionsPanel · assign agent', () => {
     fireEvent.click(screen.getByText('Secret'));
 
     expect(run).not.toHaveBeenCalled();
+    expect(rememberAssignee).not.toHaveBeenCalled();
     expect(confirmModal).toHaveBeenCalledTimes(1);
     const [modal] = confirmModal.mock.calls[0] as [
       {
@@ -147,6 +148,8 @@ describe('TaskBulkActionsPanel · assign agent', () => {
     expect(modal.content.props).toEqual({ count: 2, takeOverCount: 1 });
 
     modal.onOk();
+
+    expect(rememberAssignee).toHaveBeenCalledWith('agt_private');
 
     expect(run).toHaveBeenCalledWith(
       { kind: 'update', patch: { assigneeAgentId: 'agt_private' } },
