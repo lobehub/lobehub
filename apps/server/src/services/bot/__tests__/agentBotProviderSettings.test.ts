@@ -9,6 +9,12 @@ import {
 
 const mockAssertBotFeatureAccess = vi.hoisted(() => vi.fn());
 const mockStopClient = vi.hoisted(() => vi.fn());
+const mockStartClient = vi.hoisted(() => vi.fn());
+const inProcess = vi.hoisted(() => ({ canHost: true }));
+
+vi.mock('@/server/services/gateway/inProcessConnections', () => ({
+  canHostInProcessConnections: () => inProcess.canHost,
+}));
 const mockInvalidateBot = vi.hoisted(() => vi.fn());
 const gatewayState = vi.hoisted(() => ({ useMessageGateway: true }));
 
@@ -19,6 +25,7 @@ vi.mock('@/business/server/bot/featureAccess', () => ({
 vi.mock('@/server/services/gateway', () => ({
   GatewayService: vi.fn(function () {
     return {
+      startClient: mockStartClient,
       stopClient: mockStopClient,
       get useMessageGateway() {
         return gatewayState.useMessageGateway;
@@ -371,5 +378,48 @@ describe('status reactions of an existing bot', () => {
 
   it('stay on for a row saved before the field existed', () => {
     expect(mergeBotSettingsPatch('discord', {}, { charLimit: 1000 })?.reactionMode).toBe('minimal');
+  });
+});
+
+describe('invalidateBotAfterUpdate — credential changes on an in-process-only platform', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    inProcess.canHost = true;
+    gatewayState.useMessageGateway = false;
+  });
+
+  const existing = { applicationId: 'bot-1', platform: 'wecom', userId: 'user-1' };
+
+  it('restarts the WeCom connection on the new secret', async () => {
+    await invalidateBotAfterUpdate(existing, { credentials: { secret: 'new' } });
+
+    expect(mockInvalidateBot).toHaveBeenCalledWith('wecom', 'bot-1');
+    expect(mockStartClient).toHaveBeenCalledWith('wecom', 'bot-1', 'user-1');
+  });
+
+  it('leaves other platforms and settings-only saves alone', async () => {
+    await invalidateBotAfterUpdate(
+      { ...existing, platform: 'discord' },
+      { credentials: { botToken: 'x' } },
+    );
+    await invalidateBotAfterUpdate(existing, { settings: { charLimit: 500 } });
+    expect(mockStartClient).not.toHaveBeenCalled();
+  });
+
+  it('does not restart where WeCom cannot run, or when the bot is being turned off', async () => {
+    inProcess.canHost = false;
+    await invalidateBotAfterUpdate(existing, { credentials: { secret: 'new' } });
+    inProcess.canHost = true;
+    await invalidateBotAfterUpdate(existing, { credentials: { secret: 'new' }, enabled: false });
+
+    expect(mockStartClient).not.toHaveBeenCalled();
+    expect(mockStopClient).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the save successful when the restart fails', async () => {
+    mockStartClient.mockRejectedValueOnce(new Error('subscribe rejected'));
+    await expect(
+      invalidateBotAfterUpdate(existing, { credentials: { secret: 'bad' } }),
+    ).resolves.toBeUndefined();
   });
 });
