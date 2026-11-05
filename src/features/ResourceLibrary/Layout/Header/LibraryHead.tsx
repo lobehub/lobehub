@@ -1,13 +1,12 @@
 'use client';
 
-// oxlint-disable-next-line stylex-migration/no-plain-css -- the drop-zone inversion recolors every descendant, including the BusinessKnowledgeBaseImportAction business slot and lobe-ui Text/ActionIcon internals that no prop reaches
-import './LibraryHead.css';
-
 import type { DropdownItem } from '@lobehub/ui';
 import {
   ActionIcon,
   Block,
   Center,
+  // oxlint-disable-next-line stylex-migration/no-emotion-styles -- drop-zone inversion recolors every descendant
+  createStaticStyles,
   cx,
   DropdownMenu,
   Skeleton,
@@ -41,6 +40,14 @@ const styles = stylex.create({
     color: cssVar.colorTextTertiary,
   },
 });
+
+const fallback = createStaticStyles(({ css, cssVar }) => ({
+  dropZoneActive: css`
+    * {
+      color: ${cssVar.colorBgElevated} !important;
+    }
+  `,
+}));
 
 /**
  * Quickly switch between libraries
@@ -145,10 +152,7 @@ const Head = memo<{ id: string }>(({ id }) => {
       variant={'borderless'}
       className={
         isDropZoneActive
-          ? cx(
-              stylex.props(styles.dropZoneActive).className,
-              'lobe-library-head-52231ddf-drop-zone-active',
-            )
+          ? cx(stylex.props(styles.dropZoneActive).className, fallback.dropZoneActive)
           : undefined
       }
       onClick={handleClick}
