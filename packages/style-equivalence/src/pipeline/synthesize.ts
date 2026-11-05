@@ -6,6 +6,7 @@ import type { ProjectConfig } from '../config';
 import { extractFile, type FileExtraction } from '../extract';
 import { generateHost, HOST_HTML } from '../generate/host';
 import { generateModule } from '../generate/module';
+import { carriedClasses, globalRulesChanged } from '../plan/globalRules';
 import { type FilePlan, planFile, type Side } from '../plan/planFile';
 import { packageFile } from '../source/aliases';
 import { resolveSpecifier } from '../source/declarations';
@@ -55,6 +56,7 @@ export const synthesize = async (
 ): Promise<Synthesis> => {
   const extractions: Synthesis['extractions'] = {};
   const plans: FilePlan[] = [];
+  const planned: Array<{ file: string; pair: Record<Side, FileExtraction>; plan: FilePlan }> = [];
   for (const entry of scope) {
     const file = entry.head ?? entry.base!;
     const read = async (side: Side) => {
@@ -77,6 +79,12 @@ export const synthesize = async (
       roots,
       sources: { base: entry.base, head: entry.head },
     });
+    planned.push({ file, pair, plan });
+  }
+  const carried = carriedClasses(planned.flatMap(({ pair }) => [pair.base, pair.head]));
+  for (const { file, pair, plan } of planned) {
+    const global = globalRulesChanged(pair.base, pair.head, carried);
+    if (global) plan.gaps.push(global);
     if (!plan.cases.length && !plan.unpaired.length && !fileFlags(plan, pair).length) continue;
     extractions[file] = pair;
     plans.push(plan);

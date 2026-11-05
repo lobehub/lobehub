@@ -102,7 +102,7 @@ const constantText = (
   return target && constantText(target, constants, depth + 1);
 };
 
-const importAliases = (sf: ts.SourceFile, imported: string) => {
+export const importAliases = (sf: ts.SourceFile, imported: string) => {
   const aliases = new Map<string, string>();
   for (const statement of sf.statements) {
     const named = ts.isImportDeclaration(statement)

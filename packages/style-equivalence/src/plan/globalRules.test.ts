@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { emotionStaticAdapter } from '../extract/adapters/emotionStatic';
 import { globalCssAdapter } from '../extract/adapters/globalCss';
 import { extractFile } from '../extract/index';
-import { planFile } from './planFile';
+import { carriedClasses, globalRulesChanged } from './globalRules';
 
 const CSS = `::highlight(lobe-comment) {
   text-decoration-color: var(--lobe-color-warning);
@@ -54,10 +54,12 @@ const options = {
     specifier === './Highlight.css' ? CSS : undefined,
 };
 
-const gaps = (before: string, after: string) =>
-  planFile('a.tsx', extractFile(before, 'a.tsx', options), extractFile(after, 'a.tsx', options), {
-    layoutComponents: [],
-  }).gaps;
+const gaps = (before: string, after: string, css = options.readStylesheet) => {
+  const read = { ...options, readStylesheet: css };
+  const pair = [extractFile(before, 'a.tsx', read), extractFile(after, 'a.tsx', options)] as const;
+  const gap = globalRulesChanged(pair[0], pair[1], carriedClasses([...pair]));
+  return gap ? [gap] : [];
+};
 
 describe('global rules that hang on no element', () => {
   it('proves a global stylesheet restored verbatim into createGlobalStyle', () => {
@@ -77,18 +79,17 @@ describe('global rules that hang on no element', () => {
     expect(gaps(head(), head(undefined, ''))).toEqual(['GLOBAL_RULES_CHANGED:1/0']);
   });
 
-  it('leaves stylesheet rules on classes an element carries to the element cases', () => {
-    const withElement = `import './Highlight.css';\n\nexport const A = () => <div className="crumb" />;\n`;
-    const css = '.crumb ol { margin: 0; }\n';
-    const extraction = extractFile(withElement, 'a.tsx', {
-      ...options,
-      readStylesheet: () => css,
-    });
-    const empty = extractFile(
-      'export const A = () => <div className="crumb" />;\n',
-      'a.tsx',
-      options,
-    );
-    expect(planFile('a.tsx', extraction, empty, { layoutComponents: [] }).gaps).toEqual([]);
+  it('leaves rules on a class an element carries to the element cases', () => {
+    const css = () => '.crumb ol { margin: 0; }\n';
+    const element = `import './Highlight.css';\n\nexport const A = () => <div className="crumb" />;\n`;
+    expect(gaps(element, 'export const A = () => <div className="crumb" />;\n', css)).toEqual([]);
+  });
+
+  it('still compares a rule whose class no element carries', () => {
+    const css = () => '[data-submenu] > [role="menu"]:has(.lobe-skill-search) { width: 1px; }\n';
+    const element = `import './Highlight.css';\n\nexport const A = () => <div />;\n`;
+    expect(gaps(element, 'export const A = () => <div />;\n', css)).toEqual([
+      'GLOBAL_RULES_CHANGED:1/0',
+    ]);
   });
 });

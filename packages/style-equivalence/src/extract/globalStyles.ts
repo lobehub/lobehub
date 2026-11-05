@@ -1,6 +1,6 @@
 import ts from 'typescript';
 
-import { parseRules, templateText } from './css';
+import { importAliases, parseRules, templateText } from './css';
 import type { StyleRule } from './types';
 
 const GLOBAL_FACTORIES = new Set(['createGlobalStyle', 'injectGlobal']);
@@ -82,13 +82,20 @@ const isGlobalFactory = (tag: ts.Expression) =>
 
 export const globalStyleRules = (sf: ts.SourceFile, readModule?: ReadModule): StyleRule[] => {
   const scope = scopeOf(sf, readModule);
+  const tokenAliases = importAliases(sf, 'cssVar');
   const rules: StyleRule[] = [];
   const visit = (node: ts.Node) => {
     if (ts.isTaggedTemplateExpression(node) && isGlobalFactory(node.tag)) {
       const spans = ts.isTemplateExpression(node.template) ? node.template.templateSpans : [];
-      const interpolations = spans.map((span) =>
-        span.expression.getText(sf).replaceAll(/\s+/g, ' ').trim(),
-      );
+      const interpolations = spans.map(({ expression }) => {
+        const alias =
+          ts.isPropertyAccessExpression(expression) && ts.isIdentifier(expression.expression)
+            ? tokenAliases.get(expression.expression.text)
+            : undefined;
+        return alias
+          ? `${alias}.${expression.name.text}`
+          : expression.getText(sf).replaceAll(/\s+/g, ' ').trim();
+      });
       const folded = spans.map((span) => foldConstant(span.expression, scope) ?? null);
       const parsed = parseRules(templateText(node.template));
       const symbol = ts.isVariableDeclaration(node.parent)
