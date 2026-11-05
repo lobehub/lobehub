@@ -15,6 +15,7 @@ import {
   toast,
   Upload,
 } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { FilePenLine, FileUp, FolderIcon, FolderUp, Link, Plus } from 'lucide-react';
 import { type ChangeEvent } from 'react';
 import { memo, useCallback, useId, useMemo, useState } from 'react';
@@ -27,6 +28,8 @@ import { usePermission } from '@/hooks/usePermission';
 import { useFileStore } from '@/store/file';
 import { useTreeStore } from '@/store/tree';
 
+import { styles } from './styles';
+
 interface FolderAddButtonProps {
   folderId: string;
 }
@@ -35,7 +38,7 @@ interface FolderAddButtonProps {
  * Per-folder create entry on a tree row: everything it creates lands INSIDE
  * this folder, unlike the sidebar-level AddButton which targets the folder the
  * URL is currently in. Revealed on row hover (see styles.ts
- * `.hierarchy-node-actions`).
+ * `styles.nodeActions`).
  */
 const FolderAddButton = memo<FolderAddButtonProps>(({ folderId }) => {
   const { t } = useTranslation('file');
@@ -225,7 +228,7 @@ const FolderAddButton = memo<FolderAddButtonProps>(({ folderId }) => {
 
   return (
     <div
-      className={'hierarchy-node-actions'}
+      {...stylex.props(styles.nodeActions)}
       data-open={menuOpen}
       onClick={stopPropagation}
       onPointerDown={stopPropagation}

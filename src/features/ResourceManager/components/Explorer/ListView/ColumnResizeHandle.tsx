@@ -1,8 +1,39 @@
 'use client';
 
-import './ColumnResizeHandle.css';
-
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
+
+const styles = stylex.create({
+  handle: {
+    'cursor': 'col-resize',
+    'userSelect': 'none',
+    'position': 'absolute',
+    'zIndex': 1,
+    'insetBlockStart': 0,
+    'insetBlockEnd': 0,
+    'insetInlineEnd': 0,
+    'transform': 'translateX(-4px)',
+    'display': 'flex',
+    'alignItems': 'center',
+    'justifyContent': 'center',
+    'width': '16px',
+    '::after': {
+      content: "''",
+      width: { 'default': '1.5px', ':hover': '3px' },
+      height: 'calc(100% - 16px)',
+      borderRadius: '1px',
+      backgroundColor: { 'default': cssVar.colorBorder, ':hover': cssVar.colorPrimary },
+      transition: 'all 0.2s',
+    },
+  },
+  dragging: {
+    '::after': {
+      width: '3px',
+      backgroundColor: cssVar.colorPrimary,
+    },
+  },
+});
 
 interface ColumnResizeHandleProps {
   column: 'name' | 'date' | 'size' | 'uploader';
@@ -66,11 +97,7 @@ const ColumnResizeHandle = memo<ColumnResizeHandleProps>(
 
     return (
       <div
-        className={
-          isDragging
-            ? `${'lobe-column-resize-handle-1cfc643a-handle'} ${'lobe-column-resize-handle-1cfc643a-handle-dragging'}`
-            : 'lobe-column-resize-handle-1cfc643a-handle'
-        }
+        {...stylex.props(styles.handle, isDragging && styles.dragging)}
         onMouseDown={handleMouseDown}
       />
     );

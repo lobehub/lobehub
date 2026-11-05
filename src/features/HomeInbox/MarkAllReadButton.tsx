@@ -1,4 +1,6 @@
 import { Button, toast } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
+import { type StyleXStyles } from '@stylexjs/stylex';
 import { CheckCheckIcon } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -10,6 +12,7 @@ interface MarkAllReadButtonProps {
   news: BriefItem[];
   /** Fired after the resolve lands — lets the day digest revalidate its own SWR cache. */
   onResolved?: () => void;
+  xstyle?: StyleXStyles;
 }
 
 /**
@@ -17,7 +20,7 @@ interface MarkAllReadButtonProps {
  * `read` action — reports are knowledge, so dismissing them wholesale must
  * never accept a delivery or complete a task.
  */
-const MarkAllReadButton = memo<MarkAllReadButtonProps>(({ news, onResolved }) => {
+const MarkAllReadButton = memo<MarkAllReadButtonProps>(({ news, onResolved, xstyle }) => {
   const { t } = useTranslation('home');
   const resolveBriefsAsRead = useBriefStore((s) => s.resolveBriefsAsRead);
   const [loading, setLoading] = useState(false);
@@ -38,6 +41,7 @@ const MarkAllReadButton = memo<MarkAllReadButtonProps>(({ news, onResolved }) =>
 
   return (
     <Button
+      className={stylex.props(xstyle).className}
       disabled={loading}
       icon={CheckCheckIcon}
       size={'small'}

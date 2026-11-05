@@ -1,3 +1,4 @@
+// oxlint-disable-next-line stylex-migration/no-plain-css -- the drag-over inversion recolors every descendant, including rendered markdown/note previews and lobe-ui Checkbox, DropdownMenu and Tag internals that no prop reaches
 import './index.css';
 
 import {

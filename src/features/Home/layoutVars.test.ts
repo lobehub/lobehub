@@ -1,12 +1,7 @@
-/* eslint-disable no-restricted-imports -- reads the stylesheet source it pins */
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
-
 import { describe, expect, it } from 'vitest';
 
 import { homeLayoutVars, SPEECH_INLINE_MIN } from './layoutVars';
-
-const css = readFileSync(path.resolve(__dirname, 'index.module.css'), 'utf8');
+import css from './styles.ts?raw';
 
 describe('home layout custom properties', () => {
   it('keeps the container-query threshold in step with the layout constants', () => {
@@ -21,7 +16,7 @@ describe('home layout custom properties', () => {
   it('defines every custom property the stylesheet reads from the grid root', () => {
     const provided = new Set(Object.keys(homeLayoutVars));
     const used = new Set([...css.matchAll(/var\((--home-[a-z-]+)\)/g)].map((match) => match[1]));
-    const definedInCss = new Set([...css.matchAll(/(--home-[a-z-]+):/g)].map((m) => m[1]));
+    const definedInCss = new Set([...css.matchAll(/'(--home-[a-z-]+)':/g)].map((m) => m[1]));
     // Provided by the minimal layout or by the stylesheet itself.
     const external = new Set(['--home-minimal-lift']);
 

@@ -46,7 +46,7 @@ const MINIMAL_HEADER_HEIGHT = MINIMAL_SWITCHER_ROW + MINIMAL_HEADER_GAP + MINIMA
 const MINIMAL_LIFT = MINIMAL_HEADER_HEIGHT + MINIMAL_STACK_GAP;
 
 /**
- * Layout numbers for `index.module.css`, derived here so they stay in step with
+ * Layout numbers for `styles.ts`, derived here so they stay in step with
  * `portraitFraming.ts`. The container-query threshold cannot take a custom
  * property; `layoutVars.test.ts` pins the literal to `SPEECH_INLINE_MIN`.
  */
