@@ -12,6 +12,7 @@ import {
 import type { Message } from 'chat';
 import debug from 'debug';
 
+import { appEnv } from '@/envs/app';
 import type { AttachmentSource } from '@/server/services/aiAgent/ingestAttachment';
 import {
   BOT_RUNTIME_STATUSES,
@@ -45,6 +46,14 @@ export interface WeComGatewayListenerOptions {
   durationMs?: number;
   waitUntil?: (task: Promise<any>) => void;
 }
+
+/**
+ * Base URL the connection forwards inbound frames to — its own server. Server-to-server calls use
+ * `INTERNAL_APP_URL` when set (it bypasses the public CDN / proxy, and in Docker the public URL may
+ * not resolve from inside the container), else the public `APP_URL`.
+ */
+export const resolveSelfWebhookBase = (appUrl?: string): string =>
+  (appEnv.INTERNAL_APP_URL || appUrl || appEnv.APP_URL || '').trim().replace(/\/+$/, '');
 
 /** `wecom:single:<userid>` / `wecom:group:<chatid>` → `{ type, id }`. */
 export const decodeWeComThreadId = (platformThreadId: string): WeComThreadId => {
@@ -139,16 +148,18 @@ class WeComClient implements PlatformClient {
     const connection = new WeComLongConnection({
       botId: this.applicationId,
       log: (message, ...args) => log(message, ...args),
+      // Both end the connection for good: a newer owner holds the bot, or WeCom refuses it. The
+      // client stops too, so its periodic refresh cannot take the bot back.
       onDisplaced: () => {
-        unregisterWeComConnection(connection);
+        this.retireConnection(connection);
         void reportFailure(undefined, WECOM_DISPLACED_MESSAGE);
       },
       onFatalError: (error) => {
-        unregisterWeComConnection(connection);
+        this.retireConnection(connection);
         void reportFailure(error);
       },
       secret: this.config.credentials.secret,
-      webhookUrl: `${(this.context.appUrl || '').trim()}/api/agent/webhooks/wecom/${this.applicationId}`,
+      webhookUrl: `${resolveSelfWebhookBase(this.context.appUrl)}/api/agent/webhooks/wecom/${this.applicationId}`,
     });
 
     try {
@@ -205,6 +216,15 @@ class WeComClient implements PlatformClient {
       },
       { redisClient: this.context.redisClient as any },
     );
+  }
+
+  private retireConnection(connection: WeComLongConnection): void {
+    unregisterWeComConnection(connection);
+    if (this.connection !== connection) return;
+    this.stopped = true;
+    if (this.refreshTimer) clearTimeout(this.refreshTimer);
+    this.refreshTimer = null;
+    this.connection = null;
   }
 
   private closeConnection(): void {

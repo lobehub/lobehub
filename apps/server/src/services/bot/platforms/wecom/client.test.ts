@@ -57,6 +57,11 @@ const { FakeSocket } = vi.hoisted(() => {
 
 vi.mock('ws', () => ({ default: FakeSocket }));
 
+const appEnv = vi.hoisted(
+  () => ({ APP_URL: undefined, INTERNAL_APP_URL: undefined }) as Record<string, string | undefined>,
+);
+vi.mock('@/envs/app', () => ({ appEnv }));
+
 const { updateBotRuntimeStatus } = vi.hoisted(() => ({
   updateBotRuntimeStatus: vi.fn().mockResolvedValue(undefined),
 }));
@@ -148,6 +153,57 @@ describe('WeComClient lifecycle', () => {
       'https://app.example.com/api/agent/webhooks/wecom/bot-1',
       expect.objectContaining({ method: 'POST' }),
     );
+  });
+
+  it('forwards through INTERNAL_APP_URL when set, as other server-to-server calls do', async () => {
+    appEnv.INTERNAL_APP_URL = 'http://lobe:3210/';
+    try {
+      await startClient();
+      FakeSocket.instances[0].serverSend({
+        body: {
+          aibotid: 'bot-1',
+          chattype: 'single',
+          from: { userid: 'u1' },
+          msgid: 'm1',
+          msgtype: 'text',
+          text: { content: 'hi' },
+        },
+        cmd: 'aibot_msg_callback',
+        headers: { req_id: 'req-1' },
+      });
+      await flush();
+      expect(fetch).toHaveBeenCalledWith(
+        'http://lobe:3210/api/agent/webhooks/wecom/bot-1',
+        expect.objectContaining({ method: 'POST' }),
+      );
+    } finally {
+      appEnv.INTERNAL_APP_URL = undefined;
+    }
+  });
+
+  it('stays stopped once displaced: the periodic refresh does not take the bot back', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] });
+    try {
+      const client = factory.createClient(config, { appUrl: 'https://app.example.com' });
+      clients.push(client);
+      const started = client.start();
+      await vi.advanceTimersByTimeAsync(0);
+      await started;
+
+      FakeSocket.instances[0].serverSend({
+        body: { event: { eventtype: 'disconnected_event' } },
+        cmd: 'aibot_event_callback',
+        headers: { req_id: 'evt' },
+      });
+      await vi.advanceTimersByTimeAsync(0);
+      const sockets = FakeSocket.instances.length;
+
+      await vi.advanceTimersByTimeAsync(9 * 60 * 60 * 1000);
+      expect(FakeSocket.instances).toHaveLength(sockets);
+      expect(getWeComConnection('bot-1')).toBeUndefined();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('reports failed and throws when WeCom refuses the credentials', async () => {
