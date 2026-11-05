@@ -229,8 +229,8 @@ export const SIDEBAR_SPACER_ID = '__spacer__';
 
 export const DEFAULT_SIDEBAR_ITEMS: string[] = [
   'tasks',
-  'project',
   'goals',
+  'project',
   'dashboard',
   'resource',
   'favorites',
@@ -284,8 +284,8 @@ const normalizeSpacerPosition = (order: string[]): string[] => {
 // Projects used to be an accordion listing every project; it is now a single
 // link to the project list. Saved orders still hold `project` inside the
 // accordion block, where a link would split the block in two, so move it up to
-// sit after Tasks like the other top links (or just above the block when Tasks
-// is not up there). A spot the user picked outside the block is kept.
+// sit after Goals (or Tasks) like the other top links, or just above the block
+// when neither is up there. A spot the user picked outside the block is kept.
 const liftProjectOutOfAccordion = (order: string[]): string[] => {
   const projectIndex = order.indexOf('project');
   if (projectIndex === -1) return order;
@@ -303,9 +303,11 @@ const liftProjectOutOfAccordion = (order: string[]): string[] => {
 
   const without = order.filter((k) => k !== 'project');
   const blockStart = without.findIndex((k) => SIDEBAR_ACCORDION_KEYS.has(k));
-  const tasksIndex = without.indexOf('tasks');
-  // Tasks may have been dragged below the spacer; then stay above the block.
-  const insertAt = tasksIndex !== -1 && tasksIndex < blockStart ? tasksIndex + 1 : blockStart;
+  // Goals, else Tasks, may have been dragged below the spacer; then stay above the block.
+  const anchor = ['goals', 'tasks']
+    .map((k) => without.indexOf(k))
+    .find((i) => i !== -1 && i < blockStart);
+  const insertAt = anchor === undefined ? blockStart : anchor + 1;
   return [...without.slice(0, insertAt), 'project', ...without.slice(insertAt)];
 };
 

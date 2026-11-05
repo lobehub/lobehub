@@ -278,8 +278,8 @@ describe('systemStatusSelectors', () => {
       expect(systemStatusSelectors.sidebarItems(null)(s)).toEqual([
         // Defaults missing from a saved layout (here the newer `project`,
         // `goals`, `dashboard` and `favorites`) are backfilled.
-        'project',
         'goals',
+        'project',
         'dashboard',
         'favorites',
         'private',
@@ -298,8 +298,8 @@ describe('systemStatusSelectors', () => {
     it('should preserve a canonically-positioned spacer', () => {
       const stored = [
         'pages',
-        'project',
         'goals',
+        'project',
         'dashboard',
         'favorites',
         'recents',
@@ -339,8 +339,8 @@ describe('systemStatusSelectors', () => {
       expect(systemStatusSelectors.sidebarItems(null)(s)).toEqual([
         'tasks',
         'pages',
-        'project',
         'goals',
+        'project',
         'dashboard',
         'favorites',
         'recents',
@@ -374,9 +374,9 @@ describe('systemStatusSelectors', () => {
       });
       expect(systemStatusSelectors.sidebarItems(null)(s)).toEqual([
         'tasks',
-        // Projects left the accordion for a link, so a saved layout lifts it next to Tasks.
-        'project',
+        // Projects left the accordion for a link, so a saved layout lifts it below Goals.
         'goals',
+        'project',
         'dashboard',
         'resource',
         'favorites',
@@ -447,7 +447,7 @@ describe('systemStatusSelectors', () => {
       expect(items[spacerIdx - 1]).toBe('recents');
       // missing top-group defaults slot in just before the accordion
       expect(items.indexOf('tasks')).toBeLessThan(spacerIdx - 2);
-      expect(items.indexOf('project')).toBe(items.indexOf('tasks') + 1);
+      expect(items.indexOf('project')).toBe(items.indexOf('goals') + 1);
       expect(items.indexOf('resource')).toBeLessThan(spacerIdx - 2);
       // missing bottom-group defaults sit after the spacer
       expect(items.indexOf('image')).toBeGreaterThan(spacerIdx);
@@ -464,8 +464,8 @@ describe('systemStatusSelectors', () => {
       // the legacy state was saved) is backfilled at the head of the block.
       expect(items).toEqual([
         'tasks',
-        'project',
         'goals',
+        'project',
         'dashboard',
         'resource',
         'favorites',
@@ -488,8 +488,8 @@ describe('systemStatusSelectors', () => {
       // backfilled at the head of the block; recents/agent keep legacy order.
       expect(items).toEqual([
         'tasks',
-        'project',
         'goals',
+        'project',
         'dashboard',
         'resource',
         'favorites',

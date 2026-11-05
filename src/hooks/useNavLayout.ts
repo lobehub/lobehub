@@ -72,6 +72,14 @@ export const useNavLayout = (): NavLayout => {
           url: '/tasks',
         },
         {
+          // Behind the same lab toggle as the agent-scoped goal pages.
+          hidden: !enableGoals,
+          icon: getRouteById('goals')!.icon,
+          key: SidebarTabKey.Goals,
+          title: t('tab.goals'),
+          url: '/goals',
+        },
+        {
           // Keyed `project` to match the sidebar layout id; the page is `/projects`.
           activeTab: 'projects',
           hidden: !enableProjects,
@@ -79,14 +87,6 @@ export const useNavLayout = (): NavLayout => {
           key: 'project',
           title: t('tab.projects'),
           url: '/projects',
-        },
-        {
-          // Behind the same lab toggle as the agent-scoped goal pages.
-          hidden: !enableGoals,
-          icon: getRouteById('goals')!.icon,
-          key: SidebarTabKey.Goals,
-          title: t('tab.goals'),
-          url: '/goals',
         },
         {
           // Personal boards only for now — workspace-level boards have no UI
