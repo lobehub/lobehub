@@ -8,7 +8,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import type { FileExtraction, StyleElement } from '../extract';
 import type { FilePlan } from '../plan/planFile';
 import { generateHost } from './host';
-import { CaseList, INNER_BASELINE, readSelection } from './hostRuntime';
+import { CaseList, type CaseModules, INNER_BASELINE, readSelection } from './hostRuntime';
 import { generateModule } from './module';
 
 const tmp = path.join(import.meta.dirname, '.generated-test');
@@ -215,10 +215,7 @@ const load = async () => {
     file,
     generateModule(extraction, plan, 'base', { layoutComponents: ['Flexbox'] }),
   );
-  return (await import(file)) as {
-    cases: Record<string, (combo: Record<string, boolean | string>) => unknown>;
-    unpaired: Record<string, () => unknown>;
-  };
+  return (await import(file)) as Required<Pick<CaseModules[string], 'cases' | 'unpaired'>>;
 };
 
 const render = (node: unknown) => renderToStaticMarkup(node as never);
