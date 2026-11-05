@@ -49,6 +49,7 @@ import {
   applyWatchKeywordInstructions,
   burstMatchesWatchKeyword,
   dispatchTextCommand,
+  isEmptyInboundMessage,
   mergeSkippedMessages,
   summarizeMessageAttachments,
 } from './utils';
@@ -512,6 +513,18 @@ export function registerHandlers(
     }
 
     const merged = mergeSkippedMessages(message, context);
+    if (isEmptyInboundMessage(merged)) {
+      log(
+        'onNewMention: skip empty message (no text, attachments or quote), agent=%s, platform=%s, thread=%s, msgId=%s, merged=%d',
+        agentId,
+        platform,
+        thread.id,
+        message.id,
+        (context?.skipped?.length ?? 0) + 1,
+      );
+      observe('onNewMention', merged, thread, 'skip', 'empty-message');
+      return;
+    }
     const { openingReply, release } = await startReply({
       entryPoint: 'onNewMention',
       message: merged,
@@ -742,6 +755,18 @@ export function registerHandlers(
     }
 
     let merged = mergeSkippedMessages(message, context);
+    if (isEmptyInboundMessage(merged)) {
+      log(
+        'onSubscribedMessage: skip empty message (no text, attachments or quote), agent=%s, platform=%s, thread=%s, msgId=%s, merged=%d',
+        agentId,
+        platform,
+        thread.id,
+        message.id,
+        (context?.skipped?.length ?? 0) + 1,
+      );
+      observe('onSubscribedMessage', merged, thread, 'skip', 'empty-message', true);
+      return;
+    }
     // when a keyword (and not a mention / DM / command) is what
     // wakes the bot, prepend the matched entries' operator-authored
     // instructions to the user message so the agent gets a directive
