@@ -1,7 +1,9 @@
 import type { DeviceGitLinkedPullRequest, WorkingDirGithubState } from '@lobechat/types';
+import { useEffect } from 'react';
 
 import { type GitLinkedPRSummary } from '@/services/git';
 import { useFetchGitBranch, useFetchGitLinkedPR } from '@/store/device';
+import { useGlobalStore } from '@/store/global';
 
 /** The git context the topic recorded for the working directory. */
 export interface PullRequestSnapshot {
@@ -93,17 +95,28 @@ export const useLinkedPullRequest = ({
     isConfirmed: linkedPRConfirmed,
     mutate: refresh,
   } = useFetchGitLinkedPR(deviceId, gitPath, branch?.branch, isGithub);
+  const resolved = resolveLinkedPullRequest({
+    available,
+    branch,
+    branchConfirmed,
+    branchError,
+    linkedPR,
+    linkedPRConfirmed,
+    linkedPRError,
+    snapshot,
+  });
+
+  // Tell Work cards which PR the PR tab shows, so clicking the same PR opens the
+  // tab instead of GitHub. Cleared on unmount, when the tab disappears with it.
+  const setPullRequestUrl = useGlobalStore((s) => s.setWorkingSidebarPullRequestUrl);
+  const pullRequestUrl = resolved.pullRequest?.url;
+  useEffect(() => {
+    setPullRequestUrl(pullRequestUrl);
+    return () => setPullRequestUrl(undefined);
+  }, [pullRequestUrl, setPullRequestUrl]);
+
   return {
-    ...resolveLinkedPullRequest({
-      available,
-      branch,
-      branchConfirmed,
-      branchError,
-      linkedPR,
-      linkedPRConfirmed,
-      linkedPRError,
-      snapshot,
-    }),
+    ...resolved,
     /** Re-run the reads that confirm the PR (branch, then its linked PR). */
     onRetryConfirm: () => {
       void refreshBranch();

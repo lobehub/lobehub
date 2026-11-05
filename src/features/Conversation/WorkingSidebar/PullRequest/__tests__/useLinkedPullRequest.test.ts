@@ -1,6 +1,20 @@
-import { describe, expect, it } from 'vitest';
+import { renderHook } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
 
-import { resolveLinkedPullRequest } from '../useLinkedPullRequest';
+import { resolveLinkedPullRequest, useLinkedPullRequest } from '../useLinkedPullRequest';
+
+const deviceReads = vi.hoisted(() => ({ linkedPR: undefined as unknown }));
+const setPullRequestUrl = vi.hoisted(() => vi.fn());
+
+vi.mock('@/store/device', () => ({
+  useFetchGitBranch: () => ({ data: { branch: 'feat/x' }, isConfirmed: true, mutate: vi.fn() }),
+  useFetchGitLinkedPR: () => ({ data: deviceReads.linkedPR, isConfirmed: true, mutate: vi.fn() }),
+}));
+
+vi.mock('@/store/global', () => ({
+  useGlobalStore: (selector: (s: unknown) => unknown) =>
+    selector({ setWorkingSidebarPullRequestUrl: setPullRequestUrl }),
+}));
 
 const pr = (number: number) => ({
   number,
@@ -72,5 +86,27 @@ describe('resolveLinkedPullRequest', () => {
     expect(
       resolveLinkedPullRequest({ ...base, linkedPRError: offline }).confirmError,
     ).toBeUndefined();
+  });
+});
+
+describe('useLinkedPullRequest', () => {
+  const props = { available: true, gitPath: '/repo', isGithub: true };
+
+  // Work cards open the PR tab only for the PR it shows, so the published URL
+  // must follow the tab: set while it shows a PR, cleared once it can't.
+  it('publishes the shown PR URL and clears it on unmount', () => {
+    deviceReads.linkedPR = { pullRequest: pr(42), pullRequestStatus: 'ok' };
+    const { rerender, unmount } = renderHook((p: typeof props) => useLinkedPullRequest(p), {
+      initialProps: props,
+    });
+    expect(setPullRequestUrl).toHaveBeenLastCalledWith('u/42');
+
+    rerender({ ...props, available: false });
+    expect(setPullRequestUrl).toHaveBeenLastCalledWith(undefined);
+
+    rerender(props);
+    expect(setPullRequestUrl).toHaveBeenLastCalledWith('u/42');
+    unmount();
+    expect(setPullRequestUrl).toHaveBeenLastCalledWith(undefined);
   });
 });

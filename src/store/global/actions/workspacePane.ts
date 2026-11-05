@@ -19,11 +19,12 @@ export const globalWorkspaceSlice = (set: Setter, get: () => GlobalStore, _api?:
 
 export class GlobalWorkspacePaneActionImpl {
   readonly #get: () => GlobalStore;
+  readonly #set: Setter;
 
   constructor(set: Setter, get: () => GlobalStore, _api?: unknown) {
     void _api;
-    void set;
     this.#get = get;
+    this.#set = set;
   }
 
   switchBackToChat = (sessionId?: string): void => {
@@ -187,6 +188,12 @@ export class GlobalWorkspacePaneActionImpl {
       },
       n('openWorkingSidebar', tab),
     );
+  };
+
+  /** Published by the Working Sidebar's PR tab; `undefined` when it shows no PR. */
+  setWorkingSidebarPullRequestUrl = (url?: string): void => {
+    if (this.#get().workingSidebarPullRequestUrl === url) return;
+    this.#set({ workingSidebarPullRequestUrl: url }, false, n('setWorkingSidebarPullRequestUrl'));
   };
 
   revealInFilesTab = (relativePath: string): void => {
