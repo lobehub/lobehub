@@ -70,6 +70,75 @@ const pickMainSchema = (result: any, name: string): any => {
   return result;
 };
 
+/** Widen one property node so the model can answer it with `null`. */
+const makeNullable = (node: any) => {
+  if (!node || typeof node !== 'object') return;
+
+  if (Array.isArray(node.type)) {
+    if (!node.type.includes('null')) node.type.push('null');
+    return;
+  }
+  if (typeof node.type === 'string') {
+    node.type = [node.type, 'null'];
+    return;
+  }
+  if (Array.isArray(node.anyOf) && !node.anyOf.some((branch: any) => branch?.type === 'null')) {
+    node.anyOf.push({ type: 'null' });
+  }
+};
+
+/**
+ * OpenAI strict structured output requires every property to be listed in
+ * `required` and every object to set `additionalProperties: false`, so optional
+ * data has to be expressed as `null` instead of an absent key. Zod only puts
+ * truly required keys into `required`, and the OpenAI runtime forwards the
+ * schema untouched — without this pass an optional field rejects the whole
+ * request. See https://developers.openai.com/api/docs/guides/structured-outputs#all-fields-must-be-required
+ */
+const normalizeStrictNode = (node: any) => {
+  if (!node || typeof node !== 'object') return;
+  if (Array.isArray(node)) {
+    for (const item of node) normalizeStrictNode(item);
+    return;
+  }
+
+  for (const key of ['allOf', 'anyOf', 'oneOf']) {
+    for (const branch of Array.isArray(node[key]) ? node[key] : []) normalizeStrictNode(branch);
+  }
+  if (node.items) normalizeStrictNode(node.items);
+  for (const key of ['$defs', 'definitions']) {
+    for (const definition of Object.values<any>(node[key] ?? {})) normalizeStrictNode(definition);
+  }
+
+  if (!node.properties) return;
+
+  const required: string[] = Array.isArray(node.required) ? [...node.required] : [];
+  for (const [key, property] of Object.entries<any>(node.properties)) {
+    if (!required.includes(key)) makeNullable(property);
+    normalizeStrictNode(property);
+  }
+  node.required = Object.keys(node.properties);
+  node.additionalProperties = false;
+};
+
+/**
+ * Strict mode answers absent optional fields with `null`, while Zod `.optional()`
+ * only accepts `undefined`. Drop the nulls before validating so the Zod schemas
+ * stay the single source of truth.
+ */
+export const dropNulls = <T>(value: T): T => {
+  if (Array.isArray(value)) return value.map((item) => dropNulls(item)) as unknown as T;
+  if (value && typeof value === 'object') {
+    const result: Record<string, unknown> = {};
+    for (const [key, item] of Object.entries(value)) {
+      if (item === null) continue;
+      result[key] = dropNulls(item);
+    }
+    return result as T;
+  }
+  return value;
+};
+
 /** Zod → the provider-facing JSON Schema used by `generateObject`. */
 export const buildGenerateObjectSchema = (
   schema: z.ZodTypeAny,
@@ -77,7 +146,7 @@ export const buildGenerateObjectSchema = (
 ): GenerateObjectSchema => {
   const fullSchema = z.toJSONSchema(schema, { target: 'draft-7' });
   const jsonSchema = pickMainSchema(fullSchema, options.name);
-  if (jsonSchema?.type === 'object') jsonSchema.additionalProperties = false;
+  if (options.strict ?? true) normalizeStrictNode(jsonSchema);
 
   return {
     description: options.description,

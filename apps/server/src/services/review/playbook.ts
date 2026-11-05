@@ -22,6 +22,7 @@ import {
 import {
   CheckResponseSchema,
   type CheckVerdict,
+  dropNulls,
   type ProposalDraft,
   ProposalDraftSchema,
   ProposalResponseSchema,
@@ -192,7 +193,8 @@ export class ReviewPlaybookService {
     let droppedInvalid = 0;
     const valid: ProposalDraft[] = [];
     for (const item of envelope.drafts) {
-      const parsed = ProposalDraftSchema.safeParse(item); // PV2
+      // Strict structured output answers absent optionals with `null` (PV5).
+      const parsed = ProposalDraftSchema.safeParse(dropNulls(item)); // PV2
       if (!parsed.success) {
         droppedInvalid += 1;
         continue;
@@ -368,7 +370,7 @@ export class ReviewPlaybookService {
         continue;
       }
 
-      const parsed = CheckResponseSchema.safeParse(raw);
+      const parsed = CheckResponseSchema.safeParse(dropNulls(raw));
       if (!parsed.success) {
         for (const { item } of batch) {
           outcomes.set(item.id, {
@@ -538,7 +540,7 @@ export class ReviewPlaybookService {
       throw new ReviewServiceError('LLM_FAILED', 'Suggestion generation failed: the model errored');
     }
 
-    const parsed = SuggestionResponseSchema.safeParse(raw);
+    const parsed = SuggestionResponseSchema.safeParse(dropNulls(raw));
     if (!parsed.success) {
       throw new ReviewServiceError('SCHEMA_INVALID', 'Suggestion generation returned invalid JSON');
     }
