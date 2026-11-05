@@ -48,7 +48,7 @@ const setup = ({ canSendMessage = true }: { canSendMessage?: boolean } = {}) => 
   let waiting = 0;
   const onWaitingApprovalsChange = vi.fn((delta: 1 | -1) => (waiting += delta));
 
-  const { dispose } = connectAppView({
+  const { dispose, teardown } = connectAppView({
     getContext: () => ({
       agentId: 'agt_1',
       args: '{"city":"Paris"}',
@@ -83,8 +83,8 @@ const setup = ({ canSendMessage = true }: { canSendMessage?: boolean } = {}) => 
     );
     await flush();
   };
-  const response = (id: number) =>
-    posted.mock.calls.map(([message]) => message as any).find((message) => message.id === id);
+  const sent = () => posted.mock.calls.map(([message]) => message as any);
+  const response = (id: number) => sent().find((message) => message.id === id);
   const message = (id: number, text: string) =>
     fromView({
       id,
@@ -104,7 +104,12 @@ const setup = ({ canSendMessage = true }: { canSendMessage?: boolean } = {}) => 
     onNavigated,
     onWaitingApprovalsChange,
     response,
+    sent,
     target,
+    teardown: () => {
+      disposed = true;
+      return teardown();
+    },
     waiting: () => waiting,
   };
 };
@@ -429,6 +434,49 @@ describe('connectAppView', () => {
 
     await fromView({ method: 'notifications/cancelled', params: { requestId: 1 } });
     expect(signal.aborted).toBe(true);
+  });
+
+  it('still runs calls that need no approval while a removed view finishes, then ends them', async () => {
+    getAppToolCallPolicy.mockResolvedValue('allow');
+    invokeMcpToolCall.mockResolvedValue({ content: 'saved', success: true });
+    const { call, fromView, response, sent, teardown } = setup();
+    await fromView({ method: 'ui/notifications/initialized' });
+
+    const finished = teardown();
+    await flush();
+    const request = sent().find((m) => m.method === 'ui/resource-teardown');
+    expect(request).toBeDefined();
+
+    // The view saves its pending edits before it answers
+    await call(7, 'Paris');
+    expect(invokeMcpToolCall).toHaveBeenCalledTimes(1);
+    const { signal } = invokeMcpToolCall.mock.calls[0][1] as { signal: AbortSignal };
+    expect(signal.aborted).toBe(false);
+    expect(response(7)?.result.isError).toBeFalsy();
+
+    await fromView({ id: request.id, result: {} });
+    await finished;
+
+    // Once it finished, nothing it asks for runs any more
+    await call(9, 'Rome');
+    expect(invokeMcpToolCall).toHaveBeenCalledTimes(1);
+  });
+
+  it('drops a prompt the moment its view starts to go away', async () => {
+    getAppToolCallPolicy.mockResolvedValue('confirm');
+    confirmAppToolCall.mockImplementation(
+      ({ signal }: { signal: AbortSignal }) =>
+        new Promise((resolve) => signal.addEventListener('abort', () => resolve(false))),
+    );
+    const { call, fromView, response, teardown } = setup();
+    await fromView({ method: 'ui/notifications/initialized' });
+
+    await call(8, 'Rome');
+    void teardown();
+    await flush();
+
+    expect(invokeMcpToolCall).not.toHaveBeenCalled();
+    expect(response(8)?.result.isError).toBe(true);
   });
 
   it('cancels an approved message before acceptance once the view goes away', async () => {

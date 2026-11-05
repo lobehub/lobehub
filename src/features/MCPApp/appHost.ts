@@ -100,8 +100,12 @@ export const connectAppView = ({
   // Approvals queue up and open one at a time; a few per view, so a view
   // can't bury the user under modals
   let pendingToolApprovals = 0;
-  // Drops this view's approvals, waiting or shown, once it goes away
+  // Drops this view's approvals, waiting or shown, once it goes away (or
+  // starts to): nobody can see a prompt for a view being removed
   const approvals = new AbortController();
+  // Ends what the view started, once it is gone. Later than `approvals` during
+  // a teardown: the view may still save its edits through a tool call then.
+  const session = new AbortController();
   // The view can't see the modal its request waits for, possibly behind
   // another view's, so say under it that it's waiting rather than hung
   const awaitApproval = async (
@@ -159,7 +163,7 @@ export const connectAppView = ({
 
       // The view may have gone, or stopped waiting, while the policy loaded
       // or an approval was open: nobody would read the result, so don't run it.
-      const { dispose: disposeCall, signal } = anySignal([approvals.signal, request]);
+      const { dispose: disposeCall, signal } = anySignal([session.signal, request]);
       try {
         if (signal.aborted) throw new DOMException('The view stopped waiting', 'AbortError');
 
@@ -217,7 +221,7 @@ export const connectAppView = ({
 
         // Until the conversation accepts it, the view going away or giving up
         // on the request cancels the send rather than starting a reply
-        const { dispose: disposeSend, signal } = anySignal([approvals.signal, request]);
+        const { dispose: disposeSend, signal } = anySignal([session.signal, request]);
         try {
           return await sendAppMessage(getContext().sendMessage, text, identifier, signal);
         } finally {
@@ -235,21 +239,27 @@ export const connectAppView = ({
     },
   });
 
-  // The view's requests waiting for the user are dropped either way
-  const stop = () => {
+  const end = () => {
     window.removeEventListener('message', handleFrameNotice);
     approvals.abort();
+    session.abort();
   };
 
   return {
     bridge,
     dispose: () => {
-      stop();
+      end();
       dispose();
     },
-    teardown: () => {
-      stop();
-      return teardown(APP_VIEW_TEARDOWN_TIMEOUT_MS);
+    // Prompts go at once; calls that need none still run while the view
+    // finishes (saves its edits), and end with it
+    teardown: async () => {
+      approvals.abort();
+      try {
+        await teardown(APP_VIEW_TEARDOWN_TIMEOUT_MS);
+      } finally {
+        end();
+      }
     },
   };
 };
