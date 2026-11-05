@@ -7,7 +7,7 @@ import { runBenchmarkHandler } from '../runBenchmark';
 const mocks = vi.hoisted(() => ({
   filterTestCasesNeedingExecution: vi.fn(),
   findByDatasetId: vi.fn(),
-  findById: vi.fn(),
+  findSummaryById: vi.fn(),
   finalize: vi.fn(),
   triggerPaginateTestCases: vi.fn(),
   update: vi.fn(),
@@ -16,7 +16,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/database/server', () => ({ getServerDB: vi.fn().mockResolvedValue({}) }));
 vi.mock('@/database/models/agentEval', () => ({
   AgentEvalRunModel: class {
-    findById = mocks.findById;
+    findSummaryById = mocks.findSummaryById;
     finalize = mocks.finalize;
     update = mocks.update;
   },
@@ -54,7 +54,7 @@ describe('runBenchmarkHandler', () => {
 
   it('settles a previously created empty internal run with a generation-guarded failure', async () => {
     const startedAt = new Date('2026-11-01T12:00:00Z');
-    mocks.findById.mockResolvedValue({
+    mocks.findSummaryById.mockResolvedValue({
       config: { caseSelection: { caseIds: ['a', 'b', 'c'], mode: 'exclude' } },
       datasetId: 'ds-1',
       startedAt,
@@ -76,7 +76,7 @@ describe('runBenchmarkHandler', () => {
   it.each([{ dryRun: true }, { external: true }])(
     'does not settle empty dry or external runs (%j)',
     async ({ dryRun, external }) => {
-      mocks.findById.mockResolvedValue({
+      mocks.findSummaryById.mockResolvedValue({
         config: { executionMode: external ? 'external' : 'internal' },
         datasetId: 'ds-1',
         status: 'pending',
@@ -88,7 +88,7 @@ describe('runBenchmarkHandler', () => {
   );
 
   it('counts only the cases the run selected as totalCases', async () => {
-    mocks.findById.mockResolvedValue({
+    mocks.findSummaryById.mockResolvedValue({
       config: { caseSelection: { caseIds: ['b'], mode: 'include' } },
       datasetId: 'ds-1',
       status: 'idle',
@@ -112,7 +112,7 @@ describe('runBenchmarkHandler', () => {
   });
 
   it('counts the whole dataset when the run has no case selection', async () => {
-    mocks.findById.mockResolvedValue({ config: {}, datasetId: 'ds-1', status: 'idle' });
+    mocks.findSummaryById.mockResolvedValue({ config: {}, datasetId: 'ds-1', status: 'idle' });
 
     const result = await runBenchmarkHandler(context({}));
 

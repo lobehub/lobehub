@@ -154,14 +154,14 @@ export async function retrySingleCase(deps: EvalRunDeps, runId: string, testCase
 }
 
 export async function getRunDetails(deps: EvalRunDeps, id: string) {
-  let run = await deps.runModel.findById(id);
+  let run = await deps.runModel.findSummaryById(id);
   if (!run) return null;
 
   // Check if a 'running' run has timed out
   if (run.status === 'running') {
     const timedOut = await checkAndHandleRunTimeout(deps, run);
     if (timedOut) {
-      run = (await deps.runModel.findById(id))!;
+      run = (await deps.runModel.findSummaryById(id))!;
     }
   }
 

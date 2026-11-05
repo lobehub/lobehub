@@ -59,7 +59,7 @@ export const paginateTestCasesHandler = async (
   // Check if run was aborted before paginating
   const runStatus = await runStep(context, 'agent-eval-run:check-abort', async () => {
     const runModel = new AgentEvalRunModel(db, userId, wsId);
-    const run = await runModel.findById(runId);
+    const run = await runModel.findSummaryById(runId);
     return run?.status;
   });
 
@@ -72,7 +72,7 @@ export const paginateTestCasesHandler = async (
   const testCaseBatch = await runStep(context, 'agent-eval-run:get-test-cases-page', async () => {
     // Get run to find datasetId and userId
     const runModel = new AgentEvalRunModel(db, userId, wsId);
-    const run = await runModel.findById(runId);
+    const run = await runModel.findSummaryById(runId);
     if (!run) return { ids: [] };
 
     // Get test cases for this dataset

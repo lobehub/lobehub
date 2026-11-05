@@ -483,7 +483,7 @@ export const runRouter = router({
   getRunProgress: agentEvalProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ input, ctx }) => {
-      let run = await ctx.runModel.findById(input.id);
+      let run = await ctx.runModel.findSummaryById(input.id);
       if (!run) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Run not found' });
       }
@@ -492,7 +492,7 @@ export const runRouter = router({
       if (run.status === 'running') {
         const timedOut = await ctx.runService.checkAndHandleRunTimeout(run);
         if (timedOut) {
-          run = (await ctx.runModel.findById(input.id))!;
+          run = (await ctx.runModel.findSummaryById(input.id))!;
         }
       }
 
@@ -513,7 +513,7 @@ export const runRouter = router({
       }),
     )
     .query(async ({ input, ctx }) => {
-      const run = await ctx.runModel.findById(input.id);
+      const run = await ctx.runModel.findSummaryById(input.id);
       if (!run) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Run not found' });
       }

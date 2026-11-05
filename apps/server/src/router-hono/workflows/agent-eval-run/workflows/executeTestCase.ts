@@ -30,7 +30,9 @@ export const executeTestCaseHandler = async (context: WorkflowContext<ExecuteTes
   // Get run to get K value from config
   const run = await runStep(context, 'agent-eval-run:get-run', async () => {
     const runModel = new AgentEvalRunModel(db, userId, wsId);
-    return runModel.findById(runId);
+    const run = await runModel.findSummaryById(runId);
+    // Keep the consumed shape compatible with older full-row checkpoints.
+    return run ? { config: { k: run.config?.k }, status: run.status } : undefined;
   });
 
   if (!run) {

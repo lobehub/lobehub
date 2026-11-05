@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/database/server', () => ({ getServerDB: vi.fn().mockResolvedValue({}) }));
 vi.mock('@/database/models/agentEval', () => ({
   AgentEvalRunModel: vi.fn().mockImplementation(function () {
-    return { findById: mocks.findRun };
+    return { findSummaryById: mocks.findRun };
   }),
 }));
 vi.mock('@/server/services/agentEvalRun', () => ({

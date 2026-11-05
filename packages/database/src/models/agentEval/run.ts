@@ -1,3 +1,4 @@
+import type { EvalRunConfig } from '@lobechat/types';
 import { and, count, desc, eq, getTableColumns, inArray, ne, sql } from 'drizzle-orm';
 
 import {
@@ -9,6 +10,14 @@ import {
 import { type LobeChatDatabase } from '../../type';
 import { buildWorkspaceWhere } from '../../utils/workspace';
 import { hasUnverifiedEvalAttempts } from './runEvidence';
+
+/** Lists and status checkpoints do not need any case's frozen tool contracts. */
+export const evalRunSummaryConfig = sql<EvalRunConfig | null>`
+  case when jsonb_typeof(${agentEvalRuns.config}) = 'object'
+    then ${agentEvalRuns.config} - 'connectorSnapshots'
+    else ${agentEvalRuns.config}
+  end
+`;
 
 export class AgentEvalRunModel {
   private userId: string;
@@ -36,7 +45,7 @@ export class AgentEvalRunModel {
   };
 
   /**
-   * Query runs with optional filters
+   * Query run summaries with optional filters. Full frozen evidence remains in findById.
    */
   query = async (filter?: {
     benchmarkId?: string;
@@ -72,6 +81,7 @@ export class AgentEvalRunModel {
     const query = this.db
       .select({
         ...getTableColumns(agentEvalRuns),
+        config: evalRunSummaryConfig,
         hasUnverifiedAttempts: hasUnverifiedEvalAttempts(),
       })
       .from(agentEvalRuns)
@@ -121,6 +131,44 @@ export class AgentEvalRunModel {
     const [result] = await this.db
       .select({
         ...getTableColumns(agentEvalRuns),
+        hasUnverifiedAttempts: hasUnverifiedEvalAttempts(),
+      })
+      .from(agentEvalRuns)
+      .where(and(eq(agentEvalRuns.id, id), this.ownership()))
+      .limit(1);
+    return result;
+  };
+
+  /** Read one case's frozen contracts in SQL, without transporting the entire dataset. */
+  findForCase = async (id: string, testCaseId: string) => {
+    const [result] = await this.db
+      .select({
+        ...getTableColumns(agentEvalRuns),
+        config: sql<EvalRunConfig | null>`
+          case when jsonb_typeof(${agentEvalRuns.config} -> 'connectorSnapshots') = 'object'
+            then jsonb_set(${agentEvalRuns.config}, '{connectorSnapshots}',
+              case when (${agentEvalRuns.config} -> 'connectorSnapshots') ? ${testCaseId}
+                then jsonb_build_object(${testCaseId}::text,
+                  ${agentEvalRuns.config} -> 'connectorSnapshots' -> ${testCaseId}::text)
+                else '{}'::jsonb
+              end, false)
+            else ${agentEvalRuns.config}
+          end
+        `,
+        hasUnverifiedAttempts: hasUnverifiedEvalAttempts(),
+      })
+      .from(agentEvalRuns)
+      .where(and(eq(agentEvalRuns.id, id), this.ownership()))
+      .limit(1);
+    return result;
+  };
+
+  /** Read control/configuration fields without frozen connector contracts. */
+  findSummaryById = async (id: string) => {
+    const [result] = await this.db
+      .select({
+        ...getTableColumns(agentEvalRuns),
+        config: evalRunSummaryConfig,
         hasUnverifiedAttempts: hasUnverifiedEvalAttempts(),
       })
       .from(agentEvalRuns)

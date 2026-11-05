@@ -20,11 +20,12 @@ import type { EvalRunDeps } from './types';
 import { getCaseId, getEvalAttemptId, getEvalContextParams } from './utils';
 
 export async function loadTrajectoryData(deps: EvalRunDeps, runId: string, testCaseId: string) {
-  const run = await deps.runModel.findById(runId);
+  const run = await deps.runModel.findForCase(runId, testCaseId);
   if (!run) return { error: 'Run not found' as const };
 
   const rawTestCase = await deps.testCaseModel.findById(testCaseId);
-  if (!rawTestCase) return { error: 'Test case not found' as const };
+  if (!rawTestCase || rawTestCase.datasetId !== run.datasetId)
+    return { error: 'Test case not found' as const };
   const testCase = await withResolvedEnvironment(deps, rawTestCase);
 
   let envPrompt: string | undefined;
@@ -40,7 +41,10 @@ export async function loadTrajectoryData(deps: EvalRunDeps, runId: string, testC
     envPrompt = dataset?.evalConfig?.envPrompt;
   }
 
-  return { envPrompt, environment, run, testCase };
+  // The resolved Environment already travels above. Repeating it in content
+  // duplicates frozen tool contracts in every JSON checkpoint and replay.
+  const { environment: _environment, ...content } = testCase.content;
+  return { envPrompt, environment, run, testCase: { ...testCase, content } };
 }
 
 export async function executeTrajectory(
