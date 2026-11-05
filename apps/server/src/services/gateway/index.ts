@@ -1,3 +1,4 @@
+import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 
 import { assertBotFeatureAccess } from '@/business/server/bot/featureAccess';
@@ -91,7 +92,8 @@ export class GatewayService {
       status: BOT_RUNTIME_STATUSES.failed,
     });
     log('Refused connect for in-process-only platform %s:%s', platform, applicationId);
-    throw new Error(message);
+    // A precondition of this deployment, not a server fault: callers surface it as-is.
+    throw new TRPCError({ code: 'PRECONDITION_FAILED', message });
   }
 
   async stop(): Promise<void> {

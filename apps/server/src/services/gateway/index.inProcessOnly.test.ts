@@ -104,9 +104,10 @@ describe('GatewayService with an in-process-only platform', () => {
   it('refuses a direct gateway connect and says why', async () => {
     mockFindEnabledByPlatformAndAppId.mockResolvedValue(providerFor('wecom'));
 
-    await expect(service.startClient('wecom', 'wecom-app', 'u1')).rejects.toThrow(
-      /cannot hold in the process that answers messages/,
-    );
+    await expect(service.startClient('wecom', 'wecom-app', 'u1')).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+      message: expect.stringMatching(/cannot hold in the process that answers messages/),
+    });
 
     expect(mockGatewayClient.connect).not.toHaveBeenCalled();
     expect(mockUpdateBotRuntimeStatus).toHaveBeenCalledWith({
