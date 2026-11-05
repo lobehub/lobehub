@@ -2,8 +2,6 @@ import { spawn } from 'node:child_process';
 import type { Readable } from 'node:stream';
 
 import { getMcpToolVisibility, isMcpToolVisibleTo } from '@lobechat/const/mcpApp';
-import { toRecord } from '@lobechat/utils/object';
-import type { Progress, Transport } from '@modelcontextprotocol/client';
 import {
   McpElicitationClient,
   type McpElicitationContinuation,

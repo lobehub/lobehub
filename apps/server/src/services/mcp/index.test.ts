@@ -153,6 +153,32 @@ describe('MCPService MCP Apps sessions', () => {
     vi.restoreAllMocks();
   });
 
+  it.each([false, true])('isolates elicitation ownership with Apps=%s', async (mcpApps) => {
+    const service = new MCPService();
+    const host = { request: async () => ({ action: 'decline' as const }) };
+    const call = (scope: string, interactive: boolean) =>
+      service.callTool({
+        argsStr: '{}',
+        clientParams: httpParams,
+        mcpApps,
+        toolName: 'forecast',
+        elicitation: { scope, ...(interactive && { host }) },
+      });
+    await call('user-a', false);
+    await call('user-a', true);
+    await call('user-b', true);
+    await call('user-a', true);
+    await call('user-a', false);
+    expect(MCPClient).toHaveBeenCalledTimes(3);
+    expect(MCPClient.prototype.callTool).toHaveBeenCalledTimes(5);
+    const options = vi.mocked(MCPClient).mock.calls.map(([, options]) => options);
+    expect(options).toEqual([
+      { mcpApps },
+      { mcpApps, elicitationEnabled: true },
+      { mcpApps, elicitationEnabled: true },
+    ]);
+  });
+
   it('advertises MCP Apps only on sessions for users with the flag, cached apart', async () => {
     const service = new MCPService();
     const call = (mcpApps: boolean) =>
@@ -342,8 +368,18 @@ describe('MCPService', () => {
         mcpApps: true,
       });
 
-      expect(getClientSpy).toHaveBeenNthCalledWith(1, expect.anything(), false, { mcpApps: true });
-      expect(getClientSpy).toHaveBeenNthCalledWith(2, expect.anything(), false, { mcpApps: true });
+      expect(getClientSpy).toHaveBeenNthCalledWith(
+        1,
+        expect.anything(),
+        false,
+        expect.objectContaining({ mcpApps: true }),
+      );
+      expect(getClientSpy).toHaveBeenNthCalledWith(
+        2,
+        expect.anything(),
+        false,
+        expect.objectContaining({ mcpApps: true }),
+      );
     });
   });
 
@@ -557,7 +593,11 @@ describe('MCPService', () => {
         argsStr: '{}',
       });
 
-      expect(getClientSpy).toHaveBeenCalledWith(mockParams, false, { mcpApps: true });
+      expect(getClientSpy).toHaveBeenCalledWith(
+        mockParams,
+        false,
+        expect.objectContaining({ mcpApps: true }),
+      );
       expect(mockClient.getToolUiResourceUri).toHaveBeenCalledWith('weather');
       // With the server it may be read back from
       expect(result.state.mcpApp).toEqual({
@@ -581,7 +621,7 @@ describe('MCPService', () => {
       });
 
       expect(mockClient.isToolCallableByApp).toHaveBeenCalledWith('weather');
-      expect(mockClient.callTool).toHaveBeenCalledWith('weather', {});
+      expect(mockClient.callTool).toHaveBeenCalledWith('weather', {}, undefined);
       expect(result.success).toBe(true);
     });
 
@@ -663,7 +703,11 @@ describe('MCPService', () => {
       });
 
       // A session without the MCP Apps capability, and no listTools round trip
-      expect(getClientSpy).toHaveBeenCalledWith(mockParams, false, { mcpApps: false });
+      expect(getClientSpy).toHaveBeenCalledWith(
+        mockParams,
+        false,
+        expect.objectContaining({ mcpApps: false }),
+      );
       expect(mockClient.getToolUiResourceUri).not.toHaveBeenCalled();
       expect(result.state.mcpApp).toBeUndefined();
     });
@@ -735,8 +779,14 @@ describe('MCPService', () => {
       expect(result.success).toBe(true);
       expect(mockClient.callTool).toHaveBeenCalledTimes(2);
       // Retry must drop the cached client: first attempt skipCache=false, retry skipCache=true
-      expect(getClientSpy).toHaveBeenNthCalledWith(1, mockParams, false, { mcpApps: false, scope: 'tool:plain' });
-      expect(getClientSpy).toHaveBeenNthCalledWith(2, mockParams, true, { mcpApps: false, scope: 'tool:plain' });
+      expect(getClientSpy).toHaveBeenNthCalledWith(1, mockParams, false, {
+        mcpApps: false,
+        scope: 'tool:plain',
+      });
+      expect(getClientSpy).toHaveBeenNthCalledWith(2, mockParams, true, {
+        mcpApps: false,
+        scope: 'tool:plain',
+      });
     });
 
     it('should retry up to 3 times for NoValidSessionId error', async () => {
@@ -813,7 +863,11 @@ describe('MCPService', () => {
       await expect(mcpService.readUiResource(mockParams, 'ui://app')).resolves.toEqual(resource);
       expect(mockClient.readResource).toHaveBeenCalledWith('ui://app');
       // The session that advertised MCP Apps, like the call that stored the view
-      expect(getClientSpy).toHaveBeenCalledWith(mockParams, false, { mcpApps: true });
+      expect(getClientSpy).toHaveBeenCalledWith(
+        mockParams,
+        false,
+        expect.objectContaining({ mcpApps: true }),
+      );
     });
 
     it("falls back to the resource's listing entry for the view's metadata", async () => {
@@ -1006,7 +1060,10 @@ describe('MCPService', () => {
 
       expect(result).toEqual(resources);
       expect(mockClient.listResources).toHaveBeenCalledTimes(2);
-      expect(getClientSpy).toHaveBeenNthCalledWith(2, mockParams, true, { mcpApps: false, scope: 'metadata' });
+      expect(getClientSpy).toHaveBeenNthCalledWith(2, mockParams, true, {
+        mcpApps: false,
+        scope: 'metadata',
+      });
     });
 
     it('should throw TRPCError on other errors without retry', async () => {
@@ -1034,7 +1091,10 @@ describe('MCPService', () => {
 
       expect(result).toEqual(prompts);
       expect(mockClient.listPrompts).toHaveBeenCalledTimes(2);
-      expect(getClientSpy).toHaveBeenNthCalledWith(2, mockParams, true, { mcpApps: false, scope: 'metadata' });
+      expect(getClientSpy).toHaveBeenNthCalledWith(2, mockParams, true, {
+        mcpApps: false,
+        scope: 'metadata',
+      });
     });
 
     it('should throw TRPCError on other errors without retry', async () => {

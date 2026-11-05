@@ -360,7 +360,11 @@ describe('McpCtr MCP Apps', () => {
       }) as any,
     );
 
-    expect(client.callTool).toHaveBeenCalledWith('show_weather', { city: 'Paris' });
+    expect(client.callTool).toHaveBeenCalledWith(
+      'show_weather',
+      { city: 'Paris' },
+      expect.objectContaining({ host: undefined }),
+    );
     expect((deserializeMcpIpcPayload(result as any) as any).success).toBe(true);
   });
 

@@ -1,10 +1,10 @@
 import { CURRENT_VERSION, isDesktop } from '@lobechat/const';
-import type { McpElicitationCall } from '@lobechat/mcp-elicitation/types';
 import {
   getMcpServerFingerprint,
   isSyncedMcpToolVisibleTo,
   type McpServerAddress,
 } from '@lobechat/const/mcpApp';
+import type { McpElicitationCall } from '@lobechat/mcp-elicitation/types';
 import {
   type ChatToolPayload,
   type CheckMcpInstallResult,
@@ -209,16 +209,12 @@ class MCPService {
     const { identifier, arguments: args, apiName } = payload;
     // Calls run on this machine announce MCP Apps only under the user's flag
     const mcpApps = isMcpAppsOn();
-    const {
-      lambdaClient: defaultClient,
-      createWorkspaceLambdaClient,
-      createWorkspaceToolsClient,
-    } = await import('@/libs/trpc/client');
+    const trpc = await import('@/libs/trpc/client');
     const executionClient = elicitation
-      ? createWorkspaceLambdaClient(elicitation.workspaceId ?? null)
-      : defaultClient;
+      ? trpc.createWorkspaceLambdaClient(elicitation.workspaceId ?? null)
+      : trpc.lambdaClient;
     const executionTools = elicitation
-      ? createWorkspaceToolsClient(elicitation.workspaceId ?? null)
+      ? trpc.createWorkspaceToolsClient(elicitation.workspaceId ?? null)
       : toolsClient;
 
     // Connector-first: HTTP connectors use their server-held credentials.
@@ -315,7 +311,7 @@ class MCPService {
         (fromMcpApp || getServerConfigStoreState()?.serverConfig.deviceGatewayConfigured === false);
       // A view's calls run where its result was produced
       if (fromMcpApp && !!runsHere !== !!onThisDevice) throw new Error(VIEW_SITE_MISMATCH);
-      if (runsHere) {
+      if (runsHere && connector) {
         // Persisted connector projections omit env secrets and may be stale.
         // This protected read retains the connector's credential ownership gate.
         const detail = await executionClient.connector.getForEdit.query({ id: connector.id });

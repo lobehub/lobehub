@@ -59,7 +59,10 @@ export async function startElicitationServers(port = 0) {
     }));
     server.registerTool(
       'form',
-      { description: 'Elicit two rounds before a side effect' },
+      {
+        description: 'Elicit two rounds before a side effect',
+        _meta: { ui: { resourceUri: 'ui://fixture/form' } },
+      },
       async (ctx: ServerContext) => {
         const params = {
           mode: 'form' as const,

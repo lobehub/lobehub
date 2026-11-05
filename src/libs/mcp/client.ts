@@ -5,6 +5,7 @@ import {
   McpElicitationClient,
   type McpElicitationContinuation,
   type McpElicitationHost,
+  McpInputRequiredError,
   McpProtocolClient,
 } from '@lobechat/mcp-elicitation';
 import type { Client, Progress, Transport } from '@modelcontextprotocol/client';
@@ -199,7 +200,10 @@ export class MCPClient {
   /** When the last `getToolUiResourceUri` listing failed, while no listing has succeeded */
   private uiResourceListFailedAt?: number;
 
-  constructor(params: MCPClientParams, { mcpApps = false, elicitationEnabled = false }: MCPClientOptions = {}) {
+  constructor(
+    params: MCPClientParams,
+    { mcpApps = false, elicitationEnabled = false }: MCPClientOptions = {},
+  ) {
     this.params = params;
     this.mcp = new McpProtocolClient(
       { name: 'lobehub-mcp-client', version: '1.0.0' },
@@ -546,7 +550,19 @@ export class MCPClient {
       !this.uiResourceUris &&
       (failedAt === undefined || Date.now() - failedAt >= UI_RESOURCE_LIST_RETRY_MS)
     ) {
-      await this.listTools();
+      try {
+        await this.listTools();
+      } catch (error) {
+        // View discovery is optional; protocol continuations and expired sessions
+        // must still reach the caller instead of becoming a cached empty listing.
+        if (
+          error instanceof McpInputRequiredError ||
+          (error as Error).message === 'NoValidSessionId' ||
+          (SdkError.isInstance(error) && error.code === SdkErrorCode.UnsupportedResultType)
+        )
+          throw error;
+        console.error('MCP App tool discovery failed:', getMCPErrorLogMetadata(error));
+      }
       this.uiResourceListFailedAt = this.uiResourceUris ? undefined : Date.now();
     }
   }

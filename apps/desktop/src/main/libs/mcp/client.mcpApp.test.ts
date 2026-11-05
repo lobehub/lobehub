@@ -9,9 +9,9 @@ const { clientOptions, listTools, notificationHandlers } = vi.hoisted(() => ({
   notificationHandlers: new Map<string, () => void>(),
 }));
 
-vi.mock('@modelcontextprotocol/client', async (importOriginal) => ({
+vi.mock('@lobechat/mcp-elicitation', async (importOriginal) => ({
   ...(await importOriginal<object>()),
-  Client: class {
+  McpProtocolClient: class {
     getProtocolEra = () => 'legacy';
     listTools = listTools;
     setNotificationHandler = (method: string, handler: () => void) =>

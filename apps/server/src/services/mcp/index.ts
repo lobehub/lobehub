@@ -1,11 +1,16 @@
 import { isDesktop } from '@lobechat/const';
-import { McpCallNotStartedError, type McpElicitationContinuation, type McpElicitationHost, McpInputRequiredError } from '@lobechat/mcp-elicitation';
 import {
   getMcpServerFingerprint,
   lacksUiResourceMeta,
   partitionMcpToolsForViews,
   withListingUiMeta,
 } from '@lobechat/const/mcpApp';
+import {
+  McpCallNotStartedError,
+  type McpElicitationContinuation,
+  type McpElicitationHost,
+  McpInputRequiredError,
+} from '@lobechat/mcp-elicitation';
 import {
   type CheckMcpInstallResult,
   ConnectorErrorCode,
@@ -205,7 +210,7 @@ export class MCPService {
      * List on a session that announces MCP Apps (the user's `mcp_apps` flag):
      * a server may list the tools only its views call just to such a client.
      */
-    { mcpApps = false, scope = 'metadata' }: { mcpApps?: boolean; scope?: string } = {},
+    { mcpApps = false }: { mcpApps?: boolean } = {},
   ): Promise<McpTool[]> {
     return this.withSessionRetry(
       params,
@@ -265,7 +270,14 @@ export class MCPService {
   // callTool now accepts an object with clientParams, toolName, argsStr, and processContentBlocks
   async callTool(options: {
     argsStr: any;
-    elicitation?: { host?: McpElicitationHost; continuation?: McpElicitationContinuation; signal?: AbortSignal; interactive?: boolean; timeoutMs?: number; scope?: string };
+    elicitation?: {
+      host?: McpElicitationHost;
+      continuation?: McpElicitationContinuation;
+      signal?: AbortSignal;
+      interactive?: boolean;
+      timeoutMs?: number;
+      scope?: string;
+    };
     clientParams: MCPClientParams;
     /**
      * The call comes from an MCP App view (`tools/call`), not the model. Only
@@ -370,7 +382,10 @@ export class MCPService {
       }
     };
 
-    return this.withSessionRetry(clientParams, `calling tool "${toolName}"`, run, { mcpApps, scope: `${options.elicitation?.scope ?? 'tool'}:${options.elicitation?.host ? 'elicitation' : 'plain'}` });
+    return this.withSessionRetry(clientParams, `calling tool "${toolName}"`, run, {
+      mcpApps,
+      scope: `${options.elicitation?.scope ?? 'tool'}:${options.elicitation?.host ? 'elicitation' : 'plain'}`,
+    });
   }
 
   // Private method to get or initialize a client based on parameters
@@ -400,7 +415,10 @@ export class MCPService {
     const connection = this.getConnectionLogMetadata(params);
     log(`No cached client found, Initializing new client.`);
     try {
-      const client = new MCPClient(params, { mcpApps, elicitationEnabled: scope.endsWith(':elicitation') });
+      const client = new MCPClient(params, {
+        mcpApps,
+        ...(scope.endsWith(':elicitation') && { elicitationEnabled: true }),
+      });
       await client.initialize({
         onProgress: (progress) => {
           log(`New client initializing... ${progress.progress}/${progress.total}`);
@@ -475,7 +493,7 @@ export class MCPService {
     },
     headers?: Record<string, string>,
     /** Discover on a session that announces MCP Apps, so view-only tools are found too. */
-    { mcpApps = false, scope = 'metadata' }: { mcpApps?: boolean; scope?: string } = {},
+    { mcpApps = false }: { mcpApps?: boolean } = {},
   ): Promise<ToolManifest> {
     const mcpParams = { name: identifier, type: 'http' as const, url };
 
@@ -514,7 +532,7 @@ export class MCPService {
     params: Omit<StdioMCPParams, 'type'>,
     metadata?: CustomPluginMetadata,
     /** Discover on a session that announces MCP Apps, so view-only tools are found too. */
-    { mcpApps = false, scope = 'metadata' }: { mcpApps?: boolean; scope?: string } = {},
+    { mcpApps = false }: { mcpApps?: boolean } = {},
   ): Promise<ToolManifest> {
     const mcpParams = {
       args: params.args,

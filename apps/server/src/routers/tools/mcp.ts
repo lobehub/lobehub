@@ -18,8 +18,8 @@ import { serverDatabase, telemetry } from '@/libs/trpc/lambda/middleware';
 import { FileService } from '@/server/services/file';
 import { mcpService } from '@/server/services/mcp';
 import { processContentBlocks } from '@/server/services/mcp/contentProcessor';
-import { isMcpAppsEnabled } from '@/server/services/mcp/featureGate';
 import { McpElicitationService } from '@/server/services/mcp/elicitation/McpElicitationService';
+import { isMcpAppsEnabled } from '@/server/services/mcp/featureGate';
 
 import { McpElicitationCallSchema } from '../lambda/_schema/mcpElicitation';
 import { scheduleToolCallReport } from './_helpers';

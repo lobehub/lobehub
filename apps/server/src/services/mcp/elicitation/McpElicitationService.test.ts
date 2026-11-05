@@ -797,7 +797,10 @@ it.each(['before-enqueue', 'lost-ack'])(
     const { MCPClient } = await import('@/libs/mcp/client');
     const server = await startElicitationServers();
     const connect = async () => {
-      const c = new MCPClient({ type: 'http', name: 'fixture', url: server.url + '/modern' }, true);
+      const c = new MCPClient(
+        { type: 'http', name: 'fixture', url: server.url + '/modern' },
+        { elicitationEnabled: true },
+      );
       await c.initialize();
       return c;
     };

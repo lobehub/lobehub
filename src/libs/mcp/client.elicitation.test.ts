@@ -20,12 +20,35 @@ describe('MCP elicitation against real SDK servers', () => {
   const connect = async (path: string) => {
     const client = new MCPClient(
       { name: 'elicitation', type: 'http', url: servers.url + path },
-      true,
+      { elicitationEnabled: true },
     );
     clients.push(client);
     await client.initialize();
     return client;
   };
+  it.each(['/modern', '/legacy'])(
+    'keeps Apps metadata and elicitation together on %s',
+    async (path) => {
+      const client = new MCPClient(
+        { name: 'apps-and-elicitation', type: 'http', url: servers.url + path },
+        { mcpApps: true, elicitationEnabled: true },
+      );
+      clients.push(client);
+      await client.initialize();
+      expect(await client.getToolUiResourceUri('form')).toBe('ui://fixture/form');
+      const result = await client.callTool(
+        'form',
+        {},
+        {
+          interactive: true,
+          host: {
+            request: async () => ({ action: 'accept', content: { label: 'both-capabilities' } }),
+          },
+        },
+      );
+      expect(result.content).toEqual([{ type: 'text', text: 'saved:both-capabilities' }]);
+    },
+  );
   it('pauses modern input and resumes the original call with an exact state echo', async () => {
     const client = await connect('/modern');
     const error = await client.callTool('form', {}).catch((e) => e);
@@ -400,7 +423,7 @@ describe('MCP elicitation against real SDK servers', () => {
             ),
           ],
         },
-        true,
+        { elicitationEnabled: true },
       );
       clients.push(client);
       await client.initialize();

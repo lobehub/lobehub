@@ -24,7 +24,7 @@ describe('native MCP elicitation protocol', () => {
             name: 'desktop-elicitation',
             url: servers.url + path,
           },
-          true,
+          { elicitationEnabled: true },
         );
         clients.push(client);
         await client.initialize();
@@ -50,6 +50,34 @@ describe('native MCP elicitation protocol', () => {
       }
     },
   );
+  it.each(['/modern', '/legacy'])(
+    'keeps native Apps metadata with elicitation on %s',
+    async (path) => {
+      const servers = await startElicitationServers();
+      try {
+        const client = new MCPClient(
+          { type: 'http', name: 'native-apps-and-elicitation', url: servers.url + path },
+          { mcpApps: true, elicitationEnabled: true },
+        );
+        clients.push(client);
+        await client.initialize();
+        expect(await client.getToolUiResourceUri('form')).toBe('ui://fixture/form');
+        const result = await client.callTool(
+          'form',
+          {},
+          {
+            host: {
+              request: async () => ({ action: 'accept', content: { label: 'both-capabilities' } }),
+            },
+          },
+        );
+        expect(result.content).toEqual([{ type: 'text', text: 'saved:both-capabilities' }]);
+      } finally {
+        await Promise.all(clients.splice(0).map((client) => client.disconnect()));
+        await servers.close();
+      }
+    },
+  );
   it.each(['accept', 'decline', 'cancel'] as const)(
     'sends %s over a real legacy stdio child',
     async (action) => {
@@ -67,7 +95,7 @@ describe('native MCP elicitation protocol', () => {
             ),
           ],
         },
-        true,
+        { elicitationEnabled: true },
       );
       clients.push(client);
       await client.initialize();
@@ -95,7 +123,7 @@ it('uses the invocation budget for native interactive calls beyond the host defa
   const servers = await startElicitationServers();
   const client = new MCPClient(
     { type: 'http', name: 'deadline-fixture', url: servers.url + '/legacy' },
-    true,
+    { elicitationEnabled: true },
   );
   clients.push(client);
   try {
