@@ -45,6 +45,10 @@ beforeAll(async () => {
   await write('base-scrollbar', scrollbar('lobe-share-7976-preview', '4px'));
   await write('head-scrollbar', scrollbar('css-1x2y3z', '4px'));
   await write('head-scrollbar-wide', scrollbar('css-1x2y3z', '8px'));
+  await write(
+    'base-document-pseudo',
+    page('.t { color: black; } ::view-transition-old(panel) { animation-duration: 240ms; }'),
+  );
   await write('base-hover', page('.t { color: black; } .t:hover { color: red; }'));
   await write('head-hover', page('.t { color: black; }'));
   await write(
@@ -166,6 +170,11 @@ describe('captureRun + analyzeRun', () => {
     expect(same.gaps).toEqual([]);
     const [changed] = await run('base-scrollbar', 'head-scrollbar-wide');
     expect(changed.gaps).toEqual(['PSEUDO_UNMODELED']);
+  });
+
+  it('does not pin a document-level pseudo rule on every case', async () => {
+    const [result] = await run('base-document-pseudo', 'head-media');
+    expect(result.gaps).toEqual([]);
   });
 
   it('does not flag structural pseudo-classes the default capture already evaluates', async () => {

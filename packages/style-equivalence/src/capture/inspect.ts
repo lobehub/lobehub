@@ -74,6 +74,7 @@ export const inspectRules = (page: Page): Promise<RuleInspection> =>
         selector.split(',').some((part) => {
           try {
             const broad = broaden(part);
+            if (broad === '*') return false;
             return scope.matches(broad) || scope.querySelector(broad) !== null;
           } catch {
             return true;
