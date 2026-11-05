@@ -21,6 +21,7 @@ const placementTag = (element: StyleElement, layout: Set<string>) =>
   isIntrinsicTag(element.tag) || layout.has(element.tag) ? element.tag : 'div';
 
 interface ChainContext {
+  byId?: Map<string, StyleElement>;
   exprOf: (binding: StyleBinding) => string;
   forward?: { application?: string; element: ForwardElement };
   inner?: Record<string, InnerNode[]>;
@@ -33,6 +34,22 @@ interface ChainContext {
 
 const sampleContent = (samples: InnerNode[] | undefined) =>
   samples?.length ? innerMarkup(samples, SAMPLE_TEXT) : `{${JSON.stringify(SAMPLE_TEXT)}}`;
+
+const iconMarkup = (element: StyleElement, context: ChainContext) => {
+  const icon =
+    typeof element.iconElement === 'string' ? context.byId?.get(element.iconElement) : undefined;
+  const attributes =
+    icon && !icon.variables.length
+      ? icon.bindings.flatMap((binding) =>
+          binding.spread
+            ? [`{...(${binding.expr})}`]
+            : binding.prop === 'className'
+              ? [`className={${binding.expr}}`]
+              : [],
+        )
+      : [];
+  return `<span ${['data-synthetic-icon=""', ...attributes].join(' ')}></span>`;
+};
 
 const renderChain = (chain: StyleElement[], context: ChainContext, depth = 0): string => {
   const { exprOf, layout, probed } = context;
@@ -65,7 +82,8 @@ const renderChain = (chain: StyleElement[], context: ChainContext, depth = 0): s
     ? renderChain(rest, context, depth + 1)
     : `{${JSON.stringify(SAMPLE_TEXT)}}`;
   const targets = innerMarkup(context.inner?.[depth], SAMPLE_TEXT);
-  return `${open}>${inner}${targets}${neutral.join('')}</${tag}>`;
+  const icon = substituted && element.iconElement ? iconMarkup(element, context) : '';
+  return `${open}>${icon}${inner}${targets}${neutral.join('')}</${tag}>`;
 };
 
 const NEUTRAL = `const __neutral = (prop: string, value: unknown): any => {
@@ -194,6 +212,7 @@ export const generateModule = (
     const forwarded =
       entry.forward && element.bindings.find((item) => item.prop === entry.forward!.prop);
     const context = {
+      byId,
       exprOf: (binding: StyleBinding) => bound.get(binding)!,
       forward: target && {
         application: forwarded && applicationOf(entry.forward!.application, bound.get(forwarded)!),

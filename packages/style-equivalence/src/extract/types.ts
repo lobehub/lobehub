@@ -29,6 +29,7 @@ export interface StyleElement {
   forwardedParam?: string;
   forwards?: ForwardResolution[];
   guards?: string[];
+  iconElement?: boolean | string;
   id: string;
   literalProps: Record<string, LiteralValue>;
   owner: string;

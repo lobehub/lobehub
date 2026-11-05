@@ -218,6 +218,7 @@ export const extractFile = (
       const literalProps: Record<string, LiteralValue> = {};
       const attributes: Record<string, string> = {};
       const attributeNames: ts.Identifier[] = [];
+      let iconNode: ts.Node | undefined;
       const slots = new Set<string>();
       const expressions: ts.Expression[] = [];
       const expansions: ts.Expression[] = [];
@@ -290,6 +291,7 @@ export const extractFile = (
         }
         if (!ts.isJsxExpression(initializer) || !initializer.expression) continue;
         const expression = initializer.expression;
+        if (name === 'icon' && isJsxNode(expression)) iconNode = expression;
         if (referencesStyle(expression, name)) {
           bindingOf(expression, name, false);
           continue;
@@ -409,6 +411,8 @@ export const extractFile = (
         ts.forEachChild(node.openingElement, (child) => visit(child, parent));
         node.children.forEach((child) => visit(child, current));
       } else ts.forEachChild(node, (child) => visit(child, parent));
+      const host = styled.get(node);
+      if (host && iconNode) host.iconElement = styled.get(iconNode)?.id ?? true;
     };
     visit(statement, undefined);
   }
