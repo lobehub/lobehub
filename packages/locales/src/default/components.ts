@@ -116,6 +116,9 @@ export default {
     'Vectorization failed, please check and try again. Error detail:',
   'FileParsingStatus.chunks.embeddingStatus.processing':
     'Text chunks are being embedded, please be patient.',
+  'FileParsingStatus.chunks.embeddingStatus.quotaExceeded': 'Vector storage full',
+  'FileParsingStatus.chunks.embeddingStatus.quotaExceededResult':
+    'Vector storage is full, so this file was not embedded. Upgrade your plan or delete files you no longer need to free up space, then retry.',
   'FileParsingStatus.chunks.embeddingStatus.success': 'All current text chunks have been embedded',
   'FileParsingStatus.chunks.embeddings': 'Embedding',
   'FileParsingStatus.chunks.status.error': 'Chunking failed',
