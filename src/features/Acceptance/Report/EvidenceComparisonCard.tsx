@@ -1,13 +1,9 @@
 'use client';
 
-import './EvidenceComparisonCard.css';
-
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import type { ReactNode } from 'react';
 import { memo } from 'react';
-
-import { sx } from '@/styles/sx';
 
 /** The `metadata.comparison` an evidence artifact may carry (authored at ingest). */
 export interface EvidenceComparisonMeta {
@@ -115,10 +111,18 @@ const styles = stylex.create({
   /* The two captions are themselves a before/after contrast, so they must stay
      readable side by side — wrap rather than ellipsize. */
   caption: { minWidth: '0', opacity: 0.85 },
-  /* The card frames the capture; an inner border/radius would double the frame,
-     so whatever media the caller renders inside is flattened to the card edge
-     (plain CSS module: StyleX has no descendant tag selectors). */
   content: { flex: '1', minWidth: '0' },
+});
+
+export const comparisonMedia = stylex.create({
+  flat: {
+    display: 'block',
+    width: '100%',
+    borderWidth: 'medium',
+    borderStyle: 'none',
+    borderColor: 'currentcolor',
+    borderRadius: 0,
+  },
 });
 
 export interface EvidenceComparisonSide {
@@ -158,9 +162,7 @@ export const EvidenceComparisonCard = memo<EvidenceComparisonCardProps>(
                 <span {...stylex.props(styles.caption)}>{side.caption}</span>
               </div>
             )}
-            <div {...sx([styles.content], 'lobe-evidence-comparison-card-81032bc4-content')}>
-              {side.content}
-            </div>
+            <div {...stylex.props(styles.content)}>{side.content}</div>
           </div>
         ))}
       </div>

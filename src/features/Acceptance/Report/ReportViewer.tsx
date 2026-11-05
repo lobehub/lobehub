@@ -56,6 +56,7 @@ import {
   renderableSurfaces,
 } from '../utils';
 import {
+  comparisonMedia,
   EvidenceComparisonCard,
   isFilenameLike,
   meaningfulEvidenceCaption,
@@ -636,15 +637,18 @@ const EvidenceItem = memo<{
           <Image
             preview
             alt={e.description ?? label}
+            classNames={flat ? { image: stylex.props(comparisonMedia.flat).className } : undefined}
             src={e.fileUrl}
+            style={{ maxWidth: '100%', ...(flat && { borderRadius: 0, width: '100%' }) }}
             variant={flat ? 'borderless' : 'outlined'}
-            style={
-              flat ? { borderRadius: 0, maxWidth: '100%', width: '100%' } : { maxWidth: '100%' }
-            }
           />
         </Flexbox>
       ) : e.fileUrl && e.type === 'video' ? (
-        <video controls {...stylex.props(styles.evidenceVideo)} src={e.fileUrl} />
+        <video
+          controls
+          {...stylex.props(styles.evidenceVideo, flat && comparisonMedia.flat)}
+          src={e.fileUrl}
+        />
       ) : e.fileUrl && e.type === 'audio' ? (
         // The same waveform player the conversation renders — one audio dialect
         // across the product, plus the download the reviewer needs to keep the

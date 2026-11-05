@@ -1,10 +1,12 @@
 'use client';
 
 import { createStaticStyles, cssVar, cx, Flexbox, Icon, Image, Text } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { Check, MessageSquare, X } from 'lucide-react';
 import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { comparisonMedia } from '../../Report/EvidenceComparisonCard';
 import { useOptionalAcceptanceScope } from '../AcceptanceScope';
 import { commentAnchorId } from '../Comments/anchor';
 import { FLOATING_ACTION_HOST } from './FloatingCommentAction';
@@ -17,6 +19,8 @@ import {
   screenshotTileWidth,
 } from './screenshotSlices';
 import { useImageThreads } from './useImageThreads';
+
+const flatImageClassNames = { image: stylex.props(comparisonMedia.flat).className };
 
 const styles = createStaticStyles(({ css }) => ({
   badge: css`
@@ -448,6 +452,7 @@ export const ScreenshotTiles = memo<ScreenshotTilesProps>(
         >
           <Image
             alt={alt}
+            classNames={flat ? flatImageClassNames : undefined}
             loading={'lazy'}
             src={src}
             style={flat ? { borderRadius: 0 } : undefined}
@@ -483,6 +488,7 @@ export const ScreenshotTiles = memo<ScreenshotTilesProps>(
               >
                 <Image
                   alt={alt}
+                  classNames={flat ? flatImageClassNames : undefined}
                   height={'100%'}
                   loading={'lazy'}
                   maxHeight={'none'}
@@ -533,6 +539,7 @@ export const ScreenshotTiles = memo<ScreenshotTilesProps>(
       >
         <Image
           alt={alt}
+          classNames={flat ? flatImageClassNames : undefined}
           loading={'lazy'}
           maxHeight={'none'}
           maxWidth={'none'}

@@ -3,11 +3,13 @@
 import { readEvidenceChapters } from '@lobechat/const/verify';
 import type { AcceptanceReviewAnnotation } from '@lobechat/types';
 import { Flexbox, Image, useResponsive } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { memo, type ReactNode } from 'react';
 
 import AudioPlayer from '@/features/AudioPlayer';
 
 import {
+  comparisonMedia,
   EvidenceComparisonCard,
   meaningfulEvidenceCaption,
   readEvidenceComparison,
@@ -56,6 +58,7 @@ const comparisonContent = (item: AcceptanceEvidence, action?: ReactNode, video?:
     <Image
       preview
       alt={item.description ?? item.fileName ?? item.type}
+      classNames={{ image: stylex.props(comparisonMedia.flat).className }}
       loading={'lazy'}
       src={item.fileUrl!}
       style={{ aspectRatio: imageRatio(item), borderRadius: 0, width: '100%' }}
