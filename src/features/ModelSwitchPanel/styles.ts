@@ -1,12 +1,15 @@
-// oxlint-disable-next-line stylex-migration/no-plain-css -- the trigger's svg comes from caller-supplied @lobehub/icons avatars, which take no className or xstyle
-import './styles.css';
-
+// oxlint-disable-next-line stylex-migration/no-emotion-styles -- caller-supplied @lobehub/icons svg takes no className
+import { createStaticStyles } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 
-export const descendantStyles = {
-  trigger: 'lobe-model-switch-panel-7fffbb6a-trigger',
-} as const;
+export const descendantStyles = createStaticStyles(({ css }) => ({
+  trigger: css`
+    svg:focus {
+      outline: none;
+    }
+  `,
+}));
 
 export const styles = stylex.create({
   container: {

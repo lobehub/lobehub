@@ -1,9 +1,16 @@
 'use client';
 
-// oxlint-disable-next-line stylex-migration/no-plain-css -- needs lobe-ui slot: FormField.label (Form passes no className to Field.Label or the FormTitle wrappers inside it)
-import './ListConfig.css';
-
-import { ActionIcon, Flexbox, Icon, Popover, Select, Switch, Tabs } from '@lobehub/ui';
+import {
+  ActionIcon,
+  // oxlint-disable-next-line stylex-migration/no-emotion-styles -- needs lobe-ui slot: FormField.label
+  createStaticStyles,
+  Flexbox,
+  Icon,
+  Popover,
+  Select,
+  Switch,
+  Tabs,
+} from '@lobehub/ui';
 import { Form, type FormFieldProps, useForm } from '@lobehub/ui/form';
 import {
   ArrowDownWideNarrow,
@@ -29,6 +36,18 @@ interface ListConfigProps {
   showAuthor?: boolean;
   viewMode: ViewMode;
 }
+
+const fallback = createStaticStyles(({ css, cssVar }) => {
+  return {
+    form: css`
+      label,
+      label * {
+        font-size: 13px !important;
+        color: ${cssVar.colorTextSecondary} !important;
+      }
+    `,
+  };
+});
 
 const ListConfig = memo<ListConfigProps>(
   ({ options, setOptions, setViewMode, showAuthor, viewMode }) => {
@@ -128,7 +147,7 @@ const ListConfig = memo<ListConfigProps>(
           onChange={(key) => setViewMode(key as ViewMode)}
         />
         <Form
-          className={'lobe-list-config-9ad0ef6d-form'}
+          className={fallback.form}
           form={form}
           items={formItems}
           itemsType={'flat'}

@@ -1,10 +1,8 @@
 'use client';
 
-// oxlint-disable-next-line stylex-migration/no-plain-css -- pre, code and .line are Shiki HTML that Highlighter injects with dangerouslySetInnerHTML, which no prop reaches
-import './ContentViewer.css';
-
 import { type SkillItem } from '@lobechat/types';
-import { CopyButton, Highlighter, Markdown } from '@lobehub/ui';
+// oxlint-disable-next-line stylex-migration/no-emotion-styles -- Highlighter's Shiki pre, code and .line take no className
+import { CopyButton, createStaticStyles, Highlighter, Markdown } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 
@@ -24,6 +22,38 @@ const styles = stylex.create({
     paddingInline: '24px',
   },
 });
+
+const fallback = createStaticStyles(({ css, cssVar }) => ({
+  codeWrapper: css`
+    pre {
+      margin: 0;
+    }
+
+    code {
+      counter-reset: line;
+    }
+
+    .line {
+      width: 100% !important;
+      margin-inline: 0 !important;
+      padding-inline: 0 !important;
+    }
+
+    .line::before {
+      content: counter(line);
+      counter-increment: line;
+      user-select: none;
+
+      display: inline-block;
+
+      width: 4ch;
+      margin-inline-end: 2ch;
+
+      color: ${cssVar.colorTextQuaternary};
+      text-align: end;
+    }
+  `,
+}));
 
 export const getLanguage = (fileName: string): string => {
   const ext = fileName.toLowerCase().split('.').pop();
@@ -189,7 +219,7 @@ const ContentViewer = memo<ContentViewerProps>(
     }
 
     return (
-      <div {...sx([styles.codeWrapper], 'lobe-content-viewer-cb2c5013-code-wrapper')}>
+      <div {...sx([styles.codeWrapper], fallback.codeWrapper)}>
         <CopyButton
           content={content}
           style={{ position: 'absolute', right: 8, top: 0, zIndex: 1 }}

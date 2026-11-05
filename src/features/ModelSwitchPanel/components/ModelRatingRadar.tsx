@@ -1,7 +1,6 @@
-// oxlint-disable-next-line stylex-migration/no-plain-css -- @lobehub/charts RadarChart renders the recharts PolarGrid with a hard-coded stroke and exposes no prop or slot for it
-import './ModelRatingRadar.css';
-
 import { RadarChart } from '@lobehub/charts';
+// oxlint-disable-next-line stylex-migration/no-emotion-styles -- @lobehub/charts RadarChart PolarGrid takes no className
+import { createStaticStyles } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import type { ModelRating, ModelRatingSource } from 'model-bank';
 import type { FC } from 'react';
@@ -39,9 +38,17 @@ export interface RadarDimensionDatum {
   tooltip?: string;
 }
 
-export const radarStyles = {
-  radar: 'lobe-model-rating-radar-dfbbb915-radar',
-} as const;
+export const radarStyles = createStaticStyles(({ css, cssVar }) => ({
+  // The library strokes the grid with colorBorderSecondary, which equals colorBgElevated
+  // in the dark theme; rings render as path and circle, never polygon.
+  radar: css`
+    .recharts-polar-grid line,
+    .recharts-polar-grid path,
+    .recharts-polar-grid circle {
+      stroke: ${cssVar.colorFillSecondary};
+    }
+  `,
+}));
 
 interface ModelRatingRadarProps {
   dimensions: RadarDimensionDatum[];

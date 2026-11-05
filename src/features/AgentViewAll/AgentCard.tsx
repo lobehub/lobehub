@@ -1,12 +1,17 @@
 'use client';
 
-// oxlint-disable-next-line stylex-migration/no-plain-css -- needs lobe-ui slot: Avatar.emoji (the FluentEmoji img inside Avatar's content span takes no className)
-import './AgentCard.css';
-
 import { AGENT_CHAT_URL, DEFAULT_USER_AVATAR_URL, GROUP_CHAT_URL } from '@lobechat/const';
 import type { SidebarAgentItem } from '@lobechat/types';
 import { agentDisplayName, agentSecondaryDisplayName } from '@lobechat/types';
-import { Avatar, Block, ContextMenuTrigger, type DropdownItem, Text } from '@lobehub/ui';
+import {
+  Avatar,
+  Block,
+  ContextMenuTrigger,
+  // oxlint-disable-next-line stylex-migration/no-emotion-styles -- needs lobe-ui slot: Avatar.emoji (FluentEmoji img)
+  createStaticStyles,
+  type DropdownItem,
+  Text,
+} from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { type CSSProperties, memo, type ReactNode, useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -30,7 +35,14 @@ import { useAgentCoverColor } from './useAgentCoverColor';
 // line up across a row. The avatar straddles the cover's bottom edge.
 const AVATAR_SIZE = 56;
 export const AGENT_GRID_MIN_COLUMN = 260;
-const AVATAR_PLAIN_CLASSNAME = 'lobe-agent-card-2f4e89d4-avatar-plain';
+
+const fallback = createStaticStyles(({ css }) => ({
+  avatarPlain: css`
+    & img.lobe-fluent-emoji {
+      transform: scale(0.72);
+    }
+  `,
+}));
 
 export const AgentCardGrid = memo<{ children: ReactNode }>(({ children }) => (
   <div {...stylex.props(cardStyles.grid)}>{children}</div>
@@ -101,7 +113,7 @@ const AgentCard = memo<AgentCardProps>(({ item, onToggleSidebar, owner, sidebarH
               <span
                 {...sx(
                   [cardStyles.avatarRing, type === 'group' && cardStyles.avatarRingGroup],
-                  badge.cover ? undefined : AVATAR_PLAIN_CLASSNAME,
+                  badge.cover ? undefined : fallback.avatarPlain,
                 )}
               >
                 <SidebarItemAvatar item={item} shape={'circle'} size={AVATAR_SIZE - 6} />
