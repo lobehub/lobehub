@@ -1,5 +1,3 @@
-import './MergeDock.css';
-
 import type { DeviceGitPullRequestAction, DeviceGitPullRequestDetail } from '@lobechat/types';
 import { Button, Flexbox, Icon, ScrollArea } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
@@ -12,6 +10,7 @@ import { sx } from '@/styles/sx';
 
 import ChecksList from './ChecksList';
 import DockActionButton from './DockActionButton';
+import { failedChecksMarker } from './markers.stylex';
 import { type DockAction, type MergeDockInput, resolveMergeDock } from './mergeDockData';
 import { readMergeMethod, writeMergeMethod } from './mergeMethodStorage';
 import { DOCK_ICON, TONE_COLOR, type TranslateKey } from './prVisual';
@@ -28,7 +27,26 @@ const UPDATE_BRANCH: DockAction = { kind: 'updateBranch', tone: 'success' };
 
 const styles = stylex.create({
   actionBar: { flexWrap: 'wrap', paddingBlockStart: '10px' },
+  checks: { marginInlineStart: '22px' },
+  checksChevron: {
+    transform: {
+      default: null,
+      [stylex.when.ancestor(':is([open])', failedChecksMarker)]: 'rotate(90deg)',
+    },
+  },
   checksList: { maxHeight: 'min(240px, 35vh)' },
+  checksSummary: {
+    cursor: 'pointer',
+    display: { 'default': 'flex', '::-webkit-details-marker': 'none' },
+    gap: '4px',
+    alignItems: 'center',
+    fontSize: '12px',
+    lineHeight: '18px',
+    color: cssVar.colorTextTertiary,
+    listStyleType: 'none',
+    listStyleImage: 'none',
+    listStylePosition: 'outside',
+  },
   dock: {
     flexShrink: 0,
     paddingBlockStart: '10px',
@@ -173,9 +191,9 @@ const MergeDock = memo<MergeDockProps>(
           </Flexbox>
           {model.reasons.length > 0 &&
             (hasFailedChecks ? (
-              <details className={'lobe-merge-dock-17ae741d-checks'}>
-                <summary>
-                  <Icon icon={ChevronRightIcon} size={12} />
+              <details {...stylex.props(styles.checks, failedChecksMarker)}>
+                <summary {...stylex.props(styles.checksSummary)}>
+                  <Icon {...stylex.props(styles.checksChevron)} icon={ChevronRightIcon} size={12} />
                   {reasons}
                 </summary>
                 <ScrollArea

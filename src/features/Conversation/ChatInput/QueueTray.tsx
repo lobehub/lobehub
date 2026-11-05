@@ -1,7 +1,5 @@
 'use client';
 
-import './QueueTray.css';
-
 import { ActionIcon, Flexbox, Icon, Image, toast, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
@@ -90,6 +88,18 @@ const styles = stylex.create({
     display: { default: null, [NARROW]: 'none' },
   },
   icon: { flexShrink: 0, color: cssVar.colorTextDescription },
+  imageThumb: {
+    flexShrink: 0,
+    width: '28px',
+    height: '28px',
+    marginBlock: 0,
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorFillTertiary,
+    borderRadius: '6px',
+    boxShadow: 'none',
+  },
+  imageThumbImage: { width: '28px', height: '28px', objectFit: 'cover' },
   item: {
     paddingBlock: '6px',
     paddingInlineStart: '12px',
@@ -124,12 +134,15 @@ const QueuedFilePreview = memo<QueuedFilePreviewProps>(({ file }) => {
     return (
       <Image
         alt={file.name}
-        classNames={{ wrapper: 'lobe-queue-tray-1c07b9c6-image-thumb' }}
         objectFit={'cover'}
         size={PREVIEW_SIZE}
         src={file.url}
         title={file.name}
         variant={'borderless'}
+        classNames={{
+          image: stylex.props(styles.imageThumbImage).className,
+          wrapper: stylex.props(styles.imageThumb).className,
+        }}
         styles={{
           image: { height: PREVIEW_SIZE, width: PREVIEW_SIZE },
           wrapper: { height: PREVIEW_SIZE, width: PREVIEW_SIZE },

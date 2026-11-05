@@ -1,3 +1,4 @@
+// oxlint-disable-next-line stylex-migration/no-plain-css -- the rules target the table, img, video and pre that lobe-ui Markdown renders from the PR comment, which have no slot or xstyle
 import './MarkdownBody.css';
 
 import type {

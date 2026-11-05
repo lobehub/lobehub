@@ -1,7 +1,5 @@
 'use client';
 
-import './MessageSelectionWrapper.css';
-
 import { Flexbox } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
@@ -10,9 +8,9 @@ import { memo, type MouseEvent, type ReactNode, useCallback } from 'react';
 import { CONVERSATION_MIN_WIDTH } from '@/const/layoutTokens';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
-import { sx } from '@/styles/sx';
 
 import { messageStateSelectors, useConversationStore } from '../store';
+import { messageSelectionMarker } from './markers.stylex';
 import { isSelectableRole } from './selectableRoles';
 import SelectCircle from './SelectCircle';
 
@@ -98,11 +96,10 @@ const MessageSelectionWrapper = memo<MessageSelectionWrapperProps>(({ children, 
       <Flexbox align={'center'} flex={1} style={{ minWidth: 0 }}>
         <Flexbox {...stylex.props(styles.lane)} width={laneWidth}>
           <div
-            {...sx(
-              [styles.content, isAssistant && styles.contentCollapsed],
-              isAssistant
-                ? `${'lobe-message-selection-wrapper-3c24b563-content'} ${'lobe-message-selection-wrapper-3c24b563-content-assistant'}`
-                : 'lobe-message-selection-wrapper-3c24b563-content',
+            {...stylex.props(
+              styles.content,
+              isAssistant && styles.contentCollapsed,
+              messageSelectionMarker,
             )}
           >
             {children}

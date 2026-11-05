@@ -1,3 +1,4 @@
+// oxlint-disable-next-line stylex-migration/no-plain-css -- the rule recolors every element inside the article that lobe-ui Markdown renders, which has no slot or xstyle
 import './index.css';
 
 import { Accordion, cx, ScrollArea } from '@lobehub/ui';

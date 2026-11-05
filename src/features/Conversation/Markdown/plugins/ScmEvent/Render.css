@@ -1,4 +1,0 @@
-/* The chevron is the toggle's own svg child; it turns when the log is open. */
-.lobe-render-6976df0b-log-toggle-open svg {
-  transform: rotate(90deg);
-}

@@ -1,11 +1,15 @@
 import { type UIChatMessage } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { memo, useMemo } from 'react';
 
 import { MESSAGE_ACTION_BAR_PORTAL_ATTRIBUTES } from '@/const/messageActionPortal';
+import { selectionStyles } from '@/features/Conversation/MessageForward/selectionStyles';
 import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/selectors';
+import { sx } from '@/styles/sx';
 
+import { revealStyles } from '../../../ChatItem/revealStyles';
 import { type MessageActionsConfig } from '../../../types';
 import {
   MessageActionBar,
@@ -59,7 +63,10 @@ interface ActionsProps {
 }
 
 const actionBarHolder = (
-  <div {...{ [MESSAGE_ACTION_BAR_PORTAL_ATTRIBUTES.user]: '' }} style={{ height: '28px' }} />
+  <div
+    {...{ [MESSAGE_ACTION_BAR_PORTAL_ATTRIBUTES.user]: '' }}
+    {...sx([selectionStyles.hidden], undefined, { height: '28px' })}
+  />
 );
 
 const Actions = memo<ActionsProps>(({ id, data, disableEditing }) => {
@@ -71,7 +78,7 @@ const Actions = memo<ActionsProps>(({ id, data, disableEditing }) => {
   return (
     <Flexbox horizontal align={'center'}>
       {!disableEditing && (
-        <Flexbox align={'flex-start'} role="menubar">
+        <Flexbox align={'flex-start'} role="menubar" {...stylex.props(revealStyles.menubar)}>
           {actionBarHolder}
         </Flexbox>
       )}

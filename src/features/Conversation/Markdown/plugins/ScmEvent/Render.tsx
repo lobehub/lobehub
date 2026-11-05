@@ -1,7 +1,5 @@
 'use client';
 
-import './Render.css';
-
 import { Flexbox, Icon, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
@@ -75,6 +73,7 @@ const styles = stylex.create({
     backgroundColor: cssVar.colorFillQuaternary,
     backgroundImage: 'none',
   },
+  logToggleChevronOpen: { transform: 'rotate(90deg)' },
   logToggle: {
     cursor: 'pointer',
     userSelect: 'none',
@@ -180,12 +179,13 @@ const CheckRow = memo<{ check: ScmEventCheck; leading?: ReactNode }>(({ check, l
           </a>
         ) : null}
         {check.log ? (
-          <span
-            {...sx([styles.logToggle], open ? 'lobe-render-6976df0b-log-toggle-open' : undefined)}
-            onClick={() => setOpen((v) => !v)}
-          >
+          <span {...stylex.props(styles.logToggle)} onClick={() => setOpen((v) => !v)}>
             {open ? t('scmEvent.hideLog') : t('scmEvent.showLog')}
-            <Icon icon={ChevronRightIcon} size={12} />
+            <Icon
+              {...stylex.props(open && styles.logToggleChevronOpen)}
+              icon={ChevronRightIcon}
+              size={12}
+            />
           </span>
         ) : null}
       </Flexbox>

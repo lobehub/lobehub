@@ -1,3 +1,4 @@
+// oxlint-disable-next-line stylex-migration/no-plain-css -- the rules target every element and scrollbar inside the lobe-ui Markdown output, which has no slot or xstyle; the preview root itself must keep pointer events to scroll
 import '../style.css';
 
 import { cx, lobeStaticStylish, Markdown } from '@lobehub/ui';

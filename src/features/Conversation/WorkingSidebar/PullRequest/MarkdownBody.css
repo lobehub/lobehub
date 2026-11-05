@@ -1,5 +1,3 @@
-/* Descendant rules for the rendered PR description. The Markdown output is not
-   ours to tag, which StyleX cannot target, so they stay plain CSS. */
 .lobe-markdown-body-55878cda-body table {
   overflow-x: auto;
   display: block;

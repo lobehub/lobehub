@@ -1,5 +1,3 @@
-/* Descendant rules for the share preview. They reach into children this file
-   does not render, which StyleX cannot target, so they stay plain CSS. */
 .lobe-share-message-modal-7976a4b0-preview * {
   pointer-events: none;
 }

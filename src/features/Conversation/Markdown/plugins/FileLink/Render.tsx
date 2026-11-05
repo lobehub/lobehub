@@ -1,10 +1,9 @@
 'use client';
 
-import './Render.css';
-
 import { isDesktop } from '@lobechat/const';
 import { RENDERER_HANDLED_LINK_ATTR } from '@lobechat/desktop-bridge';
 import { A, copyToClipboard, Icon, toast } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { CopyIcon } from 'lucide-react';
 import type { MouseEvent } from 'react';
@@ -20,6 +19,7 @@ import { useFileStore } from '@/store/file';
 
 import { useConversationStore } from '../../../store';
 import type { MarkdownElementProps } from '../type';
+import { fileLinkMarker } from './markers.stylex';
 import {
   getFileLinkCopyHref,
   getFileLinkOpenAction,
@@ -30,6 +30,30 @@ import {
 
 const stylesAtomic = stylex.create({
   icon: { display: 'inline-flex', flexShrink: 0, alignItems: 'center' },
+  label: {
+    textDecorationColor: {
+      default: cssVar.colorTextTertiary,
+      [stylex.when.ancestor(':hover', fileLinkMarker)]: cssVar.colorTextSecondary,
+    },
+    textDecorationLine: 'underline',
+    textDecorationThickness: '1px',
+    textUnderlineOffset: '3px',
+    transition: 'text-decoration-color 0.15s',
+  },
+  link: {
+    cursor: 'pointer',
+    display: 'inline-flex',
+    gap: '4px',
+    alignItems: 'center',
+    color: cssVar.colorText,
+    textDecoration: 'none',
+    verticalAlign: '-0.16em',
+    borderRadius: { 'default': null, ':focus-visible': '2px' },
+    outlineWidth: { 'default': null, ':focus-visible': '2px' },
+    outlineStyle: { 'default': null, ':focus-visible': 'solid' },
+    outlineColor: { 'default': null, ':focus-visible': cssVar.colorPrimaryBorder },
+    outlineOffset: { 'default': null, ':focus-visible': '2px' },
+  },
   copy: {
     cursor: 'pointer',
     display: 'inline-flex',
@@ -79,7 +103,7 @@ const FileLabel = ({ label }: { label: string }) => (
     <span aria-hidden {...stylex.props(stylesAtomic['icon'])}>
       <FileIcon fileName={label} size={16} variant={'raw'} />
     </span>
-    <span className={'lobe-render-9ad65026-label'}>{label}</span>
+    <span {...stylex.props(stylesAtomic['label'])}>{label}</span>
   </>
 );
 
@@ -159,7 +183,7 @@ const Render = memo<MarkdownElementProps<FileLinkProperties>>(({ node }) => {
     <>
       <A
         {...(fileId ? { [RENDERER_HANDLED_LINK_ATTR]: 'true' } : {})}
-        className={'lobe-render-9ad65026-link'}
+        {...stylex.props(stylesAtomic['link'], fileLinkMarker)}
         href={targetHref}
         rel="noopener noreferrer"
         onClick={handleClick}
