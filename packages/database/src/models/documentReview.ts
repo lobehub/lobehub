@@ -94,20 +94,26 @@ export class DocumentReviewModel {
     return this.workspaceId;
   };
 
+  /**
+   * Validate the parent document inside the caller's transaction while holding
+   * its row lock, so session / rule-set creation serializes with a concurrent
+   * scope transfer (`DocumentModel.transferTo` holds this row until commit).
+   * The workspace check has to run after the lock is acquired: an unlocked read
+   * could see the source workspace, wait on the document foreign-key lock during
+   * the insert, then land a session that the transfer has already rehomed —
+   * invisible to the destination and rejected by source authorization. Mirrors
+   * DocumentCommentModel.create and DocumentLikeModel.lockDocument.
+   */
   private assertDocument = async (db: LobeChatDatabase, documentId: string) => {
     const workspaceId = this.requireWorkspaceId();
     const [document] = await db
-      .select({ id: documents.id })
+      .select({ id: documents.id, workspaceId: documents.workspaceId })
       .from(documents)
-      .where(
-        and(
-          eq(documents.id, documentId),
-          eq(documents.workspaceId, workspaceId),
-          notTrashed(documents.isDeleted),
-        ),
-      )
-      .limit(1);
-    if (!document) throw new Error(DOCUMENT_REVIEW_DOCUMENT_NOT_FOUND);
+      .where(and(eq(documents.id, documentId), notTrashed(documents.isDeleted)))
+      .limit(1)
+      .for('update');
+    if (!document || document.workspaceId !== workspaceId)
+      throw new Error(DOCUMENT_REVIEW_DOCUMENT_NOT_FOUND);
     return workspaceId;
   };
 

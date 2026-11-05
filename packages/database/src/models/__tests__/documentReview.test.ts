@@ -484,5 +484,29 @@ describe('DocumentReviewModel', () => {
           .where(eq(documentReviewRuleSets.documentId, documentId)),
       ).toEqual([]);
     });
+
+    it('refuses to open a review session from the pre-transfer workspace', async () => {
+      await new DocumentModel(serverDB, ownerId, workspaceId).transferTo(
+        documentId,
+        otherWorkspaceId,
+        ownerId,
+      );
+
+      // The workspace is compared only after the parent document row lock is
+      // taken, so a caller that lost the race against the transfer fails instead
+      // of inserting a session into the workspace the document has left.
+      await expect(model.createSession({ documentId })).rejects.toThrow(
+        DOCUMENT_REVIEW_DOCUMENT_NOT_FOUND,
+      );
+      await expect(model.createRuleSet({ documentId, title: 'x' })).rejects.toThrow(
+        DOCUMENT_REVIEW_DOCUMENT_NOT_FOUND,
+      );
+      expect(
+        await serverDB
+          .select({ id: documentReviewSessions.id })
+          .from(documentReviewSessions)
+          .where(eq(documentReviewSessions.documentId, documentId)),
+      ).toEqual([]);
+    });
   });
 });
