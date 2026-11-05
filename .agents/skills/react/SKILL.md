@@ -18,7 +18,7 @@ user-invocable: false
 ### StyleX
 
 - New code may not import `createStaticStyles` / `createStyles` / `css` / `keyframes` / `createGlobalStyle` / `injectGlobal` from `@lobehub/ui` (`stylex-migration/no-emotion-styles`). Files still on them are listed in `scripts/stylexMigration/legacyFiles.json`; after migrating one, run `bun run stylex:migration --prune-legacy`. Never add entries.
-- New code may not import a plain `.css` file either (`stylex-migration/no-plain-css`; CSS modules and package stylesheets are fine). Files that already do are listed in `scripts/stylexMigration/plainCssImporters.json`, which only shrinks. A stylesheet for DOM no prop reaches is imported under `// oxlint-disable-next-line stylex-migration/no-plain-css -- <why no slot or xstyle reaches it>`.
+- New code may not import a plain `.css` file either (`stylex-migration/no-plain-css`; CSS modules and package stylesheets are fine). Files that already do are listed in `scripts/stylexMigration/plainCssImporters.json`, which only shrinks.
 - Migrate a whole file at once. StyleX longhand rules carry raised specificity (`.x:not(#\#)`) and beat emotion classes on the same element, but StyleX shorthand rules do not, so a half-migrated element resolves by property.
 - Element that also forwards a caller's `className` / `style`: `{...sx([styles.root, active && styles.active], className, style)}` from `@/styles/sx`. Spreading `stylex.props` next to `className` fails `@stylexjs/no-conflicting-props`.
 - Component that lets callers restyle it: take `xstyle?: StyleXStyles` and pass it last in the `sx` / `stylex.props` array. A plain `className` from outside cannot override StyleX rules. Passing a class to `@lobehub/ui` components (`className`, `classNames`) works, because lobe-ui CSS sits in `@layer lobe-ui`.
@@ -29,8 +29,8 @@ user-invocable: false
 - Never move a selector into a plain `.css` file to escape StyleX. Reach the element through an API instead, in this order:
   1. The component's slot props. lobe-ui components take `classNames` / `styles` per part, e.g. `Tabs` → `classNames={{ list: stylex.props(styles.tabList).className, tab: stylex.props(styles.tab).className }}`.
   2. A pseudo-class on the slot's element: StyleX compiles keys like `':has([data-replace-all])'` and `':nth-child(2)'`, so `.tabs [role=tab]:has([data-replace-all])` becomes `classNames.tab` with `marginInlineStart: { default: null, ':has([data-replace-all])': 'auto' }`.
-  3. Our own component: add an `xstyle?: StyleXStyles` prop (or `<part>Xstyle` for an inner part) and apply it there, e.g. `AcceptanceIdentity titleXstyle` for its `h1`.
-  4. Only DOM no prop can reach (editor content such as `.ProseMirror p`, rendered markdown, third-party widgets without slots) stays in a scoped `.css` file. Add a missing slot to lobe-ui instead when the component is ours.
+  3. Our own component: add an `xstyle?: StyleXStyles` prop (or `<part>Xstyle` for an inner part) and apply it there.
+  4. Only DOM no prop can reach (editor content such as `.ProseMirror p`, rendered markdown, third-party widgets, lobe-ui parts without a slot) keeps its original nested rule, unchanged, in a `createStaticStyles` object in the same file, merged onto the host element with `{...sx(styles.content, fallback.content)}`. Put `// oxlint-disable-next-line stylex-migration/no-emotion-styles -- <what no prop reaches>` above the `@lobehub/ui` import. Add a missing slot to lobe-ui instead when the component is ours.
 
 ## Component Priority
 
