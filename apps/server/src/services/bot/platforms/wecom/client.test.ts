@@ -3,6 +3,60 @@ import { createCipheriv, randomBytes } from 'node:crypto';
 import { getWeComConnection } from '@lobechat/chat-adapter-wecom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+/** Stand-in for the WeCom long-connection server, installed as the `ws` WebSocket. */
+const { FakeSocket } = vi.hoisted(() => {
+  class FakeSocket {
+    static instances: FakeSocket[] = [];
+    static subscribeErrcode = 0;
+
+    readyState = 0;
+    readonly sent: any[] = [];
+    private readonly listeners = new Map<string, Array<(event: any) => void>>();
+
+    constructor(readonly url: string) {
+      FakeSocket.instances.push(this);
+      queueMicrotask(() => {
+        this.readyState = 1;
+        this.emit('open', {});
+      });
+    }
+
+    addEventListener(type: string, listener: (event: any) => void) {
+      this.listeners.set(type, [...(this.listeners.get(type) ?? []), listener]);
+    }
+
+    send(data: string) {
+      const frame = JSON.parse(data);
+      this.sent.push(frame);
+      const errcode = frame.cmd === 'aibot_subscribe' ? FakeSocket.subscribeErrcode : 0;
+      queueMicrotask(() =>
+        this.serverSend({
+          errcode,
+          errmsg: errcode ? 'invalid secret' : 'ok',
+          headers: frame.headers,
+        }),
+      );
+    }
+
+    close() {
+      if (this.readyState === 3) return;
+      this.readyState = 3;
+      this.emit('close', { code: 1000 });
+    }
+
+    serverSend(frame: unknown) {
+      this.emit('message', { data: JSON.stringify(frame) });
+    }
+
+    private emit(type: string, event: unknown) {
+      for (const listener of this.listeners.get(type) ?? []) listener(event);
+    }
+  }
+  return { FakeSocket };
+});
+
+vi.mock('ws', () => ({ default: FakeSocket }));
+
 const { updateBotRuntimeStatus } = vi.hoisted(() => ({
   updateBotRuntimeStatus: vi.fn().mockResolvedValue(undefined),
 }));
@@ -20,55 +74,6 @@ vi.mock('@/server/services/gateway/runtimeStatus', () => ({
 
 const { decodeWeComThreadId, WECOM_DISPLACED_MESSAGE, WeComClientFactory, wecomExtractFiles } =
   await import('./client');
-
-/** Stand-in for the WeCom long-connection server, installed as the global `WebSocket`. */
-class FakeSocket {
-  static instances: FakeSocket[] = [];
-  static subscribeErrcode = 0;
-
-  readyState = 0;
-  readonly sent: any[] = [];
-  private readonly listeners = new Map<string, Array<(event: any) => void>>();
-
-  constructor(readonly url: string) {
-    FakeSocket.instances.push(this);
-    queueMicrotask(() => {
-      this.readyState = 1;
-      this.emit('open', {});
-    });
-  }
-
-  addEventListener(type: string, listener: (event: any) => void) {
-    this.listeners.set(type, [...(this.listeners.get(type) ?? []), listener]);
-  }
-
-  send(data: string) {
-    const frame = JSON.parse(data);
-    this.sent.push(frame);
-    const errcode = frame.cmd === 'aibot_subscribe' ? FakeSocket.subscribeErrcode : 0;
-    queueMicrotask(() =>
-      this.serverSend({
-        errcode,
-        errmsg: errcode ? 'invalid secret' : 'ok',
-        headers: frame.headers,
-      }),
-    );
-  }
-
-  close() {
-    if (this.readyState === 3) return;
-    this.readyState = 3;
-    this.emit('close', { code: 1000 });
-  }
-
-  serverSend(frame: unknown) {
-    this.emit('message', { data: JSON.stringify(frame) });
-  }
-
-  private emit(type: string, event: unknown) {
-    for (const listener of this.listeners.get(type) ?? []) listener(event);
-  }
-}
 
 const flush = async () => {
   for (let i = 0; i < 5; i++) await new Promise((resolve) => setTimeout(resolve, 0));
@@ -88,7 +93,6 @@ beforeEach(() => {
   FakeSocket.instances = [];
   FakeSocket.subscribeErrcode = 0;
   updateBotRuntimeStatus.mockClear();
-  vi.stubGlobal('WebSocket', FakeSocket);
   vi.stubGlobal(
     'fetch',
     vi.fn(async () => new Response('{"ok":true}')),

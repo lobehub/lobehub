@@ -19,10 +19,12 @@
   },
   "dependencies": {
     "chat": "~4.38.0",
-    "mime": "^4.1.0"
+    "mime": "^4.1.0",
+    "ws": "^8.21.0"
   },
   "devDependencies": {
     "@types/node": "^24.13.2",
+    "@types/ws": "^8.18.1",
     "tsup": "^8.5.1",
     "typescript": "^6.0.3"
   }
