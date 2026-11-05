@@ -303,7 +303,7 @@ describe('mcpService.readMcpAppResource for stdio connectors', () => {
     });
   });
 
-  it("reads no view when the agent's own connectors can't be loaded", async () => {
+  it("fails the read, so it is retried, when the agent's own connectors can't be loaded", async () => {
     // The base connector of the same identifier is loaded; the agent's own copy is not
     connectors.set('agt_1:files', stdioConnector);
     toolState.ensureConfirmedConnectors.mockRejectedValueOnce(new Error('offline'));
@@ -314,8 +314,9 @@ describe('mcpService.readMcpAppResource for stdio connectors', () => {
         onThisDevice: true,
         server: STDIO,
       }),
-    ).resolves.toBeUndefined();
+    ).rejects.toThrow('offline');
 
+    // Never read from the base connector meanwhile
     expect(connectorEdit).not.toHaveBeenCalled();
     expect(ipcRead).not.toHaveBeenCalled();
     expect(connectorRead).not.toHaveBeenCalled();
