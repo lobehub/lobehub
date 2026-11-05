@@ -23,10 +23,12 @@ export interface StyleElement {
   attributes?: Record<string, string>;
   bindings: StyleBinding[];
   children?: string[];
+  derived?: Record<string, string>;
   flags: string[];
   foreignSpread?: boolean;
   forwardedParam?: string;
   forwards?: ForwardResolution[];
+  guards?: string[];
   id: string;
   literalProps: Record<string, LiteralValue>;
   owner: string;

@@ -3,6 +3,7 @@ import ts from 'typescript';
 import { aliasDeclaration, aliasOf } from './aliases';
 import { booleanAttribute, isStateAttribute } from './attributes';
 import { collectChildren, literalOf } from './children';
+import { localCondition, renderGuards } from './constraints';
 import { parseRules } from './css';
 import { applicationIn, componentOfStatement, forwardsOf } from './forward';
 import { globalStyleRules } from './globalStyles';
@@ -317,6 +318,7 @@ export const extractFile = (
         const tag = opening.tagName.getText(ast);
         const names = new Set<string>();
         const used = new Map<string, string>();
+        const derivedConditions: Record<string, string> = {};
         for (const expression of expressions)
           for (const node of valueIdentifierNodes(expression, { skipJsx: true })) {
             const name = node.text;
@@ -326,6 +328,8 @@ export const extractFile = (
               used.set(name, alias);
               continue;
             }
+            const condition = localCondition(node);
+            if (condition) derivedConditions[name] = condition;
             if (declaredLocally(node)) names.add(name);
             else if (markers.has(name)) top.require(name);
             else if (!top.styleSymbols.has(name) && !top.require(name)) names.add(name);
@@ -343,6 +347,7 @@ export const extractFile = (
             kinds.set(node.text, [...(kinds.get(node.text) ?? []), 'boolean']);
           }
         const real = isReal(tag);
+        const guards = renderGuards(node);
         if (layout.has(tag) || real) top.require(tag);
         const id = `${owner}#${ordinal++}`;
         const tokens = new Set<string>();
@@ -364,6 +369,8 @@ export const extractFile = (
           id,
           literalProps,
           ...(Object.keys(attributes).length ? { attributes } : {}),
+          ...(Object.keys(derivedConditions).length ? { derived: derivedConditions } : {}),
+          ...(guards.length ? { guards } : {}),
           owner,
           parent,
           ...(real ? { real } : {}),

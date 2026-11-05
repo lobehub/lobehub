@@ -22,6 +22,7 @@ import {
   type SideProperties,
 } from './placement';
 import { runtimeStyleProbe, styleDropped } from './probes';
+import { reachableCombos } from './reachable';
 import { realItemsOf, rendersReal, sampleTargets, standInsOf } from './real';
 import { tableDomain } from './tables';
 
@@ -341,7 +342,9 @@ export const planFile = (
     let modeling = model(found);
     if (Object.keys(modeling.used).length && modeling.combos.length > DOMAIN_COMBO_LIMIT)
       modeling = model({});
-    const { combos, knobs, modeled, pairwise } = modeling;
+    const { knobs, modeled, pairwise } = modeling;
+    const combos = knobs ? modeling.combos : reachableCombos(modeling.combos, chains);
+    if (combos.length < modeling.combos.length) evidence.push('COMBOS_UNREACHABLE_DROPPED');
     modeling.added.forEach((flag) => flags.add(flag));
     if (styleDropped(left, right, probes)) flags.add('RUNTIME_STYLE_DROPPED');
     if (knobs) evidence.push('CONDITION_KNOBS');
