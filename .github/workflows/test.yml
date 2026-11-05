@@ -82,6 +82,9 @@ jobs:
       - name: Verify hotfix operator CLI
         run: node --test .github/scripts/hotfixWorkflow.test.mjs
 
+      - name: Verify desktop S3 publish action
+        run: node --test .github/scripts/desktop-publish-s3.test.mjs
+
       - name: Test CLI build configuration, bundle and model-facing docs
         run: bunx vitest run --config vitest.config.mts --silent='passed-only' tsdown.config.test.ts bundle.test.ts src/modelFacingDocs.test.ts
         working-directory: apps/cli
