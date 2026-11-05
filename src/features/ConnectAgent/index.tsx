@@ -9,18 +9,19 @@ import type {
 import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
 import type { DeviceListItem } from '@lobechat/types';
 import { agentDisplayName } from '@lobechat/types';
-import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import {
   Alert,
   Button,
   Checkbox,
   createModal,
-  createStaticStyles,
+  Flexbox,
+  Icon,
   Input,
   type ModalInstance,
   ScrollArea,
   Text,
   TextArea,
+  Tooltip,
   useModalContext,
 } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';

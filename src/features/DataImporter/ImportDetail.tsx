@@ -1,7 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Button, ModalFooter, Table, type TableColumn, Text } from '@lobehub/ui';
+import { Button, Flexbox, ModalFooter, Table, type TableColumn, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { Info } from 'lucide-react';
