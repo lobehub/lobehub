@@ -8,9 +8,7 @@ import { useActiveLocation } from '@/hooks/useActiveLocation';
 import { cacheScope } from '@/libs/replica';
 import { channelActions, channelSelectors, useChannelStore } from '@/store/channel';
 
-/** A plain left click; modified clicks keep the browser's own handling of the link. */
-const isPlainClick = (event: MouseEvent) =>
-  event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey;
+import { isPlainClick } from './conversations';
 
 /**
  * With Channels on, an agent row opens the person's direct Channel with the Agent. An Agent made

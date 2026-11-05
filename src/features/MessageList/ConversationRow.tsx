@@ -5,9 +5,10 @@ import * as stylex from '@stylexjs/stylex';
 import { type ComponentProps, memo, type MouseEvent, type ReactNode, type Ref } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 
-import { formatConversationTime } from './conversations';
+import { formatConversationTime, isPlainClick } from './conversations';
 import { styles } from './style';
 
 export interface ConversationRowProps {
@@ -48,6 +49,17 @@ const ConversationRow = memo<ConversationRowProps>(
     url,
   }) => {
     const { t } = useTranslation('common');
+    const navigate = useWorkspaceAwareNavigate();
+    // Clicking the open conversation again closes it, back to the Messages home with no row
+    // selected. Modified clicks keep the link's own behavior.
+    const handleClick = (event: MouseEvent<HTMLAnchorElement>) => {
+      if (active && isPlainClick(event)) {
+        event.preventDefault();
+        navigate('/');
+        return;
+      }
+      onClick?.(event);
+    };
 
     const row = (
       <WorkspaceLink
@@ -56,7 +68,7 @@ const ConversationRow = memo<ConversationRowProps>(
         ref={ref}
         {...stylex.props(styles.row, pinned && styles.rowPinned, active && styles.rowActive)}
         to={url}
-        onClick={onClick}
+        onClick={handleClick}
         onMouseEnter={onMouseEnter}
       >
         <span {...stylex.props(styles.avatar)}>
