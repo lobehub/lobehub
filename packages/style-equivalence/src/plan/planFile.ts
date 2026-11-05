@@ -47,6 +47,7 @@ export interface PlanVariable {
 }
 
 export interface PlanCase {
+  chainOmit?: Partial<Record<Side, string[]>>;
   combos: Combo[];
   elementIds: Record<Side, string>;
   evidence?: string[];
@@ -78,15 +79,17 @@ export interface PlanConfig {
 }
 
 const declarationFree = (element: StyleElement) =>
-  !element.slots.length &&
-  element.bindings.every((binding) => binding.spread) &&
-  isIntrinsicTag(element.tag);
+  !element.slots.length && !element.forwardedParam && !element.forwards?.length;
 
-export const chainOf = (element: StyleElement, byId: Map<string, StyleElement>) => {
+export const chainOf = (
+  element: StyleElement,
+  byId: Map<string, StyleElement>,
+  omit?: readonly string[],
+) => {
   const chain: StyleElement[] = [];
   let current: StyleElement | undefined = element;
   while (current) {
-    if (current === element || !declarationFree(current)) chain.unshift(current);
+    if (current === element || !omit?.includes(current.id)) chain.unshift(current);
     current = current.parent ? byId.get(current.parent) : undefined;
   }
   return chain;
@@ -200,8 +203,22 @@ export const planFile = (
   const moved = movedStylesheets(base, head, pairs);
   const kept = keptEmotionRules(base, head, pairs);
 
+  const omittable = {
+    base: unpairedBase.filter(declarationFree).map((element) => element.id),
+    head: unpairedHead.filter(declarationFree).map((element) => element.id),
+  };
   const cases = pairs.map(([left, right]): PlanCase => {
-    const chains = { base: chainOf(left, byId.base), head: chainOf(right, byId.head) };
+    const chains = {
+      base: chainOf(left, byId.base, omittable.base),
+      head: chainOf(right, byId.head, omittable.head),
+    };
+    const chainOmit = Object.fromEntries(
+      (['base', 'head'] as const).flatMap((side) => {
+        const full = chainOf(side === 'base' ? left : right, byId[side]);
+        const ids = full.filter((item) => !chains[side].includes(item)).map((item) => item.id);
+        return ids.length ? [[side, ids]] : [];
+      }),
+    );
     const flags = new Set<string>();
     const evidence: string[] = [];
     const isReplaced = replacedHead.has(right);
@@ -371,6 +388,7 @@ export const planFile = (
             ),
           }
         : {}),
+      ...(Object.keys(chainOmit).length ? { chainOmit } : {}),
       ...(Object.keys(inner).length ? { inner } : {}),
       key: `${file}|${left.id}`,
       ...(knobs ? { knobs } : {}),

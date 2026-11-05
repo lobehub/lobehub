@@ -77,7 +77,7 @@ export const collectCaseHashInput = (input: CollectHashInput): CaseHashInput => 
     const byId = new Map(elementsOf(extraction).map((element) => [element.id, element]));
     const element = byId.get(id);
     if (!element) continue;
-    const chain = chainOf(element, byId);
+    const chain = chainOf(element, byId, input.plan?.chainOmit?.[side]);
     result.elements[side] = chain.map(({ attributes, bindings, literalProps, slots, tag }) => ({
       ...(attributes ? { attributes } : {}),
       bindings,

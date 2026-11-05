@@ -31,7 +31,7 @@ const element = (
   id,
   literalProps: {},
   owner: id.split('#')[0],
-  slots: [],
+  slots: [...new Set(expr.match(/\bstyles\.\w+/g) ?? [])].sort(),
   tag,
   variables: [],
   ...extra,

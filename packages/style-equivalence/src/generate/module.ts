@@ -134,7 +134,7 @@ export const generateModule = (
     const element = byId.get(entry.elementIds[side]);
     if (!element)
       return `${JSON.stringify(entry.key)}: () => { throw new Error('CASE_ELEMENT_MISSING'); }`;
-    const chain = chainOf(element, byId);
+    const chain = chainOf(element, byId, entry.chainOmit?.[side]);
     const { knobs } = entry;
     const inline = entry.inlineStyles?.[side] ?? [];
     const bound = new Map<StyleBinding, string | undefined>(
