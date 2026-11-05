@@ -52,6 +52,42 @@ describe('createFileStoreImageUploader', () => {
     expect(createFileInput.url).toMatch(/^files\/\d{4}-\d{2}-\d{2}\/[a-f0-9]{64}\.png$/);
   });
 
+  it('files the image as a tool-result attachment, the one source a run token may create', async () => {
+    // A remote device uploads under the run's operation token, which may file
+    // only `tool-result` images outside a Task run; it also keeps the image out
+    // of the library when a desktop uploads under its own session.
+    const port = createPort();
+    const upload = createFileStoreImageUploader(async () => port);
+
+    await upload({ data: PNG_BASE64, mediaType: 'image/png' });
+
+    expect(vi.mocked(port.createFile).mock.calls[0][0].source).toBe('tool-result');
+  });
+
+  it('records the intrinsic size on the file metadata, matching the web uploader', async () => {
+    const port = createPort();
+    const upload = createFileStoreImageUploader(async () => port);
+
+    await upload({ data: PNG_BASE64, height: 800, mediaType: 'image/png', width: 1280 });
+
+    expect(vi.mocked(port.createFile).mock.calls[0][0].metadata).toMatchObject({
+      height: 800,
+      ratio: 1.6,
+      width: 1280,
+    });
+  });
+
+  it('omits size metadata when the dimensions are unknown', async () => {
+    const port = createPort();
+    const upload = createFileStoreImageUploader(async () => port);
+
+    await upload({ data: PNG_BASE64, mediaType: 'image/png' });
+
+    const { metadata } = vi.mocked(port.createFile).mock.calls[0][0];
+    expect(metadata).not.toHaveProperty('width');
+    expect(metadata).not.toHaveProperty('ratio');
+  });
+
   it('reuses the stored object and skips the S3 PUT when the hash already exists', async () => {
     const port = createPort({
       checkFileHash: vi.fn().mockResolvedValue({ isExist: true, url: 'files/old/abc.png' }),

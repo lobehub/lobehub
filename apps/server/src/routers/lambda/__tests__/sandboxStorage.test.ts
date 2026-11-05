@@ -2,10 +2,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // serverDatabase middleware calls getServerDB(); stub it (the model mock
-// ignores the db handle anyway).
+// ignores the db handle anyway). Real-database behaviour is covered in
+// sandboxStorage.drive.test.ts.
+const { mockServerDB } = vi.hoisted(() => ({
+  mockServerDB: { transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn({}) },
+}));
+
 vi.mock('@/database/core/db-adaptor', () => ({
   getServerDB: vi.fn(function () {
-    return {};
+    return mockServerDB;
   }),
 }));
 
@@ -16,12 +21,13 @@ const mockFindById = vi.fn();
 // path that is supposed to demand ownership.
 const mockFindOwnedById = vi.fn();
 const mockUpdate = vi.fn();
+const mockDelete = vi.fn();
 
 vi.mock('@/database/models/environment', () => ({
   EnvironmentModel: vi.fn(function () {
     return {
       create: mockCreate,
-      delete: vi.fn(),
+      delete: mockDelete,
       findById: mockFindById,
       findOwnedById: mockFindOwnedById,
       query: vi.fn(),
@@ -38,6 +44,15 @@ const mockInstanceFindOwnedById = vi.fn();
 const mockInstanceQuery = vi.fn();
 const mockInstanceUpdate = vi.fn();
 const mockInstanceRecordBuildResult = vi.fn();
+const mockListStorageDirectories = vi.fn();
+
+/**
+ * Every stored instance names the drive it is on. The fixtures below mostly
+ * leave it out, so a row that does not say is on the caller's public drive —
+ * the one `ctx` below resolves to.
+ */
+const onPublicDrive = <T>(row: T) =>
+  row && typeof row === 'object' ? { providerScope: 'ws-org-ws-1', ...row } : row;
 
 vi.mock('@/database/models/environmentInstance', () => ({
   InstanceDirectoryOverlapError: class InstanceDirectoryOverlapError extends Error {},
@@ -45,10 +60,13 @@ vi.mock('@/database/models/environmentInstance', () => ({
     return {
       create: mockInstanceCreate,
       delete: mockInstanceDelete,
-      findById: mockInstanceFindById,
-      findOwnedById: mockInstanceFindOwnedById,
+      findById: async (...args: unknown[]) => onPublicDrive(await mockInstanceFindById(...args)),
+      findOwnedById: async (...args: unknown[]) =>
+        onPublicDrive(await mockInstanceFindOwnedById(...args)),
       findByWorkingDirectory: vi.fn(),
-      query: mockInstanceQuery,
+      listStorageDirectories: mockListStorageDirectories,
+      query: async (...args: unknown[]) =>
+        ((await mockInstanceQuery(...args)) as unknown[] | undefined)?.map(onPublicDrive),
       recordBuildResult: mockInstanceRecordBuildResult,
       update: mockInstanceUpdate,
     };
@@ -75,6 +93,8 @@ const mockBuildInstance = vi.fn();
 const mockBuildStatus = vi.fn();
 const mockListEnvironments = vi.fn();
 const mockStopInstance = vi.fn();
+const mockRenameFile = vi.fn();
+const mockCreateDirectory = vi.fn();
 
 vi.mock('@/server/services/market', () => ({
   MarketService: vi.fn(function () {
@@ -83,6 +103,7 @@ vi.mock('@/server/services/market', () => ({
         buildInstance: mockBuildInstance,
         buildStatus: mockBuildStatus,
         copyInstance: mockCopyEnvironment,
+        createDirectory: mockCreateDirectory,
         deleteInstance: mockDeleteEnvironment,
         getStorage: mockGetWorkspace,
         listEnvironmentSessions: mockListEnvironmentSessions,
@@ -91,19 +112,11 @@ vi.mock('@/server/services/market', () => ({
         readFile: mockReadFile,
         readOccupancy: mockReadOccupancy,
         refreshUsage: mockRefreshUsage,
+        renameFile: mockRenameFile,
         stopInstance: mockStopInstance,
+        readStopTarget: async () => ({ sessionId: 'session-1', topicId: null }),
         writeFile: mockWriteFile,
       }),
-    };
-  }),
-}));
-
-const mockListRepositoryBranches = vi.fn();
-
-vi.mock('@/server/services/connectorData', () => ({
-  ConnectorDataService: vi.fn(function () {
-    return {
-      getGitHubClient: async () => ({ listRepositoryBranches: mockListRepositoryBranches }),
     };
   }),
 }));
@@ -111,7 +124,11 @@ vi.mock('@/server/services/connectorData', () => ({
 const mockResolveClaim = vi.fn();
 const mockResolveSessionConfig = vi.fn();
 
-vi.mock('@/server/services/sandbox', () => ({
+vi.mock('@/server/services/sandbox', async () => ({
+  ...(await vi.importActual<object>('@/server/services/sandbox/binding')),
+  ...(await vi.importActual<object>('@/server/services/sandbox/driveAccess')),
+  ...(await vi.importActual<object>('@/server/services/sandbox/driveUsage')),
+  forgetDriveFolders: vi.fn(),
   resolveSandboxSessionConfig: mockResolveSessionConfig,
   resolveSandboxStorageClaim: mockResolveClaim,
 }));
@@ -124,7 +141,6 @@ vi.mock('@/server/services/scm/cloneCredential', () => ({
 
 const { sandboxStorageRouter } = await import('../sandboxStorage');
 const { SandboxStorageFilesError } = await import('@/server/services/sandbox/storageFiles');
-const { ConnectorDataError } = await import('@lobechat/connector-data');
 
 /** Shaped like the driver error drizzle surfaces, nested behind `cause`. */
 const uniqueViolation = (constraint: string) => {
@@ -137,15 +153,28 @@ const environmentId = '3f2504e0-4f89-11d3-9a0c-0305e82c3301';
 const buildInstanceId = '7b1e9c2a-5d43-4f8a-9c21-8f0e6a3b1d77';
 
 describe('sandboxStorageRouter', () => {
-  const ctx: any = { serverDB: {}, userId: 'user-1', workspaceId: 'ws-1' };
+  const ctx: any = { serverDB: mockServerDB, userId: 'user-1', workspaceId: 'ws-1' };
 
   beforeEach(() => {
     vi.clearAllMocks();
     mockResolveClaim.mockResolvedValue({ key: 'ws-org-1', quotaBytes: 1024 });
     mockInstanceRecordBuildResult.mockResolvedValue(undefined);
+    mockReadOccupancy.mockResolvedValue({ held: [], unavailable: false });
+    // A folder that is not on the drive yet, which is what a new environment
+    // directory or a copy lands in.
+    mockListFiles.mockRejectedValue(new SandboxStorageFilesError('not found', 404));
+    mockListStorageDirectories.mockResolvedValue([]);
   });
 
   describe('createInstance', () => {
+    beforeEach(() => {
+      mockFindOwnedById.mockResolvedValue({
+        id: environmentId,
+        visibility: 'public',
+        workspaceId: 'ws-1',
+      });
+    });
+
     it("binds the instance to the caller's own workspace", async () => {
       // The binding is what `environment_instances_provider_path_unique` keys
       // on, so it has to name the caller's storage rather than be accepted from
@@ -155,7 +184,7 @@ describe('sandboxStorageRouter', () => {
       await sandboxStorageRouter.createCaller(ctx).createInstance({
         environmentId,
         name: 'Atlas',
-        workingDirectory: 'projects/atlas',
+        workingDirectory: 'atlas',
       });
 
       expect(mockInstanceCreate).toHaveBeenCalledWith(
@@ -172,7 +201,7 @@ describe('sandboxStorageRouter', () => {
         sandboxStorageRouter.createCaller(ctx).createInstance({
           environmentId,
           name: 'Atlas',
-          workingDirectory: 'projects/atlas',
+          workingDirectory: 'atlas',
         }),
       ).rejects.toMatchObject({ code: 'NOT_FOUND' });
     });
@@ -186,9 +215,22 @@ describe('sandboxStorageRouter', () => {
         sandboxStorageRouter.createCaller(ctx).createInstance({
           environmentId,
           name: 'Atlas',
-          workingDirectory: 'projects/atlas',
+          workingDirectory: 'atlas',
         }),
       ).rejects.toMatchObject({ code: 'CONFLICT', message: 'DUPLICATE_INSTANCE_DIRECTORY' });
+    });
+
+    it('refuses to initialize a folder that already holds work', async () => {
+      mockListFiles.mockResolvedValue({ entries: [{ name: 'notes.md' }], path: 'atlas' });
+
+      await expect(
+        sandboxStorageRouter.createCaller(ctx).createInstance({
+          environmentId,
+          name: 'Atlas',
+          workingDirectory: 'atlas',
+        }),
+      ).rejects.toMatchObject({ code: 'CONFLICT', message: 'FOLDER_NOT_EMPTY' });
+      expect(mockInstanceCreate).not.toHaveBeenCalled();
     });
   });
 
@@ -196,7 +238,7 @@ describe('sandboxStorageRouter', () => {
     const instanceId = '0726286c-f1a1-4c9e-980d-80a8e837321d';
 
     beforeEach(() => {
-      mockInstanceFindOwnedById.mockResolvedValue({ id: instanceId });
+      mockInstanceFindOwnedById.mockResolvedValue({ environmentId, id: instanceId });
     });
 
     it('deletes the row when the execution plane has no snapshot for it', async () => {
@@ -235,12 +277,11 @@ describe('sandboxStorageRouter', () => {
         sandboxStorageRouter.createCaller(ctx).stopInstance({ id: instanceId }),
       ).resolves.toEqual({ stopped: true });
 
-      expect(mockStopInstance).toHaveBeenCalledWith({ name: instanceId });
+      expect(mockStopInstance.mock.calls[0][0].expectedSessionId).toBe('session-1');
     });
 
     it('refuses an instance the caller does not own, before reaching the execution plane', async () => {
-      // A published instance is usually held by a colleague's conversation;
-      // reading access must not be enough to cut that run off.
+      // Reading a colleague's instance does not grant authority to stop it.
       mockInstanceFindOwnedById.mockResolvedValue(undefined);
 
       await expect(
@@ -324,17 +365,82 @@ describe('sandboxStorageRouter', () => {
     });
   });
 
-  // A workspace root is shared by every member and holds every instance's
-  // directory, so a path alone authorizes nothing there: each call is confined
-  // to one instance — readable if visible, writable only by its owner.
+  // The drive is in reach without an instance — a shared drive's root and its
+  // ordinary folders belong to every member — but environment directories are
+  // carved out of it: a colleague's private one is hidden, and every one is
+  // read-only from outside.
   describe('file routes', () => {
     const instanceId = '9b2c7e1a-4d3f-4a8b-9c1d-2e3f4a5b6c7d';
 
-    it('refuses a workspace write that names no instance', async () => {
+    it('writes an ordinary folder on a shared drive with no instance named', async () => {
+      mockWriteFile.mockResolvedValue({ path: 'projA/a.txt' });
+
+      await sandboxStorageRouter.createCaller(ctx).writeFile({ content: 'x', path: 'projA/a.txt' });
+
+      expect(mockWriteFile).toHaveBeenCalledWith({ content: 'x', path: 'projA/a.txt' });
+      expect(mockListStorageDirectories).toHaveBeenCalledWith(
+        expect.objectContaining({ provider: 'market', providerScope: 'ws-org-1' }),
+      );
+    });
+
+    it('writes into a folder an environment initialized like any other', async () => {
+      mockListStorageDirectories.mockResolvedValue([
+        { id: instanceId, visible: true, workingDirectory: 'atlas' },
+      ]);
+      mockWriteFile.mockResolvedValue({ path: 'atlas/a.txt' });
+
       await expect(
-        sandboxStorageRouter.createCaller(ctx).writeFile({ content: 'x', path: 'work/a.txt' }),
-      ).rejects.toThrow('INSTANCE_REQUIRED');
-      expect(mockWriteFile).not.toHaveBeenCalled();
+        sandboxStorageRouter.createCaller(ctx).writeFile({ content: 'x', path: 'atlas/a.txt' }),
+      ).resolves.toMatchObject({ path: 'atlas/a.txt' });
+      expect(mockWriteFile).toHaveBeenCalled();
+    });
+
+    it('renames an ordinary folder without overwriting', async () => {
+      mockRenameFile.mockResolvedValue({ path: 'projB' });
+
+      await expect(
+        sandboxStorageRouter.createCaller(ctx).renameFile({ newPath: 'projB', path: 'projA' }),
+      ).resolves.toEqual({ path: 'projB' });
+      expect(mockRenameFile).toHaveBeenCalledWith({ newPath: 'projB', path: 'projA' });
+    });
+
+    it('leaves a private environment directory on the public drive out of the root listing', async () => {
+      mockListStorageDirectories.mockResolvedValue([
+        { id: instanceId, isPrivate: true, workingDirectory: 'secret' },
+      ]);
+      mockListFiles.mockResolvedValue({
+        entries: [
+          { isDirectory: true, name: 'projA', path: 'projA' },
+          { isDirectory: true, name: 'secret', path: 'secret' },
+        ],
+        path: '',
+        truncated: false,
+      });
+      const caller = sandboxStorageRouter.createCaller(ctx);
+
+      const listing = await caller.listFiles({});
+
+      expect(listing.entries.map((entry) => entry.name)).toEqual(['projA']);
+      await expect(caller.readFile({ path: 'secret/key' })).rejects.toMatchObject({
+        code: 'NOT_FOUND',
+      });
+    });
+
+    // A personal drive is its owner's alone: nothing on it is hidden from them.
+    it('hides nothing on the personal drive', async () => {
+      mockListStorageDirectories.mockResolvedValue([
+        { id: instanceId, isPrivate: true, workingDirectory: 'secret' },
+      ]);
+      mockListFiles.mockResolvedValue({
+        entries: [{ isDirectory: true, name: 'secret', path: 'secret' }],
+        path: '',
+        truncated: false,
+      });
+
+      const listing = await sandboxStorageRouter.createCaller(ctx).listFiles({ drive: 'personal' });
+
+      expect(listing.entries.map((entry) => entry.name)).toEqual(['secret']);
+      expect(mockResolveClaim).toHaveBeenCalledWith(expect.objectContaining({ drive: 'personal' }));
     });
 
     it("refuses a read outside the instance's directory", async () => {
@@ -358,37 +464,21 @@ describe('sandboxStorageRouter', () => {
       expect(mockListFiles).toHaveBeenCalledWith(expect.objectContaining({ path: 'work' }));
     });
 
-    it("reads a conversation's files through the instance its runs resolve to", async () => {
-      // The same resolution a run takes, so a public agent's conversation is
-      // held to published instances here too.
-      mockResolveSessionConfig.mockResolvedValue({ cwd: 'work', mode: 'persistent' });
-      mockReadFile.mockResolvedValue({ content: '' });
+    it("lists a conversation's own folder when it names a topic and no path", async () => {
+      mockResolveSessionConfig.mockResolvedValue({ cwd: 'projA', mode: 'drive' });
+      mockListFiles.mockResolvedValue({ entries: [] });
 
-      await sandboxStorageRouter
-        .createCaller(ctx)
-        .readFile({ path: 'work/a.txt', topicId: 'topic-1' });
-      await expect(
-        sandboxStorageRouter
-          .createCaller(ctx)
-          .readFile({ path: 'other/a.txt', topicId: 'topic-1' }),
-      ).rejects.toThrow('PATH_OUTSIDE_INSTANCE');
+      await sandboxStorageRouter.createCaller(ctx).listFiles({ topicId: 'topic-1' });
+      expect(mockListFiles).toHaveBeenLastCalledWith(
+        expect.objectContaining({ path: 'projA', topicId: 'topic-1' }),
+      );
 
+      // A temporary conversation has no folder of its own: the drive's root.
       mockResolveSessionConfig.mockResolvedValue({ mode: 'ephemeral' });
-      await expect(
-        sandboxStorageRouter.createCaller(ctx).listFiles({ topicId: 'topic-1' }),
-      ).rejects.toThrow('INSTANCE_REQUIRED');
-
-      expect(mockReadFile).toHaveBeenCalledTimes(1);
-    });
-
-    it('leaves a personal root to its owner', async () => {
-      mockWriteFile.mockResolvedValue({ path: 'notes.md' });
-
-      await sandboxStorageRouter
-        .createCaller({ ...ctx, workspaceId: undefined })
-        .writeFile({ content: 'x', path: 'notes.md' });
-
-      expect(mockWriteFile).toHaveBeenCalled();
+      await sandboxStorageRouter.createCaller(ctx).listFiles({ topicId: 'topic-1' });
+      expect(mockListFiles).toHaveBeenLastCalledWith(
+        expect.objectContaining({ path: undefined, topicId: 'topic-1' }),
+      );
     });
   });
 
@@ -412,6 +502,59 @@ describe('sandboxStorageRouter', () => {
 
       expect(mockInstanceUpdate).toHaveBeenCalledWith('copy-1', { status: 'ready' });
       expect(result.status).toBe('ready');
+    });
+
+    describe('while the source is held', () => {
+      beforeEach(() => {
+        mockInstanceFindOwnedById.mockResolvedValue({
+          environmentId,
+          id: buildInstanceId,
+          workingDirectory: 'src',
+        });
+      });
+
+      it('refuses a source a conversation is holding, before any row exists', async () => {
+        // A held instance is mid-write; a copy would capture a half-changed tree.
+        mockReadOccupancy.mockResolvedValue({
+          held: [{ id: buildInstanceId, own: false }],
+          unavailable: false,
+        });
+
+        await expect(
+          sandboxStorageRouter
+            .createCaller(ctx)
+            .copyInstance({ id: buildInstanceId, name: 'copy', workingDirectory: 'copy' }),
+        ).rejects.toMatchObject({ code: 'CONFLICT', message: 'INSTANCE_IN_USE' });
+
+        expect(mockReadOccupancy).toHaveBeenCalledWith({ names: [buildInstanceId] });
+        expect(mockInstanceCreate).not.toHaveBeenCalled();
+        expect(mockCopyEnvironment).not.toHaveBeenCalled();
+      });
+
+      it('refuses when the lease store cannot answer, rather than reading it as free', async () => {
+        mockReadOccupancy.mockRejectedValue(new Error('redis down'));
+
+        await expect(
+          sandboxStorageRouter
+            .createCaller(ctx)
+            .copyInstance({ id: buildInstanceId, name: 'copy', workingDirectory: 'copy' }),
+        ).rejects.toMatchObject({ code: 'CONFLICT', message: 'INSTANCE_IN_USE' });
+
+        expect(mockInstanceCreate).not.toHaveBeenCalled();
+        expect(mockCopyEnvironment).not.toHaveBeenCalled();
+      });
+
+      it('refuses when the lease store reports itself unavailable', async () => {
+        mockReadOccupancy.mockResolvedValue({ held: [], unavailable: true });
+
+        await expect(
+          sandboxStorageRouter
+            .createCaller(ctx)
+            .copyInstance({ id: buildInstanceId, name: 'copy', workingDirectory: 'copy' }),
+        ).rejects.toMatchObject({ message: 'INSTANCE_IN_USE' });
+
+        expect(mockInstanceCreate).not.toHaveBeenCalled();
+      });
     });
   });
 
@@ -449,6 +592,56 @@ describe('sandboxStorageRouter', () => {
       });
       expect(result.buildId).toBe('b-1');
       expect(mockInstanceUpdate).toHaveBeenLastCalledWith(buildInstanceId, { buildId: 'b-1' });
+    });
+
+    // The execution plane digests the specification it is sent to decide which
+    // build a snapshot belongs to. `kind` only picks the form the product
+    // shows, so an instance created after its environment gained one must be
+    // sent exactly what it would have been sent before.
+    it('sends the same specification whether or not the definition carries a kind', async () => {
+      mockBuildInstance.mockResolvedValue({ buildId: 'b-1' });
+
+      mockInstanceFindOwnedById.mockResolvedValue({
+        configurationSnapshot: spec,
+        id: buildInstanceId,
+        workingDirectory: 'atlas',
+      });
+      await sandboxStorageRouter
+        .createCaller(ctx)
+        .startInstanceBuild({ id: buildInstanceId, topicId: 'tpc-1' });
+      const before = mockBuildInstance.mock.lastCall?.[0].specification;
+
+      mockInstanceFindOwnedById.mockResolvedValue({
+        configurationSnapshot: { ...spec, kind: 'code' },
+        id: buildInstanceId,
+        workingDirectory: 'atlas',
+      });
+      await sandboxStorageRouter
+        .createCaller(ctx)
+        .startInstanceBuild({ id: buildInstanceId, topicId: 'tpc-1' });
+      const after = mockBuildInstance.mock.lastCall?.[0].specification;
+
+      expect(after).toEqual(before);
+      expect(after).toEqual(spec);
+      expect(after).not.toHaveProperty('kind');
+    });
+
+    // A files environment clones nothing and installs nothing, so its instance
+    // is ready the moment it exists rather than waiting on a sandbox.
+    it('settles a files environment ready without starting a build', async () => {
+      mockInstanceFindOwnedById.mockResolvedValue({
+        configurationSnapshot: { kind: 'files' },
+        id: buildInstanceId,
+        workingDirectory: 'notes',
+      });
+
+      const result = await sandboxStorageRouter
+        .createCaller(ctx)
+        .startInstanceBuild({ id: buildInstanceId, topicId: 'tpc-1' });
+
+      expect(result).toEqual({ buildId: null });
+      expect(mockBuildInstance).not.toHaveBeenCalled();
+      expect(mockInstanceUpdate).toHaveBeenCalledWith(buildInstanceId, { status: 'ready' });
     });
 
     it('carries the App installation credential when one could be minted', async () => {
@@ -767,50 +960,21 @@ describe('sandboxStorageRouter', () => {
     });
   });
 
-  describe('environment source urls', () => {
-    it('stores a github checkout and refuses any other host', async () => {
-      // The picker only ever produces a github.com URL, but this is an RPC: a
-      // caller reaching it directly could otherwise name an internal address
-      // and have the build make the execution plane fetch it.
-      const caller = sandboxStorageRouter.createCaller(ctx);
-      mockCreate.mockResolvedValue({ id: 'env-allowed', name: 'Allowed' });
-
-      await caller.createEnvironment({
-        configuration: { sources: [{ kind: 'git', url: 'https://github.com/lobehub/lobehub' }] },
-        name: 'Allowed',
-      });
-      expect(mockCreate).toHaveBeenCalled();
-
-      for (const url of [
-        'https://169.254.169.254/latest/meta-data',
-        'https://internal.corp/repo.git',
-        'https://github.com.attacker.test/a/b',
-        'http://github.com/a/b',
-      ]) {
-        mockCreate.mockClear();
-        await expect(
-          caller.createEnvironment({
-            configuration: { sources: [{ kind: 'git', url }] },
-            name: 'Refused',
-          }),
-        ).rejects.toThrow();
-        expect(mockCreate).not.toHaveBeenCalled();
-      }
-    });
-  });
-
   describe('entitlement', () => {
-    it('refuses every environment call without a workspace claim', async () => {
+    it('refuses every drive call without a claim', async () => {
       // The execution plane would reject these anyway. Failing here keeps a
-      // client that renders the panel too eagerly from looking like a server
+      // client that renders the picker too eagerly from looking like a server
       // fault, and keeps an unentitled caller from reaching the market at all.
+      // The definitions these are built from need no drive — see `environment`.
       mockResolveClaim.mockResolvedValue(null);
       const caller = sandboxStorageRouter.createCaller(ctx);
 
-      await expect(caller.createEnvironment({ name: 'Data analysis' })).rejects.toMatchObject({
-        code: 'FORBIDDEN',
-      });
-      expect(mockCreate).not.toHaveBeenCalled();
+      await expect(
+        caller.createInstance({ environmentId, name: 'atlas', workingDirectory: 'atlas' }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      await expect(caller.listFiles({})).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      expect(mockInstanceCreate).not.toHaveBeenCalled();
+      expect(mockListFiles).not.toHaveBeenCalled();
     });
   });
 
@@ -851,39 +1015,6 @@ describe('sandboxStorageRouter', () => {
     });
   });
 
-  describe('environment names', () => {
-    it.each(['environments_user_name_unique', 'environments_workspace_user_name_unique'])(
-      'maps a collision on %s to CONFLICT',
-      async (constraint) => {
-        mockCreate.mockRejectedValue(uniqueViolation(constraint));
-        const caller = sandboxStorageRouter.createCaller(ctx);
-
-        await expect(caller.createEnvironment({ name: 'Data analysis' })).rejects.toMatchObject({
-          code: 'CONFLICT',
-          message: 'DUPLICATE_ENVIRONMENT_NAME',
-        });
-      },
-    );
-
-    it('maps a collision on rename to CONFLICT', async () => {
-      mockUpdate.mockRejectedValue(uniqueViolation('environments_user_name_unique'));
-      const caller = sandboxStorageRouter.createCaller(ctx);
-
-      await expect(
-        caller.updateEnvironment({ id: environmentId, name: 'Data analysis' }),
-      ).rejects.toMatchObject({ code: 'CONFLICT', message: 'DUPLICATE_ENVIRONMENT_NAME' });
-    });
-
-    it('leaves unrelated failures untouched', async () => {
-      mockCreate.mockRejectedValue(uniqueViolation('some_other_unique_index'));
-      const caller = sandboxStorageRouter.createCaller(ctx);
-
-      await expect(caller.createEnvironment({ name: 'Data analysis' })).rejects.not.toMatchObject({
-        code: 'CONFLICT',
-      });
-    });
-  });
-
   describe('copyInstance', () => {
     const source = {
       environmentId: '9f8b1c2d-0000-4000-8000-000000000001',
@@ -896,28 +1027,28 @@ describe('sandboxStorageRouter', () => {
       mockInstanceFindOwnedById.mockResolvedValue(source);
       mockInstanceCreate.mockResolvedValue({
         id: 'copy-id',
-        workingDirectory: 'projects/atlas-copy',
+        workingDirectory: 'atlas-copy',
       });
       mockCopyEnvironment.mockResolvedValue(undefined);
 
       await sandboxStorageRouter.createCaller(ctx).copyInstance({
         id: environmentId,
         name: 'Atlas (copy)',
-        workingDirectory: 'projects/atlas-copy',
+        workingDirectory: 'atlas-copy',
       });
 
       expect(mockInstanceCreate).toHaveBeenCalledWith(
         expect.objectContaining({
           environmentId: source.environmentId,
           name: 'Atlas (copy)',
-          workingDirectory: 'projects/atlas-copy',
+          workingDirectory: 'atlas-copy',
         }),
       );
       // The copy's own folder, never the source's: sharing one would let either
       // instance's next save delete what the other still lists.
       expect(mockCopyEnvironment).toHaveBeenCalledWith({
         from: environmentId,
-        instanceDir: 'projects/atlas-copy',
+        instanceDir: 'atlas-copy',
         to: 'copy-id',
       });
     });
@@ -933,7 +1064,7 @@ describe('sandboxStorageRouter', () => {
         sandboxStorageRouter.createCaller(ctx).copyInstance({
           id: environmentId,
           name: 'Atlas (copy)',
-          workingDirectory: 'projects/atlas-copy',
+          workingDirectory: 'atlas-copy',
         }),
       ).rejects.toThrow();
       expect(mockInstanceDelete).toHaveBeenCalledWith('copy-id');
@@ -1057,51 +1188,6 @@ describe('sandboxStorageRouter', () => {
 
       expect(result).toEqual({ sessions: [], unavailable: false });
       expect(mockListEnvironmentSessions).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('listGithubBranches', () => {
-    it('lists the branches of one repository through the connected GitHub account', async () => {
-      mockListRepositoryBranches.mockResolvedValue(['canary', 'main']);
-
-      const result = await sandboxStorageRouter
-        .createCaller(ctx)
-        .listGithubBranches({ owner: 'lobehub', repository: 'lobehub' });
-
-      expect(result).toEqual({ branches: ['canary', 'main'], connected: true, truncated: false });
-      expect(mockListRepositoryBranches).toHaveBeenCalledWith('lobehub', 'lobehub');
-    });
-
-    // At the ceiling the list may be partial; the picker falls back to typing
-    // so a branch past it can still be entered.
-    it('says when the list reached the ceiling and may be partial', async () => {
-      mockListRepositoryBranches.mockResolvedValue(
-        Array.from({ length: 1000 }, (_, index) => `branch-${index}`),
-      );
-
-      const result = await sandboxStorageRouter
-        .createCaller(ctx)
-        .listGithubBranches({ owner: 'lobehub', repository: 'lobehub' });
-
-      expect(result.truncated).toBe(true);
-    });
-
-    it('answers not connected rather than failing when GitHub is unavailable', async () => {
-      mockListRepositoryBranches.mockRejectedValue(
-        new ConnectorDataError({
-          code: 'not_connected',
-          message: 'no token',
-          operation: 'listRepositoryBranches',
-          provider: 'github',
-          retryable: false,
-        }),
-      );
-
-      const result = await sandboxStorageRouter
-        .createCaller(ctx)
-        .listGithubBranches({ owner: 'lobehub', repository: 'lobehub' });
-
-      expect(result).toEqual({ branches: [], connected: false, truncated: false });
     });
   });
 });

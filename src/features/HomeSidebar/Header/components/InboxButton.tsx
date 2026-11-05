@@ -1,6 +1,6 @@
 'use client';
 
-import { ActionIcon, Badge } from '@lobehub/ui/base-ui';
+import { ActionIcon, Badge } from '@lobehub/ui';
 import { BellIcon } from 'lucide-react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';

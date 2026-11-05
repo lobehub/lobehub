@@ -9,6 +9,7 @@ import type { AcceptanceReviewAnnotation } from '@lobechat/types';
 import { RequestTrigger } from '@lobechat/types';
 import { pickTrimmedString, toRecord } from '@lobechat/utils/object';
 import debug from 'debug';
+import pMap from 'p-map';
 
 import { DocumentModel } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
@@ -20,6 +21,10 @@ import { AiGenerationService } from '@/server/services/aiGeneration';
 import { FileService } from '@/server/services/file';
 
 import {
+  GIF_FRAME_SHEET_NOTE,
+  inlinedFrameBytes,
+  isGifFrameSheet,
+  isGifStoredFrame,
   isInlineableFrameSize,
   MAX_INLINE_REQUEST_BYTES,
   resolveModelReadableFrameUrl,
@@ -56,6 +61,9 @@ const MAX_VISUALS = 3;
  * check; twelve covers that with room while still bounding the request.
  */
 export const GATE_REVIEW_MAX_VISUALS = 12;
+
+/** GIF frame sheets rendered at once for one review request. */
+const GIF_SHEET_CONCURRENCY = 2;
 
 /**
  * How many checks may be judged at once when a whole acceptance is requested.
@@ -376,9 +384,21 @@ export class VerifyReviewPredictorService {
 
     const files = await Promise.all(visual.map((row) => this.fileModel.findById(row.fileId!)));
 
-    // Spend the request's inline budget in evidence order; later frames are
-    // linked, so a many-frame check cannot push the body past provider limits.
-    let inlineBytes = 0;
+    // A GIF has no usable link (adapters that download it still drop
+    // `image/gif`), so it is always rendered to a sheet and inlined. The sheets
+    // are resolved first and spend the budget at their own size; the remaining
+    // frames then spend what is left in evidence order, and later ones are
+    // linked so a many-frame check cannot push the body past provider limits.
+    // Each sheet downloads and decodes a whole recording, so only two at a time.
+    const gifSheets = await pMap(
+      files,
+      (file) =>
+        file && isGifStoredFrame(file)
+          ? resolveModelReadableFrameUrl(this.fileService, file)
+          : undefined,
+      { concurrency: GIF_SHEET_CONCURRENCY },
+    );
+    let inlineBytes = gifSheets.reduce((sum, url) => sum + (url ? inlinedFrameBytes(url) : 0), 0);
     const inline = files.map((file) => {
       const size = file?.size;
       if (!isInlineableFrameSize(size) || inlineBytes + size > MAX_INLINE_REQUEST_BYTES)
@@ -391,17 +411,30 @@ export class VerifyReviewPredictorService {
       visual.map(async (row, index) => {
         const file = files[index];
         if (!file) return null;
+        const accessUrl =
+          gifSheets[index] ??
+          (await resolveModelReadableFrameUrl(this.fileService, file, inline[index]));
+        const frameSheet = isGifFrameSheet(row.type, accessUrl);
         return {
-          accessUrl: await resolveModelReadableFrameUrl(this.fileService, file, inline[index]),
-          description: row.description,
+          accessUrl,
+          description: frameSheet
+            ? [row.description, GIF_FRAME_SHEET_NOTE].filter(Boolean).join(' ')
+            : row.description,
           evidenceId: row.id,
+          frameSheet,
         };
       }),
     );
 
     return resolved.filter(
-      (item): item is { accessUrl: string; description: string | null; evidenceId: string } =>
-        Boolean(item?.accessUrl),
+      (
+        item,
+      ): item is {
+        accessUrl: string;
+        description: string | null;
+        evidenceId: string;
+        frameSheet: boolean;
+      } => Boolean(item?.accessUrl),
     );
   }
 
@@ -413,14 +446,19 @@ export class VerifyReviewPredictorService {
    * A region naming an image outside the attached set is dropped rather than
    * clamped to image 0: a note pinned to the wrong screenshot is more misleading
    * than no note, because the reviewer has no way to tell it moved.
+   *
+   * A GIF is shown to the model as a frame sheet, so a region drawn on it is in
+   * sheet coordinates. The page draws annotations over the original animation,
+   * where those coordinates land on unrelated content, so they are dropped; the
+   * comment still carries the finding.
    */
   private toAnnotations(
     regions: RawReviewPrediction['regions'],
-    visuals: { evidenceId: string }[],
+    visuals: { evidenceId: string; frameSheet: boolean }[],
   ): AcceptanceReviewAnnotation[] {
     return (regions ?? []).flatMap((region) => {
       const target = visuals[region.imageIndex];
-      if (!target) return [];
+      if (!target || target.frameSheet) return [];
       return [
         {
           comment: region.comment ?? undefined,

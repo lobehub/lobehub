@@ -1,5 +1,5 @@
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@lobechat/const';
-import { ActionIcon } from '@lobehub/ui/base-ui';
+import { ActionIcon } from '@lobehub/ui';
 import { ExternalLink } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -21,15 +21,21 @@ const TaskDetailHeader = memo<{ onClose?: () => void }>(({ onClose }) => {
   const activeWorkspaceSlug = useActiveWorkspaceSlug();
   const taskId = useChatStore(chatPortalSelectors.taskDetailId);
   const agentId = useTaskStore((state) =>
-    taskId ? (state.taskDetailMap[taskId]?.agentId ?? undefined) : undefined,
+    taskId
+      ? (state.taskDetailMap[state.taskRefIndex?.[taskId] ?? taskId]?.agentId ?? undefined)
+      : undefined,
   );
   const taskTitle = useTaskStore((state) =>
-    taskId ? (state.taskDetailMap[taskId]?.name ?? undefined) : undefined,
+    taskId
+      ? (state.taskDetailMap[state.taskRefIndex?.[taskId] ?? taskId]?.name ?? undefined)
+      : undefined,
   );
   const pageUrl = getTaskDetailPageUrl({
     agentId,
     appOrigin,
-    taskId,
+    identifier: useTaskStore((state) =>
+      taskId ? state.taskDetailMap[state.taskRefIndex?.[taskId] ?? taskId]?.identifier : undefined,
+    ),
     title: taskTitle,
     workspaceSlug: activeWorkspaceSlug,
   });

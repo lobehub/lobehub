@@ -53,11 +53,13 @@ venv/
 node_modules/
 *.lock
 package-lock.json
+!apps/desktop/scripts/security-policy-runtime/package-lock.json
 bun.lockb
 .pnpm-store/
 
 # Build outputs
 dist/
+public/canvas-runtime/
 public/_spa/
 public/_spa-auth/
 public/_spa-share/
@@ -158,6 +160,10 @@ apps/desktop/resources/cli-package.json
 # Superpowers plugin brainstorm/spec outputs (local only; do not commit)
 .superpowers/
 docs/superpowers/
+
+# Local Ryugi artifacts and specifications
+.ryugi/
+docs/ryugi/
 .heerogeneous-tracing
 
 # Kagura agent runtime

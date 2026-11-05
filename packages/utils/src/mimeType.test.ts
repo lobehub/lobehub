@@ -183,6 +183,39 @@ describe('resolveMimeType', () => {
     );
   });
 
+  it('keeps image/svg+xml for SVG instead of downgrading it to text/plain', async () => {
+    // SVG is text, but browsers only render it as an image from image/svg+xml.
+    const svgSource = Buffer.from(
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><path d="M0 10L5 0L10 10z"/></svg>\n',
+    );
+    await expect(resolveMimeType('/repo/shape.svg', svgSource)).resolves.toBe('image/svg+xml');
+  });
+
+  it('keeps the text downgrade for other text extensions mime-db maps to non-text types', async () => {
+    const mtsSource = Buffer.from('export const bar = 1;\n');
+    await expect(resolveMimeType('/repo/module.mts', mtsSource)).resolves.toBe(
+      'text/plain; charset=utf-8',
+    );
+
+    // Non-SVG `+xml` types stay on the downgrade so text previews keep working.
+    const atomFeed = Buffer.from('<feed xmlns="http://www.w3.org/2005/Atom"></feed>\n');
+    await expect(resolveMimeType('/repo/feed.atom', atomFeed)).resolves.toBe(
+      'text/plain; charset=utf-8',
+    );
+  });
+
+  it('prefers the SVG extension over the generic XML match for an `<?xml` prolog', async () => {
+    // file-type fingerprints the prolog as application/xml, which browsers won't render as an image.
+    const exportedSvg = Buffer.from(
+      '<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg"/>\n',
+    );
+    await expect(resolveMimeType('/repo/exported.svg', exportedSvg)).resolves.toBe('image/svg+xml');
+
+    // Plain .xml keeps the magic-byte result.
+    const plainXml = Buffer.from('<?xml version="1.0"?><root/>');
+    await expect(resolveMimeType('/repo/data.xml', plainXml)).resolves.toBe('application/xml');
+  });
+
   it('falls back to text/plain for unknown text extensions via the sniff', async () => {
     await expect(resolveMimeType('/repo/App.tsx', Buffer.from(''))).resolves.toBe(
       'text/plain; charset=utf-8',

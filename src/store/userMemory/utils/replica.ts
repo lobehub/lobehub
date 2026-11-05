@@ -1,21 +1,13 @@
 import {
-  cacheScope,
   definePagedReplica,
   defineReplica,
-  REPLICA_INDEX_KEY,
+  identityOnlyScope,
+  identityScopeOf,
   type ReplicaScope,
-  type ReplicaStorage,
   stableQueryKey,
 } from '@/libs/replica';
 
-/**
- * The identity half of a cache scope (`${userId}:${workspaceId}`), with the
- * workspace replaced by a marker no workspace id can take.
- */
-export const identityScopeOf = (scope: string): string => {
-  const separator = scope.indexOf(':');
-  return `${separator === -1 ? scope : scope.slice(0, separator)}:*`;
-};
+export { identityScopeOf };
 
 /**
  * User memories belong to the user, not to a workspace: the server reads and
@@ -26,12 +18,7 @@ export const identityScopeOf = (scope: string): string => {
  * the rows written in every workspace, and a workspace switch keeps showing
  * the same user's memories.
  */
-export const userMemoryIdentityScope: ReplicaScope = {
-  canHydrate: () => cacheScope.canHydrate?.() ?? true,
-  canPersist: () => cacheScope.canPersist(),
-  get: () => identityScopeOf(cacheScope.get()),
-  use: () => identityScopeOf(cacheScope.use()),
-};
+export const userMemoryIdentityScope: ReplicaScope = identityOnlyScope;
 
 /**
  * How many distinct search / sort page sets each memory list keeps persisted
@@ -88,53 +75,12 @@ export const memoryListKey = <T extends { pageSize?: number; q?: string }>({
 /** The part of a replica slice the user-wide purge needs (structural). */
 export interface PurgeableReplica {
   clear: () => Promise<boolean>;
-  /** Off-scope `remove(key, scope)` purges that key's rows in `scope` (engine). */
-  remove: (key: string, scope?: string) => boolean;
-  resource: { storage?: ReplicaStorage<any> };
+  /**
+   * `clear()` for a scope that may not be active: purges its persisted rows
+   * behind the writes already queued for it (`engine.clearScope`).
+   */
+  clearScope: (scope: string) => Promise<boolean>;
 }
-
-/** How long an off-scope purge waits for its row deletes to land. */
-const OFF_SCOPE_PURGE_TIMEOUT = 2000;
-const OFF_SCOPE_PURGE_POLL = 25;
-
-/**
- * Purge every persisted row a replica holds in `scope` — a partition that is
- * NOT the active one (the user whose memories were deleted switched account
- * while the server purge ran). The view on screen belongs to the active user
- * and is left alone.
- *
- * Every userMemory resource keys its persisted rows by entry key (no replica
- * `query`), so the partition's index lists entry keys; each goes through the
- * engine's off-scope `remove(key, scope)`, which orders the delete behind the
- * resource's queued writes and refuses to hydrate the key again in this
- * session. Resolves `true` once every indexed row is gone.
- */
-const purgeOffScope = async (replica: PurgeableReplica, scope: string): Promise<boolean> => {
-  const storage = replica.resource.storage;
-  if (!storage) return true;
-  const read = (queryKey: string) =>
-    storage.getStrict ? storage.getStrict({ queryKey, scope }) : storage.get({ queryKey, scope });
-
-  let keys: string[];
-  try {
-    keys = ((await read(REPLICA_INDEX_KEY))?.data as unknown as string[] | undefined) ?? [];
-  } catch {
-    return false;
-  }
-  for (const key of keys) replica.remove(key, scope);
-
-  const deadline = Date.now() + OFF_SCOPE_PURGE_TIMEOUT;
-  for (;;) {
-    try {
-      const rows = await Promise.all(keys.map((key) => read(key)));
-      if (rows.every((row) => row === undefined)) return true;
-    } catch {
-      return false;
-    }
-    if (Date.now() >= deadline) return false;
-    await new Promise((resolve) => setTimeout(resolve, OFF_SCOPE_PURGE_POLL));
-  }
-};
 
 /**
  * `clearReplicas` for the user `user` (a `userMemoryIdentityScope` value).
@@ -150,5 +96,5 @@ export const clearUserReplicas = (
   if (user === undefined || user === userMemoryIdentityScope.get())
     return clearReplicas(...replicas.map((replica) => replica.clear));
 
-  return clearReplicas(...replicas.map((replica) => () => purgeOffScope(replica, user)));
+  return clearReplicas(...replicas.map((replica) => () => replica.clearScope(user)));
 };

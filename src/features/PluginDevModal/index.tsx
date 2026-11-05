@@ -1,10 +1,8 @@
 import { isDesktop } from '@lobechat/const';
 import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
 import { type LobeToolCustomPlugin } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
-import { Button, confirmModal, Drawer, toast } from '@lobehub/ui/base-ui';
-import { useForm, useWatch } from '@lobehub/ui/base-ui/form';
-import { useResponsive } from 'antd-style';
+import { Button, confirmModal, Drawer, Flexbox, toast, useResponsive } from '@lobehub/ui';
+import { useForm, useWatch } from '@lobehub/ui/form';
 import { memo, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 

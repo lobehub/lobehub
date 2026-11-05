@@ -1,3 +1,4 @@
+import { ActivatorApiName, LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
 import { AgentDocumentsIdentifier } from '@lobechat/builtin-tool-agent-documents';
 import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
 import { LobeAgentApiName, LobeAgentIdentifier } from '@lobechat/builtin-tool-lobe-agent';
@@ -10,6 +11,7 @@ import {
   getShareGrantActivatedPluginIds,
   shareGateGrantsCloudSandbox,
 } from '.';
+import { resolveEffectiveShareToolGrants } from './grants';
 import { buildGate } from './testUtils';
 
 describe('filterPluginsByShareGate', () => {
@@ -119,5 +121,34 @@ describe('shareGateGrantsCloudSandbox', () => {
         }),
       ),
     ).toBe(true);
+  });
+});
+
+describe('resolveEffectiveShareToolGrants — lobe-activator', () => {
+  it('implies the activator, scoped to activateTools, from any tool grant', () => {
+    const grants = resolveEffectiveShareToolGrants({ toolGrants: [{ identifier: 'mcp-github' }] });
+
+    expect(grants.get(LobeActivatorIdentifier)).toEqual(new Set([ActivatorApiName.activateTools]));
+  });
+
+  it('does not imply the activator when the share grants no tool', () => {
+    expect(resolveEffectiveShareToolGrants({}).has(LobeActivatorIdentifier)).toBe(false);
+    // A skill-only share already has lobe-skills to load what it granted.
+    expect(
+      resolveEffectiveShareToolGrants({ skillGrants: ['pdf-report'] }).has(LobeActivatorIdentifier),
+    ).toBe(false);
+  });
+
+  it('never lets a stored activator entry widen the implied scope or stand alone', () => {
+    const widened = resolveEffectiveShareToolGrants({
+      toolGrants: [{ identifier: LobeActivatorIdentifier }, { identifier: 'mcp-github' }],
+    });
+    expect(widened.get(LobeActivatorIdentifier)).toEqual(new Set([ActivatorApiName.activateTools]));
+
+    // An activator entry is not itself a grant of anything to activate.
+    const alone = resolveEffectiveShareToolGrants({
+      toolGrants: [{ identifier: LobeActivatorIdentifier }],
+    });
+    expect(alone.has(LobeActivatorIdentifier)).toBe(false);
   });
 });

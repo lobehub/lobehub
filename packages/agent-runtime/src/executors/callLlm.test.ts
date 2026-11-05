@@ -71,6 +71,7 @@ const createMessageTransport = (): MessageTransport => ({
   deleteMessage: vi.fn(),
   findById: vi.fn().mockResolvedValue({ id: 'parent-1' }),
   findToolMessageIdByToolCallId: vi.fn(),
+  getToolMessage: vi.fn(),
   query: vi.fn(),
   update: vi.fn(),
   updatePluginState: vi.fn(),
@@ -169,6 +170,70 @@ const createHost = (
 });
 
 describe('callLlm executor', () => {
+  it('ships a joined steer parent on stream_start so the client can show it before the step ends', async () => {
+    const transport = createCallTransport();
+    const messages = createMessageTransport();
+    vi.mocked(messages.findById).mockResolvedValue({
+      content: 'why not the Feishu CLI',
+      id: 'steer-1',
+      metadata: { steer: true, trigger: 'chat' },
+      parentId: 'assistant-0',
+      role: 'user',
+    });
+    vi.mocked(messages.createAssistantMessage).mockResolvedValue({
+      id: 'assistant-1',
+      parentId: 'steer-1',
+      role: 'assistant',
+    });
+    const stream = createStreamSink();
+    const host = createHost(transport.llm, messages, stream);
+
+    await callLlm(host)(
+      { payload: { ...instruction.payload, parentMessageId: 'steer-1' }, type: 'call_llm' },
+      createState(),
+      { phase: 'user_input' },
+    );
+
+    expect(stream.publishEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          parentMessage: {
+            content: 'why not the Feishu CLI',
+            id: 'steer-1',
+            metadata: { steer: true, trigger: 'chat' },
+            parentId: 'assistant-0',
+            role: 'user',
+          },
+        }),
+        type: 'stream_start',
+      }),
+    );
+  });
+
+  it('leaves a non-steer parent off stream_start: the client already has it', async () => {
+    const transport = createCallTransport();
+    const messages = createMessageTransport();
+    vi.mocked(messages.findById).mockResolvedValue({
+      content: 'hello',
+      id: 'user-1',
+      metadata: {},
+      role: 'user',
+    });
+    const stream = createStreamSink();
+    const host = createHost(transport.llm, messages, stream);
+
+    await callLlm(host)(
+      { payload: { ...instruction.payload, parentId: 'user-1' }, type: 'call_llm' },
+      createState(),
+      { phase: 'user_input' },
+    );
+
+    const streamStart = vi
+      .mocked(stream.publishEvent)
+      .mock.calls.find(([event]) => event.type === 'stream_start');
+    expect(streamStart?.[0].data).not.toHaveProperty('parentMessage');
+  });
+
   it('prepares the assistant message and delegates call_llm execution to the LLM transport', async () => {
     const state = createState();
     const transport = createCallTransport();
@@ -418,6 +483,7 @@ describe('callLlm executor', () => {
     const error = new Error('temporary outage');
     const firstOutput = createAttemptOutput('partial');
     const finalOutput = createAttemptOutput('complete');
+    finalOutput.usage = { totalTokens: 10 };
     const runAttempt = vi
       .fn()
       .mockResolvedValueOnce({ error, ok: false, output: firstOutput })
@@ -489,6 +555,8 @@ describe('callLlm executor', () => {
       type: 'stream_retry',
     });
     expect(policy.waitForRetry).toHaveBeenCalledWith(1000);
+    // Both provider attempts count toward the user-facing LLM-call metric.
+    expect(result.newState.usage?.llm.apiCalls).toBe(2);
     expect(result.newState.messages.at(-1)).toMatchObject({ content: 'complete' });
     expect(transport.trace.recordResult).toHaveBeenCalledWith(finalOutput);
     expect(policy.onError).not.toHaveBeenCalled();

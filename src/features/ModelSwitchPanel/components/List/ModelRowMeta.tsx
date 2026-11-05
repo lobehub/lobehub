@@ -1,6 +1,4 @@
-import { BRANDING_PROVIDER } from '@lobechat/business-const';
-import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar, Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import { LucideImage } from 'lucide-react';
 import { type AiModelForSelect } from 'model-bank';
 import { memo, useMemo } from 'react';
@@ -83,18 +81,12 @@ export const ModelRowMeta = memo<ModelRowMetaProps>(({ model, provider }) => {
 
   let priceTooltip: React.ReactNode;
   if (pricing && multiplier !== undefined) {
-    const isCreditPricing = provider === BRANDING_PROVIDER;
-    const price = getPrice(pricing, isCreditPricing);
-    const unitPrefix = isCreditPricing
-      ? 'ModelSwitchPanel.detail.pricing.credits'
-      : 'ModelSwitchPanel.detail.pricing';
+    const price = getPrice(pricing);
+    const unitPrefix = 'ModelSwitchPanel.detail.pricing';
     priceTooltip = (
       <Flexbox gap={2}>
         <span>
-          {t(
-            isCreditPricing ? 'ModelSwitchPanel.meta.price.credits' : 'ModelSwitchPanel.meta.price',
-            { multiplier: formatPriceMultiplier(multiplier) },
-          )}
+          {t('ModelSwitchPanel.meta.price', { multiplier: formatPriceMultiplier(multiplier) })}
         </span>
         <span>
           {[

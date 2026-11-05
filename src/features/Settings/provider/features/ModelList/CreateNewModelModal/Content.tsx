@@ -1,6 +1,6 @@
 'use client';
 
-import type { FormInstance } from '@lobehub/ui/base-ui/form';
+import type { FormInstance } from '@lobehub/ui/form';
 import { memo } from 'react';
 
 import ModelConfigForm from './Form';

@@ -48,6 +48,8 @@ Start one guard per run, before the first heavy command, and stop it at teardown
 ```bash
 GUARD=.agents/skills/acceptance/scripts/resource-guard.sh
 RUN_DIR=".acceptances/guard/$RUN_TAG"
+# The guard may start before any round exists; keep its state out of git too.
+mkdir -p .acceptances && { [ -e .acceptances/.gitignore ] || printf '*\n' > .acceptances/.gitignore; }
 
 bash "$GUARD" start \
   --state-dir "$RUN_DIR" --run-tag "$RUN_TAG" --interval 10 \

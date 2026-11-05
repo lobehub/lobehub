@@ -1,4 +1,4 @@
-import { Accordion, Text } from '@lobehub/ui/base-ui';
+import { Accordion, Text } from '@lobehub/ui';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 

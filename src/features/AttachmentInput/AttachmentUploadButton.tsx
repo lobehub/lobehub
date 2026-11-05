@@ -1,4 +1,4 @@
-import { ActionIcon, Upload } from '@lobehub/ui/base-ui';
+import { ActionIcon, Upload } from '@lobehub/ui';
 import { Paperclip } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

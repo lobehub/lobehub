@@ -1,6 +1,6 @@
 'use client';
 
-import { createStaticStyles, cx } from 'antd-style';
+import { createStaticStyles, cx } from '@lobehub/ui';
 import dayjs from 'dayjs';
 import { type ReactNode } from 'react';
 import { memo, useMemo } from 'react';
@@ -157,7 +157,8 @@ function TimelineViewInner<
         style={{ minHeight: '100%' }}
         components={{
           Footer: footer
-            ? () => (
+            ? // eslint-disable-next-line @eslint-react/no-nested-component-definitions -- reads the latest pagination state on every render
+              () => (
                 <LoadMoreFooter
                   loadMoreError={loadMoreError}
                   state={footer}

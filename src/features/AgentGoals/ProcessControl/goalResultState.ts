@@ -225,6 +225,11 @@ export interface CheckLike {
 export type CriterionOutcomeState = 'failed' | 'passed' | 'unjudged';
 
 export interface CriterionOutcome {
+  /**
+   * The acceptance bundle's row for the latest round's check — the id the
+   * Portal's check view looks the criterion up by. Absent when no round judged it.
+   */
+  checkId?: string;
   criterion: CriterionLike;
   evidence: EvidenceLike[];
   /** Why it is unmet (or undecided); absent for a met criterion. */
@@ -302,6 +307,7 @@ export const buildCriterionOutcomes = ({
 
     return [
       {
+        checkId: check.id,
         criterion,
         evidence: check.evidence,
         ...(reason ? { reason } : {}),
@@ -500,6 +506,13 @@ export const resultTrailSource = (graph: Pick<GoalGraphView, 'report'>): ResultT
   if (!parsed.success) return { kind: 'derived' };
   return { kind: 'story', metadata: parsed.data, report: report.latest };
 };
+
+/**
+ * The HTML page the latest report wrote, which leads the result page. A newer
+ * wrap-up still writing keeps the previous page on screen until it lands.
+ */
+export const goalReportPageId = (graph: Pick<GoalGraphView, 'report'>): string | undefined =>
+  graph.report?.latest?.pageDocumentId || undefined;
 
 /** Whether the wrap-up agent is writing this result's storyline right now. */
 export const isGoalReportOrganizing = (graph: Pick<GoalGraphView, 'report'>): boolean =>

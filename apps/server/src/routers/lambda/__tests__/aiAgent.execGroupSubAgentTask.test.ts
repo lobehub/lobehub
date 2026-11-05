@@ -124,14 +124,43 @@ describe('aiAgentRouter.execSubAgentTask', () => {
         topicId: testTopicId,
       });
 
-      expect(mockExecGroupSubAgentTask).toHaveBeenCalledWith({
+      expect(mockExecGroupSubAgentTask).toHaveBeenCalledWith(
+        {
+          agentId: testAgentId,
+          groupId: testGroupId,
+          instruction: 'Test instruction',
+          parentMessageId: 'parent-msg-1',
+          timeout: undefined,
+          title: undefined,
+          topicId: testTopicId,
+        },
+        { llmRelay: undefined },
+      );
+    });
+
+    it('hands the tab relay channel and executor to the service', async () => {
+      mockExecGroupSubAgentTask.mockResolvedValue({ success: true, threadId: 'thread-123' });
+      const llmExecutor = {
+        capabilities: ['llm_relay@1'],
+        clientId: 'tab-1',
+        providers: ['ollama'],
+      };
+      const channel = `llmcall:${userId}:personal-3f2a9c1d8e7b4a60`;
+
+      const caller = aiAgentRouter.createCaller(createTestContext());
+
+      await caller.execSubAgentTask({
         agentId: testAgentId,
-        groupId: testGroupId,
         instruction: 'Test instruction',
+        llmExecutor: { ...llmExecutor, channelOperationId: 'someone-else-op' } as any,
+        llmRelayChannel: channel,
         parentMessageId: 'parent-msg-1',
-        timeout: undefined,
-        title: undefined,
         topicId: testTopicId,
+      });
+
+      // A client cannot pick the channel through the executor itself.
+      expect(mockExecGroupSubAgentTask).toHaveBeenCalledWith(expect.anything(), {
+        llmRelay: { channel, executor: llmExecutor },
       });
     });
 
@@ -159,6 +188,7 @@ describe('aiAgentRouter.execSubAgentTask', () => {
           parentOperationId: 'parent-operation-1',
           title: 'Delegated task',
         }),
+        expect.anything(),
       );
     });
 
@@ -211,6 +241,7 @@ describe('aiAgentRouter.execSubAgentTask', () => {
         expect.objectContaining({
           timeout: 60000,
         }),
+        expect.anything(),
       );
     });
   });

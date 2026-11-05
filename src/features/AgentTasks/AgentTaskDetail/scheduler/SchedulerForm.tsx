@@ -1,9 +1,18 @@
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Accordion, Checkbox, InputNumber, Select, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import {
+  Accordion,
+  Checkbox,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Icon,
+  InputNumber,
+  Select,
+  Text,
+  ToggleGroup,
+} from '@lobehub/ui';
 import dayjs, { type Dayjs } from 'dayjs';
 import { Globe, Hash, SlidersHorizontal } from 'lucide-react';
-import { memo, useCallback, useState } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -35,39 +44,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     min-width: 0;
   `,
-  weekdayButton: css`
-    cursor: pointer;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    width: 36px;
-    height: 32px;
-    border-radius: 6px;
-
-    font-size: 12px;
-    font-weight: 500;
-    color: ${cssVar.colorTextSecondary};
-
-    background: transparent;
-
-    transition: all 0.15s ease;
-
-    &:hover {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  weekdayButtonActive: css`
-    color: ${cssVar.colorPrimary};
-    background: ${cssVar.colorPrimaryBg};
-
-    &:hover {
-      color: ${cssVar.colorPrimary};
-      background: ${cssVar.colorPrimaryBgHover};
-    }
-  `,
 }));
 
 const DEFAULT_PATTERN = '0 9 * * *';
@@ -98,6 +74,11 @@ interface SchedulerFormProps {
 
 const SchedulerForm = memo<SchedulerFormProps>(({ maxExecutions, onChange, pattern, timezone }) => {
   const { t } = useTranslation('chat');
+
+  const weekdayOptions = useMemo(
+    () => WEEKDAYS.map(({ key, label }) => ({ label: t(label as any), value: String(key) })),
+    [t],
+  );
 
   // Local state seeded once from props at mount; never re-synced. Keeps the
   // form in user control even if an unrelated detail refresh runs concurrently.
@@ -194,8 +175,8 @@ const SchedulerForm = memo<SchedulerFormProps>(({ maxExecutions, onChange, patte
     emit({ hourlyInterval: next });
   };
 
-  const toggleWeekday = (day: number) => {
-    const next = weekdays.includes(day) ? weekdays.filter((d) => d !== day) : [...weekdays, day];
+  const handleWeekdaysChange = (values: string[]) => {
+    const next = values.map(Number).sort((a, b) => a - b);
     setWeekdays(next);
     emit({ weekdays: next });
   };
@@ -256,20 +237,20 @@ const SchedulerForm = memo<SchedulerFormProps>(({ maxExecutions, onChange, patte
           </Flexbox>
         )}
         {scheduleType === 'hourly' && (
-          <Flexbox flex={1} gap={6}>
+          <Flexbox flex={1.5} gap={6} style={{ minWidth: 0 }}>
             <Text className={styles.fieldLabel}>{t('taskSchedule.every')}</Text>
             <Flexbox horizontal align="center" gap={6}>
               <InputNumber
                 max={24}
                 min={1}
-                style={{ flex: 1 }}
+                style={{ flex: 1, minWidth: 0 }}
+                suffix={<Text type="secondary">{t('taskSchedule.hours')}</Text>}
                 value={hourlyInterval}
                 variant="filled"
                 onChange={handleHourlyIntervalChange}
               />
-              <Text type="secondary">{t('taskSchedule.hours')}</Text>
               <Select
-                style={{ width: 80 }}
+                style={{ flexShrink: 0, width: 80 }}
                 value={triggerTime.minute()}
                 variant="filled"
                 options={[
@@ -288,20 +269,13 @@ const SchedulerForm = memo<SchedulerFormProps>(({ maxExecutions, onChange, patte
       {scheduleType === 'weekly' && (
         <Flexbox gap={6}>
           <Text className={styles.fieldLabel}>{t('taskSchedule.weekday')}</Text>
-          <Flexbox horizontal gap={6}>
-            {WEEKDAYS.map(({ key, label }) => (
-              <div
-                key={key}
-                className={cx(
-                  styles.weekdayButton,
-                  weekdays.includes(key) && styles.weekdayButtonActive,
-                )}
-                onClick={() => toggleWeekday(key)}
-              >
-                {t(label as any)}
-              </div>
-            ))}
-          </Flexbox>
+          <ToggleGroup
+            multiple
+            options={weekdayOptions}
+            size="small"
+            value={weekdays.map(String)}
+            onChange={handleWeekdaysChange}
+          />
         </Flexbox>
       )}
 

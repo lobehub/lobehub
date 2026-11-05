@@ -12,7 +12,12 @@ import { subscribeActiveConversationNavigation } from './navigation';
 import { projectActiveConversationCoordinate } from './projectCoordinate';
 
 const ActiveConversationBridge = () => {
-  const params = useActiveRouteParams<{ aid?: string; gid?: string; topicId?: string }>();
+  const params = useActiveRouteParams<{
+    aid?: string;
+    gid?: string;
+    projectId?: string;
+    topicId?: string;
+  }>();
   const url = useElectronStore(selectActiveTabUrl) || '/';
   const { agentId } = useResolvedAgentRouteId(params.aid);
   const coordinate = useMemo(

@@ -1,12 +1,12 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
+import { Flexbox, Text } from '@lobehub/ui';
 import { type CSSProperties, type FC, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Outlet, useMatch } from 'react-router';
 
 import NavHeader from '@/features/NavHeader';
+import { useSettingsAnchorScroll } from '@/features/SettingsSearch/anchor';
 import { RouteSkeletonChromeProvider } from '@/spa/router/routeSkeletonChrome';
 import { WorkspaceSettingsTabs } from '@/types/workspaceSettings';
 
@@ -20,6 +20,7 @@ const COMPACT_HEADER_TABS = new Set<string>([
   WorkspaceSettingsTabs.Appearance,
   WorkspaceSettingsTabs.Billing,
   WorkspaceSettingsTabs.Budget,
+  WorkspaceSettingsTabs.ChatPreference,
   WorkspaceSettingsTabs.Creds,
   WorkspaceSettingsTabs.Credits,
   WorkspaceSettingsTabs.Devices,
@@ -37,7 +38,20 @@ const COMPACT_HEADER_TABS = new Set<string>([
   WorkspaceSettingsTabs.ServiceModel,
   WorkspaceSettingsTabs.Stats,
   WorkspaceSettingsTabs.Storage,
+  WorkspaceSettingsTabs.SubscriptionAccounts,
+  WorkspaceSettingsTabs.Teams,
+  WorkspaceSettingsTabs.Trash,
   WorkspaceSettingsTabs.Usage,
+]);
+
+/**
+ * Tabs whose content spans the full pane instead of the centered 1024 column —
+ * card grids that add columns as the pane widens (Devices), and the
+ * subscription account list, whose usage columns need the room.
+ */
+const FULL_WIDTH_TABS = new Set<string>([
+  WorkspaceSettingsTabs.Devices,
+  WorkspaceSettingsTabs.SubscriptionAccounts,
 ]);
 
 const outletContainerStyle: CSSProperties = { overflow: 'hidden', position: 'relative' };
@@ -74,6 +88,8 @@ const WorkspaceSettingsContentLayout: FC = memo(() => {
   const categories = useWorkspaceSettingCategory();
   const match = useMatch('/:workspaceSlug/settings/:tab/*');
   const activeTab = match?.params.tab;
+  // Settings-search results deep-link to `#anchor` rows on these pages.
+  useSettingsAnchorScroll();
   // The Profile nav item is labelled with the user's name (like the personal
   // sidebar); the page header keeps the generic title instead.
   const title =
@@ -83,7 +99,11 @@ const WorkspaceSettingsContentLayout: FC = memo(() => {
           ?.label;
 
   const content = (
-    <Container maxWidth={1024} paddingBlock={'24px 128px'} paddingInline={24}>
+    <Container
+      maxWidth={activeTab && FULL_WIDTH_TABS.has(activeTab) ? '100%' : 1024}
+      paddingBlock={'24px 128px'}
+      paddingInline={24}
+    >
       <Outlet />
     </Container>
   );

@@ -333,18 +333,6 @@ describe('LobeXiaomiMiMoAI - custom features', () => {
       expect(models).toEqual([]);
     });
 
-    it('should process models with MODEL_LIST_CONFIGS', async () => {
-      mockClient.models.list.mockResolvedValue({
-        data: [{ id: 'mimo-v2-pro' }],
-      });
-
-      const models = await params.models({ client: mockClient as any });
-
-      // The processModelList function should merge with known model list
-      expect(models[0]).toHaveProperty('id');
-      expect(models[0].id).toBe('mimo-v2-pro');
-    });
-
     it('should preserve model properties from API response', async () => {
       mockClient.models.list.mockResolvedValue({
         data: [

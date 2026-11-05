@@ -1,3 +1,4 @@
+import { ActivatorApiName, LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
 import { AgentDocumentsIdentifier } from '@lobechat/builtin-tool-agent-documents';
 import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
 import { SkillsIdentifier } from '@lobechat/builtin-tool-skills';
@@ -8,6 +9,7 @@ import {
   type ShareToolGrant,
 } from '@lobechat/const';
 
+import { isGovernedByBuiltinAllowlist } from './allowlist';
 import type { AgentShareGate, ShareDataToolPermissions } from './types';
 
 /**
@@ -55,6 +57,22 @@ export const getShareGrantActivatedPluginIds = (gate: AgentShareGate): string[] 
 
   return hasShareToolGrant(grants, AgentDocumentsIdentifier) ? [AgentDocumentsIdentifier] : [];
 };
+
+/**
+ * The non-builtin identifiers (MCP servers, Composio and LobeHub Skills
+ * connections, installed plugins) a share grants, at any API scope.
+ *
+ * Tool discovery reads these sources for the creator's whole account, and
+ * reading one can decrypt its credentials or call its provider. A share run
+ * must only touch what the creator granted, so discovery narrows each source
+ * to this set before reading it — not just at the final tool-set gate.
+ */
+export const getShareGrantedExtensionIds = (gate: AgentShareGate): Set<string> =>
+  new Set(
+    [...resolveShareToolGrants(gate.shareConfig.toolGrants).keys()].filter(
+      (identifier) => !isGovernedByBuiltinAllowlist(identifier),
+    ),
+  );
 
 /**
  * Whether the share grants `lobe-cloud-sandbox` (at any API scope). Drives
@@ -105,11 +123,18 @@ export const hasShareSkillAuthorization = (permissions: ShareDataToolPermissions
 /**
  * `resolveShareToolGrants` plus the grants that are implied rather than picked.
  *
- * Today that is only `lobe-skills`, whose opt-in lives in `skillGrants` (see
- * {@link hasShareSkillAuthorization}). The synthetic grant is toolset-level
- * (`'all'`) on purpose: narrowing the Skills tool down to its two visitor-safe
- * APIs is {@link DATA_TOOL_ACCESS_RULES}' job, and expressing it twice would
- * let the two lists drift.
+ * - `lobe-skills`, whose opt-in lives in `skillGrants` (see
+ *   {@link hasShareSkillAuthorization}). The synthetic grant is toolset-level
+ *   (`'all'`) on purpose: narrowing the Skills tool down to its two
+ *   visitor-safe APIs is {@link DATA_TOOL_ACCESS_RULES}' job, and expressing it
+ *   twice would let the two lists drift.
+ * - `lobe-activator`, implied by ANY tool grant: it is a runtime capability,
+ *   not a tool the owner picks, and it can only surface manifests the gated
+ *   tool set already holds. Whether a run actually keeps it (only while a
+ *   granted tool is left to activate) is decided at assembly in
+ *   `applyShareGateToToolSet`. Always written as `activateTools` only, so a
+ *   stored or hand-edited `lobe-activator` entry can never widen it to the
+ *   runtime's unlisted `activateSkill` method.
  *
  * Every gate that asks "did the creator grant this identifier" must go through
  * here, or the tool passes one layer and is rejected by the next.
@@ -118,6 +143,11 @@ export const resolveEffectiveShareToolGrants = (
   permissions: ShareDataToolPermissions,
 ): Map<string, ShareToolGrant> => {
   const grants = resolveShareToolGrants(permissions.toolGrants);
+
+  grants.delete(LobeActivatorIdentifier);
+  if (grants.size > 0) {
+    grants.set(LobeActivatorIdentifier, new Set([ActivatorApiName.activateTools]));
+  }
 
   if (hasShareSkillAuthorization(permissions)) grants.set(SkillsIdentifier, 'all');
 

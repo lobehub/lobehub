@@ -1,17 +1,18 @@
 'use client';
 
-import { ContextMenuTrigger, Flexbox } from '@lobehub/ui';
 import {
   AccordionHeader,
   AccordionItem,
   AccordionPanel,
   accordionStyles,
   AccordionTrigger,
+  ContextMenuTrigger,
+  cx,
+  Flexbox,
   Spin,
   Text,
-} from '@lobehub/ui/base-ui';
+} from '@lobehub/ui';
 import { useDocumentVisibility } from 'ahooks';
-import { cx } from 'antd-style';
 import React, { memo, Suspense, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 

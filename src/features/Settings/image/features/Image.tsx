@@ -1,14 +1,14 @@
 'use client';
 
 import { type UserImageConfig } from '@lobechat/types';
-import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
-import { Skeleton, Spin } from '@lobehub/ui/base-ui';
-import { Form, type FormGroupItem, useForm } from '@lobehub/ui/base-ui/form';
+import { Flexbox, Icon, Spin, Tooltip } from '@lobehub/ui';
+import { Form, type FormGroupItem, useForm } from '@lobehub/ui/form';
 import { CircleHelpIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { FormSliderWithInput } from '@/components/FormInput';
+import { SettingsSectionSkeleton } from '@/components/Skeleton';
 import { FORM_STYLE } from '@/const/layoutTokens';
 import { MAX_DEFAULT_IMAGE_NUM, MIN_DEFAULT_IMAGE_NUM } from '@/const/settings';
 import { SettingsSearchAnchor } from '@/features/SettingsSearch/anchor';
@@ -39,7 +39,8 @@ const ImageSettings = memo(() => {
   });
 
   if (!isUserStateInit) {
-    return <Skeleton.Text rows={1} />;
+    // One filled group holding the default image count slider.
+    return <SettingsSectionSkeleton groups={[{ rows: 1, titleWidth: 136 }]} />;
   }
 
   const items: FormGroupItem<UserImageConfig>[] = [

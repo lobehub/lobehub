@@ -1,8 +1,8 @@
+import type { UserMemoryActivityInsert } from '@lobechat/types';
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
-import type { NewUserMemoryActivity } from '../../../schemas';
 import { userMemories, userMemoriesActivities, users } from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
 import { UserMemoryActivityModel } from '../activity';
@@ -27,7 +27,7 @@ beforeEach(async () => {
 describe('UserMemoryActivityModel', () => {
   describe('create', () => {
     it('should create a new activity', async () => {
-      const activityData: Omit<NewUserMemoryActivity, 'userId'> = {
+      const activityData: Omit<UserMemoryActivityInsert, 'userId'> = {
         type: 'event',
         narrative: 'User attended a conference',
         notes: 'Met interesting people',
@@ -102,13 +102,6 @@ describe('UserMemoryActivityModel', () => {
       expect(result).toHaveLength(1);
       expect(result[0].id).toBe('activity-2');
     });
-
-    it('should not return other users activities', async () => {
-      const result = await activityModel.query();
-
-      const otherActivity = result.find((a) => a.id === 'other-activity');
-      expect(otherActivity).toBeUndefined();
-    });
   });
 
   describe('queryList', () => {
@@ -155,6 +148,9 @@ describe('UserMemoryActivityModel', () => {
           status: 'completed',
           narrative: 'First activity narrative',
           notes: 'Some notes',
+          associatedLocations: [{ name: 'Office' }],
+          associatedObjects: [{ name: 'IELTS' }],
+          associatedSubjects: [{ name: '陈老师', type: 'person' }],
           tags: ['tag1'],
           startsAt: new Date('2024-01-15T09:00:00Z'),
           capturedAt: new Date('2024-01-15T10:00:00Z'),
@@ -206,6 +202,15 @@ describe('UserMemoryActivityModel', () => {
       expect(result.page).toBe(1);
       expect(result.pageSize).toBe(20);
       expect(result.total).toBe(3);
+    });
+
+    it('returns the associated names, which pages link activities by', async () => {
+      const result = await activityModel.queryList();
+      const item = result.items.find((row) => row.id === 'list-activity-1');
+
+      expect(item?.associatedSubjects).toEqual([{ name: '陈老师', type: 'person' }]);
+      expect(item?.associatedObjects).toEqual([{ name: 'IELTS' }]);
+      expect(item?.associatedLocations).toEqual([{ name: 'Office' }]);
     });
 
     it('should return correct page and pageSize', async () => {

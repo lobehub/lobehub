@@ -1,8 +1,14 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
-import { ActionIcon, type DropdownItem, DropdownMenu, Tooltip } from '@lobehub/ui/base-ui';
-import { cx } from 'antd-style';
+import {
+  ActionIcon,
+  cx,
+  type DropdownItem,
+  DropdownMenu,
+  Flexbox,
+  Icon,
+  Tooltip,
+} from '@lobehub/ui';
 import { ChevronRightIcon, MoreHorizontalIcon, PlusIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 

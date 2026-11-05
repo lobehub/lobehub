@@ -23,6 +23,7 @@ interface GetMessagesAndTopicsParams {
     excludeStatuses?: string[];
     excludeTriggers?: string[];
     includeTriggers?: string[];
+    onlyMine?: boolean;
   };
   topicId?: string;
   topicPageSize?: number;

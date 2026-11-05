@@ -1,0 +1,135 @@
+---
+title: Using magpie in LobeHub
+description: Configure a magpie gateway and choose the request mode that fits how it is deployed.
+tags:
+  - LobeHub
+  - magpie
+  - Model gateway
+  - Routing groups
+---
+
+# Using magpie in LobeHub
+
+[magpie](https://usemagpie.ai) is a model gateway. The subscriptions, keys, local models and routing groups you set up there are served on one endpoint, with every model exposed as `provider/model`.
+
+This guide walks through using magpie in LobeHub:
+
+<Steps>
+  ### Step 1: Install and start magpie
+
+  Download the desktop app from [usemagpie.ai](https://usemagpie.ai), or run it in Docker:
+
+  ```bash
+  docker run -d --name magpie \
+    --network host \
+    -e MAGPIE_ADDR=127.0.0.1:3425 \
+    -v magpie-config:/config \
+    ghcr.io/yetone/magpie:latest
+  ```
+
+  The gateway listens on `127.0.0.1:3425` by default.
+
+  ### Step 2: Add an upstream provider
+
+  Add a provider in magpie's interface, or from a terminal:
+
+  ```bash
+  magpie provider add deepseek sk-...
+  ```
+
+  List the models it serves:
+
+  ```bash
+  magpie models
+  ```
+
+  ### Step 3: Create a gateway key
+
+  Calls from another process need a gateway key:
+
+  ```bash
+  magpie gateway-key add "LobeHub"
+  ```
+
+  Keep the `sk-magpie-key-...` it prints for the next step. The full value lives in `~/.config/magpie/caller-keys.json`; the list command shows a masked form.
+
+  ### Step 4: Configure LobeHub
+
+  Open **Settings → AI Provider** and find `magpie`:
+
+  - **API Key**: the gateway key from the previous step
+  - **API Proxy URL**: the gateway address, for example `http://127.0.0.1:3425/v1`
+  - Click **Fetch Models** to read the catalogue magpie serves
+  - Enable the models you want
+
+  <Callout type={'info'}>
+    magpie returns ids shaped like `provider/model` (such as `deepseek/deepseek-chat`). A routing group comes as `group/<id>` when you made it, or `auto/<model>` when magpie found it; both carry the routing badge.
+  </Callout>
+</Steps>
+
+## Where the request leaves from
+
+LobeHub can send model requests to magpie two ways. Which one works is not a matter of a switch; it depends on whether magpie is reachable from whoever sends the request.
+
+### From the browser
+
+Turning on **Client request mode** in the provider settings sends model requests from the browser.
+
+This works in exactly one situation: **magpie runs directly on the same machine as the browser**. There the connection arrives from `127.0.0.1`, which is what makes magpie's cross-origin handling apply at all.
+
+### From the server
+
+When the server sends the request, credentials stay there and the browser plays no part in the model call, so cross-origin rules do not apply. magpie only has to be reachable from LobeHub's server.
+
+### Why browser access is so narrow
+
+magpie asks every caller for an enabled gateway key. A browser's preflight request carries none by specification, so magpie refuses it before cross-origin handling runs.
+
+magpie skips that key requirement only for connections arriving from `127.0.0.1`. In all of these cases the connection arrives from somewhere else, and the browser cannot reach magpie at all:
+
+- Docker port mapping, which rewrites the source to a bridge address
+- LAN access, where the source is the other machine's LAN address
+- Remote or public access, where the source is the other machine's public address
+
+`MAGPIE_TRUST_PROXY=1` does not change this; it only affects forwarding-header handling. `--network host` with `127.0.0.1` does keep the source on loopback, but that is equivalent to running magpie directly on the host network.
+
+### How to choose
+
+| Where magpie runs                             | Client request mode | Address to use                           |
+| --------------------------------------------- | ------------------- | ---------------------------------------- |
+| Same machine as the browser, running directly | Works               | `http://127.0.0.1:3425/v1`               |
+| Same machine, Docker with port mapping        | Does not work       |                                          |
+| Same machine, Docker with `--network host`    | Works               | `http://127.0.0.1:3425/v1`               |
+| Another machine on the LAN                    | Does not work       | Server request, if the server reaches it |
+| Remote or public host                         | Does not work       | Server request, if the server reaches it |
+
+<Callout type={'warning'}>
+  On a hosted service such as `app.lobehub.com`, LobeHub's server cannot reach a user's `127.0.0.1`. So a magpie on the user's own machine needs client request mode, and a magpie anywhere else needs an address the LobeHub server can reach.
+
+  On a self-hosted deployment that wants every magpie request to leave from the server, set `MAGPIE_PROXY_URL`; the default for client request mode follows and turns off.
+</Callout>
+
+### What client request mode needs, in full
+
+1. magpie on the same machine as the browser, running directly (not Docker port mapping, not the LAN, not remote)
+2. **Client request mode** turned on in the provider settings
+3. LobeHub's address added under **Network and sharing → Web pages allowed to call magpie**, for example `http://localhost:3000`
+4. The complete gateway key from `magpie gateway-key add` in the **API Key** field
+
+Step 3 cannot be skipped: even from this machine, a page needs a key, and only a listed origin receives the cross-origin response headers.
+
+## Troubleshooting
+
+**Fetching models fails and the console reports a cross-origin block**
+
+magpie did not return cross-origin headers. Make sure magpie runs on the same machine as the browser and is reached over `127.0.0.1`, and add LobeHub's address to the allowed pages; otherwise send the requests from the server over an address LobeHub can reach.
+
+**It asks for a gateway key**
+
+magpie requires every caller to present an enabled gateway key. Check that the API Key field holds the complete key from `magpie gateway-key add`.
+
+**A chat request returns 401**
+
+The key is not enabled or is wrong. Check its state with `magpie gateway-key list`; the full key is in `~/.config/magpie/caller-keys.json`.
+
+You can now chat with magpie's models in LobeHub.

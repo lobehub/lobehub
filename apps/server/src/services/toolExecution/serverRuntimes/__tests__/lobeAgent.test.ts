@@ -218,7 +218,7 @@ describe('lobeAgentRuntime', () => {
     expect([...pixel.subarray(0, 3)]).toEqual([255, 255, 255]);
   });
 
-  it('should explain that media analysis needs LobeHub credits when the budget is exhausted', async () => {
+  it('should explain that media analysis needs LobeHub balance when the budget is exhausted', async () => {
     mockChat.mockRejectedValueOnce({
       budget: { availableCredits: 0, requiredCredits: 1219, shortfallCredits: 1219 },
       error: { message: 'Budget exceeded' },
@@ -234,9 +234,91 @@ describe('lobeAgentRuntime', () => {
 
     expect(result.success).toBe(false);
     expect(result.error).toMatchObject({ code: 'InsufficientBudgetForModel' });
-    expect(result.content).toContain('credits');
+    expect(result.content).toContain('balance');
     expect(result.content).toContain('test-provider/vision-model');
     expect(result.content).toMatch(/own API key/i);
+  });
+
+  it('should surface the gateway rejection reason instead of a bare blocked message', async () => {
+    mockChat.mockRejectedValueOnce({
+      _responseBody: { provider: 'lobehub', reason: 'not_onboarded' },
+      error: { message: 403 },
+      errorType: 403,
+      message: 'Request blocked.',
+    });
+    const runtime = lobeAgentRuntime.factory(baseContext);
+
+    const result = await runtime.analyzeMedia({
+      question: 'what is this?',
+      urls: ['https://example.com/image.png'],
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toMatchObject({ code: 'GATEWAY_NOT_ONBOARDED' });
+    expect(result.content).toContain('platform model gateway');
+    expect(result.content).toContain('HTTP 403');
+    expect(result.content).toContain('provider: lobehub');
+    expect(result.content).toContain('not_onboarded');
+    expect(result.content).toMatch(/not a content-policy verdict/i);
+  });
+
+  it('should still rethrow unexpected non-gateway chat failures', async () => {
+    mockChat.mockRejectedValueOnce(new Error('socket hang up'));
+    const runtime = lobeAgentRuntime.factory(baseContext);
+
+    await expect(
+      runtime.analyzeMedia({
+        question: 'what is this?',
+        urls: ['https://example.com/image.png'],
+      }),
+    ).rejects.toThrow('socket hang up');
+  });
+
+  it('should rethrow ordinary structured HTTP errors without gateway response body', async () => {
+    mockChat.mockRejectedValueOnce({ errorType: 429, message: 'Rate limited' });
+    const runtime = lobeAgentRuntime.factory(baseContext);
+
+    await expect(
+      runtime.analyzeMedia({
+        question: 'what is this?',
+        urls: ['https://example.com/image.png'],
+      }),
+    ).rejects.toMatchObject({ errorType: 429, message: 'Rate limited' });
+  });
+
+  it('should rethrow a provider-only response body — provider alone is not a gateway marker', async () => {
+    // `normalizeChatMessageError` propagates `provider` into every error body as
+    // display metadata, so a provider-only `_responseBody` (e.g. a 429 rate
+    // limit tagged with the relay provider) must keep the rethrow behavior.
+    mockChat.mockRejectedValueOnce({
+      _responseBody: { provider: 'lobehub' },
+      errorType: 429,
+      message: 'Rate limited',
+    });
+    const runtime = lobeAgentRuntime.factory(baseContext);
+
+    await expect(
+      runtime.analyzeMedia({
+        question: 'what is this?',
+        urls: ['https://example.com/image.png'],
+      }),
+    ).rejects.toMatchObject({ errorType: 429, message: 'Rate limited' });
+  });
+
+  it('should classify a gateway rejection from the response body alone (no message needed)', async () => {
+    mockChat.mockRejectedValueOnce({
+      _responseBody: { provider: 'lobehub', reason: 'quota_exceeded' },
+      errorType: 402,
+    });
+    const runtime = lobeAgentRuntime.factory(baseContext);
+
+    const result = await runtime.analyzeMedia({
+      question: 'what is this?',
+      urls: ['https://example.com/image.png'],
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toMatchObject({ code: 'GATEWAY_QUOTA_EXCEEDED' });
   });
 
   it('should reject loopback media urls before calling the multimodal model', async () => {
@@ -886,6 +968,7 @@ describe('lobeAgentRuntime', () => {
       );
 
       expect(run).toHaveBeenCalledWith({
+        background: false,
         description: 'Research',
         instruction: 'Find the answer',
         timeout: 1000,
@@ -982,6 +1065,7 @@ describe('lobeAgentRuntime', () => {
       );
 
       expect(run).toHaveBeenCalledWith({
+        background: false,
         description: 'Research',
         instruction: 'Find the answer',
         subAgentId: undefined,

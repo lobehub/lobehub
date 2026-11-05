@@ -1,13 +1,77 @@
-import { execFileSync, execSync } from 'node:child_process';
+import { execFile, execSync } from 'node:child_process';
 import * as fs from 'node:fs';
-import * as path from 'node:path';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { parseArgs, promisify } from 'node:util';
 
-import { confirm, input } from '@inquirer/prompts';
+import { confirm, input, select } from '@inquirer/prompts';
 import { consola } from 'consola';
 import * as semver from 'semver';
 
+import { createGithubStore } from '../../.github/scripts/desktopReleaseGithub.mjs';
+import { formatIntent } from '../../.github/scripts/desktopReleaseIntent.mjs';
+import { deliveredBaseline, sourcesHash } from '../../.github/scripts/desktopReleaseSources.mjs';
+
 const ROOT_DIR = process.cwd();
 const PACKAGE_JSON_PATH = path.join(ROOT_DIR, 'package.json');
+const exec = promisify(execFile);
+
+interface HotfixSources {
+  baseOssSha: string;
+  baseSourcesHash: string;
+  baseVersion: string;
+  cloudSha: string;
+  overrideReason?: string;
+}
+
+async function chooseSources(options: {
+  'base'?: string;
+  'cloud-ref'?: string;
+  'reason'?: string;
+}): Promise<HotfixSources> {
+  const repository =
+    process.env.GITHUB_REPOSITORY ||
+    (
+      await exec('gh', ['repo', 'view', '--json', 'nameWithOwner', '--jq', '.nameWithOwner'])
+    ).stdout.trim();
+  const token =
+    process.env.GH_TOKEN ||
+    process.env.GITHUB_TOKEN ||
+    (await exec('gh', ['auth', 'token'])).stdout.trim();
+  const store = createGithubStore({ repository, token, apiUrl: process.env.GITHUB_API_URL });
+  let base = options.base;
+  if (!base) {
+    const candidates = await store.listDelivered();
+    if (!candidates.length)
+      throw new Error(
+        'No Stable release has recorded delivery proof; restore and verify a baseline first.',
+      );
+    base = await select({
+      message: 'Which delivered Stable release should this hotfix repair?',
+      choices: candidates.map((candidate: { cloudSha: string; version: string }) => ({
+        name: `v${candidate.version} — Cloud ${candidate.cloudSha.slice(0, 8)}`,
+        value: candidate.version,
+      })),
+    });
+  }
+  const baseline = await deliveredBaseline(store, base);
+  const mainSha = (await exec('git', ['rev-parse', 'origin/main'])).stdout.trim();
+  await store.assertHotfixBase(baseline, mainSha);
+  const cloudSha = options['cloud-ref'] || baseline.cloudSha;
+  if (cloudSha !== baseline.cloudSha && !options.reason?.trim())
+    throw new Error('--cloud-ref requires --reason when changing the inherited Cloud source');
+  const result = {
+    baseVersion: baseline.version,
+    baseOssSha: baseline.ossSha,
+    baseSourcesHash: sourcesHash(baseline),
+    cloudSha,
+    ...(options.reason && { overrideReason: options.reason }),
+  };
+  // Validate the exact metadata before pushing a branch or creating a PR.
+  formatIntent({ schemaVersion: 1, mode: 'hotfix', ...result });
+  return result;
+}
 
 function checkGitRepo(): void {
   try {
@@ -73,9 +137,13 @@ async function confirmHotfix(opts: {
   branchName: string;
   currentVersion: string;
   isExistingBranch: boolean;
+  sources: HotfixSources;
   version: string;
 }): Promise<boolean> {
-  const { version, currentVersion, branchName, isExistingBranch } = opts;
+  const { version, currentVersion, branchName, isExistingBranch, sources } = opts;
+  consola.info(
+    `Base: v${sources.baseVersion}\nOSS: ${sources.baseOssSha}\nCloud: ${sources.cloudSha}`,
+  );
 
   if (isExistingBranch) {
     consola.box(
@@ -137,7 +205,11 @@ function pushBranch(branchName: string): void {
   }
 }
 
-async function createPullRequest(version: string, branchName: string): Promise<void> {
+async function createPullRequest(
+  version: string,
+  branchName: string,
+  sources: HotfixSources,
+): Promise<void> {
   const title = await input({
     default: `🐛 fix: hotfix v${version}`,
     message: 'PR title:',
@@ -145,6 +217,13 @@ async function createPullRequest(version: string, branchName: string): Promise<v
   const body = `## 🩹 Hotfix v${version}
 
 This PR starts a hotfix release from \`main\`.
+
+### Desktop sources
+- Base release: v${sources.baseVersion}
+- Base OSS: \`${sources.baseOssSha}\`
+- Cloud: \`${sources.cloudSha}\`
+${sources.overrideReason ? `- Cloud repair: ${sources.overrideReason}\n` : ''}
+${formatIntent({ schemaVersion: 1, mode: 'hotfix', ...sources })}
 
 ### Release Process
 1. ✅ Hotfix branch created from main
@@ -155,13 +234,24 @@ This PR starts a hotfix release from \`main\`.
 ---
 Created by hotfix script`;
 
+  const directory = await mkdtemp(path.join(tmpdir(), 'lobehub-hotfix-'));
   try {
     consola.info('🔀 Creating Pull Request...');
-    execFileSync(
-      'gh',
-      ['pr', 'create', '--title', title, '--body', body, '--base', 'main', '--head', branchName],
-      { stdio: 'inherit' },
-    );
+    const bodyFile = path.join(directory, 'body.md');
+    await writeFile(bodyFile, body);
+    const result = await exec('gh', [
+      'pr',
+      'create',
+      '--title',
+      title,
+      '--body-file',
+      bodyFile,
+      '--base',
+      'main',
+      '--head',
+      branchName,
+    ]);
+    consola.info(result.stdout.trim());
     consola.success('✅ PR created successfully!');
   } catch (error) {
     consola.error('❌ Failed to create PR');
@@ -169,7 +259,9 @@ Created by hotfix script`;
     consola.info('\n💡 Tip: Make sure GitHub CLI (gh) is installed and logged in');
     consola.info('   Install: https://cli.github.com/');
     consola.info('   Login: gh auth login');
-    process.exit(1);
+    throw error;
+  } finally {
+    await rm(directory, { recursive: true, force: true });
   }
 }
 
@@ -200,6 +292,23 @@ function extractVersionFromBranch(branchName: string): string | null {
 }
 
 async function main(): Promise<void> {
+  const { values } = parseArgs({
+    options: {
+      'base': { type: 'string' },
+      'cloud-ref': { type: 'string' },
+      'reason': { type: 'string' },
+      'help': { type: 'boolean' },
+    },
+  });
+  if (values.help) {
+    consola.log(
+      'Usage: bun run hotfix:branch [--base v2.2.21] [--cloud-ref <SHA> --reason <repair>]',
+    );
+    consola.log(
+      'Without --base, select a Stable release with matching source and delivery records.',
+    );
+    return;
+  }
   consola.info('🩹 LobeChat Hotfix Script\n');
 
   checkGitRepo();
@@ -219,12 +328,15 @@ async function main(): Promise<void> {
 
     const currentVersion = getCurrentVersion();
     const version = extractVersionFromBranch(currentBranch) ?? bumpPatchVersion(currentVersion);
+    await exec('git', ['fetch', 'origin', 'main']);
+    const sources = await chooseSources(values);
 
     const confirmed = await confirmHotfix({
       branchName: currentBranch,
       currentVersion,
       isExistingBranch: true,
       version,
+      sources,
     });
     if (!confirmed) {
       consola.info('❌ Hotfix process cancelled');
@@ -232,7 +344,7 @@ async function main(): Promise<void> {
     }
 
     pushBranch(currentBranch);
-    await createPullRequest(version, currentBranch);
+    await createPullRequest(version, currentBranch, sources);
     showCompletion(version, currentBranch);
   } else {
     consola.info('📥 Pulling latest main branch...');
@@ -241,12 +353,14 @@ async function main(): Promise<void> {
     const currentVersion = getCurrentVersion();
     const newVersion = bumpPatchVersion(currentVersion);
     const branchName = createHotfixBranchName(newVersion);
+    const sources = await chooseSources(values);
 
     const confirmed = await confirmHotfix({
       branchName,
       currentVersion,
       isExistingBranch: false,
       version: newVersion,
+      sources,
     });
     if (!confirmed) {
       consola.info('❌ Hotfix process cancelled');
@@ -255,7 +369,7 @@ async function main(): Promise<void> {
 
     createHotfixBranch(branchName);
     pushBranch(branchName);
-    await createPullRequest(newVersion, branchName);
+    await createPullRequest(newVersion, branchName, sources);
     showCompletion(newVersion, branchName);
   }
 }

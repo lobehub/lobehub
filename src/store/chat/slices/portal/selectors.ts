@@ -8,6 +8,7 @@ import {
   createLocalFileScopeKey,
   createSandboxLocalFileScopeKey,
   getLocalFileTabId,
+  isRemoteLocalFile,
 } from './helpers';
 import { type OpenLocalFileEntry, type PortalFile, type PortalViewData } from './initialState';
 import { PortalViewType } from './initialState';
@@ -80,6 +81,8 @@ const agentDetailId = (s: ChatStoreState): string | undefined => {
   const view = getViewData(s, PortalViewType.AgentDetail);
   return view?.agentId;
 };
+
+const memoryDetailView = (s: ChatStoreState) => getViewData(s, PortalViewType.MemoryDetail);
 
 // Artifact selectors
 const currentArtifact = (s: ChatStoreState): PortalArtifact | undefined => {
@@ -228,6 +231,9 @@ const currentLocalFile = (s: ChatStoreState): OpenLocalFileEntry | undefined => 
   );
 };
 
+const isCurrentLocalFileRemote = (s: ChatStoreState): boolean =>
+  isRemoteLocalFile(currentLocalFile(s));
+
 const localFilePath = (s: ChatStoreState) => currentLocalFile(s)?.filePath;
 const localFileWorkingDirectory = (s: ChatStoreState) => currentLocalFile(s)?.workingDirectory;
 
@@ -270,6 +276,7 @@ const goalPortalId = (s: ChatStoreState): string | undefined =>
   getViewData(s, PortalViewType.Goal)?.goalId;
 const goalNodeView = (s: ChatStoreState) => getViewData(s, PortalViewType.GoalNode);
 const goalMetricView = (s: ChatStoreState) => getViewData(s, PortalViewType.GoalMetric);
+const goalNorthStarView = (s: ChatStoreState) => getViewData(s, PortalViewType.GoalNorthStar);
 const goalReportView = (s: ChatStoreState) => getViewData(s, PortalViewType.GoalReport);
 const goalReportChapterView = (s: ChatStoreState) =>
   getViewData(s, PortalViewType.GoalReportChapter);
@@ -357,6 +364,7 @@ export const chatPortalSelectors = {
 
   // Goal drill-down data
   goalMetricView,
+  goalNorthStarView,
   dashboardWidgetView,
   goalNodeView,
   goalPortalId,
@@ -367,12 +375,16 @@ export const chatPortalSelectors = {
   activeLocalFileId,
   activeLocalFilePath,
   currentLocalFile,
+  isCurrentLocalFileRemote,
   dirtyLocalFileContents,
   isLocalFileDirty,
   localFileBuffer,
   localFilePath,
   localFileWorkingDirectory,
   openLocalFiles,
+
+  // Memory detail data
+  memoryDetailView,
 
   // Message detail data
   messageDetailId,

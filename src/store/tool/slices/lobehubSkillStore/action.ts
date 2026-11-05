@@ -13,6 +13,8 @@ import { toolsClient } from '@/libs/trpc/client';
 import { type StoreSetter } from '@/store/types';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
+import { isSkillConnectionError } from '@/types/skillConnectionError';
+import { type ConnectorActionError, toConnectorActionError } from '@/utils/connectorActionError';
 import { setNamespace } from '@/utils/storeDebug';
 
 import { type ToolStore } from '../../store';
@@ -84,7 +86,7 @@ export class LobehubSkillStoreActionImpl {
    */
   readonly #providerTools;
   /**
-   * The user's connected providers — a `@lobechat/replica` list, so the
+   * The user's connected providers — a `local-replica` list, so the
    * persisted row paints before the network answers and a connect / revoke shows
    * on the row at once.
    */
@@ -189,7 +191,9 @@ export class LobehubSkillStoreActionImpl {
 
       const errorMessage = error instanceof Error ? error.message : String(error);
 
-      if (errorMessage.includes('NOT_CONNECTED') || errorMessage.includes('TOKEN_EXPIRED')) {
+      // The server flags a missing / expired connection as PRECONDITION_FAILED plus a
+      // discriminator in errorData; its message is human text, never the code.
+      if (isSkillConnectionError(error)) {
         return {
           error: errorMessage,
           errorCode: 'NOT_CONNECTED',
@@ -319,9 +323,11 @@ export class LobehubSkillStoreActionImpl {
   };
 
   revokeLobehubSkill = async (provider: string): Promise<void> => {
+    const scope = cacheScope.get();
     this.#set(
       produce((draft: LobehubSkillStoreState) => {
         draft.lobehubSkillLoadingIds.add(provider);
+        delete draft.lobehubSkillErrors[provider];
       }),
       false,
       n('revokeLobehubSkill/start'),
@@ -350,11 +356,31 @@ export class LobehubSkillStoreActionImpl {
       this.#set(
         produce((draft: LobehubSkillStoreState) => {
           draft.lobehubSkillLoadingIds.delete(provider);
+          // Kept on the row, so the failure stays visible after any toast is gone.
+          if (cacheScope.get() === scope)
+            draft.lobehubSkillErrors[provider] = {
+              ...toConnectorActionError('remove', error),
+              scope,
+            };
         }),
         false,
         n('revokeLobehubSkill/error'),
       );
     }
+  };
+
+  /** Record (or clear, with `undefined`) the last failed write of a provider row. */
+  setLobehubSkillError = (provider: string, error: ConnectorActionError | undefined): void => {
+    if (!error && !this.#get().lobehubSkillErrors[provider]) return;
+
+    this.#set(
+      produce((draft: LobehubSkillStoreState) => {
+        if (error) draft.lobehubSkillErrors[provider] = { ...error, scope: cacheScope.get() };
+        else delete draft.lobehubSkillErrors[provider];
+      }),
+      false,
+      n('setLobehubSkillError'),
+    );
   };
 
   /**

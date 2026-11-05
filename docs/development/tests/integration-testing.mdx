@@ -164,27 +164,38 @@ it('should create message with correct associations', async () => {
 
 #### 2. Test Cascading Operations
 
+Agent deletion moves the Agent and related content to the recycle bin. Verify the soft-delete state
+instead of expecting database rows to disappear; physical cascading deletion happens during purge.
+This example uses a message without a Topic, which receives its own soft-delete stamp.
+
+Use the shared database/user setup above and mock `getServerDB` to return that database, as in
+[the Message Router integration suite](https://github.com/lobehub/lobehub/blob/canary/apps/server/src/routers/lambda/__tests__/integration/message.integration.test.ts).
+
 ```typescript
-it('should cascade delete messages when session is deleted', async () => {
-  const sessionCaller = sessionRouter.createCaller(createTestContext(userId));
+import { agents } from '@lobechat/database/schemas';
+
+import { agentRouter } from '../../agent';
+
+it('should trash an agent with its topicless messages', async () => {
+  const agentCaller = agentRouter.createCaller(createTestContext(userId));
   const messageCaller = messageRouter.createCaller(createTestContext(userId));
 
-  // Create session and messages
-  const sessionId = await sessionCaller.createSession({
-    /* ... */
+  // Create an Agent and a message without a Topic
+  const { agentId } = await agentCaller.createAgent({ config: { title: 'Cascade test' } });
+  const { id: messageId } = await messageCaller.createMessage({
+    agentId,
+    content: 'Test message',
+    role: 'user',
   });
-  await messageCaller.createMessage({ sessionId /* ... */ });
 
-  // Delete session
-  await sessionCaller.removeSession({ id: sessionId });
+  await agentCaller.removeAgent({ agentId });
 
-  // ✅ Verify related messages are also deleted
-  const remainingMessages = await serverDB
-    .select()
-    .from(messages)
-    .where(eq(messages.sessionId, sessionId));
+  // Verify both rows remain in the database with soft-delete stamps
+  const [agent] = await serverDB.select().from(agents).where(eq(agents.id, agentId));
+  const [message] = await serverDB.select().from(messages).where(eq(messages.id, messageId));
 
-  expect(remainingMessages).toHaveLength(0);
+  expect(agent).toMatchObject({ id: agentId, isDeleted: true });
+  expect(message).toMatchObject({ agentId, isDeleted: true, topicId: null });
 });
 ```
 
@@ -287,7 +298,7 @@ Use clear names to describe the test's intent:
 ```typescript
 // ✅ Good naming
 it('should create message with correct sessionId and topicId');
-it('should cascade delete messages when session is deleted');
+it('should trash an agent with its topicless messages');
 it('should prevent cross-user access to messages');
 
 // ❌ Poor naming
@@ -324,7 +335,7 @@ it('test delete');
 
 - ✅ Cross-layer ID propagation (sessionId, topicId, containerId, threadId)
 - ✅ Permission checks (users can only access their own resources)
-- ✅ Cascading deletes (deleting a session also deletes related data)
+- ✅ Cascading operations (trashing an Agent also hides related content; purge deletes it)
 - ✅ Foreign key constraints (cannot create associations to non-existent records)
 
 ### Priority P1 (Should Cover)

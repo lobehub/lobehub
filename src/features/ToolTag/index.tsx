@@ -2,9 +2,7 @@
 
 import { type ComposioAppType } from '@lobechat/const';
 import { COMPOSIO_APP_TYPES } from '@lobechat/const';
-import { Icon } from '@lobehub/ui';
-import { Avatar, Tag } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { Avatar, createStaticStyles, cssVar, Icon, Tag } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { memo, useMemo } from 'react';
 

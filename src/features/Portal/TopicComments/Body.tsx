@@ -1,5 +1,4 @@
-import { Center, Empty, Flexbox } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Button, Center, Empty, Flexbox } from '@lobehub/ui';
 import { MessageCircle } from 'lucide-react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';

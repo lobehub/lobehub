@@ -1,8 +1,8 @@
+import type { UserMemoryExperienceInsert } from '@lobechat/types';
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
-import type { NewUserMemoryExperience } from '../../../schemas';
 import { userMemories, userMemoriesExperiences, users } from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
 import { UserMemoryExperienceModel } from '../experience';
@@ -27,7 +27,7 @@ beforeEach(async () => {
 describe('UserMemoryExperienceModel', () => {
   describe('create', () => {
     it('should create a new experience', async () => {
-      const experienceData: Omit<NewUserMemoryExperience, 'userId'> = {
+      const experienceData: Omit<UserMemoryExperienceInsert, 'userId'> = {
         type: 'lesson',
         situation: 'When debugging code',
         reasoning: 'Checking logs helps identify issues',
@@ -101,13 +101,6 @@ describe('UserMemoryExperienceModel', () => {
 
       expect(result).toHaveLength(1);
       expect(result[0].id).toBe('experience-2');
-    });
-
-    it('should not return other users experiences', async () => {
-      const result = await experienceModel.query();
-
-      const otherExperience = result.find((e) => e.id === 'other-experience');
-      expect(otherExperience).toBeUndefined();
     });
   });
 

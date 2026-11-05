@@ -93,7 +93,7 @@ export const createConnectorSlice = (set: Setter, get: () => ToolStore, _api?: u
   new ConnectorActionImpl(set, get, _api);
 
 /**
- * The connector slice is a set of `@lobechat/replica` resources: the base
+ * The connector slice is a set of `local-replica` resources: the base
  * list, the agent-bound aggregate and the per-agent buckets. The store fields
  * keep their historical shape (`connectors`, `agentBoundConnectors`,
  * `agentConnectors`) as the replica views, so every selector and consumer is
@@ -173,12 +173,14 @@ export class ConnectorActionImpl {
    * as it is read while the network confirms it in parallel, instead of
    * blanking to an empty array first.
    *
-   * The identity scope is captured when the request is issued and handed to
-   * `hydrate` / `replace` explicitly, because the replica reads the *active*
-   * scope at call time — i.e. after the response has already landed. A response
-   * that resolves after the scope moved on is then dropped by the replica
-   * itself (`dispatch` discards actions whose scope is no longer active),
-   * instead of being written into the next identity's partition.
+   * The identity scope is captured when the request is issued: `fetch`
+   * captures it itself and `hydrate` gets it explicitly, because the replica
+   * reads the *active* scope at call time — i.e. after the response has already
+   * landed. A response that resolves after the scope moved on is then dropped
+   * by the replica's settle pipeline instead of being written into the next
+   * identity's partition. The refresh never joins a request already in flight
+   * (`fresh`): it runs after mutations, and that one may hold the pre-mutation
+   * list.
    *
    * The whole cache scope (user + workspace) is captured, not just the
    * workspace: two different signed-in users in personal context both have a
@@ -206,10 +208,9 @@ export class ConnectorActionImpl {
    */
   fetchConnectors = async (): Promise<void> => {
     const scope = cacheScope.get();
-    const pending = this.#connectors.fetcher!(LIST_PARAMS);
+    const pending = this.#connectors.fetch(LIST_PARAMS, { fresh: true });
     if (!this.#get().isConnectorsInit) await this.#connectors.hydrate(LIST_PARAMS, scope);
-    const data = await pending;
-    this.#connectors.replace(LIST_PARAMS, data, scope);
+    await pending;
   };
 
   /**
@@ -234,10 +235,9 @@ export class ConnectorActionImpl {
    */
   fetchAgentBoundConnectors = async (): Promise<void> => {
     const scope = cacheScope.get();
-    const pending = this.#agentBoundConnectors.fetcher!(LIST_PARAMS);
+    const pending = this.#agentBoundConnectors.fetch(LIST_PARAMS, { fresh: true });
     if (!this.#get().isAgentBoundInit) await this.#agentBoundConnectors.hydrate(LIST_PARAMS, scope);
-    const data = await pending;
-    this.#agentBoundConnectors.replace(LIST_PARAMS, data, scope);
+    await pending;
   };
 
   /**
@@ -248,11 +248,10 @@ export class ConnectorActionImpl {
   fetchAgentConnectors = async (agentId: string): Promise<void> => {
     const scope = cacheScope.get();
     const params = { agentId };
-    const pending = this.#agentConnectors.fetcher!(params);
+    const pending = this.#agentConnectors.fetch(params, { fresh: true });
     if (!this.#get().agentConnectorsInit[agentId])
       await this.#agentConnectors.hydrate(params, scope);
-    const data = await pending;
-    this.#agentConnectors.replace(params, data, scope);
+    await pending;
   };
 
   /** Copy a user connector into an agent-owned, independently editable row. */

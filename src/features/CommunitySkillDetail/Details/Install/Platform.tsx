@@ -2,9 +2,19 @@
 
 import { AGENT_CHAT_URL, DEFAULT_INBOX_AVATAR } from '@lobechat/const';
 import { Claude, Cline, Cursor, OpenAI } from '@lobehub/icons';
-import { Block, Flexbox, Highlighter, Icon, Markdown } from '@lobehub/ui';
-import { Avatar, Button, Divider, Select, Tabs, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cx } from 'antd-style';
+import {
+  Avatar,
+  Block,
+  Button,
+  Divider,
+  Flexbox,
+  Highlighter,
+  Icon,
+  Markdown,
+  Select,
+  Tabs,
+  Text,
+} from '@lobehub/ui';
 import { BotIcon, UserRoundIcon } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -15,6 +25,8 @@ import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 
 import { useDetailActionContext } from '../../DetailProvider';
+import { getSkillInstructionsUrl } from './getSkillInstructionsUrl';
+import styles from './Platform.module.css';
 import VsCodeIcon from './VsCodeIcon';
 
 const Title = ({ children }: { children?: React.ReactNode }) => (
@@ -33,14 +45,6 @@ enum PlatformType {
   LobeHub = 'lobehub',
   VsCode = 'vscode',
 }
-
-export const styles = createStaticStyles(({ css }) => ({
-  lite: css`
-    pre {
-      padding: 12px !important;
-    }
-  `,
-}));
 
 interface PlatformProps {
   downloadUrl?: string;
@@ -189,7 +193,7 @@ const Platform = memo<PlatformProps>(
 
     const command = genInstallCommand(identifier, active);
 
-    const agentPrompt = `Curl https://lobehub.com/skills/${identifier}/skill.md, then follow the instructions to set up LobeHub Skills Marketplace and install the skill. Once installed, read the SKILL.md file in the installed directory and follow its instructions to complete the task.`;
+    const agentPrompt = `Curl ${getSkillInstructionsUrl(identifier || '<skill-identifier>')}, then follow the instructions to set up LobeHub Skills Marketplace and install the skill. Once installed, read the SKILL.md file in the installed directory and follow its instructions to complete the task.`;
 
     const handleUseOnLobeAI = useCallback(() => {
       if (!inboxAgentId) return;
@@ -242,7 +246,7 @@ const Platform = memo<PlatformProps>(
             <Highlighter
               fullFeatured
               wrap
-              className={cx(lite && styles.lite)}
+              className={lite ? styles.lite : undefined}
               defaultExpand={expandCodeByDefault ?? false}
               fileName={'Agent prompt'}
               language={'bash'}
@@ -301,7 +305,7 @@ const Platform = memo<PlatformProps>(
             {lite && <Divider dashed />}
             <Highlighter
               fullFeatured
-              className={cx(lite && styles.lite)}
+              className={lite ? styles.lite : undefined}
               defaultExpand={expandCodeByDefault ?? false}
               fileName={t('skills.details.sidebar.installCommand')}
               language={'bash'}
@@ -313,7 +317,7 @@ const Platform = memo<PlatformProps>(
             {lite && <Divider dashed />}
             <Highlighter
               fullFeatured
-              className={cx(lite && styles.lite)}
+              className={lite ? styles.lite : undefined}
               defaultExpand={false}
               fileName={t('skills.details.sidebar.directoryLayout')}
               language={'text'}

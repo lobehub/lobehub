@@ -1,7 +1,6 @@
 'use client';
 
-import { Markdown } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles, Markdown } from '@lobehub/ui';
 import { GithubProviderCard } from 'model-bank/modelProviders';
 import { useTranslation } from 'react-i18next';
 

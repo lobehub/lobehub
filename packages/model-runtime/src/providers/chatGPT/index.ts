@@ -100,9 +100,7 @@ export const LobeChatGPTAI = createOpenAICompatibleRuntime<ChatGPTClientOptions>
       if (!isResponsesLiteModel(subscriptionPayload.model)) {
         return {
           payload:
-            reasoning === undefined
-              ? subscriptionPayload
-              : { ...subscriptionPayload, reasoning },
+            reasoning === undefined ? subscriptionPayload : { ...subscriptionPayload, reasoning },
         };
       }
 
@@ -138,7 +136,11 @@ export const LobeChatGPTAI = createOpenAICompatibleRuntime<ChatGPTClientOptions>
         payload: {
           ...rest,
           input: [
-            additionalTools as OpenAI.Responses.ResponseInputItem,
+            ...(tools?.length ||
+            !Array.isArray(input) ||
+            !input.some((item) => item.type === 'additional_tools')
+              ? [additionalTools as OpenAI.Responses.ResponseInputItem]
+              : []),
             ...developerInstructions,
             ...(Array.isArray(input) ? input : []),
           ],

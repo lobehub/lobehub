@@ -1,7 +1,6 @@
 import { AGENT_DOCUMENT_CATEGORY } from '@lobechat/const';
-import { Center, Empty, Flexbox, Icon } from '@lobehub/ui';
+import { Center, createStaticStyles, Empty, Flexbox, Icon } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
-import { createStaticStyles } from 'antd-style';
 import {
   FilePlusIcon,
   FileTextIcon,
@@ -14,7 +13,6 @@ import {
 import type { ChangeEvent, CSSProperties, MouseEvent } from 'react';
 import { memo, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { KeyedMutator } from 'swr';
 
 import { buildAgentDocumentPath } from '@/features/AgentDocumentPage/navigation';
 import type {
@@ -36,13 +34,17 @@ import {
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import type { NativeContextMenuItem } from '@/libs/contextMenu/types';
 import { agentDocumentService } from '@/services/agentDocument';
+import { useGlobalStore } from '@/store/global';
+import type { AgentDocumentSort } from '@/store/global/initialState';
+import { systemStatusSelectors } from '@/store/global/selectors';
 
 import { openConvertToSkillModal, slugifySkillName } from './ConvertToSkillModal';
 import DocumentExplorerToolbar from './DocumentExplorerToolbar';
 import { useDocumentTreeOps } from './hooks/useDocumentTreeOps';
-import type { AgentDocumentItem } from './types';
+import type { AgentDocumentItem, AgentDocumentListMutator } from './types';
 import { isOrphanSkillBundleItem } from './types';
 import { canDropDocument } from './utils/canDrop';
+import { createDocumentComparator } from './utils/sortDocuments';
 
 const SKILL_INDEX_FILENAME = 'SKILL.md';
 const FILE_TREE_HOST_TAG = 'file-tree-container';
@@ -96,9 +98,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     --trees-item-row-gap-override: ${DOCUMENT_TREE_LAYOUT.iconGap}px;
 
     /* No horizontal gutter of its own: a row's hover fill spans the panel's
-       content edges. Rows start without leading padding (DOCUMENT_TREE_ROW_CSS)
-       so the chevron glyph lines up with the 「文档」 title, which in turn sits on
-       the column of the panel tabs (技能 / 文档) above. */
+       content edges, the same edges as the panel tabs (技能 / 文档) above. Rows
+       pad their start (DOCUMENT_TREE_ROW_CSS) so the first glyph — file icon or
+       chevron — lines up with the 「文档」 title. */
     --trees-item-padding-x-override: 6px;
     --trees-item-margin-x-override: 0px;
     --trees-padding-inline-override: 0px;
@@ -112,7 +114,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 interface Props {
   agentId: string;
   data: AgentDocumentItem[];
-  mutate: KeyedMutator<AgentDocumentItem[]>;
+  mutate: AgentDocumentListMutator;
   onOpenDocument?: (documentId: string, agentDocumentId?: string) => void;
   style?: CSSProperties;
 }
@@ -196,6 +198,14 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, onOpenDocumen
       }),
     [documents, parentDocumentIds, resolveNodeName, resolveParentRowId],
   );
+
+  const sort = useGlobalStore(systemStatusSelectors.agentDocumentSort);
+  const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
+  const handleSortChange = useCallback(
+    (agentDocumentSort: AgentDocumentSort) => updateSystemStatus({ agentDocumentSort }),
+    [updateSystemStatus],
+  );
+  const compareNodes = useMemo(() => createDocumentComparator(sort), [sort]);
 
   const treeStyleVars = useMemo(
     () =>
@@ -503,8 +513,10 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, onOpenDocumen
 
   const toolbar = (
     <DocumentExplorerToolbar
+      sort={sort}
       onCreateDocument={() => handleCreateDocument(null)}
       onCreateFolder={() => handleCreateFolder(null)}
+      onSortChange={handleSortChange}
       onUploadFiles={(files) => void ops.uploadFiles(null, files)}
     />
   );
@@ -540,6 +552,7 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, onOpenDocumen
           itemHeight={DOCUMENT_TREE_LAYOUT.itemHeight}
           nodes={nodes}
           ref={treeRef}
+          sort={compareNodes}
           style={{ height: '100%' }}
           unsafeCSS={DOCUMENT_TREE_UNSAFE_CSS}
           onCommitRename={handleCommitRename}

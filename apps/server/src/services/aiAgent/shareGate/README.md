@@ -32,7 +32,7 @@ Confirmed leak paths (a concrete visitor→creator-data route was found):
   system-only tools whose every API WRITES agent-document rows under the
   creator's account. No write grant exists to honor.
 
-- `lobe-task` / `lobe-goal`: `TaskModel`/`taskRouter` are scoped only by
+- `lobe-task` / `builtin-goal`: `TaskModel`/`taskRouter` are scoped only by
   `userId`/`workspaceId` — the CREATOR's. Every mutating and single-task-read
   API takes a model-supplied identifier resolved with no topic/conversation
   check, letting a visitor read, edit, delete, reschedule or RUN (spending
@@ -63,19 +63,6 @@ Confirmed leak paths (a concrete visitor→creator-data route was found):
   with no share-run scoping designed in — same risk class as
   `lobe-agent-management`.
 
-- `lobe-topic-reference`: `topicReferenceRuntime.getTopicContext`
-  (`apps/server/src/services/toolExecution/serverRuntimes/topicReference.ts`)
-  resolves a free-form model-supplied `topicId` via
-  `TopicModel.findOwnTopicById`, scoped only to the creator's `userId` — not
-  to this share or agent — letting a visitor's model read the summary or
-  recent messages of ANY other topic the creator owns by guessing/enumerating
-  ids. `DATA_TOOL_ACCESS_RULES` has no entry for it (it isn't a
-  memory/knowledge-base/agent-documents style store), so nothing narrows the
-  allowlist grant. The automatic `<refer_topic>` injection path
-  (`serverCallLlmContextBuilder.ts`) is separately share-scoped via
-  `isTopicVisibleToRun` and is unaffected by this denial — only the
-  model-invokable tool-call path is unsafe.
-
 Denied for lack of positive safety evidence (no confirmed exploit was
 required to withhold access — the point of default-deny is that an unproven
 tool does not ship):
@@ -99,11 +86,9 @@ tool does not ship):
   it would only let the owner-facing tool picker confirm a grant no visitor
   conversation can ever exercise.
 
-- `lobe-user-interaction` / `lobe-activator`: originally denied because
-  share runs were forced headless, so neither could ever honestly complete.
-  Share runs now honor the visitor's approval flow, but both stay denied
-  until audited on their own: `lobe-activator` can widen the run's tool
-  surface at runtime, which must be proven not to escape the share grant.
+- `lobe-user-interaction`: originally denied because share runs were forced
+  headless, so it could never honestly complete. Share runs now honor the
+  visitor's approval flow, but it stays denied until audited on its own.
 
 - Device-only MCP servers (stdio, or an HTTP endpoint on localhost / a
   private network): not builtin identifiers, so the allowlist above never
@@ -129,7 +114,54 @@ absence of a known exploit.
   `agentShareVisitor` runs (`serverRuntimes/cloudSandbox.ts`), and
   `lobe-creds` stays denied above so nothing ever writes `~/.creds/env`
   into that session either. No creator credential or JWT is therefore
-  reachable from inside a visitor's sandbox command.
+  reachable from inside a visitor's sandbox command. The kept manifest's
+  `systemRole` also gets `shareVisitorSystemPrompt` appended
+  (`applyShareGateToCloudSandbox` in `toolSet.ts`), so the model knows `lh`
+  is refused before it plans a flow the agent prompt or a skill routes
+  through the CLI.
+
+- `lobe-activator`: widens the run's tool surface at runtime, so it is
+  allowed only because every source it reads is already the gated set.
+  Never picked by the owner: any tool grant implies it, scoped to
+  `activateTools` (`shareGate/grants.ts:132`, which also overrides a stored entry so
+  nothing widens it to the runtime's unlisted `activateSkill`), and assembly
+  drops it again when no granted tool is left to activate, counting restored
+  historical activations as already enabled (`shareGate/toolSet.ts:166`). A
+  kept activator gets the share-visitor `systemRole`
+  (`getSystemPromptForShareVisitor`), which omits the default prompt's push
+  to activate `lobe-skill-store` / `lobe-creds` first (both stay denied
+  above) and keeps its `activateSkill` lines only when `lobe-skills` itself
+  survived the gate.
+
+  1. What it can see. `<available_tools>` is the operation's `manifestMap`
+     minus enabled tools (`apps/server/src/modules/AgentRuntime/executorHelpers.ts:644`), and
+     that map is the one `applyShareGateToToolSet` pruned in place
+     (`apps/server/src/services/aiAgent/pipeline/operationPrep.ts:559`). An ungranted MCP server or plugin
+     contributes no name or description.
+  2. What it can activate. `activateTools` only resolves ids present in
+     `context.toolManifestMap` (`apps/server/src/services/toolExecution/serverRuntimes/activator.ts:166`),
+     which is the step's `effectiveManifestMap`
+     (`apps/server/src/modules/AgentRuntime/adapters/ServerToolTransport.ts:310`): the gated
+     operation map plus manifests of earlier activations, themselves copied
+     from the same map (`packages/agent-runtime/src/executors/tool.ts:117`,
+     `:567`). An ungranted id comes back as "Not found".
+  3. Calls in the same step. The tool-call resolver only accepts a call the
+     step offered, or one whose identifier and API exist in the step's
+     prompt manifests (`packages/context-engine/src/engine/tools/ToolNameResolver.ts:284`);
+     a tool activated in this response is not offered until the next step,
+     so a same-response call to it is dropped. Whatever does reach dispatch
+     still meets the dispatch-time gates: `isShareBlockedBuiltinDispatch` for
+     builtins (`apps/server/src/services/toolExecution/builtin.ts:192`) and the gated manifest lookup
+     for MCP (`apps/server/src/services/toolExecution/index.ts:253`).
+  4. Activations restored from history. `operationPrep` re-derives them into
+     `activatableToolIds` (`apps/server/src/services/aiAgent/pipeline/operationPrep.ts:535`) before the share
+     gate prunes that list, and `AgentRuntimeService` restores only ids still
+     in it (`apps/server/src/services/agentRuntime/AgentRuntimeService/createOperation.ts:182`).
+  5. Its skill fallback. `activateTools` retries a non-tool id as a skill
+     name. That lookup re-checks `shareConfig.skillGrants` on every source it
+     opens (`apps/server/src/services/toolExecution/serverRuntimes/activator.ts:97`), the same rule the
+     skills runtime enforces, so it cannot reach a skill the share did not
+     grant.
 
 - `lobe-skills`: the tool DOES resolve skills out of the creator's personal
   catalog — that is what it is for, and it was denied for exactly that reason

@@ -1,19 +1,19 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { ActionIcon, createModal, Skeleton } from '@lobehub/ui/base-ui';
-import { cssVar, useTheme } from 'antd-style';
+import { ActionIcon, createModal, cssVar, Flexbox, Skeleton, useTheme } from '@lobehub/ui';
 import { t as i18nT } from 'i18next';
 import { ArrowLeftIcon, DownloadIcon, InfoIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import ShareButton from '@/business/client/features/FileShare/ShareButton';
 import NavHeader from '@/features/NavHeader';
 import { PageAgentProvider } from '@/features/PageEditor/PageAgentProvider';
 import FileDetailComponent from '@/features/ResourceManager/FileDetail';
 import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import { fileManagerSelectors, useFileStore } from '@/store/file';
 import { downloadFile } from '@/utils/client/downloadFile';
+import { isMobileSurface } from '@/utils/mobileSurface';
 
 import FileContent from './FileContent';
 
@@ -71,6 +71,9 @@ const FileEditorCanvas = memo<FileEditorProps>(({ onBack }) => {
     <Flexbox horizontal height={'100%'} style={{ minHeight: 0 }} width={'100%'}>
       <Flexbox flex={1} height={'100%'} style={{ minHeight: 0 }}>
         <NavHeader
+          // The page's own back leads to its list; mobile drops the shell's
+          // history back so there is one.
+          showTogglePanelButton={!isMobileSurface()}
           left={
             <Flexbox
               horizontal
@@ -96,6 +99,7 @@ const FileEditorCanvas = memo<FileEditorProps>(({ onBack }) => {
           }
           right={
             <Flexbox horizontal gap={8}>
+              {fileDetail && <ShareButton fileId={fileDetail.fileId ?? fileDetail.id} />}
               {fileDetail?.url && (
                 <ActionIcon
                   icon={DownloadIcon}

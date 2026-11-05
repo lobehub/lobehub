@@ -1,10 +1,5 @@
 /* eslint-disable perfectionist/sort-interfaces */
-import type {
-  AgentIdentityContext,
-  FileContent,
-  KnowledgeBaseInfo,
-  PageContentContext,
-} from '@lobechat/prompts';
+import type { AgentIdentityContext, FileContent, KnowledgeBaseInfo } from '@lobechat/prompts';
 import type {
   ExpertiseContextSnapshot,
   RuntimeAdditionalContextFragment,
@@ -101,6 +96,11 @@ export interface FileContextConfig {
   enabled: boolean;
   /** Whether to include file URLs (desktop typically uses false) */
   includeFileUrl: boolean;
+  /**
+   * Attachments sent as a preview plus file id because the request's attachment
+   * budget is spent (see `planAttachmentPreviews`).
+   */
+  previewFileIds?: string[];
 }
 
 /**
@@ -209,6 +209,8 @@ export interface AgentGroupConfig {
 export interface PlanTodoConfig {
   /** Whether plan/todo context injection is enabled */
   enabled?: boolean;
+  /** Whether to inject the current todos into this LLM call */
+  injectTodos?: boolean;
   /** The current plan to inject (injected before first user message) */
   plan?: Plan;
   /** The current todo list to inject (injected at end of last user message) */
@@ -354,11 +356,6 @@ export interface MessagesEngineParams {
    * Contains static state like initial page content that doesn't change during execution
    */
   initialContext?: RuntimeInitialContext;
-  /**
-   * Page content context for direct injection (server-side usage)
-   * When provided, takes precedence over initialContext/stepContext
-   */
-  pageContentContext?: PageContentContext;
   /**
    * Step context computed at the beginning of each step (frontend runtime usage)
    * Contains dynamic state like latest XML that changes between steps

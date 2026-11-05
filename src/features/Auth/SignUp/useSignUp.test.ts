@@ -9,13 +9,14 @@ const mockMessageError = vi.hoisted(() => vi.fn());
 const mockSignUpEmail = vi.hoisted(() => vi.fn());
 const mockGetCaptchaTokenOnError = vi.hoisted(() => vi.fn());
 const mockPreSocialSignupCheck = vi.hoisted(() => vi.fn(async () => true));
+const mockTranslate = vi.hoisted(() => vi.fn());
 
 vi.mock('react-router', () => ({
   useNavigate: () => mockNavigate,
   useSearchParams: () => [{ get: mockSearchParamsGet }],
 }));
 
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+vi.mock('@lobehub/ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   toast: { error: mockMessageError, success: vi.fn() },
 }));
@@ -35,6 +36,12 @@ vi.mock('@/business/client/hooks/useBusinessSignup', () => ({
     getCaptchaTokenOnError: mockGetCaptchaTokenOnError,
     getFetchOptions: async () => undefined,
     preSocialSignupCheck: mockPreSocialSignupCheck,
+  }),
+}));
+
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: mockTranslate,
   }),
 }));
 
@@ -58,6 +65,14 @@ describe('useSignUp', () => {
     mockSearchParamsGet.mockReturnValue(null);
     mockGetCaptchaTokenOnError.mockResolvedValue(undefined);
     mockPreSocialSignupCheck.mockResolvedValue(true);
+    mockTranslate.mockImplementation((key: string, options?: Record<string, unknown>) => {
+      if (key === 'authError:codes.DELETED_ACCOUNT_EMAIL_WITH_RETRY_AFTER_DAYS') {
+        return `Retry within ${options?.count} days`;
+      }
+      if (key === 'authError:codes.DELETED_ACCOUNT_EMAIL') return 'Static cooldown';
+
+      return typeof options?.defaultValue === 'string' ? options.defaultValue : key;
+    });
     mockEnableBusinessFeatures = false;
     mockEnableEmailVerification = false;
     Object.defineProperty(window, 'location', {
@@ -232,6 +247,67 @@ describe('useSignUp', () => {
       expect(mockMessageError).toHaveBeenCalled();
       expect(mockNavigate).not.toHaveBeenCalled();
       expect(window.location.href).toBe('');
+    });
+
+    it('should show the rounded remaining cooldown in days', async () => {
+      mockSignUpEmail.mockResolvedValue({
+        error: {
+          code: 'DELETED_ACCOUNT_EMAIL',
+          message: 'DELETED_ACCOUNT_EMAIL',
+          retryAfterDays: 4,
+        },
+      });
+
+      const { result } = renderHook(() => useSignUp());
+
+      await act(async () => {
+        await result.current.onSubmit(validValues);
+      });
+
+      expect(mockMessageError).toHaveBeenCalledWith('Retry within 4 days');
+    });
+
+    it.each([0, -1, 1.5, '4', Number.POSITIVE_INFINITY])(
+      'should ignore an invalid retry-after day value: %s',
+      async (retryAfterDays) => {
+        mockSignUpEmail.mockResolvedValue({
+          error: {
+            code: 'DELETED_ACCOUNT_EMAIL',
+            message: 'DELETED_ACCOUNT_EMAIL',
+            retryAfterDays,
+          },
+        });
+
+        const { result } = renderHook(() => useSignUp());
+
+        await act(async () => {
+          await result.current.onSubmit(validValues);
+        });
+
+        expect(mockMessageError).toHaveBeenCalledWith('Static cooldown');
+      },
+    );
+
+    it('should fall back to the static error copy when the dynamic key is unavailable', async () => {
+      mockTranslate.mockImplementation((key: string, options?: Record<string, unknown>) => {
+        if (key === 'authError:codes.DELETED_ACCOUNT_EMAIL') return 'Static cooldown';
+        return typeof options?.defaultValue === 'string' ? options.defaultValue : key;
+      });
+      mockSignUpEmail.mockResolvedValue({
+        error: {
+          code: 'DELETED_ACCOUNT_EMAIL',
+          message: 'DELETED_ACCOUNT_EMAIL',
+          retryAfterDays: 4,
+        },
+      });
+
+      const { result } = renderHook(() => useSignUp());
+
+      await act(async () => {
+        await result.current.onSubmit(validValues);
+      });
+
+      expect(mockMessageError).toHaveBeenCalledWith('Static cooldown');
     });
 
     it('should retry sign up with captcha token when captcha is required', async () => {

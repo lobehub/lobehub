@@ -1,8 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { createModal, Text } from '@lobehub/ui/base-ui';
-import { useResponsive } from 'antd-style';
+import { createModal, Flexbox, Text, useResponsive } from '@lobehub/ui';
 import { memo } from 'react';
 
 import { DesktopEvidenceReview } from '../Evidence/DesktopEvidenceReview';

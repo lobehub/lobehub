@@ -76,6 +76,32 @@ describe('genServerAiProvidersConfig', () => {
     expect(result.anthropic.enabled).toBe(true);
   });
 
+  it('should generate only the requested provider from the supplied catalog', async () => {
+    const { ModelProvider } = await import('model-bank');
+    const model = {
+      abilities: { functionCall: true },
+      enabled: true,
+      id: 'deployment-model',
+      providerId: ModelProvider.LobeHub,
+      source: 'builtin' as const,
+      type: 'chat' as const,
+    };
+
+    const result = await genServerAiProvidersConfig(
+      { lobehub: { enabled: true } },
+      [ModelProvider.LobeHub],
+      [model],
+    );
+
+    expect(result).toEqual({
+      lobehub: {
+        enabled: true,
+        enabledModels: undefined,
+        serverModelLists: [model],
+      },
+    });
+  });
+
   it('should use custom enabledKey from specificConfig', async () => {
     const specificConfig = {
       openai: {
@@ -104,7 +130,12 @@ describe('genServerAiProvidersConfig', () => {
 
     const result = await genServerAiProvidersConfig({});
 
-    expect(extractEnabledModels).toHaveBeenCalledWith('openai', '+gpt-4,+gpt-3.5-turbo', false);
+    expect(extractEnabledModels).toHaveBeenCalledWith(
+      'openai',
+      '+gpt-4,+gpt-3.5-turbo',
+      false,
+      expect.any(Array),
+    );
     expect(result.openai.enabledModels).toEqual(['gpt-4', 'gpt-3.5-turbo']);
   });
 
@@ -121,7 +152,12 @@ describe('genServerAiProvidersConfig', () => {
 
     await genServerAiProvidersConfig(specificConfig);
 
-    expect(extractEnabledModels).toHaveBeenCalledWith('openai', '+custom-model', false);
+    expect(extractEnabledModels).toHaveBeenCalledWith(
+      'openai',
+      '+custom-model',
+      false,
+      expect.any(Array),
+    );
   });
 
   it('should handle withDeploymentName option', async () => {
@@ -139,8 +175,14 @@ describe('genServerAiProvidersConfig', () => {
 
     await genServerAiProvidersConfig(specificConfig);
 
-    expect(extractEnabledModels).toHaveBeenCalledWith('openai', '+gpt-4->deployment1', true);
+    expect(extractEnabledModels).toHaveBeenCalledWith(
+      'openai',
+      '+gpt-4->deployment1',
+      true,
+      expect.any(Array),
+    );
     expect(transformToAiModelList).toHaveBeenCalledWith({
+      builtinModels: expect.any(Array),
       defaultModels: expect.any(Array),
       modelString: '+gpt-4->deployment1',
       providerId: 'openai',

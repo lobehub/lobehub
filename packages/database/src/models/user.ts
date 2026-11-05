@@ -1,14 +1,18 @@
 import type {
+  NotificationSettings,
   SSOProvider,
+  SystemAgentItem,
   UserGeneralConfig,
   UserGuide,
   UserKeyVaults,
   UserPreference,
   UserSettings,
+  WidgetDryRunGrant,
 } from '@lobechat/types';
+import { mergeNotificationSettings } from '@lobechat/utils/mergeNotificationSettings';
 import { TRPCError } from '@trpc/server';
 import dayjs from 'dayjs';
-import { and, asc, eq, gt, inArray, isNull, max, or, sql } from 'drizzle-orm';
+import { and, asc, eq, gt, inArray, isNotNull, isNull, max, or, sql } from 'drizzle-orm';
 import type { PartialDeep } from 'type-fest';
 
 import { merge } from '@/utils/merge';
@@ -17,11 +21,13 @@ import { today } from '@/utils/time';
 import type { NewUser, UserItem, UserSettingsItem } from '../schemas';
 import {
   agents,
+  channels,
   chatGroups,
   goals,
   messages,
   nextauthAccounts,
   sessions,
+  taskLabels,
   topics,
   users,
   userSettings,
@@ -369,6 +375,28 @@ export class UserModel {
   };
 
   /**
+   * Append one standing widget dry-run grant to `tool.widgetDryRunGrants` in
+   * a single statement, so a concurrent writer of another `tool` key (or of
+   * another grant) is never clobbered by a stale client snapshot.
+   */
+  appendWidgetDryRunGrant = async (grant: WidgetDryRunGrant) => {
+    const item = JSON.stringify([grant]);
+
+    return this.db
+      .insert(userSettings)
+      .values({ id: this.userId, tool: { widgetDryRunGrants: [grant] } })
+      .onConflictDoUpdate({
+        set: {
+          tool: sql`coalesce(${userSettings.tool}, '{}'::jsonb) || jsonb_build_object(
+            'widgetDryRunGrants',
+            coalesce(${userSettings.tool}->'widgetDryRunGrants', '[]'::jsonb) || ${item}::jsonb
+          )`,
+        },
+        target: userSettings.id,
+      });
+  };
+
+  /**
    * Atomically replace the uninstalled-builtin-tools list for one scope
    * (personal, or one workspace's slot) inside the `tool` column, leaving every
    * other key — `humanIntervention`, the other scope's lists — untouched. Same
@@ -433,6 +461,53 @@ export class UserModel {
         },
         target: userSettings.id,
       });
+  };
+
+  /**
+   * Atomically merge a partial config into ONE `systemAgent` entry, leaving the
+   * entry's other fields and every sibling entry untouched. Same rationale as
+   * `replaceToolChannelsSetting`: the generic settings write replaces the whole
+   * column from a possibly-stale tab snapshot. Callers must restrict `key` to
+   * an allowlist; it is bound as a parameter, never interpolated.
+   */
+  mergeSystemAgentItemSetting = async (key: string, value: Partial<SystemAgentItem>) => {
+    const patch = JSON.stringify(value);
+    // A legacy scalar under the same key cannot be merged into — replace it.
+    const currentItem = sql`case when jsonb_typeof(${userSettings.systemAgent} -> ${key}::text) = 'object' then ${userSettings.systemAgent} -> ${key}::text else '{}'::jsonb end`;
+
+    return this.db
+      .insert(userSettings)
+      .values({ id: this.userId, systemAgent: { [key]: value } })
+      .onConflictDoUpdate({
+        set: {
+          systemAgent: sql`coalesce(${userSettings.systemAgent}, '{}'::jsonb) || jsonb_build_object(${key}::text, ${currentItem} || ${patch}::jsonb)`,
+        },
+        target: userSettings.id,
+      });
+  };
+
+  getNotificationSetting = async (): Promise<NotificationSettings> => {
+    const row = await this.db.query.userSettings.findFirst({
+      columns: { notification: true },
+      where: eq(userSettings.id, this.userId),
+    });
+    return (row?.notification as NotificationSettings | null) ?? {};
+  };
+
+  /**
+   * Merge a notification patch over the stored personal settings and return
+   * the result. `updateSetting` replaces the whole column, so a caller holding
+   * only the switch it wants to flip would wipe every other toggle. Read →
+   * merge → write like `WorkspaceUserSettingsModel.updatePreference`: only the
+   * owner writes this row, so a lost update needs the same user racing itself.
+   */
+  mergeNotificationSetting = async (patch: NotificationSettings) => {
+    const notification = mergeNotificationSettings(await this.getNotificationSetting(), patch);
+    await this.db
+      .insert(userSettings)
+      .values({ id: this.userId, notification })
+      .onConflictDoUpdate({ set: { notification }, target: userSettings.id });
+    return notification;
   };
 
   updatePreference = async (value: Partial<UserPreference>) => {
@@ -544,6 +619,13 @@ export class UserModel {
         }
       };
       await applyRemainingTimeout();
+      // Lock the account first. A concurrent insert referencing it takes a
+      // KEY SHARE lock on this row, so one already in flight commits before we
+      // proceed (and the cleanups below see it), and any later one waits and
+      // then fails its FK — none can slip in between a cleanup and the final
+      // delete, where a SET NULL FK would orphan it.
+      await tx.select({ id: users.id }).from(users).where(eq(users.id, id)).for('update');
+      await applyRemainingTimeout();
       // A goal decision can reference the same user that owns its parent goal.
       // Delete the graph first so its CASCADE completes before the user delete
       // runs the decision's SET NULL action on an already-deleted node.
@@ -551,6 +633,23 @@ export class UserModel {
       await applyRemainingTimeout();
       // Purge share-visitor topics authored by this user under any creator.
       await tx.delete(topics).where(eq(topics.senderId, id));
+      await applyRemainingTimeout();
+      // Personal channels and direct conversations belong to this user alone. Workspace groups
+      // outlive their creator: the user cascade only clears the channel's and member's `user_id`.
+      await tx
+        .delete(channels)
+        .where(
+          and(
+            eq(channels.userId, id),
+            or(isNull(channels.workspaceId), isNotNull(channels.agentId)),
+          ),
+        );
+      await applyRemainingTimeout();
+      // Personal task labels go with their owner; workspace labels stay and the
+      // user cascade only clears their `user_id`.
+      await tx
+        .delete(taskLabels)
+        .where(and(eq(taskLabels.userId, id), isNull(taskLabels.workspaceId)));
       await applyRemainingTimeout();
       const result = await tx.delete(users).where(eq(users.id, id));
       if (deadline !== undefined && Date.now() >= deadline)

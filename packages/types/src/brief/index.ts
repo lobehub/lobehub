@@ -44,6 +44,14 @@ export type BriefType = 'decision' | 'error' | 'insight' | 'result';
 export const NEWS_BRIEF_TYPES: BriefType[] = ['insight', 'result'];
 
 /**
+ * Brief types kept off the home unresolved feed. Run failures are not
+ * decisions: they now reach the user through the notification center and no
+ * longer mint briefs, so legacy unresolved `error` rows must not crowd
+ * "Needs you" either. They stay readable on their task.
+ */
+export const HOME_FEED_EXCLUDED_BRIEF_TYPES: BriefType[] = ['error'];
+
+/**
  * A single artifact (currently only documents) referenced from a brief.
  * Programmatically collected during topic completion, not produced by the LLM.
  */
@@ -78,6 +86,8 @@ export interface BriefGoalMetadata {
   kind: 'decision' | 'signOff';
   /** The action the goal advises — set apart among the brief's buttons. */
   recommendedAction?: string;
+  /** Present on a held batch release: the review report the decision is made in. */
+  reviewAcceptanceId?: string;
   /** Present on a sign-off brief — the Goal-level acceptance to sign. */
   signOffAcceptanceId?: string;
 }

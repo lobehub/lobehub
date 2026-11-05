@@ -82,7 +82,6 @@ You stay in charge — without staying online.
 ## 👋🏻 Getting Started & Join Our Community
 
 We are a group of e/acc design-engineers, hoping to provide modern design components and tools for AIGC.
-By adopting the Bootstrapping approach, we aim to provide developers and users with a more open, transparent, and user-friendly product ecosystem.
 
 Whether for users or professional developers, LobeHub will be your AI Agent playground. Please be aware that LobeHub is currently under active development, and feedback is welcome for any [issues][issues-link] encountered.
 
@@ -307,8 +306,8 @@ An API Key is required to chat with LLMs in LobeHub. This section uses the OpenA
 
 If you find signing up for an OpenAI account or binding a foreign-currency credit card troublesome, you can consider using a well-known OpenAI third-party proxy to obtain an API Key, which can effectively lower the barrier to getting one. At the same time, however, once you use a third-party service, you may also need to bear its potential risks — please decide based on your own actual situation. Below is a list of common third-party model proxies for your reference:
 
-|                                                                     | Provider     | Features                                                                                                | Proxy URL                 | Link                              |
-| ------------------------------------------------------------------- | ------------ | ------------------------------------------------------------------------------------------------------- | ------------------------- | --------------------------------- |
+|                                                                     | Provider     | Features                                                                                                                  | Proxy URL                 | Link                                               |
+| ------------------------------------------------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------- | ------------------------- | -------------------------------------------------- |
 | <img src="https://resource.aihubmix.com/logo.png?v=1" width="48" /> | **AIHubMix** | Uses the OpenAI enterprise API; all models site-wide at **14% off** the official price (incl. GPT-5.6 and Claude Fable 5) | `https://aihubmix.com/v1` | [Get](https://console.aihubmix.com/token?aff=8DBz) |
 
 > \[!WARNING]

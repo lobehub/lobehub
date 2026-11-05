@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { enqueueAgentSignalSourceEvent } from '@/server/services/agentSignal';
 
@@ -6,6 +6,22 @@ import { selfFeedbackIntentRuntime } from '../selfFeedbackIntent';
 
 vi.mock('@/server/services/agentSignal', () => ({
   enqueueAgentSignalSourceEvent: vi.fn(),
+}));
+
+const service = vi.hoisted(() => ({
+  available: true,
+  counters: new Map<string, number>(),
+  releaseDeclarationSlot: vi.fn(),
+  takeDeclarationSlot: vi.fn(),
+}));
+
+vi.mock('@/server/services/redis', () => ({
+  redisService: {
+    agentSignal: {
+      releaseDeclarationSlot: service.releaseDeclarationSlot,
+      takeDeclarationSlot: service.takeDeclarationSlot,
+    },
+  },
 }));
 
 const createInput = () => ({
@@ -18,8 +34,22 @@ const createInput = () => ({
 });
 
 describe('selfFeedbackIntentRuntime', () => {
+  afterEach(() => {
+    service.available = true;
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
+    service.counters.clear();
+    service.takeDeclarationSlot.mockImplementation(async (scopeKey: string) => {
+      if (!service.available) return undefined;
+      const next = (service.counters.get(scopeKey) ?? 0) + 1;
+      service.counters.set(scopeKey, next);
+      return next;
+    });
+    service.releaseDeclarationSlot.mockImplementation(async (scopeKey: string) => {
+      service.counters.set(scopeKey, (service.counters.get(scopeKey) ?? 0) - 1);
+    });
     vi.mocked(enqueueAgentSignalSourceEvent).mockResolvedValue({
       accepted: true,
       scopeKey: 'topic:topic-1',
@@ -62,8 +92,61 @@ describe('selfFeedbackIntentRuntime', () => {
         sourceId: 'self-feedback-intent:user-1:agent-1:operation:operation-1:tool-call-1',
         sourceType: 'agent.self_feedback_intent.declared',
       }),
-      { agentId: 'agent-1', userId: 'user-1' },
+      { agentId: 'agent-1', userId: 'user-1', workspaceId: undefined },
     );
+  });
+
+  /**
+   * @example
+   * A workspace-scoped run forwards its workspaceId to the enqueue boundary, so
+   * `assertAgentUsableBy` resolves the agent inside the team workspace instead of
+   * failing the personal-mode lookup with "Agent not found" (T-888).
+   */
+  it('forwards the run workspaceId to the enqueue boundary', async () => {
+    const runtime = selfFeedbackIntentRuntime.factory({
+      toolManifestMap: {},
+      workspaceId: 'workspace-1',
+    });
+
+    const result = await runtime.declareSelfFeedbackIntent(createInput(), {
+      agentId: 'agent-1',
+      toolCallId: 'tool-call-ws',
+      toolManifestMap: {},
+      topicId: 'topic-1',
+      userId: 'user-1',
+    });
+
+    expect(result.success).toBe(true);
+    expect(enqueueAgentSignalSourceEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        payload: expect.objectContaining({ agentId: 'agent-1', userId: 'user-1' }),
+        sourceType: 'agent.self_feedback_intent.declared',
+      }),
+      { agentId: 'agent-1', userId: 'user-1', workspaceId: 'workspace-1' },
+    );
+  });
+
+  /**
+   * @example
+   * A personal run (no workspaceId) keeps enqueueing without a workspace scope.
+   */
+  it('omits the workspace scope for personal runs', async () => {
+    const runtime = selfFeedbackIntentRuntime.factory({ toolManifestMap: {} });
+
+    const result = await runtime.declareSelfFeedbackIntent(createInput(), {
+      agentId: 'agent-1',
+      toolCallId: 'tool-call-personal',
+      toolManifestMap: {},
+      topicId: 'topic-1',
+      userId: 'user-1',
+    });
+
+    expect(result.success).toBe(true);
+    expect(enqueueAgentSignalSourceEvent).toHaveBeenCalledWith(expect.anything(), {
+      agentId: 'agent-1',
+      userId: 'user-1',
+      workspaceId: undefined,
+    });
   });
 
   /**
@@ -150,5 +233,45 @@ describe('selfFeedbackIntentRuntime', () => {
       strength: 'strong',
     });
     expect(enqueueAgentSignalSourceEvent).toHaveBeenCalledTimes(3);
+  });
+
+  /**
+   * @example
+   * The declaration limit is read from Redis, so it holds across server processes.
+   */
+  it('enforces the declaration limit from the shared Redis counter', async () => {
+    service.counters.set('user-1:agent-1:topic:topic-shared', 3);
+    const runtime = selfFeedbackIntentRuntime.factory({ toolManifestMap: {} });
+
+    const result = await runtime.declareSelfFeedbackIntent(createInput(), {
+      agentId: 'agent-1',
+      toolCallId: 'tool-call-from-another-process',
+      toolManifestMap: {},
+      topicId: 'topic-shared',
+      userId: 'user-1',
+    });
+
+    expect(JSON.parse(result.content)).toMatchObject({ accepted: false, reason: 'rate_limited' });
+    expect(enqueueAgentSignalSourceEvent).not.toHaveBeenCalled();
+  });
+
+  /**
+   * @example
+   * Without Redis the limit cannot be enforced, so declarations are rejected (fail closed).
+   */
+  it('rejects declarations when Redis is unavailable', async () => {
+    service.available = false;
+    const runtime = selfFeedbackIntentRuntime.factory({ toolManifestMap: {} });
+
+    const result = await runtime.declareSelfFeedbackIntent(createInput(), {
+      agentId: 'agent-1',
+      toolCallId: 'tool-call-no-redis',
+      toolManifestMap: {},
+      topicId: 'topic-no-redis',
+      userId: 'user-1',
+    });
+
+    expect(JSON.parse(result.content)).toMatchObject({ accepted: false, reason: 'rate_limited' });
+    expect(enqueueAgentSignalSourceEvent).not.toHaveBeenCalled();
   });
 });

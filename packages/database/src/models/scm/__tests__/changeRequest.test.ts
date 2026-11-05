@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
-import { acceptances, scmWebhookDeliveries, users } from '../../../schemas';
+import { acceptances, scmWebhookDeliveries, topics, users } from '../../../schemas';
 import { mergeChecks, rollupCiStatus, ScmChangeRequestModel } from '../changeRequest';
 import { ScmWebhookDeliveryModel } from '../delivery';
 import { ScmInstallationModel } from '../installation';
@@ -401,6 +401,33 @@ describe('ScmChangeRequestModel', () => {
     expect(moved.topicId).toBeNull();
   });
 
+  it('reports a wake target only for an open, ready, uncapped PR in the caller scope', async () => {
+    await serverDB.insert(topics).values({ id: 'scm-wake-topic', title: 't', userId });
+    const has = (scope = { userId }) =>
+      ScmChangeRequestModel.hasWakeTarget(serverDB, scope, 'scm-wake-topic', 2);
+    const link = (number: number, extra: Partial<typeof snapshot> & { isDraft?: boolean } = {}) =>
+      ScmChangeRequestModel.upsert(serverDB, {
+        ...snapshot,
+        ...extra,
+        links: { topicId: 'scm-wake-topic' },
+        number,
+      });
+
+    expect(await has()).toBe(false);
+    await link(20, { isDraft: true });
+    await link(21, { state: 'closed' });
+    expect(await has()).toBe(false);
+
+    const open = await link(22);
+    expect(await has()).toBe(true);
+    expect(await has({ userId: 'someone-else' })).toBe(false);
+
+    await ScmChangeRequestModel.reserveWake(serverDB, open.id, 2);
+    expect(await has()).toBe(true);
+    await ScmChangeRequestModel.reserveWake(serverDB, open.id, 2);
+    expect(await has()).toBe(false);
+  });
+
   it('rolls up review verdicts per reviewer, in any delivery order', async () => {
     const row = await ScmChangeRequestModel.upsert(serverDB, snapshot);
 
@@ -612,6 +639,53 @@ describe('ScmChangeRequestModel', () => {
     expect(after.metadata.routedBy).toBe('author');
 
     await serverDB.delete(users).where(eq(users.id, otherUser));
+  });
+
+  it('claims a hand-linked acceptance only while the hand link is still there', async () => {
+    const [linked, unlinked] = await serverDB
+      .insert(acceptances)
+      .values([
+        {
+          metadata: {
+            pullRequests: [{ number: 7, provider: 'github', repoFullName: 'lobehub/lobehub' }],
+          },
+          subjectId: 'linked',
+          subjectType: 'standalone',
+          userId,
+        },
+        { subjectId: 'unlinked', subjectType: 'standalone', userId },
+      ])
+      .returning();
+
+    // The resolver read the link while it stood; nothing unlinked it here.
+    const bound = await ScmChangeRequestModel.upsert(serverDB, {
+      ...snapshot,
+      links: { acceptanceId: linked.id, acceptanceSource: 'hand-link' },
+    });
+    expect(bound.acceptanceId).toBe(linked.id);
+
+    // This delivery read the link before the unlink committed. Applying the
+    // snapshot would put the removed binding back, and the merge after it
+    // would accept a delivery the pull request no longer leads to.
+    const raced = await ScmChangeRequestModel.upsert(serverDB, {
+      ...snapshot,
+      links: { acceptanceId: unlinked.id, acceptanceSource: 'hand-link' },
+      number: 8,
+      url: 'https://github.com/lobehub/lobehub/pull/8',
+    });
+    expect(raced.acceptanceId).toBeNull();
+  });
+
+  it('never lets a row-binding echo revive a binding the row has lost', async () => {
+    // The resolver read the row before this transaction opened, so it echoed
+    // the acceptance the row carried then. The row here — as locked inside
+    // the write — no longer carries it: an unlink committed in between.
+    const echoed = await ScmChangeRequestModel.upsert(serverDB, {
+      ...snapshot,
+      links: { acceptanceId: '11111111-2222-4333-8444-555555555555', acceptanceSource: 'row-binding' },
+    });
+
+    expect(echoed.acceptanceId).toBeNull();
   });
 
   it('replays the loser of a first-insert race under the lock instead of overwriting', async () => {

@@ -63,6 +63,33 @@ const run = (execute, command, args) => {
   return result;
 };
 
+const STAPLER_VALIDATE_RETRY_DELAYS_MS = [5000, 15_000];
+
+const sleepSync = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+
+/**
+ * `stapler validate` looks the ticket up in Apple's CloudKit service, and CI
+ * runners intermittently lose that connection (exit 68, NSURLErrorDomain).
+ * Retry before failing the build; a missing or invalid ticket fails every try.
+ */
+const validateStapledTicket = (execute, appPath, { logger, sleep }) => {
+  const attempts = STAPLER_VALIDATE_RETRY_DELAYS_MS.length + 1;
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return run(execute, 'xcrun', ['stapler', 'validate', appPath]);
+    } catch (error) {
+      const delay = STAPLER_VALIDATE_RETRY_DELAYS_MS[attempt];
+      if (delay === undefined) throw error;
+      // Logged so a build that only passes on retry stays visible in CI output.
+      const reason = String(error.message).split('\n')[0].slice(0, 200);
+      logger.warn(
+        `⚠️ stapler validate failed (attempt ${attempt + 1}/${attempts}), retrying in ${delay / 1000}s: ${reason}`,
+      );
+      sleep(delay);
+    }
+  }
+};
+
 const sha256 = (buffer) => createHash('sha256').update(buffer).digest('hex');
 
 const download = async (fetchImpl, url) => {
@@ -76,7 +103,10 @@ const download = async (fetchImpl, url) => {
  * Run before embedding and again after LobeHub.app is signed, which proves
  * electron-builder left the helper's signature and ticket alone.
  */
-export const verifyComputerUseHelper = (appPath, { execute = spawnSync, version } = {}) => {
+export const verifyComputerUseHelper = (
+  appPath,
+  { execute = spawnSync, logger = console, sleep = sleepSync, version } = {},
+) => {
   run(execute, 'codesign', ['--verify', '--strict', '--deep', '--verbose=2', appPath]);
 
   // codesign prints the signing details on stderr.
@@ -89,7 +119,7 @@ export const verifyComputerUseHelper = (appPath, { execute = spawnSync, version 
     );
   }
 
-  run(execute, 'xcrun', ['stapler', 'validate', appPath]);
+  validateStapledTicket(execute, appPath, { logger, sleep });
 
   if (version) {
     const infoPlist = path.join(appPath, 'Contents', 'Info.plist');

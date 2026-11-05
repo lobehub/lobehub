@@ -1,8 +1,6 @@
 import { type LobeToolCustomPlugin } from '@lobechat/types';
-import { Block, Flexbox, Icon } from '@lobehub/ui';
-import { Button, Text } from '@lobehub/ui/base-ui';
-import { type FormInstance, useWatch } from '@lobehub/ui/base-ui/form';
-import { cssVar } from 'antd-style';
+import { Block, Button, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
+import { type FormInstance, useWatch } from '@lobehub/ui/form';
 import { FileCode } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -14,9 +12,10 @@ import { pluginHelpers } from '@/store/tool';
 
 import ApiVisualizer from './ApiVisualizer';
 import PluginEmptyState from './EmptyState';
+import { getMcpManifestSummary } from './mcpManifestSummary';
 
 const PluginPreview = memo<{ form: FormInstance<LobeToolCustomPlugin> }>(({ form }) => {
-  const { t } = useTranslation('plugin');
+  const { t, i18n } = useTranslation('plugin');
   const manifest = useWatch(form, 'manifest');
   const meta = manifest?.meta;
 
@@ -50,7 +49,10 @@ const PluginPreview = memo<{ form: FormInstance<LobeToolCustomPlugin> }>(({ form
               <PluginTag type={'customPlugin'} />
             </Flexbox>
             <Text style={{ fontSize: 12 }} type={'secondary'}>
-              {pluginHelpers.getPluginDesc(meta) || 'Plugin Description'}
+              {pluginHelpers.getPluginDesc(meta) ||
+                (manifest.type === 'mcp'
+                  ? getMcpManifestSummary(manifest, t, i18n.resolvedLanguage)
+                  : 'Plugin Description')}
             </Text>
           </Flexbox>
         </Flexbox>

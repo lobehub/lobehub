@@ -170,4 +170,39 @@ describe('FileUploadModel', () => {
     expect(await model.findActiveByPathname(live!.pathname)).toBeDefined();
     expect((await model.findLatestByPathname(recentCleaning!.pathname))?.status).toBe('cleaning');
   });
+
+  it('reports zero live bytes for a workspace with no live uploads', async () => {
+    const emptyWorkspaceId = 'file-upload-test-empty-workspace';
+    await serverDB.insert(workspaces).values({
+      id: emptyWorkspaceId,
+      name: 'Empty workspace',
+      primaryOwnerId: userId,
+      slug: emptyWorkspaceId,
+    });
+
+    // `sum()` over an empty set yields NULL, not 0 — the counter must coerce it.
+    expect(await FileUploadModel.countLiveUsageForWorkspace(serverDB, emptyWorkspaceId)).toBe(0);
+  });
+
+  it('returns empty results when nothing is eligible to claim or purge', async () => {
+    const model = new FileUploadModel(serverDB, userId);
+    await model.create({ expiresAt, pathname: 'files/not-yet-expired', size: 1 });
+
+    // Nothing has expired as of the cutoff…
+    expect(
+      await FileUploadModel.claimExpiredBatch(serverDB, {
+        batchSize: 10,
+        cleanupLeaseBefore: new Date('2000-01-01T00:00:00Z'),
+        expiresBefore: new Date('2000-01-01T00:00:00Z'),
+      }),
+    ).toEqual([]);
+
+    // …and no terminal row predates it either.
+    expect(
+      await FileUploadModel.deleteTerminalBatch(serverDB, {
+        batchSize: 10,
+        updatedBefore: new Date('2000-01-01T00:00:00Z'),
+      }),
+    ).toBe(0);
+  });
 });

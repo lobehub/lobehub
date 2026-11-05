@@ -1,7 +1,7 @@
 /**
  * Guards the migration's cross-layer wiring: an agent-document write must
  * revalidate the slash-menu skill registry, which now lives in a replica
- * (`replica:sync` keys) instead of the `agent:documentsList` SWR entry.
+ * (`replica:sync` keys) instead of the agent document list SWR entry.
  */
 import { describe, expect, it, vi } from 'vitest';
 

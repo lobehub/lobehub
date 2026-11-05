@@ -1,20 +1,15 @@
 'use client';
 
-import { canWorkspaceRoleBeTaskAssignee } from '@lobechat/const/rbac';
 import type { TaskExecutionConfig, TaskIntentAnalysis } from '@lobechat/types';
 import { readTaskExecutionConfig, toTaskExecutionConfigPatch } from '@lobechat/types';
 import { useEditor } from '@lobehub/editor/react';
-import { Block, DropdownMenu, Flexbox } from '@lobehub/ui';
-import { ActionIcon, Button, Text, toast } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import { ActionIcon, Block, Button, cssVar, DropdownMenu, Flexbox, Text, toast } from '@lobehub/ui';
 import { $getRoot } from 'lexical';
 import { ChevronDown, ChevronUp, Paperclip } from 'lucide-react';
 import { type KeyboardEvent, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
-import { useFetchWorkspaceMembers } from '@/business/client/hooks/useFetchWorkspaceMembers';
-import { useWorkspaceMembers } from '@/business/client/hooks/useWorkspaceMembers';
 import GeneratingBorder from '@/components/GeneratingBorder';
 import { createGoalModal } from '@/features/AgentGoals/CreateGoalModal';
 import { EditorCanvas } from '@/features/EditorCanvas';
@@ -40,10 +35,17 @@ import TaskPriorityTag from '../features/TaskPriorityTag';
 import TaskVisibilityChipLabel from '../features/TaskVisibilityChipLabel';
 import TaskVisibilityTag from '../features/TaskVisibilityTag';
 import { UnassignedAssigneeIcon } from '../features/UnassignedAssigneeIcon';
+import { resolveMemberAssignee } from '../shared/memberAssigneeMode';
 import { taskDetailPath } from '../shared/taskDetailPath';
 import { useAgentDisplayMeta } from '../shared/useAgentDisplayMeta';
 import { useAgentVisibility } from '../shared/useAgentVisibility';
+import { useDefaultMemberAssignee } from '../shared/useDefaultMemberAssignee';
 import { useUserDisplayMeta } from '../shared/useUserDisplayMeta';
+import {
+  clearTaskCreateDraft,
+  persistTaskCreateDraft,
+  readTaskCreateDraft,
+} from './taskCreateDraft';
 import {
   answeredClarifications,
   buildConfirmedDraft,
@@ -69,7 +71,7 @@ interface CreateTaskInlineEntryProps {
    */
   lockAssignee?: boolean;
   onCollapse?: () => void;
-  onCreated?: (task: { agentId?: string; identifier: string }) => void;
+  onCreated?: (task: { id: string; agentId?: string; identifier: string }) => void;
   parentTaskId?: string;
   placeholder?: string;
   projectId?: string;
@@ -102,21 +104,15 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
   const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
 
   const activeWorkspaceId = useActiveWorkspaceId();
-  const { isLoading: isMembersLoading } = useFetchWorkspaceMembers();
-  const workspaceMembers = useWorkspaceMembers();
-  const assignableMemberIds = useMemo(
-    () =>
-      new Set(
-        workspaceMembers
-          .filter((member) => canWorkspaceRoleBeTaskAssignee(member.role))
-          .map((member) => member.userId),
-      ),
-    [workspaceMembers],
-  );
+  const { assignableMemberIds, defaultMemberAssignee, isDefaultMemberPending, isMembersLoading } =
+    useDefaultMemberAssignee();
   const navigate = useWorkspaceAwareNavigate();
   const [priority, setPriority] = useState(0);
   const [assigneeAgentId, setAssigneeAgentId] = useState<string | undefined>(agentId);
-  const [assigneeUserId, setAssigneeUserId] = useState<string | undefined>();
+  // `undefined` follows the default (the creator); `null` is an explicit "unassigned".
+  const [memberChoice, setMemberChoice] = useState<string | null | undefined>();
+  const assigneeUserId = resolveMemberAssignee(memberChoice, defaultMemberAssignee);
+  const isMemberPending = memberChoice === undefined && isDefaultMemberPending;
   const [instruction, setInstruction] = useState('');
   const [hasAttachments, setHasAttachments] = useState(false);
   // Where this task will run, if not simply wherever the assignee agent runs.
@@ -156,7 +152,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
   // A private agent is the stronger constraint, so drop an incompatible member.
   useEffect(() => {
     if (isPrivateAgent) {
-      if (isOtherMemberAssignee) setAssigneeUserId(undefined);
+      if (isOtherMemberAssignee) setMemberChoice(undefined);
       if (visibility === 'public') setVisibility('private');
       return;
     }
@@ -180,6 +176,8 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
   // State (instead of a ref) keeps the persistence effect from writing the old
   // scope's member into the new key during the same effect flush as the reset.
   const [draftHydratedKey, setDraftHydratedKey] = useState<string | null>(null);
+  // Whether the composer has held text since that hydration; see persistTaskCreateDraft.
+  const draftHasTextRef = useRef(false);
 
   const assigneeMeta = useAgentDisplayMeta(assigneeAgentId);
   const memberMeta = useUserDisplayMeta(assigneeUserId);
@@ -201,7 +199,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
     );
   }, []);
   const handleMemberChange = useCallback((nextUserId: string | null) => {
-    setAssigneeUserId(nextUserId ?? undefined);
+    setMemberChoice(nextUserId);
   }, []);
 
   // When the assignee is locked to a scoped agent, keep it in sync with the
@@ -211,7 +209,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
   useEffect(() => {
     if (lockAssignee) {
       setAssigneeAgentId(agentId);
-      setAssigneeUserId(undefined);
+      setMemberChoice(undefined);
       return;
     }
 
@@ -235,6 +233,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
     if (activeWorkspaceId && isMembersLoading) return;
     if (draftHydratedKey === draftStorageKey) return;
     setDraftHydratedKey(draftStorageKey);
+    draftHasTextRef.current = false;
 
     // Reset to baseline for the new scope before hydrating. The run location is
     // part of that baseline: a device or directory picked for the previous
@@ -246,24 +245,11 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
     setVisibility(defaultVisibility);
     setExecution(undefined);
     if (!lockAssignee) setAssigneeAgentId(agentId);
-    setAssigneeUserId(undefined);
+    setMemberChoice(undefined);
 
-    let raw: string | null;
+    const draft = readTaskCreateDraft(draftStorageKey);
+    if (!draft) return;
     try {
-      raw = localStorage.getItem(draftStorageKey);
-    } catch {
-      raw = null;
-    }
-    if (!raw) return;
-    try {
-      const draft = JSON.parse(raw) as {
-        assigneeAgentId?: string;
-        assigneeUserId?: string;
-        execution?: unknown;
-        markdown?: string;
-        priority?: number;
-        visibility?: 'private' | 'public';
-      };
       if (draft.markdown) editor.setDocument?.('markdown', draft.markdown);
       if (typeof draft.priority === 'number') setPriority(draft.priority);
       if (!lockAssignee && draft.assigneeAgentId) setAssigneeAgentId(draft.assigneeAgentId);
@@ -271,11 +257,14 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
       // previous release (or another tab) may have written in another shape, and
       // a malformed run location must degrade to "inherit", never reach a create.
       setExecution(readTaskExecutionConfig({ execution: draft.execution }));
-      if (
+      // `null` restores an explicit "unassigned"; a missing key keeps the default.
+      if (draft.assigneeUserId === null) {
+        setMemberChoice(null);
+      } else if (
         draft.assigneeUserId &&
         (!activeWorkspaceId || assignableMemberIds.has(draft.assigneeUserId))
       ) {
-        setAssigneeUserId(draft.assigneeUserId);
+        setMemberChoice(draft.assigneeUserId);
       }
       if (draft.visibility) setVisibility(draft.visibility);
     } catch {
@@ -294,41 +283,38 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
   ]);
 
   // Back the draft to storage on every change. Gated behind the restore pass so
-  // the initial render can't clobber a just-read draft. Write-only on non-empty:
-  // the key is cleared only on a successful submit (below), never here — so a
+  // the initial render can't clobber a just-read draft. Emptying the editor
+  // discards the draft, but only after it has held text since hydration — so a
   // `setDocument`-timing gap right after restore can't wipe a valid draft.
   useEffect(() => {
     if (!draftStorageKey || draftHydratedKey !== draftStorageKey || !editor) return;
     const markdown = String(editor.getDocument?.('markdown') ?? '').trim();
-    if (!markdown) return;
-    try {
-      localStorage.setItem(
-        draftStorageKey,
-        JSON.stringify({
-          assigneeAgentId: lockAssignee ? undefined : assigneeAgentId,
-          // `lockAssignee` locks only the scoped Agent. The responsible
-          // member remains an independent draft field and must survive reloads.
-          assigneeUserId,
-          // `undefined` (the whole selection is `undefined`) drops the key, so
-          // an untouched composer writes the same draft shape as before.
-          execution,
-          markdown,
-          priority,
-          visibility,
-        }),
-      );
-    } catch {
-      /* storage unavailable / quota — persistence is best-effort */
-    }
+    draftHasTextRef.current = persistTaskCreateDraft(
+      draftStorageKey,
+      {
+        assigneeAgentId: lockAssignee ? undefined : assigneeAgentId,
+        // `lockAssignee` locks only the scoped Agent. The responsible
+        // member remains an independent draft field and must survive reloads.
+        // The raw choice is stored so an untouched draft keeps following the default.
+        assigneeUserId: memberChoice,
+        // `undefined` (the whole selection is `undefined`) drops the key, so
+        // an untouched composer writes the same draft shape as before.
+        execution,
+        markdown,
+        priority,
+        visibility,
+      },
+      draftHasTextRef.current,
+    );
   }, [
     assigneeAgentId,
-    assigneeUserId,
     draftHydratedKey,
     draftStorageKey,
     editor,
     execution,
     instruction,
     lockAssignee,
+    memberChoice,
     priority,
     visibility,
   ]);
@@ -358,20 +344,14 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
   const resetComposer = useCallback(() => {
     setPriority(0);
     setAssigneeAgentId(agentId);
-    setAssigneeUserId(undefined);
+    setMemberChoice(undefined);
     setInstruction('');
     setExecution(undefined);
     setVisibility(defaultVisibility);
     setAnalysis(null);
     setIntentAnswers({});
     editor?.cleanDocument?.();
-    if (draftStorageKey) {
-      try {
-        localStorage.removeItem(draftStorageKey);
-      } catch {
-        /* ignore */
-      }
-    }
+    if (draftStorageKey) clearTaskCreateDraft(draftStorageKey);
   }, [agentId, defaultVisibility, draftStorageKey, editor]);
 
   /** What the composer currently holds, or null when there is nothing to create. */
@@ -477,6 +457,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
             title: t('taskIntent.created'),
           });
           onCreated?.({
+            id: result.id,
             agentId: result.assigneeAgentId ?? undefined,
             identifier: result.identifier,
           });
@@ -513,7 +494,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
   );
 
   const handleSubmit = useCallback(async () => {
-    if (!canCreateTask) return;
+    if (!canCreateTask || isMemberPending) return;
     const draft = readDraft();
     if (!draft) return;
 
@@ -541,7 +522,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
     } finally {
       setIsAnalyzing(false);
     }
-  }, [assigneeMeta?.title, canCreateTask, readDraft, submitDraft]);
+  }, [assigneeMeta?.title, canCreateTask, isMemberPending, readDraft, submitDraft]);
 
   /**
    * The escape hatch, one click away in the submit dropdown: create the task
@@ -550,11 +531,11 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
    * user who finds the reading slow or wrong is never stuck behind it.
    */
   const handleCreateDirectly = useCallback(async () => {
-    if (!canCreateTask) return;
+    if (!canCreateTask || isMemberPending) return;
     const draft = readDraft();
     if (!draft) return;
     await submitDraft(draft);
-  }, [canCreateTask, readDraft, submitDraft]);
+  }, [canCreateTask, isMemberPending, readDraft, submitDraft]);
 
   /**
    * The review editor is the source of truth for what gets created, not the
@@ -907,6 +888,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
                   !canCreateTask ||
                   isCreating ||
                   isAnalyzing ||
+                  isMemberPending ||
                   (!instruction.trim() && !hasAttachments)
                 }
                 onClick={handleSubmit}
@@ -941,6 +923,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
                     !canCreateTask ||
                     isCreating ||
                     isAnalyzing ||
+                    isMemberPending ||
                     (!instruction.trim() && !hasAttachments)
                   }
                 />

@@ -1,5 +1,5 @@
 /** Resource families that can broadcast realtime invalidation or collaboration events. */
-export type ResourceType = 'agent' | 'chatGroup' | 'document' | 'task' | 'topic';
+export type ResourceType = 'acceptance' | 'agent' | 'chatGroup' | 'document' | 'task' | 'topic';
 
 export interface ResourceRef {
   id: string;
@@ -7,6 +7,8 @@ export interface ResourceRef {
 }
 
 export type ResourceEventType =
+  | 'acceptance.commentsChanged'
+  | 'acceptance.sessionChanged'
   | 'doc.updated'
   | 'document.commentsChanged'
   | 'document.likesChanged'

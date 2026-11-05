@@ -33,12 +33,35 @@ const createProcess = () => {
 };
 
 afterEach(() => {
+  vi.useRealTimers();
   Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform });
   vi.restoreAllMocks();
   spawnMock.mockReset();
 });
 
 describe('AcpStdioClient', () => {
+  it('marks request timeouts so callers can distinguish them from command failures', async () => {
+    vi.useFakeTimers();
+    const { child } = createProcess();
+    spawnMock.mockReturnValue(child);
+    vi.spyOn(process, 'kill').mockImplementation(() => true);
+    const client = new AcpStdioClient({
+      args: [],
+      commandPath: 'agent',
+      cwd: '/workspace',
+      env: {},
+      onMessage: vi.fn(),
+      onRawMessage: vi.fn(),
+      onStderr: vi.fn(),
+    });
+    await client.start();
+    const timedOut = expect(client.request('initialize', {}, 100)).rejects.toMatchObject({
+      code: 'ETIMEDOUT',
+    });
+    await Promise.all([timedOut, vi.advanceTimersByTimeAsync(100)]);
+    client.close();
+  });
+
   it('frames split NDJSON and correlates concurrent responses by request id', async () => {
     const { child, stdout, writes } = createProcess();
     spawnMock.mockReturnValue(child);

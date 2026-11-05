@@ -1,6 +1,16 @@
-import { Block, DropdownMenu, Flexbox } from '@lobehub/ui';
-import { ActionIcon, Button, confirmModal, Spin, Tag, toast } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  ActionIcon,
+  Block,
+  Button,
+  confirmModal,
+  createStaticStyles,
+  cssVar,
+  DropdownMenu,
+  Flexbox,
+  Spin,
+  Tag,
+  toast,
+} from '@lobehub/ui';
 import { ArrowRight, ChevronRight, Database, Ellipsis, Pencil, Play, Trash2 } from 'lucide-react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';

@@ -5,7 +5,7 @@ import {
 } from '@lobechat/const/goal';
 import { describe, expect, it } from 'vitest';
 
-import { goalGateCategory, toGateAnswer, toGateQuestion } from './mapping';
+import { gateAnswerProblem, goalGateCategory, toGateAnswer, toGateQuestion } from './mapping';
 
 const recover = [
   { id: 'retry', label: 'Retry task' },
@@ -70,6 +70,34 @@ describe('toGateQuestion', () => {
     });
   });
 
+  it("adds the retire cascade after an Agent's own consequence", () => {
+    // The Agent describes its answer; which tasks it takes along is the
+    // coordinator's to say, so an answer that retires never hides it.
+    const question = toGateQuestion(
+      {
+        id: 'd3',
+        options: [
+          {
+            alsoRetires: [{ nodeId: 'n1', title: 'Summary' }],
+            description: 'Skip the measurement',
+            effect: 'retire',
+            id: 'skip',
+            label: 'Skip',
+          },
+        ],
+        question: 'Skip?',
+      },
+      {
+        cascade: (option) => (option.alsoRetires ? 'Summary goes too.' : undefined),
+        describe: () => 'generic',
+        label: (o) => o.label,
+        question: 'Skip?',
+      },
+    );
+
+    expect(question.options[0].description).toBe('Skip the measurement Summary goes too.');
+  });
+
   it("keeps an Agent's own consequence over the generic one", () => {
     const question = toGateQuestion(
       {
@@ -115,5 +143,18 @@ describe('toGateAnswer', () => {
         [{ questionId: 'd2', text: 'Both, desktop first', type: 'text' }],
       ),
     ).toEqual({ optionId: 'all', resolution: 'Both, desktop first' });
+  });
+});
+
+describe('gateAnswerProblem', () => {
+  it('requires a correction to revise a batch recipe', () => {
+    expect(gateAnswerProblem({ optionId: 'revise' })).toBe('correctionRequired');
+    expect(gateAnswerProblem({ optionId: 'revise', resolution: '  ' })).toBe('correctionRequired');
+    expect(gateAnswerProblem({ optionId: 'revise', resolution: '补上冷启动' })).toBeUndefined();
+  });
+
+  it('leaves every other answer alone', () => {
+    expect(gateAnswerProblem({ optionId: 'new_class' })).toBeUndefined();
+    expect(gateAnswerProblem({ optionId: 'retry' })).toBeUndefined();
   });
 });

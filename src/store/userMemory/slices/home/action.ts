@@ -84,7 +84,7 @@ export const createHomeSlice = (
 /**
  * The memory home reads: the persona and the identity roles + tags aggregate.
  *
- * Server state is two `@lobechat/replica` single-value resources (`personaData`
+ * Server state is two `local-replica` single-value resources (`personaData`
  * and `identityRolesData`): the persisted copy paints on the first frame and
  * the network confirms it in the background. The domain store exposes the same
  * flat fields and the same action surface it always has, backed by the replica
@@ -146,10 +146,19 @@ export class HomeActionImpl {
    * Drop the persona locally (persisted), then re-read server truth (now
    * `null`). The persona delete flow calls this after the DELETE succeeded, so
    * the section disappears immediately instead of waiting for a network round
-   * trip. The re-read is best-effort: the deletion already happened, so a
+   * trip. `user` is the account that asked (captured before the DELETE); when
+   * another account is active by now, only that account's persisted persona is
+   * purged. The re-read is best-effort: the deletion already happened, so a
    * failed GET must not surface as a failed delete — the next sync confirms it.
    */
-  refreshPersona = async (): Promise<void> => {
+  refreshPersona = async (user?: string): Promise<void> => {
+    // The account that deleted its persona switched away while the request ran:
+    // purge that account's persisted persona (and keep it from hydrating back),
+    // never the persona of the account now on screen.
+    if (user !== undefined && user !== personaResource.scope.get()) {
+      this.#persona.remove(PERSONA_KEY, user);
+      return;
+    }
     this.#persona.update(PERSONA_KEY, () => ({ persona: null }), { persist: true });
     // The replica adopts `userMemory:persona` as its sync key, so revalidating
     // that key is what drives the network sync.

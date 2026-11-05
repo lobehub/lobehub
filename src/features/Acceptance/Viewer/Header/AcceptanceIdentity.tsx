@@ -1,8 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Avatar, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { Avatar, createStaticStyles, cssVar, Flexbox, Text } from '@lobehub/ui';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -10,6 +8,7 @@ import { useAcceptanceScope } from '../AcceptanceScope';
 import { acceptanceCodingScope } from '../History/codingScope';
 import { useAcceptanceBundle } from '../useAcceptanceBundle';
 import AcceptanceStatusPill from './AcceptanceStatusPill';
+import PreviewReviewLink from './PreviewReviewLink';
 import PullRequestLinks from './PullRequestLinks';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -125,6 +124,7 @@ const AcceptanceIdentity = ({ focusSlot, statusSlot, topicSlot }: AcceptanceIden
           fallback={acceptanceCodingScope(rounds)?.pullRequest}
           pullRequests={pullRequests}
         />
+        <PreviewReviewLink acceptanceId={acceptance.id} rounds={rounds} />
       </Flexbox>
     </Flexbox>
   );

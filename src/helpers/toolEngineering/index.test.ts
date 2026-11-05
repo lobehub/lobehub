@@ -1,3 +1,4 @@
+import { AttachmentsManifest } from '@lobechat/builtin-tool-attachments';
 import { AuvManifest } from '@lobechat/builtin-tool-auv';
 import { DashboardManifest } from '@lobechat/builtin-tool-dashboard';
 import type * as ConstModule from '@lobechat/const';
@@ -26,6 +27,11 @@ vi.mock('@/store/tool', () => ({
       {
         identifier: DashboardManifest.identifier,
         manifest: DashboardManifest,
+        type: 'builtin' as const,
+      },
+      {
+        identifier: AttachmentsManifest.identifier,
+        manifest: AttachmentsManifest,
         type: 'builtin' as const,
       },
       {
@@ -274,13 +280,13 @@ describe('toolEngineering', () => {
         provider: 'openai',
       });
 
-    it('never offers lobe-dashboard while the dashboard flag is off, even when pinned', () => {
+    it('never offers builtin-dashboard while the dashboard flag is off, even when pinned', () => {
       mockCurrentAgentPlugins = [DashboardManifest.identifier];
       mockFeatureFlags = { enableDashboard: false };
       expect(generate().enabledToolIds).not.toContain(DashboardManifest.identifier);
     });
 
-    it('offers a pinned lobe-dashboard once the flag is on', () => {
+    it('offers a pinned builtin-dashboard once the flag is on', () => {
       mockCurrentAgentPlugins = [DashboardManifest.identifier];
       mockFeatureFlags = { enableDashboard: true };
       expect(generate().enabledToolIds).toContain(DashboardManifest.identifier);
@@ -547,6 +553,23 @@ describe('toolEngineering', () => {
       });
 
       expect(result.enabledToolIds).toContain('lobe-agent');
+    });
+
+    it.each([true, false])('enables lobe-attachments only with oversized files (%s)', (flag) => {
+      const toolsEngine = createAgentToolsEngine(
+        { model: 'deepseek-chat', provider: 'deepseek' },
+        undefined,
+        undefined,
+        { hasOversizedFiles: flag },
+      );
+
+      const result = toolsEngine.generateToolsDetailed({
+        model: 'deepseek-chat',
+        provider: 'deepseek',
+        toolIds: [],
+      });
+
+      expect(result.enabledToolIds.includes('lobe-attachments')).toBe(flag);
     });
 
     it('should enable lobe-agent by default since it is always-on', () => {

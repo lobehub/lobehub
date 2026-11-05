@@ -2,9 +2,16 @@ export {
   AmpAdapter,
   ClaudeCodeAdapter,
   CodeBuddyAdapter,
+  CopilotAcpAdapter,
   GrokBuildAdapter,
   QoderAdapter,
 } from './adapters';
+export {
+  appendAttachedFilesToPrompt,
+  buildAttachedFilesPrompt,
+  collectHeteroAttachedFiles,
+  type HeteroAttachedFileRef,
+} from './attachedFiles';
 export type {
   HeterogeneousAgentCliError,
   HeterogeneousAgentDescriptor,
@@ -12,6 +19,8 @@ export type {
   HeterogeneousAgentType,
   LocalHeterogeneousAgentDescriptor,
   LocalHeterogeneousAgentType,
+  LocalRuntimeHeterogeneousAgentDescriptor,
+  LocalRuntimeHeterogeneousAgentType,
   RemoteHeterogeneousAgentDescriptor,
   RemoteHeterogeneousAgentType,
 } from './config';
@@ -26,6 +35,8 @@ export {
   CODEBUDDY_CLI_INSTALL_DOCS_URL,
   CODEX_CLI_INSTALL_COMMANDS,
   CODEX_CLI_INSTALL_DOCS_URL,
+  COPILOT_CLI_INSTALL_COMMANDS,
+  COPILOT_CLI_INSTALL_DOCS_URL,
   CURSOR_CLI_INSTALL_COMMANDS,
   CURSOR_CLI_INSTALL_DOCS_URL,
   DROID_CLI_INSTALL_COMMANDS,
@@ -37,8 +48,10 @@ export {
   HETEROGENEOUS_AGENT_CONFIGS,
   isHeterogeneousAgentAuthRequired,
   isLocalHeterogeneousType,
+  isLocalRuntimeHeterogeneousType,
   isRemoteHeterogeneousType,
   LOCAL_HETEROGENEOUS_AGENT_TYPES,
+  LOCAL_RUNTIME_HETEROGENEOUS_AGENT_CONFIGS,
   OPENCODE_CLI_INSTALL_COMMANDS,
   OPENCODE_CLI_INSTALL_DOCS_URL,
   PI_CLI_INSTALL_COMMANDS,
@@ -48,6 +61,7 @@ export {
   QODER_CLI_INSTALL_DOCS_URL,
   REMOTE_HETEROGENEOUS_AGENT_CONFIGS,
   resolveHeterogeneousAgentCommand,
+  usesHeterogeneousSessionInitialModel,
 } from './config';
 export type {
   HeteroErrorAttribution,
@@ -64,6 +78,7 @@ export {
   HETERO_ERROR_SPECS,
   isUserSideHeteroError,
 } from './errors';
+export { heteroAgentSupportsImageInput } from './imageInput';
 export { getHeterogeneousTypeLabel, HETEROGENEOUS_TYPE_LABELS } from './labels';
 export type {
   CreateAssistantIntent,
@@ -95,7 +110,6 @@ export type {
   ResolveHeterogeneousProviderBindingResult,
   ServerDefaultHeterogeneousAgentType,
   ServerDefaultHeterogeneousIngress,
-  ServerDefaultHeterogeneousModelPolicy,
   ServerDefaultHeterogeneousTokenHeader,
 } from './providerBinding';
 export {
@@ -119,25 +133,33 @@ export type { HeterogeneousAgentScanMap, HeterogeneousAgentScanStatus } from './
 export type {
   CreateMessageIntent,
   CreateThreadIntent,
+  FinalizedSubagentRunSnapshot,
   FinalizeThreadIntent,
   PersistContentIntent,
   PersistToolBatchEntry,
   PersistToolBatchIntent,
   RecordUsageIntent,
+  ReopenThreadIntent,
   ResolveToolResultIntent,
   StreamContentIntent,
   SubagentIntent,
   SubagentReduceCtx,
+  SubagentRun,
   SubagentRunSnapshot,
   SubagentRunsState,
+  SubagentThreadMessage,
   UpdateToolStateIntent,
 } from './subagentCoordinator';
 export {
+  buildFinalizedSubagentRunSnapshot,
+  buildSubagentRunSnapshot,
   createSubagentRunsState,
   type EventScope,
   getEventScope,
   reduceSubagentRuns,
   rehydrateSubagentRunsState,
+  restoreFinalizedSubagentRun,
+  restoreSubagentRun,
 } from './subagentCoordinator';
 export type {
   AgentEventAdapter,

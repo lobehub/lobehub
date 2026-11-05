@@ -1,8 +1,7 @@
 'use client';
 
-import { Flexbox, Icon, ImageSelect } from '@lobehub/ui';
-import { Select, Skeleton, Tabs } from '@lobehub/ui/base-ui';
-import { Form, type FormGroupItem, useForm } from '@lobehub/ui/base-ui/form';
+import { Flexbox, Icon, ImageSelect, Select, Tabs } from '@lobehub/ui';
+import { Form, type FormGroupItem, useForm } from '@lobehub/ui/form';
 import isEqual from 'fast-deep-equal';
 import { Ban, Gauge, Monitor, Moon, Mouse, Sun, Waves } from 'lucide-react';
 import { useTheme as useNextThemesTheme } from 'next-themes';
@@ -10,6 +9,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AutoSaveHint from '@/components/Editor/AutoSaveHint';
+import { SettingsSectionSkeleton } from '@/components/Skeleton';
 import { FORM_STYLE } from '@/const/layoutTokens';
 import { imageUrl } from '@/const/url';
 import { isDesktop } from '@/const/version';
@@ -46,7 +46,29 @@ const Common = memo(() => {
     switchLocale(value);
   };
 
-  if (!(isStatusInit && isUserStateInit)) return <Skeleton.Text rows={5} />;
+  // One filled group: theme, language, animation, context menu, response language.
+  // The theme row is the 332×86 `ImageSelect`, so it reserves that size instead of an input.
+  if (!(isStatusInit && isUserStateInit))
+    return (
+      <SettingsSectionSkeleton
+        groups={[
+          {
+            // Settled sizes: theme ImageSelect, language Select, motion and
+            // context-menu Segmented controls, reply-language Select.
+            controls: {
+              0: { height: 86, width: 332 },
+              1: { height: 32, width: 167 },
+              2: { height: 38, width: 230 },
+              3: { height: 38, width: 165 },
+              4: { height: 32, width: 167 },
+            },
+            rows: 5,
+            titleWidth: 96,
+            withDesc: false,
+          },
+        ]}
+      />
+    );
 
   const themeFormGroup: FormGroupItem<UserGeneralConfig> = {
     children: [

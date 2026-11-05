@@ -46,7 +46,18 @@ export const resolveClientSkills = async (
   pluginIds?: string[],
   disabledIds?: string[],
   skillActivateMode?: 'auto' | 'manual',
+  /** Selectable for this turn even in manual mode, without being pinned. */
+  turnSkillIds?: string[],
 ): Promise<OperationSkillSet> => {
+  // The list is only fetched by mounted views (tool popover, side panel), so a
+  // send right after a page load would otherwise see no DB skills. A failed
+  // load must not block the send; fall back to whatever the store holds.
+  try {
+    await getToolStoreState().ensureAgentSkillsLoaded();
+  } catch (error) {
+    log('Failed to load agent skills before building the skill pool: %O', error);
+  }
+
   const toolState = getToolStoreState();
   const pinnedIds = new Set(pluginIds ?? []);
   const disabledIdSet = new Set(disabledIds ?? []);
@@ -116,6 +127,7 @@ export const resolveClientSkills = async (
       canExecuteOnDevice: isDesktop,
       enabledPluginIds: pluginIds,
       skillActivateMode,
+      turnSkillIds,
     },
   );
 };

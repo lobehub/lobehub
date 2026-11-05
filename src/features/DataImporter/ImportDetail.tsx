@@ -1,8 +1,14 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Button, Table, type TableColumn, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import {
+  Button,
+  createStaticStyles,
+  Flexbox,
+  ModalFooter,
+  Table,
+  type TableColumn,
+  Text,
+} from '@lobehub/ui';
 import { Info } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -126,20 +132,21 @@ const ImportPreviewModal = ({
       open={open}
       title={t('importPreview.title')}
       width={700}
-      footer={[
-        <Button
-          key="cancel"
-          onClick={() => {
-            onOpenChange(false);
-            onCancel();
-          }}
-        >
-          {t('cancel')}
-        </Button>,
-        <Button key="confirm" type="primary" onClick={handleConfirm}>
-          {t('importPreview.confirmImport')}
-        </Button>,
-      ]}
+      footer={
+        <ModalFooter>
+          <Button
+            onClick={() => {
+              onOpenChange(false);
+              onCancel();
+            }}
+          >
+            {t('cancel')}
+          </Button>
+          <Button type="primary" onClick={handleConfirm}>
+            {t('importPreview.confirmImport')}
+          </Button>
+        </ModalFooter>
+      }
       onCancel={() => onOpenChange(false)}
     >
       <div className={styles.modalContent}>

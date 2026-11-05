@@ -148,6 +148,24 @@ describe('brief list replica', () => {
     });
   });
 
+  it('refreshes the day digest when a news brief is resolved from the feed', async () => {
+    await load([createBrief('b1')]);
+    vi.spyOn(briefService, 'resolve').mockResolvedValue(undefined as never);
+    const listNewsByDay = vi
+      .spyOn(briefService, 'listNewsByDay')
+      .mockResolvedValue({ data: [createBrief('b1')], hasEarlier: false } as never);
+    const { result } = renderHook(
+      () => useBriefStore((s) => s.useFetchNewsByDay)(true, scope, '2026-07-31'),
+      { wrapper },
+    );
+    await waitFor(() => expect(result.current.data).toBeDefined());
+    expect(listNewsByDay).toHaveBeenCalledTimes(1);
+
+    await act(() => useBriefStore.getState().resolveBrief('b1', 'approve'));
+
+    await waitFor(() => expect(listNewsByDay).toHaveBeenCalledTimes(2));
+  });
+
   it('drops the briefs resolved as read from the feed', async () => {
     await load([createBrief('b1'), createBrief('b2')]);
     vi.spyOn(briefService, 'resolveManyAsRead').mockResolvedValue({ data: ['b1'] } as never);

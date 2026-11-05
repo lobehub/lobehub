@@ -8,8 +8,8 @@
  */
 import { randomUUID } from 'node:crypto';
 
-import { REPLICA_INDEX_KEY } from '@lobechat/replica';
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
+import { REPLICA_INDEX_KEY } from 'local-replica';
 import type { PropsWithChildren } from 'react';
 import { createElement, useEffect } from 'react';
 import { SWRConfig, useSWRConfig } from 'swr';
@@ -372,6 +372,45 @@ describe('userMemory topic memories replica', () => {
     // The active user's bundle (view and row) is untouched.
     expect(topicMemories(TOPIC_B)).toEqual(bundle('active'));
     expect((await rowOf(TOPIC_B, rowScope))?.data).toEqual(bundle('active'));
+  });
+
+  it('purges a deleted user’s bundle whose write was still queued when the account switched', async () => {
+    const storage = topicMemoriesResource.storage!;
+    const rowOf = (topicId: string, scopeValue: string) =>
+      storage.get({ queryKey: topicMemoriesResource.storageKey(topicId), scope: scopeValue });
+    const deletedUser = rowScope;
+    // The deleted user's bundle write is slow to land in IndexedDB.
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    const { set } = storage;
+    vi.spyOn(storage, 'set').mockImplementation(async (key, row) => {
+      if (key.scope === deletedUser) await held;
+      return set(key, row);
+    });
+    vi.mocked(userMemoryService.retrieveMemoryForTopic).mockResolvedValue(bundle('deleted'));
+    const first = renderHook(() => useUserMemoryStore((s) => s.useFetchMemoriesForTopic)(TOPIC_A), {
+      wrapper,
+    });
+    await waitFor(() => expect(topicMemories(TOPIC_A)).toEqual(bundle('deleted')));
+    first.unmount();
+
+    // The account switches while that write is still queued; the purge runs now.
+    useScope(`memory-user-${randomUUID()}:personal`);
+    let purging!: Promise<boolean>;
+    act(() => {
+      purging = useUserMemoryStore.getState().internal_clearTopicMemories(deletedUser);
+    });
+    release();
+    let cleared = false;
+    await act(async () => {
+      cleared = await purging;
+    });
+
+    expect(cleared).toBe(true);
+    // The queued write landed before the purge's delete, never after it.
+    await waitFor(async () => expect(await rowOf(TOPIC_A, deletedUser)).toBeUndefined());
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(await rowOf(TOPIC_A, deletedUser)).toBeUndefined();
   });
 
   it('bounds the persisted topic bundles to the most recently visited topics', async () => {

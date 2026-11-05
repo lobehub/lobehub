@@ -7,8 +7,8 @@ import {
   createEnableChecker,
   type LobeToolManifest,
   type PluginEnableChecker,
+  ToolsEngine,
 } from '@lobechat/context-engine';
-import { ToolsEngine } from '@lobechat/context-engine';
 import { assembleManifestPool, resolveToolRules } from '@lobechat/mecha';
 import {
   type BuiltinToolResolveContext,
@@ -107,7 +107,7 @@ export const createToolsEngine = (config: ToolsEngineConfig = {}): ToolsEngine =
         .composioAsLobeTools(toolStoreState)
         .map((tool) => tool.manifest as LobeToolManifest),
       connectors: buildClientConnectorManifests(
-        connectorSelectors.customConnectors(toolStoreState),
+        connectorSelectors.executableMcpConnectors(toolStoreState),
       ) as LobeToolManifest[],
       installedPlugins: pluginSelectors.installedPluginManifestList(
         toolStoreState,
@@ -145,6 +145,13 @@ export const createAgentToolsEngine = (
   pluginIds?: string[],
   /** Conversation context for context-aware builtin manifests (scope, isSubAgent). */
   manifestContext?: BuiltinToolResolveContext,
+  options: {
+    /**
+     * Whether the conversation has an attachment that can be sent as a preview. Enables
+     * `readAttachment` so the preview can be paged, as the server's tool discovery does.
+     */
+    hasOversizedFiles?: boolean;
+  } = {},
 ) => {
   const searchConfig = getSearchConfig(workingModel.model, workingModel.provider);
   const agentState = getAgentStoreState();
@@ -161,7 +168,7 @@ export const createAgentToolsEngine = (
       // `currentAgentPlugins` already resolves to pinned-only identifiers.
       plugins: agentSelectors.currentAgentPlugins(agentState),
     },
-    // Feature-flagged tools (e.g. lobe-dashboard) leave the pool while their
+    // Feature-flagged tools (e.g. builtin-dashboard) leave the pool while their
     // flag is off for this user.
     disabledPluginIds: [
       ...agentSelectors.currentAgentDisabledPlugins(agentState),
@@ -169,6 +176,7 @@ export const createAgentToolsEngine = (
     ],
     executionTarget: chatConfigByIdSelectors.getExecutionTargetById(activeAgentId)(agentState),
     hasEnabledKnowledgeBases: agentSelectors.hasEnabledKnowledgeBases(agentState),
+    hasOversizedFiles: options.hasOversizedFiles,
     // A `local` target only resolves on the desktop, where the host itself is
     // the machine: local tools are always reachable there.
     localExecutionReady: true,

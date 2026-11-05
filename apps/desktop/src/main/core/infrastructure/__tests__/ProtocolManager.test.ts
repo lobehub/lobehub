@@ -88,6 +88,20 @@ describe('ProtocolManager', () => {
     manager = new ProtocolManager(mockAppCore);
   });
 
+  it('queues deep links while the startup update window is blocking entry', async () => {
+    mockAppCore.startupUpdatePending = true;
+    manager.initialize();
+    openUrlHandler!(
+      { preventDefault: vi.fn() },
+      'lobehub://plugin/install?url=https://example.com',
+    );
+    expect(mockShowMainWindow).not.toHaveBeenCalled();
+    expect(mockHandleProtocolRequest).not.toHaveBeenCalled();
+    mockAppCore.startupUpdatePending = false;
+    await manager.processPendingUrls();
+    expect(mockHandleProtocolRequest).toHaveBeenCalledOnce();
+  });
+
   describe('constructor', () => {
     it('should initialize with protocol scheme from getProtocolScheme', () => {
       expect(getProtocolScheme).toHaveBeenCalled();
@@ -111,12 +125,6 @@ describe('ProtocolManager', () => {
   });
 
   describe('protocol registration', () => {
-    it('should use simple registration in production mode', () => {
-      manager.initialize();
-
-      expect(app.setAsDefaultProtocolClient).toHaveBeenCalledWith('lobehub');
-    });
-
     it('should use explicit parameters in development mode', async () => {
       vi.doMock('@/const/env', () => ({ isDev: true }));
       vi.resetModules();

@@ -41,6 +41,19 @@ interface LocalFilePreviewKeyParams {
   workingDirectory: string;
 }
 
+export const channelKeys = {
+  agentEnvironment: def(
+    'channel:agentEnvironment',
+    (channelId: string, memberId: string) =>
+      ['channel:agentEnvironment', channelId, memberId] as const,
+  ),
+  userCandidates: def(
+    'channel:userCandidates',
+    (channelId: string | undefined, search: string) =>
+      ['channel:userCandidates', channelId ?? null, search] as const,
+  ),
+};
+
 // ---- message ------------------------------------------------------------
 export interface MessageListQueryContext {
   agentId?: string | null;
@@ -128,18 +141,30 @@ export const topicKeys = {
     'topic:scheduledRunWatch',
     topicId,
   ]),
-  search: def('topic:search', (keywords: string, agentId?: string, groupId?: string) => [
+  search: def(
     'topic:search',
-    keywords,
-    agentId,
-    groupId,
-  ]),
+    (keywords: string, agentId?: string, groupId?: string, onlyMine?: boolean) => [
+      'topic:search',
+      keywords,
+      agentId,
+      groupId,
+      onlyMine,
+    ],
+  ),
 };
 
 // ---- acceptance comment -------------------------------------------------
 export const acceptanceCommentKeys = {
   list: def('acceptanceComment:list', (acceptanceId: string) => [
     'acceptanceComment:list',
+    acceptanceId,
+  ]),
+};
+
+// ---- acceptance collaboration -------------------------------------------
+export const acceptanceCollaborationKeys = {
+  conversation: def('acceptanceCollaboration:conversation', (acceptanceId: string) => [
+    'acceptanceCollaboration:conversation',
     acceptanceId,
   ]),
 };
@@ -209,45 +234,10 @@ export const isDocumentCommentKeyForEvent = (
   return false;
 };
 
-// ---- agent builder (opening-suggestion chips) ---------------------------
-// Persisted to the localStorage tier (see `CACHE_TIERS.local`) so revisits skip
-// the LLM generation instead of paying a skeleton + a generateJSON call every
-// page load. `contextSummary` is intentionally NOT part of the key so config
-// autosaves for the same target don't refetch; manual refresh revalidates the
-// same key in place (see `useBuilderSuggestions`). `locale` IS part of the key:
-// chips are generated in the UI language, so a persisted entry must not be
-// served after a language switch.
-export const agentBuilderKeys = {
-  suggestions: def(
-    'agentBuilder:suggestions',
-    (mode: string, builderAgentId: string, targetId: string | undefined, locale?: string) => [
-      'agentBuilder:suggestions',
-      mode,
-      builderAgentId,
-      targetId,
-      locale ?? null,
-    ],
-  ),
-};
-
 // ---- group --------------------------------------------------------------
 export const groupKeys = {
-  detail: def('group:detail', (groupId: string) => ['group:detail', groupId]),
-  list: def('group:list', (isLogin: boolean) => ['group:list', isLogin]),
-  /** Agent picker for the "add member" modal. */
-  queryAgents: def('group:queryAgents', () => ['group:queryAgents']),
   /** Agent picker for the "create group" modal. */
   queryAgentsForCreate: def('group:queryAgentsForCreate', () => ['group:queryAgentsForCreate']),
-};
-
-// ---- session ------------------------------------------------------------
-export const sessionKeys = {
-  createSession: def('session:createSession', (groupId: string | undefined) => [
-    'session:createSession',
-    groupId,
-  ]),
-  list: def('session:list', (isLogin: boolean | undefined) => ['session:list', isLogin]),
-  search: def('session:search', (keyword?: string) => ['session:search', keyword]),
 };
 
 // ---- thread -------------------------------------------------------------
@@ -271,19 +261,12 @@ export const recentKeys = {
   ]),
 };
 
-// ---- task ---------------------------------------------------------------
-export const isScheduledTaskListKey = (key: unknown): boolean =>
-  Array.isArray(key) && key[0] === 'task:scheduledList';
-
-export const isMyTaskListKey = (key: unknown): boolean =>
-  Array.isArray(key) && key[0] === 'task:myList';
-
 /**
  * Goal reads that have no local-first projection: the pending queues are live
  * "what needs you" feeds, and the topic link is a discovery poll.
  *
  * The goal list, the home roll-up, the graph snapshot and the metric series
- * used to live here — they are `@lobechat/replica` resources now (see
+ * used to live here — they are `local-replica` resources now (see
  * `src/store/goal/projection.ts`), so their sync keys are not SWR cache keys.
  */
 export const goalKeys = {
@@ -291,53 +274,6 @@ export const goalKeys = {
   pendingClarifications: def('goal:pendingClarifications', () => ['goal:pendingClarifications']),
   /** Gates and sign-offs waiting on the user across every goal, for the approval island. */
   pendingForIsland: def('goal:pendingForIsland', () => ['goal:pendingForIsland']),
-  /** Goals whose planning conversation is this topic (`subject_type = 'topic'`). */
-  topicGoals: def('goal:topicGoals', (topicId: string) => ['goal:topicGoals', topicId]),
-};
-
-export const taskKeys = {
-  /**
-   * Home's automated-task roll-up: the tasks that fire on a schedule or a
-   * heartbeat. Kept off `list` because it is a different result set entirely —
-   * sharing the key would let one section's fetch overwrite the other's.
-   */
-  /**
-   * The Tasks page's "My tasks" tab: work assigned to, or created by, the
-   * caller. Its own root for the same reason as `scheduledList` — a different
-   * result set from `list`, so a shared entry would let one tab's fetch
-   * overwrite the other's.
-   */
-  myList: def(
-    'task:myList',
-    (scope: 'assigned' | 'created', statuses?: string[], limit?: number, offset?: number) => [
-      'task:myList',
-      scope,
-      // Status narrowing is part of the identity: "hide completed" and "show
-      // all" are different server pages, not a client-side view of one page.
-      statuses ? [...statuses].sort().join(',') : 'all',
-      ...(limit === undefined && offset === undefined ? [] : [{ limit, offset }]),
-    ],
-  ),
-  scheduledList: def(
-    'task:scheduledList',
-    (
-      agentKey: string | undefined,
-      visibility: 'all' | 'private' | 'workspace' = 'all',
-      limit?: number,
-      offset?: number,
-    ) => [
-      'task:scheduledList',
-      agentKey,
-      visibility,
-      ...(limit === undefined && offset === undefined ? [] : [{ limit, offset }]),
-    ],
-  ),
-  /**
-   * AgentSidebar task panel. Lives in the `task:` domain (not a `sidebar:`
-   * one) so the tiered cache provider persists it to IndexedDB and the second
-   * open renders from cache instead of a skeleton.
-   */
-  sidebarGroups: def('task:sidebarGroups', (agentId: string) => ['task:sidebarGroups', agentId]),
 };
 
 // ---- work ---------------------------------------------------------------
@@ -367,7 +303,7 @@ export const workKeys = {
 
 // ---- brief --------------------------------------------------------------
 // The unresolved brief feed no longer has an SWR key: it moved onto
-// `@lobechat/replica` (`briefList`, partitioned by identity scope). Only the
+// `local-replica` (`briefList`, partitioned by identity scope). Only the
 // day-scoped news digest still reads through SWR.
 export const briefKeys = {
   /**
@@ -382,40 +318,13 @@ export const briefKeys = {
   ]),
 };
 
-// ---- home inbox ---------------------------------------------------------
-export const homeInboxKeys = {
-  /** Account-wide topics powering the home inbox (running + unread + needs-input). */
-  topics: def('home:inboxTopics', (isLogin: boolean) => ['home:inboxTopics', isLogin]),
-};
-
 // ---- agent config / available / search ----------------------------------
 export const agentConfigKeys = {
-  available: def('agent:available', () => ['agent:available']),
   search: def('agent:search', (keyword?: string) => ['agent:search', keyword]),
-  serverDefaultHeterogeneousCapability: def('agent:serverDefaultHeterogeneousCapability', () => [
-    'agent:serverDefaultHeterogeneousCapability',
-  ]),
-};
-
-// ---- aiModel ------------------------------------------------------------
-// The provider model list and the provider list live in `@lobechat/replica`
-// resources now (see `src/store/aiInfra/slices/*/projection.ts`); only the
-// paged disabled-models fetch and the per-model reasoning config are SWR keys.
-export const aiModelKeys = {
-  disabledModelsPage: def('aiModel:disabledModelsPage', (providerId: string, offset: number) => [
-    'aiModel:disabledModelsPage',
-    providerId,
-    offset,
-  ]),
-  reasoningConfig: def('aiModel:reasoningConfig', (provider: string, model: string) => [
-    'aiModel:reasoningConfig',
-    provider,
-    model,
-  ]),
 };
 
 // ---- image generation ---------------------------------------------------
-// The topic list and the per-topic batches live in `@lobechat/replica`
+// The topic list and the per-topic batches live in `local-replica`
 // resources now (see `src/store/image/slices/*/projection.ts`); only the
 // generation-status poll is still an SWR key.
 export const imageKeys = {
@@ -427,7 +336,7 @@ export const imageKeys = {
 };
 
 // ---- video generation ---------------------------------------------------
-// The topic list and the per-topic batches live in `@lobechat/replica`
+// The topic list and the per-topic batches live in `local-replica`
 // resources now (see `src/store/video/slices/*/projection.ts`); only the
 // generation-status poll is still an SWR key.
 export const videoKeys = {
@@ -516,36 +425,16 @@ export const deviceKeys = {
     workspaceId,
     deviceId,
   ]),
+  systemInfo: def('device:systemInfo', (workspaceId: string | null, deviceId: string) => [
+    'device:systemInfo',
+    workspaceId,
+    deviceId,
+  ]),
   browseDirectory: def(
     'device:browseDirectory',
     (workspaceId: string | null, deviceId: string, path?: string, cursor?: string) =>
       ['device:browseDirectory', workspaceId, deviceId, path, cursor] as const,
   ),
-  listeningPorts: def(
-    'device:listeningPorts',
-    (workspaceId: string | null, deviceId: string, cwd?: string) =>
-      ['device:listeningPorts', workspaceId, deviceId, cwd] as const,
-  ),
-  tunnels: def('device:tunnels', (workspaceId: string | null, deviceId: string) => [
-    'device:tunnels',
-    workspaceId,
-    deviceId,
-  ]),
-  gitAheadBehind: def('device:gitAheadBehind', (deviceId: string, path: string) => [
-    'device:gitAheadBehind',
-    deviceId,
-    path,
-  ]),
-  gitBranch: def('device:gitBranch', (deviceId: string, path: string) => [
-    'device:gitBranch',
-    deviceId,
-    path,
-  ]),
-  gitBranches: def('device:gitBranches', (deviceId: string, path: string) => [
-    'device:gitBranches',
-    deviceId,
-    path,
-  ]),
   gitLinkedPR: def(
     'device:gitLinkedPR',
     (deviceId: string, path: string, branch: string, pullRequestNumber?: number) => [
@@ -585,11 +474,6 @@ export const deviceKeys = {
       ...(baseRefName === undefined ? [] : [baseRefName]),
     ],
   ),
-  gitRemoteBranches: def('device:gitRemoteBranches', (deviceId: string, dirPath: string) => [
-    'device:gitRemoteBranches',
-    deviceId,
-    dirPath,
-  ]),
   gitReviewPatches: def(
     'device:gitReviewPatches',
     (deviceId: string, dirPath: string, mode: string, baseRef: string) => [
@@ -600,17 +484,6 @@ export const deviceKeys = {
       baseRef,
     ],
   ),
-  gitWorkingTreeStatus: def('device:gitWorkingTreeStatus', (deviceId: string, path: string) => [
-    'device:gitWorkingTreeStatus',
-    deviceId,
-    path,
-  ]),
-  gitWorktrees: def('device:gitWorktrees', (deviceId: string, path: string) => [
-    'device:gitWorktrees',
-    deviceId,
-    path,
-  ]),
-  listDevices: def('device:listDevices', () => ['device:listDevices']),
   repoType: def('device:repoType', (path: string) => ['device:repoType', path]),
 };
 
@@ -622,6 +495,8 @@ export const userMemoryKeys = {
     taskId,
   ]),
   contexts: def('userMemory:contexts', (params: unknown) => ['userMemory:contexts', params]),
+  contextStories: def('userMemory:contextStories', () => ['userMemory:contextStories']),
+  contextStory: def('userMemory:contextStory', (id: string) => ['userMemory:contextStory', id]),
   experiences: def('userMemory:experiences', (params: unknown) => [
     'userMemory:experiences',
     params,
@@ -693,7 +568,6 @@ export const statsKeys = {
   agents: def('stats:agents', () => ['stats:agents']),
   countAgents: def('stats:countAgents', () => ['stats:countAgents']),
   countMessages: def('stats:countMessages', () => ['stats:countMessages']),
-  countSessions: def('stats:countSessions', () => ['stats:countSessions']),
   countTopics: def('stats:countTopics', () => ['stats:countTopics']),
   heatmaps: def('stats:heatmaps', (type: string) => ['stats:heatmaps', type]),
   maxTaskDuration: def('stats:maxTaskDuration', () => ['stats:maxTaskDuration']),
@@ -745,6 +619,7 @@ export const scmKeys = {
     'scm:installations',
     workspaceId ?? null,
   ]),
+  wakeTarget: def('scm:wakeTarget', (topicId: string) => ['scm:wakeTarget', topicId]),
 };
 
 // ---- verify (deliverable judging) ---------------------------------------
@@ -795,7 +670,7 @@ export const verifyKeys = {
   ),
   /**
    * One scroll page of the list panel. Keyed by workspace + the status split +
-   * the cursor, mirroring `reportSummaries` — the sibling paged feed.
+   * the cursor.
    */
   acceptancePurgePreview: def('verify:acceptancePurgePreview', (acceptanceId: string) => [
     'verify:acceptancePurgePreview',
@@ -829,23 +704,17 @@ export const verifyKeys = {
     'verify:reportBundle',
     verifyRunId,
   ]),
-  reportSummaries: def(
-    'verify:reportSummaries',
-    (workspaceId?: string | null, q?: string, cursor?: string) => [
-      'verify:reportSummaries',
-      workspaceId ?? '',
-      q ?? '',
-      cursor ?? '',
-    ],
-  ),
-  results: def('verify:results', (operationId: string) => ['verify:results', operationId]),
   rubric: def('verify:rubric', (rubricId: string) => ['verify:rubric', rubricId]),
+  /** The acceptance round an old `/verify/:runId` link redirects to. */
+  runAcceptanceRound: def('verify:runAcceptanceRound', (verifyRunId: string) => [
+    'verify:runAcceptanceRound',
+    verifyRunId,
+  ]),
   rubricCriteria: def('verify:rubricCriteria', (rubricId: string) => [
     'verify:rubricCriteria',
     rubricId,
   ]),
   rubrics: def('verify:rubrics', () => ['verify:rubrics']),
-  state: def('verify:state', (operationId: string) => ['verify:state', operationId]),
   tracing: def('verify:tracing', (tracingId: string) => ['verify:tracing', tracingId]),
 };
 
@@ -877,6 +746,11 @@ export const inboxKeys = {
   ),
   unreadCount: def('inbox:unreadCount', (workspaceId: string | null) => [
     'inbox:unreadCount',
+    workspaceId,
+  ]),
+  /** Desktop mention-banner watcher: unread `mention` rows of the active workspace. */
+  unreadMentions: def('inbox:unreadMentions', (workspaceId: string | null) => [
+    'inbox:unreadMentions',
     workspaceId,
   ]),
 };
@@ -913,6 +787,7 @@ export const shareKeys = {
     agentId,
   ]),
   artifact: def('share:artifact', (id: string) => ['share:artifact', id]),
+  file: def('share:file', (shareId: string) => ['share:file', shareId]),
   pageDocument: def('share:pageDocument', (documentId: string) => [
     'share:pageDocument',
     documentId,
@@ -929,16 +804,23 @@ export const forkKeys = {
   source: def('fork:source', (identifier: string) => ['fork:source', identifier]),
 };
 
-// ---- portal -------------------------------------------------------------
-export const portalKeys = {
-  documentHeader: def('portal:documentHeader', (documentId: string) => [
-    'portal:documentHeader',
-    documentId,
-  ]),
-};
-
 // ---- local file ---------------------------------------------------------
 export const localFileKeys = {
+  claudeCodeMemory: def(
+    'localFile:claudeCodeMemory',
+    (
+      deviceId: string | undefined,
+      workingDirectory: string,
+      configDir?: string,
+      projectDirName?: string,
+    ) => [
+      'localFile:claudeCodeMemory',
+      deviceId ?? 'local',
+      workingDirectory,
+      configDir ?? '',
+      projectDirName ?? '',
+    ],
+  ),
   gitWorkingTreeFiles: def(
     'localFile:gitWorkingTreeFiles',
     (deviceId: string | undefined, dirPath: string) => [
@@ -984,6 +866,10 @@ export const favoriteKeys = {
 };
 
 // ---- changelog ----------------------------------------------------------
+export const canvasKeys = {
+  storage: def('canvas:storage', () => ['canvas:storage']),
+};
+
 export const changelogKeys = {
   modalIndex: def('changelog:modalIndex', () => ['changelog:modalIndex']),
   post: def('changelog:post', (id: string, locale: string) => ['changelog:post', id, locale]),
@@ -1014,9 +900,6 @@ export const onboardingKeys = {
 export const agentHomeKeys = {
   topics: def('agentHome:topics', (agentId: string) => ['agentHome:topics', agentId]),
 };
-export const agentProfileKeys = {
-  detail: def('agentProfile:detail', (agentId: string) => ['agentProfile:detail', agentId]),
-};
 export const agentSignalKeys = {
   receipts: def('agentSignal:receipts', (agentId: string, topicId: string) => [
     'agentSignal:receipts',
@@ -1025,13 +908,31 @@ export const agentSignalKeys = {
   ]),
 };
 
+// ---- bot wake records (one bot's judged messages; never persisted) ----
+export const botWakeKeys = {
+  decisions: def(
+    'botWake:decisions',
+    (
+      botId: string,
+      filters: { followupOnly: boolean; outcome?: string; unmarkedOnly: boolean },
+      page: number,
+    ) => [
+      'botWake:decisions',
+      botId,
+      filters.outcome ?? null,
+      filters.followupOnly,
+      filters.unmarkedOnly,
+      page,
+    ],
+  ),
+  summary: def('botWake:summary', (botId: string) => ['botWake:summary', botId]),
+};
+
 // ---- misc UI singletons -------------------------------------------------
 export const ollamaKeys = {
   downloadModel: def('ollama:downloadModel', (model: string) => ['ollama:downloadModel', model]),
 };
 export const authKeys = {
-  oauthAppById: def('auth:oauthAppById', (id: string) => ['auth:oauthAppById', id]),
-  oauthAppList: def('auth:oauthAppList', () => ['auth:oauthAppList']),
   oidcClientMetadata: def('auth:oidcClientMetadata', (clientId: string) => [
     'auth:oidcClientMetadata',
     clientId,
@@ -1050,54 +951,12 @@ export const topicActionKeys = {
 };
 
 // ---- misc remaining domains ---------------------------------------------
-export const homeKeys = {
-  dailyBrief: def('home:dailyBrief', (userId: string) => ['home:dailyBrief', userId]),
-};
-
-/**
- * Daily task-template recommendation cache schema version. Bump this when the
- * persisted recommendation row shape changes incompatibly so desktop clients
- * stop reading stale localStorage SWR entries.
- */
-export const TASK_TEMPLATE_RECOMMENDATION_CACHE_VERSION = 2;
-const TASK_TEMPLATE_DAILY_RECOMMEND_ROOT = `taskTemplate:listDailyRecommend:v${TASK_TEMPLATE_RECOMMENDATION_CACHE_VERSION}`;
-
-export const taskTemplateKeys = {
-  listDailyRecommend: def(
-    TASK_TEMPLATE_DAILY_RECOMMEND_ROOT,
-    (refreshSeed: unknown, recommendationCount: number, locale: string) => [
-      TASK_TEMPLATE_DAILY_RECOMMEND_ROOT,
-      refreshSeed,
-      recommendationCount,
-      locale,
-    ],
-  ),
-};
 export const resourceKeys = {
   list: def('resource:list', (params: unknown, workspaceId: string | null) => [
     'resource:list',
     params,
     workspaceId,
   ]),
-  // Every Resources cache entry is workspace-scoped: the same visibility means
-  // different rows in each workspace, so leaving `workspaceId` out of the key
-  // makes a workspace switch serve the previous workspace's rows from cache.
-  recentFiles: def(
-    'resource:recentFiles',
-    (workspaceId: string | null, visibility?: 'private' | 'public') => [
-      'resource:recentFiles',
-      workspaceId,
-      visibility ?? null,
-    ],
-  ),
-  recentPages: def(
-    'resource:recentPages',
-    (workspaceId: string | null, visibility?: 'private' | 'public') => [
-      'resource:recentPages',
-      workspaceId,
-      visibility ?? null,
-    ],
-  ),
 };
 export const recommendationsKeys = {
   heteroDetections: def('recommendations:heteroDetections', () => [
@@ -1119,12 +978,20 @@ export const imessageKeys = {
 };
 // Desktop/electron IPC fetches — roots keep their existing `electron:getXxx` value.
 export const electronKeys = {
+  /** Claude Code logins held on this machine (device-local, never persisted). */
+  claudeCodeAccounts: def('electron:claudeCodeAccounts', () => ['electron:claudeCodeAccounts']),
+  appMenu: def('electron:getAppMenu', () => ['electron:getAppMenu']),
   appTrayVisible: def('electron:getAppTrayVisible', () => ['electron:getAppTrayVisible']),
   desktopHotkeys: def('electron:getDesktopHotkeys', () => ['electron:getDesktopHotkeys']),
   gatewayDeviceInfo: def('electron:getGatewayDeviceInfo', () => ['electron:getGatewayDeviceInfo']),
   proxySettings: def('electron:getProxySettings', () => ['electron:getProxySettings']),
   remoteServerConfig: def('electron:getRemoteServerConfig', () => [
     'electron:getRemoteServerConfig',
+  ]),
+  /** This machine's derived device id in a workspace (local, no network). */
+  workspaceDeviceId: def('electron:getWorkspaceDeviceId', (workspaceId: string) => [
+    'electron:getWorkspaceDeviceId',
+    workspaceId,
   ]),
 };
 
@@ -1143,14 +1010,12 @@ export const matchDomain =
  */
 export const swrKeys = {
   agent: agentConfigKeys,
-  agentBuilder: agentBuilderKeys,
   agentDocument: agentDocumentSWRKeys,
   agentHome: agentHomeKeys,
-  agentProfile: agentProfileKeys,
   agentSignal: agentSignalKeys,
-  aiModel: aiModelKeys,
   auth: authKeys,
   brief: briefKeys,
+  canvas: canvasKeys,
   changelog: changelogKeys,
   cron: cronKeys,
   device: deviceKeys,
@@ -1165,7 +1030,6 @@ export const swrKeys = {
   goal: goalKeys,
   global: globalKeys,
   group: groupKeys,
-  home: homeKeys,
   image: imageKeys,
   imessage: imessageKeys,
   inbox: inboxKeys,
@@ -1176,20 +1040,17 @@ export const swrKeys = {
   ollama: ollamaKeys,
   onboarding: onboardingKeys,
   openInApp: openInAppKeys,
-  portal: portalKeys,
   ragEval: ragEvalKeys,
   recent: recentKeys,
   recommendations: recommendationsKeys,
   resource: resourceKeys,
   serverConfig: serverConfigKeys,
-  session: sessionKeys,
   share: shareKeys,
   stats: statsKeys,
-  task: taskKeys,
-  taskTemplate: taskTemplateKeys,
   thread: threadKeys,
   tool: toolKeys,
   topic: topicKeys,
+  acceptanceCollaboration: acceptanceCollaborationKeys,
   acceptanceComment: acceptanceCommentKeys,
   documentComment: documentCommentKeys,
   documentLike: documentLikeKeys,

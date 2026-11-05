@@ -8,17 +8,27 @@ import { useResourceManagerStore } from '.';
 import { initialState } from './initialState';
 import { explorerSearchResource } from './projection';
 
-const { mockDeleteResourcesByQuery, mockDropNodes, mockResolveSelectionIds, mockRevalidateTree } =
-  vi.hoisted(() => ({
-    mockDeleteResourcesByQuery: vi.fn(),
-    mockDropNodes: vi.fn(async () => undefined),
-    mockResolveSelectionIds: vi.fn(),
-    mockRevalidateTree: vi.fn(async () => undefined),
-  }));
+const {
+  mockDeleteResourcesByQuery,
+  mockDropNodes,
+  mockForgetSnapshot,
+  mockResolveSelectionIds,
+  mockRevalidateLoaded,
+} = vi.hoisted(() => ({
+  mockDeleteResourcesByQuery: vi.fn(),
+  mockDropNodes: vi.fn(async () => undefined),
+  mockForgetSnapshot: vi.fn(),
+  mockResolveSelectionIds: vi.fn(),
+  mockRevalidateLoaded: vi.fn(async () => undefined),
+}));
 
 vi.mock('@/store/tree', () => ({
   useTreeStore: {
-    getState: () => ({ dropNodes: mockDropNodes, revalidate: mockRevalidateTree }),
+    getState: () => ({
+      dropNodes: mockDropNodes,
+      forgetSnapshot: mockForgetSnapshot,
+      revalidateLoaded: mockRevalidateLoaded,
+    }),
   },
 }));
 
@@ -248,7 +258,7 @@ describe('resource manager store actions', () => {
     expect(useResourceManagerStore.getState().explorerSearchEntries[key]).toBeUndefined();
   });
 
-  it('should refresh the listed folder when the deleted set is only known to the server', async () => {
+  it('should refresh every loaded folder when the deleted set is only known to the server', async () => {
     useResourceManagerStore.setState({ selectAllState: 'all', selectedFileIds: [] });
     useFileStore.setState({
       deleteResources: vi.fn(),
@@ -259,9 +269,115 @@ describe('resource manager store actions', () => {
 
     await useResourceManagerStore.getState().onActionClick('delete');
 
-    // Individual ids never reach the client here, so the whole folder is refetched.
-    expect(mockRevalidateTree).toHaveBeenCalledWith('folder-a');
+    // Individual ids never reach the client here. A library-wide search also
+    // matched rows in other expanded folders, so every loaded folder is refetched
+    // — not only the one behind the explorer.
+    expect(mockRevalidateLoaded).toHaveBeenCalledWith('folder-a');
     expect(mockDropNodes).not.toHaveBeenCalled();
+    // A refetch that never lands must not leave the deleted rows in the persisted tree.
+    expect(mockForgetSnapshot).toHaveBeenCalledTimes(1);
+  });
+
+  // Regression: removing search hits from the library only refreshed the
+  // folder list, so the removed rows and the old count stayed in the library's
+  // search results.
+  it('should refresh the cached library searches after removing hits from the library', async () => {
+    const { useKnowledgeBaseStore } = await import('@/store/library');
+    const removeFilesFromKnowledgeBase = vi.fn().mockResolvedValue(undefined);
+    useKnowledgeBaseStore.setState({ removeFilesFromKnowledgeBase } as any);
+
+    const params = { libraryId: 'lib-1', pageSize: 50, q: 'report' } as any;
+    const key = explorerSearchResource.key(params);
+    useResourceManagerStore.setState({
+      explorerSearchEntries: {
+        [key]: {
+          currentPage: 0,
+          hasMore: false,
+          items: [{ fileType: 'application/pdf', id: 'hit-1', name: 'hit-1' }],
+          pageSize: 50,
+          searchParams: params,
+          total: 1,
+        },
+      },
+      libraryId: 'lib-1',
+      selectAllState: 'loaded',
+      selectedFileIds: ['hit-1'],
+    });
+
+    await useResourceManagerStore.getState().onActionClick('removeFromKnowledgeBase');
+
+    expect(removeFilesFromKnowledgeBase).toHaveBeenCalledWith('lib-1', ['hit-1']);
+    await vi.waitFor(() =>
+      expect(useResourceManagerStore.getState().explorerSearchEntries[key]).toBeUndefined(),
+    );
+  });
+
+  // Regression: while the search overlay was up, "select all" and the batch
+  // delete resolved against the folder list behind it, so they acted on rows
+  // the user had never seen instead of the search hits.
+  describe('while the search overlay is up', () => {
+    beforeEach(() => {
+      useResourceManagerStore.setState({ searchQuery: 'report' });
+      useFileStore.setState({ queryParams: { parentId: 'folder-a' } as any });
+    });
+
+    it('should select every search hit, not the folder list', async () => {
+      mockResolveSelectionIds.mockResolvedValue({ ids: ['hit-1', 'hit-2'], total: 2 });
+
+      await useResourceManagerStore.getState().selectAllResources();
+
+      const query = mockResolveSelectionIds.mock.calls[0][0];
+      expect(query).toMatchObject({ filesOnly: true, q: 'report' });
+      expect(query).not.toHaveProperty('parentId');
+      expect(useResourceManagerStore.getState().selectionTotal).toBe(2);
+    });
+
+    it('should delete the whole search query instead of a lookup per hit', async () => {
+      const deleteResources = vi.fn().mockResolvedValue(undefined);
+      useResourceManagerStore.setState({ selectAllState: 'all', selectedFileIds: ['hit-2'] });
+      useFileStore.setState({ deleteResources } as any);
+      mockDeleteResourcesByQuery.mockResolvedValue({ count: 2 });
+
+      await useResourceManagerStore.getState().onActionClick('delete');
+
+      // The exclusions ride along with the query: no id resolution, and no
+      // per-hit detail lookup inside `deleteResources` for every hit.
+      expect(mockDeleteResourcesByQuery).toHaveBeenCalledWith(
+        expect.objectContaining({ filesOnly: true, q: 'report' }),
+        ['hit-2'],
+      );
+      expect(mockDeleteResourcesByQuery.mock.calls[0][0]).not.toHaveProperty('parentId');
+      expect(mockResolveSelectionIds).not.toHaveBeenCalled();
+      expect(deleteResources).not.toHaveBeenCalled();
+      // The deleted ids are only known to the server now, so the tree is
+      // dropped and refetched instead of patched row by row.
+      expect(mockDropNodes).not.toHaveBeenCalled();
+      expect(mockForgetSnapshot).toHaveBeenCalledTimes(1);
+    });
+
+    it('should chunk search hits that live outside the listed folder', async () => {
+      const parseFilesToChunks = vi.fn().mockResolvedValue(undefined);
+      const params = { pageSize: 50, q: 'report' } as any;
+      useResourceManagerStore.setState({
+        explorerSearchEntries: {
+          [explorerSearchResource.key(params)]: {
+            currentPage: 0,
+            hasMore: false,
+            items: [{ fileType: 'application/pdf', id: 'hit-1', name: 'report.pdf' }],
+            pageSize: 50,
+            searchParams: params,
+            total: 1,
+          },
+        },
+        selectAllState: 'loaded',
+        selectedFileIds: ['hit-1'],
+      });
+      useFileStore.setState({ parseFilesToChunks } as any);
+
+      await useResourceManagerStore.getState().onActionClick('batchChunking');
+
+      expect(parseFilesToChunks).toHaveBeenCalledWith(['hit-1'], { skipExist: true });
+    });
   });
 });
 

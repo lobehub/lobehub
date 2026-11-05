@@ -1,18 +1,20 @@
 'use client';
 
 import { isDesktop } from '@lobechat/const';
-import { Center, Empty, Flexbox } from '@lobehub/ui';
 import {
   ActionIcon,
   Button,
+  Center,
   confirmModal,
+  createStaticStyles,
   DropdownMenu,
+  Empty,
+  Flexbox,
   Tag,
   Text,
   toast,
-} from '@lobehub/ui/base-ui';
+} from '@lobehub/ui';
 import { useMutation } from '@tanstack/react-query';
-import { createStaticStyles } from 'antd-style';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import { BookOpen, Eye, MoreHorizontal, Trash } from 'lucide-react';
@@ -21,8 +23,8 @@ import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
-import { type LiteTableColumn } from '@/components/LiteTable';
 import LiteTable from '@/components/LiteTable';
+import { type LiteTableColumn } from '@/components/LiteTable';
 import { isFullAccessApiKey } from '@/const/apiKeyScope';
 import { usePermission } from '@/hooks/usePermission';
 import { useClientDataSWR } from '@/libs/swr';

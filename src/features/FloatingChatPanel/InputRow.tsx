@@ -1,6 +1,6 @@
 'use client';
 
-import { createGlobalStyle, createStaticStyles } from 'antd-style';
+import { createGlobalStyle, createStaticStyles } from '@lobehub/ui';
 import { type FocusEvent, memo, useCallback, useEffect, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 
@@ -56,7 +56,7 @@ const commitWithViewTransition = (commit: () => void) => {
   const previousViewTransitionName = root.style.viewTransitionName;
   root.style.viewTransitionName = 'none';
   const transition = (document as DocumentWithVT).startViewTransition!(() => {
-    // eslint-disable-next-line @eslint-react/dom/no-flush-sync
+    // eslint-disable-next-line @eslint-react/dom-no-flush-sync
     flushSync(commit);
   });
   const restore = () => {

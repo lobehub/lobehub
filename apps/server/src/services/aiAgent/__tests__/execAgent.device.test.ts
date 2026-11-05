@@ -103,12 +103,16 @@ vi.mock('@/database/models/topic', () => ({
   }),
 }));
 
-const { mockResolveProjectDirectoryForTopic } = vi.hoisted(() => ({
+const { mockResolveProjectDirectory, mockResolveProjectDirectoryForTopic } = vi.hoisted(() => ({
+  mockResolveProjectDirectory: vi.fn(),
   mockResolveProjectDirectoryForTopic: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock('@/database/models/projectWorkingDirectory', () => ({
   ProjectWorkingDirectoryModel: vi.fn().mockImplementation(function () {
-    return { resolveForTopic: mockResolveProjectDirectoryForTopic };
+    return {
+      resolve: mockResolveProjectDirectory,
+      resolveForTopic: mockResolveProjectDirectoryForTopic,
+    };
   }),
 }));
 
@@ -687,6 +691,52 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
       expect(createOpArgs.activeDeviceId).toBe('device-001');
     });
 
+    // An explicit device on the request is a promise to the caller, so the new
+    // topic records that the binding was pinned rather than auto-picked — a
+    // later turn on an `auto` agent then stays on it instead of choosing
+    // whichever machine happens to be online.
+    it('should pin an explicitly requested device on the new topic metadata', async () => {
+      mockDeviceProxy.isConfigured = true;
+      mockDeviceProxy.queryDeviceList.mockResolvedValue([onlineDevice]);
+      await useAgencyConfig({ executionTarget: 'auto' });
+
+      await service.execAgent({
+        agentId: 'agent-1',
+        deviceId: 'device-001',
+        prompt: 'Run a command',
+      });
+
+      expect(topicMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          metadata: expect.objectContaining({
+            boundDeviceId: 'device-001',
+            deviceBindingPinned: true,
+          }),
+        }),
+        undefined,
+      );
+    });
+
+    // Same setup as the "not silently reused" spec above, except the topic
+    // records that the device was chosen explicitly. An `auto` agent must now
+    // honour it even though both machines are online.
+    it('should keep a pinned topic device on later turns for an auto agent', async () => {
+      mockDeviceProxy.isConfigured = true;
+      mockDeviceProxy.queryDeviceList.mockResolvedValue([onlineDevice, onlineDevice2]);
+      topicMock.findById.mockResolvedValue({
+        metadata: { boundDeviceId: 'device-002', deviceBindingPinned: true },
+      });
+      await useAgencyConfig({ executionTarget: 'auto' });
+
+      await service.execAgent({
+        agentId: 'agent-1',
+        appContext: { topicId: 'topic-existing' },
+        prompt: 'Run a command',
+      });
+
+      expect(mockCreateOperation.mock.calls[0][0].activeDeviceId).toBe('device-002');
+    });
+
     it('should keep explicit topic binding when the bound device is offline', async () => {
       mockDeviceProxy.isConfigured = true;
       mockDeviceProxy.queryDeviceList.mockResolvedValue([onlineDevice2]);
@@ -823,6 +873,58 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
       expect((error as Error).message).toBe(
         'Device is offline or working directory is unavailable',
       );
+    });
+  });
+
+  describe('new topic in a staged project directory', () => {
+    const stagedDirectory = {
+      deviceId: 'device-001',
+      id: 'dir-1',
+      path: '/repo',
+      permission: 'readWrite',
+      platform: 'darwin',
+      projectId: 'project-1',
+    };
+
+    // Regression: a blank conversation opened from a project group's "+" was
+    // created without its directory — the first send dropped the staged
+    // binding, so the topic left the project and ran on the agent default.
+    it('binds the created topic to the directory and runs on its device', async () => {
+      mockDeviceProxy.isConfigured = true;
+      mockDeviceProxy.queryDeviceList.mockResolvedValue([onlineDevice, onlineDevice2]);
+      mockResolveProjectDirectory.mockResolvedValueOnce(stagedDirectory);
+
+      await service.execAgent({
+        agentId: 'agent-1',
+        appContext: { projectWorkingDirectoryId: 'dir-1' },
+        prompt: 'Start here',
+      });
+
+      expect(mockResolveProjectDirectory).toHaveBeenCalledWith('dir-1');
+      const createArgs = topicMock.create.mock.calls.at(-1)![0];
+      expect(createArgs.projectId).toBe('project-1');
+      expect(createArgs.projectWorkingDirectoryId).toBe('dir-1');
+      expect(createArgs.metadata?.boundDeviceId).toBe('device-001');
+      expect(createArgs.metadata?.workingDirectory).toBe('/repo');
+      expect(mockCreateOperation.mock.calls.at(-1)![0].activeDeviceId).toBe('device-001');
+    });
+
+    it('rejects an offline directory device before creating the topic', async () => {
+      mockDeviceProxy.isConfigured = true;
+      mockDeviceProxy.queryDeviceList.mockResolvedValue([onlineDevice2]);
+      mockResolveProjectDirectory.mockResolvedValueOnce(stagedDirectory);
+      topicMock.create.mockClear();
+      mockCreateOperation.mockClear();
+
+      await expect(
+        service.execAgent({
+          agentId: 'agent-1',
+          appContext: { projectWorkingDirectoryId: 'dir-1' },
+          prompt: 'Start here',
+        }),
+      ).rejects.toThrow('Device is offline or working directory is unavailable');
+      expect(topicMock.create).not.toHaveBeenCalled();
+      expect(mockCreateOperation).not.toHaveBeenCalled();
     });
   });
 

@@ -3,9 +3,9 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DEFAULT_PREFERENCE } from '@/const/user';
-import { cacheScope } from '@/libs/replica';
+import { dailyRecommendResource } from '@/features/RecommendTaskTemplates/projection';
+import { cacheScope, replicaKeys } from '@/libs/replica';
 import type * as SWRLib from '@/libs/swr';
-import { taskTemplateKeys } from '@/libs/swr/keys';
 import { userService } from '@/services/user';
 import { useUserStore } from '@/store/user';
 import { readUserDisplaySnapshot, writeUserDisplaySnapshot } from '@/store/user/displaySnapshot';
@@ -14,7 +14,6 @@ import { type GlobalServerConfig } from '@/types/serverConfig';
 import { type UserInitializationState, type UserPreference } from '@/types/user';
 import { withSWR } from '~test-utils';
 
-import { isTaskTemplateRecommendationKey } from './action';
 import { initialCommonState } from './initialState';
 
 const swrMocks = vi.hoisted(() => ({
@@ -66,18 +65,6 @@ afterEach(() => {
 });
 
 describe('createCommonSlice', () => {
-  describe('isTaskTemplateRecommendationKey', () => {
-    it('matches every daily recommendation cache variant', () => {
-      expect(
-        isTaskTemplateRecommendationKey(taskTemplateKeys.listDailyRecommend('seed', 3, 'zh-CN')),
-      ).toBe(true);
-      expect(
-        isTaskTemplateRecommendationKey(['taskTemplate:listDailyRecommend', 'seed', 3, 'zh-CN']),
-      ).toBe(false);
-      expect(isTaskTemplateRecommendationKey(['topic:list'])).toBe(false);
-    });
-  });
-
   describe('updateAvatar', () => {
     it('should update avatar', async () => {
       const { result } = renderHook(() => useUserStore());
@@ -96,6 +83,9 @@ describe('createCommonSlice', () => {
   });
 
   describe('updateInterests', () => {
+    const recommendSyncKey = (scope: string) =>
+      replicaKeys.sync(dailyRecommendResource.name, dailyRecommendResource.version, scope, 'k', {});
+
     it('optimistically updates user.interests before the service call resolves', async () => {
       act(() => {
         useUserStore.setState({ user: { id: 'u1', interests: ['old'] } as any });
@@ -124,6 +114,28 @@ describe('createCommonSlice', () => {
       expect(updateSpy).toHaveBeenCalledWith(['new']);
     });
 
+    // Regression: interests stay out of the recommendation sync key, so an edit
+    // must re-run every mounted recommendation read of the active scope.
+    it('revalidates the task-template recommendation replica', async () => {
+      act(() => {
+        useUserStore.setState({ user: { id: 'u1', interests: ['old'] } as any });
+      });
+      vi.spyOn(userService, 'updateInterests').mockResolvedValue(undefined as any);
+
+      await useUserStore.getState().updateInterests(['new']);
+
+      const matchers = swrMocks.mutate.mock.calls
+        .map(([key]) => key)
+        .filter((key): key is (key: unknown) => boolean => typeof key === 'function');
+      expect(matchers.some((match) => match(recommendSyncKey(SCOPE)))).toBe(true);
+      expect(matchers.some((match) => match(recommendSyncKey('other-user:personal')))).toBe(false);
+      expect(
+        matchers.some((match) =>
+          match(replicaKeys.sync('agentBuilderSuggestions', 1, SCOPE, 'k', {})),
+        ),
+      ).toBe(false);
+    });
+
     it('does not fail the interest update when recommendation cache invalidation fails', async () => {
       act(() => {
         useUserStore.setState({ user: { id: 'u1', interests: ['old'] } as any });
@@ -133,7 +145,8 @@ describe('createCommonSlice', () => {
       const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
       vi.spyOn(userService, 'updateInterests').mockResolvedValue(undefined as any);
       swrMocks.mutate.mockImplementation((key) => {
-        if (key === isTaskTemplateRecommendationKey) return Promise.reject(cacheError);
+        if (typeof key === 'function' && key(recommendSyncKey(SCOPE)))
+          return Promise.reject(cacheError);
 
         return Promise.resolve(undefined);
       });

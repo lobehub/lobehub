@@ -1,13 +1,25 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { createStreamEventManagerMock, drainPushesMock, executeSyncMock, execAgentMock } = vi.hoisted(
-  () => ({
-    createStreamEventManagerMock: vi.fn(),
-    drainPushesMock: vi.fn(),
-    executeSyncMock: vi.fn(),
-    execAgentMock: vi.fn(),
-  }),
-);
+import { InMemoryStreamEventManager } from '@/server/modules/AgentRuntime/InMemoryStreamEventManager';
+
+import type * as ResumeModule from '../client-tool-resume.responses';
+import { ResponsesService } from '../responses.service';
+
+const {
+  createStreamEventManagerMock,
+  drainPushesMock,
+  executeResponseRunMock,
+  executeSyncMock,
+  execAgentMock,
+  resumeParkedClientToolsMock,
+} = vi.hoisted(() => ({
+  createStreamEventManagerMock: vi.fn(),
+  drainPushesMock: vi.fn(),
+  executeResponseRunMock: vi.fn(),
+  executeSyncMock: vi.fn(),
+  execAgentMock: vi.fn(),
+  resumeParkedClientToolsMock: vi.fn(),
+}));
 
 vi.mock('@/server/modules/AgentRuntime/factory', () => ({
   createStreamEventManager: createStreamEventManagerMock,
@@ -22,6 +34,15 @@ vi.mock('@/server/services/aiAgent', () => ({
     execAgent = execAgentMock;
   },
 }));
+vi.mock('../client-tool-resume.responses', async (importOriginal) => {
+  const actual = await importOriginal<typeof ResumeModule>();
+  executeResponseRunMock.mockImplementation(actual.executeResponseRun);
+  return {
+    ...actual,
+    executeResponseRun: executeResponseRunMock,
+    resumeParkedClientTools: resumeParkedClientToolsMock,
+  };
+});
 vi.mock('../../common/base.service', () => ({
   BaseService: class {
     db: any = null;
@@ -31,10 +52,6 @@ vi.mock('../../common/base.service', () => ({
     log() {}
   },
 }));
-
-import { InMemoryStreamEventManager } from '@/server/modules/AgentRuntime/InMemoryStreamEventManager';
-
-import { ResponsesService } from '../responses.service';
 
 const buildService = () => new (ResponsesService as any)(null, 'user_1', { workspaceId: 'ws_1' });
 
@@ -125,5 +142,150 @@ describe('ResponsesService.createStreamingResponse', () => {
 
     expect(drainPushesMock).toHaveBeenCalledWith('op_1');
     expect(remainingSubscribers(subscribedManager(), 'op_1')).toBe(0);
+  });
+});
+
+describe('ResponsesService function call outputs', () => {
+  const toolOutputRequest = {
+    input: [{ call_id: 'call_1', output: 'sunny', type: 'function_call_output' as const }],
+    model: 'agt_1',
+    previous_response_id: 'tpc_1',
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    createStreamEventManagerMock.mockReturnValue({ drainPushes: drainPushesMock });
+    resumeParkedClientToolsMock.mockResolvedValue({ operationId: 'op_parked' });
+    executeResponseRunMock.mockResolvedValue({ messages: [], status: 'done', stepCount: 3 });
+  });
+
+  // Regression: the outputs started a second run on the topic, which the parked
+  // run still held, so every resume failed as "Topic … remained busy".
+  it('continues the run parked on the caller tools instead of starting another', async () => {
+    const response = await buildService().createResponse(toolOutputRequest);
+
+    expect(resumeParkedClientToolsMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        outputs: toolOutputRequest.input,
+        topicId: 'tpc_1',
+        userId: 'user_1',
+      }),
+    );
+    expect(execAgentMock).not.toHaveBeenCalled();
+    expect(executeResponseRunMock).toHaveBeenCalledWith(expect.anything(), {
+      operationId: 'op_parked',
+      resumed: true,
+      topicId: 'tpc_1',
+    });
+    expect(response).toMatchObject({ id: 'tpc_1', status: 'completed' });
+  });
+
+  it('streams the resumed run on the same response id', async () => {
+    const events: any[] = [];
+    for await (const event of buildService().createStreamingResponse(toolOutputRequest)) {
+      events.push(event);
+    }
+
+    expect(execAgentMock).not.toHaveBeenCalled();
+    expect(events[0]).toMatchObject({ response: { id: 'tpc_1' }, type: 'response.created' });
+    expect(events.at(-1)?.type).toBe('response.completed');
+    expect(drainPushesMock).toHaveBeenCalledWith('op_parked');
+  });
+
+  it('returns the parked call to a non-streaming caller', async () => {
+    resumeParkedClientToolsMock.mockResolvedValue(undefined);
+    execAgentMock.mockResolvedValue({ operationId: 'op_new', success: true, topicId: 'tpc_2' });
+    executeResponseRunMock.mockResolvedValue({
+      interruption: { reason: 'client_tool_execution' },
+      messages: [],
+      pendingToolsCalling: [
+        {
+          apiName: 'get_weather',
+          arguments: '{"city":"Hangzhou"}',
+          id: 'call_9',
+          identifier: 'lobe-client-fn',
+        },
+      ],
+      status: 'waiting_for_async_tool',
+    });
+
+    const response = await buildService().createResponse({ input: 'weather?', model: 'agt_1' });
+
+    expect(response).toMatchObject({
+      incomplete_details: { reason: 'client_tool_execution' },
+      output: [{ call_id: 'call_9', name: 'get_weather', type: 'function_call' }],
+      status: 'incomplete',
+    });
+  });
+
+  it('falls back to a new turn when nothing is parked on the topic', async () => {
+    resumeParkedClientToolsMock.mockResolvedValue(undefined);
+    execAgentMock.mockResolvedValue({ operationId: 'op_new', success: true, topicId: 'tpc_1' });
+
+    await buildService().createResponse(toolOutputRequest);
+
+    expect(execAgentMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        appContext: { topicId: 'tpc_1' },
+        prompt: 'Tool call call_1 returned: sunny',
+      }),
+    );
+  });
+
+  it.each([false, true])(
+    'rejects a stale strict resume without starting a run (stream=%s)',
+    async (stream) => {
+      resumeParkedClientToolsMock.mockResolvedValue(undefined);
+      const params = { ...toolOutputRequest, strict_tool_resume: true };
+      const service = buildService();
+      let response;
+      if (stream) {
+        const events = [];
+        for await (const event of service.createStreamingResponse(params)) events.push(event);
+        expect(events.at(-1)?.type).toBe('response.failed');
+        response = events.at(-1)?.response;
+      } else {
+        response = await service.createResponse(params);
+      }
+      expect(response).toMatchObject({
+        status: 'failed',
+        error: { code: 'invalid_request_error' },
+      });
+      expect(execAgentMock).not.toHaveBeenCalled();
+      expect(executeResponseRunMock).not.toHaveBeenCalled();
+    },
+  );
+
+  it('requires both a previous response and tool outputs for strict resume', async () => {
+    for (const params of [
+      { input: 'hello', model: 'agt_1', previous_response_id: 'tpc_1' },
+      { input: toolOutputRequest.input, model: 'agt_1' },
+    ]) {
+      const response = await buildService().createResponse({ ...params, strict_tool_resume: true });
+      expect(response).toMatchObject({
+        status: 'failed',
+        error: { code: 'invalid_request_error' },
+      });
+    }
+    expect(execAgentMock).not.toHaveBeenCalled();
+  });
+
+  it('limits hosted discovery to the explicitly declared tools in exclusive mode', async () => {
+    const response = await buildService().createResponse({
+      input: 'Read the document',
+      model: 'agt_1',
+      tools: [
+        { type: 'lobe-agent-documents' },
+        { type: 'function', name: 'read_page', parameters: { type: 'object' } },
+      ],
+      tools_mode: 'exclusive',
+    });
+    expect(response.status).toBe('completed');
+    expect(execAgentMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        exclusivePluginIds: ['lobe-agent-documents'],
+        functionTools: [{ name: 'read_page', parameters: { type: 'object' } }],
+      }),
+    );
   });
 });

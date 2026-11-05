@@ -2,7 +2,7 @@
  * @vitest-environment happy-dom
  *
  * The memory home reads (persona + identity roles/tags) are two
- * `@lobechat/replica` single-value resources: the persisted copy paints before
+ * `local-replica` single-value resources: the persisted copy paints before
  * the network answers, the response confirms and persists it, a server
  * `null` persona is a real (persisted) absence, an unchanged revalidation does
  * not repaint, and the persona delete drops the value from the view and the
@@ -176,6 +176,47 @@ describe('userMemory home replicas', () => {
         });
         expect(row?.data).toEqual({ persona: null });
       });
+    });
+
+    it('clears the persona of the account that deleted it, not the account switched to', async () => {
+      const rowOf = (scopeValue: string) =>
+        personaResource.storage!.get({ queryKey: PERSONA_STORAGE_KEY, scope: scopeValue });
+      // The deleting account has a persisted persona.
+      personaSpy.mockResolvedValue(persona);
+      const first = renderHook(() => useUserMemoryStore((s) => s.useFetchPersona)(), { wrapper });
+      await waitFor(async () => expect((await rowOf(rowScope))?.data).toEqual({ persona }));
+      first.unmount();
+      const deletingUser = rowScope;
+
+      // The DELETE is slow; the account switches while it runs.
+      let finishDelete!: () => void;
+      vi.spyOn(memoryCRUDService, 'deletePersona').mockImplementation(
+        () => new Promise((resolve) => (finishDelete = () => resolve({ success: true }))) as never,
+      );
+      let deleting!: Promise<void>;
+      act(() => {
+        deleting = useUserMemoryStore.getState().deletePersona();
+      });
+      await waitFor(() => expect(finishDelete).toBeTypeOf('function'));
+
+      const otherPersona = { content: 'Other persona', summary: 'Other' };
+      useScope(`home-user-${randomUUID()}:personal`);
+      personaSpy.mockResolvedValue(otherPersona);
+      renderHook(() => useUserMemoryStore((s) => s.useFetchPersona)(), { wrapper });
+      await waitFor(() => expect(useUserMemoryStore.getState().persona).toEqual(otherPersona));
+
+      await act(async () => {
+        finishDelete();
+        await deleting;
+      });
+
+      // The deleting account's persisted persona is gone...
+      await waitFor(async () => expect(await rowOf(deletingUser)).toBeUndefined());
+      // ...and the account on screen keeps its own.
+      expect(useUserMemoryStore.getState().persona).toEqual(otherPersona);
+      await waitFor(async () =>
+        expect((await rowOf(rowScope))?.data).toEqual({ persona: otherPersona }),
+      );
     });
 
     it('does not report loading until a replica value exists', async () => {

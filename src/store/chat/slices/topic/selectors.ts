@@ -4,7 +4,7 @@ import { getWorkingDirEffectivePath } from '@lobechat/types';
 import { t } from 'i18next';
 import type { AiModelReasoningConfig } from 'model-bank';
 
-import { MAIN_SIDEBAR_EXCLUDE_TRIGGERS } from '@/const/topic';
+import { MAIN_SIDEBAR_EXCLUDE_TRIGGERS, TopicTrigger } from '@/const/topic';
 import {
   type ChatTopic,
   type ChatTopicSummary,
@@ -15,10 +15,12 @@ import {
 import {
   getTopicSortTime,
   groupTopicsByAgent,
+  groupTopicsByDevice,
   groupTopicsByProject,
   groupTopicsByStatus,
   groupTopicsByTime,
   groupTopicsByUpdatedTime,
+  type TopicDeviceDirectory,
 } from '@/utils/client/topic';
 
 import { type ChatStoreState } from '../../initialState';
@@ -62,7 +64,8 @@ const currentActiveTopic = (s: ChatStoreState): ChatTopic | undefined => {
   // the by-id detail cache so consumers keep real data (title, metadata, …).
   return s.activeTopicId ? s.topicDetailMap?.[s.activeTopicId] : undefined;
 };
-const searchTopics = (s: ChatStoreState): ChatTopic[] => s.searchTopics;
+const searchTopics = (s: ChatStoreState): ChatTopic[] =>
+  s.searchTopics.filter((topic) => topic.trigger !== TopicTrigger.Channel);
 
 const displayTopics = (s: ChatStoreState): ChatTopic[] | undefined =>
   currentTopicsWithoutSystemTriggers(s);
@@ -201,7 +204,7 @@ const getTopicReasoningConfigForModel =
 
 /**
  * Everything a topic pins for a heterogeneous run — the model/provider columns
- * plus `metadata.heteroEffort`. Undefined when nothing is pinned, so callers
+ * plus `metadata.heteroEffort` / `heteroSpeed`. Undefined when nothing is pinned, so callers
  * can pass it straight to `applyTopicModelToHeterogeneousProvider`.
  */
 export const resolveTopicHeteroPin = (
@@ -209,11 +212,13 @@ export const resolveTopicHeteroPin = (
 ): HeterogeneousTopicPin | undefined => {
   if (!topic) return undefined;
   const effort = topic.metadata?.heteroEffort;
-  if (!topic.model && effort === undefined) return undefined;
+  const speed = topic.metadata?.heteroSpeed;
+  if (!topic.model && effort === undefined && speed === undefined) return undefined;
 
   return {
     ...(topic.model ? { model: topic.model, provider: topic.provider || '' } : {}),
     ...(effort === undefined ? {} : { effort }),
+    ...(speed === undefined ? {} : { speed }),
   };
 };
 
@@ -301,6 +306,18 @@ const sortTopics = (topics: ChatTopic[], sortBy: TopicSortBy): ChatTopic[] => {
   return [...topics].sort((a, b) => getTopicSortTime(b, field) - getTopicSortTime(a, field));
 };
 
+// The active topic the sidebar pins into its list — except one the user just
+// archived while on it, which must hide at once (see `justArchivedTopicId`).
+// With archived topics shown, it keeps its pin so it survives the page slice.
+const sidebarActiveTopic = (
+  s: ChatStoreState,
+  includeCompleted: boolean,
+): ChatTopic | undefined => {
+  const topic = currentActiveTopic(s);
+  if (topic?.trigger === TopicTrigger.Channel) return undefined;
+  return !includeCompleted && topic && topic.id === s.justArchivedTopicId ? undefined : topic;
+};
+
 // Limit topics for sidebar display based on user's page size preference
 const displayTopicsForSidebar =
   (pageSize: number, sortBy: TopicSortBy = 'updatedAt', includeCompleted = true) =>
@@ -308,7 +325,13 @@ const displayTopicsForSidebar =
     const topics = currentTopicsWithoutSystemTriggers(s);
     if (!topics) return undefined;
 
-    return selectSidebarTopics(topics, pageSize, sortBy, includeCompleted, currentActiveTopic(s));
+    return selectSidebarTopics(
+      topics,
+      pageSize,
+      sortBy,
+      includeCompleted,
+      sidebarActiveTopic(s, includeCompleted),
+    );
   };
 
 export const selectSidebarTopics = (
@@ -357,11 +380,13 @@ const getGroupFn = (
   groupMode: TopicGroupMode,
   sortBy: TopicSortBy,
   loadingTopicIds?: ReadonlySet<string>,
+  directories?: ReadonlyArray<TopicDeviceDirectory>,
+  localDeviceIds?: readonly string[],
 ) => {
   const field: 'createdAt' | 'updatedAt' = sortBy === 'createdAt' ? 'createdAt' : 'updatedAt';
   if (groupMode === 'byProject') {
     return (topics: ChatTopic[]) =>
-      groupTopicsByProject(topics, field).map((group) =>
+      groupTopicsByProject(topics, field, { localDeviceIds }).map((group) =>
         group.id === 'no-project'
           ? { ...group, title: t('groupTitle.byProject.noProject', { ns: 'topic' }) }
           : group,
@@ -379,6 +404,12 @@ const getGroupFn = (
     // buckets without attribution stay title-less and the group item names
     // them from its agent context.
     return (topics: ChatTopic[]) => groupTopicsByAgent(topics, field);
+  }
+  if (groupMode === 'byDevice') {
+    // Device names resolve at render time from the directory and device
+    // registries, so groups stay title-less here.
+    return (topics: ChatTopic[]) =>
+      groupTopicsByDevice(topics, field, directories, { localDeviceIds });
   }
   return sortBy === 'updatedAt' ? groupTopicsByUpdatedTime : groupTopicsByTime;
 };
@@ -401,7 +432,7 @@ const buildGroupedTopics = (
         {
           children: favTopics,
           id: 'favorite',
-          title: t('favorite', { ns: 'topic' }),
+          title: t('pinned', { ns: 'topic' }),
         },
         ...groupFn(unfavTopics),
       ]
@@ -413,7 +444,14 @@ export const groupSidebarTopics = (
   groupMode: TopicGroupMode,
   sortBy: TopicSortBy,
   loadingTopicIds?: ReadonlySet<string>,
-) => buildGroupedTopics(topics, getGroupFn(groupMode, sortBy, loadingTopicIds));
+  directories?: ReadonlyArray<TopicDeviceDirectory>,
+  /** This machine's device identities (`useLocalMachineDeviceIds`), merged in byProject. */
+  localDeviceIds?: readonly string[],
+) =>
+  buildGroupedTopics(
+    topics,
+    getGroupFn(groupMode, sortBy, loadingTopicIds, directories, localDeviceIds),
+  );
 
 const groupedTopicsSelector =
   (groupFn: typeof groupTopicsByTime = groupTopicsByTime) =>
@@ -429,6 +467,7 @@ const groupedTopicsForSidebar =
     sortBy: TopicSortBy = 'updatedAt',
     groupMode: TopicGroupMode = 'byTime',
     includeCompleted = true,
+    localDeviceIds?: readonly string[],
   ) =>
   (s: ChatStoreState): GroupedTopic[] => {
     const limitedTopics = displayTopicsForSidebar(pageSize, sortBy, includeCompleted)(s);
@@ -439,7 +478,14 @@ const groupedTopicsForSidebar =
     // buckets straight from `topic.status`.
     const loadingTopicIds =
       groupMode === 'byStatus' ? operationSelectors.visiblyRunningTopicIds(s) : undefined;
-    return groupSidebarTopics(limitedTopics, groupMode, sortBy, loadingTopicIds);
+    return groupSidebarTopics(
+      limitedTopics,
+      groupMode,
+      sortBy,
+      loadingTopicIds,
+      undefined,
+      localDeviceIds,
+    );
   };
 
 const hasMoreTopics = (s: ChatStoreState): boolean => {
@@ -472,7 +518,7 @@ const agentTopicsViewData = (s: ChatStoreState): TopicData | undefined => {
 };
 
 const agentTopicsViewTopics = (s: ChatStoreState): ChatTopic[] =>
-  agentTopicsViewData(s)?.items ?? [];
+  agentTopicsViewData(s)?.items.filter((topic) => topic.trigger !== TopicTrigger.Channel) ?? [];
 
 const agentTopicsViewHasMore = (s: ChatStoreState): boolean =>
   agentTopicsViewData(s)?.hasMore ?? false;

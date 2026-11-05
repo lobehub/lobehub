@@ -318,6 +318,21 @@ export const widgetRouter = router({
       }
     }),
 
+  /**
+   * From the dry-run approval card: stop asking before dry runs that need no
+   * more access than this version (its connectors and hosts, on its level).
+   */
+  grantDryRunAccess: widgetWriteProcedure
+    .input(z.object({ versionId: uuid, widgetId: uuid }))
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const data = await ctx.widgetService.grantDryRunAccess(input.widgetId, input.versionId);
+        return { data, success: true };
+      } catch (error) {
+        fail(error, 'grant dry-run access');
+      }
+    }),
+
   /** Set (cron pattern) or clear (null) the refresh schedule. */
   setSchedule: widgetWriteProcedure
     .input(

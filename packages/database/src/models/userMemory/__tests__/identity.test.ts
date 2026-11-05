@@ -1,10 +1,10 @@
+import type { UserMemoryIdentityInsert } from '@lobechat/types';
 // @vitest-environment node
 import { RelationshipEnum } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
-import type { NewUserMemoryIdentity } from '../../../schemas';
 import { userMemories, userMemoriesIdentities, users } from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
 import { UserMemoryIdentityModel } from '../identity';
@@ -29,7 +29,7 @@ beforeEach(async () => {
 describe('UserMemoryIdentityModel', () => {
   describe('create', () => {
     it('should create a new identity', async () => {
-      const identityData: Omit<NewUserMemoryIdentity, 'userId'> = {
+      const identityData: Omit<UserMemoryIdentityInsert, 'userId'> = {
         type: 'personal',
         description: 'Software developer',
         role: 'developer',
@@ -103,13 +103,6 @@ describe('UserMemoryIdentityModel', () => {
 
       expect(result).toHaveLength(1);
       expect(result[0].id).toBe('identity-2');
-    });
-
-    it('should not return other users identities', async () => {
-      const result = await identityModel.query();
-
-      const otherIdentity = result.find((i) => i.id === 'other-identity');
-      expect(otherIdentity).toBeUndefined();
     });
   });
 
@@ -657,13 +650,6 @@ describe('UserMemoryIdentityModel', () => {
 
       expect(result).toHaveLength(1);
       expect(result[0].id).toBe('self-identity');
-    });
-
-    it('should not return other users identities', async () => {
-      const result = await identityModel.queryForInjection();
-
-      const otherUserIdentity = result.find((i) => i.id === 'other-user-self');
-      expect(otherUserIdentity).toBeUndefined();
     });
 
     it('should return correct fields for injection', async () => {

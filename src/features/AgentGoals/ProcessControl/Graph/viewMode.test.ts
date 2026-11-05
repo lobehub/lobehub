@@ -23,6 +23,7 @@ const goal = (status: GoalStatus): GoalItem => ({
   title: 'Goal',
   updatedAt: T0,
   userId: 'user-1',
+  visibility: 'public',
   workspaceId: null,
 });
 

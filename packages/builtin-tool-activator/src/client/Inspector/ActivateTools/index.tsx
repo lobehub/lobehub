@@ -2,8 +2,8 @@
 
 import { type BuiltinInspectorProps } from '@lobechat/types';
 import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
-import { Avatar } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { Avatar } from '@lobehub/ui';
+import { createStaticStyles, cssVar } from '@lobehub/ui';
 import { AlertTriangle } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

@@ -10,7 +10,12 @@ import {
 } from 'lucide-react';
 import { lazy } from 'react';
 
+import {
+  AgentChannelDetailSkeleton,
+  AgentChannelSkeleton,
+} from '@/components/Skeleton/AgentChannel';
 import AgentShareSkeleton from '@/components/Skeleton/AgentShare';
+import AgentStatisticsSkeleton from '@/components/Skeleton/AgentStatistics';
 import AgentConversationLayoutSkeleton from '@/components/Skeleton/Conversation/AgentLayout';
 import ConversationLayoutSkeleton from '@/components/Skeleton/Conversation/Layout';
 import ProfileSkeleton from '@/components/Skeleton/Profile';
@@ -85,14 +90,20 @@ export const agentProfileRouteMeta = routeMeta({
 export const agentChannelRouteMeta = routeMeta({
   DynamicMeta: ChannelDynamicMeta,
   icon: RadioTowerIcon,
-  Skeleton: createSurfaceSkeleton('grid'),
+  Skeleton: AgentChannelSkeleton,
   titleKey: 'navigation.channels',
+});
+
+// A platform detail is a credential form without the tab switcher, not the card grid.
+export const agentChannelDetailRouteMeta = routeMeta({
+  ...agentChannelRouteMeta,
+  Skeleton: AgentChannelDetailSkeleton,
 });
 
 export const agentStatisticsRouteMeta = routeMeta({
   DynamicMeta: StatisticsDynamicMeta,
   icon: ChartColumnBigIcon,
-  Skeleton: createSurfaceSkeleton('grid'),
+  Skeleton: AgentStatisticsSkeleton,
   titleKey: 'navigation.stats',
 });
 

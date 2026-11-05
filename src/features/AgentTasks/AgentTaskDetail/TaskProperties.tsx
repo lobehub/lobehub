@@ -1,7 +1,6 @@
 import type { TaskPriority, TaskStatus } from '@lobechat/types';
-import { Block } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import { Block, cssVar, Icon, Text } from '@lobehub/ui';
+import { ArchiveIcon, Stamp } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -20,6 +19,7 @@ import { useUserDisplayMeta } from '../shared/useUserDisplayMeta';
 import TaskAcceptanceStateRow from './TaskAcceptanceStateRow';
 import { taskDetailLayoutStyles as styles } from './taskDetailLayoutStyles';
 import TaskScheduleConfig from './TaskScheduleConfig';
+import { useTaskAcceptanceWait } from './useTaskAcceptanceWait';
 
 interface StatusMeta {
   labelKey: string;
@@ -52,6 +52,7 @@ const TaskProperties = memo(() => {
 
   const taskId = useTaskStore(taskDetailSelectors.activeTaskId);
   const status = useTaskStore(taskDetailSelectors.activeTaskStatus) as TaskStatus | undefined;
+  const isArchived = !!useTaskStore(taskDetailSelectors.activeTaskArchivedAt);
   const priority = useTaskStore(taskDetailSelectors.activeTaskPriority);
   const assigneeUserId = useTaskStore(taskDetailSelectors.activeTaskAssigneeUserId);
   const createdByUserId = useTaskStore(taskDetailSelectors.activeTaskCreatedByUserId);
@@ -62,6 +63,7 @@ const TaskProperties = memo(() => {
   const scheduleTimezone = useTaskStore(taskDetailSelectors.activeTaskScheduleTimezone);
   const memberMeta = useUserDisplayMeta(assigneeUserId);
   const activeWorkspaceId = useActiveWorkspaceId();
+  const acceptanceWait = useTaskAcceptanceWait();
 
   if (!taskId) return null;
 
@@ -79,10 +81,37 @@ const TaskProperties = memo(() => {
           gap={8}
           variant={'borderless'}
         >
-          <TaskStatusTag disableDropdown size={16} status={status} taskIdentifier={taskId} />
-          <Text weight={500}>{t(`taskDetail.${statusMeta.labelKey}` as never)}</Text>
+          {/* `running` covers both an executing agent and a stopped one whose
+              acceptance round has yet to settle; only the first is "in progress". */}
+          {acceptanceWait ? (
+            <Icon color={cssVar.colorWarning} icon={Stamp} size={16} />
+          ) : (
+            <TaskStatusTag disableDropdown size={16} status={status} taskIdentifier={taskId} />
+          )}
+          <Text weight={500}>
+            {acceptanceWait
+              ? t('taskDetail.status.awaitingAcceptance')
+              : t(`taskDetail.${statusMeta.labelKey}` as never)}
+          </Text>
         </Block>
       </TaskStatusTag>
+
+      {/* Archived is the user's close-out on top of the status, not a status
+          itself — shown read-only; the header menu restores it. */}
+      {isArchived && (
+        <Block
+          horizontal
+          align="center"
+          className={styles.propertyItem}
+          gap={8}
+          variant={'borderless'}
+        >
+          <Icon color={cssVar.colorTextDescription} icon={ArchiveIcon} size={16} />
+          <Text style={{ color: cssVar.colorTextDescription }} weight={500}>
+            {t('taskList.archived')}
+          </Text>
+        </Block>
+      )}
 
       {/* The human layer: whether the delivery is accepted. Read-only here —
           the decision itself is made on the acceptance page this links to.
@@ -106,7 +135,6 @@ const TaskProperties = memo(() => {
       {shouldShowMemberAssignee(activeWorkspaceId, assigneeUserId) && (
         <AssigneeMemberSelector
           currentUserId={assigneeUserId}
-          disabled={status === 'running'}
           taskCreatorId={createdByUserId}
           taskIdentifier={taskId}
           taskVisibility={visibility}

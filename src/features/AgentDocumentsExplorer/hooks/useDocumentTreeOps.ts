@@ -1,9 +1,8 @@
 import { FileSource } from '@lobechat/types';
-import { confirmModal, toast } from '@lobehub/ui/base-ui';
+import { confirmModal, toast } from '@lobehub/ui';
 import { nanoid } from 'nanoid';
 import { useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { KeyedMutator } from 'swr';
 
 import { FILE_UPLOAD_BLACKLIST } from '@/const/file';
 import { useSingleton } from '@/hooks/useSingleton';
@@ -11,14 +10,14 @@ import { agentDocumentService } from '@/services/agentDocument';
 import { fileService } from '@/services/file';
 import { useFileStore } from '@/store/file';
 
-import type { AgentDocumentItem } from '../types';
+import type { AgentDocumentItem, AgentDocumentListMutator } from '../types';
 import { isPendingId, isProtectedManagedSkillItem } from '../types';
 import { makePendingDocument } from '../utils/pendingDocument';
 
 interface UseDocumentTreeOpsArgs {
   agentId: string;
   data: AgentDocumentItem[];
-  mutate: KeyedMutator<AgentDocumentItem[]>;
+  mutate: AgentDocumentListMutator;
   topicId?: string;
 }
 

@@ -5,6 +5,9 @@ import { memo } from 'react';
 
 import type { DashboardTrendSeries } from '@/services/dashboard';
 
+import DataView from './DataView';
+import HtmlView from './HtmlView';
+import LayoutView from './LayoutView';
 import ListView from './ListView';
 import SeriesView from './SeriesView';
 import StatView from './StatView';
@@ -18,20 +21,29 @@ export interface WidgetOutputViewProps {
   view?: WidgetViewHints | null;
 }
 
-/** Card row cap when the version sets no `view.limit`. */
-const COMPACT_ROW_LIMIT = 8;
-
-/** Render one widget output by its contract type. */
+/** Render one widget output by its version's HTML or layout, else by its contract type. */
 const WidgetOutputView = memo<WidgetOutputViewProps>(
   ({ output, trend, view, density = 'compact' }) => {
-    const limit = density === 'compact' ? (view?.limit ?? COMPACT_ROW_LIMIT) : undefined;
+    // Cards scroll and load rows as needed; only an explicit `view.limit` caps them.
+    const compact = density === 'compact';
+    const limit = compact ? view?.limit : undefined;
+
+    if (view?.html) {
+      return <HtmlView framed={!compact} html={view.html} output={output} />;
+    }
+
+    if (view?.layout) {
+      return (
+        <LayoutView framed={!compact} layout={view.layout} output={output} surface={view.surface} />
+      );
+    }
 
     switch (output.type) {
       case 'stat': {
         return <StatView output={output} trend={trend} />;
       }
       case 'list': {
-        return <ListView limit={limit} output={output} />;
+        return <ListView incremental={compact} limit={limit} output={output} />;
       }
       case 'series': {
         return (
@@ -44,7 +56,12 @@ const WidgetOutputView = memo<WidgetOutputViewProps>(
         );
       }
       case 'table': {
-        return <TableView columns={view?.columns} limit={limit} output={output} />;
+        return (
+          <TableView columns={view?.columns} incremental={compact} limit={limit} output={output} />
+        );
+      }
+      case 'data': {
+        return <DataView output={output} />;
       }
       default: {
         return null;

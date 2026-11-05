@@ -6,7 +6,7 @@
  * by name; the word pair keeps the name human-readable and, together with the
  * timestamp, makes a collision unlikely. Only lowercase ASCII and `-` are used,
  * so the name is always a valid git ref, and it folds cleanly into the worktree
- * folder name (`deriveWorktreePath` turns it into `<repo>-wt-202610020308-quiet-hill`).
+ * folder name (`deriveWorktreePath` turns it into `wt-202610020308-quiet-hill`).
  */
 
 /** Namespace prefix, so worktrees created by the app group together in the branch list. */

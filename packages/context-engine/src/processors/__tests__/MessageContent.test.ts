@@ -1,4 +1,4 @@
-import { createMediaFileRef } from '@lobechat/const/mediaRef';
+import { createMediaFileRef } from '../../const/mediaRef';
 import type { ChatAudioItem, ChatImageItem, ChatVideoItem, UIChatMessage } from '@lobechat/types';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -624,6 +624,41 @@ describe('MessageContentProcessor', () => {
       );
       expect(content[0].text).toContain(
         '<file id="file1" name="test.txt" type="text/plain" size="100" url="http://example.com/test.txt"></file>',
+      );
+    });
+
+    it('sends files listed in previewFileIds as previews', async () => {
+      const content = 'row,value\n'.repeat(1000);
+      const processor = new MessageContentProcessor({
+        canReadAttachment: true,
+        fileContext: { enabled: true, includeFileUrl: false, previewFileIds: ['file-budget'] },
+        isCanUseVision: mockIsCanUseVision,
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+      const fileItem = { fileType: 'text/csv', name: 'data.csv', size: content.length };
+
+      const result = await processor.process(
+        createContext([
+          {
+            content: 'Compare them',
+            createdAt: Date.now(),
+            fileList: [
+              { ...fileItem, content, id: 'file-budget' },
+              { ...fileItem, content, id: 'file-inline' },
+            ],
+            id: 'test',
+            role: 'user',
+            updatedAt: Date.now(),
+          },
+        ]),
+      );
+
+      const text = (result.messages[0].content as any[])[0].text as string;
+      expect(text).toContain('call readAttachment with fileId="file-budget"');
+      expect(text).not.toContain('fileId="file-inline"');
+      expect(text).toContain(
+        `<file id="file-inline" name="data.csv" type="text/csv" size="${content.length}">${content}</file>`,
       );
     });
 

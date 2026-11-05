@@ -11,8 +11,8 @@ vi.mock('@/features/NavHeader', () => ({
 }));
 
 vi.mock('./Container', () => ({
-  default: ({ children }: { children?: React.ReactNode }) =>
-    React.createElement('main', undefined, children),
+  default: ({ children, maxWidth }: { children?: React.ReactNode; maxWidth?: number | string }) =>
+    React.createElement('main', { 'data-max-width': maxWidth }, children),
 }));
 
 vi.mock('./SideBar', () => ({ default: () => null }));
@@ -33,6 +33,7 @@ vi.mock('./hooks/useCategory', () => ({
         { key: 'credential', label: 'Credentials' },
         { key: 'statistics', label: 'Statistics' },
         { key: 'storage', label: 'Storage' },
+        { key: 'trash', label: 'Trash' },
         { key: 'usage', label: 'Usage' },
         { key: 'audit-log', label: 'Audit Log' },
         { key: 'profile', label: 'Jane Doe' },
@@ -72,6 +73,7 @@ describe('WorkspaceSettingsContentLayout', () => {
     ['credential', 'Credentials'],
     ['statistics', 'Statistics'],
     ['storage', 'Storage'],
+    ['trash', 'Trash'],
     ['usage', 'Usage'],
     ['appearance', 'Appearance'],
     ['hotkey', 'Hotkeys'],
@@ -87,14 +89,19 @@ describe('WorkspaceSettingsContentLayout', () => {
     expect(html).toMatch(
       new RegExp(`<header>(?:(?!</header>).)*>${title}<(?:(?!<header>).)*</header>`),
     );
-    expect(html).toContain('<main><div>Page content</div></main>');
+    expect(html).toContain('<div>Page content</div></main>');
+  });
+
+  it('spans the full pane on the devices tab and keeps the 1024 column elsewhere', () => {
+    expect(renderLayout('devices')).toContain('<main data-max-width="100%">');
+    expect(renderLayout('members')).toContain('<main data-max-width="1024">');
   });
 
   it.each(['audit-log', 'advanced'])('keeps the %s tab on the content-only layout', (tab) => {
     const html = renderLayout(tab);
 
     expect(html).not.toContain('<header>');
-    expect(html).toContain('<main><div>Page content</div></main>');
+    expect(html).toContain('<div>Page content</div></main>');
   });
 });
 

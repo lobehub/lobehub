@@ -1,4 +1,4 @@
-import { countContextTokens, DEFAULT_DRIFT_MULTIPLIER } from '@lobechat/context-engine';
+import { DEFAULT_DRIFT_MULTIPLIER, planAttachmentPreviews } from '@lobechat/context-engine';
 import type { UIChatMessage } from '@lobechat/types';
 
 /**
@@ -43,6 +43,12 @@ export function getCompressionThreshold(options: TokenCountOptions = {}): number
  */
 export interface CompressionCheckResult {
   /**
+   * Attachments to send as a preview plus file id so attachment text stays
+   * within the room the rest of the context leaves under the threshold. Pass
+   * them to the context engine with the `call_llm` payload.
+   */
+  attachmentPreviewFileIds: string[];
+  /**
    * Best raw estimate of current input tokens (sum of message content +
    * tool calls + reasoning + tool_call_id + tool definitions).
    */
@@ -63,20 +69,24 @@ export interface CompressionCheckResult {
  *
  * Uses {@link countContextTokens} under the hood, so the input estimate
  * accounts for tool calls, reasoning, and tool definitions in addition to
- * `content` (see for the calibration data).
+ * `content` (see for the calibration data). Attachment text is fitted into the
+ * remaining room first (see {@link planAttachmentPreviews}), so attachments
+ * alone never trigger compression; the estimate reflects the planned previews.
  */
 export function shouldCompress(
   messages: UIChatMessage[],
   options: TokenCountOptions = {},
 ): CompressionCheckResult {
-  const accounting = countContextTokens({
+  const threshold = getCompressionThreshold(options);
+  const { accounting, previewFileIds } = planAttachmentPreviews({
+    driftMultiplier: options.driftMultiplier ?? DEFAULT_DRIFT_MULTIPLIER,
     messages,
-    options: { driftMultiplier: options.driftMultiplier ?? DEFAULT_DRIFT_MULTIPLIER },
+    threshold,
     tools: options.tools,
   });
-  const threshold = getCompressionThreshold(options);
 
   return {
+    attachmentPreviewFileIds: [...previewFileIds],
     currentTokenCount: accounting.rawTotal,
     needsCompression: accounting.adjustedTotal > threshold,
     threshold,

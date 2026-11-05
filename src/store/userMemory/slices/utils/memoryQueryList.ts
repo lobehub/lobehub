@@ -129,6 +129,7 @@ export class MemoryQueryList<
       keys: () => Object.keys(get()[entriesField] as Record<string, TData>),
       read: (key) => (get()[entriesField] as Record<string, TData>)[key],
       refreshHead: this.#revalidate,
+      scope: () => resource.scope.get(),
       slice: this.#list,
     });
   }

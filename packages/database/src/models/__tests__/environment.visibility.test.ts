@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { pickDefaultInstance } from '@lobechat/utils/environmentInstance';
 import { eq, inArray } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -190,6 +191,60 @@ describe('environment visibility', () => {
     await expect(asPublicAgent.findById(instance.id)).resolves.toMatchObject({ id: instance.id });
   });
 
+  // Every environment directory on a drive is read-only to its file routes,
+  // whoever may run in it, and a private one left on a public drive is hidden
+  // from everyone — owner included — until it is rebuilt on a personal drive.
+  it('lists every instance folder on a storage, marking the private ones', async () => {
+    const binding = {
+      kind: 'sandbox' as const,
+      provider: 'test-provider',
+      providerResourceId: 'workspace',
+      providerScope: 'test-scope',
+    };
+    const privateEnv = await owner.create({ name: 'Private' });
+    const publishedEnv = await owner.create({ name: 'Published', visibility: 'public' });
+    const memberEnv = await member.create({ name: 'Mine' });
+    const hidden = await ownerInstances.create({
+      ...binding,
+      environmentId: privateEnv.id,
+      name: 'secret',
+      workingDirectory: 'secret',
+    });
+    const shared = await ownerInstances.create({
+      ...binding,
+      environmentId: publishedEnv.id,
+      name: 'shared',
+      workingDirectory: 'shared',
+    });
+    const own = await memberInstances.create({
+      ...binding,
+      environmentId: memberEnv.id,
+      name: 'mine',
+      workingDirectory: 'mine',
+    });
+    // Another storage entirely: never part of this drive's answer.
+    await ownerInstances.create({
+      ...binding,
+      environmentId: privateEnv.id,
+      name: 'elsewhere',
+      providerScope: 'other-scope',
+      workingDirectory: 'elsewhere',
+    });
+
+    const directories = await memberInstances.listStorageDirectories(binding);
+
+    expect(
+      directories.sort((a, b) => a.workingDirectory.localeCompare(b.workingDirectory)),
+    ).toEqual([
+      { id: own!.id, isPrivate: true, workingDirectory: 'mine' },
+      { id: hidden!.id, isPrivate: true, workingDirectory: 'secret' },
+      { id: shared!.id, isPrivate: false, workingDirectory: 'shared' },
+    ]);
+    await expect(
+      ownerInstances.listStorageDirectories({ ...binding, providerScope: 'empty-scope' }),
+    ).resolves.toEqual([]);
+  });
+
   // The unique index only catches the identical path. A folder inside another
   // instance's, or around one, would put two captured states on one tree —
   // and a colleague's private instance occupies its folder just the same.
@@ -258,5 +313,36 @@ describe('environment visibility', () => {
 
     const rows = await owner.query();
     expect(rows.map((row) => row.id)).toEqual([inWorkspace.id]);
+  });
+});
+
+describe('instance order', () => {
+  it("lists an environment's instances oldest first, ties broken by id, with the default first", async () => {
+    const environment = await owner.create({ name: 'Ordered' });
+    const created = new Date('2026-01-01T00:00:00.000Z');
+    const later = new Date('2026-01-02T00:00:00.000Z');
+
+    // Two rows created in the same instant — the case where only the id can
+    // decide — and one created later but inserted first, so insertion order
+    // and the expected order disagree.
+    const newest = await addInstance(environment.id, 'ordered-newest');
+    const tiedA = await addInstance(environment.id, 'ordered-tied-a');
+    const tiedB = await addInstance(environment.id, 'ordered-tied-b');
+    await serverDB
+      .update(environmentInstances)
+      .set({ createdAt: later })
+      .where(eq(environmentInstances.id, newest.id));
+    await serverDB
+      .update(environmentInstances)
+      .set({ createdAt: created })
+      .where(inArray(environmentInstances.id, [tiedA.id, tiedB.id]));
+
+    const [first, second] = [tiedA.id, tiedB.id].sort();
+    const rows = await ownerInstances.query({ environmentId: environment.id });
+
+    expect(rows.map((row) => row.id)).toEqual([first, second, newest.id]);
+    // The shared rule and the database agree on which instance is the default.
+    expect(pickDefaultInstance(rows)?.id).toBe(rows[0].id);
+    expect(pickDefaultInstance([...rows].reverse())?.id).toBe(first);
   });
 });

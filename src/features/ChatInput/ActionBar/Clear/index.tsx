@@ -1,4 +1,4 @@
-import { confirmModal } from '@lobehub/ui/base-ui';
+import { confirmModal } from '@lobehub/ui';
 import { Eraser } from 'lucide-react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';

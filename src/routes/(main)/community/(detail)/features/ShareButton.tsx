@@ -1,6 +1,18 @@
-import { Center, CopyButton, Flexbox, Icon } from '@lobehub/ui';
-import { ActionIcon, Avatar, Button, Input, Skeleton, Tag, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  ActionIcon,
+  Avatar,
+  Button,
+  Center,
+  CopyButton,
+  Flexbox,
+  Icon,
+  Input,
+  Skeleton,
+  Tag,
+  Text,
+} from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { startCase } from 'es-toolkit/compat';
 import { LinkIcon, Share2Icon } from 'lucide-react';
 import { type ComponentProps, type ReactNode } from 'react';
@@ -11,41 +23,23 @@ import ImperativeModal from '@/components/ImperativeModal';
 import { useShare } from '@/hooks/useShare';
 
 import CardBanner from '../../components/CardBanner';
+import iconStyles from './ShareButton.module.css';
 
-const styles = createStaticStyles(({ css, cssVar }) => {
-  return {
-    banner: css`
-      overflow: hidden;
-
-      border: 1px solid ${cssVar.colorBorderSecondary};
-      border-radius: ${cssVar.borderRadiusLG};
-
-      background: ${cssVar.colorBgContainer};
-      box-shadow: ${cssVar.boxShadowTertiary};
-    `,
-    copy: css`
-      background: ${cssVar.colorPrimary};
-
-      &:hover {
-        background: ${cssVar.colorPrimaryHover};
-      }
-    `,
-    icon: css`
-      border: 1px solid ${cssVar.colorFillSecondary};
-
-      svg {
-        fill: ${cssVar.colorTextSecondary};
-      }
-
-      &:hover {
-        border: 1px solid ${cssVar.colorBorderSecondary};
-
-        svg {
-          fill: ${cssVar.colorText};
-        }
-      }
-    `,
-  };
+const styles = stylex.create({
+  banner: {
+    overflow: 'hidden',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+    boxShadow: cssVar.boxShadowTertiary,
+  },
+  copy: {
+    backgroundColor: { 'default': cssVar.colorPrimary, ':hover': cssVar.colorPrimaryHover },
+    backgroundImage: 'none',
+  },
 });
 
 interface ShareButtonProps extends ComponentProps<typeof Button> {
@@ -76,7 +70,7 @@ const ShareButton = memo<ShareButtonProps>(({ meta, ...rest }) => {
   if (meta) {
     content = (
       <Center gap={16} style={{ position: 'relative' }} width={'100%'}>
-        <Flexbox align={'center'} className={styles.banner} width={'100%'}>
+        <Flexbox align={'center'} className={stylex.props(styles.banner).className} width={'100%'}>
           <CardBanner avatar={meta.avatar} size={640} style={{ height: 72, marginBottom: -36 }} />
           <Center
             flex={'none'}
@@ -112,7 +106,7 @@ const ShareButton = memo<ShareButtonProps>(({ meta, ...rest }) => {
               item.icon && (
                 <a href={item.link} key={item.title} rel="noreferrer" target="_blank">
                   <ActionIcon
-                    className={styles.icon}
+                    className={iconStyles.icon}
                     icon={item.icon}
                     size={{ blockSize: 36, borderRadius: 18, size: 16 }}
                     title={item.title}
@@ -124,7 +118,7 @@ const ShareButton = memo<ShareButtonProps>(({ meta, ...rest }) => {
         <Flexbox horizontal align={'center'} gap={8} width={'100%'}>
           <Input value={meta.url} variant={'filled'} />
           <CopyButton
-            className={styles.copy}
+            className={stylex.props(styles.copy).className}
             color={cssVar.colorBgLayout}
             content={meta.url}
             icon={LinkIcon}

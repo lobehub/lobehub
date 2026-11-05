@@ -134,6 +134,7 @@ export class IdentityActionImpl {
       keys: () => Object.keys(get().identityListEntries),
       read: (key) => get().identityListEntries[key],
       refreshHead: () => this.refreshIdentities(),
+      scope: () => identityListResource.scope.get(),
       slice: this.#identities,
     });
   }

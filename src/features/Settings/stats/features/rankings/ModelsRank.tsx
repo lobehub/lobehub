@@ -1,6 +1,6 @@
 import { type ModelRankItem } from '@lobechat/types';
 import { BarList } from '@lobehub/charts';
-import { ActionIcon } from '@lobehub/ui/base-ui';
+import { ActionIcon } from '@lobehub/ui';
 import { MaximizeIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

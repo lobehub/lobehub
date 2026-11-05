@@ -1,10 +1,8 @@
 'use client';
 
 import { validateVideoFileSize } from '@lobechat/utils/client';
-import { Icon, Popover } from '@lobehub/ui';
-import { toast, Upload } from '@lobehub/ui/base-ui';
+import { css, cssVar, cx, Icon, Popover, toast, Upload } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
-import { css, cssVar, cx } from 'antd-style';
 import {
   CheckIcon,
   ChevronRight,
@@ -20,6 +18,7 @@ import type { ReactNode } from 'react';
 import { memo, Suspense, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { imageUrl } from '@/const/url';
 import { openAttachKnowledgeModal } from '@/features/LibraryModal';
 import { useIsDark } from '@/hooks/useIsDark';
 import { useMediaUploadAbility } from '@/hooks/useMediaUploadAbility';
@@ -335,9 +334,7 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
         <img
           alt=""
           className="cover"
-          src={
-            isDark ? '/app-images/agent_gateway_dark.webp' : '/app-images/agent_gateway_light.webp'
-          }
+          src={imageUrl(isDark ? 'agent_gateway_dark.webp' : 'agent_gateway_light.webp')}
         />
         <div className="body">
           <div className="title">{t('gatewayMode.cardTitle')}</div>
@@ -505,7 +502,7 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
       : uploadItems;
 
     // Goal creation has one canonical entry: drop the goal chip at the head of
-    // the composer. The agent then plans and calls lobe-goal.createGoal,
+    // the composer. The agent then plans and calls builtin-goal.createGoal,
     // regardless of whether this conversation already has a topic.
     const acceptanceItems: ActionDropdownMenuItems = enableGoals
       ? [

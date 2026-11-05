@@ -11,7 +11,7 @@ import {
   resolveModelParams,
 } from '@lobechat/mecha';
 import type { UIChatMessage } from '@lobechat/types';
-import type { LobeDefaultAiModelListItem } from 'model-bank';
+import type { AiModelConfig, LobeDefaultAiModelListItem } from 'model-bank';
 
 import { loadModels } from '@/business/client/model-bank/loadModels';
 import type { AiModelModel } from '@/database/models/aiModel';
@@ -74,6 +74,10 @@ export const resolveModelExtendParamsForUser = async ({
             if (!row) return null;
             return {
               abilities: row.abilities,
+              // Carried so the frozen facts merge the user's deployment alias
+              // over the bundled card; without it the transport injects the
+              // catalog default instead of the user's endpoint.
+              deploymentName: (row.config as AiModelConfig | null)?.deploymentName ?? null,
               displayName: row.displayName,
               extendParams: row.settings?.extendParams ?? undefined,
             };

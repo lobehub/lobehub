@@ -58,6 +58,7 @@ import type {
   ToolResultData,
   UsageData,
 } from '../types';
+import { ClaudeCodeTaskSignals } from './claudeCodeTaskSignals';
 
 /**
  * The CC tool_use `name` we synthesize `pluginState.todos` for. Inlined here
@@ -1180,25 +1181,8 @@ export class ClaudeCompatibleStreamAdapter implements AgentEventAdapter {
    * not the main-agent signal detector.
    */
   private mainToolNamesById = new Map<string, string>();
-  /**
-   * Active CC tasks (long-running tools registered via `system task_started`).
-   * Keyed by `task_id`, carries the originating `tool_use_id`, the resolved
-   * tool name, and a counter incremented for each signal callback turn
-   * the adapter attributes to this task.
-   *
-   * A task lives from `task_started` until `task_notification` /
-   * `task_completed`. While alive, any `message_start` that opens a turn
-   * WITHOUT a preceding `user` event is a signal callback and gets tagged.
-   */
-  private activeTasks = new Map<
-    string,
-    {
-      callbackCount: number;
-      shouldSignalCompletion: boolean;
-      sourceToolName: string;
-      toolUseId: string;
-    }
-  >();
+  /** CC's long-running task lifecycle and the signal lineage it stamps on turns. */
+  private readonly taskSignals: ClaudeCodeTaskSignals;
   /**
    * True after a `user` event has been seen but the next turn hasn't yet
    * opened (`message_start` not yet fired). Carries the "this next turn
@@ -1207,8 +1191,8 @@ export class ClaudeCompatibleStreamAdapter implements AgentEventAdapter {
    * resulting assistant turn.
    *
    * Reset to `false` once a `message_start` consumes it. After that, any
-   * further `message_start` that opens while {@link activeTasks} is
-   * non-empty is treated as a signal callback (CC re-invoked the LLM
+   * further `message_start` is asked of {@link taskSignals} — a turn opened
+   * while a task is alive is a signal callback (CC re-invoked the LLM
    * because a long-running tool pushed an update).
    */
   private hasUnhandledUserInput = false;
@@ -1216,25 +1200,11 @@ export class ClaudeCompatibleStreamAdapter implements AgentEventAdapter {
    * {@link ExternalSignalContext} to attach to the NEXT `stream_start(newStep)`.
    *
    * Armed by `message_start` when {@link hasUnhandledUserInput} is false
-   * AND {@link activeTasks} is non-empty — i.e. CC opened a new turn
-   * without fresh user input while a long-running tool is alive. Cleared
-   * on the next `tool_use` (LLM is back on the main chain).
+   * and {@link taskSignals} attributes the turn to a task — i.e. CC opened a
+   * new turn without fresh user input. Cleared on the next `tool_use` (LLM is
+   * back on the main chain).
    */
   private pendingExternalSignal: ExternalSignalContext | undefined;
-  /**
-   * Source-tool lineage of the most recently completed long-running task,
-   * waiting to be stamped on the post-task summary turn with
-   * `type: 'task-completion'`.
-   *
-   * Armed when `system task_notification` ends an active task; consumed
-   * by the NEXT `message_start` that takes the natural-turn branch
-   * (no other active task triggering a callback). Cleared on `result`
-   * so it never leaks across LLM runs.
-   *
-   * Lets the renderer keep the summary inside the same AssistantGroup as
-   * the preceding callbacks instead of letting it spawn a separate group.
-   */
-  private pendingTaskCompletion: { sourceToolCallId: string; sourceToolName: string } | undefined;
 
   /**
    * Map a raw per-turn usage object (from `message_delta.usage` in partial
@@ -1273,6 +1243,7 @@ export class ClaudeCompatibleStreamAdapter implements AgentEventAdapter {
   ) {
     this.options = { ...DEFAULT_ADAPTER_OPTIONS, ...options };
     this.profile = profile;
+    this.taskSignals = new ClaudeCodeTaskSignals(this.options.signalBackgroundTaskCompletion);
   }
 
   adapt(raw: any): HeterogeneousAgentEvent[] {
@@ -1328,49 +1299,19 @@ export class ClaudeCompatibleStreamAdapter implements AgentEventAdapter {
       return [this.makeEvent('stream_retry', getApiRetryData(raw, this.profile.agentType))];
     }
 
-    // CC's long-running task lifecycle (Monitor, etc., ).
-    // `task_started` registers a task that may fire callback turns;
-    // `task_notification` (terminal) drops it. While a task is alive,
-    // any new turn without preceding user input is treated as a signal
-    // callback in `openMainMessage`.
+    // CC's long-running task lifecycle (Monitor, etc.) — see ClaudeCodeTaskSignals.
     if (raw.subtype === 'task_started' && raw.task_id && raw.tool_use_id) {
       const toolUseId: string = raw.tool_use_id;
-      const toolInput = this.mainToolInputsById.get(toolUseId);
-      const shouldSignalCompletion =
-        this.options.signalBackgroundTaskCompletion && toolInput?.run_in_background === true;
-      this.activeTasks.set(raw.task_id, {
-        callbackCount: 0,
-        shouldSignalCompletion,
-        sourceToolName: this.mainToolNamesById.get(toolUseId) ?? 'unknown',
+      this.taskSignals.start(
+        raw.task_id,
         toolUseId,
-      });
+        this.mainToolNamesById.get(toolUseId) ?? 'unknown',
+        this.mainToolInputsById.get(toolUseId),
+      );
       return [];
     }
     if (raw.subtype === 'task_notification' && raw.task_id) {
-      // Capture lineage BEFORE deleting so the next natural turn (the
-      // post-task summary, after CC re-invokes the LLM with a synthesized
-      // task-ended notification) can be tagged with `task-completion`.
-      // Last-task-wins if multiple tasks end before a summary fires — in
-      // practice CC summarizes once per LLM call.
-      //
-      // Gate on `callbackCount > 0`: only a task that actually fired out-of-band
-      // callback turns while alive is a genuine long-running task whose ending
-      // produces a post-task summary (the summary "keeps it inside the same
-      // AssistantGroup as the preceding callbacks" — so there must BE preceding
-      // callbacks). A task that fires `task_started` and `task_notification`
-      // back-to-back with no intervening callback turn was an inline synchronous
-      // tool that CC merely tracked as a task (e.g. a slow `git commit` running a
-      // lint-staged hook); its `tool_result` is consumed by the next turn in the
-      // normal main chain. Tagging that turn `task-completion` mis-anchors it and
-      // drops it from the rendered chain — so leave it untagged.
-      const ending = this.activeTasks.get(raw.task_id);
-      if (ending && (ending.callbackCount > 0 || ending.shouldSignalCompletion)) {
-        this.pendingTaskCompletion = {
-          sourceToolCallId: ending.toolUseId,
-          sourceToolName: ending.sourceToolName,
-        };
-      }
-      this.activeTasks.delete(raw.task_id);
+      this.taskSignals.end(raw.task_id);
       return [];
     }
     // `task_updated` is a status patch (status: 'completed' fires
@@ -1871,6 +1812,14 @@ export class ClaudeCompatibleStreamAdapter implements AgentEventAdapter {
    * not main-agent-scoped).
    */
   private handleUser(raw: any): HeterogeneousAgentEvent[] {
+    // A replayed user message (`--replay-user-messages`) is input the host
+    // delivered into a live session: the turn it opens answers the user, not a
+    // background task — even if a task notification lands before it opens.
+    if (raw.isReplay && !raw.parent_tool_use_id) {
+      this.hasUnhandledUserInput = true;
+      return [];
+    }
+
     const content = raw.message?.content;
     if (!Array.isArray(content)) return [];
 
@@ -1899,6 +1848,7 @@ export class ClaudeCompatibleStreamAdapter implements AgentEventAdapter {
       // signal pipeline.
       if (!subagentCtx) {
         this.hasUnhandledUserInput = true;
+        this.taskSignals.noteToolResult(toolCallId);
       }
 
       // `Read` on images yields `{type: 'image', source: {...}}` blocks. We
@@ -2188,13 +2138,13 @@ export class ClaudeCompatibleStreamAdapter implements AgentEventAdapter {
     this.lastApiErrorText = undefined;
     this.streamedTextByMessageId.clear();
     this.streamedThinkingByMessageId.clear();
-    // Drop any unconsumed task-completion lineage so the next LLM run
-    // doesn't inherit it (e.g. a follow-up user turn would otherwise
-    // wrongly inherit the previous run's task-completion tag).
-    this.pendingTaskCompletion = undefined;
+    // Drop any unconsumed task-completion lineage so the next LLM run doesn't
+    // inherit it; the next turn follows no tool_result of this one either.
+    this.taskSignals.clearPendingCompletion();
+    this.hasUnhandledUserInput = false;
 
     const shouldEmitVisibleOutputEnd =
-      this.options.runtimeEndStrategy === 'on-result' || this.activeTasks.size === 0;
+      this.options.runtimeEndStrategy === 'on-result' || !this.taskSignals.hasActiveTasks;
 
     return [
       ...events,
@@ -2327,7 +2277,7 @@ export class ClaudeCompatibleStreamAdapter implements AgentEventAdapter {
       // turn opened while a task is active) would see a stale `true` and skip
       // its external-signal tag.
       this.hasUnhandledUserInput = false;
-      this.pendingExternalSignal = undefined;
+      this.pendingExternalSignal = this.taskSignals.openTurn(true);
       // Reusing the tool turn's message.id as the newStep id would make the
       // reducer treat this as a REPLAY and drop it (it ignores a `newStep` whose
       // id === currentMainMessageId). For any tool turn opened by a prior
@@ -2370,42 +2320,11 @@ export class ClaudeCompatibleStreamAdapter implements AgentEventAdapter {
     this.currentMessageId = messageId;
     this.currentTurnHadToolUse = false;
     this.stepIndex++;
-    // Signal-callback detection (): if this turn opened
-    // WITHOUT a preceding `user` event AND a long-running task is
-    // still active, the LLM was re-invoked by the task pushing an
-    // update — tag the resulting assistant turn accordingly. Otherwise
-    // it's a natural continuation (tool_result follow-up or
-    // user-initiated turn).
-    if (!this.hasUnhandledUserInput && this.activeTasks.size > 0) {
-      // Pick the most recently registered active task. Multi-task
-      // concurrency isn't expected in real Monitor flows but the Map
-      // preserves insertion order so this still gives deterministic
-      // behavior if it ever happens.
-      const lastTaskKey = [...this.activeTasks.keys()].at(-1)!;
-      const task = this.activeTasks.get(lastTaskKey)!;
-      task.callbackCount += 1;
-      this.pendingExternalSignal = {
-        sequence: task.callbackCount,
-        sourceToolCallId: task.toolUseId,
-        sourceToolName: task.sourceToolName,
-        type: 'tool-stdout',
-      };
-    } else if (this.pendingTaskCompletion) {
-      // Natural turn that follows a `task_notification` — this is the
-      // post-task summary. Tag it with the source-tool lineage so the
-      // collector keeps it inside the same AssistantGroup as the
-      // preceding callbacks (rendered after the SignalCallbacks block).
-      this.pendingExternalSignal = {
-        sourceToolCallId: this.pendingTaskCompletion.sourceToolCallId,
-        sourceToolName: this.pendingTaskCompletion.sourceToolName,
-        type: 'task-completion',
-      };
-      this.pendingTaskCompletion = undefined;
-    } else {
-      // Natural turn boundary — clear any stale signal so the new
-      // assistant joins the main chain.
-      this.pendingExternalSignal = undefined;
-    }
+    // Signal-callback detection: a turn opened WITHOUT a preceding `user` event
+    // was re-invoked by a long-running task — tag it with that task's lineage.
+    // Otherwise it's a natural continuation (tool_result follow-up or
+    // user-initiated turn) and joins the main chain.
+    this.pendingExternalSignal = this.taskSignals.openTurn(this.hasUnhandledUserInput);
     this.hasUnhandledUserInput = false;
 
     return [
@@ -2463,12 +2382,3 @@ export class ClaudeCompatibleStreamAdapter implements AgentEventAdapter {
 }
 
 export class ClaudeCodeAdapter extends ClaudeCompatibleStreamAdapter {}
-
-export class ClaudeCodeSdkAdapter extends ClaudeCodeAdapter {
-  constructor() {
-    super({
-      runtimeEndStrategy: 'on-transport-close',
-      signalBackgroundTaskCompletion: true,
-    });
-  }
-}

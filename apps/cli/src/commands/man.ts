@@ -97,8 +97,12 @@ function formatAliasesSection(command: Command) {
 
 function formatDescriptionSection(command: Command) {
   const description = command.description() || 'No description available.';
+  const body = description
+    .split('\n')
+    .map((line) => (line ? `  ${line}` : ''))
+    .join('\n');
 
-  return ['DESCRIPTION', `  ${description}`].join('\n');
+  return ['DESCRIPTION', body].join('\n');
 }
 
 function formatArgumentsSection(command: Command) {

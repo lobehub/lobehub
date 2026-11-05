@@ -6,6 +6,7 @@ import type {
   TaskListItem,
 } from '@/store/task/slices/list/initialState';
 
+import type { CreateTaskContentProps } from '../CreateTaskModal/CreateTaskContent';
 import type { TaskGroupBy, TaskGroupMeta } from './listViewOptions';
 import {
   getTaskAssigneeGroupMeta,
@@ -168,6 +169,81 @@ export const getKanbanTaskPatch = (
     return { status: column.targetStatus as TaskStatus };
   }
 };
+
+/** Pinned on the new task, so it lands in the column it was created from. */
+export interface KanbanColumnCreateDefaults {
+  assigneeAgentId?: string;
+  priority?: number;
+}
+
+/**
+ * Whether a task group offers a create entry, and what the new task is pinned
+ * to. Shared by board columns and list group headers so both views offer the
+ * entry on the same groups. `undefined` means no entry: a task created there
+ * could not be guaranteed to land in that group.
+ */
+export const getTaskGroupCreateDefaults = (
+  groupMeta: TaskGroupMeta | undefined,
+): KanbanColumnCreateDefaults | undefined => {
+  switch (groupMeta?.groupBy) {
+    // New tasks start in backlog, so only that status group can receive one.
+    case 'status': {
+      return groupMeta.status === 'backlog' ? {} : undefined;
+    }
+    case 'priority': {
+      return { priority: groupMeta.priority ?? 0 };
+    }
+    // The unassigned group has no entry: the modal cannot pin "no agent".
+    case 'assignee': {
+      return groupMeta.assigneeId ? { assigneeAgentId: groupMeta.assigneeId } : undefined;
+    }
+  }
+};
+
+/**
+ * Create defaults of a sub-group: it must satisfy its parent group too, so the
+ * entry exists only when both levels offer one, and their pins are combined.
+ */
+export const getTaskSubGroupCreateDefaults = (
+  parentMeta: TaskGroupMeta | undefined,
+  subMeta: TaskGroupMeta | undefined,
+): KanbanColumnCreateDefaults | undefined => {
+  const parent = getTaskGroupCreateDefaults(parentMeta);
+  const sub = getTaskGroupCreateDefaults(subMeta);
+  if (!parent || !sub) return undefined;
+  return { ...parent, ...sub };
+};
+
+/**
+ * Whether a column offers a create entry, and what the new task is pinned to.
+ * `undefined` means no entry: a task created there could not be guaranteed to
+ * land in that column.
+ */
+export const getKanbanColumnCreateDefaults = (
+  groupBy: TaskKanbanGroupBy,
+  column: KanbanColumnDefinition,
+): KanbanColumnCreateDefaults | undefined => {
+  if (groupBy === 'status') return column.key === 'backlog' ? {} : undefined;
+  if (column.groupMeta?.groupBy !== groupBy) return undefined;
+  return getTaskGroupCreateDefaults(column.groupMeta);
+};
+
+/**
+ * Props for the create task modal opened from a column. The column's pinned
+ * fields are prefilled, so an untouched modal creates the task in this column.
+ */
+export const getKanbanCreateTaskModalProps = (
+  defaults: KanbanColumnCreateDefaults,
+  scope: { agentId?: string; projectId?: string },
+): CreateTaskContentProps => ({
+  agentId: defaults.assigneeAgentId ?? scope.agentId,
+  defaultPriority: defaults.priority,
+  // An agent-scoped board only holds that agent's tasks.
+  lockAssignee: !!scope.agentId,
+  projectId: scope.projectId,
+  // The board has no inline entry to minimize into.
+  showInlineToggle: false,
+});
 
 export const canDropTaskIntoKanbanColumn = (
   task: TaskListItem,

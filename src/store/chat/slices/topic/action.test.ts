@@ -2,7 +2,7 @@ import { DEFAULT_MODEL, DEFAULT_PROVIDER } from '@lobechat/business-const';
 import { TOPIC_TITLE_JSON_SCHEMA } from '@lobechat/prompts';
 import type { LobeUser, UIChatMessage } from '@lobechat/types';
 import { RequestTrigger } from '@lobechat/types';
-import { toast } from '@lobehub/ui/base-ui';
+import { toast } from '@lobehub/ui';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { type Mock } from 'vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -37,7 +37,7 @@ const topicListSyncKey = (containerKey: string, scope = cacheScope.get()) =>
     pageSize: 20,
   });
 
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => {
+vi.mock('@lobehub/ui', async (importOriginal) => {
   const actual = await importOriginal<{ toast: Record<string, unknown> }>();
   return { ...actual, toast: { ...actual.toast, error: vi.fn() } };
 });
@@ -120,7 +120,6 @@ beforeEach(() => {
       defaultSessions: [],
       pinnedSessions: [],
       sessions: [],
-      isSessionsFirstFetchFinished: false,
     },
     false,
   );
@@ -575,6 +574,30 @@ describe('topic action', () => {
         metadata: { heteroEffort: 'default' },
         model: 'new-model',
         provider: 'codex',
+      });
+    });
+
+    it('writes a speed-only selection to topic metadata without a model write', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const modelSpy = vi.spyOn(topicService, 'updateTopicModel');
+      const metadataSpy = vi
+        .spyOn(topicService, 'updateTopicMetadata')
+        .mockResolvedValue(undefined as any);
+      vi.spyOn(result.current, 'refreshTopic').mockResolvedValue(undefined);
+      seed();
+
+      await act(async () => {
+        await result.current.updateTopicHeteroPin('hetero-topic', {
+          provider: 'codex',
+          speed: 'fast',
+        });
+      });
+
+      expect(modelSpy).not.toHaveBeenCalled();
+      expect(metadataSpy).toHaveBeenCalledWith('hetero-topic', { heteroSpeed: 'fast' });
+      expect(useChatStore.getState().topicDataMap[KEY]?.items[0].metadata).toEqual({
+        heteroEffort: 'high',
+        heteroSpeed: 'fast',
       });
     });
 

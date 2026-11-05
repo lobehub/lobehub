@@ -177,6 +177,9 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   agent: rw('agent:read', 'agent:write'),
   // bot channel wiring carries channel credentials
   agentBotProvider: 'blocked',
+  // a bot's wake records: channel message previews and the owner's marks, read through the same
+  // bot lookup as agentBotProvider
+  agentBotWake: 'blocked',
   agentDocument: rw('knowledge:read', 'knowledge:write'),
   agentEval: 'blocked',
   agentEvalExternal: 'blocked',
@@ -189,6 +192,7 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   agentShare: 'blocked',
   agentSignal: rw('agent:read', 'agent:write'),
   agentSkills: rw('agent:read', 'agent:write'),
+  agentSteerQueue: rw('agent:read', 'agent:write'),
   // a trace snapshot is the whole inside of a run — system role, injected user
   // memory, tool results — and `getSnapshotUrl` hands back a presigned URL that
   // needs no further auth, so a restricted key holding one would read past its
@@ -201,11 +205,18 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   // keys must not mint or manage keys
   apiKey: 'blocked',
   asr: { any: 'model:invoke' },
+  // `auth.getScope` only reports which scope the presented credential runs
+  // under, so any key — however narrow — can tell where its calls land
+  auth: 'open',
   artifactShare: rw('chat:read', null),
   // decrypts stored bot/messenger credentials and calls external channel APIs
   botMessage: 'blocked',
   brief: rw('chat:read', 'chat:write'),
+  // publish opens a public site from stored files; no key-based client drives canvases
+  canvas: 'blocked',
   changelog: 'open',
+  // Sending wakes Agent runs on members' devices; no key-based client drives Channels yet
+  channel: 'blocked',
   chunk: rw('knowledge:read', 'knowledge:write'),
   comfyui: rw('model:read', 'model:write'),
   // third-party integrations hold external credentials
@@ -220,10 +231,19 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   document: rw('knowledge:read', 'knowledge:write'),
   documentComment: rw('knowledge:read', 'knowledge:write'),
   documentLike: rw('knowledge:read', 'knowledge:write'),
+  // code environment definitions: the same agent domain as the project
+  // environments they are bound to; what is built from them on the drive stays
+  // behind `sandboxStorage`
+  environment: rw('agent:read', 'agent:write'),
   expertise: rw('agent:read', 'agent:write'),
   // whole-account backup dump (settings incl. market tokens, providers, agents)
   exporter: 'blocked',
+  // Personal sidebar shortcuts, like other per-user preferences.
+  favorite: rw('user:read', 'user:write'),
   file: rw('file:read', 'file:write'),
+  // a link share opens one file to anyone holding the link — the same authority
+  // as the file itself
+  fileShare: rw('file:read', 'file:write'),
   followUpAction: rw('chat:read', 'chat:write'),
   generation: { any: 'model:invoke' },
   generationBatch: { any: 'model:invoke' },
@@ -239,6 +259,8 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   klavis: 'blocked',
   knowledge: rw('knowledge:read', 'knowledge:write'),
   knowledgeBase: rw('knowledge:read', 'knowledge:write'),
+  // Linear OAuth connections hold workspace tokens and are managed from Settings
+  linear: 'blocked',
   llmGenerationTracing: 'blocked',
   market: rw('agent:read', 'agent:write'),
   // tool execution inside a chat run
@@ -256,6 +278,7 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   pageShare: rw('chat:read', 'chat:write'),
   plugin: rw('agent:read', 'agent:write'),
   project: rw('agent:read', 'agent:write'),
+  projectReview: 'blocked',
   // project environments and working directories: same agent domain as `project`
   projectWorkingDirectory: rw('agent:read', 'agent:write'),
   pushToken: 'blocked',
@@ -296,11 +319,14 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   // restore / purge is a destructive cross-cutting surface, so restricted keys
   // never reach it; only full-access keys can.
   trash: 'blocked',
+  tts: { any: 'model:invoke' },
   upload: rw('file:read', 'file:write'),
   usage: rw('usage:read', null),
   user: rw('user:read', 'user:write'),
   userMemories: rw('user:read', 'user:write'),
   userMemory: rw('user:read', 'user:write'),
+  // the user's own skill library — same scope as the agent skills it sits beside
+  userSkill: rw('agent:read', 'agent:write'),
   verify: 'blocked',
   video: { any: 'model:invoke' },
   waitlist: 'blocked',
@@ -346,6 +372,12 @@ export const TRPC_PROCEDURE_EXTRA_SCOPES: Record<string, ApiKeyScope[]> = {
   'aiAgent.execSubAgentTask': AGENT_RUN_SCOPES,
   'aiAgent.scheduleAgentRun': AGENT_RUN_SCOPES,
   'aiAgent.startExecution': AGENT_RUN_SCOPES,
+  // a queued follow-up is a deferred composer send: the run that drains it
+  // starts a model turn and writes the user message
+  'agentSteerQueue.append': AGENT_RUN_SCOPES,
+  'agentSteerQueue.remove': ['chat:write'],
+  // returns the queued prompts and attachments, i.e. conversation content
+  'agentSteerQueue.list': ['chat:read'],
   // thread/message state writes without starting a run
   'aiAgent.createClientGroupAgentTaskThread': ['chat:write'],
   'aiAgent.createClientTaskThread': ['chat:write'],
@@ -419,6 +451,18 @@ export const TRPC_PROCEDURE_EXTRA_SCOPES: Record<string, ApiKeyScope[]> = {
 };
 
 /**
+ * Single procedures opened to restricted keys inside a namespace half that is
+ * otherwise closed to them (a `null` side of `rw`). The grant is the base scope
+ * for that one path; the rest of the namespace half stays blocked. Keep entries
+ * narrow and only for procedures that enforce their own authorization.
+ */
+export const TRPC_PROCEDURE_SCOPE_GRANTS: Record<string, ApiKeyScope> = {
+  // a member's workspace title and responsibilities — the procedure still
+  // requires self or Admin, while invite / remove / role changes stay closed
+  'workspaceMember.updateProfile': 'workspace:write',
+};
+
+/**
  * Nested sub-surfaces denied to restricted keys regardless of the parent
  * namespace rule. The namespace table only sees the first path segment, so
  * sensitive subrouters mounted inside an otherwise-scoped namespace must be
@@ -438,6 +482,15 @@ export const TRPC_BLOCKED_PATH_PREFIXES: string[] = [
   'market.creds.',
   // marketplace OIDC auth flows carry tokens
   'market.oidc.',
+  // the GitHub picker reads the user's connected GitHub account (private
+  // repositories and branches) through their OAuth grant — connector data
+  // outside the agent domain the rest of `environment` belongs to
+  'environment.listGithub',
+  // publishing decides who else can reach what an environment's directories
+  // captured on the drive (a private one's left on the public drive stops
+  // being hidden); that is drive state, which stays behind `sandboxStorage`
+  // and so out of a restricted key's reach
+  'environment.setEnvironmentVisibility',
 ];
 
 export type TrpcScopeDecision = { scopes: ApiKeyScope[] } | { open: true } | { blocked: true };
@@ -460,7 +513,8 @@ export const requiredApiKeyScopeForTrpc = (
   if (!rule || rule === 'blocked') return { blocked: true };
 
   const base =
-    rule === 'open' ? null : 'any' in rule ? rule.any : type === 'query' ? rule.read : rule.write;
+    TRPC_PROCEDURE_SCOPE_GRANTS[path] ??
+    (rule === 'open' ? null : 'any' in rule ? rule.any : type === 'query' ? rule.read : rule.write);
 
   // a namespace half with no scope grants nothing to restricted keys
   if (rule !== 'open' && !base) return { blocked: true };

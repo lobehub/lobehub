@@ -11,15 +11,21 @@ import SkeletonBar from '../Bar';
 import { MessengerPlatformDetailSkeleton } from './MessengerDetail';
 import SettingsProfileSkeleton from './Profile';
 import SettingsSectionSkeleton from './Section';
+import { SettingsSectionsBody } from './Sections';
+import { SETTINGS_SECTION_SHAPES } from './sectionShapes';
 
 type SettingsSkeletonBody =
-  { kind: 'messengerDetail'; platform: string } | { kind: 'profile' } | { kind: 'section' };
+  | { kind: 'messengerDetail'; platform: string }
+  | { kind: 'profile' }
+  | { kind: 'section' }
+  | { kind: 'sections'; tab: string };
 
 export const resolveSettingsSkeletonBody = (pathname: string): SettingsSkeletonBody => {
   const [, tab = 'profile', sub] = pathname.match(/\/settings\/([^/]+)(?:\/([^/]+))?/) ?? [];
 
   if (tab === 'profile') return { kind: 'profile' };
   if (tab === 'messenger' && sub) return { kind: 'messengerDetail', platform: sub };
+  if (Object.hasOwn(SETTINGS_SECTION_SHAPES, tab)) return { kind: 'sections', tab };
   return { kind: 'section' };
 };
 
@@ -29,6 +35,8 @@ export const SettingsBodySkeleton = () => {
   if (body.kind === 'profile') return <SettingsProfileSkeleton />;
   if (body.kind === 'messengerDetail')
     return <MessengerPlatformDetailSkeleton platform={body.platform} />;
+  if (body.kind === 'sections')
+    return <SettingsSectionsBody shape={SETTINGS_SECTION_SHAPES[body.tab]} />;
   return <SettingsSectionSkeleton />;
 };
 

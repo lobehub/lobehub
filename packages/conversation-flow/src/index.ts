@@ -37,6 +37,12 @@ export type {
 export type { FlatMessage, FlatMessageExtra, FlatMessageRole } from './types';
 
 // Shared Types
+export type { ConversationTail, ConversationTailKind } from './tail';
+export {
+  findLatestWorkRootOperationId,
+  getOperationFinalRootId,
+  resolveConversationTail,
+} from './tail';
 export type {
   HelperMaps,
   IdNode,

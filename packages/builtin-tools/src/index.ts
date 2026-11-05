@@ -20,6 +20,8 @@ import { AuvManifest } from '@lobechat/builtin-tool-auv';
 import { BriefManifest } from '@lobechat/builtin-tool-brief';
 import { BrowserManifest } from '@lobechat/builtin-tool-browser';
 import { CalculatorManifest } from '@lobechat/builtin-tool-calculator/manifest';
+import { CanvasManifest } from '@lobechat/builtin-tool-canvas';
+import { ChannelManifest } from '@lobechat/builtin-tool-channel';
 import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
 import { CredsManifest } from '@lobechat/builtin-tool-creds';
 import { DashboardManifest } from '@lobechat/builtin-tool-dashboard';
@@ -33,10 +35,7 @@ import { GroupManagementManifest } from '@lobechat/builtin-tool-group-management
 import { ImageGenerationManifest } from '@lobechat/builtin-tool-image-generation';
 import { KnowledgeBaseManifest } from '@lobechat/builtin-tool-knowledge-base';
 import { LobeAgentManifest, resolveLobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
-import {
-  LocalSystemManifest,
-  resolveLocalSystemManifest,
-} from '@lobechat/builtin-tool-local-system';
+import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { MemoryManifest, resolveMemoryRestrictedManifest } from '@lobechat/builtin-tool-memory';
 import { MessageManifest, resolveMessageManifest } from '@lobechat/builtin-tool-message';
 import { PageAgentManifest } from '@lobechat/builtin-tool-page-agent';
@@ -50,7 +49,6 @@ import {
   SkillsManifest,
 } from '@lobechat/builtin-tool-skills';
 import { TaskManifest } from '@lobechat/builtin-tool-task';
-import { TopicReferenceManifest } from '@lobechat/builtin-tool-topic-reference';
 import { UserInteractionManifest } from '@lobechat/builtin-tool-user-interaction';
 import { VerifyToolManifest } from '@lobechat/builtin-tool-verify';
 import { VideoGenerationManifest } from '@lobechat/builtin-tool-video-generation';
@@ -58,6 +56,8 @@ import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import { WebOnboardingManifest } from '@lobechat/builtin-tool-web-onboarding';
 import { isDesktop, RECOMMENDED_SKILLS, RecommendedSkillType } from '@lobechat/const';
 import { type LobeBuiltinTool } from '@lobechat/types';
+
+import { resolveCloudSandboxInPageScope } from './pageScope';
 
 /**
  * Default tool IDs that will always be added to the tools list.
@@ -74,10 +74,10 @@ export const defaultToolIds = [
   LocalSystemManifest.identifier,
   BrowserManifest.identifier,
   CloudSandboxManifest.identifier,
-  TopicReferenceManifest.identifier,
   AgentDocumentsManifest.identifier,
   TaskManifest.identifier,
   LobeAgentManifest.identifier,
+  CanvasManifest.identifier,
 ];
 
 /**
@@ -227,9 +227,8 @@ export const runtimeManagedToolIds = [
  * (`lobe-agent-management`, `lobe-task`, `lobe-creds`, `lobe-message`,
  * `lobe-skill-store`, `lobe-agent-builder`,
  * `lobe-group-agent-builder`, `lobe-group-management`, `agent-signal-review`,
- * `lobe-user-interaction`, `lobe-activator`,
- * `lobe-local-system`, `lobe-browser`, `lobe-remote-device`,
- * `lobe-topic-reference`, and the hidden system-only self-iteration tools),
+ * `lobe-user-interaction`,
+ * `lobe-local-system`, `lobe-browser`, `lobe-remote-device`, and the hidden system-only self-iteration tools),
  * see the denied-builtins section of
  * `apps/server/src/services/aiAgent/shareGate/README.md`.
  */
@@ -259,6 +258,13 @@ export const AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS = new Set<string>([
   KnowledgeBaseManifest.identifier,
   MemoryManifest.identifier,
   AgentDocumentsManifest.identifier,
+  // `lobe-activator`: never picked in the owner's tool picker — it is implied
+  // (scoped to `activateTools`) by any tool grant and kept only while the
+  // gated set still holds a granted tool to activate. It can only surface
+  // manifests from that already-gated set, and its skill fallback re-checks
+  // `shareConfig.skillGrants`. See the allowed-builtins section of
+  // `shareGate/README.md`.
+  LobeActivatorManifest.identifier,
   // `lobe-skills`: a skill-driven agent is broken the moment it is shared
   // without this, since skills are loaded on demand through this tool. It is
   // allowed only in the narrow shape `DATA_TOOL_ACCESS_RULES` gives it —
@@ -399,7 +405,6 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
     hidden: true,
     identifier: LocalSystemManifest.identifier,
     manifest: LocalSystemManifest,
-    resolveManifest: resolveLocalSystemManifest,
     type: 'builtin',
   },
   {
@@ -419,6 +424,7 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
     hidden: true,
     identifier: CloudSandboxManifest.identifier,
     manifest: CloudSandboxManifest,
+    resolveManifest: resolveCloudSandboxInPageScope(CloudSandboxManifest),
     type: 'builtin',
   },
   {
@@ -500,6 +506,13 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
     type: 'builtin',
   },
   {
+    discoverable: false,
+    hidden: true,
+    identifier: ChannelManifest.identifier,
+    manifest: ChannelManifest,
+    type: 'builtin',
+  },
+  {
     identifier: MessageManifest.identifier,
     manifest: MessageManifest,
     // Context-aware: drops APIs the current IM platform can't fulfil (e.g.
@@ -511,13 +524,6 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
     hidden: true,
     identifier: RemoteDeviceManifest.identifier,
     manifest: RemoteDeviceManifest,
-    type: 'builtin',
-  },
-  {
-    discoverable: false,
-    hidden: true,
-    identifier: TopicReferenceManifest.identifier,
-    manifest: TopicReferenceManifest,
     type: 'builtin',
   },
   {
@@ -549,7 +555,9 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
     type: 'builtin',
   },
   {
-    discoverable: false,
+    // Hidden from the Tools popover (a goal starts from `/goal`), but
+    // discoverable so the activator can enable it when the user asks for a goal
+    // in plain words or wants a rejected goal proposal redone.
     hidden: true,
     identifier: GoalManifest.identifier,
     manifest: GoalManifest,
@@ -558,6 +566,11 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
   {
     identifier: TaskManifest.identifier,
     manifest: TaskManifest,
+    type: 'builtin',
+  },
+  {
+    identifier: CanvasManifest.identifier,
+    manifest: CanvasManifest,
     type: 'builtin',
   },
   {

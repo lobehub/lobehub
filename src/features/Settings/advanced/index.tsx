@@ -1,13 +1,14 @@
 'use client';
 
 import { isDesktop } from '@lobechat/const';
-import { Select, Skeleton, Spin, Switch } from '@lobehub/ui/base-ui';
-import { Form, type FormFieldProps, type FormGroupItem, useForm } from '@lobehub/ui/base-ui/form';
+import { Select, Spin, Switch } from '@lobehub/ui';
+import { Form, type FormFieldProps, type FormGroupItem, useForm } from '@lobehub/ui/form';
 import isEqual from 'fast-deep-equal';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
+import { SettingsSectionSkeleton } from '@/components/Skeleton';
 import { FORM_STYLE } from '@/const/layoutTokens';
 import SettingHeader from '@/features/Settings/features/SettingHeader';
 import { SettingsSearchAnchor } from '@/features/SettingsSearch/anchor';
@@ -82,7 +83,19 @@ const Page = memo(() => {
           onRetry={() => refreshUserState()}
         />
       );
-    return <Skeleton.Text rows={5} />;
+    // Mirror the loaded page: header plus the tools group (dev mode + optional
+    // gateway mode) and, on desktop, the single-row update-channel group.
+    return (
+      <>
+        <SettingHeader title={t('tab.advanced')} />
+        <SettingsSectionSkeleton
+          groups={[
+            { rows: enableGatewayMode ? 2 : 1, titleWidth: 160 },
+            ...(isDesktop ? [{ rows: 1, titleWidth: 112 }] : []),
+          ]}
+        />
+      </>
+    );
   }
 
   const advancedGroup: FormGroupItem<UserGeneralConfig> = {

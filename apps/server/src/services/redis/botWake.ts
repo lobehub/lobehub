@@ -1,0 +1,477 @@
+import { randomUUID } from 'node:crypto';
+
+import debug from 'debug';
+import pMap from 'p-map';
+
+import { RedisKeys } from '@/server/modules/Redis';
+import {
+  CONVERSATION_LOG_MAX_LINES,
+  parseLine,
+  serializeLine,
+} from '@/server/services/agentSignal/scenarios/botWake/conversation';
+import type { WakeConversationLine } from '@/server/services/agentSignal/scenarios/botWake/types';
+
+import { getRedisServiceClient } from './client';
+
+const log = debug('lobe-server:redis:bot-wake');
+
+const getClient = () => getRedisServiceClient('botWake');
+
+// Channel state is only a hint for the next wake decision. A day of silence in a channel makes
+// every field stale, so the key expires instead of being cleaned up.
+const CHANNEL_TTL_SECONDS = 24 * 60 * 60;
+const SCHEDULER_TTL_SECONDS = 24 * 60 * 60;
+const CLASSIFIER_CALLS_TTL_SECONDS = 2 * 60 * 60;
+// As long as a parked message can wait for its replay (`deferredMessages` TTL).
+const INITIATION_TTL_SECONDS = 30 * 60;
+// How long after it was sent an edit that newly @-mentions a bot may still wake it. The marker
+// that remembers the message already engaged the bot lives exactly as long.
+export const EDIT_WAKE_WINDOW_SECONDS = 30 * 60;
+// A channel's recent messages are context for the next judgement, not an archive: an idle channel
+// loses them after three days, and an active one never holds more than the newest 200.
+const CONVERSATION_LOG_TTL_SECONDS = 3 * 24 * 60 * 60;
+
+// A conversation contributes its own key plus its Discord thread keys, so the read fan-out stays
+// small but is still bounded: an unbounded `Promise.all` would open one Redis round trip per key.
+const CHANNEL_READ_CONCURRENCY = 5;
+
+// A burst of chat messages lands within a few hundred ms, and each holder spends a few round
+// trips under the lock. The retry window (~1s with jitter) is sized for that burst; a writer
+// that still cannot get in reports `undefined` and the caller wakes as it did before.
+const LOCK_TTL_MS = 3000;
+const LOCK_ATTEMPTS = 25;
+const LOCK_RETRY_MS = 30;
+
+/** What the wake policies read about one channel or thread; epoch ms. */
+export interface BotWakeChannelFields {
+  botLastSpokeAt?: number;
+  /** Platform id of the person whose message last woke the bot here: who a follow-up is from. */
+  followupAuthorId?: string;
+  followupUntil?: number;
+  ownerLastSpokeAt?: number;
+  silentWakes: number;
+  /** Until when the bot stays out of this conversation unless explicitly addressed. */
+  standDownUntil?: number;
+}
+
+const toNumber = (value: string | undefined) => {
+  if (value === undefined) return undefined;
+  const parsed = Number(value);
+
+  return Number.isFinite(parsed) ? parsed : undefined;
+};
+
+const parseFields = (hash: Record<string, string> | null | undefined): BotWakeChannelFields => ({
+  botLastSpokeAt: toNumber(hash?.botLastSpokeAt),
+  followupAuthorId: hash?.followupAuthorId || undefined,
+  followupUntil: toNumber(hash?.followupUntil),
+  ownerLastSpokeAt: toNumber(hash?.ownerLastSpokeAt),
+  silentWakes: toNumber(hash?.silentWakes) ?? 0,
+  standDownUntil: toNumber(hash?.standDownUntil),
+});
+
+/**
+ * Merges the states of the keys a conversation is filed under (channel and Discord thread).
+ * Times take the latest (a stand-down on any key holds); the silent-wake count takes the highest,
+ * the stricter reading. The
+ * follow-up author comes from the key whose window ends last, the window it belongs to.
+ */
+export const mergeBotWakeChannelFields = (
+  fields: readonly BotWakeChannelFields[],
+): BotWakeChannelFields => {
+  const max = (pick: (field: BotWakeChannelFields) => number | undefined) => {
+    const values = fields.map(pick).filter((value): value is number => value !== undefined);
+
+    return values.length > 0 ? Math.max(...values) : undefined;
+  };
+
+  const followupUntil = max((field) => field.followupUntil);
+  const windowOwner =
+    followupUntil === undefined
+      ? undefined
+      : fields.find((field) => field.followupUntil === followupUntil);
+
+  return {
+    botLastSpokeAt: max((field) => field.botLastSpokeAt),
+    followupAuthorId: windowOwner?.followupAuthorId,
+    followupUntil,
+    ownerLastSpokeAt: max((field) => field.ownerLastSpokeAt),
+    silentWakes: Math.max(0, ...fields.map((field) => field.silentWakes)),
+    standDownUntil: max((field) => field.standDownUntil),
+  };
+};
+
+/**
+ * KEYS = channel hashes, the conversation the bot spoke in last; ARGV[1] = ttl;
+ * ARGV[2] = botLastSpokeAt; ARGV[3] = followupUntil. Resets the silent-wake count on every key,
+ * opens the window on the last one only.
+ */
+const BOT_SPOKE_SCRIPT = `
+for i = 1, #KEYS do
+  redis.call('HSET', KEYS[i], 'silentWakes', '0')
+  if i == #KEYS then
+    redis.call('HSET', KEYS[i], 'botLastSpokeAt', ARGV[2], 'followupUntil', ARGV[3])
+  end
+  redis.call('EXPIRE', KEYS[i], ARGV[1])
+end
+return 1
+`;
+
+/** KEYS = channel hashes; ARGV[1] = ttl. Counts one wake that ended without the bot speaking. */
+const SILENT_WAKE_SCRIPT = `
+local top = 0
+for i = 1, #KEYS do
+  local n = redis.call('HINCRBY', KEYS[i], 'silentWakes', 1)
+  redis.call('EXPIRE', KEYS[i], ARGV[1])
+  if n > top then top = n end
+end
+return top
+`;
+
+/** Releases the lock only for the writer that took it. KEYS[1] = lock; ARGV[1] = token. */
+const RELEASE_LOCK_SCRIPT = `
+if redis.call('GET', KEYS[1]) == ARGV[1] then return redis.call('DEL', KEYS[1]) end
+return 0
+`;
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// ZADD every line (score = send time, member = the serialized line, so two bots adding the same
+// message collapse into one), then keep the newest ARGV[1] and refresh the TTL, atomically.
+const REMEMBER_MESSAGES_SCRIPT = `
+for i = 3, #ARGV, 2 do
+  redis.call('ZADD', KEYS[1], ARGV[i], ARGV[i + 1])
+end
+redis.call('ZREMRANGEBYRANK', KEYS[1], 0, -(tonumber(ARGV[1]) + 1))
+redis.call('EXPIRE', KEYS[1], ARGV[2])
+return 1
+`;
+
+// The newest ARGV[1] members, newest first.
+const READ_MESSAGES_SCRIPT = `
+return redis.call('ZREVRANGE', KEYS[1], 0, tonumber(ARGV[1]) - 1)
+`;
+
+export const botWake = {
+  /**
+   * Adds messages to the conversation log of every key given (a channel and, on Discord, its
+   * thread). The log is a sorted set scored by send time whose member is the whole serialized
+   * line, so a message that two bots both saw is stored once. Keeps the newest 200 lines.
+   */
+  async rememberMessages(keys: readonly string[], lines: readonly WakeConversationLine[]) {
+    if (keys.length === 0 || lines.length === 0) return;
+
+    try {
+      const redis = await getClient();
+      if (!redis) return;
+
+      const args = lines.flatMap((line) => [line.at, serializeLine(line)]);
+      await pMap(
+        keys,
+        (key) =>
+          redis.eval(
+            REMEMBER_MESSAGES_SCRIPT,
+            1,
+            RedisKeys.botWake.conversationLog(key),
+            CONVERSATION_LOG_MAX_LINES,
+            CONVERSATION_LOG_TTL_SECONDS,
+            ...args,
+          ),
+        { concurrency: 4 },
+      );
+    } catch (error) {
+      log('rememberMessages failed: %O', error);
+    }
+  },
+
+  /**
+   * The newest `limit` messages of a conversation, oldest first, leaving out `excludeId` (the
+   * message being judged). `undefined` when Redis is unavailable, `[]` for a quiet channel.
+   */
+  async readRecentMessages(
+    key: string,
+    limit: number,
+    excludeId?: string,
+  ): Promise<WakeConversationLine[] | undefined> {
+    try {
+      const redis = await getClient();
+      if (!redis) return;
+
+      const raw = await redis.eval<string[]>(
+        READ_MESSAGES_SCRIPT,
+        1,
+        RedisKeys.botWake.conversationLog(key),
+        limit + (excludeId ? 1 : 0),
+      );
+
+      return raw
+        .map(parseLine)
+        .filter((line): line is WakeConversationLine => !!line && line.id !== excludeId)
+        .slice(0, limit)
+        .reverse();
+    } catch (error) {
+      log('readRecentMessages failed: %O', error);
+    }
+  },
+
+  /**
+   * Keeps the wake decided for a message, so the replay of a parked message reuses it. Never
+   * throws: without it the replay judges again, as it did before.
+   */
+  async rememberInitiation(applicationId: string, messageId: string, value: string) {
+    try {
+      const redis = await getClient();
+      if (!redis) return;
+
+      await redis.set(RedisKeys.botWake.initiation(applicationId, messageId), value, {
+        ex: INITIATION_TTL_SECONDS,
+      });
+    } catch (error) {
+      log('rememberInitiation failed: %O', error);
+    }
+  },
+
+  /** The wake decided for a message, as `rememberInitiation` stored it; `undefined` otherwise. */
+  async readInitiation(applicationId: string, messageId: string) {
+    try {
+      const redis = await getClient();
+      if (!redis) return;
+
+      return (await redis.get(RedisKeys.botWake.initiation(applicationId, messageId))) ?? undefined;
+    } catch (error) {
+      log('readInitiation failed: %O', error);
+    }
+  },
+
+  /**
+   * Remembers that these messages engaged the bot (see `RedisKeys.botWake.editWake`), so a later
+   * edit of any of them does not wake it again. Never throws: a missed mark at worst lets an edit
+   * that adds an @-mention wake the bot a second time.
+   */
+  async markEditWakeEngaged(applicationId: string, messageIds: readonly string[]) {
+    if (messageIds.length === 0) return;
+
+    try {
+      const redis = await getClient();
+      if (!redis) return;
+
+      const pipeline = redis.pipeline();
+      for (const messageId of new Set(messageIds)) {
+        pipeline.set(RedisKeys.botWake.editWake(applicationId, messageId), '1', {
+          ex: EDIT_WAKE_WINDOW_SECONDS,
+        });
+      }
+      await pipeline.exec();
+    } catch (error) {
+      log('markEditWakeEngaged failed: %O', error);
+    }
+  },
+
+  /**
+   * Claims the one wake an edit may start on a message: `true` only for the first caller, and only
+   * when the message has not engaged the bot before. `false` without Redis or on an error, so an
+   * edit that cannot be deduplicated never wakes the bot.
+   */
+  async claimEditWake(applicationId: string, messageId: string): Promise<boolean> {
+    try {
+      const redis = await getClient();
+      if (!redis) return false;
+
+      const claimed = await redis.set(RedisKeys.botWake.editWake(applicationId, messageId), '1', {
+        ex: EDIT_WAKE_WINDOW_SECONDS,
+        nx: true,
+      });
+
+      return claimed === 'OK';
+    } catch (error) {
+      log('claimEditWake failed: %O', error);
+
+      return false;
+    }
+  },
+
+  /**
+   * Counts one classifier call against the bot's UTC hour. `undefined` without Redis, so the
+   * caller decides whether to spend.
+   */
+  async countClassifierCall(applicationId: string, utcHour: string) {
+    try {
+      const redis = await getClient();
+      if (!redis) return;
+
+      const key = RedisKeys.botWake.classifierCalls(applicationId, utcHour);
+      const value = await redis.incr(key);
+      await redis.expire(key, CLASSIFIER_CALLS_TTL_SECONDS);
+
+      return value;
+    } catch (error) {
+      log('countClassifierCall failed: %O', error);
+    }
+  },
+
+  /**
+   * Reads and merges the state filed under a conversation's keys. `undefined` when Redis is
+   * unavailable (the caller treats the channel as having no history).
+   */
+  async readChannel(keys: readonly string[]): Promise<BotWakeChannelFields | undefined> {
+    try {
+      const redis = await getClient();
+      if (!redis) return;
+
+      const hashes = await pMap(keys, (key) => redis.hgetall(RedisKeys.botWake.channel(key)), {
+        concurrency: CHANNEL_READ_CONCURRENCY,
+      });
+
+      return mergeBotWakeChannelFields(hashes.map(parseFields));
+    } catch (error) {
+      log('readChannel failed: %O', error);
+    }
+  },
+
+  /**
+   * A message woke the bot: remember whose, on the conversation's own key, so a follow-up window
+   * the reply opens there counts that person's next words and not everyone else's.
+   */
+  async recordWakeAuthor(key: string, authorId: string) {
+    try {
+      const redis = await getClient();
+      if (!redis) return;
+
+      const channelKey = RedisKeys.botWake.channel(key);
+      const pipeline = redis.pipeline();
+      pipeline.hset(channelKey, 'followupAuthorId', authorId);
+      pipeline.expire(channelKey, CHANNEL_TTL_SECONDS);
+      await pipeline.exec();
+    } catch (error) {
+      log('recordWakeAuthor failed: %O', error);
+    }
+  },
+
+  /**
+   * The bot stepped back from a conversation (people told it it is interfering): until `until`,
+   * only an explicit address wakes it there. On the conversation's own key, so a thread the bot
+   * left does not silence the rest of the channel.
+   */
+  async recordStandDown(key: string, until: number) {
+    try {
+      const redis = await getClient();
+      if (!redis) return;
+
+      const channelKey = RedisKeys.botWake.channel(key);
+      const pipeline = redis.pipeline();
+      pipeline.hset(channelKey, 'standDownUntil', String(until));
+      pipeline.expire(channelKey, CHANNEL_TTL_SECONDS);
+      await pipeline.exec();
+    } catch (error) {
+      log('recordStandDown failed: %O', error);
+    }
+  },
+
+  /** The owner posted: remember when, so the bot can stay out of their conversation. */
+  async recordOwnerSpoke(keys: readonly string[], at: number) {
+    try {
+      const redis = await getClient();
+      if (!redis) return;
+
+      const pipeline = redis.pipeline();
+      for (const key of keys) {
+        const channelKey = RedisKeys.botWake.channel(key);
+        pipeline.hset(channelKey, 'ownerLastSpokeAt', String(at));
+        pipeline.expire(channelKey, CHANNEL_TTL_SECONDS);
+      }
+      await pipeline.exec();
+    } catch (error) {
+      log('recordOwnerSpoke failed: %O', error);
+    }
+  },
+
+  /**
+   * The bot posted a reply. Resets the silent-wake budget on every key given (the Discord channel
+   * and its thread) and opens the follow-up window on the last one, the conversation the bot spoke
+   * in: a reply in a Discord thread must not make the whole channel a follow-up to it.
+   */
+  async recordBotSpoke(keys: readonly string[], at: number, windowMs: number) {
+    try {
+      const redis = await getClient();
+      if (!redis || keys.length === 0) return;
+
+      await redis.eval(
+        BOT_SPOKE_SCRIPT,
+        keys.length,
+        ...keys.map((key) => RedisKeys.botWake.channel(key)),
+        CHANNEL_TTL_SECONDS,
+        String(at),
+        String(at + windowMs),
+      );
+    } catch (error) {
+      log('recordBotSpoke failed: %O', error);
+    }
+  },
+
+  /** A follow-up wake ended without the bot speaking. Returns the highest count now stored. */
+  async recordSilentWake(keys: readonly string[]) {
+    try {
+      const redis = await getClient();
+      if (!redis || keys.length === 0) return;
+
+      return await redis.eval<number>(
+        SILENT_WAKE_SCRIPT,
+        keys.length,
+        ...keys.map((key) => RedisKeys.botWake.channel(key)),
+        CHANNEL_TTL_SECONDS,
+      );
+    } catch (error) {
+      log('recordSilentWake failed: %O', error);
+    }
+  },
+
+  /**
+   * Runs `mutate` against one channel's scheduler state under a short lock, so two messages
+   * landing together cannot both open a run. The state is opaque JSON owned by the scheduler.
+   *
+   * Returns:
+   * - `mutate`'s result, or `undefined` when Redis is unavailable or the lock could not be
+   *   taken. The caller then falls back to waking immediately.
+   */
+  async mutateScheduler<TState, TResult>(
+    key: string,
+    mutate: (state: TState | undefined) => { result: TResult; state: TState },
+  ): Promise<TResult | undefined> {
+    let lockKey: string | undefined;
+    const token = randomUUID();
+
+    try {
+      const redis = await getClient();
+      if (!redis) return;
+
+      lockKey = RedisKeys.botWake.schedulerLock(key);
+      let locked = false;
+      for (let attempt = 0; attempt < LOCK_ATTEMPTS && !locked; attempt++) {
+        locked = (await redis.set(lockKey, token, { nx: true, px: LOCK_TTL_MS })) === 'OK';
+        if (!locked) await sleep(LOCK_RETRY_MS + Math.random() * LOCK_RETRY_MS);
+      }
+      if (!locked) {
+        lockKey = undefined;
+        return;
+      }
+
+      const stateKey = RedisKeys.botWake.scheduler(key);
+      const stored = await redis.get(stateKey);
+      const { result, state } = mutate(stored ? (JSON.parse(stored) as TState) : undefined);
+      await redis.set(stateKey, JSON.stringify(state), { ex: SCHEDULER_TTL_SECONDS });
+
+      return result;
+    } catch (error) {
+      log('mutateScheduler failed: %O', error);
+    } finally {
+      if (lockKey) {
+        try {
+          const redis = await getClient();
+          await redis?.eval(RELEASE_LOCK_SCRIPT, 1, lockKey, token);
+        } catch (error) {
+          log('scheduler lock release failed: %O', error);
+        }
+      }
+    }
+  },
+};

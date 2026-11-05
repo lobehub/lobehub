@@ -3,7 +3,8 @@
 import { memo, type ReactNode, useCallback } from 'react';
 
 import { PageEditor } from '@/features/PageEditor';
-import { pageActions, pageSelectors, usePageStore } from '@/store/page';
+import { invalidateDocumentMutation } from '@/services/document/invalidation';
+import { pageSelectors, usePageStore } from '@/store/page';
 
 interface PageExplorerProps {
   /** Forwarded to PageEditor. */
@@ -29,20 +30,11 @@ const PageExplorer = memo<PageExplorerProps>(({ pageId, header, fullWidthHeader,
   const title = document?.title;
   const emoji = document?.metadata?.emoji as string | undefined;
 
-  // Optimistic update handlers for title and emoji
-  const handleTitleChange = useCallback(
-    (newTitle: string) => {
-      pageActions.updatePageOptimistically(pageId, { title: newTitle });
-    },
-    [pageId],
-  );
-
-  const handleEmojiChange = useCallback(
-    (newEmoji: string | undefined) => {
-      pageActions.updatePageOptimistically(pageId, { emoji: newEmoji });
-    },
-    [pageId],
-  );
+  // PageEditor has already persisted the metadata. Only refresh its readers:
+  // a second rename would advance the server version behind the editor's back.
+  const handleMetadataSaved = useCallback(() => {
+    void invalidateDocumentMutation({ documentId: pageId, refreshDocumentEditor: false });
+  }, [pageId]);
 
   return (
     <PageEditor
@@ -53,8 +45,8 @@ const PageExplorer = memo<PageExplorerProps>(({ pageId, header, fullWidthHeader,
       pageId={pageId}
       rightPanel={rightPanel}
       title={title}
-      onEmojiChange={handleEmojiChange}
-      onTitleChange={handleTitleChange}
+      onEmojiChange={handleMetadataSaved}
+      onTitleChange={handleMetadataSaved}
     />
   );
 });

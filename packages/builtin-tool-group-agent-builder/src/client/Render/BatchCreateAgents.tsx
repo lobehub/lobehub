@@ -2,8 +2,8 @@
 
 import type { BuiltinRenderProps } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
-import { Avatar } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { Avatar } from '@lobehub/ui';
+import { createStaticStyles } from '@lobehub/ui';
 import { Users } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

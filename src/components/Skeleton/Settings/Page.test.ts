@@ -15,6 +15,16 @@ describe('resolveSettingsSkeletonBody', () => {
     expect(resolveSettingsSkeletonBody('/settings/common')).toEqual({ kind: 'section' });
   });
 
+  it('uses a per-tab sections shape for tabs that are not plain forms', () => {
+    for (const tab of ['billing', 'credits', 'plans', 'referral', 'usage']) {
+      expect(resolveSettingsSkeletonBody(`/settings/${tab}`)).toEqual({ kind: 'sections', tab });
+    }
+  });
+
+  it('ignores inherited object keys when looking up a tab shape', () => {
+    expect(resolveSettingsSkeletonBody('/settings/toString')).toEqual({ kind: 'section' });
+  });
+
   it('uses the profile shape for the default tab', () => {
     expect(resolveSettingsSkeletonBody('/settings')).toEqual({ kind: 'profile' });
     expect(resolveSettingsSkeletonBody('/settings/profile')).toEqual({ kind: 'profile' });

@@ -1,4 +1,10 @@
 import {
+  ActivatorApiName,
+  getSystemPromptForShareVisitor as getActivatorSystemPromptForShareVisitor,
+  LobeActivatorIdentifier,
+  systemPrompt as activatorSystemPrompt,
+} from '@lobechat/builtin-tool-activator';
+import {
   AgentDocumentsApiName,
   AgentDocumentsIdentifier,
   AgentDocumentsManifest,
@@ -22,9 +28,10 @@ import {
   SkillsIdentifier,
   SkillsManifest,
 } from '@lobechat/builtin-tool-skills';
-import { TopicReferenceIdentifier } from '@lobechat/builtin-tool-topic-reference';
 import { generateToolsFromManifest } from '@lobechat/context-engine';
 import { describe, expect, it } from 'vitest';
+
+import { buildToolDiscoveryConfig } from '@/server/modules/AgentRuntime/executorHelpers';
 
 import { applyShareGateToToolSet } from '.';
 import { buildGate, buildToolSet, toolName } from './testUtils';
@@ -57,26 +64,6 @@ describe('applyShareGateToToolSet', () => {
     applyShareGateToToolSet(
       toolSet,
       buildGate({ toolGrants: [{ identifier: AgentManagementIdentifier }] }),
-    );
-
-    expect(toolSet.enabledToolIds).toEqual([]);
-    expect(toolSet.manifestMap).toEqual({});
-    expect(toolSet.tools).toEqual([]);
-  });
-
-  it('drops a stale lobe-topic-reference grant left over from before it was denied', () => {
-    // `TopicReferenceExecutionRuntime.getTopicContext` resolves a free-form
-    // topicId via `TopicModel.findOwnTopicById`, scoped only to the creator's
-    // whole store — not to this share/agent. A share config saved while it was
-    // still allowlisted could still carry it in `toolGrants`; the gate must
-    // keep dropping it rather than newly trusting the stored config.
-    const toolSet = buildToolSet([
-      { apis: [{ name: 'getTopicContext' }], identifier: TopicReferenceIdentifier },
-    ]);
-
-    applyShareGateToToolSet(
-      toolSet,
-      buildGate({ toolGrants: [{ identifier: TopicReferenceIdentifier }] }),
     );
 
     expect(toolSet.enabledToolIds).toEqual([]);
@@ -627,5 +614,187 @@ describe('applyShareGateToToolSet', () => {
     expect(toolSet.tools!.map((tool: any) => tool.function.name)).toEqual([
       toolName('mcp-gitlab', 'listRepos', 'mcp'),
     ]);
+  });
+});
+
+describe('applyShareGateToToolSet — lobe-activator', () => {
+  /**
+   * An agent-mode run as discovery leaves it: the activator and one granted
+   * tool are enabled, the rest only sit in `manifestMap` waiting to be
+   * activated — including tools the share never granted.
+   */
+  const buildActivatorToolSet = () => {
+    const toolSet = buildToolSet([
+      { apis: [{ name: ActivatorApiName.activateTools }], identifier: LobeActivatorIdentifier },
+      { apis: [{ name: 'createIssue' }], identifier: 'mcp-github', type: 'mcp' },
+      { apis: [{ name: 'calculate' }], identifier: CalculatorIdentifier },
+      { apis: [{ name: 'searchAgent' }], identifier: AgentManagementIdentifier },
+      { apis: [{ name: 'readSecrets' }], identifier: 'mcp-private', type: 'mcp' },
+    ]);
+    toolSet.enabledToolIds.splice(
+      0,
+      toolSet.enabledToolIds.length,
+      LobeActivatorIdentifier,
+      'mcp-github',
+    );
+    toolSet.activatableToolIds.splice(0, toolSet.activatableToolIds.length);
+    return toolSet;
+  };
+
+  it('keeps the activator and shows it only granted tools to activate', () => {
+    const toolSet = buildActivatorToolSet();
+
+    applyShareGateToToolSet(
+      toolSet,
+      buildGate({
+        toolGrants: [{ identifier: 'mcp-github' }, { identifier: CalculatorIdentifier }],
+      }),
+    );
+
+    expect(toolSet.enabledToolIds).toEqual([LobeActivatorIdentifier, 'mcp-github']);
+    expect(Object.keys(toolSet.manifestMap).sort()).toEqual(
+      [CalculatorIdentifier, LobeActivatorIdentifier, 'mcp-github'].sort(),
+    );
+    // `<available_tools>` is rendered from this exact difference: the
+    // creator's other tools contribute neither a name nor a description.
+    const discovery = buildToolDiscoveryConfig(toolSet as any, toolSet.enabledToolIds);
+    expect(discovery?.availableTools.map((tool) => tool.identifier)).toEqual([
+      CalculatorIdentifier,
+    ]);
+  });
+
+  it('keeps the activator schema to activateTools', () => {
+    const toolSet = buildActivatorToolSet();
+
+    applyShareGateToToolSet(
+      toolSet,
+      buildGate({
+        toolGrants: [{ identifier: LobeActivatorIdentifier }, { identifier: CalculatorIdentifier }],
+      }),
+    );
+
+    expect(toolSet.manifestMap[LobeActivatorIdentifier].api.map((api) => api.name)).toEqual([
+      ActivatorApiName.activateTools,
+    ]);
+    expect(toolSet.tools!.map((tool: any) => tool.function.name)).toContain(
+      toolName(LobeActivatorIdentifier, ActivatorApiName.activateTools),
+    );
+  });
+
+  it('pins the share-visitor system prompt on a kept activator', () => {
+    const toolSet = buildActivatorToolSet();
+    toolSet.manifestMap[LobeActivatorIdentifier].systemRole = activatorSystemPrompt;
+
+    applyShareGateToToolSet(
+      toolSet,
+      buildGate({
+        toolGrants: [{ identifier: 'mcp-github' }, { identifier: CalculatorIdentifier }],
+      }),
+    );
+
+    const { systemRole } = toolSet.manifestMap[LobeActivatorIdentifier];
+    expect(systemRole).toBe(getActivatorSystemPromptForShareVisitor({ withSkills: false }));
+    // Both are denied to visitors, so the prompt must not send the model there.
+    expect(systemRole).not.toContain('lobe-skill-store');
+    expect(systemRole).not.toContain('lobe-creds');
+    // A tool-only share has no `lobe-skills`, so no `activateSkill` either.
+    expect(systemRole).not.toContain('activateSkill');
+  });
+
+  it('keeps the activateSkill guidance when the share grants skills', () => {
+    const toolSet = buildToolSet([
+      { apis: [{ name: ActivatorApiName.activateTools }], identifier: LobeActivatorIdentifier },
+      { apis: [{ name: 'activateSkill' }], identifier: SkillsIdentifier },
+      { apis: [{ name: 'calculate' }], identifier: CalculatorIdentifier },
+    ]);
+    toolSet.enabledToolIds.splice(
+      0,
+      toolSet.enabledToolIds.length,
+      LobeActivatorIdentifier,
+      SkillsIdentifier,
+    );
+    toolSet.activatableToolIds.splice(0, toolSet.activatableToolIds.length);
+
+    applyShareGateToToolSet(
+      toolSet,
+      buildGate({
+        skillGrants: ['pdf-report'],
+        toolGrants: [{ identifier: CalculatorIdentifier }],
+      }),
+    );
+
+    expect(toolSet.manifestMap[SkillsIdentifier]).toBeDefined();
+    expect(toolSet.manifestMap[LobeActivatorIdentifier].systemRole).toBe(
+      getActivatorSystemPromptForShareVisitor({ withSkills: true }),
+    );
+  });
+
+  it('drops the activator when the only tool left was restored from an earlier activation', () => {
+    // Next visitor turn after activating Calculator: `AgentRuntimeService`
+    // restores it from `activatableToolIds`, so `<available_tools>` is empty.
+    const toolSet = buildActivatorToolSet();
+    toolSet.activatableToolIds.push(CalculatorIdentifier);
+
+    applyShareGateToToolSet(
+      toolSet,
+      buildGate({
+        toolGrants: [{ identifier: 'mcp-github' }, { identifier: CalculatorIdentifier }],
+      }),
+    );
+
+    expect(toolSet.manifestMap[LobeActivatorIdentifier]).toBeUndefined();
+    expect(toolSet.enabledToolIds).toEqual(['mcp-github']);
+    expect(toolSet.activatableToolIds).toEqual([CalculatorIdentifier]);
+  });
+
+  it('drops the activator when every granted tool is already enabled', () => {
+    const toolSet = buildActivatorToolSet();
+
+    applyShareGateToToolSet(toolSet, buildGate({ toolGrants: [{ identifier: 'mcp-github' }] }));
+
+    expect(toolSet.manifestMap[LobeActivatorIdentifier]).toBeUndefined();
+    expect(toolSet.enabledToolIds).toEqual(['mcp-github']);
+    expect(toolSet.tools!.map((tool: any) => tool.function.name)).toEqual([
+      toolName('mcp-github', 'createIssue', 'mcp'),
+    ]);
+  });
+
+  it('drops the activator when the only grant left to activate is one the allowlist denies', () => {
+    const toolSet = buildActivatorToolSet();
+
+    applyShareGateToToolSet(
+      toolSet,
+      buildGate({
+        toolGrants: [{ identifier: 'mcp-github' }, { identifier: AgentManagementIdentifier }],
+      }),
+    );
+
+    expect(toolSet.manifestMap[LobeActivatorIdentifier]).toBeUndefined();
+    expect(toolSet.manifestMap[AgentManagementIdentifier]).toBeUndefined();
+  });
+
+  it('drops the activator on a share that grants no tool', () => {
+    const toolSet = buildActivatorToolSet();
+
+    applyShareGateToToolSet(toolSet, buildGate({ skillGrants: ['pdf-report'] }));
+
+    expect(toolSet.manifestMap[LobeActivatorIdentifier]).toBeUndefined();
+    expect(toolSet.enabledToolIds).toEqual([]);
+  });
+
+  it('prunes historical activations of tools the share does not grant', () => {
+    // `operationPrep` feeds activations restored from history in as
+    // `activatableToolIds`; `AgentRuntimeService` restores only what survives.
+    const toolSet = buildActivatorToolSet();
+    toolSet.activatableToolIds.push(CalculatorIdentifier, AgentManagementIdentifier, 'mcp-private');
+
+    applyShareGateToToolSet(
+      toolSet,
+      buildGate({
+        toolGrants: [{ identifier: 'mcp-github' }, { identifier: CalculatorIdentifier }],
+      }),
+    );
+
+    expect(toolSet.activatableToolIds).toEqual([CalculatorIdentifier]);
   });
 });

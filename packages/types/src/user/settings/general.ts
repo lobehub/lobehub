@@ -1,4 +1,4 @@
-import type { HighlighterProps, MermaidProps, NeutralColors, PrimaryColors } from '@lobehub/ui';
+import type { HighlighterProps, LobePrimaryColor, MermaidProps, NeutralColors } from '@lobehub/ui';
 
 import type { ResponseAnimationStyle } from '../../aiProvider';
 
@@ -22,6 +22,12 @@ export interface UserGeneralConfig {
    */
   enableMessageLinkIcon?: boolean;
   /**
+   * Whether Markdown pasted into the chat input is converted into rich text.
+   * Off keeps the pasted text verbatim.
+   * @default true
+   */
+  enablePasteAutoConvert?: boolean;
+  /**
    * Whether a turn's tool workflow starts expanded while the agent is still
    * running. Off keeps the running turn to a single live headline row.
    * @default false
@@ -38,7 +44,7 @@ export interface UserGeneralConfig {
   isLiteMode: boolean;
   mermaidTheme?: MermaidProps['theme'];
   neutralColor?: NeutralColors;
-  primaryColor?: PrimaryColors;
+  primaryColor?: LobePrimaryColor;
   responseLanguage?: string;
   telemetry: boolean;
   timezone?: string;

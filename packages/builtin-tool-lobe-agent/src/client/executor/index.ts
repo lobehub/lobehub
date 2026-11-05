@@ -481,6 +481,17 @@ class LobeAgentExecutor extends BaseExecutor<typeof LobeAgentApiName> {
       };
     }
 
+    // Background delivery wakes the parent through the server runtime, which
+    // this runtime does not have. Running it in the foreground instead would
+    // block a turn the model expected to keep going.
+    if (params.runInBackground) {
+      return {
+        content:
+          'Background sub-agents (runInBackground) are not supported in this runtime. Call callSubAgent again without runInBackground to wait for the result.',
+        success: false,
+      };
+    }
+
     if (!ctx.subAgent) {
       return { content: 'Sub-agent execution is not available in this runtime.', success: false };
     }

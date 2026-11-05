@@ -1,4 +1,5 @@
 import { MARKET_AUTH_REQUIRED_MESSAGE } from '@lobechat/desktop-bridge';
+import { MarketAPIError } from '@lobehub/market-sdk';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import { z } from 'zod';
@@ -24,7 +25,9 @@ import {
   processContentBlocks,
 } from '@/server/services/mcp/contentProcessor';
 import { createSandboxService, resolveSandboxSessionConfig } from '@/server/services/sandbox';
+import { isSandboxAuthError } from '@/server/services/sandbox/errors';
 import { preprocessLhCommand } from '@/server/services/toolExecution/preprocessLhCommand';
+import { SkillConnectionErrorCode } from '@/types/skillConnectionError';
 
 import { scheduleToolCallReport } from './_helpers';
 import {
@@ -34,20 +37,6 @@ import {
 } from './_helpers/marketConnections';
 
 const log = debug('lobe-server:tools:market');
-
-const isSandboxAuthError = (error?: { message?: string; name?: string }) => {
-  const code = error?.name;
-  const message = error?.message || '';
-
-  return (
-    code === 'invalid_token' ||
-    code === 'token_expired' ||
-    code === 'unauthorized' ||
-    message.toLowerCase().includes('invalid_token') ||
-    message.toLowerCase().includes('token expired') ||
-    message.toLowerCase().includes('unauthorized')
-  );
-};
 
 const throwSandboxAuthError = () => {
   throw new TRPCError({
@@ -318,6 +307,7 @@ const execInSandboxHandler = async ({
       fileService: ctx.fileService,
       marketService,
       sandboxCwd: sandbox.cwd,
+      sandboxInitialization: sandbox.initialization,
       sandboxInstanceId: sandbox.environment,
       sandboxMode: sandbox.mode,
       sandboxSpecification: sandbox.specification,
@@ -508,17 +498,22 @@ export const marketRouter = router({
         const errorMessage = (error as Error).message;
         log('connectCallTool error: %s', errorMessage);
 
-        if (errorMessage.includes('NOT_CONNECTED')) {
+        // The SDK carries the machine code in `error.code`; the message is human text.
+        // Not UNAUTHORIZED: that code opens the LobeHub / Market re-login flows (see
+        // createResponseMeta), and a provider connection is neither. The client tells
+        // these apart by `errorData.code`.
+        const connectionCode =
+          error instanceof MarketAPIError
+            ? Object.values(SkillConnectionErrorCode).find((code) => error.isErrorCode(code))
+            : undefined;
+        if (connectionCode) {
           throw new TRPCError({
-            code: 'UNAUTHORIZED',
-            message: 'Provider not connected. Please authorize first.',
-          });
-        }
-
-        if (errorMessage.includes('TOKEN_EXPIRED')) {
-          throw new TRPCError({
-            code: 'UNAUTHORIZED',
-            message: 'Token expired. Please re-authorize.',
+            cause: { data: { code: connectionCode } },
+            code: 'PRECONDITION_FAILED',
+            message:
+              connectionCode === SkillConnectionErrorCode.NotConnected
+                ? 'Provider not connected. Please authorize first.'
+                : 'Token expired. Please re-authorize.',
           });
         }
 

@@ -1,16 +1,16 @@
 'use client';
 
-import type {
-  FileTreeDirectoryHandle,
-  FileTreeItemHandle,
-  FileTreeOptions,
-  FileTreeRowDecoration,
-} from '@pierre/trees';
-import { FileTree as PierreFileTree, useFileTree, useFileTreeSelection } from '@pierre/trees/react';
-import debug from 'debug';
-import type { DragEvent, ForwardedRef, KeyboardEvent, MouseEvent } from 'react';
 import {
-  forwardRef,
+  FileTree as FileTreeModel,
+  type FileTreeDirectoryHandle,
+  type FileTreeItemHandle,
+  type FileTreeOptions,
+  type FileTreeRowDecoration,
+} from '@pierre/trees';
+import { FileTree as PierreFileTree, useFileTreeSelection } from '@pierre/trees/react';
+import debug from 'debug';
+import type { DragEvent, KeyboardEvent, MouseEvent } from 'react';
+import {
   useCallback,
   useImperativeHandle,
   useLayoutEffect,
@@ -23,6 +23,7 @@ import { useSingleton } from '@/hooks/useSingleton';
 
 import { arrayEqual, normalizeTree, remapIdsToPaths, remapPathsToIds } from '../adapter';
 import { extractName, toCanonicalTreePath } from '../adapter/path';
+import { buildSortSignature, createPathComparator } from '../adapter/sort';
 import { cssString } from '../folderIconStyle';
 import type {
   ExplorerTreeHandle,
@@ -41,8 +42,6 @@ const asDirectory = (
   handle: FileTreeItemHandle | null | undefined,
 ): FileTreeDirectoryHandle | null =>
   handle && handle.isDirectory() ? (handle as FileTreeDirectoryHandle) : null;
-
-type FileTreeModel = ReturnType<typeof useFileTree>['model'];
 
 // @pierre/trees walks a lookup path segment by segment and asks for each
 // intermediate node's directory child index *before* checking that the node is
@@ -100,14 +99,11 @@ interface ExplorerTreeInnerProps<TData> extends ExplorerTreeProps<TData> {
   requestTreeRebuild: () => void;
 }
 
-function ExplorerTreeInner<TData>(
-  props: ExplorerTreeInnerProps<TData>,
-  ref: ForwardedRef<ExplorerTreeHandle>,
-) {
+function ExplorerTreeInner<TData>(props: ExplorerTreeInnerProps<TData>) {
   const propsRef = useRef(props);
   propsRef.current = props;
 
-  const { requestTreeRebuild } = props;
+  const { ref, requestTreeRebuild } = props;
 
   const adapterRef = useSingleton(() => ({
     current: normalizeTree(props.nodes),
@@ -120,6 +116,10 @@ function ExplorerTreeInner<TData>(
   const suppressModelEventsRef = useRef(false);
   const renamingRef = useRef(false);
   const pendingCreateRef = useRef<PendingCreate | null>(null);
+  // The sibling order the model currently draws (see buildSortSignature).
+  const drawnSortSignatureRef = useSingleton(() => ({
+    current: buildSortSignature(adapterRef.current, props.sort),
+  }));
 
   const initialOptions = useMemo((): FileTreeOptions => {
     const initial = adapterRef.current;
@@ -224,6 +224,12 @@ function ExplorerTreeInner<TData>(
       },
       overscan: props.overscan,
       paths: initial.paths,
+      ...(props.sort && {
+        sort: createPathComparator(
+          () => adapterRef.current,
+          () => propsRef.current.sort,
+        ),
+      }),
       renaming: {
         canRename: (item) => {
           const path = toCanonicalTreePath(item.path, item.isFolder);
@@ -282,7 +288,12 @@ function ExplorerTreeInner<TData>(
   }, []);
 
   const renamingNodeRef = useRef<ExplorerTreeNode<TData> | null>(null);
-  const { model } = useFileTree(initialOptions);
+  // Not `useFileTree`: it destroys the model in an effect cleanup, which also
+  // runs when an <Activity> ancestor hides the tree (the working sidebar). On
+  // reveal the tree kept using the destroyed model and fell back to the paths it
+  // was created with. The model holds no global listeners, so garbage collection
+  // releases it after a real unmount, and <PierreFileTree> detaches its DOM.
+  const model = useSingleton(() => new FileTreeModel(initialOptions));
 
   // Drops whatever the tree applied optimistically (rename, drop, new row) by
   // re-applying the current nodes, keeping expansion, selection and focus.
@@ -493,6 +504,7 @@ function ExplorerTreeInner<TData>(
       model.resetPaths(next.paths, {
         initialExpandedPaths,
       });
+      drawnSortSignatureRef.current = buildSortSignature(next, propsRef.current.sort);
       for (const path of nextSelectedPaths) {
         getItemSafely(model, path)?.select();
       }
@@ -510,7 +522,19 @@ function ExplorerTreeInner<TData>(
     } finally {
       suppressModelEventsRef.current = false;
     }
-  }, [adapterRef, props.nodes, model, requestTreeRebuild]);
+  }, [adapterRef, drawnSortSignatureRef, props.nodes, model, requestTreeRebuild]);
+
+  // Runs after the nodes effect above. The tree only sorts when it rebuilds its
+  // paths, so a new comparator, or data that reorders rows under unchanged
+  // paths (a document edited while sorting by update time), needs a re-apply.
+  useLayoutEffect(() => {
+    const signature = buildSortSignature(adapterRef.current, props.sort);
+    if (signature === drawnSortSignatureRef.current) return;
+    // Re-applying would drop an open name input; retry on the next change.
+    if (renamingRef.current || pendingCreateRef.current) return;
+    resyncRef.current();
+    drawnSortSignatureRef.current = signature;
+  }, [adapterRef, drawnSortSignatureRef, props.nodes, props.sort]);
 
   // Runs after the nodes effect above, so it reads the paths just applied. On
   // first mount the shadow root can attach a frame after this effect, so the
@@ -716,24 +740,17 @@ function ExplorerTreeInner<TData>(
   );
 }
 
-const ExplorerTreeInnerWithRef = forwardRef(ExplorerTreeInner) as <TData>(
-  props: ExplorerTreeInnerProps<TData> & { ref?: ForwardedRef<ExplorerTreeHandle> },
-) => ReturnType<typeof ExplorerTreeInner>;
-
 // Owns the escape hatch for an unusable tree model: bumping the generation
 // remounts the inner component, which builds a fresh model from the current
 // paths. Kept in a parent so the inner component can ask for its own remount.
-function ExplorerTree<TData>({
-  ref,
-  ...props
-}: ExplorerTreeProps<TData> & { ref?: ForwardedRef<ExplorerTreeHandle> }) {
+function ExplorerTree<TData>({ ref, ...props }: ExplorerTreeProps<TData>) {
   const [generation, setGeneration] = useState(0);
   const requestTreeRebuild = useCallback(() => setGeneration((value) => value + 1), []);
 
   return (
-    <ExplorerTreeInnerWithRef
-      {...props}
+    <ExplorerTreeInner
       key={generation}
+      {...props}
       ref={ref}
       requestTreeRebuild={requestTreeRebuild}
     />

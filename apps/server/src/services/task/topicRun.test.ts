@@ -122,6 +122,15 @@ describe('TopicRunService', () => {
       ).resolves.toBeUndefined();
     });
 
+    it('leaves the topic of an archived Task as an ordinary conversation', async () => {
+      taskTopicModel.findByTopicId.mockResolvedValue(run);
+      taskModel.findById.mockResolvedValue({ ...task, archivedAt: new Date() });
+
+      await expect(
+        new TopicRunService(db, userId).resolveOwnableRun(topicId),
+      ).resolves.toBeUndefined();
+    });
+
     it('refuses a run whose Task is gone', async () => {
       taskTopicModel.findByTopicId.mockResolvedValue(run);
       taskModel.findById.mockResolvedValue(null);
@@ -181,6 +190,15 @@ describe('TopicRunService', () => {
         new TopicRunService(db, userId).reopen({ link, operationId: 'op-answer' }),
       ).resolves.toBe('refused');
       expect(taskTopicModel.reopenSettledRun).not.toHaveBeenCalled();
+    });
+
+    it('refuses a Task archived while the run was starting', async () => {
+      taskModel.findById.mockResolvedValue({ ...task, archivedAt: new Date() });
+
+      await expect(
+        new TopicRunService(db, userId).reopen({ link, operationId: 'op-answer' }),
+      ).resolves.toBe('refused');
+      expect(taskModel.updateStatusIfCurrent).not.toHaveBeenCalled();
     });
 
     it('refuses a Task deleted while the run was starting', async () => {

@@ -340,18 +340,6 @@ describe('GroupManagementExecutor', () => {
       });
     });
 
-    it('should not fail when groupOrchestration is not available', async () => {
-      const ctx = createMockContext();
-
-      const result = await groupManagementExecutor.executeAgentTask(
-        { agentId: 'agent-1', instruction: 'Do something', title: 'Test Task' },
-        ctx,
-      );
-
-      expect(result.success).toBe(true);
-      expect(result.stop).toBe(true);
-    });
-
     it('should include timeout in state when provided', async () => {
       const ctx = createMockContext();
 
@@ -423,6 +411,26 @@ describe('GroupManagementExecutor', () => {
 
       expect(result.success).toBe(false);
       expect(result.content).toBe('Failed to interrupt task: Task not found');
+    });
+  });
+
+  describe('vote', () => {
+    it('should return an explicit failure instead of a success-shaped stub', async () => {
+      const ctx = createMockContext();
+
+      const result = await groupManagementExecutor.vote(
+        {
+          options: [
+            { id: 'a', label: 'Option A' },
+            { id: 'b', label: 'Option B' },
+          ],
+          question: 'Which design should we pick?',
+        },
+        ctx,
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.content).toContain('broadcast');
     });
   });
 });

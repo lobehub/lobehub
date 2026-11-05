@@ -1,16 +1,16 @@
 'use client';
 
 import type { EnvironmentVisibility } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
 import {
   Button,
   confirmModal,
   createModal,
+  Flexbox,
   Input,
   ModalFooter,
   Text,
   useModalContext,
-} from '@lobehub/ui/base-ui';
+} from '@lobehub/ui';
 import { t as translate } from 'i18next';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -19,25 +19,22 @@ import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
 import { useIMECompositionEvent } from '@/hooks/useIMECompositionEvent';
 
 import GithubRepositoryPicker, { type GithubRepositorySelection } from './GithubRepositoryPicker';
-import { useEnvironmentActions } from './useEnvironmentData';
+import { type CreatedEnvironment, useEnvironmentActions } from './useEnvironmentData';
 
 /**
- * Naming a new environment.
+ * Naming a new code environment, after picking the repository it checks out.
  *
  * A dialog rather than a field parked in the page: creating is one action among
  * several this page offers, and an input sitting in the body reads as a setting
- * you are meant to fill in. The name is the only thing asked for — everything
- * else about an environment is edited once it exists, where the form can
- * explain what each part does.
+ * you are meant to fill in. Everything else about an environment is edited once
+ * it exists, where the form can explain what each part does.
+ *
+ * There is one kind. A folder of files someone hands an agent is a folder on
+ * the drive, picked in the directory picker — not an environment.
  */
 interface CreateEnvironmentContentProps {
-  /**
-   * Called with the new environment's id once it exists. An environment is a
-   * specification; nothing runs in it until it has an instance, so creating one
-   * is the middle of the task rather than the end of it and the caller takes
-   * the person to that next step instead of returning them to a list.
-   */
-  onCreated?: (environmentId: string) => void;
+  /** Called with the new environment once it exists; the caller opens it. */
+  onCreated?: (environment: CreatedEnvironment) => void;
   visibility?: EnvironmentVisibility;
 }
 
@@ -81,6 +78,7 @@ const CreateEnvironmentContent = memo<CreateEnvironmentContentProps>(
           // filtered by — those differ for a repository reached as a collaborator.
           configuration: repository
             ? {
+                kind: 'code',
                 sources: [
                   {
                     kind: 'git',
@@ -89,7 +87,7 @@ const CreateEnvironmentContent = memo<CreateEnvironmentContentProps>(
                   },
                 ],
               }
-            : undefined,
+            : { kind: 'code' },
           name: trimmed,
           // Created into the pool the person is looking at. Opening the dialog
           // from the Private tab and having the result land in the workspace's
@@ -98,8 +96,8 @@ const CreateEnvironmentContent = memo<CreateEnvironmentContentProps>(
         });
         close();
         // After the dialog, not instead of it: the person sees the environment
-        // land and is then asked for the one thing that makes it runnable.
-        if (created?.id) onCreated?.(created.id);
+        // land in the list.
+        if (created?.id) onCreated?.(created);
       } catch (cause) {
         // The one failure the user can act on is a name already taken, and it is
         // fixed by typing a different one — so it belongs next to the field
@@ -124,7 +122,7 @@ const CreateEnvironmentContent = memo<CreateEnvironmentContentProps>(
       if (visibility !== 'public') return void create();
 
       confirmModal({
-        content: <VisibilityConfirmContent capturedState variant={'publish'} />,
+        content: <VisibilityConfirmContent variant={'publish'} />,
         okText: t('environments.create'),
         onOk: create,
         title: t('environments.visibility.createPublishedConfirmTitle'),
@@ -133,10 +131,10 @@ const CreateEnvironmentContent = memo<CreateEnvironmentContentProps>(
 
     return (
       <>
-        {/* Repository first, name second. The name is the harder question and the
-          repository usually answers it, so asking for the name first makes the
-          person invent something they are about to be handed. */}
         <Flexbox gap={12} paddingBlock={8} paddingInline={16}>
+          {/* Repository first, name second. The name is the harder question and the
+            repository usually answers it, so asking for the name first makes the
+            person invent something they are about to be handed. */}
           <GithubRepositoryPicker value={repository} onChange={pickRepository} onLeave={close} />
 
           <Flexbox gap={6}>
@@ -184,7 +182,7 @@ CreateEnvironmentContent.displayName = 'CreateEnvironmentContent';
 
 export const openCreateEnvironmentModal = (
   visibility?: EnvironmentVisibility,
-  onCreated?: (environmentId: string) => void,
+  onCreated?: (environment: CreatedEnvironment) => void,
 ) =>
   createModal({
     content: <CreateEnvironmentContent visibility={visibility} onCreated={onCreated} />,

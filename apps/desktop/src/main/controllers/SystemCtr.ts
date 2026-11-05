@@ -94,7 +94,10 @@ export default class SystemController extends ControllerModule {
   }
 
   @IpcMethod()
-  requestAccessibilityAccess() {
+  async requestAccessibilityAccess(): Promise<boolean> {
+    if (await this.app.permissionGuide.open('accessibility')) {
+      return getAccessibilityStatus() === 'granted';
+    }
     return requestAccessibilityAccess();
   }
 
@@ -135,6 +138,8 @@ export default class SystemController extends ControllerModule {
       logger.info('[FullDiskAccess] Not macOS, returning granted');
       return 'granted';
     }
+
+    if (await this.app.permissionGuide.open('fullDisk')) return 'opened_settings';
 
     const mainWindow = this.app.browserManager.getMainWindow()?.browserWindow;
 
@@ -181,11 +186,15 @@ export default class SystemController extends ControllerModule {
 
   @IpcMethod()
   async requestScreenAccess(): Promise<boolean> {
+    if (await this.app.permissionGuide.open('screen')) {
+      return getMediaAccessStatus('screen') === 'granted';
+    }
     return requestScreenCaptureAccess();
   }
 
   @IpcMethod()
   async openFullDiskAccessSettings() {
+    if (await this.app.permissionGuide.open('fullDisk')) return;
     return openFullDiskAccessSettings();
   }
 

@@ -1,18 +1,13 @@
 'use client';
 
 import { Github } from '@lobehub/icons';
-import { Flexbox } from '@lobehub/ui';
-import { ActionIcon, Button, Switch, Text, toast } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
-import { FolderGit2Icon, HardDriveIcon, InfoIcon, PencilIcon, TerminalIcon } from 'lucide-react';
+import { ActionIcon, Button, createStaticStyles, cssVar, Flexbox, Text, toast } from '@lobehub/ui';
+import { FolderGit2Icon, InfoIcon, PencilIcon, TerminalIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 
-import {
-  type SandboxEnvironmentSpecification,
-  sandboxStorageService,
-} from '@/services/sandboxStorage';
+import { environmentService, type SandboxEnvironmentSpecification } from '@/services/environment';
 
 import EnvironmentVariables from './EnvironmentVariables';
 import { describeError } from './errorMessage';
@@ -56,12 +51,6 @@ interface EnvironmentFormProps {
   section: EnvironmentFormSection;
 }
 
-/**
- * Network access is on unless someone says otherwise, and an untouched
- * specification carries nothing rather than pinning the default into storage.
- */
-const DEFAULT_INTERNET_ACCESS = true;
-
 /** Drop the keys a blank value would otherwise store as empty. */
 const compact = (configuration: SandboxEnvironmentSpecification): SandboxEnvironmentSpecification =>
   Object.fromEntries(
@@ -98,7 +87,7 @@ const BranchField = memo<{
   const [editing, setEditing] = useState(false);
   const { data, error, isLoading } = useSWR(
     editing ? ['sandbox-github-branches', owner, repository] : null,
-    () => sandboxStorageService.listGithubBranches({ owner, repository }),
+    () => environmentService.listGithubBranches({ owner, repository }),
   );
 
   const canPick = !error && data?.connected !== false && !data?.truncated;
@@ -119,9 +108,9 @@ BranchField.displayName = 'EnvironmentBranchField';
 
 /**
  * An environment's specification: where its source material comes from and
- * what makes it usable. This is the record of what the environment IS; what a
- * sandbox has built from it is a cache, which is why editing here marks every
- * working copy as needing a rebuild rather than changing one.
+ * what makes it usable. An environment is a one-time initializer: the next
+ * working directory it is applied to is cloned and set up from what is saved
+ * here, and a folder it was already applied to is left as it is.
  *
  * Every field saves on its own the moment it is confirmed — Railway's settings
  * page is the reference. There is no draft and no save button: the old one sat
@@ -134,14 +123,7 @@ const EnvironmentForm = memo<EnvironmentFormProps>(({ environment, onSave, secti
   const [pickingRepository, setPickingRepository] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  /**
-   * Write one change to the specification. The toast is the only trace a
-   * per-field save leaves, so it carries the one consequence worth knowing
-   * when there is one: a change to what a build depends on — sources, the
-   * setup command, variables — puts every instance behind the specification.
-   * The rest (maintenance command, network, regenerable paths) applies to the
-   * next session as it is and says only "saved".
-   */
+  /** Write one change to the specification; the toast is the only trace a per-field save leaves. */
   const saveConfiguration = async (changes: Partial<SandboxEnvironmentSpecification>) => {
     const next = compact({ ...configuration, ...changes });
     await onSave({ configuration: next });
@@ -209,7 +191,7 @@ const EnvironmentForm = memo<EnvironmentFormProps>(({ environment, onSave, secti
       <TabPane
         desc={
           <>
-            {t('environments.form.envHint')} {t('environments.form.appliesOnBuild')}
+            {t('environments.form.envHint')} {t('environments.form.appliesOnInit')}
           </>
         }
       >
@@ -221,27 +203,31 @@ const EnvironmentForm = memo<EnvironmentFormProps>(({ environment, onSave, secti
     );
   }
 
+  const basics = (
+    <PanelSection
+      desc={t('environments.form.desc')}
+      icon={InfoIcon}
+      title={t('environments.form.basics')}
+    >
+      <InlineField
+        required
+        label={t('environments.nameLabel')}
+        placeholder={t('environments.namePlaceholder')}
+        value={environment.name}
+        onSave={(name) => onSave({ name })}
+      />
+      <InlineField
+        label={t('environments.form.description')}
+        placeholder={t('environments.form.descriptionPlaceholder')}
+        value={environment.description ?? ''}
+        onSave={(description) => onSave({ description })}
+      />
+    </PanelSection>
+  );
+
   return (
     <Flexbox>
-      <PanelSection
-        desc={t('environments.form.desc')}
-        icon={InfoIcon}
-        title={t('environments.form.basics')}
-      >
-        <InlineField
-          required
-          label={t('environments.nameLabel')}
-          placeholder={t('environments.namePlaceholder')}
-          value={environment.name}
-          onSave={(name) => onSave({ name })}
-        />
-        <InlineField
-          label={t('environments.form.description')}
-          placeholder={t('environments.form.descriptionPlaceholder')}
-          value={environment.description ?? ''}
-          onSave={(description) => onSave({ description })}
-        />
-      </PanelSection>
+      {basics}
 
       <PanelSection
         desc={t('environments.form.sourcesHint')}
@@ -257,7 +243,7 @@ const EnvironmentForm = memo<EnvironmentFormProps>(({ environment, onSave, secti
              cannot do it. Repeated on the setup section and the variables tab,
              which are governed by the same snapshot. */
           <Text fontSize={12} type={'secondary'}>
-            {t('environments.form.appliesOnBuild')}
+            {t('environments.form.appliesOnInit')}
           </Text>
         }
       >
@@ -326,15 +312,12 @@ const EnvironmentForm = memo<EnvironmentFormProps>(({ environment, onSave, secti
       </PanelSection>
 
       <PanelSection
+        last
         icon={TerminalIcon}
         title={t('environments.form.setup')}
         notice={
-          /* The setup command's half of it. The maintenance command below
-             runs every time work resumes, which is the whole reason the two
-             are separate fields — but it is read from the same snapshot, so
-             an edit to it reaches new instances too. */
           <Text fontSize={12} type={'secondary'}>
-            {t('environments.form.appliesOnBuild')}
+            {t('environments.form.appliesOnInit')}
           </Text>
         }
       >
@@ -345,58 +328,6 @@ const EnvironmentForm = memo<EnvironmentFormProps>(({ environment, onSave, secti
           placeholder={'pnpm install'}
           value={configuration.bootstrapCommand ?? ''}
           onSave={(bootstrapCommand) => saveConfiguration({ bootstrapCommand })}
-        />
-        <InlineField
-          multiline
-          desc={t('environments.form.maintenanceHint')}
-          label={t('environments.form.maintenance')}
-          placeholder={'git pull --ff-only'}
-          value={configuration.maintenanceCommand ?? ''}
-          onSave={(maintenanceCommand) => saveConfiguration({ maintenanceCommand })}
-        />
-      </PanelSection>
-
-      <PanelSection last icon={HardDriveIcon} title={t('environments.form.runtime')}>
-        <Flexbox horizontal align={'center'} gap={16} justify={'space-between'}>
-          <Flexbox gap={2}>
-            <Text fontSize={12} weight={500}>
-              {t('environments.form.internetAccess')}
-            </Text>
-            <Text fontSize={12} type={'secondary'}>
-              {t('environments.form.internetAccessHint')}
-            </Text>
-          </Flexbox>
-          <Switch
-            checked={configuration.internetAccess ?? DEFAULT_INTERNET_ACCESS}
-            disabled={busy}
-            onChange={(internetAccess) =>
-              run(() =>
-                saveConfiguration({
-                  // The default is not stored: an environment that never
-                  // mentions the network must keep meaning "on".
-                  internetAccess:
-                    internetAccess === DEFAULT_INTERNET_ACCESS ? undefined : internetAccess,
-                }),
-              )
-            }
-          />
-        </Flexbox>
-        <InlineField
-          multiline
-          desc={t('environments.form.excludeHint')}
-          label={t('environments.form.exclude')}
-          placeholder={'dist\n.cache'}
-          // One path per line: a list of paths is a list of lines everywhere
-          // else a person meets one.
-          value={(configuration.excludePaths ?? []).join('\n')}
-          onSave={(excludePaths) =>
-            saveConfiguration({
-              excludePaths: excludePaths
-                .split('\n')
-                .map((line) => line.trim())
-                .filter(Boolean),
-            })
-          }
         />
       </PanelSection>
     </Flexbox>

@@ -14,7 +14,7 @@ import type {
   GoalNodeWorkVersionRelation,
   GoalStatus,
 } from '@lobechat/types';
-import { experimentMembers, experimentOwner, experimentStatus } from '@lobechat/utils/goalGraph';
+import { experimentStatus } from '@lobechat/utils/goalGraph';
 import {
   and,
   asc,
@@ -43,6 +43,7 @@ import { works, workVersions } from '../schemas/work';
 import type { LobeChatDatabase, Transaction } from '../type';
 import { notTrashed } from '../utils/softDelete';
 import { buildWorkspaceWhere } from '../utils/workspace';
+import { assertContainerEdge } from './goalEdgeRules';
 import { workOwnership } from './work/context';
 
 interface EventInput {
@@ -63,6 +64,8 @@ interface CreateNodeInput {
   kind: GoalNodeKind;
   priority?: number;
   questionId?: string;
+  /** Why the node was created this way, kept on its `created` event. */
+  reason?: string;
   scopeId?: string;
   status?: GoalNodeStatus;
   title: string;
@@ -550,7 +553,9 @@ export class GoalGraphModel {
 
     const depthOfRow = (row: (typeof rows)[number]) =>
       Math.min(
+        /* v8 ignore start -- unreachable `?? Infinity`: the join keeps only nodes whose taskId is in taskIds, which are exactly depthOf's keys */
         row.nodeTaskId ? (depthOf.get(row.nodeTaskId) ?? Infinity) : Infinity,
+        /* v8 ignore stop */
         row.subjectType === 'task' && row.carrierTaskId
           ? (depthOf.get(row.carrierTaskId) ?? Infinity)
           : Infinity,
@@ -563,10 +568,96 @@ export class GoalGraphModel {
     return nearest ? { id: nearest.id, title: nearest.title } : undefined;
   };
 
+  /**
+   * {@link findGoalByTaskId} for many tasks in two queries, with the same
+   * nearest-ancestor rule and the goal's status — for bulk task writes that
+   * must not probe each task on its own. Tasks without a goal are absent.
+   */
+  findGoalsByTaskIds = async (
+    taskIds: string[],
+  ): Promise<Map<string, { id: string; status: string; title: string }>> => {
+    const result = new Map<string, { id: string; status: string; title: string }>();
+    if (taskIds.length === 0) return result;
+
+    const chain = await this.db.execute<{ depth: number; id: string; root: string }>(sql`
+      WITH RECURSIVE chain(root, id, depth, visited) AS (
+        SELECT ${tasks.id}, ${tasks.id}, 0, ARRAY[${tasks.id}] FROM ${tasks}
+        WHERE ${tasks.id} IN (${sql.join(
+          taskIds.map((id) => sql`${id}`),
+          sql`, `,
+        )})
+        UNION ALL
+        SELECT chain.root, ${tasks.parentTaskId}, chain.depth + 1, chain.visited || ${tasks.parentTaskId}
+        FROM ${tasks} JOIN chain ON ${tasks.id} = chain.id
+        WHERE ${tasks.parentTaskId} IS NOT NULL
+          AND NOT (${tasks.parentTaskId} = ANY(chain.visited))
+      )
+      SELECT root, id, depth FROM chain
+    `);
+    // ancestor id → every selected root it sits above, with its distance.
+    const rootsOf = new Map<string, { depth: number; root: string }[]>();
+    for (const row of chain.rows) {
+      const list = rootsOf.get(row.id) ?? [];
+      list.push({ depth: Number(row.depth), root: row.root });
+      rootsOf.set(row.id, list);
+    }
+    const chainIds = [...rootsOf.keys()];
+    if (chainIds.length === 0) return result;
+
+    const rows = await this.db
+      .select({
+        carrierTaskId: goals.subjectId,
+        createdAt: goals.createdAt,
+        id: goals.id,
+        nodeTaskId: goalNodes.taskId,
+        status: goals.status,
+        subjectType: goals.subjectType,
+        title: goals.title,
+      })
+      .from(goals)
+      .leftJoin(goalNodes, and(eq(goalNodes.goalId, goals.id), inArray(goalNodes.taskId, chainIds)))
+      .where(
+        and(
+          this.ownership(),
+          or(
+            inArray(goalNodes.taskId, chainIds),
+            and(eq(goals.subjectType, 'task'), inArray(goals.subjectId, chainIds)),
+          ),
+        ),
+      );
+
+    const best = new Map<
+      string,
+      { createdAt: number; depth: number; row: (typeof rows)[number] }
+    >();
+    const consider = (anchorId: string | null, row: (typeof rows)[number]) => {
+      if (!anchorId) return;
+      for (const { depth, root } of rootsOf.get(anchorId) ?? []) {
+        const createdAt = new Date(row.createdAt).getTime();
+        const current = best.get(root);
+        if (
+          !current ||
+          depth < current.depth ||
+          (depth === current.depth && createdAt > current.createdAt)
+        ) {
+          best.set(root, { createdAt, depth, row });
+        }
+      }
+    };
+    for (const row of rows) {
+      consider(row.nodeTaskId, row);
+      if (row.subjectType === 'task') consider(row.carrierTaskId, row);
+    }
+    for (const [root, { row }] of best) {
+      result.set(root, { id: row.id, status: row.status, title: row.title });
+    }
+    return result;
+  };
+
   createNode = async (goalId: string, input: CreateNodeInput) =>
     this.db.transaction(async (tx) => {
       if (!(await this.ownedGoal(goalId, tx))) return undefined;
-      const { scopeId, questionId, ...values } = input;
+      const { scopeId, questionId, reason, ...values } = input;
       if (input.kind === 'experiment' && !questionId)
         throw new Error('An experiment must answer a question');
       if (input.kind !== 'experiment' && questionId)
@@ -586,6 +677,7 @@ export class GoalGraphModel {
         entityId: node.id,
         entityType: 'node',
         eventType: 'created',
+        reason,
       });
       const model = new GoalGraphModel(
         tx as unknown as LobeChatDatabase,
@@ -648,47 +740,7 @@ export class GoalGraphModel {
       if (kind === 'contains' || kind === 'answers') {
         const nodes = await tx.select().from(goalNodes).where(eq(goalNodes.goalId, goalId));
         const edges = await tx.select().from(goalEdges).where(eq(goalEdges.goalId, goalId));
-        const graph = { nodes, edges };
-        const source = nodes.find((node) => node.id === sourceNodeId);
-        const target = nodes.find((node) => node.id === targetNodeId);
-        if (!source || !target || source.id === target.id)
-          throw new Error('Invalid experiment relationship');
-        if (source.kind !== 'experiment')
-          throw new Error('Only an experiment can contain nodes or answer a question');
-        if (kind === 'contains') {
-          const owner = experimentOwner(graph, target.id);
-          if (owner && owner !== source.id)
-            throw new Error('A node can belong to only one experiment');
-          if (experimentMembers(graph, target.id).has(source.id))
-            throw new Error('Experiment containment cannot form a cycle');
-          const questionId = edges.find(
-            (edge) => edge.kind === 'answers' && edge.sourceNodeId === target.id,
-          )?.targetNodeId;
-          if (
-            edges.some(
-              (edge) =>
-                edge.kind === 'answers' &&
-                edge.targetNodeId === target.id &&
-                experimentOwner(graph, edge.sourceNodeId) !== source.id,
-            )
-          )
-            throw new Error('A question must share its answer scope');
-          if (questionId && experimentOwner(graph, questionId) !== source.id)
-            throw new Error('An answer must share its question scope');
-        } else {
-          if (target.kind !== 'problem') throw new Error('An experiment must answer a question');
-          if (experimentOwner(graph, source.id) !== experimentOwner(graph, target.id))
-            throw new Error('An answer must share its question scope');
-          if (
-            edges.some(
-              (edge) =>
-                edge.kind === 'answers' &&
-                edge.sourceNodeId === source.id &&
-                edge.targetNodeId !== target.id,
-            )
-          )
-            throw new Error('An experiment answers one question');
-        }
+        assertContainerEdge({ edges, nodes }, sourceNodeId, targetNodeId, kind);
       }
       const [edge] = await tx
         .insert(goalEdges)
@@ -700,6 +752,81 @@ export class GoalGraphModel {
         eventType: 'linked',
       });
       return edge;
+    });
+
+  /**
+   * Take nodes back off a draft Goal's graph, with every edge touching them.
+   *
+   * Only a `draft` can lose nodes, and only ones never bound to a Task: nothing
+   * has run, so no history goes with them. A started Goal retires nodes instead.
+   */
+  removeDraftNodes = async (goalId: string, nodeIds: string[], reason: string) =>
+    this.db.transaction(async (tx) => {
+      const goal = await this.ownedGoal(goalId, tx);
+      if (!goal) return 0;
+      if (goal.status !== 'draft') throw new Error('Only a draft Goal can remove nodes');
+      if (!nodeIds.length) return 0;
+      const removed = await tx
+        .delete(goalNodes)
+        .where(
+          and(
+            eq(goalNodes.goalId, goalId),
+            inArray(goalNodes.id, nodeIds),
+            isNull(goalNodes.taskId),
+          ),
+        )
+        .returning({ id: goalNodes.id });
+      if (removed.length !== nodeIds.length)
+        throw new Error('Only unbound nodes of this Goal can be removed');
+      for (const { id } of removed) {
+        await this.appendEvent(tx, goalId, {
+          entityId: id,
+          entityType: 'node',
+          eventType: 'unlinked',
+          reason,
+        });
+      }
+      return removed.length;
+    });
+
+  /**
+   * Take edges back off a draft Goal's graph: every edge from `sourceNodeId` to
+   * `targetNodeId`, or only those of `kind`. A draft has dispatched nothing, so
+   * no run was gated by them; a started Goal keeps its edges.
+   */
+  removeDraftEdges = async (
+    goalId: string,
+    match: { kind?: GoalEdgeKind; sourceNodeId: string; targetNodeId: string },
+    reason?: string,
+  ): Promise<
+    | { edgeIds: string[]; status: 'removed' }
+    | { goalStatus: GoalStatus; status: 'not_draft' }
+    | { status: 'not_found' }
+  > =>
+    this.db.transaction(async (tx) => {
+      const goal = await this.ownedGoal(goalId, tx);
+      if (!goal) return { status: 'not_found' as const };
+      if (goal.status !== 'draft') return { goalStatus: goal.status, status: 'not_draft' as const };
+      const removed = await tx
+        .delete(goalEdges)
+        .where(
+          and(
+            eq(goalEdges.goalId, goalId),
+            eq(goalEdges.sourceNodeId, match.sourceNodeId),
+            eq(goalEdges.targetNodeId, match.targetNodeId),
+            match.kind ? eq(goalEdges.kind, match.kind) : undefined,
+          ),
+        )
+        .returning({ id: goalEdges.id });
+      for (const { id } of removed) {
+        await this.appendEvent(tx, goalId, {
+          entityId: id,
+          entityType: 'edge',
+          eventType: 'unlinked',
+          reason,
+        });
+      }
+      return { edgeIds: removed.map(({ id }) => id), status: 'removed' as const };
     });
 
   bindTask = async (goalId: string, nodeId: string, taskId: string) =>
@@ -761,6 +888,32 @@ export class GoalGraphModel {
 
   /** Rewrite a node's description — e.g. the planner replacing the seeded requirement blob with its own problem statement. */
   /** `confidence` travels with the description when the planner re-reads the problem. */
+  /** Follow a goal rename on the root question, while it still carries the goal's old title. */
+  renameProblemNode = async (goalId: string, from: string, to: string) =>
+    this.db.transaction(async (tx) => {
+      if (!(await this.ownedGoal(goalId, tx))) return undefined;
+      const [node] = await tx
+        .update(goalNodes)
+        .set({ title: to, updatedAt: new Date() })
+        .where(
+          and(
+            eq(goalNodes.goalId, goalId),
+            eq(goalNodes.kind, 'problem'),
+            eq(goalNodes.title, from),
+          ),
+        )
+        .returning();
+      if (!node) return undefined;
+      await this.appendEvent(tx, goalId, {
+        entityId: node.id,
+        entityType: 'node',
+        eventType: 'updated',
+        reason: 'Goal renamed',
+        taskId: node.taskId ?? undefined,
+      });
+      return node;
+    });
+
   updateNodeDescription = async (
     goalId: string,
     nodeId: string,
@@ -929,6 +1082,41 @@ export class GoalGraphModel {
         reason: resolution,
       });
       await settleDecisionBriefs(tx, decision.id, optionId, resolution);
+      return decision;
+    });
+
+  /**
+   * Rewrite the options of a still-pending decision, for when what an answer
+   * would do changed after the question was asked. A settled decision keeps
+   * the options it was answered against.
+   */
+  updatePendingDecisionOptions = async (
+    goalId: string,
+    decisionId: string,
+    options: GoalDecisionOption[],
+  ) =>
+    this.db.transaction(async (tx) => {
+      if (!(await this.ownedGoal(goalId, tx))) return undefined;
+      const [ownedDecision] = await tx
+        .select({ id: goalNodeDecisions.id })
+        .from(goalNodeDecisions)
+        .innerJoin(goalNodes, eq(goalNodeDecisions.nodeId, goalNodes.id))
+        .where(
+          and(
+            eq(goalNodeDecisions.id, decisionId),
+            eq(goalNodeDecisions.status, 'pending'),
+            eq(goalNodes.goalId, goalId),
+          ),
+        )
+        .limit(1);
+      if (!ownedDecision) return undefined;
+      const [decision] = await tx
+        .update(goalNodeDecisions)
+        .set({ options, updatedAt: new Date() })
+        .where(
+          and(eq(goalNodeDecisions.id, ownedDecision.id), eq(goalNodeDecisions.status, 'pending')),
+        )
+        .returning();
       return decision;
     });
 

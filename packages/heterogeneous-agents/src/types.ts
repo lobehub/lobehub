@@ -56,6 +56,8 @@ export interface HeterogeneousAgentEvent {
 /** Data shape for stream_start events */
 export interface StreamStartData {
   assistantMessage?: { id: string };
+  /** Native Codex turn boundary, stable across tool-separated assistant steps. */
+  codexTurnId?: string;
   /**
    * External-trigger context for the step opened by this stream_start.
    * Set when the new step was opened in response to a repeated tool
@@ -248,10 +250,14 @@ export interface HeterogeneousToolResultImage {
   data?: string;
   /** File record id after upload to the file store. */
   fileId?: string;
+  /** Intrinsic height in pixels, read from the image header at upload time. */
+  height?: number;
   /** IANA media type, e.g. `image/png`. */
   mediaType: string;
   /** Remote URL after upload. */
   url?: string;
+  /** Intrinsic width in pixels, read from the image header at upload time. */
+  width?: number;
 }
 
 /** Data shape for tool_result events (ACP-specific) */

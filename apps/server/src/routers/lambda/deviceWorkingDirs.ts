@@ -29,3 +29,21 @@ export const preserveWorkspaceCache = (
       : entry;
   });
 };
+
+/** Max recent working directories kept per device (matches the update input cap). */
+export const WORKING_DIRS_MAX = 20;
+
+/**
+ * Move `entry` to the front of `current` (most-recent-first), replacing any entry
+ * with the same path while keeping its server-owned workspace cache, and cap the
+ * list. Mirrors the client's optimistic `nextWorkingDirs`.
+ */
+export const upsertWorkingDir = (
+  entry: WorkingDirEntry,
+  current: readonly WorkingDirEntry[],
+): WorkingDirEntry[] => {
+  const path = entry.path.trim();
+  if (!path) return [...current];
+  const [next] = preserveWorkspaceCache([{ ...entry, path }], current);
+  return [next, ...current.filter((dir) => dir.path !== path)].slice(0, WORKING_DIRS_MAX);
+};

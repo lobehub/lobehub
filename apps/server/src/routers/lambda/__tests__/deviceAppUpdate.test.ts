@@ -100,7 +100,11 @@ describe('remote app update', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.findWorkspaceDeviceById.mockResolvedValue({ deviceId: 'device', userId: 'enroller' });
+    mocks.findWorkspaceDeviceById.mockResolvedValue({
+      deviceId: 'device',
+      userId: 'enroller',
+      visibility: 'private',
+    });
     mocks.installAppUpdate.mockResolvedValue({ status: 'ok', targetVersion: '2.2.0' });
   });
 

@@ -65,7 +65,11 @@ const syncCalls = async (
       ([key]) => Array.isArray(key) && key[0] === 'replica:sync' && key[1] === name,
     )
     .map(([key, fetcher, config]) => ({
-      config: config as { onSuccess?: (data: unknown) => void; revalidateOnFocus?: boolean },
+      config: config as {
+        onError?: (error: unknown) => void;
+        onSuccess?: (data: unknown) => void;
+        revalidateOnFocus?: boolean;
+      },
       fetcher: fetcher as () => Promise<any>,
       key: key as unknown[],
     }));
@@ -204,6 +208,21 @@ describe('GroupAgentSlice (replica)', () => {
 
       expect(groupAgentSelectors.groupAgentDetail(key)(useStore.getState())).toBeUndefined();
       expect(useStore.getState().groupAgentDetailMap[key]).toBeUndefined();
+    });
+
+    it('evicts a hydrated detail when revalidation answers NOT_FOUND, keeps it on transient errors', async () => {
+      const { result } = renderHook(() =>
+        useStore.getState().useFetchGroupAgentDetail({ identifier: 'group-1' }),
+      );
+      const key = result.current.queryKey!;
+      useStore.setState({ groupAgentDetailMap: { [key]: { identifier: 'group-1' } as any } });
+
+      const [call] = await syncCalls('groupAgentDetail');
+      act(() => call.config.onError!({ data: { code: 'INTERNAL_SERVER_ERROR' } }));
+      expect(groupAgentSelectors.groupAgentDetail(key)(useStore.getState())).toBeDefined();
+
+      act(() => call.config.onError!({ data: { code: 'NOT_FOUND' } }));
+      expect(groupAgentSelectors.groupAgentDetail(key)(useStore.getState())).toBeUndefined();
     });
 
     it('keys the detail by identifier and version', () => {

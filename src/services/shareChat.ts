@@ -1,4 +1,9 @@
-import type { ExecAgentResult, UIChatMessage, UserInterventionConfig } from '@lobechat/types';
+import type {
+  ExecAgentClientIds,
+  ExecAgentResult,
+  UIChatMessage,
+  UserInterventionConfig,
+} from '@lobechat/types';
 
 import { lambdaClient } from '@/libs/trpc/client';
 import type {
@@ -10,7 +15,7 @@ import type {
 
 export interface ShareChatExecParams {
   /** Client-minted ids for the rows this run creates (fresh sends only). */
-  clientIds?: { assistantMessageId?: string; topicId?: string; userMessageId?: string };
+  clientIds?: ExecAgentClientIds;
   /**
    * Files the visitor uploaded through {@link ShareChatService.createFile} to
    * attach to this turn. The server re-checks each id's share provenance, so

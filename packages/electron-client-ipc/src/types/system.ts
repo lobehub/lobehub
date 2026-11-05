@@ -29,3 +29,6 @@ export interface UserPathData {
 
 export type ThemeMode = 'system' | 'dark' | 'light';
 export type ThemeAppearance = 'dark' | 'light' | string;
+
+export type GuidedPermission = 'accessibility' | 'fullDisk' | 'inputMonitoring' | 'screen';
+export type PermissionGuideStatus = 'active' | 'dismissed' | 'granted';

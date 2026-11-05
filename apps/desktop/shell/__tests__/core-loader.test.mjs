@@ -526,3 +526,27 @@ describe('resolveCore', () => {
     expect(core.log.join('\n')).toMatch(/9\.9\.9/);
   });
 });
+
+it('does not count time spent in the first-launch update gate as failed Core boots', () => {
+  for (let i = 0; i < 5; i++) {
+    const core = resolveCore({
+      abi: ABI,
+      builtinDir,
+      publicKey: publicKeyPem,
+      userData,
+      deferBoot: true,
+    });
+    expect(core.source).toBe('builtin');
+  }
+  const core = resolveCore({
+    abi: ABI,
+    builtinDir,
+    publicKey: publicKeyPem,
+    userData,
+    deferBoot: true,
+  });
+  core.startBoot();
+  expect(readBoot().failures).toBe(1);
+  core.markHealthy();
+  expect(readBoot()).toMatchObject({ healthy: true, failures: 0 });
+});

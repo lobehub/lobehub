@@ -1,4 +1,5 @@
 import type { GoalReportDispatch, GoalReportState } from './goalReport';
+import type { GoalRolloutPolicy, GoalRolloutState } from './goalRollout';
 import type { InitialGoalOverviewContext } from './stepContext';
 import type { AcceptanceStatus, VerifyCheckTally } from './verify';
 import type { WorkType } from './work';
@@ -16,7 +17,15 @@ import type { WorkType } from './work';
  * there), mirroring the AcceptanceStatus convention.
  */
 export type GoalStatus =
-  'planning' | 'running' | 'verifying' | 'review' | 'paused' | 'achieved' | 'failed' | 'canceled';
+  | 'draft'
+  | 'planning'
+  | 'running'
+  | 'verifying'
+  | 'review'
+  | 'paused'
+  | 'achieved'
+  | 'failed'
+  | 'canceled';
 
 /**
  * The execution carrier a goal is optionally bound to. Goals are standalone
@@ -25,6 +34,14 @@ export type GoalStatus =
  * existing rows still carry the earlier `task` value.
  */
 export type GoalSubjectType = 'task' | 'topic' | 'standalone';
+
+/**
+ * Who in a team workspace can see a goal. Mirrors agent / task visibility:
+ * 'public' goals are visible to every member, 'private' ones only to their
+ * creator. Personal-mode goals are implicitly private and ignore it.
+ */
+export const GOAL_VISIBILITIES = ['private', 'public'] as const;
+export type GoalVisibility = (typeof GOAL_VISIBILITIES)[number];
 
 /** Automatic recovery policy for Goal Graph Tasks. */
 export interface GoalRecoveryPolicy {
@@ -110,6 +127,10 @@ export type GoalPauseReason =
   | 'exploration_limit'
   /** The planner asked for a correction after its allowance was already spent. */
   | 'exploration_revision_limit'
+  /** A repeated batch hit a pattern break and is waiting on a person's choice. */
+  | 'pattern_break'
+  /** A repeated batch passed its gate and is waiting on a person to approve the release. */
+  | 'release_review'
   | 'user';
 
 export interface GoalExplorationDecision {
@@ -226,6 +247,12 @@ export const summarizeGoalSupervision = (state?: GoalSupervisionState): GoalSupe
 export interface GoalManagerPolicy {
   instruction?: string;
   maxTurns?: number;
+  /**
+   * Set when the coordinator opened this policy to hand its planning over; the
+   * token lets a hand-over that could not start remove its own policy and
+   * nothing a person set meanwhile.
+   */
+  openedForHandoff?: string;
 }
 
 /** Bounded wait on time or one correlated external result. */
@@ -311,6 +338,16 @@ export interface GoalManagerState {
    * over twice.
    */
   problem?: string;
+  /**
+   * What kind of problem was handed over. `rollout_release`: a batch gate passed
+   * and the main Agent decides whether the next wave goes out (`release`) or a
+   * person approves it (`escalate`); no other answer applies to it.
+   * `rollout_revise`: the owner sent the batch plan back and the main Agent
+   * rewrites it (`revise_plan`). `rollout_distill`: a round's probes settled
+   * and the main Agent rewrites the plan from what they ran into
+   * (`revise_plan`) before the gate judges them.
+   */
+  problemKind?: 'rollout_distill' | 'rollout_release' | 'rollout_revise';
   /** The blocked task that problem belongs to, so accepting a plan that replaces
    *  it can retire exactly that node without parsing the key. */
   problemTaskId?: string;
@@ -326,8 +363,14 @@ export interface GoalManagerState {
   reviewSnapshot?: string;
   snapshot: string;
   startedAt: string;
+  /**
+   * `start` settled this turn with the draft's arrangement rather than a plan
+   * the agent submitted, so a later `lh goal plan` on it is refused, not
+   * reported as a duplicate of a plan that was never written.
+   */
+  startedFromDraft?: boolean;
   submitted?: {
-    action: 'tasks' | 'verify' | 'retry' | 'escalate' | 'wait';
+    action: 'tasks' | 'verify' | 'retry' | 'escalate' | 'wait' | 'release' | 'revise_plan';
     /**
      * The question an `escalate` puts to the owner, with the answers it offers.
      * Without it the gate could only ask "retry or retire?" while the real
@@ -436,12 +479,20 @@ export interface GoalConfig {
    * before the first result came back. Null/undefined uses the default.
    */
   maxConcurrentTasks?: number | null;
+  /**
+   * The model the goal agent plans with, overriding that agent's own model for
+   * planning turns only. Unset means the agent's own model. Always written
+   * together with `provider`, and dropped when the goal changes agent.
+   */
+  model?: string;
   /** Who the current pause belongs to; cleared when the goal runs again. */
   pausedBy?: GoalPauseReason;
   /** Coordinator-owned lease for initial decomposition; not a user policy. */
   planningCheckpoint?: { expiresAt: string; token: string };
   /** Retained after release to distinguish lease-aware retries from legacy planners. */
   planningProtocol?: 'lease-v1';
+  /** Provider of `model`; set and cleared with it. */
+  provider?: string;
   /**
    * Coordinator-owned: when the queued wake for a Task waiting on a usage-window
    * reset fires. One wake per Goal, so ticks before the reset do not queue more.
@@ -450,6 +501,13 @@ export interface GoalConfig {
   recovery?: GoalRecoveryPolicy;
   /** Coordinator-owned receipt of the latest wrap-up report dispatch. */
   report?: GoalReportDispatch;
+  /**
+   * Batch rollout, when this goal is one repeated mould. Absent on every goal
+   * that is not — which is what keeps the mechanism off the ordinary path.
+   */
+  rollout?: GoalRolloutPolicy;
+  /** Coordinator-owned batch progress; never accepted as client configuration. */
+  rolloutState?: GoalRolloutState;
   schedule?: GoalSchedulePolicy;
   supervision?: GoalSupervisionPolicy;
   /** Durable supervisor topic and bounded incident ledger. */
@@ -460,6 +518,14 @@ export interface GoalConfig {
    * Unset means the goal's agent does its own Tasks.
    */
   taskAgentId?: string;
+  /**
+   * The model the goal's Tasks run on, overriding their executor's own model.
+   * Applied to Tasks the coordinator creates and to unfinished ones when set.
+   * Written together with `taskProvider`, dropped when the executor changes.
+   */
+  taskModel?: string;
+  /** Provider of `taskModel`; set and cleared with it. */
+  taskProvider?: string;
   /** Coordinator-owned; written by decomposition, never by a policy edit. */
   understanding?: GoalUnderstanding;
 }
@@ -467,7 +533,7 @@ export interface GoalConfig {
 /** Creation accepts planning options, never a runtime receipt. */
 export type GoalCreateConfig = Omit<
   GoalConfig,
-  'managerState' | 'report' | 'supervisorState' | 'understanding'
+  'managerState' | 'report' | 'rolloutState' | 'supervisorState' | 'understanding'
 >;
 
 /**
@@ -477,6 +543,8 @@ export type GoalCreateConfig = Omit<
  */
 export interface GoalItem {
   agentId: string | null;
+  /** Set when the user archives the goal; archived goals are hidden from lists by default. */
+  archivedAt?: Date | null;
   completedAt: Date | null;
   config: GoalConfig | null;
   createdAt: Date;
@@ -495,6 +563,8 @@ export interface GoalItem {
   title: string;
   updatedAt: Date;
   userId: string;
+  /** Who in the workspace sees the goal; see {@link GoalVisibility}. */
+  visibility: GoalVisibility;
   workspaceId: string | null;
 }
 
@@ -502,8 +572,16 @@ export interface GoalItem {
 // Goal Graph — durable long-horizon reasoning structure
 // ============================================
 
-/** Coarse-grained semantic role of a node in a Goal Graph. */
-export type GoalNodeKind = 'problem' | 'experiment' | 'task' | 'finding' | 'decision';
+/**
+ * Coarse-grained semantic role of a node in a Goal Graph.
+ *
+ * `batch` is the container for one repeated mould: a set of structurally
+ * identical units delivered as a single class (probe → gate → waves) instead of
+ * N flat sibling tasks. It is deliberately its own kind rather than a reuse of
+ * `experiment`: an experiment is a candidate answer under test, a batch is one
+ * reusable transformation applied many times.
+ */
+export type GoalNodeKind = 'problem' | 'experiment' | 'task' | 'finding' | 'decision' | 'batch';
 
 /** Semantic lifecycle of a node; independent from the execution status of its Task. */
 export type GoalNodeStatus =
@@ -545,6 +623,12 @@ export type GoalDecisionStatus = 'pending' | 'resolved' | 'canceled';
 export type GoalDecisionOptionEffect = 'retry' | 'retire';
 
 export interface GoalDecisionOption {
+  /**
+   * The unfinished tasks a `retire` effect takes along, because they depend on
+   * the retired one. It is what the person confirms: answering is refused when
+   * the set changed since. Data, not copy: the reader's client words it.
+   */
+  alsoRetires?: { nodeId: string; title: string }[];
   /** The consequence of choosing this option, in the words the person reads. */
   description?: string;
   effect?: GoalDecisionOptionEffect;
@@ -713,6 +797,13 @@ export interface GoalGraphSnapshot {
   events: GoalGraphEvent[];
   goal: GoalItem;
   nodes: GoalGraphNode[];
+  /**
+   * When the coordinator retries each active task node a usage window refused
+   * (the reset plus its safety margin). Such a Task is held `paused` with no
+   * running run, so it has no heartbeat — without this the client reads the
+   * wait as lost.
+   */
+  quotaRetryAt?: Record<string, Date>;
   /**
    * The wrap-up report: whether it is being written, done or failed, and the
    * newest submitted version. Absent until the Goal-level acceptance has ended

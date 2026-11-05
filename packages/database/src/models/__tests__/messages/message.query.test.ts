@@ -344,11 +344,12 @@ describe('MessageModel Query Tests', () => {
           alt: 'file-1',
           height: 600,
           id: 'f-0',
+          mimeType: 'image/png',
           ratio: 1.3333,
           url: `${domain}/f-0/abc`,
           width: 800,
         },
-        { alt: 'file-3', id: 'f-3', url: `${domain}/f-3/abc` },
+        { alt: 'file-3', id: 'f-3', mimeType: 'image/png', url: `${domain}/f-3/abc` },
       ]);
       expect(postProcessUrl).toHaveBeenCalledWith(
         'abc',
@@ -358,7 +359,6 @@ describe('MessageModel Query Tests', () => {
         'abc',
         expect.objectContaining({ fileType: 'image/png', id: 'f-3' }),
       );
-
       expect(result[1].id).toBe('2');
       expect(result[1].imageList).toEqual([]);
     });
@@ -393,12 +393,12 @@ describe('MessageModel Query Tests', () => {
       );
 
       const result = await messageModel.queryByIds(['query-by-id-message'], { postProcessUrl });
-
       expect(result[0].imageList).toEqual([
         {
           alt: 'query-by-id.png',
           height: 720,
           id: 'query-by-id-file',
+          mimeType: 'image/png',
           ratio: 1.7778,
           url: '/f/query-by-id-file/files/query-by-id.png',
           width: 1280,

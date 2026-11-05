@@ -2,6 +2,7 @@ import debug from 'debug';
 
 import { getServerDB } from '@/database/core/db-adaptor';
 import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
+import { recoverChannels } from '@/server/services/channel/recover';
 import { after } from '@/server/utils/scheduleAfterResponse';
 
 import { StaleOperationReaper } from './StaleOperationReaper';
@@ -120,7 +121,11 @@ export const scheduleOpportunisticStaleSweep = (): void => {
         console.error(`[opportunistic-sweep] ${phase} failed: %O`, error);
       },
       sweep: async () => {
-        const result = await new StaleOperationReaper(await getServerDB()).sweep();
+        const db = await getServerDB();
+        const [result] = await Promise.all([
+          new StaleOperationReaper(db).sweep(),
+          recoverChannels(db),
+        ]);
         log('sweep: %O', result);
       },
     }),

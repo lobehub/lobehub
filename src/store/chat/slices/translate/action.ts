@@ -13,6 +13,19 @@ import { useUserStore } from '@/store/user';
 import { systemAgentSelectors } from '@/store/user/selectors';
 
 /**
+ * The locale the detection prompt answered with. Small local models append the
+ * echoed input or a translation after it, so only the first token counts.
+ */
+const parseDetectedLocale = (output?: string) => {
+  const token = output
+    ?.trim()
+    .split(/\s+/)[0]
+    ?.replaceAll(/^[{"'`]+|[}"'`.,]+$/g, '');
+
+  return token && supportLocales.includes(token) ? token : undefined;
+};
+
+/**
  * chat translate
  */
 
@@ -47,8 +60,11 @@ export class ChatTranslateActionImpl {
     const message = dbMessageSelectors.getDbMessageById(id)(this.#get());
     if (!message) return;
 
-    // Get current agent for translation
-    const translationSetting = systemAgentSelectors.translation(useUserStore.getState());
+    // Only the model of the translation system agent: its other settings
+    // (`enabled`, `customPrompt`) are not model parameters and must not reach
+    // the provider request.
+    const { model, provider } = systemAgentSelectors.translation(useUserStore.getState());
+    const translationSetting = { model, provider };
 
     // create translate extra
     await updateMessageTranslate(id, { content: '', from: '', to: targetLang });
@@ -75,7 +91,8 @@ export class ChatTranslateActionImpl {
       // detect from language
       chatService.fetchPresetTaskResult({
         onFinish: async (data) => {
-          if (data && supportLocales.includes(data)) from = data;
+          const detected = parseDetectedLocale(data);
+          if (detected) from = detected;
 
           await updateMessageTranslate(id, { content, from, to: targetLang });
         },

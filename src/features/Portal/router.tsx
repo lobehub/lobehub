@@ -18,10 +18,12 @@ import { FilePreview } from './FilePreview';
 import { Goal } from './Goal';
 import { GoalMetric } from './GoalMetric';
 import { GoalNode } from './GoalNode';
+import { GoalNorthStar } from './GoalNorthStar';
 import { GoalReport, GoalReportChapter } from './GoalReport';
 import { GroupThread } from './GroupThread';
 import { HomeBody, HomeTitle } from './Home';
 import { LocalFile } from './LocalFile';
+import { MemoryDetail } from './MemoryDetail';
 import { MessageDetail } from './MessageDetail';
 import { Notebook } from './Notebook';
 import { Plugins } from './Plugins';
@@ -51,9 +53,11 @@ const VIEW_COMPONENTS: Record<PortalViewType, PortalImpl> = {
   [PortalViewType.Goal]: Goal,
   [PortalViewType.GoalMetric]: GoalMetric,
   [PortalViewType.GoalNode]: GoalNode,
+  [PortalViewType.GoalNorthStar]: GoalNorthStar,
   [PortalViewType.GoalReport]: GoalReport,
   [PortalViewType.GoalReportChapter]: GoalReportChapter,
   [PortalViewType.LocalFile]: LocalFile,
+  [PortalViewType.MemoryDetail]: MemoryDetail,
   [PortalViewType.MessageDetail]: MessageDetail,
   [PortalViewType.ToolUI]: Plugins,
   [PortalViewType.TaskDetail]: TaskDetail,

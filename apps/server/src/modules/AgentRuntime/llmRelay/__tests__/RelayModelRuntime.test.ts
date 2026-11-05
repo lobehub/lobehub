@@ -65,11 +65,13 @@ const createStreamManager = () => {
 const createRuntime = (
   streamManager: any,
   deadlines = { claimMs: 2000, firstChunkMs: 2000, idleMs: 2000, totalMs: 5000 },
+  channelOperationId?: string,
 ) =>
   new RelayModelRuntime({
     assistantMessageId: 'msg_1',
     attempt: 1,
     callId: CALL_ID,
+    channelOperationId,
     deadlines,
     operationId: 'op_1',
     preferredClientId: 'tab-a',
@@ -589,6 +591,55 @@ describe('RelayModelRuntime over a gateway with relay routes', () => {
     });
     expect(manager.closeLlmCall).toHaveBeenCalledWith('op_1', CALL_ID);
     expect(manager.publishStreamEvent).not.toHaveBeenCalled();
+  });
+
+  it("runs a sub-agent's call over its parent's channel, still naming the sub-agent's run", async () => {
+    const { executes, manager } = createGatewayManager();
+    const controller = new AbortController();
+    const response = await createRuntime(manager, undefined, 'parent_op').chat(payload, {
+      signal: controller.signal,
+    });
+    const consumed = consumeStreamUntilDone(response);
+    await vi.waitFor(() => expect(executes).toHaveLength(1));
+
+    expect(manager.sendLlmExecute).toHaveBeenCalledWith(
+      'parent_op',
+      expect.objectContaining({ callId: CALL_ID, operationId: 'op_1', preferredClientId: 'tab-a' }),
+    );
+
+    await post(executes[0].leaseToken, { chunks: [], clientId: 'tab-a', seq: 1 });
+    controller.abort();
+
+    await expect(consumed).rejects.toMatchObject({ name: 'AbortError' });
+    expect(manager.sendLlmCancel).toHaveBeenCalledWith('parent_op', {
+      callId: CALL_ID,
+      reason: 'interrupted',
+      stepIndex: 0,
+    });
+    expect(manager.closeLlmCall).toHaveBeenCalledWith('parent_op', CALL_ID);
+  });
+
+  it("falls back to a stream event on the parent's channel without relay routes", async () => {
+    const published: { operationId: string; type: string }[] = [];
+    const manager = {
+      publishStreamEvent: vi.fn(async (operationId: string, event: any) => {
+        published.push({ operationId, type: event.type });
+        return 'event-id';
+      }),
+    };
+    const controller = new AbortController();
+    const response = await createRuntime(manager, undefined, 'parent_op').chat(payload, {
+      signal: controller.signal,
+    });
+    const consumed = consumeStreamUntilDone(response);
+    await vi.waitFor(() => expect(published).toHaveLength(1));
+    controller.abort();
+    await expect(consumed).rejects.toMatchObject({ name: 'AbortError' });
+
+    expect(published).toEqual([
+      { operationId: 'parent_op', type: 'llm_execute' },
+      { operationId: 'parent_op', type: 'llm_cancel' },
+    ]);
   });
 
   it('fails as ClientLlmExecutorUnavailable when the gateway refuses the dispatch', async () => {

@@ -1,20 +1,12 @@
 'use client';
 
 import { type NetworkProxySettings } from '@lobechat/electron-client-ipc';
-import { Flexbox } from '@lobehub/ui';
-import {
-  Button,
-  Input,
-  InputPassword,
-  RadioGroup,
-  Skeleton,
-  Switch,
-  toast,
-} from '@lobehub/ui/base-ui';
-import { Form, type FormGroupItem, useForm, useWatch } from '@lobehub/ui/base-ui/form';
+import { Button, Flexbox, Input, InputPassword, RadioGroup, Switch, toast } from '@lobehub/ui';
+import { Form, type FormGroupItem, useForm, useWatch } from '@lobehub/ui/form';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { SettingsSectionSkeleton } from '@/components/Skeleton';
 import { FORM_STYLE } from '@/const/layoutTokens';
 import { SettingsSearchAnchor } from '@/features/SettingsSearch/anchor';
 import { desktopSettingsService } from '@/services/electron/settings';
@@ -200,7 +192,19 @@ const ProxyForm = () => {
     }
   }, [proxySettings, testUrl, form, t]);
 
-  if (isLoading) return <Skeleton.Text rows={5} />;
+  // Enable, basic settings (type/server/port), auth (credentials hidden until
+  // enabled) and connection test groups, as in the loaded form.
+  if (isLoading)
+    return (
+      <SettingsSectionSkeleton
+        groups={[
+          { rows: 1, titleWidth: 96 },
+          { rows: 3, titleWidth: 112 },
+          { rows: 1, titleWidth: 128 },
+          { rows: 1, titleWidth: 120 },
+        ]}
+      />
+    );
 
   const enableProxyGroup: FormGroupItem<NetworkProxySettings> = {
     children: [
