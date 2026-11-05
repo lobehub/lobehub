@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const gateway = vi.hoisted(() => ({ enabled: false }));
 
@@ -50,6 +50,11 @@ const ctx: any = { serverDB: {}, userId: 'user-1', workspaceId: null };
 describe('agentBotProviderRouter.listPlatforms', () => {
   beforeEach(() => {
     gateway.enabled = false;
+    vi.stubEnv('VERCEL_ENV', '');
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   it('offers a platform that replies over its own connection when connections run in-process', async () => {
@@ -59,6 +64,12 @@ describe('agentBotProviderRouter.listPlatforms', () => {
 
   it('hides it behind the external message gateway, which cannot relay its replies', async () => {
     gateway.enabled = true;
+    const platforms = await agentBotProviderRouter.createCaller(ctx).listPlatforms();
+    expect(platforms.map((p) => p.id)).toEqual(['qq']);
+  });
+
+  it('hides it on serverless, where the socket and the webhook live in different invocations', async () => {
+    vi.stubEnv('VERCEL_ENV', 'preview');
     const platforms = await agentBotProviderRouter.createCaller(ctx).listPlatforms();
     expect(platforms.map((p) => p.id)).toEqual(['qq']);
   });

@@ -11,6 +11,10 @@ import { BOT_CONNECT_QUEUE_EXPIRE_MS, BotConnectQueue } from './botConnectQueue'
 import { createGatewayManager, getGatewayManager } from './GatewayManager';
 import { mapGatewayStatusToRuntimeStatus, resolveBotGatewayCapabilities } from './gatewayMapping';
 import {
+  canHostInProcessConnections,
+  inProcessConnectionUnavailableMessage,
+} from './inProcessConnections';
+import {
   getConfiguredMessageGatewayHosts,
   getMessageGatewayClient,
   getMessageGatewayClientForHost,
@@ -71,6 +75,25 @@ export class GatewayService {
     }
   }
 
+  /**
+   * A platform that replies only over its own connection would receive messages it can never
+   * answer here (see `canHostInProcessConnections`): record why, and refuse instead of connecting.
+   */
+  private async assertCanHostConnection(platform: string, applicationId: string): Promise<void> {
+    const definition = platformRegistry.getPlatform(platform);
+    if (!definition?.requiresInProcessConnection || canHostInProcessConnections()) return;
+
+    const message = inProcessConnectionUnavailableMessage(definition.name);
+    await updateBotRuntimeStatus({
+      applicationId,
+      errorMessage: message,
+      platform,
+      status: BOT_RUNTIME_STATUSES.failed,
+    });
+    log('Refused connect for in-process-only platform %s:%s', platform, applicationId);
+    throw new Error(message);
+  }
+
   async stop(): Promise<void> {
     const manager = getGatewayManager();
     if (!manager) return;
@@ -84,6 +107,8 @@ export class GatewayService {
     applicationId: string,
     userId: string,
   ): Promise<'started' | 'queued'> {
+    await this.assertCanHostConnection(platform, applicationId);
+
     if (this.useMessageGateway) {
       return this.startClientViaGateway(platform, applicationId, userId);
     }
@@ -333,20 +358,6 @@ export class GatewayService {
 
     const definition = platformRegistry.getPlatform(platform);
     const connectionMode = resolveConnectionMode(definition, provider.settings);
-
-    // The gateway forwards inbound events but cannot relay outbound frames, and these platforms
-    // only reply on their own connection — connecting through it would receive messages that
-    // could never be answered.
-    if (definition?.requiresInProcessConnection) {
-      await updateBotRuntimeStatus({
-        applicationId,
-        errorMessage: `${definition.name} replies over its own long connection, which the message gateway cannot relay yet`,
-        platform,
-        status: BOT_RUNTIME_STATUSES.failed,
-      });
-      log('Refused gateway connect for in-process-only platform %s:%s', platform, applicationId);
-      return 'started';
-    }
 
     // Webhook-mode platforms don't need persistent gateway connections.
     // Run the platform client locally via GatewayManager so each platform can

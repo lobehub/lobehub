@@ -118,6 +118,16 @@ async function processConnectQueue(remainingMs: number): Promise<number> {
         await queue.remove(item.platform, item.applicationId);
         continue;
       }
+      // Replies for these ride the connection, which this cron invocation would take with it.
+      if (definition.requiresInProcessConnection) {
+        log(
+          'Skipping queued in-process-only platform=%s appId=%s',
+          item.platform,
+          item.applicationId,
+        );
+        await queue.remove(item.platform, item.applicationId);
+        continue;
+      }
 
       const provider = await AgentBotProviderModel.findEnabledByPlatformAndAppId(
         serverDB,
@@ -208,6 +218,9 @@ export async function gatewayCron(c: Context): Promise<Response> {
   const stats: Array<{ platform: string; started: number; total: number }> = [];
 
   for (const platform of platforms) {
+    // Replies for these ride the connection, which this cron invocation would take with it.
+    if (platform.requiresInProcessConnection) continue;
+
     const providers = await AgentBotProviderModel.findEnabledByPlatform(
       serverDB,
       platform.id,

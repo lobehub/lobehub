@@ -689,9 +689,9 @@ export interface PlatformDefinition {
 
   /**
    * Outbound messages ride the live platform connection itself (WeCom AI bots have no REST send
-   * API), so only the process holding that connection can reply. The external message gateway
-   * forwards inbound events but cannot relay outbound frames, so in gateway mode the platform is
-   * not offered and its connections are not handed to a gateway.
+   * API), so only the process holding that connection can reply. Deployments where that process
+   * is not the one answering webhooks — external message gateway, serverless — do not offer the
+   * platform or start its connections (`canHostInProcessConnections`).
    */
   requiresInProcessConnection?: boolean;
 
