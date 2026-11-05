@@ -1,7 +1,5 @@
-// oxlint-disable-next-line stylex-migration/no-plain-css -- styles the h1s that lobe-ui Markdown renders inside check evidence; no prop reaches them
-import './AcceptanceEmbed.css';
-
-import { cx, Flexbox } from '@lobehub/ui';
+// oxlint-disable-next-line stylex-migration/no-emotion-styles -- Markdown evidence h1s get no className
+import { createStaticStyles, Flexbox } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { useState } from 'react';
@@ -25,6 +23,7 @@ import AcceptanceTabs, {
 import ReadChecks from '@/features/Acceptance/Viewer/ReadOnly/Checks';
 import ReadDiscussion from '@/features/Acceptance/Viewer/ReadOnly/Discussion';
 import { useAcceptanceBundle } from '@/features/Acceptance/Viewer/useAcceptanceBundle';
+import { sx } from '@/styles/sx';
 
 const styles = stylex.create({
   content: {
@@ -43,6 +42,16 @@ const styles = stylex.create({
   },
 });
 
+const fallback = createStaticStyles(({ css }) => ({
+  content: css`
+    h1 {
+      overflow: visible;
+      overflow-wrap: anywhere;
+      white-space: normal;
+    }
+  `,
+}));
+
 const EmbedContent = () => {
   const { acceptanceId } = useAcceptanceScope();
   const { data } = useAcceptanceBundle(acceptanceId);
@@ -57,13 +66,7 @@ const EmbedContent = () => {
   );
 
   return (
-    <Flexbox
-      gap={24}
-      className={cx(
-        stylex.props(styles.content).className,
-        'lobe-acceptance-embed-fe01f599-content',
-      )}
-    >
+    <Flexbox gap={24} {...sx(styles.content, fallback.content)}>
       <AcceptanceIdentity />
       <AcceptanceGoal />
       <AcceptanceTabs
