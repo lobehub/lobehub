@@ -1,4 +1,4 @@
-import { and, count, eq, inArray, ne, or } from 'drizzle-orm';
+import { and, count, eq, inArray, isNull, ne, or } from 'drizzle-orm';
 
 import { agentsToSessions, messages, sessions, tasks, threads, topics } from '../../schemas';
 import { notTrashed } from '../../utils/softDelete';
@@ -129,8 +129,9 @@ export const getDeleteImpact = async (
   if (await hasForeignTopicComments(ctx.db, ctx.userId, topicWhere))
     return { foreignTopicCount, hasForeignContent: true };
 
-  // Messages under the caller's topics, plus the topicless ones the cascade
-  // stamps directly.
+  // Messages under the caller's live topics, plus the topicless ones the
+  // cascade stamps directly. A message inside an already-trashed topic stays
+  // unstamped (it is hidden by its topic) and this delete does not touch it.
   const messageScope =
     sessionIds.length > 0
       ? or(inArray(messages.sessionId, sessionIds), eq(messages.agentId, agentId))
@@ -138,7 +139,15 @@ export const getDeleteImpact = async (
   const [foreignMessage] = await ctx.db
     .select({ id: messages.id })
     .from(messages)
-    .where(and(messageScope, ne(messages.userId, ctx.userId), notTrashed(messages.isDeleted)))
+    .leftJoin(topics, eq(messages.topicId, topics.id))
+    .where(
+      and(
+        messageScope,
+        ne(messages.userId, ctx.userId),
+        notTrashed(messages.isDeleted),
+        or(isNull(messages.topicId), notTrashed(topics.isDeleted)),
+      ),
+    )
     .limit(1);
 
   return { foreignTopicCount, hasForeignContent: !!foreignMessage };

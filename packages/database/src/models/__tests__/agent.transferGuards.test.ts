@@ -264,6 +264,46 @@ describe('AgentModel.getDeleteImpact', () => {
     });
   });
 
+  it("ignores a teammate's message inside a topic that is already in the trash", async () => {
+    await serverDB.insert(topics).values({
+      agentId,
+      id: 'agtg-teammate-trashed-topic',
+      isDeleted: true,
+      userId: teammateId,
+      workspaceId: wsId,
+    });
+    await serverDB.insert(messages).values({
+      agentId,
+      id: 'agtg-teammate-message',
+      role: 'user',
+      topicId: 'agtg-teammate-trashed-topic',
+      userId: teammateId,
+    });
+
+    expect(await ownerModel.getDeleteImpact(agentId)).toEqual({
+      foreignTopicCount: 0,
+      hasForeignContent: false,
+    });
+  });
+
+  it("flags a teammate's message inside the caller's live topic", async () => {
+    await serverDB
+      .insert(topics)
+      .values({ agentId, id: 'agtg-own-topic', userId: ownerId, workspaceId: wsId });
+    await serverDB.insert(messages).values({
+      agentId,
+      id: 'agtg-teammate-message',
+      role: 'user',
+      topicId: 'agtg-own-topic',
+      userId: teammateId,
+    });
+
+    expect(await ownerModel.getDeleteImpact(agentId)).toEqual({
+      foreignTopicCount: 0,
+      hasForeignContent: true,
+    });
+  });
+
   it("ignores a teammate's message that is already in the trash", async () => {
     await serverDB.insert(messages).values({
       agentId,

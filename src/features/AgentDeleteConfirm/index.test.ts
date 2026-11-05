@@ -5,13 +5,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { agentService } from '@/services/agent';
 
-import { confirmRemoveAgent, getRemoveAgentAlert } from './index';
+import { confirmRemoveAgent, getRemoveAgentAlert, getRemoveAgentConfirmState } from './index';
 
-const confirmModalMock = vi.hoisted(() => vi.fn());
+const createModalMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@lobehub/ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
-  confirmModal: confirmModalMock,
+  createModal: createModalMock,
 }));
 
 vi.mock('i18next', () => ({
@@ -20,15 +20,6 @@ vi.mock('i18next', () => ({
 }));
 
 type Impact = Awaited<ReturnType<typeof agentService.getAgentDeleteImpact>>;
-
-/** Let the impact lookup's promise chain settle. */
-const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
-
-const openDialog = () => {
-  const onConfirm = vi.fn();
-  confirmRemoveAgent({ agentId: 'agent-1', onConfirm });
-  return { config: confirmModalMock.mock.calls[0][0], onConfirm };
-};
 
 describe('getRemoveAgentAlert', () => {
   it("warns with the count of other members' topics", () => {
@@ -51,71 +42,67 @@ describe('getRemoveAgentAlert', () => {
   });
 });
 
+describe('getRemoveAgentConfirmState', () => {
+  it('keeps Delete disabled while the impact lookup is in flight', () => {
+    expect(getRemoveAgentConfirmState(undefined)).toEqual({
+      acknowledgeForeignContent: false,
+      alert: null,
+      canConfirm: false,
+    });
+  });
+
+  it("enables Delete with the warning and acknowledges teammates' content once it loaded", () => {
+    expect(getRemoveAgentConfirmState({ foreignTopicCount: 3, hasForeignContent: true })).toEqual({
+      acknowledgeForeignContent: true,
+      alert: 'confirmRemoveSessionItemAlertWithOthersCount:3',
+      canConfirm: true,
+    });
+  });
+
+  it('acknowledges nothing when only the caller owns content', () => {
+    expect(getRemoveAgentConfirmState({ foreignTopicCount: 0, hasForeignContent: false })).toEqual({
+      acknowledgeForeignContent: false,
+      alert: 'confirmRemoveSessionItemAlert',
+      canConfirm: true,
+    });
+  });
+
+  it('falls back to the plain copy without acknowledging anything when the lookup failed', () => {
+    expect(getRemoveAgentConfirmState(null)).toEqual({
+      acknowledgeForeignContent: false,
+      alert: 'confirmRemoveSessionItemAlert',
+      canConfirm: true,
+    });
+  });
+});
+
 describe('confirmRemoveAgent', () => {
   beforeEach(() => {
-    confirmModalMock.mockReset();
+    createModalMock.mockReset();
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  it('opens the danger dialog right away, before the impact lookup lands', () => {
+  it('opens the dialog right away, before the impact lookup lands', () => {
     vi.spyOn(agentService, 'getAgentDeleteImpact').mockReturnValue(new Promise<Impact>(() => {}));
 
-    const { config } = openDialog();
+    confirmRemoveAgent({ agentId: 'agent-1', onConfirm: vi.fn() });
 
-    expect(confirmModalMock).toHaveBeenCalledTimes(1);
+    expect(createModalMock).toHaveBeenCalledTimes(1);
+    expect(createModalMock.mock.calls[0][0]).toMatchObject({ title: 'delete', width: 420 });
     expect(agentService.getAgentDeleteImpact).toHaveBeenCalledWith('agent-1');
-    expect(config.okButtonProps).toEqual({ danger: true });
   });
 
-  it('does not acknowledge foreign content when confirmed before the lookup lands', async () => {
-    let resolveImpact!: (impact: Impact) => void;
-    vi.spyOn(agentService, 'getAgentDeleteImpact').mockReturnValue(
-      new Promise<Impact>((resolve) => {
-        resolveImpact = resolve;
-      }),
-    );
-    const { config, onConfirm } = openDialog();
-
-    await config.onOk();
-    expect(onConfirm).toHaveBeenCalledWith({ acknowledgeForeignContent: false });
-
-    resolveImpact({ foreignTopicCount: 2, hasForeignContent: true });
-  });
-
-  it("acknowledges teammates' content once the warning has loaded", async () => {
-    vi.spyOn(agentService, 'getAgentDeleteImpact').mockResolvedValue({
-      foreignTopicCount: 3,
-      hasForeignContent: true,
-    });
-    const { config, onConfirm } = openDialog();
-    await flush();
-
-    await config.onOk();
-    expect(onConfirm).toHaveBeenCalledWith({ acknowledgeForeignContent: true });
-  });
-
-  it('acknowledges nothing when only the caller owns content', async () => {
-    vi.spyOn(agentService, 'getAgentDeleteImpact').mockResolvedValue({
-      foreignTopicCount: 0,
-      hasForeignContent: false,
-    });
-    const { config, onConfirm } = openDialog();
-    await flush();
-
-    await config.onOk();
-    expect(onConfirm).toHaveBeenCalledWith({ acknowledgeForeignContent: false });
-  });
-
-  it('acknowledges nothing when the impact lookup fails', async () => {
+  it('does not reject when the impact lookup fails', async () => {
     vi.spyOn(agentService, 'getAgentDeleteImpact').mockRejectedValue(new Error('network'));
-    vi.spyOn(console, 'error').mockImplementation(() => {});
-    const { config, onConfirm } = openDialog();
-    await flush();
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-    await config.onOk();
-    expect(onConfirm).toHaveBeenCalledWith({ acknowledgeForeignContent: false });
+    confirmRemoveAgent({ agentId: 'agent-1', onConfirm: vi.fn() });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(createModalMock).toHaveBeenCalledTimes(1);
+    expect(consoleError).toHaveBeenCalled();
   });
 });
