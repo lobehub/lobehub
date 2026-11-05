@@ -32,6 +32,7 @@ import {
   formatFieldFormatViolations,
   mergeWithDefaults,
   platformRegistry,
+  restrictPlatformToWebhook,
   withResolvedConcurrencySettings,
 } from '@/server/services/bot/platforms';
 import {
@@ -171,12 +172,19 @@ const withFormSettings = (platform: string, settings?: Record<string, unknown>) 
 
 export const agentBotProviderRouter = router({
   listPlatforms: authedProcedure.query(async ({ ctx }) => {
+    const { useMessageGateway } = new GatewayService();
+
     return Promise.all(
       platformRegistry.listSerializedPlatforms().map((platform) =>
-        withBotPlatformAccessMeta(platform, {
-          userId: ctx.userId,
-          workspaceId: ctx.workspaceId ?? undefined,
-        }),
+        withBotPlatformAccessMeta(
+          useMessageGateway && platform.messageGatewayUnsupported
+            ? restrictPlatformToWebhook(platform)
+            : platform,
+          {
+            userId: ctx.userId,
+            workspaceId: ctx.workspaceId ?? undefined,
+          },
+        ),
       ),
     );
   }),

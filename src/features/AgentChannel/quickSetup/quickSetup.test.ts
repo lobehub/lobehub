@@ -170,6 +170,18 @@ describe('getSetupGuide', () => {
     expect(DINGTALK_CONSOLE_URL).toMatch(/^https:\/\/open-dev\.dingtalk\.com\//);
   });
 
+  it('tells DingTalk webhook bots to configure HTTP callback, not Stream mode', () => {
+    const stepKeys = (connectionMode: string) =>
+      getSetupGuide('dingtalk', { appName: 'Moss', connectionMode })!.steps.map((step) => step.key);
+
+    expect(stepKeys('webhook')).toContain('robotWebhook');
+    expect(stepKeys('webhook')).not.toContain('robot');
+    expect(stepKeys('websocket')).toContain('robot');
+    expect(defaultAgentLocale['channel.quickSetup.dingtalk.robotWebhook.title']).toMatch(
+      /HTTP callback/,
+    );
+  });
+
   it('asks for the DingTalk Client ID and Secret inline and leaves RobotCode optional', () => {
     expect([...getInlineFieldKeys('dingtalk')]).toEqual(['applicationId', 'clientSecret']);
     expect(getInlineFieldKeys('dingtalk').has('robotCode')).toBe(false);

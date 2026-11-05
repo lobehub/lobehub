@@ -75,6 +75,35 @@ describe('GatewayService', () => {
       expect(mockGatewayClient.connect).not.toHaveBeenCalled();
     });
 
+    it('never pushes a platform the gateway cannot host', async () => {
+      mockFindEnabledByPlatform.mockImplementation(async (_db: unknown, platform: string) =>
+        platform === 'dingtalk'
+          ? [
+              {
+                applicationId: 'ding-app',
+                credentials: { clientSecret: 'x' },
+                id: 'prov-ding',
+                settings: {},
+                userId: 'u1',
+              },
+            ]
+          : [],
+      );
+      mockResolveConnectionMode.mockReturnValue('websocket');
+
+      await service.ensureRunning();
+
+      expect(mockGatewayClient.connect).not.toHaveBeenCalled();
+      expect(mockUpdateBotRuntimeStatus).toHaveBeenCalledWith(
+        expect.objectContaining({
+          applicationId: 'ding-app',
+          errorCode: 'webhook_mode_required',
+          platform: 'dingtalk',
+          status: 'failed',
+        }),
+      );
+    });
+
     it('ensure-wakes a registered-only desired provider without probing status', async () => {
       // Registered-only (pruned from stats) used to be skipped outright, but a
       // stranded DO (alarm chain lost) looks exactly like this and sleeps
@@ -279,15 +308,19 @@ describe('GatewayService', () => {
     });
 
     it('handles connect failure gracefully', async () => {
-      mockFindEnabledByPlatform.mockResolvedValue([
-        {
-          applicationId: 'app-1',
-          credentials: { token: 'x' },
-          id: 'prov-1',
-          settings: {},
-          userId: 'u1',
-        },
-      ]);
+      mockFindEnabledByPlatform.mockImplementation(async (_db: unknown, platform: string) =>
+        platform === 'discord'
+          ? [
+              {
+                applicationId: 'app-1',
+                credentials: { token: 'x' },
+                id: 'prov-1',
+                settings: {},
+                userId: 'u1',
+              },
+            ]
+          : [],
+      );
       mockResolveConnectionMode.mockReturnValue('websocket');
       mockGatewayClient.connect.mockRejectedValue(new Error('timeout'));
 

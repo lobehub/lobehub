@@ -86,6 +86,9 @@ export default {
   'channel.quickSetup.dingtalk.robot.title': 'Add the robot and choose Stream mode',
   'channel.quickSetup.dingtalk.robot.desc':
     'Under App Capabilities, add Robot, fill in its details and set the message receiving mode to Stream mode.',
+  'channel.quickSetup.dingtalk.robotWebhook.title': 'Add the robot and choose HTTP callback',
+  'channel.quickSetup.dingtalk.robotWebhook.desc':
+    'Under App Capabilities, add Robot, fill in its details, set the message receiving mode to HTTP callback, and paste the Webhook URL shown here after saving as the message receiving address.',
   'channel.quickSetup.dingtalk.permissions.title': 'Grant the robot send permission',
   'channel.quickSetup.dingtalk.permissions.desc':
     'Under Permissions, request qyapi_robot_sendmsg so the bot can reply in single and group chats.',
@@ -227,6 +230,8 @@ export default {
     'The bot session has expired. Save the bot again to reconnect it.',
   'channel.connectionError.upstream_unavailable':
     'The platform service is temporarily unavailable. LobeHub will try again later.',
+  'channel.connectionError.webhook_mode_required':
+    'This deployment can only connect this platform in Webhook mode. Switch the connection mode to Webhook and update the callback address in the platform console.',
   'channel.endpointUrl': 'Webhook URL',
   'channel.endpointUrlHint':
     'Please copy this URL and paste it into the <bold>{{fieldName}}</bold> field in the {{name}} Developer Portal.',

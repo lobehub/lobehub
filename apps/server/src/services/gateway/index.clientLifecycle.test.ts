@@ -13,6 +13,7 @@ import {
   mockFindEnabledByPlatformAndAppId,
   mockGatewayClient,
   mockGatewayManager,
+  mockGetBotRuntimeStatus,
   mockResolveConnectionMode,
   mockUpdateBotRuntimeStatus,
   resetGatewayServiceMocks,
@@ -65,6 +66,46 @@ describe('GatewayService client lifecycle', () => {
   describe('via the message gateway', () => {
     beforeEach(() => {
       mockGatewayClient.isEnabled = true;
+    });
+
+    it('refuses a persistent connection the gateway cannot host, with an actionable error', async () => {
+      mockFindEnabledByPlatformAndAppId.mockResolvedValue(provider);
+      mockResolveConnectionMode.mockReturnValue('websocket');
+
+      await expect(service.startClient('dingtalk', 'app-1', 'user-1')).rejects.toMatchObject({
+        code: 'PRECONDITION_FAILED',
+        message: expect.stringMatching(/switch the connection mode to webhook/i),
+      });
+
+      expect(mockGatewayClient.connect).not.toHaveBeenCalled();
+      expect(mockUpdateBotRuntimeStatus).toHaveBeenCalledWith({
+        applicationId: 'app-1',
+        errorCode: 'webhook_mode_required',
+        errorMessage: expect.stringMatching(/switch the connection mode to webhook/i),
+        platform: 'dingtalk',
+        status: 'failed',
+      });
+    });
+
+    it('still starts webhook mode on a platform the gateway cannot host', async () => {
+      mockFindEnabledByPlatformAndAppId.mockResolvedValue(provider);
+      mockResolveConnectionMode.mockReturnValue('webhook');
+
+      await expect(service.startClient('dingtalk', 'app-1', 'user-1')).resolves.toBe('started');
+
+      expect(mockGatewayManager.startClient).toHaveBeenCalledWith('dingtalk', 'app-1');
+      expect(mockGatewayClient.connect).not.toHaveBeenCalled();
+    });
+
+    it('keeps the refusal visible instead of overwriting it with gateway status', async () => {
+      const cached = { errorMessage: 'refused', status: 'failed' };
+      mockGetBotRuntimeStatus.mockResolvedValue(cached);
+      mockFindEnabledByPlatformAndAppId.mockResolvedValue(provider);
+      mockResolveConnectionMode.mockReturnValue('websocket');
+
+      await expect(service.refreshBotRuntimeStatus('dingtalk', 'app-1')).resolves.toBe(cached);
+
+      expect(mockGatewayClient.getStatus).not.toHaveBeenCalled();
     });
 
     it('connects a persistent provider with its capabilities and marks it connected', async () => {
