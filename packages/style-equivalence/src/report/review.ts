@@ -130,3 +130,20 @@ export const completionText = (
 
 export const standInNote = (tags: string[] | undefined) =>
   tags?.length ? `替身：这里画的是占位块，不是真实组件（${tags.join('、')}）` : undefined;
+
+export const shotNotes = (
+  item: { flags: string[]; standIns?: Partial<Record<'base' | 'head', string[]>> },
+  side: 'base' | 'head',
+) => {
+  const notes: string[] = [];
+  const standIn = standInNote(item.standIns?.[side]);
+  if (standIn) notes.push(standIn);
+  if (item.flags.includes('INNER_TARGET')) {
+    const partly = item.flags.find((flag) => flag.startsWith('INNER_TARGET_PARTLY_FORWARDED:'));
+    const tag = partly?.slice(partly.indexOf(':') + 1).split('|')[0];
+    notes.push(
+      `只画了容器本身：规则要命中的${tag ? ` ${tag} ` : '内部元素'}在组件${tag ? '内部' : '里'}，截图里没有`,
+    );
+  }
+  return notes;
+};

@@ -3,7 +3,7 @@ import * as stylex from '@stylexjs/stylex';
 
 import { REVEAL_COLORS } from '../../server/reveal';
 import { cropShotUrl, type ReviewView } from '../api';
-import { cellVerdict, reviewGrid, standInNote } from '../review';
+import { cellVerdict, reviewGrid, shotNotes } from '../review';
 import { StyleDetails } from './StyleDetails';
 
 const styles = stylex.create({
@@ -136,7 +136,7 @@ const Pair = ({
 }) => (
   <div {...stylex.props(styles.pair)}>
     {sidesOf(item).map((side) => {
-      const note = standInNote(item.standIns?.[side]);
+      const notes = shotNotes(item, side);
       return (
         <div key={side}>
           <div {...stylex.props(styles.side)}>{side === 'base' ? '改之前' : '改之后'}</div>
@@ -147,7 +147,13 @@ const Pair = ({
               src={cropShotUrl(item.key, side, condition, combo)}
               {...stylex.props(styles.shot)}
             />
-            {note && <div {...stylex.props(styles.standIn)}>{note}</div>}
+            {notes.length > 0 && (
+              <div {...stylex.props(styles.standIn)}>
+                {notes.map((note) => (
+                  <div key={note}>{note}</div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       );

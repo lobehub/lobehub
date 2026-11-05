@@ -7,6 +7,7 @@ import {
   nextOpen,
   nextSelection,
   reviewGrid,
+  shotNotes,
   standInNote,
 } from './review';
 
@@ -200,5 +201,26 @@ describe('standInNote', () => {
   it('says nothing when the screenshot shows real elements', () => {
     expect(standInNote(undefined)).toBeUndefined();
     expect(standInNote([])).toBeUndefined();
+  });
+});
+
+describe('shotNotes', () => {
+  it('says the inner elements a descendant rule targets are not drawn', () => {
+    expect(
+      shotNotes(
+        { flags: ['INNER_TARGET', 'INNER_TARGET_PARTLY_FORWARDED:h1|A,B'], standIns: {} },
+        'head',
+      ),
+    ).toEqual(['只画了容器本身：规则要命中的 h1 在组件内部，截图里没有']);
+    expect(shotNotes({ flags: ['INNER_TARGET'], standIns: {} }, 'base')).toEqual([
+      '只画了容器本身：规则要命中的内部元素在组件里，截图里没有',
+    ]);
+  });
+
+  it('combines a stand-in note with the inner-target note', () => {
+    expect(
+      shotNotes({ flags: ['INNER_TARGET'], standIns: { base: ['Tabs'] } }, 'base'),
+    ).toHaveLength(2);
+    expect(shotNotes({ flags: [], standIns: { base: ['Tabs'] } }, 'head')).toEqual([]);
   });
 });
