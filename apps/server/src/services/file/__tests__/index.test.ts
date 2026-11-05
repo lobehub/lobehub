@@ -3,6 +3,7 @@ import { TRPCError } from '@trpc/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { FileModel } from '@/database/models/file';
+import { FileContentRepository } from '@/database/repositories/fileContent';
 import { TempFileManager } from '@/server/utils/tempFileManager';
 import { FileSource } from '@/types/files';
 
@@ -39,6 +40,11 @@ vi.mock('../impls', () => ({
   }),
 }));
 
+vi.mock('@/database/repositories/fileContent', () => {
+  class FileContentRepository {}
+  (FileContentRepository.prototype as any).replaceStoredContent = vi.fn();
+  return { FileContentRepository };
+});
 vi.mock('@/database/models/file');
 
 vi.mock('@/server/utils/tempFileManager');
@@ -521,6 +527,38 @@ describe('FileService', () => {
       expect(mockFileModel.checkHash).toHaveBeenCalled();
       const createdRecord = mockFileModel.create.mock.calls[0][0];
       expect(createdRecord.fileHash.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('refreshFileRecordByUrl', () => {
+    const replaceStoredContent = vi.mocked(FileContentRepository.prototype.replaceStoredContent);
+
+    beforeEach(() => {
+      replaceStoredContent.mockReset();
+    });
+
+    it('returns the access url of the reused row', async () => {
+      replaceStoredContent.mockResolvedValue('file-1');
+
+      const result = await service.refreshFileRecordByUrl('files/a.docx', {
+        fileType: 'application/docx',
+        size: 42,
+      });
+
+      expect(replaceStoredContent).toHaveBeenCalledWith('files/a.docx', {
+        fileType: 'application/docx',
+        size: 42,
+      });
+      expect(result?.fileId).toBe('file-1');
+      expect(result?.url).toContain('file-1');
+    });
+
+    it('resolves undefined when no row can be reused', async () => {
+      replaceStoredContent.mockResolvedValue(undefined);
+
+      await expect(
+        service.refreshFileRecordByUrl('files/a.docx', { fileType: 'x', size: 1 }),
+      ).resolves.toBeUndefined();
     });
   });
 

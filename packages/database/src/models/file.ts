@@ -54,6 +54,7 @@ import {
   notAgentShareFile,
   ownChatAttachment,
 } from '../utils/fileVisibility';
+import { notTrashed } from '../utils/softDelete';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
 /**
@@ -229,7 +230,11 @@ export class FileModel {
     await tx.delete(files).where(and(eq(files.id, id), this.ownership()));
 
     if (!fileHash) {
-      return removeGlobalFile && getAgentShareFileProvenance(file.metadata) ? file : undefined;
+      if (!removeGlobalFile || !getAgentShareFileProvenance(file.metadata)) return undefined;
+
+      return (await this.findReferencedStorageUrls(tx, [file.url])).has(file.url)
+        ? undefined
+        : file;
     }
 
     const result = await tx
@@ -244,10 +249,35 @@ export class FileModel {
     if (fileCount === 0 && removeGlobalFile) {
       await tx.delete(globalFiles).where(eq(globalFiles.hashId, fileHash));
 
-      return file;
+      return (await this.findReferencedStorageUrls(tx, [file.url])).has(file.url)
+        ? undefined
+        : file;
     }
 
     return undefined;
+  };
+
+  /**
+   * Storage keys still pointed at by a surviving row. Rows can share one object
+   * under different hashes (a sandbox re-export overwrites the same key), so a
+   * hash reference count alone cannot prove the object is unused. Recycle-bin
+   * rows count because they can still be restored.
+   */
+  private findReferencedStorageUrls = async (tx: Transaction, urls: string[]) => {
+    const rows = await tx
+      .select({ url: files.url })
+      .from(files)
+      .where(
+        and(
+          inArray(files.url, urls),
+          // Not `ownership()`: another member's private row still needs the object.
+          this.workspaceId
+            ? or(eq(files.userId, this.userId), eq(files.workspaceId, this.workspaceId))
+            : eq(files.userId, this.userId),
+        ),
+      );
+
+    return new Set(rows.map((row) => row.url));
   };
 
   /** Delete a file row within the caller's access scope. */
@@ -476,7 +506,22 @@ export class FileModel {
       const hashesToDeleteSet = new Set(hashesToDelete);
 
       // Return only files whose backing global object became unreferenced.
-      return fileList.filter((file) => file.fileHash && hashesToDeleteSet.has(file.fileHash));
+      const unreferenced = fileList.filter(
+        (file) => file.fileHash && hashesToDeleteSet.has(file.fileHash),
+      );
+      if (unreferenced.length === 0) return [];
+
+      const referencedUrls = await this.findReferencedStorageUrls(
+        trx,
+        unreferenced.map((file) => file.url),
+      );
+      const seenUrls = new Set<string>();
+
+      return unreferenced.filter((file) => {
+        if (referencedUrls.has(file.url) || seenUrls.has(file.url)) return false;
+        seenUrls.add(file.url);
+        return true;
+      });
     });
   };
 
@@ -626,6 +671,19 @@ export class FileModel {
         inArray(files.id, ids),
         this.ownership(),
         fileMatchesAccessScope(files.metadata, accessScope),
+      ),
+    });
+  };
+
+  /** Rows the caller can access for a storage key, newest first. */
+  findManyByUrl = async (url: string) => {
+    return this.db.query.files.findMany({
+      orderBy: [desc(files.createdAt)],
+      where: and(
+        eq(files.url, url),
+        notTrashed(files.isDeleted),
+        this.ownership(),
+        fileMatchesAccessScope(files.metadata, ordinaryFileAccessScope),
       ),
     });
   };
@@ -850,7 +908,7 @@ export class FileModel {
     });
 
   // Abstract common method for deleting chunks
-  private deleteFileChunks = async (trx: PgTransaction<any>, fileIds: string[]) => {
+  deleteFileChunks = async (trx: PgTransaction<any>, fileIds: string[]) => {
     /* v8 ignore next -- unreachable: both callers pass a non-empty list ([id] in deleteInTransaction; deleteMany returns early when no file matched) */
     if (fileIds.length === 0) return;
 
