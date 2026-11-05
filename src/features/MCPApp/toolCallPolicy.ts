@@ -166,14 +166,15 @@ const revalidateConnectors = async (agentId: string | undefined): Promise<boolea
   }
 };
 
-// The resync a view's call started for each connector on this page, settled or not
+// The resync a view's call started for each connector on this page: pending, or done
 const connectorResyncs = new Map<string, Promise<boolean>>();
 
 /**
  * Sync a connector's tools again, once per page, so a list synced before MCP
  * Apps was on picks up the tools its server offers only to views (stdio ones
  * too, which only this desktop can list). Calls made meanwhile wait for the
- * same sync. Whether it succeeded.
+ * same sync; one that failed is tried again by the next call. Whether it
+ * succeeded.
  */
 const resyncConnectorTools = (connectorId: string): Promise<boolean> => {
   let resync = connectorResyncs.get(connectorId);
@@ -187,6 +188,8 @@ const resyncConnectorTools = (connectorId: string): Promise<boolean> => {
             '[MCPApp] failed to sync the tools of a connector for a view tool call:',
             error,
           );
+          // A failed sync may succeed later: the next call tries again
+          connectorResyncs.delete(connectorId);
           return false;
         },
       );

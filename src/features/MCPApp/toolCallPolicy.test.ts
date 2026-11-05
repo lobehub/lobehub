@@ -197,6 +197,23 @@ describe('getAppToolCallPolicy', () => {
       expect(toolStore.syncConnectorTools).toHaveBeenCalledTimes(1);
     });
 
+    it('tries a failed resync again on the next call', async () => {
+      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      connectors.set('flaky-app', { ...connector('auto'), id: 'conn_flaky' });
+      toolStore.syncConnectorTools.mockRejectedValueOnce(new Error('offline'));
+      expect(await getAppToolCallPolicy('flaky-app', 'load_page')).toBe('deny');
+
+      toolStore.syncConnectorTools.mockImplementationOnce(async () => {
+        connectors.set('flaky-app', {
+          ...connector('auto'),
+          id: 'conn_flaky',
+          tools: [{ metadata: { visibility: ['app'] }, permission: 'auto', toolName: 'load_page' }],
+        });
+      });
+      expect(await getAppToolCallPolicy('flaky-app', 'load_page')).toBe('allow');
+      expect(toolStore.syncConnectorTools).toHaveBeenCalledTimes(2);
+    });
+
     it('refuses a view a connector tool only the model may call', async () => {
       connectors.set('mail', {
         ...connector('auto'),
