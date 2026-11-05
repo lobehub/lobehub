@@ -115,9 +115,15 @@ const styles = stylex.create({
 });
 
 export const comparisonMedia = stylex.create({
-  flat: {
+  image: {
     display: 'block',
     width: '100%',
+    borderWidth: 'medium',
+    borderStyle: 'none',
+    borderColor: 'currentcolor',
+    borderRadius: 0,
+  },
+  video: {
     borderWidth: 'medium',
     borderStyle: 'none',
     borderColor: 'currentcolor',

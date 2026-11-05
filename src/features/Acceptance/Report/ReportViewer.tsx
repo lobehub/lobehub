@@ -637,7 +637,7 @@ const EvidenceItem = memo<{
           <Image
             preview
             alt={e.description ?? label}
-            classNames={flat ? { image: stylex.props(comparisonMedia.flat).className } : undefined}
+            classNames={flat ? { image: stylex.props(comparisonMedia.image).className } : undefined}
             src={e.fileUrl}
             style={{ maxWidth: '100%', ...(flat && { borderRadius: 0, width: '100%' }) }}
             variant={flat ? 'borderless' : 'outlined'}
@@ -646,7 +646,7 @@ const EvidenceItem = memo<{
       ) : e.fileUrl && e.type === 'video' ? (
         <video
           controls
-          {...stylex.props(styles.evidenceVideo, flat && comparisonMedia.flat)}
+          {...stylex.props(styles.evidenceVideo, flat && comparisonMedia.video)}
           src={e.fileUrl}
         />
       ) : e.fileUrl && e.type === 'audio' ? (

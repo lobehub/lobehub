@@ -58,7 +58,7 @@ const comparisonContent = (item: AcceptanceEvidence, action?: ReactNode, video?:
     <Image
       preview
       alt={item.description ?? item.fileName ?? item.type}
-      classNames={{ image: stylex.props(comparisonMedia.flat).className }}
+      classNames={{ image: stylex.props(comparisonMedia.image).className }}
       loading={'lazy'}
       src={item.fileUrl!}
       style={{ aspectRatio: imageRatio(item), borderRadius: 0, width: '100%' }}

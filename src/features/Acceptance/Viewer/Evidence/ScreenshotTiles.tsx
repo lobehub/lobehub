@@ -20,7 +20,7 @@ import {
 } from './screenshotSlices';
 import { useImageThreads } from './useImageThreads';
 
-const flatImageClassNames = { image: stylex.props(comparisonMedia.flat).className };
+const flatImageClassNames = { image: stylex.props(comparisonMedia.image).className };
 
 const styles = createStaticStyles(({ css }) => ({
   badge: css`
