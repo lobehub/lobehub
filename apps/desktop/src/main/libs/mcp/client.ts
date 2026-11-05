@@ -88,6 +88,9 @@ export interface StdioSpawnFailureInput {
  * Electron main process heap while the 5s pre-check window runs. */
 const PRECHECK_OUTPUT_CAP_BYTES = 64 * 1024;
 
+/** After a failed tool listing, MCP App lookups give up at once for this long. */
+const TOOL_LISTING_RETRY_MS = 60_000;
+
 /** Grace window between `exit` and `close` before the pre-check classifies
  * on the data captured so far — a grandchild holding the stdio pipes can
  * keep `close` pending indefinitely (see the `close`/`exit` handlers in
@@ -366,6 +369,8 @@ export class MCPClient {
   private appHiddenTools?: Set<string>;
   /** Tools only views may call (`_meta.ui.visibility` without "model"), from the same listing */
   private modelHiddenTools?: Set<string>;
+  /** When the last listing for these lookups failed, while none has succeeded */
+  private toolListingFailedAt?: number;
 
   constructor(
     params: MCPClientParams,
@@ -401,6 +406,7 @@ export class MCPClient {
       this.uiResourceUris = undefined;
       this.appHiddenTools = undefined;
       this.modelHiddenTools = undefined;
+      this.toolListingFailedAt = undefined;
     });
 
     switch (params.type) {
@@ -781,11 +787,32 @@ export class MCPClient {
   }
 
   /**
+   * List the tools once for the MCP App lookups below. A failed listing is not
+   * retried for {@link TOOL_LISTING_RETRY_MS}: each lookup fails at once
+   * meanwhile, so a server that can't list them doesn't add a listing wait
+   * (or two) before every tool call.
+   */
+  private async ensureToolsListed() {
+    if (this.appHiddenTools) return;
+    const failedAt = this.toolListingFailedAt;
+    if (failedAt !== undefined && Date.now() - failedAt < TOOL_LISTING_RETRY_MS) {
+      throw new Error('The MCP server could not list its tools recently');
+    }
+    try {
+      await this.listTools();
+      this.toolListingFailedAt = undefined;
+    } catch (error) {
+      this.toolListingFailedAt = Date.now();
+      throw error;
+    }
+  }
+
+  /**
    * Whether the server keeps `toolName` from the model: its
    * `_meta.ui.visibility` lacks "model", so only its views may call it.
    */
   async isToolHiddenFromModel(toolName: string): Promise<boolean> {
-    if (!this.modelHiddenTools) await this.listTools();
+    await this.ensureToolsListed();
 
     return !!this.modelHiddenTools?.has(toolName);
   }
@@ -795,7 +822,7 @@ export class MCPClient {
    * includes "app", or is unset. Lists tools once per client to learn it.
    */
   async isToolCallableByApp(toolName: string): Promise<boolean> {
-    if (!this.appHiddenTools) await this.listTools();
+    await this.ensureToolsListed();
 
     return !this.appHiddenTools?.has(toolName);
   }
@@ -805,7 +832,7 @@ export class MCPClient {
    * Lists tools once per client to learn it.
    */
   async getToolUiResourceUri(toolName: string): Promise<string | undefined> {
-    if (!this.uiResourceUris) await this.listTools();
+    await this.ensureToolsListed();
 
     return this.uiResourceUris?.get(toolName);
   }

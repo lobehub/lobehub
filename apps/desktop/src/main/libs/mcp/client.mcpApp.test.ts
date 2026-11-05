@@ -90,3 +90,26 @@ describe('desktop MCPClient after the server changes its tools', () => {
     expect(listTools).toHaveBeenCalledTimes(2);
   });
 });
+
+describe('desktop MCPClient when the server cannot list its tools', () => {
+  it('gives up at once for a while instead of listing again before every lookup', async () => {
+    vi.useFakeTimers();
+    try {
+      listTools.mockRejectedValue(new Error('slow server'));
+      const client = new MCPClient(params, { mcpApps: true });
+
+      await expect(client.isToolHiddenFromModel('page')).rejects.toThrow('slow server');
+      await expect(client.getToolUiResourceUri('page')).rejects.toThrow();
+      await expect(client.isToolCallableByApp('page')).rejects.toThrow();
+      expect(listTools).toHaveBeenCalledTimes(1);
+
+      // Tried again once the cooldown has passed
+      listTools.mockResolvedValue({ tools: [{ name: 'page' }] });
+      vi.advanceTimersByTime(60_000);
+      await expect(client.isToolCallableByApp('page')).resolves.toBe(true);
+      expect(listTools).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
