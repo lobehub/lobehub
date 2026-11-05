@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   assertCanPerformResourceAction: vi.fn(),
   create: vi.fn(),
   createDefaultChannel: vi.fn(),
+  createSite: vi.fn(),
   resolveCoordinatorAgents: vi.fn(),
 }));
 
@@ -35,6 +36,12 @@ vi.mock('@/database/repositories/projectCoordinator', () => ({
 
 vi.mock('@/server/services/channel/defaultChannel', () => ({
   createDefaultChannel: mocks.createDefaultChannel,
+}));
+
+vi.mock('@/server/services/projectReview', () => ({
+  ProjectReviewService: vi.fn(function () {
+    return { createSite: mocks.createSite };
+  }),
 }));
 
 vi.mock('@/server/services/resourcePermission', () => ({
@@ -119,5 +126,30 @@ describe('project.create default Channel', () => {
     expect(mocks.createDefaultChannel).toHaveBeenCalledWith(
       expect.objectContaining({ projectId: 'project-1', workspaceId: undefined }),
     );
+  });
+});
+
+describe('project.create from a client that still sends a type or a site', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.create.mockResolvedValue({
+      coordinatorAgentId: 'agent-1',
+      id: 'project-1',
+      name: 'Launch',
+    });
+    mocks.resolveCoordinatorAgents.mockImplementation(async (projects) => projects);
+  });
+
+  it('creates only the project and drops the extra fields', async () => {
+    const result = await caller('ws-1').create({
+      name: 'Launch',
+      siteOrigin: 'https://launch.dev',
+      type: 'web',
+    } as never);
+
+    expect(mocks.create.mock.calls[0][0]).not.toHaveProperty('type');
+    expect(mocks.create.mock.calls[0][0]).not.toHaveProperty('siteOrigin');
+    expect(mocks.createSite).not.toHaveBeenCalled();
+    expect(result).not.toHaveProperty('siteError');
   });
 });

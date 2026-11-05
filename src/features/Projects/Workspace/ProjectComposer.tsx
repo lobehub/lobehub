@@ -1,7 +1,7 @@
 'use client';
 
 import { cssVar, Flexbox, Segmented, toast } from '@lobehub/ui';
-import { memo, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useUploadFiles } from '@/components/DragUploadZone';
@@ -43,8 +43,14 @@ const inputContainerProps = {
 };
 const actionBarStyle = { paddingBlockEnd: ACTION_BAR_INSET, paddingInline: ACTION_BAR_INSET };
 
+export interface ProjectComposerRequest {
+  at: number;
+  mode: ProjectComposerMode;
+}
+
 interface ProjectComposerProps {
   detail: ProjectDetail;
+  request?: ProjectComposerRequest;
 }
 
 /**
@@ -53,11 +59,25 @@ interface ProjectComposerProps {
  * project agent (the main agent unless another is picked), or recording a task
  * for it.
  */
-const ProjectComposer = memo<ProjectComposerProps>(({ detail }) => {
+const ProjectComposer = memo<ProjectComposerProps>(({ detail, request }) => {
   const { project } = detail;
+  const containerRef = useRef<HTMLDivElement>(null);
   const { t } = useTranslation('project');
   const { t: tHome } = useTranslation('home');
   const [mode, setMode] = useState<ProjectComposerMode>('chat');
+
+  const [handledRequest, setHandledRequest] = useState(request);
+  if (request !== handledRequest) {
+    setHandledRequest(request);
+    if (request) setMode(request.mode);
+  }
+
+  useEffect(() => {
+    if (!request) return;
+    const container = containerRef.current;
+    container?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    container?.querySelector<HTMLElement>('[contenteditable="true"]')?.focus();
+  }, [request]);
   const agents = useMemo(() => projectComposerAgents(detail), [detail]);
   const [pickedAgentId, setPickedAgentId] = useState<string>();
   // A pick that left the project (disabled or removed) falls back to the main agent.
@@ -97,49 +117,51 @@ const ProjectComposer = memo<ProjectComposerProps>(({ detail }) => {
   );
 
   return (
-    <InputDragUpload radius={CONTAINER_RADIUS} onUploadFiles={handleUploadFiles}>
-      <ChatInputProvider
-        agentId={agentId}
-        allowExpand={false}
-        contextSelectionKey={`project-home:${project.id}`}
-        leftActions={leftActions}
-        rightActions={rightActions}
-        sendButtonProps={sendButtonProps}
-        slashPlacement="bottom"
-        topicId={null}
-        onSend={submit}
-      >
-        <DesktopChatInput
-          actionBarStyle={actionBarStyle}
-          dropdownPlacement="bottomLeft"
-          inputContainerProps={inputContainerProps}
-          showControlBar={false}
-          leftContent={
-            <Flexbox horizontal align={'center'} gap={4}>
-              <Segmented
-                size={'small'}
-                value={mode}
-                options={[
-                  { label: t('overview.mode.chat'), value: 'chat' },
-                  { label: t('overview.mode.task'), value: 'task' },
-                ]}
-                onChange={(value) => setMode(value as ProjectComposerMode)}
-              />
-              <ProjectAgentSelect
-                agents={agents}
-                disabled={sending}
-                value={agentId}
-                onChange={setPickedAgentId}
-              />
-              <FileUpload includeKnowledge={false} />
-            </Flexbox>
-          }
-          placeholder={t(
-            mode === 'task' ? 'overview.taskPlaceholder' : 'overview.composerPlaceholder',
-          )}
-        />
-      </ChatInputProvider>
-    </InputDragUpload>
+    <div ref={containerRef}>
+      <InputDragUpload radius={CONTAINER_RADIUS} onUploadFiles={handleUploadFiles}>
+        <ChatInputProvider
+          agentId={agentId}
+          allowExpand={false}
+          contextSelectionKey={`project-home:${project.id}`}
+          leftActions={leftActions}
+          rightActions={rightActions}
+          sendButtonProps={sendButtonProps}
+          slashPlacement="bottom"
+          topicId={null}
+          onSend={submit}
+        >
+          <DesktopChatInput
+            actionBarStyle={actionBarStyle}
+            dropdownPlacement="bottomLeft"
+            inputContainerProps={inputContainerProps}
+            showControlBar={false}
+            leftContent={
+              <Flexbox horizontal align={'center'} gap={4}>
+                <Segmented
+                  size={'small'}
+                  value={mode}
+                  options={[
+                    { label: t('overview.mode.chat'), value: 'chat' },
+                    { label: t('overview.mode.task'), value: 'task' },
+                  ]}
+                  onChange={(value) => setMode(value as ProjectComposerMode)}
+                />
+                <ProjectAgentSelect
+                  agents={agents}
+                  disabled={sending}
+                  value={agentId}
+                  onChange={setPickedAgentId}
+                />
+                <FileUpload includeKnowledge={false} />
+              </Flexbox>
+            }
+            placeholder={t(
+              mode === 'task' ? 'overview.taskPlaceholder' : 'overview.composerPlaceholder',
+            )}
+          />
+        </ChatInputProvider>
+      </InputDragUpload>
+    </div>
   );
 });
 

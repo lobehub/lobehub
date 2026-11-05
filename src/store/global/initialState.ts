@@ -252,6 +252,7 @@ export interface SystemStatus {
    * in the Home inbox. Append-only and capped, see `appendDismissedIslandKey`.
    */
   dismissedIslandItemKeys?: string[];
+  dismissedProjectOnboarding?: Record<string, boolean>;
   /**
    * List options of each Docs sidebar page section, kept apart so narrowing
    * Shared docs never changes what My docs shows.
