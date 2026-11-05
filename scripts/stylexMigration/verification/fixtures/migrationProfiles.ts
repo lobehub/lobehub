@@ -49,6 +49,7 @@ export const migrationProfiles: Record<string, FixtureProfile> = {
   EvalTestCaseTable: {
     dependencies: ['lucide-react', 'i18next', 'react-i18next'],
     selector: '[data-component-mount] tbody tr',
+    settleFrames: 2,
     variants: [
       { id: 'selected', states: ['default', 'hover'] },
       { id: 'unselected', states: ['default', 'hover'] },
