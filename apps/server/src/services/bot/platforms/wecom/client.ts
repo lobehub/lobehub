@@ -37,6 +37,7 @@ const log = debug('bot-platform:wecom:bot');
 
 const CONNECTED_STATUS_TTL_BUFFER_MS = 60 * 1000;
 const DEFAULT_DURATION_MS = 8 * 60 * 60 * 1000; // 8 hours
+const REFRESH_RETRY_MS = 60 * 1000;
 
 /** Shown as the runtime error when WeCom hands the bot to a newer connection. */
 export const WECOM_DISPLACED_MESSAGE =
@@ -103,6 +104,8 @@ class WeComClient implements PlatformClient {
   readonly applicationId: string;
 
   private connection: WeComLongConnection | null = null;
+  private generation = 0;
+  private pending: WeComLongConnection | null = null;
   private readonly config: BotProviderConfig;
   private readonly context: BotPlatformRuntimeContext;
   private refreshTimer: ReturnType<typeof setTimeout> | null = null;
@@ -119,6 +122,8 @@ class WeComClient implements PlatformClient {
   async start(options?: WeComGatewayListenerOptions): Promise<void> {
     log('Starting WeCom bot %s', this.applicationId);
     this.stopped = false;
+    // A later start() or stop() supersedes this one while its subscribe is still pending.
+    const generation = ++this.generation;
     const durationMs = options?.durationMs ?? DEFAULT_DURATION_MS;
     const ttlMs = durationMs + CONNECTED_STATUS_TTL_BUFFER_MS;
     const statusOptions = { redisClient: this.context.redisClient as any, ttlMs };
@@ -162,13 +167,22 @@ class WeComClient implements PlatformClient {
       webhookUrl: `${resolveSelfWebhookBase(this.context.appUrl)}/api/agent/webhooks/wecom/${this.applicationId}`,
     });
 
+    this.pending = connection;
     try {
       await connection.start();
     } catch (error) {
       connection.stop();
+      if (generation !== this.generation) return;
+      this.pending = null;
       await reportFailure(error);
       throw error;
     }
+    if (generation !== this.generation) {
+      // Stopped (integration disabled / deleted) or restarted while subscribing.
+      connection.stop();
+      return;
+    }
+    this.pending = null;
 
     this.connection = connection;
     registerWeComConnection(connection);
@@ -184,13 +198,7 @@ class WeComClient implements PlatformClient {
         }),
       );
     } else {
-      this.refreshTimer = setTimeout(() => {
-        if (this.stopped) return;
-        log('WeCom bot %s: refreshing after %dh', this.applicationId, durationMs / 3_600_000);
-        this.start().catch((error) =>
-          log('WeCom bot %s refresh failed: %O', this.applicationId, error),
-        );
-      }, durationMs);
+      this.scheduleRefresh(durationMs);
     }
 
     await updateBotRuntimeStatus(
@@ -207,6 +215,9 @@ class WeComClient implements PlatformClient {
   async stop(): Promise<void> {
     log('Stopping WeCom bot %s', this.applicationId);
     this.stopped = true;
+    this.generation++;
+    this.pending?.stop();
+    this.pending = null;
     this.closeConnection();
     await updateBotRuntimeStatus(
       {
@@ -216,6 +227,23 @@ class WeComClient implements PlatformClient {
       },
       { redisClient: this.context.redisClient as any },
     );
+  }
+
+  /**
+   * Reconnect periodically. The refresh closes the live socket before subscribing again (a second
+   * subscribe would kick the first), so a failed refresh would leave the bot offline: retry it.
+   */
+  private scheduleRefresh(delayMs: number): void {
+    if (this.refreshTimer) clearTimeout(this.refreshTimer);
+    this.refreshTimer = setTimeout(() => {
+      this.refreshTimer = null;
+      if (this.stopped) return;
+      log('WeCom bot %s: refreshing the long connection', this.applicationId);
+      this.start().catch((error) => {
+        log('WeCom bot %s refresh failed, retrying: %O', this.applicationId, error);
+        if (!this.stopped) this.scheduleRefresh(REFRESH_RETRY_MS);
+      });
+    }, delayMs);
   }
 
   private retireConnection(connection: WeComLongConnection): void {

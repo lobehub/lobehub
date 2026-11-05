@@ -1,3 +1,4 @@
+import debug from 'debug';
 import { eq } from 'drizzle-orm';
 
 import { assertBotFeatureAccess } from '@/business/server/bot/featureAccess';
@@ -9,6 +10,7 @@ import {
   hasPassiveListeningRule,
 } from '@/server/services/conversationWake/config';
 import { GatewayService } from '@/server/services/gateway';
+import { canHostInProcessConnections } from '@/server/services/gateway/inProcessConnections';
 
 import { getBotMessageRouter } from './BotMessageRouter';
 import {
@@ -19,6 +21,8 @@ import {
   resolveConnectionMode,
   validateAccessSettings,
 } from './platforms';
+
+const log = debug('lobe-server:bot:provider-settings');
 
 /**
  * Merge schema defaults into incoming settings before persisting, so the DB
@@ -179,6 +183,7 @@ interface BotInvalidationTarget {
 
 interface BotInvalidationDelta {
   applicationId?: string;
+  credentials?: Record<string, unknown>;
   enabled?: boolean;
   platform?: string;
   settings?: Record<string, unknown>;
@@ -230,4 +235,20 @@ export async function invalidateBotAfterUpdate(
   }
 
   await getBotMessageRouter().invalidateBot(existing.platform, existing.applicationId);
+
+  // A platform whose live connection is held in-process signs what it forwards with its
+  // credentials, and the reloaded webhook adapter now verifies with the new ones: restart the
+  // connection on them, or every inbound message is refused from here on.
+  if (
+    !shouldStopRuntime &&
+    value.credentials !== undefined &&
+    platformRegistry.getPlatform(existing.platform)?.requiresInProcessConnection &&
+    canHostInProcessConnections()
+  ) {
+    try {
+      await service.startClient(existing.platform, existing.applicationId, existing.userId);
+    } catch (error) {
+      log('Restart after credential change failed for %s: %O', existing.platform, error);
+    }
+  }
 }

@@ -8,6 +8,11 @@ const { FakeSocket } = vi.hoisted(() => {
   class FakeSocket {
     static instances: FakeSocket[] = [];
     static subscribeErrcode = 0;
+    static holdSubscribe = false;
+    static held: Array<() => void> = [];
+    static releaseSubscribe() {
+      for (const release of FakeSocket.held.splice(0)) release();
+    }
 
     readyState = 0;
     readonly sent: any[] = [];
@@ -29,13 +34,17 @@ const { FakeSocket } = vi.hoisted(() => {
       const frame = JSON.parse(data);
       this.sent.push(frame);
       const errcode = frame.cmd === 'aibot_subscribe' ? FakeSocket.subscribeErrcode : 0;
-      queueMicrotask(() =>
+      const ack = () =>
         this.serverSend({
           errcode,
           errmsg: errcode ? 'invalid secret' : 'ok',
           headers: frame.headers,
-        }),
-      );
+        });
+      if (frame.cmd === 'aibot_subscribe' && FakeSocket.holdSubscribe) {
+        FakeSocket.held.push(ack);
+        return;
+      }
+      queueMicrotask(ack);
     }
 
     close() {
@@ -97,6 +106,7 @@ let clients: Array<{ stop: () => Promise<void> }> = [];
 beforeEach(() => {
   FakeSocket.instances = [];
   FakeSocket.subscribeErrcode = 0;
+  FakeSocket.held = [];
   updateBotRuntimeStatus.mockClear();
   vi.stubGlobal(
     'fetch',
@@ -201,6 +211,47 @@ describe('WeComClient lifecycle', () => {
       await vi.advanceTimersByTimeAsync(9 * 60 * 60 * 1000);
       expect(FakeSocket.instances).toHaveLength(sockets);
       expect(getWeComConnection('bot-1')).toBeUndefined();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('honors a stop that arrives while the subscribe is pending', async () => {
+    FakeSocket.holdSubscribe = true;
+    try {
+      const client = factory.createClient(config, {});
+      clients.push(client);
+      const started = client.start();
+      await flush();
+      await client.stop();
+      FakeSocket.releaseSubscribe();
+      await started;
+
+      expect(getWeComConnection('bot-1')).toBeUndefined();
+      expect(statuses()).not.toContain('connected');
+      expect(statuses().at(-1)).toBe('disconnected');
+    } finally {
+      FakeSocket.holdSubscribe = false;
+    }
+  });
+
+  it('retries a failed periodic refresh instead of staying offline', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] });
+    try {
+      const client = factory.createClient(config, { appUrl: 'https://app.example.com' });
+      clients.push(client);
+      const started = client.start();
+      await vi.advanceTimersByTimeAsync(0);
+      await started;
+
+      // The refresh's re-subscribe is refused once, then accepted.
+      FakeSocket.subscribeErrcode = 50_001;
+      await vi.advanceTimersByTimeAsync(8 * 60 * 60 * 1000 + 10);
+      expect(getWeComConnection('bot-1')).toBeUndefined();
+
+      FakeSocket.subscribeErrcode = 0;
+      await vi.advanceTimersByTimeAsync(61 * 1000);
+      expect(getWeComConnection('bot-1')?.isConnected).toBe(true);
     } finally {
       vi.useRealTimers();
     }
