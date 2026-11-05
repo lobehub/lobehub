@@ -92,9 +92,9 @@ export const globalStyleRules = (sf: ts.SourceFile, readModule?: ReadModule): St
           ts.isPropertyAccessExpression(expression) && ts.isIdentifier(expression.expression)
             ? tokenAliases.get(expression.expression.text)
             : undefined;
-        return alias
-          ? `${alias}.${expression.name.text}`
-          : expression.getText(sf).replaceAll(/\s+/g, ' ').trim();
+        if (alias && ts.isPropertyAccessExpression(expression))
+          return `${alias}.${expression.name.text}`;
+        return expression.getText(sf).replaceAll(/\s+/g, ' ').trim();
       });
       const folded = spans.map((span) => foldConstant(span.expression, scope) ?? null);
       const parsed = parseRules(templateText(node.template));

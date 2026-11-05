@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { emotionStaticAdapter } from '../extract/adapters/emotionStatic';
 import { globalCssAdapter } from '../extract/adapters/globalCss';
 import { extractFile } from '../extract/index';
+import type { ExtractOptions } from '../extract/types';
 import { carriedClasses, globalRulesChanged } from './globalRules';
 
 const CSS = `::highlight(lobe-comment) {
@@ -54,7 +55,11 @@ const options = {
     specifier === './Highlight.css' ? CSS : undefined,
 };
 
-const gaps = (before: string, after: string, css = options.readStylesheet) => {
+const gaps = (
+  before: string,
+  after: string,
+  css: ExtractOptions['readStylesheet'] = options.readStylesheet,
+) => {
   const read = { ...options, readStylesheet: css };
   const pair = [extractFile(before, 'a.tsx', read), extractFile(after, 'a.tsx', options)] as const;
   const gap = globalRulesChanged(pair[0], pair[1], carriedClasses([...pair]));

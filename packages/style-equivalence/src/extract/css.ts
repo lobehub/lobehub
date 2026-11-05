@@ -134,9 +134,9 @@ export const templateSlotRules = (symbol: string, factory: ts.CallExpression): S
         ts.isPropertyAccessExpression(expression) && ts.isIdentifier(expression.expression)
           ? tokenAliases.get(expression.expression.text)
           : undefined;
-      return alias
-        ? `${alias}.${expression.name.text}`
-        : expression.getText().replaceAll(/\s+/g, ' ').trim();
+      if (alias && ts.isPropertyAccessExpression(expression))
+        return `${alias}.${expression.name.text}`;
+      return expression.getText().replaceAll(/\s+/g, ' ').trim();
     });
     const folded = spans.map((span) => constantText(span.expression, constants) ?? null);
     for (const rule of parseRules(templateText(value.template), `.${SELF}`).rules)
