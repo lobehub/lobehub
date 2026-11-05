@@ -40,6 +40,7 @@ const {
   awaitManagedDeviceForToolCall,
   findWakeableManagedDevices,
   isDeviceUnreachableResult,
+  requestManagedDeviceWake,
   waitForManagedDeviceOnline,
   wakeManagedDevice,
 } = await import('./managedDeviceWake');
@@ -152,6 +153,29 @@ describe('wakeManagedDevice', () => {
     await expect(pending).resolves.toBeUndefined();
     expect(warn).toHaveBeenCalledOnce();
     warn.mockRestore();
+  });
+});
+
+describe('requestManagedDeviceWake', () => {
+  it('wakes a managed device the caller can see and reports the acceptance', async () => {
+    mocks.findPersonalByDeviceId.mockResolvedValue(managedRow('managed-a'));
+
+    await expect(requestManagedDeviceWake(caller, 'managed-a')).resolves.toBe('accepted');
+    expect(mocks.wake).toHaveBeenCalledWith({ userId: 'user-1' }, 'managed-a');
+  });
+
+  it('never wakes an ordinary connected device', async () => {
+    mocks.findPersonalByDeviceId.mockResolvedValue(connectedRow('desktop-a'));
+
+    await expect(requestManagedDeviceWake(caller, 'desktop-a')).resolves.toBe('not-managed');
+    expect(mocks.wake).not.toHaveBeenCalled();
+  });
+
+  it('passes a refused wake to the caller', async () => {
+    mocks.findPersonalByDeviceId.mockResolvedValue(managedRow('managed-a'));
+    mocks.wake.mockRejectedValue(new Error('limit reached'));
+
+    await expect(requestManagedDeviceWake(caller, 'managed-a')).rejects.toThrow('limit reached');
   });
 });
 

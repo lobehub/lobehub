@@ -41,3 +41,21 @@ export type ManagedDevicePhase = (typeof MANAGED_DEVICE_PHASES)[number];
 /** Whether a device row is a managed cloud device. */
 export const isManagedCloudDevice = (device: { identitySource?: string | null }): boolean =>
   device.identitySource === MANAGED_CLOUD_DEVICE_IDENTITY_SOURCE;
+
+/** Phases from which the provider cannot bring a managed device online. */
+const UNWAKEABLE_MANAGED_DEVICE_PHASES: readonly ManagedDevicePhase[] = ['deleting', 'failed'];
+
+/**
+ * Whether a device is a managed cloud device that is not online now but that
+ * a run can wake. Such a device is a valid choice in a device picker: binding
+ * it makes the run wake it before dispatch. An unknown phase counts as
+ * wakeable, the same as the server's wake path.
+ */
+export const isWakeableManagedDevice = (device: {
+  identitySource?: string | null;
+  managedPhase?: ManagedDevicePhase;
+  online: boolean;
+}): boolean =>
+  !device.online &&
+  isManagedCloudDevice(device) &&
+  !(device.managedPhase && UNWAKEABLE_MANAGED_DEVICE_PHASES.includes(device.managedPhase));

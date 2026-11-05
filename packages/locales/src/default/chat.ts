@@ -963,6 +963,11 @@ export default {
   'heteroAgent.executionTarget.switchTopic.ok': 'Switch',
   'heteroAgent.executionTarget.switchTopic.title': 'Move this topic to another environment?',
   'heteroAgent.executionTarget.unknownDevice': 'Unknown device',
+  'heteroAgent.executionTarget.wake': 'Wake now',
+  'heteroAgent.executionTarget.wakeFailed': 'Could not wake this cloud device. Try again.',
+  'heteroAgent.executionTarget.wakeStarting':
+    'The cloud device is still starting. A run on it waits until it is ready.',
+  'heteroAgent.executionTarget.wakesWhenUsed': 'Wakes when used',
   'hideForYou':
     "Direct message content is hidden. Please enable 'Show Direct Message Content' in settings to view.",
   'history.title': 'The Agent will keep only the latest {{count}} messages.',

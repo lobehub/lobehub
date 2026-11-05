@@ -120,15 +120,11 @@ export const findWakeableManagedDevices = async (
 };
 
 /**
- * Ask the provider to start a managed device. A failure is logged, not thrown:
- * a failed or slow wake leaves the device offline, and every caller already
- * handles an offline device. Never holds the caller longer than
+ * Ask the provider to start a managed device and wait until it accepts the
+ * request. Throws when the provider refuses it or takes longer than
  * `MANAGED_DEVICE_WAKE_REQUEST_TIMEOUT_MS`.
  */
-export const wakeManagedDevice = async (
-  userId: string,
-  target: ManagedDeviceTarget,
-): Promise<void> => {
+const requestProviderWake = async (userId: string, target: ManagedDeviceTarget): Promise<void> => {
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     await Promise.race([
@@ -143,6 +139,23 @@ export const wakeManagedDevice = async (
         );
       }),
     ]);
+  } finally {
+    clearTimeout(timer);
+  }
+};
+
+/**
+ * Ask the provider to start a managed device. A failure is logged, not thrown:
+ * a failed or slow wake leaves the device offline, and every caller already
+ * handles an offline device. Never holds the caller longer than
+ * `MANAGED_DEVICE_WAKE_REQUEST_TIMEOUT_MS`.
+ */
+export const wakeManagedDevice = async (
+  userId: string,
+  target: ManagedDeviceTarget,
+): Promise<void> => {
+  try {
+    await requestProviderWake(userId, target);
     log('wakeManagedDevice: wake accepted for deviceId=%s', target.deviceId);
   } catch (error) {
     console.warn('[ManagedDeviceWake] Wake request failed', {
@@ -150,9 +163,31 @@ export const wakeManagedDevice = async (
       error: error instanceof Error ? error.message : String(error),
       userId,
     });
-  } finally {
-    clearTimeout(timer);
   }
+};
+
+/**
+ * Wake a managed cloud device because the user asked for it (the device
+ * picker's wake control). Unlike {@link wakeManagedDevice}, the caller needs
+ * the result:
+ *
+ * - `'not-managed'`: the deployment offers no managed devices, the row is not
+ *   visible to the caller, or the device is an ordinary connected one.
+ * - `'accepted'`: the provider accepted the request. The device is not online
+ *   yet; watch the device list for that.
+ *
+ * Throws when the provider refuses the request or does not answer in time.
+ */
+export const requestManagedDeviceWake = async (
+  caller: CallerScope,
+  deviceId: string,
+): Promise<'accepted' | 'not-managed'> => {
+  const target = await findManagedDevice(caller, deviceId);
+  if (!target) return 'not-managed';
+
+  await requestProviderWake(caller.userId, target);
+  log('requestManagedDeviceWake: wake accepted for deviceId=%s', deviceId);
+  return 'accepted';
 };
 
 /**
