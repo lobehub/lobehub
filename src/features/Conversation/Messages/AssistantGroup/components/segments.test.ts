@@ -286,6 +286,17 @@ describe('liftMcpAppSegments', () => {
     expect(lifted).toEqual([view]);
   });
 
+  it("lifts a lone view out of the segment it shares with the answer's reasoning", () => {
+    const view = { id: 's1', tools: [mcpView('a')] } as any;
+    const reasoning = { content: '', id: 's2', reasoning: { content: 'Thinking.' } } as any;
+    const shared = { blocks: [view, reasoning], kind: 'workflow' as const };
+
+    expect(liftMcpAppSegments([shared])).toEqual({
+      folded: [{ blocks: [reasoning], kind: 'workflow' }],
+      lifted: [{ blocks: [view], kind: 'workflow' }],
+    });
+  });
+
   it('does not lift a segment that mixes a view with ordinary tools', () => {
     const mixed = {
       blocks: [{ id: 's1', tools: [plain('a'), mcpView('b')] } as any],

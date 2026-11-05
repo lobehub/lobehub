@@ -81,18 +81,17 @@ export const shouldFoldProcess = ({
     ),
   );
 
-const isMcpAppSegment = (segment: GroupRenderSegment): boolean =>
-  segment.kind === 'workflow' &&
-  segment.blocks.length > 0 &&
-  segment.blocks.every((block) => !!block.tools?.length && block.tools.every(isMcpAppTool));
+const isMcpAppBlock = (block: RenderableAssistantContentBlock): boolean =>
+  !!block.tools?.length && block.tools.every(isMcpAppTool);
 
 /**
  * Take the MCP App views out of a turn's folded process. Like an image the turn
  * produced, the view is what the user came for, so it stays on screen between
- * the fold and the answer while the other steps fold as usual. Only a segment
- * made of MCP App tools alone is lifted: the workflow partition already breaks
- * each view out of a multi-tool run (`isBreakoutTool`), and a single-tool turn
- * renders its one tool inline.
+ * the fold and the answer while the other steps fold as usual. A block of MCP
+ * App tools alone is lifted: the workflow partition already breaks each view
+ * out of a multi-tool run (`isBreakoutTool`). A lone view may share its segment
+ * with tool-less neighbours (the answer's reasoning after it), which stay in
+ * the fold, in their order.
  */
 export const liftMcpAppSegments = (
   processSegments: GroupRenderSegment[],
@@ -100,7 +99,29 @@ export const liftMcpAppSegments = (
   const folded: GroupRenderSegment[] = [];
   const lifted: GroupRenderSegment[] = [];
   for (const segment of processSegments) {
-    (isMcpAppSegment(segment) ? lifted : folded).push(segment);
+    if (segment.kind !== 'workflow' || !segment.blocks.some(isMcpAppBlock)) {
+      folded.push(segment);
+      continue;
+    }
+    if (segment.blocks.every(isMcpAppBlock)) {
+      lifted.push(segment);
+      continue;
+    }
+
+    // Each run of views is lifted, each run of other blocks folds
+    let run: RenderableAssistantContentBlock[] = [];
+    let runIsView = false;
+    const flush = () => {
+      if (run.length > 0) (runIsView ? lifted : folded).push({ ...segment, blocks: run });
+      run = [];
+    };
+    for (const block of segment.blocks) {
+      const isView = isMcpAppBlock(block);
+      if (isView !== runIsView) flush();
+      runIsView = isView;
+      run.push(block);
+    }
+    flush();
   }
 
   return { folded, lifted };
