@@ -69,6 +69,7 @@ const extraction: FileExtraction = {
     element('T#0', 'span', 'cx(styles.a, TONE[tone])', {
       variables: [{ kind: 'unknown', name: 'tone' }],
     }),
+    element('D#0', 'details', 'styles.a', { children: ['D#0/0'] }),
     element('P#0', 'div', 'styles.a', { runtimeStyle: 'laneStyle' }),
     element('P#1', 'span', 'styles.b', { parent: 'P#0' }),
     element('K#1', 'span', 'cx(styles.a,', {
@@ -85,6 +86,14 @@ const extraction: FileExtraction = {
   file: 'a.tsx',
   gaps: [],
   outsideReferences: [],
+  plain: [
+    {
+      ...element('D#0/0', 'summary', ''),
+      bindings: [],
+      literalProps: { title: 'raw' },
+      parent: 'D#0',
+    },
+  ],
   prelude,
   rules: [],
   styleSymbols: ['styles'],
@@ -142,6 +151,14 @@ const plan: FilePlan = {
           values: ['off', 'on', '__style_equivalence_absent__'],
         },
       ],
+    },
+    {
+      combos: [],
+      elementIds: { base: 'D#0/0', head: 'D#0/0' },
+      file: 'a.tsx',
+      flags: [],
+      key: 'a.tsx|D#0/0',
+      variables: [],
     },
     {
       combos: [],
@@ -241,6 +258,13 @@ describe('generateModule', () => {
     expect(render(cases['a.tsx|P#1']({ laneStyle: false }))).not.toContain('style=');
   });
 
+  it('renders a plain child inside its styled parent', async () => {
+    const { cases } = await load();
+    expect(render(cases['a.tsx|D#0/0']({}))).toBe(
+      '<details data-synthetic-element="D#0" class="a"><summary data-synthetic-element="D#0/0" title="raw">Ag 文本 Text</summary></details>',
+    );
+  });
+
   it('fails a knob case it cannot bind instead of rendering it unbound', async () => {
     const { cases } = await load();
     expect(() => cases['a.tsx|K#1']({})).toThrow('KNOB_UNBOUND');
@@ -261,7 +285,9 @@ describe('CaseList', () => {
       {
         ...plan,
         cases: plan.cases
-          .filter((entry) => !['a.tsx|K#1', 'a.tsx|P#1', 'a.tsx|T#0'].includes(entry.key))
+          .filter(
+            (entry) => !['a.tsx|D#0/0', 'a.tsx|K#1', 'a.tsx|P#1', 'a.tsx|T#0'].includes(entry.key),
+          )
           .map((entry) => ({
             ...entry,
             combos:
@@ -289,7 +315,9 @@ describe('CaseList', () => {
       {
         ...plan,
         cases: plan.cases
-          .filter((entry) => !['a.tsx|K#1', 'a.tsx|P#1', 'a.tsx|T#0'].includes(entry.key))
+          .filter(
+            (entry) => !['a.tsx|D#0/0', 'a.tsx|K#1', 'a.tsx|P#1', 'a.tsx|T#0'].includes(entry.key),
+          )
           .map((entry) => ({
             ...entry,
             combos:

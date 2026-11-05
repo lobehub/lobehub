@@ -1,5 +1,6 @@
 import ts from 'typescript';
 
+import { collectChildren, literalOf } from './children';
 import { parseRules } from './css';
 import {
   declaredLocally,
@@ -47,15 +48,6 @@ const ownerOf = (statement: ts.Statement, ast: ts.SourceFile) => {
   if (ts.isFunctionDeclaration(statement)) return statement.name?.text ?? 'default';
   if (ts.isExportAssignment(statement)) return 'default';
   return `statement@${ast.getLineAndCharacterOfPosition(statement.getStart(ast)).line + 1}`;
-};
-
-const literalOf = (expression: ts.Expression): LiteralValue | undefined => {
-  if (ts.isStringLiteral(expression) || ts.isNoSubstitutionTemplateLiteral(expression))
-    return expression.text;
-  if (ts.isNumericLiteral(expression)) return Number(expression.text);
-  if (expression.kind === ts.SyntaxKind.TrueKeyword) return true;
-  if (expression.kind === ts.SyntaxKind.FalseKeyword) return false;
-  return undefined;
 };
 
 export const extractFile = (
@@ -118,6 +110,7 @@ export const extractFile = (
   const usedGlobal = new Set<string>();
 
   const elements: StyleElement[] = [];
+  const styled = new Map<ts.Node, StyleElement>();
   const classTokens = new Map<string, Set<string>>();
   const bound = new Set<ts.Node>();
 
@@ -217,7 +210,7 @@ export const extractFile = (
           if (binding.prop === 'className' && binding.expr.startsWith('"'))
             (JSON.parse(binding.expr) as string).split(/\s+/).forEach((token) => tokens.add(token));
         classTokens.set(id, tokens);
-        elements.push({
+        const element: StyleElement = {
           bindings,
           flags: [],
           id,
@@ -233,7 +226,9 @@ export const extractFile = (
             kind: mergeKinds(kinds.get(name) ?? ['unknown']),
             name,
           })),
-        });
+        };
+        elements.push(element);
+        styled.set(node, element);
         current = id;
       }
       if (ts.isJsxElement(node)) {
@@ -243,6 +238,10 @@ export const extractFile = (
     };
     visit(statement, undefined);
   }
+
+  const plain = collectChildren(styled, ast, (tag) => {
+    if (layout.has(tag)) top.require(tag);
+  });
 
   const outsideReferences: string[] = [];
   for (const statement of ast.statements) {
@@ -287,6 +286,7 @@ export const extractFile = (
     file,
     gaps,
     outsideReferences,
+    ...(plain.length ? { plain } : {}),
     prelude: top.prelude(),
     rules,
     slotProperties,

@@ -1,6 +1,7 @@
 import type { FileExtraction, StyleElement, VariableKind } from '../extract';
 import { mergeKinds, valueIdentifiers } from '../extract/identifiers';
 import { type Combo, combosFor, DOMAIN_COMBO_LIMIT } from './combos';
+import { childCovered, elementsOf, parentCovered, replacedDescendants } from './descendants';
 import { bindKnobs, parseExpression } from './knobs';
 import { alignElements } from './pair';
 import {
@@ -107,7 +108,7 @@ export const planFile = (
 ): FilePlan => {
   const layout = new Set(config.layoutComponents);
   const byId = {
-    base: new Map(base.elements.map((e) => [e.id, e])),
+    base: new Map(elementsOf(base).map((e) => [e.id, e])),
     head: new Map(head.elements.map((e) => [e.id, e])),
   };
   const baseOwners = groupByOwner(base.elements);
@@ -128,19 +129,38 @@ export const planFile = (
   }
   for (const [owner, elements] of headOwners)
     if (!baseOwners.has(owner)) unpairedHead.push(...elements);
+  const replaced = replacedDescendants(base, head, pairs, unpairedHead);
+  const replacedHead = new Set(replaced.map(([, right]) => right));
+  unpairedHead.splice(0, unpairedHead.length, ...unpairedHead.filter((e) => !replacedHead.has(e)));
+  pairs.push(...replaced);
+  const rendered = new Set(pairs.map(([left]) => left.id));
+  const covered = new Set(
+    [...new Set(replaced.map(([left]) => left.parent!))].filter((id) =>
+      parentCovered(byId.base.get(id)!, base, rendered),
+    ),
+  );
 
   const cases = pairs.map(([left, right]): PlanCase => {
     const chains = { base: chainOf(left, byId.base), head: chainOf(right, byId.head) };
-    const flags = new Set<string>([...left.flags, ...right.flags]);
+    const flags = new Set<string>();
+    const evidence: string[] = [];
+    const isReplaced = replacedHead.has(right);
     if (left.tag !== right.tag) flags.add('TAG_CHANGED');
     for (const item of [...chains.base, ...chains.head]) {
       if (!isIntrinsicTag(item.tag) && !layout.has(item.tag)) flags.add('PLACEMENT_SUBSTITUTED');
       if (item.bindings.some((binding) => !binding.spread && binding.prop !== 'className'))
         flags.add('PLACEMENT_NEUTRAL_PROP');
-      item.flags.forEach((flag) => flags.add(flag));
+      const inner =
+        item.flags.includes('INNER_TARGET') &&
+        chains.base.includes(item) &&
+        (covered.has(item.id) ||
+          (isReplaced && item.id === left.parent && childCovered(item, left, base.rules)));
+      if (inner && !isReplaced && !evidence.includes('DESCENDANT_RENDERED'))
+        evidence.push('DESCENDANT_RENDERED');
+      item.flags.forEach((flag) => !(inner && flag === 'INNER_TARGET') && flags.add(flag));
     }
+    if (isReplaced) evidence.push('DESCENDANT_REPLACED');
     const properties = { base: base.slotProperties, head: head.slotProperties };
-    const evidence: string[] = [];
     if (
       (flags.has('PLACEMENT_SUBSTITUTED') || flags.has('PLACEMENT_NEUTRAL_PROP')) &&
       placementPreserved(chains.base, chains.head, {

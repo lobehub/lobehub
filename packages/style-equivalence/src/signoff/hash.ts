@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
 import type { FileExtraction, LiteralValue, StyleBinding } from '../extract';
+import { elementsOf } from '../plan/descendants';
 import { chainOf, type PlanCase, type Side } from '../plan/planFile';
 import { declarationText, resolveSlot } from '../source/declarations';
 
@@ -70,7 +71,7 @@ export const collectCaseHashInput = (input: CollectHashInput): CaseHashInput => 
     const source = input.sources[side];
     const id = input.elementIds?.[side] ?? input.plan?.elementIds[side];
     if (!extraction || !source || !id) continue;
-    const byId = new Map(extraction.elements.map((element) => [element.id, element]));
+    const byId = new Map(elementsOf(extraction).map((element) => [element.id, element]));
     const element = byId.get(id);
     if (!element) continue;
     const chain = chainOf(element, byId);

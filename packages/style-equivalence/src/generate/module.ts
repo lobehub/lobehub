@@ -1,4 +1,5 @@
 import type { FileExtraction, LiteralValue, StyleBinding, StyleElement } from '../extract';
+import { elementsOf } from '../plan/descendants';
 import { bindKnobs } from '../plan/knobs';
 import { chainOf, type FilePlan, isIntrinsicTag, type Side } from '../plan/planFile';
 
@@ -75,7 +76,7 @@ export const generateModule = (
   config: GenerateConfig,
 ) => {
   const layout = new Set(config.layoutComponents);
-  const byId = new Map(extraction.elements.map((element) => [element.id, element]));
+  const byId = new Map(elementsOf(extraction).map((element) => [element.id, element]));
   const entries = plan.cases.map((entry) => {
     const element = byId.get(entry.elementIds[side]);
     if (!element)

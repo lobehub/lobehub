@@ -17,6 +17,7 @@ export interface StyleBinding {
 
 export interface StyleElement {
   bindings: StyleBinding[];
+  children?: string[];
   flags: string[];
   id: string;
   literalProps: Record<string, LiteralValue>;
@@ -24,6 +25,7 @@ export interface StyleElement {
   parent?: string;
   runtimeStyle?: string;
   slots: string[];
+  subtreeTags?: Record<string, number>;
   tag: string;
   variables: VariableUse[];
 }
@@ -42,6 +44,7 @@ export interface FileExtraction {
   file: string;
   gaps: string[];
   outsideReferences: string[];
+  plain?: StyleElement[];
   prelude: string;
   rules: StyleRule[];
   slotProperties?: Record<string, string[]>;
