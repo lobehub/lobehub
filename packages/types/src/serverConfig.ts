@@ -67,6 +67,11 @@ export type IFeatureFlagsState = {
    * working.
    */
   enableManagedCloudDevice: boolean | undefined;
+  /**
+   * MCP Apps views in the conversation (`mcp_apps`). Off by default: tool results
+   * that declare a `ui://` view render as plain results.
+   */
+  enableMcpApps: boolean | undefined;
   enableOnboardingV2: boolean | undefined;
   enableRAGEval: boolean | undefined;
   enableSTT: boolean | undefined;
