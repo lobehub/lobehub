@@ -113,9 +113,11 @@ const ModelCard = memo<ModelCardProps>(({ pricing, id, provider, displayName }) 
               </Tooltip>
             )}
             <Tooltip
-              title={t('messages.modelCard.pricing.inputTokens', {
-                amount: prices.input.amount,
-              })}
+              title={
+                prices.input.amount === undefined
+                  ? undefined
+                  : t('messages.modelCard.pricing.inputTokens', { amount: prices.input.amount })
+              }
             >
               <Flexbox horizontal className={stylex.props(styles.priceItem).className} gap={2}>
                 <Icon icon={ArrowUpFromDot} />
@@ -123,9 +125,11 @@ const ModelCard = memo<ModelCardProps>(({ pricing, id, provider, displayName }) 
               </Flexbox>
             </Tooltip>
             <Tooltip
-              title={t('messages.modelCard.pricing.outputTokens', {
-                amount: prices.output.amount,
-              })}
+              title={
+                prices.output.amount === undefined
+                  ? undefined
+                  : t('messages.modelCard.pricing.outputTokens', { amount: prices.output.amount })
+              }
             >
               <Flexbox horizontal className={stylex.props(styles.priceItem).className} gap={2}>
                 <Icon icon={ArrowDownToDot} />

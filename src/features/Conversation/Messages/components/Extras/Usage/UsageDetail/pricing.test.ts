@@ -40,7 +40,7 @@ describe('getPriceLabels', () => {
   it('reads a missing rate as -- rather than $0.00', () => {
     const labels = getPriceLabels(pricing(fixed('textInput', 3)));
 
-    expect(labels.output).toEqual({ amount: '--', text: '--' });
+    expect(labels.output).toEqual({ text: '--' });
   });
 
   it('reads every rate as -- when the model has no pricing', () => {

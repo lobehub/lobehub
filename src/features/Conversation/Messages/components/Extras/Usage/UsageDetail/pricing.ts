@@ -38,8 +38,11 @@ export const getPrice = (pricing: Pricing) => {
 };
 
 export interface PriceLabel {
-  /** The amount alone (`3.00`), for copy that already carries the `$`. */
-  amount: string;
+  /**
+   * The amount alone (`3.00`), for copy that already carries the `$`. Absent when the
+   * model does not quote the rate, so that copy is not rendered as `$--`.
+   */
+  amount?: string;
   /** The amount as shown in the row (`$3.00`). */
   text: string;
 }
@@ -69,7 +72,7 @@ export const getPriceLabels = (pricing?: Pricing): PriceLabels => {
   const digits = getUsdDigits(Object.values(prices));
 
   const label = (key: keyof typeof rates): PriceLabel => {
-    if (rates[key] === undefined) return { amount: '--', text: '--' };
+    if (rates[key] === undefined) return { text: '--' };
 
     return {
       amount: formatUsdDigits(prices[key], digits, { withSymbol: false }),
