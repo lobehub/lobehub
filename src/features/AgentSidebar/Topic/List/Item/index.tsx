@@ -550,10 +550,12 @@ const TopicItemRow = memo<TopicItemRowProps>(
       // like Codex. It is secondary metadata, so only an idle topic uses it
       // as the leading icon.
       if (metaCard?.pullRequest) {
-        const prVisual = PR_STATE_VISUAL[getPullRequestState(metaCard.pullRequest)];
+        const prState = getPullRequestState(metaCard.pullRequest);
+        const prVisual = PR_STATE_VISUAL[prState];
         const ciStatus = metaCard.pullRequest.ciStatus;
         const ciVisual = getCiVisual(ciStatus);
-        const showCiBadge = ciStatus !== undefined && ciStatus !== 'unknown';
+        const showCiBadge =
+          prState !== 'merged' && ciStatus !== undefined && ciStatus !== 'unknown';
         const tooltip = showCiBadge
           ? `${t(prVisual.labelKey)} · ${t(ciVisual.labelKey)}`
           : t(prVisual.labelKey);

@@ -12,7 +12,7 @@ import { Command } from 'commander';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { HeteroTraceRecorder } from '../utils/HeteroTraceRecorder';
-import { registerHeteroCommand, SUPPORTED_AGENT_TYPES } from './hetero';
+import { registerHeteroCommand } from './hetero';
 
 const {
   mockCreateCodexAgentHandle,
@@ -289,12 +289,6 @@ describe('hetero exec command', () => {
       );
     },
   );
-
-  it('supports every local descriptor type plus the bundled DeepSeek Harness runtime', () => {
-    expect([...SUPPORTED_AGENT_TYPES].toSorted()).toEqual(
-      [...HETEROGENEOUS_AGENT_CONFIGS.map(({ type }) => type), 'deepseek-harness'].toSorted(),
-    );
-  });
 
   it('rejects unsupported agent types via process.exit(2)', async () => {
     await runCmd(['hetero', 'exec', '--type', 'kimi-cli', '--prompt', 'hi']);

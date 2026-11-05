@@ -126,6 +126,14 @@ export interface ContextFactRequest {
  * fact" and never blocks the turn.
  */
 export interface ContextFactProviders {
+  /**
+   * An agent document by its `agent_documents.id`, or null when it is missing,
+   * belongs to another agent, or the caller may not read it.
+   */
+  findAgentDocument?: (
+    agentId: string,
+    documentId: string,
+  ) => Promise<{ content?: string | null; title?: string | null } | null | undefined>;
   /** A topic by id, or null when the caller may not see it. */
   findTopic?: (topicId: string) => Promise<TopicFacts | null | undefined>;
   /** The agent row the builder or group builder is editing. */

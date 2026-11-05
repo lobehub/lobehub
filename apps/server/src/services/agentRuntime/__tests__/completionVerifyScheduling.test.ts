@@ -88,6 +88,7 @@ describe('CompletionLifecycle — verify gate scheduling', () => {
     vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
     vi.spyOn(hookDispatcher, 'unregister').mockImplementation(function () {});
     const settle = vi.spyOn(verifyServices, 'settleFailedRepair').mockResolvedValue(false);
+    vi.spyOn(verifyServices, 'releaseUndeliveredRound').mockResolvedValue(false);
 
     await lifecycle.dispatchHooks(
       'repair-op',
@@ -96,5 +97,23 @@ describe('CompletionLifecycle — verify gate scheduling', () => {
     );
     await Promise.all(after.mock.calls.map(([callback]) => callback()));
     expect(settle).toHaveBeenCalledWith(expect.anything(), 'user-1', 'repair-op', undefined);
+  });
+
+  it('releases the round of a task run that ended in error', async () => {
+    vi.spyOn(verifyServices, 'settleFailedRepair').mockResolvedValue(false);
+    const release = vi.spyOn(verifyServices, 'releaseUndeliveredRound').mockResolvedValue(true);
+    const lifecycle = new CompletionLifecycle({} as any, 'user-1');
+    vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue(undefined);
+    vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
+    vi.spyOn(hookDispatcher, 'unregister').mockImplementation(function () {});
+
+    await lifecycle.dispatchHooks(
+      'task-op',
+      { host: { hooks: [] }, origin: {}, status: 'error' },
+      'error',
+    );
+    await Promise.all(after.mock.calls.map(([callback]) => callback()));
+
+    expect(release).toHaveBeenCalledWith(expect.anything(), 'user-1', 'task-op', undefined);
   });
 });

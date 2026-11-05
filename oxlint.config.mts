@@ -627,8 +627,10 @@ export default defineConfig(
             'Home cold-path modules must not statically import ChatInput. Load an isolated editor entry with import().',
           // `hooks/useAgentModelSelection` reaches the store only through the
           // editor-free `store/apiContext`; Home model switches share its path.
+          // `draftStorage` is localStorage-only; a refused Home send hands its
+          // message to the conversation composer through it.
           regex:
-            '^@/features/ChatInput(?:$|/(?!(?:hooks/useAgentModelSelection|store/initialState|utils/contextSelections)$).+)',
+            '^@/features/ChatInput(?:$|/(?!(?:draftStorage|hooks/useAgentModelSelection|store/initialState|utils/contextSelections)$).+)',
         },
       ],
     }),

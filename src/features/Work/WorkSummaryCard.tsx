@@ -12,12 +12,8 @@ import { getWorkVersionTotalTokens } from '@/utils/workCumulativeUsage';
 import { formatWorkVersionCost } from '@/utils/workVersionCost';
 
 import CanvasWorkCard from './CanvasWorkCard';
-import {
-  getWorkTypeDescriptor,
-  isSafeExternalUrl,
-  type WorkBranch,
-  type WorkIcon,
-} from './descriptors';
+import { getWorkTypeDescriptor, type WorkBranch, type WorkIcon } from './descriptors';
+import { openExternalWork } from './openExternalWork';
 import { useResourceDeletedPrompt } from './useResourceDeletedPrompt';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -42,6 +38,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   branch: css`
     flex: 1 1 0;
     min-width: 0;
+    font-size: 12px;
     color: ${cssVar.colorTextTertiary};
   `,
   cost: css`
@@ -323,9 +320,7 @@ const WorkSummaryCard = memo<WorkSummaryCardProps>(
           return;
         }
         case 'external': {
-          // Defense in depth: only ever hand http(s) to shell.openExternal.
-          if (isSafeExternalUrl(openTarget.url))
-            window.open(openTarget.url, '_blank', 'noopener,noreferrer');
+          openExternalWork(openTarget.url);
           return;
         }
         case 'filePreview': {

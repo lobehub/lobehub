@@ -29,22 +29,27 @@ describe('buildMessagesEngineParams', () => {
     expect(explicit.toolsConfig?.disabledToolIdentifiers).toEqual(['x']);
   });
 
-  it('only sets skills and topic references when there is something to inject', () => {
+  it('only sets skills, topic and document references when there is something to inject', () => {
     const empty = buildMessagesEngineParams({
       ...baseSnapshot(),
-      step: { topicReferences: [] },
+      step: { documentReferences: [], topicReferences: [] },
       tools: { enabledSkills: [] },
     });
     expect(empty).not.toHaveProperty('skillsConfig');
     expect(empty).not.toHaveProperty('topicReferences');
+    expect(empty).not.toHaveProperty('documentReferences');
 
     const filled = buildMessagesEngineParams({
       ...baseSnapshot(),
-      step: { topicReferences: [{ id: 't1' } as any] },
+      step: {
+        documentReferences: [{ documentId: 'd1' }],
+        topicReferences: [{ id: 't1' } as any],
+      },
       tools: { enabledSkills: [{ identifier: 's1' } as any] },
     });
     expect(filled.skillsConfig).toEqual({ enabledSkills: [{ identifier: 's1' }] });
     expect(filled.topicReferences).toEqual([{ id: 't1' }]);
+    expect(filled.documentReferences).toEqual([{ documentId: 'd1' }]);
   });
 
   it('places world and step facts without leaking undefined keys', () => {

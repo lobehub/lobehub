@@ -45,6 +45,7 @@ export type WorkingSidebarTab =
   | 'files'
   | 'overview'
   | 'params'
+  | 'pr'
   | 'review'
   | 'search'
   | 'skills'
@@ -596,6 +597,12 @@ export interface GlobalState {
   sidebarKey: SidebarTabKey;
   status: SystemStatus;
   statusStorage: AsyncLocalStorage<SystemStatus>;
+  /**
+   * URL of the PR the mounted Working Sidebar's PR tab shows, so a Work card for
+   * the same PR can open that tab instead of leaving the app. Session state:
+   * deliberately outside the persisted `status`.
+   */
+  workingSidebarPullRequestUrl?: string;
 }
 
 export const INITIAL_STATUS = {

@@ -259,6 +259,15 @@ If subagent events leak to the main handler, the main bubble can inherit the wro
 
 Run the smallest useful test set first.
 
+For shared Codex modules consumed by Desktop, also check the Desktop consumer with
+`bun check --cwd=<repo>/apps/desktop -p tsconfig.json` from outside the repo. The
+root type-check excludes Desktop, whose `strict: false` makes Zod nullable output
+properties optional in type inference. A `satisfies z.ZodType<ProtocolType>`
+assertion can therefore fail only in Desktop despite unchanged runtime validation;
+remove a redundant assertion rather than changing global compiler settings. Pass
+affected `__tests__/*.test.ts` files explicitly to `bun run check --test` when
+updating adjacent action entries: automatic related-test discovery may miss them.
+
 ```bash
 bunx vitest run --silent='passed-only' 'packages/heterogeneous-agents/src/adapters/codex.test.ts'
 bunx vitest run --silent='passed-only' 'packages/heterogeneous-agents/src/adapters/claudeCode.test.ts'

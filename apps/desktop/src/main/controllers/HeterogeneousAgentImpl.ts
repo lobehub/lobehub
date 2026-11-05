@@ -111,7 +111,7 @@ import semver from 'semver';
 import { HETERO_AGENT_FILES_DIR, HETERO_AGENT_TRACING_DIR } from '@/const/heteroAgent';
 import type { App } from '@/core/App';
 import { detectHeterogeneousCliCommand } from '@/modules/binaries';
-import { resolveCliScript, withEmbeddedCliEnv } from '@/modules/cliEmbedding';
+import { prepareAppSignInEnv, resolveCliScript, withEmbeddedCliEnv } from '@/modules/cliEmbedding';
 import { getHeterogeneousAgentDriver, withCodexContextArgs } from '@/modules/heterogeneousAgent';
 import {
   consumeCodexRateLimitResetCredit as consumeCodexRateLimitResetCreditRequest,
@@ -1185,7 +1185,7 @@ export default class HeterogeneousAgentCtr {
 
   // ─── AskUserQuestion MCP server () ───
 
-  /** Register and broadcast a native ACP intervention without starting an MCP server. */
+  /** Register a native intervention (ACP or Codex) without starting an MCP server. */
   private setupAcpInterventionForOp(
     operationId: string,
     sessionId: string,
@@ -1194,8 +1194,7 @@ export default class HeterogeneousAgentCtr {
     bridge: AskUserBridge;
     cleanup: () => Promise<void>;
   } {
-    // Cursor keeps its legacy Claude Code renderer identifier. Droid has a
-    // first-class identifier, while provider remains explicit for both.
+    // Cursor keeps its legacy renderer identifier; every provider stays explicit.
     const bridge = new AskUserBridge(operationId, {
       identifier: provider === 'cursor' ? 'claude-code' : provider,
       provider,
@@ -1475,6 +1474,13 @@ export default class HeterogeneousAgentCtr {
       });
     }
 
+    // `lh` in the run acts as the user signed in to this app, like built-in agents' `lh`.
+    const appSignInEnv = await prepareAppSignInEnv({
+      appStoragePath: this.app.appStoragePath,
+      auth: this.remoteServerAuth,
+    });
+    const sessionEnv = hostedProviderBinding?.env ?? params.env;
+
     const { model, resumeSessionId } = resolveHostedBindingSession({
       ...params,
       agentType,
@@ -1485,10 +1491,14 @@ export default class HeterogeneousAgentCtr {
     this.sessions.set(sessionId, {
       agentSessionId: resumeSessionId,
       agentType,
-      args: withCodexContextArgs(agentType, params.env, hostedProviderBinding?.args ?? params.args),
+      args: withCodexContextArgs(
+        agentType,
+        params.env || appSignInEnv ? { ...appSignInEnv, ...params.env } : undefined,
+        hostedProviderBinding?.args ?? params.args,
+      ),
       command: params.command,
       cwd: params.cwd,
-      env: hostedProviderBinding?.env ?? params.env,
+      env: sessionEnv || appSignInEnv ? { ...appSignInEnv, ...sessionEnv } : undefined,
       hostedProviderBinding,
       serverDefaultApiConfig:
         params.providerBinding?.kind === 'server-default'
@@ -2060,6 +2070,7 @@ export default class HeterogeneousAgentCtr {
         needsSessionIntroduction: this.needsSessionIntroduction.bind(this),
         recordInflightRun: this.recordInflightRun.bind(this),
         resolveSessionCommand: this.resolveSessionCommand.bind(this),
+        setupAcpInterventionForOp: this.setupAcpInterventionForOp.bind(this),
         writeCliTraceFile: this.writeCliTraceFile.bind(this),
         writeCliTraceJson: this.writeCliTraceJson.bind(this),
       },

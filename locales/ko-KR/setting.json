@@ -2851,7 +2851,6 @@
   "workspace.billingPage.usage.categories.imageGeneration": "이미지 생성",
   "workspace.billingPage.usage.categories.tts": "텍스트 음성 변환",
   "workspace.billingPage.usage.categories.videoGeneration": "비디오 생성",
-  "workspace.billingPage.usage.empty": "아직 지출 없음",
   "workspace.billingPage.usage.logsTitle": "최근 활동",
   "workspace.billingPage.usage.member": "멤버",
   "workspace.billingPage.usage.member.moreMembers_one": "{{count}}명의 추가 멤버",

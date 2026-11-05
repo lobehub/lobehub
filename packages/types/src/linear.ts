@@ -197,6 +197,12 @@ export interface LinearSyncJobMetadata {
    * does not reread what earlier rounds covered. Absent: read from the start.
    */
   cursor?: string;
+  /**
+   * Times a rule run was handed to a new request because one ran out of time.
+   * Each hand-off is one more request in a chain the host cuts off a few
+   * requests deep, so a run stops handing off after a few.
+   */
+  handOffs?: number;
   /** Picked issues (`kind: 'issues'`). */
   issueIds?: string[];
   kind: 'issues' | 'rule';

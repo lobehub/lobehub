@@ -2851,7 +2851,6 @@
   "workspace.billingPage.usage.categories.imageGeneration": "تولید تصویر",
   "workspace.billingPage.usage.categories.tts": "متن به گفتار",
   "workspace.billingPage.usage.categories.videoGeneration": "تولید ویدئو",
-  "workspace.billingPage.usage.empty": "هنوز هزینه‌ای نشده است",
   "workspace.billingPage.usage.logsTitle": "فعالیت‌های اخیر",
   "workspace.billingPage.usage.member": "عضو",
   "workspace.billingPage.usage.member.moreMembers_one": "{{count}} عضو دیگر",

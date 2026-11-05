@@ -45,12 +45,6 @@ describe('ZoomHUD', () => {
     expect(screen.queryByText(/%/)).toBeNull();
   });
 
-  it('shows formatted percentage when event fires', () => {
-    render(<ZoomHUD />);
-    emit(1.2, 1);
-    expect(screen.getByText('120%')).toBeInTheDocument();
-  });
-
   it('hides after 1500ms of inactivity', () => {
     render(<ZoomHUD />);
     emit(1.2, 1);

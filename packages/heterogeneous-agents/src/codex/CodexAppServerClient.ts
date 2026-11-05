@@ -319,7 +319,7 @@ export class CodexAppServerClient {
       await this.startProcess(generation);
       const params: InitializeParams = {
         capabilities: {
-          experimentalApi: false,
+          experimentalApi: true,
           requestAttestation: false,
         },
         clientInfo: {
