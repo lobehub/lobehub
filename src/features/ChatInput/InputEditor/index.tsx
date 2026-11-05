@@ -1,6 +1,3 @@
-// oxlint-disable-next-line stylex-migration/no-plain-css -- the paragraphs are Lexical editor content inside @lobehub/editor's Editor, which takes no className or style for them
-import './index.css';
-
 import { isDesktop, TRACING_SCENARIOS } from '@lobechat/const';
 import { HotkeyEnum, KeyEnum } from '@lobechat/const/hotkeys';
 import { HETEROGENEOUS_TYPE_LABELS } from '@lobechat/heterogeneous-agents';
@@ -14,7 +11,8 @@ import { isCommandPressed } from '@lobechat/utils';
 import type { IEditor, ISlashMenuOption, ISlashSectionOption } from '@lobehub/editor';
 import { INSERT_MENTION_COMMAND, ReactAutoCompletePlugin } from '@lobehub/editor';
 import { Editor, useEditorState } from '@lobehub/editor/react';
-import { combineKeys } from '@lobehub/ui';
+// oxlint-disable-next-line stylex-migration/no-emotion-styles -- Lexical editor paragraphs take no className
+import { combineKeys, createStaticStyles, cx } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import Fuse from 'fuse.js';
 import { KEY_ESCAPE_COMMAND } from 'lexical';
@@ -62,7 +60,15 @@ import { INSERT_REFER_TOPIC_COMMAND } from './ReferTopic';
 import { useLocalFileTag } from './useLocalFileTag';
 import { useMentionCategories } from './useMentionCategories';
 
-const className = `${'lobe-input-editor-38d9c0fc-editor'} ${mentionPlainClassName}`;
+const fallback = createStaticStyles(({ css }) => ({
+  editor: css`
+    p {
+      margin-block-end: 0;
+    }
+  `,
+}));
+
+const className = cx(fallback.editor, mentionPlainClassName);
 
 // Single-line dimmed preview of the highlighted history entry, shown through the
 // editor's placeholder slot while the input is empty (history popup open).

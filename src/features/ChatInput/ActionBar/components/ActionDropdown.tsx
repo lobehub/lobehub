@@ -1,8 +1,5 @@
 'use client';
 
-// oxlint-disable-next-line stylex-migration/no-plain-css -- needs lobe-ui slots: DropdownMenu submenu popup, item indicator, group label, header, separator and submenu arrow (renderDropdownMenuItems renders them with no className or style prop), and the rules apply to every open menu, not only this one's popup
-import './ActionDropdown.global.css';
-
 import {
   type BaseMenuItemType,
   type DropdownMenuPopupProps,
@@ -12,6 +9,9 @@ import {
   type PopoverTrigger,
 } from '@lobehub/ui';
 import {
+  // oxlint-disable-next-line stylex-migration/no-emotion-styles -- global rules for every open menu's submenu parts, which have no slot
+  createGlobalStyle,
+  cssVar as cssVarValue,
   cx,
   DropdownMenuPopup,
   DropdownMenuPortal,
@@ -49,6 +49,89 @@ const styles = stylex.create({
     outlineOffset: { 'default': null, ':focus-visible': '2px' },
   },
 });
+
+const SubmenuScrollStyle = createGlobalStyle`
+  /* base-ui DropdownMenu.Item reserves an indicator slot (empty aria-hidden
+     span) for checkbox/radio variants. Our menu items don't use it, so the
+     empty slot only contributes left whitespace. Collapse it across both
+     the top-level menu and any nested submenu popups. */
+  [role='menu'] [role='menuitem'] > * > span[aria-hidden='true']:empty,
+  [role='menu'] [role='menuitem'] > span[aria-hidden='true']:empty {
+    display: none;
+  }
+
+  [data-submenu] > [role='menu'] {
+    will-change: auto;
+
+    /* Submenus have 0ms animation, so disabling compositing is safe.
+       Both will-change:transform AND the inherited transform: scaleY(1) from
+       Menu.Positioner ('& > *' rule) create a new containing block, which
+       breaks position:sticky for descendants and lets items leak below the
+       popup. Disable both for submenus where animation is already 0ms. */
+    transform: none !important;
+
+    overflow: hidden auto;
+    overscroll-behavior: contain;
+
+    /* The popup is shrink-to-fit, so one long item title would otherwise widen
+       the whole submenu. Bound the container and let rows fill it — the
+       min-width:0 chain below turns the overflow into an ellipsis. */
+    max-width: min(90vw, 400px);
+    max-height: min(50vh, 640px);
+    padding-block-end: 4px;
+  }
+
+  /* The skill submenu (the one with the search header) has collapsible groups,
+     so shrink-to-fit makes it resize every time a group opens or closes —
+     measured 243px collapsed vs 400px expanded, the jump driven by whichever
+     title happens to be longest. Pin the width so the container stays put and
+     the rows ellipsize into it. */
+  [data-submenu] > [role='menu']:has(.lobe-skill-submenu-search) {
+    width: min(90vw, 400px);
+  }
+
+  /* base-ui menu-item internal containers are flex by default but don't set
+     min-width:0, which blocks descendant text-overflow:ellipsis from working.
+     Force min-width:0 down the chain so long titles can truncate. */
+  [data-submenu] > [role='menu'] [role='menuitem'] > *,
+  [data-submenu] > [role='menu'] [role='menuitem'] > * > * {
+    min-width: 0;
+  }
+
+  /* Align base-ui separator color with the stats-footer's border-block-start
+     (colorBorderSecondary) so all dividers in the menu look consistent. */
+  [data-submenu] > [role='menu'] [role='separator'] {
+    background: ${cssVarValue.colorBorderSecondary};
+  }
+
+  /* base-ui group label is rendered inside a [role='presentation'] with its
+     own default vertical padding, which stacks with our activationGroupHeader
+     padding and inflates the gap above/below group headers. Reset only the
+     vertical padding for skill activation groups; other groups (e.g. the
+     Knowledge submenu's Libraries/Files headers) keep their default padding. */
+  [data-submenu] > [role='menu'] [role='group']:has([data-skill-activation-group]) > [role='presentation'] {
+    padding-block: 0;
+  }
+
+  /* The skill submenu is the only submenu that uses a header slot (the search
+     bar). renderDropdownMenuItems wraps it in DropdownMenuHeader's default
+     8px/12px padding — which can't be reached via props — leaving the borderless
+     search floating in a tall gap and indented past the rows below. Trim the
+     padding so the search sits snug against the divider and its icon lines up
+     with the 16px icon column shared by the menu rows. */
+  [data-submenu] > [role='menu'] > *:has(.lobe-skill-submenu-search) {
+    padding-block: 4px;
+    padding-inline: 4px;
+  }
+
+  /* Submenu triggers that opt into a custom trailing chevron (the Plus menu's
+     Skills / Web Search / Attachments rows mark their extra icon with .lobe-submenu-chevron)
+     render that chevron themselves; hide base-ui's default triangle submenu arrow
+     — always the last child of the trigger's content — so the two don't stack. */
+  [role='menuitem']:has(.lobe-submenu-chevron) > * > *:last-child {
+    display: none;
+  }
+`;
 
 export type ActionDropdownMenuItem = MenuItemType;
 
@@ -345,33 +428,36 @@ const ActionDropdown = memo<ActionDropdownProps>(
     }, [portalContainer]);
 
     return (
-      <DropdownMenuRoot
-        {...rest}
-        defaultOpen={defaultOpen}
-        open={open}
-        onOpenChange={handleOpenChange}
-        onOpenChangeComplete={handleOpenChangeComplete}
-      >
-        <DropdownMenuTrigger
-          className={stylex.props(styles.trigger).className}
-          {...resolvedTriggerProps}
+      <>
+        <SubmenuScrollStyle />
+        <DropdownMenuRoot
+          {...rest}
+          defaultOpen={defaultOpen}
+          open={open}
+          onOpenChange={handleOpenChange}
+          onOpenChangeComplete={handleOpenChangeComplete}
         >
-          {children}
-        </DropdownMenuTrigger>
-        <DropdownMenuPortal container={resolvedPortalContainer} {...restPortalProps}>
-          <DropdownMenuPositioner
-            {...positionerProps}
-            hoverTrigger={Boolean(resolvedTriggerProps?.openOnHover)}
-            placement={isMobile ? 'top' : placement}
+          <DropdownMenuTrigger
+            className={stylex.props(styles.trigger).className}
+            {...resolvedTriggerProps}
           >
-            <DropdownMenuPopup {...resolvedPopupProps}>
-              <Suspense fallback={<DebugNode trace="ActionDropdown > popup" />}>
-                {menuContent}
-              </Suspense>
-            </DropdownMenuPopup>
-          </DropdownMenuPositioner>
-        </DropdownMenuPortal>
-      </DropdownMenuRoot>
+            {children}
+          </DropdownMenuTrigger>
+          <DropdownMenuPortal container={resolvedPortalContainer} {...restPortalProps}>
+            <DropdownMenuPositioner
+              {...positionerProps}
+              hoverTrigger={Boolean(resolvedTriggerProps?.openOnHover)}
+              placement={isMobile ? 'top' : placement}
+            >
+              <DropdownMenuPopup {...resolvedPopupProps}>
+                <Suspense fallback={<DebugNode trace="ActionDropdown > popup" />}>
+                  {menuContent}
+                </Suspense>
+              </DropdownMenuPopup>
+            </DropdownMenuPositioner>
+          </DropdownMenuPortal>
+        </DropdownMenuRoot>
+      </>
     );
   },
 );
