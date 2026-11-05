@@ -1142,7 +1142,7 @@ export default {
   'connections.cancel': 'Cancel',
   'connections.save': 'Save connections',
   'connections.editHint':
-    'Changes affect future runs for every environment using this connection. Saved credentials are kept private; enter new credentials to replace them.',
+    'Changes affect every environment using this connection. Saved credentials are kept private; enter new credentials to replace them.',
   'connections.checking': 'Checking connection availability…',
   'connections.missing': '{{count}} service bindings need a connection before running.',
   'connections.configured': 'All required services have a connection.',

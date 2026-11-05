@@ -145,7 +145,7 @@
   "connections.datasetOnly": "Manage connections in the Dataset that uses this environment. Import a new Dataset before configuring its connections.",
   "connections.disabled": "Disabled",
   "connections.edit": "Edit connection",
-  "connections.editHint": "Changes affect future runs for every environment using this connection. Saved credentials are kept private; enter new credentials to replace them.",
+  "connections.editHint": "Changes affect every environment using this connection. Saved credentials are kept private; enter new credentials to replace them.",
   "connections.empty": "No available HTTP connections yet. Create one here, then choose it above.",
   "connections.enabled": "Enable connection",
   "connections.environment": "Environment",

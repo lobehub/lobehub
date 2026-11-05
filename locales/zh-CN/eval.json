@@ -145,7 +145,7 @@
   "connections.datasetOnly": "请在使用此环境的数据集中管理连接。新数据集需先导入，再配置连接。",
   "connections.disabled": "已停用",
   "connections.edit": "编辑连接",
-  "connections.editHint": "更改将影响使用此连接的所有环境的后续运行。已保存的凭据不会显示；输入新凭据即可替换。",
+  "connections.editHint": "更改将影响使用此连接的所有环境。已保存的凭据不会显示；输入新凭据即可替换。",
   "connections.empty": "还没有可用的 HTTP 连接。在此创建后，再在上方选择。",
   "connections.enabled": "启用连接",
   "connections.environment": "环境",
