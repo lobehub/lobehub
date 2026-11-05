@@ -687,6 +687,14 @@ export interface PlatformDefinition {
    */
   publicCredentialKeys?: string[];
 
+  /**
+   * Outbound messages ride the live platform connection itself (WeCom AI bots have no REST send
+   * API), so only the process holding that connection can reply. The external message gateway
+   * forwards inbound events but cannot relay outbound frames, so in gateway mode the platform is
+   * not offered and its connections are not handed to a gateway.
+   */
+  requiresInProcessConnection?: boolean;
+
   /** Field schema — top-level objects `credentials` and `settings` map to DB columns. */
   schema: FieldSchema[];
 

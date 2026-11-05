@@ -86,6 +86,9 @@ export async function buildDesiredConnections(
   for (const definition of platformRegistry.listPlatforms()) {
     const platform = definition.id;
 
+    // Replies for these ride the connection itself; a gateway could receive but never answer.
+    if (definition.requiresInProcessConnection) continue;
+
     // Only platforms owned by one of `hosts`. Loading the rest would decrypt
     // credentials for connections this call is never going to look at — pure
     // waste for a single-host pull, and a wider blast radius on failure.
