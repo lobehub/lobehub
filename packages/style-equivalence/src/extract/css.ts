@@ -102,10 +102,25 @@ const constantText = (
   return target && constantText(target, constants, depth + 1);
 };
 
+const importAliases = (sf: ts.SourceFile, imported: string) => {
+  const aliases = new Map<string, string>();
+  for (const statement of sf.statements) {
+    const named = ts.isImportDeclaration(statement)
+      ? statement.importClause?.namedBindings
+      : undefined;
+    if (named && ts.isNamedImports(named))
+      for (const element of named.elements)
+        if ((element.propertyName ?? element.name).text === imported)
+          aliases.set(element.name.text, imported);
+  }
+  return aliases;
+};
+
 export const templateSlotRules = (symbol: string, factory: ts.CallExpression): StyleRule[] => {
   const object = returnedObject(factory);
   if (!object) return [];
   const constants = topLevelConstants(factory.getSourceFile());
+  const tokenAliases = importAliases(factory.getSourceFile(), 'cssVar');
   const rules: StyleRule[] = [];
   for (const property of object.properties) {
     if (!ts.isPropertyAssignment(property)) continue;
@@ -113,9 +128,16 @@ export const templateSlotRules = (symbol: string, factory: ts.CallExpression): S
     if (!ts.isTaggedTemplateExpression(value)) continue;
     const slot = `${symbol}.${property.name.getText()}`;
     const spans = ts.isTemplateExpression(value.template) ? value.template.templateSpans : [];
-    const interpolations = spans.map((span) =>
-      span.expression.getText().replaceAll(/\s+/g, ' ').trim(),
-    );
+    const interpolations = spans.map((span) => {
+      const { expression } = span;
+      const alias =
+        ts.isPropertyAccessExpression(expression) && ts.isIdentifier(expression.expression)
+          ? tokenAliases.get(expression.expression.text)
+          : undefined;
+      return alias
+        ? `${alias}.${expression.name.text}`
+        : expression.getText().replaceAll(/\s+/g, ' ').trim();
+    });
     const folded = spans.map((span) => constantText(span.expression, constants) ?? null);
     for (const rule of parseRules(templateText(value.template), `.${SELF}`).rules)
       rules.push({

@@ -259,3 +259,33 @@ export const Body = () => <Markdown ${host}>{text}</Markdown>;
     expect(entry.flags).toContain('INNER_TARGET');
   });
 });
+
+describe('a theme token read through a renamed import', () => {
+  it('resolves cssVar imported under another name', () => {
+    const css = `.docx-f4c0-scroll .docx-wrapper > section.docx {\n  box-shadow: var(--lobe-box-shadow-tertiary);\n}\n`;
+    const before = `import './Docx.css';\n\nexport const Docx = () => <div className={'docx-f4c0-scroll'} />;\n`;
+    const after = (
+      token: string,
+    ) => `import { createStaticStyles, cssVar as cssVarValue } from '@lobehub/ui';
+
+const fallback = createStaticStyles(({ css }) => ({
+  scroll: css\`
+    .docx-wrapper > section.docx {
+      box-shadow: \${cssVarValue.${token}};
+    }
+  \`,
+}));
+
+export const Docx = () => <div className={fallback.scroll} />;
+`;
+    const run = (token: string) =>
+      planFile(
+        'a.tsx',
+        extractFile(before, 'a.tsx', options({ './Docx.css': css })),
+        extractFile(after(token), 'a.tsx', options({})),
+        { layoutComponents: [] },
+      ).cases[0];
+    expect(run('boxShadowTertiary').flags).toEqual([]);
+    expect(run('boxShadowSecondary').flags).toContain('INNER_TARGET');
+  });
+});
