@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  findFoldedMatches,
   findKeywordRanges,
   requestReveal,
   REVEAL_IN_PAGE_EVENT,
@@ -78,5 +79,32 @@ describe('requestReveal', () => {
 
     expect(listener).toHaveBeenCalledTimes(1);
     expect(listener.mock.calls[0][0].detail).toEqual({ bottom: 420, top: 400 });
+  });
+});
+
+describe('findFoldedMatches', () => {
+  it('keeps matching a node whose lower-casing changes length', () => {
+    // `İ`.toLowerCase() is two code units, which used to drop the whole node.
+    const text = 'İstanbul deployment failed';
+    const [[start, end]] = findFoldedMatches(text, 'deployment');
+
+    expect(text.slice(start, end)).toBe('deployment');
+  });
+
+  it('maps a match on the expanded character back to original offsets', () => {
+    const text = 'Gİt İstanbul';
+    expect(findFoldedMatches(text, 'i̇stanbul').map(([s, e]) => text.slice(s, e))).toEqual([
+      'İstanbul',
+    ]);
+  });
+
+  it('drops a match that would split one folded character', () => {
+    // 'i' alone is only half of the folded `İ` (i + combining dot).
+    expect(findFoldedMatches('İ', 'i')).toEqual([]);
+  });
+
+  it('matches astral characters by code point', () => {
+    const text = 'ship 🚀 now 🚀';
+    expect(findFoldedMatches(text, '🚀')).toHaveLength(2);
   });
 });

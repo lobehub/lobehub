@@ -1,4 +1,3 @@
-import type { RefObject } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
@@ -18,8 +17,12 @@ interface UseTaskFindOptions {
   /** The find bar is open; closing it clears every highlight. */
   enabled: boolean;
   keyword: string;
-  /** The detail's scroll container: the text searched, and what scrolls to a match. */
-  rootRef: RefObject<HTMLElement | null>;
+  /**
+   * The detail's scroll container: the text searched, and what scrolls to a
+   * match. An element, not a ref, so a remount (Retry after a failed load
+   * swaps the error view back for a new container) restarts the search there.
+   */
+  root: HTMLElement | null;
 }
 
 /**
@@ -29,7 +32,7 @@ interface UseTaskFindOptions {
  * re-renders (autosave, streaming activity, lazy sections), keeping the user's
  * position when the match under it still exists.
  */
-export const useTaskFind = ({ enabled, keyword, rootRef }: UseTaskFindOptions) => {
+export const useTaskFind = ({ enabled, keyword, root }: UseTaskFindOptions) => {
   const [count, setCount] = useState(0);
   const [activeIndex, setActiveIndex] = useState(0);
   const rangesRef = useRef<Range[]>([]);
@@ -40,7 +43,6 @@ export const useTaskFind = ({ enabled, keyword, rootRef }: UseTaskFindOptions) =
     (index: number, scroll: boolean) => {
       const range = rangesRef.current[index];
       setHighlightRanges(TASK_FIND_HIGHLIGHT.active, range ? [range] : [], 2);
-      const root = rootRef.current;
       if (!scroll || !range || !root) return;
       // A match inside a clamped "show more" preview opens it first; scroll
       // once the expanded layout has been committed and laid out.
@@ -51,11 +53,10 @@ export const useTaskFind = ({ enabled, keyword, rootRef }: UseTaskFindOptions) =
         }),
       );
     },
-    [rootRef],
+    [root],
   );
 
   useEffect(() => {
-    const root = rootRef.current;
     const needle = keyword.trim();
     if (!enabled || !needle || !root) {
       rangesRef.current = [];
@@ -96,7 +97,7 @@ export const useTaskFind = ({ enabled, keyword, rootRef }: UseTaskFindOptions) =
       if (frame !== undefined) cancelAnimationFrame(frame);
       clearHighlights(Object.values(TASK_FIND_HIGHLIGHT));
     };
-  }, [enabled, keyword, paintActive, rootRef]);
+  }, [enabled, keyword, paintActive, root]);
 
   const step = useCallback(
     (delta: 1 | -1) => {

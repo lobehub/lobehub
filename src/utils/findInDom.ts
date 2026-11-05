@@ -24,6 +24,47 @@ export const requestReveal = (range: Range) => {
   );
 };
 
+/**
+ * `[start, end)` offsets in `text` of every case-insensitive occurrence of an
+ * already lower-cased `needle`. Lower-casing can change a character's length
+ * (`İ` becomes two code units), so matching runs on the folded text and maps
+ * each hit back to original offsets. A hit that starts or ends inside one
+ * folded character is dropped; the rest of the text still matches.
+ */
+export const findFoldedMatches = (text: string, needle: string): [number, number][] => {
+  if (!needle) return [];
+
+  let folded = '';
+  // For each folded code unit: the original offset of the character it came
+  // from, and of the character after it.
+  const starts: number[] = [];
+  const ends: number[] = [];
+  for (let index = 0; index < text.length;) {
+    const char = String.fromCodePoint(text.codePointAt(index)!);
+    const lower = char.toLowerCase();
+    for (let unit = 0; unit < lower.length; unit++) {
+      starts.push(index);
+      ends.push(index + char.length);
+    }
+    folded += lower;
+    index += char.length;
+  }
+
+  const matches: [number, number][] = [];
+  for (let index = folded.indexOf(needle); index !== -1;) {
+    const last = index + needle.length - 1;
+    const startsOnBoundary = index === 0 || starts[index - 1] !== starts[index];
+    const endsOnBoundary = last === folded.length - 1 || starts[last + 1] !== starts[last];
+    if (startsOnBoundary && endsOnBoundary) {
+      matches.push([starts[index], ends[last]]);
+      index = folded.indexOf(needle, index + needle.length);
+    } else {
+      index = folded.indexOf(needle, index + 1);
+    }
+  }
+  return matches;
+};
+
 const SKIPPED_TAGS = new Set(['INPUT', 'NOSCRIPT', 'SCRIPT', 'STYLE', 'TEXTAREA']);
 
 export const supportsHighlightApi = () =>
@@ -59,17 +100,11 @@ export const findKeywordRanges = (
 
   const ranges: Range[] = [];
   for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-    const value = node.nodeValue ?? '';
-    const text = value.toLowerCase();
-    // A case fold that changes the length would shift every offset below.
-    if (text.length !== value.length) continue;
-
-    for (let index = text.indexOf(needle); index !== -1;) {
+    for (const [start, end] of findFoldedMatches(node.nodeValue ?? '', needle)) {
       const range = document.createRange();
-      range.setStart(node, index);
-      range.setEnd(node, index + needle.length);
+      range.setStart(node, start);
+      range.setEnd(node, end);
       ranges.push(range);
-      index = text.indexOf(needle, index + needle.length);
     }
   }
 

@@ -2,7 +2,6 @@
 
 import { HotkeyEnum, HotkeyScopeEnum } from '@lobechat/const/hotkeys';
 import { useDebounce } from 'ahooks';
-import type { RefObject } from 'react';
 import { useCallback, useState } from 'react';
 
 import { useHotkeyById } from '@/hooks/useHotkeys/useHotkeyById';
@@ -19,12 +18,15 @@ const FIND_DEBOUNCE_MS = 120;
  * already owns (one key, one meaning: find in what is open), so a rebind in
  * settings moves both, and the two never show up as conflicting shortcuts.
  */
-export const useTaskFindBar = (rootRef: RefObject<HTMLElement | null>) => {
+export const useTaskFindBar = () => {
+  // A callback ref into state: the scroll container remounts when Retry
+  // replaces the error view, and the search must follow the new element.
+  const [root, setRoot] = useState<HTMLElement | null>(null);
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState('');
   const [focusRequest, setFocusRequest] = useState(0);
   const keyword = useDebounce(value, { wait: FIND_DEBOUNCE_MS }).trim();
-  const { activeIndex, count, step } = useTaskFind({ enabled: open, keyword, rootRef });
+  const { activeIndex, count, step } = useTaskFind({ enabled: open, keyword, root });
 
   const openFind = useCallback(() => {
     setOpen(true);
@@ -52,5 +54,5 @@ export const useTaskFindBar = (rootRef: RefObject<HTMLElement | null>) => {
     />
   ) : null;
 
-  return { bar, openFind };
+  return { bar, openFind, rootRef: setRoot };
 };

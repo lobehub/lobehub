@@ -1,7 +1,7 @@
 import { HotkeyEnum } from '@lobechat/const/hotkeys';
 import { ActionIcon, Button, Flexbox } from '@lobehub/ui';
 import { SearchIcon } from 'lucide-react';
-import { memo, useRef } from 'react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 
@@ -42,8 +42,7 @@ const TaskDetailPage = memo<TaskDetailPageProps>(({ taskId, showTaskAgentPanelTo
   ]);
 
   const { isInitialLoading, isNotFound, error, onRetry } = useActiveTaskDetail(taskId);
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const { bar: findBar, openFind } = useTaskFindBar(scrollRef);
+  const { bar: findBar, openFind, rootRef: findRootRef } = useTaskFindBar();
   const findHotkey = useUserStore(settingsSelectors.getHotkeyById(HotkeyEnum.FindInTopic));
 
   // A transient fetch failure (network / 500) is not a 404 — keep the URL and
@@ -126,7 +125,7 @@ const TaskDetailPage = memo<TaskDetailPageProps>(({ taskId, showTaskAgentPanelTo
           re-renders never reach the scroll container's match observer. */}
       <Flexbox flex={1} style={{ minHeight: 0, position: 'relative' }}>
         {findBar}
-        <Flexbox flex={1} ref={scrollRef} style={{ minHeight: 0, overflowY: 'auto' }}>
+        <Flexbox flex={1} ref={findRootRef} style={{ minHeight: 0, overflowY: 'auto' }}>
           {/* Detail is prose — instruction, deliverables, activity — so it keeps the
               centered reading column rather than the list page's full-bleed rows,
               whose value is the horizontal room for their metadata columns. */}
