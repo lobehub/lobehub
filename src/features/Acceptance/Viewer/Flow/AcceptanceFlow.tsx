@@ -5,8 +5,6 @@ import '@xyflow/react/dist/style.css';
 import {
   ActionIcon,
   Button,
-  createStaticStyles,
-  cssVar,
   Empty,
   Flexbox,
   Select,
@@ -14,11 +12,15 @@ import {
   useAppElement,
   useResponsive,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { MarkerType, ReactFlowProvider } from '@xyflow/react';
 import { Maximize2, Minimize2 } from 'lucide-react';
 import { use, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
+
+import { sx } from '@/styles/sx';
 
 import { useAcceptanceScope } from '../AcceptanceScope';
 import { acceptanceContentLayout } from '../layout';
@@ -33,62 +35,56 @@ import { FlowOutline } from './FlowOutline';
 import { FlowPanelHostContext } from './FlowPanelHost';
 import { FlowResults } from './FlowResults';
 
-const styles = createStaticStyles(({ css }) => ({
+const narrow = '@media (width <= 640px)';
+
+// The page's text measure, from the shared layout constants StyleX cannot read.
+const contentMeasure = acceptanceContentLayout.maxWidth - 2 * acceptanceContentLayout.paddingInline;
+
+const styles = stylex.create({
   // Fullscreen is a two-column shell, the same shape the page uses: the details
   // rail owns the full height of the right edge and the toolbar belongs to the
   // canvas beside it, not to a band stretched across both.
-  fullscreen: css`
-    position: fixed;
-    z-index: ${cssVar.zIndexPopupBase};
-    inset: 0;
-    background: ${cssVar.colorBgContainer};
-
-    @media (width <= 640px) {
-      flex-direction: column;
-    }
-  `,
-  stage: css`
-    min-width: 0;
-    min-height: 0;
-    padding: 16px;
-  `,
-  details: css`
-    overflow: hidden;
-    flex: none;
-
-    width: min(440px, 42%);
-    height: 100%;
-    min-height: 0;
-
-    @media (width <= 640px) {
-      width: 100%;
-      height: 40%;
-    }
-  `,
-  workspace: css`
-    min-width: 0;
-    min-height: 0;
-
-    @media (width <= 640px) {
-      flex-direction: column;
-    }
-  `,
-  toolbar: css`
-    width: 100%;
-    max-width: ${acceptanceContentLayout.maxWidth - 2 * acceptanceContentLayout.paddingInline}px;
-    margin-inline: auto;
-  `,
+  fullscreen: {
+    position: 'fixed',
+    zIndex: cssVar.zIndexPopupBase,
+    insetBlockStart: 0,
+    insetBlockEnd: 0,
+    insetInlineStart: 0,
+    insetInlineEnd: 0,
+    backgroundColor: cssVar.colorBgContainer,
+    flexDirection: { default: null, [narrow]: 'column' },
+  },
+  stage: {
+    minWidth: 0,
+    minHeight: 0,
+    padding: '16px',
+  },
+  details: {
+    overflow: 'hidden',
+    flex: 'none',
+    width: { default: 'min(440px, 42%)', [narrow]: '100%' },
+    height: { default: '100%', [narrow]: '40%' },
+    minHeight: 0,
+  },
+  workspace: {
+    minWidth: 0,
+    minHeight: 0,
+    flexDirection: { default: null, [narrow]: 'column' },
+  },
+  toolbar: {
+    width: '100%',
+    marginInline: 'auto',
+  },
   // The outline is reading material, so it keeps the page's text measure while
   // the canvas next to it is allowed the full width.
-  outline: css`
-    overflow: auto;
+  outline: {
+    overflow: 'auto',
+    width: '100%',
+    minWidth: 0,
+    marginInline: 'auto',
+  },
+});
 
-    width: 100%;
-    min-width: 0;
-    max-width: ${acceptanceContentLayout.maxWidth - 2 * acceptanceContentLayout.paddingInline}px;
-    margin-inline: auto;
-  `,
-}));
 const nodeTypes = { state: FlowNode, flowGroup: FlowGroup };
 
 export function AcceptanceFlow() {
@@ -198,17 +194,17 @@ export function AcceptanceFlow() {
   ) : null;
   const stage = (
     <Flexbox
-      className={fullscreen ? styles.stage : undefined}
       flex={fullscreen ? 1 : undefined}
       gap={16}
+      {...stylex.props(fullscreen && styles.stage)}
     >
       <Flexbox
         horizontal
         align="center"
-        className={styles.toolbar}
         gap={8}
         justify="space-between"
         wrap="wrap"
+        {...sx([styles.toolbar], undefined, { maxWidth: contentMeasure })}
       >
         <Flexbox horizontal align="center" gap={4}>
           <Button size="small" type="text" onClick={() => setFocus(undefined)}>
@@ -258,9 +254,9 @@ export function AcceptanceFlow() {
           />
         </Flexbox>
       </Flexbox>
-      <Flexbox horizontal className={styles.workspace} flex={fullscreen ? 1 : undefined}>
+      <Flexbox horizontal flex={fullscreen ? 1 : undefined} {...stylex.props(styles.workspace)}>
         {showOutline ? (
-          <Flexbox className={styles.outline} flex={1}>
+          <Flexbox flex={1} {...sx([styles.outline], undefined, { maxWidth: contentMeasure })}>
             <FlowOutline edges={graphEdges} nodes={graph.nodes} onSelect={setSelected} />
           </Flexbox>
         ) : (
@@ -281,9 +277,9 @@ export function AcceptanceFlow() {
   );
   if (!fullscreen) return stage;
   return createPortal(
-    <Flexbox horizontal className={styles.fullscreen}>
+    <Flexbox horizontal {...stylex.props(styles.fullscreen)}>
       {stage}
-      {results && <Flexbox className={styles.details}>{results}</Flexbox>}
+      {results && <Flexbox {...stylex.props(styles.details)}>{results}</Flexbox>}
     </Flexbox>,
     appElement ?? document.body,
   );

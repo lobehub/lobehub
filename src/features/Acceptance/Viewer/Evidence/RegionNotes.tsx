@@ -1,6 +1,8 @@
 'use client';
 
-import { ActionIcon, createStaticStyles, cssVar, Flexbox, Icon, TextArea } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Icon, TextArea } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Crosshair, Trash2 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { memo } from 'react';
@@ -8,48 +10,36 @@ import { useTranslation } from 'react-i18next';
 
 import type { DraftAnnotationEntry, RejectableEvidence } from '../Review/rejectDraft';
 
-const styles = createStaticStyles(({ css }) => ({
-  /** The badge that ties a note back to the numbered box on the image. */
-  index: css`
-    flex: none;
-
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
-
-    font-size: 11px;
-    font-weight: 600;
-    line-height: 18px;
-    color: #fff;
-    text-align: center;
-
-    background: ${cssVar.colorError};
-  `,
-  /** The phone caption: a link back to the box on the image, not a
-      button-shaped box. The tap target comes from padding around a compact
-      line, so a list of regions does not become a column of 44px slabs. */
-  jump: css`
-    cursor: pointer;
-
-    display: inline-flex;
-    gap: 5px;
-    align-items: center;
-    align-self: flex-start;
-
-    padding-block: 7px;
-    padding-inline: 2px;
-    border: none;
-
-    font-size: 13px;
-    color: ${cssVar.colorLink};
-
-    background: none;
-
-    &:active {
-      opacity: 0.6;
-    }
-  `,
-}));
+const styles = stylex.create({
+  index: {
+    flex: 'none',
+    width: '18px',
+    height: '18px',
+    borderRadius: '50%',
+    fontSize: '11px',
+    fontWeight: 600,
+    lineHeight: '18px',
+    color: '#fff',
+    textAlign: 'center',
+    backgroundColor: cssVar.colorError,
+    backgroundImage: 'none',
+  },
+  jump: {
+    cursor: 'pointer',
+    display: 'inline-flex',
+    gap: '5px',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    paddingBlock: '7px',
+    paddingInline: '2px',
+    borderStyle: 'none',
+    fontSize: '13px',
+    color: cssVar.colorLink,
+    backgroundColor: 'transparent',
+    backgroundImage: 'none',
+    opacity: { 'default': null, ':active': 0.6 },
+  },
+});
 
 interface RegionNoteRowProps {
   /** Focus the field on mount — a note just made is a note about to be written. */
@@ -83,6 +73,7 @@ export const RegionNoteRow = memo<RegionNoteRowProps>(
             autoSize={{ maxRows: 5, minRows: 1 }}
             placeholder={placeholder}
             style={{ flex: 1, fontSize }}
+            styles={fontSize ? { input: { fontSize } } : undefined}
             value={value}
             onChange={(event) => onChange(event.target.value)}
           />
@@ -117,7 +108,7 @@ export const RegionNotes = memo<RegionNotesProps>(({ annotations, onChange, onRe
       placeholder={t('acceptance.review.annotationPlaceholder', { index: index + 1 })}
       value={annotation.comment}
       badge={
-        <span className={styles.index} style={{ marginBlockStart: 6 }}>
+        <span className={stylex.props(styles.index).className} style={{ marginBlockStart: 6 }}>
           {index + 1}
         </span>
       }
@@ -160,7 +151,7 @@ export const MobileRegionNotes = memo<MobileRegionNotesProps>(
           value={annotation.comment}
           caption={
             <button
-              className={styles.jump}
+              {...stylex.props(styles.jump)}
               type={'button'}
               onClick={() => onJump(annotation.evidenceId)}
             >

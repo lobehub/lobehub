@@ -1,8 +1,12 @@
 'use client';
 
-import { createStaticStyles, cssVar, Flexbox, useResponsive } from '@lobehub/ui';
+import { Flexbox, useResponsive } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { useState } from 'react';
 import { useLocation } from 'react-router';
+
+import { sx } from '@/styles/sx';
 
 import { useAcceptanceScope } from './AcceptanceScope';
 import AcceptanceCheckInventory from './Checks/AcceptanceCheckInventory';
@@ -34,28 +38,27 @@ import { checksForTurn } from './turnChecks';
 import { useAcceptanceBundle } from './useAcceptanceBundle';
 import { useAcceptanceTurn } from './useAcceptanceTurn';
 
-const styles = createStaticStyles(({ css }) => ({
-  column: css`
-    width: 100%;
-    max-width: ${acceptanceContentLayout.maxWidth}px;
-    margin-inline: auto;
-    padding-inline: 24px;
+const styles = stylex.create({
+  checks: (maxWidth: number) => ({
+    width: '100%',
+    maxWidth,
+    marginInline: 'auto',
+  }),
+  column: {
+    width: '100%',
+    marginInline: 'auto',
+    paddingInline: { 'default': '24px', '@media (width <= 767px)': '16px' },
+  },
+  headerBand: {
+    flex: 'none',
+    paddingBlockStart: '20px',
+    paddingBlockEnd: 0,
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+});
 
-    @media (width <= 767px) {
-      padding-inline: 16px;
-    }
-  `,
-  checks: css`
-    width: 100%;
-    max-width: ${acceptanceChecksLayout.maxWidth}px;
-    margin-inline: auto;
-  `,
-  headerBand: css`
-    flex: none;
-    padding-block: 20px 0;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-}));
 interface AcceptancePageProps {
   onDraftToComposer?: (text: string) => boolean;
 }
@@ -99,8 +102,11 @@ export const AcceptanceOverview = ({
 
   return (
     <>
-      <Flexbox className={styles.headerBand}>
-        <Flexbox className={styles.column} gap={12}>
+      <Flexbox {...stylex.props(styles.headerBand)}>
+        <Flexbox
+          gap={12}
+          {...sx([styles.column], undefined, { maxWidth: acceptanceContentLayout.maxWidth })}
+        >
           {/* Sharing sits beside the identity, as on the workbench page. The
               control gates itself on the server's review capability, so a
               reader without it sees nothing here. */}
@@ -142,10 +148,11 @@ export const AcceptanceOverview = ({
       </Flexbox>
 
       <Flexbox
-        className={styles.column}
         gap={16}
         paddingBlock={20}
-        style={tab === 'flow' ? { maxWidth: 1500 } : undefined}
+        {...sx([styles.column], undefined, {
+          maxWidth: tab === 'flow' ? 1500 : acceptanceContentLayout.maxWidth,
+        })}
       >
         {/* Deciding belongs where the evidence is. The discussion is a
             conversation; ending one there put the closing act under a thread
@@ -163,7 +170,7 @@ export const AcceptanceOverview = ({
         ) : tab === 'checks' && gateDossier ? (
           <GateReview dossier={gateDossier} />
         ) : tab === 'checks' ? (
-          <Flexbox className={styles.checks} gap={16}>
+          <Flexbox {...stylex.props(styles.checks(acceptanceChecksLayout.maxWidth))} gap={16}>
             <AcceptanceCheckInventory toolbar={<AcceptanceCheckOwnerToolbar />} />
             <ReviewerApprovalBar />
             <AcceptanceDecision onDraftToComposer={onDraftToComposer} />

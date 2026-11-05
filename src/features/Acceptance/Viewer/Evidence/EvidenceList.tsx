@@ -3,9 +3,11 @@
 import { readEvidenceChapters } from '@lobechat/const/verify';
 import type { AcceptanceReviewAnnotation } from '@lobechat/types';
 import { Flexbox, Image, useResponsive } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { memo, type ReactNode } from 'react';
 
 import AudioPlayer from '@/features/AudioPlayer';
+import { sx } from '@/styles/sx';
 
 import {
   EvidenceComparisonCard,
@@ -22,8 +24,9 @@ import { TerminalEvidenceCard } from '../../Report/TerminalEvidence';
 import type { AcceptanceEvidence } from '../Checks/types';
 import { AnnotatedImage } from '../Evidence/Annotation';
 import { ScreenshotTiles } from '../Evidence/ScreenshotTiles';
+import { floatingActionHostMarker } from '../markers.stylex';
 import { IMAGE_EVIDENCE, imageRatio, isAnnotatable, isVisual } from './evidence';
-import FloatingCommentAction, { FLOATING_ACTION_HOST } from './FloatingCommentAction';
+import FloatingCommentAction from './FloatingCommentAction';
 import type { EvidenceOverlayMap } from './overlay';
 import { styles } from './styles';
 import { VideoEvidenceDiscussion } from './Video/VideoEvidenceDiscussion';
@@ -64,7 +67,7 @@ const comparisonContent = (item: AcceptanceEvidence, action?: ReactNode, video?:
   );
   if (!action) return image;
   return (
-    <div style={{ position: 'relative' }} {...{ [FLOATING_ACTION_HOST]: '' }}>
+    <div {...sx([floatingActionHostMarker], undefined, { position: 'relative' })}>
       {image}
       {action}
     </div>
@@ -165,7 +168,7 @@ export const EvidenceList = memo<{
         }
 
         const description = meaningfulEvidenceCaption(item.description);
-        const caption = description && <span className={styles.caption}>{description}</span>;
+        const caption = description && <span {...stylex.props(styles.caption)}>{description}</span>;
         if (item.fileUrl && item.type === 'video')
           return <div key={item.id}>{videoContent(item, caption)}</div>;
         if (item.fileUrl && item.type === 'audio')
@@ -199,8 +202,10 @@ export const EvidenceList = memo<{
           return (
             <div
               key={item.id}
-              style={{ position: 'relative', width: '100%' }}
-              {...(action ? { [FLOATING_ACTION_HOST]: '' } : {})}
+              {...sx([action && floatingActionHostMarker], undefined, {
+                position: 'relative',
+                width: '100%',
+              })}
             >
               <button
                 type={'button'}
@@ -267,7 +272,7 @@ export const EvidenceList = memo<{
                     src={shot.fileUrl!}
                     caption={
                       shotCaption ? (
-                        <span className={styles.caption}>{shotCaption}</span>
+                        <span {...stylex.props(styles.caption)}>{shotCaption}</span>
                       ) : undefined
                     }
                   />
@@ -282,8 +287,11 @@ export const EvidenceList = memo<{
             <Flexbox
               gap={4}
               key={item.id}
-              style={{ maxWidth: '100%', position: 'relative', width: 'fit-content' }}
-              {...(action ? { [FLOATING_ACTION_HOST]: '' } : {})}
+              {...sx([action && floatingActionHostMarker], undefined, {
+                maxWidth: '100%',
+                position: 'relative',
+                width: 'fit-content',
+              })}
             >
               {action}
               {overlay?.length ? (
@@ -299,12 +307,13 @@ export const EvidenceList = memo<{
                 />
               ) : (
                 <Flexbox
-                  className={styles.evidenceImage}
-                  style={
+                  {...sx(
+                    [styles.evidenceImage],
+                    undefined,
                     item.fileWidth && item.fileHeight
                       ? { aspectRatio: imageRatio(item), maxWidth: '100%', width: item.fileWidth }
-                      : undefined
-                  }
+                      : undefined,
+                  )}
                 >
                   <Image
                     alt={item.description ?? item.fileName ?? item.type}
@@ -342,7 +351,7 @@ export const EvidenceList = memo<{
         if (item.content)
           return (
             <Flexbox gap={4} key={item.id}>
-              <div className={styles.evidenceText}>{item.content}</div>
+              <div {...stylex.props(styles.evidenceText)}>{item.content}</div>
               {caption}
             </Flexbox>
           );

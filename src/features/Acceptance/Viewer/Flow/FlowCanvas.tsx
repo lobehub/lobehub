@@ -1,4 +1,7 @@
-import { createStaticStyles, cssVar, Flexbox } from '@lobehub/ui';
+// oxlint-disable-next-line stylex-migration/no-emotion-styles -- @xyflow/react edge labels and control buttons take no className
+import { createStaticStyles, Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import {
   Background,
   Controls,
@@ -13,6 +16,7 @@ import { useEffect, useRef } from 'react';
 
 import { observeWidth } from '@/features/AgentGoals/ProcessControl/Graph/useFitViewOnResize';
 import { useSingleton } from '@/hooks/useSingleton';
+import { sx } from '@/styles/sx';
 
 import { FlowAnchorContext } from './flowAnchor';
 import { FlowEdge } from './FlowEdge';
@@ -22,18 +26,21 @@ import { getSelectedFlowNodeId, panNodeIntoView } from './flowViewport';
 const edgeTypes = { transition: FlowEdge };
 
 const fitOptions = { maxZoom: 1, minZoom: 0.65, padding: 0.08 };
-const styles = createStaticStyles(({ css }) => ({
+const styles = stylex.create({
+  canvas: {
+    overflow: 'hidden',
+    flex: 'none',
+    width: '100%',
+    minWidth: 0,
+    height: 'clamp(520px, calc(100dvh - 400px), 900px)',
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: 'transparent',
+    backgroundImage: 'none',
+  },
+});
+
+const fallback = createStaticStyles(({ css, cssVar }) => ({
   canvas: css`
-    overflow: hidden;
-    flex: none;
-
-    width: 100%;
-    min-width: 0;
-    height: clamp(520px, calc(100dvh - 400px), 900px);
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: transparent;
-
     .react-flow__edgelabel-renderer {
       z-index: 5;
     }
@@ -125,9 +132,12 @@ export function FlowCanvas({
     // anchor channel has to sit above the canvas to reach a group's toggle.
     <FlowAnchorContext value={anchor}>
       <Flexbox
-        className={styles.canvas}
         ref={ref}
-        style={fullscreen ? { flex: 1, height: '100%', minHeight: 0 } : undefined}
+        {...sx(
+          [styles.canvas],
+          fallback.canvas,
+          fullscreen ? { flex: 1, height: '100%', minHeight: 0 } : undefined,
+        )}
       >
         <ReactFlow
           fitView

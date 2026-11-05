@@ -1,17 +1,8 @@
 'use client';
 
-import {
-  ActionIcon,
-  Button,
-  createStaticStyles,
-  cssVar,
-  Flexbox,
-  Icon,
-  Select,
-  Text,
-  TextArea,
-  toast,
-} from '@lobehub/ui';
+import { ActionIcon, Button, Flexbox, Icon, Select, Text, TextArea, toast } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ClipboardCheck, History, X } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -26,45 +17,48 @@ import { flowStateColor } from './FlowNode';
 type FlowVersion = AcceptanceBundle['flows'][number]['versions'][number];
 type FlowAttempt = FlowVersion['runs'][number]['attempts'][number];
 
-const styles = createStaticStyles(({ css }) => ({
-  panel: css`
-    overflow: hidden;
-
-    width: 100%;
-    height: 100%;
-    min-height: 0;
-    border-inline-start: 1px solid ${cssVar.colorBorderSecondary};
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  header: css`
-    padding: 16px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  body: css`
-    overflow: auto;
-    min-height: 0;
-    padding: 16px;
-  `,
-  plan: css`
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-
-    summary {
-      cursor: pointer;
-      padding-block: 6px;
-    }
-  `,
-  observation: css`
-    line-height: 1.7;
-    overflow-wrap: anywhere;
-    white-space: pre-wrap;
-  `,
-  review: css`
-    padding-block-start: 16px;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-}));
+const styles = stylex.create({
+  panel: {
+    overflow: 'hidden',
+    width: '100%',
+    height: '100%',
+    minHeight: 0,
+    borderInlineStartWidth: '1px',
+    borderInlineStartStyle: 'solid',
+    borderInlineStartColor: cssVar.colorBorderSecondary,
+    backgroundColor: cssVar.colorBgContainer,
+  },
+  header: {
+    padding: '16px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+  body: {
+    overflow: 'auto',
+    minHeight: 0,
+    padding: '16px',
+  },
+  plan: {
+    fontSize: '12px',
+    color: cssVar.colorTextSecondary,
+  },
+  planSummary: {
+    cursor: 'pointer',
+    paddingBlock: '6px',
+  },
+  observation: {
+    lineHeight: 1.7,
+    overflowWrap: 'anywhere',
+    whiteSpace: 'pre-wrap',
+  },
+  review: {
+    paddingBlockStart: '16px',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+  },
+});
 
 function AttemptReview({
   acceptanceId,
@@ -80,7 +74,7 @@ function AttemptReview({
   const [comment, setComment] = useState(attempt.reviewComment ?? '');
   const [saving, setSaving] = useState(false);
   return (
-    <Flexbox className={styles.review} gap={10}>
+    <Flexbox gap={10} {...stylex.props(styles.review)}>
       {attempt.review && (
         <Text>
           {t(`flow.review.${attempt.review}`)}
@@ -209,8 +203,14 @@ export function FlowResults({
       annotation,
     ]);
   return (
-    <Flexbox className={styles.panel}>
-      <Flexbox horizontal align="center" className={styles.header} gap={12} justify="space-between">
+    <Flexbox {...stylex.props(styles.panel)}>
+      <Flexbox
+        horizontal
+        align="center"
+        gap={12}
+        justify="space-between"
+        {...stylex.props(styles.header)}
+      >
         <Flexbox horizontal align="center" gap={10} wrap="wrap">
           <Text strong fontSize={16}>
             {node.title}
@@ -231,7 +231,7 @@ export function FlowResults({
           onClick={onClose}
         />
       </Flexbox>
-      <Flexbox className={styles.body} gap={16}>
+      <Flexbox gap={16} {...stylex.props(styles.body)}>
         {selectedEdge && (
           <Text type="secondary">
             {selectedEdge.trigger}
@@ -260,7 +260,7 @@ export function FlowResults({
               <Text fontSize={12} type="secondary">
                 {t('flow.actual')}
               </Text>
-              <Text className={styles.observation}>{attempt.observation}</Text>
+              <Text {...stylex.props(styles.observation)}>{attempt.observation}</Text>
             </Flexbox>
           </>
         ) : (
@@ -272,8 +272,8 @@ export function FlowResults({
           </Text>
           <Text>{node.expected}</Text>
         </Flexbox>
-        <details className={styles.plan} open={!attempt}>
-          <summary>{t('flow.instruction')}</summary>
+        <details {...stylex.props(styles.plan)} open={!attempt}>
+          <summary {...stylex.props(styles.planSummary)}>{t('flow.instruction')}</summary>
           <Text>{node.instruction}</Text>
         </details>
         {attempt && (

@@ -1,8 +1,11 @@
 'use client';
 
 import { useVideo } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { sx } from '@/styles/sx';
 
 import type { TimedNote } from './chapters';
 import { styles } from './styles';
@@ -53,21 +56,26 @@ export const RangeLane = ({ notes, onRange, onSeek, range }: RangeLaneProps) => 
   };
 
   return (
-    <div className={styles.lane} onPointerDown={onPointerDown}>
-      {!range && <span className={styles.laneLabel}>{t('acceptance.video.rangeLane')}</span>}
+    <div {...stylex.props(styles.lane)} onPointerDown={onPointerDown}>
+      {!range && <span {...stylex.props(styles.laneLabel)}>{t('acceptance.video.rangeLane')}</span>}
       {notes
         .filter((note) => note.end !== undefined)
         .map((note) => (
           <div
-            className={styles.noteSpan}
             key={`span-${note.key}`}
-            style={{ left: pct(note.start), top: 4, width: pct(note.end! - note.start) }}
+            {...sx([styles.noteSpan], undefined, {
+              left: pct(note.start),
+              top: 4,
+              width: pct(note.end! - note.start),
+            })}
           />
         ))}
       {range && (
         <div
-          className={styles.rangeBand}
-          style={{ left: pct(range.start), width: pct(range.end - range.start) }}
+          {...sx([styles.rangeBand], undefined, {
+            left: pct(range.start),
+            width: pct(range.end - range.start),
+          })}
         />
       )}
     </div>

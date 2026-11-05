@@ -1,7 +1,9 @@
 'use client';
 
 import type { AcceptanceCommentItem, AcceptanceCommentThread } from '@lobechat/types';
-import { createStaticStyles, cssVar, cx, Flexbox, Icon } from '@lobehub/ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { GitCommitHorizontal, MessageSquare } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -14,6 +16,7 @@ import { checkDisplayTitle } from '../../utils';
 import { useAcceptanceScope } from '../AcceptanceScope';
 import { collectEvidenceById } from '../Checks/CheckHistory';
 import type { AcceptanceCheck } from '../Checks/types';
+import { timelineEntryMarker } from '../markers.stylex';
 import { acceptanceCheckPath, useAcceptanceRouteBase } from '../routes';
 import { commentAnchorId } from './anchor';
 import CommentCard, { commentAuthorName, CommentAvatar } from './CommentCard';
@@ -22,36 +25,34 @@ import { NODE_GUTTER, styles, TIMELINE_NODE } from './styles';
 import ThreadEvidence from './ThreadEvidence';
 import TimelineEvent from './TimelineEvent';
 
-export const entryStyles = createStaticStyles(({ css }) => ({
-  checkLink: css`
-    font-weight: 500;
-    color: ${cssVar.colorText};
-
-    &:hover {
-      color: ${cssVar.colorText};
-      text-decoration: underline;
-    }
-  `,
-  quote: css`
-    padding-block: 6px;
-    padding-inline: 12px;
-    border-inline-start: 2px solid ${cssVar.colorBorder};
-
-    font-size: 13px;
-    line-height: 1.65;
-    color: ${cssVar.colorText};
-    overflow-wrap: anywhere;
-    white-space: pre-wrap;
-  `,
-  regionBody: css`
-    padding-block-start: 8px;
-    padding-inline-start: ${TIMELINE_NODE + NODE_GUTTER}px;
-  `,
-  regionHeader: css`
-    font-size: 13px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-}));
+export const entryStyles = stylex.create({
+  checkLink: {
+    fontWeight: 500,
+    color: cssVar.colorText,
+    textDecoration: { 'default': null, ':hover': 'underline' },
+  },
+  quote: {
+    paddingBlock: '6px',
+    paddingInline: '12px',
+    borderInlineStartWidth: '2px',
+    borderInlineStartStyle: 'solid',
+    borderInlineStartColor: cssVar.colorBorder,
+    fontSize: '13px',
+    lineHeight: 1.65,
+    color: cssVar.colorText,
+    overflowWrap: 'anywhere',
+    whiteSpace: 'pre-wrap',
+  },
+  regionBody: {
+    paddingBlockStart: '8px',
+    // TIMELINE_NODE + NODE_GUTTER: StyleX cannot read constants across files.
+    paddingInlineStart: '28px',
+  },
+  regionHeader: {
+    fontSize: '13px',
+    color: cssVar.colorTextSecondary,
+  },
+});
 
 /**
  * A round. With a note it IS the agent's turn: one entry whose header says
@@ -77,8 +78,8 @@ export const TimelineRound = memo<{
     );
   return (
     <div
-      className={cx(styles.timelineEntry, anchored && styles.entryAnchored)}
       id={commentAnchorId(proposal.id)}
+      {...stylex.props(styles.timelineEntry, anchored && styles.entryAnchored, timelineEntryMarker)}
     >
       <CommentCard
         anchored
@@ -105,8 +106,8 @@ export const TimelineMessage = memo<{
   reactable: boolean;
 }>(({ anchored, comment, onDelete, onReact, reactable }) => (
   <div
-    className={cx(styles.timelineEntry, anchored && styles.entryAnchored)}
     id={commentAnchorId(comment.id)}
+    {...stylex.props(styles.timelineEntry, anchored && styles.entryAnchored, timelineEntryMarker)}
   >
     <CommentCard
       anchored
@@ -133,10 +134,10 @@ export const CheckReference = memo<{ check?: AcceptanceCheck }>(({ check }) => {
   const workspaceSlug = useActiveWorkspaceSlug();
   if (!check) return null;
   const label = `C${check.seq} · ${checkDisplayTitle(check.title, t('acceptance.checks.holisticTitle'))}`;
-  if (embedded) return <span className={entryStyles.checkLink}>{label}</span>;
+  if (embedded) return <span {...stylex.props(entryStyles.checkLink)}>{label}</span>;
   return (
     <Link
-      className={entryStyles.checkLink}
+      {...stylex.props(entryStyles.checkLink)}
       to={buildWorkspaceAwarePath(
         acceptanceCheckPath(acceptanceId, check.id, routeBase),
         workspaceSlug,
@@ -174,15 +175,15 @@ export const TimelineRegion = memo<{
 
   return (
     <div
-      className={cx(styles.timelineEntry, anchored && styles.entryAnchored)}
       id={commentAnchorId(root.id)}
+      {...stylex.props(styles.timelineEntry, anchored && styles.entryAnchored, timelineEntryMarker)}
     >
       <Flexbox
         horizontal
         align={'center'}
-        className={entryStyles.regionHeader}
         gap={NODE_GUTTER}
         wrap={'wrap'}
+        {...stylex.props(entryStyles.regionHeader)}
       >
         <CommentAvatar comment={root} size={TIMELINE_NODE} />
         <Icon icon={MessageSquare} size={13} />
@@ -196,9 +197,9 @@ export const TimelineRegion = memo<{
       <Flexbox
         horizontal
         align={'flex-start'}
-        className={entryStyles.regionBody}
         gap={16}
         wrap={'wrap'}
+        {...stylex.props(entryStyles.regionBody)}
       >
         {evidence && (
           <ThreadEvidence

@@ -1,19 +1,13 @@
 'use client';
 
-import {
-  ActionIcon,
-  Button,
-  createStaticStyles,
-  cssVar,
-  cx,
-  Flexbox,
-  Icon,
-  Text,
-  TextArea,
-} from '@lobehub/ui';
+import { ActionIcon, Button, Flexbox, Icon, Text, TextArea } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Film, ZoomIn, ZoomOut } from 'lucide-react';
 import { memo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { sx } from '@/styles/sx';
 
 import { ZOOM_STEPS } from '../Review/rejectDraft';
 import type { RejectReviewModel } from '../Review/useRejectReview';
@@ -24,98 +18,95 @@ import { VideoNotes } from './Video/VideoNotes';
 import type { VideoReviewStageHandle } from './Video/VideoReviewStage';
 import { VideoReviewStage } from './Video/VideoReviewStage';
 
-const styles = createStaticStyles(({ css }) => ({
-  body: css`
-    overflow: hidden;
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-
-    min-height: 0;
-  `,
-  footer: css`
-    flex: none;
-    padding-block-start: 12px;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  /** Stage and notes side by side — the pointer that circles a region is the
-      same one that types about it, so neither should scroll the other away. */
-  stageRow: css`
-    display: flex;
-    flex: 1;
-    gap: 16px;
-    min-height: 0;
-  `,
-  notes: css`
-    overflow-y: auto;
-    display: flex;
-    flex: none;
-    flex-direction: column;
-    gap: 12px;
-
-    width: 320px;
-    min-width: 0;
-  `,
-  thumb: css`
-    cursor: pointer;
-
-    overflow: hidden;
-
-    width: 72px;
-    height: 48px;
-    border: 2px solid transparent;
-    border-radius: ${cssVar.borderRadius};
-
-    img {
-      display: block;
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
-  `,
-  /** A video has no poster to thumbnail without decoding it — an icon tile says what it is. */
-  videoThumb: css`
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    color: #fff;
-
-    background: #000;
-  `,
-  thumbActive: css`
-    border-color: ${cssVar.colorPrimary};
-  `,
-  /** The zoom pill floats bottom-center over the stage — controls live with
-      the thing they control, not in a detached toolbar row. */
-  zoomBar: css`
-    position: absolute;
-    z-index: 5;
-    inset-block-end: 16px;
-    inset-inline-start: 50%;
-    transform: translateX(-50%);
-
-    display: flex;
-    gap: 4px;
-    align-items: center;
-
-    padding-block: 4px;
-    padding-inline: 8px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 99px;
-
-    background: ${cssVar.colorBgElevated};
-    box-shadow: ${cssVar.boxShadowSecondary};
-  `,
-  zoomLabel: css`
-    min-width: 44px;
-
-    font-size: 12px;
-    font-variant-numeric: tabular-nums;
-    color: ${cssVar.colorTextSecondary};
-    text-align: center;
-  `,
-}));
+const styles = stylex.create({
+  body: {
+    overflow: 'hidden',
+    display: 'flex',
+    flex: '1',
+    flexDirection: 'column',
+    minHeight: 0,
+  },
+  footer: {
+    flex: 'none',
+    paddingBlockStart: '12px',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+  },
+  // Stage and notes side by side — the pointer that circles a region is the
+  // same one that types about it, so neither should scroll the other away.
+  stageRow: {
+    display: 'flex',
+    flex: '1',
+    gap: '16px',
+    minHeight: 0,
+  },
+  notes: {
+    overflowY: 'auto',
+    display: 'flex',
+    flex: 'none',
+    flexDirection: 'column',
+    gap: '12px',
+    width: '320px',
+    minWidth: 0,
+  },
+  thumb: {
+    cursor: 'pointer',
+    overflow: 'hidden',
+    width: '72px',
+    height: '48px',
+    borderWidth: '2px',
+    borderStyle: 'solid',
+    borderColor: 'transparent',
+    borderRadius: cssVar.borderRadius,
+  },
+  thumbImage: {
+    display: 'block',
+    width: '100%',
+    height: '100%',
+    objectFit: 'cover',
+  },
+  // A video has no poster to thumbnail without decoding it — an icon tile says what it is.
+  videoThumb: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    color: '#fff',
+    backgroundColor: '#000',
+    backgroundImage: 'none',
+  },
+  thumbActive: {
+    borderColor: cssVar.colorPrimary,
+  },
+  // The zoom pill floats bottom-center over the stage — controls live with
+  // the thing they control, not in a detached toolbar row.
+  zoomBar: {
+    position: 'absolute',
+    zIndex: 5,
+    insetBlockEnd: '16px',
+    insetInlineStart: '50%',
+    transform: 'translateX(-50%)',
+    display: 'flex',
+    gap: '4px',
+    alignItems: 'center',
+    paddingBlock: '4px',
+    paddingInline: '8px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: '99px',
+    backgroundColor: cssVar.colorBgElevated,
+    backgroundImage: 'none',
+    boxShadow: cssVar.boxShadowSecondary,
+  },
+  zoomLabel: {
+    minWidth: '44px',
+    fontSize: '12px',
+    fontVariantNumeric: 'tabular-nums',
+    color: cssVar.colorTextSecondary,
+    textAlign: 'center',
+  },
+});
 
 interface DesktopEvidenceReviewProps {
   model: RejectReviewModel;
@@ -147,7 +138,7 @@ export const DesktopEvidenceReview = memo<DesktopEvidenceReviewProps>(({ model }
   const isVideo = activeEvidence?.type === 'video';
 
   return (
-    <div className={styles.body}>
+    <div {...stylex.props(styles.body)}>
       {activeEvidence && (
         <Flexbox flex={1} gap={12} style={{ minHeight: 0 }}>
           <Flexbox gap={12} height={'100%'} style={{ minHeight: 0 }}>
@@ -157,30 +148,30 @@ export const DesktopEvidenceReview = memo<DesktopEvidenceReviewProps>(({ model }
                   <button
                     aria-pressed={item.id === activeEvidence.id}
                     key={item.id}
-                    style={{ flexShrink: 0 }}
                     type={'button'}
                     aria-label={t('acceptance.review.imageNumber', {
                       current: index + 1,
                       total: evidence.length,
                     })}
-                    className={cx(
-                      styles.thumb,
-                      item.id === activeEvidence.id && styles.thumbActive,
+                    {...sx(
+                      [styles.thumb, item.id === activeEvidence.id && styles.thumbActive],
+                      undefined,
+                      { flexShrink: 0 },
                     )}
                     onClick={() => model.selectEvidence(index)}
                   >
                     {item.type === 'video' ? (
-                      <span className={styles.videoThumb} style={{ height: '100%' }}>
+                      <span {...sx([styles.videoThumb], undefined, { height: '100%' })}>
                         <Icon icon={Film} size={18} />
                       </span>
                     ) : (
-                      <img alt={''} src={item.fileUrl} />
+                      <img alt={''} src={item.fileUrl} {...stylex.props(styles.thumbImage)} />
                     )}
                   </button>
                 ))}
               </Flexbox>
             )}
-            <div className={styles.stageRow} style={{ position: 'relative' }}>
+            <div {...sx([styles.stageRow], undefined, { position: 'relative' })}>
               {isVideo ? (
                 <VideoReviewStage
                   chapters={activeEvidence.chapters ?? []}
@@ -208,7 +199,7 @@ export const DesktopEvidenceReview = memo<DesktopEvidenceReviewProps>(({ model }
                 />
               )}
               {!isVideo && (
-                <div className={styles.zoomBar}>
+                <div {...stylex.props(styles.zoomBar)}>
                   <ActionIcon
                     disabled={zoom <= ZOOM_STEPS[0]}
                     icon={ZoomOut}
@@ -216,7 +207,7 @@ export const DesktopEvidenceReview = memo<DesktopEvidenceReviewProps>(({ model }
                     title={t('acceptance.review.zoomOut')}
                     onClick={() => model.stepZoom(-1)}
                   />
-                  <span className={styles.zoomLabel}>{Math.round(zoom * 100)}%</span>
+                  <span {...stylex.props(styles.zoomLabel)}>{Math.round(zoom * 100)}%</span>
                   <ActionIcon
                     disabled={zoom >= ZOOM_STEPS.at(-1)!}
                     icon={ZoomIn}
@@ -226,7 +217,7 @@ export const DesktopEvidenceReview = memo<DesktopEvidenceReviewProps>(({ model }
                   />
                 </div>
               )}
-              <div className={styles.notes}>
+              <div {...stylex.props(styles.notes)}>
                 <Flexbox gap={2}>
                   <Text strong fontSize={13}>
                     {t('acceptance.review.regionComments')}
@@ -264,7 +255,7 @@ export const DesktopEvidenceReview = memo<DesktopEvidenceReviewProps>(({ model }
           </Flexbox>
         </Flexbox>
       )}
-      <div className={styles.footer}>
+      <div {...stylex.props(styles.footer)}>
         {failed && (
           <Text role={'alert'} type={'danger'}>
             {t('acceptance.review.submitFailed')}
