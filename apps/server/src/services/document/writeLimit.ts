@@ -62,3 +62,13 @@ export const assertDocumentWriteWithinLimit = async ({
     message: formatDocumentCharLimitMessage(data),
   });
 };
+
+/** Reads the refusal data of an error thrown by {@link assertDocumentWriteWithinLimit}. */
+export const getDocumentCharLimitErrorData = (
+  error: unknown,
+): DocumentCharLimitErrorData | undefined => {
+  if (!(error instanceof TRPCError)) return;
+  const data = (error.cause as { data?: Partial<DocumentCharLimitErrorData> } | undefined)?.data;
+  if (data?.code !== DOCUMENT_CHAR_LIMIT_EXCEEDED || typeof data.limit !== 'number') return;
+  return data as DocumentCharLimitErrorData;
+};

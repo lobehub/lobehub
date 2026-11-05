@@ -149,15 +149,30 @@ describe('DocumentService per-document character limit', () => {
       expect(documentModel.update).toHaveBeenCalled();
     });
 
-    it('skips room projections', async () => {
+    // LOBE-15419: the room accepts browser edits without measuring them, so a
+    // projection that grows the page past the limit must not reach the row.
+    it('refuses a room projection that grows the page past the limit', async () => {
+      refuse();
+
+      await expect(
+        service().updateDocument('doc-1', {
+          content: 'x'.repeat(20),
+          origin: 'room-projection',
+        }),
+      ).rejects.toMatchObject({ cause: { data: { code: 'DocumentCharLimitExceeded' } } });
+
+      expect(documentModel.update).not.toHaveBeenCalled();
+    });
+
+    it('lets a room projection through when a system write grew the page', async () => {
       refuse();
 
       await service().updateDocument('doc-1', {
         content: 'x'.repeat(20),
         origin: 'room-projection',
+        writeSource: 'system',
       });
 
-      expect(checkDocumentCharLimit).not.toHaveBeenCalled();
       expect(documentModel.update).toHaveBeenCalled();
     });
 
