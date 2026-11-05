@@ -515,7 +515,7 @@ export type AiModelSettingsWrite = z.infer<typeof AiModelSettingsWriteSchema>;
 
 /**
  * Moves the legacy effort extend params of a client-written `settings` to
- * `settings.reasoningEffort`; `hasProviderCard` as in `migrateModelSettings`.
+ * `settings.reasoningEffort`; `cardDeclaresEffort` as in `migrateModelSettings`.
  */
 export const translateLegacyModelSettings = (
   settings: AiModelSettingsWrite | undefined,

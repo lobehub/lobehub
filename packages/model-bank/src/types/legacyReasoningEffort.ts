@@ -210,23 +210,23 @@ export const translateLegacyReasoningConfig = <T extends object>(
 
 export interface MigrateModelSettingsContext {
   /**
-   * The provider ships a card for this model, so the card's spec applies and
-   * the row only drops its legacy keys.
+   * The provider's card for this model declares `settings.reasoningEffort`,
+   * so the card's spec applies and the row only drops its legacy keys.
    */
-  hasProviderCard: boolean;
+  cardDeclaresEffort: boolean;
 }
 
 /**
  * Moves a model's legacy effort extend param into `settings.reasoningEffort`.
- * Models backed by a provider card only drop the key; custom and remote-only
- * models get the legacy key's levels — the ones their API accepted, which a
+ * Models whose provider card declares a spec only drop the key; other rows
+ * (custom, remote-only, or a card without a spec) get the legacy key's levels — the ones their API accepted, which a
  * same-id card elsewhere may not match — without a default, so it still
  * resolves from the same model at runtime. Returns `undefined` when there is
  * nothing to change.
  */
 export const migrateModelSettings = (
   settings: unknown,
-  { hasProviderCard }: MigrateModelSettingsContext,
+  { cardDeclaresEffort }: MigrateModelSettingsContext,
 ): Record<string, unknown> | undefined => {
   if (!isRecord(settings) || !Array.isArray(settings.extendParams)) return;
 
@@ -241,7 +241,7 @@ export const migrateModelSettings = (
   if (rest.length > 0) next.extendParams = rest;
   else delete next.extendParams;
 
-  if (!hasProviderCard && next.reasoningEffort === undefined) {
+  if (!cardDeclaresEffort && next.reasoningEffort === undefined) {
     const [key] = legacy;
     next.reasoningEffort = createReasoningEffortSettings(LEGACY_EFFORT_LEVELS[key], {
       controlsThinking: LEGACY_CONTROLS_THINKING.has(key),

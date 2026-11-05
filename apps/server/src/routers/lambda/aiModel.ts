@@ -6,8 +6,8 @@ import {
   AiModelTypeSchema,
   type AiProviderModelListItem,
   CreateAiModelSchema,
-  hasProviderModelCard,
   migrateModelSettings,
+  providerCardDeclaresEffort,
   ToggleAiModelEnableSchema,
   translateLegacyModelSettings,
   translateLegacyReasoningConfig,
@@ -49,8 +49,8 @@ const withCurrentSettings = <T extends { settings?: AiModelSettingsWrite }>(
   id: string,
 ) => {
   if (!settings) return rest;
-  const hasProviderCard = hasProviderModelCard(providerId, id);
-  return { ...rest, settings: translateLegacyModelSettings(settings, { hasProviderCard }) };
+  const cardDeclaresEffort = providerCardDeclaresEffort(providerId, id);
+  return { ...rest, settings: translateLegacyModelSettings(settings, { cardDeclaresEffort }) };
 };
 
 const AI_MODEL_UNIQUE_CONSTRAINT = 'ai_models_id_provider_id_user_id_pk';
@@ -124,7 +124,7 @@ export const aiModelRouter = router({
     .mutation(async ({ input, ctx }) => {
       const models = input.models.map((model) => {
         const settings = migrateModelSettings(model?.settings, {
-          hasProviderCard: hasProviderModelCard(input.id, model.id),
+          cardDeclaresEffort: providerCardDeclaresEffort(input.id, model.id),
         });
         return settings ? { ...model, settings } : model;
       });

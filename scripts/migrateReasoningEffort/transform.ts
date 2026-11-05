@@ -20,9 +20,9 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   !!value && typeof value === 'object' && !Array.isArray(value);
 
 export interface MigrateAiModelRowInput {
+  /** The provider card declares this model's effort spec (see `migrateModelSettings`). */
+  cardDeclaresEffort: boolean;
   chatConfig: unknown;
-  /** The provider ships a card for this model (see `migrateModelSettings`). */
-  hasProviderCard: boolean;
   model: string;
   provider: string;
   settings: unknown;
@@ -43,7 +43,7 @@ export type MigrateAiModelRowResult =
  */
 export const migrateAiModelRow = ({
   chatConfig,
-  hasProviderCard,
+  cardDeclaresEffort,
   model,
   provider,
   settings,
@@ -56,7 +56,7 @@ export const migrateAiModelRow = ({
   const nextChatConfig = migrateReasoningConfig(chatConfig, effortKey);
   if (nextChatConfig?.conflict) return { conflict: true };
 
-  const nextSettings = migrateModelSettings(settings, { hasProviderCard });
+  const nextSettings = migrateModelSettings(settings, { cardDeclaresEffort });
   if (!nextChatConfig && !nextSettings) return;
   return { chatConfig: nextChatConfig?.next, conflict: false, settings: nextSettings };
 };

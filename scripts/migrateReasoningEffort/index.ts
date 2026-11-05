@@ -24,7 +24,7 @@
  *   bun scripts/migrateReasoningEffort/index.ts
  *   bun scripts/migrateReasoningEffort/index.ts --apply --batch-size=500
  */
-import { hasProviderModelCard } from 'model-bank';
+import { providerCardDeclaresEffort } from 'model-bank';
 import pg from 'pg';
 
 import {
@@ -64,28 +64,41 @@ interface Stats {
 }
 
 interface TableJob<Row, Change> {
-  /** Rows with any legacy key after `cursor`, in key order. */
-  load: (client: pg.PoolClient, cursor: string) => Promise<Row[]>;
+  /** Primary keys of every row with a legacy key, in key order. */
+  keys: (client: pg.PoolClient) => Promise<string[]>;
+  /** The rows of `keys` that still have a legacy key. */
+  load: (client: pg.PoolClient, keys: string[]) => Promise<Row[]>;
   name: string;
   /** Applies a batch and returns how many rows still matched their read value. */
   save: (client: pg.PoolClient, changes: Change[]) => Promise<number>;
   /** Returns the change for a row, flagging an unresolved value conflict. */
   toChange: (row: Row) => { change?: Change; conflict: boolean } | undefined;
-  toCursor: (row: Row) => string;
 }
+
+const withClient = async <T>(
+  timeout: string,
+  run: (client: pg.PoolClient) => Promise<T>,
+): Promise<T> => {
+  const client = await pool.connect();
+  try {
+    await client.query(`SET statement_timeout = '${timeout}'`);
+    return await run(client);
+  } finally {
+    client.release();
+  }
+};
 
 const runJob = async <Row, Change>(job: TableJob<Row, Change>): Promise<Stats> => {
   const stats: Stats = { applied: 0, changed: 0, conflicts: 0, scanned: 0, skipped: 0 };
-  let cursor = '';
+  // Collects the matching keys in one sequential scan, then pages by key.
+  // Paging by "the next N matching rows" along the primary key walks most of
+  // the table per page once few rows match (the post-deploy run), and that
+  // page hits the statement timeout.
+  const keys = await withClient('10min', job.keys);
 
-  while (true) {
-    const client = await pool.connect();
-    try {
-      await client.query(`SET statement_timeout = '120s'`);
-      const rows = await job.load(client, cursor);
-      if (rows.length === 0) break;
-
-      cursor = job.toCursor(rows.at(-1)!);
+  for (let offset = 0; offset < keys.length; offset += batchSize) {
+    await withClient('120s', async (client) => {
+      const rows = await job.load(client, keys.slice(offset, offset + batchSize));
       stats.scanned += rows.length;
 
       const results = rows.map(job.toChange).filter((r) => !!r);
@@ -98,9 +111,7 @@ const runJob = async <Row, Change>(job: TableJob<Row, Change>): Promise<Stats> =
         stats.applied += applied;
         stats.skipped += changes.length - applied;
       }
-    } finally {
-      client.release();
-    }
+    });
 
     console.log(`[${job.name}] scanned=${stats.scanned} changed=${stats.changed}`);
   }
@@ -132,15 +143,22 @@ interface AiModelChange {
   settings?: Record<string, unknown>;
 }
 
+const AI_MODEL_LEGACY_FILTER = `(config->'chatConfig' ?| $1::text[] OR settings->'extendParams' ?| $2::text[])`;
+
 const aiModelsJob: TableJob<AiModelRow, AiModelChange> = {
-  load: async (client, cursor) =>
+  keys: async (client) =>
+    (
+      await client.query<{ k: string }>(
+        `SELECT _id::text AS k FROM ai_models WHERE ${AI_MODEL_LEGACY_FILTER} ORDER BY _id`,
+        [LEGACY_CONFIG_KEYS, LEGACY_EXTEND_PARAMS],
+      )
+    ).rows.map((row) => row.k),
+  load: async (client, keys) =>
     (
       await client.query<AiModelRow>(
         `SELECT _id, id, provider_id, config, settings FROM ai_models
-         WHERE ($1 = '' OR _id > $1::uuid)
-           AND (config->'chatConfig' ?| $2::text[] OR settings->'extendParams' ?| $3::text[])
-         ORDER BY _id LIMIT $4`,
-        [cursor, LEGACY_CONFIG_KEYS, LEGACY_EXTEND_PARAMS, batchSize],
+         WHERE _id = ANY($3::uuid[]) AND ${AI_MODEL_LEGACY_FILTER}`,
+        [LEGACY_CONFIG_KEYS, LEGACY_EXTEND_PARAMS, keys],
       )
     ).rows,
   name: 'ai_models',
@@ -170,7 +188,7 @@ const aiModelsJob: TableJob<AiModelRow, AiModelChange> = {
   toChange: (row) => {
     const result = migrateAiModelRow({
       chatConfig: row.config?.chatConfig,
-      hasProviderCard: hasProviderModelCard(row.provider_id, row.id),
+      cardDeclaresEffort: providerCardDeclaresEffort(row.provider_id, row.id),
       model: row.id,
       provider: row.provider_id,
       settings: row.settings,
@@ -187,7 +205,6 @@ const aiModelsJob: TableJob<AiModelRow, AiModelChange> = {
       conflict: false,
     };
   },
-  toCursor: (row) => row._id,
 };
 
 interface JsonPathRow {
@@ -215,14 +232,20 @@ const createJsonPathJob = (
 ): TableJob<JsonPathRow, JsonPathChange> => {
   const accessor = `${column}${path.map((key) => `->'${key}'`).join('')}`;
   return {
-    load: async (client, cursor) =>
+    keys: async (client) =>
+      (
+        await client.query<{ id: string }>(
+          `SELECT id FROM ${table} WHERE ${accessor} ?| $1::text[] ORDER BY id`,
+          [LEGACY_CONFIG_KEYS],
+        )
+      ).rows.map((row) => row.id),
+    load: async (client, keys) =>
       (
         await client.query<JsonPathRow>(
           `SELECT id, ${modelSql} AS model, ${providerSql} AS provider, ${accessor} AS value
            FROM ${table}
-           WHERE id > $1 AND ${accessor} ?| $2::text[]
-           ORDER BY id LIMIT $3`,
-          [cursor, LEGACY_CONFIG_KEYS, batchSize],
+           WHERE id = ANY($2::text[]) AND ${accessor} ?| $1::text[]`,
+          [LEGACY_CONFIG_KEYS, keys],
         )
       ).rows,
     name: `${table}.${[column, ...path].join('.')}`,
@@ -243,7 +266,6 @@ const createJsonPathJob = (
       if (!result?.next) return result;
       return { change: { id: row.id, next: result.next, old: row.value }, conflict: false };
     },
-    toCursor: (row) => row.id,
   };
 };
 

@@ -438,5 +438,25 @@ describe('aiModelRouter', () => {
         { id: 'remote-model', settings: { reasoningEffort: { levels: ['low', 'high'] } } },
       ]);
     });
+
+    it('declares the legacy levels when the bundled card has no effort spec', async () => {
+      const mockBatchUpdate = vi.fn().mockResolvedValue([]);
+      vi.mocked(AiModelModel).mockImplementation(function () {
+        return { batchUpdateAiModels: mockBatchUpdate } as any;
+      });
+
+      const caller = aiModelRouter.createCaller(mockCtx);
+      await caller.batchUpdateAiModels({
+        id: 'openrouter',
+        models: [{ id: 'openai/o3-mini', settings: { extendParams: ['reasoningEffort'] } }],
+      });
+
+      expect(mockBatchUpdate).toHaveBeenCalledWith('openrouter', [
+        {
+          id: 'openai/o3-mini',
+          settings: { reasoningEffort: { levels: ['low', 'medium', 'high'] } },
+        },
+      ]);
+    });
   });
 });

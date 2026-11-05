@@ -37,7 +37,7 @@ describe('migrateAiModelRow', () => {
     expect(
       migrateAiModelRow({
         chatConfig: { reasoningEffort: 'high', thinkingLevel3: 'low' },
-        hasProviderCard: false,
+        cardDeclaresEffort: false,
         model: 'my-model',
         provider: 'custom',
         settings: { extendParams: ['gpt5ReasoningEffort'] },
@@ -49,7 +49,7 @@ describe('migrateAiModelRow', () => {
     expect(
       migrateAiModelRow({
         chatConfig: { gpt5ReasoningEffort: 'low' },
-        hasProviderCard: false,
+        cardDeclaresEffort: false,
         model: 'my-model',
         provider: 'custom',
         settings: { extendParams: ['gpt5ReasoningEffort'] },

@@ -51,11 +51,11 @@ describe('released-client write schemas', () => {
     const settings = AiModelSettingsWriteSchema.parse({
       extendParams: ['gpt5ReasoningEffort', 'textVerbosity'],
     });
-    expect(translateLegacyModelSettings(settings, { hasProviderCard: false })).toEqual({
+    expect(translateLegacyModelSettings(settings, { cardDeclaresEffort: false })).toEqual({
       extendParams: ['textVerbosity'],
       reasoningEffort: { levels: ['minimal', 'low', 'medium', 'high'] },
     });
-    expect(translateLegacyModelSettings(settings, { hasProviderCard: true })).toEqual({
+    expect(translateLegacyModelSettings(settings, { cardDeclaresEffort: true })).toEqual({
       extendParams: ['textVerbosity'],
     });
   });

@@ -206,17 +206,24 @@ const staticModelMap: ModelsMap = {
 
 export const LOBE_DEFAULT_MODEL_LIST = buildDefaultModelList(staticModelMap);
 
-let providerCardKeys: Set<string> | undefined;
+let effortCardKeys: Set<string> | undefined;
 
 /**
- * Whether the provider's card governs a model: a bundled card exists for
- * `providerId/id`, or the provider is LobeHub, whose model list is managed
- * server-side so its cards always apply.
+ * Whether the provider's card supplies a model's `settings.reasoningEffort`:
+ * the bundled card for `providerId/id` declares one, or the provider is
+ * LobeHub, whose model list is managed server-side so its cards always apply.
+ * A card without a spec does not count: a user row's legacy effort param
+ * (e.g. OpenRouter `openai/o3-mini`, written by the remote model fetch) is the
+ * only source of that model's levels, merged over the spec-less card.
  */
-export const hasProviderModelCard = (providerId: string, id: string) => {
+export const providerCardDeclaresEffort = (providerId: string, id: string) => {
   if (providerId === 'lobehub') return true;
-  providerCardKeys ??= new Set(LOBE_DEFAULT_MODEL_LIST.map((m) => `${m.providerId}/${m.id}`));
-  return providerCardKeys.has(`${providerId}/${id}`);
+  effortCardKeys ??= new Set(
+    LOBE_DEFAULT_MODEL_LIST.filter((m) => !!m.settings?.reasoningEffort).map(
+      (m) => `${m.providerId}/${m.id}`,
+    ),
+  );
+  return effortCardKeys.has(`${providerId}/${id}`);
 };
 
 export const loadModels = async (

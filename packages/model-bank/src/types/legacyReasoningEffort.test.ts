@@ -77,7 +77,7 @@ describe('migrateModelSettings', () => {
     expect(
       migrateModelSettings(
         { extendParams: ['thinkingLevel3', 'urlContext'], searchImpl: 'params' },
-        { hasProviderCard: true },
+        { cardDeclaresEffort: true },
       ),
     ).toEqual({ extendParams: ['urlContext'], searchImpl: 'params' });
   });
@@ -87,7 +87,7 @@ describe('migrateModelSettings', () => {
     expect(
       migrateModelSettings(
         { extendParams: ['deepseekV4ReasoningEffort'] },
-        { hasProviderCard: false },
+        { cardDeclaresEffort: false },
       ),
     ).toEqual({
       reasoningEffort: { controlsThinking: true, levels: ['none', 'high', 'max'] },
@@ -98,7 +98,7 @@ describe('migrateModelSettings', () => {
     expect(
       migrateModelSettings(
         { extendParams: ['deepseekV4ReasoningEffort', 'enableReasoning'] },
-        { hasProviderCard: false },
+        { cardDeclaresEffort: false },
       ),
     ).toEqual({
       extendParams: ['enableReasoning'],
@@ -107,11 +107,14 @@ describe('migrateModelSettings', () => {
   });
 
   it('is idempotent', () => {
-    const migrated = migrateModelSettings({ extendParams: ['effort'] }, { hasProviderCard: false });
+    const migrated = migrateModelSettings(
+      { extendParams: ['effort'] },
+      { cardDeclaresEffort: false },
+    );
     expect(migrated).toEqual({
       reasoningEffort: { levels: ['low', 'medium', 'high', 'max'] },
     });
-    expect(migrateModelSettings(migrated, { hasProviderCard: false })).toBeUndefined();
+    expect(migrateModelSettings(migrated, { cardDeclaresEffort: false })).toBeUndefined();
   });
 });
 
