@@ -11,9 +11,10 @@ const DEFAULT_REFERENCE_MP = (1024 * 1024) / 1_000_000;
  * Frames whose combined output tokens roughly equal one static image at default settings.
  *
  * Measured on GPT Image 2.6 Flare (2026-11-05, default quality/size): a static image used 903
- * output tokens, a 2-frame GIF 555 and a 9-frame GIF 1,172, i.e. about 380 + 88 × frames. Scaling
- * the static price by `frames / 7` (never below one image) matches the default 9 frames and errs
- * high elsewhere (about 1.4× at 64 frames), so the hold stays at or above the settled cost.
+ * output tokens, a 2-frame GIF 555 and a 9-frame GIF 1,172, i.e. roughly 380 + 88 × frames, though
+ * a later 4-frame GIF used 974. Scaling the static price by `frames / 7` (never below one image)
+ * is only an admission estimate: it can fall up to ~10% below the real cost around 6–9 frames and
+ * runs high for long GIFs (about 1.4× at 64 frames). The charge always settles to reported usage.
  */
 const GIF_FRAMES_PER_IMAGE_PRICE = 7;
 
