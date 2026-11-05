@@ -82,6 +82,18 @@ describe('invertTaskLabelChange', () => {
     expect(undo).toEqual({ add: [], remove: [] });
   });
 
+  it('restores an explicitly removed grouped label while its group is still empty', () => {
+    expect(invertTaskLabelChange([bug], { remove: ['bug'] }, [], [])).toEqual({
+      add: ['bug'],
+      remove: [],
+    });
+    // ...but not once a teammate has picked another label of that group.
+    expect(invertTaskLabelChange([bug], { remove: ['bug'] }, [], [chore])).toEqual({
+      add: [],
+      remove: [],
+    });
+  });
+
   it('does not re-add a removed label that is already back, nor remove a pre-existing one', () => {
     expect(invertTaskLabelChange([fe], { remove: ['fe'] }, [], [fe])).toEqual({
       add: [],

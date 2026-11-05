@@ -185,9 +185,9 @@ export const describeUnresolvedTaskLabels = (
  *
  * What this change took away (explicitly, or as a group sibling it swapped
  * out) comes back only if nobody has touched it since: an ungrouped label only
- * when it is still absent, a grouped one only while this change's own label is
- * still the group's current one. Only labels this change added that are still
- * there are taken away.
+ * when it is still absent, a grouped one only while its group holds nothing
+ * but this change's own label (or nothing at all). Only labels this change
+ * added that are still there are taken away.
  */
 export const invertTaskLabelChange = (
   before: readonly Pick<TaskLabelRef, 'id' | 'parentId'>[],
@@ -200,14 +200,15 @@ export const invertTaskLabelChange = (
   const currentIds = new Set(current.map((label) => label.id));
   const ours = new Set(add.filter((id) => !beforeIds.has(id) && afterIds.has(id)));
   const oursStillCurrent = current.filter((label) => ours.has(label.id));
-  const groupsHeldByUs = new Set(
-    oursStillCurrent.flatMap((label) => (label.parentId ? [label.parentId] : [])),
+  // Groups someone else has put a label into since this change.
+  const groupsTakenByOthers = new Set(
+    current.flatMap((label) => (label.parentId && !ours.has(label.id) ? [label.parentId] : [])),
   );
 
   return {
     add: before
       .filter((label) => !afterIds.has(label.id) && !currentIds.has(label.id))
-      .filter((label) => !label.parentId || groupsHeldByUs.has(label.parentId))
+      .filter((label) => !label.parentId || !groupsTakenByOthers.has(label.parentId))
       .map((label) => label.id),
     remove: oursStillCurrent.map((label) => label.id),
   };
