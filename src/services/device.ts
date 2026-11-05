@@ -31,6 +31,16 @@ class DeviceService {
     return createWorkspaceLambdaClient(null).device.updateDevice.mutate(input);
   }
 
+  /**
+   * Ask a managed cloud device to start. Resolves when the request is
+   * accepted, not when the device is online. Routed by the device's own
+   * scope, like the other per-device writes.
+   */
+  wakeManagedDevice({ deviceId, scope }: { deviceId: string; scope: DeviceScope }) {
+    const client = scope === 'personal' ? createWorkspaceLambdaClient(null) : lambdaClient;
+    return client.device.wakeManagedDevice.mutate({ deviceId });
+  }
+
   /** Update user-editable fields of a workspace-enrolled device (workspace-scoped write). */
   updateWorkspaceDevice(input: Parameters<DeviceClient['updateWorkspaceDevice']['mutate']>[0]) {
     return lambdaClient.device.updateWorkspaceDevice.mutate(input);
