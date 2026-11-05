@@ -124,8 +124,43 @@ describe('getMcpServerFingerprint', () => {
       // Not the same as one argument holding both
       getMcpServerFingerprint({ args: ['a.js b.js'], command: 'node', type: 'stdio' }),
       getMcpServerFingerprint({ args: ['a.js', 'b.js'], command: 'node', type: 'stdio' }),
+      // The environment, which may pick the endpoint, is part of it
+      getMcpServerFingerprint({
+        args: ['a.js'],
+        command: 'node',
+        env: { URL: 'b' },
+        type: 'stdio',
+      }),
     ]);
 
+    // In any order, and an empty one is none
+    expect(
+      await getMcpServerFingerprint({
+        command: 'node',
+        env: { A: '1', B: '2' },
+        type: 'stdio',
+      }),
+    ).toBe(
+      await getMcpServerFingerprint({ command: 'node', env: { B: '2', A: '1' }, type: 'stdio' }),
+    );
+    expect(await getMcpServerFingerprint({ command: 'node', env: {}, type: 'stdio' })).toBe(
+      await getMcpServerFingerprint({ command: 'node', type: 'stdio' }),
+    );
+
     expect(new Set(fingerprints).size).toBe(fingerprints.length);
+  });
+});
+
+describe('getMcpServerFingerprint outside a secure context', () => {
+  it('names the server the same without crypto.subtle', async () => {
+    const address = { type: 'http' as const, url: 'http://10.0.0.5:3000/mcp' };
+    const fingerprint = await getMcpServerFingerprint(address);
+    const subtle = Object.getOwnPropertyDescriptor(globalThis.crypto, 'subtle');
+    Object.defineProperty(globalThis.crypto, 'subtle', { configurable: true, value: undefined });
+    try {
+      await expect(getMcpServerFingerprint(address)).resolves.toBe(fingerprint);
+    } finally {
+      if (subtle) Object.defineProperty(globalThis.crypto, 'subtle', subtle);
+    }
   });
 });

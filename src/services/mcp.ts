@@ -234,6 +234,7 @@ class MCPService {
           !(await isViewServer(server, {
             args: config.args ?? [],
             command: config.command,
+            env: config.env,
             type: 'stdio',
           }))
         ) {
@@ -513,7 +514,14 @@ class MCPService {
       const detail = await lambdaClient.connector.getForEdit.query({ id: connector.id });
       const config = detail.mcpStdioConfig;
       if (!detail.isEnabled || detail.mcpConnectionType !== 'stdio' || !config?.command) return;
-      if (!(await reaches({ args: config.args ?? [], command: config.command, type: 'stdio' }))) {
+      if (
+        !(await reaches({
+          args: config.args ?? [],
+          command: config.command,
+          env: config.env,
+          type: 'stdio',
+        }))
+      ) {
         return;
       }
 

@@ -1,3 +1,5 @@
+import { sha256Hex } from './sha256';
+
 /**
  * Who may call an MCP tool, per MCP Apps (SEP-1865) `_meta.ui.visibility`:
  * `"model"` is the agent's tool list, `"app"` is an interactive view's
@@ -112,18 +114,34 @@ export const withListingUiMeta = <R extends { contents?: UiResourceItem[] }>(
 
 /** The part of an MCP connection that says which server it reaches. */
 export type McpServerAddress =
-  { type: 'http'; url: string } | { args?: readonly string[]; command: string; type: 'stdio' };
+  | { type: 'http'; url: string }
+  | {
+      args?: readonly string[];
+      command: string;
+      /** Part of which server it is: a stdio server may pick its endpoint by env. */
+      env?: Record<string, string> | null;
+      type: 'stdio';
+    };
+
+const stdioIdentity = ({
+  args = [],
+  command,
+  env,
+}: Extract<McpServerAddress, { type: 'stdio' }>): string => {
+  const launch = JSON.stringify([command, ...args]);
+  // Sorted, so the same variables name the same server in any order
+  const vars = Object.entries(env ?? {}).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  return vars.length > 0 ? `${launch} ${JSON.stringify(vars)}` : launch;
+};
 
 /**
  * Names the MCP server a tool result came from without storing its address
- * (a URL may carry a token): a SHA-256 of the URL, or of the command and its
- * arguments. A result's view is only read back from the server it names.
+ * (a URL may carry a token): a SHA-256 of the URL, or of the command, its
+ * arguments and environment. A result's view is only read back from the server it names.
  */
 export const getMcpServerFingerprint = async (address: McpServerAddress): Promise<string> => {
   const source =
-    address.type === 'http'
-      ? `http ${address.url}`
-      : `stdio ${JSON.stringify([address.command, ...(address.args ?? [])])}`;
-  const digest = await globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(source));
-  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+    address.type === 'http' ? `http ${address.url}` : `stdio ${stdioIdentity(address)}`;
+  // Not `crypto.subtle`: browsers leave it out of pages that aren't a secure context
+  return sha256Hex(source);
 };

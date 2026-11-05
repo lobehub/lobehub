@@ -115,7 +115,12 @@ const view = { contents: [{ text: '<html />', uri: 'ui://app' }] };
 // The servers the results in these cases came from
 const LOCAL = await getMcpServerFingerprint({ type: 'http', url: 'http://127.0.0.1:3000/mcp' });
 const REMOTE = await getMcpServerFingerprint({ type: 'http', url: 'https://mcp.example.com/mcp' });
-const STDIO = await getMcpServerFingerprint({ args: ['mcp.js'], command: 'node', type: 'stdio' });
+const STDIO = await getMcpServerFingerprint({
+  args: ['mcp.js'],
+  command: 'node',
+  env: { TOKEN: 'fresh-secret' },
+  type: 'stdio',
+});
 const LINEAR = await getMcpServerFingerprint({ type: 'http', url: 'https://mcp.linear.app/mcp' });
 const httpPlugin = (url: string) => ({
   customParams: { mcp: { headers: { 'x-key': 'k' }, type: 'http', url } },
@@ -321,6 +326,18 @@ describe('mcpService.readMcpAppResource for stdio connectors', () => {
     connectorEdit.mockResolvedValueOnce({
       ...detail,
       mcpStdioConfig: { args: ['other.js'], command: 'node', env: {} },
+    });
+
+    await expect(
+      mcpService.readMcpAppResource('files', 'ui://app', { onThisDevice: true, server: STDIO }),
+    ).resolves.toBeUndefined();
+    expect(ipcRead).not.toHaveBeenCalled();
+  });
+
+  it('reads no view once only the connector environment changed, which may pick another server', async () => {
+    connectorEdit.mockResolvedValueOnce({
+      ...detail,
+      mcpStdioConfig: { ...detail.mcpStdioConfig, env: { TOKEN: 'fresh-secret', URL: 'b' } },
     });
 
     await expect(
