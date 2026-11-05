@@ -1,3 +1,4 @@
+import { useLayoutEffect } from 'react';
 import useSWR, { unstable_serialize } from 'swr';
 import { type Key, type SWRHook } from 'swr';
 
@@ -80,13 +81,32 @@ export const useOnlyFetchOnceSWR: SWRHook = (key, fetch, config) =>
     ...config,
   });
 
-const actionKeys = new Set<string>();
+// How many mounted `useActionSWR` hooks hold each key: the sidebar and the hotkey share one. SWR
+// only revalidates a key through a mounted hook, so an unmounted action key needs no entry.
+const mountedActionKeys = new Map<string, number>();
 
 /**
- * Whether `key` belongs to a `useActionSWR` hook. Revalidating such a key runs its action, so a
- * broadcast that revalidates every key (`mutate(() => true)`) must filter it out.
+ * Whether `key` belongs to a mounted `useActionSWR` hook. Revalidating such a key runs its action,
+ * so a broadcast that revalidates every key (`mutate(() => true)`) must filter it out.
  */
-export const isActionSWRKey = (key: Key) => actionKeys.has(unstable_serialize(key));
+export const isActionSWRKey = (key: Key) => mountedActionKeys.has(unstable_serialize(key));
+
+const useMountedActionKey = (key: Key) => {
+  const serializedKey = unstable_serialize(key);
+
+  // A layout effect, like the one SWR subscribes the key's revalidator in. A passive effect would
+  // run later and leave a gap in which a broadcast could run the action.
+  useLayoutEffect(() => {
+    mountedActionKeys.set(serializedKey, (mountedActionKeys.get(serializedKey) ?? 0) + 1);
+
+    return () => {
+      const holders = (mountedActionKeys.get(serializedKey) ?? 1) - 1;
+
+      if (holders > 0) mountedActionKeys.set(serializedKey, holders);
+      else mountedActionKeys.delete(serializedKey);
+    };
+  }, [serializedKey]);
+};
 
 /**
  * This type of request method is for action triggers. Must use mutate to trigger the request.
@@ -99,7 +119,7 @@ export const isActionSWRKey = (key: Key) => actionKeys.has(unstable_serialize(ke
  */
 // @ts-ignore
 export const useActionSWR: SWRHook = (key, fetch, config) => {
-  actionKeys.add(unstable_serialize(key));
+  useMountedActionKey(key);
 
   return useSWR(key, fetch, {
     // Use empty object as fallback to prevent auto-fetch when cache is empty

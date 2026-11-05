@@ -35,12 +35,24 @@ vi.mock('@/libs/trpc/client', () => ({
   lambdaQueryClient: {},
 }));
 
-const Consumers = () => {
+const DataConsumer = () => {
   useSWR(['data-key'], mocks.fetchData);
+
+  return null;
+};
+
+const ActionButton = () => {
   const { mutate } = useActionSWR(['action-key'], mocks.action);
 
   return <button onClick={() => mutate()}>run action</button>;
 };
+
+const Consumers = () => (
+  <>
+    <DataConsumer />
+    <ActionButton />
+  </>
+);
 
 describe('QueryProvider scope change', () => {
   beforeEach(() => {
@@ -60,6 +72,45 @@ describe('QueryProvider scope change', () => {
     rerender(
       <QueryProvider>
         <Consumers />
+      </QueryProvider>,
+    );
+
+    await waitFor(() => expect(mocks.fetchData).toHaveBeenCalledTimes(2));
+    expect(mocks.action).not.toHaveBeenCalled();
+  });
+
+  it('keeps the action out while another hook still holds its key', async () => {
+    const { rerender } = render(
+      <QueryProvider>
+        <Consumers />
+        <ActionButton />
+      </QueryProvider>,
+    );
+    await waitFor(() => expect(mocks.fetchData).toHaveBeenCalledTimes(1));
+
+    mocks.scope = 'user-1:personal';
+    rerender(
+      <QueryProvider>
+        <Consumers />
+      </QueryProvider>,
+    );
+
+    await waitFor(() => expect(mocks.fetchData).toHaveBeenCalledTimes(2));
+    expect(mocks.action).not.toHaveBeenCalled();
+  });
+
+  it('does not run an action whose hooks have all unmounted', async () => {
+    const { rerender } = render(
+      <QueryProvider>
+        <Consumers />
+      </QueryProvider>,
+    );
+    await waitFor(() => expect(mocks.fetchData).toHaveBeenCalledTimes(1));
+
+    mocks.scope = 'user-1:personal';
+    rerender(
+      <QueryProvider>
+        <DataConsumer />
       </QueryProvider>,
     );
 
