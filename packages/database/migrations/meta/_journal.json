@@ -1428,6 +1428,13 @@
       "when": 1793815529290,
       "tag": "0203_project_site_last_seen",
       "breakpoints": true
+    },
+    {
+      "idx": 204,
+      "version": "7",
+      "when": 1793869041794,
+      "tag": "0204_workspace_invitation_link",
+      "breakpoints": true
     }
   ],
   "version": "6"
