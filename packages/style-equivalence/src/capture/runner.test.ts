@@ -37,6 +37,14 @@ const write = async (name: string, html: string) => {
 
 beforeAll(async () => {
   root = await mkdtemp(path.join(tmpdir(), 'style-eq-capture-'));
+  const scrollbar = (name: string, width: string) =>
+    page(`.${name} ::-webkit-scrollbar { width: ${width}; }`).replace(
+      'class="row"',
+      `class="${name}"`,
+    );
+  await write('base-scrollbar', scrollbar('lobe-share-7976-preview', '4px'));
+  await write('head-scrollbar', scrollbar('css-1x2y3z', '4px'));
+  await write('head-scrollbar-wide', scrollbar('css-1x2y3z', '8px'));
   await write('base-hover', page('.t { color: black; } .t:hover { color: red; }'));
   await write('head-hover', page('.t { color: black; }'));
   await write(
@@ -151,6 +159,13 @@ describe('captureRun + analyzeRun', () => {
       [],
     );
     expect(gaps).toEqual({ 'a.tsx|A#0': ['STATE_UNMODELED'] });
+  });
+
+  it('matches an unmodeled pseudo rule kept verbatim under a different class on the same element', async () => {
+    const [same] = await run('base-scrollbar', 'head-scrollbar');
+    expect(same.gaps).toEqual([]);
+    const [changed] = await run('base-scrollbar', 'head-scrollbar-wide');
+    expect(changed.gaps).toEqual(['PSEUDO_UNMODELED']);
   });
 
   it('does not flag structural pseudo-classes the default capture already evaluates', async () => {

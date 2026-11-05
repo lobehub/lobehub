@@ -385,7 +385,7 @@ const unmodeledRules = (found: RuleInspection) =>
   Object.fromEntries(
     Object.entries(found.unmodeled).map(([section, indices]) => [
       section,
-      indices.map((index) => found.rules[index]),
+      found.sectionRules?.[section] ?? indices.map((index) => found.rules[index]),
     ]),
   );
 

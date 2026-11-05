@@ -5,6 +5,7 @@ export interface RuleInspection {
   media: string[];
   pseudoRules: Record<string, string[]>;
   rules: string[];
+  sectionRules?: Record<string, string[]>;
   unmodeled: Record<string, number[]>;
 }
 
@@ -162,11 +163,42 @@ export const inspectRules = (page: Page): Promise<RuleInspection> =>
         }
       }
       const unmodeled: Record<string, number[]> = {};
+      const sectionRules: Record<string, string[]> = {};
+      const hostClasses = (section: Element) => {
+        const owners = new Map<string, string | null>();
+        for (const element of section.querySelectorAll('[data-synthetic-element]')) {
+          const id = element.getAttribute('data-synthetic-element')!;
+          for (const name of element.classList)
+            owners.set(name, owners.has(name) && owners.get(name) !== id ? null : id);
+        }
+        return [...owners].filter((entry): entry is [string, string] => entry[1] !== null);
+      };
+      const escape = (text: string) => text.replaceAll(/[$()*+.?[\\\]^{|}]/g, '\\$&');
       for (const section of sections) {
         const found = candidates.flatMap((rule, index) => (touching(rule, section) ? [index] : []));
-        if (found.length) unmodeled[section.getAttribute('data-case')!] = found;
+        if (!found.length) continue;
+        const key = section.getAttribute('data-case')!;
+        unmodeled[key] = found;
+        const owned = hostClasses(section);
+        sectionRules[key] = found.map((index) =>
+          owned.reduce(
+            (text, [name, id]) =>
+              text.replaceAll(
+                new RegExp(`\\.${escape(name)}(?![\\w-])`, 'g'),
+                `[data-synthetic-element="${id}"]`,
+              ),
+            rules[index],
+          ),
+        );
       }
-      return { containers, media: [...new Set(media)], pseudoRules, rules, unmodeled };
+      return {
+        containers,
+        media: [...new Set(media)],
+        pseudoRules,
+        rules,
+        sectionRules,
+        unmodeled,
+      };
     },
     {
       forceable: FORCEABLE,
