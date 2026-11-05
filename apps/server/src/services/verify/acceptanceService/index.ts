@@ -376,7 +376,17 @@ export class AcceptanceService {
     if (acceptance.status === 'rejected' && current.userDecision === 'reject') return 'rejected';
 
     const report = await this.reportModel.findByRun(current.id);
-    const status = statusFromRound(current, Boolean(report));
+    let status = statusFromRound(current, Boolean(report));
+    // A round still verifying when its goal node was retired settles here, after
+    // the retirement already closed what was waiting (GoalGraphModel
+    // updateNodeStatus). The Goal discarded that node's outcome, so a settled
+    // result must not reopen a sign-off request for dropped work.
+    if (
+      (status === 'delivered' || status === 'errored') &&
+      acceptance.subjectType === 'task' &&
+      (await this.acceptanceModel.isRetiredGoalTask(acceptance.subjectId))
+    )
+      status = 'closed';
     if (status !== acceptance.status) {
       await this.acceptanceModel.updatePolicyStatus(acceptanceId, status);
       notifyAcceptance(acceptanceId, 'session');

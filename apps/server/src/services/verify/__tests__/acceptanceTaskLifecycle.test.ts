@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   findReportByRun: vi.fn(),
   goalFindByGraphTask: vi.fn(),
   goalLockById: vi.fn(),
+  isRetiredGoalTask: vi.fn(),
   listByAcceptance: vi.fn(),
   setDecision: vi.fn(),
   taskFindById: vi.fn(),
@@ -31,6 +32,7 @@ vi.mock('@/database/models/acceptance', () => ({
     return {
       findById: mocks.findById,
       findPolicyById: mocks.findPolicyById,
+      isRetiredGoalTask: mocks.isRetiredGoalTask,
       updatePolicyStatus: mocks.updatePolicyStatus,
       updateStatus: mocks.updateStatus,
     };
@@ -91,6 +93,7 @@ describe('AcceptanceService task lifecycle', () => {
     mocks.findPolicyById.mockImplementation((...args: unknown[]) => mocks.findById(...args));
     mocks.goalFindByGraphTask.mockResolvedValue(undefined);
     mocks.goalLockById.mockImplementation(async (id: string) => ({ archivedAt: null, id }));
+    mocks.isRetiredGoalTask.mockResolvedValue(false);
     mocks.taskResolve.mockResolvedValue({ automationMode: null, id: 'task_1', status: 'running' });
     // The row read back after the completion write.
     mocks.taskFindById.mockResolvedValue({ id: 'task_1', status: 'completed' });
@@ -228,6 +231,39 @@ describe('AcceptanceService task lifecycle', () => {
 
       await expect(service().recomputeStatus('acc-1')).resolves.toBe('delivered');
       expect(mocks.updatePolicyStatus).toHaveBeenCalledWith('acc-1', 'delivered');
+    });
+
+    describe('a round that settles after its goal node was retired', () => {
+      // Retirement closes only what is already waiting; a round still verifying
+      // lands later and must not reopen a sign-off for work the Goal dropped.
+      beforeEach(() => {
+        mocks.isRetiredGoalTask.mockResolvedValue(true);
+      });
+
+      it.each([
+        ['delivered', 'failed'],
+        ['delivered', 'delivered'],
+        ['errored', 'errored'],
+      ])('closes instead of %s (round %s) and leaves the task alone', async (_, roundStatus) => {
+        mocks.listByAcceptance.mockResolvedValue([
+          { id: 'run-1', roundIndex: 1, status: roundStatus },
+        ]);
+
+        await expect(service().recomputeStatus('acc-1')).resolves.toBe('closed');
+        expect(mocks.isRetiredGoalTask).toHaveBeenCalledWith('task_1');
+        expect(mocks.updatePolicyStatus).toHaveBeenCalledWith('acc-1', 'closed');
+        expect(mocks.taskServiceUpdateStatus).not.toHaveBeenCalled();
+      });
+
+      it('keeps a round still verifying open', async () => {
+        mocks.listByAcceptance.mockResolvedValue([
+          { id: 'run-1', roundIndex: 1, status: 'verifying' },
+        ]);
+        stored.status = 'planned';
+
+        await expect(service().recomputeStatus('acc-1')).resolves.toBe('verifying');
+        expect(mocks.updatePolicyStatus).toHaveBeenCalledWith('acc-1', 'verifying');
+      });
     });
   });
 

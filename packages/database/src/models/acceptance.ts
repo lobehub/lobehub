@@ -316,6 +316,20 @@ export class AcceptanceModel {
   };
 
   /**
+   * Whether a task is a retired step of a goal graph. The Goal discards a
+   * retired node's outcome, so its acceptance has nothing left to sign off.
+   * A task backs at most one goal node (`goal_nodes_task_id_unique`).
+   */
+  isRetiredGoalTask = async (taskId: string): Promise<boolean> => {
+    const [row] = await this.db
+      .select({ id: goalNodes.id })
+      .from(goalNodes)
+      .where(and(eq(goalNodes.taskId, taskId), eq(goalNodes.status, 'retired')))
+      .limit(1);
+    return Boolean(row);
+  };
+
+  /**
    * The status of many subjects' acceptances in one read — for list surfaces
    * that must know each row's state without a request per row. Exact where the
    * recency-capped `query()` is not: it answers about the subjects asked for,

@@ -15,6 +15,7 @@ import {
   workspaces,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
+import { AcceptanceModel } from '../acceptance';
 import { GoalModel } from '../goal';
 import { GoalGraphModel } from '../goalGraph';
 import { TaskModel } from '../task';
@@ -308,6 +309,26 @@ describe('GoalGraphModel', () => {
     expect(statusOf(delivered.id)?.completedAt).toBeInstanceOf(Date);
     // A round still running is left to land; only a settled wait is closed.
     expect(statusOf(inFlight.id)).toMatchObject({ status: 'verifying' });
+  });
+
+  it('reports which tasks back a retired goal node', async () => {
+    // The acceptance rollup closes a round that settles after retirement; it
+    // asks this to tell a dropped step from a live one.
+    const goal = await goalModel.create({ subjectType: 'standalone', title: 'Late settle' });
+    const retired = await graphModel.createNode(goal.id, { kind: 'task', title: 'Dropped' });
+    const live = await graphModel.createNode(goal.id, { kind: 'task', title: 'Live' });
+    const taskModel = new TaskModel(serverDB, userId);
+    const dropped = await taskModel.create({ instruction: 'Dropped work' });
+    const running = await taskModel.create({ instruction: 'Live work' });
+    const standalone = await taskModel.create({ instruction: 'No goal' });
+    await graphModel.bindTask(goal.id, retired!.id, dropped.id);
+    await graphModel.bindTask(goal.id, live!.id, running.id);
+    await graphModel.updateNodeStatus(goal.id, retired!.id, 'retired');
+
+    const acceptanceModel = new AcceptanceModel(serverDB, userId);
+    expect(await acceptanceModel.isRetiredGoalTask(dropped.id)).toBe(true);
+    expect(await acceptanceModel.isRetiredGoalTask(running.id)).toBe(false);
+    expect(await acceptanceModel.isRetiredGoalTask(standalone.id)).toBe(false);
   });
 
   it('treats a same-status write as a no-op instead of churning the graph', async () => {
