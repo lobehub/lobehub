@@ -37,7 +37,6 @@ const projectMessage = (message: UIChatMessage): UIChatMessage => ({
   error: projectError(message.error),
   members: message.members?.map(projectMessage),
   pluginError: undefined,
-  taskCompletions: message.taskCompletions?.map(projectAssistantContentBlock),
   tasks: message.tasks?.map(projectMessage),
 });
 

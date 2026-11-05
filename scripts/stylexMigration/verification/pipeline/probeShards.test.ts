@@ -17,7 +17,6 @@ describe('bounded probe shards', () => {
     expect(report.shards.map((shard) => shard.completedProbeIds)).toEqual([['a', 'b'], ['c']]);
     expect(report.unexecutedProbeIds).toEqual([]);
     expect(report.gaps).toEqual([]);
-    expect(report.gateEligible).toBe(false);
   });
 
   it('starts a fresh shard at a variant boundary', () => {

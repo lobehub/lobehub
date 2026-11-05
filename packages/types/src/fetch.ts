@@ -16,6 +16,7 @@ export const ChatErrorType = {
   ShareHeterogeneousAgentUnsupported: 'ShareHeterogeneousAgentUnsupported', // This agent configuration is not supported for shared visitors
   AgentShareProviderNotSupported: 'AgentShareProviderNotSupported', // This shared agent uses a provider that is not supported for shared visitors
   SupervisorDecisionFailed: 'SupervisorDecisionFailed', // Supervisor decision failed
+  AgentConcurrencyLimitExceeded: 'AgentConcurrencyLimitExceeded', // The user already has as many agent runs in flight as allowed — recovers when one finishes
 
   InvalidUserKey: 'InvalidUserKey', // is not valid User key
   CreateMessageError: 'CreateMessageError',

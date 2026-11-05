@@ -296,6 +296,7 @@ export const rollbackAgentSignalReceipt = async (
           ...(lockOwnerId ? { lockOwnerId } : {}),
           restoreFromHistoryId: history.id,
           saveSource: 'restore',
+          writeSource: 'system',
         },
         { userId: context.userId, workspaceId: context.workspaceId },
       );

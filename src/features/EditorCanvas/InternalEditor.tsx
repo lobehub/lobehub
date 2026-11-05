@@ -30,6 +30,7 @@ import InlineToolbar from './InlineToolbar';
 import LinearFilePlugin from './LinearFilePlugin';
 import { registerAttachmentClickOpen } from './registerAttachmentClickOpen';
 import { registerBlockDecoratorCaretGuard } from './registerBlockDecoratorCaretGuard';
+import { registerBlockDecoratorClickToWrite } from './registerBlockDecoratorClickToWrite';
 import { registerImageFilePastePreference } from './registerImageFilePastePreference';
 import { needsImageRehost, rehostImage } from './rehostImage';
 import { useFileUpload, useImageUpload } from './useImageUpload';
@@ -296,13 +297,19 @@ const InternalEditor = memo<InternalEditorProps>(
       return () => unregister?.();
     }, [editor]);
 
-    // Opt-in (comment editors): keep the caret out of the root node around
+    // Opt-in (comment / task editors): keep the caret out of the root node around
     // block images by pushing an empty paragraph next to the image instead of
     // showing Lexical's horizontal root-level caret.
     useEffect(() => {
       if (!editor || !blockImageCaretGuard) return;
-      const unregister = registerBlockDecoratorCaretGuard(editor);
-      return () => unregister?.();
+      const unregisterGuard = registerBlockDecoratorCaretGuard(editor);
+      // A click in a block image's row, or typing with the image selected,
+      // continues writing on the line after it.
+      const unregisterClick = registerBlockDecoratorClickToWrite(editor);
+      return () => {
+        unregisterGuard?.();
+        unregisterClick?.();
+      };
     }, [blockImageCaretGuard, editor]);
 
     const onInitRef = useRef(onInit);

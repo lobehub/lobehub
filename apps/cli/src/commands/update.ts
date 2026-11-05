@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { realpathSync } from 'node:fs';
 
 import type { Command } from 'commander';
@@ -21,6 +21,7 @@ interface UpdateOptions {
   check?: boolean;
   packageManager?: PackageManager;
   tag?: string;
+  verbose?: boolean;
 }
 
 /**
@@ -117,11 +118,48 @@ function runInstall(command: string, args: string[]): Promise<void> {
   });
 }
 
+function runEntry(args: string[]): Promise<void> {
+  return new Promise((resolve, reject) => {
+    // The Node binary and entry path are passed as argv, never through a shell.
+    const child = spawn(process.execPath, [process.argv[1], ...args], { stdio: 'inherit' });
+    child.on('error', reject);
+    child.on('close', (code) =>
+      code === 0 ? resolve() : reject(new Error(`exited with code ${code ?? 'null'}`)),
+    );
+  });
+}
+
+/**
+ * Let the CLI that was just installed report the connectors, so the user sees the new
+ * version's detection rather than the code running this update. Report from this process
+ * when the entry no longer runs the installed version (a versioned pnpm path, for example).
+ */
+export async function reportInstalledConnectStatus(installedVersion: string, verbose = false) {
+  try {
+    const stdout = await new Promise<string>((resolve, reject) => {
+      execFile(
+        process.execPath,
+        [process.argv[1], '--version'],
+        { encoding: 'utf8', timeout: 30_000 },
+        (error, output) => (error ? reject(error) : resolve(output)),
+      );
+    });
+    if (stdout.trim() === installedVersion) {
+      await runEntry(['connect', 'status', ...(verbose ? ['--verbose'] : [])]);
+      return;
+    }
+  } catch (error) {
+    log.debug(`Installed CLI report unavailable: ${(error as Error).message}`);
+  }
+  await printConnectStatus({ installedVersion, verbose });
+}
+
 export function registerUpdateCommand(program: Command) {
   program
     .command('update')
     .description(`Update the ${CLI_DISPLAY_NAME} to the latest published version`)
     .option('--check', 'Only check for a newer version without installing')
+    .option('-v, --verbose', 'Include connector details and installation paths')
     .option('--tag <tag>', 'npm dist-tag to update to', 'latest')
     .option(
       '--package-manager <pm>',
@@ -154,12 +192,12 @@ export function registerUpdateCommand(program: Command) {
 
       if (!isNewerVersion(latest, current)) {
         log.info(pc.green('Installed CLI is already on the latest version.'));
-        await printConnectStatus();
+        await printConnectStatus({ verbose: options.verbose });
         return;
       }
 
       if (options.check) {
-        await printConnectStatus();
+        await printConnectStatus({ verbose: options.verbose });
         log.info(
           `Update available: ${current} → ${pc.green(latest)}. Run ${pc.cyan('lh update')} to upgrade.`,
         );
@@ -180,7 +218,10 @@ export function registerUpdateCommand(program: Command) {
         process.exit(1);
         return;
       }
-      log.info(pc.green(`Successfully installed CLI ${latest}.`));
-      await printConnectStatus({ installedVersion: latest });
+      log.info(pc.green(`CLI installation updated: ${current} → ${latest}.`));
+      log.info(
+        'Running connectors were not restarted. Their version and connection are shown below; the update takes effect for each connector after it restarts.',
+      );
+      await reportInstalledConnectStatus(latest, options.verbose);
     });
 }

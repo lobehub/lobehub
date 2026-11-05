@@ -1,3 +1,4 @@
+import { type TaskListFilter } from '@lobechat/types';
 import { type NavigateFunction } from 'react-router';
 
 import { type LocaleMode } from '@/types/locale';
@@ -458,6 +459,13 @@ export interface SystemStatus {
    * Whether the right-side "Hidden columns" panel on the Kanban board is collapsed.
    */
   taskKanbanHiddenPanelCollapsed?: boolean;
+  /**
+   * Tasks page filters, one entry per list scope (workspace + global / agent /
+   * project page). An array, not a map: status is deep-merged on write, which
+   * could never drop a removed condition from a nested object, while arrays
+   * are replaced whole.
+   */
+  taskListFilters?: { filter: TaskListFilter; scope: string }[];
   /**
    * Display mode for the tasks page. Persisted so a manually selected board or
    * list view survives navigation and page reloads.

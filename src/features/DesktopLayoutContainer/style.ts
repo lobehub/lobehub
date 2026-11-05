@@ -18,6 +18,14 @@ export const styles = stylex.create({
     backgroundImage: 'none',
   },
 
+  // `flush`: the rail wrap owns border, radius and spacing.
+  innerFlush: {
+    borderStyle: 'none',
+    borderColor: 'currentcolor',
+    borderRadius: 0,
+    borderEndEndRadius: 0,
+  },
+
   // Outer container
   outerContainer: {
     position: 'relative',
@@ -28,6 +36,15 @@ export const styles = stylex.create({
     backgroundImage: 'none',
   },
 
-  // Desktop shell paints the window background behind the container
   outerContainerDesktop: { backgroundColor: 'transparent' },
+
+  outerFlush: {
+    minWidth: 0,
+    paddingBlockStart: 0,
+    paddingBlockEnd: 0,
+    paddingInlineStart: 0,
+    paddingInlineEnd: 0,
+    backgroundColor: 'transparent',
+    backgroundImage: 'none',
+  },
 });

@@ -109,7 +109,7 @@ export const updateDocumentThroughRoom = async (
   service: Pick<DocumentService, 'updateDocument'>,
   documentId: string,
   params: UpdateDocumentParams,
-  writer: Omit<PageWriter, 'saveSource'>,
+  writer: Omit<PageWriter, 'saveSource' | 'writeSource'>,
 ): Promise<UpdateDocumentResult> => {
   const writesRoom =
     params.content !== undefined || params.editorData !== undefined || params.title !== undefined;
@@ -121,7 +121,11 @@ export const updateDocumentThroughRoom = async (
     db,
     documentId,
     { editorData: params.editorData, markdown: params.content, title: params.title },
-    { ...writer, saveSource: params.saveSource ?? 'system' },
+    {
+      ...writer,
+      saveSource: params.saveSource ?? 'system',
+      writeSource: params.writeSource ?? 'user',
+    },
   );
   if (!routed) return service.updateDocument(documentId, params);
 
