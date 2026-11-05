@@ -1,3 +1,4 @@
+// oxlint-disable-next-line stylex-migration/no-plain-css -- needs lobe-ui slot: Select.valueText (the span Select renders around the selected label)
 import './scopeOptions.css';
 
 import { Avatar, Flexbox, Tag, Text } from '@lobehub/ui';
