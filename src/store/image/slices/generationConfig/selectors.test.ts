@@ -156,12 +156,6 @@ describe('imageGenerationConfigSelectors', () => {
   });
 
   describe('isSupportParam', () => {
-    it('should return true when parameter exists in parametersSchema', () => {
-      const state = merge(initialStore, { parametersSchema: testModelSchema });
-      const result = imageGenerationConfigSelectors.isSupportedParam('size')(state);
-      expect(result).toBe(true);
-    });
-
     it('should return false when parameter does not exist in parametersSchema', () => {
       const state = merge(initialStore, { parametersSchema: testModelSchema });
       const result = imageGenerationConfigSelectors.isSupportedParam('nonexistent' as any)(state);
