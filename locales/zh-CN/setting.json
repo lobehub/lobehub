@@ -653,6 +653,7 @@
   "drive.usage.overageModalTitle": "超出额度后继续保存",
   "drive.usage.poolTitle": "工作区存储配额",
   "drive.usage.refresh": "重新统计",
+  "drive.usage.refreshFailed": "暂时无法重新统计用量，当前显示的仍是上次统计的结果，请稍后再试。",
   "drive.usage.remaining": "剩余 {{size}} · 已用 {{percent}}%",
   "drive.usage.showAllMembers": "显示全部 {{count}} 位成员",
   "drive.usage.showFewerMembers": "收起",

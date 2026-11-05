@@ -1,9 +1,23 @@
-import { render, screen } from '@testing-library/react';
+import type * as LobeUI from '@lobehub/ui';
+import { toast } from '@lobehub/ui';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { UsageBreakdown } from './UsageBreakdown';
 
 vi.mock('@/business/client/features/RetainedMemberDrives', () => ({ default: () => null }));
+vi.mock('@lobehub/ui', async (importOriginal) => {
+  const actual = await importOriginal<typeof LobeUI>();
+  return {
+    ...actual,
+    // Real base-ui ActionIcon only surfaces its title via a hover Tooltip, so
+    // a plain button stands in to make the refresh clickable by its label.
+    ActionIcon: ({ onClick, title }: { onClick?: () => void; title?: string }) => (
+      <button title={title} type="button" onClick={onClick} />
+    ),
+    toast: { ...actual.toast, error: vi.fn() },
+  };
+});
 
 const overQuota = (overageAllowed: boolean) =>
   ({
@@ -29,5 +43,27 @@ describe('UsageBreakdown', () => {
 
     expect(screen.getByText('drive.usage.overBilled')).toBeInTheDocument();
     expect(screen.queryByText('drive.usage.over')).not.toBeInTheDocument();
+  });
+
+  // LOBE-15436: a refresh whose walk timed out used to answer with the old
+  // figure as if it had been re-measured.
+  it('should say the figure is the last measurement when the drive could not be measured', async () => {
+    const onRefresh = vi.fn().mockRejectedValue(new Error('STORAGE_USAGE_MEASURE_FAILED'));
+    render(<UsageBreakdown data={overQuota(false)} onRefresh={onRefresh} />);
+
+    fireEvent.click(screen.getByTitle('drive.usage.refresh'));
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('drive.usage.refreshFailed'));
+  });
+
+  it('should keep the generic message for any other refresh failure', async () => {
+    const onRefresh = vi.fn().mockRejectedValue(new Error('BAD_GATEWAY'));
+    render(<UsageBreakdown data={overQuota(false)} onRefresh={onRefresh} />);
+
+    fireEvent.click(screen.getByTitle('drive.usage.refresh'));
+
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith('workingDirectory.drive.actionFailed'),
+    );
   });
 });
