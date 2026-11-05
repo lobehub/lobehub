@@ -2,13 +2,14 @@ import { CHANNEL_URL } from '@lobechat/const';
 import type { ChannelDetail } from '@lobechat/types';
 import { ActionIcon, Button, DropdownMenu, Flexbox, Popover, Text } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
-import { Bot, MoreHorizontal, UserPlus, Users } from 'lucide-react';
+import { Bot, FolderCog, MoreHorizontal, UserPlus, Users } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useCloseOnNavigate } from '@/hooks/useCloseOnNavigate';
 
+import { openChannelAgentEnvironment } from './AgentEnvironment';
 import { canInviteMembers } from './channelAccess';
 import { openInviteMembers } from './CreateChannel';
 import { FailureIndicator } from './FailureIndicator';
@@ -58,6 +59,19 @@ export function MemberStatus({
             label: t('openAgentNamed', { name: directAgent.name }),
             onClick: () => navigate(`/agent/${channel.agentId}`),
           },
+          // The member list is hidden here, so its device and directory setup lives in this menu.
+          ...(directAgent.member.status === 'active' &&
+          channel.canDelete &&
+          channel.status !== 'archived'
+            ? [
+                {
+                  icon: FolderCog,
+                  key: 'environment',
+                  label: t('environment.title'),
+                  onClick: () => openChannelAgentEnvironment(channel.id, directAgent.member),
+                },
+              ]
+            : []),
           { type: 'divider' as const },
         ]
       : []),
