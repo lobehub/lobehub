@@ -147,3 +147,6 @@ export const shotNotes = (
   }
   return notes;
 };
+
+export const hasScreenshots = (item: { category: string; key: string }) =>
+  item.category !== 'blocking' && !item.key.endsWith('|file');

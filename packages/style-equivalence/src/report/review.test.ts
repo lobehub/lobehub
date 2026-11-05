@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   cellVerdict,
   completionText,
+  hasScreenshots,
   keyAction,
   nextOpen,
   nextSelection,
@@ -222,5 +223,13 @@ describe('shotNotes', () => {
       shotNotes({ flags: ['INNER_TARGET'], standIns: { base: ['Tabs'] } }, 'base'),
     ).toHaveLength(2);
     expect(shotNotes({ flags: [], standIns: { base: ['Tabs'] } }, 'head')).toEqual([]);
+  });
+});
+
+describe('hasScreenshots', () => {
+  it('shows screenshots for an element but not for a whole-file item or a render failure', () => {
+    expect(hasScreenshots({ category: 'needs-signoff', key: 'a.tsx|A#0' })).toBe(true);
+    expect(hasScreenshots({ category: 'needs-signoff', key: 'a.tsx|file' })).toBe(false);
+    expect(hasScreenshots({ category: 'blocking', key: 'a.tsx|A#0' })).toBe(false);
   });
 });

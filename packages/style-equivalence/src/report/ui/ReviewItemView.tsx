@@ -3,7 +3,7 @@ import * as stylex from '@stylexjs/stylex';
 
 import { REVEAL_COLORS } from '../../server/reveal';
 import { cropShotUrl, type ReviewView } from '../api';
-import { cellVerdict, reviewGrid, shotNotes } from '../review';
+import { cellVerdict, hasScreenshots, reviewGrid, shotNotes } from '../review';
 import { StyleDetails } from './StyleDetails';
 
 const styles = stylex.create({
@@ -90,7 +90,6 @@ const styles = stylex.create({
     width: '100%',
   },
   side: { color: cssVar.colorTextTertiary, fontSize: 11, marginBlockEnd: 4 },
-  frame: { position: 'relative' },
   standIn: {
     backgroundColor: cssVar.colorWarningBg,
     borderColor: cssVar.colorWarningBorder,
@@ -98,15 +97,12 @@ const styles = stylex.create({
     borderStyle: 'solid',
     borderWidth: 1,
     color: cssVar.colorWarningText,
-    fontSize: 12,
+    fontSize: 11.5,
     fontWeight: 600,
-    insetBlockStart: 6,
-    insetInlineStart: 6,
-    insetInlineEnd: 6,
     lineHeight: 1.4,
+    marginBlockEnd: 4,
     paddingBlock: 2,
     paddingInline: 6,
-    position: 'absolute',
   },
   title: { fontSize: 20, fontWeight: 600, marginBlock: 0 },
   verdict: {
@@ -140,21 +136,19 @@ const Pair = ({
       return (
         <div key={side}>
           <div {...stylex.props(styles.side)}>{side === 'base' ? '改之前' : '改之后'}</div>
-          <div {...stylex.props(styles.frame)}>
-            <img
-              alt={`${side === 'base' ? '改之前' : '改之后'} ${item.title}`}
-              loading="lazy"
-              src={cropShotUrl(item.key, side, condition, combo)}
-              {...stylex.props(styles.shot)}
-            />
-            {notes.length > 0 && (
-              <div {...stylex.props(styles.standIn)}>
-                {notes.map((note) => (
-                  <div key={note}>{note}</div>
-                ))}
-              </div>
-            )}
-          </div>
+          {notes.length > 0 && (
+            <div {...stylex.props(styles.standIn)}>
+              {notes.map((note) => (
+                <div key={note}>{note}</div>
+              ))}
+            </div>
+          )}
+          <img
+            alt={`${side === 'base' ? '改之前' : '改之后'} ${item.title}`}
+            loading="lazy"
+            src={cropShotUrl(item.key, side, condition, combo)}
+            {...stylex.props(styles.shot)}
+          />
         </div>
       );
     })}
@@ -243,7 +237,7 @@ export const ReviewItemView = ({
   item: ReviewView;
 }) => {
   const grid = reviewGrid(item.combos, conditions, item.comboDifferences);
-  const visual = item.category !== 'blocking';
+  const visual = hasScreenshots(item);
   return (
     <section>
       <h1 {...stylex.props(styles.title)}>{item.title}</h1>
