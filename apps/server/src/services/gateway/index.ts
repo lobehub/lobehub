@@ -10,7 +10,11 @@ import type { BotRuntimeStatusSnapshot } from '@/types/botRuntimeStatus';
 import { type ConnectionMode, platformRegistry, resolveConnectionMode } from '../bot/platforms';
 import { BOT_CONNECT_QUEUE_EXPIRE_MS, BotConnectQueue } from './botConnectQueue';
 import { createGatewayManager, getGatewayManager } from './GatewayManager';
-import { mapGatewayStatusToRuntimeStatus, resolveBotGatewayCapabilities } from './gatewayMapping';
+import {
+  buildMessageGatewayRefusalStatus,
+  mapGatewayStatusToRuntimeStatus,
+  resolveBotGatewayCapabilities,
+} from './gatewayMapping';
 import {
   getConfiguredMessageGatewayHosts,
   getMessageGatewayClient,
@@ -194,7 +198,7 @@ export class GatewayService {
 
         const definition = platformRegistry.getPlatform(provider.platform);
         const connectionMode = resolveConnectionMode(definition, provider.settings);
-        if (connectionMode === 'webhook') return;
+        if (connectionMode === 'webhook' || definition?.messageGatewayUnsupported) return;
 
         try {
           const client = getMessageGatewayClient(provider.platform);
@@ -247,8 +251,9 @@ export class GatewayService {
 
     // Webhook-mode bots have no persistent gateway connection to query — the
     // gateway only holds the webhook URL registration, so the local snapshot
-    // is already the source of truth.
-    if (connectionMode === 'webhook') return cached;
+    // is already the source of truth. The same goes for a platform the gateway
+    // cannot host: it holds nothing, and asking would overwrite the refusal.
+    if (connectionMode === 'webhook' || definition?.messageGatewayUnsupported) return cached;
 
     const client = getMessageGatewayClient(platform);
     try {
@@ -365,6 +370,12 @@ export class GatewayService {
       await manager.startClient(platform, applicationId);
       log('Started webhook-mode client locally %s:%s', platform, applicationId);
       return 'started';
+    }
+
+    if (definition?.messageGatewayUnsupported) {
+      const status = buildMessageGatewayRefusalStatus(definition, applicationId);
+      await updateBotRuntimeStatus(status);
+      throw new TRPCError({ code: 'PRECONDITION_FAILED', message: status.errorMessage });
     }
 
     const webhookPath = `/api/agent/webhooks/${platform}/${applicationId}`;

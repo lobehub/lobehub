@@ -14,6 +14,7 @@ import { AgentBotProviderModel } from '@/database/models/agentBotProvider';
 import type { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 
 import { platformRegistry, resolveConnectionMode } from '../../bot/platforms';
+import { buildMessageGatewayRefusalStatus } from '../gatewayMapping';
 import {
   type getMessageGatewayClient,
   type MessageGatewayHost,
@@ -169,6 +170,18 @@ export async function buildDesiredConnections(
         const connectionMode = resolveConnectionMode(definition, provider.settings);
         return connectionMode === 'webhook' ? [] : [{ connectionMode, provider }];
       });
+
+      // No handler on the gateway: a connect can only fail, every round.
+      if (definition.messageGatewayUnsupported) {
+        await Promise.all(
+          persistent.map(({ provider }) =>
+            updateBotRuntimeStatus(
+              buildMessageGatewayRefusalStatus(definition, provider.applicationId),
+            ),
+          ),
+        );
+        continue;
+      }
 
       // Bounded concurrency, not one provider at a time. Regression: each
       // check is a lookup of its own, and checking a large platform in series

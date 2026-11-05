@@ -31,6 +31,7 @@ import {
   formatFieldFormatViolations,
   mergeWithDefaults,
   platformRegistry,
+  restrictPlatformToWebhook,
   withResolvedConcurrencySettings,
 } from '@/server/services/bot/platforms';
 import {
@@ -172,14 +173,20 @@ const withFormSettings = (platform: string, settings?: Record<string, unknown>) 
 
 export const agentBotProviderRouter = router({
   listPlatforms: authedProcedure.query(async ({ ctx }) => {
+    const { useMessageGateway } = new GatewayService();
+
     // A platform that replies over its own connection only runs where something here can hold
     // that connection (see `resolveReplyConnectionHost`). Elsewhere it is marked, not dropped, so
     // a bot configured before the deployment changed can still be opened and removed.
     return Promise.all(
       platformRegistry.listSerializedPlatforms().map((platform) => {
-        const unavailableReason = getReplyConnectionUnavailableReason(platform);
+        const offered =
+          useMessageGateway && platform.messageGatewayUnsupported
+            ? restrictPlatformToWebhook(platform)
+            : platform;
+        const unavailableReason = getReplyConnectionUnavailableReason(offered);
         return withBotPlatformAccessMeta(
-          unavailableReason ? { ...platform, unavailableReason } : platform,
+          unavailableReason ? { ...offered, unavailableReason } : offered,
           {
             userId: ctx.userId,
             workspaceId: ctx.workspaceId ?? undefined,
