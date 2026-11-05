@@ -20,6 +20,7 @@ import {
   patchOutgoing,
   removeOutgoing,
 } from './outbox';
+import { channelOutboxStorage } from './outboxStorage';
 import { ChannelPrivateAction } from './privateAction';
 import { channelThreadEntityId } from './projection';
 import { channelSelectors } from './selectors';
@@ -249,6 +250,7 @@ class ChannelActionImpl {
       threadId: input.threadId ?? null,
     };
     this.#setOutbox((outbox) => addOutgoing(outbox, message), 'add');
+    channelOutboxStorage.save(message);
     return this.#deliver(message);
   };
   /** Sends a failed message again under the same request key, so it is stored at most once. */
@@ -258,8 +260,27 @@ class ChannelActionImpl {
     this.#setOutbox((outbox) => patchOutgoing(outbox, message, { status: 'sending' }), 'retry');
     return this.#deliver(message);
   };
-  discardSend = (message: ChannelOutgoingMessage) =>
+  discardSend = (message: ChannelOutgoingMessage) => {
     this.#setOutbox((outbox) => removeOutgoing(outbox, message), 'discard');
+    channelOutboxStorage.forget(message);
+  };
+  /** Scopes whose unsent messages were read back after a reload; once per scope and session. */
+  readonly #restoredScopes = new Set<string>();
+  /** Brings back the scope's unsent messages from an earlier page load, marked failed. */
+  restoreOutbox = (scope: string) => {
+    if (this.#restoredScopes.has(scope)) return;
+    this.#restoredScopes.add(scope);
+    const stored = channelOutboxStorage.load(scope);
+    if (!stored.length) return;
+    this.#setOutbox(
+      (outbox) =>
+        stored.reduce(
+          (next, message) => (findOutgoing(next, message) ? next : addOutgoing(next, message)),
+          outbox,
+        ),
+      'restore',
+    );
+  };
   #setOutbox = (fn: (outbox: ChannelOutbox) => ChannelOutbox, action: string) =>
     useChannelStore.setState(
       (state) => ({ outbox: fn(state.outbox) }),
@@ -306,6 +327,7 @@ class ChannelActionImpl {
           }),
         'sent',
       );
+      channelOutboxStorage.forget(message);
       if (cacheScope.get() === message.scope) void this.#refreshAfterSend(input, data.threadId);
       return data;
     } catch (error) {
@@ -330,6 +352,7 @@ class ChannelActionImpl {
   reset = () => {
     this.#private.resetThreadRemovals();
     this.#deliveries.clear();
+    this.#restoredScopes.clear();
     useChannelStore.setState(initialState, false, 'channel/reset');
   };
 }

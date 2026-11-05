@@ -6,6 +6,7 @@ import { channelService } from '@/services/channel';
 
 import { channelActions } from './action';
 import { channelOutboxKey } from './outbox';
+import { channelOutboxStorage } from './outboxStorage';
 import { useChannelStore } from './store';
 
 vi.mock('@/services/channel', () => ({
@@ -49,6 +50,7 @@ describe('Channel queued send', () => {
     channelActions.reset();
   });
   afterEach(() => {
+    localStorage.clear();
     channelActions.reset();
     vi.restoreAllMocks();
     vi.clearAllMocks();
@@ -124,5 +126,47 @@ describe('Channel queued send', () => {
     expect(channelService.send).toHaveBeenCalledTimes(1);
     expect(channelService.detail).not.toHaveBeenCalled();
     expect(outgoing().map((message) => message.status)).toEqual(['sent', 'failed']);
+  });
+
+  it('keeps an unsent message across a reload until the server confirms it', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.mocked(channelService.send).mockRejectedValueOnce(new Error('offline'));
+    await channelActions.queueSend(input);
+    const [failed] = outgoing();
+
+    // A reload empties memory; the conversation reads the message back.
+    channelActions.reset();
+    expect(outgoing()).toEqual([]);
+    channelActions.restoreOutbox(scope);
+    expect(outgoing()).toMatchObject([
+      { content: 'Hello', requestKey: failed.requestKey, status: 'failed' },
+    ]);
+
+    vi.mocked(channelService.send).mockResolvedValueOnce(result(stored('message', 2)));
+    await channelActions.retrySend(outgoing()[0]);
+    expect(channelOutboxStorage.load(scope)).toEqual([]);
+  });
+
+  it('forgets a deleted message and restores a scope only once', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.mocked(channelService.send).mockRejectedValueOnce(new Error('offline'));
+    await channelActions.queueSend(input);
+    channelActions.restoreOutbox(scope);
+    expect(outgoing()).toHaveLength(1);
+
+    channelActions.discardSend(outgoing()[0]);
+
+    expect(channelOutboxStorage.load(scope)).toEqual([]);
+  });
+
+  it('marks a message whose send was interrupted by a reload as failed', () => {
+    const gate = Promise.withResolvers<SendResult>();
+    vi.mocked(channelService.send).mockReturnValue(gate.promise);
+    void channelActions.queueSend(input);
+
+    channelActions.reset();
+    channelActions.restoreOutbox(scope);
+
+    expect(outgoing()).toMatchObject([{ content: 'Hello', status: 'failed' }]);
   });
 });

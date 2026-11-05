@@ -67,6 +67,7 @@ const Timeline = ({
   const cached = useChannelStore(channelSelectors.detail(params));
   const detail = visibleChannelDetail(cached, sync.error);
   const scope = cacheScope.use();
+  useEffect(() => channelActions.restoreOutbox(scope), [scope]);
   const userId = useUserStore(userProfileSelectors.userId);
   const queued = useChannelStore(channelSelectors.outgoing(channelId, threadId));
   // Sent from this tab and not on a loaded page yet; they follow the latest page only.
