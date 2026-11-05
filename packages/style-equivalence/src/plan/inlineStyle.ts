@@ -3,7 +3,7 @@ import ts from 'typescript';
 import type { StyleElement } from '../extract';
 import { valueIdentifiers } from '../extract/identifiers';
 
-const compact = (text: string) => text.replaceAll(/\s+/g, '');
+const compact = (text: string) => text.replaceAll(/\s+/g, '').replaceAll(/,(?=[)\]}])/g, '');
 
 interface SxStyle {
   binding: number;

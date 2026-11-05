@@ -77,4 +77,10 @@ describe('an inline style moved from the style prop into sx', () => {
     expect(entry.inlineStyles?.head).toHaveLength(1);
     expect(entry.flags).toEqual(['INLINE_STYLE_SPREAD_ORDER']);
   });
+
+  it('shares a style that differs only by a trailing comma and line breaks', () => {
+    const [entry] = plan(head('{\n  left: `${view.ratio * 100}%`,\n}')).plan.cases;
+    expect(entry.inlineStyles?.head).toHaveLength(1);
+    expect(entry.flags).toEqual([]);
+  });
 });
