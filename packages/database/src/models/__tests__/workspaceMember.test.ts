@@ -653,6 +653,28 @@ describe('WorkspaceMemberModel', () => {
 
       expect(a.token).not.toBe(b.token);
     });
+
+    it('allows a null expiry only on reusable invitations (database check constraint)', async () => {
+      await expect(
+        serverDB.insert(workspaceInvitations).values({
+          inviterId,
+          token: 'single-use-without-expiry',
+          workspaceId,
+        }),
+      ).rejects.toThrow();
+
+      const [link] = await serverDB
+        .insert(workspaceInvitations)
+        .values({ inviterId, reusable: true, token: 'link-without-expiry', workspaceId })
+        .returning();
+      expect(link).toMatchObject({ expiresAt: null, reusable: true });
+
+      const single = await new WorkspaceMemberModel(serverDB, inviterId).createInvitation({
+        workspaceId,
+      });
+      expect(single.reusable).toBe(false);
+      expect(single.expiresAt).toBeInstanceOf(Date);
+    });
   });
 
   describe('findInvitationByToken', () => {
