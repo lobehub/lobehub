@@ -2,6 +2,7 @@ import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 import { isRecord, pickString } from '@lobechat/utils/object';
 
 import { CodexAppServerAdapter } from '../adapters/codexAppServer';
+import type { AskUserBridge } from '../askUser';
 import type { HeterogeneousAgentRuntimeStatus } from '../spawn/claudeAgentSdkSession';
 import { toStreamEvent } from '../spawn/streamEvent';
 import type { UsageData } from '../types';
@@ -22,6 +23,11 @@ import type {
   TurnStartResponse,
   UserInput,
 } from './protocol';
+import {
+  codexUserInputArguments,
+  codexUserInputResponse,
+  parseCodexUserInput,
+} from './requestUserInput';
 
 const CODEX_APP_SERVER_TRANSPORT = 'codex-app-server' as const;
 /** An interrupted turn settled within 250 ms in probes; this bounds slow tool teardown. */
@@ -39,6 +45,7 @@ const toThreadResumeParams = (threadId: string, params: ThreadStartParams): Thre
 
 interface ActiveTurn {
   adapter: CodexAppServerAdapter;
+  askUserBridge?: AskUserBridge;
   completion: Promise<void>;
   interruptRequest?: Promise<void>;
   interruptRequested: boolean;
@@ -57,6 +64,7 @@ interface ThreadNameSetParams {
 }
 
 export interface CodexThreadTurnOptions {
+  askUserBridge?: AskUserBridge;
   input: UserInput[];
   onRawMessage: (line: string) => Promise<void> | void;
   operationId: string;
@@ -151,6 +159,7 @@ export class CodexThreadSession {
       });
       const activeTurn: ActiveTurn = {
         adapter,
+        askUserBridge: options.askUserBridge,
         completion,
         interruptRequested: this.interruptRequested,
         notificationQueue: Promise.resolve(),
@@ -198,6 +207,7 @@ export class CodexThreadSession {
       this.emitStatus('error', options.operationId);
       throw error;
     } finally {
+      this.activeTurn?.askUserBridge?.cancelAll('session_ended');
       for (const unsubscribe of traceUnsubscribers) unsubscribe();
       this.activeTurn = undefined;
       this.interruptRequested = false;
@@ -212,6 +222,7 @@ export class CodexThreadSession {
     if (!activeTurn) return;
 
     activeTurn.interruptRequested = true;
+    activeTurn.askUserBridge?.cancelAll('session_ended');
     if (!activeTurn.turnId) return;
     try {
       await this.requestInterrupt(activeTurn);
@@ -344,13 +355,14 @@ export class CodexThreadSession {
       this.options.client.subscribe(threadId, (method, params) =>
         this.enqueueNotification(method, params),
       ),
-      this.options.client.subscribeServerRequests(threadId, (method) => {
+      this.options.client.subscribeServerRequests(threadId, (method, params) => {
         if (
           method === 'item/commandExecution/requestApproval' ||
           method === 'item/fileChange/requestApproval'
         ) {
           return { decision: 'cancel' };
         }
+        if (method === 'item/tool/requestUserInput') return this.requestUserInput(params);
         throw new Error(`Unsupported Codex app-server request: ${method}`);
       }),
       this.options.client.registerThread(
@@ -370,6 +382,51 @@ export class CodexThreadSession {
     if (this.closedByHost) return;
     this.attached = true;
     if (response.model) this.updateModel(response.model);
+  }
+
+  private async requestUserInput(params: unknown) {
+    const request = parseCodexUserInput(params);
+    const activeTurn = this.activeTurn;
+    const bridge = activeTurn?.askUserBridge;
+    if (
+      !activeTurn ||
+      !bridge ||
+      bridge.operationId !== activeTurn.operationId ||
+      request.threadId !== this.threadId ||
+      request.turnId !== activeTurn.turnId ||
+      activeTurn.terminalNotificationReceived ||
+      activeTurn.interruptRequested
+    )
+      throw new Error('Codex user input has no matching active operation');
+
+    const args = codexUserInputArguments(request);
+    // Serialize visible tool events with native notifications, but never put
+    // the human wait on that queue: interrupts and nonblocking turns must flow.
+    activeTurn.notificationQueue = activeTurn.notificationQueue.then(() =>
+      this.emitEvents(
+        activeTurn.adapter.startUserInput(request.itemId, args),
+        activeTurn.operationId,
+      ),
+    );
+    await activeTurn.notificationQueue;
+    if (
+      activeTurn.interruptRequested ||
+      activeTurn.terminalNotificationReceived ||
+      activeTurn.transportInterrupted
+    )
+      return { answers: {} };
+    const answer = await bridge.pending(
+      { arguments: args, toolCallId: request.itemId },
+      request.autoResolutionMs ? { timeoutMs: request.autoResolutionMs } : {},
+    );
+    activeTurn.notificationQueue = activeTurn.notificationQueue.then(() =>
+      this.emitEvents(
+        activeTurn.adapter.completeUserInput(request.itemId, answer),
+        activeTurn.operationId,
+      ),
+    );
+    await activeTurn.notificationQueue;
+    return codexUserInputResponse(request, answer);
   }
 
   private handleDisconnect(): void {
@@ -395,6 +452,7 @@ export class CodexThreadSession {
     const activeTurn = this.activeTurn;
     if (!activeTurn || activeTurn.transportInterrupted) return;
     activeTurn.transportInterrupted = true;
+    activeTurn.askUserBridge?.cancelAll('session_ended');
     activeTurn.notificationQueue = activeTurn.notificationQueue
       .then(() =>
         this.emitEvents(activeTurn.adapter.interruptForTransportFailure(), activeTurn.operationId),
@@ -412,6 +470,7 @@ export class CodexThreadSession {
       const notification = params as TurnCompletedNotification;
       if (notification.turn.status !== 'inProgress') {
         activeTurn.terminalNotificationReceived = true;
+        activeTurn.askUserBridge?.cancelAll('session_ended');
       }
     }
 

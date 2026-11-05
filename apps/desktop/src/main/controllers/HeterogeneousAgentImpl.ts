@@ -1185,7 +1185,7 @@ export default class HeterogeneousAgentCtr {
 
   // ─── AskUserQuestion MCP server () ───
 
-  /** Register and broadcast a native ACP intervention without starting an MCP server. */
+  /** Register a native intervention (ACP or Codex) without starting an MCP server. */
   private setupAcpInterventionForOp(
     operationId: string,
     sessionId: string,
@@ -1194,8 +1194,7 @@ export default class HeterogeneousAgentCtr {
     bridge: AskUserBridge;
     cleanup: () => Promise<void>;
   } {
-    // Cursor keeps its legacy Claude Code renderer identifier. Droid has a
-    // first-class identifier, while provider remains explicit for both.
+    // Cursor keeps its legacy renderer identifier; every provider stays explicit.
     const bridge = new AskUserBridge(operationId, {
       identifier: provider === 'cursor' ? 'claude-code' : provider,
       provider,
@@ -2060,6 +2059,7 @@ export default class HeterogeneousAgentCtr {
         needsSessionIntroduction: this.needsSessionIntroduction.bind(this),
         recordInflightRun: this.recordInflightRun.bind(this),
         resolveSessionCommand: this.resolveSessionCommand.bind(this),
+        setupAcpInterventionForOp: this.setupAcpInterventionForOp.bind(this),
         writeCliTraceFile: this.writeCliTraceFile.bind(this),
         writeCliTraceJson: this.writeCliTraceJson.bind(this),
       },
