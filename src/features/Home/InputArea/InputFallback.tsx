@@ -60,7 +60,7 @@ const styles = stylex.create({
     'color': cssVar.colorText,
     'backgroundColor': 'transparent',
     'backgroundImage': 'none',
-    'outline': 'none',
+    'outline': '0',
     '::placeholder': {
       color: cssVar.colorTextPlaceholder,
     },
