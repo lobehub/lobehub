@@ -3,11 +3,12 @@ import type { Command } from 'commander';
 import pc from 'picocolors';
 
 import { getTrpcClient } from '../api/client';
-import { resolveIdentityFingerprint } from '../auth/identity';
+import { resolveServerUrl } from '../settings';
 import { confirm, outputJson, printTable, truncate } from '../utils/format';
 import type { LocalMcpParams } from '../utils/localMcp';
 import { listLocalMcpTools } from '../utils/localMcp';
 import { log } from '../utils/logger';
+import { isStdioLaunchTrusted, trustStdioLaunch } from '../utils/stdioTrust';
 
 type TrpcClient = Awaited<ReturnType<typeof getTrpcClient>>;
 type CreateConnectorInput = Parameters<TrpcClient['connector']['create']['mutate']>[0];
@@ -228,9 +229,8 @@ export function buildLocalMcpParams(detail: ConnectorDetail): LocalMcpParams {
 }
 
 /**
- * Gate before launching a stored stdio command on this machine. Called only
- * when the connector may have been written by someone else (refresh), never
- * for a command the user just typed (add).
+ * Gate before launching a stored stdio command on this machine. Throws to
+ * stop the launch.
  */
 export type ConfirmLocalCommand = (
   detail: ConnectorDetail,
@@ -244,22 +244,32 @@ export function formatStdioCommand(params: { args?: string[]; command: string })
   return [params.command, ...(params.args ?? [])].map(quote).join(' ');
 }
 
+const stdioTrustKey = (id: string) => `${resolveServerUrl()}#${id}`;
+
 /**
- * `confirmLocalCommand` for `refresh`: a stdio connector in a workspace can be
- * stored by another member, and refreshing it executes that command as the
- * local OS user. Run it unprompted only when the current login created it;
- * otherwise show the exact argv and require an interactive yes.
+ * `confirmLocalCommand` for `add`: the command is the one the user just typed,
+ * so record it as approved on this machine.
+ */
+export const trustTypedStdioCommand: ConfirmLocalCommand = async (detail, params) => {
+  trustStdioLaunch(stdioTrustKey(detail.id), params);
+};
+
+/**
+ * `confirmLocalCommand` for `refresh`: a workspace stdio connector can be
+ * stored or overwritten by another member, and refreshing it executes that
+ * command as the local OS user. Run it unprompted only when this exact
+ * command/argv/env was approved on this machine; otherwise show it and
+ * require an interactive yes. The row's creator is not evidence — an
+ * overwrite keeps `userId` while replacing the command.
  */
 export const confirmSharedStdioCommand: ConfirmLocalCommand = async (detail, params) => {
-  const creator = (detail as { userId?: string | null }).userId;
-  if (creator && resolveIdentityFingerprint() === `user:${creator}`) return;
+  const key = stdioTrustKey(detail.id);
+  if (isStdioLaunchTrusted(key, params)) return;
 
-  const argv = formatStdioCommand(params);
   const envKeys = Object.keys(params.env ?? {});
-  const owner = creator ? `another user (${creator})` : 'an unknown user';
   const summary = [
-    `This stdio connector was created by ${owner}. Refreshing it runs this command on this machine:`,
-    `  ${argv}`,
+    "This stdio connector's command has not been approved on this machine (it is new here, or someone changed it). Refreshing it runs:",
+    `  ${formatStdioCommand(params)}`,
     ...(envKeys.length > 0 ? [`  with env: ${envKeys.join(', ')}`] : []),
   ].join('\n');
 
@@ -270,6 +280,7 @@ export const confirmSharedStdioCommand: ConfirmLocalCommand = async (detail, par
   if (!(await confirm('Run this command?'))) {
     throw new Error('Cancelled: the stdio command was not run.');
   }
+  trustStdioLaunch(key, params);
 };
 
 /**
@@ -455,7 +466,9 @@ export function registerConnectorCommand(program: Command) {
 
       let synced: { local: boolean; toolCount: number };
       try {
-        synced = await syncConnectorTools(client, id, input);
+        synced = await syncConnectorTools(client, id, input, {
+          confirmLocalCommand: trustTypedStdioCommand,
+        });
       } catch (error) {
         fail(error, await rollback());
       }
