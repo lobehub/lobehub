@@ -90,7 +90,7 @@ const KanbanBoard = memo<KanbanBoardProps>((props) => {
     options.completedTasks === 'none' ? HIDDEN_WHEN_COMPLETED_STATUSES : undefined;
 
   // Label columns read their name and color from the registry.
-  const { error: labelsError } = useFetchTaskLabels();
+  const { error: labelsError, mutate: retryLabels } = useFetchTaskLabels();
   const isLabelsInit = useTaskStore(taskLabelSelectors.isLabelsInit);
 
   const useFetchTaskGroupList = useTaskStore((s) => s.useFetchTaskGroupList);
@@ -102,7 +102,7 @@ const KanbanBoard = memo<KanbanBoardProps>((props) => {
     // A persisted label grouping may point at a deleted group; the page only
     // drops it once the registry is known, so wait for that (or its failure)
     // instead of sending one doomed request after every reload.
-    enabled: !isTaskLabelGroupBy(groupBy) || isLabelsInit || !!labelsError,
+    enabled: !isTaskLabelGroupBy(groupBy) || isLabelsInit,
     filter,
     includeArchived: options.showArchived,
   });
@@ -423,16 +423,20 @@ const KanbanBoard = memo<KanbanBoardProps>((props) => {
   // Error gated ahead of empty by AsyncBoundary so a failed fetch shows Retry
   // instead of the "no tasks" empty. `data` is the SWR result —
   // undefined until the first fetch settles.
+  // A label board needs the registry for its columns (names, colors, order);
+  // if that failed, show it here with its own Retry rather than raw label ids.
+  const registryError = isTaskLabelGroupBy(groupBy) && !isLabelsInit ? labelsError : undefined;
+  const boardError = registryError ?? error;
   return (
     <AsyncBoundary
       data={isTaskGroupListInit || undefined}
       empty={emptyState}
-      error={error}
+      error={boardError}
       errorVariant={'block'}
       isEmpty={totalTasks === 0}
-      isLoading={isLoading || (!isTaskGroupListInit && !error)}
+      isLoading={isLoading || (!isTaskGroupListInit && !boardError)}
       loading={skeletonBoard}
-      onRetry={() => mutate()}
+      onRetry={() => (registryError ? retryLabels() : mutate())}
     >
       {board}
     </AsyncBoundary>

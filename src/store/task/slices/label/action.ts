@@ -26,6 +26,12 @@ export const createTaskLabelSlice = (set: Setter, get: () => TaskStore, _api?: u
 export class TaskLabelSliceActionImpl {
   readonly #get: () => TaskStore;
   readonly #set: Setter;
+  /**
+   * Per-task chain of label writes. Each call carries the delta the user saw
+   * when clicking; sending them one after another keeps the server in click
+   * order (its row lock orders by arrival, which rapid toggles can invert).
+   */
+  readonly #labelWrites = new Map<string, Promise<unknown>>();
 
   constructor(set: Setter, get: () => TaskStore, _api?: unknown) {
     void _api;
@@ -122,7 +128,16 @@ export class TaskLabelSliceActionImpl {
     try {
       // One request, one transaction: on failure nothing was written, so
       // rolling the optimistic state back matches the server.
-      await taskLabelService.changeForTask(taskId, { add: added, remove: removed });
+      const previous = this.#labelWrites.get(taskId) ?? Promise.resolve();
+      const write = previous
+        .catch(() => {})
+        .then(() => taskLabelService.changeForTask(taskId, { add: added, remove: removed }));
+      this.#labelWrites.set(taskId, write);
+      try {
+        await write;
+      } finally {
+        if (this.#labelWrites.get(taskId) === write) this.#labelWrites.delete(taskId);
+      }
     } catch (error) {
       collections.rollback();
       if (hasDetail) {

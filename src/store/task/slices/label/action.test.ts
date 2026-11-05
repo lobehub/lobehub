@@ -136,6 +136,33 @@ describe('TaskLabelSliceAction', () => {
       expect(overlay.rollback).not.toHaveBeenCalled();
     });
 
+    it('sends rapid edits to one task in click order', async () => {
+      stubCollections(async () => {});
+      const sent: string[] = [];
+      let releaseFirst!: () => void;
+      vi.mocked(taskLabelService.changeForTask)
+        .mockImplementationOnce(async (_id, delta) => {
+          await new Promise<void>((resolve) => (releaseFirst = resolve));
+          sent.push(`add ${delta.add}`);
+          return [];
+        })
+        .mockImplementationOnce(async (_id, delta) => {
+          sent.push(`add ${delta.add}`);
+          return [];
+        });
+      const a = label('a', 'A');
+      const b = label('b', 'B');
+
+      const first = useTaskStore.getState().setTaskLabels('T-1', [], [a]);
+      const second = useTaskStore.getState().setTaskLabels('T-1', [a], [b]);
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      expect(sent).toEqual([]);
+      releaseFirst();
+      await Promise.all([first, second]);
+
+      expect(sent).toEqual(['add a', 'add b']);
+    });
+
     it('drops the overlay instead of persisting it when the re-fetch fails', async () => {
       const overlay = stubCollections(async () => {
         throw new Error('offline');
