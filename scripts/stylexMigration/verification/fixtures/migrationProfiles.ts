@@ -6,6 +6,7 @@ export const migrationFixtures = [
   ['PreviewToolbar', 'src/features/Portal/LocalFile/PreviewToolbar.tsx'],
   ['WorkPreview', 'src/features/WorkGallery/WorkPreview.tsx'],
   ['WorkPreviewStatus', 'src/features/WorkGallery/WorkPreview.tsx'],
+  ['MessageDetailBody', 'src/features/Portal/MessageDetail/Body/index.tsx'],
 ] as const;
 
 export const migrationProfiles: Record<string, FixtureProfile> = {
@@ -98,5 +99,14 @@ export const migrationProfiles: Record<string, FixtureProfile> = {
         appearance,
       })),
     ),
+  },
+  MessageDetailBody: {
+    dependencies: ['fast-deep-equal'],
+    variants: [{ id: 'light' }, { id: 'dark', appearance: 'dark' }],
+    boundaries: ['@/store/chat', '@/store/chat/selectors'].map((source) => ({
+      importer: 'src/features/Portal/MessageDetail/Body/index.tsx',
+      source,
+      replacement: 'fixtures/MessageDetailBodyData.ts',
+    })),
   },
 };

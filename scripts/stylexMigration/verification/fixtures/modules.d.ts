@@ -42,6 +42,7 @@ declare module 'verification:component' {
     label?: ReactNode;
     loading?: boolean;
   }>;
+  export const MessageDetailBody: ComponentType;
   export const SidebarGroupItem: ComponentType<{ disabled: boolean; id: string; name: string }>;
   export const Menu: ComponentType<ListProps>;
   export const SpendType: ComponentType<{
