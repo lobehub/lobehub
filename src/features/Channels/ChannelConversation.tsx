@@ -1,6 +1,7 @@
 import type { ChannelPublicMessage } from '@lobechat/types';
 import { Button, Empty, Flexbox } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
+import { useLatest } from 'ahooks';
 import { MessageSquare } from 'lucide-react';
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -14,6 +15,8 @@ import WideScreenContainer from '@/features/WideScreenContainer';
 import { useActiveLocation } from '@/hooks/useActiveLocation';
 import { cacheScope } from '@/libs/replica';
 import { channelActions, channelSelectors, useChannelStore } from '@/store/channel';
+import { useUserStore } from '@/store/user';
+import { userProfileSelectors } from '@/store/user/selectors';
 
 import { ArchivedNotice } from './ArchivedNotice';
 import { visibleChannelDetail } from './channelAccess';
@@ -21,7 +24,10 @@ import { ChannelMessage, ThreadRootMessage } from './ChannelMessage';
 import { Composer } from './Composer';
 import { JoinEventLine } from './JoinEventLine';
 import { channelJoinEvents, channelTimeline } from './joinEvents';
+import { isCurrentUserMember } from './memberName';
 import { channelTimeFormatters, presentChannelTimeline } from './messagePresentation';
+import { presentOutgoingMessage } from './outgoing';
+import { OutgoingStatus } from './OutgoingStatus';
 import { ReplyActivity } from './ReplyActivity';
 import { styles } from './styles';
 import type { ChannelThreadDraft } from './threadDraft';
@@ -51,11 +57,9 @@ const Timeline = ({
   const reply = useReplyTarget(channelDraftKey(channelId, threadId));
   const [jumpTarget, setJumpTarget] = useState<ChannelReplyTarget | null>(null);
   const [highlighted, setHighlighted] = useState<string | null>(null);
-  const sending = useRef(false);
   const mounted = useRef(false);
   const location = useActiveLocation();
-  const currentLocation = useRef(location);
-  currentLocation.current = location;
+  const currentLocation = useLatest(location);
   useEffect(() => {
     mounted.current = true;
     return () => {
@@ -71,9 +75,21 @@ const Timeline = ({
   const sync = channelActions.useFetchDetail(params);
   const cached = useChannelStore(channelSelectors.detail(params));
   const detail = visibleChannelDetail(cached, sync.error);
+  const scope = cacheScope.use();
+  const userId = useUserStore(userProfileSelectors.userId);
+  const queued = useChannelStore(channelSelectors.outgoing(channelId, threadId));
+  // Sent from this tab and not on a loaded page yet; they follow the latest page only.
+  const outgoing = useMemo(() => {
+    if (!detail || before !== undefined) return [];
+    const member = detail.members.find((entry) => isCurrentUserMember(entry, userId));
+    return queued
+      .filter((entry) => entry.scope === scope)
+      .map((entry) => ({ entry, message: presentOutgoingMessage(entry, { member, userId }) }));
+  }, [before, detail, queued, scope, userId]);
+  const outgoingById = new Map(outgoing.map((item) => [item.message.id, item.entry]));
   const feedRef = useRef<HTMLDivElement>(null);
   const followLatest = useRef(true);
-  const lastMessageId = detail?.messages.at(-1)?.id;
+  const lastMessageId = (outgoing.at(-1)?.message ?? detail?.messages.at(-1))?.id;
   const sequence = detail?.channel.sequence;
   useChannelEvents(params);
   const jumpToMessage = (target: ChannelReplyTarget) => {
@@ -105,16 +121,16 @@ const Timeline = ({
 
   const activeMembers = detail?.members.filter((member) => member.status === 'active') ?? [];
   const thread = threadId ? detail?.threads.find((entry) => entry.id === threadId) : undefined;
-  const selectReply = (message: ChannelPublicMessage) => {
-    if (!sending.current) reply.select(message);
-  };
+  const selectReply = (message: ChannelPublicMessage) => reply.select(message);
   const channelArchived = detail?.channel.status === 'archived';
   const direct = !!detail?.channel.agentId;
   // Join lines belong to the main conversation; a thread starts from its root message. A direct
   // conversation reads like a chat with its Agent, so it has no "invited" lines at all.
   const timeline = detail
     ? channelTimeline(
-        detail.messages,
+        outgoing.length
+          ? [...detail.messages, ...outgoing.map((item) => item.message)]
+          : detail.messages,
         threadId || direct ? [] : channelJoinEvents(detail.members),
         !detail.hasMore && before === undefined,
       )
@@ -211,6 +227,18 @@ const Timeline = ({
                     )}
                     {item.kind === 'event' ? (
                       <JoinEventLine event={item.event} />
+                    ) : outgoingById.has(item.message.id) ? (
+                      <ChannelMessage
+                        continuation={continuation}
+                        delivery={<OutgoingStatus message={outgoingById.get(item.message.id)!} />}
+                        message={item.message}
+                        threadId={threadId}
+                        detail={{
+                          ...detail,
+                          attachments: outgoingById.get(item.message.id)!.attachments,
+                        }}
+                        onJumpToMessage={jumpToMessage}
+                      />
                     ) : (
                       <ChannelMessage
                         continuation={continuation}
@@ -240,42 +268,32 @@ const Timeline = ({
                 key={channelDraftKey(channelId, threadId)}
                 members={activeMembers}
                 replyTarget={reply.target}
-                threadId={threadId}
                 placeholder={
                   threadId
                     ? t('threadComposer')
                     : t(direct ? 'directComposer' : 'composer', { name: detail.channel.title })
                 }
                 onCancelReply={() => reply.clear()}
-                onSend={async (content, mentions, requestKey, fileIds, replyToId) => {
-                  const sentReply = reply.snapshot();
+                onQueue={(message) => {
                   const sentLocation = currentLocation.current;
                   const sentScope = cacheScope.get();
-                  sending.current = true;
-                  try {
-                    followLatest.current = true;
-                    const message = await channelActions.send({
-                      channelId,
-                      content,
-                      fileIds,
-                      mentions,
-                      requestKey,
-                      replyToId,
-                      threadId,
+                  // A reply picked while outsiders were being invited stays for the next message.
+                  if (reply.snapshot().target?.id === message.replyToId) reply.clear();
+                  followLatest.current = true;
+                  setBefore(undefined);
+                  void channelActions
+                    .queueSend({ ...message, channelId, threadId })
+                    .then((stored) => {
+                      if (
+                        stored?.threadId &&
+                        !threadId &&
+                        mounted.current &&
+                        sentScope === cacheScope.get() &&
+                        sentLocation.pathname === currentLocation.current.pathname &&
+                        sentLocation.search === currentLocation.current.search
+                      )
+                        onOpenThread?.(stored.threadId, false);
                     });
-                    reply.clear(sentReply);
-                    if (
-                      mounted.current &&
-                      sentScope === cacheScope.get() &&
-                      sentLocation.pathname === currentLocation.current.pathname &&
-                      sentLocation.search === currentLocation.current.search
-                    ) {
-                      setBefore(undefined);
-                      if (!threadId && message.threadId) onOpenThread?.(message.threadId, false);
-                    }
-                  } finally {
-                    sending.current = false;
-                  }
                 }}
               />
             )}
