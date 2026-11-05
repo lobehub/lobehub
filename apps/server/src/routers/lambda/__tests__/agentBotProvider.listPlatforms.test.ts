@@ -62,15 +62,25 @@ describe('agentBotProviderRouter.listPlatforms', () => {
     expect(platforms.map((p) => p.id)).toEqual(['qq', 'wecom']);
   });
 
-  it('hides it behind the external message gateway, which cannot relay its replies', async () => {
+  it('marks it unavailable behind the external message gateway, which cannot relay its replies', async () => {
     gateway.enabled = true;
     const platforms = await agentBotProviderRouter.createCaller(ctx).listPlatforms();
-    expect(platforms.map((p) => p.id)).toEqual(['qq']);
+    expect(platforms.map((p) => [p.id, !!(p as any).unavailableReason])).toEqual([
+      ['qq', false],
+      ['wecom', true],
+    ]);
   });
 
-  it('hides it on serverless, where the socket and the webhook live in different invocations', async () => {
+  it('marks it unavailable on serverless, where the socket and the webhook live apart', async () => {
     vi.stubEnv('VERCEL_ENV', 'preview');
     const platforms = await agentBotProviderRouter.createCaller(ctx).listPlatforms();
-    expect(platforms.map((p) => p.id)).toEqual(['qq']);
+    expect((platforms.find((p) => p.id === 'wecom') as any).unavailableReason).toMatch(
+      /cannot hold in the process that answers messages/,
+    );
+  });
+
+  it('leaves it available where connections run in-process', async () => {
+    const platforms = await agentBotProviderRouter.createCaller(ctx).listPlatforms();
+    expect(platforms.every((p) => !(p as any).unavailableReason)).toBe(true);
   });
 });

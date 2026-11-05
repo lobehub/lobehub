@@ -25,7 +25,7 @@
   - 外部 message gateway：gateway 持有连接、转发入站，但不中继出站帧；
   - Vercel 等 serverless（无 gateway）：连接活在 gateway cron 那次调用里，webhook 和回调落在别的调用，摸不到 socket。
 
-  不能用时：平台列表不展示、reconcile 和 cron 不拉起连接、直接 connect 写 failed 状态并抛错说明原因。Cloud 上线需要 message gateway 增加出站中继后再放开。
+  不能用时：平台目录把它标为 `unavailableReason`，渠道列表对没有企微 bot 的 agent 隐藏（已配置的仍可打开、停用、删除），reconcile 和 cron 不拉起连接、直接 connect 写 failed 状态并抛错说明原因。Cloud 上线需要 message gateway 增加出站中继后再放开。
 
 - **多副本长驻部署也不行**：每个副本的 GatewayManager 都会拉起同一个机器人，互相踢下线（见 2 节），最后只剩一个副本持有连接，而转发和回调可能被负载均衡到别的副本。只支持单实例。
 
