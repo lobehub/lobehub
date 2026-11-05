@@ -19,6 +19,8 @@ export interface WeComSocket {
 }
 
 const SOCKET_OPEN = 1;
+/** Refused re-subscribes in a row before a running connection gives up (official SDK default). */
+const MAX_RESUBSCRIBE_FAILURES = 5;
 
 export interface WeComConnectionOptions {
   /** Stops the connection when aborted. */
@@ -126,6 +128,7 @@ export class WeComLongConnection {
     Pick<WeComConnectionOptions, 'abortSignal' | 'onDisplaced' | 'onFatalError'>;
 
   private authenticated = false;
+  private authFailures = 0;
   private connectPromise: Promise<void> | null = null;
   private displaced = false;
   private everSubscribed = false;
@@ -317,9 +320,12 @@ export class WeComLongConnection {
         else resolve();
       };
 
+      // Both failures below drop the socket without a close event reaching `onSocketGone`, so they
+      // schedule the next reconnect themselves (a no-op before the first subscribe).
       const timeout = setTimeout(() => {
         settle(new Error('WeCom long connection timed out waiting for subscribe receipt'));
         this.teardownSocket();
+        this.scheduleReconnect();
       }, this.options.connectTimeoutMs);
 
       let socket: WeComSocket;
@@ -327,6 +333,7 @@ export class WeComLongConnection {
         socket = this.options.createSocket(this.options.wsUrl);
       } catch (error) {
         settle(error instanceof Error ? error : new Error(String(error)));
+        this.scheduleReconnect();
         return;
       }
       this.socket = socket;
@@ -350,6 +357,7 @@ export class WeComLongConnection {
             this.authenticated = true;
             this.everSubscribed = true;
             this.reconnectAttempts = 0;
+            this.authFailures = 0;
             this.startHeartbeat();
             this.options.log('WeCom bot %s: subscribed', this.botId);
             settle();
@@ -358,7 +366,7 @@ export class WeComLongConnection {
               `WeCom subscribe rejected: ${frame.errmsg ?? 'unknown'} (errcode ${frame.errcode})`,
             );
             settle(error);
-            this.failFatally(error);
+            this.onSubscribeRejected(error);
           }
           return;
         }
@@ -610,6 +618,29 @@ export class WeComLongConnection {
 
   private onSocketGone(): void {
     this.teardownSocket();
+    this.scheduleReconnect();
+  }
+
+  /**
+   * A refused first subscribe means wrong credentials: `start()` rejects and nothing retries. A
+   * refused RE-subscribe may be a transient server error, so it backs off and retries like the
+   * official SDK (`maxAuthFailureAttempts`, 5) before giving up for good.
+   */
+  private onSubscribeRejected(error: Error): void {
+    if (!this.everSubscribed) {
+      this.stop();
+      return;
+    }
+    this.authFailures++;
+    if (this.authFailures >= MAX_RESUBSCRIBE_FAILURES) {
+      this.failFatally(error);
+      return;
+    }
+    this.teardownSocket();
+    this.scheduleReconnect();
+  }
+
+  private scheduleReconnect(): void {
     // Only reconnect a connection that subscribed once; a first attempt reports through start().
     if (this.stopped || this.displaced || !this.everSubscribed) return;
     if (this.reconnectTimer) return;
@@ -626,8 +657,7 @@ export class WeComLongConnection {
   }
 
   private failFatally(error: Error): void {
-    const wasRunning = this.everSubscribed;
     this.stop();
-    if (wasRunning) this.options.onFatalError?.(error);
+    this.options.onFatalError?.(error);
   }
 }

@@ -4,7 +4,7 @@
  * connection) must never be handed to the external message gateway, which can forward inbound
  * events but not relay outbound frames.
  */
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { GatewayService } from '.';
 import {
@@ -12,6 +12,7 @@ import {
   mockFindEnabledByPlatformAndAppId,
   mockGatewayClient,
   mockGatewayEnv,
+  mockGatewayManager,
   mockResolveConnectionMode,
   mockUpdateBotRuntimeStatus,
   resetGatewayServiceMocks,
@@ -103,14 +104,49 @@ describe('GatewayService with an in-process-only platform', () => {
   it('refuses a direct gateway connect and says why', async () => {
     mockFindEnabledByPlatformAndAppId.mockResolvedValue(providerFor('wecom'));
 
-    await expect(service.startClient('wecom', 'wecom-app', 'u1')).resolves.toBe('started');
+    await expect(service.startClient('wecom', 'wecom-app', 'u1')).rejects.toThrow(
+      /cannot hold in the process that answers messages/,
+    );
 
     expect(mockGatewayClient.connect).not.toHaveBeenCalled();
     expect(mockUpdateBotRuntimeStatus).toHaveBeenCalledWith({
       applicationId: 'wecom-app',
-      errorMessage: expect.stringContaining('message gateway cannot relay'),
+      errorMessage: expect.stringContaining('WeCom replies over its own long connection'),
       platform: 'wecom',
       status: 'failed',
     });
+  });
+});
+
+describe('GatewayService with an in-process-only platform, without the message gateway', () => {
+  let service: GatewayService;
+
+  beforeEach(() => {
+    resetGatewayServiceMocks();
+    service = new GatewayService();
+    mockGatewayManager.isRunning = true;
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('starts it in-process on a long-running server', async () => {
+    vi.stubEnv('VERCEL_ENV', '');
+
+    await expect(service.startClient('wecom', 'wecom-app', 'u1')).resolves.toBe('started');
+    expect(mockGatewayManager.startClient).toHaveBeenCalledWith('wecom', 'wecom-app');
+  });
+
+  it('refuses it on serverless, where the socket would live in another invocation', async () => {
+    vi.stubEnv('VERCEL_ENV', 'production');
+
+    await expect(service.startClient('wecom', 'wecom-app', 'u1')).rejects.toThrow(
+      /cannot hold in the process that answers messages/,
+    );
+    expect(mockGatewayManager.startClient).not.toHaveBeenCalled();
+    expect(mockUpdateBotRuntimeStatus).toHaveBeenCalledWith(
+      expect.objectContaining({ platform: 'wecom', status: 'failed' }),
+    );
   });
 });

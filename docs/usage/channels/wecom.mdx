@@ -17,7 +17,7 @@ Once a WeCom (企业微信) AI bot is connected to your LobeHub agent, colleague
 
 LobeHub uses the AI bot's **API mode with a long connection**: LobeHub connects out to WeCom, so **no public IP, callback URL, or ICP-filed domain is needed**.
 
-> **Availability:** a WeCom bot can only reply over its own long connection, so the channel works only where the LobeHub server process holds channel connections itself (for example a self-hosted LobeHub). Deployments that host channel connections on an external message gateway do not show WeCom yet.
+> **Availability:** a WeCom bot can only reply over its own long connection, so the channel works only on **a single long-running LobeHub server process** (for example a single-instance Docker self-host). Serverless deployments (such as Vercel) and deployments that host channel connections on an external message gateway do not show WeCom yet; multi-replica deployments make the replicas knock the same bot offline in turn, so they are not supported either.
 
 ## Prerequisites
 

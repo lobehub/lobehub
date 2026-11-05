@@ -304,6 +304,64 @@ describe('WeComLongConnection — lifecycle', () => {
     expect(connection.isConnected).toBe(true);
   });
 
+  it('keeps reconnecting when a reconnect attempt times out waiting for the subscribe receipt', async () => {
+    let silent = false;
+    const sockets: FakeWeComServerSocket[] = [];
+    const { connection } = setup({
+      connectTimeoutMs: 15,
+      createSocket: (url) => {
+        const s = new FakeWeComServerSocket(url);
+        if (silent) s.ackFor = () => undefined;
+        sockets.push(s);
+        return s;
+      },
+      maxReconnectDelayMs: 5,
+    });
+    active = connection;
+    await connection.start();
+
+    silent = true;
+    sockets[0].close(1006, 'network');
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    // The first reconnect hung and timed out; later attempts were still scheduled.
+    expect(sockets.length).toBeGreaterThanOrEqual(3);
+
+    silent = false;
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    expect(connection.isConnected).toBe(true);
+  });
+
+  it('retries a refused re-subscribe with backoff, then gives up and reports it', async () => {
+    let refuse = false;
+    const sockets: FakeWeComServerSocket[] = [];
+    const onFatalError = vi.fn();
+    const { connection } = setup({
+      createSocket: (url) => {
+        const s = new FakeWeComServerSocket(url);
+        s.ackFor = (frame) =>
+          refuse && frame.cmd === WECOM_CMD.SUBSCRIBE
+            ? { errcode: 50_001, errmsg: 'system busy' }
+            : { errcode: 0 };
+        sockets.push(s);
+        return s;
+      },
+      maxReconnectDelayMs: 2,
+      onFatalError,
+    });
+    active = connection;
+    await connection.start();
+
+    refuse = true;
+    sockets[0].close(1006, 'network');
+    await new Promise((resolve) => setTimeout(resolve, 80));
+
+    // Five refused re-subscribes (sockets 2–6), then it stops for good.
+    expect(sockets).toHaveLength(6);
+    expect(onFatalError).toHaveBeenCalledTimes(1);
+    expect(onFatalError.mock.calls[0][0].message).toMatch(/system busy/);
+    expect(connection.isConnected).toBe(false);
+  });
+
   it('sends heartbeats and reconnects when two in a row go unanswered', async () => {
     const { connection, socket, sockets } = setup({
       heartbeatIntervalMs: 10,

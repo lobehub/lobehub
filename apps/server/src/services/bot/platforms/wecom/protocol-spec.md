@@ -19,7 +19,15 @@
 和飞书 / QQ 的关键差异：企微智能机器人**没有 REST 发送接口**，回复、流式、主动推送都必须走持有连接的那条 WebSocket。所以：
 
 - 回复只能由持有连接的进程发出。连接持有者把自己登记在进程内注册表（`registry.ts`，挂在 `globalThis`），adapter 和 messenger 从注册表取连接发送；本进程没有连接时抛 `WeComConnectionUnavailableError`。
-- 外部 message gateway 目前只转发入站、不中继出站，因此定义上标 `requiresInProcessConnection: true`：gateway 模式下不在平台列表展示、reconcile 不下发连接、直接 connect 时写 failed 状态说明原因。Cloud 上线需要 message gateway 增加出站中继后再放开。
+
+- 定义上标 `requiresInProcessConnection: true`，由 `gateway/inProcessConnections.ts` 的 `canHostInProcessConnections()` 判定当前部署能否使用：只有**单个长期运行、自己维持渠道连接**的服务进程可以。两种部署不行：
+
+  - 外部 message gateway：gateway 持有连接、转发入站，但不中继出站帧；
+  - Vercel 等 serverless（无 gateway）：连接活在 gateway cron 那次调用里，webhook 和回调落在别的调用，摸不到 socket。
+
+  不能用时：平台列表不展示、reconcile 和 cron 不拉起连接、直接 connect 写 failed 状态并抛错说明原因。Cloud 上线需要 message gateway 增加出站中继后再放开。
+
+- **多副本长驻部署也不行**：每个副本的 GatewayManager 都会拉起同一个机器人，互相踢下线（见 2 节），最后只剩一个副本持有连接，而转发和回调可能被负载均衡到别的副本。只支持单实例。
 
 ## 2. 帧格式
 
@@ -94,6 +102,11 @@ LobeHub 的回复管线没有 token 级流式；平台定义 `supportsMessageEdi
 6. 被动发送失败时回退到主动推送，避免回复丢失。
 
 空内容的 `finish: false` stream 在客户端如何显示：未实测。
+
+已知限制（工程选择，均未实测）：
+
+- 回复上下文按**会话**保存，只记最新一条消息的 `req_id`。群里两人先后 @ 机器人、第一条还没开始回复时，第一条的回答会挂在第二条消息的 stream 上，第二条的回答改走主动推送。
+- 打开「处理中」消息（`processingMessage`）时，这条确认消息会先用掉 stream，最终回复因此走主动推送，显示为一条新消息而不是对原消息的回复。
 
 ### 4.2 限制
 

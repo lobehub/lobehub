@@ -15,7 +15,7 @@ export interface DownloadedWeComMedia {
   name?: string;
 }
 
-/** Every downloadable media item on a message: the message's own, then its quote's. */
+/** Every downloadable media item on a message (quoted messages' media is not collected). */
 export const collectWeComMedia = (body: WeComMessageBody): WeComMediaRef[] => {
   const refs: WeComMediaRef[] = [];
   const add = (kind: WeComMediaKind, media?: WeComMedia) => {

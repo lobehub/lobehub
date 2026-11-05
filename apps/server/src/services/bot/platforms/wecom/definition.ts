@@ -14,8 +14,8 @@ export const wecom: PlatformDefinition = {
     portalUrl: 'https://work.weixin.qq.com/wework_admin/frame',
     setupGuideUrl: channelDocUrl('wecom'),
   },
-  // Replies ride the bot's own long connection (see protocol-spec.md), which the external
-  // message gateway cannot relay yet.
+  // Replies ride the bot's own long connection (see protocol-spec.md), so only a single
+  // long-running server can serve it.
   requiresInProcessConnection: true,
   schema,
   supportsMarkdown: true,
