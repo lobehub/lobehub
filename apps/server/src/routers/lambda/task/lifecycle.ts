@@ -9,6 +9,10 @@ import { markSilentTRPCErrorLog } from '@/libs/trpc/utils/errorLogger';
 import { assertNotInOpenGoal } from '@/server/services/task/archiveGuard';
 import { notifyAssignedBestEffort } from '@/server/services/task/assignmentNotification';
 import {
+  assertTaskOriginAccessible,
+  taskOriginInputSchema,
+} from '@/server/services/task/originValidation';
+import {
   assertResultingScheduleValid,
   schedulePatternSchema,
   scheduleTimezoneSchema,
@@ -32,6 +36,9 @@ const createSchema = z.object({
   // schedule-dispatch sweep to pick the task up.
   automationMode: z.enum(['heartbeat', 'schedule']).optional(),
   config: z.record(z.string(), z.unknown()).optional(),
+  // Only `origin` is caller-settable: the conversation to notify when the task
+  // finishes. The server checks the caller owns it before storing it.
+  context: z.object({ origin: taskOriginInputSchema.optional() }).optional(),
   createdByAgentId: z.string().optional(),
   description: z.string().optional(),
   editorData: z.unknown().optional(),
@@ -140,11 +147,20 @@ export const lifecycleRouter = router({
         throw error;
       });
     }
+    const origin = createInput.context?.origin;
+    if (origin) {
+      await assertTaskOriginAccessible(
+        ctx.serverDB,
+        { userId: ctx.userId, workspaceId: ctx.workspaceId ?? undefined },
+        origin,
+      );
+    }
     try {
       const parsedVerify = taskVerifyConfigPatchSchema.safeParse(createInput.config?.verify);
       const { verify: _legacyVerify, ...taskConfig } = createInput.config ?? {};
       const task = await ctx.taskService.createTask({
         ...createInput,
+        context: origin ? { origin } : undefined,
         parentTaskId: createInput.parentTaskId
           ? (await resolveTaskOrThrow(ctx.taskModel, createInput.parentTaskId)).id
           : undefined,

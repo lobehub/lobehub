@@ -30,6 +30,7 @@ import {
 } from './label';
 import { registerLifecycleCommands } from './lifecycle';
 import { formatTaskModel, toCreateModelConfig, toModelConfigPatch } from './model';
+import { type TaskOriginInput, toCreateOrigin } from './origin';
 import { registerReviewCommands } from './review';
 import { registerTopicCommands } from './topic';
 import { resolveAppUrl, resolveAppUrlBuilder, taskPath } from './url';
@@ -584,6 +585,17 @@ export function registerTaskCommand(program: Command) {
     )
     .option('--model <model>', "Model to run with (default: the assignee agent's model)")
     .option('--provider <provider>', 'Provider for --model (default: resolved from the agent)')
+    .option(
+      '--origin-agent <id>',
+      'Agent to notify when the task finishes (requires --origin-topic)',
+    )
+    .option(
+      '--origin-topic <id>',
+      'Your conversation (topic) that receives the result card (requires --origin-agent)',
+    )
+    .option('--origin-message <id>', 'Message in the origin topic the task was created from')
+    .option('--origin-operation <id>', 'Operation that created the task')
+    .option('--origin-tool-call <id>', 'Tool call that created the task')
     .option('--json [fields]', 'Output JSON')
     .action(
       async (options: {
@@ -593,11 +605,25 @@ export function registerTaskCommand(program: Command) {
         label?: string[];
         model?: string;
         name?: string;
+        originAgent?: string;
+        originMessage?: string;
+        originOperation?: string;
+        originToolCall?: string;
+        originTopic?: string;
         parent?: string;
         priority?: string;
         provider?: string;
         user?: string;
       }) => {
+        let origin: TaskOriginInput | undefined;
+        try {
+          origin = toCreateOrigin(options);
+        } catch (error) {
+          log.error((error as Error).message);
+          process.exitCode = 1;
+          return;
+        }
+
         const client = await getTrpcClient();
         const buildUrl = await resolveAppUrlBuilder(client);
         const assigneeUserId = await resolveUserOption(client, options.user);
@@ -616,6 +642,7 @@ export function registerTaskCommand(program: Command) {
         if (options.priority) input.priority = Number.parseInt(options.priority, 10);
         const modelConfig = toCreateModelConfig(options);
         if (modelConfig) input.config = modelConfig;
+        if (origin) input.context = { origin };
 
         const result = await client.task.create.mutate(input);
         const url = buildUrl(taskPath(result.data.identifier, result.data.name));
