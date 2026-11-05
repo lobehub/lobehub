@@ -373,6 +373,37 @@ describe('GoalGraphModel', () => {
     expect(rowOf(accepted.id)).toMatchObject({ status: 'accepted' });
   });
 
+  it('skips the write when the settled status already matches, and settles nothing outside its scope', async () => {
+    // `verifying` is not closed by retirement, so the settle just writes the
+    // status it was handed. When the row already holds it there is no update
+    // and no `completedAt`; a row outside the caller's scope is not seen at all.
+    const task = await new TaskModel(serverDB, userId).create({ instruction: 'Settle no-op' });
+    const [waiting] = await serverDB
+      .insert(acceptances)
+      .values({ status: 'verifying', subjectId: task.id, subjectType: 'task', userId })
+      .returning();
+
+    const acceptanceModel = new AcceptanceModel(serverDB, userId);
+    expect(await acceptanceModel.settleTaskPolicyStatus(waiting.id, 'verifying')).toBe('verifying');
+
+    const [row] = await serverDB.select().from(acceptances).where(eq(acceptances.id, waiting.id));
+    expect(row).toMatchObject({ completedAt: null, status: 'verifying' });
+
+    // Unknown id and another user's row both resolve to undefined.
+    expect(
+      await acceptanceModel.settleTaskPolicyStatus(
+        '00000000-0000-4000-8000-000000000000',
+        'delivered',
+      ),
+    ).toBeUndefined();
+    expect(
+      await new AcceptanceModel(serverDB, otherUserId).settleTaskPolicyStatus(
+        waiting.id,
+        'delivered',
+      ),
+    ).toBeUndefined();
+  });
+
   it('treats a same-status write as a no-op instead of churning the graph', async () => {
     // Re-activating an already-active node must not bump `updatedAt` or append
     // an event: a coordinator retry loop does this on every tick, and the
