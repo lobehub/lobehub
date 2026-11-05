@@ -129,12 +129,15 @@ export const generateModule = (
       return `${JSON.stringify(entry.key)}: () => { throw new Error('CASE_ELEMENT_MISSING'); }`;
     const chain = chainOf(element, byId);
     const { knobs } = entry;
+    const inline = entry.inlineStyles?.[side] ?? [];
     const bound = new Map<StyleBinding, string | undefined>(
-      chain.flatMap((item) =>
-        item.bindings.map((binding) => [
-          binding,
-          knobs ? bindKnobs(binding.expr, knobs) : binding.expr,
-        ]),
+      chain.flatMap((item, index) =>
+        item.bindings.map((binding, position) => {
+          const expr =
+            inline.find((style) => style.index === index && style.binding === position)?.without ??
+            binding.expr;
+          return [binding, knobs ? bindKnobs(expr, knobs) : expr];
+        }),
       ),
     );
     if ([...bound.values()].includes(undefined))

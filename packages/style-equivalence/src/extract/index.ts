@@ -331,6 +331,10 @@ export const extractFile = (
             : {}),
           slots: [...slots].sort(),
           ...(styleExpr ? { styleExpr } : {}),
+          ...(opening.attributes.properties.filter(ts.isJsxSpreadAttribute).length >
+          bindings.filter((binding) => binding.spread).length
+            ? { foreignSpread: true }
+            : {}),
           tag,
           variables: [...names].sort().map((name) => ({
             kind: mergeKinds(kinds.get(name) ?? ['unknown']),

@@ -8,6 +8,7 @@ import {
   type ForwardPlan,
   partlyForwarded,
 } from './forwarded';
+import { sharedInlineStyles } from './inlineStyle';
 import type { InnerNode } from './inner';
 import { keptEmotionRules } from './kept';
 import { bindKnobs, parseExpression } from './knobs';
@@ -52,6 +53,7 @@ export interface PlanCase {
   flags: string[];
   forward?: ForwardPlan;
   forwardedParam?: string;
+  inlineStyles?: Partial<Record<Side, Array<{ binding: number; index: number; without: string }>>>;
   inner?: Record<string, InnerNode[]>;
   key: string;
   knobs?: string[];
@@ -273,11 +275,18 @@ export const planFile = (
     for (const { index, proof } of [...movedAt, ...keptAt])
       if (proof.nodes.length) inner[index] = [...(inner[index] ?? []), ...proof.nodes];
     const structural = flags.size > 0;
+    const shared = sharedInlineStyles(chains);
     const variables = new Map<string, PlanVariable>();
     for (const side of ['base', 'head'] as const)
-      for (const item of chains[side])
+      for (const [itemIndex, item] of chains[side].entries())
         for (const variable of item.variables) {
           if (PASS_THROUGH_VARIABLES.has(variable.name) || variable.name === param) continue;
+          if (
+            shared[side]?.some(
+              (style) => style.index === itemIndex && style.names.includes(variable.name),
+            )
+          )
+            continue;
           const entry = variables.get(variable.name) ?? { kinds: {}, name: variable.name };
           entry.kinds[side] = mergeKinds([entry.kinds[side] ?? variable.kind, variable.kind]);
           variables.set(variable.name, entry);
@@ -339,6 +348,16 @@ export const planFile = (
       flags: [...flags].sort(),
       ...(forward ? { forward } : {}),
       ...(param ? { forwardedParam: param } : {}),
+      ...(Object.keys(shared).length
+        ? {
+            inlineStyles: Object.fromEntries(
+              Object.entries(shared).map(([side, list]) => [
+                side,
+                list.map(({ binding, index, without }) => ({ binding, index, without })),
+              ]),
+            ),
+          }
+        : {}),
       ...(Object.keys(inner).length ? { inner } : {}),
       key: `${file}|${left.id}`,
       ...(knobs ? { knobs } : {}),

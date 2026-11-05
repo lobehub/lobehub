@@ -22,6 +22,7 @@ export interface StyleElement {
   bindings: StyleBinding[];
   children?: string[];
   flags: string[];
+  foreignSpread?: boolean;
   forwardedParam?: string;
   forwards?: ForwardResolution[];
   id: string;
