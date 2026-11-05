@@ -6,13 +6,13 @@ import {
   accordionStyles,
   AccordionTrigger,
   ContextMenuTrigger,
-  createStaticStyles,
   cx,
   Flexbox,
   Icon,
   Spin,
   Text,
 } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { HashIcon } from 'lucide-react';
 import React, { memo, useCallback, useMemo, useState } from 'react';
 
@@ -24,11 +24,7 @@ import SessionList from '../List';
 import Actions from './Actions';
 import { useGroupDropdownMenu } from './useDropdownMenu';
 
-const styles = createStaticStyles(({ css }) => ({
-  item: css`
-    padding-inline-start: 14px;
-  `,
-}));
+const styles = stylex.create({ item: { paddingInlineStart: '14px' } });
 
 const GroupItem = memo<SidebarGroup>(({ items, id, name, visibility }) => {
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
@@ -89,7 +85,7 @@ const GroupItem = memo<SidebarGroup>(({ items, id, name, visibility }) => {
         <SessionList
           dataSource={items}
           groupId={id}
-          itemClassName={styles.item}
+          itemClassName={stylex.props(styles.item).className}
           visibility={visibility}
         />
       </AccordionPanel>

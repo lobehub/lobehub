@@ -1,5 +1,5 @@
 import {
-  ACCEPTANCE_REVIEW_CLIENT_ID,
+  ACCEPTANCE_CLIENT_ID,
   ACCEPTANCE_REVIEW_SCOPE,
   ACCEPTANCE_REVIEW_TOKEN_TTL_SECONDS,
   acceptanceIdFromReviewResource,
@@ -8,9 +8,9 @@ import {
 } from '@lobechat/const';
 
 export const isAcceptanceReviewClient = (clientId: string | undefined) =>
-  clientId === ACCEPTANCE_REVIEW_CLIENT_ID;
+  clientId === ACCEPTANCE_CLIENT_ID;
 
-// The review toolbar's token lives on third-party preview pages, so it must
+// The acceptance toolbar's token lives on third-party preview pages, so it must
 // only ever carry one acceptance's audience — never the full API audience.
 const DEVICE_ROUTES = new Set(['code_verification', 'device_authorization', 'device_resume']);
 const DEVICE_GRANT = 'urn:ietf:params:oauth:grant-type:device_code';
@@ -60,4 +60,4 @@ export const isAcceptanceReviewAudience = (aud: unknown) => isReviewResource(aud
 export const isAcceptanceReviewIssued = (payload: { aud?: unknown; client_id?: unknown }) =>
   isAcceptanceReviewAudience(payload.aud) ||
   isAcceptanceReviewClient(payload.client_id as string | undefined) ||
-  (Array.isArray(payload.aud) ? payload.aud : [payload.aud]).includes(ACCEPTANCE_REVIEW_CLIENT_ID);
+  (Array.isArray(payload.aud) ? payload.aud : [payload.aud]).includes(ACCEPTANCE_CLIENT_ID);

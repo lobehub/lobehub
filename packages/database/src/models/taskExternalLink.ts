@@ -1,5 +1,5 @@
 import type { TaskExternalProvider } from '@lobechat/types';
-import { and, eq, inArray, isNull } from 'drizzle-orm';
+import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 
 import type { NewTaskExternalLink, TaskExternalLinkItem } from '../schemas';
 import { taskExternalLinks, tasks } from '../schemas';
@@ -87,9 +87,36 @@ export class TaskExternalLinkModel {
       >
     >,
   ): Promise<void> {
+    const { metadata, ...rest } = data;
     await this.db
       .update(taskExternalLinks)
-      .set({ ...data, lastSyncedAt: new Date(), updatedAt: new Date() })
+      .set({
+        ...rest,
+        // Display metadata is replaced, but the comment bookkeeping a sync
+        // recorded is kept: read and written in the row update itself, so a
+        // refresh working from an older read never drops what was recorded since.
+        ...(metadata
+          ? {
+              metadata: sql`jsonb_strip_nulls(jsonb_build_object('commentsSynced', ${taskExternalLinks.metadata} -> 'commentsSynced', 'syncedCommentIds', ${taskExternalLinks.metadata} -> 'syncedCommentIds')) || ${JSON.stringify(metadata)}::jsonb`,
+            }
+          : {}),
+        lastSyncedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(and(this.scope(), eq(taskExternalLinks.id, id)));
+  }
+
+  /**
+   * Record that the issue's comments were synced, adding the ids of those
+   * copied onto the link's task (possibly none) so they are not copied again.
+   */
+  async recordSyncedComments(id: string, commentIds: string[]): Promise<void> {
+    await this.db
+      .update(taskExternalLinks)
+      .set({
+        metadata: sql`jsonb_set(jsonb_set(${taskExternalLinks.metadata}, '{syncedCommentIds}', coalesce(${taskExternalLinks.metadata} -> 'syncedCommentIds', '[]'::jsonb) || ${JSON.stringify(commentIds)}::jsonb), '{commentsSynced}', 'true'::jsonb)`,
+        updatedAt: new Date(),
+      })
       .where(and(this.scope(), eq(taskExternalLinks.id, id)));
   }
 

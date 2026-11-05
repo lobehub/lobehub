@@ -16,6 +16,7 @@ const xaiChatModels: AIChatModelCard[] = [
     displayName: 'Grok 4.7',
     enabled: true,
     id: 'grok-4.7',
+    isOfficial: true,
     /** @see https://docs.x.ai/developers/models/grok-4.7 */
     pricing: {
       units: [
@@ -72,6 +73,7 @@ const xaiChatModels: AIChatModelCard[] = [
     displayName: 'Grok 4.6',
     enabled: true,
     id: 'grok-4.6',
+    isOfficial: true,
     /** @see https://docs.x.ai/developers/models/grok-4.6 */
     pricing: {
       units: [
@@ -130,11 +132,36 @@ const xaiChatModels: AIChatModelCard[] = [
     family: 'grok',
     generation: 'grok-4.5',
     id: 'grok-4.5',
+    isOfficial: true,
     pricing: {
       units: [
-        { name: 'textInput_cacheRead', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 6, strategy: 'fixed', unit: 'millionTokens' },
+        {
+          name: 'textInput_cacheRead',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 0.3, upTo: 199_999 },
+            { rate: 0.6, upTo: 'infinity' },
+          ],
+          unit: 'millionTokens',
+        },
+        {
+          name: 'textInput',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 2, upTo: 199_999 },
+            { rate: 4, upTo: 'infinity' },
+          ],
+          unit: 'millionTokens',
+        },
+        {
+          name: 'textOutput',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 6, upTo: 199_999 },
+            { rate: 12, upTo: 'infinity' },
+          ],
+          unit: 'millionTokens',
+        },
       ],
     },
     releasedAt: '2026-07-08',
@@ -158,6 +185,7 @@ const xaiChatModels: AIChatModelCard[] = [
     family: 'grok',
     generation: 'grok-4.3',
     id: 'grok-4.3',
+    isOfficial: true,
     knowledgeCutoff: '2025-12',
     pricing: {
       units: [
@@ -362,6 +390,7 @@ const xaiImageModels: AIImageModelCard[] = [
     displayName: 'Grok Imagine Image 2.0',
     enabled: true,
     id: 'grok-imagine-image-2.0',
+    isOfficial: true,
     parameters: {
       aspectRatio: {
         default: 'auto',

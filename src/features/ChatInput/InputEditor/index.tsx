@@ -33,9 +33,9 @@ import { useChatStore } from '@/store/chat';
 import { useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import {
-  labPreferSelectors,
   settingsSelectors,
   systemAgentSelectors,
+  userGeneralSettingsSelectors,
   userProfileSelectors,
 } from '@/store/user/selectors';
 
@@ -56,7 +56,7 @@ import InputHistoryPopup, { getHistoryPreviewText } from './InputHistoryPopup';
 import { INSERT_LOCAL_FILE_TAG_COMMAND } from './LocalFileTag';
 import { mentionPlainClassName } from './mentionStyle';
 import Placeholder, { type PlaceholderVariant } from './Placeholder';
-import { CHAT_INPUT_EMBED_PLUGINS, createChatInputRichPlugins } from './plugins';
+import { createChatInputRichPlugins } from './plugins';
 import { INSERT_REFER_TOPIC_COMMAND } from './ReferTopic';
 import { useLocalFileTag } from './useLocalFileTag';
 import { useMentionCategories } from './useMentionCategories';
@@ -248,7 +248,7 @@ const InputEditor = memo<{
     };
   }, [state.isEmpty]);
 
-  const enableRichRender = useUserStore(labPreferSelectors.enableInputMarkdown);
+  const enablePasteAutoConvert = useUserStore(userGeneralSettingsSelectors.enablePasteAutoConvert);
 
   const slashActionItems = useSlashActionItems();
   const slashItems = useCallback(
@@ -500,17 +500,11 @@ const InputEditor = memo<{
     [isSlashEnabled, slashItems],
   );
 
-  const richRenderProps = useMemo(() => {
-    const basePlugins = !enableRichRender
-      ? CHAT_INPUT_EMBED_PLUGINS
-      : createChatInputRichPlugins({ linkPlugin: false });
+  const plugins = useMemo(() => {
+    const basePlugins = createChatInputRichPlugins({ linkPlugin: false });
 
-    const plugins = autoCompletePlugin ? [...basePlugins, autoCompletePlugin] : basePlugins;
-
-    return !enableRichRender
-      ? { enablePasteMarkdown: false, markdownOption: false, plugins }
-      : { plugins };
-  }, [enableRichRender, autoCompletePlugin]);
+    return autoCompletePlugin ? [...basePlugins, autoCompletePlugin] : basePlugins;
+  }, [autoCompletePlugin]);
 
   const handleEditorInit = useCallback(
     (editor: IEditor) => {
@@ -555,8 +549,9 @@ const InputEditor = memo<{
         editor={editor}
         getPopupContainer={() => (slashMenuRef as any)?.current ?? null}
         {...{ slashPlacement }}
-        {...richRenderProps}
+        enablePasteMarkdown={enablePasteAutoConvert}
         mentionOption={mentionOption}
+        plugins={plugins}
         slashOption={slashOption}
         type={'text'}
         variant={'chat'}

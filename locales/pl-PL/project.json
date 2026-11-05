@@ -116,8 +116,6 @@
   "knowledgeBases.searchPlaceholder": "Szukaj bibliotek",
   "knowledgeBases.updateFailed": "Nie udało się zaktualizować biblioteki",
   "list.deleteAction": "Usuń projekt",
-  "list.deleteConfirmDescription": "Usunąć „{{name}}”? Jego zadania projektowe, cele, tematy i powiązania zostaną trwale usunięte.",
-  "list.deleteConfirmTitle": "Usunąć projekt?",
   "list.deleteError": "Nie udało się usunąć projektu.",
   "list.deleteSuccess": "„{{name}}” został usunięty",
   "list.emptyDescription": "Utwórz swój pierwszy projekt, aby zorganizować cele, zadania i zasoby.",

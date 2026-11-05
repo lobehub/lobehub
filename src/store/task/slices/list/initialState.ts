@@ -19,6 +19,8 @@ export type TaskListVisibilityFilter = 'all' | 'private' | 'workspace';
 export type TaskKanbanGroupBy = 'assignee' | 'member' | 'priority' | 'status';
 
 export interface TaskListSliceState {
+  /** The viewed list is narrowed by the page's filter, so it is not every task. */
+  activeTaskListFiltered?: boolean;
   /**
    * The list the Tasks page is showing (`taskListMap` key) — what the task
    * manager agent sees as "the viewed list".

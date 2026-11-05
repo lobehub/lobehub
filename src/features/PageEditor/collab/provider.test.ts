@@ -1,7 +1,7 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as Y from 'yjs';
 
-import { PageCollabProvider } from './provider';
+import { AWARENESS_RENEW_INTERVAL_MS, AWARENESS_TIMEOUT_MS, PageCollabProvider } from './provider';
 
 const b64 = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes));
 
@@ -161,6 +161,95 @@ describe('PageCollabProvider', () => {
     deliver({ clientID: 42, documentId: 'doc_1', state: { name: 'Ann' }, type: 'doc_awareness' });
 
     expect(provider.awareness.getStates().get(42)).toEqual({ name: 'Ann' });
+  });
+
+  describe('awareness renewal', () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    const joined = () => {
+      vi.useFakeTimers();
+      const harness = createMux();
+      const provider = new PageCollabProvider('doc_1', new Y.Doc(), harness.mux as any);
+      provider.connect();
+      harness.ready();
+      harness.deliver(synced());
+      return { ...harness, provider };
+    };
+    const awarenessSent = (sent: any[]) => sent.filter((m) => m.type === 'doc_awareness');
+
+    it('re-sends its own state so people who join later still see it', () => {
+      const { provider, sent } = joined();
+      provider.awareness.setLocalState({ name: 'A' });
+      const before = awarenessSent(sent).length;
+
+      vi.advanceTimersByTime(AWARENESS_RENEW_INTERVAL_MS);
+
+      expect(awarenessSent(sent).length).toBe(before + 1);
+      expect(awarenessSent(sent).at(-1)).toMatchObject({ state: { name: 'A' } });
+    });
+
+    it('stops re-sending once destroyed', () => {
+      const { provider, sent } = joined();
+      provider.awareness.setLocalState({ name: 'A' });
+      provider.destroy();
+      const before = sent.length;
+
+      vi.advanceTimersByTime(AWARENESS_RENEW_INTERVAL_MS * 3);
+
+      expect(sent.length).toBe(before);
+    });
+
+    it('forgets a peer whose state stopped arriving', () => {
+      const { deliver, provider } = joined();
+      const onUpdate = vi.fn();
+      provider.awareness.on('update', onUpdate);
+      deliver({ clientID: 7, documentId: 'doc_1', state: { name: 'B' }, type: 'doc_awareness' });
+
+      vi.advanceTimersByTime(AWARENESS_TIMEOUT_MS + AWARENESS_RENEW_INTERVAL_MS);
+
+      expect(provider.awareness.getStates().has(7)).toBe(false);
+      expect(onUpdate).toHaveBeenCalledTimes(2);
+    });
+
+    it('keeps the last-known peers while it is offline itself', () => {
+      vi.useFakeTimers();
+      const harness = createMux();
+      const provider = new PageCollabProvider('doc_1', new Y.Doc(), harness.mux as any);
+      provider.connect();
+      harness.ready();
+      harness.deliver(synced());
+      harness.deliver({
+        clientID: 7,
+        documentId: 'doc_1',
+        state: { name: 'B' },
+        type: 'doc_awareness',
+      });
+
+      (harness.mux.openDocument.mock.calls[0][1] as any).onStatus('disconnected');
+      vi.advanceTimersByTime(AWARENESS_TIMEOUT_MS * 2);
+
+      expect(provider.awareness.getStates().has(7)).toBe(true);
+    });
+
+    it('keeps a peer that keeps renewing', () => {
+      const { deliver, provider } = joined();
+      const renew = () =>
+        deliver({ clientID: 7, documentId: 'doc_1', state: { name: 'B' }, type: 'doc_awareness' });
+      renew();
+
+      for (
+        let elapsed = 0;
+        elapsed < AWARENESS_TIMEOUT_MS * 2;
+        elapsed += AWARENESS_RENEW_INTERVAL_MS
+      ) {
+        vi.advanceTimersByTime(AWARENESS_RENEW_INTERVAL_MS);
+        renew();
+      }
+
+      expect(provider.awareness.getStates().get(7)).toEqual({ name: 'B' });
+    });
   });
 
   it('reports a reset when the room epoch changed under it', () => {

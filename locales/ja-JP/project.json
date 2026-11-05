@@ -116,8 +116,6 @@
   "knowledgeBases.searchPlaceholder": "ライブラリを検索",
   "knowledgeBases.updateFailed": "ライブラリを更新できませんでした",
   "list.deleteAction": "プロジェクトを削除",
-  "list.deleteConfirmDescription": "「{{name}}」を削除しますか？そのプロジェクトタスク、目標、トピック、およびバインディングは永久に削除されます。",
-  "list.deleteConfirmTitle": "プロジェクトを削除しますか？",
   "list.deleteError": "プロジェクトを削除できませんでした。",
   "list.deleteSuccess": "「{{name}}」を削除しました",
   "list.emptyDescription": "目標、タスク、リソースを整理するために最初のプロジェクトを作成してください。",
