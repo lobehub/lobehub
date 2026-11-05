@@ -4,6 +4,7 @@ import type { TFunction } from 'i18next';
 import { describe, expect, it } from 'vitest';
 
 import {
+  canLeaveLinearScopeStep,
   formatLinearSyncResult,
   isActiveLinearSyncJob,
   linearIssueListCounts,
@@ -150,5 +151,27 @@ describe('linearScopeProjectLabel', () => {
     expect(linearScopeProjectLabel(scope(null), t, { withAll: true })).toBe(
       'linear.sync.filter.allProjects',
     );
+  });
+});
+
+describe('canLeaveLinearScopeStep', () => {
+  const loaded = { isLoading: false };
+  const failed = { error: new Error('projects failed'), isLoading: false };
+
+  it('needs a team', () => {
+    expect(canLeaveLinearScopeStep({ linearProjectId: null, teamId: null }, loaded)).toBe(false);
+  });
+
+  it('holds All projects until the project list loads without error', () => {
+    const all = { linearProjectId: null, teamId: 'team-1' };
+    expect(canLeaveLinearScopeStep(all, loaded)).toBe(true);
+    expect(canLeaveLinearScopeStep(all, { isLoading: true })).toBe(false);
+    expect(canLeaveLinearScopeStep(all, failed)).toBe(false);
+  });
+
+  it('lets No project through when the project list is loading or failed', () => {
+    const none = { linearProjectId: LINEAR_NO_PROJECT_ID, teamId: 'team-1' };
+    expect(canLeaveLinearScopeStep(none, { isLoading: true })).toBe(true);
+    expect(canLeaveLinearScopeStep(none, failed)).toBe(true);
   });
 });

@@ -30,6 +30,18 @@ export const linearScopeProjectLabel = (
   return options.withAll ? t('linear.sync.filter.allProjects') : undefined;
 };
 
+/**
+ * Whether the scope step may move on. "All projects" waits for the team's
+ * project list, since without it the choice may be a mistake; "No project"
+ * needs only the team, so a failed or slow list does not block it.
+ */
+export const canLeaveLinearScopeStep = (
+  filter: { linearProjectId: string | null; teamId: string | null },
+  projects: { error?: unknown; isLoading: boolean },
+): boolean =>
+  !!filter.teamId &&
+  (isLinearNoProject(filter.linearProjectId) || (!projects.isLoading && !projects.error));
+
 /** All skipped issues; the stored list stops at its cap, and older results lack the count. */
 export const linearSyncSkippedCount = (result: LinearSyncResult): number =>
   result.skippedCount ?? result.skipped?.length ?? 0;
