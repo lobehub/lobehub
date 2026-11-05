@@ -15,6 +15,7 @@ import {
   Icon,
   Text,
 } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import type { TFunction } from 'i18next';
 import type { LucideIcon } from 'lucide-react';
 import {
@@ -138,7 +139,7 @@ const ActivityAuthor = memo<{
       agentId={author.id}
       trigger={'hover'}
     >
-      <span className={styles.agentAuthorName}>{name}</span>
+      <span className={stylex.props(styles.agentAuthorName).className}>{name}</span>
     </AgentProfilePopup>
   );
 });
@@ -160,9 +161,14 @@ const RelativeTime = memo<{ time?: string }>(({ time }) => {
  */
 const FeedLine = memo<{ children: ReactNode; mark: ReactNode; time?: string }>(
   ({ children, mark, time }) => (
-    <Flexbox horizontal align={'center'} className={styles.activityLine} gap={8}>
-      <div className={styles.activityMark}>{mark}</div>
-      <Text ellipsis style={{ color: cssVar.colorTextSecondary, flex: 1, minWidth: 0 }}>
+    <Flexbox
+      horizontal
+      align={'center'}
+      className={stylex.props(styles.activityLine).className}
+      gap={8}
+    >
+      <div className={stylex.props(styles.activityMark).className}>{mark}</div>
+      <Text ellipsis style={{ color: cssVar.colorTextSecondary, flex: '1', minWidth: 0 }}>
         {children}
         <RelativeTime time={time} />
       </Text>
@@ -465,7 +471,10 @@ const TaskActivities = memo<TaskActivitiesProps>(({ variant = 'activity' }) => {
     const flush = () => {
       if (run.length === 0) return;
       out.push(
-        <Flexbox className={styles.activityTimeline} key={`rail-${out.length}`}>
+        <Flexbox
+          className={stylex.props(styles.activityTimeline).className}
+          key={`rail-${out.length}`}
+        >
           {run}
         </Flexbox>,
       );

@@ -1,7 +1,9 @@
 'use client';
 
 import { HTML_DOCUMENT_FILE_TYPE } from '@lobechat/const';
-import { Button, createStaticStyles, cssVar, Skeleton } from '@lobehub/ui';
+import { Button, Skeleton } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Maximize2 } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -14,51 +16,39 @@ import GoalReportFullscreen from './GoalReportFullscreen';
 /** How much of the report the result page shows before the reader expands it. */
 const PREVIEW_MAX_HEIGHT = 480;
 
-const styles = createStaticStyles(({ css }) => ({
-  // `isolation` keeps the shadow and hit layers' z-index inside the card, so
-  // the result page's sticky follow-up dock still covers them on scroll.
-  card: css`
-    isolation: isolate;
-    position: relative;
-
-    overflow: hidden;
-
-    max-height: ${PREVIEW_MAX_HEIGHT}px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-  `,
+const styles = stylex.create({
+  card: {
+    isolation: 'isolate',
+    position: 'relative',
+    overflow: 'hidden',
+    maxHeight: `${PREVIEW_MAX_HEIGHT}px`,
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+  },
   // A shadow rising from the clipped edge says there is more below; the
   // expand button sits on it.
-  expand: css`
-    pointer-events: none;
-
-    position: absolute;
-    z-index: 2;
-    inset-block-end: 0;
-    inset-inline: 0;
-
-    display: flex;
-    align-items: flex-end;
-    justify-content: center;
-
-    height: 140px;
-    padding-block-end: 20px;
-
-    background: linear-gradient(to bottom, transparent, ${cssVar.colorBgMask});
-
-    > * {
-      pointer-events: auto;
-    }
-  `,
+  expand: {
+    pointerEvents: 'none',
+    position: 'absolute',
+    zIndex: 2,
+    insetBlockEnd: 0,
+    insetInline: 0,
+    display: 'flex',
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    height: '140px',
+    paddingBlockEnd: '20px',
+    backgroundColor: 'transparent',
+    backgroundImage: `linear-gradient(to bottom, transparent, ${cssVar.colorBgMask})`,
+  },
+  // The overlay passes clicks through to the hit layer; only the button itself takes them.
+  expandChild: { pointerEvents: 'auto', display: 'flex' },
   // The sandboxed frame swallows clicks; this layer turns the clipped preview
   // into one target that opens the full report.
-  hit: css`
-    cursor: zoom-in;
-    position: absolute;
-    z-index: 1;
-    inset: 0;
-  `,
-}));
+  hit: { cursor: 'zoom-in', position: 'absolute', zIndex: 1, inset: 0 },
+});
 
 /**
  * The HTML page the wrap-up agent wrote, as the first screen of the result:
@@ -80,11 +70,11 @@ const GoalReportPage = memo<{ documentId: string }>(({ documentId }) => {
 
   return (
     <>
-      <div className={styles.card}>
+      <div {...stylex.props(styles.card)}>
         <HtmlDocumentFrame content={page.content} title={title} />
         <div
           aria-label={t('goalProcess.result.report.expand')}
-          className={styles.hit}
+          {...stylex.props(styles.hit)}
           role={'button'}
           tabIndex={0}
           onClick={expand}
@@ -92,10 +82,12 @@ const GoalReportPage = memo<{ documentId: string }>(({ documentId }) => {
             if (event.key === 'Enter' || event.key === ' ') expand();
           }}
         />
-        <div className={styles.expand}>
-          <Button icon={<Maximize2 size={14} />} shape={'round'} onClick={expand}>
-            {t('goalProcess.result.report.expand')}
-          </Button>
+        <div {...stylex.props(styles.expand)}>
+          <div {...stylex.props(styles.expandChild)}>
+            <Button icon={<Maximize2 size={14} />} shape={'round'} onClick={expand}>
+              {t('goalProcess.result.report.expand')}
+            </Button>
+          </div>
         </div>
       </div>
       <GoalReportFullscreen

@@ -5,9 +5,6 @@ import {
   ActionIcon,
   Button,
   Center,
-  createStaticStyles,
-  cssVar,
-  cx,
   Flexbox,
   Icon,
   Markdown,
@@ -16,6 +13,8 @@ import {
   Text,
   useAppElement,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ArrowLeft, ArrowRight, Download, ExternalLink, X } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
@@ -43,96 +42,82 @@ import {
  * offers to open it.
  */
 
-const styles = createStaticStyles(({ css }) => ({
-  body: css`
-    overflow: auto;
-    flex: 1;
-
-    min-height: 0;
-    padding-block: 32px 64px;
-    padding-inline: 48px;
-  `,
-  card: css`
-    width: 100%;
-    max-width: 640px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  doc: css`
-    width: 100%;
-    max-width: 760px;
-    margin-inline: auto;
-  `,
-  header: css`
-    flex: none;
-    padding-block: 12px;
-    padding-inline: 24px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  image: css`
-    max-width: 100%;
-    max-height: 60vh;
-    border-radius: ${cssVar.borderRadius};
-    object-fit: contain;
-  `,
-  item: css`
-    cursor: pointer;
-
-    display: flex;
-    gap: 10px;
-    align-items: center;
-
-    width: 100%;
-    padding-block: 8px;
-    padding-inline: 10px;
-    border: none;
-    border-radius: ${cssVar.borderRadius};
-
-    text-align: start;
-
-    background: none;
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-
-    &:focus-visible {
-      outline: 2px solid ${cssVar.colorPrimary};
-      outline-offset: -2px;
-    }
-  `,
-  itemActive: css`
-    background: ${cssVar.colorFillSecondary};
-
-    &:hover {
-      background: ${cssVar.colorFillSecondary};
-    }
-  `,
-  overlay: css`
-    position: fixed;
-    z-index: 1000;
-    inset: 0;
-
-    display: flex;
-    flex-direction: row;
-
-    background: ${cssVar.colorBgLayout};
-
-    &:focus {
-      outline: none;
-    }
-  `,
-  sidebar: css`
-    overflow: auto;
-    flex: none;
-
-    width: 320px;
-    padding: 12px;
-    border-inline-end: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-}));
+const styles = stylex.create({
+  body: {
+    overflow: 'auto',
+    flex: '1',
+    minHeight: '0',
+    paddingBlockStart: '32px',
+    paddingBlockEnd: '64px',
+    paddingInline: '48px',
+  },
+  card: {
+    width: '100%',
+    maxWidth: '640px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  doc: { width: '100%', maxWidth: '760px', marginInline: 'auto' },
+  header: {
+    flex: 'none',
+    paddingBlock: '12px',
+    paddingInline: '24px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+  image: {
+    maxWidth: '100%',
+    maxHeight: '60vh',
+    borderRadius: cssVar.borderRadius,
+    objectFit: 'contain',
+  },
+  item: {
+    cursor: 'pointer',
+    display: 'flex',
+    gap: '10px',
+    alignItems: 'center',
+    width: '100%',
+    paddingBlock: '8px',
+    paddingInline: '10px',
+    borderStyle: 'none',
+    borderRadius: cssVar.borderRadius,
+    textAlign: 'start',
+    backgroundColor: { 'default': 'transparent', ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': 'none', ':hover': 'none' },
+    outlineWidth: { 'default': null, ':focus-visible': '2px' },
+    outlineStyle: { 'default': null, ':focus-visible': 'solid' },
+    outlineColor: { 'default': null, ':focus-visible': cssVar.colorPrimary },
+    outlineOffset: { 'default': null, ':focus-visible': '-2px' },
+  },
+  itemActive: {
+    backgroundColor: { 'default': cssVar.colorFillSecondary, ':hover': cssVar.colorFillSecondary },
+    backgroundImage: { 'default': 'none', ':hover': 'none' },
+  },
+  overlay: {
+    position: 'fixed',
+    zIndex: 1000,
+    inset: '0',
+    display: 'flex',
+    flexDirection: 'row',
+    backgroundColor: cssVar.colorBgLayout,
+    backgroundImage: 'none',
+    outlineStyle: { 'default': null, ':focus': 'none' },
+  },
+  sidebar: {
+    overflow: 'auto',
+    flex: 'none',
+    width: '320px',
+    padding: '12px',
+    borderInlineEndWidth: '1px',
+    borderInlineEndStyle: 'solid',
+    borderInlineEndColor: cssVar.colorBorderSecondary,
+  },
+});
 
 const SidebarItem = ({
   active,
@@ -149,7 +134,7 @@ const SidebarItem = ({
   return (
     <button
       aria-current={active || undefined}
-      className={cx(styles.item, active && styles.itemActive)}
+      {...stylex.props(styles.item, active && styles.itemActive)}
       type={'button'}
       onClick={onClick}
     >
@@ -175,7 +160,11 @@ const DocumentBody = ({ documentId }: { documentId: string }) => {
   if (isLoading && !isHydrated) return null;
   if (isLoading)
     return (
-      <Flexbox className={styles.doc} data-testid={'deliverable-reader-loading'} gap={12}>
+      <Flexbox
+        className={stylex.props(styles.doc).className}
+        data-testid={'deliverable-reader-loading'}
+        gap={12}
+      >
         <Skeleton height={28} radius={4} width={'50%'} />
         <Skeleton height={14} radius={4} />
         <Skeleton height={14} radius={4} />
@@ -184,7 +173,7 @@ const DocumentBody = ({ documentId }: { documentId: string }) => {
     );
 
   return (
-    <div className={styles.doc} data-testid={'deliverable-reader-document'}>
+    <div {...stylex.props(styles.doc)} data-testid={'deliverable-reader-document'}>
       <Markdown variant={'chat'} {...markdownProps}>
         {document?.content ?? ''}
       </Markdown>
@@ -211,7 +200,7 @@ const Body = ({ item }: { item: DeliverableItem }) => {
     return (
       <Center>
         <Center
-          className={styles.card}
+          className={stylex.props(styles.card).className}
           data-testid={'deliverable-reader-link'}
           gap={12}
           padding={32}
@@ -246,9 +235,14 @@ const Body = ({ item }: { item: DeliverableItem }) => {
 
   return (
     <Center>
-      <Center className={styles.card} data-testid={'deliverable-reader-file'} gap={12} padding={32}>
+      <Center
+        className={stylex.props(styles.card).className}
+        data-testid={'deliverable-reader-file'}
+        gap={12}
+        padding={32}
+      >
         {url && isImageArtifact(artifact) ? (
-          <img alt={title} className={styles.image} src={url} />
+          <img alt={title} {...stylex.props(styles.image)} src={url} />
         ) : (
           <Icon icon={deliverableIconOf(artifact)} size={28} />
         )}
@@ -290,7 +284,7 @@ const Header = ({
   const cited = item.citedBy.length > 0;
 
   return (
-    <Flexbox horizontal align={'center'} className={styles.header} gap={16}>
+    <Flexbox horizontal align={'center'} className={stylex.props(styles.header).className} gap={16}>
       <Flexbox flex={1} gap={4} style={{ minWidth: 0 }}>
         <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
           <Text ellipsis data-testid={'deliverable-reader-title'} fontSize={15} weight={600}>
@@ -393,13 +387,13 @@ const DeliverableReader = ({ index, items, onClose, onIndexChange }: Deliverable
     <div
       aria-label={t('goalProcess.result.deliverables.reader.label')}
       aria-modal={true}
-      className={styles.overlay}
+      {...stylex.props(styles.overlay)}
       data-testid={'deliverable-reader'}
       ref={overlayRef}
       role={'dialog'}
       tabIndex={-1}
     >
-      <Flexbox className={styles.sidebar} gap={4} ref={sidebarRef}>
+      <Flexbox className={stylex.props(styles.sidebar).className} gap={4} ref={sidebarRef}>
         <Flexbox
           horizontal
           align={'center'}
@@ -428,7 +422,7 @@ const DeliverableReader = ({ index, items, onClose, onIndexChange }: Deliverable
       </Flexbox>
       <Flexbox flex={1} style={{ minWidth: 0 }}>
         <Header index={index} item={current} total={items.length} onIndexChange={onIndexChange} />
-        <div className={styles.body}>
+        <div {...stylex.props(styles.body)}>
           {/* The reader covers the page it was opened from, so a detail opened
               in a side panel would be invisible — entity links navigate. */}
           <EntityLinkHostProvider portal={false} onDismiss={onClose}>

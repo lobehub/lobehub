@@ -10,7 +10,11 @@ import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useTaskStore } from '@/store/task';
 import { isMobileSurface } from '@/utils/mobileSurface';
 
-import { styles } from './style';
+import {
+  breadcrumbClassNames,
+  breadcrumbCrumbClassName,
+  breadcrumbRootClassName,
+} from './breadcrumbStyles';
 import { taskDetailPath } from './taskDetailPath';
 import { useAgentDisplayMeta } from './useAgentDisplayMeta';
 
@@ -54,8 +58,8 @@ const Breadcrumb = memo<BreadcrumbProps>(({ taskId }) => {
     }),
   );
 
-  const allTasksLabel = (
-    <Text color={'inherit'} style={{ whiteSpace: 'nowrap' }} weight={500}>
+  const renderAllTasksLabel = (className?: string) => (
+    <Text className={className} color={'inherit'} style={{ whiteSpace: 'nowrap' }} weight={500}>
       {t('taskList.all')}
     </Text>
   );
@@ -67,6 +71,7 @@ const Breadcrumb = memo<BreadcrumbProps>(({ taskId }) => {
           title: (
             <Text
               ellipsis
+              className={taskId ? undefined : breadcrumbCrumbClassName}
               color={'inherit'}
               style={{ maxWidth: 160 }}
               type={taskId ? undefined : 'secondary'}
@@ -84,14 +89,21 @@ const Breadcrumb = memo<BreadcrumbProps>(({ taskId }) => {
     agentCrumb && taskId
       ? {
           ...agentCrumb,
-          title: <WorkspaceLink to={`/agent/${aid}/tasks`}>{agentCrumb.title}</WorkspaceLink>,
+          title: (
+            <WorkspaceLink className={breadcrumbCrumbClassName} to={`/agent/${aid}/tasks`}>
+              {agentCrumb.title}
+            </WorkspaceLink>
+          ),
         }
       : agentCrumb;
 
   const ancestorCrumbs = ancestors.map(({ id, identifier, agentId, name }) => ({
     key: id,
     title: (
-      <WorkspaceLink to={taskDetailPath(identifier, agentId ?? undefined, name)}>
+      <WorkspaceLink
+        className={breadcrumbCrumbClassName}
+        to={taskDetailPath(identifier, agentId ?? undefined, name)}
+      >
         <Text color={'inherit'} weight={500}>
           {identifier}
         </Text>
@@ -103,6 +115,7 @@ const Breadcrumb = memo<BreadcrumbProps>(({ taskId }) => {
     ? {
         title: (
           <span
+            className={breadcrumbCrumbClassName}
             style={{
               alignItems: 'center',
               display: 'inline-flex',
@@ -138,7 +151,8 @@ const Breadcrumb = memo<BreadcrumbProps>(({ taskId }) => {
 
   return (
     <BaseBreadcrumb
-      className={styles.breadcrumb}
+      className={breadcrumbRootClassName}
+      classNames={breadcrumbClassNames}
       separator={<Icon icon={ChevronRight} />}
       items={[
         // On a phone the header's back button already leads up, and there is
@@ -149,9 +163,11 @@ const Breadcrumb = memo<BreadcrumbProps>(({ taskId }) => {
               {
                 title:
                   taskId || agentCrumbNode ? (
-                    <WorkspaceLink to={'/tasks'}>{allTasksLabel}</WorkspaceLink>
+                    <WorkspaceLink className={breadcrumbCrumbClassName} to={'/tasks'}>
+                      {renderAllTasksLabel()}
+                    </WorkspaceLink>
                   ) : (
-                    allTasksLabel
+                    renderAllTasksLabel(breadcrumbCrumbClassName)
                   ),
               },
             ]),

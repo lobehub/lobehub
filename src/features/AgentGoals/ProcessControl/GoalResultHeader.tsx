@@ -1,7 +1,9 @@
 'use client';
 
 import type { GoalGraphDecision } from '@lobechat/types';
-import { createStaticStyles, cssVar, Flexbox, Spin, Text, toast } from '@lobehub/ui';
+import { Flexbox, Spin, Text, toast } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { useTranslation } from 'react-i18next';
 
 import { usePermission } from '@/hooks/usePermission';
@@ -26,14 +28,15 @@ import type { GoalResultData } from './useGoalResultData';
  * the acceptance itself, so this page does not carry a second copy of it.
  */
 
-const styles = createStaticStyles(({ css }) => ({
-  strip: css`
-    padding-block: 10px;
-    padding-inline: 14px;
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorFillQuaternary};
-  `,
-}));
+const styles = stylex.create({
+  strip: {
+    paddingBlock: '10px',
+    paddingInline: '14px',
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+});
 
 interface DecisionStripProps {
   agentId?: string | null;
@@ -66,7 +69,7 @@ const DecisionStrip = ({ agentId, decision, goalId, onDecided }: DecisionStripPr
   };
 
   return (
-    <Flexbox className={styles.strip} data-goal-result-gate={decision.id}>
+    <Flexbox className={stylex.props(styles.strip).className} data-goal-result-gate={decision.id}>
       <GoalDecisionCase
         agentId={agentId}
         canAnswer={canEdit}

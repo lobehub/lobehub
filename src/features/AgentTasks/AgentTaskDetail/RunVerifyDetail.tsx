@@ -1,46 +1,45 @@
 'use client';
 
-import { Button, createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Button, Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Check, ChevronDown, ChevronRight, CircleDashed, X } from 'lucide-react';
 import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useVerifyResults } from '@/features/Acceptance';
 
-const styles = createStaticStyles(({ css }) => ({
-  check: css`
-    padding-block: 6px;
-    padding-inline: 10px;
-
-    & + & {
-      border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-    }
-  `,
-  header: css`
-    justify-content: flex-start;
-
-    width: 100%;
-    height: auto;
-    margin: -4px;
-    padding: 4px;
-    border-radius: ${cssVar.borderRadius};
-
-    text-align: start;
-
-    &:hover {
-      background: ${cssVar.colorFillQuaternary};
-    }
-  `,
-  list: css`
-    overflow: hidden;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-  `,
-  reason: css`
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-}));
+const styles = stylex.create({
+  check: {
+    paddingBlock: '6px',
+    paddingInline: '10px',
+    borderBlockStartWidth: { default: null, [stylex.when.siblingBefore(':is(*)')]: '1px' },
+    borderBlockStartStyle: { default: null, [stylex.when.siblingBefore(':is(*)')]: 'solid' },
+    borderBlockStartColor: {
+      default: null,
+      [stylex.when.siblingBefore(':is(*)')]: cssVar.colorBorderSecondary,
+    },
+  },
+  header: {
+    justifyContent: 'flex-start',
+    width: '100%',
+    height: 'auto',
+    margin: '-4px',
+    padding: '4px',
+    borderRadius: cssVar.borderRadius,
+    textAlign: 'start',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillQuaternary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  list: {
+    overflow: 'hidden',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+  },
+  reason: { fontSize: '12px', color: cssVar.colorTextSecondary },
+});
 
 const verdictIcon = (verdict: string | null) => {
   if (verdict === 'passed') return { color: cssVar.colorSuccess, icon: Check };
@@ -68,7 +67,7 @@ const RunVerifyDetail = memo<{
     <Flexbox gap={6}>
       <Button
         aria-expanded={expanded}
-        className={styles.header}
+        className={stylex.props(styles.header).className}
         title={t(expanded ? 'taskDetail.runCollapse' : 'taskDetail.runExpand')}
         type={'text'}
         onClick={() => setExpanded((open) => !open)}
@@ -86,7 +85,7 @@ const RunVerifyDetail = memo<{
         </Flexbox>
       </Button>
       {expanded && (
-        <Flexbox className={styles.list}>
+        <Flexbox className={stylex.props(styles.list).className}>
           {results.map((result) => {
             const meta = verdictIcon(result.verdict);
             // An LLM judge's reasoning IS its product; a programmatic check
@@ -94,15 +93,22 @@ const RunVerifyDetail = memo<{
             const reasoning = (result.toulmin as { reasoning?: string } | null)?.reasoning;
 
             return (
-              <Flexbox className={styles.check} gap={4} key={result.id}>
+              <Flexbox
+                className={stylex.props(styles.check, stylex.defaultMarker()).className}
+                gap={4}
+                key={result.id}
+              >
                 <Flexbox horizontal align={'center'} gap={8}>
                   <Icon color={meta.color} icon={meta.icon} size={14} style={{ flex: 'none' }} />
-                  <Text ellipsis fontSize={13} style={{ flex: 1, minWidth: 0 }}>
+                  <Text ellipsis fontSize={13} style={{ flex: '1', minWidth: 0 }}>
                     {result.checkItemTitle}
                   </Text>
                 </Flexbox>
                 {reasoning && (
-                  <Text className={styles.reason} style={{ whiteSpace: 'pre-wrap' }}>
+                  <Text
+                    className={stylex.props(styles.reason).className}
+                    style={{ whiteSpace: 'pre-wrap' }}
+                  >
                     {reasoning}
                   </Text>
                 )}

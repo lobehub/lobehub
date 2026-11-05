@@ -1,4 +1,6 @@
-import { createStaticStyles, cssVar, Flexbox, Text } from '@lobehub/ui';
+import { Flexbox, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -14,57 +16,39 @@ export const formatGoalDuration = (milliseconds: number) => {
 
 export const formatGoalCost = (cost: number) => (cost > 0 ? `$${cost.toFixed(2)}` : '—');
 
-const styles = createStaticStyles(({ css }) => ({
-  acceptance: css`
-    min-width: 0;
-  `,
-  metric: css`
-    justify-self: end;
-    white-space: nowrap;
-  `,
-  metrics: css`
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 48px 64px;
-    column-gap: 12px;
-    align-items: center;
-
-    width: min(100%, 390px);
-    min-width: 390px;
-
-    /* On a phone the fixed width would crush the goal title beside it. The
-       metrics take what is left on the row's second line (beside the agent
-       and the menu), and the duration / cost cells shrink to their content. */
-    @media (width <= 767px) {
-      grid-template-columns: minmax(0, 1fr) auto auto;
-      flex: 1 1 0;
-      column-gap: 8px;
-
-      width: auto;
-      min-width: 0;
-    }
-  `,
-  needsYou: css`
-    flex: none;
-    color: ${cssVar.colorWarning};
-    white-space: nowrap;
-  `,
-  progress: css`
-    overflow: hidden;
-    flex: none;
-
-    width: 64px;
-    height: 4px;
-    border-radius: ${cssVar.borderRadiusXS};
-
-    background: ${cssVar.colorFillSecondary};
-  `,
-  progressValue: css`
-    height: 100%;
-    border-radius: inherit;
-    background: ${cssVar.colorSuccess};
-    transition: width 0.2s ${cssVar.motionEaseOut};
-  `,
-}));
+const styles = stylex.create({
+  acceptance: { minWidth: '0' },
+  metric: { justifySelf: 'end', whiteSpace: 'nowrap' },
+  metrics: {
+    display: 'grid',
+    gridTemplateColumns: {
+      'default': 'minmax(0, 1fr) 48px 64px',
+      '@media (width <= 767px)': 'minmax(0, 1fr) auto auto',
+    },
+    flex: { 'default': null, '@media (width <= 767px)': '1 1 0' },
+    columnGap: { 'default': '12px', '@media (width <= 767px)': '8px' },
+    alignItems: 'center',
+    width: { 'default': 'min(100%, 390px)', '@media (width <= 767px)': 'auto' },
+    minWidth: { 'default': '390px', '@media (width <= 767px)': 0 },
+  },
+  needsYou: { flex: 'none', color: cssVar.colorWarning, whiteSpace: 'nowrap' },
+  progress: {
+    overflow: 'hidden',
+    flex: 'none',
+    width: '64px',
+    height: '4px',
+    borderRadius: cssVar.borderRadiusXS,
+    backgroundColor: cssVar.colorFillSecondary,
+    backgroundImage: 'none',
+  },
+  progressValue: {
+    height: '100%',
+    borderRadius: 'inherit',
+    backgroundColor: cssVar.colorSuccess,
+    backgroundImage: 'none',
+    transition: `width 0.2s ${cssVar.motionEaseOut}`,
+  },
+});
 
 export interface GoalProgressProps {
   pendingDecisions: number;
@@ -84,15 +68,23 @@ export const GoalProgress = memo<GoalProgressProps>(
     const progress = taskTotal > 0 ? Math.round((taskDone / taskTotal) * 100) : 0;
 
     return (
-      <div className={styles.metrics}>
+      <div {...stylex.props(styles.metrics)}>
         {/* Progress and anything blocked on the user read as one cell, so
           duration and cost sit in fixed columns at the row's end and line up
           whether or not a goal needs you. */}
-        <Flexbox horizontal align={'center'} className={styles.acceptance} gap={8}>
+        <Flexbox
+          horizontal
+          align={'center'}
+          className={stylex.props(styles.acceptance).className}
+          gap={8}
+        >
           {taskTotal > 0 ? (
             <Flexbox horizontal align={'center'} gap={6} style={{ minWidth: 0 }}>
-              <div aria-hidden className={styles.progress}>
-                <div className={styles.progressValue} style={{ width: `${progress}%` }} />
+              <div aria-hidden {...stylex.props(styles.progress)}>
+                <div
+                  className={stylex.props(styles.progressValue).className}
+                  style={{ width: `${progress}%` }}
+                />
               </div>
               <Text ellipsis color={cssVar.colorTextTertiary} fontSize={12}>
                 {t('goalList.taskProgress', { done: taskDone, total: taskTotal })}
@@ -104,17 +96,25 @@ export const GoalProgress = memo<GoalProgressProps>(
             </Text>
           )}
           {pendingDecisions > 0 && (
-            <Text className={styles.needsYou} fontSize={12}>
+            <Text className={stylex.props(styles.needsYou).className} fontSize={12}>
               {t('goalList.needsYou', { count: pendingDecisions })}
             </Text>
           )}
         </Flexbox>
         {/* A goal that has not run yet leaves these cells empty: a column of
           lone dashes reads as stray marks rather than as "nothing yet". */}
-        <Text className={styles.metric} color={cssVar.colorTextTertiary} fontSize={12}>
+        <Text
+          className={stylex.props(styles.metric).className}
+          color={cssVar.colorTextTertiary}
+          fontSize={12}
+        >
           {totalRunDuration > 0 ? formatGoalDuration(totalRunDuration) : null}
         </Text>
-        <Text className={styles.metric} color={cssVar.colorTextTertiary} fontSize={12}>
+        <Text
+          className={stylex.props(styles.metric).className}
+          color={cssVar.colorTextTertiary}
+          fontSize={12}
+        >
           {totalRunCost > 0 ? formatGoalCost(totalRunCost) : null}
         </Text>
       </div>

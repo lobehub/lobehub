@@ -1,6 +1,8 @@
 'use client';
 
-import { createStaticStyles, cssVar, Flexbox, Text } from '@lobehub/ui';
+import { Flexbox, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo, type ReactNode, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -19,34 +21,26 @@ import GoalStatusGlyph from './GoalStatusGlyph';
  * graph (the goal page, the conversation portal) can mount it by id.
  */
 
-const styles = createStaticStyles(({ css }) => ({
-  metric: css`
-    cursor: pointer;
-
-    min-width: 112px;
-    padding-block: 4px;
-    padding-inline: 10px;
-    border-radius: ${cssVar.borderRadius};
-
-    transition: background 0.15s;
-
-    &:hover {
-      background: ${cssVar.colorFillQuaternary};
-    }
-  `,
-  metrics: css`
-    /* Negative inline offset keeps the metric text aligned with the title while
-       the hover background still gets breathing room. */
-    margin-inline-start: -10px;
-  `,
-}));
+const styles = stylex.create({
+  metric: {
+    cursor: 'pointer',
+    minWidth: '112px',
+    paddingBlock: '4px',
+    paddingInline: '10px',
+    borderRadius: cssVar.borderRadius,
+    transition: 'background 0.15s',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillQuaternary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  metrics: { marginInlineStart: '-10px' },
+});
 
 const Metric = memo<{
   label: string;
   onClick: () => void;
   value: ReactNode;
 }>(({ label, onClick, value }) => (
-  <Flexbox className={styles.metric} gap={2} onClick={onClick}>
+  <Flexbox className={stylex.props(styles.metric).className} gap={2} onClick={onClick}>
     <Flexbox horizontal align={'center'} gap={7} style={{ minHeight: 26 }}>
       {value}
     </Flexbox>
@@ -116,7 +110,7 @@ const GoalHeaderMetrics = memo<{ goalId: string }>(({ goalId }) => {
         : t('goalProcess.metrics.uncapped');
 
   return (
-    <Flexbox horizontal className={styles.metrics} gap={8} wrap={'wrap'}>
+    <Flexbox horizontal className={stylex.props(styles.metrics).className} gap={8} wrap={'wrap'}>
       <Metric
         label={t('goalProcess.metrics.status')}
         value={

@@ -1,17 +1,14 @@
 'use client';
 
-import { createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { CircleDashed } from 'lucide-react';
 import { memo } from 'react';
 
 import { CriterionList, CriterionRow, shouldGroupChecks } from '@/features/Acceptance';
 
-const styles = createStaticStyles(({ css }) => ({
-  groupHeader: css`
-    padding-block: 9px;
-    padding-inline: 12px;
-  `,
-}));
+const styles = stylex.create({ groupHeader: { paddingBlock: '9px', paddingInline: '12px' } });
 
 export interface PendingAcceptanceCheckItem {
   id: string;
@@ -32,7 +29,12 @@ export const PendingAcceptanceCheckList = memo<PendingAcceptanceCheckListProps>(
     return (
       <CriterionList>
         {grouped && (
-          <Flexbox horizontal align={'center'} className={styles.groupHeader} gap={8}>
+          <Flexbox
+            horizontal
+            align={'center'}
+            className={stylex.props(styles.groupHeader).className}
+            gap={8}
+          >
             <Text fontSize={12}>{groupLabel}</Text>
             <Text fontSize={11} type={'secondary'}>
               {items.length}

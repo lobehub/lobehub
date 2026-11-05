@@ -3,8 +3,6 @@ import {
   ActionIcon,
   Avatar,
   Button,
-  createStaticStyles,
-  cssVar,
   Flexbox,
   Icon,
   InputNumber,
@@ -15,6 +13,8 @@ import {
   Text,
   toast,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
 import { CalendarClockIcon, CalendarDays, Clock, RefreshCw, TimerIcon, Zap } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -38,23 +38,24 @@ type IntervalUnit = 'hours' | 'minutes';
 
 const MIN_MINUTES = 10;
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  fieldLabel: css`
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  popover: css`
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 12px;
-    background: ${cssVar.colorBgContainer};
-  `,
-  preview: css`
-    padding-block: 12px;
-    padding-inline: 14px;
-    border-radius: 12px;
-    background: ${cssVar.colorFillQuaternary};
-  `,
-}));
+const styles = stylex.create({
+  fieldLabel: { fontSize: '12px', color: cssVar.colorTextSecondary },
+  popover: {
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: '12px',
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  preview: {
+    paddingBlock: '12px',
+    paddingInline: '14px',
+    borderRadius: '12px',
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+});
 
 interface IntervalTabProps {
   currentInterval: number;
@@ -125,7 +126,9 @@ const IntervalTab = memo<IntervalTabProps>(({ currentInterval, disabled, taskId 
 
   return (
     <Flexbox gap={6}>
-      <Text className={styles.fieldLabel}>{t('taskSchedule.intervalLabel')}</Text>
+      <Text className={stylex.props(styles.fieldLabel).className}>
+        {t('taskSchedule.intervalLabel')}
+      </Text>
       <Flexbox horizontal align="center" gap={8}>
         <Text type="secondary">{t('taskSchedule.every')}</Text>
         <InputNumber
@@ -331,7 +334,12 @@ const TaskScheduleConfig = memo(function TaskScheduleConfig({
       </Flexbox>
 
       {enabled && nextRunText && (
-        <Flexbox horizontal align="center" className={styles.preview} gap={10}>
+        <Flexbox
+          horizontal
+          align="center"
+          className={stylex.props(styles.preview).className}
+          gap={10}
+        >
           <Icon color={cssVar.colorTextDescription} icon={Clock} size={16} />
           <Text style={{ color: cssVar.colorTextSecondary }}>{t('taskSchedule.nextRun')}</Text>
           <Text style={{ flex: 1, textAlign: 'right' }} weight={500}>
@@ -401,7 +409,7 @@ const TaskScheduleConfig = memo(function TaskScheduleConfig({
 
   return (
     <Popover
-      className={styles.popover}
+      className={stylex.props(styles.popover).className}
       content={content}
       disabled={!canEditTask || isArchived}
       placement="bottomRight"

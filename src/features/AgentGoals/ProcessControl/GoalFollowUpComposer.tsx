@@ -1,7 +1,9 @@
 'use client';
 
 import { ChatInput, ChatInputActionBar, SendButton, useEditor } from '@lobehub/editor/react';
-import { createStaticStyles, cssVar, Icon } from '@lobehub/ui';
+import { Icon } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { $getRoot } from 'lexical';
 import { PlusIcon } from 'lucide-react';
 import type { FocusEvent, KeyboardEvent } from 'react';
@@ -24,59 +26,52 @@ import { useFoldableComposer } from './useFoldableComposer';
  * opens into the full input once the reader asks for it.
  */
 
-const styles = createStaticStyles(({ css }) => ({
-  // Pinned to the bottom of the page's scroll area. Collapsed, only the pill
-  // takes pointer events, so the result text under the dock stays selectable.
-  dock: css`
-    pointer-events: none;
-
-    position: sticky;
-    z-index: 1;
-    inset-block-end: 0;
-
-    display: flex;
-    justify-content: center;
-
-    padding-block: 16px;
-  `,
-  // Open, the input sits over a fade so the result text scrolling underneath
-  // never collides with the box.
-  dockExpanded: css`
-    pointer-events: auto;
-    display: block;
-    padding-block: 24px 16px;
-    background: linear-gradient(to bottom, transparent, ${cssVar.colorBgLayout} 24px);
-  `,
-  pill: css`
-    pointer-events: auto;
-    cursor: pointer;
-
-    display: inline-flex;
-    gap: 8px;
-    align-items: center;
-
-    height: 40px;
-    padding-inline: 16px 20px;
-    border: 1px solid color-mix(in srgb, ${cssVar.colorBorderSecondary} 60%, transparent);
-    border-radius: 999px;
-
-    font-size: 14px;
-    color: ${cssVar.colorTextSecondary};
-
-    background: color-mix(in srgb, ${cssVar.colorBgElevated} 75%, transparent);
-    backdrop-filter: blur(16px) saturate(1.2);
-    box-shadow: ${cssVar.boxShadowSecondary};
-
-    transition:
-      color 0.2s,
-      background 0.2s;
-
-    &:hover {
-      color: ${cssVar.colorText};
-      background: color-mix(in srgb, ${cssVar.colorBgElevated} 90%, transparent);
-    }
-  `,
-}));
+const styles = stylex.create({
+  // Pinned to the bottom of the page's scroll area, over a fade so the result
+  // text scrolling underneath never collides with the box.
+  dock: {
+    pointerEvents: 'none',
+    position: 'sticky',
+    zIndex: 1,
+    insetBlockEnd: 0,
+    display: 'flex',
+    justifyContent: 'center',
+    paddingBlockStart: '16px',
+    paddingBlockEnd: '16px',
+  },
+  dockExpanded: {
+    pointerEvents: 'auto',
+    display: 'block',
+    paddingBlockStart: '24px',
+    paddingBlockEnd: '16px',
+    backgroundColor: 'transparent',
+    backgroundImage: `linear-gradient(to bottom, transparent, ${cssVar.colorBgLayout} 24px)`,
+  },
+  pill: {
+    pointerEvents: 'auto',
+    cursor: 'pointer',
+    display: 'inline-flex',
+    gap: '8px',
+    alignItems: 'center',
+    height: '40px',
+    paddingInlineStart: '16px',
+    paddingInlineEnd: '20px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: `color-mix(in srgb, ${cssVar.colorBorderSecondary} 60%, transparent)`,
+    borderRadius: '999px',
+    fontSize: '14px',
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
+    backgroundColor: {
+      'default': `color-mix(in srgb, ${cssVar.colorBgElevated} 75%, transparent)`,
+      ':hover': `color-mix(in srgb, ${cssVar.colorBgElevated} 90%, transparent)`,
+    },
+    backgroundImage: 'none',
+    backdropFilter: 'blur(16px) saturate(1.2)',
+    boxShadow: cssVar.boxShadowSecondary,
+    transition: 'color 0.2s, background 0.2s',
+  },
+});
 
 interface GoalFollowUpComposerProps {
   /** Hidden rather than unmounted, so the draft outlives a tab switch. */
@@ -130,11 +125,16 @@ const GoalFollowUpComposer = memo<GoalFollowUpComposerProps>(({ hidden, onSend }
     // The dock itself carries `hidden`: a wrapper would become the sticky
     // element's containing block and unpin it from the page bottom.
     <div
-      className={expanded ? `${styles.dock} ${styles.dockExpanded}` : styles.dock}
+      className={stylex.props(styles.dock, expanded && styles.dockExpanded).className}
       hidden={hidden}
     >
       {!expanded && (
-        <button className={styles.pill} ref={triggerRef} type={'button'} onClick={open}>
+        <button
+          className={stylex.props(styles.pill).className}
+          ref={triggerRef}
+          type={'button'}
+          onClick={open}
+        >
           <Icon icon={PlusIcon} size={16} />
           {t('goalProcess.result.followUp.trigger')}
         </button>

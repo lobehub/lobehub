@@ -1,6 +1,8 @@
 'use client';
 
-import { Button, createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Button, Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ArrowRight, CircleSlash, Flag, MessageCircleQuestion, XCircle } from 'lucide-react';
 import { type ReactNode, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -34,20 +36,15 @@ import {
  * wrap-up storyline exists, never required.
  */
 
-const styles = createStaticStyles(({ css }) => ({
-  item: css`
-    padding-block: 10px;
-
-    &:not(:last-child) {
-      border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-    }
-  `,
-  time: css`
-    flex: none;
-    min-width: 60px;
-    text-align: end;
-  `,
-}));
+const styles = stylex.create({
+  item: {
+    paddingBlock: '10px',
+    borderBlockEndWidth: { 'default': null, ':not(:last-child)': '1px' },
+    borderBlockEndStyle: { 'default': null, ':not(:last-child)': 'solid' },
+    borderBlockEndColor: { 'default': null, ':not(:last-child)': cssVar.colorBorderSecondary },
+  },
+  time: { flex: 'none', minWidth: '60px', textAlign: 'end' },
+});
 
 export const SectionTitle = ({ children, extra }: { children: ReactNode; extra?: ReactNode }) => (
   <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
@@ -71,7 +68,12 @@ export const GroupLabel = ({ children, extra }: { children: ReactNode; extra?: R
 const DecisionTime = ({ at }: { at: Date }) => {
   const { text, title } = useActivityTime(at);
   return (
-    <Text className={styles.time} fontSize={12} title={title} type={'secondary'}>
+    <Text
+      className={stylex.props(styles.time).className}
+      fontSize={12}
+      title={title}
+      type={'secondary'}
+    >
       {text}
     </Text>
   );
@@ -126,7 +128,7 @@ const DecisionItem = ({
   copy: { choice?: string; detail?: string; question: string };
   view: UserDecisionView;
 }) => (
-  <Flexbox horizontal className={styles.item} gap={12}>
+  <Flexbox horizontal className={stylex.props(styles.item).className} gap={12}>
     <Icon
       color={cssVar.colorTextTertiary}
       icon={MessageCircleQuestion}
@@ -244,7 +246,7 @@ const OpenItem = ({
   title: string;
   tone: string;
 }) => (
-  <Flexbox horizontal className={styles.item} gap={12}>
+  <Flexbox horizontal className={stylex.props(styles.item).className} gap={12}>
     <Icon color={tone} icon={icon} size={16} style={{ flex: 'none', marginBlockStart: 2 }} />
     <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
       <Text style={{ wordBreak: 'break-word' }} weight={500}>

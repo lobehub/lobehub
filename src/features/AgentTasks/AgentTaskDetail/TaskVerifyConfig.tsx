@@ -1,17 +1,14 @@
 'use client';
 
 import { AgentRuntimeErrorType } from '@lobechat/types';
+import { Block, Flexbox, Icon } from '@lobehub/ui';
 import {
   ActionIcon,
-  Block,
   Button,
   confirmModal,
   createStaticStyles,
-  cssVar,
   type DropdownItem,
   DropdownMenu,
-  Flexbox,
-  Icon,
   Select,
   Spin,
   Tag,
@@ -19,6 +16,8 @@ import {
   TextArea,
   toast,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import {
   ChevronRight,
   ChevronUp,
@@ -52,40 +51,17 @@ import { TaskAcceptanceHeader } from './TaskAcceptanceHeader';
 
 const SAVE_DEBOUNCE_MS = 600;
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  collapsedRequirement: css`
-    /* full requirement, wrapping to as many lines as it needs — readable at a glance.
-       Inset past the trigger icon so it reads flat under the title, not as a clickable row. */
-    padding-inline: 32px 8px;
-    line-height: 1.5;
-  `,
-  list: css`
-    width: 100%;
-  `,
-  row: css`
-    cursor: pointer;
-    padding-block: 10px;
-    padding-inline: 12px;
-
-    & + & {
-      border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-    }
-
-    &:hover {
-      background: ${cssVar.colorFillQuaternary};
-    }
-  `,
-  rowTitle: css`
-    flex: 1;
-  `,
-  section: css`
-    padding-block: 12px;
-    padding-inline: 12px;
-  `,
-  subtitle: css`
-    color: ${cssVar.colorTextSecondary};
-  `,
-}));
+const styles = stylex.create({
+  // The full requirement, wrapping to as many lines as it needs — readable at a glance.
+  // Inset past the trigger icon so it reads flat under the title, not as a clickable row.
+  collapsedRequirement: {
+    paddingInlineStart: '32px',
+    paddingInlineEnd: '8px',
+    lineHeight: 1.5,
+  },
+  section: { paddingBlock: '12px', paddingInline: '12px' },
+  subtitle: { color: cssVar.colorTextSecondary },
+});
 
 /** Working item: a draft plus a stable client id, so reorder/edit is jitter-free. */
 interface DraftItem extends VerifyCriterionDraft {
@@ -535,7 +511,7 @@ const TaskVerifyConfig = memo(() => {
         {savedCount > 0 ? (
           <Tag>{t('verifyConfig.criteriaCount', { count: savedCount })}</Tag>
         ) : showRequirement ? null : (
-          <Text className={styles.subtitle} fontSize={12}>
+          <Text className={stylex.props(styles.subtitle).className} fontSize={12}>
             {t('verifyConfig.collapsedHint')}
           </Text>
         )}
@@ -545,7 +521,7 @@ const TaskVerifyConfig = memo(() => {
     return (
       <Flexbox gap={2}>
         {trigger}
-        <Text className={styles.collapsedRequirement} fontSize={14}>
+        <Text className={stylex.props(styles.collapsedRequirement).className} fontSize={14}>
           {requirementPreview}
         </Text>
       </Flexbox>
@@ -555,10 +531,12 @@ const TaskVerifyConfig = memo(() => {
   // ---- B. generating ----
   if (generating) {
     return (
-      <Block className={styles.section} variant={'outlined'}>
+      <Block className={stylex.props(styles.section).className} variant={'outlined'}>
         <Flexbox horizontal align={'center'} gap={12}>
           <Spin size="middle" variant="network" />
-          <Text className={styles.subtitle}>{t('verifyConfig.generating')}</Text>
+          <Text className={stylex.props(styles.subtitle).className}>
+            {t('verifyConfig.generating')}
+          </Text>
         </Flexbox>
       </Block>
     );
@@ -584,7 +562,7 @@ const TaskVerifyConfig = memo(() => {
       },
     ];
     return (
-      <Block className={styles.section} variant={'outlined'}>
+      <Block className={stylex.props(styles.section).className} variant={'outlined'}>
         <Flexbox gap={12}>
           <Flexbox horizontal align={'center'} justify={'space-between'}>
             <Flexbox horizontal align={'center'} gap={8}>
@@ -608,7 +586,7 @@ const TaskVerifyConfig = memo(() => {
               <ActionIcon icon={ChevronUp} size={'small'} onClick={() => setExpanded(false)} />
             </Flexbox>
           </Flexbox>
-          <Text className={styles.subtitle}>
+          <Text className={stylex.props(styles.subtitle).className}>
             {requirement.trim()
               ? t('verifyConfig.empty.materializeHint')
               : t('verifyConfig.empty.subtitle')}
@@ -682,7 +660,7 @@ const TaskVerifyConfig = memo(() => {
   ];
 
   return (
-    <Flexbox className={styles.section}>
+    <Flexbox className={stylex.props(styles.section).className}>
       <Flexbox gap={12}>
         {/* Definition and result modes share one title contract. Mode-specific
             controls stay on the right without changing the information hierarchy. */}
@@ -698,7 +676,7 @@ const TaskVerifyConfig = memo(() => {
         </Flexbox>
 
         <Flexbox gap={6}>
-          <Text className={styles.subtitle} fontSize={12}>
+          <Text className={stylex.props(styles.subtitle).className} fontSize={12}>
             {t('taskDetail.acceptance.goal')}
           </Text>
           <Text type={requirementText ? undefined : 'secondary'}>

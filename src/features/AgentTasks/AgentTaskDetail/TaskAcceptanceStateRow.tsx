@@ -1,6 +1,7 @@
 'use client';
 
 import { Block, cssVar, Icon, Text } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import {
   AlertTriangle,
   CheckCheck,
@@ -114,7 +115,7 @@ const TaskAcceptanceStateRow = memo(() => {
       clickable
       horizontal
       align={'center'}
-      className={styles.propertyItem}
+      className={stylex.props(styles.propertyItem).className}
       gap={8}
       // The label may be truncated below, so the hover title carries it in
       // full ahead of the "click to review" hint.

@@ -1,6 +1,8 @@
 'use client';
 
-import { Block, ContextMenuTrigger, createStaticStyles, cssVar, Flexbox, Text } from '@lobehub/ui';
+import { Block, ContextMenuTrigger, Flexbox, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import type { KeyboardEvent } from 'react';
 import { memo } from 'react';
 
@@ -16,22 +18,18 @@ import GoalStatusGlyph from './GoalStatusGlyph';
 import type { GoalItemProps } from './types';
 import { useGoalItemMenu } from './useGoalMenuItems';
 
-const styles = createStaticStyles(({ css }) => ({
-  card: css`
-    min-width: 0;
-    transition:
-      border-color 0.2s ${cssVar.motionEaseOut},
-      background 0.2s ${cssVar.motionEaseOut},
-      transform 0.2s ${cssVar.motionEaseOut};
+const HOVERED = ':is(:hover, [data-popup-open])';
 
-    &:hover,
-    &[data-popup-open] {
-      transform: translateY(-1px);
-      border-color: ${cssVar.colorPrimaryBorder};
-      background: ${cssVar.colorFillQuaternary};
-    }
-  `,
-}));
+const styles = stylex.create({
+  card: {
+    minWidth: 0,
+    transition: `border-color 0.2s ${cssVar.motionEaseOut}, background 0.2s ${cssVar.motionEaseOut}, transform 0.2s ${cssVar.motionEaseOut}`,
+    transform: { default: null, [HOVERED]: 'translateY(-1px)' },
+    borderColor: { default: null, [HOVERED]: cssVar.colorPrimaryBorder },
+    backgroundColor: { default: null, [HOVERED]: cssVar.colorFillQuaternary },
+    backgroundImage: { default: null, [HOVERED]: 'none' },
+  },
+});
 
 export const GoalCardItem = memo<GoalItemProps>(({ globalScopeId, goal: item, projectId }) => {
   const navigate = useWorkspaceAwareNavigate();
@@ -61,7 +59,7 @@ export const GoalCardItem = memo<GoalItemProps>(({ globalScopeId, goal: item, pr
     <ContextMenuTrigger items={menuItems}>
       <Block
         clickable
-        className={styles.card}
+        className={stylex.props(styles.card).className}
         gap={12}
         padding={16}
         role={'link'}

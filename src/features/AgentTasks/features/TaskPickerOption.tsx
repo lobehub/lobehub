@@ -1,6 +1,7 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { type ReactNode } from 'react';
 
 import { taskExecutionStyles as styles } from './taskExecutionStyles';
@@ -40,7 +41,7 @@ export const TaskPickerOption = ({
 }: TaskPickerOptionProps) => (
   <button
     aria-pressed={checked === undefined ? undefined : checked}
-    className={`${styles.row} ${checked ? styles.rowActive : ''}`}
+    className={stylex.props(styles.row, checked && styles.rowActive).className}
     disabled={disabled}
     type={'button'}
     onClick={onSelect}

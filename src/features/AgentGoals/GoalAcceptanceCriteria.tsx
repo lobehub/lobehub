@@ -1,16 +1,8 @@
 'use client';
 
-import {
-  ActionIcon,
-  Block,
-  Button,
-  confirmModal,
-  createStaticStyles,
-  cssVar,
-  Flexbox,
-  Icon,
-  Text,
-} from '@lobehub/ui';
+import { ActionIcon, Block, Button, confirmModal, Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { PencilIcon, PlusIcon, XIcon } from 'lucide-react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -23,21 +15,20 @@ import type { GoalCriterionWithInstruction } from '@/services/verify';
 import { verifyService } from '@/services/verify';
 import { useGoalStore } from '@/store/goal';
 
-const styles = createStaticStyles(({ css }) => ({
-  row: css`
-    padding-block: 8px;
-
-    &:not(:last-child) {
-      border-block-end: 1px dashed ${cssVar.colorBorderSecondary};
-    }
-  `,
-  seq: css`
-    flex: none;
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    color: ${cssVar.colorTextQuaternary};
-  `,
-}));
+const styles = stylex.create({
+  row: {
+    paddingBlock: '8px',
+    borderBlockEndWidth: { 'default': null, ':not(:last-child)': '1px' },
+    borderBlockEndStyle: { 'default': null, ':not(:last-child)': 'dashed' },
+    borderBlockEndColor: { 'default': null, ':not(:last-child)': cssVar.colorBorderSecondary },
+  },
+  seq: {
+    flex: 'none',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '12px',
+    color: cssVar.colorTextQuaternary,
+  },
+});
 
 /**
  * The goal's structured acceptance standard: the persisted verify criteria the
@@ -124,16 +115,16 @@ const GoalAcceptanceCriteria = memo<{ criteriaIds: string[]; goalId: string }>(
     return (
       <Block paddingBlock={4} paddingInline={16} variant={'outlined'}>
         {criteriaIds.length === 0 && (
-          <Flexbox className={styles.row}>
+          <Flexbox className={stylex.props(styles.row).className}>
             <Text fontSize={13} type={'secondary'}>
               {t('goalAcceptance.empty')}
             </Text>
           </Flexbox>
         )}
         {(criteria ?? []).map((item, index) => (
-          <Flexbox className={styles.row} gap={4} key={item.id}>
+          <Flexbox className={stylex.props(styles.row).className} gap={4} key={item.id}>
             <Flexbox horizontal align={'center'} gap={10}>
-              <span className={styles.seq}>C{index + 1}</span>
+              <span {...stylex.props(styles.seq)}>C{index + 1}</span>
               <Text style={{ flex: 1, minWidth: 0 }} weight={500}>
                 {item.title}
               </Text>
@@ -157,7 +148,7 @@ const GoalAcceptanceCriteria = memo<{ criteriaIds: string[]; goalId: string }>(
           </Flexbox>
         ))}
         {canEdit && (
-          <Flexbox horizontal className={styles.row}>
+          <Flexbox horizontal className={stylex.props(styles.row).className}>
             <Button
               icon={<Icon icon={PlusIcon} />}
               size={'small'}

@@ -5,7 +5,11 @@ import { ChevronRight } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { styles } from '@/features/AgentTasks/shared/style';
+import {
+  breadcrumbClassNames,
+  breadcrumbCrumbClassName,
+  breadcrumbRootClassName,
+} from '@/features/AgentTasks/shared/breadcrumbStyles';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
@@ -27,7 +31,13 @@ const GoalWorkspaceBreadcrumb = memo<GoalWorkspaceBreadcrumbProps>(({ title }) =
     key: 'goal',
     title: (
       // Viewport-capped so the crumb fits beside the back button on a phone.
-      <Text ellipsis color={'inherit'} style={{ maxWidth: 'min(320px, 45vw)' }} weight={500}>
+      <Text
+        ellipsis
+        className={breadcrumbCrumbClassName}
+        color={'inherit'}
+        style={{ maxWidth: 'min(320px, 45vw)' }}
+        weight={500}
+      >
         {title}
       </Text>
     ),
@@ -35,7 +45,8 @@ const GoalWorkspaceBreadcrumb = memo<GoalWorkspaceBreadcrumbProps>(({ title }) =
 
   return (
     <Breadcrumb
-      className={styles.breadcrumb}
+      className={breadcrumbRootClassName}
+      classNames={breadcrumbClassNames}
       separator={<Icon icon={ChevronRight} />}
       items={
         goalsEnabled
@@ -43,7 +54,7 @@ const GoalWorkspaceBreadcrumb = memo<GoalWorkspaceBreadcrumbProps>(({ title }) =
               {
                 key: 'goals',
                 title: (
-                  <WorkspaceLink to={'/goals'}>
+                  <WorkspaceLink className={breadcrumbCrumbClassName} to={'/goals'}>
                     <Text color={'inherit'} style={{ whiteSpace: 'nowrap' }} weight={500}>
                       {t('goalList.title')}
                     </Text>

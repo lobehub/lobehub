@@ -1,4 +1,6 @@
-import { Button, createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Button, Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Handle, type NodeProps, Position } from '@xyflow/react';
 import { ChevronDown, FlaskConical } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -13,31 +15,33 @@ export interface ExperimentGroupData extends GraphNodeData {
   onToggle: () => void;
 }
 
-const styles = createStaticStyles(({ css }) => ({
-  frame: css`
-    box-sizing: border-box;
-    width: 100%;
-    height: 100%;
-    border: 1px solid ${cssVar.colorBorder};
-    border-radius: 12px;
-
-    background: color-mix(in srgb, ${cssVar.colorInfo} 3%, transparent);
-  `,
-  header: css`
-    padding-block: 12px;
-    padding-inline: 16px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 12px 12px 0 0;
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  title: css`
-    overflow: hidden;
-    min-width: 0;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-}));
+const styles = stylex.create({
+  frame: {
+    boxSizing: 'border-box',
+    width: '100%',
+    height: '100%',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorder,
+    borderRadius: '12px',
+    backgroundColor: `color-mix(in srgb, ${cssVar.colorInfo} 3%, transparent)`,
+    backgroundImage: 'none',
+  },
+  header: {
+    paddingBlock: '12px',
+    paddingInline: '16px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+    borderTopLeftRadius: '12px',
+    borderTopRightRadius: '12px',
+    borderBottomRightRadius: '0',
+    borderBottomLeftRadius: '0',
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  title: { overflow: 'hidden', minWidth: '0', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+});
 
 /** An expanded container encloses its work without replacing the surrounding map. */
 const ExperimentGroup = ({ data }: NodeProps) => {
@@ -51,12 +55,12 @@ const ExperimentGroup = ({ data }: NodeProps) => {
   const isBatch = kind === 'batch';
   const ContainerIcon = KIND_ICON[kind ?? view.node.kind] ?? FlaskConical;
   return (
-    <div className={styles.frame}>
+    <div {...stylex.props(styles.frame)}>
       <Handle position={Position.Top} type={'target'} />
       <Flexbox
         horizontal
         align={'center'}
-        className={styles.header}
+        className={stylex.props(styles.header).className}
         gap={12}
         justify={'space-between'}
       >
@@ -74,7 +78,7 @@ const ExperimentGroup = ({ data }: NodeProps) => {
         >
           <Icon icon={ChevronDown} size={14} />
           <Icon icon={ContainerIcon} size={14} />
-          <span className={styles.title}>
+          <span {...stylex.props(styles.title)}>
             {isBatch
               ? `${t('goalProcess.kind.batch')} · ${view.node.title}`
               : `${t('goalExperiment.number', { number: view.seq })} · ${view.node.title}`}

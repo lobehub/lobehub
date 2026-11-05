@@ -1,5 +1,6 @@
 import {
   ActionIcon,
+  // oxlint-disable-next-line stylex-migration/no-emotion-styles -- needs lobe-ui slot: Form.label
   createStaticStyles,
   Flexbox,
   Icon,
@@ -46,7 +47,7 @@ interface TasksHeaderProps {
   setOptions: (updater: (prev: TaskListViewOptions) => TaskListViewOptions) => void;
 }
 
-const styles = createStaticStyles(({ css, cssVar }) => {
+const fallback = createStaticStyles(({ css, cssVar }) => {
   return {
     form: css`
       label,
@@ -278,7 +279,7 @@ const TasksGroupConfig = memo<TasksHeaderProps>(({ options, pinnedOptions, setOp
         }
       />
       <Form
-        className={styles.form}
+        className={fallback.form}
         form={form}
         items={viewMode === 'kanban' ? boardFormItems : formItems}
         itemsType={'flat'}

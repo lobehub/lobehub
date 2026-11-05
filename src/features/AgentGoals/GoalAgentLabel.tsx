@@ -1,18 +1,13 @@
 'use client';
 
-import { createStaticStyles, Flexbox, Text } from '@lobehub/ui';
+import { Flexbox, Text } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 
 import AssigneeAvatar from '@/features/AgentTasks/features/AssigneeAvatar';
 import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
 
-const styles = createStaticStyles(({ css }) => ({
-  label: css`
-    flex: none;
-    width: 140px;
-    min-width: 0;
-  `,
-}));
+const styles = stylex.create({ label: { flex: 'none', width: '140px', minWidth: '0' } });
 
 interface GoalAgentLabelProps {
   agentId?: string | null;
@@ -27,7 +22,7 @@ const GoalAgentLabel = memo<GoalAgentLabelProps>(({ agentId }) => {
   const meta = useAgentDisplayMeta(agentId);
 
   return (
-    <Flexbox horizontal align={'center'} className={styles.label} gap={6}>
+    <Flexbox horizontal align={'center'} className={stylex.props(styles.label).className} gap={6}>
       {agentId && meta && (
         <>
           <AssigneeAvatar agentId={agentId} size={18} />

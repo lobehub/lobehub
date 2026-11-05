@@ -1,39 +1,35 @@
-import { createStaticStyles, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import type { ReactNode } from 'react';
 
 /** Indent added per nesting level, in px. */
 const INDENT_STEP = 20;
 
-const styles = createStaticStyles(({ css, cssVar }) => {
-  return {
-    // Elbow drawn from the row's top edge down to its vertical centre, so a
-    // child reads as hanging off the row above it rather than off the group.
-    connector: css`
-      position: relative;
-
-      flex: none;
-      align-self: stretch;
-
-      inline-size: 12px;
-      margin-inline-end: 4px;
-
-      &::before {
-        content: '';
-
-        position: absolute;
-        inset-block: 0 50%;
-        inset-inline-start: 0;
-
-        inline-size: 8px;
-        border-block-end: 1px solid ${cssVar.colorBorder};
-        border-inline-start: 1px solid ${cssVar.colorBorder};
-        border-end-start-radius: 4px;
-      }
-    `,
-    muted: css`
-      opacity: 0.5;
-    `,
-  };
+const styles = stylex.create({
+  connector: {
+    'position': 'relative',
+    'flex': 'none',
+    'alignSelf': 'stretch',
+    'inlineSize': '12px',
+    'marginInlineEnd': '4px',
+    '::before': {
+      content: "''",
+      position: 'absolute',
+      insetBlockStart: '0',
+      insetBlockEnd: '50%',
+      insetInlineStart: '0',
+      inlineSize: '8px',
+      borderBlockEndWidth: '1px',
+      borderBlockEndStyle: 'solid',
+      borderBlockEndColor: cssVar.colorBorder,
+      borderInlineStartWidth: '1px',
+      borderInlineStartStyle: 'solid',
+      borderInlineStartColor: cssVar.colorBorder,
+      borderEndStartRadius: '4px',
+    },
+  },
+  muted: { opacity: 0.5 },
 });
 
 interface TaskRowIndentProps {
@@ -54,10 +50,10 @@ const TaskRowIndent = ({ children, depth, muted }: TaskRowIndentProps) => {
     <Flexbox
       horizontal
       align={'stretch'}
-      className={muted ? styles.muted : undefined}
+      className={stylex.props(muted ? styles.muted : undefined).className}
       style={depth > 0 ? { paddingInlineStart: depth * INDENT_STEP } : undefined}
     >
-      {depth > 0 && <div className={styles.connector} />}
+      {depth > 0 && <div {...stylex.props(styles.connector)} />}
       <Flexbox flex={1} style={{ minWidth: 0 }}>
         {children}
       </Flexbox>

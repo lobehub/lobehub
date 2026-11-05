@@ -1,6 +1,8 @@
 'use client';
 
-import { createStaticStyles, cssVar, cx, Empty, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Empty, Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { BotMessageSquare, ChevronRight } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -22,48 +24,37 @@ import { useElapsed } from './useElapsed';
  * per-attempt ledger folded underneath.
  */
 
-const styles = createStaticStyles(({ css }) => ({
-  arrow: css`
-    flex: none;
-    color: ${cssVar.colorTextQuaternary};
-    transition: transform 0.2s;
-  `,
-  arrowOpen: css`
-    transform: rotate(90deg);
-  `,
-  attempt: css`
-    padding-block: 6px;
-
-    & + & {
-      border-block-start: 1px dashed ${cssVar.colorBorderSecondary};
-    }
-  `,
-  body: css`
-    padding-block: 0 10px;
-    padding-inline: 42px 9px;
-  `,
-  mono: css`
-    font-family: ${cssVar.fontFamilyCode};
-    font-variant-numeric: tabular-nums;
-  `,
-  row: css`
-    cursor: pointer;
-
-    /* The hover wash keeps its inset; the row's content lines up with the section title. */
-    margin-inline: -9px;
-    padding-block: 6px;
-    padding-inline: 9px;
-    border-radius: ${cssVar.borderRadiusSM};
-
-    &:hover {
-      background: ${cssVar.colorFillQuaternary};
-    }
-  `,
-  time: css`
-    flex: none;
-    margin-inline-start: auto;
-  `,
-}));
+const styles = stylex.create({
+  arrow: { flex: 'none', color: cssVar.colorTextQuaternary, transition: 'transform 0.2s' },
+  arrowOpen: { transform: 'rotate(90deg)' },
+  attempt: {
+    paddingBlock: '6px',
+    borderBlockStartWidth: { default: null, [stylex.when.siblingBefore(':is(*)')]: '1px' },
+    borderBlockStartStyle: { default: null, [stylex.when.siblingBefore(':is(*)')]: 'dashed' },
+    borderBlockStartColor: {
+      default: null,
+      [stylex.when.siblingBefore(':is(*)')]: cssVar.colorBorderSecondary,
+    },
+  },
+  body: {
+    paddingBlockStart: '0',
+    paddingBlockEnd: '10px',
+    paddingInlineStart: '42px',
+    paddingInlineEnd: '9px',
+  },
+  mono: { fontFamily: cssVar.fontFamilyCode, fontVariantNumeric: 'tabular-nums' },
+  // The hover wash keeps its inset; the row's content lines up with the section title.
+  row: {
+    cursor: 'pointer',
+    marginInline: '-9px',
+    paddingBlock: '6px',
+    paddingInline: '9px',
+    borderRadius: cssVar.borderRadiusSM,
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillQuaternary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  time: { flex: 'none', marginInlineStart: 'auto' },
+});
 
 const lastTouch = (view: GoalNodeView): Date =>
   [
@@ -112,7 +103,12 @@ const RunningClock = memo<{ startedAt?: Date }>(({ startedAt }) => {
   const elapsed = useElapsed(startedAt);
   if (!elapsed) return null;
   return (
-    <Text className={styles.mono} fontSize={12} style={{ flex: 'none' }} type={'secondary'}>
+    <Text
+      className={stylex.props(styles.mono).className}
+      fontSize={12}
+      style={{ flex: 'none' }}
+      type={'secondary'}
+    >
       {t('goalProcess.running.elapsed', { duration: elapsed })}
     </Text>
   );
@@ -134,12 +130,12 @@ const ActivityRow = memo<{ onSelect: (nodeId: string) => void; view: GoalNodeVie
         <Flexbox
           horizontal
           align={'center'}
-          className={styles.row}
+          className={stylex.props(styles.row).className}
           gap={8}
           onClick={() => (hasDetail ? setOpen(!open) : onSelect(view.node.id))}
         >
           <Icon
-            className={cx(styles.arrow, open && styles.arrowOpen)}
+            className={stylex.props(styles.arrow, open && styles.arrowOpen).className}
             icon={ChevronRight}
             size={14}
             style={{ opacity: hasDetail ? 1 : 0 }}
@@ -153,7 +149,7 @@ const ActivityRow = memo<{ onSelect: (nodeId: string) => void; view: GoalNodeVie
           </Text>
           {view.startedAt && <RunningClock startedAt={view.startedAt} />}
           <Text
-            className={cx(styles.time, styles.mono)}
+            className={stylex.props(styles.time, styles.mono).className}
             fontSize={12}
             title={title}
             type={'secondary'}
@@ -162,11 +158,15 @@ const ActivityRow = memo<{ onSelect: (nodeId: string) => void; view: GoalNodeVie
           </Text>
         </Flexbox>
         {open && (
-          <Flexbox className={styles.body} gap={10}>
+          <Flexbox className={stylex.props(styles.body).className} gap={10}>
             {view.attempts.length > 0 && (
               <Flexbox gap={0}>
                 {view.attempts.map((attempt) => (
-                  <Flexbox className={styles.attempt} gap={2} key={attempt.index}>
+                  <Flexbox
+                    className={stylex.props(styles.attempt, stylex.defaultMarker()).className}
+                    gap={2}
+                    key={attempt.index}
+                  >
                     <Flexbox horizontal align={'center'} gap={8}>
                       <Text fontSize={12} style={{ flex: 'none' }} weight={600}>
                         {t('goalProcess.attempts.nth', { index: attempt.index })}

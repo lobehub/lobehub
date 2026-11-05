@@ -1,6 +1,7 @@
 'use client';
 
-import { Button, createStaticStyles, Flexbox, Text, toast } from '@lobehub/ui';
+import { Button, Flexbox, Text, toast } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { PauseIcon, PlayIcon } from 'lucide-react';
 import { memo, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -54,11 +55,7 @@ import { useGoalChatPanel } from './useGoalChatPanel';
  * (node → task → topic conversation).
  */
 
-const styles = createStaticStyles(({ css }) => ({
-  header: css`
-    padding-block: 8px 4px;
-  `,
-}));
+const styles = stylex.create({ header: { paddingBlockStart: '8px', paddingBlockEnd: '4px' } });
 
 /** A goal 404s outside its own scope; reading it through another scope tells where it lives. */
 const probeGoalGraph = (client: ScopedLambdaClient, id: string, signal: AbortSignal) =>
@@ -314,7 +311,7 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
           />
           <Flexbox flex={1} style={{ overflowY: 'auto' }}>
             <WideScreenContainer gap={20} paddingBlock={16}>
-              <Flexbox className={styles.header} gap={8}>
+              <Flexbox className={stylex.props(styles.header).className} gap={8}>
                 <GoalDetailTitle
                   creatorUserId={goal.userId}
                   goalId={goal.id}

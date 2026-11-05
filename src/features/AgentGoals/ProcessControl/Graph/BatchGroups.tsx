@@ -1,16 +1,9 @@
 'use client';
 
 import type { GoalRolloutPlanSkill, GoalRolloutRetro, GoalRolloutVerifier } from '@lobechat/types';
-import {
-  ActionIcon,
-  Button,
-  createStaticStyles,
-  cssVar,
-  cx,
-  Flexbox,
-  Icon,
-  Tooltip,
-} from '@lobehub/ui';
+import { ActionIcon, Button, Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Handle, type NodeProps, Position } from '@xyflow/react';
 import {
   ChevronLeft,
@@ -33,17 +26,11 @@ import { useTranslation } from 'react-i18next';
 
 import { TASK_STATUS_VISUALS } from '@/components/ExecutionStatus';
 import RunningGlyph from '@/features/Home/components/RunningGlyph';
+import { sx } from '@/styles/sx';
 
 import type { GoalNodeView } from '../goalGraphViewModel';
 import { GATE_COLOR, KIND_COLOR, KIND_ICON, SKILL_COLOR, SKILL_ICON } from '../shared';
-import {
-  BATCH_FRAME_HEAD,
-  BATCH_RETRO_MARK,
-  BATCH_RETRO_ROW,
-  BATCH_ROW_LABEL,
-  BATCH_SQUARE,
-  BATCH_SQUARE_GAP,
-} from './batchLayout';
+import { BATCH_FRAME_HEAD, BATCH_RETRO_ROW, BATCH_SQUARE_GAP } from './batchLayout';
 import {
   type BatchCell,
   type BatchCellState,
@@ -76,250 +63,220 @@ export const CELL_VISUAL: Record<BatchCellState, { color: string; icon: LucideIc
   stale: { color: TASK_STATUS_VISUALS.backlog.color, icon: CircleSlash },
 };
 
-const styles = createStaticStyles(({ css }) => ({
-  glow: css`
-    animation: goal-batch-glow 1.6s ease-in-out infinite;
+const REDUCED_MOTION = '@media (prefers-reduced-motion: reduce)';
 
-    @keyframes goal-batch-glow {
-      0%,
-      100% {
-        box-shadow: 0 0 0 0 color-mix(in srgb, ${cssVar.colorWarning} 0%, transparent);
-      }
+const glow = stylex.keyframes({
+  '0%, 100%': { boxShadow: `0 0 0 0 color-mix(in srgb, ${cssVar.colorWarning} 0%, transparent)` },
+  '50%': {
+    boxShadow: `0 0 0 2px color-mix(in srgb, ${cssVar.colorWarning} 28%, transparent), 0 0 8px 2px color-mix(in srgb, ${cssVar.colorWarning} 55%, transparent)`,
+  },
+});
 
-      50% {
-        box-shadow:
-          0 0 0 2px color-mix(in srgb, ${cssVar.colorWarning} 28%, transparent),
-          0 0 8px 2px color-mix(in srgb, ${cssVar.colorWarning} 55%, transparent);
-      }
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      animation: none;
-    }
-  `,
-  card: css`
-    cursor: pointer;
-
-    box-sizing: border-box;
-    width: 100%;
-    padding-block: 7px;
-    padding-inline: 9px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorBgContainer};
-
-    transition: border-color 0.15s;
-
-    &:hover {
-      border-color: ${cssVar.colorBorder};
-    }
-  `,
-  cardTitle: css`
-    overflow: hidden;
-
-    font-size: 12px;
-    font-weight: 500;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  foot: css`
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    align-items: center;
-
-    padding-block: 6px;
-    padding-inline: 10px;
-
-    font-size: 11px;
-  `,
-  glyph: css`
-    display: flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-
-    width: 24px;
-    height: 24px;
-    border-radius: 6px;
-  `,
-  group: css`
-    box-sizing: border-box;
-    width: 100%;
-    border: 1px solid ${cssVar.colorBorder};
-    border-radius: 12px;
-
-    /* White on light like every card; the header rule separates it, not a grey fill. */
-    background: ${cssVar.colorBgContainer};
-  `,
-  /* A label row, not a title bar: no fill, no rule, the body carries the weight. */
-  groupHead: css`
-    display: flex;
-    gap: 8px;
-    align-items: center;
-    justify-content: space-between;
-
-    padding-block: 8px;
-    padding-inline: 10px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 12px 12px 0 0;
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  groupTitle: css`
-    overflow: hidden;
-
-    min-width: 0;
-
-    font-size: 13px;
-    font-weight: 600;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  /* Trials: one row of two cards, status above each card. */
-  probeGrid: css`
-    display: flex;
-    flex-wrap: wrap;
-    gap: 7px;
-
-    padding-block: 8px 4px;
-    padding-inline: 10px;
-  `,
-  probeCell: css`
-    display: flex;
-    flex: 1 1 calc(50% - 4px);
-    flex-direction: column;
-    gap: 4px;
-
-    min-width: 0;
-  `,
-  /* A round's frame: a quiet container, the cards inside carry the weight. */
-  frame: css`
-    box-sizing: border-box;
-    width: 100%;
-    height: 100%;
-    border: 1px dashed ${cssVar.colorBorder};
-    border-radius: 16px;
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  frameHead: css`
-    display: flex;
-    align-items: center;
-
-    height: ${BATCH_FRAME_HEAD}px;
-    padding-inline: 14px;
-
-    font-size: 13px;
-    font-weight: 600;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  /* Waves: row gap equals square gap, so the roster reads as a grid. */
-  wavesBody: css`
-    display: flex;
-    flex-direction: column;
-    gap: ${BATCH_SQUARE_GAP}px;
-
-    padding-block: 8px 4px;
-    padding-inline: 10px;
-  `,
-  hint: css`
-    cursor: help;
-    display: inline-flex;
-    color: ${cssVar.colorTextTertiary};
-
-    &:hover {
-      color: ${cssVar.colorTextSecondary};
-    }
-  `,
-  handle: css`
-    width: 1px;
-    min-width: 0;
-    height: 1px;
-    min-height: 0;
-    border: none;
-
-    opacity: 0;
-  `,
-  muted: css`
-    font-size: 11px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  retroMark: css`
-    display: inline-flex;
-    flex: none;
-    gap: 4px;
-    align-items: center;
-
-    width: ${BATCH_RETRO_MARK}px;
-    margin-inline-start: 4px;
-    padding-inline-start: 8px;
-    border-inline-start: 1px dashed ${cssVar.colorBorder};
-
-    font-size: 10px;
-    line-height: 1;
-    white-space: nowrap;
-  `,
-  retroBody: css`
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-
-    padding-block: 8px 10px;
-    padding-inline: 10px;
-  `,
-  retroLayer: css`
-    /* A short row: the card radius would read as a pill. */
-    border-radius: ${cssVar.borderRadiusSM};
-  `,
-  retroRow: css`
-    cursor: default;
-    height: ${BATCH_RETRO_ROW}px;
-
-    &:hover {
-      border-color: ${cssVar.colorBorderSecondary};
-    }
-  `,
-  rowLabel: css`
-    flex: none;
-
-    width: ${BATCH_ROW_LABEL}px;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 10px;
-    line-height: 1;
-    color: ${cssVar.colorTextTertiary};
-    white-space: nowrap;
-  `,
-  rowLabelHot: css`
-    font-weight: 700;
-    color: ${cssVar.colorWarning};
-  `,
-  square: css`
-    cursor: default;
-
-    display: inline-block;
-    flex: none;
-
-    width: ${BATCH_SQUARE}px;
-    height: ${BATCH_SQUARE}px;
-    padding: 0;
-    border: none;
-    border-radius: 3px;
-  `,
-  squareLink: css`
-    cursor: pointer;
-  `,
-  status: css`
-    display: inline-flex;
-    gap: 5px;
-    align-items: center;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 11px;
-  `,
-}));
+const styles = stylex.create({
+  glow: {
+    animationName: { default: glow, [REDUCED_MOTION]: 'none' },
+    animationDuration: '1.6s',
+    animationTimingFunction: 'ease-in-out',
+    animationIterationCount: 'infinite',
+  },
+  card: {
+    cursor: 'pointer',
+    boxSizing: 'border-box',
+    width: '100%',
+    paddingBlock: '7px',
+    paddingInline: '9px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: { 'default': cssVar.colorBorderSecondary, ':hover': cssVar.colorBorder },
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+    transition: 'border-color 0.15s',
+  },
+  cardTitle: {
+    overflow: 'hidden',
+    fontSize: '12px',
+    fontWeight: 500,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  foot: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: '8px',
+    alignItems: 'center',
+    paddingBlock: '6px',
+    paddingInline: '10px',
+    fontSize: '11px',
+  },
+  glyph: {
+    display: 'flex',
+    flex: 'none',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '24px',
+    height: '24px',
+    borderRadius: '6px',
+  },
+  // White on light like every card; the header rule separates it, not a grey fill.
+  group: {
+    boxSizing: 'border-box',
+    width: '100%',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorder,
+    borderRadius: '12px',
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  // A label row, not a title bar: no fill, no rule, the body carries the weight.
+  groupHead: {
+    display: 'flex',
+    gap: '8px',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBlock: '8px',
+    paddingInline: '10px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+    borderStartStartRadius: '12px',
+    borderStartEndRadius: '12px',
+    borderEndEndRadius: 0,
+    borderEndStartRadius: 0,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  groupTitle: {
+    overflow: 'hidden',
+    minWidth: 0,
+    fontSize: '13px',
+    fontWeight: 600,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  // Trials: one row of two cards, status above each card.
+  probeGrid: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: '7px',
+    paddingBlockStart: '8px',
+    paddingBlockEnd: '4px',
+    paddingInline: '10px',
+  },
+  probeCell: {
+    display: 'flex',
+    flexGrow: '1',
+    flexShrink: '1',
+    flexBasis: 'calc(50% - 4px)',
+    flexDirection: 'column',
+    gap: '4px',
+    minWidth: 0,
+  },
+  // A round's frame: a quiet container, the cards inside carry the weight.
+  frame: {
+    boxSizing: 'border-box',
+    width: '100%',
+    height: '100%',
+    borderWidth: '1px',
+    borderStyle: 'dashed',
+    borderColor: cssVar.colorBorder,
+    borderRadius: '16px',
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  frameHead: {
+    display: 'flex',
+    alignItems: 'center',
+    // BATCH_FRAME_HEAD (38), see stylexConstants.test.ts
+    height: '38px',
+    paddingInline: '14px',
+    fontSize: '13px',
+    fontWeight: 600,
+    color: cssVar.colorTextSecondary,
+  },
+  // Waves: row gap equals square gap, so the roster reads as a grid.
+  wavesBody: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '10px', // BATCH_SQUARE_GAP
+    paddingBlockStart: '8px',
+    paddingBlockEnd: '4px',
+    paddingInline: '10px',
+  },
+  hint: {
+    cursor: 'help',
+    display: 'inline-flex',
+    color: { 'default': cssVar.colorTextTertiary, ':hover': cssVar.colorTextSecondary },
+  },
+  handle: {
+    width: '1px',
+    minWidth: 0,
+    height: '1px',
+    minHeight: 0,
+    borderStyle: 'none',
+    opacity: 0,
+  },
+  muted: { fontSize: '11px', color: cssVar.colorTextTertiary },
+  retroMark: {
+    display: 'inline-flex',
+    flex: 'none',
+    gap: '4px',
+    alignItems: 'center',
+    width: '150px', // BATCH_RETRO_MARK
+    marginInlineStart: '4px',
+    paddingInlineStart: '8px',
+    borderInlineStartWidth: '1px',
+    borderInlineStartStyle: 'dashed',
+    borderInlineStartColor: cssVar.colorBorder,
+    fontSize: '10px',
+    lineHeight: 1,
+    whiteSpace: 'nowrap',
+  },
+  retroBody: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '6px',
+    paddingBlockStart: '8px',
+    paddingBlockEnd: '10px',
+    paddingInline: '10px',
+  },
+  // A short row: the card radius would read as a pill.
+  retroLayer: { borderRadius: cssVar.borderRadiusSM },
+  retroRow: {
+    cursor: 'default',
+    height: '44px', // BATCH_RETRO_ROW
+    borderColor: cssVar.colorBorderSecondary,
+  },
+  rowLabel: {
+    flex: 'none',
+    width: '44px', // BATCH_ROW_LABEL
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '10px',
+    lineHeight: 1,
+    color: cssVar.colorTextTertiary,
+    whiteSpace: 'nowrap',
+  },
+  rowLabelHot: { fontWeight: 700, color: cssVar.colorWarning },
+  square: {
+    cursor: 'default',
+    display: 'inline-block',
+    flex: 'none',
+    width: '12px', // BATCH_SQUARE
+    height: '12px',
+    padding: 0,
+    borderStyle: 'none',
+    borderRadius: '3px',
+  },
+  squareLink: { cursor: 'pointer' },
+  status: {
+    display: 'inline-flex',
+    gap: '5px',
+    alignItems: 'center',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '11px',
+  },
+});
 
 const squareStyle = (state: BatchCellState) => {
   switch (state) {
@@ -350,10 +307,15 @@ const STAGE_HANDLE_TOP = 19;
  */
 const GroupHandles = () => (
   <>
-    <Handle className={styles.handle} isConnectable={false} position={Position.Top} type="target" />
+    <Handle
+      className={stylex.props(styles.handle).className}
+      isConnectable={false}
+      position={Position.Top}
+      type="target"
+    />
     {/* Stages hand off left to right: in on the left, out on the right. */}
     <Handle
-      className={styles.handle}
+      className={stylex.props(styles.handle).className}
       id="l"
       isConnectable={false}
       position={Position.Left}
@@ -362,13 +324,13 @@ const GroupHandles = () => (
     />
     {/* Bottom first: a link that names no handle takes the first source. */}
     <Handle
-      className={styles.handle}
+      className={stylex.props(styles.handle).className}
       isConnectable={false}
       position={Position.Bottom}
       type="source"
     />
     <Handle
-      className={styles.handle}
+      className={stylex.props(styles.handle).className}
       id="r"
       isConnectable={false}
       position={Position.Right}
@@ -387,7 +349,7 @@ interface GroupStatus {
 }
 
 const StatusText = memo<GroupStatus>(({ color, icon, running, text }) => (
-  <span className={styles.status} style={{ color }}>
+  <span className={stylex.props(styles.status).className} style={{ color }}>
     {running ? <RunningGlyph size={13} /> : <Icon icon={icon} size={13} />}
     {text}
   </span>
@@ -412,15 +374,15 @@ const GroupShell = memo<{
 }>(({ children, foot, hint, icon, iconColor, onEnter, status, statusInHead, title, toolbar }) => {
   const { t } = useTranslation('chat');
   return (
-    <div className={styles.group}>
+    <div className={stylex.props(styles.group).className}>
       <GroupHandles />
-      <div className={styles.groupHead}>
+      <div className={stylex.props(styles.groupHead).className}>
         <Flexbox horizontal align={'center'} gap={7} style={{ minWidth: 0, overflow: 'hidden' }}>
           <Icon color={iconColor} icon={icon} size={14} />
-          <span className={styles.groupTitle}>{title}</span>
+          <span className={stylex.props(styles.groupTitle).className}>{title}</span>
           {hint && (
             <Tooltip title={hint}>
-              <span data-hint className={cx('nodrag', styles.hint)} role="img">
+              <span data-hint className={sx([styles.hint], 'nodrag').className} role="img">
                 <Icon icon={Info} size={13} />
               </span>
             </Tooltip>
@@ -430,7 +392,7 @@ const GroupShell = memo<{
           {statusInHead && (
             <>
               <StatusText {...status} />
-              {foot && <span className={styles.muted}>{foot}</span>}
+              {foot && <span className={stylex.props(styles.muted).className}>{foot}</span>}
             </>
           )}
           {toolbar}
@@ -450,9 +412,9 @@ const GroupShell = memo<{
       </div>
       {children}
       {!statusInHead && (
-        <div className={styles.foot}>
+        <div className={stylex.props(styles.foot).className}>
           <StatusText {...status} />
-          {foot && <span className={styles.muted}>{foot}</span>}
+          {foot && <span className={stylex.props(styles.muted).className}>{foot}</span>}
         </div>
       )}
     </div>
@@ -473,12 +435,16 @@ export const Square = memo<{
       data-state={state}
       style={squareStyle(state)}
       type="button"
-      className={cx(
-        'nodrag',
-        styles.square,
-        nodeId && onSelect && styles.squareLink,
-        state === 'running' && styles.glow,
-      )}
+      className={
+        sx(
+          [
+            styles.square,
+            nodeId && onSelect ? styles.squareLink : null,
+            state === 'running' && styles.glow,
+          ],
+          'nodrag',
+        ).className
+      }
       onClick={(event) => {
         event.stopPropagation();
         if (nodeId) onSelect?.(nodeId);
@@ -528,7 +494,7 @@ const SquareLegend = memo(() => {
     <Flexbox gap={6}>
       {(['backlog', 'running', 'human', 'done', 'stale'] as const).map((state) => (
         <Flexbox horizontal align={'center'} gap={6} key={state}>
-          <span className={styles.square} style={squareStyle(state)} />
+          <span className={stylex.props(styles.square).className} style={squareStyle(state)} />
           {label(state)}
         </Flexbox>
       ))}
@@ -570,7 +536,11 @@ const ProbeCell = memo<{ onSelect: (id: string) => void; probe: BatchProbe; view
     const visual = CELL_VISUAL[probe.state];
     const subtitle = probeSubtitle(view?.node.description);
     return (
-      <div className={styles.probeCell} data-probe={probe.nodeId} data-state={probe.state}>
+      <div
+        className={stylex.props(styles.probeCell).className}
+        data-probe={probe.nodeId}
+        data-state={probe.state}
+      >
         <StatusText
           color={visual.color}
           icon={visual.icon}
@@ -578,7 +548,7 @@ const ProbeCell = memo<{ onSelect: (id: string) => void; probe: BatchProbe; view
           text={t(`goalBatch.probes.cell.${probe.state}` as const)}
         />
         <div
-          className={cx('nodrag', styles.card)}
+          className={sx([styles.card], 'nodrag').className}
           role="button"
           style={probe.state === 'stale' ? { opacity: 0.5 } : undefined}
           tabIndex={0}
@@ -595,17 +565,20 @@ const ProbeCell = memo<{ onSelect: (id: string) => void; probe: BatchProbe; view
         >
           <Flexbox horizontal align={'center'} gap={7}>
             <span
-              className={styles.glyph}
+              className={stylex.props(styles.glyph).className}
               style={{ background: KIND_COLOR.task.soft, color: KIND_COLOR.task.line }}
             >
               <Icon icon={KIND_ICON.task} size={14} />
             </span>
-            <Flexbox style={{ flex: 1, minWidth: 0 }}>
-              <span className={styles.cardTitle} title={probe.title}>
+            <Flexbox style={{ flex: '1', minWidth: 0 }}>
+              <span className={stylex.props(styles.cardTitle).className} title={probe.title}>
                 {probe.title}
               </span>
               {subtitle && (
-                <span className={cx(styles.cardTitle, styles.muted)} style={{ fontWeight: 400 }}>
+                <span
+                  className={stylex.props(styles.cardTitle, styles.muted).className}
+                  style={{ fontWeight: 400 }}
+                >
                   {subtitle}
                 </span>
               )}
@@ -666,7 +639,10 @@ export const BatchExperimentProbeGroup = memo<NodeProps>(({ data }) => {
                 setPicked(attempt - 1);
               }}
             />
-            <span className={styles.muted} style={{ fontVariantNumeric: 'tabular-nums' }}>
+            <span
+              className={stylex.props(styles.muted).className}
+              style={{ fontVariantNumeric: 'tabular-nums' }}
+            >
               {t('goalBatch.probes.attemptOf', { current: attempt, total: attempts })}
             </span>
             <ActionIcon
@@ -685,7 +661,7 @@ export const BatchExperimentProbeGroup = memo<NodeProps>(({ data }) => {
       }
       onEnter={onEnter}
     >
-      <div className={styles.probeGrid}>
+      <div className={stylex.props(styles.probeGrid).className}>
         {probes.map((probe) => (
           <ProbeCell
             key={probe.nodeId}
@@ -717,7 +693,7 @@ export interface BatchWaveRow {
 const RetroMark = memo<{ cells: BatchCell[]; retro?: GoalRolloutRetro }>(({ cells, retro }) => {
   const { t } = useTranslation('chat');
   const finished = cells.length > 0 && cells.every((cell) => cell.state === 'done');
-  if (!retro && !finished) return <span className={styles.retroMark} />;
+  if (!retro && !finished) return <span className={stylex.props(styles.retroMark).className} />;
   const status = !retro
     ? { ...CELL_VISUAL.backlog, text: t('goalBatch.retro.mark.pending') }
     : retro.status === 'running'
@@ -733,7 +709,10 @@ const RetroMark = memo<{ cells: BatchCell[]; retro?: GoalRolloutRetro }>(({ cell
           };
   return (
     <Tooltip title={retro ? <RetroSummary retro={retro} /> : t('goalBatch.retro.mark.pendingHint')}>
-      <span className={cx('nodrag', styles.retroMark)} data-retro-mark={retro?.status ?? 'pending'}>
+      <span
+        className={sx([styles.retroMark], 'nodrag').className}
+        data-retro-mark={retro?.status ?? 'pending'}
+      >
         <StatusText {...status} />
       </span>
     </Tooltip>
@@ -756,7 +735,7 @@ const WaveRows = memo<{
         const hot = cells.some((cell) => cell.state === 'human' || cell.reopenedIn);
         return (
           <Flexbox horizontal align={'center'} data-wave={wave} gap={8} key={wave}>
-            <span className={cx(styles.rowLabel, hot && styles.rowLabelHot)}>
+            <span className={stylex.props(styles.rowLabel, hot && styles.rowLabelHot).className}>
               {t('goalBatch.waves.row', { number: wave + 1 })}
             </span>
             <Flexbox horizontal gap={BATCH_SQUARE_GAP}>
@@ -875,12 +854,12 @@ export const BatchWavesGroup = memo<NodeProps>(({ data }) => {
       }
       onEnter={onEnter}
     >
-      <div className={styles.wavesBody}>
+      <div className={stylex.props(styles.wavesBody).className}>
         {/* Re-opened units first — this round's own canary, named by the batch
             they first ran in — then the roster waves the round owns. */}
         {reopened.map((row, w) => (
           <Flexbox horizontal align={'center'} data-reopened-row={w} gap={8} key={`reopened-${w}`}>
-            <span className={styles.rowLabel}>{rowLabelOf(row.from)}</span>
+            <span className={stylex.props(styles.rowLabel).className}>{rowLabelOf(row.from)}</span>
             <Flexbox horizontal gap={BATCH_SQUARE_GAP}>
               {row.probes.map((probe) => (
                 <Square
@@ -946,7 +925,7 @@ const RetroLayer = memo<{
   title: string;
 }>(({ color, icon, onOpen, subtitle, title }) => (
   <div
-    className={cx('nodrag', styles.card, styles.retroLayer, !onOpen && styles.retroRow)}
+    className={sx([styles.card, styles.retroLayer, !onOpen && styles.retroRow], 'nodrag').className}
     role={onOpen ? 'button' : undefined}
     style={{ height: BATCH_RETRO_ROW }}
     tabIndex={onOpen ? 0 : undefined}
@@ -962,12 +941,18 @@ const RetroLayer = memo<{
     }}
   >
     <Flexbox horizontal align={'center'} gap={7}>
-      <span className={styles.glyph} style={{ background: color.soft, color: color.line }}>
+      <span
+        className={stylex.props(styles.glyph).className}
+        style={{ background: color.soft, color: color.line }}
+      >
         <Icon icon={icon} size={14} />
       </span>
-      <Flexbox style={{ flex: 1, minWidth: 0 }}>
-        <span className={styles.cardTitle}>{title}</span>
-        <span className={cx(styles.cardTitle, styles.muted)} style={{ fontWeight: 400 }}>
+      <Flexbox style={{ flex: '1', minWidth: 0 }}>
+        <span className={stylex.props(styles.cardTitle).className}>{title}</span>
+        <span
+          className={stylex.props(styles.cardTitle, styles.muted).className}
+          style={{ fontWeight: 400 }}
+        >
           {subtitle}
         </span>
       </Flexbox>
@@ -1023,7 +1008,7 @@ export const BatchRetroGroup = memo<NodeProps>(({ data }) => {
           : t('goalBatch.retro.titleWave', { wave: retro.wave })
       }
     >
-      <div className={styles.retroBody}>
+      <div className={stylex.props(styles.retroBody).className}>
         <RetroLayer
           color={SKILL_COLOR}
           icon={SKILL_ICON}
@@ -1072,9 +1057,9 @@ export const BatchRoundFrame = memo<NodeProps>(({ data }) => {
   const { revision } = data as BatchRoundFrameData;
   const { t } = useTranslation('chat');
   return (
-    <div className={styles.frame}>
+    <div className={stylex.props(styles.frame).className}>
       <Handle
-        className={styles.handle}
+        className={stylex.props(styles.handle).className}
         id="l"
         isConnectable={false}
         position={Position.Left}
@@ -1082,14 +1067,16 @@ export const BatchRoundFrame = memo<NodeProps>(({ data }) => {
         type="target"
       />
       <Handle
-        className={styles.handle}
+        className={stylex.props(styles.handle).className}
         id="r"
         isConnectable={false}
         position={Position.Right}
         style={{ top: BATCH_FRAME_HEAD / 2 }}
         type="source"
       />
-      <div className={styles.frameHead}>{t('goalBatch.round.title', { revision })}</div>
+      <div className={stylex.props(styles.frameHead).className}>
+        {t('goalBatch.round.title', { revision })}
+      </div>
     </div>
   );
 });
