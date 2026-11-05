@@ -41,6 +41,12 @@ describe('findPath', () => {
       { x: 2, y: 8 },
     ]);
   });
+
+  it('never accepts a blocked destination, not even the blocked cell it starts on', () => {
+    // A seated character's cell is the bench seat: "walking" there is not standing there.
+    expect(findPath(scene, { x: 2, y: 6 }, { x: 2, y: 6 })).toBeUndefined();
+    expect(findPath(scene, { x: 6, y: 4 }, { x: 6, y: 4 })).toEqual([]);
+  });
 });
 
 describe('planAction', () => {
@@ -119,6 +125,19 @@ describe('planAction', () => {
     });
     expect(planAction(scene, start, { action: 'moveTo', point: { x: 10, y: 6 } })).toMatchObject({
       error: { type: 'unreachable' },
+    });
+  });
+
+  it('refuses to stand up into the bench seat itself', () => {
+    const seated: CharacterState = {
+      activity: { action: 'sitOn', targetId: 'bench_1' },
+      facing: 'south',
+      pose: 'sitting',
+      position: { x: 2, y: 6 },
+    };
+    expect(planAction(scene, seated, { action: 'moveTo', point: { x: 2, y: 6 } })).toMatchObject({
+      error: { type: 'unreachable' },
+      ok: false,
     });
   });
 

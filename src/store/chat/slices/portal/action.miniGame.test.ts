@@ -29,6 +29,18 @@ describe('toggleMiniGame', () => {
   });
 });
 
+describe('closeMiniGame', () => {
+  it('closes only the mini game, never another open view', () => {
+    act(() => useChatStore.getState().pushPortalView({ type: PortalViewType.Notebook }));
+    act(() => useChatStore.getState().closeMiniGame());
+    expect(viewType()).toBe(PortalViewType.Notebook);
+
+    act(() => useChatStore.getState().toggleMiniGame());
+    act(() => useChatStore.getState().closeMiniGame());
+    expect(viewType()).toBe(PortalViewType.Notebook);
+  });
+});
+
 describe('clearPortalStack with keepMiniGame', () => {
   it('keeps an open mini game, so a send that creates a topic does not close it', () => {
     act(() => {

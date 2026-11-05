@@ -738,11 +738,19 @@ export class ChatPortalActionImpl {
     this.#get().pushPortalView({ type: PortalViewType.Notebook });
   };
 
+  /** Closes the mini game when it is the open view; other views stay. */
+  closeMiniGame = (): void => {
+    const { portalStack, showPortal } = this.#get();
+    if (showPortal && getCurrentViewType(portalStack) === PortalViewType.MiniGame) {
+      this.#get().popPortalView();
+    }
+  };
+
   /** Opens the mini game beside the chat, or closes it when it is the open view. */
   toggleMiniGame = (): void => {
     const { portalStack, showPortal } = this.#get();
     if (showPortal && getCurrentViewType(portalStack) === PortalViewType.MiniGame) {
-      this.#get().popPortalView();
+      this.#get().closeMiniGame();
     } else {
       this.#get().pushPortalView({ type: PortalViewType.MiniGame });
     }

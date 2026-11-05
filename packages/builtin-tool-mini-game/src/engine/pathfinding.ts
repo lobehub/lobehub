@@ -29,8 +29,8 @@ const NEIGHBORS: GridPoint[] = [
 /**
  * Shortest 4-directional path on the scene grid (breadth-first; every step
  * costs the same). Returns the cells to walk through, excluding `from` and
- * including `to`; an empty array when already there; `undefined` when `to`
- * cannot be reached. The start cell may be blocked (a seated character sits
+ * including `to`; an empty array when already standing on `to`; `undefined`
+ * when `to` is blocked or cannot be reached. The start cell may be blocked (a seated character sits
  * on the bench), every other cell must be walkable.
  */
 export const findPath = (
@@ -38,10 +38,11 @@ export const findPath = (
   from: GridPoint,
   to: GridPoint,
 ): GridPoint[] | undefined => {
-  if (isSamePoint(from, to)) return [];
-
+  // The destination is checked first: a seated character may leave its
+  // blocked seat, but "walking" onto that same seat is not standing there.
   const blocked = getBlockedCells(scene);
   if (!isWalkable(scene, to, blocked)) return;
+  if (isSamePoint(from, to)) return [];
 
   const previous = new Map<string, GridPoint | null>([[key(from), null]]);
   const queue: GridPoint[] = [from];
