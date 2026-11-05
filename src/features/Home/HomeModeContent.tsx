@@ -44,6 +44,7 @@ import { markdownToTxt } from '@/utils/markdownToTxt';
 
 import { HOME_ENTITY_PORTAL_SCOPE } from './acceptancePortalView';
 import GroupBlock from './components/GroupBlock';
+import { groupBlockActionStyles } from './components/GroupBlock/actionStyles';
 import { homeType } from './components/homeType';
 import RunningGlyph from './components/RunningGlyph';
 import Time from './components/Time';
@@ -556,6 +557,7 @@ const HomeModeContent = memo<HomeModeContentProps>(({ inlineRail, mode, onSugges
             action={
               isTeam ? (
                 <Segmented
+                  classNames={{ item: stylex.props(groupBlockActionStyles.button).className }}
                   size={'small'}
                   value={scope}
                   options={[

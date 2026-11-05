@@ -1,7 +1,5 @@
 'use client';
 
-import './ResourceAccessPage.css';
-
 import { Alert, Breadcrumb, Flexbox, Icon, Text, toast } from '@lobehub/ui';
 import { Form, type FormGroupItem, useForm } from '@lobehub/ui/form';
 import * as stylex from '@stylexjs/stylex';
@@ -27,6 +25,10 @@ import { useAccessLevelOptions } from './useAccessLevelOptions';
 import { useResourcePermission } from './useResourcePermission';
 
 const styles = stylex.create({
+  backLink: {
+    display: 'flex',
+    alignItems: 'center',
+  },
   body: {
     position: 'relative',
     overflowY: 'auto',
@@ -150,14 +152,16 @@ const ResourceAccessPage = memo<ResourceAccessPageProps>(
           styles={{ left: { paddingInlineStart: 24 } }}
           left={
             <Breadcrumb
-              className={'lobe-resource-access-page-a367420c-breadcrumb'}
               separator={<Icon icon={ChevronRight} size={14} />}
               items={[
                 ...(resourceName
                   ? [
                       {
                         title: (
-                          <Link to={buildWorkspaceAwarePath(resourceHomePath, activeWorkspaceSlug)}>
+                          <Link
+                            {...stylex.props(styles.backLink)}
+                            to={buildWorkspaceAwarePath(resourceHomePath, activeWorkspaceSlug)}
+                          >
                             <Text
                               ellipsis
                               as={'span'}

@@ -1,7 +1,5 @@
 'use client';
 
-import './index.css';
-
 import { agentDisplayName } from '@lobechat/types';
 import {
   Button,
@@ -12,6 +10,7 @@ import {
   DropdownMenuTrigger,
   Text,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { ChevronsUpDownIcon } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
@@ -31,6 +30,34 @@ import AgentList from './AgentList';
 import { useResolvedHomeAgentId } from './useResolvedHomeAgentId';
 
 const styles = stylex.create({
+  chevron: {
+    color: cssVar.colorTextDescription,
+    opacity: {
+      default: 0,
+      [stylex.when.ancestor(':hover')]: 1,
+      [stylex.when.ancestor(':is([data-popup-open])')]: 1,
+    },
+    transition: `opacity 0.2s ${cssVar.motionEaseOut}`,
+  },
+  trigger: {
+    justifyContent: 'flex-start',
+    width: 'fit-content',
+    minWidth: 0,
+    maxWidth: '100%',
+    height: 'auto',
+    marginInlineStart: '-2px',
+    paddingBlock: '2px',
+    paddingInline: '2px',
+    borderWidth: 0,
+    borderStyle: 'none',
+    borderColor: 'currentcolor',
+    backgroundColor: {
+      'default': 'transparent',
+      ':is([data-popup-open])': cssVar.colorFillTertiary,
+    },
+    backgroundImage: 'none',
+    gap: '8px',
+  },
   popup: {
     overflow: 'hidden',
     display: 'flex',
@@ -93,7 +120,7 @@ const AgentSelect = memo(() => {
         <Button
           aria-expanded={open}
           aria-haspopup={'menu'}
-          className={'lobe-agent-select-4585cea3-trigger'}
+          className={stylex.props(styles.trigger, stylex.defaultMarker()).className}
           type={'text'}
         >
           <AgentAvatar
@@ -112,7 +139,7 @@ const AgentSelect = memo(() => {
           >
             {displayTitle}
           </Text>
-          <ChevronsUpDownIcon className={'lobe-agent-select-4585cea3-chevron'} size={12} />
+          <ChevronsUpDownIcon {...stylex.props(styles.chevron)} size={12} />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuPortal>

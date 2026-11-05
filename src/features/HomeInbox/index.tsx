@@ -14,6 +14,7 @@ import { useWorkspaceMemberProfiles } from '@/business/client/hooks/useWorkspace
 import AsyncError from '@/components/AsyncError';
 import { BriefCardSkeleton } from '@/features/DailyBrief/BriefCardSkeleton';
 import GroupBlock from '@/features/Home/components/GroupBlock';
+import { groupBlockActionStyles } from '@/features/Home/components/GroupBlock/actionStyles';
 import { homeType } from '@/features/Home/components/homeType';
 import RailCard from '@/features/Home/components/RailCard';
 import Recommendations, { useRecommendationsVisible } from '@/features/Recommendations';
@@ -297,6 +298,7 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
   // there's nothing to handle. Only shown in a team workspace.
   const scopeToggle = isTeam ? (
     <Segmented
+      classNames={{ item: stylex.props(groupBlockActionStyles.button).className }}
       size={'small'}
       value={scope}
       options={[
@@ -488,9 +490,14 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
       action: (
         <Flexbox horizontal align={'center'} gap={4}>
           {unresolvedNews.length > 0 && (
-            <MarkAllReadButton news={unresolvedNews} onResolved={() => void newsSWR.mutate()} />
+            <MarkAllReadButton
+              news={unresolvedNews}
+              xstyle={groupBlockActionStyles.button}
+              onResolved={() => void newsSWR.mutate()}
+            />
           )}
           <ActionIcon
+            className={stylex.props(groupBlockActionStyles.button).className}
             disabled={!hasEarlierNews}
             icon={ChevronLeftIcon}
             size={'small'}
@@ -498,6 +505,7 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
             onClick={() => setNewsDayOffset(shownNewsOffset + 1)}
           />
           <ActionIcon
+            className={stylex.props(groupBlockActionStyles.button).className}
             disabled={shownNewsOffset === 0}
             icon={ChevronRightIcon}
             size={'small'}

@@ -182,11 +182,11 @@ const AgentList = memo<AgentListProps>(({ activeAgentId, error, onRetry, onSelec
               </div>
             ) : (
               <DropdownMenuItem
+                key={item.key}
                 className={
                   stylex.props(styles.item, item.row.id === activeAgentId && styles.active)
                     .className
                 }
-                key={item.key}
                 onClick={() => onSelect(item.row.id)}
               >
                 <AgentAvatar

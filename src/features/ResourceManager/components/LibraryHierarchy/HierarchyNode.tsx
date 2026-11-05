@@ -1,9 +1,7 @@
 'use client';
 
-import './hierarchy.css';
-
 import { DERIVED_DOCUMENT_SOURCE_TYPE } from '@lobechat/const';
-import { Block, cx, Flexbox, Icon, Input, stopPropagation, toast, Tooltip } from '@lobehub/ui';
+import { Block, Flexbox, Icon, Input, stopPropagation, toast, Tooltip } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { FileText, FolderIcon, FolderOpenIcon, LockIcon } from 'lucide-react';
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -294,11 +292,14 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
             height={36}
             paddingInline={4}
             variant={isActive ? 'filled' : 'borderless'}
-            className={cx(
-              'lobe-hierarchy-1d43e20b-tree-item',
-              stylex.props(isOver && styles.fileItemDragOver, isDragging && styles.dragging)
-                .className,
-            )}
+            className={
+              stylex.props(
+                styles.treeItem,
+                stylex.defaultMarker(),
+                isOver && styles.fileItemDragOver,
+                isDragging && styles.dragging,
+              ).className
+            }
             style={{
               paddingInlineStart: level * 12 + 4,
             }}
@@ -388,10 +389,10 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
           height={36}
           paddingInline={4}
           variant={isActive ? 'filled' : 'borderless'}
-          className={cx(
-            'lobe-hierarchy-1d43e20b-tree-item',
-            stylex.props(isDragging && styles.dragging).className,
-          )}
+          className={
+            stylex.props(styles.treeItem, stylex.defaultMarker(), isDragging && styles.dragging)
+              .className
+          }
           style={{
             paddingInlineStart: level * 12 + 4,
           }}
