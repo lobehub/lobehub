@@ -20,10 +20,10 @@ export class DingTalkFormatConverter extends BaseFormatConverter {
 
   /**
    * Inbound group text arrives with the leading `@robot` mention already
-   * removed by DingTalk but keeps the separating whitespace; normalise it.
+   * removed by DingTalk but keeps the separating U+2005 (four-per-em space); normalise it.
    */
   cleanText(text: string): string {
-    return text.replaceAll(' ', ' ').trim();
+    return text.replaceAll('\u2005', ' ').trim();
   }
 
   /**
