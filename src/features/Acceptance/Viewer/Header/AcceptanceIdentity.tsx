@@ -1,8 +1,6 @@
 'use client';
 
 import { Avatar, createStaticStyles, cssVar, Flexbox, Text } from '@lobehub/ui';
-import type { StyleXStyles } from '@stylexjs/stylex';
-import * as stylex from '@stylexjs/stylex';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -50,7 +48,6 @@ interface AcceptanceIdentityProps {
   /** Rendered after the title, revealed on hover — the per-check entry point. */
   focusSlot?: ReactNode;
   statusSlot?: ReactNode;
-  titleXstyle?: StyleXStyles;
   topicSlot?: ReactNode;
 }
 
@@ -73,12 +70,7 @@ interface AcceptanceIdentityProps {
  * reader had not reached yet.
  */
 
-const AcceptanceIdentity = ({
-  focusSlot,
-  statusSlot,
-  titleXstyle,
-  topicSlot,
-}: AcceptanceIdentityProps) => {
+const AcceptanceIdentity = ({ focusSlot, statusSlot, topicSlot }: AcceptanceIdentityProps) => {
   const { t } = useTranslation('verify');
   const { acceptanceId, embedded } = useAcceptanceScope();
   const { data } = useAcceptanceBundle(acceptanceId);
@@ -96,12 +88,7 @@ const AcceptanceIdentity = ({
           reader came to judge — and it sat where the title's own meaning
           should carry. */}
       <Flexbox horizontal align={'center'} className={styles.titleRow} gap={10} wrap={'wrap'}>
-        <Text
-          ellipsis
-          as={'h1'}
-          className={stylex.props(titleXstyle).className}
-          style={{ fontSize: 18, margin: 0, minWidth: 0 }}
-        >
+        <Text ellipsis as={'h1'} style={{ fontSize: 18, margin: 0, minWidth: 0 }}>
           {subject.title ?? subject.id}
         </Text>
         {focusSlot && <div data-role={'focus-entry'}>{focusSlot}</div>}

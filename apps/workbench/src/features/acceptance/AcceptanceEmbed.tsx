@@ -1,4 +1,7 @@
-import { Flexbox } from '@lobehub/ui';
+// oxlint-disable-next-line stylex-migration/no-plain-css -- styles the h1s that lobe-ui Markdown renders inside check evidence; no prop reaches them
+import './AcceptanceEmbed.css';
+
+import { cx, Flexbox } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { useState } from 'react';
@@ -31,7 +34,6 @@ const styles = stylex.create({
     paddingBlock: { 'default': '24px', '@media (width <= 767px)': '16px' },
     paddingInline: { 'default': '24px', '@media (width <= 767px)': '16px' },
   },
-  title: { overflow: 'visible', overflowWrap: 'anywhere', whiteSpace: 'normal' },
   page: {
     overflow: 'auto',
     width: '100%',
@@ -55,8 +57,14 @@ const EmbedContent = () => {
   );
 
   return (
-    <Flexbox className={stylex.props(styles.content).className} gap={24}>
-      <AcceptanceIdentity titleXstyle={styles.title} />
+    <Flexbox
+      gap={24}
+      className={cx(
+        stylex.props(styles.content).className,
+        'lobe-acceptance-embed-fe01f599-content',
+      )}
+    >
+      <AcceptanceIdentity />
       <AcceptanceGoal />
       <AcceptanceTabs
         active={tab}
