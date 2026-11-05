@@ -1,8 +1,7 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Progress, Spin, Tag, Text } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui';
+import { cssVar, Flexbox, Progress, Spin, Tag, Text } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 
 import BubblesLoading from '@/components/BubblesLoading';
@@ -64,10 +63,15 @@ export const ContextMemoryCard = memo<ContextMemoryCardProps>(({ data, loading }
   if (isEmpty) return null;
 
   return (
-    <Flexbox className={styles.container}>
-      <Flexbox horizontal align={'center'} className={styles.header} gap={8}>
+    <Flexbox className={stylex.props(styles.container).className}>
+      <Flexbox
+        horizontal
+        align={'center'}
+        className={stylex.props(styles.header).className}
+        gap={8}
+      >
         <Flexbox flex={1}>
-          <div className={styles.title}>{title || 'Context Memory'}</div>
+          <div {...stylex.props(styles.title)}>{title || 'Context Memory'}</div>
         </Flexbox>
         {contextType && <Tag>{contextType}</Tag>}
         {status && <Tag color={STATUS_COLORS[status] || 'default'}>{status.replace('_', ' ')}</Tag>}
@@ -80,7 +84,7 @@ export const ContextMemoryCard = memo<ContextMemoryCardProps>(({ data, loading }
 
           {description && (
             <MemorySection title={'Description'}>
-              <div className={styles.sectionBody}>
+              <div {...stylex.props(styles.sectionBody)}>
                 <StreamingMarkdown>{description}</StreamingMarkdown>
               </div>
             </MemorySection>
@@ -89,7 +93,7 @@ export const ContextMemoryCard = memo<ContextMemoryCardProps>(({ data, loading }
           {scoreItems.length > 0 && (
             <Flexbox
               horizontal
-              className={styles.section}
+              className={stylex.props(styles.section).className}
               gap={24}
               style={{ paddingBlock: 12, paddingInline: 12 }}
             >
@@ -124,7 +128,7 @@ export const ContextMemoryCard = memo<ContextMemoryCardProps>(({ data, loading }
           {labels.length > 0 && (
             <Flexbox
               horizontal
-              className={styles.section}
+              className={stylex.props(styles.section).className}
               gap={8}
               style={{ paddingBlock: 12, paddingInline: 12 }}
               wrap={'wrap'}
@@ -136,15 +140,20 @@ export const ContextMemoryCard = memo<ContextMemoryCardProps>(({ data, loading }
           )}
         </>
       ) : (
-        <Flexbox className={styles.content} gap={8}>
+        <Flexbox className={stylex.props(styles.content).className} gap={8}>
           {!summary && loading ? (
             <BubblesLoading />
           ) : (
             <>
-              {summary && <div className={styles.summary}>{summary}</div>}
+              {summary && <div {...stylex.props(styles.summary)}>{summary}</div>}
               {details && <StreamingMarkdown>{details}</StreamingMarkdown>}
               {tags.length > 0 && (
-                <Flexbox horizontal className={styles.tags} gap={8} wrap={'wrap'}>
+                <Flexbox
+                  horizontal
+                  className={stylex.props(styles.tags).className}
+                  gap={8}
+                  wrap={'wrap'}
+                >
                   {tags.map((tag, index) => (
                     <Tag key={index}>{tag}</Tag>
                   ))}

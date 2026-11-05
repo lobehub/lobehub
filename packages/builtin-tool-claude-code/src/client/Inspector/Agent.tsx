@@ -3,9 +3,10 @@
 import { AnimatedNumber } from '@lobechat/shared-tool-ui/components';
 import { inspectorTextStyles, shinyTextStyles } from '@lobechat/shared-tool-ui/styles';
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { Tooltip } from '@lobehub/ui';
+import { cx, Tooltip } from '@lobehub/ui';
 import { GroupBotIcon } from '@lobehub/ui/icons';
-import { createStaticStyles, cx } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -16,55 +17,42 @@ import { aggregateSubagentMetrics } from '@/utils/subagentMetrics';
 import { type AgentArgs, ClaudeCodeApiName } from '../../types';
 import { resolveCCSubagentType } from '../subagentTypes';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  chip: css`
-    overflow: hidden;
-    display: inline-flex;
-    flex-shrink: 1;
-    align-items: center;
-
-    min-width: 0;
-    margin-inline-start: 6px;
-    padding-block: 2px;
-    padding-inline: 10px;
-    border-radius: 999px;
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  chipText: css`
-    overflow: hidden;
-
-    min-width: 0;
-
-    font-size: 12px;
-    color: ${cssVar.colorText};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  icon: css`
-    flex-shrink: 0;
-    margin-inline: 6px;
-    color: ${cssVar.colorTextDescription};
-  `,
-  label: css`
-    flex-shrink: 0;
-    color: ${cssVar.colorText};
-  `,
-  metrics: css`
-    display: inline-flex;
-    flex-shrink: 0;
-    gap: 6px;
-    align-items: center;
-
-    margin-inline-start: 8px;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextDescription};
-  `,
-  metricsDot: css`
-    color: ${cssVar.colorTextQuaternary};
-  `,
-}));
+const styles = stylex.create({
+  chip: {
+    overflow: 'hidden',
+    display: 'inline-flex',
+    flexShrink: 1,
+    alignItems: 'center',
+    minWidth: 0,
+    marginInlineStart: '6px',
+    paddingBlock: '2px',
+    paddingInline: '10px',
+    borderRadius: '999px',
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+  chipText: {
+    overflow: 'hidden',
+    minWidth: 0,
+    fontSize: '12px',
+    color: cssVar.colorText,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  icon: { flexShrink: 0, marginInline: '6px', color: cssVar.colorTextDescription },
+  label: { flexShrink: 0 },
+  labelColor: { color: cssVar.colorText },
+  metrics: {
+    display: 'inline-flex',
+    flexShrink: 0,
+    gap: '6px',
+    alignItems: 'center',
+    marginInlineStart: '8px',
+    fontSize: '12px',
+    color: cssVar.colorTextDescription,
+  },
+  metricsDot: { color: cssVar.colorTextQuaternary },
+});
 
 const formatTokens = (n: number): string => {
   if (n < 1000) return String(n);
@@ -167,14 +155,14 @@ export const AgentInspector = memo<BuiltinInspectorProps<AgentArgs>>(
     const metricsNode =
       metrics?.hasAny && (metrics.toolCalls > 0 || metrics.totalTokens > 0) ? (
         <Tooltip title={tooltipLines.length > 0 ? tooltipLines.join(' · ') : undefined}>
-          <span className={styles.metrics}>
+          <span {...stylex.props(styles.metrics)}>
             {metrics.toolCalls > 0 && (
               <span>
                 {tChat('thread.subagentMetrics.toolsShort', { count: metrics.toolCalls })}
               </span>
             )}
             {metrics.toolCalls > 0 && metrics.totalTokens > 0 && (
-              <span className={styles.metricsDot}>·</span>
+              <span {...stylex.props(styles.metricsDot)}>·</span>
             )}
             {metrics.totalTokens > 0 && (
               <span>
@@ -191,12 +179,19 @@ export const AgentInspector = memo<BuiltinInspectorProps<AgentArgs>>(
 
     return (
       <div className={inspectorTextStyles.root}>
-        <span className={cx(styles.label, isShiny && shinyTextStyles.shinyText)}>Agent:</span>
-        <Icon className={styles.icon} size={14} />
-        <span className={styles.label}>{labelText}</span>
+        <span
+          className={cx(
+            stylex.props(styles.label, !isShiny && styles.labelColor).className,
+            isShiny && shinyTextStyles.shinyText,
+          )}
+        >
+          Agent:
+        </span>
+        <Icon className={stylex.props(styles.icon).className} size={14} />
+        <span {...stylex.props(styles.label, styles.labelColor)}>{labelText}</span>
         {description && (
-          <span className={styles.chip}>
-            <span className={styles.chipText}>{description}</span>
+          <span {...stylex.props(styles.chip)}>
+            <span {...stylex.props(styles.chipText)}>{description}</span>
           </span>
         )}
         {metricsNode}

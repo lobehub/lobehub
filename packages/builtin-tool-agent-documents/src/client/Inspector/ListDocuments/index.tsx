@@ -2,6 +2,7 @@
 
 import type { BuiltinInspectorProps } from '@lobechat/types';
 import { cx } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -19,7 +20,6 @@ export const ListDocumentsInspector = memo<
   // The read path projects the row list away and pins its size as
   // `documentCount`; the array is only here for a payload that predates that.
   const count = pluginState?.documentCount ?? pluginState?.documents?.length;
-  const styles = inspectorChipStyles;
 
   return (
     <div className={inspectorTextStyles.root} style={{ flexWrap: 'wrap', gap: 4 }}>
@@ -28,16 +28,16 @@ export const ListDocumentsInspector = memo<
       </span>
       {scope && (
         <>
-          <span className={styles.separator}>·</span>
-          <span className={styles.subdued}>
+          <span {...stylex.props(inspectorChipStyles.separator)}>·</span>
+          <span {...stylex.props(inspectorChipStyles.subdued)}>
             {t(`builtins.lobe-agent-documents.inspector.scope.${scope}` as const)}
           </span>
         </>
       )}
       {typeof count === 'number' && (
         <>
-          <span className={styles.separator}>·</span>
-          <span className={styles.subdued}>
+          <span {...stylex.props(inspectorChipStyles.separator)}>·</span>
+          <span {...stylex.props(inspectorChipStyles.subdued)}>
             {t('builtins.lobe-agent-documents.inspector.docCount', { count })}
           </span>
         </>

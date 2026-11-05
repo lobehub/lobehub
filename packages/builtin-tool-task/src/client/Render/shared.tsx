@@ -1,6 +1,8 @@
 'use client';
 
-import { ActionIcon, Block, createStaticStyles, cssVar, cx, Icon, Text } from '@lobehub/ui';
+import { ActionIcon, Block, Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import type { LucideIcon } from 'lucide-react';
 import { PanelRight, PanelRightClose } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -15,101 +17,95 @@ import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 import { useTaskStore } from '@/store/task';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  assignee: css`
-    display: inline-flex;
-    gap: 6px;
-    align-items: center;
-
-    min-width: 0;
-    max-width: 100%;
-  `,
-  assigneeName: css`
-    overflow: hidden;
-
-    font-size: 13px;
-    color: ${cssVar.colorText};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  body: css`
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-
-    padding-block: 12px;
-    padding-inline: 12px;
-  `,
-  header: css`
-    display: flex;
-    gap: 8px;
-    align-items: center;
-
-    padding-block: 10px;
-    padding-inline: 12px;
-  `,
-  headerDivider: css`
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  identifier: css`
-    flex-shrink: 0;
-
-    padding-block: 1px;
-    padding-inline: 6px;
-    border-radius: 4px;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  inlineRow: css`
-    display: flex;
-    gap: 8px;
-    align-items: center;
-    min-width: 0;
-  `,
-  inlineValue: css`
-    overflow: hidden;
-    flex: 1;
-
-    min-width: 0;
-
-    font-size: 13px;
-    color: ${cssVar.colorText};
-  `,
-  label: css`
-    flex-shrink: 0;
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  mono: css`
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  section: css`
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    min-width: 0;
-  `,
-  sectionValue: css`
-    font-size: 13px;
-    line-height: 1.6;
-    color: ${cssVar.colorTextSecondary};
-    overflow-wrap: anywhere;
-  `,
-  spacer: css`
-    flex: 1;
-  `,
-  title: css`
-    font-size: 13px;
-    font-weight: 500;
-    color: ${cssVar.colorText};
-  `,
-}));
+const styles = stylex.create({
+  assignee: {
+    display: 'inline-flex',
+    gap: '6px',
+    alignItems: 'center',
+    minWidth: 0,
+    maxWidth: '100%',
+  },
+  assigneeName: {
+    overflow: 'hidden',
+    fontSize: '13px',
+    color: cssVar.colorText,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  body: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '10px',
+    paddingBlock: '12px',
+    paddingInline: '12px',
+  },
+  header: {
+    display: 'flex',
+    gap: '8px',
+    alignItems: 'center',
+    paddingBlock: '10px',
+    paddingInline: '12px',
+  },
+  headerDivider: {
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+  identifier: {
+    flexShrink: 0,
+    paddingBlock: '1px',
+    paddingInline: '6px',
+    borderRadius: '4px',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '12px',
+    color: cssVar.colorTextSecondary,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+  inlineRow: {
+    display: 'flex',
+    gap: '8px',
+    alignItems: 'center',
+    minWidth: 0,
+  },
+  inlineValue: {
+    overflow: 'hidden',
+    flex: '1',
+    minWidth: 0,
+    fontSize: '13px',
+    color: cssVar.colorText,
+  },
+  label: {
+    flexShrink: 0,
+    fontSize: '12px',
+    color: cssVar.colorTextTertiary,
+  },
+  mono: {
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '12px',
+    color: cssVar.colorTextSecondary,
+  },
+  section: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '4px',
+    minWidth: 0,
+  },
+  sectionValue: {
+    fontSize: '13px',
+    lineHeight: 1.6,
+    color: cssVar.colorTextSecondary,
+    overflowWrap: 'anywhere',
+  },
+  spacer: {
+    flex: '1',
+  },
+  title: {
+    fontSize: '13px',
+    fontWeight: 500,
+    color: cssVar.colorText,
+  },
+});
 
 /**
  * Shared open/close wiring for a task's detail portal, reused by every
@@ -176,14 +172,14 @@ export const TaskResultCard = memo<TaskResultCardProps>(
         width={'100%'}
         onClick={canOpen ? open : undefined}
       >
-        <div className={cx(styles.header, !!children && styles.headerDivider)}>
+        <div {...stylex.props(styles.header, !!children && styles.headerDivider)}>
           {icon && (
             <Icon icon={icon} size={15} style={{ color: iconColor ?? cssVar.colorTextSecondary }} />
           )}
-          <Text className={styles.title}>{title}</Text>
-          {identifier && <span className={styles.identifier}>{identifier}</span>}
+          <Text className={stylex.props(styles.title).className}>{title}</Text>
+          {identifier && <span {...stylex.props(styles.identifier)}>{identifier}</span>}
           {headerExtra}
-          <div className={styles.spacer} />
+          <div {...stylex.props(styles.spacer)} />
           {canOpen && (
             <ActionIcon
               active={isExpanded}
@@ -197,7 +193,7 @@ export const TaskResultCard = memo<TaskResultCardProps>(
             />
           )}
         </div>
-        {children && <div className={styles.body}>{children}</div>}
+        {children && <div {...stylex.props(styles.body)}>{children}</div>}
       </Block>
     );
   },
@@ -208,9 +204,9 @@ TaskResultCard.displayName = 'TaskResultCard';
 /** A scalar detail row: muted label followed by an inline value. */
 export const InlineField = memo<{ children: ReactNode; label: ReactNode }>(
   ({ children, label }) => (
-    <div className={styles.inlineRow}>
-      <span className={styles.label}>{label}</span>
-      <div className={styles.inlineValue}>{children}</div>
+    <div {...stylex.props(styles.inlineRow)}>
+      <span {...stylex.props(styles.label)}>{label}</span>
+      <div {...stylex.props(styles.inlineValue)}>{children}</div>
     </div>
   ),
 );
@@ -220,9 +216,9 @@ InlineField.displayName = 'InlineField';
 /** A stacked detail block: muted label above long-form content. */
 export const SectionField = memo<{ children: ReactNode; label: ReactNode }>(
   ({ children, label }) => (
-    <div className={styles.section}>
-      <span className={styles.label}>{label}</span>
-      <div className={styles.sectionValue}>{children}</div>
+    <div {...stylex.props(styles.section)}>
+      <span {...stylex.props(styles.label)}>{label}</span>
+      <div {...stylex.props(styles.sectionValue)}>{children}</div>
     </div>
   ),
 );
@@ -235,9 +231,9 @@ export const AssigneeInline = memo<{ agentId: string }>(({ agentId }) => {
   const displayName = agentMeta?.title || agentId;
 
   return (
-    <span className={styles.assignee} title={displayName}>
+    <span {...stylex.props(styles.assignee)} title={displayName}>
       <AssigneeAvatar agentId={agentId} fallbackToDefault={false} size={18} />
-      <span className={styles.assigneeName}>{displayName}</span>
+      <span {...stylex.props(styles.assigneeName)}>{displayName}</span>
     </span>
   );
 });
@@ -250,13 +246,13 @@ export const MemberAssigneeInline = memo<{ userId: string }>(({ userId }) => {
   const displayName = meta?.title || userId;
 
   return (
-    <span className={styles.assignee} title={displayName}>
+    <span {...stylex.props(styles.assignee)} title={displayName}>
       <AssigneeUserAvatar size={18} userId={userId} />
-      <span className={styles.assigneeName}>{displayName}</span>
+      <span {...stylex.props(styles.assigneeName)}>{displayName}</span>
     </span>
   );
 });
 
 MemberAssigneeInline.displayName = 'MemberAssigneeInline';
 
-export const monoChipClassName = styles.mono;
+export const monoChipStyle = styles.mono;

@@ -10,7 +10,7 @@ import { useTranslation } from 'react-i18next';
 
 import { resolveTaskOpenTarget } from '../../../taskRef';
 import type { RunTaskParams, RunTaskState } from '../../../types';
-import { InlineField, monoChipClassName, SectionField, TaskResultCard } from '../shared';
+import { InlineField, monoChipStyle, SectionField, TaskResultCard } from '../shared';
 
 const styles = stylex.create({
   topicChip: {
@@ -64,7 +64,7 @@ export const RunTaskRender = memo<BuiltinRenderProps<RunTaskParams, RunTaskState
             )}
             {topicId && (
               <InlineField label={t('builtins.lobe-task.run.topic')}>
-                <span className={monoChipClassName}>{topicId}</span>
+                <span {...stylex.props(monoChipStyle)}>{topicId}</span>
               </InlineField>
             )}
           </>

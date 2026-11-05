@@ -1,8 +1,7 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { ActionIcon, Checkbox, Input } from '@lobehub/ui';
-import { createStaticStyles, cx } from '@lobehub/ui';
+import { ActionIcon, Checkbox, cx, Flexbox, Input } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { Plus } from 'lucide-react';
 import type { ChangeEvent, KeyboardEvent } from 'react';
 import { memo, useCallback, useEffect, useRef } from 'react';
@@ -10,15 +9,15 @@ import { useTranslation } from 'react-i18next';
 
 import { ADD_ITEM_ID, useTodoListStore } from './store';
 
-const styles = createStaticStyles(({ css }) => ({
-  addRow: css`
-    padding-block: 10px;
-    padding-inline: 12px;
-  `,
-  dragHandlePlaceholder: css`
-    width: 8px;
-  `,
-}));
+const styles = stylex.create({
+  addRow: {
+    paddingBlock: '10px',
+    paddingInline: '12px',
+  },
+  dragHandlePlaceholder: {
+    width: '8px',
+  },
+});
 
 interface AddItemRowProps {
   className?: string;
@@ -86,8 +85,13 @@ const AddItemRow = memo<AddItemRowProps>(({ placeholder, showDragHandle = true, 
   }, [setFocusedId]);
 
   return (
-    <Flexbox horizontal align="center" className={cx(styles.addRow, className)} gap={4}>
-      {showDragHandle && <div className={styles.dragHandlePlaceholder} />}
+    <Flexbox
+      horizontal
+      align="center"
+      className={cx(stylex.props(styles.addRow).className, className)}
+      gap={4}
+    >
+      {showDragHandle && <div {...stylex.props(styles.dragHandlePlaceholder)} />}
       <Checkbox checked={false} shape={'circle'} style={{ borderWidth: 1.5, cursor: 'default' }} />
       <Input
         placeholder={defaultPlaceholder}

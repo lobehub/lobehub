@@ -1,9 +1,8 @@
 'use client';
 
 import type { FileSearchResult } from '@lobechat/types';
-import { Center, Flexbox, MaterialFileTypeIcon, Tooltip } from '@lobehub/ui';
-import { Text } from '@lobehub/ui';
-import { cx } from '@lobehub/ui';
+import { Center, Flexbox, MaterialFileTypeIcon, Text, Tooltip } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { useTheme } from 'next-themes';
 import { memo } from 'react';
 
@@ -21,15 +20,20 @@ const FileItem = memo<FileItemProps>(({ fileId, fileName, relevanceScore }) => {
     <Flexbox
       horizontal
       align={'center'}
-      className={cx(styles.container, isDarkMode ? styles.containerDark : styles.containerLight)}
       gap={4}
       key={fileId}
+      className={
+        stylex.props(styles.container, isDarkMode ? styles.containerDark : styles.containerLight)
+          .className
+      }
     >
       <MaterialFileTypeIcon filename={fileName} size={20} type={'file'} variant={'raw'} />
       <Flexbox horizontal gap={12} justify={'space-between'} style={{ maxWidth: 200 }}>
         <Text ellipsis>{fileName}</Text>
         <Tooltip title={`Relevance: ${(relevanceScore * 100).toFixed(1)}%`}>
-          <Center className={styles.badge}>{relevanceScore.toFixed(2)}</Center>
+          <Center className={stylex.props(styles.badge).className}>
+            {relevanceScore.toFixed(2)}
+          </Center>
         </Tooltip>
       </Flexbox>
     </Flexbox>

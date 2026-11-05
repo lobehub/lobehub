@@ -16,7 +16,7 @@ import {
   AssigneeInline,
   InlineField,
   MemberAssigneeInline,
-  monoChipClassName,
+  monoChipStyle,
   SectionField,
   TaskResultCard,
 } from '../shared';
@@ -109,7 +109,7 @@ export const EditTaskRender = memo<BuiltinRenderProps<EditTaskParams, EditTaskSt
                 {params.parentIdentifier === null ? (
                   <Text type={'secondary'}>{t('builtins.lobe-task.edit.parentClear')}</Text>
                 ) : (
-                  <span className={monoChipClassName}>{params.parentIdentifier}</span>
+                  <span {...stylex.props(monoChipStyle)}>{params.parentIdentifier}</span>
                 )}
               </InlineField>
             )}

@@ -1,15 +1,9 @@
 'use client';
 
 import type { AgentGroupMember, BuiltinRenderProps } from '@lobechat/types';
-import {
-  Accordion,
-  Block,
-  createStaticStyles,
-  Flexbox,
-  Markdown,
-  Text,
-  useTheme,
-} from '@lobehub/ui';
+import { Accordion, Block, Flexbox, Markdown, Text, useTheme } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -19,48 +13,27 @@ import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 
 import type { ExecuteTasksParams } from '../../../types';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  assignee: css`
-    display: flex;
-    flex-shrink: 0;
-    gap: 6px;
-    align-items: center;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  container: css`
-    .accordion-action {
-      margin-inline-end: 8px;
-      opacity: 1 !important;
-    }
-  `,
-  index: css`
-    flex-shrink: 0;
-    font-size: 12px;
-    color: ${cssVar.colorTextQuaternary};
-  `,
-  instruction: css`
-    font-size: 13px;
-    line-height: 1.6;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  resultBox: css`
-    overflow: hidden;
-  `,
-  resultLabel: css`
-    padding-inline: 4px;
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-
-  taskTitle: css`
-    overflow: hidden;
-    font-size: 14px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-}));
+const styles = stylex.create({
+  accordionAction: { marginInlineEnd: '8px', opacity: 1 },
+  assignee: {
+    display: 'flex',
+    flexShrink: 0,
+    gap: '6px',
+    alignItems: 'center',
+    fontSize: '12px',
+    color: cssVar.colorTextSecondary,
+  },
+  index: { flexShrink: 0, fontSize: '12px', color: cssVar.colorTextQuaternary },
+  instruction: { fontSize: '13px', lineHeight: 1.6, color: cssVar.colorTextSecondary },
+  resultBox: { overflow: 'hidden' },
+  resultLabel: { paddingInline: '4px', fontSize: '12px', color: cssVar.colorTextTertiary },
+  taskTitle: {
+    overflow: 'hidden',
+    fontSize: '14px',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+});
 
 /**
  * ExecuteTasks Render component for Group Management tool
@@ -92,15 +65,16 @@ const ExecuteTasksRender = memo<BuiltinRenderProps<ExecuteTasksParams, unknown, 
     if (!tasksWithAgents.length && !resultContent) return null;
 
     return (
-      <Flexbox className={styles.container} gap={12}>
+      <Flexbox gap={12}>
         {!!tasksWithAgents.length && (
           <Accordion
+            classNames={{ action: stylex.props(styles.accordionAction).className }}
             defaultValue={[]}
             gap={0}
             variant={'borderless'}
             items={tasksWithAgents.map((task, index) => ({
               action: (
-                <div className={styles.assignee}>
+                <div {...stylex.props(styles.assignee)}>
                   <AgentAvatar
                     agentId={task.agentId}
                     avatar={task.agent?.avatar}
@@ -115,14 +89,16 @@ const ExecuteTasksRender = memo<BuiltinRenderProps<ExecuteTasksParams, unknown, 
               alwaysShowAction: true,
               children: task.instruction && (
                 <Block padding={12} style={{ marginTop: 8 }} variant={'filled'}>
-                  <Text className={styles.instruction}>{task.instruction}</Text>
+                  <Text className={stylex.props(styles.instruction).className}>
+                    {task.instruction}
+                  </Text>
                 </Block>
               ),
               key: task.agentId || String(index),
               title: (
                 <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
-                  <span className={styles.index}>{index + 1}.</span>
-                  <Text className={styles.taskTitle} weight={500}>
+                  <span {...stylex.props(styles.index)}>{index + 1}.</span>
+                  <Text className={stylex.props(styles.taskTitle).className} weight={500}>
                     {task.title || 'Task'}
                   </Text>
                 </Flexbox>
@@ -133,10 +109,14 @@ const ExecuteTasksRender = memo<BuiltinRenderProps<ExecuteTasksParams, unknown, 
 
         {resultContent && (
           <Flexbox gap={4}>
-            <Text className={styles.resultLabel}>
+            <Text className={stylex.props(styles.resultLabel).className}>
               {t('agentGroupManagement.executeTasks.results')}
             </Text>
-            <Block className={styles.resultBox} padding={12} variant={'filled'}>
+            <Block
+              className={stylex.props(styles.resultBox).className}
+              padding={12}
+              variant={'filled'}
+            >
               <Markdown style={{ maxHeight: 320, overflow: 'auto' }} variant={'chat'}>
                 {resultContent}
               </Markdown>

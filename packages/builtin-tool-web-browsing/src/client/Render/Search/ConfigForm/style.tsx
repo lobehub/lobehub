@@ -1,25 +1,25 @@
 import type { CenterProps } from '@lobehub/ui';
-import { Center, Flexbox } from '@lobehub/ui';
-import { Avatar } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
+import { Avatar, Center, cx, Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import type { ReactNode } from 'react';
 import { memo } from 'react';
 
-export const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    border-radius: 8px;
-    color: ${cssVar.colorText};
-  `,
-  desc: css`
-    color: ${cssVar.colorTextTertiary};
-    text-align: center;
-  `,
-  form: css`
-    width: 100%;
-    max-width: 300px;
-    padding-block: 12px;
-  `,
-}));
+export const styles = stylex.create({
+  container: {
+    borderRadius: '8px',
+    color: cssVar.colorText,
+  },
+  desc: {
+    color: cssVar.colorTextTertiary,
+    textAlign: 'center',
+  },
+  form: {
+    width: '100%',
+    maxWidth: '300px',
+    paddingBlock: '12px',
+  },
+});
 
 export const FormAction = memo<
   {
@@ -42,7 +42,7 @@ export const FormAction = memo<
     ...rest
   }) => {
     return (
-      <Center className={cx(styles.form, className)} gap={gap} {...rest}>
+      <Center className={cx(stylex.props(styles.form).className, className)} gap={gap} {...rest}>
         <Avatar
           animation={animation}
           avatar={avatar}
@@ -53,7 +53,7 @@ export const FormAction = memo<
           <Flexbox style={{ fontSize: 18, fontWeight: 'bold', textAlign: 'center' }}>
             {title}
           </Flexbox>
-          <Flexbox className={styles.desc}>{description}</Flexbox>
+          <Flexbox className={stylex.props(styles.desc).className}>{description}</Flexbox>
         </Flexbox>
         {children}
       </Center>

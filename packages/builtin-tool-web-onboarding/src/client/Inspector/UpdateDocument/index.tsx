@@ -2,6 +2,7 @@
 
 import type { BuiltinInspectorProps } from '@lobechat/types';
 import { cx } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -14,7 +15,6 @@ export const UpdateDocumentInspector = memo<
   BuiltinInspectorProps<UpdateDocumentArgs, { applied?: number }>
 >(({ args, partialArgs, pluginState, isArgumentsStreaming, isLoading }) => {
   const { t } = useTranslation('plugin');
-  const styles = inspectorChipStyles;
 
   const type = args?.type ?? partialArgs?.type;
   const requestedHunks = args?.hunks?.length ?? partialArgs?.hunks?.length ?? 0;
@@ -37,12 +37,12 @@ export const UpdateDocumentInspector = memo<
         {t('builtins.lobe-web-onboarding.apiName.updateDocument')}
       </span>
       {type && (
-        <span className={styles.chip}>
+        <span {...stylex.props(inspectorChipStyles.chip)}>
           {t(`builtins.lobe-web-onboarding.docType.${type}` as const)}
         </span>
       )}
       {hunkCount > 0 && (
-        <span className={styles.meta}>
+        <span {...stylex.props(inspectorChipStyles.meta)}>
           {t('builtins.lobe-web-onboarding.inspector.hunkCount', { count: hunkCount })}
         </span>
       )}

@@ -1,9 +1,9 @@
 'use client';
 
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { Icon } from '@lobehub/ui';
-import { Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
+import { cx, Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { CheckCircle, DiffIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -12,12 +12,10 @@ import { oneLineEllipsis, shinyTextStyles } from '@/styles';
 
 import type { UpdatePlanParams, UpdatePlanState } from '../../../types';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  title: css`
-    margin-inline-end: 8px;
-    color: ${cssVar.colorText};
-  `,
-}));
+const styles = stylex.create({
+  title: { marginInlineEnd: '8px' },
+  titleColor: { color: cssVar.colorText },
+});
 
 export const UpdatePlanInspector = memo<BuiltinInspectorProps<UpdatePlanParams, UpdatePlanState>>(
   ({ args, partialArgs, isArgumentsStreaming }) => {
@@ -39,7 +37,12 @@ export const UpdatePlanInspector = memo<BuiltinInspectorProps<UpdatePlanParams, 
 
     return (
       <div className={oneLineEllipsis}>
-        <span className={cx(styles.title, isArgumentsStreaming && shinyTextStyles.shinyText)}>
+        <span
+          className={cx(
+            stylex.props(styles.title, !isArgumentsStreaming && styles.titleColor).className,
+            isArgumentsStreaming && shinyTextStyles.shinyText,
+          )}
+        >
           {t('builtins.lobe-agent.apiName.updatePlan')}
         </span>
         {completed && (

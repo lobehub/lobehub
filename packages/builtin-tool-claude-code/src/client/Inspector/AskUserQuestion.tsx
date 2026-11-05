@@ -3,7 +3,9 @@
 import { normalizeAskUserQuestions } from '@lobechat/shared-tool-ui/ask-user';
 import { inspectorTextStyles, shinyTextStyles } from '@lobechat/shared-tool-ui/styles';
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { createStaticStyles, cx } from '@lobehub/ui';
+import { cx } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -18,41 +20,31 @@ import { ClaudeCodeApiName } from '../../types';
  */
 const MAX_CHIPS = 2;
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  chip: css`
-    overflow: hidden;
-
-    min-width: 0;
-    padding-block: 2px;
-    padding-inline: 10px;
-    border-radius: 999px;
-
-    font-size: 12px;
-    color: ${cssVar.colorText};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  chips: css`
-    overflow: hidden;
-    display: flex;
-    gap: 4px;
-    align-items: center;
-
-    min-width: 0;
-    margin-inline-start: 6px;
-  `,
-  /** Never shrinks — the chips absorb the compression and ellipsize instead. */
-  label: css`
-    flex-shrink: 0;
-  `,
-  more: css`
-    flex-shrink: 0;
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-}));
+const styles = stylex.create({
+  chip: {
+    overflow: 'hidden',
+    minWidth: 0,
+    paddingBlock: '2px',
+    paddingInline: '10px',
+    borderRadius: '999px',
+    fontSize: '12px',
+    color: cssVar.colorText,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+  chips: {
+    overflow: 'hidden',
+    display: 'flex',
+    gap: '4px',
+    alignItems: 'center',
+    minWidth: 0,
+    marginInlineStart: '6px',
+  },
+  label: { flexShrink: 0 },
+  more: { flexShrink: 0, fontSize: '12px', color: cssVar.colorTextTertiary },
+});
 
 export const AskUserQuestionInspector = memo<BuiltinInspectorProps<AskUserQuestionArgs>>(
   ({ args, partialArgs, isArgumentsStreaming, isLoading }) => {
@@ -77,20 +69,20 @@ export const AskUserQuestionInspector = memo<BuiltinInspectorProps<AskUserQuesti
       <div className={inspectorTextStyles.root}>
         <span
           className={cx(
-            styles.label,
+            stylex.props(styles.label).className,
             (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
           )}
         >
           {label}
         </span>
         {shown.length > 0 && (
-          <div className={styles.chips}>
+          <div {...stylex.props(styles.chips)}>
             {shown.map((header, idx) => (
-              <span className={styles.chip} key={`${header}-${idx}`}>
+              <span key={`${header}-${idx}`} {...stylex.props(styles.chip)}>
                 {header}
               </span>
             ))}
-            {rest > 0 && <span className={styles.more}>{`+${rest}`}</span>}
+            {rest > 0 && <span {...stylex.props(styles.more)}>{`+${rest}`}</span>}
           </div>
         )}
       </div>

@@ -1,9 +1,8 @@
 'use client';
 
 import type { BuiltinInterventionProps } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
-import { Avatar, Button, Text } from '@lobehub/ui';
-import { cx } from '@lobehub/ui';
+import { Avatar, Button, Flexbox, Text } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import type { KeyboardEvent } from 'react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -151,8 +150,8 @@ const PickAgentsIntervention = memo<BuiltinInterventionProps<ShowAgentMarketplac
     const showEmpty = !isLoading && visibleTemplates.length === 0;
 
     return (
-      <Flexbox className={styles.root} gap={12}>
-        <div className={styles.header}>
+      <Flexbox className={stylex.props(styles.root).className} gap={12}>
+        <div {...stylex.props(styles.header)}>
           <Text style={{ fontWeight: 500 }}>{prompt}</Text>
           {description && (
             <Text style={{ fontSize: 13 }} type="secondary">
@@ -164,20 +163,20 @@ const PickAgentsIntervention = memo<BuiltinInterventionProps<ShowAgentMarketplac
         {showLoading ? (
           <PickAgentsSkeleton />
         ) : showEmpty ? (
-          <div className={styles.empty}>
+          <div {...stylex.props(styles.empty)}>
             {error
               ? tTool('agentMarketplace.picker.failedToLoad')
               : tTool('agentMarketplace.picker.empty')}
           </div>
         ) : (
-          <div className={styles.container}>
-            <div aria-orientation="horizontal" className={styles.tabBar} role="tablist">
+          <div {...stylex.props(styles.container)}>
+            <div aria-orientation="horizontal" {...stylex.props(styles.tabBar)} role="tablist">
               {availableCategories.map((category) => {
                 const isActive = activeCategory === category;
                 return (
                   <button
                     aria-selected={isActive}
-                    className={cx(styles.categoryItem, isActive && styles.categoryItemActive)}
+                    {...stylex.props(styles.categoryItem, isActive && styles.categoryItemActive)}
                     disabled={disabled}
                     key={category}
                     role="tab"
@@ -190,11 +189,11 @@ const PickAgentsIntervention = memo<BuiltinInterventionProps<ShowAgentMarketplac
               })}
             </div>
 
-            <div className={styles.content}>
+            <div {...stylex.props(styles.content)}>
               {visibleTemplates.length === 0 ? (
-                <div className={styles.empty}>{tTool('agentMarketplace.picker.empty')}</div>
+                <div {...stylex.props(styles.empty)}>{tTool('agentMarketplace.picker.empty')}</div>
               ) : (
-                <div className={styles.grid}>
+                <div {...stylex.props(styles.grid)}>
                   {visibleTemplates.map((tpl) => {
                     const isSelected = selected.has(tpl.id);
                     const avatar = tpl.avatar;
@@ -202,19 +201,19 @@ const PickAgentsIntervention = memo<BuiltinInterventionProps<ShowAgentMarketplac
                       <div
                         aria-disabled={disabled}
                         aria-pressed={isSelected}
-                        className={cx(styles.card, isSelected && styles.cardSelected)}
+                        {...stylex.props(styles.card, isSelected && styles.cardSelected)}
                         key={tpl.id}
                         role="button"
                         tabIndex={disabled ? -1 : 0}
                         onClick={() => toggle(tpl.id)}
                         onKeyDown={(event) => handleCardKeyDown(event, tpl.id)}
                       >
-                        <div className={styles.cardHeader}>
+                        <div {...stylex.props(styles.cardHeader)}>
                           <Avatar avatar={avatar} shape="square" size={36} />
-                          <div className={styles.cardTitle}>{tpl.title}</div>
+                          <div {...stylex.props(styles.cardTitle)}>{tpl.title}</div>
                         </div>
                         {tpl.description && (
-                          <div className={styles.cardDescription}>{tpl.description}</div>
+                          <div {...stylex.props(styles.cardDescription)}>{tpl.description}</div>
                         )}
                       </div>
                     );
@@ -225,9 +224,9 @@ const PickAgentsIntervention = memo<BuiltinInterventionProps<ShowAgentMarketplac
           </div>
         )}
 
-        <div className={styles.footer}>
+        <div {...stylex.props(styles.footer)}>
           <Text
-            className={styles.skipLink}
+            className={stylex.props(styles.skipLink).className}
             type="secondary"
             onClick={disabled ? undefined : handleSkip}
           >

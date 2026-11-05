@@ -1,9 +1,17 @@
 'use client';
 
 import type { CrawlErrorResult, CrawlSuccessResult } from '@lobechat/web-crawler';
-import { Block, Flexbox, stopPropagation } from '@lobehub/ui';
-import { ActionIcon, Alert, Descriptions, Text } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Alert,
+  Block,
+  Descriptions,
+  Flexbox,
+  stopPropagation,
+  Text,
+} from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ExternalLink } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -12,50 +20,24 @@ import { useChatStore } from '@/store/chat';
 
 import { WebBrowsingManifest } from '../../../manifest';
 
-const styles = createStaticStyles(({ css, cssVar }) => {
-  return {
-    container: css`
-      overflow: hidden;
-      min-width: 360px;
-      max-width: 360px;
-    `,
-
-    detailsSection: css`
-      padding-block: ${cssVar.paddingSM};
-    `,
-    externalLink: css`
-      color: ${cssVar.colorTextQuaternary};
-
-      :hover {
-        color: ${cssVar.colorText};
-      }
-    `,
-    footer: css`
-      padding-block: 4px;
-      padding-inline: 12px;
-      background-color: ${cssVar.colorFillQuaternary};
-    `,
-    footerText: css`
-      font-size: 12px !important;
-      color: ${cssVar.colorTextTertiary} !important;
-    `,
-    metaInfo: css`
-      display: flex;
-      align-items: center;
-      color: ${cssVar.colorTextSecondary};
-    `,
-    title: css`
-      overflow: hidden;
-      display: -webkit-box;
-      -webkit-box-orient: vertical;
-      -webkit-line-clamp: 1;
-
-      margin-block-end: 0;
-    `,
-    titleRow: css`
-      overflow: hidden;
-    `,
-  };
+const styles = stylex.create({
+  container: {
+    overflow: 'hidden',
+    minWidth: '360px',
+    maxWidth: '360px',
+  },
+  footer: {
+    paddingBlock: '4px',
+    paddingInline: '12px',
+    backgroundColor: cssVar.colorFillQuaternary,
+  },
+  footerText: {
+    fontSize: '12px',
+    color: cssVar.colorTextTertiary,
+  },
+  titleRow: {
+    overflow: 'hidden',
+  },
 });
 
 interface CrawlerData {
@@ -71,7 +53,7 @@ const CrawlerResultCard = memo<CrawlerData>(({ result, messageId, crawler, origi
 
   if ('errorType' in result) {
     return (
-      <Flexbox className={styles.footer} gap={8}>
+      <Flexbox className={stylex.props(styles.footer).className} gap={8}>
         <Alert
           title={<div style={{ textAlign: 'start' }}>{result.errorMessage || result.content}</div>}
           type={'error'}
@@ -81,8 +63,8 @@ const CrawlerResultCard = memo<CrawlerData>(({ result, messageId, crawler, origi
           <Descriptions
             column={1}
             classNames={{
-              content: styles.footerText,
-              label: styles.footerText,
+              content: stylex.props(styles.footerText).className,
+              label: stylex.props(styles.footerText).className,
             }}
             items={[
               {
@@ -101,7 +83,7 @@ const CrawlerResultCard = memo<CrawlerData>(({ result, messageId, crawler, origi
   return (
     <Block
       clickable
-      className={styles.container}
+      className={stylex.props(styles.container).className}
       justify={'space-between'}
       variant={'outlined'}
       onClick={() => {
@@ -110,7 +92,12 @@ const CrawlerResultCard = memo<CrawlerData>(({ result, messageId, crawler, origi
       }}
     >
       <Flexbox gap={8} paddingBlock={8} paddingInline={12}>
-        <Flexbox horizontal align={'center'} className={styles.titleRow} justify={'space-between'}>
+        <Flexbox
+          horizontal
+          align={'center'}
+          className={stylex.props(styles.titleRow).className}
+          justify={'space-between'}
+        >
           <Text ellipsis>{title || originalUrl}</Text>
           <a href={url} target={'_blank'} onClick={stopPropagation}>
             <ActionIcon icon={ExternalLink} size={'small'} />
@@ -120,12 +107,12 @@ const CrawlerResultCard = memo<CrawlerData>(({ result, messageId, crawler, origi
           {description || result.content?.slice(0, 40)}
         </Text>
       </Flexbox>
-      <Flexbox className={styles.footer}>
+      <Flexbox className={stylex.props(styles.footer).className}>
         <Descriptions
           column={2}
           classNames={{
-            content: styles.footerText,
-            label: styles.footerText,
+            content: stylex.props(styles.footerText).className,
+            label: stylex.props(styles.footerText).className,
           }}
           items={[
             {

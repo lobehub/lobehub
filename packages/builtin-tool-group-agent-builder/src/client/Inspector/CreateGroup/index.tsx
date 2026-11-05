@@ -1,9 +1,9 @@
 'use client';
 
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
-import { Avatar } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
+import { Avatar, cx, Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Check } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -12,23 +12,11 @@ import { shinyTextStyles } from '@/styles';
 
 import type { CreateGroupParams, CreateGroupState } from '../../../types';
 
-const styles = createStaticStyles(({ css, cssVar: cv }) => ({
-  root: css`
-    overflow: hidden;
-    display: flex;
-    gap: 8px;
-    align-items: center;
-  `,
-  statusIcon: css`
-    flex-shrink: 0;
-    margin-block-end: -2px;
-  `,
-  title: css`
-    flex-shrink: 0;
-    color: ${cv.colorTextSecondary};
-    white-space: nowrap;
-  `,
-}));
+const styles = stylex.create({
+  root: { overflow: 'hidden', display: 'flex', gap: '8px', alignItems: 'center' },
+  statusIcon: { flexShrink: 0, marginBlockEnd: '-2px' },
+  title: { flexShrink: 0, color: cssVar.colorTextSecondary, whiteSpace: 'nowrap' },
+});
 
 export const CreateGroupInspector = memo<
   BuiltinInspectorProps<CreateGroupParams, CreateGroupState>
@@ -40,7 +28,7 @@ export const CreateGroupInspector = memo<
 
   if (isArgumentsStreaming && !title) {
     return (
-      <div className={styles.root}>
+      <div {...stylex.props(styles.root)}>
         <span className={shinyTextStyles.shinyText}>
           {t('builtins.lobe-group-agent-builder.apiName.createGroup')}
         </span>
@@ -51,10 +39,10 @@ export const CreateGroupInspector = memo<
   const isSuccess = pluginState?.success;
 
   return (
-    <Flexbox horizontal align={'center'} className={styles.root} gap={8}>
+    <Flexbox horizontal align={'center'} className={stylex.props(styles.root).className} gap={8}>
       <span
         className={cx(
-          styles.title,
+          stylex.props(styles.title).className,
           (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
         )}
       >
@@ -63,7 +51,11 @@ export const CreateGroupInspector = memo<
       {avatar && <Avatar avatar={avatar} shape={'square'} size={20} title={title || undefined} />}
       {title && <span>{title}</span>}
       {!isLoading && isSuccess && (
-        <Check className={styles.statusIcon} color={cssVar.colorSuccess} size={14} />
+        <Check
+          className={stylex.props(styles.statusIcon).className}
+          color={cssVar.colorSuccess}
+          size={14}
+        />
       )}
     </Flexbox>
   );

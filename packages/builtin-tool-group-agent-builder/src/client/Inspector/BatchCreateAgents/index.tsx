@@ -1,9 +1,9 @@
 'use client';
 
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
-import { Avatar } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
+import { Avatar, cx, Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Check } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -12,32 +12,13 @@ import { shinyTextStyles } from '@/styles';
 
 import type { BatchCreateAgentsParams, BatchCreateAgentsState } from '../../../types';
 
-const styles = createStaticStyles(({ css, cssVar: cv }) => ({
-  avatarGroup: css`
-    display: flex;
-    gap: 2px;
-    align-items: center;
-  `,
-  count: css`
-    font-size: 12px;
-    color: ${cv.colorTextSecondary};
-  `,
-  root: css`
-    overflow: hidden;
-    display: flex;
-    gap: 8px;
-    align-items: center;
-  `,
-  statusIcon: css`
-    flex-shrink: 0;
-    margin-block-end: -2px;
-  `,
-  title: css`
-    flex-shrink: 0;
-    color: ${cv.colorTextSecondary};
-    white-space: nowrap;
-  `,
-}));
+const styles = stylex.create({
+  avatarGroup: { display: 'flex', gap: '2px', alignItems: 'center' },
+  count: { fontSize: '12px', color: cssVar.colorTextSecondary },
+  root: { overflow: 'hidden', display: 'flex', gap: '8px', alignItems: 'center' },
+  statusIcon: { flexShrink: 0, marginBlockEnd: '-2px' },
+  title: { flexShrink: 0, color: cssVar.colorTextSecondary, whiteSpace: 'nowrap' },
+});
 
 export const BatchCreateAgentsInspector = memo<
   BuiltinInspectorProps<BatchCreateAgentsParams, BatchCreateAgentsState>
@@ -59,7 +40,7 @@ export const BatchCreateAgentsInspector = memo<
   // Initial streaming state
   if (isArgumentsStreaming && !displayInfo) {
     return (
-      <div className={styles.root}>
+      <div {...stylex.props(styles.root)}>
         <span className={shinyTextStyles.shinyText}>
           {t('builtins.lobe-group-agent-builder.apiName.batchCreateAgents')}
         </span>
@@ -72,10 +53,10 @@ export const BatchCreateAgentsInspector = memo<
   const totalCount = displayInfo?.count ?? 0;
 
   return (
-    <Flexbox horizontal align={'center'} className={styles.root} gap={8}>
+    <Flexbox horizontal align={'center'} className={stylex.props(styles.root).className} gap={8}>
       <span
         className={cx(
-          styles.title,
+          stylex.props(styles.title).className,
           (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
         )}
       >
@@ -83,7 +64,7 @@ export const BatchCreateAgentsInspector = memo<
       </span>
       {displayInfo && (
         <>
-          <div className={styles.avatarGroup}>
+          <div {...stylex.props(styles.avatarGroup)}>
             {displayInfo.displayAgents?.map((agent, index) => (
               <Avatar
                 avatar={agent.avatar}
@@ -94,7 +75,7 @@ export const BatchCreateAgentsInspector = memo<
               />
             ))}
           </div>
-          <span className={styles.count}>
+          <span {...stylex.props(styles.count)}>
             {pluginState
               ? `${successCount}/${totalCount}`
               : `${totalCount} ${t('builtins.lobe-group-agent-builder.inspector.agents')}`}
@@ -102,7 +83,11 @@ export const BatchCreateAgentsInspector = memo<
         </>
       )}
       {!isLoading && isSuccess && (
-        <Check className={styles.statusIcon} color={cssVar.colorSuccess} size={14} />
+        <Check
+          className={stylex.props(styles.statusIcon).className}
+          color={cssVar.colorSuccess}
+          size={14}
+        />
       )}
     </Flexbox>
   );

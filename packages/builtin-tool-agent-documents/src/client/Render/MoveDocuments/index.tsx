@@ -2,6 +2,7 @@
 
 import type { BuiltinRenderProps } from '@lobechat/types';
 import { Flexbox, Text } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -25,8 +26,13 @@ const MoveDocumentsRender = memo<
 
   return (
     <Flexbox gap={8}>
-      <Flexbox horizontal align={'center'} className={cardStyles.card} gap={8}>
-        <Text className={cardStyles.label}>
+      <Flexbox
+        horizontal
+        align={'center'}
+        className={stylex.props(cardStyles.card).className}
+        gap={8}
+      >
+        <Text className={stylex.props(cardStyles.label).className}>
           {t('builtins.lobe-agent-documents.moveDocuments.destination')}
         </Text>
         <DocumentRef strong lookup={lookup} refId={pluginState?.parentId ?? args?.parentId} />
@@ -34,7 +40,12 @@ const MoveDocumentsRender = memo<
       <Flexbox gap={2}>
         {results.map((item) => (
           <Flexbox gap={2} key={item.id}>
-            <Flexbox horizontal align={'center'} className={cardStyles.row} gap={8}>
+            <Flexbox
+              horizontal
+              align={'center'}
+              className={stylex.props(cardStyles.row).className}
+              gap={8}
+            >
               <Flexbox flex={1} style={{ minWidth: 0 }}>
                 <DocumentRef
                   fallbackTitle={'title' in item ? item.title : undefined}
@@ -43,7 +54,10 @@ const MoveDocumentsRender = memo<
                 />
               </Flexbox>
               {item.status && (
-                <Text className={cardStyles.status} type={STATUS_TYPE[item.status]}>
+                <Text
+                  className={stylex.props(cardStyles.status).className}
+                  type={STATUS_TYPE[item.status]}
+                >
                   {t(`builtins.lobe-agent-documents.moveDocuments.status.${item.status}`)}
                 </Text>
               )}

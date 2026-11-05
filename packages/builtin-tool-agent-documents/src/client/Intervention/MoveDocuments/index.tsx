@@ -2,6 +2,7 @@
 
 import type { BuiltinInterventionProps } from '@lobechat/types';
 import { Flexbox, Text } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -26,8 +27,13 @@ const MoveDocumentsIntervention = memo<BuiltinInterventionProps<MoveDocumentsArg
 
   return (
     <Flexbox gap={8}>
-      <Flexbox horizontal align={'center'} className={cardStyles.card} gap={8}>
-        <Text className={cardStyles.label}>
+      <Flexbox
+        horizontal
+        align={'center'}
+        className={stylex.props(cardStyles.card).className}
+        gap={8}
+      >
+        <Text className={stylex.props(cardStyles.label).className}>
           {t('builtins.lobe-agent-documents.moveDocuments.destination')}
         </Text>
         <DocumentRef strong lookup={lookup} refId={args?.parentId} />
@@ -37,7 +43,13 @@ const MoveDocumentsIntervention = memo<BuiltinInterventionProps<MoveDocumentsArg
       </Text>
       <Flexbox gap={2}>
         {ids.map((id) => (
-          <Flexbox horizontal align={'center'} className={cardStyles.row} gap={8} key={id}>
+          <Flexbox
+            horizontal
+            align={'center'}
+            className={stylex.props(cardStyles.row).className}
+            gap={8}
+            key={id}
+          >
             <Flexbox flex={2} style={{ minWidth: 0 }}>
               <DocumentRef lookup={lookup} refId={id} />
             </Flexbox>

@@ -2,6 +2,7 @@
 
 import type { BuiltinInspectorProps } from '@lobechat/types';
 import { cx } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -16,7 +17,6 @@ export const CreateFolderInspector = memo<
   const { t } = useTranslation('plugin');
 
   const title = args?.title || partialArgs?.title;
-  const styles = inspectorChipStyles;
 
   if (isArgumentsStreaming && !title) {
     return (
@@ -33,7 +33,7 @@ export const CreateFolderInspector = memo<
       <span className={cx((isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText)}>
         {t('builtins.lobe-agent-documents.apiName.createFolder')}
       </span>
-      {title && <span className={styles.chip}>{title}</span>}
+      {title && <span {...stylex.props(inspectorChipStyles.chip)}>{title}</span>}
     </div>
   );
 });

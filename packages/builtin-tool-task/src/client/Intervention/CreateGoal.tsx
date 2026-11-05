@@ -10,9 +10,20 @@ import {
   ReactTablePlugin,
 } from '@lobehub/editor';
 import { Editor, useEditor } from '@lobehub/editor/react';
-import { Flexbox, Icon } from '@lobehub/ui';
-import { ActionIcon, Button, Input, InputNumber, Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Button,
+  // oxlint-disable-next-line stylex-migration/no-emotion-styles -- the editor's content DOM gets no className
+  createStaticStyles,
+  cx,
+  Flexbox,
+  Icon,
+  Input,
+  InputNumber,
+  Text,
+} from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronRight, Pencil, Plus, Trash2 } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -26,84 +37,86 @@ import {
 
 import type { CreateGoalParams, GoalCriterionDraft } from '../../types';
 
-const styles = createStaticStyles(({ css }) => ({
-  header: css`
-    position: sticky;
-    z-index: 2;
+const styles = stylex.create({
+  criterionRow: {
+    borderBlockStartColor: {
+      'default': null,
+      ':is(html[data-theme="dark"] *):not(:first-child)': cssVar.colorBorder,
+    },
+  },
+  header: {
+    position: 'sticky',
+    zIndex: 2,
+    // Chrome measures sticky against the scroller's CONTENT box, so top: 0
+    // would pin 8px below where the header actually rests (the root cancels
+    // that padding) and shove it down. -8px makes the pinned and resting
+    // positions identical — the title simply never moves.
+    insetBlockStart: '-8px',
+    paddingBlockStart: '8px',
+    paddingBlockEnd: '4px',
+    backgroundColor: cssVar.colorBgElevated,
+    backgroundImage: 'none',
+  },
+  instructionEditor: {
+    paddingBlock: '8px',
+    paddingInline: '12px',
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  list: {
+    backgroundColor: 'transparent',
+    backgroundImage: 'none',
+  },
+  // Cancels the intervention scroller's own top padding. It has to sit on the
+  // card root, not on the sticky header: a sticky box is clamped to its
+  // containing block, so pulling the header alone just gets clamped back and
+  // leaves that strip for content to scroll through.
+  root: {
+    marginBlockStart: '-8px',
+  },
+  section: {
+    paddingBlock: '8px',
+  },
+  sectionDivided: {
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+  },
+  sectionHeader: {
+    cursor: 'pointer',
+    userSelect: 'none',
+  },
+  sectionLabel: {
+    fontSize: '12px',
+    fontWeight: 500,
+    color: cssVar.colorTextSecondary,
+  },
+  seq: {
+    fontSize: '11px',
+    color: cssVar.colorTextTertiary,
+  },
+  titleInput: {
+    paddingBlock: '2px',
+    paddingInline: 0,
+    fontSize: '15px',
+    fontWeight: 600,
+  },
+});
 
-    /* Chrome measures sticky against the scroller's CONTENT box, so top: 0
-      would pin 8px below where the header actually rests (the root cancels
-      that padding) and shove it down. -8px makes the pinned and resting
-      positions identical — the title simply never moves. */
-    inset-block-start: -8px;
-
-    padding-block: 8px 4px;
-
-    background: ${cssVar.colorBgElevated};
-  `,
+const fallback = createStaticStyles(({ css }) => ({
   instructionEditor: css`
-    padding-block: 8px;
-    padding-inline: 12px;
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorFillQuaternary};
-
-    /* The editor defaults to a document-reading 16px; inside a confirmation
-      card the instruction is one field among several, so it matches the
-      criteria rows rather than dwarfing them. */
     &,
     & * {
       font-size: 13px;
       line-height: 1.65;
     }
   `,
-  list: css`
-    background: transparent;
-
-    /* The secondary border is too faint to read on the dark elevated surface
-      the intervention card sits on. */
-    html[data-theme='dark'] & > * + * {
-      border-block-start-color: ${cssVar.colorBorder};
-    }
-  `,
-  /**
-   * Cancels the intervention scroller's own top padding. It has to sit on the
-   * card root, not on the sticky header: a sticky box is clamped to its
-   * containing block, so pulling the header alone just gets clamped back and
-   * leaves that strip for content to scroll through.
-   */
-  root: css`
-    margin-block-start: -8px;
-  `,
-  section: css`
-    padding-block: 8px;
-
-    & + & {
-      border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-    }
-  `,
-  sectionHeader: css`
-    cursor: pointer;
-    user-select: none;
-  `,
-  sectionLabel: css`
-    font-size: 12px;
-    font-weight: 500;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  seq: css`
-    font-size: 11px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  titleInput: css`
-    padding-block: 2px;
-    padding-inline: 0;
-    font-size: 15px;
-    font-weight: 600;
-  `,
 }));
 
 interface SectionProps {
   children: React.ReactNode;
+  divided?: boolean;
   extra?: React.ReactNode;
   label: string;
   onToggle: () => void;
@@ -115,12 +128,15 @@ interface SectionProps {
  * do, how to judge it, how much to spend) — each gets a header the user can
  * fold away, instead of three flat blocks bleeding into each other.
  */
-const Section = memo<SectionProps>(({ children, extra, label, onToggle, open }) => (
-  <Flexbox className={styles.section} gap={7}>
+const Section = memo<SectionProps>(({ children, divided, extra, label, onToggle, open }) => (
+  <Flexbox
+    className={stylex.props(styles.section, divided && styles.sectionDivided).className}
+    gap={7}
+  >
     <Flexbox
       horizontal
       align={'center'}
-      className={styles.sectionHeader}
+      className={stylex.props(styles.sectionHeader).className}
       gap={6}
       onClick={onToggle}
     >
@@ -130,7 +146,7 @@ const Section = memo<SectionProps>(({ children, extra, label, onToggle, open }) 
         size={13}
         style={{ transform: open ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s' }}
       />
-      <Text className={styles.sectionLabel}>{label}</Text>
+      <Text className={stylex.props(styles.sectionLabel).className}>{label}</Text>
       {extra}
     </Flexbox>
     {open && children}
@@ -191,10 +207,10 @@ const CreateGoalIntervention = memo<BuiltinInterventionProps<CreateGoalParams>>(
     );
 
     return (
-      <Flexbox className={styles.root}>
-        <Flexbox className={styles.header}>
+      <Flexbox className={stylex.props(styles.root).className}>
+        <Flexbox className={stylex.props(styles.header).className}>
           <Input
-            className={styles.titleInput}
+            className={stylex.props(styles.titleInput).className}
             value={args.name}
             variant={'borderless'}
             onChange={(event) => patch({ name: event.target.value })}
@@ -206,7 +222,12 @@ const CreateGoalIntervention = memo<BuiltinInterventionProps<CreateGoalParams>>(
           open={openSections.instruction}
           onToggle={() => toggleSection('instruction')}
         >
-          <Flexbox className={styles.instructionEditor}>
+          <Flexbox
+            className={cx(
+              stylex.props(styles.instructionEditor).className,
+              fallback.instructionEditor,
+            )}
+          >
             <Editor
               content={initialInstruction}
               editor={editor}
@@ -225,23 +246,25 @@ const CreateGoalIntervention = memo<BuiltinInterventionProps<CreateGoalParams>>(
         </Section>
 
         <Section
+          divided
           label={t('builtins.lobe-task.goal.criteria')}
           open={openSections.criteria}
           extra={
-            <Text as={'span'} className={styles.seq}>
+            <Text as={'span'} className={stylex.props(styles.seq).className}>
               {args.criteria.length}
             </Text>
           }
           onToggle={() => toggleSection('criteria')}
         >
           <Flexbox gap={7}>
-            <CriterionList className={styles.list}>
+            <CriterionList className={stylex.props(styles.list).className}>
               {/* Rows are read-only on purpose. A focusable input sitting in a
                 dense list is one stray click away from silently rewriting a
                 criterion; edits belong in the modal, where they are deliberate
                 and cancellable. */}
               {args.criteria.map((criterion, index) => (
                 <CriterionRow
+                  className={stylex.props(styles.criterionRow).className}
                   key={index}
                   seq={index + 1}
                   title={criterion.title}
@@ -304,13 +327,16 @@ const CreateGoalIntervention = memo<BuiltinInterventionProps<CreateGoalParams>>(
         </Section>
 
         <Section
+          divided
           label={t('builtins.lobe-task.goal.sectionBudget')}
           open={openSections.budget}
           onToggle={() => toggleSection('budget')}
         >
           <Flexbox horizontal gap={24}>
             <Flexbox gap={4}>
-              <Text className={styles.seq}>{t('builtins.lobe-task.goal.roundBudget')}</Text>
+              <Text className={stylex.props(styles.seq).className}>
+                {t('builtins.lobe-task.goal.roundBudget')}
+              </Text>
               <InputNumber
                 min={2}
                 size={'small'}
@@ -322,7 +348,9 @@ const CreateGoalIntervention = memo<BuiltinInterventionProps<CreateGoalParams>>(
               />
             </Flexbox>
             <Flexbox gap={4}>
-              <Text className={styles.seq}>{t('builtins.lobe-task.goal.costBudget')}</Text>
+              <Text className={stylex.props(styles.seq).className}>
+                {t('builtins.lobe-task.goal.costBudget')}
+              </Text>
               <InputNumber
                 min={0}
                 placeholder={t('builtins.lobe-task.goal.uncapped')}

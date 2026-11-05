@@ -1,8 +1,20 @@
 import type { CrawlPluginState, CrawlResult } from '@lobechat/types';
 import type { CrawlSuccessResult } from '@lobechat/web-crawler';
-import { CopyButton, Flexbox, Highlighter, Icon, Markdown, stopPropagation } from '@lobehub/ui';
-import { Alert, Descriptions, Segmented, Skeleton, Text } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import {
+  Alert,
+  CopyButton,
+  Descriptions,
+  Flexbox,
+  Highlighter,
+  Icon,
+  Markdown,
+  Segmented,
+  Skeleton,
+  stopPropagation,
+  Text,
+} from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ExternalLink } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -11,74 +23,41 @@ import { useToolResultPayload } from '@/hooks/useToolResultPayload';
 
 import { CRAWL_CONTENT_LIMITED_COUNT } from '../../../const';
 
-const styles = createStaticStyles(({ css, cssVar }) => {
-  return {
-    cardBody: css`
-      padding-block: 12px 8px;
-      padding-inline: 16px;
-    `,
-    container: css`
-      cursor: pointer;
-
-      overflow: hidden;
-
-      max-width: 360px;
-      border: 1px solid ${cssVar.colorBorderSecondary};
-      border-radius: 12px;
-
-      transition: border-color 0.2s;
-
-      :hover {
-        border-color: ${cssVar.colorPrimary};
-      }
-    `,
-    description: css`
-      margin-block: 0 4px !important;
-      color: ${cssVar.colorTextSecondary};
-    `,
-    detailsSection: css`
-      padding-block: ${cssVar.paddingSM};
-    `,
-    externalLink: css`
-      color: ${cssVar.colorPrimary};
-    `,
-    footer: css`
-      padding: ${cssVar.paddingXS};
-      border-radius: 6px;
-      text-align: center;
-      background-color: ${cssVar.colorFillQuaternary};
-    `,
-    footerText: css`
-      font-size: ${cssVar.fontSizeSM};
-      color: ${cssVar.colorTextTertiary} !important;
-    `,
-    metaInfo: css`
-      display: flex;
-      align-items: center;
-      color: ${cssVar.colorTextSecondary};
-    `,
-    sliced: css`
-      color: ${cssVar.colorTextQuaternary};
-    `,
-    title: css`
-      overflow: hidden;
-      display: -webkit-box;
-      -webkit-box-orient: vertical;
-      -webkit-line-clamp: 2;
-
-      margin-block-end: 0;
-
-      font-size: 16px;
-      font-weight: bold;
-    `,
-    titleRow: css`
-      color: ${cssVar.colorText};
-    `,
-
-    url: css`
-      color: ${cssVar.colorTextTertiary};
-    `,
-  };
+const styles = stylex.create({
+  description: {
+    marginBlockStart: 0,
+    marginBlockEnd: '4px',
+    color: cssVar.colorTextSecondary,
+  },
+  footer: {
+    paddingBlock: cssVar.paddingXS,
+    paddingInline: cssVar.paddingXS,
+    borderRadius: '6px',
+    textAlign: 'center',
+    backgroundColor: cssVar.colorFillQuaternary,
+  },
+  footerText: {
+    fontSize: cssVar.fontSizeSM,
+    color: cssVar.colorTextTertiary,
+  },
+  sliced: {
+    color: cssVar.colorTextQuaternary,
+  },
+  title: {
+    overflow: 'hidden',
+    display: '-webkit-box',
+    WebkitBoxOrient: 'vertical',
+    WebkitLineClamp: 2,
+    marginBlockEnd: 0,
+    fontSize: '16px',
+    fontWeight: 'bold',
+  },
+  titleRow: {
+    color: cssVar.colorText,
+  },
+  url: {
+    color: cssVar.colorTextTertiary,
+  },
 });
 
 enum DisplayType {
@@ -112,12 +91,12 @@ const PageContent = memo<PageContentProps>(({ messageId, result }) => {
 
   if ('errorType' in result.data) {
     return (
-      <Flexbox className={styles.footer} gap={4}>
+      <Flexbox className={stylex.props(styles.footer).className} gap={4}>
         <div>
           <Descriptions
             column={1}
             classNames={{
-              content: styles.footerText,
+              content: stylex.props(styles.footerText).className,
             }}
             items={[
               {
@@ -159,23 +138,23 @@ const PageContent = memo<PageContentProps>(({ messageId, result }) => {
         <Flexbox
           horizontal
           align={'center'}
-          className={styles.titleRow}
+          className={stylex.props(styles.titleRow).className}
           gap={24}
           justify={'space-between'}
         >
           <Flexbox>
-            <div className={styles.title}>{title || result.originalUrl}</div>
+            <div {...stylex.props(styles.title)}>{title || result.originalUrl}</div>
           </Flexbox>
         </Flexbox>
         {description && (
-          <Text className={styles.description} ellipsis={{ rows: 4 }}>
+          <Text className={stylex.props(styles.description).className} ellipsis={{ rows: 4 }}>
             {description}
           </Text>
         )}
-        <Flexbox horizontal align={'center'} className={styles.url} gap={4}>
+        <Flexbox horizontal align={'center'} className={stylex.props(styles.url).className} gap={4}>
           {siteName && <div>{siteName} · </div>}
           <a
-            className={styles.url}
+            className={stylex.props(styles.url).className}
             href={url}
             rel={'nofollow'}
             style={{ display: 'flex', gap: 4 }}
@@ -187,11 +166,11 @@ const PageContent = memo<PageContentProps>(({ messageId, result }) => {
           </a>
         </Flexbox>
 
-        <div className={styles.footer}>
+        <div {...stylex.props(styles.footer)}>
           <Descriptions
             column={2}
             classNames={{
-              content: styles.footerText,
+              content: stylex.props(styles.footerText).className,
             }}
             items={[
               {
@@ -238,7 +217,7 @@ const PageContent = memo<PageContentProps>(({ messageId, result }) => {
               ) : (
                 <>
                   <span>{content.slice(0, CRAWL_CONTENT_LIMITED_COUNT)}</span>
-                  <span className={styles.sliced}>
+                  <span {...stylex.props(styles.sliced)}>
                     {content.slice(CRAWL_CONTENT_LIMITED_COUNT, -1)}
                   </span>
                 </>

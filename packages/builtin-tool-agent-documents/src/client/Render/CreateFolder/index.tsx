@@ -2,6 +2,7 @@
 
 import type { BuiltinRenderProps } from '@lobechat/types';
 import { Flexbox, Icon, Text } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { FolderIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -21,12 +22,12 @@ const CreateFolderRender = memo<
   if (!title) return null;
 
   return (
-    <Flexbox className={cardStyles.card} gap={6}>
+    <Flexbox className={stylex.props(cardStyles.card).className} gap={6}>
       <Flexbox horizontal align={'center'} gap={8}>
-        <Icon className={cardStyles.arrow} icon={FolderIcon} size={16} />
+        <Icon className={stylex.props(cardStyles.arrow).className} icon={FolderIcon} size={16} />
         <Text strong>{title}</Text>
         {pluginState && (
-          <Text className={cardStyles.status} type={'secondary'}>
+          <Text className={stylex.props(cardStyles.status).className} type={'secondary'}>
             {t(
               pluginState.created
                 ? 'builtins.lobe-agent-documents.createFolder.created'
@@ -36,7 +37,9 @@ const CreateFolderRender = memo<
         )}
       </Flexbox>
       <Flexbox horizontal align={'center'} gap={8}>
-        <Text className={cardStyles.label}>{t('builtins.lobe-agent-documents.ref.location')}</Text>
+        <Text className={stylex.props(cardStyles.label).className}>
+          {t('builtins.lobe-agent-documents.ref.location')}
+        </Text>
         <DocumentRef lookup={lookup} refId={args?.parentId} />
       </Flexbox>
     </Flexbox>

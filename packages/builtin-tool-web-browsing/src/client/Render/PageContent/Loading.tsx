@@ -1,51 +1,52 @@
 'use client';
 
-import { CopyButton, Flexbox } from '@lobehub/ui';
-import { Skeleton } from '@lobehub/ui';
-import { createStaticStyles, cx } from '@lobehub/ui';
+import { CopyButton, cx, Flexbox, Skeleton } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { lineEllipsis, shinyTextStyles } from '@/styles';
 
-const styles = createStaticStyles(({ css, cssVar }) => {
-  return {
-    cardBody: css`
-      padding-block-start: 12px;
-      padding-inline: 12px;
-    `,
-    container: css`
-      overflow: hidden;
-      justify-content: space-between;
-
-      min-width: 360px;
-      max-width: 360px;
-      height: 136px;
-      border: 1px solid ${cssVar.colorBorderSecondary};
-      border-radius: 12px;
-    `,
-
-    footer: css`
-      padding-block: 8px;
-      padding-inline: 12px;
-
-      font-size: ${cssVar.fontSizeSM};
-      color: ${cssVar.colorTextTertiary};
-
-      background-color: ${cssVar.colorFillQuaternary};
-    `,
-    text: cx(lineEllipsis(2), shinyTextStyles.shinyText),
-  };
+const styles = stylex.create({
+  cardBody: {
+    paddingBlockStart: '12px',
+    paddingInline: '12px',
+  },
+  container: {
+    overflow: 'hidden',
+    justifyContent: 'space-between',
+    minWidth: '360px',
+    maxWidth: '360px',
+    height: '136px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: '12px',
+  },
+  footer: {
+    paddingBlock: '8px',
+    paddingInline: '12px',
+    fontSize: cssVar.fontSizeSM,
+    color: cssVar.colorTextTertiary,
+    backgroundColor: cssVar.colorFillQuaternary,
+  },
 });
+
+const textClassName = cx(lineEllipsis(2), shinyTextStyles.shinyText);
 
 const LoadingCard = memo<{ url: string }>(({ url }) => {
   const { t } = useTranslation('plugin');
 
   return (
-    <Flexbox className={styles.container}>
-      <Flexbox horizontal className={styles.cardBody} justify={'space-between'}>
+    <Flexbox className={stylex.props(styles.container).className}>
+      <Flexbox
+        horizontal
+        className={stylex.props(styles.cardBody).className}
+        justify={'space-between'}
+      >
         <a href={url} rel={'nofollow'} target={'_blank'}>
-          <div className={styles.text}>{url}</div>
+          <div className={textClassName}>{url}</div>
         </a>
         <CopyButton content={url} size={'small'} />
       </Flexbox>
@@ -54,7 +55,7 @@ const LoadingCard = memo<{ url: string }>(({ url }) => {
         <Skeleton height={14} width={'40%'} />
       </Flexbox>
 
-      <div className={styles.footer}>{t('search.crawPages.crawling')}</div>
+      <div {...stylex.props(styles.footer)}>{t('search.crawPages.crawling')}</div>
     </Flexbox>
   );
 });

@@ -2,7 +2,9 @@
 
 import type { AgentGroupMember, BuiltinInspectorProps } from '@lobechat/types';
 import { safeParsePartialJSON } from '@lobechat/utils';
-import { Avatar, createStaticStyles, cx, Flexbox, useTheme } from '@lobehub/ui';
+import { Avatar, cx, Flexbox, useTheme } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -13,19 +15,10 @@ import { shinyTextStyles } from '@/styles';
 
 import type { ExecuteTasksParams, TaskItem } from '../../../types';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  root: css`
-    overflow: hidden;
-    display: flex;
-    gap: 8px;
-    align-items: center;
-  `,
-  title: css`
-    flex-shrink: 0;
-    color: ${cssVar.colorTextSecondary};
-    white-space: nowrap;
-  `,
-}));
+const styles = stylex.create({
+  root: { overflow: 'hidden', display: 'flex', gap: '8px', alignItems: 'center' },
+  title: { flexShrink: 0, color: cssVar.colorTextSecondary, whiteSpace: 'nowrap' },
+});
 
 export const ExecuteAgentTasksInspector = memo<BuiltinInspectorProps<ExecuteTasksParams>>(
   ({ args, partialArgs, isArgumentsStreaming }) => {
@@ -78,7 +71,7 @@ export const ExecuteAgentTasksInspector = memo<BuiltinInspectorProps<ExecuteTask
 
     if (isArgumentsStreaming && agents.length === 0) {
       return (
-        <div className={styles.root}>
+        <div {...stylex.props(styles.root)}>
           <span className={shinyTextStyles.shinyText}>
             {t('builtins.lobe-group-management.apiName.executeAgentTasks')}
           </span>
@@ -87,8 +80,13 @@ export const ExecuteAgentTasksInspector = memo<BuiltinInspectorProps<ExecuteTask
     }
 
     return (
-      <Flexbox horizontal align={'center'} className={styles.root} gap={8}>
-        <span className={cx(styles.title, isArgumentsStreaming && shinyTextStyles.shinyText)}>
+      <Flexbox horizontal align={'center'} className={stylex.props(styles.root).className} gap={8}>
+        <span
+          className={cx(
+            stylex.props(styles.title).className,
+            isArgumentsStreaming && shinyTextStyles.shinyText,
+          )}
+        >
           {t('builtins.lobe-group-management.inspector.executeAgentTasks.title')}
         </span>
         {avatarItems.length > 0 && <Avatar.Group items={avatarItems} shape={'circle'} size={24} />}
