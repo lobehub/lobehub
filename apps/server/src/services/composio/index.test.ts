@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { withNativeConnectorLock } from '@/libs/mcp/nativeConnectorLock';
+
 import { ComposioService } from './index';
 
 const mocks = vi.hoisted(() => ({
@@ -12,6 +14,10 @@ const mocks = vi.hoisted(() => ({
   pluginFindById: vi.fn(),
   pluginQuery: vi.fn(),
   toolsExecute: vi.fn(),
+}));
+vi.mock('@/libs/mcp/agentPluginAccess', () => ({
+  isAgentPluginDisabled: async () => false,
+  readDisabledAgentPlugins: async () => [],
 }));
 
 vi.mock('@/database/models/connector', () => ({
@@ -50,7 +56,13 @@ vi.mock('@/libs/composio', () => ({
   isComposioConnectedAccountNotFoundError: mocks.isComposioNotFound,
 }));
 
-const service = () => new ComposioService({ db: {} as any, userId: 'user-1' });
+const service = () => {
+  const db: any = {
+    execute: async () => {},
+    transaction: async (run: (tx: any) => Promise<unknown>) => run(db),
+  };
+  return new ComposioService({ db, userId: 'user-1' });
+};
 
 const activeConnectorRow = (overrides: Record<string, any> = {}) => ({
   id: 'conn-gmail',
@@ -369,5 +381,254 @@ describe('ComposioService.executeComposioTool', () => {
     expect(result.success).toBe(false);
     expect(result.error?.code).toBe('COMPOSIO_CONFIG_NOT_FOUND');
     expect(mocks.toolsExecute).not.toHaveBeenCalled();
+  });
+});
+
+describe('native managed Composio access', () => {
+  const managedRow = (agentIds = ['toby']) =>
+    activeConnectorRow({
+      status: 'connected',
+      metadata: {
+        composio: { appSlug: 'GMAIL', connectedAccountId: 'ca-native', status: 'ACTIVE' },
+        nativeAccess: {
+          agentIds,
+          readToolNames: ['GMAIL_FETCH_EMAILS'],
+          readToolVersions: { GMAIL_FETCH_EMAILS: '20261029_00' },
+        },
+      },
+    });
+  const legacyPlugin = {
+    identifier: 'gmail',
+    customParams: { composio: { connectedAccountId: 'ca-legacy', status: 'ACTIVE' } },
+    manifest: { api: [{ name: 'GMAIL_SEND_EMAIL', parameters: {} }] },
+  };
+
+  it('does not advertise a pending grant through the legacy plugin projection', async () => {
+    mocks.connectorQuery.mockResolvedValue([managedRow([])]);
+    mocks.pluginQuery.mockResolvedValue([legacyPlugin]);
+    expect(await service().getComposioManifests('toby')).toEqual([]);
+  });
+
+  it('advertises only explicitly permitted, synced read tools for a granted agent', async () => {
+    mocks.connectorQuery.mockResolvedValue([managedRow()]);
+    mocks.connectorToolQueryAll.mockResolvedValue([
+      { userConnectorId: 'conn-gmail', toolName: 'GMAIL_FETCH_EMAILS', permission: 'auto' },
+      { userConnectorId: 'conn-gmail', toolName: 'GMAIL_SEND_EMAIL', permission: 'auto' },
+    ]);
+    const manifests = await service().getComposioManifests('toby');
+    expect(manifests.map((m) => m.api.map((tool) => tool.name))).toEqual([['GMAIL_FETCH_EMAILS']]);
+  });
+
+  it('rejects direct execution by an agent without a grant before calling Composio', async () => {
+    mocks.connectorQueryByIdentifiers.mockResolvedValue([managedRow()]);
+    mocks.pluginFindById.mockResolvedValue(legacyPlugin);
+    const result = await service().executeComposioTool({
+      agentId: 'another-agent',
+      args: {},
+      identifier: 'gmail',
+      toolSlug: 'GMAIL_FETCH_EMAILS',
+    });
+    expect(result.success).toBe(false);
+    expect(mocks.toolsExecute).not.toHaveBeenCalled();
+  });
+
+  it('rejects a directly forged write tool even for an allowed agent', async () => {
+    mocks.connectorQueryByIdentifiers.mockResolvedValue([managedRow()]);
+    const result = await service().executeComposioTool({
+      agentId: 'toby',
+      args: {},
+      identifier: 'gmail',
+      toolSlug: 'GMAIL_SEND_EMAIL',
+    });
+    expect(result.success).toBe(false);
+    expect(mocks.toolsExecute).not.toHaveBeenCalled();
+  });
+
+  it.each(['disable', 'replace'] as const)(
+    'serializes provider dispatch with a concurrent %s',
+    async (change) => {
+      let row = managedRow();
+      let committed = false;
+      let callsAfterCommit = 0;
+      let enter!: () => void;
+      let release!: () => void;
+      const entered = new Promise<void>((resolve) => {
+        enter = resolve;
+      });
+      const paused = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      let tail = Promise.resolve<unknown>(undefined);
+      const db: any = {
+        execute: async () => {},
+        transaction: (run: (tx: any) => Promise<unknown>) => {
+          const next = tail.then(() => run(db));
+          tail = next.catch(() => {});
+          return next;
+        },
+      };
+      mocks.connectorQueryByIdentifiers.mockImplementation(async () => [structuredClone(row)]);
+      mocks.connectorToolQueryAll.mockImplementationOnce(async () => {
+        enter();
+        await paused;
+        return [
+          { userConnectorId: 'conn-gmail', toolName: 'GMAIL_FETCH_EMAILS', permission: 'auto' },
+        ];
+      });
+      mocks.toolsExecute.mockImplementation(async () => {
+        if (committed) callsAfterCommit++;
+        return { successful: true, data: 'read' };
+      });
+      const runtime = new ComposioService({ db, userId: 'user-1' });
+      const input = {
+        agentId: 'toby',
+        args: {},
+        identifier: 'gmail',
+        toolSlug: 'GMAIL_FETCH_EMAILS',
+      };
+      const reading = runtime.executeComposioTool(input);
+      await entered;
+      const changing = withNativeConnectorLock(db, 'user-1', 'gmail', async () => {
+        row = {
+          ...row,
+          isEnabled: false,
+          metadata: {
+            ...row.metadata,
+            nativeAccess: { ...row.metadata.nativeAccess, agentIds: [] },
+            composio: {
+              ...row.metadata.composio,
+              connectedAccountId: change === 'replace' ? 'ca-new' : 'ca-native',
+            },
+          },
+        };
+        committed = true;
+      });
+      await new Promise((resolve) => setImmediate(resolve));
+      release();
+      await reading;
+      await changing;
+      expect(callsAfterCommit).toBe(0);
+      expect((await runtime.executeComposioTool(input)).success).toBe(false);
+    },
+  );
+
+  it('stops a managed connection when the provider reports invalid authentication credentials', async () => {
+    mocks.connectorQueryByIdentifiers.mockResolvedValue([managedRow()]);
+    mocks.connectorToolQueryAll.mockResolvedValue([
+      { userConnectorId: 'conn-gmail', toolName: 'GMAIL_FETCH_EMAILS', permission: 'auto' },
+    ]);
+    mocks.toolsExecute.mockResolvedValue({
+      successful: false,
+      error: { code: 401, message: 'Request had invalid authentication credentials.' },
+    });
+    expect(
+      (
+        await service().executeComposioTool({
+          agentId: 'toby',
+          args: {},
+          identifier: 'gmail',
+          toolSlug: 'GMAIL_FETCH_EMAILS',
+        })
+      ).success,
+    ).toBe(false);
+    expect(mocks.markComposioUnavailable).toHaveBeenCalledWith('conn-gmail', 'ca-native');
+  });
+
+  it('executes a synced allowed read using the granted connection identity', async () => {
+    mocks.connectorQueryByIdentifiers.mockResolvedValue([managedRow()]);
+    mocks.connectorToolQueryAll.mockResolvedValue([
+      { userConnectorId: 'conn-gmail', toolName: 'GMAIL_FETCH_EMAILS', permission: 'auto' },
+    ]);
+    mocks.toolsExecute.mockResolvedValue({ successful: true, data: 'actual read result' });
+    const result = await service().executeComposioTool({
+      agentId: 'toby',
+      args: { max_results: 1 },
+      identifier: 'gmail',
+      toolSlug: 'GMAIL_FETCH_EMAILS',
+    });
+    expect(result).toMatchObject({ success: true, content: 'actual read result' });
+    expect(mocks.toolsExecute).toHaveBeenCalledWith(
+      'GMAIL_FETCH_EMAILS',
+      expect.objectContaining({
+        connectedAccountId: 'ca-native',
+        userId: 'user-1',
+        arguments: { max_results: 1 },
+        version: '20261029_00',
+      }),
+    );
+  });
+
+  it('does not report a provider-declared failed read as a successful tool result', async () => {
+    mocks.connectorQueryByIdentifiers.mockResolvedValue([managedRow()]);
+    mocks.connectorToolQueryAll.mockResolvedValue([
+      { userConnectorId: 'conn-gmail', toolName: 'GMAIL_FETCH_EMAILS', permission: 'auto' },
+    ]);
+    mocks.toolsExecute.mockResolvedValue({
+      successful: false,
+      error: '401 invalid credentials',
+      data: {},
+    });
+    const result = await service().executeComposioTool({
+      agentId: 'toby',
+      args: {},
+      identifier: 'gmail',
+      toolSlug: 'GMAIL_FETCH_EMAILS',
+    });
+    expect(result).toMatchObject({ success: false, error: { code: 'COMPOSIO_TOOL_FAILED' } });
+  });
+
+  it('does not silently use a changed or unverified Composio tool version', async () => {
+    const row = managedRow();
+    row.metadata.nativeAccess.readToolVersions = {};
+    mocks.connectorQueryByIdentifiers.mockResolvedValue([row]);
+    mocks.connectorToolQueryAll.mockResolvedValue([
+      { userConnectorId: 'conn-gmail', toolName: 'GMAIL_FETCH_EMAILS', permission: 'auto' },
+    ]);
+    mocks.toolsExecute.mockResolvedValue({ successful: true, data: 'unexpected read' });
+    const result = await service().executeComposioTool({
+      agentId: 'toby',
+      args: {},
+      identifier: 'gmail',
+      toolSlug: 'GMAIL_FETCH_EMAILS',
+    });
+    expect(result.success).toBe(false);
+    expect(mocks.toolsExecute).not.toHaveBeenCalled();
+  });
+
+  it('requires an explicit provider success marker for managed reads', async () => {
+    mocks.connectorQueryByIdentifiers.mockResolvedValue([managedRow()]);
+    mocks.connectorToolQueryAll.mockResolvedValue([
+      { userConnectorId: 'conn-gmail', toolName: 'GMAIL_FETCH_EMAILS', permission: 'auto' },
+    ]);
+    mocks.toolsExecute.mockResolvedValue({ data: 'ambiguous response' });
+    const result = await service().executeComposioTool({
+      agentId: 'toby',
+      args: {},
+      identifier: 'gmail',
+      toolSlug: 'GMAIL_FETCH_EMAILS',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('never falls through to old plugin credentials when a managed row has no matching backend account', async () => {
+    const row = managedRow();
+    delete (row.metadata as any).composio;
+    mocks.connectorQueryByIdentifiers.mockResolvedValue([row]);
+    mocks.pluginFindById.mockResolvedValue(legacyPlugin);
+    mocks.toolsExecute.mockResolvedValue({ successful: true, data: 'wrong account' });
+    const result = await service().executeComposioTool({
+      agentId: 'toby',
+      args: {},
+      identifier: 'gmail',
+      toolSlug: 'GMAIL_FETCH_EMAILS',
+    });
+    expect(result.success).toBe(false);
+    expect(mocks.toolsExecute).not.toHaveBeenCalled();
+  });
+
+  it('fails closed instead of reviving plugin credentials when connector resolution fails', async () => {
+    mocks.connectorQuery.mockRejectedValue(new Error('connection lookup failed'));
+    mocks.pluginQuery.mockResolvedValue([legacyPlugin]);
+    expect(await service().getComposioManifests('toby')).toEqual([]);
   });
 });

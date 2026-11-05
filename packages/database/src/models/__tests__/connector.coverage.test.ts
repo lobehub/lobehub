@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
+import { ConnectorRepository } from '../../repositories/connector';
 import { agents, userConnectors, users } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { ConnectorModel } from '../connector';
@@ -82,9 +83,9 @@ describe('ConnectorModel coverage edges', () => {
 
   describe('missing rows', () => {
     it('copyToAgent returns null and creates nothing for an unknown source', async () => {
-      const model = new ConnectorModel(serverDB, userId);
-
-      expect(await model.copyToAgent(missingId, agentId)).toBeNull();
+      expect(
+        await new ConnectorRepository(serverDB, userId).copyToAgent(missingId, agentId),
+      ).toBeNull();
       expect(
         await serverDB.select().from(userConnectors).where(eq(userConnectors.userId, userId)),
       ).toEqual([]);

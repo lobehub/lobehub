@@ -5,7 +5,13 @@ import type { LobeChatDatabase } from '@/database/type';
 
 import { McpServerService } from './mcp-server.service';
 
-const { connectorInstances, hasAnyPermissionMock, syncConnectorToolsByIdMock } = vi.hoisted(() => ({
+const {
+  connectorDeleteMock,
+  connectorInstances,
+  hasAnyPermissionMock,
+  syncConnectorToolsByIdMock,
+} = vi.hoisted(() => ({
+  connectorDeleteMock: vi.fn(),
   connectorInstances: [] as any[],
   hasAnyPermissionMock: vi.fn(),
   syncConnectorToolsByIdMock: vi.fn(),
@@ -44,6 +50,11 @@ vi.mock('@/server/services/connector/sync', () => ({
 vi.mock('@/database/models/connectorTool', () => ({
   ConnectorToolModel: class {
     queryByConnector = vi.fn().mockResolvedValue([]);
+  },
+}));
+vi.mock('@/database/repositories/connector', () => ({
+  ConnectorRepository: class {
+    delete = connectorDeleteMock;
   },
 }));
 vi.mock('@/database/models/connector', () => ({
@@ -88,7 +99,7 @@ describe('McpServerService row-level manage checks', () => {
 
       await expect(call).rejects.toThrow(/Only the creator or a workspace owner/);
       expect(connectorInstances.every((it) => it.update.mock.calls.length === 0)).toBe(true);
-      expect(connectorInstances.every((it) => it.delete.mock.calls.length === 0)).toBe(true);
+      expect(connectorDeleteMock).not.toHaveBeenCalled();
       expect(syncConnectorToolsByIdMock).not.toHaveBeenCalled();
     },
   );
@@ -138,7 +149,7 @@ describe('McpServerService row-level manage checks', () => {
         method === 'updateServer' ? svc.updateServer('mcp-1', { name: 'x' }) : svc[method]('mcp-1');
 
       await expect(call).rejects.toThrow(/MCP server not found/);
-      expect(connectorInstances.every((it) => it.delete.mock.calls.length === 0)).toBe(true);
+      expect(connectorDeleteMock).not.toHaveBeenCalled();
       expect(syncConnectorToolsByIdMock).not.toHaveBeenCalled();
     },
   );

@@ -4,6 +4,7 @@ import { isLocalOrPrivateUrl } from '@lobechat/utils';
 import type { AgentModel } from '@/database/models/agent';
 import type { DecryptedConnector } from '@/database/models/connector';
 import { ConnectorMcpConnectionType, ConnectorToolPermission } from '@/database/schemas';
+import { canCallNativeConnectorTool } from '@/libs/mcp/connectorAccessPolicy';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { mcpService } from '@/server/services/mcp';
 import { isMcpAppsEnabled } from '@/server/services/mcp/featureGate';
@@ -99,6 +100,12 @@ export const callConnectorToolById = async (
   }
   if (!connector.isEnabled) {
     throw new ConnectorToolCallError('FORBIDDEN', 'Connector is disabled');
+  }
+  if (!canCallNativeConnectorTool(connector, undefined, params.toolName)) {
+    throw new ConnectorToolCallError(
+      'FORBIDDEN',
+      'This connection requires an authorized agent run',
+    );
   }
   // A view open since the connector was pointed elsewhere must not drive the new server
   if (params.fromApp && !(await reachesServer(connector, params.server))) {

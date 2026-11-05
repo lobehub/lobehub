@@ -1,9 +1,10 @@
+import { readComposioToolVersion } from '@lobechat/connector-data';
 import { COMPOSIO_APP_TYPES } from '@lobechat/const';
 import type { LobeToolManifest } from '@lobechat/context-engine';
 import type { LobeChatDatabase } from '@lobechat/database';
 import debug from 'debug';
 
-import { ConnectorModel } from '@/database/models/connector';
+import { ConnectorModel, type DecryptedConnector } from '@/database/models/connector';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
 import { PluginModel } from '@/database/models/plugin';
 import type { UserConnectorToolItem } from '@/database/schemas';
@@ -12,6 +13,13 @@ import {
   isComposioClientAvailable,
   isComposioConnectedAccountNotFoundError,
 } from '@/libs/composio';
+import { isAgentPluginDisabled, readDisabledAgentPlugins } from '@/libs/mcp/agentPluginAccess';
+import {
+  canCallNativeConnectorTool,
+  canUseNativeConnector,
+  hasNativeConnectorPolicy,
+} from '@/libs/mcp/connectorAccessPolicy';
+import { withNativeConnectorLock } from '@/libs/mcp/nativeConnectorLock';
 import { type ToolExecutionResult } from '@/server/services/toolExecution/types';
 
 const log = debug('lobe-server:composio-service');
@@ -55,10 +63,14 @@ export class ComposioService {
   private connectorModel?: ConnectorModel;
   private connectorToolModel?: ConnectorToolModel;
   private userId?: string;
+  private db?: LobeChatDatabase;
+  private workspaceId?: string;
 
   constructor(options: ComposioServiceOptions = {}) {
     const { db, userId, workspaceId } = options;
     this.userId = userId;
+    this.db = db;
+    this.workspaceId = workspaceId;
 
     if (db && userId) {
       // Scope to the caller's workspace (personal when undefined). Agent-scoped
@@ -79,6 +91,35 @@ export class ComposioService {
   }
 
   async executeComposioTool(params: ComposioToolExecuteParams): Promise<ToolExecutionResult> {
+    if (
+      !this.db ||
+      !this.userId ||
+      this.workspaceId ||
+      !VALID_COMPOSIO_IDENTIFIERS.has(params.identifier)
+    )
+      return this.executeComposioToolUnlocked(params);
+    try {
+      return await withNativeConnectorLock(this.db, this.userId, params.identifier, async (tx) =>
+        new ComposioService({
+          db: tx as LobeChatDatabase,
+          userId: this.userId,
+        }).executeComposioToolUnlocked(params),
+      );
+    } catch {
+      return {
+        success: false,
+        content: 'Connection access could not be confirmed.',
+        error: {
+          code: 'CONNECTION_ACCESS_UNAVAILABLE',
+          message: 'Connection access could not be confirmed',
+        },
+      };
+    }
+  }
+
+  private async executeComposioToolUnlocked(
+    params: ComposioToolExecuteParams,
+  ): Promise<ToolExecutionResult> {
     const { identifier, toolSlug, args, agentId } = params;
     let resolvedConnectedAccountId: string | undefined;
     let resolvedConnectorId: string | undefined;
@@ -116,7 +157,18 @@ export class ComposioService {
     }
 
     try {
-      const account = await this.resolveComposioAccount(identifier, agentId);
+      if (
+        agentId &&
+        this.db &&
+        (await isAgentPluginDisabled(this.db, agentId, identifier, !this.workspaceId))
+      ) {
+        return {
+          content: 'This service is disabled for this agent.',
+          success: false,
+          error: { code: 'CONNECTION_ACCESS_DENIED', message: 'Agent access is disabled' },
+        };
+      }
+      const account = await this.resolveComposioAccount(identifier, agentId, !this.workspaceId);
       if (!account) {
         return {
           content: `Composio configuration not found for server "${identifier}"`,
@@ -131,6 +183,24 @@ export class ComposioService {
       const { connectedAccountId, ownerUserId } = account;
       resolvedConnectedAccountId = connectedAccountId;
       resolvedConnectorId = account.connectorId;
+      if (account.connector && hasNativeConnectorPolicy(account.connector)) {
+        const tools = await this.connectorToolModel!.queryAllByConnectorIds(
+          [account.connector.id],
+          { lock: !this.workspaceId },
+        );
+        const tool = tools.find((item) => item.toolName === toolSlug);
+        if (
+          !canCallNativeConnectorTool(account.connector, agentId, toolSlug) ||
+          !tool ||
+          tool.permission === 'disabled'
+        ) {
+          return {
+            content: 'This tool is not permitted for this connection and agent.',
+            error: { code: 'CONNECTION_ACCESS_DENIED', message: 'Connection access denied' },
+            success: false,
+          };
+        }
+      }
 
       log(
         'executeComposioTool: calling Composio API with connectedAccountId=%s, ownerUserId=%s',
@@ -139,12 +209,18 @@ export class ComposioService {
       );
 
       const composioClient = getComposioClient();
+      const managed = !!account.connector && hasNativeConnectorPolicy(account.connector);
+      const version = managed
+        ? readComposioToolVersion(
+            account.connector?.metadata?.nativeAccess?.readToolVersions?.[toolSlug],
+          )
+        : undefined;
       const result = await (composioClient.tools as any).execute(toolSlug, {
         arguments: args,
         connectedAccountId,
         // Toolkit version resolves to "latest"; allow manual execution without a
         // pinned version (Composio otherwise throws ComposioToolVersionRequiredError).
-        dangerouslySkipVersionCheck: true,
+        ...(managed ? { version } : { dangerouslySkipVersionCheck: true }),
         // The Composio user entity that OWNS this connected account — the user who
         // linked it (`connectedAccounts.link(ownerUserId, …)` at connection time),
         // NOT the caller. In a workspace, a member running a shared agent resolves
@@ -157,6 +233,37 @@ export class ComposioService {
       log('executeComposioTool: response: %O', result);
 
       const data = result as any;
+      if (
+        (managed && data?.successful !== true) ||
+        data?.successful === false ||
+        data?.success === false ||
+        data?.error
+      ) {
+        const providerError = data?.error;
+        const authRejected =
+          providerError?.code === 401 ||
+          ['UNAUTHENTICATED', 'invalid_grant', 'invalid_token'].includes(providerError?.code);
+        if (managed && authRejected && resolvedConnectorId) {
+          try {
+            await this.connectorModel!.markComposioConnectionUnavailable(
+              resolvedConnectorId,
+              connectedAccountId,
+            );
+          } catch {
+            log('Could not persist rejected connection authentication');
+          }
+        }
+
+        const message =
+          typeof data.error === 'string'
+            ? data.error
+            : 'The provider reported that this tool call failed.';
+        return {
+          content: message,
+          error: { code: 'COMPOSIO_TOOL_FAILED', message },
+          success: false,
+        };
+      }
       const content = data?.data || data?.result || data;
 
       let resultContent = '';
@@ -226,15 +333,30 @@ export class ComposioService {
   private async resolveComposioAccount(
     identifier: string,
     agentId?: string,
+    lockRows = false,
   ): Promise<
-    { connectedAccountId: string; connectorId?: string; ownerUserId: string } | undefined
+    | {
+        connectedAccountId: string;
+        connector?: DecryptedConnector;
+        connectorId?: string;
+        ownerUserId: string;
+      }
+    | undefined
   > {
     if (this.connectorModel) {
-      const [connector] = await this.connectorModel.resolveByIdentifiers([identifier], agentId);
+      const [connector] = await this.connectorModel.resolveByIdentifiers(
+        [identifier],
+        agentId,
+        undefined,
+        { lock: lockRows },
+      );
+      if (connector && !canUseNativeConnector(connector, agentId)) return undefined;
       const composio = connector?.metadata?.composio;
+      if (connector && hasNativeConnectorPolicy(connector) && !composio) return undefined;
       if (composio?.connectedAccountId) {
         return {
           connectedAccountId: composio.connectedAccountId,
+          connector,
           connectorId: connector.id,
           ownerUserId: composio.linkedByUserId ?? connector.userId ?? this.userId!,
         };
@@ -266,6 +388,19 @@ export class ComposioService {
   ): Promise<LobeToolManifest[]> {
     const manifests: LobeToolManifest[] = [];
     const coveredIdentifiers = new Set<string>();
+    const disabledIdentifiers = new Set<string>();
+    if (agentId && this.db) {
+      try {
+        const disabled = await readDisabledAgentPlugins(this.db, agentId);
+        if (!disabled) return [];
+        for (const identifier of disabled) {
+          coveredIdentifiers.add(identifier);
+          disabledIdentifiers.add(identifier);
+        }
+      } catch {
+        return [];
+      }
+    }
     const identifiers = options?.identifiers?.filter((id) => VALID_COMPOSIO_IDENTIFIERS.has(id));
     if (identifiers?.length === 0) return manifests;
 
@@ -279,9 +414,16 @@ export class ComposioService {
         const connectors = identifiers
           ? await this.connectorModel.resolveByIdentifiers(identifiers, agentId)
           : await this.connectorModel.resolveAll(agentId);
+        // A managed row remains authoritative even when disabled, ungranted or
+        // not synced. Never revive its old plugin-table projection.
+        for (const connector of connectors) {
+          if (hasNativeConnectorPolicy(connector)) coveredIdentifiers.add(connector.identifier);
+        }
         const composioConnectors = connectors.filter(
           (c) =>
             VALID_COMPOSIO_IDENTIFIERS.has(c.identifier) &&
+            !disabledIdentifiers.has(c.identifier) &&
+            canUseNativeConnector(c, agentId) &&
             c.isEnabled &&
             c.metadata?.composio?.status === 'ACTIVE',
         );
@@ -298,7 +440,12 @@ export class ComposioService {
           }
 
           for (const connector of composioConnectors) {
-            const connectorTools = toolsByConnector.get(connector.id) ?? [];
+            const connectorTools = (toolsByConnector.get(connector.id) ?? []).filter(
+              (tool) =>
+                !hasNativeConnectorPolicy(connector) ||
+                (canCallNativeConnectorTool(connector, agentId, tool.toolName) &&
+                  tool.permission !== 'disabled'),
+            );
             if (connectorTools.length === 0) continue;
 
             const appType = COMPOSIO_APP_TYPES.find((t) => t.identifier === connector.identifier);
@@ -330,6 +477,7 @@ export class ComposioService {
         }
       } catch (error) {
         console.error('ComposioService.getComposioManifests (connector) error: %O', error);
+        return []; // Cannot establish that plugin fallback would be unrestricted.
       }
     }
 

@@ -38,6 +38,21 @@ export class ConnectorToolModel {
   private ownership = () =>
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, userConnectorTools);
 
+  /** Preserve synced definitions and user permissions on an independent connector copy. */
+  cloneForConnector = async (sourceId: string, newConnectorId: string): Promise<void> => {
+    const tools = await this.db
+      .select()
+      .from(userConnectorTools)
+      .where(and(eq(userConnectorTools.userConnectorId, sourceId), this.ownership()));
+    if (tools.length === 0) return;
+    await this.db.insert(userConnectorTools).values(
+      tools.map(({ id: _id, createdAt: _created, updatedAt: _updated, ...tool }) => ({
+        ...tool,
+        userConnectorId: newConnectorId,
+      })),
+    );
+  };
+
   findById = async (toolId: string): Promise<UserConnectorToolItem | undefined> => {
     const [row] = await this.db
       .select()
@@ -151,13 +166,17 @@ export class ConnectorToolModel {
    * Query all tools for the given connector UUIDs, including disabled ones.
    * Used for manifest building where disabled tools must be visible (blocking description).
    */
-  queryAllByConnectorIds = async (connectorIds: string[]): Promise<UserConnectorToolItem[]> => {
+  queryAllByConnectorIds = async (
+    connectorIds: string[],
+    options?: { lock?: boolean },
+  ): Promise<UserConnectorToolItem[]> => {
     if (connectorIds.length === 0) return [];
 
-    return this.db
+    const query = this.db
       .select()
       .from(userConnectorTools)
       .where(and(this.ownership(), inArray(userConnectorTools.userConnectorId, connectorIds)));
+    return options?.lock ? query.for('share') : query;
   };
 
   /**

@@ -2,6 +2,7 @@ import type { Context } from 'hono';
 import { Hono } from 'hono';
 
 import acceptanceReview from './acceptance-review';
+import connectors from './connectors';
 import device from './device';
 
 const app = new Hono();
@@ -19,6 +20,8 @@ app.get('/health', (c) =>
     service: '@lobechat/server',
   }),
 );
+
+app.all('/api/connectors/*', (c) => connectors.fetch(c.req.raw));
 
 app.all('/api/agent', (c) => fetchWith(c, () => import('./agent')));
 app.all('/api/agent/*', (c) => fetchWith(c, () => import('./agent')));

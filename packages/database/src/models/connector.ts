@@ -1,8 +1,9 @@
+import type { ConnectorCredentials, NewUserConnector, UserConnectorItem } from '@lobechat/types';
 import { and, eq, inArray, isNotNull, isNull, or, sql } from 'drizzle-orm';
 
-import type { ConnectorCredentials, NewUserConnector, UserConnectorItem } from '../schemas';
-import { ConnectorStatus, userConnectors, userConnectorTools } from '../schemas';
+import { ConnectorStatus, userConnectors } from '../schemas';
 import type { LobeChatDatabase } from '../type';
+import { withNativeConnectorLock } from '../utils/nativeConnectorLock';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
 interface GateKeeper {
@@ -47,6 +48,8 @@ export interface ComposioConnectorReference extends ConnectorReference {
     status: string;
   };
 }
+
+const nativeRuntimeKeys = ['nativeAccess', 'personalConnection', 'nativeReadEvidence'] as const;
 
 type CreateConnectorParams = Omit<NewUserConnector, 'userId' | 'id' | 'createdAt' | 'updatedAt'>;
 
@@ -138,6 +141,10 @@ export class ConnectorModel {
    */
   private pickByPriority = (rows: UserConnectorItem[], agentId?: string): UserConnectorItem[] => {
     const rank = (row: UserConnectorItem): number => {
+      // An explicit native account choice wins over implicit agent/base scope.
+      // Keep an expired selection authoritative as well: never silently fall
+      // back to a different account while it is being reauthorized.
+      if (agentId && row.metadata?.nativeAccess?.agentIds?.includes(agentId)) return 3;
       if (agentId && row.agentId === agentId) return 2;
       if (agentId && row.metadata?.mountedByAgentId === agentId) return 1;
       return 0;
@@ -154,6 +161,8 @@ export class ConnectorModel {
     params: CreateConnectorParams,
     gateKeeper: GateKeeper | undefined = this.gateKeeper,
   ): Promise<UserConnectorItem> => {
+    if (params.metadata && nativeRuntimeKeys.some((key) => Object.hasOwn(params.metadata!, key)))
+      throw new Error('Managed connection metadata is reserved for server authorization');
     const credentials = params.credentials
       ? await encryptCredentials(params.credentials, gateKeeper)
       : null;
@@ -171,22 +180,24 @@ export class ConnectorModel {
     return result;
   };
 
-  /**
-   * Clone an existing connector into an agent scope ("Copy user tool"): a new
-   * independent row with the same config, bound to `agentId`. The encrypted
-   * `credentials` ciphertext is copied verbatim (same vault key, so no
-   * decrypt/re-encrypt needed) — which is why copying must happen server-side:
-   * the client never receives the ciphertext. Any mount reference on the source
-   * is dropped so the copy is a standalone agent-owned connector.
-   */
-  copyToAgent = async (sourceId: string, agentId: string): Promise<UserConnectorItem | null> => {
-    const [source] = await this.db
+  /** Scoped raw row for repository mutations; credentials remain encrypted. */
+  lockById = async (id: string): Promise<UserConnectorItem | undefined> => {
+    const [row] = await this.db
       .select()
       .from(userConnectors)
-      .where(and(eq(userConnectors.id, sourceId), this.ownership()))
-      .limit(1);
-    if (!source) return null;
+      .where(and(eq(userConnectors.id, id), this.ownership()))
+      .limit(1)
+      .for('update');
+    return row;
+  };
 
+  /** Insert only this aggregate; the repository copies tools in the same transaction. */
+  cloneRowToAgent = async (
+    source: UserConnectorItem,
+    agentId: string,
+  ): Promise<UserConnectorItem> => {
+    if (source.metadata && Object.hasOwn(source.metadata, 'nativeAccess'))
+      throw new Error('Managed connections require confirmed agent scope assignment');
     const { id: _id, createdAt: _c, updatedAt: _u, metadata, ...rest } = source;
     const cleanedMetadata = metadata
       ? (() => {
@@ -194,31 +205,14 @@ export class ConnectorModel {
           return restMeta;
         })()
       : metadata;
-
     const [created] = await this.db
       .insert(userConnectors)
       .values({ ...rest, agentId, metadata: cleanedMetadata })
       .returning();
-
-    // Clone the connector's tools (user_connector_tools) onto the new row —
-    // otherwise the copy has no callable tools and the runtime resolves nothing.
-    const sourceTools = await this.db
-      .select()
-      .from(userConnectorTools)
-      .where(eq(userConnectorTools.userConnectorId, sourceId));
-
-    if (sourceTools.length > 0) {
-      await this.db.insert(userConnectorTools).values(
-        sourceTools.map(({ id: _toolId, createdAt: _tc, updatedAt: _tu, ...toolRest }) => ({
-          ...toolRest,
-          userConnectorId: created.id,
-        })),
-      );
-    }
-
     return created;
   };
 
+  /** Delete only the connector aggregate. Runtime callers use ConnectorRepository. */
   delete = async (id: string): Promise<void> => {
     await this.db.delete(userConnectors).where(and(eq(userConnectors.id, id), this.ownership()));
   };
@@ -324,14 +318,16 @@ export class ConnectorModel {
     identifiers: string[],
     agentId?: string,
     gateKeeper: GateKeeper | undefined = this.gateKeeper,
+    options?: { lock?: boolean },
   ): Promise<DecryptedConnector[]> => {
     if (identifiers.length === 0) return [];
 
-    const rows = await this.db
+    const query = this.db
       .select()
       .from(userConnectors)
       .where(and(this.scopePredicate(agentId), inArray(userConnectors.identifier, identifiers)));
 
+    const rows = await (options?.lock ? query.for('share') : query);
     return Promise.all(this.pickByPriority(rows, agentId).map((r) => decryptRow(r, gateKeeper)));
   };
 
@@ -442,22 +438,93 @@ export class ConnectorModel {
     id: string,
     patch: UpdateConnectorParams,
     gateKeeper: GateKeeper | undefined = this.gateKeeper,
+    options?: { nativeTransition?: boolean },
   ): Promise<void> => {
-    const credentials =
-      patch.credentials !== undefined && patch.credentials !== null
-        ? await encryptCredentials(patch.credentials, gateKeeper)
-        : undefined;
-
-    const set = {
-      ...patch,
-      ...(credentials !== undefined ? { credentials } : {}),
-      updatedAt: new Date(),
+    const apply = async (db: LobeChatDatabase, expectedIdentifier?: string) => {
+      const [current] = await db
+        .select()
+        .from(userConnectors)
+        .where(and(eq(userConnectors.id, id), this.ownership()))
+        .limit(1)
+        .for('update');
+      if (!current) return;
+      if (expectedIdentifier && current.identifier !== expectedIdentifier)
+        throw new Error('The connection changed before editing');
+      const managed = !!current.metadata && Object.hasOwn(current.metadata, 'nativeAccess');
+      let next = { ...patch };
+      if (!options?.nativeTransition) {
+        if (
+          !managed &&
+          next.metadata &&
+          nativeRuntimeKeys.some((key) => Object.hasOwn(next.metadata!, key))
+        )
+          throw new Error('Managed connection metadata is reserved for server authorization');
+        if (managed) {
+          if (
+            (next.agentId !== undefined && next.agentId !== current.agentId) ||
+            (next.identifier !== undefined && next.identifier !== current.identifier) ||
+            (next.metadata &&
+              Object.hasOwn(next.metadata, 'mountedByAgentId') &&
+              next.metadata.mountedByAgentId !== current.metadata?.mountedByAgentId)
+          )
+            throw new Error('Managed connections require confirmed agent scope assignment');
+          if (next.metadata !== undefined) {
+            const metadata = { ...current.metadata, ...next.metadata };
+            for (const key of [...nativeRuntimeKeys, 'composio', 'mountedByAgentId'] as const) {
+              if (Object.hasOwn(current.metadata!, key))
+                metadata[key] = current.metadata![key] as never;
+              else delete metadata[key];
+            }
+            next = { ...next, metadata };
+          }
+          if (
+            (next.isEnabled !== undefined && next.isEnabled !== current.isEnabled) ||
+            (next.status !== undefined && next.status !== current.status)
+          ) {
+            const { nativeReadEvidence: _oldEvidence, ...metadata } =
+              next.metadata ?? current.metadata!;
+            next = {
+              ...next,
+              metadata: {
+                ...metadata,
+                nativeAccess: {
+                  ...current.metadata!.nativeAccess!,
+                  revision: Math.max(
+                    Date.now(),
+                    (current.metadata!.nativeAccess?.revision ?? 0) + 1,
+                  ),
+                },
+              },
+            };
+          }
+        }
+      }
+      const credentials =
+        next.credentials !== undefined && next.credentials !== null
+          ? await encryptCredentials(next.credentials, gateKeeper)
+          : undefined;
+      await db
+        .update(userConnectors)
+        .set({
+          ...next,
+          ...(credentials !== undefined ? { credentials } : {}),
+          updatedAt: sql`greatest(clock_timestamp(), ${userConnectors.updatedAt} + interval '1 millisecond')`,
+        })
+        .where(and(eq(userConnectors.id, id), this.ownership()));
     };
-
-    await this.db
-      .update(userConnectors)
-      .set(set)
-      .where(and(eq(userConnectors.id, id), this.ownership()));
+    // Trusted native transitions already own the provider lock and transaction.
+    if (options?.nativeTransition) return apply(this.db);
+    const [candidate] = await this.db
+      .select()
+      .from(userConnectors)
+      .where(and(eq(userConnectors.id, id), this.ownership()))
+      .limit(1);
+    if (!candidate) return;
+    if (!candidate.workspaceId)
+      return withNativeConnectorLock(this.db, this.userId, candidate.identifier, (tx) =>
+        apply(tx as LobeChatDatabase, candidate.identifier),
+      );
+    return this.db.transaction((tx) => apply(tx as LobeChatDatabase));
   };
 
   updateStatus = async (id: string, status: ConnectorStatus): Promise<void> => {

@@ -1,6 +1,7 @@
 import { getComposioAppByIdentifier } from '@lobechat/const';
 import { isFullAccessApiKey } from '@lobechat/const/apiKeyScope';
 import { buildMcpToolMetadata } from '@lobechat/const/mcpApp';
+import type { OIDCConfig } from '@lobechat/types';
 import { upsertPluginMode } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
@@ -15,7 +16,7 @@ import { ConnectorToolModel } from '@/database/models/connectorTool';
 import { PluginModel } from '@/database/models/plugin';
 import { WorkspaceModel } from '@/database/models/workspace';
 import { WorkspaceAuditLogModel } from '@/database/models/workspaceAuditLog';
-import type { OIDCConfig } from '@/database/schemas';
+import { ConnectorRepository } from '@/database/repositories/connector';
 import {
   ConnectorMcpConnectionType,
   ConnectorSourceType,
@@ -70,6 +71,7 @@ const connectorProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts
     ctx: {
       agentModel: new AgentModel(ctx.serverDB, ctx.userId, wsId),
       connectorModel: new ConnectorModel(ctx.serverDB, ctx.userId, wsId, gateKeeper),
+      connectorRepository: new ConnectorRepository(ctx.serverDB, ctx.userId, wsId),
       connectorToolModel: new ConnectorToolModel(ctx.serverDB, ctx.userId, wsId),
       pluginModel: new PluginModel(ctx.serverDB, ctx.userId, wsId),
     },
@@ -508,6 +510,11 @@ export const connectorRouter = router({
 
       const source = await ctx.connectorModel.findById(input.connectorId);
       if (!source) throw new TRPCError({ code: 'NOT_FOUND', message: 'Connector not found' });
+      if (source.metadata && Object.hasOwn(source.metadata, 'nativeAccess'))
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Manage this connection through confirmed agent access instead of copying it',
+        });
       // Cloning duplicates the source's encrypted credentials into a row the
       // agent owner controls — creator/owner only.
       await assertConnectorCredentialsManageable(ctx, source);
@@ -523,7 +530,7 @@ export const connectorRouter = router({
         });
       }
 
-      const created = await ctx.connectorModel.copyToAgent(input.connectorId, input.agentId);
+      const created = await ctx.connectorRepository.copyToAgent(input.connectorId, input.agentId);
       if (!created) throw new TRPCError({ code: 'NOT_FOUND', message: 'Connector not found' });
       return { id: created.id };
     }),
@@ -587,6 +594,11 @@ export const connectorRouter = router({
       // Clearing the mount lock mutates the source row — creator/owner only.
       await assertConnectorCredentialsManageable(ctx, connector);
 
+      if (connector.metadata && Object.hasOwn(connector.metadata, 'nativeAccess'))
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Update confirmed agent access instead of unlinking this managed connection',
+        });
       const { mountedByAgentId: _drop, ...restMeta } = connector.metadata ?? {};
       await ctx.connectorModel.update(input.connectorId, { metadata: restMeta });
       return { id: input.connectorId };
@@ -773,7 +785,7 @@ export const connectorRouter = router({
         if (!target.agentId) await ctx.pluginModel.delete(target.identifier);
       }
 
-      await ctx.connectorModel.delete(input.id);
+      await ctx.connectorRepository.delete(input.id);
 
       // Agent-owned connector: also unpin its tool from the owning agent's
       // `plugins`, so deleting it here matches the agent-profile delete (row +

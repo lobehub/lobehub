@@ -2219,6 +2219,828 @@ export type PostApiV1ChatGroupsByIdMembersResponses = {
 
 export type PostApiV1ChatGroupsByIdMembersResponse = PostApiV1ChatGroupsByIdMembersResponses[keyof PostApiV1ChatGroupsByIdMembersResponses];
 
+export type GetApiV1ConnectorsCatalogData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/connectors/catalog';
+};
+
+export type GetApiV1ConnectorsCatalogErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1ConnectorsCatalogError = GetApiV1ConnectorsCatalogErrors[keyof GetApiV1ConnectorsCatalogErrors];
+
+export type GetApiV1ConnectorsCatalogResponses = {
+    /**
+     * Connector operation result
+     */
+    200: {
+        data: Array<{
+            id: string;
+            name: string;
+            available: boolean;
+            unavailableReason?: string;
+        }>;
+        success: true;
+        timestamp: string;
+        message?: string;
+    };
+};
+
+export type GetApiV1ConnectorsCatalogResponse = GetApiV1ConnectorsCatalogResponses[keyof GetApiV1ConnectorsCatalogResponses];
+
+export type GetApiV1ConnectorsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/connectors';
+};
+
+export type GetApiV1ConnectorsErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1ConnectorsError = GetApiV1ConnectorsErrors[keyof GetApiV1ConnectorsErrors];
+
+export type GetApiV1ConnectorsResponses = {
+    /**
+     * Connector operation result
+     */
+    200: {
+        data: Array<{
+            id: string;
+            providerId: string;
+            name: string;
+            agentId: string | null;
+            status: 'authorizing' | 'ready' | 'disconnected' | 'expired' | 'permission_required' | 'sync_failed' | 'unavailable' | 'disconnecting' | 'disconnect_failed';
+            managed: boolean;
+            isEnabled: boolean;
+            revision: number;
+            agentIds: Array<string>;
+            accountLabel?: string;
+            grantedScopes: Array<string> | null;
+            lastError?: string;
+            authorization?: {
+                id: string;
+                expiresAt: number;
+                status: 'pending' | 'complete' | 'cancelled' | 'expired' | 'unknown';
+                url?: string;
+            };
+            reading: 'unverified' | 'verified';
+            accessRevision: number;
+            activeAgentIds: Array<string>;
+            reads: Array<{
+                agentId: string;
+                at: number;
+                connectionId: string;
+                operationId?: string;
+                outcome: 'data' | 'empty' | 'unverified' | 'failed';
+                recordCount: number;
+                revision: number;
+                toolCallId: string;
+                toolName: string;
+                topicId: string;
+            }>;
+        }>;
+        success: true;
+        timestamp: string;
+        message?: string;
+    };
+};
+
+export type GetApiV1ConnectorsResponse = GetApiV1ConnectorsResponses[keyof GetApiV1ConnectorsResponses];
+
+export type PostApiV1ConnectorsAuthorizationsData = {
+    body: {
+        providerId: string;
+        requestId: string;
+        connectionId?: string;
+        adoptReadOnly?: boolean;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/connectors/authorizations';
+};
+
+export type PostApiV1ConnectorsAuthorizationsErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1ConnectorsAuthorizationsError = PostApiV1ConnectorsAuthorizationsErrors[keyof PostApiV1ConnectorsAuthorizationsErrors];
+
+export type PostApiV1ConnectorsAuthorizationsResponses = {
+    /**
+     * Connector operation result
+     */
+    200: {
+        data: {
+            id: string;
+            providerId: string;
+            name: string;
+            agentId: string | null;
+            status: 'authorizing' | 'ready' | 'disconnected' | 'expired' | 'permission_required' | 'sync_failed' | 'unavailable' | 'disconnecting' | 'disconnect_failed';
+            managed: boolean;
+            isEnabled: boolean;
+            revision: number;
+            agentIds: Array<string>;
+            accountLabel?: string;
+            grantedScopes: Array<string> | null;
+            lastError?: string;
+            authorization?: {
+                id: string;
+                expiresAt: number;
+                status: 'pending' | 'complete' | 'cancelled' | 'expired' | 'unknown';
+                url?: string;
+            };
+            reading: 'unverified' | 'verified';
+            accessRevision: number;
+            activeAgentIds: Array<string>;
+            reads: Array<{
+                agentId: string;
+                at: number;
+                connectionId: string;
+                operationId?: string;
+                outcome: 'data' | 'empty' | 'unverified' | 'failed';
+                recordCount: number;
+                revision: number;
+                toolCallId: string;
+                toolName: string;
+                topicId: string;
+            }>;
+        };
+        success: true;
+        timestamp: string;
+        message?: string;
+    };
+};
+
+export type PostApiV1ConnectorsAuthorizationsResponse = PostApiV1ConnectorsAuthorizationsResponses[keyof PostApiV1ConnectorsAuthorizationsResponses];
+
+export type GetApiV1ConnectorsAuthorizationsBySessionIdData = {
+    body?: never;
+    path: {
+        sessionId: string;
+    };
+    query?: never;
+    url: '/api/v1/connectors/authorizations/{sessionId}';
+};
+
+export type GetApiV1ConnectorsAuthorizationsBySessionIdErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1ConnectorsAuthorizationsBySessionIdError = GetApiV1ConnectorsAuthorizationsBySessionIdErrors[keyof GetApiV1ConnectorsAuthorizationsBySessionIdErrors];
+
+export type GetApiV1ConnectorsAuthorizationsBySessionIdResponses = {
+    /**
+     * Connector operation result
+     */
+    200: {
+        data: {
+            id: string;
+            providerId: string;
+            name: string;
+            agentId: string | null;
+            status: 'authorizing' | 'ready' | 'disconnected' | 'expired' | 'permission_required' | 'sync_failed' | 'unavailable' | 'disconnecting' | 'disconnect_failed';
+            managed: boolean;
+            isEnabled: boolean;
+            revision: number;
+            agentIds: Array<string>;
+            accountLabel?: string;
+            grantedScopes: Array<string> | null;
+            lastError?: string;
+            authorization?: {
+                id: string;
+                expiresAt: number;
+                status: 'pending' | 'complete' | 'cancelled' | 'expired' | 'unknown';
+                url?: string;
+            };
+            reading: 'unverified' | 'verified';
+            accessRevision: number;
+            activeAgentIds: Array<string>;
+            reads: Array<{
+                agentId: string;
+                at: number;
+                connectionId: string;
+                operationId?: string;
+                outcome: 'data' | 'empty' | 'unverified' | 'failed';
+                recordCount: number;
+                revision: number;
+                toolCallId: string;
+                toolName: string;
+                topicId: string;
+            }>;
+        };
+        success: true;
+        timestamp: string;
+        message?: string;
+    };
+};
+
+export type GetApiV1ConnectorsAuthorizationsBySessionIdResponse = GetApiV1ConnectorsAuthorizationsBySessionIdResponses[keyof GetApiV1ConnectorsAuthorizationsBySessionIdResponses];
+
+export type PostApiV1ConnectorsAuthorizationsBySessionIdCancelData = {
+    body?: never;
+    path: {
+        sessionId: string;
+    };
+    query?: never;
+    url: '/api/v1/connectors/authorizations/{sessionId}/cancel';
+};
+
+export type PostApiV1ConnectorsAuthorizationsBySessionIdCancelErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1ConnectorsAuthorizationsBySessionIdCancelError = PostApiV1ConnectorsAuthorizationsBySessionIdCancelErrors[keyof PostApiV1ConnectorsAuthorizationsBySessionIdCancelErrors];
+
+export type PostApiV1ConnectorsAuthorizationsBySessionIdCancelResponses = {
+    /**
+     * Connector operation result
+     */
+    200: {
+        data: {
+            id: string;
+            providerId: string;
+            name: string;
+            agentId: string | null;
+            status: 'authorizing' | 'ready' | 'disconnected' | 'expired' | 'permission_required' | 'sync_failed' | 'unavailable' | 'disconnecting' | 'disconnect_failed';
+            managed: boolean;
+            isEnabled: boolean;
+            revision: number;
+            agentIds: Array<string>;
+            accountLabel?: string;
+            grantedScopes: Array<string> | null;
+            lastError?: string;
+            authorization?: {
+                id: string;
+                expiresAt: number;
+                status: 'pending' | 'complete' | 'cancelled' | 'expired' | 'unknown';
+                url?: string;
+            };
+            reading: 'unverified' | 'verified';
+            accessRevision: number;
+            activeAgentIds: Array<string>;
+            reads: Array<{
+                agentId: string;
+                at: number;
+                connectionId: string;
+                operationId?: string;
+                outcome: 'data' | 'empty' | 'unverified' | 'failed';
+                recordCount: number;
+                revision: number;
+                toolCallId: string;
+                toolName: string;
+                topicId: string;
+            }>;
+        };
+        success: true;
+        timestamp: string;
+        message?: string;
+    };
+};
+
+export type PostApiV1ConnectorsAuthorizationsBySessionIdCancelResponse = PostApiV1ConnectorsAuthorizationsBySessionIdCancelResponses[keyof PostApiV1ConnectorsAuthorizationsBySessionIdCancelResponses];
+
+export type GetApiV1ConnectorsByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/connectors/{id}';
+};
+
+export type GetApiV1ConnectorsByIdErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1ConnectorsByIdError = GetApiV1ConnectorsByIdErrors[keyof GetApiV1ConnectorsByIdErrors];
+
+export type GetApiV1ConnectorsByIdResponses = {
+    /**
+     * Connector operation result
+     */
+    200: {
+        data: {
+            id: string;
+            providerId: string;
+            name: string;
+            agentId: string | null;
+            status: 'authorizing' | 'ready' | 'disconnected' | 'expired' | 'permission_required' | 'sync_failed' | 'unavailable' | 'disconnecting' | 'disconnect_failed';
+            managed: boolean;
+            isEnabled: boolean;
+            revision: number;
+            agentIds: Array<string>;
+            accountLabel?: string;
+            grantedScopes: Array<string> | null;
+            lastError?: string;
+            authorization?: {
+                id: string;
+                expiresAt: number;
+                status: 'pending' | 'complete' | 'cancelled' | 'expired' | 'unknown';
+                url?: string;
+            };
+            reading: 'unverified' | 'verified';
+            accessRevision: number;
+            activeAgentIds: Array<string>;
+            reads: Array<{
+                agentId: string;
+                at: number;
+                connectionId: string;
+                operationId?: string;
+                outcome: 'data' | 'empty' | 'unverified' | 'failed';
+                recordCount: number;
+                revision: number;
+                toolCallId: string;
+                toolName: string;
+                topicId: string;
+            }>;
+        };
+        success: true;
+        timestamp: string;
+        message?: string;
+    };
+};
+
+export type GetApiV1ConnectorsByIdResponse = GetApiV1ConnectorsByIdResponses[keyof GetApiV1ConnectorsByIdResponses];
+
+export type PostApiV1ConnectorsByIdRefreshData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/connectors/{id}/refresh';
+};
+
+export type PostApiV1ConnectorsByIdRefreshErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1ConnectorsByIdRefreshError = PostApiV1ConnectorsByIdRefreshErrors[keyof PostApiV1ConnectorsByIdRefreshErrors];
+
+export type PostApiV1ConnectorsByIdRefreshResponses = {
+    /**
+     * Connector operation result
+     */
+    200: {
+        data: {
+            id: string;
+            providerId: string;
+            name: string;
+            agentId: string | null;
+            status: 'authorizing' | 'ready' | 'disconnected' | 'expired' | 'permission_required' | 'sync_failed' | 'unavailable' | 'disconnecting' | 'disconnect_failed';
+            managed: boolean;
+            isEnabled: boolean;
+            revision: number;
+            agentIds: Array<string>;
+            accountLabel?: string;
+            grantedScopes: Array<string> | null;
+            lastError?: string;
+            authorization?: {
+                id: string;
+                expiresAt: number;
+                status: 'pending' | 'complete' | 'cancelled' | 'expired' | 'unknown';
+                url?: string;
+            };
+            reading: 'unverified' | 'verified';
+            accessRevision: number;
+            activeAgentIds: Array<string>;
+            reads: Array<{
+                agentId: string;
+                at: number;
+                connectionId: string;
+                operationId?: string;
+                outcome: 'data' | 'empty' | 'unverified' | 'failed';
+                recordCount: number;
+                revision: number;
+                toolCallId: string;
+                toolName: string;
+                topicId: string;
+            }>;
+        };
+        success: true;
+        timestamp: string;
+        message?: string;
+    };
+};
+
+export type PostApiV1ConnectorsByIdRefreshResponse = PostApiV1ConnectorsByIdRefreshResponses[keyof PostApiV1ConnectorsByIdRefreshResponses];
+
+export type PutApiV1ConnectorsByIdAgentsData = {
+    body: {
+        agentIds: Array<string>;
+        revision: number;
+        adoptReadOnly?: boolean;
+        replacements?: Array<{
+            id: string;
+            revision: number;
+        }>;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/connectors/{id}/agents';
+};
+
+export type PutApiV1ConnectorsByIdAgentsErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PutApiV1ConnectorsByIdAgentsError = PutApiV1ConnectorsByIdAgentsErrors[keyof PutApiV1ConnectorsByIdAgentsErrors];
+
+export type PutApiV1ConnectorsByIdAgentsResponses = {
+    /**
+     * Connector operation result
+     */
+    200: {
+        data: {
+            id: string;
+            providerId: string;
+            name: string;
+            agentId: string | null;
+            status: 'authorizing' | 'ready' | 'disconnected' | 'expired' | 'permission_required' | 'sync_failed' | 'unavailable' | 'disconnecting' | 'disconnect_failed';
+            managed: boolean;
+            isEnabled: boolean;
+            revision: number;
+            agentIds: Array<string>;
+            accountLabel?: string;
+            grantedScopes: Array<string> | null;
+            lastError?: string;
+            authorization?: {
+                id: string;
+                expiresAt: number;
+                status: 'pending' | 'complete' | 'cancelled' | 'expired' | 'unknown';
+                url?: string;
+            };
+            reading: 'unverified' | 'verified';
+            accessRevision: number;
+            activeAgentIds: Array<string>;
+            reads: Array<{
+                agentId: string;
+                at: number;
+                connectionId: string;
+                operationId?: string;
+                outcome: 'data' | 'empty' | 'unverified' | 'failed';
+                recordCount: number;
+                revision: number;
+                toolCallId: string;
+                toolName: string;
+                topicId: string;
+            }>;
+        };
+        success: true;
+        timestamp: string;
+        message?: string;
+    };
+};
+
+export type PutApiV1ConnectorsByIdAgentsResponse = PutApiV1ConnectorsByIdAgentsResponses[keyof PutApiV1ConnectorsByIdAgentsResponses];
+
+export type PostApiV1ConnectorsByIdDisconnectData = {
+    body: {
+        revision: number;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/connectors/{id}/disconnect';
+};
+
+export type PostApiV1ConnectorsByIdDisconnectErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1ConnectorsByIdDisconnectError = PostApiV1ConnectorsByIdDisconnectErrors[keyof PostApiV1ConnectorsByIdDisconnectErrors];
+
+export type PostApiV1ConnectorsByIdDisconnectResponses = {
+    /**
+     * Connector operation result
+     */
+    200: {
+        data: {
+            connection: {
+                id: string;
+                providerId: string;
+                name: string;
+                agentId: string | null;
+                status: 'authorizing' | 'ready' | 'disconnected' | 'expired' | 'permission_required' | 'sync_failed' | 'unavailable' | 'disconnecting' | 'disconnect_failed';
+                managed: boolean;
+                isEnabled: boolean;
+                revision: number;
+                agentIds: Array<string>;
+                accountLabel?: string;
+                grantedScopes: Array<string> | null;
+                lastError?: string;
+                authorization?: {
+                    id: string;
+                    expiresAt: number;
+                    status: 'pending' | 'complete' | 'cancelled' | 'expired' | 'unknown';
+                    url?: string;
+                };
+                reading: 'unverified' | 'verified';
+                accessRevision: number;
+                activeAgentIds: Array<string>;
+                reads: Array<{
+                    agentId: string;
+                    at: number;
+                    connectionId: string;
+                    operationId?: string;
+                    outcome: 'data' | 'empty' | 'unverified' | 'failed';
+                    recordCount: number;
+                    revision: number;
+                    toolCallId: string;
+                    toolName: string;
+                    topicId: string;
+                }>;
+            } | null;
+            localDisabled: boolean;
+            remoteDisconnected: boolean;
+        };
+        success: true;
+        timestamp: string;
+        message?: string;
+    };
+};
+
+export type PostApiV1ConnectorsByIdDisconnectResponse = PostApiV1ConnectorsByIdDisconnectResponses[keyof PostApiV1ConnectorsByIdDisconnectResponses];
+
 export type GetApiV1EvalRunsData = {
     body?: never;
     path?: never;

@@ -4,6 +4,8 @@ import type { ToolManifest } from '@lobechat/types';
 import type { DecryptedConnector } from '@/database/models/connector';
 import type { UserConnectorToolItem } from '@/database/schemas';
 
+import { canCallNativeConnectorTool, canUseNativeConnector } from './connectorAccessPolicy';
+
 /**
  * Convert connector DB rows into ToolManifest entries suitable for
  * injection into the server AgentToolsEngine as additionalManifests.
@@ -16,6 +18,7 @@ import type { UserConnectorToolItem } from '@/database/schemas';
 export function buildConnectorManifests(
   connectors: DecryptedConnector[],
   tools: UserConnectorToolItem[],
+  agentId?: string,
 ): ToolManifest[] {
   const toolsByConnector = new Map<string, UserConnectorToolItem[]>();
   for (const tool of tools) {
@@ -27,13 +30,16 @@ export function buildConnectorManifests(
   const manifests: ToolManifest[] = [];
 
   for (const connector of connectors) {
+    if (!canUseNativeConnector(connector, agentId)) continue;
     // The listing and the permission mapping are the shared rule; the server
     // adds the endpoint and credentials the runtime needs to call it.
     const manifest = buildConnectorManifest({
       identifier: connector.identifier,
       isEnabled: connector.isEnabled,
       name: connector.name,
-      tools: toolsByConnector.get(connector.id) ?? [],
+      tools: (toolsByConnector.get(connector.id) ?? []).filter((tool) =>
+        canCallNativeConnectorTool(connector, agentId, tool.toolName),
+      ),
     });
     if (!manifest) continue;
 

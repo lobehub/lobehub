@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
+import { ConnectorRepository } from '../../repositories/connector';
 import { agents, userConnectors, userConnectorTools, users, workspaces } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { ConnectorModel } from '../connector';
@@ -234,8 +235,7 @@ describe('ConnectorModel agent-scoped resolution', () => {
         name: 'Personal Gmail',
       });
 
-      const model = new ConnectorModel(serverDB, userId);
-      const copy = await model.copyToAgent(source.id, agentA);
+      const copy = await new ConnectorRepository(serverDB, userId).copyToAgent(source.id, agentA);
 
       expect(copy).not.toBeNull();
       expect(copy!.id).not.toBe(source.id);
@@ -243,7 +243,7 @@ describe('ConnectorModel agent-scoped resolution', () => {
       expect(copy!.identifier).toBe('gmail');
       expect(copy!.credentials).toBe('enc:cipher-blob'); // ciphertext copied as-is
       // source row is untouched
-      const stillBase = await model.findScopedByIdentifier('gmail');
+      const stillBase = await new ConnectorModel(serverDB, userId).findScopedByIdentifier('gmail');
       expect(stillBase?.id).toBe(source.id);
     });
 
@@ -257,8 +257,7 @@ describe('ConnectorModel agent-scoped resolution', () => {
         userId,
       });
 
-      const model = new ConnectorModel(serverDB, userId);
-      const copy = await model.copyToAgent(source.id, agentA);
+      const copy = await new ConnectorRepository(serverDB, userId).copyToAgent(source.id, agentA);
 
       const copiedTools = await serverDB
         .select()
@@ -280,8 +279,7 @@ describe('ConnectorModel agent-scoped resolution', () => {
         name: 'Personal Gmail',
       });
 
-      const model = new ConnectorModel(serverDB, userId);
-      const copy = await model.copyToAgent(source.id, agentA);
+      const copy = await new ConnectorRepository(serverDB, userId).copyToAgent(source.id, agentA);
 
       expect(copy!.metadata?.mountedByAgentId).toBeUndefined();
       expect(copy!.metadata?.avatar).toBe('📧');

@@ -81,12 +81,17 @@ describe('composioRouter — workspace scoping (workspace-agent connector bug)',
     });
   });
 
-  const callerFor = (workspaceId?: string) =>
-    composioRouter.createCaller({
-      serverDB: {},
+  const callerFor = (workspaceId?: string) => {
+    const db: any = {
+      execute: async () => {},
+      transaction: async (run: (tx: any) => Promise<unknown>) => run(db),
+    };
+    return composioRouter.createCaller({
+      serverDB: db,
       userId: 'user_test',
       workspaceId: workspaceId ?? null,
     } as any);
+  };
 
   const agentInput = {
     agentId: 'agent-1',

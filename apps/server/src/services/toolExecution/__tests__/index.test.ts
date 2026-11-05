@@ -5,12 +5,20 @@ import { SdkErrorCode, SdkHttpError } from '@modelcontextprotocol/client';
 import { TRPCError } from '@trpc/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type * as ConnectorPermissionModule from '@/libs/mcp/connectorPermissionCheck';
 import { createMCPError } from '@/libs/mcp/types';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDevices';
 
 import { ToolExecutionService } from '../index';
 import { localSystemRuntime } from '../serverRuntimes/localSystem';
+
+// Connector permission behavior is covered with a real DB in personalConnector/store.test.
+// These dispatch tests use an intentionally incomplete DB fake for device routing.
+vi.mock('@/libs/mcp/connectorPermissionCheck', async (original) => ({
+  ...(await original<typeof ConnectorPermissionModule>()),
+  getConnectorToolPermission: vi.fn(async () => null),
+}));
 
 vi.mock('@/server/services/deviceGateway', () => ({
   deviceGateway: {
