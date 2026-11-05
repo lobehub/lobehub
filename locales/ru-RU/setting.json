@@ -2851,7 +2851,6 @@
   "workspace.billingPage.usage.categories.imageGeneration": "Генерация изображений",
   "workspace.billingPage.usage.categories.tts": "Текст в речь",
   "workspace.billingPage.usage.categories.videoGeneration": "Генерация видео",
-  "workspace.billingPage.usage.empty": "Расходов пока нет",
   "workspace.billingPage.usage.logsTitle": "Недавняя активность",
   "workspace.billingPage.usage.member": "Участник",
   "workspace.billingPage.usage.member.moreMembers_one": "{{count}} дополнительный участник",
