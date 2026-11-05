@@ -1,7 +1,7 @@
 import { toast } from '@lobehub/ui';
 import { t } from 'i18next';
 
-import { agentService } from '@/services/agent';
+import { agentService, type RemoveAgentOptions } from '@/services/agent';
 import { chatGroupService } from '@/services/chatGroup';
 import { homeService } from '@/services/home';
 import { sessionService } from '@/services/session';
@@ -84,8 +84,8 @@ export class SidebarUIActionImpl {
     await this.#get().refreshAgentList();
   };
 
-  removeAgent = async (agentId: string): Promise<void> => {
-    await agentService.removeAgent(agentId);
+  removeAgent = async (agentId: string, options?: RemoveAgentOptions): Promise<void> => {
+    await agentService.removeAgent(agentId, options);
     await this.#get().refreshAgentList();
     // deleting an agent cascade-deletes its topics + messages on the server; drop
     // their message cache too so it doesn't orphan in IndexedDB (never expires)

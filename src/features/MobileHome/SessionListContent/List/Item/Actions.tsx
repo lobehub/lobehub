@@ -16,6 +16,7 @@ import { useResourceAccess } from '@/features/ResourcePermission/useResourceAcce
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
 import { useResourceManageable } from '@/hooks/useResourceManageable';
+import { type RemoveAgentOptions } from '@/services/agent';
 import { chatGroupService } from '@/services/chatGroup';
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
@@ -145,10 +146,11 @@ const Actions = ({
       icon: <Icon icon={Trash} />,
       label: t('delete', { ns: 'common' }),
       onClick: () => {
-        const onDelete = () =>
+        const onDelete = (options?: RemoveAgentOptions) =>
           run(async () => {
             try {
-              await (item.type === 'group' ? removeAgentGroup : removeAgent)(item.id);
+              if (item.type === 'group') await removeAgentGroup(item.id);
+              else await removeAgent(item.id, options);
               toast.success(
                 t(
                   item.type === 'group'
@@ -171,7 +173,7 @@ const Actions = ({
           content: t('confirmRemoveChatGroupItemAlert'),
           okText: t('delete', { ns: 'common' }),
           okButtonProps: { danger: true },
-          onOk: onDelete,
+          onOk: () => onDelete(),
         });
       },
     },

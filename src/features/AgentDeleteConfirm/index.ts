@@ -1,11 +1,16 @@
 import { confirmModal } from '@lobehub/ui';
 import { t } from 'i18next';
 
-import { agentService } from '@/services/agent';
+import { agentService, type RemoveAgentOptions } from '@/services/agent';
 
 interface ConfirmRemoveAgentOptions {
   agentId: string;
-  onConfirm: () => Promise<void> | void;
+  /**
+   * Runs the delete. Pass the options on to `removeAgent`: they carry the
+   * acknowledgment that lets an author delete an agent holding teammates'
+   * content, set only when the dialog actually warned about it.
+   */
+  onConfirm: (options: RemoveAgentOptions) => Promise<void> | void;
 }
 
 type AgentDeleteImpact = Awaited<ReturnType<typeof agentService.getAgentDeleteImpact>>;
@@ -32,8 +37,9 @@ export const getRemoveAgentAlert = (impact: AgentDeleteImpact | null): string =>
  * Open the shared agent deletion confirmation. Every delete entry point (the
  * sidebar, the mobile list, the agent profile) goes through here so authors
  * and workspace owners read the same warning about other members' topics.
- * A failed impact lookup falls back to the plain copy; the delete itself is
- * still authorized server-side.
+ * A failed impact lookup falls back to the plain copy without acknowledging
+ * foreign content, so the server keeps refusing an author's delete that would
+ * take teammates' topics down unannounced.
  */
 export const confirmRemoveAgent = async ({
   agentId,
@@ -52,7 +58,7 @@ export const confirmRemoveAgent = async ({
     okButtonProps: { danger: true },
     okText: t('delete', { ns: 'common' }),
     onOk: async () => {
-      await onConfirm();
+      await onConfirm({ acknowledgeForeignContent: !!impact?.hasForeignContent });
     },
     title: t('delete', { ns: 'common' }),
   });

@@ -576,9 +576,9 @@ export const useAgentDropdownMenu = ({
                         domEvent.stopPropagation();
                         void confirmRemoveAgent({
                           agentId: id,
-                          onConfirm: async () => {
+                          onConfirm: async (options) => {
                             try {
-                              await removeAgent(id);
+                              await removeAgent(id, options);
                               toast.success(t('confirmRemoveSessionSuccess'));
                             } catch (error) {
                               toast.error(t(getDeleteErrorMessageKey(error), { ns: 'common' }));

@@ -68,17 +68,34 @@ describe('lifecycleRouter.removeAgent', () => {
     vi.mocked(isWorkspacePrimaryOwner).mockResolvedValue(false);
   });
 
-  const callRemove = (workspaceRole: string) =>
+  const callRemove = (workspaceRole: string, acknowledgeForeignContent?: boolean) =>
     lifecycleRouter
       .createCaller({ userId, workspaceId, workspaceRole } as any)
-      .removeAgent({ agentId });
+      .removeAgent({ acknowledgeForeignContent, agentId });
 
-  it("lets the agent's author delete it even when it carries teammates' topics", async () => {
+  it("lets the agent's author delete it with teammates' topics once the impact is acknowledged", async () => {
     vi.mocked(getResourceMeta).mockResolvedValue({ userId, visibility: 'public', workspaceId });
 
-    await expect(callRemove('member')).resolves.toEqual({ id: agentId });
+    await expect(callRemove('member', true)).resolves.toEqual({ id: agentId });
     expect(trashAgent).toHaveBeenCalledWith(agentId);
     expect(transferHasForeignRows).not.toHaveBeenCalled();
+  });
+
+  it("refuses the author when the caller never acknowledged teammates' content (CLI, agent tools, older clients)", async () => {
+    vi.mocked(getResourceMeta).mockResolvedValue({ userId, visibility: 'public', workspaceId });
+
+    await expect(callRemove('member')).rejects.toMatchObject({
+      cause: { data: { code: TransferErrorCode.OwnerOnly } },
+      code: 'FORBIDDEN',
+    });
+    expect(trashAgent).not.toHaveBeenCalled();
+  });
+
+  it('lets the author delete without acknowledgment when nothing foreign rides along', async () => {
+    vi.mocked(getResourceMeta).mockResolvedValue({ userId, visibility: 'public', workspaceId });
+    transferHasForeignRows.mockResolvedValue(false);
+
+    await expect(callRemove('member')).resolves.toEqual({ id: agentId });
   });
 
   it("still refuses a non-owner admin deleting someone else's agent with teammates' content", async () => {
@@ -88,7 +105,7 @@ describe('lifecycleRouter.removeAgent', () => {
       workspaceId,
     });
 
-    await expect(callRemove('admin')).rejects.toMatchObject({
+    await expect(callRemove('admin', true)).rejects.toMatchObject({
       cause: { data: { code: TransferErrorCode.OwnerOnly } },
       code: 'FORBIDDEN',
     });

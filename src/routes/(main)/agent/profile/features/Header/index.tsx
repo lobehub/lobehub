@@ -173,9 +173,9 @@ const Header = memo(() => {
     if (!canManage || !activeAgentId) return;
     void confirmRemoveAgent({
       agentId: activeAgentId,
-      onConfirm: async () => {
+      onConfirm: async (options) => {
         try {
-          await removeAgent(activeAgentId);
+          await removeAgent(activeAgentId, options);
         } catch (error) {
           toast.error(t(getDeleteErrorMessageKey(error), { ns: 'common' }));
           return;

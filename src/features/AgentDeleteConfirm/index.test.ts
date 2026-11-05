@@ -42,7 +42,7 @@ describe('confirmRemoveAgent', () => {
     expect(config.okButtonProps).toEqual({ danger: true });
 
     await config.onOk();
-    expect(onConfirm).toHaveBeenCalledTimes(1);
+    expect(onConfirm).toHaveBeenCalledWith({ acknowledgeForeignContent: true });
   });
 
   it('falls back to the generic other-members warning when no foreign topic is counted', async () => {
@@ -69,12 +69,17 @@ describe('confirmRemoveAgent', () => {
     expect(confirmModalMock.mock.calls[0][0].content).toBe('confirmRemoveSessionItemAlert');
   });
 
-  it('still opens the dialog with the plain copy when the impact lookup fails', async () => {
+  it('still opens the dialog with the plain copy when the impact lookup fails, without acknowledging foreign content', async () => {
     vi.spyOn(agentService, 'getAgentDeleteImpact').mockRejectedValue(new Error('network'));
     vi.spyOn(console, 'error').mockImplementation(() => {});
+    const onConfirm = vi.fn();
 
-    await confirmRemoveAgent({ agentId: 'agent-1', onConfirm: vi.fn() });
+    await confirmRemoveAgent({ agentId: 'agent-1', onConfirm });
 
-    expect(confirmModalMock.mock.calls[0][0].content).toBe('confirmRemoveSessionItemAlert');
+    const config = confirmModalMock.mock.calls[0][0];
+    expect(config.content).toBe('confirmRemoveSessionItemAlert');
+
+    await config.onOk();
+    expect(onConfirm).toHaveBeenCalledWith({ acknowledgeForeignContent: false });
   });
 });
