@@ -5,5 +5,7 @@ export {
   buildGameContextSelection,
   buildGameStateXml,
   describeCharacter,
+  describeSurroundings,
+  relativeDirection,
   type SnapshotNames,
 } from './snapshot';

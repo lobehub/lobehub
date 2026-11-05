@@ -25,6 +25,31 @@ const bounds = (object: GameObject) => {
   return { h: Math.max(...ys) - y + 1, w: Math.max(...xs) - x + 1, x, y };
 };
 
+/**
+ * Where an object lies from the character as seen on screen (x grows right,
+ * y grows down), measured to its nearest cell. Models misjudge left/right from
+ * raw coordinates, so the snapshot states it.
+ */
+export const relativeDirection = (object: GameObject, character: CharacterState) => {
+  const { x: cx, y: cy } = character.position;
+  let nearest = object.footprint[0];
+  let steps = Number.POSITIVE_INFINITY;
+  for (const cell of object.footprint) {
+    const distance = Math.abs(cell.x - cx) + Math.abs(cell.y - cy);
+    if (distance < steps) {
+      nearest = cell;
+      steps = distance;
+    }
+  }
+  const dx = nearest.x - cx;
+  const dy = nearest.y - cy;
+  const vertical = dy !== 0 && Math.abs(dy) * 2 >= Math.abs(dx) ? (dy < 0 ? 'up' : 'down') : '';
+  const horizontal =
+    dx !== 0 && Math.abs(dx) * 2 >= Math.abs(dy) ? (dx < 0 ? 'left' : 'right') : '';
+  const dir = [vertical, horizontal].filter(Boolean).join('-') || 'here';
+  return { dir, steps };
+};
+
 const activityLabel = (character: CharacterState) =>
   character.activity
     ? `${character.activity.action}${character.activity.targetId ? ` ${character.activity.targetId}` : ''}`
@@ -43,6 +68,19 @@ export const describeCharacter = (scene: GameScene, character: CharacterState): 
 };
 
 /**
+ * Where every object is from the character's current cell, for tool results.
+ * The message snapshot predates the move, so without this the model guesses
+ * directions after walking somewhere.
+ */
+export const describeSurroundings = (scene: GameScene, character: CharacterState): string =>
+  `Around you now: ${scene.objects
+    .map((object) => {
+      const { dir, steps } = relativeDirection(object, character);
+      return dir === 'here' ? `${object.id} here` : `${object.id} ${dir} ${steps} step(s)`;
+    })
+    .join(', ')}.`;
+
+/**
  * The game state the model reads every turn: the scene, every object it may
  * interact with (id, name, cells, supported actions) and the character itself.
  */
@@ -56,6 +94,7 @@ export const buildGameStateXml = (
 
   const objectLines = scene.objects.map((object) => {
     const { h, w, x, y } = bounds(object);
+    const { dir, steps } = relativeDirection(object, character);
     const attrs = [
       `id="${object.id}"`,
       `kind="${object.kind}"`,
@@ -64,6 +103,8 @@ export const buildGameStateXml = (
       `y="${y}"`,
       `w="${w}"`,
       `h="${h}"`,
+      `dir="${dir}"`,
+      `steps="${steps}"`,
       `actions="${object.actions.join(',')}"`,
     ];
     if (object.description) attrs.push(`note="${escapeAttr(object.description)}"`);

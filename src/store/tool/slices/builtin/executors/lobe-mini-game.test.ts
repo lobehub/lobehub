@@ -30,6 +30,8 @@ describe('miniGameExecutor', () => {
     expect(result.success).toBe(true);
     expect(result.content).toMatch(/^Walked \d+ step\(s\) and sat down on bench_1\. Now: /);
     expect(result.content).toContain('pose=sitting');
+    expect(result.content).toContain('Around you now: ');
+    expect(result.content).toContain('lamp_1 right 3 step(s)');
     expect(result.state).toMatchObject({
       arrived: true,
       pose: 'sitting',

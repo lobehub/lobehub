@@ -15,6 +15,7 @@ import {
 import {
   buildGameStateXml,
   describeCharacter,
+  describeSurroundings,
   parseActionParams,
 } from '@lobechat/builtin-tool-mini-game/engine';
 import { BaseExecutor, type BuiltinToolResult } from '@lobechat/types';
@@ -60,7 +61,7 @@ class MiniGameExecutor extends BaseExecutor<typeof MiniGameApiName> {
 
     const result = await miniGameActions.perform(parsed.request);
     const { character, scene } = useMiniGameStore.getState();
-    const status = describeCharacter(scene, character);
+    const status = `${describeCharacter(scene, character)}. ${describeSurroundings(scene, character)}`;
     if (!result.ok)
       return this.#failure(result.error.type, `${result.error.message} Now: ${status}`);
 
