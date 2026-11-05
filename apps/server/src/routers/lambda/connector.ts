@@ -836,6 +836,8 @@ export const connectorRouter = router({
         /** An MCP App view's `tools/call`: only tools visible to the app run. */
         fromApp: z.boolean().optional(),
         identifier: z.string().min(1),
+        /** With `fromApp`: the server the view came from (`getMcpServerFingerprint`). */
+        server: z.string().optional(),
         toolName: z.string().min(1),
       }),
     )

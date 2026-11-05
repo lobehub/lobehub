@@ -32,9 +32,13 @@ export interface AppViewContext {
   canSendMessage: boolean;
   identifier: string;
   isDark: boolean;
+  /** This desktop's own MCP process produced the result; the view's calls run there. */
+  onThisDevice: boolean;
   /** Tool call result envelope (`{ content, state, success }`). */
   result: { content: string; state?: any };
   sendMessage: (params: SendMessageParams) => Promise<void>;
+  /** The MCP server the view came from; its tool calls reach no other. */
+  server?: string;
   t: TFunction<'plugin'> | ((key: string, options?: Record<string, unknown>) => string);
 }
 
@@ -108,7 +112,7 @@ export const connectAppView = ({
     // Views may only call tools on the server that rendered them, and
     // under the same approval rules as the conversation.
     callTool: async (name, toolArgs, request) => {
-      const { agentId, identifier, t } = getContext();
+      const { agentId, identifier, onThisDevice, server, t } = getContext();
       const policy = await getAppToolCallPolicy(identifier, name, { agentId, toolArgs });
       let allowed = policy === 'allow';
       if (policy === 'confirm') {
@@ -157,7 +161,7 @@ export const connectAppView = ({
               type: 'mcp',
             },
             // The view's HTML came from this machine for a local server, so its calls do too
-            { agentId, fromMcpApp: true, signal },
+            { agentId, fromMcpApp: true, onThisDevice, server, signal },
           ),
         );
       } finally {

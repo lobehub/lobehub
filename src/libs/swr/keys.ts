@@ -547,13 +547,15 @@ export const fileKeys = {
 export const mcpAppKeys = {
   resource: def(
     'mcpApp:resource',
-    (identifier: string, uri: string, agentId?: string, server?: string) => [
-      'mcpApp:resource',
-      identifier,
-      uri,
-      agentId ?? null,
-      server ?? null,
-    ],
+    (
+      identifier: string,
+      uri: string,
+      {
+        agentId,
+        onThisDevice = false,
+        server,
+      }: { agentId?: string; onThisDevice?: boolean; server?: string },
+    ) => ['mcpApp:resource', identifier, uri, agentId ?? null, onThisDevice, server ?? null],
   ),
 };
 

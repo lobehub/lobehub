@@ -116,6 +116,7 @@ const view = { contents: [{ text: '<html />', uri: 'ui://app' }] };
 const LOCAL = await getMcpServerFingerprint({ type: 'http', url: 'http://127.0.0.1:3000/mcp' });
 const REMOTE = await getMcpServerFingerprint({ type: 'http', url: 'https://mcp.example.com/mcp' });
 const STDIO = await getMcpServerFingerprint({ args: ['mcp.js'], command: 'node', type: 'stdio' });
+const LINEAR = await getMcpServerFingerprint({ type: 'http', url: 'https://mcp.linear.app/mcp' });
 const httpPlugin = (url: string) => ({
   customParams: { mcp: { headers: { 'x-key': 'k' }, type: 'http', url } },
 });
@@ -133,7 +134,7 @@ describe('mcpService.readMcpAppResource on desktop', () => {
     plugins.set('local', httpPlugin('http://127.0.0.1:3000/mcp'));
 
     await expect(
-      mcpService.readMcpAppResource('local', 'ui://app', { server: LOCAL }),
+      mcpService.readMcpAppResource('local', 'ui://app', { onThisDevice: true, server: LOCAL }),
     ).resolves.toEqual(view);
 
     expect(relayRead).not.toHaveBeenCalled();
@@ -145,6 +146,18 @@ describe('mcpService.readMcpAppResource on desktop', () => {
       },
       uri: 'ui://app',
     });
+  });
+
+  it('reads a view of a LAN server on the server relay when the server produced its result', async () => {
+    // A self-hosted server without a device gateway runs private http servers itself
+    plugins.set('local', httpPlugin('http://127.0.0.1:3000/mcp'));
+
+    await expect(
+      mcpService.readMcpAppResource('local', 'ui://app', { server: LOCAL }),
+    ).resolves.toEqual(view);
+
+    expect(ipcRead).not.toHaveBeenCalled();
+    expect(relayRead).toHaveBeenCalledWith(expect.objectContaining({ uri: 'ui://app' }));
   });
 
   it('loads the installed plugins first when the conversation was opened cold', async () => {
@@ -237,7 +250,7 @@ describe('mcpService.readMcpAppResource for stdio connectors', () => {
 
   it('reads the view on the desktop with the fresh stdio configuration', async () => {
     await expect(
-      mcpService.readMcpAppResource('files', 'ui://app', { server: STDIO }),
+      mcpService.readMcpAppResource('files', 'ui://app', { onThisDevice: true, server: STDIO }),
     ).resolves.toEqual(view);
 
     expect(connectorEdit).toHaveBeenCalledWith({ id: 'conn_1' });
@@ -257,7 +270,7 @@ describe('mcpService.readMcpAppResource for stdio connectors', () => {
       connectorEdit.mockResolvedValueOnce(current);
 
       await expect(
-        mcpService.readMcpAppResource('files', 'ui://app', { server: STDIO }),
+        mcpService.readMcpAppResource('files', 'ui://app', { onThisDevice: true, server: STDIO }),
       ).resolves.toBeUndefined();
     }
     expect(ipcRead).not.toHaveBeenCalled();
@@ -271,7 +284,11 @@ describe('mcpService.readMcpAppResource for stdio connectors', () => {
     });
 
     await expect(
-      mcpService.readMcpAppResource('files', 'ui://app', { agentId: 'agt_1', server: STDIO }),
+      mcpService.readMcpAppResource('files', 'ui://app', {
+        agentId: 'agt_1',
+        onThisDevice: true,
+        server: STDIO,
+      }),
     ).resolves.toEqual(view);
 
     expect(toolState.ensureConfirmedConnectors).toHaveBeenCalledWith('agt_1');
@@ -287,7 +304,11 @@ describe('mcpService.readMcpAppResource for stdio connectors', () => {
     toolState.ensureConfirmedConnectors.mockRejectedValueOnce(new Error('offline'));
 
     await expect(
-      mcpService.readMcpAppResource('files', 'ui://app', { agentId: 'agt_1', server: STDIO }),
+      mcpService.readMcpAppResource('files', 'ui://app', {
+        agentId: 'agt_1',
+        onThisDevice: true,
+        server: STDIO,
+      }),
     ).resolves.toBeUndefined();
 
     expect(connectorEdit).not.toHaveBeenCalled();
@@ -303,7 +324,7 @@ describe('mcpService.readMcpAppResource for stdio connectors', () => {
     });
 
     await expect(
-      mcpService.readMcpAppResource('files', 'ui://app', { server: STDIO }),
+      mcpService.readMcpAppResource('files', 'ui://app', { onThisDevice: true, server: STDIO }),
     ).resolves.toBeUndefined();
     expect(ipcRead).not.toHaveBeenCalled();
   });
@@ -312,7 +333,7 @@ describe('mcpService.readMcpAppResource for stdio connectors', () => {
     environment.isDesktop = false;
 
     await expect(
-      mcpService.readMcpAppResource('files', 'ui://app', { server: STDIO }),
+      mcpService.readMcpAppResource('files', 'ui://app', { onThisDevice: true, server: STDIO }),
     ).resolves.toBeUndefined();
 
     expect(connectorEdit).not.toHaveBeenCalled();
@@ -394,11 +415,18 @@ describe('mcpService MCP App calls for agents', () => {
 
     await mcpService.invokeMcpToolCall(
       { apiName: 'list', arguments: '{}', id: 't1', identifier: 'linear', type: 'mcp' },
-      { agentId: 'agt_1', fromMcpApp: true },
+      { agentId: 'agt_1', fromMcpApp: true, server: LINEAR },
     );
 
     expect(connectorCall).toHaveBeenCalledWith(
-      { agentId: 'agt_1', args: '{}', fromApp: true, identifier: 'linear', toolName: 'list' },
+      {
+        agentId: 'agt_1',
+        args: '{}',
+        fromApp: true,
+        identifier: 'linear',
+        server: LINEAR,
+        toolName: 'list',
+      },
       expect.anything(),
     );
   });
@@ -412,6 +440,8 @@ describe('mcpService.invokeMcpToolCall on desktop', () => {
     ipcCall.mockResolvedValue(serializeMcpIpcPayload({ content: 'ok', success: true }));
   });
 
+  // A view whose result this desktop's own MCP process produced
+  const localView = { fromMcpApp: true, onThisDevice: true, server: LOCAL };
   const refresh = {
     apiName: 'refresh',
     arguments: '{"city":"Paris"}',
@@ -423,7 +453,7 @@ describe('mcpService.invokeMcpToolCall on desktop', () => {
   it('calls localhost / LAN http servers over IPC for a view, not the server relay', async () => {
     plugins.set('local', httpPlugin('http://127.0.0.1:3000/mcp'));
 
-    await mcpService.invokeMcpToolCall(refresh, { fromMcpApp: true });
+    await mcpService.invokeMcpToolCall(refresh, localView);
 
     expect(relayCall).not.toHaveBeenCalled();
     expect(deserializeMcpIpcPayload(ipcCall.mock.calls[0][0])).toEqual({
@@ -439,8 +469,34 @@ describe('mcpService.invokeMcpToolCall on desktop', () => {
     plugins.set('remote', httpPlugin('https://mcp.example.com/mcp'));
     relayCall.mockResolvedValue({ content: 'ok', success: true });
 
-    await mcpService.invokeMcpToolCall({ ...refresh, identifier: 'remote' }, { fromMcpApp: true });
+    await mcpService.invokeMcpToolCall(
+      { ...refresh, identifier: 'remote' },
+      { fromMcpApp: true, server: REMOTE },
+    );
 
+    expect(relayCall).toHaveBeenCalledWith(
+      expect.objectContaining({ fromApp: true, toolName: 'refresh' }),
+      expect.anything(),
+    );
+  });
+
+  it('refuses a view call once the plugin reaches another server than the view came from', async () => {
+    plugins.set('local', httpPlugin('http://127.0.0.1:4000/mcp'));
+
+    await expect(mcpService.invokeMcpToolCall(refresh, localView)).rejects.toThrow(
+      'another server',
+    );
+    expect(ipcCall).not.toHaveBeenCalled();
+    expect(relayCall).not.toHaveBeenCalled();
+  });
+
+  it('runs a view call to a LAN server on the server relay when the server produced its result', async () => {
+    plugins.set('local', httpPlugin('http://127.0.0.1:3000/mcp'));
+    relayCall.mockResolvedValue({ content: 'ok', success: true });
+
+    await mcpService.invokeMcpToolCall(refresh, { fromMcpApp: true, server: LOCAL });
+
+    expect(ipcCall).not.toHaveBeenCalled();
     expect(relayCall).toHaveBeenCalledWith(
       expect.objectContaining({ fromApp: true, toolName: 'refresh' }),
       expect.anything(),
@@ -462,7 +518,7 @@ describe('mcpService.invokeMcpToolCall on desktop', () => {
     request.abort();
 
     await expect(
-      mcpService.invokeMcpToolCall(refresh, { fromMcpApp: true, signal: request.signal }),
+      mcpService.invokeMcpToolCall(refresh, { ...localView, signal: request.signal }),
     ).rejects.toThrow();
     expect(ipcCall).not.toHaveBeenCalled();
   });
@@ -477,7 +533,7 @@ describe('mcpService.invokeMcpToolCall on desktop', () => {
       }),
     );
 
-    const result = await mcpService.invokeMcpToolCall(refresh, { fromMcpApp: true });
+    const result = await mcpService.invokeMcpToolCall(refresh, localView);
 
     // Only this desktop can serve it: the view and its calls run in its process
     expect(result?.state?.mcpApp).toEqual({
@@ -497,7 +553,7 @@ describe('mcpService.invokeMcpToolCall on desktop', () => {
       }),
     );
 
-    const result = await mcpService.invokeMcpToolCall(refresh, { fromMcpApp: true });
+    const result = await mcpService.invokeMcpToolCall(refresh, localView);
 
     // Unmarked, any desktop opening the conversation would serve it
     expect(result?.state).toEqual({ content: [] });
@@ -530,6 +586,7 @@ describe('mcpService.invokeMcpToolCall for stdio connectors behind a device gate
     mcpStdioConfig: { args: ['mcp.js'], command: 'node', env: { TOKEN: 'fresh-secret' } },
     tools: [{ permission: 'auto', toolName: 'list' }],
   };
+  const stdioView = { fromMcpApp: true, onThisDevice: true, server: STDIO };
   const list = {
     apiName: 'list',
     arguments: '{"dir":"/tmp"}',
@@ -550,7 +607,7 @@ describe('mcpService.invokeMcpToolCall for stdio connectors behind a device gate
   });
 
   it('runs a view call on this desktop, where its view was read', async () => {
-    await expect(mcpService.invokeMcpToolCall(list, { fromMcpApp: true })).resolves.toEqual({
+    await expect(mcpService.invokeMcpToolCall(list, stdioView)).resolves.toEqual({
       content: 'ok',
       success: true,
     });
@@ -574,7 +631,7 @@ describe('mcpService.invokeMcpToolCall for stdio connectors behind a device gate
     });
 
     await expect(
-      mcpService.invokeMcpToolCall(list, { fromMcpApp: true, signal: request.signal }),
+      mcpService.invokeMcpToolCall(list, { ...stdioView, signal: request.signal }),
     ).rejects.toThrow();
     expect(ipcCall).not.toHaveBeenCalled();
   });
@@ -585,7 +642,7 @@ describe('mcpService.invokeMcpToolCall for stdio connectors behind a device gate
       tools: [{ permission: 'disabled', toolName: 'list' }],
     });
 
-    await expect(mcpService.invokeMcpToolCall(list, { fromMcpApp: true })).rejects.toThrow(
+    await expect(mcpService.invokeMcpToolCall(list, stdioView)).rejects.toThrow(
       'unavailable or disabled',
     );
     expect(ipcCall).not.toHaveBeenCalled();

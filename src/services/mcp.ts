@@ -79,6 +79,16 @@ const markLocalView = async <T>(result: T): Promise<T> => {
   return result;
 };
 
+/**
+ * Whether `address` is the MCP server a view came from (`server`, a
+ * `getMcpServerFingerprint`). A view is read, and its calls run, on no other.
+ */
+const isViewServer = async (server: string | undefined, address: McpServerAddress) =>
+  !!server && (await getMcpServerFingerprint(address)) === server;
+
+const VIEW_SERVER_MOVED = 'This view came from another server than the tool reaches now';
+const VIEW_SITE_MISMATCH = "This view's server runs elsewhere than this call would";
+
 /** The user's `mcp_apps` flag: whether sessions on this machine announce MCP Apps. */
 const isMcpAppsOn = () => {
   const state = getServerConfigStoreState();
@@ -136,6 +146,8 @@ class MCPService {
     {
       agentId,
       fromMcpApp,
+      onThisDevice,
+      server,
       signal,
       topicId,
     }: {
@@ -151,6 +163,15 @@ class MCPService {
        *   Conversation calls keep their existing route.
        */
       fromMcpApp?: boolean;
+      /**
+       * With `fromMcpApp`: the view's result came from this desktop's own MCP
+       * process (it carries this device's id), so its calls run there too;
+       * otherwise on the server. A URL alone can't tell a server-side
+       * `localhost` from this machine's.
+       */
+      onThisDevice?: boolean;
+      /** With `fromMcpApp`: the server the view came from; its calls reach no other. */
+      server?: string;
       signal?: AbortSignal;
       topicId?: string;
     },
@@ -185,12 +206,14 @@ class MCPService {
       : !!agentId && !plugin;
     if (isConnector) {
       const { lambdaClient } = await import('@/libs/trpc/client');
-      if (
+      const runsHere =
         connector &&
         isDesktop &&
         connector.mcpConnectionType === 'stdio' &&
-        (fromMcpApp || getServerConfigStoreState()?.serverConfig.deviceGatewayConfigured === false)
-      ) {
+        (fromMcpApp || getServerConfigStoreState()?.serverConfig.deviceGatewayConfigured === false);
+      // A view's calls run where its result was produced
+      if (fromMcpApp && !!runsHere !== !!onThisDevice) throw new Error(VIEW_SITE_MISMATCH);
+      if (runsHere) {
         // Persisted connector projections omit env secrets and may be stale.
         // This protected read retains the connector's credential ownership gate.
         const detail = await lambdaClient.connector.getForEdit.query({ id: connector.id });
@@ -205,6 +228,16 @@ class MCPService {
         const config = detail.mcpStdioConfig;
         if (detail.mcpConnectionType !== 'stdio' || !config?.command) {
           throw new Error('Connector does not have a stdio command configured');
+        }
+        if (
+          fromMcpApp &&
+          !(await isViewServer(server, {
+            args: config.args ?? [],
+            command: config.command,
+            type: 'stdio',
+          }))
+        ) {
+          throw new Error(VIEW_SERVER_MOVED);
         }
         throwIfAborted(signal);
         const result = await ensureElectronIpc().mcp.callTool(
@@ -226,7 +259,14 @@ class MCPService {
       }
       try {
         return (await lambdaClient.connector.callTool.mutate(
-          { agentId, args, ...(fromMcpApp && { fromApp: true }), identifier, toolName: apiName },
+          {
+            agentId,
+            args,
+            // The server checks the view's server against the connector it resolves
+            ...(fromMcpApp && { fromApp: true, server }),
+            identifier,
+            toolName: apiName,
+          },
           { signal },
         )) as MCPToolCallResult;
       } catch (error) {
@@ -252,12 +292,11 @@ class MCPService {
 
     const isStdio = plugin?.customParams?.mcp?.type === 'stdio';
     const isCloud = plugin?.customParams?.mcp?.type === 'cloud';
-    // localhost / LAN endpoints are only reachable from this machine
+    // A view's call to an http server runs where its result was produced: over
+    // IPC when this desktop's process produced it (a localhost / LAN endpoint
+    // only it reaches), else on the server, which may reach its own LAN
     const isLocalHttp =
-      !!fromMcpApp &&
-      isDesktop &&
-      plugin?.customParams?.mcp?.type === 'http' &&
-      isLocalOrPrivateUrl(params.url);
+      !!fromMcpApp && isDesktop && plugin?.customParams?.mcp?.type === 'http' && !!onThisDevice;
     const isCustomPlugin = !!customPlugin;
 
     // Build meta for server-side reporting
@@ -284,6 +323,13 @@ class MCPService {
       params,
       toolName: apiName,
     };
+
+    // Cloud servers refuse view calls below
+    if (fromMcpApp && !isCloud) {
+      if (!(await isViewServer(server, params))) throw new Error(VIEW_SERVER_MOVED);
+      // Stdio runs only on this desktop, which then marked the result as its own
+      if (isStdio && !(isDesktop && onThisDevice)) throw new Error(VIEW_SITE_MISMATCH);
+    }
 
     // Before the timing starts: a call cancelled here never ran, so isn't reported
     throwIfAborted(signal);
@@ -401,12 +447,25 @@ class MCPService {
   async readMcpAppResource(
     identifier: string,
     uri: string,
-    { agentId, server }: { agentId?: string; server?: string },
+    {
+      agentId,
+      onThisDevice = false,
+      server,
+    }: {
+      agentId?: string;
+      /**
+       * The result came from this desktop's own MCP process (it carries this
+       * device's id): read the view there, over IPC. Otherwise it came from the
+       * server, which reads it. Never the other one: a URL can't tell a
+       * server-side `localhost` from this machine's.
+       */
+      onThisDevice?: boolean;
+      server?: string;
+    },
   ): Promise<ReadResourceResult | undefined> {
     // A result that doesn't name its server can't be matched to one
     if (!server) return;
-    const reaches = async (address: McpServerAddress) =>
-      (await getMcpServerFingerprint(address)) === server;
+    const reaches = (address: McpServerAddress) => isViewServer(server, address);
 
     const { pluginSelectors } = await import('@/store/tool/selectors');
     const { getToolStoreState } = await import('@/store/tool/store');
@@ -446,7 +505,7 @@ class MCPService {
     // Stdio connectors run on a desktop app, never on the server, so only the
     // desktop can read their view: it spawns the same command over IPC.
     if (connectorServes && connector?.mcpConnectionType === 'stdio') {
-      if (!isDesktop) return;
+      if (!isDesktop || !onThisDevice) return;
 
       const { lambdaClient } = await import('@/libs/trpc/client');
       // Persisted connector projections omit env secrets and may be stale.
@@ -481,6 +540,7 @@ class MCPService {
     // the tool ran on. The agent's lists are loaded by now, so an identifier
     // with no connector here has none on the server either.
     if (connectorServes) {
+      if (onThisDevice) return;
       const { lambdaClient } = await import('@/libs/trpc/client');
       // The server checks `server` against the connector it resolves
       return (await lambdaClient.connector.readUiResource.query({
@@ -497,11 +557,12 @@ class MCPService {
     const { params } = buildPluginMcpParams(plugin, identifier);
     if (!(await reaches(params))) return;
 
-    // Stdio servers and localhost / LAN endpoints are only reachable from this
-    // machine, so the desktop reads them over IPC instead of the server relay.
-    const isLocalHttp = type === 'http' && isDesktop && isLocalOrPrivateUrl(params.url);
+    // A result this desktop's process produced (stdio, or a localhost / LAN
+    // endpoint only it reaches) has its view read here over IPC; any other on
+    // the server relay. Stdio never runs on the server.
+    const isLocalHttp = type === 'http' && onThisDevice;
     if (type === 'stdio' || isLocalHttp) {
-      if (!isDesktop) return;
+      if (!isDesktop || !onThisDevice) return;
 
       const input = isLocalHttp
         ? {

@@ -95,6 +95,7 @@ const ToolRender = memo<ToolRenderProps>(
           result={{ content: resolvedContent, state: unwrapMcpToolState(resolvedState) }}
           server={mcpApp.server}
           toolCallId={toolCallId}
+          onThisDevice={!!mcpApp.deviceId}
         />
       );
     }

@@ -61,6 +61,15 @@ const findConnector = async (
  * Refreshes the OAuth token first, then calls the remote MCP with the decrypted
  * credentials. Shared by the `connector.callTool` tRPC procedure.
  */
+/** Whether an HTTP connector reaches `server` (`getMcpServerFingerprint`). */
+const reachesServer = async (
+  connector: { mcpServerUrl?: string | null },
+  server: string | undefined,
+): Promise<boolean> =>
+  !!server &&
+  !!connector.mcpServerUrl &&
+  (await getMcpServerFingerprint({ type: 'http', url: connector.mcpServerUrl })) === server;
+
 export const callConnectorToolById = async (
   params: {
     agentId?: string;
@@ -68,6 +77,8 @@ export const callConnectorToolById = async (
     /** An MCP App view's `tools/call`: only tools visible to the app run. */
     fromApp?: boolean;
     identifier: string;
+    /** With `fromApp`: the server the view came from; its calls reach no other. */
+    server?: string;
     toolName: string;
   },
   ctx: ConnectorExecContext,
@@ -78,6 +89,13 @@ export const callConnectorToolById = async (
   }
   if (!connector.isEnabled) {
     throw new ConnectorToolCallError('FORBIDDEN', 'Connector is disabled');
+  }
+  // A view open since the connector was pointed elsewhere must not drive the new server
+  if (params.fromApp && !(await reachesServer(connector, params.server))) {
+    throw new ConnectorToolCallError(
+      'FORBIDDEN',
+      'This view came from another server than the connector reaches now',
+    );
   }
 
   // The tool MUST be present in the synced list — this is the single source of
@@ -198,10 +216,7 @@ export const readConnectorUiResourceById = async (
 
   // The identifier may name another server now (the connector was edited, or
   // the agent's copy replaced): its HTML must not get this result's data
-  if (
-    !connector.mcpServerUrl ||
-    (await getMcpServerFingerprint({ type: 'http', url: connector.mcpServerUrl })) !== params.server
-  ) {
+  if (!(await reachesServer(connector, params.server))) {
     throw new ConnectorToolCallError(
       'NOT_FOUND',
       'This view came from another server than the connector reaches now',

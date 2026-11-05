@@ -50,6 +50,8 @@ export interface McpAppViewProps {
   identifier: string;
   /** The message carrying the result; its agent is the one the view acts as. */
   messageId?: string;
+  /** This desktop's own MCP process produced the result: the view is read, and calls, there. */
+  onThisDevice?: boolean;
   resourceUri: string;
   /** Tool call result envelope (`{ content, state, success }`). */
   result: { content: string; state?: any };
@@ -69,6 +71,7 @@ const McpAppView = memo<McpAppViewProps>(
     fallback,
     identifier,
     messageId,
+    onThisDevice = false,
     resourceUri,
     result,
     server,
@@ -88,6 +91,7 @@ const McpAppView = memo<McpAppViewProps>(
     const useFetchMcpAppResource = useToolStore((s) => s.useFetchMcpAppResource);
     const { data, error, isLoading } = useFetchMcpAppResource(identifier, resourceUri, {
       agentId,
+      onThisDevice,
       server,
     });
 
@@ -107,8 +111,10 @@ const McpAppView = memo<McpAppViewProps>(
       canSendMessage,
       identifier,
       isDark,
+      onThisDevice,
       result,
       sendMessage,
+      server,
       t,
     });
     const bridgeRef = useRef<AppBridge>(undefined);

@@ -55,8 +55,10 @@ const setup = ({ canSendMessage = true }: { canSendMessage?: boolean } = {}) => 
       canSendMessage,
       identifier: 'weather-demo',
       isDark: false,
+      onThisDevice: true,
       result: { content: 'sunny' },
       sendMessage,
+      server: 'weather-server',
       t: (key: string) => key,
     }),
     onHeight,
@@ -405,7 +407,14 @@ describe('connectAppView', () => {
 
     expect(invokeMcpToolCall).toHaveBeenCalledWith(
       expect.objectContaining({ apiName: 'get_forecast', identifier: 'weather-demo' }),
-      { agentId: 'agt_1', fromMcpApp: true, signal: expect.any(AbortSignal) },
+      // On the server, and where, the view came from
+      {
+        agentId: 'agt_1',
+        fromMcpApp: true,
+        onThisDevice: true,
+        server: 'weather-server',
+        signal: expect.any(AbortSignal),
+      },
     );
   });
 

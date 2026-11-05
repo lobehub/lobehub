@@ -98,8 +98,9 @@ describe('callConnectorToolById', () => {
     ).rejects.toHaveProperty('code', 'FORBIDDEN');
     expect(mcpService.callTool).not.toHaveBeenCalled();
 
+    const server = await getMcpServerFingerprint({ type: 'http', url: connector.mcpServerUrl! });
     await callConnectorToolById(
-      { fromApp: true, identifier: 'my-conn', toolName: 'do_thing' },
+      { fromApp: true, identifier: 'my-conn', server, toolName: 'do_thing' },
       ctx,
     );
     expect(mcpService.callTool).toHaveBeenCalledWith(expect.objectContaining({ fromApp: true }));
@@ -145,11 +146,30 @@ describe('callConnectorToolById', () => {
       vi.mocked(mcpService.callTool).mockResolvedValue({ success: true });
       const ctx = makeCtx([connector], [tool()]);
 
-      await callConnectorToolById({ fromApp, identifier: 'my-conn', toolName: 'do_thing' }, ctx);
+      const server = await getMcpServerFingerprint({ type: 'http', url: connector.mcpServerUrl! });
+      await callConnectorToolById(
+        { fromApp, identifier: 'my-conn', server, toolName: 'do_thing' },
+        ctx,
+      );
 
       expect(mcpService.callTool).toHaveBeenCalledWith(expect.objectContaining({ fromApp }));
     },
   );
+
+  it("refuses a view's call once the connector reaches another server than the view's", async () => {
+    const ctx = makeCtx([connector], [tool()]);
+    const other = await getMcpServerFingerprint({ type: 'http', url: 'https://old.example.com' });
+
+    for (const server of [other, undefined]) {
+      await expect(
+        callConnectorToolById(
+          { fromApp: true, identifier: 'my-conn', server, toolName: 'do_thing' },
+          ctx,
+        ),
+      ).rejects.toHaveProperty('code', 'FORBIDDEN');
+    }
+    expect(mcpService.callTool).not.toHaveBeenCalled();
+  });
 
   it('uses the refreshed token when the connector token was refreshed', async () => {
     vi.mocked(ensureFreshConnectorToken).mockResolvedValueOnce({
