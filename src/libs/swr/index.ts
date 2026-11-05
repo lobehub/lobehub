@@ -1,5 +1,5 @@
-import useSWR from 'swr';
-import { type SWRHook } from 'swr';
+import useSWR, { unstable_serialize } from 'swr';
+import { type Key, type SWRHook } from 'swr';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 
@@ -80,6 +80,14 @@ export const useOnlyFetchOnceSWR: SWRHook = (key, fetch, config) =>
     ...config,
   });
 
+const actionKeys = new Set<string>();
+
+/**
+ * Whether `key` belongs to a `useActionSWR` hook. Revalidating such a key runs its action, so a
+ * broadcast that revalidates every key (`mutate(() => true)`) must filter it out.
+ */
+export const isActionSWRKey = (key: Key) => actionKeys.has(unstable_serialize(key));
+
 /**
  * This type of request method is for action triggers. Must use mutate to trigger the request.
  * Benefits: built-in loading/error states, easy to handle loading/error UI interactions.
@@ -90,8 +98,10 @@ export const useOnlyFetchOnceSWR: SWRHook = (key, fetch, config) =>
  * Combined with revalidateOnMount: false, this prevents auto-fetch on mount.
  */
 // @ts-ignore
-export const useActionSWR: SWRHook = (key, fetch, config) =>
-  useSWR(key, fetch, {
+export const useActionSWR: SWRHook = (key, fetch, config) => {
+  actionKeys.add(unstable_serialize(key));
+
+  return useSWR(key, fetch, {
     // Use empty object as fallback to prevent auto-fetch when cache is empty
     // Combined with revalidateOnMount: false, SWR won't call fetcher on mount
     fallbackData: {},
@@ -106,6 +116,7 @@ export const useActionSWR: SWRHook = (key, fetch, config) =>
     revalidateOnReconnect: false,
     ...config,
   });
+};
 
 export interface SWRRefreshParams<T, A = (...args: any[]) => any> {
   action: A;
