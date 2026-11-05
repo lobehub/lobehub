@@ -129,6 +129,7 @@ export const extractFile = (
       const slots = new Set<string>();
       const expressions: ts.Expression[] = [];
       let runtimeStyle: string | undefined;
+      let styleExpr: string | undefined;
       for (const attribute of opening.attributes.properties) {
         if (ts.isJsxSpreadAttribute(attribute)) {
           if (!referencesStyle(attribute.expression)) continue;
@@ -178,8 +179,13 @@ export const extractFile = (
         }
         const literal = literalOf(expression);
         if (literal !== undefined) literalProps[name] = literal;
-        else if (name === 'style' && ts.isIdentifier(expression) && !GLOBALS.has(expression.text))
-          runtimeStyle = expression.text;
+        else if (
+          name === 'style' &&
+          !(ts.isIdentifier(expression) && GLOBALS.has(expression.text))
+        ) {
+          styleExpr = expression.getText(ast).replaceAll(/\s+/g, ' ');
+          if (ts.isIdentifier(expression)) runtimeStyle = expression.text;
+        }
       }
       let current = parent;
       if (bindings.length) {
@@ -221,6 +227,7 @@ export const extractFile = (
             ? { runtimeStyle }
             : {}),
           slots: [...slots].sort(),
+          ...(styleExpr ? { styleExpr } : {}),
           tag,
           variables: [...names].sort().map((name) => ({
             kind: mergeKinds(kinds.get(name) ?? ['unknown']),

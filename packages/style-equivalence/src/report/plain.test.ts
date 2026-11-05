@@ -80,6 +80,15 @@ describe('askSentence', () => {
     expect(askSentence({ category: 'blocking', flags: [] }, { variables: [] })).toContain('出错');
   });
 
+  it('asks whether a runtime style was lost on purpose', () => {
+    const text = askSentence(
+      { category: 'needs-signoff', flags: ['RUNTIME_STYLE_DROPPED'] },
+      { variables: [] },
+    );
+    expect(text).toContain('style=');
+    expect(text).not.toContain('拿不准');
+  });
+
   it('never prints flag codes', () => {
     const text = askSentence(
       { category: 'needs-signoff', flags: ['CROSS_COMPONENT', 'MEDIA_UNMODELED'] },

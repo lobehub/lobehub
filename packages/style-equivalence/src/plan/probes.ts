@@ -1,7 +1,7 @@
 import ts from 'typescript';
 
 import type { StyleElement } from '../extract';
-import { valueIdentifierNodes } from '../extract/identifiers';
+import { valueIdentifierNodes, valueIdentifiers } from '../extract/identifiers';
 import { parseExpression } from './knobs';
 import { isIntrinsicTag } from './placement';
 
@@ -48,3 +48,11 @@ const anchoredAt = (anchor: StyleElement[], other: StyleElement[], name: string)
 export const runtimeStyleProbe = (name: string, chains: Sides<StyleElement[]>) =>
   chains.base.length === chains.head.length &&
   (anchoredAt(chains.base, chains.head, name) || anchoredAt(chains.head, chains.base, name));
+
+export const styleDropped = (base: StyleElement, head: StyleElement, probed: Set<string>) => {
+  if (Boolean(base.styleExpr) === Boolean(head.styleExpr)) return false;
+  const [present, absent] = base.styleExpr ? [base, head] : [head, base];
+  const parsed = parseExpression(present.styleExpr!);
+  const names = parsed ? [...valueIdentifiers(parsed.expression)] : [];
+  return !names.some((name) => probed.has(name) || mentions(absent, name));
+};

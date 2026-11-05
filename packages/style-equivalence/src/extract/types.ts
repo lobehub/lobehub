@@ -1,6 +1,6 @@
 import type ts from 'typescript';
 
-export type LiteralValue = string | number | boolean;
+export type LiteralValue = string | number | boolean | { [key: string]: LiteralValue };
 
 export type VariableKind = 'boolean' | 'call' | 'member' | 'unknown';
 
@@ -25,6 +25,7 @@ export interface StyleElement {
   parent?: string;
   runtimeStyle?: string;
   slots: string[];
+  styleExpr?: string;
   subtreeTags?: Record<string, number>;
   tag: string;
   variables: VariableUse[];

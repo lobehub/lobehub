@@ -12,7 +12,7 @@ import {
   sharedConditions,
   type SideProperties,
 } from './placement';
-import { runtimeStyleProbe } from './probes';
+import { runtimeStyleProbe, styleDropped } from './probes';
 import { tableDomain } from './tables';
 
 export { isIntrinsicTag } from './placement';
@@ -252,6 +252,7 @@ export const planFile = (
       modeling = model({});
     const { combos, knobs, modeled, pairwise } = modeling;
     modeling.added.forEach((flag) => flags.add(flag));
+    if (styleDropped(left, right, probes)) flags.add('RUNTIME_STYLE_DROPPED');
     if (knobs) evidence.push('CONDITION_KNOBS');
     if (Object.keys(modeling.used).length) evidence.push('TABLE_KEYS');
     if (modeled.some((variable) => variable.probe)) evidence.push('RUNTIME_STYLE_PROBED');

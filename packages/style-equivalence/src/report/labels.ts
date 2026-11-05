@@ -33,6 +33,7 @@ export const FLAG_LABELS: Record<string, string> = {
   PLACEMENT_NEUTRAL_PROP: '非 className 属性',
   PLACEMENT_SUBSTITUTED: '组件替换成 div',
   PSEUDO_UNMODELED: '伪元素读不到',
+  RUNTIME_STYLE_DROPPED: '运行时 style 只在一侧',
   STATE_UNMODELED: '状态伪类未建模',
   STYLE_OUTSIDE_JSX: 'JSX 外的样式引用',
   TAG_CHANGED: '标签变了',
@@ -71,6 +72,8 @@ export const FLAG_EXPLANATIONS: Record<string, string> = {
     '元素是非布局组件，合成时换成了 div，只证明了样式槽本身等价，没证明组件把样式放在哪里。',
   PSEUDO_UNMODELED:
     '两侧命中这个元素的伪元素规则不同（比如 ::selection、::-webkit-scrollbar），读不到计算样式。',
+  RUNTIME_STYLE_DROPPED:
+    '同一个元素一侧传了 style={…}（运行时才知道的值），另一侧完全没有传，也没有把这个值交给样式调用。工具不渲染运行时值，左右截图一致不能说明 style 没丢。',
   STATE_UNMODELED:
     '两侧命中这个元素的状态伪类规则不同（比如 :checked、:disabled、:invalid），采集时元素不在这些状态，这部分样式没有被比较。',
   STYLE_OUTSIDE_JSX:

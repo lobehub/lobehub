@@ -96,6 +96,10 @@ export const askSentence = (item: { category: string; flags: string[] }, context
     lines.push(
       `样式交给 ${context.component ?? '组件'} 的 ${context.prop ?? 'className'} 处理，组件内部怎么用它工具看不到。`,
     );
+  if (names.has('RUNTIME_STYLE_DROPPED'))
+    lines.push(
+      '改之前和改之后只有一侧给这个元素传了 style={…}，另一侧把它去掉了。截图里看不出运行时样式，看一下代码里是不是漏传了。',
+    );
   if (names.has('STYLE_OUTSIDE_JSX')) lines.push('这个文件在 JSX 之外也用到了样式，工具比较不了。');
   const gaps = [...names].filter((name) => GAPS[name]).map((name) => GAPS[name]);
   if (gaps.length) lines.push(`这条样式只在${gaps.join('、')}下生效，工具触发不了。`);

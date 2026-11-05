@@ -8,12 +8,33 @@ export const PLAIN_ATTRIBUTES_UNMODELED = 'PLAIN_ATTRIBUTES_UNMODELED';
 
 const STYLE_PROPS = new Set(['class', 'className', 'style']);
 
+const objectLiteralOf = (expression: ts.ObjectLiteralExpression) => {
+  const value: Record<string, LiteralValue> = {};
+  for (const property of expression.properties) {
+    if (!ts.isPropertyAssignment(property)) return undefined;
+    const { name } = property;
+    if (!ts.isIdentifier(name) && !ts.isStringLiteral(name)) return undefined;
+    const inner = literalOf(property.initializer);
+    if (inner === undefined) return undefined;
+    value[name.text] = inner;
+  }
+  return value;
+};
+
 export const literalOf = (expression: ts.Expression): LiteralValue | undefined => {
+  if (ts.isParenthesizedExpression(expression)) return literalOf(expression.expression);
   if (ts.isStringLiteral(expression) || ts.isNoSubstitutionTemplateLiteral(expression))
     return expression.text;
   if (ts.isNumericLiteral(expression)) return Number(expression.text);
+  if (
+    ts.isPrefixUnaryExpression(expression) &&
+    expression.operator === ts.SyntaxKind.MinusToken &&
+    ts.isNumericLiteral(expression.operand)
+  )
+    return -Number(expression.operand.text);
   if (expression.kind === ts.SyntaxKind.TrueKeyword) return true;
   if (expression.kind === ts.SyntaxKind.FalseKeyword) return false;
+  if (ts.isObjectLiteralExpression(expression)) return objectLiteralOf(expression);
   return undefined;
 };
 
