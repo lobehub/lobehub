@@ -199,3 +199,63 @@ export const Content = () => <div className={fallback.content} />;
     expect(entry.flags).toEqual(['INNER_TARGET']);
   });
 });
+
+describe('a stylesheet class joined with StyleX classes in an expression', () => {
+  const MD = 'lobe-body-b06f-md';
+  const mdCss = `.${MD} > div {\n  padding-block-end: 40px;\n}\n`;
+  const mdBase = (className: string) => `import './Body.css';
+
+import { Markdown } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
+
+const styles = stylex.create({ md: { overflow: 'hidden' } });
+
+export const Body = () => <Markdown className={${className}}>{text}</Markdown>;
+`;
+  const mdHead = (
+    host = '{...sx(styles.md, fallback.md)}',
+  ) => `import { createStaticStyles, Markdown } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
+
+import { sx } from '@/styles/sx';
+
+const styles = stylex.create({ md: { overflow: 'hidden' } });
+
+const fallback = createStaticStyles(({ css }) => ({
+  md: css\`
+    & > div {
+      padding-block-end: 40px;
+    }
+  \`,
+}));
+
+export const Body = () => <Markdown ${host}>{text}</Markdown>;
+`;
+  const run = (before: string, after = mdHead()) =>
+    planFile(
+      'a.tsx',
+      extractFile(before, 'a.tsx', options({ './Body.css': mdCss })),
+      extractFile(after, 'a.tsx', options({})),
+      { layoutComponents: [] },
+    ).cases[0];
+
+  it('maps the class inside cx to its stylesheet and keeps the placement through sx', () => {
+    const entry = run(mdBase(`cx(stylex.props(styles.md).className, '${MD}')`));
+    expect(entry.flags).toEqual([]);
+    expect(entry.evidence).toEqual(['PLACEMENT_PRESERVED', 'EMOTION_RULE_KEPT']);
+  });
+
+  it('maps the class inside a template literal', () => {
+    const entry = run(mdBase(`\`\${stylex.props(styles.md).className} \${'${MD}'}\``));
+    expect(entry.flags).not.toContain('INNER_TARGET');
+    expect(entry.evidence).toContain('EMOTION_RULE_KEPT');
+  });
+
+  it('keeps the placement flag when head passes the fallback through another prop', () => {
+    const entry = run(
+      mdBase(`cx(stylex.props(styles.md).className, '${MD}')`),
+      mdHead('{...sx(styles.md)} classNames={{ root: fallback.md }}'),
+    );
+    expect(entry.flags).toContain('INNER_TARGET');
+  });
+});

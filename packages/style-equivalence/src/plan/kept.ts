@@ -177,19 +177,17 @@ const literalTokens = (element: StyleElement) =>
     return tokens;
   });
 
-const singleClassName = (element: StyleElement) => {
-  const [binding] = element.bindings;
-  return element.bindings.length === 1 && !binding.spread && binding.prop === 'className'
-    ? binding.expr.replaceAll(/\s+/g, '')
-    : undefined;
-};
-
 const placementSwap = (base: StyleElement, head: StyleElement, slots: [string, string]) => {
-  const [left, right] = [singleClassName(base), singleClassName(head)];
+  const [binding] = head.bindings;
+  if (base.bindings.length !== 1 || head.bindings.length !== 1 || binding.expansion)
+    return undefined;
+  const escaped = slots[1].replaceAll(/[$.]/g, (char) => `\\${char}`);
+  const parts = binding.expr.split(new RegExp(`(?<![\\w$.])${escaped}(?![\\w$])`));
+  if (parts.length !== 2) return undefined;
   const own = slots[0].startsWith('global.')
-    ? left === JSON.stringify(slots[0].slice('global.'.length))
-    : left === slots[0];
-  return own && right === slots[1] ? base.bindings[0].expr : undefined;
+    ? JSON.stringify(slots[0].slice('global.'.length))
+    : slots[0];
+  return parts.join(own);
 };
 
 interface Context {

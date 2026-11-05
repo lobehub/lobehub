@@ -207,10 +207,37 @@ const canonicalOf = (
   return merged && joinsDisjoint(ctx.joins, properties) ? { terms } : undefined;
 };
 
+const isSx = (node: ts.Expression): node is ts.CallExpression =>
+  ts.isCallExpression(node) && compact(node.expression) === 'sx';
+
+const sxValue = (
+  call: ts.CallExpression,
+  properties: SlotProperties | undefined,
+  atoms: string[],
+) => {
+  const [styles, className, style] = call.arguments;
+  if (!styles || (style && !EMPTY.has(compact(style)))) return undefined;
+  const unit = newUnit();
+  const ctx: Context = { atoms, depth: 0, joins: [], unit, units: [unit] };
+  ctx.unit.propsCalls += 1;
+  ctx.depth += 1;
+  const own = termsOf(styles, ctx);
+  ctx.depth -= 1;
+  const extra = className ? termsOf(className, ctx) : [];
+  if (!own || !extra) return undefined;
+  const merged = ctx.units.every(
+    (item) => item.propsCalls <= 1 && !(item.propsCalls === 1 && item.outside > 0),
+  );
+  return merged && joinsDisjoint(ctx.joins, properties)
+    ? { prop: 'className', value: { terms: [...own, ...extra] } }
+    : undefined;
+};
+
 const normalize = (binding: StyleBinding, properties?: SlotProperties, atoms: string[] = []) => {
   const expression = parse(binding.expr);
   if (!expression) return undefined;
   if (binding.spread) {
+    if (isSx(expression)) return sxValue(expression, properties, atoms);
     if (!isStylexProps(expression)) return undefined;
     const value = canonicalOf(expression, properties, atoms, true);
     return value && { prop: 'className', value };

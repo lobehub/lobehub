@@ -202,6 +202,10 @@ export const extractFile = (
         bound.add(expression);
         expressions.push(expression);
         slotsOf(expression).forEach((slot) => slots.add(slot));
+        for (const token of globalTokensIn(expression)) {
+          usedGlobal.add(token);
+          slots.add(`global.${token}`);
+        }
         const expanded = expandedOf(expression);
         if (expanded) {
           expansions.push(expanded.node);
