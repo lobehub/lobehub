@@ -142,6 +142,12 @@ export const styles = stylex.create({
   },
   // While dragging, hover still resolves to the resting (or pinned) hover surface, as it did
   // when the dragging rule lost to the base :hover rule on specificity.
+  tabDraggingActive: {
+    boxShadow: {
+      default: cssVar.boxShadowSecondary,
+      [DARK_DESKTOP]: `inset 0 0 0 1px ${cssVar.colorBorderSecondary}`,
+    },
+  },
   tabDraggingPinned: {
     backgroundColor: { 'default': cssVar.colorBgElevated, ':hover': cssVar.colorFillTertiary },
   },

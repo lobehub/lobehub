@@ -321,6 +321,7 @@ const TabItem = memo<TabItemProps>(
             isDragging && styles.tabDragging,
             isDragging && pinned && styles.tabDraggingPinned,
             isActive && styles.tabActive,
+            isActive && isDragging && styles.tabDraggingActive,
           ).className,
         )}
         style={{
