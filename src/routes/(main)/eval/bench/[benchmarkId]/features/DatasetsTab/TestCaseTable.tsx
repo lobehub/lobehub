@@ -1,7 +1,14 @@
-import './TestCaseTable.css';
-
-import { DropdownMenu, Flexbox } from '@lobehub/ui';
-import { ActionIcon, Button, Input, Pagination, Table, type TableColumn, Text } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Button,
+  DropdownMenu,
+  Flexbox,
+  Input,
+  Pagination,
+  Table,
+  type TableColumn,
+  Text,
+} from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { Ellipsis, ExternalLink, FileUp, Pencil, Plus, Search, Trash2 } from 'lucide-react';
@@ -85,6 +92,10 @@ const styles = stylex.create({
     fontWeight: 600,
     lineHeight: 1,
     color: cssVar.colorText,
+  },
+  selectedCell: {
+    backgroundColor: cssVar.colorPrimaryBg,
+    backgroundImage: 'none',
   },
   tableHeader: {
     fontSize: cssVar.fontSizeSM,
@@ -278,8 +289,14 @@ const TestCaseTable = memo<TestCaseTableProps>(
         });
       }
 
-      return base;
-    }, [pagination, readOnly, onEdit, onOpen, onDelete, t, datasetEvalMode]);
+      return base.map((column) => ({
+        ...column,
+        onCell: (record: any) =>
+          record.id === selectedId
+            ? { className: stylex.props(styles.selectedCell).className }
+            : {},
+      }));
+    }, [pagination, readOnly, onEdit, onOpen, onDelete, t, datasetEvalMode, selectedId]);
 
     return (
       <>
@@ -356,13 +373,12 @@ const TestCaseTable = memo<TestCaseTableProps>(
             </Flexbox>
           )}
         </div>
-        <div className={'lobe-test-case-table-acd68e7e-table'}>
+        <div>
           <Table
             classNames={{ header: { cell: stylex.props(styles.tableHeader).className } }}
             columns={columns}
             dataSource={testCases}
             pagination={false}
-            rowClassName={(record) => (record.id === selectedId ? 'row-selected' : '')}
             rowKey="id"
             size="small"
             onRow={

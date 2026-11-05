@@ -1,7 +1,5 @@
 'use client';
 
-import './CaptureContent.css';
-
 import { Divider, Flexbox, Icon, Segmented, Select, Text, TextArea, toast } from '@lobehub/ui';
 import { Form, useForm } from '@lobehub/ui/form';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
@@ -74,6 +72,13 @@ const styles = stylex.create({
   },
   chevronOpen: {
     transform: 'rotate(90deg)',
+  },
+  kind: {
+    fontSize: cssVar.fontSizeSM,
+  },
+  kindItem: {
+    paddingBlock: '1px',
+    paddingInline: '8px',
   },
   contextToggle: {
     cursor: 'pointer',
@@ -194,9 +199,12 @@ const CaptureContent: FC<CaptureContentProps> = ({ draft, formId, onLoadingChang
           <Flexbox horizontal align="center" gap={10}>
             <span {...stylex.props(styles.msgHead)}>{t('capture.actual')}</span>
             <Segmented
-              className={'lobe-capture-content-156861c9-kind'}
               size="small"
               value={kind}
+              classNames={{
+                item: stylex.props(styles.kindItem).className,
+                root: stylex.props(styles.kind).className,
+              }}
               options={[
                 { label: t('capture.kind.negative'), value: 'negative' },
                 { label: t('capture.kind.positive'), value: 'positive' },

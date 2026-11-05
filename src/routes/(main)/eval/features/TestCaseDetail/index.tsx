@@ -1,7 +1,5 @@
 'use client';
 
-import './index.css';
-
 import { Breadcrumb, Button, Flexbox, Tag, Text, TextArea, toast } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
@@ -16,6 +14,20 @@ import Transcript from './Transcript';
 import { useCaseDraft } from './useCaseDraft';
 
 const styles = stylex.create({
+  breadcrumb: {
+    fontSize: cssVar.fontSize,
+  },
+  crumbLink: {
+    color: { 'default': cssVar.colorTextTertiary, ':hover': cssVar.colorText },
+    textDecoration: 'none',
+    transition: 'color 0.15s ease',
+  },
+  editor: {
+    fontSize: cssVar.fontSize,
+  },
+  editorInput: {
+    lineHeight: 1.75,
+  },
   icon: {
     display: 'flex',
     alignItems: 'center',
@@ -119,14 +131,21 @@ const TestCaseDetail = memo<TestCaseDetailProps>(({ datasetName, testCase }) => 
       }}
     >
       <Breadcrumb
-        className={'lobe-test-case-detail-a58474f2-breadcrumb'}
+        className={stylex.props(styles.breadcrumb).className}
         items={[
           {
-            title: <WorkspaceLink to="/eval">{t('testCaseDetail.breadcrumb.eval')}</WorkspaceLink>,
+            title: (
+              <WorkspaceLink {...stylex.props(styles.crumbLink)} to="/eval">
+                {t('testCaseDetail.breadcrumb.eval')}
+              </WorkspaceLink>
+            ),
           },
           {
             title: (
-              <WorkspaceLink to={`/eval/datasets/${testCase.datasetId}`}>
+              <WorkspaceLink
+                {...stylex.props(styles.crumbLink)}
+                to={`/eval/datasets/${testCase.datasetId}`}
+              >
                 {datasetName || t('testCaseDetail.breadcrumb.dataset')}
               </WorkspaceLink>
             ),
@@ -174,7 +193,8 @@ const TestCaseDetail = memo<TestCaseDetailProps>(({ datasetName, testCase }) => 
             editing ? (
               <TextArea
                 autoSize={{ maxRows: 12, minRows: 3 }}
-                className={'lobe-test-case-detail-a58474f2-editor'}
+                className={stylex.props(styles.editor).className}
+                classNames={{ input: stylex.props(styles.editorInput).className }}
                 value={draft.input}
                 onChange={(e) => setDraft({ input: e.target.value })}
               />
@@ -203,7 +223,8 @@ const TestCaseDetail = memo<TestCaseDetailProps>(({ datasetName, testCase }) => 
         {editing ? (
           <TextArea
             autoSize={{ maxRows: 12, minRows: 3 }}
-            className={'lobe-test-case-detail-a58474f2-editor'}
+            className={stylex.props(styles.editor).className}
+            classNames={{ input: stylex.props(styles.editorInput).className }}
             value={draft.criteria}
             onChange={(e) => setDraft({ criteria: e.target.value })}
           />
@@ -221,7 +242,8 @@ const TestCaseDetail = memo<TestCaseDetailProps>(({ datasetName, testCase }) => 
         {editing ? (
           <TextArea
             autoSize={{ maxRows: 12, minRows: 3 }}
-            className={'lobe-test-case-detail-a58474f2-editor'}
+            className={stylex.props(styles.editor).className}
+            classNames={{ input: stylex.props(styles.editorInput).className }}
             placeholder={t('testCaseDetail.expected.placeholder')}
             value={draft.expected}
             onChange={(e) => setDraft({ expected: e.target.value })}

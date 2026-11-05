@@ -1,12 +1,29 @@
 'use client';
 
-import './Footer.css';
-
-import { type DropdownItem, DropdownMenu, Flexbox } from '@lobehub/ui';
-import { Button, ModalFooter, useModalContext } from '@lobehub/ui';
+import {
+  Button,
+  type DropdownItem,
+  DropdownMenu,
+  Flexbox,
+  ModalFooter,
+  useModalContext,
+} from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronDown } from 'lucide-react';
 import { type FC } from 'react';
 import { useTranslation } from 'react-i18next';
+
+const styles = stylex.create({
+  splitMain: {
+    borderEndEndRadius: 0,
+    borderStartEndRadius: 0,
+  },
+  splitToggle: {
+    marginInlineStart: '-1px',
+    borderEndStartRadius: 0,
+    borderStartStartRadius: 0,
+  },
+});
 
 interface FooterProps {
   loading: boolean;
@@ -31,12 +48,22 @@ const RunCreateFooter: FC<FooterProps> = ({ loading, onCreateAndStart, onCreateO
       <Button disabled={loading} onClick={close}>
         {t('common.cancel')}
       </Button>
-      <Flexbox horizontal className={'lobe-footer-743fbaf6-split-button'}>
-        <Button loading={loading} type="primary" onClick={onCreateOnly}>
+      <Flexbox horizontal>
+        <Button
+          className={stylex.props(styles.splitMain).className}
+          loading={loading}
+          type="primary"
+          onClick={onCreateOnly}
+        >
           {t('run.create.createOnly')}
         </Button>
         <DropdownMenu items={menuItems}>
-          <Button icon={<ChevronDown size={14} />} loading={loading} type="primary" />
+          <Button
+            className={stylex.props(styles.splitToggle).className}
+            icon={<ChevronDown size={14} />}
+            loading={loading}
+            type="primary"
+          />
         </DropdownMenu>
       </Flexbox>
     </ModalFooter>
