@@ -489,15 +489,12 @@ export class CompletionLifecycle {
       }
 
       if (reason === 'error' || reason === 'interrupted') {
-        const verifyPlanInstantiation = this.verifyPlanInstantiations.get(operationId);
         after(async () => {
           const userId = runOrigin.userId || this.userId;
           await settleFailedRepair(this.serverDB, userId, operationId, this.workspaceId);
           // A task run that failed before delivering leaves the round opened at
-          // its start with nothing to verify. Wait for that round to land so a
-          // run failing within its first second is not missed; the verify sweep
-          // catches whatever still slips past.
-          await verifyPlanInstantiation;
+          // its start with nothing to verify. When planning is still under way,
+          // `instantiateVerifyPlanOnStart` releases the round once it lands.
           await releaseUndeliveredRound(this.serverDB, userId, operationId, this.workspaceId);
         });
       }
