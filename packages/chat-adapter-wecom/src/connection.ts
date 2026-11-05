@@ -1,5 +1,7 @@
 import { randomBytes } from 'node:crypto';
 
+import WebSocket from 'ws';
+
 import { signForwardedFrame, WECOM_SIGNATURE_HEADER, WECOM_TIMESTAMP_HEADER } from './crypto';
 import type {
   WeComFrame,
@@ -10,7 +12,7 @@ import type {
 } from './types';
 import { WECOM_CMD, WECOM_DEFAULT_WS_URL, WECOM_MAX_CONTENT_BYTES } from './types';
 
-/** Minimal WebSocket surface (the WHATWG one Node ships), so tests can inject a fake. */
+/** Minimal WebSocket surface (`ws`'s EventTarget API), so tests can inject a fake. */
 export interface WeComSocket {
   addEventListener: (type: string, listener: (event: any) => void) => void;
   close: (code?: number, reason?: string) => void;
@@ -151,6 +153,8 @@ export class WeComLongConnection {
     this.options = {
       ackTimeoutMs: 10_000,
       connectTimeoutMs: 15_000,
+      // `ws`, as the official SDK uses: Node's built-in (undici) WebSocket rejects the handshake
+      // response of openws.work.weixin.qq.com (verified 2026-11-05) and never opens.
       createSocket: (url) => new WebSocket(url) as unknown as WeComSocket,
       fetchImpl: globalThis.fetch.bind(globalThis),
       heartbeatIntervalMs: 30_000,
