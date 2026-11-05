@@ -1,6 +1,5 @@
 import * as stylex from '@stylexjs/stylex';
 
-const WIDE = '@media (width > 1100px)';
 const NARROW = '@media (width <= 1100px)';
 const REDUCED_MOTION = '@media (prefers-reduced-motion: reduce)';
 const SPEECH_INLINE = '@container home (width >= 1086px)';
@@ -29,7 +28,7 @@ export const styles = stylex.create({
     rowGap: '16px',
     columnGap: '16px',
     alignItems: 'end',
-    width: { default: '100%', [WIDE]: 'calc(100% - var(--home-collapsed-offset) * 2)' },
+    width: { default: 'calc(100% - var(--home-collapsed-offset) * 2)', [NARROW]: '100%' },
     minWidth: 0,
     transition: {
       default: 'transform var(--home-rail-transition) ease-out',
@@ -45,11 +44,9 @@ export const styles = stylex.create({
   },
   heroCollapsed: {
     transform: {
-      default: null,
-      [WIDE]: {
-        'default': 'translateX(var(--home-collapsed-offset))',
-        ':dir(rtl)': 'translateX(calc(-1 * var(--home-collapsed-offset)))',
-      },
+      'default': 'translateX(var(--home-collapsed-offset))',
+      ':dir(rtl)': 'translateX(calc(-1 * var(--home-collapsed-offset)))',
+      [NARROW]: { 'default': 'none', ':dir(rtl)': 'none' },
     },
   },
   header: {
@@ -82,11 +79,9 @@ export const styles = stylex.create({
     },
     'minHeight': { default: 'var(--home-compact-portrait-visible)', [SPEECH_INLINE]: 0 },
     'transform': {
-      default: null,
-      [WIDE]: {
-        'default': 'translateX(calc(var(--home-collapsed-offset) * 2))',
-        ':dir(rtl)': 'translateX(calc(var(--home-collapsed-offset) * -2))',
-      },
+      'default': 'translateX(calc(var(--home-collapsed-offset) * 2))',
+      ':dir(rtl)': 'translateX(calc(var(--home-collapsed-offset) * -2))',
+      [NARROW]: { 'default': 'none', ':dir(rtl)': 'none' },
     },
     'transition': {
       default: 'transform var(--home-rail-transition) ease-out',
@@ -94,7 +89,7 @@ export const styles = stylex.create({
     },
   },
   speechCollapsed: {
-    transform: { default: null, [WIDE]: 'none' },
+    transform: 'none',
   },
   bubbleSlot: {
     width: 'max-content',
@@ -126,13 +121,11 @@ export const styles = stylex.create({
   },
   mainCollapsed: {
     transform: {
-      default: null,
-      [WIDE]: {
-        'default': 'translateX(var(--home-collapsed-offset))',
-        ':dir(rtl)': 'translateX(calc(-1 * var(--home-collapsed-offset)))',
-      },
+      'default': 'translateX(var(--home-collapsed-offset))',
+      ':dir(rtl)': 'translateX(calc(-1 * var(--home-collapsed-offset)))',
+      [NARROW]: { 'default': 'none', ':dir(rtl)': 'none' },
     },
-    width: { default: '100%', [WIDE]: 'calc(100% + var(--home-collapsed-gain))' },
+    width: { default: 'calc(100% + var(--home-collapsed-gain))', [NARROW]: '100%' },
   },
   minimal: {
     width: '100%',
