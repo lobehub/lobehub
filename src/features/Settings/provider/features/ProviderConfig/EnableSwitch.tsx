@@ -1,18 +1,19 @@
-import { createStaticStyles, Skeleton, Tooltip } from '@lobehub/ui';
+import { Skeleton, Tooltip } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { type FC } from 'react';
 
 import InstantSwitch from '@/components/InstantSwitch';
 import { usePermission } from '@/hooks/usePermission';
 import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 
-const styles = createStaticStyles(({ css }) => ({
-  switchLoading: css`
-    width: 44px !important;
-    min-width: 44px !important;
-    height: 22px !important;
-    border-radius: 12px !important;
-  `,
-}));
+const styles = stylex.create({
+  switchLoading: {
+    width: '44px !important',
+    minWidth: '44px !important',
+    height: '22px !important',
+    borderRadius: '12px !important',
+  },
+});
 
 interface SwitchProps {
   Component?: FC<{ id: string }>;
@@ -27,7 +28,8 @@ const Switch = ({ id, Component }: SwitchProps) => {
   ]);
   const { allowed: canManageProvider, reason } = usePermission('manage_provider_key');
 
-  if (isLoading) return <Skeleton className={styles.switchLoading} height={36} />;
+  if (isLoading)
+    return <Skeleton className={stylex.props(styles.switchLoading).className} height={36} />;
 
   // slot for cloud
   if (Component) return <Component id={id} />;

@@ -12,6 +12,7 @@ import {
   Icon,
   Tooltip,
 } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { MoreHorizontalIcon, RotateCcw, SquareArrowOutUpRight, Trash2, Unplug } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -240,7 +241,7 @@ const ComposioSkillItem = memo<ComposioSkillItemProps>(
     const renderStatus = () => {
       if (!server) {
         return (
-          <span className={styles.disconnected}>
+          <span {...stylex.props(styles.disconnected)}>
             {t('tools.composio.disconnected', { defaultValue: 'Disconnected' })}
           </span>
         );
@@ -248,17 +249,17 @@ const ComposioSkillItem = memo<ComposioSkillItemProps>(
 
       switch (server.status) {
         case ComposioServerStatus.ACTIVE: {
-          return <span className={styles.connected}>{t('tools.composio.connected')}</span>;
+          return <span {...stylex.props(styles.connected)}>{t('tools.composio.connected')}</span>;
         }
         case ComposioServerStatus.PENDING_AUTH: {
-          return <span className={styles.pending}>{t('tools.composio.authRequired')}</span>;
+          return <span {...stylex.props(styles.pending)}>{t('tools.composio.authRequired')}</span>;
         }
         case ComposioServerStatus.ERROR: {
-          return <span className={styles.error}>{t('tools.composio.error')}</span>;
+          return <span {...stylex.props(styles.error)}>{t('tools.composio.error')}</span>;
         }
         default: {
           return (
-            <span className={styles.disconnected}>
+            <span {...stylex.props(styles.disconnected)}>
               {t('tools.composio.disconnected', { defaultValue: 'Disconnected' })}
             </span>
           );
@@ -452,7 +453,7 @@ const ComposioSkillItem = memo<ComposioSkillItemProps>(
       <Flexbox
         horizontal
         align="center"
-        className={styles.container}
+        className={stylex.props(styles.container).className}
         gap={8}
         justify="space-between"
         style={{
@@ -468,10 +469,10 @@ const ComposioSkillItem = memo<ComposioSkillItemProps>(
             gap={8}
             style={{ cursor: onSelect ? undefined : 'pointer' }}
           >
-            <div className={`${styles.icon} ${!isConnected ? styles.disconnectedIcon : ''}`}>
+            <div {...stylex.props(styles.icon, !isConnected && styles.disconnectedIcon)}>
               {renderIcon()}
             </div>
-            <span className={`${styles.title} ${!isConnected ? styles.disconnectedTitle : ''}`}>
+            <span {...stylex.props(styles.title, !isConnected && styles.disconnectedTitle)}>
               {serverType.label}
             </span>
           </Flexbox>
