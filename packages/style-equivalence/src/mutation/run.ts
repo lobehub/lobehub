@@ -243,6 +243,7 @@ export const runMutations = async (context: MutationContext): Promise<MutationRe
       containerRules: 0,
       pageErrors,
       unparsedMedia: 0,
+      unparsedSelectors: [],
       widths: context.widths,
     }).map((result) => [result.key, result]),
   );

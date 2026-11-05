@@ -55,6 +55,19 @@ beforeAll(async () => {
     'base-document-pseudo',
     page('.t { color: black; } ::view-transition-old(panel) { animation-duration: 240ms; }'),
   );
+  await write(
+    'base-ancestor-not',
+    page(
+      '.t { color: black; } @media (hover: hover) and (pointer: fine) { .x1a2b3c.x1a2b3c.x1a2b3c:where(.lhewz77w:not(:hover, :focus-within) *) { opacity: 0; } }',
+    ),
+  );
+  await write(
+    'base-unparsable',
+    page(
+      '.t { color: black; }',
+      "const sheet = document.createElement('style'); sheet.textContent = '@namespace svg url(http://www.w3.org/2000/svg); @media (hover: hover) { svg|a { color: red; } }'; document.head.prepend(sheet);",
+    ),
+  );
   await write('base-hover', page('.t { color: black; } .t:hover { color: red; }'));
   await write('head-hover', page('.t { color: black; }'));
   await write(
@@ -186,6 +199,26 @@ describe('captureRun + analyzeRun', () => {
   it('does not pin a document-level pseudo rule on every case', async () => {
     const [result] = await run('base-document-pseudo', 'head-media');
     expect(result.gaps).toEqual([]);
+  });
+
+  it('keeps a rule whose functional pseudo nests a comma off cases that do not carry its class', async () => {
+    const capture = await captureRun({
+      browser,
+      conditions: { themeAttribute: 'data-theme', themes: ['light'], widths: [1280] },
+      urls: { base: `${server.url}/base-ancestor-not/`, head: `${server.url}/head-media/` },
+    });
+    expect(capture.caseGaps).toEqual({});
+    expect(capture.unparsedSelectors).toEqual([]);
+  });
+
+  it('reports a selector the page cannot evaluate instead of pinning it on every case', async () => {
+    const capture = await captureRun({
+      browser,
+      conditions: { themeAttribute: 'data-theme', themes: ['light'], widths: [1280] },
+      urls: { base: `${server.url}/base-unparsable/`, head: `${server.url}/head-media/` },
+    });
+    expect(capture.caseGaps).toEqual({});
+    expect(capture.unparsedSelectors).toEqual(['svg|a']);
   });
 
   it('does not flag structural pseudo-classes the default capture already evaluates', async () => {

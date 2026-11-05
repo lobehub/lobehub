@@ -237,6 +237,7 @@ export const runComparison = async (options: RunOptions): Promise<RunResult> => 
       recordsDir: options.recordsDir,
       roots,
       scope,
+      unparsedSelectors: capture.unparsedSelectors,
       verifierVersion: VERIFIER_VERSION,
     });
     const result: RunResult = {
@@ -269,6 +270,7 @@ export const runComparison = async (options: RunOptions): Promise<RunResult> => 
       scope,
       states: capture.states,
       unparsedMedia: capture.unparsedMedia,
+      unparsedSelectors: capture.unparsedSelectors,
       verifierVersion: VERIFIER_VERSION,
       widths: capture.widths,
     });

@@ -29,6 +29,7 @@ export interface AssembleInput {
   recordsDir: string;
   roots: Record<Side, string>;
   scope: ScopeFile[];
+  unparsedSelectors: string[];
   verifierVersion: string;
 }
 
@@ -107,6 +108,7 @@ export const assembleVerdict = async (input: AssembleInput) => {
     mutation: input.mutation,
     reworks,
     signoffs,
+    unparsedSelectors: input.unparsedSelectors.length,
   });
   return { evidence, verdict };
 };

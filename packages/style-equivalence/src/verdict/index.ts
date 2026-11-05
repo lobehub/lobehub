@@ -86,6 +86,7 @@ export interface VerdictInput {
   mutation: { passed: boolean };
   reworks?: Map<string, ReworkRecord>;
   signoffs: Map<string, SignoffRecord>;
+  unparsedSelectors?: number;
 }
 
 export interface Verdict {
@@ -100,6 +101,7 @@ export const decideVerdict = ({
   mutation,
   reworks,
   signoffs,
+  unparsedSelectors,
 }: VerdictInput): Verdict => {
   const states = items.map((item) => ({
     ...item,
@@ -132,5 +134,6 @@ export const decideVerdict = ({
   const mismatches = calibration.filter((entry) => entry.status === 'mismatch').length;
   if (mismatches) reasons.push(`calibration mismatch ${mismatches}`);
   if (!mutation.passed) reasons.push('mutation not fully caught');
+  if (unparsedSelectors) reasons.push(`selector unparsed ${unparsedSelectors}`);
   return { items: states, mergeable: !reasons.length, reasons };
 };

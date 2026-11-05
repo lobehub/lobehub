@@ -34,6 +34,7 @@ export interface RunCapture {
   pageErrors: string[];
   states?: CaptureState[];
   unparsedMedia: number;
+  unparsedSelectors: string[];
   widths: number[];
 }
 
@@ -377,6 +378,7 @@ const captureConditions = async ({
     containerRules: 0,
     pageErrors,
     unparsedMedia: 0,
+    unparsedSelectors: [],
     widths: [...new Set(plan.map((item) => item.width))],
   };
 };
@@ -422,6 +424,7 @@ export const captureRun = async ({
   const pseudoRules: Partial<Record<Side, Record<string, string[]>>> = {};
   const unmodeled: Partial<Record<Side, Record<string, string[]>>> = {};
   let containerRules = 0;
+  const unparsedSelectors = new Set<string>();
   for (const side of ['base', 'head'] as const) {
     const page = await openPage(
       browser,
@@ -434,6 +437,7 @@ export const captureRun = async ({
     pseudoRules[side] = found.pseudoRules;
     unmodeled[side] = unmodeledRules(found);
     containerRules += found.containers;
+    for (const selector of found.unparsed) unparsedSelectors.add(selector);
     await page.close();
   }
   const { unparsed, widths } = planWidths(media, conditions.widths);
@@ -465,6 +469,7 @@ export const captureRun = async ({
     pageErrors,
     states: plannedStates,
     unparsedMedia: unparsed,
+    unparsedSelectors: [...unparsedSelectors].sort(),
     widths,
   };
 };

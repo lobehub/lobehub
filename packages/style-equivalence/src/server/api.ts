@@ -69,6 +69,7 @@ export const currentVerdict = async (stored: StoredRun) => {
     mutation: stored.mutation,
     reworks: reviews.reworks,
     signoffs: reviews.passes,
+    unparsedSelectors: (stored.run.unparsedSelectors as string[] | undefined)?.length,
   });
 };
 

@@ -7,6 +7,7 @@ export interface RuleInspection {
   rules: string[];
   sectionRules?: Record<string, string[]>;
   unmodeled: Record<string, number[]>;
+  unparsed: string[];
 }
 
 export const FORCEABLE = ['active', 'focus', 'focus-visible', 'focus-within', 'hover'];
@@ -47,6 +48,24 @@ export const inspectRules = (page: Page): Promise<RuleInspection> =>
     ({ forceable, pseudoElements, staticClasses }) => {
       const sections = [...document.querySelectorAll('[data-case]')];
       const root = document.querySelector('[data-synthetic-cases]') ?? document.body;
+      const selectorList = (selector: string) => {
+        const parts: string[] = [];
+        let depth = 0;
+        let start = 0;
+        for (let index = 0; index < selector.length; index++) {
+          const char = selector[index];
+          if (char === '\\') index++;
+          else if (char === '(' || char === '[') depth++;
+          else if (char === ')' || char === ']') depth--;
+          else if (char === ',' && depth === 0) {
+            parts.push(selector.slice(start, index));
+            start = index + 1;
+          }
+        }
+        parts.push(selector.slice(start));
+        return parts;
+      };
+      const unparsed = new Set<string>();
       const broaden = (selector: string) => {
         let text = '';
         for (let index = 0; index < selector.length; index++) {
@@ -97,13 +116,14 @@ export const inspectRules = (page: Page): Promise<RuleInspection> =>
         return parent ? [resolve(parent)] : [];
       };
       const hits = (selector: string, scope: Element) =>
-        selector.split(',').some((part) => {
+        selectorList(selector).some((part) => {
           try {
             const broad = broaden(part);
             if (broad === '*') return false;
             return scope.matches(broad) || scope.querySelector(broad) !== null;
           } catch {
-            return true;
+            unparsed.add(part.trim());
+            return false;
           }
         });
       const touching = (rule: CSSRule, scope: Element) =>
@@ -166,7 +186,7 @@ export const inspectRules = (page: Page): Promise<RuleInspection> =>
               candidates.push(rule);
               rules.push(`STATE_UNMODELED|${rule.cssText}`);
             }
-            for (const part of rule.selectorText.split(',')) {
+            for (const part of selectorList(rule.selectorText)) {
               const compounds = part.trim().split(/\s*[\s>+~]\s*/);
               compounds.forEach((compound, index) => {
                 const states = [...compound.matchAll(/:([a-z-]+)/gi)]
@@ -225,6 +245,7 @@ export const inspectRules = (page: Page): Promise<RuleInspection> =>
         rules,
         sectionRules,
         unmodeled,
+        unparsed: [...unparsed],
       };
     },
     {

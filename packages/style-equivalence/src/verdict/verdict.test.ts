@@ -92,6 +92,17 @@ describe('decideVerdict', () => {
     expect(verdict({ signoffs: new Map() }).mergeable).toBe(false);
   });
 
+  it('refuses a run whose page held selectors it could not evaluate', () => {
+    const result = decideVerdict({
+      calibration: [],
+      items: [],
+      mutation: { passed: true },
+      signoffs: new Map(),
+      unparsedSelectors: 2,
+    });
+    expect(result).toMatchObject({ mergeable: false, reasons: ['selector unparsed 2'] });
+  });
+
   it('counts unsigned unpaired elements apart from unsigned cases', () => {
     expect(verdict({ signoffs: new Map() }).reasons).toEqual([
       'difference 1',
