@@ -42,6 +42,15 @@ describe('formatLinearSyncResult', () => {
     );
   });
 
+  it('counts comments copied from Linear', () => {
+    expect(formatLinearSyncResult(result({ commentsImported: 3, updated: 1 }), t)).toBe(
+      'linear.sync.result.updated:1 · linear.sync.result.commentsImported:3',
+    );
+    expect(formatLinearSyncResult(result({ commentsImported: 2 }), t)).toBe(
+      'linear.sync.result.commentsImported:2',
+    );
+  });
+
   it('counts skipped issues past the stored list', () => {
     expect(
       formatLinearSyncResult(

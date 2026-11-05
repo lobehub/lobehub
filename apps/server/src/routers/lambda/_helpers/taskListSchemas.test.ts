@@ -22,3 +22,44 @@ describe('completedWithin', () => {
     expect(resolveClosedAfter(undefined, now)).toBeUndefined();
   });
 });
+
+describe('filter', () => {
+  const filter = {
+    agent: { operator: 'isNot', values: ['agt_1', '__none__'] },
+    completedAt: { operator: 'before', window: 'quarter' },
+    content: '  menu ',
+    priority: { operator: 'is', values: [0, 2] },
+    status: { operator: 'is', values: ['backlog'] },
+  } as const;
+
+  it('is accepted by list and groupList', () => {
+    expect(listSchema.parse({ filter }).filter).toEqual({ ...filter, content: 'menu' });
+    expect(groupListSchema.parse({ filter, groupBy: 'priority' }).filter?.status).toEqual(
+      filter.status,
+    );
+  });
+
+  it('rejects malformed conditions', () => {
+    expect(() =>
+      listSchema.parse({ filter: { status: { operator: 'is', values: ['done'] } } }),
+    ).toThrow();
+    expect(() =>
+      listSchema.parse({ filter: { priority: { operator: 'is', values: [5] } } }),
+    ).toThrow();
+    expect(() =>
+      listSchema.parse({ filter: { status: { operator: 'is', values: [] } } }),
+    ).toThrow();
+    expect(() =>
+      listSchema.parse({ filter: { createdAt: { operator: 'within', window: 'year' } } }),
+    ).toThrow();
+    expect(() =>
+      listSchema.parse({ filter: { status: { operator: 'contains', values: ['backlog'] } } }),
+    ).toThrow();
+  });
+
+  it('does not let a creator condition ask for "nobody"', () => {
+    expect(() =>
+      listSchema.parse({ filter: { creator: { operator: 'is', values: ['__none__'] } } }),
+    ).toThrow();
+  });
+});

@@ -2386,6 +2386,7 @@
   "taskDetail.activities.priority.changed": "<actor/> a changé la priorité de <from/> à <to/>",
   "taskDetail.activities.status.changed": "<actor/> a changé le statut de <from/> à <to/>",
   "taskDetail.activitiesEmpty": "Aucune activité pour le moment",
+  "taskDetail.activitiesLoadMore": "Afficher l’activité antérieure ({{count}})",
   "taskDetail.addSubtask": "Ajouter une sous-tâche",
   "taskDetail.artifactInaccessible": "Document indisponible — accès refusé",
   "taskDetail.artifactMenu.delete": "Retirer de la tâche",

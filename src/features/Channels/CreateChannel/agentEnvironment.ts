@@ -126,6 +126,15 @@ export const reconcileChannelAgentDraft = (
 export const canSubmitChannelAgents = (agents: ChannelAgentDraft[]) =>
   agents.length > 0 && agents.every((agent) => agent.initialized && !agent.issue);
 
+/**
+ * Every chosen Agent must be ready to run. A new Channel may start with only its creator, while
+ * an invitation has to add someone.
+ */
+export const canSubmitChannelMembers = (
+  agents: ChannelAgentDraft[],
+  { creating, people }: { creating: boolean; people: number },
+) => (!agents.length || canSubmitChannelAgents(agents)) && (creating || agents.length + people > 0);
+
 /** Only send the channel-local choices, never form state or Agent configuration. */
 export const toChannelAgentSelection = (draft: ChannelAgentDraft): ChannelAgentSelection => {
   const { initialized: _initialized, issue: _issue, ...selection } = draft;

@@ -22,7 +22,7 @@ import {
 } from './agent';
 import { findThread } from './delivery';
 import { ChannelError } from './error';
-import { addChannelUser, channelUserCandidates } from './people';
+import { addChannelUser, channelUserCandidates, newChannelUserCandidates } from './people';
 import { retryRouting } from './routing';
 import type { ChannelSendInput } from './send';
 import { sendMessage } from './send';
@@ -83,13 +83,18 @@ export class ChannelRepository {
     /** Callers check that the project is readable in this scope. */
     projectId?: string;
     title: string;
+    /** Workspace people a group starts with, checked the same way as adding them later. */
+    userIds?: string[];
     visibility?: ChannelVisibility;
   }) =>
     this.db.transaction(async (tx) => {
       const { agentId } = params;
       if (
         agentId !== undefined &&
-        (!agentId.trim() || params.visibility === 'public' || !!params.agents?.length)
+        (!agentId.trim() ||
+          params.visibility === 'public' ||
+          !!params.agents?.length ||
+          !!params.userIds?.length)
       )
         throw new ChannelError(
           'BAD_REQUEST',
@@ -123,8 +128,10 @@ export class ChannelRepository {
         await addAgentMember(tx, channel, this.userId, { agentId, config: params.agentConfig });
       for (const agent of params.agents ?? [])
         await addAgentMember(tx, channel, this.userId, agent);
+      const access = { channel, member } satisfies ChannelAccess;
+      for (const userId of new Set(params.userIds)) await addChannelUser(tx, access, userId);
 
-      return { channel, member } satisfies ChannelAccess;
+      return access;
     });
 
   /**
@@ -239,6 +246,16 @@ export class ChannelRepository {
 
   addUser = async (channelId: string, userId: string) =>
     this.write(channelId, (tx, access) => addChannelUser(tx, access, userId), { minRole: 'admin' });
+
+  /** People a new Channel in this workspace can start with. */
+  newChannelUserCandidates = async (search?: string) => {
+    const { workspaceId } = this;
+    if (!workspaceId)
+      throw new ChannelError('BAD_REQUEST', 'People can only be added to workspace group channels');
+    return this.db.transaction((tx) =>
+      newChannelUserCandidates(tx, workspaceId, this.userId, search),
+    );
+  };
 
   userCandidates = async (channelId: string, search?: string) =>
     this.write(channelId, (tx, access) => channelUserCandidates(tx, access, search), {

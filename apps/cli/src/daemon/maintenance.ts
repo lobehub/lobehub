@@ -19,10 +19,18 @@ import {
 } from '../commands/update';
 import { CLI_CONFIG_DIR_NAME } from '../constants/identity';
 import { cliPackageName, cliVersion } from '../pkg';
+import { CONNECT_RETRYABLE_EXIT_CODE } from '../service/connect';
+import { readConnectServices, serviceRestartsAfterExit } from '../service/status';
 import { type MaintenanceConfig, writeMaintenanceState } from './maintenanceWorker';
 import { getLogPath } from './manager';
 
 const MAINTENANCE_MESSAGE = 'The CLI is updating or restarting. Retry after it reconnects.';
+
+/**
+ * Who starts the replacement process: the maintenance worker relaunches a CLI daemon, while a
+ * systemd service exits with a failure status and lets its `Restart=` policy start the new code.
+ */
+type MaintenanceMode = 'daemon' | 'service';
 
 /** One gate shared by every workspace connection owned by this process. */
 export class CliMaintenance {
@@ -34,13 +42,14 @@ export class CliMaintenance {
   private child?: ChildProcess;
   private acknowledged = false;
   private latestVersion?: string;
+  private mode?: Promise<MaintenanceMode | undefined>;
 
   constructor(
     private readonly options: {
       activeTasks: () => number;
       daemon: boolean;
       restartArgs: string[];
-      shutdown: () => Promise<void>;
+      shutdown: (exitCode: number) => Promise<void>;
     },
   ) {}
 
@@ -72,8 +81,26 @@ export class CliMaintenance {
     return worker;
   }
 
+  /** The unit's MainPID and restart policy are fixed for this process, so resolve them once. */
+  private resolveMode(): Promise<MaintenanceMode | undefined> {
+    this.mode ??= (async () => {
+      if (process.platform === 'win32') return undefined;
+      if (this.options.daemon) return 'daemon';
+      const { services, unavailableScopes } = await readConnectServices();
+      const managed = services.some(
+        (service) =>
+          service.mainPid === process.pid &&
+          serviceRestartsAfterExit(service, CONNECT_RETRYABLE_EXIT_CODE),
+      );
+      // An unreadable manager may still own this process; check again on the next request.
+      if (!managed && unavailableScopes.length > 0) this.mode = undefined;
+      return managed ? 'service' : undefined;
+    })();
+    return this.mode;
+  }
+
   getState = async (): Promise<DeviceCliUpdateState> => {
-    let supported = this.options.daemon && process.platform !== 'win32';
+    let supported = (await this.resolveMode()) !== undefined;
     try {
       if (supported) await this.workerPath();
     } catch {
@@ -104,7 +131,7 @@ export class CliMaintenance {
       supported,
       unsupportedReason: supported
         ? undefined
-        : 'Use an installed CLI with lh connect --daemon on macOS or Linux. Foreground and system-service connections must be maintained on the device.',
+        : 'Use an installed CLI with lh connect --daemon on macOS or Linux, or a systemd connect service that restarts on failure. Foreground connections must be maintained on the device.',
     };
   };
 
@@ -145,6 +172,7 @@ export class CliMaintenance {
         throw new Error('This device has active tasks. Wait for them to finish before restarting.');
       if (update && !this.latestVersion)
         throw new Error('Check for updates before updating this CLI.');
+      const mode = await this.resolveMode();
       const operation: DeviceCliUpdateOperation = {
         fromInstanceId: this.instanceId,
         id: requestId,
@@ -168,7 +196,7 @@ export class CliMaintenance {
         operation,
         parentPid: process.pid,
         receiptPath: receipt,
-        restartArgs: this.options.restartArgs,
+        restartArgs: mode === 'daemon' ? this.options.restartArgs : undefined,
         statePath: this.statePath,
       };
       await writeFile(configPath, JSON.stringify(config), { mode: 0o600 });
@@ -211,7 +239,10 @@ export class CliMaintenance {
       const child = this.child;
       child.on('message', (message: { type: string }) => {
         if (message.type === 'ready-to-restart') {
-          void this.options.shutdown().catch((error) => console.error('CLI restart failed', error));
+          const exitCode = mode === 'service' ? CONNECT_RETRYABLE_EXIT_CODE : 0;
+          void this.options
+            .shutdown(exitCode)
+            .catch((error) => console.error('CLI restart failed', error));
         }
       });
       child.unref();

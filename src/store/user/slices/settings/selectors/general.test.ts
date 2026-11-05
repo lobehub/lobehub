@@ -58,6 +58,39 @@ describe('settingsSelectors', () => {
     });
   });
 
+  describe('enablePasteAutoConvert', () => {
+    it('should default to true when unset', () => {
+      expect(userGeneralSettingsSelectors.enablePasteAutoConvert(initialState as UserStore)).toBe(
+        true,
+      );
+    });
+
+    it('should return false when turned off', () => {
+      const s: UserState = merge(initialState, {
+        settings: { general: { enablePasteAutoConvert: false } },
+      });
+
+      expect(userGeneralSettingsSelectors.enablePasteAutoConvert(s as UserStore)).toBe(false);
+    });
+
+    it('should default to false for users who turned off the retired input markdown lab', () => {
+      const s: UserState = merge(initialState, {
+        preference: { lab: { enableInputMarkdown: false } },
+      });
+
+      expect(userGeneralSettingsSelectors.enablePasteAutoConvert(s as UserStore)).toBe(false);
+    });
+
+    it('should let the explicit setting win over the retired lab', () => {
+      const s: UserState = merge(initialState, {
+        preference: { lab: { enableInputMarkdown: false } },
+        settings: { general: { enablePasteAutoConvert: true } },
+      });
+
+      expect(userGeneralSettingsSelectors.enablePasteAutoConvert(s as UserStore)).toBe(true);
+    });
+  });
+
   describe('currentResponseLanguage', () => {
     it('should prefer the saved response language', () => {
       const s: UserState = merge(initialState, {

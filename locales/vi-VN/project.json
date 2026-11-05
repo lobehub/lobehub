@@ -116,8 +116,6 @@
   "knowledgeBases.searchPlaceholder": "Tìm kiếm thư viện",
   "knowledgeBases.updateFailed": "Không thể cập nhật thư viện",
   "list.deleteAction": "Xóa dự án",
-  "list.deleteConfirmDescription": "Xóa “{{name}}”? Các nhiệm vụ dự án, mục tiêu, chủ đề và liên kết của nó sẽ bị xóa vĩnh viễn.",
-  "list.deleteConfirmTitle": "Xóa dự án?",
   "list.deleteError": "Không thể xóa dự án.",
   "list.deleteSuccess": "“{{name}}” đã được xóa",
   "list.emptyDescription": "Tạo dự án đầu tiên của bạn để tổ chức mục tiêu, nhiệm vụ và tài nguyên.",

@@ -124,7 +124,6 @@ const SubtaskTitle = memo<{ task: TaskDetailSubtask }>(({ task }) => {
         {shouldShowMemberAssignee(activeWorkspaceId, task.assigneeUserId) && (
           <AssigneeMemberSelector
             currentUserId={task.assigneeUserId ?? null}
-            disabled={isRunning}
             taskCreatorId={task.createdByUserId}
             taskIdentifier={task.id}
             taskVisibility={task.visibility}
@@ -132,7 +131,7 @@ const SubtaskTitle = memo<{ task: TaskDetailSubtask }>(({ task }) => {
             <span
               style={{
                 alignItems: 'center',
-                cursor: isRunning ? 'not-allowed' : 'pointer',
+                cursor: 'pointer',
                 display: 'inline-flex',
                 flex: 'none',
               }}

@@ -4,6 +4,7 @@ import type {
   TaskAutomationMode,
   TaskInstructionSynthesis,
   TaskIntentAnalysis,
+  TaskListFilter,
   TaskStatus,
 } from '@lobechat/types';
 
@@ -29,6 +30,8 @@ class TaskService {
     automated?: boolean;
     /** Keep completed / canceled tasks only when closed within this window. */
     completedWithin?: TaskCompletedWindow;
+    /** The Tasks page filter, applied server-side before paging. */
+    filter?: TaskListFilter;
     /** Archived tasks are left out unless this is set. */
     includeArchived?: boolean;
     orderBy?: 'createdAt' | 'updatedAt';
@@ -49,6 +52,7 @@ class TaskService {
     automated?: boolean;
     completedWithin?: TaskCompletedWindow;
     excludeStatuses?: TaskStatus[];
+    filter?: TaskListFilter;
     groupBy?: 'assignee' | 'member' | 'priority';
     groups?: Array<{
       key: string;

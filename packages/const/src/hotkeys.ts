@@ -51,6 +51,7 @@ export const HotkeyEnum = {
   OpenChatSettings: 'openChatSettings',
   PrevTab: 'prevTab',
   OpenHotkeyHelper: 'openHotkeyHelper',
+  OpenTaskFilter: 'openTaskFilter',
   RegenerateMessage: 'regenerateMessage',
   SaveDocument: 'saveDocument',
   SaveTopic: 'saveTopic',
@@ -147,6 +148,12 @@ export const HOTKEYS_REGISTRATION: HotkeyRegistration = [
     group: HotkeyGroupEnum.Essential,
     id: HotkeyEnum.ToggleFavorite,
     keys: combineKeys([KeyEnum.Alt, 'f']),
+    scopes: [HotkeyScopeEnum.Global],
+  },
+  {
+    group: HotkeyGroupEnum.Essential,
+    id: HotkeyEnum.OpenTaskFilter,
+    keys: 'f',
     scopes: [HotkeyScopeEnum.Global],
   },
   // Chat

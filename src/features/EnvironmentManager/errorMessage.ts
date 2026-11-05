@@ -12,6 +12,10 @@ import { isMachineErrorMessage } from '@/utils/machineErrorMessage';
  * sentence — falls back to the caller's generic line.
  */
 const CODE_KEYS: Record<string, string> = {
+  // A drive download over the size the sandbox packs in one request.
+  DOWNLOAD_TOO_LARGE: 'drive.explorer.downloadTooLarge',
+  // A deployment whose sandbox has no shell to pack a download with.
+  DOWNLOAD_UNAVAILABLE: 'drive.explorer.downloadUnavailable',
   DUPLICATE_INSTANCE_DIRECTORY: 'environments.files.folderTaken',
   ENVIRONMENT_HAS_INSTANCES: 'environments.hasInstances',
   // The execution plane calls this an instance now too. The old

@@ -778,6 +778,41 @@ describe('linearRouter', () => {
       expect(latest).toMatchObject({ error: 'reconnect', id: second.id, status: 'error' });
     });
 
+    it('passes the comment choice of an import and a rule run on to the sync', async () => {
+      const connection = await connect({ userId });
+      mocks.getToken.mockResolvedValue('token');
+      mocks.runSync.mockResolvedValue({ ok: true });
+      mocks.importIssues.mockResolvedValue(syncResult);
+      mocks.syncByFilter.mockResolvedValue(syncResult);
+
+      const imported = await caller({ userId }).startImport({
+        connectionId: connection.id,
+        issueIds: ['issue-1'],
+        projectId,
+        syncComments: true,
+      });
+      await new LinearSyncJobService(serverDB, userId).run(imported.id);
+      expect(mocks.importIssues).toHaveBeenCalledWith('token', ['issue-1'], {
+        syncComments: true,
+        targetProjectId: projectId,
+      });
+
+      const rule = await caller({ userId }).createSyncRule({
+        connectionId: connection.id,
+        projectId,
+        stateTypes: ['backlog'],
+        teamId: 'team-1',
+        teamName: 'Engineering',
+      });
+      const run = await caller({ userId }).startRuleSync({ ruleId: rule.id, syncComments: true });
+      await new LinearSyncJobService(serverDB, userId).run(run.id);
+      expect(mocks.syncByFilter).toHaveBeenCalledWith(
+        'token',
+        expect.objectContaining({ teamId: 'team-1' }),
+        expect.objectContaining({ syncComments: true }),
+      );
+    });
+
     it("lists only the project's own rules, and drops them with the project", async () => {
       const connection = await connect({ userId });
       await serverDB

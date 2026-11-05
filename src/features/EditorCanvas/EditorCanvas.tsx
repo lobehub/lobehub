@@ -52,7 +52,9 @@ export interface EditorCanvasProps {
   /**
    * Keep the caret out of Lexical's root node around block images by pushing
    * an empty paragraph next to the image (otherwise a horizontal root-level
-   * caret shows above / below it). Off by default; comment editors opt in.
+   * caret shows above / below it), and let a click in an image's row or
+   * typing with the image selected continue on the line after it. Off by
+   * default; comment editors and the create-task modal opt in.
    */
   blockImageCaretGuard?: boolean;
 

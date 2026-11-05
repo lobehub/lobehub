@@ -10,6 +10,7 @@ import { mentionPlainClassName } from '@/features/ChatInput/InputEditor/mentionS
 import { EditorCanvas } from '@/features/EditorCanvas';
 import {
   getAttachmentFileIdsFromEditor,
+  hasIncompleteEditorAttachments,
   insertFilesIntoEditor,
 } from '@/features/EditorCanvas/editorAttachments';
 import { useWorkspaceCommentMentionOption } from '@/features/Portal/TopicComments/useWorkspaceCommentMentionOption';
@@ -27,12 +28,14 @@ const CommentInput = memo<{ taskId: string }>(({ taskId }) => {
   const userAvatar = useUserAvatar();
   const [hasContent, setHasContent] = useState(false);
   const [hasAttachments, setHasAttachments] = useState(false);
+  const [uploadingAttachments, setUploadingAttachments] = useState(false);
   const shouldSendOnEnter = useEnterToSend();
   // Same member source as document / topic comments, so `@` produces the
   // identical mention node the server resolves for notifications.
   const mentionOption = useWorkspaceCommentMentionOption();
 
-  const canSubmit = hasContent || hasAttachments;
+  // A still-uploading image would be sent as its local `blob:` preview URL.
+  const canSubmit = (hasContent || hasAttachments) && !uploadingAttachments;
 
   const handleContentChange = useCallback(() => {
     const lexicalEditor = editor?.getLexicalEditor?.();
@@ -42,6 +45,7 @@ const CommentInput = memo<{ taskId: string }>(({ taskId }) => {
       setHasContent(text.length > 0);
     });
     setHasAttachments(getAttachmentFileIdsFromEditor(editor).length > 0);
+    setUploadingAttachments(hasIncompleteEditorAttachments(editor));
   }, [editor]);
 
   const handleAttach = useCallback(
@@ -55,8 +59,9 @@ const CommentInput = memo<{ taskId: string }>(({ taskId }) => {
     (state: { hasAttachments: boolean; hasContent: boolean }) => {
       setHasContent(state.hasContent);
       setHasAttachments(state.hasAttachments);
+      setUploadingAttachments(hasIncompleteEditorAttachments(editor));
     },
-    [],
+    [editor],
   );
 
   const { submit: handleSubmit, submitting } = useCommentSubmit({
