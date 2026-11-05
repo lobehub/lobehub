@@ -1,15 +1,16 @@
 ---
 title: 配置云端沙箱
-description: 配置内置云端沙箱能力，包括 Market 和自托管 Onlyboxes。
+description: 配置内置云端沙箱能力，包括 Market、自托管 Onlyboxes 和 boxd。
 tags:
   - 云端沙箱
   - Onlyboxes
+  - boxd
   - 自托管
 ---
 
 # 配置云端沙箱
 
-云端沙箱用于内置的代码执行、Shell 命令、文件操作和文件导出工具。默认情况下，LobeHub 使用 Market 沙箱；自托管部署可以把同一套工具能力切换到兼容 Onlyboxes 的沙箱提供方。
+云端沙箱用于内置的代码执行、Shell 命令、文件操作和文件导出工具。默认情况下，LobeHub 使用 Market 沙箱；自托管部署可以把同一套工具能力切换到兼容 Onlyboxes 的沙箱提供方，或切换到 boxd。
 
 ## 核心环境变量
 
@@ -24,6 +25,7 @@ tags:
 
 - `market`：使用现有 Market 沙箱。
 - `onlyboxes`：使用兼容 Onlyboxes 的自托管沙箱 Console。
+- `boxd`：在 [boxd](https://boxd.sh) 云端计算机上运行每个沙箱。
 
 ### `MARKET_BASE_URL`
 
@@ -81,6 +83,48 @@ tags:
 - 默认值：`900`
 - 示例：`3600`
 
+### `BOXD_API_KEY`
+
+- 类型：当 `SANDBOX_PROVIDER=boxd` 时必填
+- 描述：boxd API Key。每个 Key 只属于一个 boxd 组织，LobeHub 创建的所有计算机都归该组织所有并由其计费。可以通过 `boxd auth keys create lobehub` 创建。该 Key 只保存在 LobeHub 服务端，不会进入任何计算机。
+- 默认值：-
+- 示例：`bxd_xxxxxxxx`
+
+### `BOXD_REGION`
+
+- 类型：可选
+- 描述：创建计算机所在的 boxd 区域：`fra`（法兰克福）或 `nyc`（纽约）。请选择离 LobeHub 服务端最近的区域，因为每次工具调用和文件传输都会经过这段链路。boxd 中为组织设置的默认区域在这里不生效。
+- 默认值：`fra`
+- 示例：`nyc`
+
+### `BOXD_SNAPSHOT`
+
+- 类型：可选
+- 描述：每台计算机启动时使用的 boxd 快照，用于预置在第一条命令之前就需要的软件包和文件。未设置时，计算机从 boxd 基础镜像启动。
+- 默认值：-
+- 示例：`lobehub-base`
+
+### `BOXD_VCPU`
+
+- 类型：可选
+- 描述：每台计算机的规格：`1`（4 GB 内存）、`2`（8 GB）、`4`（16 GB）或 `8`（32 GB）。从 `BOXD_SNAPSHOT` 启动的计算机沿用快照的规格。
+- 默认值：组织的默认规格
+- 示例：`4`
+
+### `BOXD_LEASE_TTL_SEC`
+
+- 类型：可选
+- 描述：话题最后一次工具调用之后，其计算机保留的时长（秒）。话题使用期间，删除时间最多每分钟顺延一次。设置为 `0` 时计算机会一直保留，直到你手动删除。
+- 默认值：`900`
+- 示例：`3600`
+
+### `BOXD_BASE_URL`
+
+- 类型：可选
+- 描述：boxd API 地址。仅在使用专用 boxd 部署时需要设置。
+- 默认值：`https://boxd.sh:9443`
+- 示例：`https://boxd.example.com:9443`
+
 ## Market 配置
 
 默认情况下，LobeHub 使用官方 Market 沙箱，不需要额外配置：
@@ -133,4 +177,32 @@ CONSOLE_JIT_SIGNING_KEY=onlyboxes-jit-signing-secret
 <Callout type={'info'}>
   文件导出仍会把沙箱内产物写入 LobeHub 配置的 S3 存储。如果用户需要下载沙箱生成的文件，请同时配置 S3
   相关环境变量。
+</Callout>
+
+## boxd 配置
+
+[boxd](https://boxd.sh) 为每个沙箱提供一台独立的云端计算机：一台带 100 GB 磁盘的 KVM 虚拟机，不到一秒即可创建。LobeHub 为每个话题分配一台计算机，在第一次工具调用时创建，因此文件、已安装的软件包和后台进程会在多次调用之间保留。
+
+使用 boxd 时的最小配置：
+
+```bash
+SANDBOX_PROVIDER=boxd
+BOXD_API_KEY=bxd_xxxxxxxx
+# 离当前服务端最近的区域
+BOXD_REGION=fra
+```
+
+LobeHub 使用 boxd 计算机的方式：
+
+- 每台计算机按话题命名为 `lobehub-<hash>`，并带有 `app=lobehub` 标签，服务端重启后仍能找到同一台计算机。可以用 `boxd machine list --label app=lobehub` 查看。
+- 计算机以隔离模式创建：模型编写的代码无法访问 boxd API、组织的集成或组织的其他机器。API Key 只保存在 LobeHub 服务端。
+- 计算机可以访问互联网，没有出站白名单。它还保留 boxd 为每台机器提供的公网 HTTPS 地址 `https://<计算机名>.boxd.sh`（`nyc` 区域为 `<计算机名>.nyc.boxd.sh`），该地址会转发到命令在 80、443、3000、5000、5173、8000 或 8080 端口上留下的监听服务。LobeHub 会为这个地址开启机器人防护，脚本和爬虫只会收到 `503`，只有通过浏览器验证的访问者才能进入；同时会关闭 SSH。
+- 计算机空闲 5 分钟后进入待机，下一次工具调用时自动唤醒。话题最后一次工具调用 `BOXD_LEASE_TTL_SEC` 秒之后，计算机会被删除。之后的调用会获得一台新的计算机，模型也会被告知沙箱已重建。
+- 每台计算机都计入 boxd 组织的机器数量上限，待机中的也算：未添加付款方式的组织上限为 2 台，添加后为 50 台。使用默认租期时，最近 15 分钟内用过的每个话题各占一台。达到上限后，新话题的工具调用会失败，并给出说明上限的错误。请添加付款方式、向 boxd 申请更高的上限，或调低 `BOXD_LEASE_TTL_SEC`。
+- 请求云盘文件夹或持久环境的运行同样使用话题自己的计算机：这两项是 Market 的功能，boxd 会把它们作为临时沙箱运行。
+- 基础镜像为 Ubuntu 24.04，预装 Python 3、Node.js、Bun、git、curl 和 Docker。命令以 `boxd` 用户运行，可以使用 `sudo`。其他需要预装的内容可以做成快照并设置 `BOXD_SNAPSHOT`。
+
+<Callout type={'info'}>
+  计算机会直接通过 LobeHub S3 存储生成的预签名 URL 下载用户上传的文件和技能包，并上传导出的文件，因此
+  `S3_ENDPOINT` 需要能从公网访问，而不仅仅是 LobeHub 服务端可以访问。
 </Callout>
