@@ -14,6 +14,7 @@ export interface StoredRun {
   extractions: Record<string, unknown>;
   items: VerdictItem[];
   mutation: { passed: boolean };
+  plans?: Array<{ file: string; standIns?: Record<string, string[]> }>;
   recordsDir: string;
   results: { cases: Array<{ category: string; key: string; plan: { file: string } }> };
   run: Record<string, unknown> & { repo?: string };
@@ -40,6 +41,7 @@ export const loadRun = async (runDir: string): Promise<StoredRun> => {
     extractions: await readJson(runDir, 'extractions.json', {}),
     items: verdict.items.map(({ signoff: _signoff, ...item }) => item),
     mutation: await readJson(runDir, 'mutation.json', { passed: false }),
+    plans: await readJson(runDir, 'plan.json', []),
     recordsDir: path.dirname(runDir),
     results: await readJson(runDir, 'results.json', { cases: [] }),
     run: await readJson(runDir, 'run.json', {}),

@@ -24,7 +24,13 @@ const element = (id: string, tag: string, slots: string[], extra: object = {}) =
   ...extra,
 });
 
-const kase = (id: string, category: string, flags: string[], combos: object[] = [{}]) => ({
+const kase = (
+  id: string,
+  category: string,
+  flags: string[],
+  combos: object[] = [{}],
+  extra: object = {},
+) => ({
   category,
   key: `src/A.tsx|${id}`,
   plan: {
@@ -34,6 +40,7 @@ const kase = (id: string, category: string, flags: string[], combos: object[] = 
     flags,
     key: `src/A.tsx|${id}`,
     variables: [],
+    ...extra,
   },
   result: {
     comboDifferences: [],
@@ -75,7 +82,9 @@ beforeAll(async () => {
     cases: [
       kase('A#0', 'difference', []),
       kase('A#1', 'needs-signoff', ['VARIABLE_UNMODELED'], [{ online: false }, { online: true }]),
-      kase('A#2', 'needs-signoff', ['PLACEMENT_SUBSTITUTED']),
+      kase('A#2', 'needs-signoff', ['PLACEMENT_SUBSTITUTED'], [{}], {
+        standIns: { head: ['SkillsIcon'] },
+      }),
       kase('A#3', 'equal', []),
     ],
   });
@@ -209,6 +218,8 @@ describe('review API', () => {
       ['icon', 'SkillsIcon'],
       ['row', undefined],
     ]);
+    expect(placed.standIns).toEqual({ head: ['SkillsIcon'] });
+    expect(difference.standIns).toEqual({});
     expect(payload.items.find((entry: any) => entry.key === 'src/A.tsx|A#2').state).toBe(
       'waiting-agent',
     );

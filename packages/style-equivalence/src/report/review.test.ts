@@ -7,6 +7,7 @@ import {
   nextOpen,
   nextSelection,
   reviewGrid,
+  standInNote,
 } from './review';
 
 const item = (key: string, state: string) => ({ key, state });
@@ -186,5 +187,18 @@ describe('cellVerdict', () => {
       text: '只有改之前，改之后不见了',
       tone: 'neutral',
     });
+  });
+});
+
+describe('standInNote', () => {
+  it('says plainly that a screenshot shows a placeholder, naming the component', () => {
+    expect(standInNote(['Tabs', 'Select'])).toBe(
+      '替身：这里画的是占位块，不是真实组件（Tabs、Select）',
+    );
+  });
+
+  it('says nothing when the screenshot shows real elements', () => {
+    expect(standInNote(undefined)).toBeUndefined();
+    expect(standInNote([])).toBeUndefined();
   });
 });

@@ -20,7 +20,7 @@ import {
   type SideProperties,
 } from './placement';
 import { runtimeStyleProbe, styleDropped } from './probes';
-import { realItemsOf, sampleTargets } from './real';
+import { realItemsOf, rendersReal, sampleTargets, standInsOf } from './real';
 import { tableDomain } from './tables';
 
 export { isIntrinsicTag } from './placement';
@@ -56,6 +56,7 @@ export interface PlanCase {
   knobs?: string[];
   neutralOmitted?: number[];
   samples?: InnerNode[];
+  standIns?: Partial<Record<Side, string[]>>;
   variables: PlanVariable[];
 }
 
@@ -63,6 +64,7 @@ export interface FilePlan {
   cases: PlanCase[];
   file: string;
   gaps: string[];
+  standIns?: Record<string, string[]>;
   unpaired: Array<{ elementId: string; side: Side }>;
 }
 
@@ -233,6 +235,16 @@ export const planFile = (
     if (realItems.size) evidence.push('REAL_COMPONENT_RENDERED');
     const samples = realItems.size ? sampleTargets(chains, { base, head }) : [];
     const omitted = neutralOmitted(chains);
+    const standIns = Object.fromEntries(
+      (['base', 'head'] as const).flatMap((side) => {
+        const tags = standInsOf(
+          chains[side],
+          (item) => realItems.has(item) || resolved.has(item),
+          layout,
+        );
+        return tags.length ? [[side, tags]] : [];
+      }),
+    );
     const inner = Object.fromEntries(
       movedAt
         .filter(({ proof }) => proof.nodes.length)
@@ -310,14 +322,29 @@ export const planFile = (
       ...(knobs ? { knobs } : {}),
       ...(omitted.length ? { neutralOmitted: omitted } : {}),
       ...(samples.length ? { samples } : {}),
+      ...(Object.keys(standIns).length ? { standIns } : {}),
       variables: modeled,
     };
   });
 
+  const unpairedStandIns = Object.fromEntries(
+    (['base', 'head'] as const).flatMap((side) =>
+      (side === 'base' ? unpairedBase : unpairedHead).flatMap((element) => {
+        const chain = chainOf(element, byId[side]);
+        const tags = standInsOf(
+          chain,
+          (item, index) => rendersReal(item, index === chain.length - 1, config.realComponents),
+          layout,
+        );
+        return tags.length ? [[`${side}:${element.id}`, tags]] : [];
+      }),
+    ),
+  );
   return {
     cases,
     file,
     gaps: [...new Set([...base.gaps, ...head.gaps])],
+    ...(Object.keys(unpairedStandIns).length ? { standIns: unpairedStandIns } : {}),
     unpaired: [
       ...unpairedBase.map((element) => ({ elementId: element.id, side: 'base' as const })),
       ...unpairedHead.map((element) => ({ elementId: element.id, side: 'head' as const })),

@@ -34,3 +34,15 @@ export const sampleTargets = (
   }
   return hasTargets(selectors);
 };
+
+export const standInsOf = (
+  chain: StyleElement[],
+  rendered: (item: StyleElement, index: number) => boolean,
+  layout: Set<string>,
+) =>
+  chain
+    .filter(
+      (item, index) =>
+        !/^[a-z][\w-]*$/.test(item.tag) && !layout.has(item.tag) && !rendered(item, index),
+    )
+    .map((item) => item.tag);

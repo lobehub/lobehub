@@ -103,6 +103,19 @@ describe('a real library component rendered in place of the stand-in', () => {
     const { plan } = both(base('./Tabs'), head('./Tabs'));
     expect(plan.cases[0].flags).toEqual(['PLACEMENT_NEUTRAL_PROP', 'PLACEMENT_SUBSTITUTED']);
     expect(plan.cases[0].evidence).toBeUndefined();
+    expect(plan.cases[0].standIns).toEqual({ base: ['Tabs'], head: ['Tabs'] });
+  });
+
+  it('records no stand-in when every component on the chain renders for real', () => {
+    expect(both(base(), head()).plan.cases[0].standIns).toBeUndefined();
+  });
+
+  it('records the stand-ins of an element that exists on one side only', () => {
+    const { plan } = both(
+      base(undefined, '<div className={styles.tabs} />'),
+      head(undefined, '<Select {...stylex.props(styles.tab)} />'),
+    );
+    expect(plan.standIns).toEqual({ 'head:View#0': ['Select'] });
   });
 
   it('keeps the stand-in when a leaf component would have to host a styled child', () => {

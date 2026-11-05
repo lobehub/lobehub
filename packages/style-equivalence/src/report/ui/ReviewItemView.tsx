@@ -3,7 +3,7 @@ import * as stylex from '@stylexjs/stylex';
 
 import { REVEAL_COLORS } from '../../server/reveal';
 import { cropShotUrl, type ReviewView } from '../api';
-import { cellVerdict, reviewGrid } from '../review';
+import { cellVerdict, reviewGrid, standInNote } from '../review';
 import { StyleDetails } from './StyleDetails';
 
 const styles = stylex.create({
@@ -90,6 +90,24 @@ const styles = stylex.create({
     width: '100%',
   },
   side: { color: cssVar.colorTextTertiary, fontSize: 11, marginBlockEnd: 4 },
+  frame: { position: 'relative' },
+  standIn: {
+    backgroundColor: cssVar.colorWarningBg,
+    borderColor: cssVar.colorWarningBorder,
+    borderRadius: 4,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    color: cssVar.colorWarningText,
+    fontSize: 12,
+    fontWeight: 600,
+    insetBlockStart: 6,
+    insetInlineStart: 6,
+    insetInlineEnd: 6,
+    lineHeight: 1.4,
+    paddingBlock: 2,
+    paddingInline: 6,
+    position: 'absolute',
+  },
   title: { fontSize: 20, fontWeight: 600, marginBlock: 0 },
   verdict: {
     alignItems: 'center',
@@ -117,17 +135,23 @@ const Pair = ({
   item: ReviewView;
 }) => (
   <div {...stylex.props(styles.pair)}>
-    {sidesOf(item).map((side) => (
-      <div key={side}>
-        <div {...stylex.props(styles.side)}>{side === 'base' ? '改之前' : '改之后'}</div>
-        <img
-          alt={`${side === 'base' ? '改之前' : '改之后'} ${item.title}`}
-          loading="lazy"
-          src={cropShotUrl(item.key, side, condition, combo)}
-          {...stylex.props(styles.shot)}
-        />
-      </div>
-    ))}
+    {sidesOf(item).map((side) => {
+      const note = standInNote(item.standIns?.[side]);
+      return (
+        <div key={side}>
+          <div {...stylex.props(styles.side)}>{side === 'base' ? '改之前' : '改之后'}</div>
+          <div {...stylex.props(styles.frame)}>
+            <img
+              alt={`${side === 'base' ? '改之前' : '改之后'} ${item.title}`}
+              loading="lazy"
+              src={cropShotUrl(item.key, side, condition, combo)}
+              {...stylex.props(styles.shot)}
+            />
+            {note && <div {...stylex.props(styles.standIn)}>{note}</div>}
+          </div>
+        </div>
+      );
+    })}
   </div>
 );
 

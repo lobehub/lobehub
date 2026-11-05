@@ -127,3 +127,6 @@ export const completionText = (
     }
   return lines;
 };
+
+export const standInNote = (tags: string[] | undefined) =>
+  tags?.length ? `替身：这里画的是占位块，不是真实组件（${tags.join('、')}）` : undefined;

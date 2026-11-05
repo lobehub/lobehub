@@ -162,6 +162,7 @@ export interface ReviewView {
   needsAgent: boolean;
   note?: { finding: string; suggestion: 'pass' | 'rework' };
   rework?: { at: string; note: string; reviewer: string };
+  standIns: Partial<Record<'base' | 'head', string[]>>;
   state: ReviewState;
   styles: {
     blocks: Array<{

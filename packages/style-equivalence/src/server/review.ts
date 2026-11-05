@@ -21,10 +21,17 @@ import {
   type StoredRun,
 } from './api';
 
+type Sides<T> = Partial<Record<'base' | 'head', T>>;
+
 interface CaseEntry {
   category: string;
   key: string;
-  plan: { combos?: Combo[]; elementIds?: { base: string; head: string }; file: string };
+  plan: {
+    combos?: Combo[];
+    elementIds?: { base: string; head: string };
+    file: string;
+    standIns?: Sides<string[]>;
+  };
   result?: {
     comboDifferences?: Array<{
       combo: number;
@@ -98,6 +105,18 @@ const stylesOf = (
 
 type Extractions = Record<string, Partial<Record<'base' | 'head', { elements: StyleElement[] }>>>;
 
+export const standInsFor = (
+  key: string,
+  entry: Pick<CaseEntry, 'plan'> | undefined,
+  plans: Array<{ file: string; standIns?: Record<string, string[]> }>,
+): Sides<string[]> => {
+  const unpaired = /^(.*)\|unpaired:(base|head):(.+)$/.exec(key);
+  if (!unpaired) return entry?.plan.standIns ?? {};
+  const [, file, side, id] = unpaired;
+  const tags = plans.find((plan) => plan.file === file)?.standIns?.[`${side}:${id}`];
+  return tags ? { [side]: tags } : {};
+};
+
 const elementFor = (stored: StoredRun, key: string, entry: CaseEntry | undefined) => {
   const extractions = stored.extractions as Extractions;
   const unpaired = /^(.*)\|unpaired:(base|head):(.+)$/.exec(key);
@@ -133,6 +152,7 @@ const describe = (
   element?: StyleElement,
   evidence?: CaseEvidence,
   layout: Set<string> = new Set(),
+  standIns: Sides<string[]> = {},
 ) => {
   const component = element && !isIntrinsicTag(element.tag) ? element.tag : undefined;
   const binding = element?.bindings[0];
@@ -162,6 +182,7 @@ const describe = (
     component,
     differingConditions: entry?.result?.differingConditions ?? [],
     errors: entry?.result?.errors ?? [],
+    standIns,
     styles: stylesOf(entry, evidence, layout),
     summary: differenceSummary(entry?.result?.rootCauses ?? []),
     title: titleOf(item.key, element),
@@ -198,6 +219,7 @@ export const reviewPayload = async (stored: StoredRun, layoutComponents: string[
       context.elements.get(item.key),
       stored.evidence[item.key] as CaseEvidence | undefined,
       layout,
+      standInsFor(item.key, context.cases.get(item.key), stored.plans ?? []),
     ),
   );
   const resolved = [...reviews.reworks.values()].filter((rework) => rework.resolvedAt);
