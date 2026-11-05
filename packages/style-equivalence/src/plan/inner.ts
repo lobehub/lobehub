@@ -1,12 +1,10 @@
-import selectorParser from 'postcss-selector-parser';
+import { parseSelectorList, type SelectorNode } from './selectorTree';
 
 export interface InnerNode {
   attributes: Record<string, string>;
   children: InnerNode[];
   tag: string;
 }
-
-type Node = selectorParser.Node;
 
 const VOID_TAGS = new Set(['area', 'br', 'col', 'embed', 'hr', 'img', 'input', 'source', 'wbr']);
 const PSEUDO_ELEMENTS = new Set(['::after', '::before', '::marker', '::placeholder']);
@@ -18,28 +16,36 @@ interface Trie {
   tag: string;
 }
 
-const compoundOf = (nodes: Node[], last: boolean): Trie | undefined => {
+interface Step {
+  key: string;
+  nodes: SelectorNode[];
+}
+
+const compoundOf = (nodes: SelectorNode[], last: boolean): Trie | undefined => {
   const node: Trie = { attributes: {}, children: new Map(), tag: 'div' };
   const classes: string[] = [];
   for (const [index, part] of nodes.entries()) {
-    if (part.type === 'tag') node.tag = part.value.toLowerCase();
+    const value = part.value ?? '';
+    if (part.type === 'tag') node.tag = value.toLowerCase();
     else if (part.type === 'universal') continue;
-    else if (part.type === 'class') classes.push(part.value);
-    else if (part.type === 'id') node.attributes.id = part.value;
-    else if (part.type === 'attribute') {
-      const operator = part.operator as string | undefined;
-      if (!ATTRIBUTE_OPERATORS.has(operator) || part.attribute in node.attributes) return undefined;
-      node.attributes[part.attribute] = operator ? (part.value ?? '') : '';
-    } else if (part.type === 'pseudo' && part.value === ':has' && part.nodes.length === 1) {
-      const [first, ...after] = part.nodes[0].nodes;
+    else if (part.type === 'class') classes.push(value);
+    else if (part.type === 'id') node.attributes.id = value;
+    else if (part.type === 'attribute' && part.attribute) {
+      if (!ATTRIBUTE_OPERATORS.has(part.operator) || part.attribute in node.attributes)
+        return undefined;
+      node.attributes[part.attribute] = part.operator ? value : '';
+    } else if (part.type === 'pseudo' && value === ':has' && part.nodes?.length === 1) {
+      const [argument] = part.nodes;
+      const parts = argument.nodes ?? [];
+      const [first, ...after] = parts;
       const relative = first?.type === 'combinator';
-      const inner = relative ? after : part.nodes[0].nodes;
-      if (relative && first.value.trim() !== '>') return undefined;
+      const inner = relative ? after : parts;
+      if (relative && first.value?.trim() !== '>') return undefined;
       if (!inner.length || inner.some((item) => item.type === 'combinator')) return undefined;
       const child = compoundOf(inner, true);
       if (!child) return undefined;
-      node.children.set(`:has${String(part.nodes[0]).trim()}`, child);
-    } else if (part.type === 'pseudo' && PSEUDO_ELEMENTS.has(part.value)) {
+      node.children.set(`:has(${String(argument).trim()})`, child);
+    } else if (part.type === 'pseudo' && PSEUDO_ELEMENTS.has(value)) {
       if (!last || index !== nodes.length - 1) return undefined;
     } else return undefined;
   }
@@ -47,19 +53,19 @@ const compoundOf = (nodes: Node[], last: boolean): Trie | undefined => {
   return node;
 };
 
-const pathOf = (selector: selectorParser.Selector) => {
-  const steps: Array<{ key: string; nodes: Node[] }> = [];
+const pathOf = (selector: SelectorNode[]) => {
+  const steps: Step[] = [];
   let combinator = '';
-  let current: Node[] = [];
+  let current: SelectorNode[] = [];
   const flush = () => {
     steps.push({ key: `${combinator}${current.map(String).join('').trim()}`, nodes: current });
     current = [];
   };
-  for (const part of selector.nodes) {
+  for (const part of selector) {
     if (part.type === 'combinator') {
       if (!current.length) return undefined;
       flush();
-      combinator = part.value.trim() || ' ';
+      combinator = part.value?.trim() || ' ';
       if (![' ', '>'].includes(combinator)) return undefined;
       continue;
     }
@@ -71,7 +77,7 @@ const pathOf = (selector: selectorParser.Selector) => {
   return steps;
 };
 
-const merge = (into: Map<string, Trie>, steps: Array<{ key: string; nodes: Node[] }>) => {
+const merge = (into: Map<string, Trie>, steps: Step[]) => {
   let level = into;
   for (const [index, step] of steps.entries()) {
     const fresh = compoundOf(step.nodes, index === steps.length - 1);
@@ -96,25 +102,17 @@ const finish = (trie: Map<string, Trie>): InnerNode[] | undefined => {
 export const innerTargets = (selectors: string[], scope: string) => {
   const root = new Map<string, Trie>();
   for (const text of selectors) {
-    let valid = true;
-    try {
-      selectorParser((parsed) => {
-        parsed.each((selector) => {
-          if (!valid) return;
-          const steps = pathOf(selector);
-          const [head, ...rest] = steps ?? [];
-          const scoped =
-            head?.nodes[0]?.type === 'class' &&
-            head.nodes[0].value === scope &&
-            head.nodes.slice(1).every((part) => part.type === 'pseudo');
-          if (!steps || !scoped) valid = false;
-          else if (rest.length && !merge(root, rest)) valid = false;
-        });
-      }).processSync(text);
-    } catch {
-      return undefined;
+    const parsed = parseSelectorList(text);
+    if (!parsed) return undefined;
+    for (const selector of parsed) {
+      const steps = pathOf(selector);
+      const [head, ...rest] = steps ?? [];
+      const scoped =
+        head?.nodes[0]?.type === 'class' &&
+        head.nodes[0].value === scope &&
+        head.nodes.slice(1).every((part) => part.type === 'pseudo');
+      if (!steps || !scoped || (rest.length && !merge(root, rest))) return undefined;
     }
-    if (!valid) return undefined;
   }
   return finish(root);
 };

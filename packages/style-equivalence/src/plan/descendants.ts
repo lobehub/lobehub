@@ -1,7 +1,6 @@
-import selectorParser from 'postcss-selector-parser';
-
 import type { FileExtraction, StyleElement, StyleRule } from '../extract';
 import { targetsInnerTag } from '../extract/selectors';
+import { parseSelectorList, type SelectorNode } from './selectorTree';
 
 interface Step {
   child: boolean;
@@ -23,32 +22,23 @@ const scopeNames = (rule: StyleRule, element: StyleElement) =>
       .map(([name]) => name),
   );
 
-const stepsOf = (rule: StyleRule, scopes: Set<string>): Step[] | undefined => {
-  const steps: Step[] = [];
-  let valid = true;
-  try {
-    selectorParser((root) => {
-      root.each((selector) => {
-        const nodes = selector.nodes;
-        const [scope, combinator, target] = nodes;
-        if (
-          nodes.length !== 3 ||
-          scope.type !== 'class' ||
-          !scopes.has(scope.value) ||
-          combinator.type !== 'combinator' ||
-          ![' ', '>'].includes(combinator.value.trim() || ' ') ||
-          (target.type !== 'tag' && target.type !== 'universal')
-        ) {
-          valid = false;
-          return;
-        }
-        steps.push({ child: combinator.value.trim() === '>', tag: target.value });
-      });
-    }).processSync(rule.selector);
-  } catch {
+const stepOf = (nodes: SelectorNode[], scopes: Set<string>): Step | undefined => {
+  const [scope, combinator, target] = nodes;
+  if (
+    nodes.length !== 3 ||
+    scope.type !== 'class' ||
+    !scopes.has(scope.value ?? '') ||
+    combinator.type !== 'combinator' ||
+    ![' ', '>'].includes(combinator.value?.trim() || ' ') ||
+    (target.type !== 'tag' && target.type !== 'universal')
+  )
     return undefined;
-  }
-  return valid ? steps : undefined;
+  return { child: combinator.value?.trim() === '>', tag: target.value ?? '*' };
+};
+
+const stepsOf = (rule: StyleRule, scopes: Set<string>): Step[] | undefined => {
+  const steps = parseSelectorList(rule.selector)?.map((nodes) => stepOf(nodes, scopes));
+  return steps?.every(Boolean) ? (steps as Step[]) : undefined;
 };
 
 const rulesOf = (element: StyleElement, rules: StyleRule[]) =>
