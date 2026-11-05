@@ -1,20 +1,25 @@
 'use client';
 
+// oxlint-disable-next-line stylex-migration/no-plain-css -- needs lobe-ui slot: Avatar.emoji (the FluentEmoji img inside Avatar's content span takes no className)
 import './AgentCard.css';
 
 import { AGENT_CHAT_URL, DEFAULT_USER_AVATAR_URL, GROUP_CHAT_URL } from '@lobechat/const';
 import type { SidebarAgentItem } from '@lobechat/types';
 import { agentDisplayName, agentSecondaryDisplayName } from '@lobechat/types';
-import { Avatar, Block, ContextMenuTrigger, cx, type DropdownItem, Text } from '@lobehub/ui';
+import { Avatar, Block, ContextMenuTrigger, type DropdownItem, Text } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { type CSSProperties, memo, type ReactNode, useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
+import { sx } from '@/styles/sx';
 
+import { cardStyles, coverStyles } from './agentCardStyles';
 import AgentPendant from './AgentPendant';
 import type { AgentRowAuthor } from './AgentRow';
 import { coverPattern } from './coverColor';
 import ItemActions from './ItemActions';
+import { cardMarker } from './markers.stylex';
 import { resolveAgentBadge } from './resolveAgentBadge';
 import SidebarItemAvatar from './SidebarItemAvatar';
 import { useAgentCoverColor } from './useAgentCoverColor';
@@ -23,30 +28,12 @@ import { useAgentCoverColor } from './useAgentCoverColor';
 // centered, with the owner in the bottom-left corner. Every row has a fixed
 // height, so the avatar, the name baseline and the description's first line
 // line up across a row. The avatar straddles the cover's bottom edge.
-// The cover is 80px tall; its selector-based rules live in AgentCard.css.
 const AVATAR_SIZE = 56;
 export const AGENT_GRID_MIN_COLUMN = 260;
-export const cardStyles = {
-  card: 'lobe-agent-card-2f4e89d4-card',
-  cover: 'lobe-agent-card-2f4e89d4-cover',
-  avatarRing: 'lobe-agent-card-2f4e89d4-avatar-ring',
-  avatarRingGroup: 'lobe-agent-card-2f4e89d4-avatar-ring-group',
-  avatarPlain: 'lobe-agent-card-2f4e89d4-avatar-plain',
-  name: 'lobe-agent-card-2f4e89d4-name',
-  roleRow: 'lobe-agent-card-2f4e89d4-role-row',
-  role: 'lobe-agent-card-2f4e89d4-role',
-  description: 'lobe-agent-card-2f4e89d4-description',
-  owner: 'lobe-agent-card-2f4e89d4-owner',
-  ownerName: 'lobe-agent-card-2f4e89d4-owner-name',
-  grid: 'lobe-agent-card-2f4e89d4-grid',
-  actions: 'lobe-agent-card-2f4e89d4-actions',
-  link: 'lobe-agent-card-2f4e89d4-link',
-  wrapper: 'lobe-agent-card-2f4e89d4-wrapper',
-} as const;
+const AVATAR_PLAIN_CLASSNAME = 'lobe-agent-card-2f4e89d4-avatar-plain';
 
-/** Badge-wall grid wrapper. */
 export const AgentCardGrid = memo<{ children: ReactNode }>(({ children }) => (
-  <div className={'lobe-agent-card-2f4e89d4-grid'}>{children}</div>
+  <div {...stylex.props(cardStyles.grid)}>{children}</div>
 ));
 
 AgentCardGrid.displayName = 'AgentCardGrid';
@@ -83,70 +70,73 @@ const AgentCard = memo<AgentCardProps>(({ item, onToggleSidebar, owner, sidebarH
 
   return (
     <ContextMenuTrigger items={getContextMenuItems}>
-      <div className={'lobe-agent-card-2f4e89d4-wrapper'}>
+      <div {...stylex.props(cardMarker, cardStyles.wrapper)}>
         <WorkspaceLink
           aria-label={displayTitle}
-          className={'lobe-agent-card-2f4e89d4-link'}
+          className={stylex.props(cardStyles.link).className}
           ref={setAnchor}
           to={type === 'group' ? GROUP_CHAT_URL(id) : AGENT_CHAT_URL(id, false)}
           onPointerEnter={activateMenu}
         >
           <Block
             clickable
-            className={'lobe-agent-card-2f4e89d4-card'}
+            className={stylex.props(cardStyles.card).className}
             height={'100%'}
             variant={'outlined'}
           >
             <div
-              className={'lobe-agent-card-2f4e89d4-cover'}
-              data-cover-image={badge.coverImage ? '' : undefined}
-              data-pattern={badge.coverImage ? undefined : coverPattern(item)}
-              style={
+              {...sx(
+                [
+                  coverStyles.root,
+                  badge.coverImage ? coverStyles.coverImage : coverStyles[coverPattern(item)],
+                ],
+                undefined,
                 {
                   '--agent-cover': coverColor,
                   'backgroundImage': badge.coverImage
                     ? `url(${JSON.stringify(badge.coverImage)})`
                     : undefined,
-                } as CSSProperties
-              }
+                } as CSSProperties,
+              )}
+              data-cover-image={badge.coverImage ? '' : undefined}
+              data-pattern={badge.coverImage ? undefined : coverPattern(item)}
             />
             <AgentPendant bottom={badge.bottom} top={badge.top}>
               <span
-                className={cx(
-                  'lobe-agent-card-2f4e89d4-avatar-ring',
-                  !badge.cover && 'lobe-agent-card-2f4e89d4-avatar-plain',
-                  type === 'group' && 'lobe-agent-card-2f4e89d4-avatar-ring-group',
+                {...sx(
+                  [cardStyles.avatarRing, type === 'group' && cardStyles.avatarRingGroup],
+                  badge.cover ? undefined : AVATAR_PLAIN_CLASSNAME,
                 )}
               >
                 <SidebarItemAvatar item={item} shape={'circle'} size={AVATAR_SIZE - 6} />
               </span>
             </AgentPendant>
-            <Text ellipsis className={'lobe-agent-card-2f4e89d4-name'}>
+            <Text ellipsis className={stylex.props(cardStyles.name).className}>
               {displayTitle}
             </Text>
-            <div className={'lobe-agent-card-2f4e89d4-role-row'}>
+            <div {...stylex.props(cardStyles.roleRow)}>
               {roleTag ? (
-                <span className={'lobe-agent-card-2f4e89d4-role'} title={roleTag}>
+                <span {...stylex.props(cardStyles.role)} title={roleTag}>
                   {roleTag}
                 </span>
               ) : null}
             </div>
-            <div className={'lobe-agent-card-2f4e89d4-description'}>{description}</div>
+            <div {...stylex.props(cardStyles.description)}>{description}</div>
             {owner?.name ? (
-              <div className={'lobe-agent-card-2f4e89d4-owner'}>
+              <div {...stylex.props(cardStyles.owner)}>
                 <Avatar
                   avatar={owner.avatar || DEFAULT_USER_AVATAR_URL}
                   shape={'circle'}
                   size={16}
                 />
-                <span className={'lobe-agent-card-2f4e89d4-owner-name'} title={owner.name}>
+                <span {...stylex.props(cardStyles.ownerName)} title={owner.name}>
                   {owner.name}
                 </span>
               </div>
             ) : null}
           </Block>
         </WorkspaceLink>
-        <span data-card-actions className={'lobe-agent-card-2f4e89d4-actions'}>
+        <span data-card-actions {...stylex.props(cardStyles.actions)}>
           {/* Visible "…" trigger AND right-click open the same menu — the
               context menu alone proved undiscoverable (the sidebar toggle
               folds into it via includeSidebarToggle). Rendered as a SIBLING

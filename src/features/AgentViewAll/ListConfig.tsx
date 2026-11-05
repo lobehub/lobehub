@@ -1,5 +1,6 @@
 'use client';
 
+// oxlint-disable-next-line stylex-migration/no-plain-css -- needs lobe-ui slot: FormField.label (Form passes no className to Field.Label or the FormTitle wrappers inside it)
 import './ListConfig.css';
 
 import { ActionIcon, Flexbox, Icon, Popover, Select, Switch, Tabs } from '@lobehub/ui';

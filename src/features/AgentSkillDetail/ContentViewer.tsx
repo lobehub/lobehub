@@ -1,5 +1,6 @@
 'use client';
 
+// oxlint-disable-next-line stylex-migration/no-plain-css -- pre, code and .line are Shiki HTML that Highlighter injects with dangerouslySetInnerHTML, which no prop reaches
 import './ContentViewer.css';
 
 import { type SkillItem } from '@lobechat/types';

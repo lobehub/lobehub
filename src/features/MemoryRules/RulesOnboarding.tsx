@@ -1,7 +1,5 @@
 'use client';
 
-import './RulesOnboarding.css';
-
 import { Button, Icon } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
@@ -10,7 +8,6 @@ import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { sx } from '@/styles/sx';
 
 const styles = stylex.create({
   actions: {
@@ -77,6 +74,9 @@ const styles = stylex.create({
   },
   rowAction: {
     flex: 'none',
+  },
+  rowActionButton: {
+    minInlineSize: '72px',
   },
   rowCopy: {
     display: 'flex',
@@ -150,9 +150,7 @@ const Row = ({ action, description, icon, meta, separated, title }: RowProps) =>
       <span {...stylex.props(styles.rowDescription)}>{description}</span>
     </span>
     {meta && <span {...stylex.props(styles.rowMeta)}>{meta}</span>}
-    {action && (
-      <span {...sx([styles.rowAction], 'lobe-rules-onboarding-dcf30d3e-row-action')}>{action}</span>
-    )}
+    {action && <span {...stylex.props(styles.rowAction)}>{action}</span>}
   </div>
 );
 
@@ -215,10 +213,14 @@ const RulesOnboarding = ({
       <div {...stylex.props(styles.listTitle)}>{t('rules.onboarding.listTitle')}</div>
       <div {...stylex.props(styles.list)}>
         <Row
-          action={<Button onClick={onDistill}>{t('rules.onboarding.distill.action')}</Button>}
           description={t('rules.onboarding.distill.description')}
           icon={FileSearchIcon}
           title={t('rules.onboarding.distill.title')}
+          action={
+            <Button className={stylex.props(styles.rowActionButton).className} onClick={onDistill}>
+              {t('rules.onboarding.distill.action')}
+            </Button>
+          }
         />
         <Row
           separated
@@ -227,7 +229,10 @@ const RulesOnboarding = ({
           meta={backlogRounds ? t('rules.onboarding.backlog', { count: backlogRounds }) : undefined}
           title={t('rules.onboarding.reject.title')}
           action={
-            <Button onClick={() => navigate('/acceptance')}>
+            <Button
+              className={stylex.props(styles.rowActionButton).className}
+              onClick={() => navigate('/acceptance')}
+            >
               {t('rules.onboarding.reject.action')}
             </Button>
           }
@@ -235,9 +240,16 @@ const RulesOnboarding = ({
         {agents && (
           <Row
             separated
-            action={<Button onClick={agents.onOpen}>{t('rules.onboarding.agents.action')}</Button>}
             icon={BotIcon}
             title={t('rules.onboarding.agents.title')}
+            action={
+              <Button
+                className={stylex.props(styles.rowActionButton).className}
+                onClick={agents.onOpen}
+              >
+                {t('rules.onboarding.agents.action')}
+              </Button>
+            }
             description={
               agents.agentCount > 1
                 ? t('rules.onboarding.agents.descriptionMany', {

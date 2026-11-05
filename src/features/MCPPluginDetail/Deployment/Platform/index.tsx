@@ -1,3 +1,4 @@
+// oxlint-disable-next-line stylex-migration/no-plain-css -- the pre is Shiki HTML that Highlighter injects with dangerouslySetInnerHTML, which no prop reaches
 import './index.css';
 
 import { type ConnectionConfig } from '@lobehub/market-types';

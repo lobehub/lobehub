@@ -1,4 +1,3 @@
-/* The labels are rendered inside @lobehub/ui's Form, so StyleX cannot reach them. */
 .lobe-list-config-9ad0ef6d-form label,
 .lobe-list-config-9ad0ef6d-form label * {
   font-size: 13px !important;

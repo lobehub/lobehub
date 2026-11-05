@@ -1,7 +1,5 @@
 'use client';
 
-import './TopicCard.css';
-
 import { AGENT_CHAT_TOPIC_URL } from '@lobechat/const';
 import { formatPrice, formatTokenNumber } from '@lobechat/utils/format';
 import { Block, Checkbox, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
@@ -22,6 +20,8 @@ import { getProjectInfo } from './utils';
 
 const styles = stylex.create({
   projectLabel: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+  projectTag: { alignSelf: 'flex-start', minWidth: 0, maxWidth: '100%' },
+  projectTagIcon: { flexShrink: 0 },
   card: {
     cursor: 'pointer',
     position: 'relative',
@@ -165,19 +165,31 @@ const TopicCard = memo<TopicCardProps>(({ topic, agentId }) => {
       {project && (
         <Flexbox gap={4}>
           <Tag
-            className={'lobe-topic-card-2f172269-project-tag'}
-            icon={<Icon icon={FolderIcon} size={11} />}
+            className={stylex.props(styles.projectTag).className}
             size={'small'}
             title={project.path}
+            icon={
+              <Icon
+                className={stylex.props(styles.projectTagIcon).className}
+                icon={FolderIcon}
+                size={11}
+              />
+            }
           >
             <span className={stylex.props(styles.projectLabel).className}>{project.path}</span>
           </Tag>
           {project.branch && (
             <Tag
-              className={'lobe-topic-card-2f172269-project-tag'}
-              icon={<Icon icon={GitBranchIcon} size={11} />}
+              className={stylex.props(styles.projectTag).className}
               size={'small'}
               title={project.branch}
+              icon={
+                <Icon
+                  className={stylex.props(styles.projectTagIcon).className}
+                  icon={GitBranchIcon}
+                  size={11}
+                />
+              }
             >
               <span className={stylex.props(styles.projectLabel).className}>{project.branch}</span>
             </Tag>

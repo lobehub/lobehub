@@ -1,16 +1,15 @@
-import './MCPConfigForm.css';
-
-import { Button, Flexbox, Markdown } from '@lobehub/ui';
+import { Button, Flexbox, Markdown, type MarkdownProps } from '@lobehub/ui';
 import { Form, useForm } from '@lobehub/ui/form';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import * as m from 'motion/react-m';
-import { memo, useState } from 'react';
+import { type ComponentProps, isValidElement, memo, type ReactElement, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import ItemRender from '@/components/JSONSchemaConfig/ItemRender';
 import { transformPluginSettings } from '@/features/PluginSettings';
 import { useToolStore } from '@/store/tool';
+import { sx } from '@/styles/sx';
 
 interface MCPConfigFormProps {
   configSchema: any;
@@ -40,7 +39,23 @@ const styles = stylex.create({
     borderBlockStartStyle: 'solid',
     borderBlockStartColor: cssVar.colorBorderSecondary,
   },
+  descParagraph: {
+    color: cssVar.colorTextDescription,
+  },
 });
+
+const isMediaParagraph = (children: unknown) =>
+  isValidElement(children) &&
+  ['img', 'video'].includes(
+    (children as ReactElement<{ node?: { tagName?: string } }>).props.node?.tagName ?? '',
+  );
+
+const descComponents: MarkdownProps['components'] = {
+  p: ({ children, className, style }: ComponentProps<'p'> & { node?: unknown }) => {
+    if (isMediaParagraph(children)) return children;
+    return <p {...sx(styles.descParagraph, className, style)}>{children}</p>;
+  },
+};
 
 const MCPConfigForm = memo<MCPConfigFormProps>(({ configSchema, identifier, onCancel }) => {
   const { t } = useTranslation(['plugin', 'common']);
@@ -116,7 +131,7 @@ const MCPConfigForm = memo<MCPConfigFormProps>(({ configSchema, identifier, onCa
                 />
               ),
               desc: item.desc && (
-                <Markdown className={'lobe-mcpconfig-form-a050f829-markdown'} variant={'chat'}>
+                <Markdown components={descComponents} variant={'chat'}>
                   {item.desc as string}
                 </Markdown>
               ),

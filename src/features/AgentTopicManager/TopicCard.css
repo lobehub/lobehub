@@ -1,9 +1,0 @@
-.lobe-topic-card-2f172269-project-tag {
-  align-self: flex-start;
-  min-width: 0;
-  max-width: 100%;
-}
-
-.lobe-topic-card-2f172269-project-tag > :first-child {
-  flex-shrink: 0;
-}
