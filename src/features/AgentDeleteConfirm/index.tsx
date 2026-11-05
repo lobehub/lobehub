@@ -119,7 +119,11 @@ const LoadedConfirm = ({ impact, onConfirm }: LoadedConfirmProps) => {
  * settles (see `getRemoveAgentConfirmState`).
  */
 export const confirmRemoveAgent = ({ agentId, onConfirm }: ConfirmRemoveAgentOptions): void => {
-  const impact = agentService.getAgentDeleteImpact(agentId).catch((error) => {
+  // Built inside a promise executor so a lookup that throws synchronously
+  // still settles as "failed" and the dialog opens with the plain copy.
+  const impact = new Promise<AgentDeleteImpact>((resolve) =>
+    resolve(agentService.getAgentDeleteImpact(agentId)),
+  ).catch((error) => {
     console.error('[confirmRemoveAgent]', error);
     return null;
   });

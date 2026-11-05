@@ -95,6 +95,19 @@ describe('confirmRemoveAgent', () => {
     expect(agentService.getAgentDeleteImpact).toHaveBeenCalledWith('agent-1');
   });
 
+  it('still opens the dialog when the impact lookup throws synchronously', async () => {
+    vi.spyOn(agentService, 'getAgentDeleteImpact').mockImplementation(() => {
+      throw new TypeError('not a function');
+    });
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    expect(() => confirmRemoveAgent({ agentId: 'agent-1', onConfirm: vi.fn() })).not.toThrow();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(createModalMock).toHaveBeenCalledTimes(1);
+    expect(consoleError).toHaveBeenCalled();
+  });
+
   it('does not reject when the impact lookup fails', async () => {
     vi.spyOn(agentService, 'getAgentDeleteImpact').mockRejectedValue(new Error('network'));
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
