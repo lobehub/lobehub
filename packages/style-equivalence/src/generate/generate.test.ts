@@ -17,7 +17,8 @@ afterAll(() => rm(tmp, { force: true, recursive: true }));
 const prelude = `const cx = (...names) => names.filter(Boolean).join(' ');
 const Flexbox = ({ className, children }) => <div data-flex="" className={className}>{children}</div>;
 const styles = { a: 'a', b: 'b', c: 'c', item: 'item', itemDragging: 'itemDragging' };
-const PILL = { on: 'a' };`;
+const PILL = { on: 'a' };
+const TONE = { on: 'b', off: 'c' };`;
 
 const element = (
   id: string,
@@ -65,6 +66,9 @@ const extraction: FileExtraction = {
         variables: [{ kind: 'unknown', name: 'state' }],
       },
     ),
+    element('T#0', 'span', 'cx(styles.a, TONE[tone])', {
+      variables: [{ kind: 'unknown', name: 'tone' }],
+    }),
     element('K#1', 'span', 'cx(styles.a,', {
       variables: [{ kind: 'unknown', name: 'state' }],
     }),
@@ -125,6 +129,20 @@ const plan: FilePlan = {
     },
     {
       combos: [],
+      elementIds: { base: 'T#0', head: 'T#0' },
+      file: 'a.tsx',
+      flags: [],
+      key: 'a.tsx|T#0',
+      variables: [
+        {
+          kinds: { base: 'unknown', head: 'unknown' },
+          name: 'tone',
+          values: ['off', 'on', '__style_equivalence_absent__'],
+        },
+      ],
+    },
+    {
+      combos: [],
       elementIds: { base: 'K#1', head: 'K#1' },
       file: 'a.tsx',
       flags: [],
@@ -154,7 +172,7 @@ const load = async () => {
     generateModule(extraction, plan, 'base', { layoutComponents: ['Flexbox'] }),
   );
   return (await import(file)) as {
-    cases: Record<string, (combo: Record<string, boolean>) => unknown>;
+    cases: Record<string, (combo: Record<string, boolean | string>) => unknown>;
   };
 };
 
@@ -195,6 +213,15 @@ describe('generateModule', () => {
     expect(knob(false, false)).toContain('class="a"');
   });
 
+  it('renders a table lookup with each key of its domain', async () => {
+    const { cases } = await load();
+    expect(render(cases['a.tsx|T#0']({ tone: 'on' }))).toContain('class="a b"');
+    expect(render(cases['a.tsx|T#0']({ tone: 'off' }))).toContain('class="a c"');
+    expect(render(cases['a.tsx|T#0']({ tone: '__style_equivalence_absent__' }))).toContain(
+      'class="a"',
+    );
+  });
+
   it('fails a knob case it cannot bind instead of rendering it unbound', async () => {
     const { cases } = await load();
     expect(() => cases['a.tsx|K#1']({})).toThrow('KNOB_UNBOUND');
@@ -215,7 +242,7 @@ describe('CaseList', () => {
       {
         ...plan,
         cases: plan.cases
-          .filter((entry) => entry.key !== 'a.tsx|K#1')
+          .filter((entry) => entry.key !== 'a.tsx|K#1' && entry.key !== 'a.tsx|T#0')
           .map((entry) => ({
             ...entry,
             combos:
@@ -243,7 +270,7 @@ describe('CaseList', () => {
       {
         ...plan,
         cases: plan.cases
-          .filter((entry) => entry.key !== 'a.tsx|K#1')
+          .filter((entry) => entry.key !== 'a.tsx|K#1' && entry.key !== 'a.tsx|T#0')
           .map((entry) => ({
             ...entry,
             combos:

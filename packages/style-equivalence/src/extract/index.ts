@@ -10,6 +10,7 @@ import {
   valueIdentifiers,
 } from './identifiers';
 import { classifyRules, classNamesIn, foreignClassNames } from './selectors';
+import { collectTables } from './tables';
 import { collectTopLevel } from './topLevel';
 import type {
   ExtractOptions,
@@ -284,5 +285,6 @@ export const extractFile = (
     rules,
     slotProperties,
     styleSymbols: [...top.styleSymbols].sort(),
+    tables: collectTables(ast),
   };
 };

@@ -2,7 +2,7 @@ import { Component, type ComponentType, type ReactNode } from 'react';
 
 import type { FilePlan } from '../plan/planFile';
 
-type CaseRender = (combo: Record<string, boolean>) => ReactNode;
+type CaseRender = (combo: Record<string, boolean | string>) => ReactNode;
 export type CaseModules = Record<string, { cases: Record<string, CaseRender>; error?: string }>;
 
 export type CaseSelection = { caseKey: string; combo: number } | { caseKeys: string[] };
@@ -30,7 +30,7 @@ const CaseView = ({
   error,
   render,
 }: {
-  combo: Record<string, boolean>;
+  combo: Record<string, boolean | string>;
   error?: string;
   render?: CaseRender;
 }) =>

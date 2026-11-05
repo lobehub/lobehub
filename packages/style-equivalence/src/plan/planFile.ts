@@ -1,6 +1,6 @@
 import type { FileExtraction, StyleElement, VariableKind } from '../extract';
 import { mergeKinds, valueIdentifiers } from '../extract/identifiers';
-import { type Combo, combosFor } from './combos';
+import { type Combo, combosFor, DOMAIN_COMBO_LIMIT } from './combos';
 import { bindKnobs, parseExpression } from './knobs';
 import { alignElements } from './pair';
 import {
@@ -9,6 +9,7 @@ import {
   sharedConditions,
   type SideProperties,
 } from './placement';
+import { tableDomain } from './tables';
 
 export { isIntrinsicTag } from './placement';
 
@@ -26,6 +27,7 @@ export const PASS_THROUGH_VARIABLES = new Set([
 export interface PlanVariable {
   kinds: Partial<Record<Side, VariableKind>>;
   name: string;
+  values?: string[];
 }
 
 export interface PlanCase {
@@ -159,20 +161,43 @@ export const planFile = (
           variables.set(variable.name, entry);
         }
     const sorted = [...variables.values()].sort((a, b) => a.name.localeCompare(b.name));
-    const unmodeled = sorted.some((variable) => Object.values(variable.kinds).includes('unknown'));
-    const knobs = unmodeled && !structural ? conditionKnobs(chains, properties) : undefined;
-    const modeled: PlanVariable[] = [];
-    if (knobs) evidence.push('CONDITION_KNOBS');
-    else
-      for (const variable of sorted) {
-        if (Object.values(variable.kinds).includes('unknown')) {
-          flags.add('VARIABLE_UNMODELED');
-          continue;
+    const tables = { base: base.tables, head: head.tables };
+    const found: Record<string, string[]> = {};
+    for (const variable of sorted) {
+      if (!Object.values(variable.kinds).includes('unknown')) continue;
+      const domain = tableDomain(variable.name, chains, tables);
+      if (domain) found[variable.name] = domain;
+    }
+    const model = (domains: Record<string, string[]>) => {
+      const unknown = (variable: PlanVariable) =>
+        !domains[variable.name] && Object.values(variable.kinds).includes('unknown');
+      const knobs =
+        sorted.some(unknown) && !structural ? conditionKnobs(chains, properties) : undefined;
+      const modeled: PlanVariable[] = [];
+      const added = new Set<string>();
+      if (!knobs)
+        for (const variable of sorted) {
+          if (unknown(variable)) {
+            added.add('VARIABLE_UNMODELED');
+            continue;
+          }
+          if (!variable.kinds.base || !variable.kinds.head) added.add('ASYMMETRIC_CONDITION');
+          const values = domains[variable.name];
+          modeled.push(values ? { ...variable, values } : variable);
         }
-        if (!variable.kinds.base || !variable.kinds.head) flags.add('ASYMMETRIC_CONDITION');
-        modeled.push(variable);
-      }
-    const { combos, pairwise } = combosFor(knobs ?? modeled.map((variable) => variable.name));
+      const used = Object.fromEntries(
+        modeled.flatMap((variable) => (variable.values ? [[variable.name, variable.values]] : [])),
+      );
+      const names = knobs ?? modeled.map((variable) => variable.name);
+      return { added, knobs, modeled, used, ...combosFor(names, used) };
+    };
+    let modeling = model(found);
+    if (Object.keys(modeling.used).length && modeling.combos.length > DOMAIN_COMBO_LIMIT)
+      modeling = model({});
+    const { combos, knobs, modeled, pairwise } = modeling;
+    modeling.added.forEach((flag) => flags.add(flag));
+    if (knobs) evidence.push('CONDITION_KNOBS');
+    if (Object.keys(modeling.used).length) evidence.push('TABLE_KEYS');
     if (pairwise) flags.add('COMBINATIONS_PAIRWISE');
     return {
       combos,

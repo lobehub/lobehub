@@ -116,7 +116,7 @@ export const generateModule = (
             : `const ${variable.name} = ${readThrough(variable.name) ? '__opaque' : 'undefined'};`,
         );
       }
-    return `${JSON.stringify(entry.key)}: (__v: Record<string, boolean>) => { ${lines.join(' ')} return (${renderChain(chain, layout, (binding) => bound.get(binding)!)}); }`;
+    return `${JSON.stringify(entry.key)}: (__v: Record<string, boolean | string>) => { ${lines.join(' ')} return (${renderChain(chain, layout, (binding) => bound.get(binding)!)}); }`;
   });
   return [
     extraction.prelude,
