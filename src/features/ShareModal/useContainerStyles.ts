@@ -1,6 +1,5 @@
-// oxlint-disable-next-line stylex-migration/no-plain-css -- react-pdf renders the Document / Page descendants itself and exposes no prop for them
-import './useContainerStyles.css';
-
+// oxlint-disable-next-line stylex-migration/no-emotion-styles -- react-pdf Document/Page DOM takes no className
+import { createStaticStyles, cx } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 
@@ -23,6 +22,15 @@ export const styles = stylex.create({
   previewWide: { '--preview-max-width': '880px' },
 });
 
+const fallback = createStaticStyles(({ css }) => ({
+  preview: css`
+    .react-pdf__Document *,
+    .react-pdf__Page * {
+      pointer-events: none;
+    }
+  `,
+}));
+
 type PreviewVariant = 'narrow' | 'text' | 'wide';
 
 const variantStyles = {
@@ -33,4 +41,4 @@ const variantStyles = {
 
 /** Class names of the framed preview surface, for one of its width variants. */
 export const previewClassName = (variant: PreviewVariant) =>
-  `${stylex.props(styles.preview, variantStyles[variant]).className} ${'lobe-use-container-styles-53df3f34-preview'}`;
+  cx(stylex.props(styles.preview, variantStyles[variant]).className, fallback.preview);

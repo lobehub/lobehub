@@ -1,12 +1,20 @@
 'use client';
 
-// oxlint-disable-next-line stylex-migration/no-plain-css -- needs lobe-ui slot: Steps.connector
-import './TelemetryStep.css';
-
 import { BRANDING_NAME } from '@lobechat/business-const';
 import { DEFAULT_INBOX_TITLE } from '@lobechat/const';
 import { type IconProps } from '@lobehub/ui';
-import { Block, Button, cssVar, Flexbox, Icon, Steps, Switch, Text } from '@lobehub/ui';
+import {
+  Block,
+  Button,
+  // oxlint-disable-next-line stylex-migration/no-emotion-styles -- needs lobe-ui slot: Steps.connector
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Icon,
+  Steps,
+  Switch,
+  Text,
+} from '@lobehub/ui';
 import { TypewriterEffect } from '@lobehub/ui/awesome';
 import { LoadingDots } from '@lobehub/ui/chat';
 import { BrainIcon, HeartHandshakeIcon, PencilRulerIcon, ShieldCheck } from 'lucide-react';
@@ -16,6 +24,15 @@ import { Trans, useTranslation } from 'react-i18next';
 import { ProductLogo } from '@/components/Branding';
 import { PRIVACY_URL, TERMS_URL } from '@/const/url';
 import { useUserStore } from '@/store/user';
+
+const fallback = createStaticStyles(({ css }) => ({
+  steps: css`
+    && > li > span[aria-hidden] {
+      inset-block-start: 36px;
+      inset-inline-start: 16px;
+    }
+  `,
+}));
 
 interface TelemetryStepProps {
   onNext: () => void;
@@ -81,7 +98,7 @@ const TelemetryStep = memo<TelemetryStepProps>(({ onNext }) => {
         <Text as={'p'}>{t('telemetry.desc')}</Text>
       </Flexbox>
       <Steps
-        className={'lobe-telemetry-step-08415200-steps'}
+        className={fallback.steps}
         orientation={'vertical'}
         styles={{ indicator: { border: 'none', height: 32, width: 32 } }}
         items={[

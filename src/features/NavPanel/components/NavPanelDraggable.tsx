@@ -1,9 +1,6 @@
 'use client';
 
-// oxlint-disable-next-line stylex-migration/no-plain-css -- `* { user-select }` covers every node of route-owned panel content; no prop reaches arbitrary descendants
-import './NavPanelDraggable.css';
-
-import { cssVar, DraggablePanel } from '@lobehub/ui';
+import { cssVar, cx, DraggablePanel } from '@lobehub/ui';
 import { cssVar as stylexCssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { type ReactNode } from 'react';
@@ -25,6 +22,7 @@ import { sx } from '@/styles/sx';
 import { isMacOS } from '@/utils/platform';
 
 import { useNavPanelSizeChangeHandler } from '../hooks/useNavPanel';
+import { fallback } from './style';
 
 const draggableStyles = stylex.create({
   content: {
@@ -125,7 +123,6 @@ export const NavPanelDraggable = memo<NavPanelDraggableProps>(({ activeContent, 
   return (
     <DraggablePanel
       data-nav-panel-draggable
-      className={stylex.props(draggableStyles.panel, imLayout && draggableStyles.imPanel).className}
       classNames={classNames}
       defaultSize={defaultSize}
       expand={expand}
@@ -135,6 +132,10 @@ export const NavPanelDraggable = memo<NavPanelDraggableProps>(({ activeContent, 
       placement="left"
       showBorder={false}
       style={styles}
+      className={cx(
+        stylex.props(draggableStyles.panel, imLayout && draggableStyles.imPanel).className,
+        fallback.panel,
+      )}
       onExpandChange={togglePanel}
       onSizeDragging={handleSizeChange}
     >

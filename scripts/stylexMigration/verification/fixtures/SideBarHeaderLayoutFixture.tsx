@@ -1,7 +1,6 @@
-// oxlint-disable-next-line stylex-migration/no-plain-css -- the fixture stands in for the NavPanelDraggable root that owns this stylesheet
-import '@/features/NavPanel/components/NavPanelDraggable.css';
-
 import { SideBarHeaderLayout } from 'verification:component';
+
+import { fallback } from '@/features/NavPanel/components/style';
 
 import { FixtureI18n } from './FixtureI18n';
 
@@ -18,7 +17,7 @@ export const Fixture = ({ variant }: { variant: string }) => {
       {variant.endsWith('outside') ? (
         header
       ) : (
-        <div data-nav-panel-draggable className="lobe-nav-panel-draggable-4efd33c1-panel">
+        <div data-nav-panel-draggable className={fallback.panel}>
           {header}
         </div>
       )}

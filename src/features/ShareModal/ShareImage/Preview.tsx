@@ -1,9 +1,7 @@
-// oxlint-disable-next-line stylex-migration/no-plain-css -- `* { font-size }` restyles the rendered Markdown of the system role, which takes no per-node props
-import './style.css';
-
 import { DEFAULT_INBOX_TITLE } from '@lobechat/const';
 import { agentDisplayName, type ConversationContext, type UIChatMessage } from '@lobechat/types';
-import { Flexbox, Markdown, Text } from '@lobehub/ui';
+// oxlint-disable-next-line stylex-migration/no-emotion-styles -- Markdown output gets no className
+import { createStaticStyles, Flexbox, Markdown, Text } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 
@@ -23,6 +21,14 @@ import ChatList from './ChatList';
 import { styles } from './style';
 import { type FieldType } from './type';
 import { WidthMode } from './type';
+
+const fallback = createStaticStyles(({ css }) => ({
+  role: css`
+    * {
+      font-size: 12px !important;
+    }
+  `,
+}));
 
 const BACKGROUND_STYLE = {
   backgroundImage: `url(${imageUrl('screenshot_background.webp')})`,
@@ -134,9 +140,7 @@ const Preview = memo<PreviewProps>(
                 </Flexbox>
               </Flexbox>
               {withSystemRole && systemRole && (
-                <div
-                  className={`${stylex.props(styles.role).className} ${'lobe-share-image-ddbed31e-role'}`}
-                >
+                <div {...sx([styles.role], fallback.role)}>
                   <Markdown variant={'chat'}>{systemRole}</Markdown>
                 </div>
               )}
