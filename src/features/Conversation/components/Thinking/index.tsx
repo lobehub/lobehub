@@ -1,7 +1,5 @@
-// oxlint-disable-next-line stylex-migration/no-plain-css -- the rule recolors every element inside the article that lobe-ui Markdown renders, which has no slot or xstyle
-import './index.css';
-
-import { Accordion, cx, ScrollArea } from '@lobehub/ui';
+// oxlint-disable-next-line stylex-migration/no-emotion-styles -- Markdown output gets no className
+import { Accordion, createStaticStyles, cx, ScrollArea } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import type { CSSProperties, ReactNode, RefObject } from 'react';
@@ -26,6 +24,14 @@ const styles = stylex.create({
     backgroundImage: 'none',
   },
 });
+
+const fallback = createStaticStyles(({ css, cssVar }) => ({
+  contentScroll: css`
+    article * {
+      color: ${cssVar.colorTextDescription};
+    }
+  `,
+}));
 
 interface ThinkingProps {
   citations?: ChatCitationItem[];
@@ -64,10 +70,7 @@ const Thinking = memo<ThinkingProps>((props) => {
               scrollFade
               className={stylex.props(styles.scrollRoot).className}
               viewportProps={{
-                className: cx(
-                  stylex.props(styles.contentScroll).className,
-                  'lobe-thinking-6f369866-content-scroll',
-                ),
+                className: cx(stylex.props(styles.contentScroll).className, fallback.contentScroll),
                 ref: ref as RefObject<HTMLDivElement>,
                 onScroll: handleScroll,
               }}

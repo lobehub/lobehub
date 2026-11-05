@@ -1,12 +1,10 @@
-// oxlint-disable-next-line stylex-migration/no-plain-css -- the rules target the table, img, video and pre that lobe-ui Markdown renders from the PR description, which have no slot or xstyle
-import './MarkdownBody.css';
-
 import type {
   DeviceGitPullRequestAction,
   DeviceGitPullRequestActivity,
   DeviceGitPullRequestDetail,
 } from '@lobechat/types';
-import { Button, cx, Flexbox, Icon, Markdown, Skeleton } from '@lobehub/ui';
+// oxlint-disable-next-line stylex-migration/no-emotion-styles -- Markdown output gets no className
+import { Button, createStaticStyles, Flexbox, Icon, Markdown, Skeleton } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import {
@@ -19,6 +17,7 @@ import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { GitReplicaReadResult } from '@/store/device';
+import { sx } from '@/styles/sx';
 
 import { ChevronRight, OverviewRow, rowStyles } from '../Overview/OverviewRow';
 import { sectionProps, sectionStyles } from '../Overview/sectionStyles';
@@ -39,6 +38,26 @@ const styles = stylex.create({
   header: { cursor: 'pointer', userSelect: 'none', gap: '6px' },
   sha: { fontFamily: cssVar.fontFamilyCode },
 });
+
+const fallback = createStaticStyles(({ css }) => ({
+  body: css`
+    table {
+      overflow-x: auto;
+      display: block;
+      max-width: 100%;
+    }
+
+    img,
+    video {
+      max-width: 100%;
+    }
+
+    pre {
+      overflow-x: auto;
+      max-width: 100%;
+    }
+  `,
+}));
 
 interface SectionProps {
   children: ReactNode;
@@ -133,14 +152,7 @@ const Sections = memo<SectionsProps>(
             title={t('workingPanel.pr.section.description')}
             onToggle={toggle('description')}
           >
-            <Markdown
-              fontSize={13}
-              variant={'chat'}
-              className={cx(
-                stylex.props(styles.body).className,
-                'lobe-markdown-body-55878cda-body',
-              )}
-            >
+            <Markdown fontSize={13} variant={'chat'} {...sx(styles.body, fallback.body)}>
               {detail.body}
             </Markdown>
           </Section>

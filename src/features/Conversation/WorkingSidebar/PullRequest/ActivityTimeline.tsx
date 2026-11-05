@@ -1,12 +1,10 @@
-// oxlint-disable-next-line stylex-migration/no-plain-css -- the rules target the table, img, video and pre that lobe-ui Markdown renders from the PR comment, which have no slot or xstyle
-import './MarkdownBody.css';
-
 import type {
   DeviceGitPullRequestAction,
   DeviceGitPullRequestDetail,
   DeviceGitPullRequestReview,
 } from '@lobechat/types';
-import { Avatar, Button, cx, Flexbox, Icon, Markdown, TextArea } from '@lobehub/ui';
+// oxlint-disable-next-line stylex-migration/no-emotion-styles -- Markdown output gets no className
+import { Avatar, Button, createStaticStyles, Flexbox, Icon, Markdown, TextArea } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import type { LucideIcon } from 'lucide-react';
@@ -15,6 +13,7 @@ import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { electronSystemService } from '@/services/electron/system';
+import { sx } from '@/styles/sx';
 
 import type { Tone } from './mergeDockData';
 import { timeAgo, TONE_COLOR, type TranslateKey } from './prVisual';
@@ -56,6 +55,26 @@ const styles = stylex.create({
     color: { 'default': null, ':hover': cssVar.colorText },
   },
 });
+
+const fallback = createStaticStyles(({ css }) => ({
+  commentBody: css`
+    table {
+      overflow-x: auto;
+      display: block;
+      max-width: 100%;
+    }
+
+    img,
+    video {
+      max-width: 100%;
+    }
+
+    pre {
+      overflow-x: auto;
+      max-width: 100%;
+    }
+  `,
+}));
 
 const githubAvatar = (login: string) => `https://github.com/${login}.png?size=36`;
 
@@ -141,10 +160,7 @@ const ActivityTimeline = memo<ActivityTimelineProps>(
                   <Markdown
                     fontSize={13}
                     variant={'chat'}
-                    className={cx(
-                      stylex.props(styles.commentBody).className,
-                      'lobe-markdown-body-55878cda-body',
-                    )}
+                    {...sx(styles.commentBody, fallback.commentBody)}
                   >
                     {entry.body}
                   </Markdown>

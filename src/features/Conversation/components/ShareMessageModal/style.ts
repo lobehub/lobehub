@@ -1,3 +1,5 @@
+// oxlint-disable-next-line stylex-migration/no-emotion-styles -- Markdown output gets no className
+import { createStaticStyles } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import { media } from '@lobehub/ui/stylex/media.stylex';
 import * as stylex from '@stylexjs/stylex';
@@ -34,3 +36,16 @@ export const styles = stylex.create({
     marginInline: { default: null, [media.sm]: '-16px' },
   },
 });
+
+export const fallback = createStaticStyles(({ css }) => ({
+  preview: css`
+    * {
+      pointer-events: none;
+
+      ::-webkit-scrollbar {
+        width: 0 !important;
+        height: 0 !important;
+      }
+    }
+  `,
+}));
