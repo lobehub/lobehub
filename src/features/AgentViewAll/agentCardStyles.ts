@@ -28,7 +28,7 @@ export const cardStyles = stylex.create({
     borderColor: cssVar.colorBgContainer,
     borderRadius: '50%',
     backgroundColor: cssVar.colorBgContainer,
-    backgroundImage: `linear-gradient(${cssVar.colorFillTertiary}, ${cssVar.colorFillTertiary})`,
+    backgroundImage: `linear-gradient(${cssVar.colorFillTertiary}, ${cssVar.colorFillTertiary}), none`,
     backgroundClip: 'padding-box',
   },
   avatarRingGroup: {
