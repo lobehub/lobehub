@@ -1,7 +1,5 @@
 'use client';
 
-import '../inspectorTable.css';
-
 import { Button, Input } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { RefreshCw } from 'lucide-react';
@@ -83,7 +81,7 @@ const EntryTable = ({
     </div>
     <div {...stylex.props(styles.tableScroll)}>
       <table
-        className={'lobe-inspector-table-90f58e23-table'}
+        className={stylex.props(styles.table).className}
         style={{ minWidth: '100%', width: TABLE_WIDTH }}
       >
         <colgroup>
@@ -94,7 +92,11 @@ const EntryTable = ({
         <thead>
           <tr>
             {COLUMNS.map(({ label }) => (
-              <th key={label} scope={'col'}>
+              <th
+                key={label}
+                scope={'col'}
+                {...stylex.props(styles.tableCell, styles.tableHeadCell)}
+              >
                 {label}
               </th>
             ))}
@@ -108,7 +110,7 @@ const EntryTable = ({
               <tr
                 aria-label={row.key}
                 aria-selected={active}
-                {...stylex.props(active ? styles.rowActive : undefined)}
+                {...stylex.props(styles.tableRow, active && styles.rowActive)}
                 key={row.key}
                 tabIndex={0}
                 onClick={() => onSelect(row.key)}
@@ -120,7 +122,11 @@ const EntryTable = ({
                 }}
               >
                 {cellsOf(row).map((text, index) => (
-                  <td key={COLUMNS[index].label} title={text}>
+                  <td
+                    key={COLUMNS[index].label}
+                    title={text}
+                    {...stylex.props(styles.tableCell, styles.tableBodyCell)}
+                  >
                     {text}
                   </td>
                 ))}

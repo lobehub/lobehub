@@ -1,5 +1,6 @@
 'use client';
 
+// oxlint-disable-next-line stylex-migration/no-plain-css -- needs lobe-ui slot: Select.valueText (the span Select renders around the selected label)
 import './ShareDeviceModal.css';
 
 import type { DeviceListItem, DeviceVisibility } from '@lobechat/types';

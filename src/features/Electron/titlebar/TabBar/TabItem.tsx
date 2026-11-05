@@ -1,9 +1,6 @@
 'use client';
 
-import './tab.css';
-
-import { ContextMenuTrigger, type DropdownItem, Icon, Tooltip } from '@lobehub/ui';
-import { ActionIcon, cx } from '@lobehub/ui';
+import { ActionIcon, ContextMenuTrigger, cx, type DropdownItem, Icon, Tooltip } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { X } from 'lucide-react';
 import { type MotionValue, useMotionValue, useSpring, useTransform } from 'motion/react';
@@ -26,20 +23,6 @@ import { isTabClosable } from './tabClose';
 import { buildTabContextMenuItems } from './tabContextMenu';
 import { rubberBand } from './tabDrag';
 import { resolveTabInset, type TabTier } from './tabLayout';
-
-const tabStylesAtomic = stylex.create({
-  tabTitle: {
-    overflow: 'hidden',
-    flex: '1',
-    minWidth: '0',
-    fontSize: '12px',
-    color: 'var(--lobe-color-text)',
-    whiteSpace: 'nowrap',
-    transition:
-      'margin-inline-end 0.15s var(--lobe-motion-ease-in-out),\n    opacity 0.12s var(--lobe-motion-ease-in-out)',
-    maskImage: 'linear-gradient(to right, #000 max(60%, calc(100% - 20px)), transparent)',
-  },
-});
 
 // 20px box on an 8px-round tab, inset a uniform 3px: 8 - 3 = 5 keeps the button's curve
 // concentric with the tab's own. ActionIcon writes blockSize and borderRadius straight
@@ -330,11 +313,15 @@ const TabItem = memo<TabItemProps>(
         tabIndex={0}
         className={cx(
           electronStylish.nodrag,
-          'lobe-tab-2ab21bcb-tab',
-          pinned && 'lobe-tab-2ab21bcb-tab-pinned',
-          isSplitVisible && !isActive && 'lobe-tab-2ab21bcb-tab-split-visible',
-          isActive && 'lobe-tab-2ab21bcb-tab-active',
-          isDragging && 'lobe-tab-2ab21bcb-tab-dragging',
+          stylex.props(
+            styles.tab,
+            stylex.defaultMarker(),
+            pinned && styles.tabPinned,
+            isSplitVisible && !isActive && styles.tabSplitVisible,
+            isDragging && styles.tabDragging,
+            isDragging && pinned && styles.tabDraggingPinned,
+            isActive && styles.tabActive,
+          ).className,
         )}
         style={{
           paddingInlineStart: inset,
@@ -349,16 +336,25 @@ const TabItem = memo<TabItemProps>(
         onPointerLeave={() => setHovered(false)}
       >
         {indicator}
-        <span data-tab-title {...stylex.props(tabStylesAtomic['tabTitle'])}>
+        <span
+          data-tab-title
+          {...stylex.props(
+            styles.tabTitle,
+            tier === 'icon' && styles.tabTitleHidden,
+            !closeInert && styles.tabTitleReserved,
+          )}
+        >
           {meta.title}
         </span>
         <ActionIcon
           data-tab-close
-          className={'lobe-tab-2ab21bcb-close-icon'}
           icon={X}
           inert={closeInert}
           size="small"
           style={CLOSE_BUTTON_STYLE}
+          className={
+            stylex.props(styles.closeIcon, !closeInert && styles.closeIconRevealed).className
+          }
           onClick={handleClose}
         />
       </m.div>

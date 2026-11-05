@@ -1,7 +1,5 @@
 'use client';
 
-import '../inspectorTable.css';
-
 import { Button, Input } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { RefreshCw } from 'lucide-react';
@@ -85,7 +83,7 @@ const RecordTable = ({
       </div>
       <div {...stylex.props(styles.tableScroll)}>
         <table
-          className={'lobe-inspector-table-90f58e23-table'}
+          className={stylex.props(styles.table).className}
           style={{ minWidth: '100%', width: Math.max(tableWidth, 640) }}
         >
           <colgroup>
@@ -96,7 +94,12 @@ const RecordTable = ({
           <thead>
             <tr>
               {columns.map((column) => (
-                <th key={column.id} scope={'col'} title={column.label}>
+                <th
+                  key={column.id}
+                  scope={'col'}
+                  title={column.label}
+                  {...stylex.props(styles.tableCell, styles.tableHeadCell)}
+                >
                   {column.label}
                 </th>
               ))}
@@ -110,7 +113,7 @@ const RecordTable = ({
                 <tr
                   aria-label={row.entry.key}
                   aria-selected={active}
-                  {...stylex.props(active ? styles.rowActive : undefined)}
+                  {...stylex.props(styles.tableRow, active && styles.rowActive)}
                   key={row.entry.key}
                   tabIndex={0}
                   onClick={() => onSelect(row.entry.key)}
@@ -126,7 +129,11 @@ const RecordTable = ({
                     const text = formatLocalDatabaseCellValue(field?.value);
 
                     return (
-                      <td key={column.id} title={text}>
+                      <td
+                        key={column.id}
+                        title={text}
+                        {...stylex.props(styles.tableCell, styles.tableBodyCell)}
+                      >
                         {text}
                       </td>
                     );

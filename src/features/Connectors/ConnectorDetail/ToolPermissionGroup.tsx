@@ -1,5 +1,3 @@
-import './ToolPermissionGroup.css';
-
 import { Button, DropdownMenu } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
@@ -9,7 +7,6 @@ import { useTranslation } from 'react-i18next';
 
 import { ConnectorToolPermission } from '@/database/schemas';
 import type { ConnectorTool } from '@/store/tool/slices/connector';
-import { sx } from '@/styles/sx';
 
 import ToolPermissionRow from './ToolPermissionRow';
 
@@ -88,10 +85,7 @@ const ToolPermissionGroup = memo<ToolPermissionGroupProps>(
     return (
       <div>
         <div
-          {...sx(
-            [styles.groupHeader, stylex.defaultMarker()],
-            'lobe-tool-permission-group-8cb36a4e-group-header',
-          )}
+          {...stylex.props(styles.groupHeader, stylex.defaultMarker())}
           onClick={() => setExpanded((e) => !e)}
         >
           <div {...stylex.props(styles.groupLabel)}>

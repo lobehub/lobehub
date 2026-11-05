@@ -1,3 +1,4 @@
+// oxlint-disable-next-line stylex-migration/no-plain-css -- the <pre> is Highlighter output injected through dangerouslySetInnerHTML, which no slot or xstyle reaches
 import './OverloadedState.css';
 
 import { Button, Flexbox, Highlighter, Spin, Text } from '@lobehub/ui';

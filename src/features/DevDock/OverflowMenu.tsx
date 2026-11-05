@@ -1,14 +1,10 @@
 'use client';
 
-import './OverflowMenu.css';
-
 import { type DropdownItem, DropdownMenu } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { Ellipsis, Pin } from 'lucide-react';
 import { memo } from 'react';
-
-import { sx } from '@/styles/sx';
 
 import {
   type DevDockItem,
@@ -36,7 +32,14 @@ const styles = stylex.create({
     },
     backgroundColor: { 'default': 'transparent', ':hover': cssVar.colorFillTertiary },
     backgroundImage: 'none',
+    opacity: {
+      'default': 0,
+      ':is([role^="menuitem"]:hover *)': 1,
+      ':focus-visible': 1,
+      '[data-pinned="true"]': 1,
+    },
   },
+  popup: { minWidth: '224px' },
   submenuLabel: { display: 'inline-flex', gap: '8px', alignItems: 'center' },
   trigger: {
     cursor: 'pointer',
@@ -71,7 +74,7 @@ const PinToggle = memo<{ item: DevDockItem }>(({ item }) => {
   const setPinned = useDevDockStore((s) => s.setPinned);
   return (
     <button
-      {...sx([styles.pinButton], 'lobe-overflow-menu-f4b5c876-pin')}
+      {...stylex.props(styles.pinButton)}
       data-pinned={pinned}
       title={pinned ? 'Unpin from bar' : 'Pin to bar'}
       type={'button'}
@@ -195,7 +198,7 @@ const OverflowMenu = memo(() => {
     <DropdownMenu
       items={buildItems}
       placement={'topRight'}
-      popupProps={{ className: 'lobe-overflow-menu-f4b5c876-popup' }}
+      popupProps={{ className: stylex.props(styles.popup).className }}
     >
       <span {...stylex.props(styles.trigger)} title={'More tools'}>
         <Ellipsis size={13} />

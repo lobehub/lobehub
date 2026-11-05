@@ -1,15 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-// Read as source rather than exercised through a rendered tab: the rules under test only
-// exist as `[data-tier]` selectors in a static stylesheet (tab.module.css), and a happy-dom
-// render reproduces neither the attribute cascade nor the thing that makes them wrong — the
-// tier landing a whole spring ahead of the width it describes. Vitest stubs CSS modules to
-// `{}`, so the stylesheet is read from disk.
-const { readFileSync } = await import('node:fs');
-const source = readFileSync(
-  `${process.cwd()}/src/features/Electron/titlebar/TabBar/tab.module.css`,
-  'utf8',
-);
+// Read as source rather than exercised through a rendered tab: happy-dom reproduces
+// neither the cascade nor the thing that makes these rules wrong — the tier landing a whole
+// spring ahead of the width it describes.
+import source from './styles.ts?raw';
 
 const ruleBody = (selector: string): string => {
   const start = source.indexOf(selector);
@@ -30,7 +24,7 @@ const ruleBody = (selector: string): string => {
 };
 
 describe('icon tier', () => {
-  const body = ruleBody(".tab[data-tier='icon'] [data-tab-title]");
+  const body = ruleBody('tabTitleHidden:');
 
   // Geometry belongs to the springs in TabItem, which arrive with the width. Anything here
   // lands on the tier flip instead, a whole spring earlier.

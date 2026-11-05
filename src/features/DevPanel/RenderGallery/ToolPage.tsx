@@ -1,13 +1,9 @@
 'use client';
 
-import './ToolPage.css';
-
 import { Flexbox, Tabs, Tag, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { useEffect, useRef, useState } from 'react';
-
-import { sx } from '@/styles/sx';
 
 import ApiList from './ApiList';
 import { LIFECYCLE_MODE_LABEL, LIFECYCLE_MODES, type LifecycleMode } from './lifecycleMode';
@@ -37,6 +33,7 @@ const styles = stylex.create({
    * mid-word ("Vie / w"). Keep the guard on the label itself, not on the row.
    */
   controlLabel: { flexShrink: 0, whiteSpace: 'nowrap' },
+  controlTabList: { flexWrap: 'wrap' },
   controlTabs: { minWidth: 0 },
   header: {
     gap: '8px',
@@ -161,7 +158,7 @@ const DevtoolsToolPage = ({ toolset }: DevtoolsToolPageProps) => {
       {view === 'api' && (
         <ApiList activeApiName={activeApi} apis={toolset.apis} onSelect={handleSelect} />
       )}
-      <div {...sx([styles.content], 'lobe-tool-page-d7746a9a-content')} ref={scrollRef}>
+      <div {...stylex.props(styles.content)} ref={scrollRef}>
         <Flexbox className={stylex.props(styles.body).className}>
           <Flexbox className={stylex.props(styles.header).className}>
             <Flexbox horizontal align={'center'} gap={10} wrap={'wrap'}>
@@ -192,10 +189,9 @@ const DevtoolsToolPage = ({ toolset }: DevtoolsToolPageProps) => {
               </Text>
               <Tabs
                 activeKey={view}
+                className={stylex.props(styles.controlTabs).className}
+                classNames={{ list: stylex.props(styles.controlTabList).className }}
                 size={'small'}
-                className={
-                  sx([styles.controlTabs], 'lobe-tool-page-d7746a9a-control-tabs').className
-                }
                 items={[
                   { key: 'api', label: 'By API' },
                   { key: 'aggregate', label: 'Aggregate' },
@@ -214,10 +210,9 @@ const DevtoolsToolPage = ({ toolset }: DevtoolsToolPageProps) => {
               </Text>
               <Tabs
                 activeKey={mode}
+                className={stylex.props(styles.controlTabs).className}
+                classNames={{ list: stylex.props(styles.controlTabList).className }}
                 size={'small'}
-                className={
-                  sx([styles.controlTabs], 'lobe-tool-page-d7746a9a-control-tabs').className
-                }
                 items={LIFECYCLE_MODES.map((value) => ({
                   key: value,
                   label: LIFECYCLE_MODE_LABEL[value],
