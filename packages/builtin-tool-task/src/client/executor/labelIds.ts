@@ -31,14 +31,18 @@ export const applyTaskLabelDelta = async (
   withUndo: boolean,
 ): Promise<() => Promise<void>> => {
   if (delta.add.length === 0 && delta.remove.length === 0) return noop;
-  const before = withUndo
-    ? ((await taskService.getDetail(taskId)).data?.labels ?? []).map((label) => label.id)
-    : undefined;
+  const readLabels = async () => (await taskService.getDetail(taskId)).data?.labels ?? [];
+  const before = withUndo ? await readLabels() : undefined;
   const after = (await taskLabelService.changeForTask(taskId, delta)).map((label) => label.id);
   if (!before) return noop;
   return async () => {
-    const undo = invertTaskLabelChange(before, delta, after);
-    if (undo.add.length === 0 && undo.remove.length === 0) return;
-    await taskLabelService.changeForTask(taskId, undo).catch(() => {});
+    try {
+      // Re-read so a teammate's change made since is not rolled over.
+      const undo = invertTaskLabelChange(before, delta, after, await readLabels());
+      if (undo.add.length === 0 && undo.remove.length === 0) return;
+      await taskLabelService.changeForTask(taskId, undo);
+    } catch {
+      /* best-effort: the edit already reports its own failure */
+    }
   };
 };

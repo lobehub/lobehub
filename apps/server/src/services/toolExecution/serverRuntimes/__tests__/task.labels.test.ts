@@ -124,8 +124,25 @@ describe('task tool labels', () => {
 
   it('editTask undoes only its own label change when a later write fails', async () => {
     const { runtime, taskCaller, taskLabelCaller } = setup();
-    taskCaller.detail.mockResolvedValue({ data: { labels: [{ id: 'bug' }, { id: 'fe' }] } });
     // Feature swaps out Bug; `other` was added concurrently by someone else.
+    taskCaller.detail
+      .mockResolvedValueOnce({
+        data: {
+          labels: [
+            { id: 'bug', parentId: 'g' },
+            { id: 'fe', parentId: null },
+          ],
+        },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          labels: [
+            { id: 'feat', parentId: 'g' },
+            { id: 'fe', parentId: null },
+            { id: 'other', parentId: null },
+          ],
+        },
+      });
     taskLabelCaller.changeForTask
       .mockResolvedValueOnce([{ id: 'feat' }, { id: 'fe' }, { id: 'other' }])
       .mockResolvedValueOnce([]);
@@ -144,7 +161,9 @@ describe('task tool labels', () => {
   it('editTask undoes its label change when a later input fails validation', async () => {
     const { agentModel, runtime, taskCaller, taskLabelCaller } = setup();
     agentModel.existsById.mockResolvedValue(false);
-    taskCaller.detail.mockResolvedValue({ data: { labels: [] } });
+    taskCaller.detail
+      .mockResolvedValueOnce({ data: { labels: [] } })
+      .mockResolvedValueOnce({ data: { labels: [{ id: 'feat', parentId: 'g' }] } });
     taskLabelCaller.changeForTask.mockResolvedValueOnce([{ id: 'feat' }]).mockResolvedValueOnce([]);
 
     const result = await runtime.editTask({

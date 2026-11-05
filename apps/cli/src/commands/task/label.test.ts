@@ -153,14 +153,24 @@ describe('lh task --label', () => {
   });
 
   it('edit undoes only its own label change when the field edit fails', async () => {
-    client.task.detail.query.mockResolvedValue({
-      data: {
-        labels: [
-          { id: 'bug', name: 'Bug' },
-          { id: 'fe', name: 'Frontend' },
-        ],
-      },
-    });
+    client.task.detail.query
+      .mockResolvedValueOnce({
+        data: {
+          labels: [
+            { id: 'bug', name: 'Bug', parentId: 'g-type' },
+            { id: 'fe', name: 'Frontend', parentId: null },
+          ],
+        },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          labels: [
+            { id: 'feat', name: 'Feature', parentId: 'g-type' },
+            { id: 'fe', name: 'Frontend', parentId: null },
+            { id: 'other', name: 'Other', parentId: null },
+          ],
+        },
+      });
     // Feature swaps out Bug; `other` was added meanwhile by someone else.
     client.taskLabel.changeForTask.mutate
       .mockResolvedValueOnce([

@@ -57,19 +57,37 @@ describe('formatTaskLabelPath', () => {
 });
 
 describe('invertTaskLabelChange', () => {
-  it('undoes only the applied delta, including implicit group swaps', () => {
-    // before: Bug (Type) + Frontend; add Feature (swaps Bug), remove Frontend
+  const bug = { id: 'bug', parentId: 'type' };
+  const feat = { id: 'feat', parentId: 'type' };
+  const chore = { id: 'chore', parentId: 'type' };
+  const fe = { id: 'fe', parentId: null };
+  const other = { id: 'other', parentId: null };
+
+  it('undoes only the applied delta, including an implicit group swap', () => {
+    // Feature swapped out Bug, Frontend was removed; `other` was added meanwhile.
     const undo = invertTaskLabelChange(
-      ['bug', 'fe'],
+      [bug, fe],
       { add: ['feat'], remove: ['fe'] },
-      ['feat', 'other'], // `other` was added concurrently by someone else
+      ['feat', 'other'],
+      [feat, other],
     );
 
     expect(undo).toEqual({ add: ['bug', 'fe'], remove: ['feat'] });
   });
 
-  it('does not remove a label that was already there', () => {
-    expect(invertTaskLabelChange(['bug'], { add: ['bug'] }, ['bug'])).toEqual({
+  it('leaves a group alone once someone else replaced our sibling', () => {
+    // After our swap to Feature, a teammate picked Chore in the same group.
+    const undo = invertTaskLabelChange([bug], { add: ['feat'] }, ['feat'], [chore]);
+
+    expect(undo).toEqual({ add: [], remove: [] });
+  });
+
+  it('does not re-add a removed label that is already back, nor remove a pre-existing one', () => {
+    expect(invertTaskLabelChange([fe], { remove: ['fe'] }, [], [fe])).toEqual({
+      add: [],
+      remove: [],
+    });
+    expect(invertTaskLabelChange([bug], { add: ['bug'] }, ['bug'], [bug])).toEqual({
       add: [],
       remove: [],
     });

@@ -19,9 +19,9 @@ beforeEach(() => {
 
 describe('applyTaskLabelDelta', () => {
   it('applies the delta and undoes only it, keeping concurrent changes', async () => {
-    vi.mocked(taskService.getDetail).mockResolvedValue({
-      data: { labels: [ref('bug'), ref('fe')] },
-    } as any);
+    vi.mocked(taskService.getDetail)
+      .mockResolvedValueOnce({ data: { labels: [ref('bug'), ref('fe')] } } as any)
+      .mockResolvedValueOnce({ data: { labels: [ref('feat'), ref('other')] } } as any);
     vi.mocked(taskLabelService.changeForTask).mockResolvedValueOnce([
       ref('feat'),
       ref('other'),

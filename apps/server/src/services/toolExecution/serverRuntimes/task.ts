@@ -434,17 +434,22 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
         const labelCaller = deps.taskLabelCaller!;
         const { addLabels: _a, identifier: _i, removeLabels: _r, ...otherArgs } = args;
         const hasOtherEdits = Object.values(otherArgs).some((value) => value !== undefined);
-        const before = hasOtherEdits
-          ? ((await taskCaller().detail({ id: task.id })).data?.labels ?? []).map((l) => l.id)
-          : undefined;
+        const readLabels = async () =>
+          (await taskCaller().detail({ id: task.id })).data?.labels ?? [];
+        const before = hasOtherEdits ? await readLabels() : undefined;
         const after = (await labelCaller.changeForTask({ ...labelDelta, taskId: task.id })).map(
           (label) => label.id,
         );
         if (before) {
           undoLabels = async () => {
-            const undo = invertTaskLabelChange(before, labelDelta, after);
-            if (undo.add.length === 0 && undo.remove.length === 0) return;
-            await labelCaller.changeForTask({ ...undo, taskId: task.id }).catch(() => {});
+            try {
+              // Re-read so a teammate's change made since is not rolled over.
+              const undo = invertTaskLabelChange(before, labelDelta, after, await readLabels());
+              if (undo.add.length === 0 && undo.remove.length === 0) return;
+              await labelCaller.changeForTask({ ...undo, taskId: task.id });
+            } catch {
+              /* best-effort: the edit already reports its own failure */
+            }
           };
         }
       }

@@ -724,22 +724,24 @@ export function registerTaskCommand(program: Command) {
         // (not the whole set replaced), so a teammate's concurrent label edit
         // survives and the command never half-applies.
         const hasOtherEdits = hasFieldEdits || !!options.status;
-        const previousLabelIds =
-          hasLabelEdits && hasOtherEdits
-            ? ((await client.task.detail.query({ id })).data?.labels ?? []).map((l) => l.id)
-            : undefined;
+        const readLabels = async () => (await client.task.detail.query({ id })).data?.labels ?? [];
+        const previousLabels = hasLabelEdits && hasOtherEdits ? await readLabels() : undefined;
         let labels: Awaited<ReturnType<typeof client.taskLabel.changeForTask.mutate>> | undefined;
         const restoreLabelsOnFailure = async (error: unknown): Promise<never> => {
-          if (previousLabelIds && labels) {
-            const undo = invertTaskLabelChange(
-              previousLabelIds,
-              { add: addLabelIds, remove: removeLabelIds },
-              labels.map((label) => label.id),
-            );
-            if (undo.add.length > 0 || undo.remove.length > 0) {
-              await client.taskLabel.changeForTask
-                .mutate({ ...undo, taskId: id })
-                .catch(() => log.warn(`Labels on ${id} were changed but could not be restored.`));
+          if (previousLabels && labels) {
+            try {
+              // Re-read so a teammate's change made since is not rolled over.
+              const undo = invertTaskLabelChange(
+                previousLabels,
+                { add: addLabelIds, remove: removeLabelIds },
+                labels.map((label) => label.id),
+                await readLabels(),
+              );
+              if (undo.add.length > 0 || undo.remove.length > 0) {
+                await client.taskLabel.changeForTask.mutate({ ...undo, taskId: id });
+              }
+            } catch {
+              log.warn(`Labels on ${id} were changed but could not be restored.`);
             }
           }
           throw error;

@@ -176,26 +176,39 @@ export const describeUnresolvedTaskLabels = (
 /**
  * The label change that undoes one applied `changeForTask`, touching only what
  * that call itself changed — never a full-set replacement, so labels another
- * client added or removed meanwhile survive the rollback.
+ * client changed meanwhile survive the rollback.
  *
- * - `before`: label ids on the task right before the change
+ * - `before`: labels on the task right before the change
  * - `add` / `remove`: the delta that was applied
  * - `after`: label ids the change returned
+ * - `current`: labels on the task now, read right before rolling back
  *
- * Grouped siblings the change swapped out implicitly (in `before`, gone from
- * `after`, not asked to be removed) are restored too.
+ * What this change took away (explicitly, or as a group sibling it swapped
+ * out) comes back only if nobody has touched it since: an ungrouped label only
+ * when it is still absent, a grouped one only while this change's own label is
+ * still the group's current one. Only labels this change added that are still
+ * there are taken away.
  */
 export const invertTaskLabelChange = (
-  before: readonly string[],
-  { add = [], remove = [] }: { add?: readonly string[]; remove?: readonly string[] },
+  before: readonly Pick<TaskLabelRef, 'id' | 'parentId'>[],
+  { add = [] }: { add?: readonly string[]; remove?: readonly string[] },
   after: readonly string[],
+  current: readonly Pick<TaskLabelRef, 'id' | 'parentId'>[],
 ): { add: string[]; remove: string[] } => {
-  const beforeSet = new Set(before);
-  const afterSet = new Set(after);
+  const beforeIds = new Set(before.map((label) => label.id));
+  const afterIds = new Set(after);
+  const currentIds = new Set(current.map((label) => label.id));
+  const ours = new Set(add.filter((id) => !beforeIds.has(id) && afterIds.has(id)));
+  const oursStillCurrent = current.filter((label) => ours.has(label.id));
+  const groupsHeldByUs = new Set(
+    oursStillCurrent.flatMap((label) => (label.parentId ? [label.parentId] : [])),
+  );
+
   return {
-    // Put back what this change took away, explicitly or by a group swap.
-    add: before.filter((id) => !afterSet.has(id)),
-    // Take away only what this change itself brought in.
-    remove: [...new Set(add)].filter((id) => !beforeSet.has(id) && afterSet.has(id)),
+    add: before
+      .filter((label) => !afterIds.has(label.id) && !currentIds.has(label.id))
+      .filter((label) => !label.parentId || groupsHeldByUs.has(label.parentId))
+      .map((label) => label.id),
+    remove: oursStillCurrent.map((label) => label.id),
   };
 };
