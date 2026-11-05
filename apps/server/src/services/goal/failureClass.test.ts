@@ -52,6 +52,10 @@ describe('classifyGoalFailure', () => {
       "The device this agent runs on is offline, so the run couldn't start. Check that the LobeHub desktop app (or the `lh` CLI) is running and connected, then try again.",
       'device',
     ],
+    [
+      "Can't reach the device this agent is bound to right now. Try again in a moment. If it still can't connect, check that the LobeHub desktop app or `lh` CLI on the device is connected, or switch to another online device.",
+      'device',
+    ],
     ['GATEWAY_NOT_CONFIGURED', 'gateway'],
     ['InvalidProviderAPIKey', 'credentials'],
     // The verifier's credit refusal has no retry branch; the setup gate owns it.
