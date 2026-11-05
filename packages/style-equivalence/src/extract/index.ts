@@ -7,6 +7,7 @@ import { globalStyleRules } from './globalStyles';
 import {
   declaredLocally,
   isJsxNode,
+  literalText,
   mergeKinds,
   usageKinds,
   valueIdentifierNodes,
@@ -179,9 +180,9 @@ export const extractFile = (
   const globalTokensIn = (node: ts.Node) => {
     const tokens = new Set<string>();
     const visit = (current: ts.Node) => {
-      if (ts.isStringLiteralLike(current))
-        for (const token of current.text.split(/\s+/))
-          if (globalClasses.has(token)) tokens.add(token);
+      const text = literalText(current);
+      if (text !== undefined)
+        for (const token of text.split(/\s+/)) if (globalClasses.has(token)) tokens.add(token);
       ts.forEachChild(current, visit);
     };
     visit(node);
@@ -306,8 +307,9 @@ export const extractFile = (
         const id = `${owner}#${ordinal++}`;
         const tokens = new Set<string>();
         const collectTokens = (node: ts.Node) => {
-          if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node))
-            node.text.split(/\s+/).forEach((token) => token && tokens.add(token));
+          literalText(node)
+            ?.split(/\s+/)
+            .forEach((token) => token && tokens.add(token));
           ts.forEachChild(node, collectTokens);
         };
         expressions.forEach(collectTokens);
@@ -402,11 +404,20 @@ export const extractFile = (
   }
 
   const globalRules = globalStyleRules(ast, (specifier) => options.readModule?.(file, specifier));
+  const literalClasses = new Set<string>();
+  const collectLiterals = (node: ts.Node) => {
+    literalText(node)
+      ?.split(/\s+/)
+      .forEach((token) => /^[a-z][\w-]*-[\w-]+$/i.test(token) && literalClasses.add(token));
+    ts.forEachChild(node, collectLiterals);
+  };
+  collectLiterals(ast);
   return {
     elements,
     file,
     gaps,
     ...(globalRules.length ? { globalRules } : {}),
+    ...(literalClasses.size ? { literalClasses: [...literalClasses].sort() } : {}),
     outsideReferences,
     ...(plain.length ? { plain } : {}),
     prelude: top.prelude(),

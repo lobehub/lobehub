@@ -56,6 +56,7 @@ export interface FileExtraction {
   file: string;
   gaps: string[];
   globalRules?: StyleRule[];
+  literalClasses?: string[];
   outsideReferences: string[];
   plain?: StyleElement[];
   prelude: string;

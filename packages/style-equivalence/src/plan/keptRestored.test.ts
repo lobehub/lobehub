@@ -251,6 +251,12 @@ export const Body = () => <Markdown ${host}>{text}</Markdown>;
     expect(entry.evidence).toContain('EMOTION_RULE_KEPT');
   });
 
+  it('maps the class written in the template text itself', () => {
+    const entry = run(mdBase(`\`\${stylex.props(styles.md).className} ${MD}\``));
+    expect(entry.flags).not.toContain('INNER_TARGET');
+    expect(entry.evidence).toContain('EMOTION_RULE_KEPT');
+  });
+
   it('keeps the placement flag when head passes the fallback through another prop', () => {
     const entry = run(
       mdBase(`cx(stylex.props(styles.md).className, '${MD}')`),

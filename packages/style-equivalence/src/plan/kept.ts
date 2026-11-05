@@ -2,6 +2,7 @@ import ts from 'typescript';
 
 import type { FileExtraction, StyleElement, StyleRule } from '../extract';
 import { SELF } from '../extract/css';
+import { literalText } from '../extract/identifiers';
 import { classNamesIn } from '../extract/selectors';
 import { elementsOf } from './descendants';
 import { type InnerNode, innerTargets } from './inner';
@@ -86,7 +87,7 @@ const placementOf = (element: StyleElement, slot: string) => {
     const token = slot.startsWith('global.') ? slot.slice('global.'.length) : undefined;
     const matches = (node: ts.Node) =>
       token
-        ? ts.isStringLiteralLike(node) && node.text.split(/\s+/).includes(token)
+        ? !!literalText(node)?.split(/\s+/).includes(token)
         : ts.isPropertyAccessExpression(node) && compact(node) === slot;
     const visit = (node: ts.Node) => {
       if (matches(node)) {
@@ -170,7 +171,7 @@ const literalTokens = (element: StyleElement) =>
     );
     const tokens: string[] = [];
     const visit = (node: ts.Node) => {
-      if (ts.isStringLiteralLike(node)) tokens.push(...node.text.split(/\s+/).filter(Boolean));
+      tokens.push(...(literalText(node)?.split(/\s+/).filter(Boolean) ?? []));
       ts.forEachChild(node, visit);
     };
     visit(source);

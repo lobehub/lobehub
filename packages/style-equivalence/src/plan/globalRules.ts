@@ -1,6 +1,7 @@
 import ts from 'typescript';
 
 import type { FileExtraction, StyleRule } from '../extract';
+import { literalText } from '../extract/identifiers';
 import { classNamesIn } from '../extract/selectors';
 import { elementsOf } from './descendants';
 import { resolve, signature } from './kept';
@@ -11,7 +12,7 @@ export const GLOBAL_RULES_CHANGED = 'GLOBAL_RULES_CHANGED';
 const literalTokens = (expr: string) => {
   const tokens: string[] = [];
   const visit = (node: ts.Node) => {
-    if (ts.isStringLiteralLike(node)) tokens.push(...node.text.split(/\s+/).filter(Boolean));
+    tokens.push(...(literalText(node)?.split(/\s+/).filter(Boolean) ?? []));
     ts.forEachChild(node, visit);
   };
   visit(ts.createSourceFile('t.ts', `(${expr});`, ts.ScriptTarget.Latest, true));
@@ -20,7 +21,8 @@ const literalTokens = (expr: string) => {
 
 export const carriedClasses = (extractions: FileExtraction[]) => {
   const carried = new Set<string>();
-  for (const extraction of extractions)
+  for (const extraction of extractions) {
+    extraction.literalClasses?.forEach((token) => carried.add(token));
     for (const element of elementsOf(extraction)) {
       for (const slot of element.slots)
         if (slot.startsWith('global.')) carried.add(slot.slice('global.'.length));
@@ -28,6 +30,7 @@ export const carriedClasses = (extractions: FileExtraction[]) => {
         for (const expr of [binding.expr, binding.expansion])
           if (expr) literalTokens(expr).forEach((token) => carried.add(token));
     }
+  }
   return carried;
 };
 

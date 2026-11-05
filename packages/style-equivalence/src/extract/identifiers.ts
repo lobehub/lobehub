@@ -132,3 +132,11 @@ export const declaredLocally = (node: ts.Identifier) => {
   }
   return false;
 };
+
+export const literalText = (node: ts.Node) =>
+  ts.isStringLiteralLike(node) ||
+  ts.isTemplateHead(node) ||
+  ts.isTemplateMiddle(node) ||
+  ts.isTemplateTail(node)
+    ? node.text
+    : undefined;

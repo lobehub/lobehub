@@ -92,4 +92,10 @@ describe('global rules that hang on no element', () => {
       'GLOBAL_RULES_CHANGED:1/0',
     ]);
   });
+
+  it('leaves a class the file writes outside JSX to the outside-JSX flag', () => {
+    const css = () => '.lobe-input-38d9-editor p { margin: 0; }\n';
+    const outside = `import './Highlight.css';\n\nconst className = \`\${'lobe-input-38d9-editor'}\`;\nexport const A = () => <div />;\n`;
+    expect(gaps(outside, 'export const A = () => <div />;\n', css)).toEqual([]);
+  });
 });
