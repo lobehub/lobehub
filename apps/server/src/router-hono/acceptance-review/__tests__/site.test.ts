@@ -18,9 +18,9 @@ let serverDB: LobeChatDatabase;
 vi.mock('@/database/core/db-adaptor', () => ({ getServerDB: async () => serverDB }));
 vi.mock('@/libs/oidc-provider/jwt', () => ({
   verifyAcceptanceReviewJWT: async (token: string) => {
-    const [userId, siteId, origin] = token.split('|');
+    const [userId, siteId, origin, clientId = 'lobehub-acceptance'] = token.split('|');
     if (!origin) throw new Error('invalid');
-    return { expiresAt: 2_000_000_000, site: { origin, siteId }, userId };
+    return { clientId, expiresAt: 2_000_000_000, site: { origin, siteId }, userId };
   },
 }));
 vi.mock('@/server/workflows/expertiseRejection', () => ({
@@ -100,6 +100,44 @@ describe('site review tokens', () => {
     const response = await call(ownerId, '/session', 'https://fieldnotes-mirror.net');
     expect(response.status).toBe(403);
     expect(await response.json()).toMatchObject({ error: { code: 'FORBIDDEN' } });
+  });
+
+  describe('from the browser extension', () => {
+    const EXTENSION_ORIGIN = 'chrome-extension://fjgpjfdackkmgdldjiebkhkdacbibhnb';
+    const extensionCall = (userId: string, clientId: string, origin?: string) =>
+      app.request(`${BASE}/session`, {
+        headers: {
+          authorization: `Bearer ${userId}|${site.id}|${ORIGIN}|${clientId}`,
+          ...(origin ? { origin } : {}),
+        },
+      });
+
+    it('accepts a site token the extension minted, whatever Origin its worker sends', async () => {
+      const fromWorker = await extensionCall(
+        ownerId,
+        'lobehub-acceptance-extension',
+        EXTENSION_ORIGIN,
+      );
+      expect(fromWorker.status).toBe(200);
+      expect(await fromWorker.json()).toMatchObject({ site: { id: site.id } });
+      expect((await extensionCall(ownerId, 'lobehub-acceptance-extension')).status).toBe(200);
+    });
+
+    it('still checks access for an extension-minted token', async () => {
+      const response = await extensionCall(
+        guestId,
+        'lobehub-acceptance-extension',
+        EXTENSION_ORIGIN,
+      );
+      expect(response.status).toBe(403);
+      expect(await response.json()).toMatchObject({ error: { code: 'SITE_ACCESS_REVOKED' } });
+    });
+
+    it('keeps the Origin check for tokens the page signed in for', async () => {
+      expect((await extensionCall(ownerId, 'lobehub-acceptance', EXTENSION_ORIGIN)).status).toBe(
+        403,
+      );
+    });
   });
 
   describe('on the LobeHub app origin itself', () => {

@@ -1,4 +1,11 @@
-import { acceptanceIdFromReviewResource, siteReviewFromResource } from '@lobechat/const';
+import {
+  ACCEPTANCE_EXTENSION_CLIENT_ID,
+  ACCEPTANCE_EXTENSION_RESOURCE,
+  ACCEPTANCE_REVIEW_SCOPE,
+  ACCEPTANCE_REVIEW_TOKEN_TTL_SECONDS,
+  acceptanceIdFromReviewResource,
+  siteReviewFromResource,
+} from '@lobechat/const';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import type { JSONWebKeySet, JWK, JWK_RSA_Public } from 'jose';
@@ -6,7 +13,11 @@ import { calculateJwkThumbprint } from 'jose';
 
 import { authEnv } from '@/envs/auth';
 
-import { isAcceptanceReviewClient, isAcceptanceReviewIssued } from './acceptanceReview';
+import {
+  isAcceptanceExtensionClient,
+  isAcceptanceReviewClient,
+  isAcceptanceReviewIssued,
+} from './acceptanceReview';
 
 const log = debug('oidc-jwt');
 
@@ -208,11 +219,52 @@ export const verifyAcceptanceReviewJWT = async (token: string) => {
   const { payload } = await verifyJwt(token, publicKeys);
   const acceptanceId = acceptanceIdFromReviewResource(payload.aud);
   const site = siteReviewFromResource(payload.aud);
+  const clientId = payload.client_id as string | undefined;
   if (
-    !isAcceptanceReviewClient(payload.client_id as string) ||
+    !(isAcceptanceReviewClient(clientId) || isAcceptanceExtensionClient(clientId)) ||
     (!acceptanceId && !site) ||
     !payload.sub
   )
     throw new Error('Not an acceptance review token');
-  return { acceptanceId, expiresAt: payload.exp, site, userId: payload.sub };
+  return { acceptanceId, clientId, expiresAt: payload.exp, site, userId: payload.sub };
+};
+
+export const verifyAcceptanceExtensionJWT = async (token: string) => {
+  const publicKeys = await getVerificationKeys();
+  const { payload } = await verifyJwt(token, publicKeys);
+  if (
+    !isAcceptanceExtensionClient(payload.client_id as string | undefined) ||
+    payload.aud !== ACCEPTANCE_EXTENSION_RESOURCE ||
+    !payload.sub
+  )
+    throw new Error('Not an acceptance extension token');
+  return { userId: payload.sub };
+};
+
+// The extension trades its own access token for these, so the review API sees
+// the same short-lived, single-target token the page client would get.
+export const signAcceptanceReviewToken = async ({
+  resource,
+  userId,
+}: {
+  resource: string;
+  userId: string;
+}) => {
+  const jwks = getJWKS() as JSONWebKeySet;
+  const signingKey = jwks.keys.find((key) => key.alg === 'RS256' && key.kty === 'RSA')!;
+  const { importJWK, SignJWT } = await import('jose');
+  const kid = signingKey.kid ?? (await calculateJwkThumbprint(signingKey));
+  const expiresAt = Math.floor(Date.now() / 1000) + ACCEPTANCE_REVIEW_TOKEN_TTL_SECONDS;
+  const token = await new SignJWT({
+    client_id: ACCEPTANCE_EXTENSION_CLIENT_ID,
+    scope: ACCEPTANCE_REVIEW_SCOPE,
+  })
+    .setProtectedHeader({ alg: 'RS256', kid, typ: 'at+jwt' })
+    .setAudience(resource)
+    .setSubject(userId)
+    .setIssuedAt()
+    .setJti(crypto.randomUUID())
+    .setExpirationTime(expiresAt)
+    .sign(await importJWK(signingKey, 'RS256'));
+  return { expiresAt, token };
 };

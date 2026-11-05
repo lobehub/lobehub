@@ -1,5 +1,17 @@
 export const ACCEPTANCE_CLIENT_ID = 'lobehub-acceptance';
 
+export const ACCEPTANCE_EXTENSION_CLIENT_ID = 'lobehub-acceptance-extension';
+
+export const ACCEPTANCE_EXTENSION_RESOURCE = 'urn:lobehub:acceptance-extension';
+
+export const ACCEPTANCE_EXTENSION_SCOPE = 'acceptance:extension';
+
+export const ACCEPTANCE_EXTENSION_TOKEN_TTL_SECONDS = 60 * 60;
+
+// Pinned by the `key` in the extension manifest; the Chrome Web Store ID joins
+// once the listing exists.
+export const ACCEPTANCE_EXTENSION_IDS = ['fjgpjfdackkmgdldjiebkhkdacbibhnb'];
+
 /**
  * URL parameter that activates the acceptance toolbar (`@lobehub/acceptance-sdk`). A
  * page mounts the toolbar only when its URL carries this parameter; the SDK

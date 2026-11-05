@@ -4,6 +4,7 @@ import type { MiddlewareHandler } from 'hono';
 import { getServerDB } from '@/database/core/db-adaptor';
 import type { LobeChatDatabase } from '@/database/type';
 import { appEnv } from '@/envs/app';
+import { isAcceptanceExtensionClient } from '@/libs/oidc-provider/acceptanceReview';
 import { verifyAcceptanceReviewJWT } from '@/libs/oidc-provider/jwt';
 import type { ReviewAccess } from '@/server/services/acceptanceReview/access';
 import { resolveReviewAccess } from '@/server/services/acceptanceReview/access';
@@ -56,9 +57,14 @@ export const reviewAuth: MiddlewareHandler<ReviewEnv> = async (c, next) => {
   const db = await getServerDB();
 
   if (claims.site) {
-    const origin = requestOrigin(c.req.header('origin'), c.req.header('sec-fetch-site'));
-    if (!origin || !siteOriginMatches(claims.site.origin, origin)) {
-      return reviewError(c, 403, 'FORBIDDEN', 'Origin not allowed for this token');
+    // An extension-minted token only ever lives in the extension's background
+    // worker, which sends it for the tab that matched the site; the request
+    // Origin there is the extension's own, never the site's.
+    if (!isAcceptanceExtensionClient(claims.clientId)) {
+      const origin = requestOrigin(c.req.header('origin'), c.req.header('sec-fetch-site'));
+      if (!origin || !siteOriginMatches(claims.site.origin, origin)) {
+        return reviewError(c, 403, 'FORBIDDEN', 'Origin not allowed for this token');
+      }
     }
     const site = await findSiteForOrigin(db, claims.site.siteId, claims.site.origin);
     if (!site?.acceptanceId) return reviewError(c, 404, 'SITE_GONE', 'Site not found');
