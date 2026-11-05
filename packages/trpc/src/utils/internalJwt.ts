@@ -1,5 +1,10 @@
 import { randomUUID } from 'node:crypto';
 
+import {
+  MANAGED_DEVICE_JWT_PURPOSE,
+  TUNNEL_ACCESS_JWT_PURPOSE,
+  WORKSPACE_DEVICE_CONNECT_JWT_PURPOSE,
+} from '@lobechat/types';
 import debug from 'debug';
 import type { JSONWebKeySet, JWK, JWK_RSA_Public, JWTVerifyOptions } from 'jose';
 import {
@@ -271,7 +276,7 @@ export const signWorkspaceDeviceToken = async (workspaceId: string): Promise<str
   const { key, kid } = await getSigningKey();
 
   return (
-    new SignJWT({ purpose: 'workspace-device-connect', workspace_id: workspaceId })
+    new SignJWT({ purpose: WORKSPACE_DEVICE_CONNECT_JWT_PURPOSE, workspace_id: workspaceId })
       .setProtectedHeader({ alg: 'RS256', kid })
       .setSubject(workspaceId)
       .setIssuedAt()
@@ -284,6 +289,38 @@ export const signWorkspaceDeviceToken = async (workspaceId: string): Promise<str
       .setExpirationTime('4h')
       .sign(key)
   );
+};
+
+/**
+ * Sign the device gateway token of a managed cloud device. The gateway accepts
+ * it only for the connection whose `deviceId` equals `device_id`, and every
+ * server login verifier rejects its purpose. `sub` is the owning user, or the
+ * workspace for a workspace device (which also carries `workspace_id`, like
+ * {@link signWorkspaceDeviceToken}).
+ */
+export const signManagedDeviceToken = async (params: {
+  deviceId: string;
+  /** Lifetime in seconds. */
+  expiresIn: number;
+  sub: string;
+  workspaceId?: string;
+}): Promise<{ expiresAt: string; token: string }> => {
+  const { key, kid } = await getSigningKey();
+  const issuedAt = Math.floor(Date.now() / 1000);
+  const expiresAt = issuedAt + params.expiresIn;
+
+  const token = await new SignJWT({
+    device_id: params.deviceId,
+    purpose: MANAGED_DEVICE_JWT_PURPOSE,
+    ...(params.workspaceId ? { workspace_id: params.workspaceId } : {}),
+  })
+    .setProtectedHeader({ alg: 'RS256', kid })
+    .setSubject(params.sub)
+    .setIssuedAt(issuedAt)
+    .setExpirationTime(expiresAt)
+    .sign(key);
+
+  return { expiresAt: new Date(expiresAt * 1000).toISOString(), token };
 };
 
 /**
@@ -303,7 +340,7 @@ export const signTunnelAccessToken = async (params: {
   const { key, kid } = await getSigningKey();
 
   return new SignJWT({
-    purpose: 'tunnel-access',
+    purpose: TUNNEL_ACCESS_JWT_PURPOSE,
     ...(params.workspaceId ? { workspace_id: params.workspaceId } : {}),
   })
     .setProtectedHeader({ alg: 'RS256', kid })

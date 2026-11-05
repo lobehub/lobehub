@@ -2851,7 +2851,6 @@
   "workspace.billingPage.usage.categories.imageGeneration": "Generowanie obrazów",
   "workspace.billingPage.usage.categories.tts": "Tekst na mowę",
   "workspace.billingPage.usage.categories.videoGeneration": "Generowanie wideo",
-  "workspace.billingPage.usage.empty": "Brak wydatków",
   "workspace.billingPage.usage.logsTitle": "Ostatnia aktywność",
   "workspace.billingPage.usage.member": "Członek",
   "workspace.billingPage.usage.member.moreMembers_one": "{{count}} dodatkowy członek",

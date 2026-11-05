@@ -64,7 +64,8 @@ export const storedLoginFor = async (
     if (owner && subjectOf(stored) === owner) return { token: stored };
   }
 
-  const report = describeTokenLookup(result);
+  // This run did pass a credential, so the agent-run "no sign-in" report would misstate the cause.
+  const report = result.status === 'no-login' ? undefined : describeTokenLookup(result);
   return {
     warning: report
       ? `${report.detail} ${report.fix}`

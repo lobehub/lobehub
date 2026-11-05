@@ -77,6 +77,17 @@ export const createServerContextFactProviders = ({
     : ordinaryDocumentAccessScope;
 
   return {
+    findAgentDocument: async (agentId, documentId) => {
+      const doc = await new AgentDocumentsService(
+        db,
+        userId,
+        workspaceId,
+        undefined,
+        documentAccessScope,
+      ).getDocumentById(documentId, agentId);
+      return doc ? { content: doc.content, title: doc.title } : null;
+    },
+
     findTopic: async (topicId) => {
       const topic = await new TopicModel(db, userId, ctx.workspaceId).findById(topicId);
       if (!topic) return null;

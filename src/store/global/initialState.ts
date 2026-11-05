@@ -45,6 +45,7 @@ export type WorkingSidebarTab =
   | 'files'
   | 'overview'
   | 'params'
+  | 'pr'
   | 'review'
   | 'search'
   | 'skills'
@@ -251,6 +252,7 @@ export interface SystemStatus {
    * in the Home inbox. Append-only and capped, see `appendDismissedIslandKey`.
    */
   dismissedIslandItemKeys?: string[];
+  dismissedProjectOnboarding?: Record<string, boolean>;
   /**
    * List options of each Docs sidebar page section, kept apart so narrowing
    * Shared docs never changes what My docs shows.
@@ -596,6 +598,12 @@ export interface GlobalState {
   sidebarKey: SidebarTabKey;
   status: SystemStatus;
   statusStorage: AsyncLocalStorage<SystemStatus>;
+  /**
+   * URL of the PR the mounted Working Sidebar's PR tab shows, so a Work card for
+   * the same PR can open that tab instead of leaving the app. Session state:
+   * deliberately outside the persisted `status`.
+   */
+  workingSidebarPullRequestUrl?: string;
 }
 
 export const INITIAL_STATUS = {

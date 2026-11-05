@@ -2851,7 +2851,6 @@
   "workspace.billingPage.usage.categories.imageGeneration": "画像生成",
   "workspace.billingPage.usage.categories.tts": "テキスト読み上げ",
   "workspace.billingPage.usage.categories.videoGeneration": "動画生成",
-  "workspace.billingPage.usage.empty": "まだ支出はありません",
   "workspace.billingPage.usage.logsTitle": "最近のアクティビティ",
   "workspace.billingPage.usage.member": "メンバー",
   "workspace.billingPage.usage.member.moreMembers_one": "{{count}}人のメンバーが追加されました",

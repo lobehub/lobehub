@@ -27,7 +27,7 @@ export default {
   'artifacts.deploy.publish': 'Publish',
   'artifacts.deploy.publishNewVersion': 'Publish this version',
   'artifacts.deploy.quotaUnavailable':
-    'Deployment quota validation is temporarily unavailable. Try again later.',
+    'Deployment limit check is temporarily unavailable. Try again later.',
   'artifacts.deploy.serviceOverloaded':
     'Artifact hosting is temporarily overloaded. Try publishing again shortly.',
   'artifacts.deploy.success': 'Published',

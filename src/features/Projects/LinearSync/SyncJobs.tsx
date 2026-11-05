@@ -13,6 +13,7 @@ import { linearService } from '@/services/linear';
 import {
   formatLinearSyncResult,
   isActiveLinearSyncJob,
+  linearScopeProjectLabel,
   linearSyncJobErrorMessage,
   linearSyncJobProgress,
 } from './utils';
@@ -78,7 +79,7 @@ const SyncJobs = memo<SyncJobsProps>(({ canStop, jobs, onChanged, projectId, rul
     const rule = rules.find((item) => item.id === job.ruleId);
     return rule
       ? t('linear.sync.job.titleRule', {
-          rule: [rule.teamName, rule.linearProjectName].filter(Boolean).join(' › '),
+          rule: [rule.teamName, linearScopeProjectLabel(rule, t)].filter(Boolean).join(' › '),
         })
       : t('linear.sync.job.titleRuleDeleted');
   };

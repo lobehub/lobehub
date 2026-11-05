@@ -981,10 +981,11 @@ export default {
     'This link now opens a different agent. Switching to it — try again once it opens. Your draft is kept.',
   'input.agentSlugUnconfirmed':
     'Couldn’t confirm which agent this link opens. Check your connection, then try again.',
-  'input.concurrencyLimit':
-    'You have too many agent tasks running at once. Send again when one finishes.',
-  'input.concurrencyLimitWithCount':
-    'Your plan runs up to {{count}} agent tasks at once. Send again when one finishes.',
+  'input.concurrencyLimit.desc': 'Send again when one finishes.',
+  'input.concurrencyLimit.title': 'Too many agent tasks running at once',
+  'input.concurrencyLimit.titleWithCount_one': 'Your plan runs up to {{count}} agent task at once',
+  'input.concurrencyLimit.titleWithCount_other':
+    'Your plan runs up to {{count}} agent tasks at once',
   'input.costEstimate.creditsPerMillionTokens': '${{credits}}/M tokens',
   'input.costEstimate.hint': 'Estimated cost: ~${{credits}}',
   'input.costEstimate.inputLabel': 'Input',
@@ -995,8 +996,6 @@ export default {
     'Estimated from current context, tools, and model pricing. Actual cost may vary.',
   'input.disclaimer': 'Agents can make mistakes. Use your judgment for critical info.',
   'input.errorMsg': 'Send failed: {{errorMsg}}. Retry, or send again later.',
-  'input.inputCompletionError.desc':
-    'Input suggestions stopped after an error. Retry, or adjust the suggestion model in Settings.',
   'input.inputCompletionError.retry': 'Retry',
   'input.inputCompletionError.settings': 'Settings',
   'input.inputCompletionError.title': 'Input suggestions paused',
@@ -1185,7 +1184,7 @@ export default {
   'messages.modelCard.pricing.inputTokens': 'Input ${{amount}}/M',
   'messages.modelCard.pricing.outputTokens': 'Output ${{amount}}/M',
   'messages.modelCard.pricing.writeCacheInputTokens': 'Cache write ${{amount}}/M',
-  'messages.tokenDetails.average': 'Average unit price',
+  'messages.tokenDetails.average': 'Average price per 1M tokens',
   'messages.tokenDetails.cliCredits.title': '{{value}} Credits',
   'messages.tokenDetails.cliCredits.tooltip':
     'Subscription credits reported by the agent CLI for this turn. The CLI bills in credits instead of reporting tokens; this is separate from your LobeHub usage.',
@@ -2163,6 +2162,13 @@ export default {
   'taskDetail.reportedByAgent': 'the agent',
   'taskDetail.runFollowUp': 'Ask a follow-up',
   'taskDetail.runFollowUpPlaceholder': 'Ask a follow-up about this run...',
+  'taskDetail.find.close': 'Close find',
+  'taskDetail.find.empty': 'No results',
+  'taskDetail.find.next': 'Next match',
+  'taskDetail.find.open': 'Find in task',
+  'taskDetail.find.placeholder': 'Find in this task',
+  'taskDetail.find.position': '{{current}}/{{total}}',
+  'taskDetail.find.prev': 'Previous match',
   'taskDetail.followUpFailed': 'Couldn’t send the follow-up. Your message is kept — try again.',
   'taskDetail.collapseReply': 'Collapse',
   'taskDetail.replyInThread': 'Reply in this thread',
@@ -3135,6 +3141,17 @@ export default {
   'taskList.bulk.actions': 'Actions',
   'taskList.bulk.archive': 'Archive',
   'taskList.bulk.assignAgent': 'Assign to agent…',
+  'taskList.bulk.assignPrivate.hint_one':
+    'This agent is private, so {{count}} public task and its subtasks become private before it is assigned. Members assigned to them are unassigned.',
+  'taskList.bulk.assignPrivate.hint_other':
+    'This agent is private, so {{count}} public tasks and their subtasks become private before it is assigned. Members assigned to them are unassigned.',
+  'taskList.bulk.assignPrivate.ok': 'Make private and assign',
+  'taskList.bulk.assignPrivate.takeOverWarning_one':
+    '{{count}} of them was created by another member. It becomes your private task: its creator loses access, and its schedule or heartbeat is turned off.',
+  'taskList.bulk.assignPrivate.takeOverWarning_other':
+    '{{count}} of them were created by other members. They become your private tasks: their creators lose access, and their schedule or heartbeat is turned off.',
+  'taskList.bulk.assignPrivate.title_one': 'Assign {{count}} task to a private agent?',
+  'taskList.bulk.assignPrivate.title_other': 'Assign {{count}} tasks to a private agent?',
   'taskList.bulk.assignToMe': 'Assign to me',
   'taskList.bulk.changeStatus': 'Change status…',
   'taskList.bulk.clear': 'Clear selection',

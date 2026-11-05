@@ -232,6 +232,7 @@ const Timeline = ({
             ) : (
               <Composer
                 activity={<ReplyActivity detail={detail} threadId={threadId} />}
+                channel={detail.channel}
                 draftKey={channelDraftKey(channelId, threadId)}
                 key={channelDraftKey(channelId, threadId)}
                 members={activeMembers}

@@ -353,10 +353,21 @@ export class DeviceModel {
     return device;
   };
 
-  delete = async (deviceId: string) => {
+  /**
+   * Remove a PERSONAL device. Workspace devices the user enrolled keep their
+   * rows; they go through `deleteWorkspaceDevice`. Returns the removed rows.
+   */
+  delete = async (deviceId: string): Promise<DeviceItem[]> => {
     return this.db
       .delete(devices)
-      .where(and(eq(devices.userId, this.userId), eq(devices.deviceId, deviceId)));
+      .where(
+        and(
+          eq(devices.userId, this.userId),
+          eq(devices.deviceId, deviceId),
+          isNull(devices.workspaceId),
+        ),
+      )
+      .returning();
   };
 
   /**
@@ -403,13 +414,15 @@ export class DeviceModel {
   /**
    * Remove a WORKSPACE device, scoped by `workspace_id`. Permission
    * (workspace owner, or the enroller acting on their own device) is enforced
-   * at the router via `canEditWorkspaceDevice`.
+   * at the router via `canEditWorkspaceDevice`. Returns the removed rows, or
+   * `undefined` without a current workspace.
    */
-  deleteWorkspaceDevice = async (deviceId: string) => {
+  deleteWorkspaceDevice = async (deviceId: string): Promise<DeviceItem[] | undefined> => {
     if (!this.workspaceId) return;
     return this.db
       .delete(devices)
-      .where(and(eq(devices.workspaceId, this.workspaceId), eq(devices.deviceId, deviceId)));
+      .where(and(eq(devices.workspaceId, this.workspaceId), eq(devices.deviceId, deviceId)))
+      .returning();
   };
 
   /**

@@ -328,6 +328,8 @@ export default {
     'Saving will be refused once the page goes over the limit.',
   'pageEditor.charLimit.nearTitle':
     'This page has {{actual}} of {{limit}} characters allowed per page on your plan.',
+  'pageEditor.charLimit.overDescription':
+    'Changes cannot be saved while the page is over the limit. Shorten the page or upgrade your plan.',
   'pageEditor.chooseIcon': 'Choose Icon',
   'pageEditor.collab.notSynced':
     'Your latest page edits are still syncing, so the Agent may not see them yet.',

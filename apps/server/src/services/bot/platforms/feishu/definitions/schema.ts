@@ -12,6 +12,7 @@ import {
   makeDmPolicyField,
   makeGroupPolicyFields,
   makeUserIdField,
+  processingMessageField,
   reactionModeField,
   watchKeywordsField,
 } from '../../const';
@@ -112,6 +113,7 @@ export const sharedSchema: FieldSchema[] = [
         type: 'boolean',
       },
       displayToolCallsField,
+      processingMessageField,
       reactionModeField,
       {
         key: 'historyLimit',
