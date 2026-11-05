@@ -319,8 +319,13 @@ export const dispatchToCliDevice = async (
  * existing offline handling (the device error on the run, the goal's device
  * wait) takes over. A run stopped during the wait is not dispatched.
  *
- * Returns `undefined`: the run counts as started. A later failure settles it
- * through the same path as an immediate dispatch failure.
+ * If the provider refuses the wake, the device will not come online. The run
+ * then dispatches at once, with no wait, and the offline handling takes over
+ * as for any offline device.
+ *
+ * Returns `undefined` after an accepted wake: the run counts as started. A
+ * later failure settles it through the same path as an immediate dispatch
+ * failure.
  */
 export const dispatchToWakingCliDevice = async (
   deps: HeteroDispatchDeps,
@@ -332,7 +337,20 @@ export const dispatchToWakingCliDevice = async (
 ): Promise<ExecAgentResult | undefined> => {
   const { device, heteroPlan, ...dispatchParams } = params;
 
-  await wakeManagedDevice(deps.userId, device);
+  const devicePlan = {
+    deviceId: heteroPlan.deviceId,
+    kind: 'device' as const,
+    target: heteroPlan.target,
+  };
+
+  if (!(await wakeManagedDevice(deps.userId, device))) {
+    log(
+      'execAgent: wake refused for managed device %s, dispatching op=%s now',
+      heteroPlan.deviceId,
+      run.operationId,
+    );
+    return dispatchToCliDevice(deps, run, { ...dispatchParams, heteroPlan: devicePlan });
+  }
 
   const operationModel = new AgentOperationModel(deps.db, deps.userId, deps.workspaceId);
   const isStopped = async () =>
@@ -356,10 +374,7 @@ export const dispatchToWakingCliDevice = async (
         online,
         run.operationId,
       );
-      await dispatchToCliDevice(deps, run, {
-        ...dispatchParams,
-        heteroPlan: { deviceId: heteroPlan.deviceId, kind: 'device', target: heteroPlan.target },
-      });
+      await dispatchToCliDevice(deps, run, { ...dispatchParams, heteroPlan: devicePlan });
     } catch (error) {
       // Off the request path nothing else would settle the run.
       const message = error instanceof Error ? error.message : String(error);

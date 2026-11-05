@@ -122,7 +122,7 @@ beforeEach(() => {
   mocks.resolveDeviceDispatchAuthorizationFailure.mockResolvedValue(undefined);
   mocks.selectCodexDeviceDispatch.mockResolvedValue({ kind: 'exec' });
   mocks.waitForManagedDeviceOnline.mockResolvedValue(true);
-  mocks.wakeManagedDevice.mockResolvedValue(undefined);
+  mocks.wakeManagedDevice.mockResolvedValue(true);
 });
 
 describe('dispatchToWakingCliDevice', () => {
@@ -161,6 +161,28 @@ describe('dispatchToWakingCliDevice', () => {
     await runScheduledWork();
 
     expect(mocks.dispatchAgentRun).toHaveBeenCalledTimes(1);
+    expect(mocks.finalizeHeteroDispatchError).toHaveBeenCalledWith(
+      deps,
+      expect.objectContaining({
+        deviceRoute: expect.objectContaining({ deviceId: 'managed-a' }),
+        operationId: 'op-1',
+      }),
+    );
+  });
+
+  it('dispatches at once without waiting when the provider refuses the wake', async () => {
+    mocks.wakeManagedDevice.mockResolvedValue(false);
+    mocks.dispatchAgentRun.mockResolvedValue({ error: 'DEVICE_OFFLINE', success: false });
+    const { deps } = createDeps();
+
+    await dispatch(deps);
+
+    expect(mocks.afterWork).toHaveLength(0);
+    expect(mocks.waitForManagedDeviceOnline).not.toHaveBeenCalled();
+    expect(mocks.dispatchAgentRun).toHaveBeenCalledTimes(1);
+    expect(mocks.dispatchAgentRun).toHaveBeenCalledWith(
+      expect.objectContaining({ deviceId: 'managed-a' }),
+    );
     expect(mocks.finalizeHeteroDispatchError).toHaveBeenCalledWith(
       deps,
       expect.objectContaining({

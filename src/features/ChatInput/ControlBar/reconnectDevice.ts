@@ -40,7 +40,10 @@ const defaultSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(r
  * - This desktop app's own device reconnects its gateway connection.
  * - Any other device gets the `lobehub://` deep link for its desktop app.
  *
- * A failed wake or reconnect request throws.
+ * A failed wake or reconnect request throws. A failed list refresh does not:
+ * it counts as one poll in which the device is not online yet, so a passing
+ * network error after an accepted wake still ends as `starting`, and the user
+ * is not asked to send a second wake.
  */
 export const reconnectDevice = async (
   device: Pick<DeviceListItem, 'deviceId' | 'identitySource' | 'scope'>,
@@ -61,7 +64,12 @@ export const reconnectDevice = async (
 
   const poll = managed ? MANAGED_DEVICE_WAKE_POLL : DEVICE_RECONNECT_POLL;
   for (let attempt = 0; attempt < poll.attempts; attempt += 1) {
-    const nextDevices = await deps.refreshDevices();
+    let nextDevices: DeviceListItem[] | undefined;
+    try {
+      nextDevices = await deps.refreshDevices();
+    } catch (error) {
+      console.warn('Device list refresh failed while waiting for a device:', error);
+    }
     if (nextDevices?.some((item) => item.deviceId === deviceId && item.online)) return 'connected';
     await sleep(poll.intervalMs);
   }

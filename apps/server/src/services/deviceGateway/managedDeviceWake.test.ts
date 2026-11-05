@@ -120,12 +120,14 @@ describe('findWakeableManagedDevices', () => {
 });
 
 describe('wakeManagedDevice', () => {
-  it('passes the owner scope of the device to the provider', async () => {
-    await wakeManagedDevice('user-1', {
-      deviceId: 'managed-w',
-      scope: 'workspace',
-      workspaceId: 'ws-1',
-    });
+  it('passes the owner scope of the device to the provider and reports the acceptance', async () => {
+    await expect(
+      wakeManagedDevice('user-1', {
+        deviceId: 'managed-w',
+        scope: 'workspace',
+        workspaceId: 'ws-1',
+      }),
+    ).resolves.toBe(true);
 
     expect(mocks.wake).toHaveBeenCalledWith({ userId: 'user-1', workspaceId: 'ws-1' }, 'managed-w');
   });
@@ -136,7 +138,7 @@ describe('wakeManagedDevice', () => {
 
     await expect(
       wakeManagedDevice('user-1', { deviceId: 'managed-a', scope: 'personal' }),
-    ).resolves.toBeUndefined();
+    ).resolves.toBe(false);
     expect(mocks.wake).toHaveBeenCalledWith({ userId: 'user-1' }, 'managed-a');
     expect(warn).toHaveBeenCalledOnce();
     warn.mockRestore();
@@ -150,7 +152,7 @@ describe('wakeManagedDevice', () => {
     const pending = wakeManagedDevice('user-1', { deviceId: 'managed-a', scope: 'personal' });
     await vi.advanceTimersByTimeAsync(MANAGED_DEVICE_WAKE_REQUEST_TIMEOUT_MS);
 
-    await expect(pending).resolves.toBeUndefined();
+    await expect(pending).resolves.toBe(false);
     expect(warn).toHaveBeenCalledOnce();
     warn.mockRestore();
   });
@@ -274,6 +276,46 @@ describe('awaitManagedDeviceForToolCall', () => {
     await vi.advanceTimersByTimeAsync(MANAGED_DEVICE_WAKE_POLL_INTERVAL_MS);
 
     await expect(pending).resolves.toBe('online');
+  });
+
+  it('returns at once without waiting when the provider refuses the wake', async () => {
+    vi.useFakeTimers();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    mocks.findPersonalByDeviceId.mockResolvedValue(managedRow('managed-a'));
+    mocks.wake.mockRejectedValue(new Error('device is being deleted'));
+
+    const settled = vi.fn();
+    void awaitManagedDeviceForToolCall(caller, 'managed-a').then(settled);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(settled).toHaveBeenCalledWith(undefined);
+    expect(mocks.wake).toHaveBeenCalledOnce();
+    // Only the online check before the wake; the wait loop never polls.
+    expect(mocks.queryDeviceList).toHaveBeenCalledOnce();
+    expect(vi.getTimerCount()).toBe(0);
+    warn.mockRestore();
+  });
+
+  it('still waits for the device after an accepted wake', async () => {
+    vi.useFakeTimers();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    mocks.findPersonalByDeviceId.mockResolvedValue(managedRow('managed-a'));
+
+    const settled = vi.fn();
+    const pending = awaitManagedDeviceForToolCall(caller, 'managed-a').then(settled);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(settled).not.toHaveBeenCalled();
+    expect(mocks.queryDeviceList.mock.calls.length).toBeGreaterThan(1);
+
+    await vi.advanceTimersByTimeAsync(MANAGED_DEVICE_TOOL_CALL_WAIT_MS);
+    await pending;
+    expect(settled).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error: expect.objectContaining({ code: DEVICE_WAKING_ERROR_CODE }),
+      }),
+    );
+    warn.mockRestore();
   });
 
   it('leaves ordinary devices alone', async () => {

@@ -145,24 +145,29 @@ const requestProviderWake = async (userId: string, target: ManagedDeviceTarget):
 };
 
 /**
- * Ask the provider to start a managed device. A failure is logged, not thrown:
- * a failed or slow wake leaves the device offline, and every caller already
- * handles an offline device. Never holds the caller longer than
+ * Ask the provider to start a managed device. Resolves `true` when the provider
+ * accepted the request, and `false` when it refused it (for example, the
+ * device is being deleted) or did not answer in time. A failure is logged, not
+ * thrown: the device stays offline, and every caller already handles an
+ * offline device. A caller must not wait for a device after `false`, because
+ * it will not come online. Never holds the caller longer than
  * `MANAGED_DEVICE_WAKE_REQUEST_TIMEOUT_MS`.
  */
 export const wakeManagedDevice = async (
   userId: string,
   target: ManagedDeviceTarget,
-): Promise<void> => {
+): Promise<boolean> => {
   try {
     await requestProviderWake(userId, target);
     log('wakeManagedDevice: wake accepted for deviceId=%s', target.deviceId);
+    return true;
   } catch (error) {
     console.warn('[ManagedDeviceWake] Wake request failed', {
       deviceId: target.deviceId,
       error: error instanceof Error ? error.message : String(error),
       userId,
     });
+    return false;
   }
 };
 
@@ -296,8 +301,8 @@ export const isDeviceUnreachableResult = (result: {
  * connection: wake the device and wait up to
  * `MANAGED_DEVICE_TOOL_CALL_WAIT_MS` for it.
  *
- * - `undefined`: not a managed device, or none is available. Report the
- *   failure as before.
+ * - `undefined`: not a managed device, none is available, or the provider
+ *   refused the wake. Report the failure as before.
  * - `'online'`: the device is online now. The caller can retry the call once.
  * - otherwise the `DEVICE_WAKING` result to return, so the model retries.
  */
@@ -309,7 +314,8 @@ export const awaitManagedDeviceForToolCall = async (
   if (!target) return;
   if (await isManagedDeviceOnline(caller.userId, target)) return 'online';
 
-  await wakeManagedDevice(caller.userId, target);
+  // A refused wake will not bring the device online, so do not wait for it.
+  if (!(await wakeManagedDevice(caller.userId, target))) return;
   const online = await waitForManagedDeviceOnline(caller.userId, target, {
     timeoutMs: MANAGED_DEVICE_TOOL_CALL_WAIT_MS,
   });

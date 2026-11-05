@@ -53,6 +53,34 @@ describe('reconnectDevice', () => {
     expect(d.sleep).toHaveBeenCalledWith(MANAGED_DEVICE_WAKE_POLL.intervalMs);
   });
 
+  it('keeps polling after a failed list refresh and reports the device online', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const d = deps();
+    const refreshDevices = d.refreshDevices as unknown as ReturnType<typeof vi.fn>;
+    refreshDevices.mockRejectedValueOnce(new Error('network'));
+
+    await expect(reconnectDevice(managed, { isCurrentMachine: false }, d)).resolves.toBe(
+      'connected',
+    );
+    expect(d.refreshDevices).toHaveBeenCalledTimes(2);
+    expect(d.wakeManagedDevice).toHaveBeenCalledOnce();
+    warn.mockRestore();
+  });
+
+  it('reports starting, not a failed wake, when every list refresh fails', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const d = deps();
+    const refreshDevices = d.refreshDevices as unknown as ReturnType<typeof vi.fn>;
+    refreshDevices.mockRejectedValue(new Error('network'));
+
+    await expect(reconnectDevice(managed, { isCurrentMachine: false }, d)).resolves.toBe(
+      'starting',
+    );
+    expect(d.refreshDevices).toHaveBeenCalledTimes(MANAGED_DEVICE_WAKE_POLL.attempts);
+    expect(d.wakeManagedDevice).toHaveBeenCalledOnce();
+    warn.mockRestore();
+  });
+
   it('passes a refused wake to the caller', async () => {
     const d = deps();
     d.wakeManagedDevice.mockRejectedValue(new Error('refused'));
