@@ -4,6 +4,7 @@ import path from 'node:path';
 import postcss from 'postcss';
 import ts from 'typescript';
 
+import { NAMESPACE } from '../extract/importedClasses';
 import { classNamesIn } from '../extract/selectors';
 import { aliasCandidates } from './aliases';
 
@@ -135,6 +136,24 @@ export const resolveSlot = (
     });
   if (locals.has(symbol))
     return [{ code, css: false, kind: 'source', member, path: source, symbol }];
+  const [via, inner] = symbol.split(NAMESPACE);
+  if (inner) {
+    const owner = named.get(via);
+    const file = owner && resolveSpecifier(root, source, owner.specifier, aliases);
+    return owner && file
+      ? [
+          {
+            code: read(file),
+            css: false,
+            kind: 'import',
+            member,
+            path: file,
+            specifier: owner.specifier,
+            symbol: inner,
+          },
+        ]
+      : [];
+  }
   const imported = named.get(symbol);
   const file = imported && resolveSpecifier(root, source, imported.specifier, aliases);
   if (!imported || !file) return [];

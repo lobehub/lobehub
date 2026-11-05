@@ -12,6 +12,7 @@ export interface VariableUse {
 }
 
 export interface StyleBinding {
+  expansion?: string;
   expr: string;
   prop: string;
   spread: boolean;

@@ -27,14 +27,20 @@ const TRANSPARENT = new Set([
   ts.SyntaxKind.TemplateSpan,
 ]);
 
+const JOINERS = new Set(['filter', 'join']);
+
 const compact = (node: ts.Node) => node.getText().replaceAll(/\s+/g, '');
 
 const segmentOf = (node: ts.Node, parent: ts.Node): string | null | undefined => {
   if (TRANSPARENT.has(parent.kind)) return null;
-  if (ts.isCallExpression(parent))
-    return parent.arguments.includes(node as ts.Expression) ? null : undefined;
-  if (ts.isPropertyAccessExpression(parent))
-    return ts.isCallExpression(node) && parent.name.text === 'className' ? null : undefined;
+  if (ts.isCallExpression(parent)) {
+    if (parent.arguments.includes(node as ts.Expression)) return null;
+    return parent.expression === node && ts.isPropertyAccessExpression(node) ? null : undefined;
+  }
+  if (ts.isPropertyAccessExpression(parent)) {
+    if (ts.isCallExpression(node) && parent.name.text === 'className') return null;
+    return parent.expression === node && JOINERS.has(parent.name.text) ? null : undefined;
+  }
   if (ts.isPropertyAssignment(parent) && parent.initializer === node) {
     const { name } = parent;
     return ts.isIdentifier(name) || ts.isStringLiteralLike(name) ? `key:${name.text}` : undefined;
@@ -71,7 +77,12 @@ const pathFrom = (node: ts.Node) => {
 const placementOf = (element: StyleElement, slot: string) => {
   const found: string[][] = [];
   for (const binding of element.bindings) {
-    const source = ts.createSourceFile('t.ts', `(${binding.expr});`, ts.ScriptTarget.Latest, true);
+    const source = ts.createSourceFile(
+      't.ts',
+      `(${binding.expansion ?? binding.expr});`,
+      ts.ScriptTarget.Latest,
+      true,
+    );
     const token = slot.startsWith('global.') ? slot.slice('global.'.length) : undefined;
     const matches = (node: ts.Node) =>
       token
@@ -149,7 +160,12 @@ const signature = (rule: StyleRule, selector: string) =>
 
 const literalTokens = (element: StyleElement) =>
   element.bindings.flatMap((binding) => {
-    const source = ts.createSourceFile('t.ts', `(${binding.expr});`, ts.ScriptTarget.Latest, true);
+    const source = ts.createSourceFile(
+      't.ts',
+      `(${binding.expansion ?? binding.expr});`,
+      ts.ScriptTarget.Latest,
+      true,
+    );
     const tokens: string[] = [];
     const visit = (node: ts.Node) => {
       if (ts.isStringLiteralLike(node)) tokens.push(...node.text.split(/\s+/).filter(Boolean));

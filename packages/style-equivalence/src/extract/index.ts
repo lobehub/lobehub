@@ -43,6 +43,8 @@ const GLOBALS = new Set([
   'window',
 ]);
 
+const CLASS_PROPS = new Set(['...', 'className', 'classNames']);
+
 const ownerOf = (statement: ts.Statement, ast: ts.SourceFile) => {
   if (ts.isVariableStatement(statement))
     return statement.declarationList.declarations.map((d) => d.name.getText(ast)).join(',');
@@ -77,9 +79,12 @@ export const extractFile = (
       )
     );
   };
+  const derived = new Map<string, string>();
   const isStyleName = (name: string) => top.styleSymbols.has(name) || markers.has(name);
-  const referencesStyle = (node: ts.Node) =>
-    [...valueIdentifiers(node, { skipJsx: true })].some(isStyleName);
+  const referencesStyle = (node: ts.Node, prop?: string) =>
+    [...valueIdentifiers(node, { skipJsx: true })].some(
+      (name) => isStyleName(name) || (CLASS_PROPS.has(prop ?? '') && derived.has(name)),
+    );
   const slotsOf = (node: ts.Node) => {
     const slots = new Set<string>();
     const visit = (current: ts.Node) => {
@@ -125,7 +130,53 @@ export const extractFile = (
     if (binding.kind === 'global') classes.forEach((name) => globalClasses.add(name));
     for (const rule of parsed.rules) rules.push({ ...rule, owned, stylesheet: source });
   }
+  for (const [local, imported] of top.importedClasses) {
+    if (!imported.factories.size && !imported.tokens.some((token) => globalClasses.has(token)))
+      continue;
+    derived.set(local, imported.expansion);
+    for (const [symbol, factory] of imported.factories) {
+      top.styleSymbols.add(symbol);
+      for (const adapter of options.adapters)
+        if (adapter.recognizeFactory(factory)) {
+          rules.push(...(adapter.rulesOf?.(symbol, factory) ?? []));
+          Object.assign(slotProperties, adapter.propertiesOf?.(symbol, factory));
+          Object.assign(slotConditions, adapter.conditionsOf?.(symbol, factory));
+        }
+    }
+  }
+  const expandedOf = (expression: ts.Expression) => {
+    const start = expression.getStart(ast);
+    let text = expression.getText(ast);
+    const found = valueIdentifierNodes(expression, { skipJsx: true })
+      .filter((node) => derived.has(node.text) && !declaredLocally(node))
+      .sort((a, b) => b.getStart(ast) - a.getStart(ast));
+    if (!found.length) return undefined;
+    for (const node of found)
+      text = `${text.slice(0, node.getStart(ast) - start)}(${derived.get(node.text)})${text.slice(node.end - start)}`;
+    const parsed = ts.createSourceFile(
+      'x.tsx',
+      `(${text});`,
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TSX,
+    );
+    const [statement] = parsed.statements;
+    return statement && ts.isExpressionStatement(statement)
+      ? { node: statement.expression, text }
+      : undefined;
+  };
   const usedGlobal = new Set<string>();
+  const globalTokensIn = (node: ts.Node) => {
+    const tokens = new Set<string>();
+    const visit = (current: ts.Node) => {
+      if (ts.isStringLiteralLike(current))
+        for (const token of current.text.split(/\s+/))
+          if (globalClasses.has(token)) tokens.add(token);
+      ts.forEachChild(current, visit);
+    };
+    visit(node);
+    return tokens;
+  };
 
   const elements: StyleElement[] = [];
   const styled = new Map<ts.Node, StyleElement>();
@@ -146,15 +197,33 @@ export const extractFile = (
       const literalProps: Record<string, LiteralValue> = {};
       const slots = new Set<string>();
       const expressions: ts.Expression[] = [];
+      const expansions: ts.Expression[] = [];
+      const bindingOf = (expression: ts.Expression, prop: string, spread: boolean) => {
+        bound.add(expression);
+        expressions.push(expression);
+        slotsOf(expression).forEach((slot) => slots.add(slot));
+        const expanded = expandedOf(expression);
+        if (expanded) {
+          expansions.push(expanded.node);
+          slotsOf(expanded.node).forEach((slot) => slots.add(slot));
+          for (const token of globalTokensIn(expanded.node)) {
+            usedGlobal.add(token);
+            slots.add(`global.${token}`);
+          }
+        }
+        bindings.push({
+          expr: expression.getText(ast),
+          ...(expanded ? { expansion: expanded.text } : {}),
+          prop,
+          spread,
+        });
+      };
       let runtimeStyle: string | undefined;
       let styleExpr: string | undefined;
       for (const attribute of opening.attributes.properties) {
         if (ts.isJsxSpreadAttribute(attribute)) {
-          if (!referencesStyle(attribute.expression)) continue;
-          bound.add(attribute.expression);
-          expressions.push(attribute.expression);
-          bindings.push({ expr: attribute.expression.getText(ast), prop: '...', spread: true });
-          slotsOf(attribute.expression).forEach((slot) => slots.add(slot));
+          if (!referencesStyle(attribute.expression, '...')) continue;
+          bindingOf(attribute.expression, '...', true);
           continue;
         }
         const name = attribute.name.getText(ast);
@@ -188,11 +257,8 @@ export const extractFile = (
         }
         if (!ts.isJsxExpression(initializer) || !initializer.expression) continue;
         const expression = initializer.expression;
-        if (referencesStyle(expression)) {
-          bound.add(expression);
-          expressions.push(expression);
-          bindings.push({ expr: expression.getText(ast), prop: name, spread: false });
-          slotsOf(expression).forEach((slot) => slots.add(slot));
+        if (referencesStyle(expression, name)) {
+          bindingOf(expression, name, false);
           continue;
         }
         const literal = literalOf(expression);
@@ -231,6 +297,7 @@ export const extractFile = (
           ts.forEachChild(node, collectTokens);
         };
         expressions.forEach(collectTokens);
+        expansions.forEach(collectTokens);
         for (const binding of bindings)
           if (binding.prop === 'className' && binding.expr.startsWith('"'))
             (JSON.parse(binding.expr) as string).split(/\s+/).forEach((token) => tokens.add(token));
