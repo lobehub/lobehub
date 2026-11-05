@@ -32,10 +32,15 @@ import {
   REVIEW_PROPOSAL_MAX_CHARS,
   REVIEW_PROPOSAL_PROMPT_VERSION,
   REVIEW_SUGGESTION_PROMPT_VERSION,
+  strictNullablePaths,
   SuggestionResponseSchema,
 } from './schema';
 import { chainSuggestionPrompt, SUGGESTION_SYSTEM_PROMPT } from './suggestionPrompt';
 import { countQuoteOccurrences, locateQuote, quoteContext } from './textExtract';
+
+/** Optional properties strict normalization widened to `null`, per response schema. */
+const PROPOSAL_NULLABLE_PATHS = strictNullablePaths(ProposalResponseSchema);
+const CHECK_NULLABLE_PATHS = strictNullablePaths(CheckResponseSchema);
 
 export interface ProposedRuleDraft extends ProposalDraft {
   duplicate: boolean;
@@ -192,9 +197,12 @@ export class ReviewPlaybookService {
 
     let droppedInvalid = 0;
     const valid: ProposalDraft[] = [];
-    for (const item of envelope.drafts) {
-      // Strict structured output answers absent optionals with `null` (PV5).
-      const parsed = ProposalDraftSchema.safeParse(dropNulls(item)); // PV2
+    // Strict structured output answers absent optionals with `null` (PV5). Clean
+    // the whole envelope so the paths collected from `ProposalResponseSchema`
+    // still line up; only the widened optionals are unset, never required keys.
+    const cleaned = dropNulls(raw, PROPOSAL_NULLABLE_PATHS) as { drafts: unknown[] };
+    for (const item of cleaned.drafts) {
+      const parsed = ProposalDraftSchema.safeParse(item); // PV2
       if (!parsed.success) {
         droppedInvalid += 1;
         continue;
@@ -370,7 +378,7 @@ export class ReviewPlaybookService {
         continue;
       }
 
-      const parsed = CheckResponseSchema.safeParse(dropNulls(raw));
+      const parsed = CheckResponseSchema.safeParse(dropNulls(raw, CHECK_NULLABLE_PATHS));
       if (!parsed.success) {
         for (const { item } of batch) {
           outcomes.set(item.id, {
@@ -540,7 +548,9 @@ export class ReviewPlaybookService {
       throw new ReviewServiceError('LLM_FAILED', 'Suggestion generation failed: the model errored');
     }
 
-    const parsed = SuggestionResponseSchema.safeParse(dropNulls(raw));
+    // `SuggestionResponseSchema` has no optional properties, so strict mode never
+    // widens a field here and a `null` is a real schema violation.
+    const parsed = SuggestionResponseSchema.safeParse(raw);
     if (!parsed.success) {
       throw new ReviewServiceError('SCHEMA_INVALID', 'Suggestion generation returned invalid JSON');
     }

@@ -74,6 +74,11 @@ const pickMainSchema = (result: any, name: string): any => {
 const makeNullable = (node: any) => {
   if (!node || typeof node !== 'object') return;
 
+  // JSON Schema applies `type` and `enum` together, so widening `type` alone
+  // still rejects `null` while `enum` lists only the value union — the provider
+  // would have to invent an enum member for a field that should be absent.
+  if (Array.isArray(node.enum) && !node.enum.includes(null)) node.enum = [...node.enum, null];
+
   if (Array.isArray(node.type)) {
     if (!node.type.includes('null')) node.type.push('null');
     return;
@@ -87,6 +92,10 @@ const makeNullable = (node: any) => {
   }
 };
 
+/** Dot-joined property names; array indices are collapsed, so `items` inherits
+ * the path of the property that holds the array. */
+const pathKey = (path: string[], key: string) => [...path, key].join('.');
+
 /**
  * OpenAI strict structured output requires every property to be listed in
  * `required` and every object to set `additionalProperties: false`, so optional
@@ -94,45 +103,89 @@ const makeNullable = (node: any) => {
  * truly required keys into `required`, and the OpenAI runtime forwards the
  * schema untouched — without this pass an optional field rejects the whole
  * request. See https://developers.openai.com/api/docs/guides/structured-outputs#all-fields-must-be-required
+ *
+ * Paths widened here are collected so `dropNulls` can undo exactly those and
+ * nothing else.
  */
-const normalizeStrictNode = (node: any) => {
-  if (!node || typeof node !== 'object') return;
+const normalizeStrictNode = (
+  node: any,
+  path: string[] = [],
+  nullable: Set<string> = new Set(),
+): Set<string> => {
+  if (!node || typeof node !== 'object') return nullable;
   if (Array.isArray(node)) {
-    for (const item of node) normalizeStrictNode(item);
-    return;
+    for (const item of node) normalizeStrictNode(item, path, nullable);
+    return nullable;
   }
 
   for (const key of ['allOf', 'anyOf', 'oneOf']) {
-    for (const branch of Array.isArray(node[key]) ? node[key] : []) normalizeStrictNode(branch);
+    for (const branch of Array.isArray(node[key]) ? node[key] : []) {
+      normalizeStrictNode(branch, path, nullable);
+    }
   }
-  if (node.items) normalizeStrictNode(node.items);
+  if (node.items) normalizeStrictNode(node.items, path, nullable);
   for (const key of ['$defs', 'definitions']) {
-    for (const definition of Object.values<any>(node[key] ?? {})) normalizeStrictNode(definition);
+    for (const definition of Object.values<any>(node[key] ?? {})) {
+      normalizeStrictNode(definition, path, nullable);
+    }
   }
 
-  if (!node.properties) return;
+  if (!node.properties) return nullable;
 
   const required: string[] = Array.isArray(node.required) ? [...node.required] : [];
   for (const [key, property] of Object.entries<any>(node.properties)) {
-    if (!required.includes(key)) makeNullable(property);
-    normalizeStrictNode(property);
+    const childPath = [...path, key];
+    if (!required.includes(key)) {
+      makeNullable(property);
+      nullable.add(childPath.join('.'));
+    }
+    normalizeStrictNode(property, childPath, nullable);
   }
   node.required = Object.keys(node.properties);
   node.additionalProperties = false;
+
+  return nullable;
+};
+
+const EMPTY_PATHS: ReadonlySet<string> = new Set();
+
+const nullablePathCache = new WeakMap<z.ZodTypeAny, ReadonlySet<string>>();
+
+/**
+ * The property paths (dot-joined, array indices collapsed) that strict
+ * normalization widened to `null` for a given Zod schema.
+ */
+export const strictNullablePaths = (schema: z.ZodTypeAny): ReadonlySet<string> => {
+  const cached = nullablePathCache.get(schema);
+  if (cached) return cached;
+
+  const jsonSchema = pickMainSchema(z.toJSONSchema(schema, { target: 'draft-7' }), 'root');
+  const paths: ReadonlySet<string> = normalizeStrictNode(jsonSchema);
+  nullablePathCache.set(schema, paths);
+
+  return paths;
 };
 
 /**
  * Strict mode answers absent optional fields with `null`, while Zod `.optional()`
- * only accepts `undefined`. Drop the nulls before validating so the Zod schemas
- * stay the single source of truth.
+ * only accepts `undefined`. Unset the nulls before validating so the Zod schemas
+ * stay the single source of truth — but only where strict normalization widened
+ * the field. A `null` in a required property (say `severity` or `evidence`)
+ * still reaches Zod and is rejected instead of silently falling back to a default.
  */
-export const dropNulls = <T>(value: T): T => {
-  if (Array.isArray(value)) return value.map((item) => dropNulls(item)) as unknown as T;
+export const dropNulls = <T>(
+  value: T,
+  nullablePaths: ReadonlySet<string> = EMPTY_PATHS,
+  path: string[] = [],
+): T => {
+  if (Array.isArray(value)) {
+    return value.map((item) => dropNulls(item, nullablePaths, path)) as unknown as T;
+  }
   if (value && typeof value === 'object') {
     const result: Record<string, unknown> = {};
     for (const [key, item] of Object.entries(value)) {
-      if (item === null) continue;
-      result[key] = dropNulls(item);
+      if (item === null && nullablePaths.has(pathKey(path, key))) continue;
+      result[key] = dropNulls(item, nullablePaths, [...path, key]);
     }
     return result as T;
   }

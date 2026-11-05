@@ -5,6 +5,7 @@ import {
   CheckResponseSchema,
   dropNulls,
   ProposalResponseSchema,
+  strictNullablePaths,
 } from '../schema';
 
 /** Every subschema that declares `properties`, wherever it sits in the tree. */
@@ -48,6 +49,13 @@ describe('buildGenerateObjectSchema (OpenAI strict structured output)', () => {
     // `uncertainReason` is `.optional()` in Zod: strict mode needs it present as null.
     expect(verdict.required).toContain('uncertainReason');
     expect(verdict.properties.uncertainReason.type).toEqual(['string', 'null']);
+    // `type` and `enum` apply together, so null has to join the enum as well.
+    expect(verdict.properties.uncertainReason.enum).toEqual([
+      'insufficient_evidence',
+      'ambiguous_wording',
+      'missing_attachment',
+      null,
+    ]);
     // the evidence item keeps its optional clause label the same way
     expect(verdict.properties.evidence.items.required).toContain('clauseLabel');
   });
@@ -74,6 +82,25 @@ describe('buildGenerateObjectSchema (OpenAI strict structured output)', () => {
   });
 });
 
+describe('strictNullablePaths', () => {
+  it('lists only the optional properties strict mode widened', () => {
+    const checkPaths = strictNullablePaths(CheckResponseSchema);
+    expect(checkPaths.has('results.uncertainReason')).toBe(true);
+    expect(checkPaths.has('results.evidence.clauseLabel')).toBe(true);
+    // required properties are never widened
+    expect(checkPaths.has('results.confidence')).toBe(false);
+    expect(checkPaths.has('results.evidence.quote')).toBe(false);
+
+    // array indices collapse and `anyOf` branches keep the parent path, so the
+    // optional keys inside a nullable hint stay addressable from the root
+    const proposalPaths = strictNullablePaths(ProposalResponseSchema);
+    expect(proposalPaths.has('drafts.sourceHint.clauseLabel')).toBe(true);
+    expect(proposalPaths.has('drafts.sourceHint.quote')).toBe(true);
+    // `severity` has a default, so Zod already requires it — never widened
+    expect(proposalPaths.has('drafts.severity')).toBe(false);
+  });
+});
+
 describe('dropNulls', () => {
   it('drops null optionals so Zod `.optional()` still sees undefined', () => {
     const raw = {
@@ -92,7 +119,9 @@ describe('dropNulls', () => {
     // the strict-mode shape is rejected as-is, which is what the normalizer fixes
     expect(CheckResponseSchema.safeParse(raw).success).toBe(false);
 
-    const parsed = CheckResponseSchema.safeParse(dropNulls(raw));
+    const parsed = CheckResponseSchema.safeParse(
+      dropNulls(raw, strictNullablePaths(CheckResponseSchema)),
+    );
     expect(parsed.success).toBe(true);
     if (!parsed.success) return;
 
@@ -100,9 +129,30 @@ describe('dropNulls', () => {
     expect(parsed.data.results[0].evidence[0].clauseLabel).toBeUndefined();
   });
 
+  it('leaves a null in a required property to Zod instead of repairing it', () => {
+    const raw = {
+      results: [
+        {
+          confidence: 0.9,
+          // `evidence` is required and defaults to []; a null here is malformed output
+          evidence: null,
+          explanation: '文档已写明分阶段验收。',
+          ruleId: 'rule-1',
+          verdict: 'passed',
+        },
+      ],
+    };
+
+    const cleaned = dropNulls(raw, strictNullablePaths(CheckResponseSchema)) as typeof raw;
+    expect(cleaned.results[0].evidence).toBeNull();
+    expect(CheckResponseSchema.safeParse(cleaned).success).toBe(false);
+  });
+
   it('keeps nested arrays and non-null values intact', () => {
-    expect(dropNulls({ a: [{ b: null, c: 1 }], d: null, e: 'x' })).toEqual({
+    const paths = new Set(['a.b']);
+    expect(dropNulls({ a: [{ b: null, c: 1 }], d: null, e: 'x' }, paths)).toEqual({
       a: [{ c: 1 }],
+      d: null,
       e: 'x',
     });
   });
