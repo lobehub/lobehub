@@ -256,6 +256,7 @@ const sortedJson = (value: unknown) =>
 const sameElement = (base: StyleElement, head: StyleElement, properties: SideProperties) => {
   if (base.tag !== head.tag) return false;
   if (sortedJson(base.literalProps) !== sortedJson(head.literalProps)) return false;
+  if (sortedJson(base.attributes ?? {}) !== sortedJson(head.attributes ?? {})) return false;
   if (base.bindings.length !== head.bindings.length) return false;
   return base.bindings.every((binding, index) => {
     const left = normalize(binding, properties.base);

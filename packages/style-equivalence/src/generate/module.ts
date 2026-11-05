@@ -45,6 +45,8 @@ const renderChain = (chain: StyleElement[], context: ChainContext, depth = 0): s
   const attributes = [`data-synthetic-element=${JSON.stringify(element.id)}`];
   for (const [name, value] of Object.entries(element.literalProps))
     if (keepLiteral(name, substituted)) attributes.push(renderLiteral(name, value));
+  for (const [name, variable] of Object.entries(element.attributes ?? {}))
+    attributes.push(`${name}={${variable}}`);
   const neutral: string[] = [];
   for (const binding of element.bindings) {
     const expr = exprOf(binding);

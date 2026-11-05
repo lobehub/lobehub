@@ -85,7 +85,8 @@ export const counterparts = (
       !counterpart.bindings.length &&
       !counterpart.flags.length &&
       counterpart.tag === element.tag &&
-      sortedJson(counterpart.literalProps) === sortedJson(element.literalProps)
+      sortedJson(counterpart.literalProps) === sortedJson(element.literalProps) &&
+      sortedJson(counterpart.attributes ?? {}) === sortedJson(element.attributes ?? {})
       ? { counterpart, parent }
       : undefined;
   };

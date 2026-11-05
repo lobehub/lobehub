@@ -8,6 +8,7 @@ import { chainOf, type PlanCase, type Side } from '../plan/planFile';
 import { declarationText, resolveSlot } from '../source/declarations';
 
 export interface HashedElement {
+  attributes?: Record<string, string>;
   bindings: StyleBinding[];
   literalProps: Record<string, LiteralValue>;
   slots: string[];
@@ -77,7 +78,8 @@ export const collectCaseHashInput = (input: CollectHashInput): CaseHashInput => 
     const element = byId.get(id);
     if (!element) continue;
     const chain = chainOf(element, byId);
-    result.elements[side] = chain.map(({ bindings, literalProps, slots, tag }) => ({
+    result.elements[side] = chain.map(({ attributes, bindings, literalProps, slots, tag }) => ({
+      ...(attributes ? { attributes } : {}),
       bindings,
       literalProps,
       slots,

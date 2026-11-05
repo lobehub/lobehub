@@ -1,6 +1,7 @@
 import ts from 'typescript';
 
 import { aliasDeclaration, aliasOf } from './aliases';
+import { booleanAttribute, isStateAttribute } from './attributes';
 import { collectChildren, literalOf } from './children';
 import { parseRules } from './css';
 import { applicationIn, componentOfStatement, forwardsOf } from './forward';
@@ -214,6 +215,8 @@ export const extractFile = (
       const opening = ts.isJsxElement(node) ? node.openingElement : node;
       const bindings: StyleBinding[] = [];
       const literalProps: Record<string, LiteralValue> = {};
+      const attributes: Record<string, string> = {};
+      const attributeNames: ts.Identifier[] = [];
       const slots = new Set<string>();
       const expressions: ts.Expression[] = [];
       const expansions: ts.Expression[] = [];
@@ -293,6 +296,14 @@ export const extractFile = (
         const literal = literalOf(expression);
         if (literal !== undefined) literalProps[name] = literal;
         else if (
+          isStateAttribute(name) &&
+          ts.isIdentifier(expression) &&
+          !GLOBALS.has(expression.text) &&
+          booleanAttribute(code, name)
+        ) {
+          attributes[name] = expression.text;
+          attributeNames.push(expression);
+        } else if (
           name === 'style' &&
           !(ts.isIdentifier(expression) && GLOBALS.has(expression.text))
         ) {
@@ -323,6 +334,14 @@ export const extractFile = (
         for (const expression of expressions)
           for (const [name, list] of usageKinds(expression, names))
             kinds.set(name, [...(kinds.get(name) ?? []), ...list]);
+        for (const node of attributeNames)
+          if (
+            declaredLocally(node) ||
+            (!top.styleSymbols.has(node.text) && !top.require(node.text))
+          ) {
+            names.add(node.text);
+            kinds.set(node.text, [...(kinds.get(node.text) ?? []), 'boolean']);
+          }
         const real = isReal(tag);
         if (layout.has(tag) || real) top.require(tag);
         const id = `${owner}#${ordinal++}`;
@@ -344,6 +363,7 @@ export const extractFile = (
           flags: [],
           id,
           literalProps,
+          ...(Object.keys(attributes).length ? { attributes } : {}),
           owner,
           parent,
           ...(real ? { real } : {}),

@@ -20,6 +20,7 @@ export interface StyleBinding {
 
 export interface StyleElement {
   aliases?: Record<string, string>;
+  attributes?: Record<string, string>;
   bindings: StyleBinding[];
   children?: string[];
   flags: string[];
