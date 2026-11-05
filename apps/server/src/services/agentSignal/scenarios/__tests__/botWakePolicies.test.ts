@@ -125,12 +125,6 @@ describe('internal rules policy', () => {
 
     expect([result.verdict, result.reason]).toEqual(expected);
   });
-
-  it('never allows', () => {
-    for (const { signal: overrides } of cases) {
-      expect(evaluate(policy, signal(overrides)).verdict).not.toBe('allow');
-    }
-  });
 });
 
 describe('internal rules policy: naming the bot', () => {
