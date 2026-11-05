@@ -8,6 +8,7 @@ import { ReviewBar } from './ReviewBar';
 import { ReviewItemView } from './ReviewItemView';
 import { ReviewQueue } from './ReviewQueue';
 import { ReworkPanel } from './ReworkPanel';
+import { RunBadge, useFollowRun } from './RunBadge';
 
 const styles = stylex.create({
   center: { color: cssVar.colorTextSecondary, fontSize: 14, padding: 40 },
@@ -84,14 +85,20 @@ export const ReviewPage = () => {
   const [panel, setPanel] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
+  const load = useCallback(() => {
     fetchReview()
       .then((next) => {
         setPayload(next);
-        setCurrent(nextSelection(next.items, undefined));
+        setCurrent((selected) =>
+          selected && next.items.some((entry) => entry.key === selected)
+            ? selected
+            : nextSelection(next.items, undefined),
+        );
       })
       .catch((reason: unknown) => setError(String(reason)));
   }, []);
+  useEffect(load, [load]);
+  useFollowRun(payload?.follow, load);
 
   const item = payload?.items.find((entry) => entry.key === current);
 
@@ -155,6 +162,7 @@ export const ReviewPage = () => {
         <span {...stylex.props(styles.sub)}>
           工具已自动证明 {counts.proven} 条 · 剩 {payload.items.length} 条要你看
         </span>
+        <RunBadge follow={payload.follow} />
         <div {...stylex.props(styles.topEnd)}>
           <span {...stylex.props(styles.pill, styles.pillOk)}>已通过 {counts.passed}</span>
           <span {...stylex.props(styles.pill, styles.pillBack)}>已打回 {counts.reworked}</span>
@@ -174,7 +182,7 @@ export const ReviewPage = () => {
       <aside {...stylex.props(styles.queue)}>
         <ReviewQueue current={current} payload={payload} onSelect={select} />
       </aside>
-      <main {...stylex.props(styles.main)}>
+      <main key={payload.run.runId} {...stylex.props(styles.main)}>
         {item ? (
           <ReviewItemView conditions={payload.conditions} item={item} />
         ) : (

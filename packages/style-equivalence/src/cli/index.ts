@@ -22,7 +22,7 @@ const HELP = `style-equivalence — compare styled elements between two revision
   bun run style-eq --base <ref> --head <ref>
   bun run style-eq --stack [--stack-base <branch>]
   bun run style-eq self-test
-  bun run style-eq serve <run-id|run-dir> [--port <n>]
+  bun run style-eq serve <run-id|run-dir> [--port <n>] [--pin]
   bun run style-eq rework <run-id|run-dir|--pr <number>> [--json]
   bun run style-eq annotate <run-id|run-dir> [--json] [--apply <notes.json>]
 
@@ -32,6 +32,7 @@ Options:
   --keep-worktrees    keep base/head worktrees for debugging
   --skip-calibration  do not run the project's real-mount calibration
   --mutations <n>     mutants to sample from equal cases (default 10, 0 turns it off)
+  --pin               serve exactly this run instead of following newer runs on the same base
 `;
 
 const DEFAULT_STACK_BASE = 'test/stylex-migration-stack';
@@ -78,6 +79,7 @@ const main = async () => {
       'json': { type: 'boolean' },
       'keep-worktrees': { type: 'boolean' },
       'mutations': { type: 'string' },
+      'pin': { type: 'boolean' },
       'port': { type: 'string' },
       'pr': { type: 'string' },
       'records': { type: 'string' },
@@ -156,6 +158,7 @@ const main = async () => {
     );
     const server = await startServer({
       layoutComponents,
+      pin: values.pin ?? false,
       port: Number(values.port ?? 0),
       recordsDir,
       runDir,

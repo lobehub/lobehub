@@ -12,7 +12,15 @@ import type { CaptureState } from '../capture/states';
 import { resolveInside } from '../capture/staticServer';
 import type { ConditionConfig } from '../config';
 import { SELF_TEST_FILE } from '../selftest/store';
-import { ApiError, applySignoff, caseDetail, currentVerdict, loadRun, readSelfTest } from './api';
+import {
+  ApiError,
+  applySignoff,
+  caseDetail,
+  currentVerdict,
+  readSelfTest,
+  type StoredRun,
+} from './api';
+import { createRunSource } from './follow';
 import { caseShot, caseSnapshot, parseCombo, parseCondition } from './inspectCase';
 import { applyReview, reviewPayload } from './review';
 
@@ -68,6 +76,7 @@ const sendFile = async (response: ServerResponse, root: string, requestPath: str
 
 export interface ServerOptions {
   layoutComponents?: string[];
+  pin?: boolean;
   port?: number;
   recordsDir?: string;
   runDir: string;
@@ -76,16 +85,21 @@ export interface ServerOptions {
 
 export const startServer = async ({
   layoutComponents = [],
+  pin = false,
   port = 0,
   recordsDir,
   runDir,
   uiDir = DEFAULT_UI_DIR,
 }: ServerOptions) => {
   const selfTestFile = path.join(recordsDir ?? path.dirname(runDir), SELF_TEST_FILE);
-  const stored = await loadRun(runDir);
+  const source = await createRunSource({
+    pin,
+    recordsDir: recordsDir ?? path.dirname(runDir),
+    runDir,
+  });
   let browser: Browser | undefined;
   let url = '';
-  const rerun = async (key: string) => {
+  const rerun = async (stored: StoredRun, key: string) => {
     browser ??= await launchBrowser();
     const conditions = stored.run.conditionConfig as ConditionConfig | undefined;
     if (!conditions) throw new ApiError(409, 'RUN_HAS_NO_CONDITIONS');
@@ -103,25 +117,33 @@ export const startServer = async ({
   const route = async (request: IncomingMessage, response: ServerResponse) => {
     const { pathname, searchParams } = new URL(request.url ?? '/', 'http://x');
     const method = request.method ?? 'GET';
+    const { dir, stored } = await source.current();
+    const follow = source.info(stored, dir);
+    if (pathname === '/api/current' && method === 'GET') return json(response, 200, follow);
     if (pathname === '/api/run' && method === 'GET')
       return json(response, 200, {
         calibration: stored.calibration,
         cases: stored.results.cases,
+        follow,
         mutation: stored.mutation,
         run: stored.run,
         verdict: await currentVerdict(stored),
       });
     if (pathname === '/api/review' && method === 'GET')
-      return json(response, 200, await reviewPayload(stored, layoutComponents));
+      return json(response, 200, { ...(await reviewPayload(stored, layoutComponents)), follow });
     if (pathname === '/api/review' && method === 'POST')
-      return json(response, 200, await applyReview(stored, (await readBody(request)) as never));
+      return json(response, 200, {
+        ...(await applyReview(stored, (await readBody(request)) as never)),
+        follow,
+      });
     if (pathname === '/api/method' && method === 'GET')
       return json(response, 200, { selfTest: await readSelfTest(selfTestFile) });
     const caseMatch = /^\/api\/case\/([^/]+)(?:\/(rerun|snapshot|shot))?$/.exec(pathname);
     if (caseMatch) {
       const key = decodeURIComponent(caseMatch[1]);
       const action = caseMatch[2];
-      if (action === 'rerun' && method === 'POST') return json(response, 200, await rerun(key));
+      if (action === 'rerun' && method === 'POST')
+        return json(response, 200, await rerun(stored, key));
       if (!action && method === 'GET') return json(response, 200, await caseDetail(stored, key));
       if ((action === 'snapshot' || action === 'shot') && method === 'GET') {
         browser ??= await launchBrowser();
@@ -155,11 +177,7 @@ export const startServer = async ({
     ] as const)
       if (pathname.startsWith(prefix)) {
         if (
-          !(await sendFile(
-            response,
-            path.join(runDir, directory),
-            pathname.slice(prefix.length - 1),
-          ))
+          !(await sendFile(response, path.join(dir, directory), pathname.slice(prefix.length - 1)))
         )
           json(response, 404, { error: 'NOT_FOUND' });
         return;

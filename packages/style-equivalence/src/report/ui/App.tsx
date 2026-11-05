@@ -1,6 +1,6 @@
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { fetchRun, type RunPayload } from '../api';
 import { useRoute } from '../route';
@@ -10,6 +10,7 @@ import { FileView } from './FileView';
 import { MethodPage } from './MethodPage';
 import { OverviewMatrix } from './OverviewMatrix';
 import { ReviewPage } from './ReviewPage';
+import { useFollowRun } from './RunBadge';
 import { TopBar, VerdictStrip } from './TopBar';
 
 const styles = stylex.create({
@@ -55,20 +56,22 @@ const ReportApp = ({
 }) => {
   const [payload, setPayload] = useState<RunPayload>();
   const [error, setError] = useState<string>();
-  useEffect(() => {
+  const load = useCallback(() => {
     fetchRun()
       .then(setPayload)
       .catch((reason: unknown) => setError(String(reason)));
   }, []);
+  useEffect(load, [load]);
+  useFollowRun(payload?.follow, load);
   if (error) return <div {...stylex.props(styles.center)}>读取运行结果失败：{error}</div>;
   if (!payload) return <div {...stylex.props(styles.center)}>正在读取运行结果…</div>;
   const conditions = payload.run.conditions ?? [];
   const unpaired = payload.verdict.items.filter((item) => item.category === 'unpaired');
   return (
     <div {...stylex.props(styles.app)}>
-      <TopBar run={payload.run} />
+      <TopBar follow={payload.follow} run={payload.run} />
       <VerdictStrip payload={payload} />
-      <div {...stylex.props(styles.layout)}>
+      <div key={payload.run.runId} {...stylex.props(styles.layout)}>
         <aside {...stylex.props(styles.side)}>
           <FileTree
             cases={payload.cases}

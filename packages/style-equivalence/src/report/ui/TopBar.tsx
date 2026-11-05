@@ -1,9 +1,10 @@
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 
-import type { RunPayload } from '../api';
+import type { FollowInfo, RunPayload } from '../api';
 import { CATEGORY_LABELS } from '../labels';
 import { hrefOf } from '../route';
+import { RunBadge } from './RunBadge';
 
 const styles = stylex.create({
   bar: {
@@ -66,7 +67,7 @@ const styles = stylex.create({
   verdictOk: { color: cssVar.colorSuccess },
 });
 
-export const TopBar = ({ run }: { run: RunPayload['run'] }) => (
+export const TopBar = ({ follow, run }: { follow?: FollowInfo; run: RunPayload['run'] }) => (
   <header {...stylex.props(styles.bar)}>
     <a href={hrefOf({ kind: 'overview' })} {...stylex.props(styles.brand)}>
       style-equivalence <span {...stylex.props(styles.brandNote)}>· 本地报告</span>
@@ -74,6 +75,7 @@ export const TopBar = ({ run }: { run: RunPayload['run'] }) => (
     <span {...stylex.props(styles.rev)}>{run.base.slice(0, 7)}</span>
     <span {...stylex.props(styles.muted)}>→</span>
     <span {...stylex.props(styles.rev)}>{run.head.slice(0, 7)}</span>
+    <RunBadge follow={follow} />
     <div {...stylex.props(styles.spacer)} />
     <a href={hrefOf({ kind: 'review' })} {...stylex.props(styles.link)}>
       复查
