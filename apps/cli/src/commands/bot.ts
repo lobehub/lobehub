@@ -755,7 +755,7 @@ export function registerBotCommand(program: Command) {
     .option('--server-id <id>', 'Default server / guild / workspace ID for AI tool calls')
     .option(
       '--processing-message <on|off>',
-      'Post a "working on it" message before each reply (on by default)',
+      'Post a "working on it" message before each reply (off by default)',
     )
     .action(
       async (

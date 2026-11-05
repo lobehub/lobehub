@@ -269,7 +269,7 @@ export async function executeWithCallback(
         }
       }
     } else if (!postProcessingMessage) {
-      // The owner turned the "working on it" message off: typing only. With no
+      // The "working on it" message is off (the default): typing only. With no
       // `progressMessage`, the hooks post the final reply as its own message.
       await safeSideEffect(() => thread.startTyping(), 'startTyping (executeWithWebhooks)');
     } else if (!supportsMessageEdit) {

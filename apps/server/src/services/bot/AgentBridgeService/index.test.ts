@@ -605,6 +605,7 @@ describe('AgentBridgeService', () => {
       await service.handleMention(thread, message, {
         agentId: 'agent-1',
         botContext: { platform: 'qq', platformThreadId: 'qq:c2c:user-1' } as any,
+        botSettings: { processingMessage: true },
         client,
       });
 
@@ -626,6 +627,7 @@ describe('AgentBridgeService', () => {
       await service.handleMention(thread, message, {
         agentId: 'agent-1',
         botContext: { platform: 'discord', platformThreadId: THREAD_ID } as any,
+        botSettings: { processingMessage: true },
         client,
       });
 
@@ -663,6 +665,22 @@ describe('AgentBridgeService', () => {
       });
 
       expect(thread.post).not.toHaveBeenCalled();
+      expect(progressMessageIdFromHooks()).toBeUndefined();
+    });
+
+    it('skips the ack by default when the bot has never set processingMessage', async () => {
+      mockGetPlatform.mockReturnValue({ id: 'qq', name: 'QQ', supportsMessageEdit: false });
+      const service = new AgentBridgeService(FAKE_DB, USER_ID);
+      const thread = createThread();
+
+      await service.handleMention(thread, createMessage(), {
+        agentId: 'agent-1',
+        botContext: { platform: 'qq', platformThreadId: 'qq:c2c:user-1' } as any,
+        client: createClient(),
+      });
+
+      expect(thread.post).not.toHaveBeenCalled();
+      expect(thread.startTyping).toHaveBeenCalled();
       expect(progressMessageIdFromHooks()).toBeUndefined();
     });
 

@@ -150,6 +150,7 @@ const mention = async (
   await service.handleMention(thread, createMessage(), {
     agentId: 'agent-1',
     botContext: { platformThreadId: THREAD_ID } as any,
+    botSettings: { processingMessage: true },
     client,
     replyLocale: 'en-US',
     ...overrides,
@@ -383,6 +384,7 @@ describe('AgentBridgeService local mode', () => {
     const pending = service.handleMention(thread, createMessage(), {
       agentId: 'agent-1',
       botContext: { platformThreadId: THREAD_ID } as any,
+      botSettings: { processingMessage: true },
       client: createClient().client,
     });
     await vi.waitFor(() => expect(mockInterruptTask).toHaveBeenCalledWith({ operationId: 'op-1' }));
