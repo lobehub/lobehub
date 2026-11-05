@@ -1,5 +1,6 @@
 // --------------- Core types & utilities ---------------
 // --------------- Registry singleton ---------------
+import { dingtalk } from './dingtalk/definition';
 import { discord } from './discord/definition';
 import { feishu } from './feishu/definitions/feishu';
 import { lark } from './feishu/definitions/lark';
@@ -118,6 +119,7 @@ export type { BotProviderFieldValues, FieldFormatViolation } from './validateFie
 export { collectFieldFormatViolations, formatFieldFormatViolations } from './validateFieldFormats';
 
 // --------------- Platform definitions ---------------
+export { dingtalk } from './dingtalk/definition';
 export { discord } from './discord/definition';
 export { feishu } from './feishu/definitions/feishu';
 export { lark } from './feishu/definitions/lark';
@@ -141,3 +143,4 @@ platformRegistry.register(qq);
 platformRegistry.register(wechat);
 platformRegistry.register(line);
 platformRegistry.register(wecom);
+platformRegistry.register(dingtalk);
