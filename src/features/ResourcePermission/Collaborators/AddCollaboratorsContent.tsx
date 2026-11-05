@@ -63,7 +63,10 @@ const styles = stylex.create({
     paddingInlineStart: '8px',
     color: cssVar.colorPrimary,
   },
-  rowSelected: { backgroundColor: cssVar.colorFillQuaternary, backgroundImage: 'none' },
+  rowSelected: {
+    backgroundColor: { 'default': cssVar.colorFillQuaternary, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: 'none',
+  },
 });
 
 /**

@@ -16,7 +16,10 @@ const styles = stylex.create({
     transition: 'background-color 0.2s',
     backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
   },
-  folderHeaderActive: { color: cssVar.colorText, backgroundColor: cssVar.colorFillSecondary },
+  folderHeaderActive: {
+    color: cssVar.colorText,
+    backgroundColor: { 'default': cssVar.colorFillSecondary, ':hover': cssVar.colorFillTertiary },
+  },
 });
 
 export interface FolderTreeItem {
