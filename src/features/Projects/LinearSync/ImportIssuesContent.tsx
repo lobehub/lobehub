@@ -20,7 +20,12 @@ import {
   type LinearIssueImportModalOptions,
 } from './types';
 import { jobsShownInDialog, useLinearSyncJobs } from './useLinearSyncJobs';
-import { isActiveLinearSyncJob, linearSyncErrorMessage } from './utils';
+import {
+  canLeaveLinearScopeStep,
+  isActiveLinearSyncJob,
+  linearScopeProjectLabel,
+  linearSyncErrorMessage,
+} from './utils';
 
 type Step = 'scope' | 'issues' | 'run';
 
@@ -131,7 +136,7 @@ const ImportIssuesContent = memo<LinearIssueImportModalOptions>(
 
     const scopeLabel = [
       filter.teamName,
-      filter.linearProjectName ?? t('linear.sync.filter.allProjects'),
+      linearScopeProjectLabel(filter, t, { withAll: true }),
       t('linear.sync.filter.statesSummary', { count: filter.stateTypes.length }),
     ].join(' · ');
 
@@ -139,8 +144,13 @@ const ImportIssuesContent = memo<LinearIssueImportModalOptions>(
       if (step === 'scope') {
         return (
           <Button
-            disabled={!filter.teamId || projectsLoading || !!projectsError}
             type={'primary'}
+            disabled={
+              !canLeaveLinearScopeStep(filter, {
+                error: projectsError,
+                isLoading: projectsLoading,
+              })
+            }
             onClick={() => setStep('issues')}
           >
             {t('linear.sync.wizard.next')}

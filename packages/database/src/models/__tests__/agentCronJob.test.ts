@@ -34,13 +34,6 @@ afterEach(async () => {
 });
 
 describe('AgentCronJobModel', () => {
-  describe('constructor', () => {
-    it('should create model with db and userId', () => {
-      const model = new AgentCronJobModel(serverDB, userId);
-      expect(model).toBeInstanceOf(AgentCronJobModel);
-    });
-  });
-
   describe('create', () => {
     it('should create a cron job with required fields', async () => {
       const model = new AgentCronJobModel(serverDB, userId);

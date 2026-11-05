@@ -1,5 +1,5 @@
 import type { LinearSyncJobMetadata } from '@lobechat/types';
-import { LINEAR_ISSUE_STATE_TYPES } from '@lobechat/types';
+import { isLinearNoProject, LINEAR_ISSUE_STATE_TYPES } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -230,7 +230,11 @@ export const linearRouter = router({
       const row = await LinearSyncRuleModel.create(ctx.serverDB, {
         connectionId: input.connectionId,
         linearProjectId: input.linearProjectId ?? null,
-        linearProjectName: input.linearProjectId ? (input.linearProjectName ?? null) : null,
+        // "No project" is labelled by the client; there is no Linear name to keep.
+        linearProjectName:
+          input.linearProjectId && !isLinearNoProject(input.linearProjectId)
+            ? (input.linearProjectName ?? null)
+            : null,
         projectId: input.projectId,
         stateTypes: input.stateTypes,
         teamId: input.teamId,

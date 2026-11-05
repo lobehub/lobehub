@@ -44,4 +44,16 @@ describe('describeLockedDevicePicker', () => {
     expect(hint).toContain('Tell the user to reconnect it (Acme desktop app or `lh connect`).');
     expect(hint).not.toContain('LobeHub');
   });
+
+  it('tells the model to retry while a managed device starts', async () => {
+    const describeLockedDevicePicker = await loadDescribe();
+    const hint = describeLockedDevicePicker({
+      deviceId: 'managed-a',
+      kind: 'device-wakeable',
+      target: 'device',
+    });
+
+    expect(hint).toContain('managed cloud device "managed-a", which is starting');
+    expect(hint).toContain('DEVICE_WAKING');
+  });
 });

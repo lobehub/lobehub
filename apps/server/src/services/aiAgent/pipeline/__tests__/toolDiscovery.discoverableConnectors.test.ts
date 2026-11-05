@@ -280,8 +280,10 @@ describe('discoverTools — unpinned custom MCP connectors', () => {
     // An activatable connector whose upstream tools changed must not keep
     // offering the old list until someone re-syncs it by hand.
     expect(scheduleStaleConnectorToolsRefresh).toHaveBeenCalledTimes(1);
-    const [connectors] = vi.mocked(scheduleStaleConnectorToolsRefresh).mock.calls[0];
+    const [connectors, , ctx] = vi.mocked(scheduleStaleConnectorToolsRefresh).mock.calls[0];
     expect(connectors.map((c) => c.identifier)).toContain(YINGMI);
+    // The refresh lists under the run's user, whose mcp_apps flag finds view-only tools
+    expect(ctx).toMatchObject({ userId: 'user-1' });
   });
 
   describe('share visitor run', () => {

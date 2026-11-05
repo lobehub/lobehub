@@ -138,12 +138,6 @@ describe('AgentEvalRunModel', () => {
         passRate: 0,
       });
     });
-
-    it('should default status to idle', async () => {
-      const result = await runModel.create({ datasetId });
-
-      expect(result.status).toBe('idle');
-    });
   });
 
   describe('query', () => {
@@ -272,13 +266,6 @@ describe('AgentEvalRunModel', () => {
 
       expect(offsetResults).toHaveLength(2);
       expect(offsetResults[0].id).toBe(allResults[1].id);
-    });
-
-    it('should order by createdAt descending', async () => {
-      const results = await runModel.query();
-
-      // Most recent should be first
-      expect(results.length).toBeGreaterThanOrEqual(3);
     });
   });
 

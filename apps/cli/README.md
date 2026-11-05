@@ -50,6 +50,79 @@ Diagnostics never dump the service's command line or environment. Older connecto
 on Linux use a conservative `/proc` lookup; an inaccessible or unsupported entry
 is reported as unknown instead of guessed.
 
+## Managed cloud devices
+
+A managed cloud device is a device that LobeHub creates and runs for you. The
+platform that runs it starts the agent with:
+
+```bash
+lh connect --managed
+```
+
+Managed mode reads everything from the environment. It does not use a stored
+login, a keychain or a browser, and it writes no credentials to disk, so it runs
+headless in a container. `lh connect service install` is not needed: the
+platform supervises the process and restarts it when it exits.
+
+| Variable                          | Required | Meaning                                                     |
+| --------------------------------- | -------- | ----------------------------------------------------------- |
+| `LOBEHUB_MANAGED_DEVICE_ID`       | yes      | The device id. It replaces the id derived from the machine. |
+| `LOBEHUB_MANAGED_DEVICE_SECRET`   | yes      | The bootstrap secret. The CLI never prints it.              |
+| `LOBEHUB_SERVER`                  | yes      | The LobeHub server URL.                                     |
+| `LOBEHUB_DEVICE_GATEWAY_URL`      | yes      | The device gateway URL.                                     |
+| `LOBEHUB_DEVICE_ACTIVITY_COMMAND` | no       | A JSON array: a command to run while the device does work.  |
+
+If a required variable is missing, the CLI names it and exits with status 1.
+`LOBEHUB_SERVER` and `LOBEHUB_DEVICE_GATEWAY_URL` must use `https`; `http` is
+accepted only for `localhost` and the loopback addresses `127.0.0.0/8` and
+`::1`. The URLs must not contain a user name, a password, a query or a fragment.
+A path is kept, so `https://example.com/lobehub` sends the token request to
+`https://example.com/lobehub/api/device/managed/token`. `--managed` cannot be used
+with `--token`, `--gateway`, `--device-id`, `--workspace`, `--public` or
+`--daemon`.
+
+After the CLI reads the secret, it removes it from its own environment, so the
+processes it starts (tool calls, agent runs) do not inherit it. This does not
+hide the secret from the device: other processes of the same user can still
+read the environment the CLI started with (for example `/proc/<pid>/environ`).
+The secret only gets tokens for this device, and it stops working when the
+device is deleted.
+
+**Token.** The CLI sends `POST {LOBEHUB_SERVER}/api/device/managed/token` with
+`{ "deviceId", "secret" }` and gets `{ "token", "expiresAt" }`, where
+`expiresAt` is an RFC 3339 time with `Z` or an offset. The token's
+`workspace_id` claim, when present, makes the device a workspace device;
+otherwise its `sub` is the owning user.
+
+- The CLI gets a new token when 80% of the token's lifetime has passed (at least
+  5 s after it got the previous one). The open gateway connection stays up:
+  only the next connection uses the new token, so running tool calls, agent
+  runs and tunnels continue.
+- On HTTP 408, 429 or 5xx, a network error or an unreadable response, the CLI
+  tries again after 1 s, then 2 s, 4 s and so on, up to 60 s between attempts
+  (each delay ±20%). It continues until the server answers.
+- On HTTP 401 (wrong secret, or the device was deleted), 404 (the server has no
+  managed cloud devices) or another 4xx, the CLI exits with status 1.
+- If the gateway rejects a token, the CLI gets a new token and connects again.
+  If the gateway also rejects that token before a connection succeeds, the CLI
+  exits with status 1.
+
+**Activity command.** When `LOBEHUB_DEVICE_ACTIVITY_COMMAND` is set, the CLI runs
+it while the device serves a tool call, an RPC, an agent run or an open tunnel.
+It runs when the work starts and then every 30 s while work continues, never
+more than once in 30 s and never two at a time. The work does not wait for it.
+A run that takes longer than 10 s is stopped. Failures appear only in the debug
+log (`--verbose`).
+
+The value is a JSON array of strings: the program, then its arguments, for
+example `["my-agent","touch"]`. The CLI runs the program directly, without a
+shell, so there is no quoting, `$VAR`, `~` or glob expansion, and `|`, `;`, `&`,
+`>` and `<` are ordinary characters. If the value is not a non-empty JSON array
+of non-empty strings, the CLI exits with status 1 at startup. To use shell
+features, give an explicit shell, for example
+`["sh","-c","my-agent touch >> /var/log/activity"]`. When the CLI stops, it
+also stops a command that is still running.
+
 ## Publish local artifacts
 
 ```bash

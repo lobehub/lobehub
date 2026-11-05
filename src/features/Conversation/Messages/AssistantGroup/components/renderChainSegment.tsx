@@ -20,6 +20,23 @@ export interface ChainSegmentRenderOptions {
   messageIndex: number;
 }
 
+/**
+ * A segment's key within its whole turn, not within the slice being rendered:
+ * folding moves a segment between slices (fold, lifted, final), and a key tied
+ * to its place in the slice would remount it. Built like the keys
+ * {@link renderChainSegment} gives the segment's own elements, so it does not
+ * depend on how the turn is sliced or on any runtime flag.
+ */
+export const getChainSegmentKey = (view: GroupChainView, segment: GroupRenderSegment): string => {
+  const index = view.segments.indexOf(segment);
+
+  if (segment.kind === 'workflow') {
+    return segment.blocks[0]?.renderKey ?? `${view.id}.workflow.${index}`;
+  }
+
+  return segment.block.renderKey ?? `${view.id}.${segment.block.id}.${index}`;
+};
+
 export const renderChainSegment = (
   view: GroupChainView,
   segment: GroupRenderSegment,

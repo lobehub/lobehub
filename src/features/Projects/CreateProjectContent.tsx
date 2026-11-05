@@ -1,13 +1,4 @@
-import {
-  Button,
-  cssVar,
-  Flexbox,
-  Input,
-  ModalFooter,
-  Text,
-  toast,
-  useModalContext,
-} from '@lobehub/ui';
+import { Button, Flexbox, Input, ModalFooter, Text, toast, useModalContext } from '@lobehub/ui';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -26,6 +17,7 @@ import {
   isProjectIdentifierValid,
   isProjectSlugValid,
 } from './createProjectForm';
+import CreateProjectMoreFields from './CreateProjectMoreFields';
 import MainAgentSection from './MainAgentSection';
 import {
   DEDICATED_MAIN_AGENT,
@@ -165,42 +157,6 @@ const CreateProjectContent = memo<CreateProjectOptions>(({ onCreated }) => {
             />
           </ProjectAvatarField>
         </Flexbox>
-        <Flexbox gap={6}>
-          <Text fontSize={13} weight={500}>
-            {t('create.identifierLabel')}
-          </Text>
-          <Input
-            aria-invalid={identifierInvalid}
-            maxLength={6}
-            placeholder={t('create.identifierPlaceholder')}
-            style={identifierInvalid ? { borderColor: cssVar.colorError } : undefined}
-            value={form.identifier}
-            onChange={(event) => updateForm({ identifier: event.target.value.toUpperCase() })}
-            onPressEnter={handleCreate}
-          />
-          <Text fontSize={12} type={identifierInvalid ? 'danger' : 'secondary'}>
-            {t(identifierInvalid ? 'create.identifierInvalid' : 'create.identifierDescription')}
-          </Text>
-        </Flexbox>
-        <Flexbox gap={6}>
-          <Text fontSize={13} weight={500}>
-            {t('create.slugLabel')}
-          </Text>
-          <Input
-            aria-invalid={!slugValid}
-            maxLength={100}
-            placeholder={t('create.slugPlaceholder')}
-            style={slugValid ? undefined : { borderColor: cssVar.colorError }}
-            value={form.slug}
-            onPressEnter={handleCreate}
-            onChange={(event) =>
-              updateForm({ slug: event.target.value.toLowerCase(), slugEdited: true })
-            }
-          />
-          <Text fontSize={12} type={slugValid ? 'secondary' : 'danger'}>
-            {t(slugValid ? 'create.slugDescription' : 'create.slugInvalid')}
-          </Text>
-        </Flexbox>
         <MainAgentSection
           agentId={mainAgentId}
           disabled={form.loading}
@@ -210,6 +166,18 @@ const CreateProjectContent = memo<CreateProjectOptions>(({ onCreated }) => {
           onAgentChange={(id) => updateForm({ mainAgentId: id })}
           onModeChange={(mainAgentMode) => updateForm({ mainAgentMode })}
         />
+        <CreateProjectMoreFields
+          identifier={form.identifier}
+          identifierInvalid={identifierInvalid}
+          slug={form.slug}
+          slugValid={slugValid}
+          onIdentifierChange={(identifier) => updateForm({ identifier })}
+          onSlugChange={(slug) => updateForm({ slug, slugEdited: true })}
+          onSubmit={handleCreate}
+        />
+        <Text fontSize={12} type="secondary">
+          {t('create.afterCreateHint')}
+        </Text>
       </Flexbox>
       <ModalFooter>
         <Button onClick={close}>{t('cancel', { ns: 'common' })}</Button>

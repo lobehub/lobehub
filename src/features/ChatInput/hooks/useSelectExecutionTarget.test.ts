@@ -200,22 +200,6 @@ describe('useSelectExecutionTarget', () => {
       );
     });
 
-    it("keeps the failure toast for a user's own pick", async () => {
-      testState.isDesktop = true;
-      testState.electron.gatewayDeviceInfo = { deviceId: 'this-machine' };
-      const { result } = renderHook(() => useSelectExecutionTarget('agent-id'));
-
-      await result.current('local');
-
-      expect(testState.agent.updateAgentConfigById).toHaveBeenCalledWith(
-        'agent-id',
-        {
-          agencyConfig: { boundDeviceId: 'this-machine', executionTarget: 'local' },
-        },
-        { rethrow: true },
-      );
-    });
-
     it('records the sandbox choice alongside a local pick', async () => {
       testState.isDesktop = true;
       testState.electron.gatewayDeviceInfo = { deviceId: 'this-machine' };

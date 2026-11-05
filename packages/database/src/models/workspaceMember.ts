@@ -1,6 +1,20 @@
 import { INVITATION_EXPIRY_DAYS } from '@lobechat/const';
 import { canWorkspaceRoleBeTaskAssignee } from '@lobechat/const/rbac';
-import { and, asc, count, eq, exists, inArray, isNotNull, isNull, or, sql } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  exists,
+  gt,
+  inArray,
+  isNotNull,
+  isNull,
+  or,
+  sql,
+} from 'drizzle-orm';
+import { nanoid as secureNanoid } from 'nanoid';
 import { nanoid } from 'nanoid/non-secure';
 
 import { devices } from '../schemas/device';
@@ -321,13 +335,94 @@ export class WorkspaceMemberModel {
     });
   };
 
+  /** Pending single-use invitations; reusable links are managed separately. */
   listPendingInvitations = async (workspaceId: string) => {
     return this.db.query.workspaceInvitations.findMany({
       where: and(
         eq(workspaceInvitations.workspaceId, workspaceId),
         eq(workspaceInvitations.status, 'pending'),
+        eq(workspaceInvitations.reusable, false),
       ),
     });
+  };
+
+  // ===== Reusable link invitations (share links) ===== //
+
+  /**
+   * The workspace's live share links, newest first: reusable, not revoked and
+   * not past `expiresAt`. A workspace may hold several at once.
+   */
+  listLinkInvitations = async (workspaceId: string, now = new Date()) => {
+    return this.db.query.workspaceInvitations.findMany({
+      orderBy: [desc(workspaceInvitations.createdAt)],
+      where: and(
+        eq(workspaceInvitations.workspaceId, workspaceId),
+        eq(workspaceInvitations.reusable, true),
+        eq(workspaceInvitations.status, 'pending'),
+        or(isNull(workspaceInvitations.expiresAt), gt(workspaceInvitations.expiresAt, now)),
+      ),
+    });
+  };
+
+  /** Number of live share links, for the per-workspace cap. */
+  countLinkInvitations = async (workspaceId: string, now = new Date()) => {
+    const [row] = await this.db
+      .select({ value: count() })
+      .from(workspaceInvitations)
+      .where(
+        and(
+          eq(workspaceInvitations.workspaceId, workspaceId),
+          eq(workspaceInvitations.reusable, true),
+          eq(workspaceInvitations.status, 'pending'),
+          or(isNull(workspaceInvitations.expiresAt), gt(workspaceInvitations.expiresAt, now)),
+        ),
+      );
+    return row?.value ?? 0;
+  };
+
+  /**
+   * Create a share link: a reusable invitation any signed-in user can accept
+   * until it expires or is revoked. `expiresAt: null` never expires.
+   */
+  createLinkInvitation = async (params: {
+    expiresAt: Date | null;
+    role?: MemberRole;
+    workspaceId: string;
+  }) => {
+    const [invitation] = await this.db
+      .insert(workspaceInvitations)
+      .values({
+        expiresAt: params.expiresAt,
+        inviterId: this.userId,
+        reusable: true,
+        role: params.role ?? 'member',
+        // Long-lived and shared publicly, so draw the token from a CSPRNG.
+        token: secureNanoid(32),
+        workspaceId: params.workspaceId,
+      })
+      .returning();
+    return invitation;
+  };
+
+  /**
+   * Revoke one share link of the workspace. Returns whether a live link was
+   * revoked (false for an unknown id, another workspace's link, a single-use
+   * invitation, or a link that was already revoked).
+   */
+  revokeLinkInvitation = async (workspaceId: string, id: string) => {
+    const rows = await this.db
+      .update(workspaceInvitations)
+      .set({ status: 'revoked', updatedAt: new Date() })
+      .where(
+        and(
+          eq(workspaceInvitations.id, id),
+          eq(workspaceInvitations.workspaceId, workspaceId),
+          eq(workspaceInvitations.reusable, true),
+          eq(workspaceInvitations.status, 'pending'),
+        ),
+      )
+      .returning({ id: workspaceInvitations.id });
+    return rows.length > 0;
   };
 
   revokeInvitation = async (id: string) => {

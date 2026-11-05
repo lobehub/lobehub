@@ -374,3 +374,119 @@ describe('TaskLabelModel task assignments', () => {
     expect(links[0].userId).toBe(otherUserId);
   });
 });
+
+describe('TaskLabelModel id guards', () => {
+  it('treats a malformed id as absent instead of raising a uuid cast error', async () => {
+    const label = await workspace.create({ name: 'Bug' });
+
+    expect(await workspace.findById('not-a-uuid')).toBeUndefined();
+    expect(await workspace.findByIds(['not-a-uuid'])).toEqual([]);
+    await expect(workspace.delete('not-a-uuid')).resolves.toBeUndefined();
+
+    // A mixed list keeps the rows that do resolve.
+    expect((await workspace.findByIds([label.id, 'not-a-uuid'])).map((l) => l.id)).toEqual([
+      label.id,
+    ]);
+    expect(await workspace.findByIds([label.id])).toHaveLength(1);
+  });
+
+  it('resolves no names when every entry is blank', async () => {
+    await workspace.create({ name: 'Bug' });
+
+    expect(await workspace.findByNames(['', '   '])).toEqual([]);
+  });
+
+  it('reports a malformed parent id as a missing group', async () => {
+    await expectCode(
+      workspace.create({ name: 'Orphan', parentId: 'not-a-uuid' }),
+      'INVALID_PARENT',
+    );
+  });
+
+  it('checks an assignment set without writing anything', async () => {
+    const group = await workspace.create({ isGroup: true, name: 'Type' });
+    const bug = await workspace.create({ name: 'Bug', parentId: group.id });
+    const feature = await workspace.create({ name: 'Feature', parentId: group.id });
+    const loose = await workspace.create({ name: 'Loose' });
+
+    await expect(workspace.assertAssignable([loose.id, bug.id])).resolves.toBeUndefined();
+    await expectCode(workspace.assertAssignable([group.id]), 'GROUP_NOT_ASSIGNABLE');
+    await expectCode(workspace.assertAssignable([bug.id, feature.id]), 'GROUP_CONFLICT');
+  });
+});
+
+describe('TaskLabelModel sparse updates', () => {
+  it('writes a patch without a parent change straight through', async () => {
+    const label = await workspace.create({ name: 'Bug' });
+
+    // No `parentId` in the patch: no parent or conflict checks run.
+    expect(await workspace.update(label.id, { color: '#123456' })).toMatchObject({
+      color: '#123456',
+      name: 'Bug',
+    });
+    // A name-only patch is trimmed and the parent left alone.
+    expect(await workspace.update(label.id, { name: '  Bugfix  ' })).toMatchObject({
+      name: 'Bugfix',
+    });
+  });
+
+  it('reports a missing label as LABEL_NOT_FOUND', async () => {
+    const group = await workspace.create({ isGroup: true, name: 'Type' });
+    const label = await workspace.create({ name: 'Bug' });
+    await workspace.delete(label.id);
+
+    await expectCode(workspace.update(label.id, { name: 'Gone' }), 'LABEL_NOT_FOUND');
+    await expectCode(workspace.update(label.id, { parentId: group.id }), 'LABEL_NOT_FOUND');
+  });
+
+  it('reports LABEL_NOT_FOUND when the row vanishes under the lock', async () => {
+    const group = await workspace.create({ isGroup: true, name: 'Type' });
+    const label = await workspace.create({ name: 'Bug' });
+    const snapshot = await workspace.findById(label.id);
+
+    // A writer that already read the label, which another request then deletes.
+    const racy = new TaskLabelModel(serverDB, userId, workspaceId);
+    racy.findById = async () => snapshot;
+    await workspace.delete(label.id);
+
+    await expectCode(racy.update(label.id, { parentId: group.id }), 'LABEL_NOT_FOUND');
+  });
+
+  it('writes a move to the parent the label already sits in without a conflict check', async () => {
+    const group = await workspace.create({ isGroup: true, name: 'Type' });
+    const label = await workspace.create({ name: 'Bug', parentId: group.id });
+
+    expect(await workspace.update(label.id, { parentId: group.id })).toMatchObject({
+      parentId: group.id,
+    });
+  });
+
+  it('returns the current set for an empty label list', async () => {
+    const task = await new TaskModel(serverDB, userId, workspaceId).create({ instruction: 'a' });
+    const label = await workspace.create({ name: 'Bug' });
+    await workspace.addTaskLabels(task.id, [label.id]);
+
+    expect(await workspace.getLabelsForTasks([])).toEqual({});
+    expect((await workspace.addTaskLabels(task.id, [])).map((l) => l.id)).toEqual([label.id]);
+  });
+});
+
+describe('TaskLabelModel personal handover', () => {
+  it('keeps label links on a same-owner move and drops them for another owner', async () => {
+    const personalTasks = new TaskModel(serverDB, userId);
+    const toSameOwner = await personalTasks.create({ instruction: 'same owner' });
+    const toAnotherOwner = await personalTasks.create({ instruction: 'another owner' });
+    const label = await personal.create({ name: 'Mine' });
+    await personal.addTaskLabels(toSameOwner.id, [label.id]);
+    await personal.addTaskLabels(toAnotherOwner.id, [label.id]);
+
+    // A personal label registry is not visible to another user, so only the
+    // same-owner handover can keep its links.
+    await personalTasks.transferTo(toSameOwner.id, null, userId);
+    await personalTasks.transferTo(toAnotherOwner.id, null, otherUserId);
+
+    const links = await serverDB.select().from(taskLabelLinks);
+    expect(links.map((link) => link.taskId)).toEqual([toSameOwner.id]);
+    expect(links[0].userId).toBe(userId);
+  });
+});

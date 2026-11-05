@@ -8,6 +8,7 @@ import type {
   LinearSyncSkipReason,
   TaskItem,
 } from '@lobechat/types';
+import { isLinearNoProject } from '@lobechat/types';
 import debug from 'debug';
 import pMap from 'p-map';
 
@@ -325,7 +326,7 @@ export class LinearIssueSyncService {
     // can be any team the project belongs to, not just the filter's team.
     const seen = new Set(issues.map((issue) => issue.id));
     const teamIds = new Set([filter.teamId, ...issues.map((issue) => issue.team.id)]);
-    if (filter.linearProjectId) {
+    if (filter.linearProjectId && !isLinearNoProject(filter.linearProjectId)) {
       // Let a failed lookup fail the run: skipping the project's other teams
       // would leave their closed issues' tasks open without any sign of it.
       for (const id of await getLinearProjectTeamIds(accessToken, filter.linearProjectId)) {

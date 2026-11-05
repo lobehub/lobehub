@@ -125,6 +125,21 @@ export async function executeWithHooksLocalMode(
   // last streamed progress frame.
   let lastProgressText: string | undefined;
 
+  // Edit the placeholder when there is one; otherwise post the notice as its
+  // own message. The placeholder is off by default (`processingMessage`), so a
+  // stop or startup failure must not depend on it or the user sees nothing.
+  const showNotice = async (markdown: string, what: string) => {
+    try {
+      if (progressMessage) {
+        await progressMessage.edit({ markdown });
+      } else {
+        await thread.post({ markdown });
+      }
+    } catch (error) {
+      log('executeWithCallback[local]: failed to show %s: %O', what, error);
+    }
+  };
+
   const stopGatewayTyping = () => {
     if (gatewayConnectionId && botContext?.platformThreadId) {
       const gwClient = getMessageGatewayClient(platformFromThreadId(botContext.platformThreadId));
@@ -280,15 +295,7 @@ export async function executeWithHooksLocalMode(
                 }
 
                 if (reason === 'interrupted') {
-                  if (progressMessage) {
-                    try {
-                      await progressMessage.edit({
-                        markdown: renderStopped(undefined, replyLocale),
-                      });
-                    } catch {
-                      // ignore edit failure
-                    }
-                  }
+                  await showNotice(renderStopped(undefined, replyLocale), 'stopped message');
                   resolve({ reply: '', topicId: resolvedTopicId });
                   return;
                 }
@@ -512,14 +519,11 @@ export async function executeWithHooksLocalMode(
           // progress message. Rendering here too would just overwrite its
           // (better-classified) copy — or, with no placeholder to edit, add a
           // second error message to the thread.
-          if (progressMessage && !result.terminalReported) {
-            try {
-              await progressMessage.edit({
-                markdown: renderThrownAgentError(result.error, result.operationId, replyLocale),
-              });
-            } catch (error) {
-              log('executeWithCallback[local]: failed to edit startup error: %O', error);
-            }
+          if (!result.terminalReported) {
+            await showNotice(
+              renderThrownAgentError(result.error, result.operationId, replyLocale),
+              'startup error',
+            );
           }
 
           resolve({ reply: '', topicId: result.topicId });
@@ -552,15 +556,7 @@ export async function executeWithHooksLocalMode(
         clearTimeout(timeout);
 
         if (isAbortError(error)) {
-          if (progressMessage) {
-            try {
-              await progressMessage.edit({
-                markdown: renderStopped(error.message, replyLocale),
-              });
-            } catch (editError) {
-              log('executeWithCallback[local]: failed to edit stopped message: %O', editError);
-            }
-          }
+          await showNotice(renderStopped(error.message, replyLocale), 'stopped message');
 
           resolve({ reply: '', topicId: topicId ?? '' });
           return;
@@ -589,15 +585,10 @@ export async function executeWithHooksLocalMode(
         // is traceable instead of opaque.
         const fallbackOperationId = deps.activeOperations.get(thread.id);
 
-        if (progressMessage) {
-          try {
-            await progressMessage.edit({
-              markdown: renderThrownAgentError(error, fallbackOperationId, replyLocale),
-            });
-          } catch (editError) {
-            log('executeWithCallback[local]: failed to edit startup error: %O', editError);
-          }
-        }
+        await showNotice(
+          renderThrownAgentError(error, fallbackOperationId, replyLocale),
+          'startup error',
+        );
 
         resolve({ reply: '', topicId: topicId ?? '' });
       });

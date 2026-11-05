@@ -24,6 +24,8 @@ export enum FileSource {
   /** Original upload owned by an agent's document tree rather than the resource library. */
   AgentDocument = 'agent-document',
   Canvas = 'canvas',
+  /** Attachment sent in a public agent's conversation; shared with the conversation, not the library. */
+  ChatAttachment = 'chat-attachment',
   ImageGeneration = 'image_generation',
   /** Audio recording owned by a meeting (`meetings.audio_file_id`), not the resource library. */
   Meeting = 'meeting',
@@ -55,6 +57,7 @@ export const LIBRARY_HIDDEN_FILE_SOURCES: FileSource[] = [
   FileSource.Canvas,
   FileSource.Meeting,
   FileSource.ToolResult,
+  FileSource.ChatAttachment,
 ];
 
 /** Sources a generation model wrote, as opposed to anything a human put there. */

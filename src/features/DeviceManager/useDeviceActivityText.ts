@@ -2,6 +2,8 @@ import type { DeviceListItem } from '@lobechat/types';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 
+import { getManagedDeviceStatus, managedStatusLabelKey } from './managedDeviceStatus';
+
 /**
  * A device's presence as one line — "Online · Connected 5 minutes ago" or
  * "Last connected 2 days ago". Shared by the device card footer and the
@@ -22,10 +24,18 @@ import { useTranslation } from 'react-i18next';
  *
  * A row restored from the persisted list (`onlineUnknown`) has no channels by
  * construction, so it reads as "checking" rather than as offline.
+ *
+ * A managed cloud device reports its phase instead when the connection does
+ * not explain it: a sleeping one says it wakes on demand rather than showing
+ * when it last connected.
  */
 export const useDeviceActivityText = (device: DeviceListItem) => {
   const { t } = useTranslation('setting');
   const channels = device.channels ?? [];
+
+  const managedStatus = getManagedDeviceStatus(device);
+  if (managedStatus === 'sleeping') return t('devices.managed.status.sleepingHint');
+  if (managedStatus) return t(managedStatusLabelKey[managedStatus]);
 
   if (device.onlineUnknown) return t('devices.status.checking');
 

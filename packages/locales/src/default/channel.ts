@@ -107,6 +107,9 @@ export default {
   'conversationEmpty': 'Start the conversation',
   'mentionHint':
     'Mention Agents to choose who replies. Without a mention, every Agent here replies.',
+  'mentionInvite.failed': "Couldn't add {{name}} to the channel. Try again.",
+  'mentionInvite.failedReason': "Couldn't add {{name}} to the channel: {{reason}}",
+  'mentionInvite.section': 'Not in this channel · mention to add',
   'attachments.upload': 'Attach files',
   'attachments.failed': 'Upload failed. Try again.',
   'attachments.limit': 'Attach up to {{count}} files.',

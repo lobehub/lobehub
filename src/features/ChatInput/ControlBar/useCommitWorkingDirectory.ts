@@ -14,6 +14,8 @@ import { topicSelectors } from '@/store/chat/selectors';
 import { useDeviceStore } from '@/store/device';
 import { getElectronStoreState, useElectronStore } from '@/store/electron';
 
+import { stagedProjectDirectoryIdSelector } from './useProjectTopicDirectory';
+
 export interface CommitWorkingDirectoryOptions extends CommitAgentDefaultOptions {
   /**
    * Persist against the `local` execution target on this machine, regardless of
@@ -119,6 +121,9 @@ export const useCommitWorkingDirectory = (agentId: string, routeTopicId?: string
   const activeTopic = useChatStore((s) =>
     activeTopicId ? topicSelectors.getTopicById(activeTopicId)(s) : undefined,
   );
+  // A blank conversation staged in a project directory has no topic to record
+  // a pick on, and the agent default is not where it will run.
+  const stagedDirectoryId = useChatStore(stagedProjectDirectoryIdSelector(agentId, activeTopicId));
   const updateTopicMetadata = useChatStore((s) => s.updateTopicMetadata);
 
   const updateDeviceCwd = useDeviceStore((s) => s.updateDeviceCwd);
@@ -312,6 +317,7 @@ export const useCommitWorkingDirectory = (agentId: string, routeTopicId?: string
       const effectivePath = getWorkingDirEffectivePath(normalizedEntry);
       if (!normalizedEntry || !effectivePath) return;
 
+      if (stagedDirectoryId) throw new Error(t('directories.boundRoot', { ns: 'project' }));
       if (activeTopic?.projectWorkingDirectoryId) {
         const source = getWorkingDirSourcePath(
           activeTopic.metadata?.workingDirectoryConfig ?? activeTopic.metadata?.workingDirectory,
@@ -342,7 +348,7 @@ export const useCommitWorkingDirectory = (agentId: string, routeTopicId?: string
       }
       await run();
     },
-    [activeTopic, isHetero, t, writeCwd],
+    [activeTopic, isHetero, stagedDirectoryId, t, writeCwd],
   );
 
   /**

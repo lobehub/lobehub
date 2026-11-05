@@ -47,6 +47,13 @@ const toUsageData = (usage: any): UsageData => {
   };
 };
 
+/**
+ * Calls a tool makes through `ctx.executeTool()` (codemode, tool_search, MCP)
+ * carry `parentToolCallId`. They never become transcript tool calls: the
+ * calling tool reports their results itself.
+ */
+const isNestedToolExecution = (raw: any): boolean => typeof raw.parentToolCallId === 'string';
+
 const toToolPayload = (toolCall: any): ToolCallPayload | undefined => {
   if (!toolCall || typeof toolCall.id !== 'string') return;
 
@@ -135,6 +142,7 @@ export class PiAdapter implements AgentEventAdapter {
         return [];
       }
       case 'tool_execution_start': {
+        if (isNestedToolExecution(raw)) return [];
         return this.startTool({
           arguments: raw.args,
           id: raw.toolCallId,
@@ -142,6 +150,7 @@ export class PiAdapter implements AgentEventAdapter {
         });
       }
       case 'tool_execution_end': {
+        if (isNestedToolExecution(raw)) return [];
         if (typeof raw.toolCallId === 'string' && !this.completedToolResults.has(raw.toolCallId)) {
           this.executionResults.set(raw.toolCallId, {
             isError: raw.isError === true,
@@ -180,6 +189,9 @@ export class PiAdapter implements AgentEventAdapter {
         return [];
       }
       case 'agent_settled': {
+        // `aborted` (Pi >= 1.1) also covers cancellation while a tool runs,
+        // which produces no aborted assistant message.
+        if (raw.aborted === true) return this.handleAborted();
         return this.handleSettled();
       }
       default: {

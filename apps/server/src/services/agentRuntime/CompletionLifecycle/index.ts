@@ -11,6 +11,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import { formatErrorForState } from '@/server/modules/AgentRuntime/formatErrorForState';
 import {
   instantiateVerifyPlanOnStart,
+  releaseUndeliveredRound,
   runVerifyOnCompletion,
   settleFailedRepair,
 } from '@/server/services/verify';
@@ -489,12 +490,12 @@ export class CompletionLifecycle {
 
       if (reason === 'error' || reason === 'interrupted') {
         after(async () => {
-          await settleFailedRepair(
-            this.serverDB,
-            runOrigin.userId || this.userId,
-            operationId,
-            this.workspaceId,
-          );
+          const userId = runOrigin.userId || this.userId;
+          await settleFailedRepair(this.serverDB, userId, operationId, this.workspaceId);
+          // A task run that failed before delivering leaves the round opened at
+          // its start with nothing to verify. When planning is still under way,
+          // `instantiateVerifyPlanOnStart` releases the round once it lands.
+          await releaseUndeliveredRound(this.serverDB, userId, operationId, this.workspaceId);
         });
       }
 

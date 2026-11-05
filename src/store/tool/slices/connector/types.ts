@@ -6,6 +6,8 @@ export interface ConnectorTool {
   displayName: string | null;
   id: string;
   inputSchema: Record<string, unknown> | null;
+  /** Synced metadata; `visibility` is the MCP tool's `_meta.ui.visibility`. */
+  metadata?: Record<string, unknown> | null;
   permission: ConnectorToolPermission;
   toolName: string;
   userConnectorId: string;

@@ -2851,7 +2851,6 @@
   "workspace.billingPage.usage.categories.imageGeneration": "توليد الصور",
   "workspace.billingPage.usage.categories.tts": "تحويل النص إلى كلام",
   "workspace.billingPage.usage.categories.videoGeneration": "توليد الفيديو",
-  "workspace.billingPage.usage.empty": "لا يوجد إنفاق حتى الآن",
   "workspace.billingPage.usage.logsTitle": "النشاطات الحديثة",
   "workspace.billingPage.usage.member": "العضو",
   "workspace.billingPage.usage.member.moreMembers_one": "{{count}} عضو إضافي",

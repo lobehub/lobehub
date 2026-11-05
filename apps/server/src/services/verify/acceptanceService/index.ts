@@ -376,9 +376,18 @@ export class AcceptanceService {
     if (acceptance.status === 'rejected' && current.userDecision === 'reject') return 'rejected';
 
     const report = await this.reportModel.findByRun(current.id);
-    const status = statusFromRound(current, Boolean(report));
+    const derived = statusFromRound(current, Boolean(report));
+    // A task acceptance settles under a row lock that also closes it when its
+    // goal node has been retired: a round still verifying at retirement lands
+    // here afterwards, and the Goal discarded that node's outcome, so it must
+    // not reopen a sign-off request for dropped work.
+    const status =
+      acceptance.subjectType === 'task'
+        ? ((await this.acceptanceModel.settleTaskPolicyStatus(acceptanceId, derived)) ?? derived)
+        : derived;
     if (status !== acceptance.status) {
-      await this.acceptanceModel.updatePolicyStatus(acceptanceId, status);
+      if (acceptance.subjectType !== 'task')
+        await this.acceptanceModel.updatePolicyStatus(acceptanceId, status);
       notifyAcceptance(acceptanceId, 'session');
       log('acceptance %s → %s (from round %d)', acceptanceId, status, current.roundIndex);
     }
