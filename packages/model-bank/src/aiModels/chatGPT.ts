@@ -15,12 +15,12 @@ const CHATGPT_MODEL_IDS = new Set([
 /**
  * Models available through ChatGPT subscription authentication use the Codex
  * backend rather than the usage-billed OpenAI Platform API. Reuse the OpenAI
- * model metadata, but omit per-token pricing and cap the context window to the
- * current Codex catalog limit.
+ * model metadata, but omit per-token pricing and `isOfficial` (these cards carry no list price)
+ * and cap the context window to the current Codex catalog limit.
  */
 const chatGPTChatModels: AIChatModelCard[] = openaiChatModels
   .filter(({ id }) => CHATGPT_MODEL_IDS.has(id))
-  .map(({ pricing: _pricing, ...model }) => ({
+  .map(({ isOfficial: _isOfficial, pricing: _pricing, ...model }) => ({
     ...model,
     contextWindowTokens: 272_000,
     settings: {

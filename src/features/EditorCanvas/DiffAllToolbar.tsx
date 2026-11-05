@@ -1,7 +1,7 @@
 'use client';
 
 import type { IEditor } from '@lobehub/editor';
-import { DiffAction, LITEXML_DIFFNODE_ALL_COMMAND } from '@lobehub/editor';
+import { DiffAction } from '@lobehub/editor';
 import { Block, Button, Flexbox, Icon } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
@@ -11,6 +11,8 @@ import { useTranslation } from 'react-i18next';
 
 import { useIsDark } from '@/hooks/useIsDark';
 import { useDocumentStore } from '@/store/document';
+
+import { resolveAllDiffs } from './resolveAllDiffs';
 
 const styles = stylex.create({
   container: {
@@ -133,9 +135,7 @@ const DiffAllToolbar = memo<DiffAllToolbarProps>(({ documentId, editor }) => {
             size={'small'}
             type="text"
             onClick={async () => {
-              editor.dispatchCommand(LITEXML_DIFFNODE_ALL_COMMAND, {
-                action: DiffAction.Reject,
-              });
+              resolveAllDiffs(editor, DiffAction.Reject);
               await handleSave();
             }}
           >
@@ -146,9 +146,7 @@ const DiffAllToolbar = memo<DiffAllToolbarProps>(({ documentId, editor }) => {
             size={'small'}
             type="fill"
             onClick={async () => {
-              editor.dispatchCommand(LITEXML_DIFFNODE_ALL_COMMAND, {
-                action: DiffAction.Accept,
-              });
+              resolveAllDiffs(editor, DiffAction.Accept);
               await handleSave();
             }}
           >

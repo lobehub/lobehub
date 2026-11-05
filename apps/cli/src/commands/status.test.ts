@@ -6,6 +6,7 @@ import { createPublicLambdaClient } from '../api/client';
 import { resolveToken } from '../auth/resolveToken';
 import { loadDeviceGatewayUrl, saveDeviceGatewayUrl } from '../settings';
 import { log } from '../utils/logger';
+import { warnStaleConnectors } from './connectStatus';
 import { registerStatusCommand } from './status';
 
 const OFFICIAL_AUTH = {
@@ -15,6 +16,8 @@ const OFFICIAL_AUTH = {
   userId: 'test-user',
 };
 const SELF_HOSTED = 'https://self-hosted.example.com';
+
+vi.mock('./connectStatus', () => ({ warnStaleConnectors: vi.fn() }));
 
 // Mock resolveToken
 vi.mock('../auth/resolveToken', () => ({ resolveToken: vi.fn() }));
@@ -67,6 +70,7 @@ describe('status command', () => {
     vi.mocked(resolveToken).mockResolvedValue(OFFICIAL_AUTH);
     vi.mocked(loadDeviceGatewayUrl).mockReturnValue(undefined);
     getGlobalConfig.mockResolvedValue({ serverConfig: {} });
+    vi.mocked(warnStaleConnectors).mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -101,6 +105,24 @@ describe('status command', () => {
     clientEventHandlers['connected']?.();
     await parsePromise;
   };
+
+  it('flags a connector running other code before probing with a fresh connection', async () => {
+    await runConnected();
+
+    expect(warnStaleConnectors).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(warnStaleConnectors).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(resolveToken).mock.invocationCallOrder[0],
+    );
+  });
+
+  it('still probes when the connector version check fails', async () => {
+    vi.mocked(warnStaleConnectors).mockRejectedValue(new Error('status file unreadable'));
+
+    await runConnected();
+
+    expect(connectCalled).toBe(true);
+    expect(exitSpy).toHaveBeenCalledWith(0);
+  });
 
   it("probes the gateway advertised by the token's server when none is saved", async () => {
     vi.mocked(resolveToken).mockResolvedValue({ ...OFFICIAL_AUTH, serverUrl: SELF_HOSTED });

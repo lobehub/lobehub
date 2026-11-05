@@ -49,7 +49,8 @@ export const channelKeys = {
   ),
   userCandidates: def(
     'channel:userCandidates',
-    (channelId: string, search: string) => ['channel:userCandidates', channelId, search] as const,
+    (channelId: string | undefined, search: string) =>
+      ['channel:userCandidates', channelId ?? null, search] as const,
   ),
 };
 
@@ -927,8 +928,6 @@ export const ollamaKeys = {
   downloadModel: def('ollama:downloadModel', (model: string) => ['ollama:downloadModel', model]),
 };
 export const authKeys = {
-  oauthAppById: def('auth:oauthAppById', (id: string) => ['auth:oauthAppById', id]),
-  oauthAppList: def('auth:oauthAppList', () => ['auth:oauthAppList']),
   oidcClientMetadata: def('auth:oidcClientMetadata', (clientId: string) => [
     'auth:oidcClientMetadata',
     clientId,

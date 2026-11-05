@@ -116,8 +116,6 @@
   "knowledgeBases.searchPlaceholder": "جستجوی کتابخانه‌ها",
   "knowledgeBases.updateFailed": "کتابخانه قابل به‌روزرسانی نیست",
   "list.deleteAction": "حذف پروژه",
-  "list.deleteConfirmDescription": "“{{name}}” حذف شود؟ وظایف پروژه، اهداف، موضوعات و پیوندهای آن به طور دائمی حذف خواهند شد.",
-  "list.deleteConfirmTitle": "حذف پروژه؟",
   "list.deleteError": "امکان حذف پروژه وجود ندارد.",
   "list.deleteSuccess": "«{{name}}» حذف شد",
   "list.emptyDescription": "اولین پروژه خود را ایجاد کنید تا اهداف، وظایف و منابع را سازماندهی کنید.",

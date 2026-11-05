@@ -46,6 +46,8 @@ export default {
   'switchAgent.title': 'Quick Switch Agent',
   'switchTab.desc': 'Jump to a specific tab by its position (1–9) in the Desktop app tab bar',
   'switchTab.title': 'Switch to Tab by Number',
+  'openTaskFilter.desc': 'Open the filter menu on the Tasks page',
+  'openTaskFilter.title': 'Filter Tasks',
   'toggleFavorite.desc': 'Add the open page to the Favorites section of the sidebar, or remove it',
   'toggleFavorite.title': 'Add to / Remove from Favorites',
   'toggleLeftPanel.desc': 'Show or hide the left panel',

@@ -2,8 +2,9 @@ import type * as DeviceGatewayClientModule from '@lobechat/device-gateway-client
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type * as ApiClientModule from '../../api/client';
-import type { ConnectServiceStatus } from '../../service/status';
+import { cliVersion } from '../../pkg';
 import type * as ServiceStatusModule from '../../service/status';
+import type { ConnectServiceStatus } from '../../service/status';
 import type * as SettingsModule from '../../settings';
 import type * as ProbesModule from '../probes';
 import { makeContext, runCheck } from '../testUtils';
@@ -179,7 +180,7 @@ describe('device.daemon', () => {
       },
     ];
     state.daemonStatus = {
-      cliVersion: '0.0.71',
+      cliVersion,
       connectionStatus: 'connected',
       deviceId: 'dev_1',
       gatewayUrl: 'wss://gw',
@@ -208,6 +209,27 @@ describe('device.daemon', () => {
     expect(outcome.detail).toContain('left over');
   });
 
+  it('repairs only the stale process observed by the check', async () => {
+    state.daemonStatus = {
+      pid: 4,
+      connectionStatus: 'connected',
+      gatewayUrl: 'wss://gw',
+      startedAt: '',
+    };
+    const outcome = await runCheck(deviceChecks, 'device.daemon');
+    state.daemonStatus = { ...state.daemonStatus, pid: 42 };
+    const check = deviceChecks.find((item) => item.id === 'device.daemon')!;
+    await check.repair!(makeContext(), {
+      ...outcome,
+      durationMs: 0,
+      group: 'device',
+      id: check.id,
+      title: check.title,
+    });
+    expect(removePid).toHaveBeenCalledWith(4);
+    expect(removeStatus).toHaveBeenCalledWith(4);
+  });
+
   it('does not call a live daemon connected without its own report', async () => {
     state.daemonPid = 42;
     state.daemonStatus = null;
@@ -221,6 +243,7 @@ describe('device.daemon', () => {
   it('reports a healthy daemon', async () => {
     state.daemonPid = 42;
     state.daemonStatus = {
+      cliVersion,
       connectionStatus: 'connected',
       deviceId: 'dev_1',
       gatewayUrl: 'wss://gw',
@@ -233,6 +256,31 @@ describe('device.daemon', () => {
     expect(outcome.status).toBe('ok');
     expect(outcome.detail).toContain('dev_1');
   });
+
+  it.each([
+    ['0.0.1', 'running CLI 0.0.1'],
+    [undefined, 'did not report its CLI version'],
+  ])(
+    'flags a connected daemon still running code from before an update (%s)',
+    async (running, detail) => {
+      state.daemonPid = 42;
+      state.daemonStatus = {
+        cliVersion: running,
+        connectionStatus: 'connected',
+        deviceId: 'dev_1',
+        gatewayUrl: 'wss://gw',
+        pid: 42,
+        startedAt: '',
+      };
+
+      const outcome = await runCheck(deviceChecks, 'device.daemon');
+
+      expect(outcome.status).toBe('warn');
+      expect(outcome.detail).toContain(detail);
+      expect(outcome.detail).toContain(`installed CLI is ${cliVersion}`);
+      expect(outcome.fix).toContain('lh connect restart');
+    },
+  );
 
   it('flags a daemon whose last known state was not connected', async () => {
     state.daemonPid = 42;

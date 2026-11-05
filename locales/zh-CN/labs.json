@@ -28,8 +28,6 @@
   "features.imessage.title": "iMessage 渠道",
   "features.inAppBrowser.desc": "在会话侧边栏显示「浏览器」标签页:内嵌浏览器可就地打开搜索结果,并让 Agent 的浏览操作实时可见。",
   "features.inAppBrowser.title": "内置浏览器",
-  "features.inputMarkdown.desc": "在输入区域实时渲染 Markdown（粗体、代码块、表格等）",
-  "features.inputMarkdown.title": "输入框 Markdown 渲染",
   "features.messageTextSelectionActions.desc": "在聊天消息中选中文本时显示快捷操作，可将选中的文本加入下一次对话上下文。",
   "features.messageTextSelectionActions.title": "消息文本选择操作",
   "features.oauthApps.desc": "在个人和工作区设置中显示 OAuth 应用管理入口。此功能默认隐藏。",

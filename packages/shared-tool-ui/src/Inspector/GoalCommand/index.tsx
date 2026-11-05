@@ -2,7 +2,9 @@
 
 import type { RunCommandState } from '@lobechat/tool-runtime';
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
+import { cx } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Target, X } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -10,34 +12,25 @@ import { useTranslation } from 'react-i18next';
 import { inspectorTextStyles, shinyTextStyles } from '../../styles';
 import { type GoalCommand, isGoalCommandFailed } from '../../utils/goalCommand';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  chip: css`
-    overflow: hidden;
-    flex-shrink: 1;
-
-    min-width: 0;
-    margin-inline-start: 6px;
-    padding-block: 2px;
-    padding-inline: 10px;
-    border-radius: 999px;
-
-    font-size: 12px;
-    color: ${cssVar.colorText};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  icon: css`
-    flex-shrink: 0;
-    margin-inline-end: 6px;
-    color: ${cssVar.colorTextDescription};
-  `,
-  statusIcon: css`
-    flex-shrink: 0;
-    margin-inline-start: 4px;
-  `,
-}));
+const styles = stylex.create({
+  chip: {
+    overflow: 'hidden',
+    flexShrink: 1,
+    minWidth: '0',
+    marginInlineStart: '6px',
+    paddingBlock: '2px',
+    paddingInline: '10px',
+    borderRadius: '999px',
+    fontSize: '12px',
+    color: cssVar.colorText,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+  icon: { flexShrink: 0, marginInlineEnd: '6px', color: cssVar.colorTextDescription },
+  statusIcon: { flexShrink: 0, marginInlineStart: '4px' },
+});
 
 export interface GoalCommandInspectorProps extends BuiltinInspectorProps<
   { command?: string },
@@ -62,12 +55,18 @@ export const GoalCommandInspector = memo<GoalCommandInspectorProps>(
 
     return (
       <div className={inspectorTextStyles.root}>
-        <Target className={styles.icon} size={14} />
+        <Target className={stylex.props(styles.icon).className} size={14} />
         <span className={cx(inFlight && shinyTextStyles.shinyText)}>
           {t(`builtins.goalCommand.${goalCommand.kind}.${status}` as any)}
         </span>
-        {title && <span className={styles.chip}>{title}</span>}
-        {failed && <X className={styles.statusIcon} color={cssVar.colorError} size={14} />}
+        {title && <span {...stylex.props(styles.chip)}>{title}</span>}
+        {failed && (
+          <X
+            className={stylex.props(styles.statusIcon).className}
+            color={cssVar.colorError}
+            size={14}
+          />
+        )}
       </div>
     );
   },

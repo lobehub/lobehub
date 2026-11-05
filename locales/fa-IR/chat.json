@@ -2386,6 +2386,7 @@
   "taskDetail.activities.priority.changed": "<actor/> اولویت را از <from/> به <to/> تغییر داد",
   "taskDetail.activities.status.changed": "<actor/> وضعیت را از <from/> به <to/> تغییر داد",
   "taskDetail.activitiesEmpty": "هنوز فعالیتی وجود ندارد",
+  "taskDetail.activitiesLoadMore": "نمایش فعالیت‌های قبلی ({{count}})",
   "taskDetail.addSubtask": "افزودن زیر‌وظیفه",
   "taskDetail.artifactInaccessible": "سند در دسترس نیست — دسترسی وجود ندارد",
   "taskDetail.artifactMenu.delete": "حذف از وظیفه",

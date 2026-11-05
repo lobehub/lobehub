@@ -4,6 +4,7 @@ import { and, desc, eq, gt, inArray, isNotNull, lte, or, sql } from 'drizzle-orm
 import type { ResourceTransferRequestItem } from '../schemas';
 import { notifications, resourceTransferRequests } from '../schemas';
 import type { LobeChatDatabase, Transaction } from '../type';
+import { isUniqueViolation } from '../utils/uniqueViolation';
 
 /** Create rejected: the resource already carries a live transfer request. */
 export const TRANSFER_REQUEST_ALREADY_PENDING = 'TRANSFER_REQUEST_ALREADY_PENDING';
@@ -18,14 +19,6 @@ export const TRANSFER_REQUEST_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export const PENDING_TRANSFER_LIST_LIMIT = 50;
 
 type Executor = Transaction | LobeChatDatabase;
-
-const PG_UNIQUE_VIOLATION = '23505';
-
-const isUniqueViolation = (error: unknown): boolean =>
-  !!error &&
-  typeof error === 'object' &&
-  (('code' in error && (error as { code?: string }).code === PG_UNIQUE_VIOLATION) ||
-    ('cause' in error && isUniqueViolation((error as { cause?: unknown }).cause)));
 
 /**
  * Lifecycle of member-to-member ownership handover requests, scoped to one
