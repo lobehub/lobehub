@@ -171,7 +171,7 @@ const Header = memo(() => {
 
   const handleDelete = useCallback(() => {
     if (!canManage || !activeAgentId) return;
-    void confirmRemoveAgent({
+    confirmRemoveAgent({
       agentId: activeAgentId,
       onConfirm: async (options) => {
         try {

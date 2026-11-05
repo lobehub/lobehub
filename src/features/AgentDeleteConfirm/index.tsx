@@ -1,5 +1,6 @@
-import { confirmModal } from '@lobehub/ui';
+import { confirmModal, Skeleton } from '@lobehub/ui';
 import { t } from 'i18next';
+import { Suspense, use } from 'react';
 
 import { agentService, type RemoveAgentOptions } from '@/services/agent';
 
@@ -19,8 +20,8 @@ type AgentDeleteImpact = Awaited<ReturnType<typeof agentService.getAgentDeleteIm
  * Pick the confirmation copy for an agent delete. The cascade trashes every
  * topic under the agent, teammates' included, so the dialog must say so when
  * they exist — with a count when other members started topics, or the generic
- * "includes other members' content" line when only comments, messages or
- * tasks are foreign.
+ * "includes other members' content" line when only comments or messages are
+ * foreign.
  */
 export const getRemoveAgentAlert = (impact: AgentDeleteImpact | null): string => {
   if (impact && impact.foreignTopicCount > 0)
@@ -33,28 +34,42 @@ export const getRemoveAgentAlert = (impact: AgentDeleteImpact | null): string =>
   return t('confirmRemoveSessionItemAlert', { ns: 'chat' });
 };
 
+const RemoveAgentAlert = ({ impact }: { impact: Promise<AgentDeleteImpact | null> }) => (
+  <>{getRemoveAgentAlert(use(impact))}</>
+);
+
 /**
  * Open the shared agent deletion confirmation. Every delete entry point (the
  * sidebar, the mobile list, the agent profile) goes through here so authors
  * and workspace owners read the same warning about other members' topics.
- * A failed impact lookup falls back to the plain copy without acknowledging
- * foreign content, so the server keeps refusing an author's delete that would
- * take teammates' topics down unannounced.
+ *
+ * The dialog opens right away, bound to `agentId`, and fills in its copy once
+ * the impact lookup lands — its mask keeps the user on the agent they started
+ * from instead of a late dialog surfacing over another one. Confirming before
+ * the lookup lands, or after it failed, does not acknowledge foreign content,
+ * so the server keeps refusing an author's delete that would take teammates'
+ * topics down unannounced.
  */
-export const confirmRemoveAgent = async ({
-  agentId,
-  onConfirm,
-}: ConfirmRemoveAgentOptions): Promise<void> => {
+export const confirmRemoveAgent = ({ agentId, onConfirm }: ConfirmRemoveAgentOptions): void => {
   let impact: AgentDeleteImpact | null = null;
-  try {
-    impact = await agentService.getAgentDeleteImpact(agentId);
-  } catch (error) {
-    console.error('[confirmRemoveAgent]', error);
-  }
+  const impactRequest = agentService.getAgentDeleteImpact(agentId).then(
+    (value) => {
+      impact = value;
+      return value;
+    },
+    (error) => {
+      console.error('[confirmRemoveAgent]', error);
+      return null;
+    },
+  );
 
   confirmModal({
     cancelText: t('cancel', { ns: 'common' }),
-    content: getRemoveAgentAlert(impact),
+    content: (
+      <Suspense fallback={<Skeleton.Text rows={2} />}>
+        <RemoveAgentAlert impact={impactRequest} />
+      </Suspense>
+    ),
     okButtonProps: { danger: true },
     okText: t('delete', { ns: 'common' }),
     onOk: async () => {

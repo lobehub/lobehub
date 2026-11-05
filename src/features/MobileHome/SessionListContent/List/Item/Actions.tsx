@@ -164,7 +164,7 @@ const Actions = ({
           });
 
         if (item.type !== 'group') {
-          void confirmRemoveAgent({ agentId: item.id, onConfirm: onDelete });
+          confirmRemoveAgent({ agentId: item.id, onConfirm: onDelete });
           return;
         }
 

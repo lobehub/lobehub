@@ -225,6 +225,59 @@ describe('AgentModel.getDeleteImpact', () => {
       hasForeignContent: true,
     });
   });
+
+  it("ignores a teammate's empty session, thread and task, which the trash cascade leaves in place", async () => {
+    await linkSession('agtg-teammate-session', teammateId);
+    await serverDB
+      .insert(topics)
+      .values({ agentId, id: 'agtg-own-topic', userId: ownerId, workspaceId: wsId });
+    await serverDB.insert(threads).values({
+      agentId,
+      id: 'agtg-teammate-thread',
+      topicId: 'agtg-own-topic',
+      type: 'standalone',
+      userId: teammateId,
+    });
+    await serverDB.insert(tasks).values({
+      assigneeAgentId: agentId,
+      createdByUserId: teammateId,
+      identifier: 'AGTG-1',
+      instruction: 'teammate task',
+      seq: 1,
+      workspaceId: wsId,
+    });
+
+    expect(await ownerModel.getDeleteImpact(agentId)).toEqual({
+      foreignTopicCount: 0,
+      hasForeignContent: false,
+    });
+  });
+
+  it("flags a teammate's topicless message on the agent, which the cascade trashes", async () => {
+    await serverDB
+      .insert(messages)
+      .values({ agentId, id: 'agtg-teammate-message', role: 'user', userId: teammateId });
+
+    expect(await ownerModel.getDeleteImpact(agentId)).toEqual({
+      foreignTopicCount: 0,
+      hasForeignContent: true,
+    });
+  });
+
+  it("ignores a teammate's message that is already in the trash", async () => {
+    await serverDB.insert(messages).values({
+      agentId,
+      id: 'agtg-teammate-message',
+      isDeleted: true,
+      role: 'user',
+      userId: teammateId,
+    });
+
+    expect(await ownerModel.getDeleteImpact(agentId)).toEqual({
+      foreignTopicCount: 0,
+      hasForeignContent: false,
+    });
+  });
 });
 
 describe('AgentModel.transferAgentOwnership guards', () => {

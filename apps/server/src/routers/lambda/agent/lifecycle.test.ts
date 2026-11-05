@@ -45,17 +45,17 @@ const agentId = 'agent-1';
 const workspaceId = 'ws-1';
 
 describe('lifecycleRouter.removeAgent', () => {
-  let transferHasForeignRows: ReturnType<typeof vi.fn>;
+  let getDeleteImpact: ReturnType<typeof vi.fn>;
   let trashAgent: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     vi.clearAllMocks();
 
-    transferHasForeignRows = vi.fn().mockResolvedValue(true);
+    getDeleteImpact = vi.fn().mockResolvedValue({ foreignTopicCount: 2, hasForeignContent: true });
     trashAgent = vi.fn().mockResolvedValue({ id: agentId });
 
     vi.mocked(AgentModel).mockImplementation(function () {
-      return { transferHasForeignRows } as any;
+      return { getDeleteImpact } as any;
     });
     vi.mocked(TrashService).mockImplementation(function () {
       return { trashAgent } as any;
@@ -78,7 +78,7 @@ describe('lifecycleRouter.removeAgent', () => {
 
     await expect(callRemove('member', true)).resolves.toEqual({ id: agentId });
     expect(trashAgent).toHaveBeenCalledWith(agentId);
-    expect(transferHasForeignRows).not.toHaveBeenCalled();
+    expect(getDeleteImpact).not.toHaveBeenCalled();
   });
 
   it("refuses the author when the caller never acknowledged teammates' content (CLI, agent tools, older clients)", async () => {
@@ -93,7 +93,7 @@ describe('lifecycleRouter.removeAgent', () => {
 
   it('lets the author delete without acknowledgment when nothing foreign rides along', async () => {
     vi.mocked(getResourceMeta).mockResolvedValue({ userId, visibility: 'public', workspaceId });
-    transferHasForeignRows.mockResolvedValue(false);
+    getDeleteImpact.mockResolvedValue({ foreignTopicCount: 0, hasForeignContent: false });
 
     await expect(callRemove('member')).resolves.toEqual({ id: agentId });
   });
@@ -120,7 +120,7 @@ describe('lifecycleRouter.removeAgent', () => {
     });
 
     await expect(callRemove('owner')).resolves.toEqual({ id: agentId });
-    expect(transferHasForeignRows).not.toHaveBeenCalled();
+    expect(getDeleteImpact).not.toHaveBeenCalled();
   });
 });
 

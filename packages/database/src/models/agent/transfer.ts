@@ -93,9 +93,13 @@ export const transferHasForeignRows = async (
 
 /**
  * What deleting the agent takes down besides the caller's own work, for the
- * delete confirmation: how many live topics other members started under it,
- * and whether anything foreign at all (sessions, comments on the caller's
- * topics, messages, threads, tasks) rides along with the cascade.
+ * delete confirmation and the author's delete guard. Mirrors the trash
+ * cascade (`softDeleteAgent`), which stamps only the agent, every live topic
+ * under it (with its messages and comments) and its topicless messages —
+ * linked sessions, threads and tasks stay where they are, so they never count:
+ * - `foreignTopicCount`: live topics other members started under the agent;
+ * - `hasForeignContent`: that, or a teammate's comment / message riding along
+ *   inside the caller's own topics or among the topicless messages.
  */
 export const getDeleteImpact = async (
   ctx: AgentModelContext,
@@ -107,17 +111,35 @@ export const getDeleteImpact = async (
     .where(eq(agentsToSessions.agentId, agentId));
   const sessionIds = [...new Set(links.map((link) => link.sessionId))];
 
-  const topicWhere =
+  const topicWhere = and(
     sessionIds.length > 0
       ? or(inArray(topics.sessionId, sessionIds), eq(topics.agentId, agentId))
-      : eq(topics.agentId, agentId);
+      : eq(topics.agentId, agentId),
+    notTrashed(topics.isDeleted),
+  )!;
   const [row] = await ctx.db
     .select({ count: count() })
     .from(topics)
-    .where(and(topicWhere, ne(topics.userId, ctx.userId), notTrashed(topics.isDeleted)));
+    .where(and(topicWhere, ne(topics.userId, ctx.userId)));
   const foreignTopicCount = Number(row?.count ?? 0);
+  if (foreignTopicCount > 0) return { foreignTopicCount, hasForeignContent: true };
 
-  const hasForeignContent = foreignTopicCount > 0 || (await transferHasForeignRows(ctx, agentId));
+  // Every live topic here is the caller's, so a foreign comment rides along
+  // inside one of them. NULL authors (deleted accounts) count as foreign.
+  if (await hasForeignTopicComments(ctx.db, ctx.userId, topicWhere))
+    return { foreignTopicCount, hasForeignContent: true };
 
-  return { foreignTopicCount, hasForeignContent };
+  // Messages under the caller's topics, plus the topicless ones the cascade
+  // stamps directly.
+  const messageScope =
+    sessionIds.length > 0
+      ? or(inArray(messages.sessionId, sessionIds), eq(messages.agentId, agentId))
+      : eq(messages.agentId, agentId);
+  const [foreignMessage] = await ctx.db
+    .select({ id: messages.id })
+    .from(messages)
+    .where(and(messageScope, ne(messages.userId, ctx.userId), notTrashed(messages.isDeleted)))
+    .limit(1);
+
+  return { foreignTopicCount, hasForeignContent: !!foreignMessage };
 };

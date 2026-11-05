@@ -382,7 +382,7 @@ export default {
   'confirmRemoveSessionItemAlert':
     'You are about to delete this agent and its topics. They will be moved to the trash and can be restored within 30 days.',
   'confirmRemoveSessionItemAlertWithOthers':
-    'This agent includes topics, comments, or tasks from other members. Deleting the agent moves them to the trash too, not just your own. They can be restored within 30 days.',
+    'This agent includes comments or messages from other members. Deleting the agent moves them to the trash too, not just your own. They can be restored within 30 days.',
   'confirmRemoveSessionItemAlertWithOthersCount_one':
     'This agent has {{count}} topic started by another member. Deleting the agent moves that topic and its comments to the trash too, not just your own. It can be restored within 30 days.',
   'confirmRemoveSessionItemAlertWithOthersCount_other':

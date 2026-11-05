@@ -574,7 +574,7 @@ export const useAgentDropdownMenu = ({
                       label: t('delete', { ns: 'common' }),
                       onClick: ({ domEvent }: any) => {
                         domEvent.stopPropagation();
-                        void confirmRemoveAgent({
+                        confirmRemoveAgent({
                           agentId: id,
                           onConfirm: async (options) => {
                             try {

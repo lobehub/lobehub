@@ -257,18 +257,19 @@ export const lifecycleRouter = router({
           userId: ctx.userId,
           workspaceId: ctx.workspaceId,
         });
-        // The delete cascade trashes every linked session/topic/message. The
-        // agent's author may still delete it once the caller acknowledges that
-        // teammates' topics go with it (`getAgentDeleteImpact`); callers that
-        // never disclosed the impact (CLI, agent tools, older clients) keep the
-        // guard. A non-owner admin must not take other members' conversations
-        // down with an agent that isn't theirs.
+        // The delete cascade trashes the agent's topics and messages, so the
+        // guard asks what it would actually take (`getDeleteImpact`; sessions
+        // and tasks stay). The agent's author may still delete it once the
+        // caller acknowledges that teammates' content goes with it; callers
+        // that never disclosed the impact (CLI, agent tools, older clients)
+        // keep the guard. A non-owner admin must not take other members'
+        // conversations down with an agent that isn't theirs.
         const authorAcknowledged =
           meta?.userId === ctx.userId && input.acknowledgeForeignContent === true;
         if (
           isWorkspaceNonOwner(ctx) &&
           !authorAcknowledged &&
-          (await ctx.agentModel.transferHasForeignRows(input.agentId))
+          (await ctx.agentModel.getDeleteImpact(input.agentId)).hasForeignContent
         ) {
           throw new TRPCError({
             cause: { data: { code: TransferErrorCode.OwnerOnly } },
