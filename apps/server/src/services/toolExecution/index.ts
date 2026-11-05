@@ -130,11 +130,18 @@ const getThrownErrorText = (error: unknown): string => {
 /**
  * What the model reads of a server MCP call. A result with an MCP App view
  * gives its text only: MCP Apps keeps `structuredContent` and `_meta` for the
- * view, out of model context. Any other result keeps its whole serialized form,
- * `structuredContent` included.
+ * view, out of model context. Any other result (no view, an error, a failed
+ * view lookup) keeps its serialized form, `structuredContent` included, but
+ * never `_meta`: protocol metadata, where an Apps-aware server keeps what only
+ * its views may see.
  */
-const toModelContent = (result: any): string =>
-  result?.state?.mcpApp ? result.content : JSON.stringify(result);
+const toModelContent = (result: any): string => {
+  if (result?.state?.mcpApp) return result.content;
+  if (!result?.state || typeof result.state !== 'object') return JSON.stringify(result);
+
+  const { _meta, ...state } = result.state;
+  return JSON.stringify({ ...result, state });
+};
 
 export class ToolExecutionService {
   private builtinToolsExecutor: BuiltinToolsExecutor;

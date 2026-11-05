@@ -815,6 +815,26 @@ describe('ToolExecutionService', () => {
       expect(JSON.parse(result.content).state.structuredContent).toEqual({ temperature: 20 });
     });
 
+    it("keeps an HTTP MCP result's _meta from the model when it has no view, in its state", async () => {
+      // An error from an Apps-aware server: no view, but view-only metadata
+      const state = {
+        _meta: { view: { token: 'view-only' } },
+        content: [{ text: 'failed', type: 'text' }],
+        isError: true,
+      };
+      const callTool = vi.fn().mockResolvedValue({ content: 'failed', state, success: false });
+      const service = makeService({ callTool });
+
+      const result = await service.executeTool(
+        mcpPayload,
+        contextWith({ name: 'my-mcp', type: 'http', url: 'https://mcp.example.com' }),
+      );
+
+      expect(result.content).not.toContain('view-only');
+      expect(JSON.parse(result.content).state.content).toEqual(state.content);
+      expect(result.state).toMatchObject({ state });
+    });
+
     it.each([
       { name: 'my-mcp', type: 'http', url: 'http://localhost:8080/mcp' },
       { args: [], command: 'npx', name: 'my-mcp', type: 'stdio' },
