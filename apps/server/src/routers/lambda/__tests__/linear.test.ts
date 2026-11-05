@@ -1064,6 +1064,8 @@ describe('linearRouter', () => {
       mocks.syncByFilter.mockResolvedValue(syncResult);
       const rule = await caller({ userId }).createSyncRule({
         connectionId: connection.id,
+        // @ts-expect-error A rule does not keep this: archived issues are chosen per run.
+        includeArchived: true,
         projectId,
         stateTypes: ['completed'],
         teamId: 'team-1',

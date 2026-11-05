@@ -50,7 +50,7 @@ class LinearService {
     lambdaClient.linear.listSyncRules.query({ projectId });
 
   createSyncRule = async (
-    params: LinearIssueFilterParams & {
+    params: Omit<LinearIssueFilterParams, 'includeArchived'> & {
       linearProjectName?: string | null;
       projectId: string;
       teamName: string;

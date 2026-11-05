@@ -221,10 +221,14 @@ export const linearRouter = router({
 
   createSyncRule: linearTaskWriteProcedure
     .input(
-      issueFilterInput.merge(projectInput).extend({
-        linearProjectName: z.string().max(255).nullish(),
-        teamName: z.string().min(1).max(255),
-      }),
+      // A rule keeps what to match; archived issues are chosen per run, in `startRuleSync`.
+      issueFilterInput
+        .omit({ includeArchived: true })
+        .merge(projectInput)
+        .extend({
+          linearProjectName: z.string().max(255).nullish(),
+          teamName: z.string().min(1).max(255),
+        }),
     )
     .mutation(async ({ ctx, input }) => {
       await requireWritableConnection(ctx, input.connectionId);
