@@ -690,6 +690,41 @@ export class AgentOperationModel {
   }
 
   /**
+   * Atomically retire a parent operation parked in `waiting_for_async_tool`
+   * whose liveness lease has expired. A concurrent heartbeat wins by moving
+   * updatedAt past staleBefore, preventing false recovery.
+   *
+   * The mirror of {@link settleStaleRunning} for the parked-parent shape:
+   * the dead-operation lease path only ever matched `status = 'running'`, so
+   * a parent whose child died (or never reported back) stayed parked forever
+   * and every stop request on its task was refused as unconfirmed. Callers
+   * must have established first that no live runtime owns the parent (its
+   * coordinator state is gone) and that none of its async children is still
+   * alive — a parked parent is the normal shape of a long sub-agent call,
+   * and this CAS alone cannot tell a stranded parent from a patient one.
+   */
+  async settleStaleWaitingForAsyncTool(operationId: string, staleBefore: Date): Promise<boolean> {
+    const [row] = await this.db
+      .update(agentOperations)
+      .set({
+        completedAt: new Date(),
+        completionReason: 'lease_expired',
+        status: 'abandoned',
+      })
+      .where(
+        and(
+          eq(agentOperations.id, operationId),
+          eq(agentOperations.status, 'waiting_for_async_tool'),
+          sql`${agentOperations.updatedAt} < ${staleBefore}`,
+          this.ownership(),
+        ),
+      )
+      .returning({ id: agentOperations.id });
+
+    return Boolean(row);
+  }
+
+  /**
    * Atomically claim the next redrive attempt for an operation whose liveness
    * lease has expired, so a stale step can be re-queued instead of stranding.
    *
