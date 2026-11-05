@@ -1,5 +1,6 @@
 'use client';
 
+// oxlint-disable-next-line stylex-migration/no-plain-css -- cmdk renders [cmdk-group-heading] inside Command.Group and exposes no className or slot for it
 import './styles.css';
 
 import { stopPropagation } from '@lobehub/ui';
@@ -178,7 +179,7 @@ const CommandMenuContent = memo<CommandMenuContentProps>(({ isClosing, onClose }
             onTypeFilterChange={searchAnalytics.trackFilterChange}
           />
 
-          <Command.List ref={listRef}>
+          <Command.List {...stylex.props(styles.cmdkList)} ref={listRef}>
             {/* Hide cmdk's Empty when we have search results or are loading them,
                since force-mounted items aren't counted by cmdk's internal filter.
                The unfiltered search view also renders the marketplace fallback
@@ -189,12 +190,17 @@ const CommandMenuContent = memo<CommandMenuContentProps>(({ isClosing, onClose }
               (searchResults.length > 0 ||
                 isSearching ||
                 (!page && !selectedAgent && !typeFilter && !search.trimStart().startsWith('@')))
-            ) && <Command.Empty>{t('cmdk.noResults')}</Command.Empty>}
+            ) && (
+              <Command.Empty {...stylex.props(styles.cmdkEmpty)}>
+                {t('cmdk.noResults')}
+              </Command.Empty>
+            )}
 
             {/* Show send command when agent is selected */}
             {selectedAgent && (
               <Command.Group>
                 <Command.Item
+                  {...stylex.props(styles.cmdkItem)}
                   disabled={!search.trim()}
                   value="send-to-agent"
                   onSelect={handleSendToSelectedAgent}

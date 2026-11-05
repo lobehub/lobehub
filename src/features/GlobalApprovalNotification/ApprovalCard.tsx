@@ -1,5 +1,6 @@
 'use client';
 
+// oxlint-disable-next-line stylex-migration/no-plain-css -- the paragraphs are rendered markdown inside MarkdownMessage, which no prop reaches
 import './userRequest.css';
 
 import { AGENT_CHAT_TOPIC_URL, GROUP_CHAT_TOPIC_URL, GROUP_CHAT_URL } from '@lobechat/const';

@@ -1,8 +1,7 @@
 'use client';
 
-import { ActionIcon } from '@lobehub/ui';
 import type { VerifyCodingScope } from '@lobechat/types';
-import { Avatar, Flexbox, Freeze, Icon, Popover, Text } from '@lobehub/ui';
+import { ActionIcon, Avatar, Flexbox, Freeze, Icon, Popover, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import type { TFunction } from 'i18next';

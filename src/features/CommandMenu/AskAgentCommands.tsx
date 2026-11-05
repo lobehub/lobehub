@@ -67,6 +67,7 @@ const AskAgentCommands = memo(() => {
       {/* @<default assistant> option */}
       {showLobeAI && (
         <Command.Item
+          {...stylex.props(styles.cmdkItem)}
           value="@lobe-ai"
           onMouseDown={preventDefault}
           onSelect={() =>
@@ -83,6 +84,7 @@ const AskAgentCommands = memo(() => {
       {/* @agent options */}
       {filteredAgents.map((agent) => (
         <Command.Item
+          {...stylex.props(styles.cmdkItem)}
           key={agent.id}
           value={`@${agentDisplayName(agent, 'agent')}-${agent.id}`}
           onMouseDown={preventDefault}

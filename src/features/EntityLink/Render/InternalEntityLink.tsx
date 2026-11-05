@@ -43,7 +43,7 @@ import { useAcceptanceBrowserUrl } from './useAcceptanceBrowserUrl';
 
 const styles = stylex.create({
   browser: {
-    color: { 'default': cssVar.colorTextTertiary, ':hover': cssVar.colorText },
+    color: { default: cssVar.colorTextTertiary, ':hover': cssVar.colorText },
     transition: 'color 0.15s',
   },
   icon: {

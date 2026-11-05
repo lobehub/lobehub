@@ -30,6 +30,21 @@ declare module 'verification:component' {
     breadcrumb?: Array<{ href?: string; title: ReactNode }>;
     left?: ReactNode;
   }>;
+  export const CommandMenuTheme: ComponentType;
+  export const TaskBulkActionsPanel: ComponentType<{
+    onClose: () => void;
+    tasks: Array<{ archivedAt: null; id: string; identifier: string }>;
+  }>;
+  export const DashboardLayoutEditor: ComponentType<{
+    dashboardId: string;
+    initialLayouts: Record<string, { h: number; w: number; x: number; y: number }>;
+    items: Array<{
+      item: { id: string };
+      view: undefined;
+      widget: { id: string; title: string; userId: string };
+    }>;
+    onDone: () => void;
+  }>;
   export const WorkPreview: ComponentType<{
     item: WorkSummaryItem;
     title: string;

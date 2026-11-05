@@ -27,6 +27,7 @@ const pulse = stylex.keyframes({
 });
 
 const CLOSING = "[data-closing='true']";
+const SELECTED = "[aria-selected='true']";
 
 export const styles = stylex.create({
   backTag: { cursor: 'pointer', fontSize: '12px' },
@@ -54,7 +55,52 @@ export const styles = stylex.create({
     paddingBlock: '12px',
     paddingInline: '16px',
   },
-  // cmdk's inner elements are styled by styles.module.css (.root)
+  cmdkEmpty: {
+    color: cssVar.colorTextTertiary,
+    fontSize: '14px',
+    paddingBlock: '32px',
+    paddingInline: '16px',
+    textAlign: 'center',
+  },
+  cmdkInput: {
+    '::placeholder': { color: cssVar.colorTextPlaceholder },
+    'backgroundColor': 'transparent',
+    'backgroundImage': 'none',
+    'borderColor': 'currentcolor',
+    'borderStyle': 'none',
+    'borderWidth': 0,
+    'color': cssVar.colorText,
+    'flex': '1',
+    'fontFamily': 'inherit',
+    'fontSize': '16px',
+    'minWidth': 0,
+    'outline': 'none',
+    'paddingBlock': 0,
+    'paddingInline': 0,
+  },
+  cmdkItem: {
+    alignItems: 'center',
+    backgroundColor: {
+      'default': null,
+      ':hover': cssVar.colorBgTextHover,
+      [SELECTED]: cssVar.colorBgTextHover,
+    },
+    borderRadius: cssVar.borderRadius,
+    color: cssVar.colorText,
+    cursor: 'pointer',
+    display: 'flex',
+    gap: '12px',
+    paddingBlock: '12px',
+    paddingInline: '16px',
+    transition: 'all 0.15s ease',
+    userSelect: 'none',
+  },
+  cmdkList: {
+    maxHeight: '400px',
+    overflowY: 'auto',
+    paddingBlock: '8px',
+    paddingInline: '8px',
+  },
   commandRoot: {
     animationDuration: { default: '0.12s', [CLOSING]: '0.15s' },
     animationFillMode: { default: null, [CLOSING]: 'forwards' },

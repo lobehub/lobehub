@@ -25,6 +25,7 @@ import { styles as sharedStyles } from './styles';
 import { useFileListItemDrag } from './useFileListItemDrag';
 import { useFileListItemMeta } from './useFileListItemMeta';
 import { useFileListItemRename } from './useFileListItemRename';
+import { styles as sharedStyles } from './styles';
 
 export const FILE_DATE_WIDTH = 160;
 export const FILE_SIZE_WIDTH = 140;

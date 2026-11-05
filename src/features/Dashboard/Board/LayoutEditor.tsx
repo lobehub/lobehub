@@ -1,7 +1,5 @@
 'use client';
 
-import './style.css';
-
 import {
   closestCenter,
   DndContext,
@@ -113,7 +111,7 @@ const ResizeHandle = ({ layout, onResize }: ResizeHandleProps) => {
     <button
       data-resize-handle
       aria-label={t('layout.resize')}
-      className={'lobe-board-e4f55859-resize-handle'}
+      {...stylex.props(gridStyles.resizeHandle)}
       data-active={active}
       title={t('layout.resize')}
       type={'button'}
@@ -142,8 +140,13 @@ const EditableCell = memo<EditableCellProps>(({ entry, layout, onResize, editabl
   return (
     <div
       {...sx(
-        [gridStyles.cell, isDragging && gridStyles.cellDragging],
-        'lobe-board-e4f55859-edit-cell',
+        [
+          gridStyles.cell,
+          gridStyles.editCell,
+          stylex.defaultMarker(),
+          isDragging && gridStyles.cellDragging,
+        ],
+        undefined,
         {
           ...cellStyle(layout),
           transform: CSS.Translate.toString(transform),

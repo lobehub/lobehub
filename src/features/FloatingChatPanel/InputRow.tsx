@@ -1,5 +1,6 @@
 'use client';
 
+// oxlint-disable-next-line stylex-migration/no-plain-css -- ::view-transition-* pseudo-elements hang off the document root, outside any element StyleX can style
 import './InputRowViewTransition.css';
 
 import * as stylex from '@stylexjs/stylex';

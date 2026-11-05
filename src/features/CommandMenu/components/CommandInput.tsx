@@ -127,6 +127,7 @@ const CommandInput = memo<CommandInputProps>(({ onInputChange, onTypeFilterChang
           </Tag>
         )}
         <Command.Input
+          {...stylex.props(styles.cmdkInput)}
           autoFocus
           maxLength={500}
           placeholder={getPlaceholder()}

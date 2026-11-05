@@ -47,7 +47,7 @@ const CommandItem = memo<CommandItemProps>((props) => {
   if (props.variant === 'detailed') {
     const { icon, title, description, trailingLabel, unpinned: _unpinned, ...itemProps } = props;
     return (
-      <Command.Item {...itemProps}>
+      <Command.Item {...itemProps} {...stylex.props(styles.cmdkItem)}>
         <div {...stylex.props(styles.itemContent)}>
           <div {...stylex.props(styles.itemIcon)}>{icon}</div>
           <div {...stylex.props(styles.itemDetails)}>
@@ -71,7 +71,7 @@ const CommandItem = memo<CommandItemProps>((props) => {
       : icon;
 
   return (
-    <Command.Item {...itemProps}>
+    <Command.Item {...itemProps} {...stylex.props(styles.cmdkItem)}>
       {iconWithClass}
       <div {...stylex.props(styles.itemContent)}>
         <div {...stylex.props(styles.itemLabel)}>{children}</div>

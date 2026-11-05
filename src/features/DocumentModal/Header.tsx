@@ -1,5 +1,6 @@
 'use client';
 
+// oxlint-disable-next-line stylex-migration/no-plain-css -- ShareButton is a business slot whose cloud implementation renders the buttons and takes no className or xstyle
 import './Header.css';
 
 import {

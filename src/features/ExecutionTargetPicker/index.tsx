@@ -1,5 +1,6 @@
 'use client';
 
+// oxlint-disable-next-line stylex-migration/no-plain-css -- needs lobe-ui slot: Select.valueText (the span Select renders around labelRender output)
 import './index.css';
 
 import type { DeviceExecutionTarget, DeviceListItem } from '@lobechat/types';

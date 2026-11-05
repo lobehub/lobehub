@@ -10,6 +10,7 @@ import {
   Tag,
   toast,
 } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { Command } from 'cmdk';
 import {
   ArchiveIcon,
@@ -72,10 +73,18 @@ const Item = ({
   onSelect: () => void;
   value: string;
 }) => (
-  <Command.Item disabled={disabled} value={value} onSelect={onSelect}>
+  <Command.Item
+    {...stylex.props(styles.cmdkItem)}
+    disabled={disabled}
+    value={value}
+    onSelect={onSelect}
+  >
     {icon}
-    <div className={styles.itemContent}>
-      <div className={styles.itemLabel} style={danger ? { color: cssVar.colorError } : undefined}>
+    <div className={stylex.props(styles.itemContent).className}>
+      <div
+        className={stylex.props(styles.itemLabel).className}
+        style={danger ? { color: cssVar.colorError } : undefined}
+      >
         {label}
       </div>
     </div>
@@ -159,10 +168,10 @@ const TaskBulkActionsPanel = memo<TaskBulkActionsPanelProps>(({ onClose, tasks }
     : t('taskList.bulk.search.placeholder');
 
   const panel = (
-    <div className={styles.overlay} onClick={onClose}>
+    <div className={stylex.props(styles.overlay).className} onClick={onClose}>
       <div onClick={stopPropagation}>
         <Command
-          className={styles.commandRoot}
+          className={stylex.props(styles.commandRoot).className}
           data-testid={'task-bulk-actions-panel'}
           onKeyDown={(event) => {
             if (event.key === 'Escape') {
@@ -177,48 +186,55 @@ const TaskBulkActionsPanel = memo<TaskBulkActionsPanelProps>(({ onClose, tasks }
             }
           }}
         >
-          <div className={styles.contextWrapper}>
+          <div className={stylex.props(styles.contextWrapper).className}>
             {page && (
               <Tag
-                className={styles.backTag}
+                className={stylex.props(styles.backTag).className}
                 icon={<ArrowLeft size={12} />}
                 onClick={() => goTo()}
               />
             )}
-            <Tag className={styles.contextTag}>
+            <Tag className={stylex.props(styles.contextTag).className}>
               {t('taskList.bulk.count', { count: selectedIds.length })}
             </Tag>
           </div>
-          <div className={styles.inputWrapper}>
+          <div className={stylex.props(styles.inputWrapper).className}>
             <Command.Input
+              {...stylex.props(styles.cmdkInput)}
               autoFocus
               placeholder={placeholder}
               value={search}
               onValueChange={setSearch}
             />
           </div>
-          <Command.List>
-            <Command.Empty>{t('taskList.bulk.noResults')}</Command.Empty>
+          <Command.List {...stylex.props(styles.cmdkList)}>
+            <Command.Empty {...stylex.props(styles.cmdkEmpty)}>
+              {t('taskList.bulk.noResults')}
+            </Command.Empty>
 
             {!page && (
               <Command.Group>
                 <Item
                   disabled={disabled}
-                  icon={<Icon className={styles.icon} icon={CircleDashedIcon} />}
                   label={t('taskList.bulk.changeStatus')}
                   value={'change status'}
+                  icon={
+                    <Icon className={stylex.props(styles.icon).className} icon={CircleDashedIcon} />
+                  }
                   onSelect={() => goTo('status')}
                 />
                 <Item
                   disabled={disabled}
-                  icon={<Icon className={styles.icon} icon={BarChart3Icon} />}
                   label={t('taskList.bulk.setPriority')}
                   value={'set priority'}
+                  icon={
+                    <Icon className={stylex.props(styles.icon).className} icon={BarChart3Icon} />
+                  }
                   onSelect={() => goTo('priority')}
                 />
                 <Item
                   disabled={disabled}
-                  icon={<Icon className={styles.icon} icon={BotIcon} />}
+                  icon={<Icon className={stylex.props(styles.icon).className} icon={BotIcon} />}
                   label={t('taskList.bulk.assignAgent')}
                   value={'assign agent'}
                   onSelect={() => goTo('agent')}
@@ -227,16 +243,26 @@ const TaskBulkActionsPanel = memo<TaskBulkActionsPanelProps>(({ onClose, tasks }
                   <>
                     <Item
                       disabled={disabled}
-                      icon={<Icon className={styles.icon} icon={UserRoundCheckIcon} />}
                       label={t('taskList.bulk.assignToMe')}
                       value={'assign to me'}
+                      icon={
+                        <Icon
+                          className={stylex.props(styles.icon).className}
+                          icon={UserRoundCheckIcon}
+                        />
+                      }
                       onSelect={() => act({ kind: 'update', patch: { assigneeUserId: userId } })}
                     />
                     <Item
                       disabled={disabled}
-                      icon={<Icon className={styles.icon} icon={UserRoundXIcon} />}
                       label={t('taskList.bulk.unassignMember')}
                       value={'unassign member'}
+                      icon={
+                        <Icon
+                          className={stylex.props(styles.icon).className}
+                          icon={UserRoundXIcon}
+                        />
+                      }
                       onSelect={() => act({ kind: 'update', patch: { assigneeUserId: null } })}
                     />
                   </>
@@ -244,22 +270,29 @@ const TaskBulkActionsPanel = memo<TaskBulkActionsPanelProps>(({ onClose, tasks }
                 {allArchived ? (
                   <Item
                     disabled={disabled}
-                    icon={<Icon className={styles.icon} icon={ArchiveRestoreIcon} />}
                     label={t('taskList.bulk.unarchive')}
                     value={'unarchive restore'}
+                    icon={
+                      <Icon
+                        className={stylex.props(styles.icon).className}
+                        icon={ArchiveRestoreIcon}
+                      />
+                    }
                     onSelect={() => act({ archived: false, kind: 'archive' })}
                   />
                 ) : (
                   <Item
                     disabled={disabled || !anyArchivable}
-                    icon={<Icon className={styles.icon} icon={ArchiveIcon} />}
                     label={t('taskList.bulk.archive')}
                     value={'archive'}
+                    icon={
+                      <Icon className={stylex.props(styles.icon).className} icon={ArchiveIcon} />
+                    }
                     onSelect={() => act({ archived: true, kind: 'archive' })}
                   />
                 )}
                 <Item
-                  icon={<Icon className={styles.icon} icon={CopyIcon} />}
+                  icon={<Icon className={stylex.props(styles.icon).className} icon={CopyIcon} />}
                   label={t('taskList.bulk.copyIds')}
                   value={'copy ids identifiers'}
                   onSelect={copyIds}
@@ -270,7 +303,11 @@ const TaskBulkActionsPanel = memo<TaskBulkActionsPanelProps>(({ onClose, tasks }
                   label={t('taskList.bulk.delete')}
                   value={'delete remove'}
                   icon={
-                    <Icon className={styles.icon} color={cssVar.colorError} icon={Trash2Icon} />
+                    <Icon
+                      className={stylex.props(styles.icon).className}
+                      color={cssVar.colorError}
+                      icon={Trash2Icon}
+                    />
                   }
                   onSelect={confirmDelete}
                 />
@@ -284,10 +321,16 @@ const TaskBulkActionsPanel = memo<TaskBulkActionsPanelProps>(({ onClose, tasks }
                   return (
                     <Item
                       disabled={disabled}
-                      icon={<Icon className={styles.icon} color={meta.color} icon={meta.icon} />}
                       key={status}
                       label={statusLabel(status)}
                       value={`status ${status} ${statusLabel(status)}`}
+                      icon={
+                        <Icon
+                          className={stylex.props(styles.icon).className}
+                          color={meta.color}
+                          icon={meta.icon}
+                        />
+                      }
                       onSelect={() => act({ kind: 'status', status })}
                     />
                   );
@@ -322,9 +365,11 @@ const TaskBulkActionsPanel = memo<TaskBulkActionsPanelProps>(({ onClose, tasks }
               <Command.Group>
                 <Item
                   disabled={disabled}
-                  icon={<Icon className={styles.icon} icon={UserRoundXIcon} />}
                   label={t('taskList.bulk.unassignAgent')}
                   value={'unassigned none'}
+                  icon={
+                    <Icon className={stylex.props(styles.icon).className} icon={UserRoundXIcon} />
+                  }
                   onSelect={() => act({ kind: 'update', patch: { assigneeAgentId: null } })}
                 />
                 {agents.map((agent) => {
