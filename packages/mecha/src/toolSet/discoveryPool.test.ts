@@ -316,6 +316,27 @@ describe('resolveClientExecutors', () => {
     ).toEqual({});
   });
 
+  it('marks browser-executed tools for the client even behind a device gateway', () => {
+    // The mini game lives in the browser tab that started the run, not on a
+    // device: a gateway must hand its calls to that tab, so the mark stays.
+    const map = { ...manifestMap, 'lobe-mini-game': manifest('lobe-mini-game') };
+    expect(
+      resolveClientExecutors({
+        browserIdentifiers: ['lobe-mini-game', 'not-in-run'],
+        hasDeviceProxy: true,
+        manifestMap: map,
+        stdioIdentifiers: ['stdio-mcp'],
+      }),
+    ).toEqual({ 'lobe-mini-game': 'client' });
+    expect(
+      resolveClientExecutors({
+        browserIdentifiers: ['lobe-mini-game'],
+        hasDeviceProxy: false,
+        manifestMap: map,
+      }),
+    ).toEqual({ 'local': 'client', 'lobe-mini-game': 'client' });
+  });
+
   it('marks a stdio plugin that is only discoverable, not enabled', () => {
     // The activator can enable `stdio-mcp` mid-run. `ToolResolver` copies this
     // map into the operation snapshot and `applyActivation` never revisits it,

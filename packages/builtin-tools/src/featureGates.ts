@@ -1,4 +1,5 @@
 import { DashboardIdentifier, LegacyDashboardIdentifier } from '@lobechat/builtin-tool-dashboard';
+import { MiniGameIdentifier } from '@lobechat/builtin-tool-mini-game';
 import type { IFeatureFlagsState } from '@lobechat/types';
 
 /** Builtin tools that exist only while a runtime feature flag is on for the user. */
@@ -6,6 +7,7 @@ export const FEATURE_GATED_TOOLS: Record<string, keyof IFeatureFlagsState> = {
   [DashboardIdentifier]: 'enableDashboard',
   // A legacy pinned or replayed id must stay behind the same flag.
   [LegacyDashboardIdentifier]: 'enableDashboard',
+  [MiniGameIdentifier]: 'enableMiniGame',
 };
 
 /**

@@ -1,6 +1,5 @@
 // Disable the auto sort key eslint rule to make the code more logic and readable
 import { createCallAgentManifest } from '@lobechat/builtin-tool-agent-management';
-import { GoalIdentifier, isGoalPrompt } from '@lobechat/builtin-tool-goal';
 import { isDesktop, isHeterogeneousAgentModelId, LOADING_FLAT } from '@lobechat/const';
 import { formatSelectedSkillsContext, formatSelectedToolsContext } from '@lobechat/context-engine';
 import {
@@ -140,6 +139,7 @@ import {
 import { pageConversationNeedsGateway, preparePageConversation } from '../pageConversation';
 import { mergePartialPersistedMessages, resolveSendResponseMessages } from '../persistedMessages';
 import { resolveExistingTopicForRun } from '../resolveExistingTopic';
+import { appendAutoSelectedTools } from './autoSelectedTools';
 import { type ContextCompressionOptions, executeContextCompression } from './compression';
 import { resolveRunCwd, resolveSendProjectRun, type SourceTopicDirectory } from './runCwd';
 import { showSendErrorInContext } from './sendErrorNotice';
@@ -345,13 +345,10 @@ export class ConversationLifecycleActionImpl {
     const targetInputEditor = inputEditor === undefined ? mainInputEditor : inputEditor;
     const ownerAgentId = context.agentId;
     const selectedSkills = parseSelectedSkillsFromEditorData(editorData);
-    const selectedTools = parseSelectedToolsFromEditorData(editorData);
-    if (
-      isGoalPrompt(message) &&
-      !selectedTools.some(({ identifier }) => identifier === GoalIdentifier)
-    ) {
-      selectedTools.push({ identifier: GoalIdentifier, name: 'Goal' });
-    }
+    const selectedTools = appendAutoSelectedTools(parseSelectedToolsFromEditorData(editorData), {
+      contextSelections,
+      message,
+    });
     const mentionedAgents = parseMentionedAgentsFromEditorData(editorData);
 
     const localFileReferences = mergeLocalFileReferences(

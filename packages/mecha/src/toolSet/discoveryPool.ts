@@ -224,6 +224,12 @@ export const resolveDiscoveryPool = (request: DiscoveryPoolRequest): DiscoveryPo
 };
 
 export interface ClientExecutorsRequest {
+  /**
+   * Tools that drive UI in the browser tab that started the run. They are
+   * marked `'client'` whether or not a device gateway exists: the gateway
+   * hands their `tool_execute` to that tab, never to a device.
+   */
+  browserIdentifiers?: readonly string[];
   /** A device gateway exists; tool calls tunnel to a registered device. */
   hasDeviceProxy: boolean;
   manifestMap: Readonly<Record<string, LobeToolManifest>>;
@@ -249,6 +255,9 @@ export const resolveClientExecutors = (
   request: ClientExecutorsRequest,
 ): Record<string, ToolExecutor> => {
   const executorMap: Record<string, ToolExecutor> = {};
+  for (const id of request.browserIdentifiers ?? []) {
+    if (request.manifestMap[id]) executorMap[id] = 'client';
+  }
   if (request.hasDeviceProxy) return executorMap;
   for (const [id, manifest] of Object.entries(request.manifestMap)) {
     if ((manifest as { executors?: string[] })?.executors?.includes('client'))

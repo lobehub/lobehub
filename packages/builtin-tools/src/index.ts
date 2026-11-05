@@ -38,6 +38,7 @@ import { LobeAgentManifest, resolveLobeAgentManifest } from '@lobechat/builtin-t
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { MemoryManifest, resolveMemoryRestrictedManifest } from '@lobechat/builtin-tool-memory';
 import { MessageManifest, resolveMessageManifest } from '@lobechat/builtin-tool-message';
+import { MiniGameManifest } from '@lobechat/builtin-tool-mini-game';
 import { PageAgentManifest } from '@lobechat/builtin-tool-page-agent';
 import { RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
 import { selfFeedbackIntentManifest } from '@lobechat/builtin-tool-self-iteration';
@@ -301,7 +302,22 @@ export const AGENT_SHARE_NO_DATA_GRANT_BUILTIN_IDENTIFIERS = new Set<string>([
   KnowledgeBaseManifest.identifier,
 ]);
 
+/**
+ * Tools that act on UI living in the browser tab that started the run (the
+ * mini game). They always dispatch to that tab as a client `tool_execute`,
+ * also behind a device gateway — a device has no such UI to drive.
+ */
+export const browserExecutedToolIds = [MiniGameManifest.identifier];
+
 const builtinToolRegistry: LobeBuiltinTool[] = [
+  {
+    // Enabled per turn by the chat input while the game panel is open.
+    discoverable: false,
+    hidden: true,
+    identifier: MiniGameManifest.identifier,
+    manifest: MiniGameManifest,
+    type: 'builtin',
+  },
   {
     discoverable: false,
     hidden: true,

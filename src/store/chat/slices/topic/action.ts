@@ -1492,7 +1492,7 @@ export class ChatTopicActionImpl {
     const shouldClearNewKey = !id || opts.clearNewKey;
 
     if (shouldClearNewKey) {
-      this.#get().clearPortalStack();
+      this.#get().clearPortalStack({ keepMiniGame: true });
     }
 
     const cleanupAgentId = opts.clearNewKeyContext?.agentId ?? activeAgentId;

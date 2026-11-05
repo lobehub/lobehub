@@ -15,6 +15,7 @@ import { useHomeStore } from '@/store/home';
 import { useImageStore } from '@/store/image';
 import { useKnowledgeBaseStore } from '@/store/library';
 import { useMentionStore } from '@/store/mention';
+import { miniGameActions } from '@/store/miniGame';
 import { useNotebookStore } from '@/store/notebook';
 import { pageActions } from '@/store/page';
 import { projectFileActions } from '@/store/projectFile';
@@ -58,6 +59,7 @@ const resetableStores: ResetableStoreApi[] = [
 const resetableActions: ResetableStore[] = [
   channelActions,
   agentDocumentActions,
+  miniGameActions,
   pageActions,
   projectFileActions,
   resourcePermissionActions,

@@ -28,6 +28,7 @@ import { operationSelectors, topicSelectors } from '@/store/chat/selectors';
 import { selectCurrentTurnTodosFromMessages } from '@/store/chat/slices/message/selectors/dbMessage';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { fileChatSelectors, useFileStore } from '@/store/file';
+import { miniGameActions } from '@/store/miniGame';
 
 import { buildMessageContextSelections } from '../../ChatInput/utils/contextSelections';
 import WideScreenContainer from '../../WideScreenContainer';
@@ -405,6 +406,10 @@ const ChatInput = memo<ChatInputProps>(
 
         const { contextSelections, pageSelections } =
           buildMessageContextSelections(currentContextList);
+        // While the mini game is open, every message carries its snapshot so
+        // the agent knows where its character is (and gets the game tool).
+        const gameSelection = miniGameActions.getContextSelection();
+        if (gameSelection) contextSelections.push(gameSelection);
 
         // Fire and forget - send with captured message
         await sendMessage({

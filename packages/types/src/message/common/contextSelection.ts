@@ -110,12 +110,28 @@ export interface ElementContextSelection extends ContextSelectionBase {
   source: 'element';
 }
 
+/** A snapshot of the mini game the user plays with the agent, taken at send time. */
+export const GameContextSelectionSchema = ContextSelectionBaseSchema.extend({
+  sceneId: z.string(),
+  source: z.literal('game'),
+});
+
+export interface GameContextSelection extends ContextSelectionBase {
+  sceneId: string;
+  source: 'game';
+}
+
 export const ContextSelectionSchema = z.discriminatedUnion('source', [
   PageContextSelectionSchema,
   CodeContextSelectionSchema,
   TextContextSelectionSchema,
   ElementContextSelectionSchema,
+  GameContextSelectionSchema,
 ]);
 
 export type ContextSelection =
-  PageContextSelection | CodeContextSelection | TextContextSelection | ElementContextSelection;
+  | PageContextSelection
+  | CodeContextSelection
+  | TextContextSelection
+  | ElementContextSelection
+  | GameContextSelection;

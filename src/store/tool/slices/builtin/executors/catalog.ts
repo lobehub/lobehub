@@ -38,6 +38,7 @@ import { agentDocumentsExecutor } from './lobe-agent-documents';
 import { attachmentsExecutor } from './lobe-attachments';
 import { canvasExecutor } from './lobe-canvas';
 import { messageExecutor } from './lobe-message';
+import { miniGameExecutor } from './lobe-mini-game';
 import { notebookExecutor } from './lobe-notebook';
 import { skillStoreExecutor } from './lobe-skill-store';
 import { skillsExecutor } from './lobe-skills';
@@ -82,6 +83,7 @@ export const builtinToolExecutors = [
   localSystemExecutorWithGitEffects,
   memoryExecutor,
   messageExecutor,
+  miniGameExecutor,
   notebookExecutor,
   pageAgentHookExecutor,
   skillStoreExecutor,

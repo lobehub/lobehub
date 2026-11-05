@@ -103,12 +103,14 @@ export type {
   CodeContextSelection,
   ContextSelection,
   ElementContextSelection,
+  GameContextSelection,
   PageContextSelection,
 } from '../common';
 export {
   CodeContextSelectionSchema,
   ContextSelectionSchema,
   ElementContextSelectionSchema,
+  GameContextSelectionSchema,
   PageContextSelectionSchema,
 } from '../common';
 export type { PageSelection } from '../common/pageSelection';

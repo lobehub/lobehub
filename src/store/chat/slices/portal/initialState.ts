@@ -28,6 +28,7 @@ export enum PortalViewType {
   LocalFile = 'localFile',
   MemoryDetail = 'memoryDetail',
   MessageDetail = 'messageDetail',
+  MiniGame = 'miniGame',
   Notebook = 'notebook',
   TaskDetail = 'taskDetail',
   TaskResult = 'taskResult',
@@ -105,6 +106,7 @@ export type PortalViewData =
   | { runId?: string; type: PortalViewType.DashboardWidget; widgetId: string }
   | { agentDocumentId?: string; documentId: string; type: PortalViewType.Document }
   | { type: PortalViewType.Notebook }
+  | { type: PortalViewType.MiniGame }
   | { file: PortalFile; type: PortalViewType.FilePreview }
   | { type: PortalViewType.LocalFile }
   /** `id` is the layer-specific row id (e.g. a preference id), not the base memory id. */

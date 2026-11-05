@@ -73,6 +73,13 @@ export const FeatureFlagsSchema = z.object({
   mcp_apps: FeatureFlagValue.optional(),
 
   /**
+   * Mini game: the Pixel Yard panel next to the chat, where the agent plays a
+   * character it moves with the `lobe-mini-game` tool. Off: the entry button
+   * is hidden and the tool is never offered. Array values are user ids.
+   */
+  mini_game: FeatureFlagValue.optional(),
+
+  /**
    * Trial gate for the rail layout: icon rail + one wrapped list column and
    * content, the IM-style Messages list (Lobe AI opens by default), Contacts,
    * the Tasks scope list and the agent profile side panel. Off keeps the
@@ -201,6 +208,9 @@ export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
   // Off until an admin publishes a user allowlist or flips it to true.
   dashboard: false,
 
+  // On in development only until an admin publishes a user allowlist.
+  mini_game: isDev,
+
   // Off: a personal-trial layout, enabled per user id.
   im_layout: false,
 
@@ -258,6 +268,7 @@ export const mapFeatureFlagsEnvToState = (
     enableLlmRelay: evaluateFeatureFlag(config.agent_llm_relay, userId, 'agent_llm_relay'),
     enableDashboard: evaluateFeatureFlag(config.dashboard, userId, 'dashboard'),
     enableMcpApps: evaluateFeatureFlag(config.mcp_apps, userId, 'mcp_apps'),
+    enableMiniGame: evaluateFeatureFlag(config.mini_game, userId, 'mini_game'),
     enableImLayout: evaluateFeatureFlag(config.im_layout, userId, 'im_layout'),
     enableChannels: evaluateFeatureFlag(config.channel, userId, 'channel'),
     enableManagedCloudDevice: evaluateFeatureFlag(

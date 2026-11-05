@@ -9,7 +9,7 @@ import {
   SELF_FEEDBACK_INTENT_IDENTIFIER,
   shouldExposeSelfFeedbackIntentTool,
 } from '@lobechat/builtin-tool-self-iteration';
-import { manualModeExcludeToolIds } from '@lobechat/builtin-tools';
+import { browserExecutedToolIds, manualModeExcludeToolIds } from '@lobechat/builtin-tools';
 import { getFeatureDisabledToolIds } from '@lobechat/builtin-tools/featureGates';
 import type {
   AgentGroupConfig,
@@ -582,6 +582,7 @@ export const discoverTools = async (
     Object.assign(
       toolExecutorMap,
       resolveClientExecutors({
+        browserIdentifiers: browserExecutedToolIds,
         hasDeviceProxy: gatewayConfigured,
         manifestMap: toolManifestMap,
         stdioIdentifiers: [

@@ -123,6 +123,7 @@ import {
   MessageRenders,
   MessageStreamings,
 } from '@lobechat/builtin-tool-message/client';
+import { MiniGameInspectors, MiniGameManifest } from '@lobechat/builtin-tool-mini-game/client';
 import {
   PageAgentInspectors,
   PageAgentManifest,
@@ -389,6 +390,7 @@ export const registerBuiltinToolSurfaces = (): void => {
     [LocalSystemManifest.identifier]: LocalSystemInspectors as Record<string, BuiltinInspector>,
     [MemoryManifest.identifier]: MemoryInspectors as Record<string, BuiltinInspector>,
     [MessageManifest.identifier]: MessageInspectors as Record<string, BuiltinInspector>,
+    [MiniGameManifest.identifier]: MiniGameInspectors,
     [PageAgentManifest.identifier]: PageAgentInspectors as Record<string, BuiltinInspector>,
     [RemoteDeviceManifest.identifier]: RemoteDeviceInspectors as Record<string, BuiltinInspector>,
     [LobeActivatorManifest.identifier]: LobeActivatorInspectors as Record<string, BuiltinInspector>,
