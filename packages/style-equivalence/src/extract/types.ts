@@ -32,9 +32,11 @@ export interface StyleElement {
 
 export interface StyleRule {
   conditions: string[];
+  declarations?: string[];
   owned: Record<string, string>;
   selector: string;
   slot?: string;
+  stylesheet?: string;
 }
 
 export type StylesheetBinding = { kind: 'global' } | { kind: 'module'; symbol: string };

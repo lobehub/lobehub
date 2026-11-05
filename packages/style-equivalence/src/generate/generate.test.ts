@@ -8,7 +8,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import type { FileExtraction, StyleElement } from '../extract';
 import type { FilePlan } from '../plan/planFile';
 import { generateHost } from './host';
-import { CaseList, readSelection } from './hostRuntime';
+import { CaseList, INNER_BASELINE, readSelection } from './hostRuntime';
 import { generateModule } from './module';
 
 const tmp = path.join(import.meta.dirname, '.generated-test');
@@ -70,6 +70,8 @@ const extraction: FileExtraction = {
       variables: [{ kind: 'unknown', name: 'tone' }],
     }),
     element('D#0', 'details', 'styles.a', { children: ['D#0/0'] }),
+    element('I#0', 'div', 'styles.a'),
+    element('I#1', 'span', 'styles.b', { parent: 'I#0' }),
     element('P#0', 'div', 'styles.a', { runtimeStyle: 'laneStyle' }),
     element('P#1', 'span', 'styles.b', { parent: 'P#0' }),
     element('K#1', 'span', 'cx(styles.a,', {
@@ -151,6 +153,21 @@ const plan: FilePlan = {
           values: ['off', 'on', '__style_equivalence_absent__'],
         },
       ],
+    },
+    {
+      combos: [],
+      elementIds: { base: 'I#1', head: 'I#1' },
+      file: 'a.tsx',
+      flags: [],
+      inner: {
+        0: [{ attributes: { role: 'tablist' }, children: [], tag: 'div' }],
+        1: [
+          { attributes: {}, children: [], tag: 'h1' },
+          { attributes: { className: 'x' }, children: [], tag: 'img' },
+        ],
+      },
+      key: 'a.tsx|I#1',
+      variables: [],
     },
     {
       combos: [],
@@ -265,6 +282,13 @@ describe('generateModule', () => {
     );
   });
 
+  it('renders the inner targets a moved stylesheet selects inside each chain element', async () => {
+    const { cases } = await load();
+    expect(render(cases['a.tsx|I#1']({}))).toBe(
+      '<div data-synthetic-element="I#0" class="a"><span data-synthetic-element="I#1" class="b">Ag 文本 Text<h1 data-synthetic-inner="">Ag 文本 Text</h1><img data-synthetic-inner="" class="x"/></span><div data-synthetic-inner="" role="tablist">Ag 文本 Text</div></div>',
+    );
+  });
+
   it('fails a knob case it cannot bind instead of rendering it unbound', async () => {
     const { cases } = await load();
     expect(() => cases['a.tsx|K#1']({})).toThrow('KNOB_UNBOUND');
@@ -286,7 +310,10 @@ describe('CaseList', () => {
         ...plan,
         cases: plan.cases
           .filter(
-            (entry) => !['a.tsx|D#0/0', 'a.tsx|K#1', 'a.tsx|P#1', 'a.tsx|T#0'].includes(entry.key),
+            (entry) =>
+              !['a.tsx|D#0/0', 'a.tsx|I#1', 'a.tsx|K#1', 'a.tsx|P#1', 'a.tsx|T#0'].includes(
+                entry.key,
+              ),
           )
           .map((entry) => ({
             ...entry,
@@ -297,6 +324,7 @@ describe('CaseList', () => {
     ];
     const all = render(createElement(CaseList, { modules: { 'a.tsx': mod }, plan: fullPlan }));
     expect(all.match(/data-case=/g)).toHaveLength(6);
+    expect(all).toContain(`<style>${INNER_BASELINE}</style>`);
     expect(all).toContain('data-case="a.tsx|A#0|1"');
     const one = render(
       createElement(CaseList, {
@@ -316,7 +344,10 @@ describe('CaseList', () => {
         ...plan,
         cases: plan.cases
           .filter(
-            (entry) => !['a.tsx|D#0/0', 'a.tsx|K#1', 'a.tsx|P#1', 'a.tsx|T#0'].includes(entry.key),
+            (entry) =>
+              !['a.tsx|D#0/0', 'a.tsx|I#1', 'a.tsx|K#1', 'a.tsx|P#1', 'a.tsx|T#0'].includes(
+                entry.key,
+              ),
           )
           .map((entry) => ({
             ...entry,

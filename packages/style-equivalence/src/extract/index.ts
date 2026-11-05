@@ -105,7 +105,7 @@ export const extractFile = (
         ? Object.fromEntries([...classes].map((name) => [name, `${binding.symbol}.${name}`]))
         : {};
     if (binding.kind === 'global') classes.forEach((name) => globalClasses.add(name));
-    for (const rule of parsed.rules) rules.push({ ...rule, owned });
+    for (const rule of parsed.rules) rules.push({ ...rule, owned, stylesheet: source });
   }
   const usedGlobal = new Set<string>();
 

@@ -44,6 +44,8 @@ const CaseView = ({
 
 export const SECTION_WIDTH = 360;
 
+export const INNER_BASELINE = ':where([data-synthetic-inner]){width:fit-content}';
+
 export const CaseList = ({
   modules,
   plan,
@@ -54,6 +56,7 @@ export const CaseList = ({
   selection?: CaseSelection;
 }) => (
   <main data-synthetic-cases="">
+    <style>{INNER_BASELINE}</style>
     {plan.flatMap((file) =>
       file.cases.flatMap((entry) =>
         entry.combos.map((combo, index) => {

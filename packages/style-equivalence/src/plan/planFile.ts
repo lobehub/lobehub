@@ -2,7 +2,9 @@ import type { FileExtraction, StyleElement, VariableKind } from '../extract';
 import { mergeKinds, valueIdentifiers } from '../extract/identifiers';
 import { type Combo, combosFor, DOMAIN_COMBO_LIMIT } from './combos';
 import { childCovered, elementsOf, parentCovered, replacedDescendants } from './descendants';
+import type { InnerNode } from './inner';
 import { bindKnobs, parseExpression } from './knobs';
+import { movedStylesheets } from './moved';
 import { alignElements } from './pair';
 import {
   isIntrinsicTag,
@@ -39,6 +41,7 @@ export interface PlanCase {
   evidence?: string[];
   file: string;
   flags: string[];
+  inner?: Record<string, InnerNode[]>;
   key: string;
   knobs?: string[];
   variables: PlanVariable[];
@@ -139,23 +142,34 @@ export const planFile = (
       parentCovered(byId.base.get(id)!, base, rendered),
     ),
   );
+  const moved = movedStylesheets(base, head, pairs);
 
   const cases = pairs.map(([left, right]): PlanCase => {
     const chains = { base: chainOf(left, byId.base), head: chainOf(right, byId.head) };
     const flags = new Set<string>();
     const evidence: string[] = [];
     const isReplaced = replacedHead.has(right);
+    const movedAt =
+      chains.base.length === chains.head.length
+        ? chains.base.flatMap((item, index) => {
+            const proof = moved.get(item.id);
+            return proof && proof.head === chains.head[index].id ? [{ index, proof }] : [];
+          })
+        : [];
+    const movedItems = new Set(
+      movedAt.flatMap(({ index }) => [chains.base[index], chains.head[index]]),
+    );
     if (left.tag !== right.tag) flags.add('TAG_CHANGED');
     for (const item of [...chains.base, ...chains.head]) {
       if (!isIntrinsicTag(item.tag) && !layout.has(item.tag)) flags.add('PLACEMENT_SUBSTITUTED');
       if (item.bindings.some((binding) => !binding.spread && binding.prop !== 'className'))
         flags.add('PLACEMENT_NEUTRAL_PROP');
-      const inner =
-        item.flags.includes('INNER_TARGET') &&
+      const reached =
         chains.base.includes(item) &&
         (covered.has(item.id) ||
           (isReplaced && item.id === left.parent && childCovered(item, left, base.rules)));
-      if (inner && !isReplaced && !evidence.includes('DESCENDANT_RENDERED'))
+      const inner = item.flags.includes('INNER_TARGET') && (reached || movedItems.has(item));
+      if (inner && reached && !isReplaced && !evidence.includes('DESCENDANT_RENDERED'))
         evidence.push('DESCENDANT_RENDERED');
       item.flags.forEach((flag) => !(inner && flag === 'INNER_TARGET') && flags.add(flag));
     }
@@ -163,15 +177,27 @@ export const planFile = (
     const properties = { base: base.slotProperties, head: head.slotProperties };
     if (
       (flags.has('PLACEMENT_SUBSTITUTED') || flags.has('PLACEMENT_NEUTRAL_PROP')) &&
-      placementPreserved(chains.base, chains.head, {
-        layoutComponents: config.layoutComponents,
-        properties,
-      })
+      placementPreserved(
+        chains.base,
+        chains.head.map((item, index) => {
+          const placement = movedAt.find((entry) => entry.index === index)?.proof.placement;
+          return placement
+            ? { ...item, bindings: [{ ...item.bindings[0], expr: placement }] }
+            : item;
+        }),
+        { layoutComponents: config.layoutComponents, properties },
+      )
     ) {
       flags.delete('PLACEMENT_SUBSTITUTED');
       flags.delete('PLACEMENT_NEUTRAL_PROP');
       evidence.push('PLACEMENT_PRESERVED');
     }
+    if (movedAt.length) evidence.push('STYLESHEET_MOVED');
+    const inner = Object.fromEntries(
+      movedAt
+        .filter(({ proof }) => proof.nodes.length)
+        .map(({ index, proof }) => [index, proof.nodes]),
+    );
     const structural = flags.size > 0;
     const variables = new Map<string, PlanVariable>();
     for (const side of ['base', 'head'] as const)
@@ -236,6 +262,7 @@ export const planFile = (
       ...(evidence.length ? { evidence } : {}),
       file,
       flags: [...flags].sort(),
+      ...(Object.keys(inner).length ? { inner } : {}),
       key: `${file}|${left.id}`,
       ...(knobs ? { knobs } : {}),
       variables: modeled,

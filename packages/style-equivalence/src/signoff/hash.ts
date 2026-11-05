@@ -18,7 +18,7 @@ export interface CaseHashInput {
   declarations: Partial<Record<Side, Record<string, string>>>;
   elements: Partial<Record<Side, HashedElement[]>>;
   outcome?: string[];
-  plan?: Pick<PlanCase, 'combos' | 'flags' | 'variables'>;
+  plan?: Pick<PlanCase, 'combos' | 'flags' | 'inner' | 'variables'>;
   verifierMajor: string;
 }
 
@@ -62,6 +62,7 @@ export const collectCaseHashInput = (input: CollectHashInput): CaseHashInput => 
     plan: input.plan && {
       combos: input.plan.combos,
       flags: input.plan.flags,
+      inner: input.plan.inner,
       variables: input.plan.variables,
     },
     verifierMajor: input.verifierVersion.split('.')[0],
