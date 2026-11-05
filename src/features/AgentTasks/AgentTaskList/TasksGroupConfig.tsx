@@ -1,3 +1,4 @@
+// oxlint-disable-next-line stylex-migration/no-plain-css -- needs lobe-ui slot: Form.label (FormKit Field renders the <label> and its FormTitle with no classNames or styles entry for them)
 import './TasksGroupConfig.css';
 
 import { ActionIcon, Flexbox, Icon, Popover, Select, Switch, Tabs } from '@lobehub/ui';

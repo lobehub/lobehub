@@ -1,5 +1,6 @@
 'use client';
 
+// oxlint-disable-next-line stylex-migration/no-plain-css -- needs lobe-ui slot: Breadcrumb.list (the <ol> keeps flex-wrap: wrap and no prop reaches it)
 import '@/features/AgentTasks/shared/breadcrumb.css';
 
 import { Breadcrumb, Icon, Text } from '@lobehub/ui';
@@ -7,6 +8,11 @@ import { ChevronRight } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import {
+  breadcrumbClassNames,
+  breadcrumbCrumbClassName,
+  breadcrumbRootClassName,
+} from '@/features/AgentTasks/shared/breadcrumbStyles';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
@@ -28,7 +34,13 @@ const GoalWorkspaceBreadcrumb = memo<GoalWorkspaceBreadcrumbProps>(({ title }) =
     key: 'goal',
     title: (
       // Viewport-capped so the crumb fits beside the back button on a phone.
-      <Text ellipsis color={'inherit'} style={{ maxWidth: 'min(320px, 45vw)' }} weight={500}>
+      <Text
+        ellipsis
+        className={breadcrumbCrumbClassName}
+        color={'inherit'}
+        style={{ maxWidth: 'min(320px, 45vw)' }}
+        weight={500}
+      >
         {title}
       </Text>
     ),
@@ -36,7 +48,8 @@ const GoalWorkspaceBreadcrumb = memo<GoalWorkspaceBreadcrumbProps>(({ title }) =
 
   return (
     <Breadcrumb
-      className={'lobe-breadcrumb-30cde0ed-breadcrumb'}
+      className={breadcrumbRootClassName}
+      classNames={breadcrumbClassNames}
       separator={<Icon icon={ChevronRight} />}
       items={
         goalsEnabled
@@ -44,7 +57,7 @@ const GoalWorkspaceBreadcrumb = memo<GoalWorkspaceBreadcrumbProps>(({ title }) =
               {
                 key: 'goals',
                 title: (
-                  <WorkspaceLink to={'/goals'}>
+                  <WorkspaceLink className={breadcrumbCrumbClassName} to={'/goals'}>
                     <Text color={'inherit'} style={{ whiteSpace: 'nowrap' }} weight={500}>
                       {t('goalList.title')}
                     </Text>

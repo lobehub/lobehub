@@ -1,6 +1,7 @@
 'use client';
 
 import '@xyflow/react/dist/style.css';
+// oxlint-disable-next-line stylex-migration/no-plain-css -- styles @xyflow/react's own DOM (edge paths, edge labels, controls, attribution) and the edge <g> it renders, including html[data-theme] dark overrides; React Flow exposes no class or style prop for those parts
 import './canvas.css';
 
 import type { GoalGraphEdge } from '@lobechat/types';
@@ -42,6 +43,7 @@ import RightPanel from '@/features/RightPanel';
 import { useIsDark } from '@/hooks/useIsDark';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
+import { sx } from '@/styles/sx';
 
 import {
   type GoalGraphNodeKind,
@@ -109,6 +111,8 @@ import { type GraphViewMode, isStageWholeMap, stageNodeIds } from './viewMode';
  * node drill-down keeps working.
  */
 
+const CANVAS_SCOPE_CLASS = 'lobe-canvas-e3dae3fb-canvas';
+
 const EDGE_OPACITY_VARS = {
   '--goal-muted-edge-opacity': MUTED_EDGE_OPACITY,
   '--goal-muted-edge-opacity-dark': MUTED_EDGE_OPACITY_DARK,
@@ -148,6 +152,8 @@ const styles = stylex.create({
     boxShadow: cssVar.boxShadowTertiary,
   },
   floatRight: { insetInlineEnd: '16px' },
+  canvas: { position: 'relative', width: '100%', height: '560px' },
+  canvasFull: { height: '100%' },
   overlay: {
     position: 'fixed',
     zIndex: 1000,
@@ -1178,7 +1184,7 @@ const Graph = memo<GraphProps>(({ extra, fullscreen = false, onFullscreenChange,
             <Canvas
               {...props}
               fullscreen
-              className={cx('lobe-canvas-e3dae3fb-canvas', 'lobe-canvas-e3dae3fb-full')}
+              className={sx([styles.canvas, styles.canvasFull], CANVAS_SCOPE_CLASS).className}
               collapsed={collapsed}
               graph={scopedGraph}
               hiddenKinds={hiddenKinds}
@@ -1243,7 +1249,7 @@ const Graph = memo<GraphProps>(({ extra, fullscreen = false, onFullscreenChange,
       <ReactFlowProvider>
         <Canvas
           {...props}
-          className={'lobe-canvas-e3dae3fb-canvas'}
+          className={sx([styles.canvas], CANVAS_SCOPE_CLASS).className}
           collapsed={collapsed}
           fullscreen={false}
           graph={scopedGraph}

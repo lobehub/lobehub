@@ -1,17 +1,7 @@
 /* The exploration map's canvas. It restyles @xyflow/react's own DOM and the
    `goal-*` edge classes set in index.tsx, which StyleX cannot reach. The muted
-   edge opacities come in as custom properties so mainline.ts stays their one
-   source. */
-.lobe-canvas-e3dae3fb-canvas {
-  position: relative;
-  width: 100%;
-  height: 560px;
-}
-
-.lobe-canvas-e3dae3fb-full {
-  height: 100%;
-}
-
+   edge opacities come in as custom properties (canvasRoot.ts) so mainline.ts
+   stays their one source. */
 .lobe-canvas-e3dae3fb-canvas .react-flow__attribution {
   display: none;
 }

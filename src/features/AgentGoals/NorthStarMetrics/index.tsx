@@ -1,5 +1,6 @@
 'use client';
 
+// oxlint-disable-next-line stylex-migration/no-plain-css -- the dashed target line styles recharts' own <path name="target"> elements inside SparkAreaChart, which has no per-series stroke or fill prop
 import './index.css';
 
 import { SparkAreaChart } from '@lobehub/charts';

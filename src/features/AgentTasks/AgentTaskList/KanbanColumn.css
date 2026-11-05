@@ -1,27 +1,9 @@
-/* A draggable task card. The grab cursor and the child hover wash reach the
-   card's descendants (`*`, `> *`), which StyleX cannot select. */
-.lobe-kanban-column-14c7298e-card {
-  border-radius: var(--lobe-border-radius-lg);
-  background: var(--lobe-color-bg-elevated);
-  box-shadow:
-    0 1px 2px rgb(0 0 0 / 4%),
-    0 2px 6px rgb(0 0 0 / 3%);
-}
-
-.lobe-kanban-column-14c7298e-card,
+/* The card is a drag handle, so every descendant shows the card's cursor
+   instead of the pointer its own component sets. */
 .lobe-kanban-column-14c7298e-card * {
   cursor: default;
 }
 
-.lobe-kanban-column-14c7298e-card:active,
 .lobe-kanban-column-14c7298e-card:active * {
   cursor: grabbing;
-}
-
-.lobe-kanban-column-14c7298e-card:hover > * {
-  background: var(--lobe-color-fill-quaternary);
-}
-
-.lobe-kanban-column-14c7298e-dragging {
-  visibility: hidden;
 }

@@ -1,7 +1,0 @@
-/* EditorCanvas reserves space for its document footer by default. The compact
-   review summary has no footer, so keeping that space turns a one-line
-   instruction into a conspicuous empty band. Reaches into the editor's own DOM,
-   which StyleX cannot select. */
-.lobe-create-goal-content-a69e0085-instruction-editor > div > div > div {
-  padding-block-end: 0 !important;
-}

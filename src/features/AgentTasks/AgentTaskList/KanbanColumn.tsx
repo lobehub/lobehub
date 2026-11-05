@@ -1,9 +1,9 @@
+// oxlint-disable-next-line stylex-migration/no-plain-css -- the card forces its cursor onto every descendant, including lobe-ui Block, Tag, Avatar and selector trigger internals that set their own pointer cursor; no slot or xstyle reaches all of them
 import './KanbanColumn.css';
 
 import { useDndContext, useDraggable, useDroppable } from '@dnd-kit/core';
 import type { TaskStatus } from '@lobechat/types';
-import { type DropdownItem, DropdownMenu, Icon } from '@lobehub/ui';
-import { ActionIcon, cx, Skeleton, Text } from '@lobehub/ui';
+import { ActionIcon, type DropdownItem, DropdownMenu, Icon, Skeleton, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { EyeOff, MoreHorizontal, Plus } from 'lucide-react';
@@ -11,6 +11,7 @@ import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { TaskKanbanGroupBy, TaskListItem } from '@/store/task/slices/list/initialState';
+import { sx } from '@/styles/sx';
 
 import { createTaskModal } from '../CreateTaskModal';
 import type { TaskItemRouteScope } from '../features/AgentTaskItem';
@@ -27,6 +28,8 @@ import TaskItemSkeleton from './TaskItemSkeleton';
 
 export const COLUMN_WIDTH = 300;
 
+const CARD_SCOPE_CLASS = 'lobe-kanban-column-14c7298e-card';
+
 const DraggableTaskCard = memo<{ routeScope?: TaskItemRouteScope; task: TaskListItem }>(
   ({ routeScope, task }) => {
     const { attributes, isDragging, listeners, setNodeRef } = useDraggable({
@@ -37,14 +40,16 @@ const DraggableTaskCard = memo<{ routeScope?: TaskItemRouteScope; task: TaskList
     return (
       <div
         ref={setNodeRef}
-        className={cx(
-          'lobe-kanban-column-14c7298e-card',
-          isDragging && 'lobe-kanban-column-14c7298e-dragging',
-        )}
+        {...sx([styles.card, isDragging && styles.cardDragging], CARD_SCOPE_CLASS)}
         {...listeners}
         {...attributes}
       >
-        <AgentTaskItem routeScope={routeScope} task={task} variant="compact" />
+        <AgentTaskItem
+          className={stylex.props(styles.cardSurface).className}
+          routeScope={routeScope}
+          task={task}
+          variant="compact"
+        />
       </div>
     );
   },
@@ -72,6 +77,20 @@ const styles = stylex.create({
     backgroundColor: { 'default': null, ':hover': cssVar.colorBgContainer },
     backgroundImage: { 'default': null, ':hover': 'none' },
     transition: 'border-color 0.2s, color 0.2s, background 0.2s',
+  },
+  card: {
+    cursor: { 'default': 'default', ':active': 'grabbing' },
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgElevated,
+    backgroundImage: 'none',
+    boxShadow: '0 1px 2px rgb(0 0 0 / 4%), 0 2px 6px rgb(0 0 0 / 3%)',
+  },
+  cardDragging: {
+    visibility: 'hidden',
+  },
+  cardSurface: {
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillQuaternary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
   },
   body: {
     overflowY: 'auto',
@@ -275,10 +294,13 @@ const KanbanColumn = memo<KanbanColumnProps>(
           {loading ? (
             Array.from({ length: 3 }).map((_, index) => (
               <div
-                className={'lobe-kanban-column-14c7298e-card'}
                 key={`kanban-skeleton-${columnKey}-${index}`}
+                {...sx([styles.card], CARD_SCOPE_CLASS)}
               >
-                <TaskItemSkeleton variant={'compact'} />
+                <TaskItemSkeleton
+                  className={stylex.props(styles.cardSurface).className}
+                  variant={'compact'}
+                />
               </div>
             ))
           ) : tasks.length > 0 ? (

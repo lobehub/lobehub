@@ -1,7 +1,5 @@
 'use client';
 
-import './CreateGoalContent.css';
-
 import { resolveGoalAttemptBudget } from '@lobechat/builtin-tool-goal';
 import type { CreateGoalParams, GoalCriterionDraft } from '@lobechat/builtin-tool-task';
 import { GOAL_TITLE_MAX_LENGTH } from '@lobechat/const/goal';
@@ -63,6 +61,8 @@ import {
 import { hasUnsavedGoalDraft } from './hasUnsavedGoalDraft';
 
 const REDUCED_MOTION = '@media (prefers-reduced-motion: reduce)';
+
+const INSTRUCTION_EDITOR_WITHOUT_FOOTER_SPACE = { paddingBottom: 0 };
 
 const generationRoll = stylex.keyframes({
   '0%, 20%': { transform: 'translateY(0)' },
@@ -599,15 +599,9 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
       {step === 'review' && (
         <Flexbox className={stylex.props(styles.body).className}>
           <Flexbox className={stylex.props(styles.reviewSection).className} gap={10}>
-            <Flexbox
-              className={
-                sx(
-                  [styles.instructionEditor],
-                  'lobe-create-goal-content-a69e0085-instruction-editor',
-                ).className
-              }
-            >
+            <Flexbox className={stylex.props(styles.instructionEditor).className}>
               <EditorCanvas
+                contentStyle={INSTRUCTION_EDITOR_WITHOUT_FOOTER_SPACE}
                 disabled={!canCreate}
                 editor={editor}
                 editorData={{ content: plan.instruction }}

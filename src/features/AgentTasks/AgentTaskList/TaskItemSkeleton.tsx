@@ -2,13 +2,14 @@ import { Block, Flexbox, Skeleton } from '@lobehub/ui';
 import { memo } from 'react';
 
 interface TaskItemSkeletonProps {
+  className?: string;
   variant?: 'compact' | 'default';
 }
 
-const TaskItemSkeleton = memo<TaskItemSkeletonProps>(({ variant = 'default' }) => {
+const TaskItemSkeleton = memo<TaskItemSkeletonProps>(({ className, variant = 'default' }) => {
   if (variant === 'compact') {
     return (
-      <Block gap={8} padding={12} variant={'borderless'}>
+      <Block className={className} gap={8} padding={12} variant={'borderless'}>
         <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
           <Skeleton height={14} style={{ minWidth: 60 }} width={60} />
           <Skeleton.Avatar shape={'circle'} size={'small'} />
@@ -26,7 +27,7 @@ const TaskItemSkeleton = memo<TaskItemSkeletonProps>(({ variant = 'default' }) =
   }
 
   return (
-    <Block gap={8} padding={12} variant={'borderless'}>
+    <Block className={className} gap={8} padding={12} variant={'borderless'}>
       <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
         <Flexbox horizontal align={'center'} gap={8} style={{ flex: 1, minWidth: 0 }}>
           <Skeleton.Avatar shape={'square'} size={16} style={{ borderRadius: 4, flex: 'none' }} />
