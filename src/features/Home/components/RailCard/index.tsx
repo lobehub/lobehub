@@ -28,9 +28,14 @@ const styles = stylex.create({
     minWidth: 0,
     padding: 0,
     borderWidth: 0,
+    borderStyle: 'none',
+    borderColor: 'currentcolor',
     textAlign: 'start',
     backgroundColor: 'transparent',
     backgroundImage: 'none',
+  },
+  chevron: {
+    color: { default: null, [stylex.when.ancestor(':hover')]: cssVar.colorTextSecondary },
   },
 });
 
@@ -63,7 +68,7 @@ const RailCard = memo<RailCardProps>(
         {loading && <Spin size="small" variant="network" />}
         {onCollapsedChange && (
           <Icon
-            className={'home-rail-card-chevron'}
+            className={stylex.props(styles.chevron).className}
             color={cssVar.colorTextQuaternary}
             icon={collapsed ? ChevronRightIcon : ChevronDownIcon}
             size={14}
@@ -83,7 +88,7 @@ const RailCard = memo<RailCardProps>(
             {onCollapsedChange ? (
               <button
                 aria-expanded={!collapsed}
-                {...stylex.props(styles.heading)}
+                {...stylex.props(styles.heading, stylex.defaultMarker())}
                 data-testid={'home-rail-card-toggle'}
                 type={'button'}
                 onClick={() => onCollapsedChange(!collapsed)}

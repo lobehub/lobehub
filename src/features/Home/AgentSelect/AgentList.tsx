@@ -30,7 +30,10 @@ const SECTION_HEIGHT = 28;
 const MAX_LIST_HEIGHT = 360;
 
 const styles = stylex.create({
-  active: { backgroundColor: cssVar.colorFillTertiary, backgroundImage: 'none' },
+  active: {
+    backgroundColor: { 'default': cssVar.colorFillTertiary, ':hover': cssVar.colorFillSecondary },
+    backgroundImage: 'none',
+  },
   empty: {
     paddingBlock: '24px',
     paddingInline: '12px',
@@ -182,11 +185,11 @@ const AgentList = memo<AgentListProps>(({ activeAgentId, error, onRetry, onSelec
               </div>
             ) : (
               <DropdownMenuItem
+                key={item.key}
                 className={
                   stylex.props(styles.item, item.row.id === activeAgentId && styles.active)
                     .className
                 }
-                key={item.key}
                 onClick={() => onSelect(item.row.id)}
               >
                 <AgentAvatar

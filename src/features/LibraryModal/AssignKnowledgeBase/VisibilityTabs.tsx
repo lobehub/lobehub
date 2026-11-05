@@ -34,7 +34,7 @@ const styles = stylex.create({
   },
   buttonActive: {
     color: cssVar.colorText,
-    backgroundColor: cssVar.colorBgElevated,
+    backgroundColor: { 'default': cssVar.colorBgElevated, ':hover': cssVar.colorFillTertiary },
     backgroundImage: 'none',
     boxShadow: '0 1px 2px rgb(0 0 0 / 6%)',
   },
