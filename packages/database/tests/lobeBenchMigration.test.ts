@@ -15,7 +15,7 @@ import { agentEvalMemories } from '../src/schemas/agentEvalMemory';
 import { agentEvalEnvironments } from '../src/schemas/agentEvals';
 
 const migrationsFolder = path.join(__dirname, '../migrations');
-const migrationTag = '0201_lobe_bench_environments_and_memory';
+const migrationTag = '0205_lobe_bench_environments_and_memory';
 const temporaryFolders: string[] = [];
 
 async function canaryMigrationsFolder() {
