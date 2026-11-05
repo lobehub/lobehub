@@ -321,7 +321,26 @@ describe('describeTokenLookup', () => {
     expect(report?.fix).toContain('signing in again will not change the answer');
   });
 
-  it('leaves the caller its own wording when there is nothing to diagnose', () => {
-    expect(describeTokenLookup({ status: 'no-login' })).toBeUndefined();
+  describe('no login', () => {
+    beforeEach(() => {
+      vi.stubEnv('LOBEHUB_OPERATION_ID', '');
+      vi.stubEnv('LOBEHUB_TOPIC_ID', '');
+    });
+    afterEach(() => vi.unstubAllEnvs());
+
+    it('leaves the caller its own wording when there is nothing to diagnose', () => {
+      expect(describeTokenLookup({ status: 'no-login' })).toBeUndefined();
+    });
+
+    /** An agent told only "run lh login" guessed at restarts and workspace ids instead. */
+    it('explains a missing login inside an agent run and hands the login to the user', () => {
+      vi.stubEnv('LOBEHUB_TOPIC_ID', 'tpc_1');
+
+      const report = describeTokenLookup({ status: 'no-login' });
+
+      expect(report?.detail).toContain('agent conversation');
+      expect(report?.fix).toContain("Ask the user to run 'lh login'");
+      expect(report?.fix).toContain('Do not run it yourself');
+    });
   });
 });
