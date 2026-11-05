@@ -1,3 +1,5 @@
+// oxlint-disable-next-line stylex-migration/no-emotion-styles -- MarkdownMessage paragraphs get no className
+import { createStaticStyles } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 
@@ -177,3 +179,15 @@ export const styles = stylex.create({
     zIndex: 1000,
   },
 });
+
+export const fallback = createStaticStyles(({ css }) => ({
+  userRequestBody: css`
+    p:first-child {
+      margin-block-start: 0;
+    }
+
+    p:last-child {
+      margin-block-end: 0;
+    }
+  `,
+}));

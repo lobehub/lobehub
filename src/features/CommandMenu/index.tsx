@@ -1,8 +1,5 @@
 'use client';
 
-// oxlint-disable-next-line stylex-migration/no-plain-css -- cmdk renders [cmdk-group-heading] inside Command.Group and exposes no className or slot for it
-import './styles.css';
-
 import { stopPropagation } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { Command, defaultFilter } from 'cmdk';
@@ -24,7 +21,7 @@ import CommandFooter from './components/CommandFooter';
 import CommandInput from './components/CommandInput';
 import MainMenu from './MainMenu';
 import SearchResults from './SearchResults';
-import { styles } from './styles';
+import { fallback, styles } from './styles';
 import ThemeMenu from './ThemeMenu';
 import { useCommandMenu } from './useCommandMenu';
 
@@ -132,7 +129,7 @@ const CommandMenuContent = memo<CommandMenuContentProps>(({ isClosing, onClose }
     <div {...stylex.props(styles.overlay)} data-closing={isClosing} onClick={onClose}>
       <div onClick={stopPropagation}>
         <Command
-          {...sx([styles.commandRoot], 'lobe-command-menu-48defd20-root')}
+          {...sx([styles.commandRoot], fallback.commandRoot)}
           data-closing={isClosing}
           filter={commandFilter}
           shouldFilter={page !== 'ask-ai' && !selectedAgent && !search.trimStart().startsWith('@')}

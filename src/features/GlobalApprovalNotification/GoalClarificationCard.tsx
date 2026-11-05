@@ -1,8 +1,5 @@
 'use client';
 
-// oxlint-disable-next-line stylex-migration/no-plain-css -- the paragraphs are rendered markdown inside MarkdownMessage, which no prop reaches
-import './userRequest.css';
-
 import { ActionIcon, Button, Icon } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { ArrowUpRight, ChevronUp, Target } from 'lucide-react';
@@ -14,7 +11,7 @@ import MarkdownMessage from '@/features/Conversation/Markdown';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { sx } from '@/styles/sx';
 
-import { styles } from './styles';
+import { fallback, styles } from './styles';
 import type { GoalClarificationGroup } from './usePendingGoalClarifications';
 
 interface GoalClarificationCardProps {
@@ -69,7 +66,7 @@ const GoalClarificationCard = memo<GoalClarificationCardProps>(
 
         {group.requirement && (
           <div {...stylex.props(styles.requestContext)}>
-            <div {...sx([styles.userRequestBody], 'lobe-user-request-bac9c8fa-body')}>
+            <div {...sx([styles.userRequestBody], fallback.userRequestBody)}>
               <MarkdownMessage>{group.requirement}</MarkdownMessage>
             </div>
           </div>

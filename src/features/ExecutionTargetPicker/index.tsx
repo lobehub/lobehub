@@ -1,10 +1,8 @@
 'use client';
 
-// oxlint-disable-next-line stylex-migration/no-plain-css -- needs lobe-ui slot: Select.valueText (the span Select renders around labelRender output)
-import './index.css';
-
 import type { DeviceExecutionTarget, DeviceListItem } from '@lobechat/types';
-import { Flexbox, Icon } from '@lobehub/ui';
+// oxlint-disable-next-line stylex-migration/no-emotion-styles -- needs lobe-ui slot: Select.valueText
+import { createStaticStyles, Flexbox, Icon } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { BoxIcon, LaptopIcon, MonitorOffIcon, SparklesIcon } from 'lucide-react';
@@ -77,6 +75,16 @@ const styles = stylex.create({
     whiteSpace: 'nowrap',
   },
 });
+
+const fallback = createStaticStyles(({ css }) => ({
+  selectValue: css`
+    > span {
+      display: flex;
+      flex: 1;
+      min-width: 0;
+    }
+  `,
+}));
 
 export const SHARED_EXECUTION_TARGETS = ['auto', 'device', 'none', 'sandbox'] as const;
 
@@ -258,7 +266,7 @@ ExecutionTargetDeviceStatus.displayName = 'ExecutionTargetPicker.ExecutionTarget
 export const executionTargetSelectClassNames = {
   item: stylex.props(styles.selectItem).className,
   popup: stylex.props(styles.selectPopup).className,
-  value: 'lobe-execution-target-picker-741a9616-select-value',
+  value: fallback.selectValue,
 };
 
 interface ExecutionTargetLabelProps {

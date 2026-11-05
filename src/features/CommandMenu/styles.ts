@@ -1,3 +1,5 @@
+// oxlint-disable-next-line stylex-migration/no-emotion-styles -- cmdk group heading takes no className
+import { createStaticStyles } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 
@@ -218,3 +220,18 @@ export const styles = stylex.create({
     paddingInline: '16px',
   },
 });
+
+export const fallback = createStaticStyles(({ css, cssVar }) => ({
+  commandRoot: css`
+    [cmdk-group-heading] {
+      user-select: none;
+
+      padding-block: 8px;
+      padding-inline: 16px;
+
+      font-size: 12px;
+      font-weight: 500;
+      color: ${cssVar.colorTextSecondary};
+    }
+  `,
+}));
