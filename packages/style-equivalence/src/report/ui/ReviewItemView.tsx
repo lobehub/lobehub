@@ -3,7 +3,7 @@ import * as stylex from '@stylexjs/stylex';
 
 import { REVEAL_COLORS } from '../../server/reveal';
 import { cropShotUrl, type ReviewView } from '../api';
-import { reviewGrid } from '../review';
+import { cellVerdict, reviewGrid } from '../review';
 import { StyleDetails } from './StyleDetails';
 
 const styles = stylex.create({
@@ -38,6 +38,7 @@ const styles = stylex.create({
   colHead: { color: cssVar.colorTextTertiary, fontSize: 12, paddingInlineStart: 4 },
   diff: { borderColor: cssVar.colorError, boxShadow: `0 0 0 3px ${cssVar.colorErrorBg}` },
   error: { color: cssVar.colorError },
+  neutral: { color: cssVar.colorTextSecondary },
   grid: {
     alignItems: 'stretch',
     columnGap: 16,
@@ -130,6 +131,17 @@ const Pair = ({
   </div>
 );
 
+const CellVerdict = ({
+  cell,
+  itemKey,
+}: {
+  cell: { differs: boolean; summary: string[] };
+  itemKey: string;
+}) => {
+  const verdict = cellVerdict(itemKey, cell);
+  return <div {...stylex.props(styles.verdict, styles[verdict.tone])}>{verdict.text}</div>;
+};
+
 const ShotGrid = ({
   columns,
   item,
@@ -156,9 +168,7 @@ const ShotGrid = ({
           {...stylex.props(styles.cell, cell.differs && styles.diff)}
         >
           <Pair combo={cell.combo} condition={cell.condition} item={item} />
-          <div {...stylex.props(styles.verdict, cell.differs ? styles.error : styles.ok)}>
-            {cell.differs ? `不一样：${cell.summary.join('；')}` : '一致'}
-          </div>
+          <CellVerdict cell={cell} itemKey={item.key} />
         </div>
       )),
     ])}

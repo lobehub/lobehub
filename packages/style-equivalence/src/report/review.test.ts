@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { completionText, keyAction, nextOpen, nextSelection, reviewGrid } from './review';
+import {
+  cellVerdict,
+  completionText,
+  keyAction,
+  nextOpen,
+  nextSelection,
+  reviewGrid,
+} from './review';
 
 const item = (key: string, state: string) => ({ key, state });
 
@@ -156,5 +163,28 @@ describe('completionText', () => {
       '工具自检没通过：注入的已知改动没有全部被发现。',
       '工具自检没通过：2 处合成渲染和真实挂载不一致。',
     ]);
+  });
+});
+
+describe('cellVerdict', () => {
+  const key = 'a.tsx|A#0';
+
+  it('says whether the two sides match', () => {
+    expect(cellVerdict(key, { differs: false, summary: [] })).toEqual({ text: '一致', tone: 'ok' });
+    expect(cellVerdict(key, { differs: true, summary: ['颜色 红 → 蓝'] })).toEqual({
+      text: '不一样：颜色 红 → 蓝',
+      tone: 'error',
+    });
+  });
+
+  it('names the only side of a one-sided element instead of claiming a match', () => {
+    expect(cellVerdict('a.tsx|unpaired:head:A#2', { differs: false, summary: [] })).toEqual({
+      text: '只有改之后，没有可对比的',
+      tone: 'neutral',
+    });
+    expect(cellVerdict('a.tsx|unpaired:base:A#2', { differs: false, summary: [] })).toEqual({
+      text: '只有改之前，改之后不见了',
+      tone: 'neutral',
+    });
   });
 });
