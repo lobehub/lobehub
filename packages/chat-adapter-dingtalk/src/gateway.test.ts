@@ -18,6 +18,8 @@ class MockWebSocket {
   url: string;
   sentMessages: string[] = [];
   closeCalls: Array<{ code?: number; reason?: string }> = [];
+  /** Half-open TCP: the peer never answers the close frame, so no `close` event fires. */
+  hangOnClose = false;
   private listeners = new Map<string, Array<(...args: any[]) => void>>();
 
   constructor(url: string) {
@@ -48,6 +50,7 @@ class MockWebSocket {
 
   close(code?: number, reason?: string) {
     this.closeCalls.push({ code, reason });
+    if (this.hangOnClose) return;
     if (this.readyState === MockWebSocket.CLOSED) return;
     this.readyState = MockWebSocket.CLOSED;
     this.emit('close', { code: code ?? 1000, reason: reason ?? '' });
@@ -320,6 +323,25 @@ describe('DingTalkStreamConnection', () => {
       expect(ws.closeCalls.at(-1)).toEqual({ code: 4000, reason: 'Idle timeout' });
 
       await vi.advanceTimersByTimeAsync(1100);
+      expect(api.openStreamConnection).toHaveBeenCalledTimes(2);
+      conn.close();
+    });
+
+    it('reconnects after the idle timeout even when the half-open socket never emits close', async () => {
+      const { api, ws, conn } = await connected({ idleTimeoutMs: 10_000 });
+      ws.hangOnClose = true;
+
+      await vi.advanceTimersByTimeAsync(15_000);
+      expect(ws.closeCalls.at(-1)).toEqual({ code: 4000, reason: 'Idle timeout' });
+
+      await vi.advanceTimersByTimeAsync(1100);
+      expect(api.openStreamConnection).toHaveBeenCalledTimes(2);
+
+      // The retired socket finally closing (TCP timeout) must not trigger another reconnect.
+      ws.hangOnClose = false;
+      ws.readyState = MockWebSocket.OPEN;
+      ws.close(1006, 'tcp timeout');
+      await vi.advanceTimersByTimeAsync(5000);
       expect(api.openStreamConnection).toHaveBeenCalledTimes(2);
       conn.close();
     });

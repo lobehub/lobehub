@@ -63,6 +63,8 @@ export class DingTalkStreamConnection {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private durationTimer: ReturnType<typeof setTimeout> | null = null;
   private idleTimer: ReturnType<typeof setInterval> | null = null;
+  /** Sockets replaced by the idle watchdog; their late `close` must not schedule a reconnect. */
+  private readonly retiredSockets = new WeakSet<WebSocket>();
   private lastFrameAt = 0;
   private onAbort?: () => void;
 
@@ -167,6 +169,7 @@ export class DingTalkStreamConnection {
 
       ws.addEventListener('close', (event) => {
         this.log('Stream WebSocket closed: code=%d reason=%s', event.code, event.reason);
+        if (this.retiredSockets.has(ws)) return;
         if (this.ws !== ws && this.ws !== null) return;
         this.ws = null;
         this.stopIdleWatchdog();
@@ -237,7 +240,13 @@ export class DingTalkStreamConnection {
       }
       if (Date.now() - this.lastFrameAt > this.idleTimeoutMs) {
         this.log('No frame for %dms, replacing the connection', this.idleTimeoutMs);
+        // A half-open socket may never emit `close` (the peer cannot answer the close frame),
+        // so detach it and reconnect now instead of waiting for the TCP timeout.
+        this.retiredSockets.add(ws);
+        this.ws = null;
+        this.stopIdleWatchdog();
         ws.close(4000, 'Idle timeout');
+        this.scheduleReconnect();
       }
     }, interval);
   }
