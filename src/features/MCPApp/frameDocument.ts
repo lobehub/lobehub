@@ -8,9 +8,12 @@ import { APP_IFRAME_ALLOW, injectCsp } from './utils';
  *   which child frames it may navigate (`frame-src`), not navigations of its
  *   own frame, so a view loaded directly could leave with data in its URL
  *   (`location.href = …`). The wrapper's `frame-src` holds the view frame to
- *   the frame domains the resource declared. It relays the view's postMessage
- *   traffic both ways unchanged, and if the view frame ever loads a second
- *   document it removes it and stops relaying.
+ *   the frame domains the resource declared: the boundary is those domains,
+ *   which the view may embed and message anyway. It relays the view's
+ *   postMessage traffic both ways unchanged. When the view frame loads a
+ *   second document it removes it and stops relaying, so a view that left its
+ *   document doesn't linger in the chat; a page the view frame reaches first
+ *   (before its own document finished loading) stays, within those domains.
  * - the **view** frame runs the app's HTML behind the same CSP (`injectCsp`).
  *
  * A srcdoc frame inherits its parent's CSP on top of its own, so the wrapper
