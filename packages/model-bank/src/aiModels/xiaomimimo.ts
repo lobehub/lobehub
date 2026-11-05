@@ -20,6 +20,7 @@ const xiaomimimoChatModels: AIChatModelCard[] = [
     family: 'mimo',
     generation: 'mimo-v2.6',
     id: 'mimo-v2.6-pro',
+    isOfficial: true,
     maxOutput: 131_072,
     pricing: {
       currency: 'USD',
@@ -54,6 +55,7 @@ const xiaomimimoChatModels: AIChatModelCard[] = [
     family: 'mimo',
     generation: 'mimo-v2.6',
     id: 'mimo-v2.6-pro-ultraspeed',
+    isOfficial: true,
     maxOutput: 131_072,
     pricing: {
       currency: 'USD',
@@ -88,6 +90,7 @@ const xiaomimimoChatModels: AIChatModelCard[] = [
     family: 'mimo',
     generation: 'mimo-v2.6',
     id: 'mimo-v2.6-flash',
+    isOfficial: true,
     maxOutput: 131_072,
     pricing: {
       currency: 'USD',

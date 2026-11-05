@@ -1,76 +1,56 @@
 'use client';
 
 import type { BuiltinRenderProps } from '@lobechat/types';
-import { Flexbox, Highlighter } from '@lobehub/ui';
-import { Text } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { Flexbox, Highlighter, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 
 import type { WebSearchArgs, WebSearchPluginState, WebSearchResult } from '../../../types';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  hostname: css`
-    overflow: hidden;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  metadata: css`
-    overflow: hidden;
-
-    min-width: 0;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  queryRow: css`
-    align-items: center;
-    justify-content: space-between;
-
-    min-width: 0;
-    padding-block: 2px;
-    padding-inline: 4px;
-  `,
-  resultItem: css`
-    min-width: 0;
-    padding-block: 5px;
-    padding-inline: 4px;
-    border-block-end: 1px solid ${cssVar.colorSplit};
-
-    &:last-child {
-      border-block-end: 0;
-    }
-  `,
-  root: css`
-    overflow: auto;
-    min-width: 0;
-    max-height: 280px;
-    padding-block: 2px;
-  `,
-  snippet: css`
-    font-size: 12px;
-    line-height: 1.45;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  title: css`
-    overflow: hidden;
-
-    font-size: 13px;
-    font-weight: 500;
-    line-height: 1.45;
-    color: ${cssVar.colorText};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-
-    &:hover {
-      color: ${cssVar.colorLink};
-    }
-  `,
-}));
+const styles = stylex.create({
+  hostname: {
+    overflow: 'hidden',
+    fontSize: '12px',
+    color: cssVar.colorTextTertiary,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  metadata: {
+    overflow: 'hidden',
+    minWidth: '0',
+    fontSize: '12px',
+    color: cssVar.colorTextSecondary,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  queryRow: {
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minWidth: '0',
+    paddingBlock: '2px',
+    paddingInline: '4px',
+  },
+  resultItem: {
+    minWidth: '0',
+    paddingBlock: '5px',
+    paddingInline: '4px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: { 'default': 'solid', ':last-child': 'none' },
+    borderBlockEndColor: cssVar.colorSplit,
+  },
+  root: { overflow: 'auto', minWidth: '0', maxHeight: '280px', paddingBlock: '2px' },
+  snippet: { fontSize: '12px', lineHeight: 1.45, color: cssVar.colorTextSecondary },
+  title: {
+    overflow: 'hidden',
+    fontSize: '13px',
+    fontWeight: 500,
+    lineHeight: 1.45,
+    color: { 'default': cssVar.colorText, ':hover': cssVar.colorLink },
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+});
 
 const getWebSearchHostname = (link: string): string | undefined => {
   try {
@@ -119,11 +99,11 @@ const WebSearch = memo<BuiltinRenderProps<WebSearchArgs, WebSearchPluginState>>(
         : undefined;
 
     return (
-      <Flexbox className={styles.root} gap={0}>
+      <Flexbox className={stylex.props(styles.root).className} gap={0}>
         {(query || duration) && (
-          <Flexbox horizontal className={styles.queryRow} gap={8}>
-            <span className={styles.metadata}>{query}</span>
-            {duration && <span className={styles.metadata}>{duration}</span>}
+          <Flexbox horizontal className={stylex.props(styles.queryRow).className} gap={8}>
+            <span {...stylex.props(styles.metadata)}>{query}</span>
+            {duration && <span {...stylex.props(styles.metadata)}>{duration}</span>}
           </Flexbox>
         )}
         {results.map((result, index) => {
@@ -131,12 +111,20 @@ const WebSearch = memo<BuiltinRenderProps<WebSearchArgs, WebSearchPluginState>>(
           const title = result.title || hostname || result.link;
 
           return (
-            <Flexbox className={styles.resultItem} gap={3} key={`${result.link}-${index}`}>
+            <Flexbox
+              className={stylex.props(styles.resultItem).className}
+              gap={3}
+              key={`${result.link}-${index}`}
+            >
               <a href={result.link} rel={'noreferrer'} target={'_blank'}>
-                <span className={styles.title}>{title}</span>
+                <span {...stylex.props(styles.title)}>{title}</span>
               </a>
-              <Text className={styles.hostname}>{hostname || result.link}</Text>
-              {result.snippet && <Text className={styles.snippet}>{result.snippet}</Text>}
+              <Text className={stylex.props(styles.hostname).className}>
+                {hostname || result.link}
+              </Text>
+              {result.snippet && (
+                <Text className={stylex.props(styles.snippet).className}>{result.snippet}</Text>
+              )}
             </Flexbox>
           );
         })}

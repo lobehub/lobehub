@@ -42,9 +42,6 @@ export default {
   'features.inAppBrowser.title': 'In-App Browser',
   'features.groupChat.desc': 'Enable multi-agent group chat coordination.',
   'features.groupChat.title': 'Group Chat (Multi-Agent)',
-  'features.inputMarkdown.desc':
-    'Render Markdown in the input area in real time (bold text, code blocks, tables, etc.).',
-  'features.inputMarkdown.title': 'Input Markdown Rendering',
   'features.messageTextSelectionActions.desc':
     'Show a quick action when selecting text in chat messages so the selected text can be added to the next conversation context.',
   'features.messageTextSelectionActions.title': 'Message Text Selection Actions',

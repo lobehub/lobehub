@@ -1,15 +1,9 @@
 'use client';
 
-import {
-  Button,
-  createStaticStyles,
-  DropdownMenu,
-  Flexbox,
-  Icon,
-  Text,
-  Tooltip,
-} from '@lobehub/ui';
+import { Button, DropdownMenu, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
 import { GithubIcon } from '@lobehub/ui/icons';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { FileArchive, Grid2x2Plus, Link, Store } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -26,51 +20,43 @@ import { type ToolDetailType } from './SkillDetail';
 import SkillList, { type SkillViewMode } from './SkillList';
 import { SkillListVariantProvider } from './SkillListRow';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  body: css`
-    overflow-y: auto;
-    flex: 1;
-    padding-block: 4px;
-    padding-inline: 8px;
-  `,
-  pageBody: css`
-    padding-block: 0 24px;
-    padding-inline: 0;
-  `,
-  pageHeader: css`
-    display: flex;
-    flex-shrink: 0;
-    gap: 16px;
-    align-items: flex-start;
-    justify-content: space-between;
-
-    padding-block: 24px 16px;
-    padding-inline: 12px;
-  `,
-  header: css`
-    display: flex;
-    flex-shrink: 0;
-    gap: 8px;
-    align-items: center;
-    justify-content: space-between;
-
-    height: 42px;
-    padding-inline: 16px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  root: css`
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-
-    width: 300px;
-    min-width: 260px;
-    border-inline-end: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  tooltipAnchor: css`
-    display: inline-flex;
-  `,
-}));
+const styles = stylex.create({
+  body: { overflowY: 'auto', flex: '1', paddingBlock: '4px', paddingInline: '8px' },
+  pageBody: { paddingBlockStart: '0', paddingBlockEnd: '24px', paddingInline: '0' },
+  pageHeader: {
+    display: 'flex',
+    flexShrink: 0,
+    gap: '16px',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    paddingBlockStart: '24px',
+    paddingBlockEnd: '16px',
+    paddingInline: '12px',
+  },
+  header: {
+    display: 'flex',
+    flexShrink: 0,
+    gap: '8px',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    height: '42px',
+    paddingInline: '16px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+  root: {
+    overflowY: 'auto',
+    display: 'flex',
+    flexDirection: 'column',
+    width: '300px',
+    minWidth: '260px',
+    borderInlineEndWidth: '1px',
+    borderInlineEndStyle: 'solid',
+    borderInlineEndColor: cssVar.colorBorderSecondary,
+  },
+  tooltipAnchor: { display: 'inline-flex' },
+});
 
 interface LeftPanelProps {
   /** Fill the page instead of sitting as a 300px column beside the detail (mobile). */
@@ -104,7 +90,7 @@ const LeftPanel = memo<LeftPanelProps>(
     if (isConnectorPage)
       return (
         <SkillListVariantProvider value={'page'}>
-          <div className={styles.pageHeader}>
+          <div {...stylex.props(styles.pageHeader)}>
             <Flexbox gap={4}>
               <Text as={'h1'} fontSize={20} style={{ margin: 0 }} weight={600}>
                 {t('skillView.connectors', 'Connectors')}
@@ -127,7 +113,7 @@ const LeftPanel = memo<LeftPanelProps>(
                 }
               >
                 {/* Disabled buttons swallow hover events; the wrapper anchors the tooltip. */}
-                <span className={styles.tooltipAnchor}>
+                <span {...stylex.props(styles.tooltipAnchor)}>
                   <Button
                     disabled={!canAddConnector}
                     icon={Grid2x2Plus}
@@ -140,7 +126,7 @@ const LeftPanel = memo<LeftPanelProps>(
             </Flexbox>
           </div>
           <ConnectorManagePolicy variant={'page'} />
-          <div className={styles.pageBody}>
+          <div {...stylex.props(styles.pageBody)}>
             <SkillList
               viewMode={viewMode}
               onDeleteSelected={onDeleteSelected}
@@ -157,10 +143,10 @@ const LeftPanel = memo<LeftPanelProps>(
     return (
       <>
         <div
-          className={styles.root}
+          className={stylex.props(styles.root).className}
           style={fullWidth ? { borderInlineEnd: 'none', width: '100%' } : undefined}
         >
-          <div className={styles.header}>
+          <div {...stylex.props(styles.header)}>
             <Text strong style={{ fontSize: 14 }}>
               {isConnectorView
                 ? t('skillView.connectors', 'Connectors')
@@ -178,7 +164,7 @@ const LeftPanel = memo<LeftPanelProps>(
                   }
                 >
                   {/* Disabled buttons swallow hover events; the wrapper anchors the tooltip. */}
-                  <span className={styles.tooltipAnchor}>
+                  <span {...stylex.props(styles.tooltipAnchor)}>
                     <Button
                       disabled={!canAddConnector}
                       icon={Grid2x2Plus}
@@ -243,7 +229,7 @@ const LeftPanel = memo<LeftPanelProps>(
 
           {isConnectorView && <ConnectorManagePolicy />}
 
-          <div className={styles.body}>
+          <div {...stylex.props(styles.body)}>
             <SkillList
               selectedIdentifier={selectedIdentifier}
               viewMode={viewMode}

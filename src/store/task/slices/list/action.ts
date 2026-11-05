@@ -1,5 +1,5 @@
 import type { TaskCompletedWindow } from '@lobechat/builtin-tool-task';
-import type { TaskStatus } from '@lobechat/types';
+import { normalizeTaskListFilter, type TaskListFilter, type TaskStatus } from '@lobechat/types';
 import { useMemo } from 'react';
 
 import { createReplicaSlice, recordLens, type ReplicaSyncResult } from '@/libs/replica';
@@ -63,6 +63,8 @@ export const TASK_COLLECTION_PAGE_SIZE = 50;
 
 export interface ScheduledTaskListOptions {
   agentId?: string;
+  /** The Tasks page filter; Home's roll-up sends none. */
+  filter?: TaskListFilter;
   limit?: number;
   offset?: number;
   projectId?: string;
@@ -75,12 +77,14 @@ export interface ScheduledTaskListOptions {
  */
 export const scheduledTaskListQuery = ({
   agentId,
+  filter,
   limit,
   offset,
   projectId,
 }: ScheduledTaskListOptions): TaskListQuery => ({
   agentId: projectId ? undefined : agentId,
   automated: true,
+  filter: normalizeTaskListFilter(filter),
   limit,
   offset,
   orderBy: 'updatedAt',
@@ -158,6 +162,7 @@ export class TaskListSliceActionImpl {
       ...(query.agentId ? { assigneeAgentId: query.agentId } : {}),
       automated: query.automated,
       ...(query.completedWithin && { completedWithin: query.completedWithin }),
+      ...(query.filter && { filter: query.filter }),
       includeArchived: query.includeArchived,
       orderBy: query.orderBy,
       projectId: query.projectId,
@@ -176,6 +181,7 @@ export class TaskListSliceActionImpl {
       ...(query.automated === undefined ? {} : { automated: query.automated }),
       ...(query.completedWithin && { completedWithin: query.completedWithin }),
       excludeStatuses: query.excludeStatuses,
+      ...(query.filter && { filter: query.filter }),
       ...(query.groupBy === 'status'
         ? { groups: DEFAULT_KANBAN_GROUPS }
         : { groupBy: query.groupBy }),
@@ -259,9 +265,15 @@ export class TaskListSliceActionImpl {
     apply: (value: TaskGroupListValue) => TaskGroupListValue,
   ) => this.#taskGroupList.beginOptimistic(queryKey, apply);
 
-  setActiveTaskListKey = (queryKey?: string): void => {
-    if (this.#get().activeTaskListKey === queryKey) return;
-    this.#set({ activeTaskListKey: queryKey }, false, 'setActiveTaskListKey');
+  setActiveTaskListKey = (queryKey?: string, filtered?: boolean): void => {
+    const state = this.#get();
+    if (state.activeTaskListKey === queryKey && !!state.activeTaskListFiltered === !!filtered)
+      return;
+    this.#set(
+      { activeTaskListFiltered: !!queryKey && !!filtered, activeTaskListKey: queryKey },
+      false,
+      'setActiveTaskListKey',
+    );
   };
 
   refreshTaskGroupList = async (): Promise<void> => {
@@ -328,6 +340,8 @@ export class TaskListSliceActionImpl {
       completedWithin?: TaskCompletedWindow;
       enabled?: boolean;
       excludeStatuses?: readonly TaskStatus[];
+      /** The Tasks page filter; part of the key. */
+      filter?: TaskListFilter;
       groupBy?: TaskKanbanGroupBy;
       includeArchived?: boolean;
       projectId?: string;
@@ -347,6 +361,7 @@ export class TaskListSliceActionImpl {
       completedWithin,
       enabled = true,
       excludeStatuses,
+      filter,
       groupBy = 'status',
       includeArchived,
       projectId,
@@ -362,6 +377,7 @@ export class TaskListSliceActionImpl {
           automated,
           completedWithin,
           excludeStatuses: excludeStatuses?.length ? [...excludeStatuses].sort() : undefined,
+          filter: normalizeTaskListFilter(filter),
           groupBy,
           includeArchived: includeArchived || undefined,
           projectId,
@@ -419,6 +435,8 @@ export class TaskListSliceActionImpl {
      */
     completedWithin?: TaskCompletedWindow;
     enabled?: boolean;
+    /** The Tasks page filter, applied before `limit` / `offset`. */
+    filter?: TaskListFilter;
     includeArchived?: boolean;
     limit?: number;
     offset?: number;
@@ -434,6 +452,7 @@ export class TaskListSliceActionImpl {
     const {
       completedWithin,
       enabled = true,
+      filter,
       includeArchived,
       limit,
       offset,
@@ -443,6 +462,7 @@ export class TaskListSliceActionImpl {
     return this.#useCollectionPage(
       {
         completedWithin,
+        filter: normalizeTaskListFilter(filter),
         // Archived rows are a different server page, like the status filter.
         includeArchived: includeArchived || undefined,
         limit,
@@ -478,6 +498,8 @@ export class TaskListSliceActionImpl {
        */
       complete?: boolean;
       enabled?: boolean;
+      /** The Tasks page filter, applied server-side; part of the key. */
+      filter?: TaskListFilter;
       /** Include archived tasks (the "Show archived" option); part of the key. */
       includeArchived?: boolean;
       /**
@@ -505,6 +527,7 @@ export class TaskListSliceActionImpl {
       automated,
       complete = false,
       enabled = true,
+      filter,
       includeArchived,
       orderBy,
       projectId,
@@ -519,6 +542,7 @@ export class TaskListSliceActionImpl {
           agentId: allAgents || projectId ? undefined : agentId,
           automated,
           complete: complete || undefined,
+          filter: normalizeTaskListFilter(filter),
           includeArchived: includeArchived || undefined,
           orderBy,
           projectId,

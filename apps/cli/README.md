@@ -2,6 +2,54 @@
 
 LobeHub command-line interface.
 
+## Update a connected device
+
+```bash
+lh update                  # Install the latest CLI without restarting a connector
+lh connect status          # Connection, running version, and any required action
+lh connect status --verbose # Service metadata and CLI installation paths
+
+# Wait for active tasks to finish, then restart the detected connector:
+lh connect restart
+lh connect status          # Verify the new running version and connection
+```
+
+Installing an update and activating it are separate steps. `lh update` keeps the
+running connector in place; it reports the installed and running versions separately.
+Restarting disconnects the device and closes its remote terminals. A terminal
+provided by LobeHub may close or print `Terminated` before the restart request
+returns. Reconnect before checking status; “Restart requested” is not confirmation
+that the device is already connected.
+
+`lh connect restart` detects a CLI daemon or a user/system systemd service. System
+services use `sudo` unless already running as root. When multiple connectors are
+running, select one with `--manager daemon`, `--manager user`, or `--manager system`.
+Service restarts preserve the unit's configuration; daemon connection flags such
+as `--token` cannot override it. `lh connect service restart` remains a user-service
+alias. With no managed connector and no inspection failures, `lh connect restart`
+retains its existing behavior of starting a daemon. Daemon restarts wait for the
+previous process to exit before starting its replacement, including when upgrading
+from an older CLI. If shutdown times out, no replacement is started.
+
+A daemon cannot be restarted from a terminal or shell it owns: its shutdown would
+kill the waiting restart command. This is rejected before stopping the connection;
+run `lh connect restart` from a local terminal or an independent SSH session instead.
+If process ancestry cannot be verified, the restart is also rejected without
+stopping the connector. Systemd service restarts still use the service manager.
+
+If an older restart lost `daemon.pid`, `lh connect status` can recover it from the
+status record only after verifying that the process is alive and is a daemon, not
+a foreground connection or systemd service. This recovery does not restart the
+connection. Cleanup checks PID ownership; normal restarts also wait for the old
+process to exit before creating new records.
+
+If the version still differs after a restart, the status report shows the command's
+CLI entry path and the connector's entry path when available. Different paths mean
+you should update the connector's installation or change its service configuration.
+Diagnostics never dump the service's command line or environment. Older connectors
+on Linux use a conservative `/proc` lookup; an inaccessible or unsupported entry
+is reported as unknown instead of guessed.
+
 ## Publish local artifacts
 
 ```bash

@@ -28,8 +28,12 @@ class LinearService {
     lambdaClient.linear.listIssues.query(params);
 
   /** Starts a background import; returns the job id. */
-  startImport = async (params: { connectionId: string; issueIds: string[]; projectId: string }) =>
-    lambdaClient.linear.startImport.mutate(params);
+  startImport = async (params: {
+    connectionId: string;
+    issueIds: string[];
+    projectId: string;
+    syncComments?: boolean;
+  }) => lambdaClient.linear.startImport.mutate(params);
 
   cancelSync = async (projectId: string, jobId: string) =>
     lambdaClient.linear.cancelSync.mutate({ jobId, projectId });
@@ -50,7 +54,8 @@ class LinearService {
   deleteSyncRule = async (ruleId: string) => lambdaClient.linear.deleteSyncRule.mutate({ ruleId });
 
   /** Starts a background run of a saved rule; returns the job id. */
-  startRuleSync = async (ruleId: string) => lambdaClient.linear.startRuleSync.mutate({ ruleId });
+  startRuleSync = async (ruleId: string, options: { syncComments?: boolean } = {}) =>
+    lambdaClient.linear.startRuleSync.mutate({ ruleId, ...options });
 }
 
 export const linearService = new LinearService();

@@ -186,7 +186,7 @@ export interface AcceptanceMetadata {
   /** Latest explicit feedback handoff; kept apart from the standing Site review lifecycle. */
   repair?: AcceptanceRepairRequest;
   /** Task delivery's link back to the feedback handoff it addresses. */
-  repairSource?: { acceptanceId: string; requestId: string };
+  repairSource?: { acceptanceId: string; commentIds?: string[]; requestId: string };
   /** User-set display-title override for the acceptance (sidebar rename). */
   title?: string;
 }

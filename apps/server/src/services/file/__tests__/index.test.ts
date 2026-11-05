@@ -290,7 +290,7 @@ describe('FileService', () => {
 
     const result = await service.createPreSignedUpload(testKey);
 
-    expect(service['impl'].createPreSignedUpload).toHaveBeenCalledWith(testKey);
+    expect(service['impl'].createPreSignedUpload).toHaveBeenCalledWith(testKey, undefined);
     expect(result).toBe(expectedUpload);
   });
 

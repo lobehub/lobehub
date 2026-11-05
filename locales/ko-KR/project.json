@@ -116,8 +116,6 @@
   "knowledgeBases.searchPlaceholder": "라이브러리 검색",
   "knowledgeBases.updateFailed": "라이브러리를 업데이트할 수 없습니다",
   "list.deleteAction": "프로젝트 삭제",
-  "list.deleteConfirmDescription": "“{{name}}”을(를) 삭제하시겠습니까? 해당 프로젝트의 작업, 목표, 주제 및 연결이 영구적으로 삭제됩니다.",
-  "list.deleteConfirmTitle": "프로젝트를 삭제하시겠습니까?",
   "list.deleteError": "프로젝트를 삭제할 수 없습니다.",
   "list.deleteSuccess": "“{{name}}”이(가) 삭제되었습니다",
   "list.emptyDescription": "목표, 작업 및 자원을 정리할 첫 번째 프로젝트를 만들어보세요.",

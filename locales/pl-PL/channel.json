@@ -97,7 +97,6 @@
   "moveToTrash": "Przenieś kanał do kosza",
   "moveToTrashConfirm": "Przenieść „{{title}}” do kosza? Odpowiedzi zostaną zatrzymane. Możesz przywrócić kanał i jego historię z Kosza. Agenci i pliki zostaną zachowane.",
   "moveToTrashSuccess": "Kanał przeniesiony do kosza",
-  "nameAutoPlaceholder": "Pozostaw puste, aby nazwać go po jego członkach",
   "nameOptional": "Nazwa kanału (opcjonalna)",
   "noDevice": "Brak urządzenia",
   "noDevices": "Żadne urządzenie nie jest połączone. Połącz jedno, a następnie wybierz je tutaj.",

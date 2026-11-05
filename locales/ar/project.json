@@ -116,8 +116,6 @@
   "knowledgeBases.searchPlaceholder": "بحث في المكتبات",
   "knowledgeBases.updateFailed": "تعذر تحديث المكتبة",
   "list.deleteAction": "حذف المشروع",
-  "list.deleteConfirmDescription": "حذف “{{name}}”؟ سيتم إزالة مهام المشروع وأهدافه ومواضيعه وروابطه بشكل دائم.",
-  "list.deleteConfirmTitle": "حذف المشروع؟",
   "list.deleteError": "تعذر حذف المشروع.",
   "list.deleteSuccess": "تم حذف “{{name}}”",
   "list.emptyDescription": "أنشئ مشروعك الأول لتنظيم الأهداف والمهام والموارد.",

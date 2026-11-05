@@ -129,6 +129,7 @@ describe('WebBrowsingDocumentService.upsertCrawledDocument ()', () => {
       editorData: { root: { fakeNodeFor: 'new body' } },
       saveSource: 'llm_call',
       title: 'Updated title',
+      writeSource: 'system',
     });
     expect(result).toEqual({ id: 'doc-existing', status: 'updated' });
   });

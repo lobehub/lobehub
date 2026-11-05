@@ -108,8 +108,8 @@ interface DeviceHoverPanelProps {
 
 /**
  * A device's details at a glance, shown beside its row in the execution
- * environment picker: live state and load first (what decides whether to run
- * there), then the machine's specs. A read-only digest of the detail page's
+ * environment picker: live state and resource usage first (what decides
+ * whether to run there), each in its own group, then the machine's specs. A read-only digest of the detail page's
  * overview, reading the same metric series so opening one warms the other.
  */
 const DeviceHoverPanel = ({ device }: DeviceHoverPanelProps) => {
@@ -157,25 +157,39 @@ const DeviceHoverPanel = ({ device }: DeviceHoverPanelProps) => {
         </InfoRow>
       )}
       {online && (
-        <div className={styles.usage}>
-          {usage.loading ? (
-            <UsageMeterGroup loading>
-              <UsageMeterSkeleton />
-              <UsageMeterSkeleton />
-            </UsageMeterGroup>
-          ) : (
-            <UsageMeterGroup>
-              <UsageMeter label={t('devices.card.cpuUsage')} value={usage.latest?.cpuPercent} />
-              <UsageMeter
-                label={t('devices.card.memoryUsage')}
-                value={usage.latest?.memoryPercent}
-              />
-              {usage.reportsDisk && (
-                <UsageMeter label={t('devices.card.diskUsage')} value={usage.latest?.diskPercent} />
-              )}
-            </UsageMeterGroup>
-          )}
-        </div>
+        <>
+          <Section color={cssVar.colorWarning} title={t('devices.detail.usage')} />
+          <div className={styles.usage}>
+            {usage.loading ? (
+              <UsageMeterGroup loading>
+                {/* CPU, memory and load: the rows a Linux / macOS device always shows. */}
+                <UsageMeterSkeleton />
+                <UsageMeterSkeleton />
+                <UsageMeterSkeleton />
+              </UsageMeterGroup>
+            ) : (
+              <UsageMeterGroup>
+                <UsageMeter label={t('devices.card.cpuUsage')} value={usage.latest?.cpuPercent} />
+                <UsageMeter
+                  label={t('devices.card.memoryUsage')}
+                  value={usage.latest?.memoryPercent}
+                />
+                {usage.reportsLoad && (
+                  <UsageMeter
+                    label={t('devices.detail.loadUsage')}
+                    value={usage.latest?.loadPercent}
+                  />
+                )}
+                {usage.reportsDisk && (
+                  <UsageMeter
+                    label={t('devices.card.diskUsage')}
+                    value={usage.latest?.diskPercent}
+                  />
+                )}
+              </UsageMeterGroup>
+            )}
+          </div>
+        </>
       )}
 
       <Section color={cssVar.colorInfo} title={t('devices.detail.specs')} />

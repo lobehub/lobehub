@@ -81,7 +81,7 @@ describe('POST /oidc/consent', () => {
 
     beforeEach(() => {
       mocks.getInteractionDetails.mockResolvedValue({
-        params: { client_id: 'lobehub-review', resource: RESOURCE },
+        params: { client_id: 'lobehub-acceptance', resource: RESOURCE },
         prompt: {
           details: { missingResourceScopes: { [RESOURCE]: ['acceptance:review'] } },
           name: 'consent',
