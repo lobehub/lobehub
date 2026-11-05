@@ -17,8 +17,9 @@ export default {
   'desktop.showApp.title': 'Show/Hide Main Window',
   'editMessage.desc': 'Enter edit mode by holding Alt and double-clicking the message',
   'editMessage.title': 'Edit Message',
-  'findInTopic.desc': 'Search every message of the current topic in the right panel',
-  'findInTopic.title': 'Find in Topic',
+  'findInTopic.desc':
+    'Search every message of the current topic in the right panel, or find text on the open task page',
+  'findInTopic.title': 'Find in Topic or Task',
   'navigateToChat.desc': 'Switch to the Chat tab and enter Lobe AI',
   'navigateToChat.title': 'Switch to Default Chat',
   'nextTab.desc':
