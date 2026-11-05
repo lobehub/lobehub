@@ -4832,6 +4832,8 @@ When I am ___, I need ___
   'drive.usage.overBy': '{{size}} over the quota',
   'drive.usage.others': 'Other members',
   'drive.usage.refresh': 'Measure again',
+  'drive.usage.refreshFailed':
+    'Could not measure the drive right now. The figure shown is still the last measurement — try again in a moment.',
   'drive.usage.membersTitle': "Members' personal drives",
   'drive.usage.membersHint': 'Usage only — contents stay private',
   'drive.usage.memberUnmeasured': 'Not measured',

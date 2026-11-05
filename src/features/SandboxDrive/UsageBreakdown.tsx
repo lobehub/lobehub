@@ -15,6 +15,9 @@ import { formatSize } from '@/utils/format';
 
 import type { useDriveUsage } from './useDriveData';
 
+/** The market's code for a usage refresh whose walk did not finish. */
+const USAGE_MEASURE_FAILED = 'STORAGE_USAGE_MEASURE_FAILED';
+
 type DriveUsageData = NonNullable<ReturnType<typeof useDriveUsage>['data']>;
 
 /** How many members the ranking shows before it folds the rest away. */
@@ -185,8 +188,15 @@ export const UsageBreakdown = memo<{
     setRefreshing(true);
     try {
       await onRefresh();
-    } catch {
-      toast.error(t('workingDirectory.drive.actionFailed', { ns: 'device' }));
+    } catch (error) {
+      // The execution plane could not walk the drive, so the figure on screen
+      // is the last one it measured — say so, rather than let a refresh that
+      // changed nothing pass for one that confirmed it (LOBE-15436).
+      toast.error(
+        (error as { message?: string } | undefined)?.message === USAGE_MEASURE_FAILED
+          ? t('drive.usage.refreshFailed')
+          : t('workingDirectory.drive.actionFailed', { ns: 'device' }),
+      );
     } finally {
       setRefreshing(false);
     }
