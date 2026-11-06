@@ -29,7 +29,7 @@ describe('resolveAgentManagementManifest', () => {
     expect(names).toContain(AgentManagementApiName.installPlugin);
   });
 
-  it('advertises only the callAgent params every runtime honors', () => {
+  it('advertises only the callAgent params every runtime honors or rejects explicitly', () => {
     const callAgent = AgentManagementManifest.api.find(
       (api) => api.name === AgentManagementApiName.callAgent,
     )!;
@@ -38,9 +38,12 @@ describe('resolveAgentManagementManifest', () => {
     // path has no thread title or per-call timeout to honor. Advertising
     // `taskTitle` / `timeout` would promise behavior only the server deferred
     // path keeps, so they must not appear in the shared schema.
+    // `runInBackground` is the exception: the client executor refuses it with
+    // an explicit retry hint instead of silently ignoring it.
     expect(Object.keys(callAgent.parameters.properties ?? {}).sort()).toEqual([
       'agentId',
       'instruction',
+      'runInBackground',
       'skipCallSupervisor',
     ]);
   });
