@@ -12,7 +12,9 @@ import { taskDetailSelectors } from '@/store/task/selectors';
 
 import AssigneeMemberSelector from '../features/AssigneeMemberSelector';
 import AssigneeUserAvatar from '../features/AssigneeUserAvatar';
+import ProjectSelector from '../features/ProjectSelector';
 import TaskPriorityTag from '../features/TaskPriorityTag';
+import TaskProjectValue from '../features/TaskProjectValue';
 import TaskStatusTag from '../features/TaskStatusTag';
 import TaskTriggerTag from '../features/TaskTriggerTag';
 import { UnassignedAssigneeIcon } from '../features/UnassignedAssigneeIcon';
@@ -69,6 +71,8 @@ const TaskProperties = memo(() => {
   const taskDatabaseId = useTaskStore(taskDetailSelectors.activeTaskDatabaseId);
   const labels = useTaskStore(taskDetailSelectors.activeTaskLabels);
   const setTaskLabels = useTaskStore((s) => s.setTaskLabels);
+  const projectId = useTaskStore(taskDetailSelectors.activeTaskProjectId);
+  const hasParent = !!useTaskStore(taskDetailSelectors.activeTaskParent);
 
   if (!taskId) return null;
 
@@ -201,6 +205,30 @@ const TaskProperties = memo(() => {
           )}
         </Block>
       </TaskLabelPicker>
+
+      {/* A subtask lives in its parent's project: the server refuses to split them. */}
+      <ProjectSelector
+        fullWidth
+        disabledReason={hasParent ? t('taskProject.inheritedFromParent') : undefined}
+        taskIdentifier={taskId}
+        value={projectId}
+      >
+        <Block
+          clickable
+          horizontal
+          align="center"
+          className={styles.propertyItem}
+          gap={8}
+          variant={'borderless'}
+        >
+          <TaskProjectValue
+            emptyLabel={t('taskProject.add')}
+            iconSize={16}
+            projectId={projectId}
+            weight={500}
+          />
+        </Block>
+      </ProjectSelector>
 
       {/* Where the runs go lives in the detail header's main column, next to the
           assignee it inherits from — not in this rail. See
