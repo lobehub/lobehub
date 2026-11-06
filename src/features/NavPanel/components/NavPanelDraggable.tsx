@@ -149,7 +149,7 @@ export const NavPanelDraggable = memo<NavPanelDraggableProps>(({ activeContent, 
             visibility, so the layer is force-hidden like HomeLayout does. */}
         {homeContent && (
           <Activity mode={isHomeActive ? 'visible' : 'hidden'} name="NavPanelHome">
-            <div {...sx(draggableStyles.layer, !isHomeActive && hiddenLayerStyle)}>
+            <div {...sx(draggableStyles.layer, isHomeActive ? undefined : hiddenLayerStyle)}>
               {homeContent}
             </div>
           </Activity>
