@@ -873,8 +873,6 @@ describe('createTaskRuntime', () => {
       // clickable when the message is delivered to IM / mobile.
       expect(result.content).toContain('[T-A](https://app.lobehub.com/task/T-A)');
       expect(result.content).toContain('[T-B](https://app.lobehub.com/task/T-B)');
-      expect(result.content).toContain('T-A');
-      expect(result.content).toContain('T-B');
       // State parity with the client executor: the dispatch-layer registration
       // reads per-item identity + success from `state.results`.
       expect(result.state).toEqual({

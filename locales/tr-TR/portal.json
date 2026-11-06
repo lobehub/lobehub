@@ -19,7 +19,6 @@
   "artifacts.deploy.outdated": "Eski sürüm yayında",
   "artifacts.deploy.publish": "Yayınla",
   "artifacts.deploy.publishNewVersion": "Bu sürümü yayınla",
-  "artifacts.deploy.quotaUnavailable": "Dağıtım kotası doğrulaması geçici olarak kullanılamıyor. Daha sonra tekrar deneyin.",
   "artifacts.deploy.serviceOverloaded": "Artifact barındırma geçici olarak aşırı yüklendi. Kısa bir süre sonra tekrar yayınlamayı deneyin.",
   "artifacts.deploy.success": "Yayınlandı",
   "artifacts.deploy.writeInProgress": "Başka bir dağıtım değişikliği devam ediyor. Kısa bir süre sonra tekrar deneyin.",

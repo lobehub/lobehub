@@ -1,7 +1,9 @@
 'use client';
 
 import { ThemeProvider as NextThemesProvider } from 'next-themes';
-import { type ReactNode } from 'react';
+import { type ReactNode, useEffect } from 'react';
+
+import { installFormAutocompleteDefaults } from '@/utils/client/installFormAutocompleteDefaults';
 
 interface NextThemeProviderProps {
   children: ReactNode;
@@ -9,6 +11,8 @@ interface NextThemeProviderProps {
 }
 
 export default function NextThemeProvider({ children, forcedTheme }: NextThemeProviderProps) {
+  useEffect(installFormAutocompleteDefaults, []);
+
   return (
     <NextThemesProvider
       disableTransitionOnChange

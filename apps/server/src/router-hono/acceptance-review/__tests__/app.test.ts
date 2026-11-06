@@ -26,9 +26,9 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/database/core/db-adaptor', () => ({ getServerDB: async () => serverDB }));
 vi.mock('@/libs/oidc-provider/jwt', () => ({
   verifyAcceptanceReviewJWT: async (token: string) => {
-    const [userId, acceptanceId] = token.split('|');
+    const [userId, acceptanceId, acceptanceOrigin] = token.split('|');
     if (!acceptanceId) throw new Error('invalid');
-    return { acceptanceId, expiresAt: 2_000_000_000, userId };
+    return { acceptanceId, acceptanceOrigin, expiresAt: 2_000_000_000, userId };
   },
 }));
 vi.mock('@/server/services/file', () => ({
@@ -167,6 +167,23 @@ describe('auth', () => {
   it('refuses a token that does not verify', async () => {
     const res = await app.request(`${BASE}/session`, { headers: { authorization: 'Bearer junk' } });
     expect(res.status).toBe(401);
+  });
+
+  it('only answers an origin-bound token from that origin', async () => {
+    const bound = (origin: string) =>
+      call(ownerId, '/session', {
+        headers: { origin },
+        target: `${acceptanceId}|https://preview.example.com`,
+      });
+    expect((await bound('https://preview.example.com')).status).toBe(200);
+    const elsewhere = await bound('https://evil.example');
+    expect(elsewhere.status).toBe(403);
+    expect(await elsewhere.json()).toMatchObject({ error: { code: 'FORBIDDEN' } });
+  });
+
+  it('keeps answering a legacy token that carries no origin, from any origin', async () => {
+    const res = await call(ownerId, '/session', { headers: { origin: 'https://evil.example' } });
+    expect(res.status).toBe(200);
   });
 
   it('hides an acceptance the user can no longer read', async () => {

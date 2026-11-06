@@ -41,6 +41,7 @@ import { gitService } from '@/services/git';
 import { openCreateWorktreeModal } from './CreateWorktreeModal';
 import gitMenuTriggerStyles from './gitMenuTrigger.module.css';
 import { useSwitchWorktree } from './useSwitchWorktree';
+import { useWorktreeHomeDir } from './useWorktreeHomeDir';
 import { getPathName, isDisabled, normalizeDisplayPath } from './worktreeHelpers';
 
 const spin = stylex.keyframes({ to: { transform: 'rotate(360deg)' } });
@@ -396,6 +397,7 @@ const WorktreeSwitcher = memo<WorktreeSwitcherProps>(
     const [removingPaths, setRemovingPaths] = useState<Set<string>>(() => new Set());
     const currentRowRef = useRef<HTMLDivElement>(null);
     const switchWorktree = useSwitchWorktree({ agentId, isGithub, sourcePath, topicId });
+    const resolveHomeDir = useWorktreeHomeDir(deviceId, open);
 
     // Clear the query each time the dropdown closes so it reopens unfiltered.
     useEffect(() => {
@@ -511,9 +513,15 @@ const WorktreeSwitcher = memo<WorktreeSwitcherProps>(
     // branch" flow), then switch the working directory into it. Returns an error
     // message for inline display in the modal, or undefined on success.
     const handleCreateWorktree = useCallback(
-      async (branch: string): Promise<string | undefined> => {
-        const worktreePath = deriveWorktreePath(sourcePath, branch);
-        const result = await gitService.addGitWorktree({ branch, deviceId, path, worktreePath });
+      async (branch: string, homeDir: string | undefined): Promise<string | undefined> => {
+        const worktreePath = deriveWorktreePath(sourcePath, branch, { homeDir });
+        const result = await gitService.addGitWorktree({
+          branch,
+          deviceId,
+          path,
+          sourcePath,
+          worktreePath,
+        });
         if (!result.success) return result.error || t('workingDirectory.createWorktreeFailed');
 
         // Point the conversation at the freshly created worktree, then reconcile
@@ -525,8 +533,11 @@ const WorktreeSwitcher = memo<WorktreeSwitcherProps>(
       [deviceId, onWorktreesChange, path, sourcePath, switchWorktree, t],
     );
 
-    const openCreateWorktree = useCallback(() => {
+    const openCreateWorktree = useCallback(async () => {
       setOpen(false);
+      // Resolved once, so the previewed folder is the one submitted (and the one
+      // the server derives from the same reported home).
+      const homeDir = await resolveHomeDir();
       openCreateWorktreeModal({
         // The modal reads the repo's full local branch list itself and draws the
         // generated default from it, so a name is not handed out twice and does
@@ -535,11 +546,11 @@ const WorktreeSwitcher = memo<WorktreeSwitcherProps>(
         // list can be awaited: snapshotting an in-flight (empty) list would hand
         // out a name git is guaranteed to refuse.
         deviceId,
-        onSubmit: handleCreateWorktree,
+        onSubmit: (branch) => handleCreateWorktree(branch, homeDir),
         path,
-        resolvePath: (branch) => deriveWorktreePath(sourcePath, branch),
+        resolvePath: (branch) => deriveWorktreePath(sourcePath, branch, { homeDir }),
       });
-    }, [deviceId, handleCreateWorktree, path, sourcePath]);
+    }, [deviceId, handleCreateWorktree, path, resolveHomeDir, sourcePath]);
 
     // Scroll the current worktree into view each time the dropdown opens — the
     // list mounts at scrollTop=0, so a current worktree below the fold would

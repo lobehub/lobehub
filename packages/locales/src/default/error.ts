@@ -213,9 +213,9 @@ export default {
   'response.ServerAgentRuntimeError':
     'Sorry, the Agent service is currently unavailable. Please try again later or contact us via email for support.',
   'response.SubscriptionPlanLimit':
-    'Your subscription usage has been exhausted, and you cannot use this feature. Please upgrade to a higher plan or configure a custom model API to continue using it.',
+    'You have reached your subscription usage limit, so this feature is unavailable. Upgrade your plan or configure a custom model API to continue.',
   'response.SubscriptionPlanLimitUltimate':
-    'Your subscription usage has been exhausted, and you cannot use this feature. Please top up or configure a custom model API to continue using it.',
+    'You have reached your subscription usage limit, so this feature is unavailable. Top up or configure a custom model API to continue.',
   'response.SystemTimeNotMatchError':
     'Sorry, your system time does not match the server. Please check your system time and try again.',
   'response.LobeHubModelDeprecated':

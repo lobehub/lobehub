@@ -1,12 +1,12 @@
 'use client';
 
+import { CHANNEL_URL } from '@lobechat/const';
 import type { ChannelListItem } from '@lobechat/types';
 import { Avatar, Icon } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import { HashIcon } from 'lucide-react';
 import { memo } from 'react';
 
-import { channelPath } from '@/features/Channels/paths';
 import { useChannelMenu } from '@/features/Channels/useChannelMenu';
 
 import ConversationRow from './ConversationRow';
@@ -25,13 +25,14 @@ const ChannelConversation = memo<ChannelConversationProps>(({ active, activeAt, 
 
   return (
     <ConversationRow
+      closeOnReselect
       active={active}
       activeAt={activeAt}
       contextMenuItems={menuItems(channel)}
       preview={channelPreview(channel)}
       title={channel.title}
       unread={channel.unreadCount}
-      url={channelPath(channel.id)}
+      url={CHANNEL_URL(channel.id)}
       avatar={
         <Avatar
           avatar={<Icon color={cssVar.colorTextSecondary} icon={HashIcon} size={16} />}

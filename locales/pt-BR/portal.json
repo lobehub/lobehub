@@ -19,7 +19,6 @@
   "artifacts.deploy.outdated": "Versão antiga em uso",
   "artifacts.deploy.publish": "Publicar",
   "artifacts.deploy.publishNewVersion": "Publicar esta versão",
-  "artifacts.deploy.quotaUnavailable": "A validação da cota de implantação está temporariamente indisponível. Tente novamente mais tarde.",
   "artifacts.deploy.serviceOverloaded": "O serviço de hospedagem de artefatos está temporariamente sobrecarregado. Tente publicar novamente em breve.",
   "artifacts.deploy.success": "Publicado",
   "artifacts.deploy.writeInProgress": "Outra alteração de implantação está em andamento. Tente novamente em breve.",

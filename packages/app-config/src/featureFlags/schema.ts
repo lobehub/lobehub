@@ -65,6 +65,14 @@ export const FeatureFlagsSchema = z.object({
   dashboard: FeatureFlagValue.optional(),
 
   /**
+   * MCP Apps: a tool result that declares an interactive `ui://` view renders
+   * that view (third-party HTML in a sandboxed iframe) in the conversation and
+   * stays on screen when the turn folds. Off: such results render as plain
+   * tool results. Array values are user ids.
+   */
+  mcp_apps: FeatureFlagValue.optional(),
+
+  /**
    * Trial gate for the rail layout: icon rail + one wrapped list column and
    * content, the IM-style Messages list (Lobe AI opens by default), Contacts,
    * the Tasks scope list and the agent profile side panel. Off keeps the
@@ -79,6 +87,14 @@ export const FeatureFlagsSchema = z.object({
    * was already queued still finishes. Array values are user ids, checked per member.
    */
   channel: FeatureFlagValue.optional(),
+
+  /**
+   * Rollout gate for creating managed cloud devices: the "Create in cloud" entry on the device
+   * list and every API that creates one or sets who can create one. Off: the entry does not render
+   * and those APIs refuse the call. Managed devices that already exist keep working: they list,
+   * wake, connect and can be removed. Array values are user ids, checked per member.
+   */
+  managed_cloud_device: FeatureFlagValue.optional(),
 
   topic_preview: FeatureFlagValue.optional(),
 
@@ -189,7 +205,13 @@ export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
   im_layout: false,
 
   // Off until an admin publishes a user allowlist or flips it to true.
+  mcp_apps: false,
+
+  // Off until an admin publishes a user allowlist or flips it to true.
   channel: false,
+
+  // Off until an admin publishes a user allowlist or flips it to true.
+  managed_cloud_device: false,
 
   // Off until the backend replaces the preview read; allowlist first.
   topic_preview: false,
@@ -235,8 +257,14 @@ export const mapFeatureFlagsEnvToState = (
     ),
     enableLlmRelay: evaluateFeatureFlag(config.agent_llm_relay, userId, 'agent_llm_relay'),
     enableDashboard: evaluateFeatureFlag(config.dashboard, userId, 'dashboard'),
+    enableMcpApps: evaluateFeatureFlag(config.mcp_apps, userId, 'mcp_apps'),
     enableImLayout: evaluateFeatureFlag(config.im_layout, userId, 'im_layout'),
     enableChannels: evaluateFeatureFlag(config.channel, userId, 'channel'),
+    enableManagedCloudDevice: evaluateFeatureFlag(
+      config.managed_cloud_device,
+      userId,
+      'managed_cloud_device',
+    ),
     enableTopicPreview: evaluateFeatureFlag(config.topic_preview, userId, 'topic_preview'),
     showProvider: evaluateFeatureFlag(config.provider_settings, userId, 'provider_settings'),
 

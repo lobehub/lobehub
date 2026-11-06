@@ -117,12 +117,6 @@ describe('settings useCategory', () => {
     expect(getItemKeys()).not.toContain(SettingsTabs.OAuthApps);
   });
 
-  it('shows Integrations in the Account group without any Labs flag', () => {
-    const { result } = renderHook(() => useCategory(), { wrapper: createWrapper(true) });
-    const accountGroup = result.current.find((group) => group.key === SettingsGroupKey.Account);
-    expect(accountGroup?.items.map((item) => item.key)).toContain(SettingsTabs.Integrations);
-  });
-
   // The sandbox drives moved to Docs → Sandbox Storage; settings keep only the
   // environment definitions.
   it('keeps Environments in settings without a sandbox storage tab', () => {

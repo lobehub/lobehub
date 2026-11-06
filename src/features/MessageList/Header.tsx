@@ -1,5 +1,6 @@
 'use client';
 
+import { CHANNEL_URL } from '@lobechat/const';
 import { ActionIcon, DropdownMenu, Flexbox, Icon, SearchBar, Text } from '@lobehub/ui';
 import { HashIcon, PlusIcon } from 'lucide-react';
 import { memo, type ReactNode, useMemo } from 'react';
@@ -7,7 +8,6 @@ import { useTranslation } from 'react-i18next';
 
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { openCreateChannel } from '@/features/Channels/CreateChannel';
-import { channelPath } from '@/features/Channels/paths';
 import { useChannelsEnabled } from '@/features/Channels/useChannelsEnabled';
 import { useCreateMenuItems } from '@/features/HomeSidebar/hooks';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -58,7 +58,7 @@ const Header = memo(() => {
         icon: <Icon icon={HashIcon} />,
         key: 'newChannel',
         label: t('create', { ns: 'channel' }),
-        onClick: () => openCreateChannel((id) => navigate(channelPath(id))),
+        onClick: () => openCreateChannel((id) => navigate(CHANNEL_URL(id))),
       },
       ...rest,
     ];

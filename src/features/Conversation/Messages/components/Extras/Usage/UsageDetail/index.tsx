@@ -16,6 +16,10 @@ import ModelCard from './ModelCard';
 import type { TokenProgressItem } from './TokenProgress';
 import TokenProgress from './TokenProgress';
 import { getDetailsToken } from './tokens';
+import { createUsdFormatter } from './usd';
+
+/** Right-hand values stack in one column, so digits keep the same width. */
+const VALUE_STYLE = { fontVariantNumeric: 'tabular-nums', fontWeight: 500 } as const;
 
 interface TokenDetailProps {
   model: string;
@@ -124,14 +128,20 @@ const TokenDetail = memo<TokenDetailProps>(({ usage, performance, model, provide
       ? detailTokens.totalTokens.cost
       : detailTokens.totalTokens!.token;
 
-  const formatValue = isShowCredit ? formatUsd : formatUsageValue;
+  // Every amount in the panel shares one number of decimals, so the column reads at a glance
+  const formatPanelUsd = createUsdFormatter(
+    [...inputDetails, ...outputDetails, ...totalDetail]
+      .map((item) => item.value)
+      .concat(totalCount),
+  );
+  const formatValue = isShowCredit ? formatPanelUsd : formatUsageValue;
   const detailTotal = formatValue(totalCount);
   const cacheRate =
     typeof detailTokens.inputCacheRate === 'number'
       ? `${formatNumber(detailTokens.inputCacheRate * 100, 1)}%`
       : undefined;
 
-  // Average unit price in USD per 1M tokens
+  // Average unit price in USD per 1M tokens; the label carries the unit
   const averagePricing = formatUsd(
     (detailTokens.totalTokens!.cost * 1_000_000) / detailTokens.totalTokens!.token,
   );
@@ -188,21 +198,21 @@ const TokenDetail = memo<TokenDetailProps>(({ usage, performance, model, provide
                   <div style={{ color: cssVar.colorTextSecondary }}>
                     {t('messages.tokenDetails.cacheRate')}
                   </div>
-                  <div style={{ fontWeight: 500 }}>{cacheRate}</div>
+                  <div style={VALUE_STYLE}>{cacheRate}</div>
                 </Flexbox>
               )}
               <Flexbox horizontal align={'center'} gap={4} justify={'space-between'}>
                 <div style={{ color: cssVar.colorTextSecondary }}>
                   {t('messages.tokenDetails.total')}
                 </div>
-                <div style={{ fontWeight: 500 }}>{detailTotal}</div>
+                <div style={VALUE_STYLE}>{detailTotal}</div>
               </Flexbox>
               {isShowCredit && (
                 <Flexbox horizontal align={'center'} gap={4} justify={'space-between'}>
                   <div style={{ color: cssVar.colorTextSecondary }}>
                     {t('messages.tokenDetails.average')}
                   </div>
-                  <div style={{ fontWeight: 500 }}>{averagePricing}</div>
+                  <div style={VALUE_STYLE}>{averagePricing}</div>
                 </Flexbox>
               )}
               {tps && (
@@ -213,7 +223,7 @@ const TokenDetail = memo<TokenDetailProps>(({ usage, performance, model, provide
                     </div>
                     <InfoTooltip title={t('messages.tokenDetails.speed.tps.tooltip')} />
                   </Flexbox>
-                  <div style={{ fontWeight: 500 }}>{tps}</div>
+                  <div style={VALUE_STYLE}>{tps}</div>
                 </Flexbox>
               )}
               {ttft && (
@@ -224,7 +234,7 @@ const TokenDetail = memo<TokenDetailProps>(({ usage, performance, model, provide
                     </div>
                     <InfoTooltip title={t('messages.tokenDetails.speed.ttft.tooltip')} />
                   </Flexbox>
-                  <div style={{ fontWeight: 500 }}>{ttft}s</div>
+                  <div style={VALUE_STYLE}>{ttft}s</div>
                 </Flexbox>
               )}
             </Flexbox>
@@ -235,7 +245,7 @@ const TokenDetail = memo<TokenDetailProps>(({ usage, performance, model, provide
       <Center
         horizontal
         gap={2}
-        style={{ cursor: 'pointer' }}
+        style={{ cursor: 'pointer', fontVariantNumeric: 'tabular-nums' }}
         onClick={(e) => {
           // Prevent Popover from closing and toggle the format
           e.preventDefault();

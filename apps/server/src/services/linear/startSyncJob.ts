@@ -1,7 +1,6 @@
 import type { LinearSyncJobErrorCode, LinearSyncJobMetadata } from '@lobechat/types';
 import { AsyncTaskStatus, AsyncTaskType } from '@lobechat/types';
 import { TRPCClientError } from '@trpc/client';
-import debug from 'debug';
 
 import { AsyncTaskModel } from '@/database/models/asyncTask';
 import { LinearSyncJobModel, LinearSyncRuleModel } from '@/database/models/linear';
@@ -10,8 +9,6 @@ import { createAsyncCaller } from '@/server/routers/async';
 import { after } from '@/server/utils/scheduleAfterResponse';
 
 import { toLinearSyncJobView } from './syncJob';
-
-const log = debug('lobe-server:linear:sync-job');
 
 /**
  * Hand-offs per job. Only a hand-off the async router turned away before
@@ -128,7 +125,8 @@ const dispatchJob = async (
         // Signs a new internal token, so a retry never resends a rejected one.
         asyncCaller = await createAsyncCaller({ userId });
       } catch (error) {
-        log('trigger sync %s failed: %O', taskId, error);
+        // Logged in production too: a lost hand-off otherwise leaves no trace.
+        console.error('[linear-sync] trigger sync %s failed: %O', taskId, error);
         await fail();
         return;
       }
@@ -136,14 +134,25 @@ const dispatchJob = async (
         await asyncCaller.linear.runSync({ taskId, workspaceId });
         return;
       } catch (error) {
-        // Any other failure reached the async router, which owns the job from
-        // there; a dropped response (a proxy timing out a long run) is not a
-        // failed sync, so only log it.
+        // A dropped response (a proxy timing out a long run) is not a failed
+        // sync: the async router claimed the job and owns it from there. A
+        // request the host answered without running it (e.g. Vercel's 508 on
+        // a deep chain of requests) left the job unclaimed for good, so it is
+        // shown as failed now instead of sitting queued until it times out.
+        // An error without an answer (a dropped connection) may still be on
+        // its way to the router, which must be able to claim it; that job
+        // times out as unclaimed if it never arrives.
         if (!isRejectedHandOff(error)) {
-          log('async sync %s request failed: %O', taskId, error);
+          console.error('[linear-sync] hand-off of sync %s failed: %O', taskId, error);
+          if (isAnsweredHandOff(error)) await fail();
           return;
         }
-        log('async sync %s hand-off rejected (attempt %d): %O', taskId, attempt, error);
+        console.warn(
+          '[linear-sync] hand-off of sync %s rejected (attempt %d): %O',
+          taskId,
+          attempt,
+          error,
+        );
         if (attempt >= MAX_DISPATCH_ATTEMPTS) {
           await fail();
           return;
@@ -152,6 +161,16 @@ const dispatchJob = async (
     }
   });
 };
+
+/**
+ * The host sent an answer, so the request is over: had the router run it, it
+ * would have claimed the job first, and `fail` only touches an unclaimed one.
+ * A tRPC answer carries its response; a host page that is not tRPC JSON (such
+ * as Vercel's 508) fails to parse, which a dropped connection never does.
+ */
+const isAnsweredHandOff = (error: unknown) =>
+  error instanceof TRPCClientError &&
+  (error.meta?.response !== undefined || error.cause instanceof SyntaxError);
 
 /** The async router refused the call before running it, so the job is still unclaimed. */
 const isRejectedHandOff = (error: unknown) =>

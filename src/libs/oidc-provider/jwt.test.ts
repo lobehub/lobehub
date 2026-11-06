@@ -113,6 +113,7 @@ describe('acceptance review tokens', () => {
     const { verifyAcceptanceReviewJWT } = await import('./jwt');
     await expect(verifyAcceptanceReviewJWT('t')).resolves.toEqual({
       acceptanceId: '7f0c9a7e-0000-4000-8000-000000000001',
+      clientId: 'lobehub-acceptance',
       expiresAt: 1_800_000_000,
       userId: 'user-1',
     });

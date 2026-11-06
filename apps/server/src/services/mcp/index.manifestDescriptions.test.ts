@@ -65,7 +65,6 @@ describe('MCP automatic descriptions and installed tool prompts', () => {
       const result = await service.getStdioMcpServerManifest({ command: 'mcp', name: 'test-mcp' });
 
       expect(result.meta.description).toBe(expected);
-      expect(result.meta.description).not.toContain('undefined');
     },
   );
 
@@ -82,7 +81,6 @@ describe('MCP automatic descriptions and installed tool prompts', () => {
       );
 
       expect(result.meta.description).toBe(scenario.expected);
-      expect(result.meta.description).not.toContain('undefined');
     },
   );
 
@@ -113,4 +111,41 @@ describe('MCP automatic descriptions and installed tool prompts', () => {
       expect(prompt).not.toContain('undefined');
     },
   );
+});
+
+describe('MCP manifests leave out tools only views may call', () => {
+  const mixed = [
+    { inputSchema: { type: 'object' as const }, name: 'hello' },
+    {
+      _meta: { ui: { visibility: ['app'] } },
+      inputSchema: { type: 'object' as const },
+      name: 'load_page',
+    },
+  ];
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(MCPClient.prototype.listTools).mockResolvedValue(mixed);
+    vi.mocked(MCPClient.prototype.listManifests).mockResolvedValue({
+      prompts: undefined,
+      resources: undefined,
+      title: undefined,
+      tools: mixed,
+      version: undefined,
+    });
+  });
+
+  it.each(['stdio', 'http'] as const)('%s manifest lists only model-visible tools', async (t) => {
+    const service = new MCPService();
+    const manifest =
+      t === 'stdio'
+        ? await service.getStdioMcpServerManifest({ command: 'mcp', name: 'test-mcp' })
+        : await service.getStreamableMcpServerManifest('test-mcp', 'https://mcp.example.com');
+
+    expect(manifest.api.map((api) => api.name)).toEqual(['hello']);
+    expect(manifest.meta.description).toMatch(/^test-mcp MCP server has 1 tool/);
+    // Still known to the view-call policy, outside the model's `api`
+    expect(manifest.mcpAppOnlyApi?.map((api) => api.name)).toEqual(['load_page']);
+    expect(manifest.mcpModelOnlyTools).toBeUndefined();
+  });
 });

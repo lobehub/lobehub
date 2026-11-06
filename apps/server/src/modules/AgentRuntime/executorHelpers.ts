@@ -526,6 +526,8 @@ export const buildServerAgentMemberRunner = (
             agentId,
             content: '',
             groupId,
+            // Lets the reader hide the anchor and the tool card show this member's progress.
+            metadata: { groupMemberAnchor: { agentId: resolvedMembers[i].agentId, index: i } },
             parentId: groupTool.id,
             plugin: { ...(chatToolPayload as any), id: memberToolCallId },
             pluginState: { status: 'pending' },
@@ -566,6 +568,19 @@ export const buildServerAgentMemberRunner = (
             });
             if (result?.started) {
               startedCount += 1;
+              // The tool card follows an isolated member's progress by polling
+              // its thread, which it can only find through the anchor until the
+              // member finishes. Best-effort: the run proceeds either way.
+              if (result.threadId) {
+                await ctx.messageModel
+                  .updatePluginState(anchorMessageId, { threadId: result.threadId })
+                  .catch((error) =>
+                    log(
+                      'buildServerAgentMemberRunner: failed to stamp thread on anchor: %O',
+                      error,
+                    ),
+                  );
+              }
               return;
             }
             if (result?.error) startErrors.push(result.error);

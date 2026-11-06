@@ -44,4 +44,25 @@ describe('DirectoryBrowser', () => {
     expect(screen.getByText('held')).toBeInTheDocument();
     expect(screen.getByText('workingDirectory.useFolder').closest('button')).not.toBeDisabled();
   });
+
+  it('should keep what a pick carries along off the footer buttons row', () => {
+    // Beside the buttons, an environment select pushed them onto a second line
+    // in English, where the labels run longer.
+    render(
+      <DirectoryBrowser
+        loading={false}
+        pickExtra={<span>environment</span>}
+        source={sourceWith({})}
+        onCancel={vi.fn()}
+        onManual={vi.fn()}
+        onSelect={vi.fn()}
+      />,
+    );
+
+    const footer = screen
+      .getByText('workingDirectory.enterPathManually')
+      .closest('button')!.parentElement!;
+    expect(screen.getByText('environment')).toBeInTheDocument();
+    expect(footer).not.toContainElement(screen.getByText('environment'));
+  });
 });

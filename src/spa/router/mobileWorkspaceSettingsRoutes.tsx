@@ -1,9 +1,13 @@
 'use client';
 
+import { Settings } from 'lucide-react';
 import type { RouteObject } from 'react-router';
 
 import WorkspaceProviderRedirect from '@/features/WorkspaceSetting/ProviderRedirect';
+import { createWorkspaceSettingsRouteMeta } from '@/features/WorkspaceSetting/routeMeta';
+import { routeMeta } from '@/spa/router/routeMeta';
 import { workspaceSettingsContentRoute } from '@/spa/router/workspaceSettingsRoutes';
+import { WorkspaceSettingsTabs } from '@/types/workspaceSettings';
 import { dynamicElement } from '@/utils/router';
 
 /**
@@ -19,6 +23,7 @@ export const mobileWorkspaceSettingsChildren: RouteObject[] = [
       () => import('@/routes/(mobile)/[workspaceSlug]/settings'),
       'Mobile > Workspace > Settings > Index',
     ),
+    handle: { meta: routeMeta({ icon: Settings, titleKey: 'navigation.settings' }) },
     index: true,
   },
   ...(workspaceSettingsContentRoute.children ?? []),
@@ -30,6 +35,7 @@ export const mobileWorkspaceSettingsChildren: RouteObject[] = [
         ),
       'Mobile > Workspace > Settings > Provider',
     ),
+    handle: { meta: createWorkspaceSettingsRouteMeta(WorkspaceSettingsTabs.Provider) },
     path: 'provider',
   },
   // Path-shaped provider deep-links (`/:slug/settings/provider/:id`) redirect
@@ -41,6 +47,7 @@ export const mobileWorkspaceSettingsChildren: RouteObject[] = [
       () => import('@/routes/(main)/[workspaceSlug]/settings/skill'),
       'Mobile > Workspace > Settings > Skill',
     ),
+    handle: { meta: createWorkspaceSettingsRouteMeta(WorkspaceSettingsTabs.Skill) },
     path: 'skill',
   },
   {
@@ -48,6 +55,7 @@ export const mobileWorkspaceSettingsChildren: RouteObject[] = [
       () => import('@/routes/(main)/[workspaceSlug]/settings/connector'),
       'Mobile > Workspace > Settings > Connector',
     ),
+    handle: { meta: createWorkspaceSettingsRouteMeta(WorkspaceSettingsTabs.Connector) },
     path: 'connector',
   },
 ];

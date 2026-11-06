@@ -41,20 +41,9 @@ import {
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { isDesktop } from '@/const/version';
-import { resolveTargetDeviceId } from '@/helpers/agentWorkingDirectory';
-import { resolveExecutionTarget } from '@/helpers/executionTarget';
-import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
-import { useEffectiveWorkingDirectory } from '@/hooks/useEffectiveWorkingDirectory';
-import { deviceSelectors, useDeviceStore } from '@/store/device';
-import { useElectronStore } from '@/store/electron';
-import { useUserStore } from '@/store/user';
-import { authSelectors } from '@/store/user/selectors';
-
-import { useTopicId } from '../../hooks/useTopicId';
 import { useMenuContentLifecycle } from '../useMenuContentLifecycle';
-import { useModelCatalog } from './useModelCatalog';
 import { useModelCatalogView } from './useModelCatalogView';
+import { useTargetModelCatalog } from './useTargetModelCatalog';
 
 const spin = stylex.keyframes({ to: { transform: 'rotate(360deg)' } });
 
@@ -164,42 +153,13 @@ export const ModelCatalogSelector = memo<ModelCatalogSelectorProps>(
       handleOpenChangeComplete: completeOpenChange,
       open,
     } = useMenuContentLifecycle(onSelect);
-    const topicId = useTopicId();
-    const { agencyConfig, isPreferenceLoading, workspaceScoped } = useEffectiveAgencyConfig(
-      agentId,
-      { topicId },
-    );
-    const isLogin = useUserStore(authSelectors.isLogin);
-    useDeviceStore((s) => s.useFetchDevices)(isLogin || isDesktop);
-    const isDeviceListLoading = !useDeviceStore(deviceSelectors.isDeviceListLoaded);
-    // Let the execution host choose its default; this desktop's fallback may not exist remotely.
-    const cwd = useEffectiveWorkingDirectory(agentId, { homeFallback: false, topicId });
-    const provider = agencyConfig?.heterogeneousProvider;
-    useElectronStore((s) => s.useFetchGatewayDeviceInfo)();
-    const currentDeviceId = useElectronStore((s) => s.gatewayDeviceInfo?.deviceId);
-    const executionTarget = resolveExecutionTarget(agencyConfig, {
-      clientExecutionAvailable: isDesktop,
-      isHetero: true,
-      workspaceScoped,
-    });
-    const targetDeviceId = resolveTargetDeviceId(agencyConfig, currentDeviceId, {
-      workspaceScoped,
-    });
-    const useLocalIpc = isDesktop && executionTarget === 'local';
-    const rpcDeviceId = useLocalIpc ? undefined : targetDeviceId;
-    const targetReady = useLocalIpc || (executionTarget === 'device' && !!rpcDeviceId);
     const currentModel =
       model && model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION
         ? model
         : HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
-    const { data, error, isLoading, isValidating, mutate } = useModelCatalog({
-      cwd,
-      deviceId: rpcDeviceId,
-      isDeviceListLoading,
-      isPreferenceLoading,
+    const { data, error, isLoading, isValidating, mutate, targetReady } = useTargetModelCatalog({
+      agentId,
       open,
-      provider,
-      targetReady,
       type,
     });
 

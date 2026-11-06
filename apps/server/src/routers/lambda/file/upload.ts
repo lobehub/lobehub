@@ -96,6 +96,8 @@ export const uploadRouter = router({
     .use(withScopedPermission('file:upload'))
     .input(
       UploadFileSchema.omit({ url: true }).extend({
+        /** Agent whose conversation this upload is attached to. */
+        conversationAgentId: z.string().optional(),
         parentId: z.string().optional(),
         url: z.string(),
         visibility: z.enum(['private', 'public']).optional(),
@@ -131,6 +133,21 @@ export const uploadRouter = router({
         knowledgeBaseVisibility = knowledgeBase.visibility;
       }
 
+      // Every member can read a public agent's conversation, so an attachment
+      // defaulted to the uploader's private space would tombstone for them. The
+      // agent is resolved here, never trusted from the client's cached state.
+      const isPublicAgentAttachment =
+        !!ctx.workspaceId &&
+        !!input.conversationAgentId &&
+        !input.knowledgeBaseId &&
+        !input.source &&
+        !input.visibility &&
+        !parentDocument &&
+        (await ctx.agentModel.getAgentVisibility(input.conversationAgentId)) === 'public';
+      const fileSource = isPublicAgentAttachment
+        ? FileSource.ChatAttachment
+        : toFileSource(input.source);
+
       // Visibility precedence (workspace mode only — personal mode ignores the
       // column entirely):
       //   1. A library upload always uses the knowledge base visibility.
@@ -139,13 +156,18 @@ export const uploadRouter = router({
       //      uploaded inside a private folder stays private.
       //   4. Agent-document uploads default to 'public' to match their document's
       //      access contract; their source keeps them out of resource listings.
-      //   5. Otherwise default top-level uploads to 'private' so new content
+      //   5. Attachments in a public agent's conversation default to 'public';
+      //      their source keeps them out of resource listings. Flipping one back
+      //      to private or deleting it still tombstones the card.
+      //   6. Otherwise default top-level uploads to 'private' so new content
       //      starts in the creator's private space (mirrors the Pages spec).
       const resolvedVisibility: 'private' | 'public' | undefined = ctx.workspaceId
         ? (knowledgeBaseVisibility ??
           input.visibility ??
           parentVisibility ??
-          (input.source === FileSource.AgentDocument ? 'public' : 'private'))
+          (input.source === FileSource.AgentDocument || isPublicAgentAttachment
+            ? 'public'
+            : 'private'))
         : undefined;
 
       if (latestUpload?.status === 'settled') {
@@ -162,7 +184,7 @@ export const uploadRouter = router({
           settledFile.name === input.name &&
           settledFile.parentId === (resolvedParentId ?? null) &&
           settledFile.size === input.size &&
-          (settledFile.source ?? undefined) === toFileSource(input.source) &&
+          (settledFile.source ?? undefined) === fileSource &&
           settledFile.url === input.url &&
           (!ctx.workspaceId || settledFile.visibility === resolvedVisibility) &&
           isEqual(settledFile.metadata, metadata ?? null);
@@ -231,19 +253,20 @@ export const uploadRouter = router({
         });
       }
 
-      const { id } = await ctx.serverDB.transaction(async (trx) => {
-        let shouldRefreshGlobalFile = false;
-        if (isExist && existingFile.url && existingFile.url !== input.url) {
-          shouldRefreshGlobalFile = !(await isStoredObjectAvailable(
-            ctx.fileService,
-            existingFile.url,
-          ));
-        }
+      // Storage I/O must finish before the transaction borrows a pooled connection.
+      const missingHashUrl =
+        isExist &&
+        existingFile.url &&
+        existingFile.url !== input.url &&
+        !(await isStoredObjectAvailable(ctx.fileService, existingFile.url))
+          ? existingFile.url
+          : undefined;
 
-        if (shouldRefreshGlobalFile) {
-          // A user may re-upload the same bytes after the old object key was
-          // removed. Keep the global hash pointer on the newly uploaded object so
-          // future dedup checks do not resolve back to the stale key.
+      const { id } = await ctx.serverDB.transaction(async (trx) => {
+        // Apply a missing-object probe only to the pointer it observed, and decide whether to
+        // insert the global row from the current mapping rather than the pre-transaction read.
+        const currentFile = await ctx.fileModel.checkHash(input.hash!, trx);
+        if (missingHashUrl && currentFile.isExist && currentFile.url === missingHashUrl) {
           await ctx.fileModel.updateGlobalFile(
             input.hash!,
             {
@@ -268,12 +291,12 @@ export const uploadRouter = router({
               // wire type is a loose string for older clients, so unknown values
               // are dropped rather than persisted — `source` drives the resource
               // library's origin filter and its hidden-source exclusion.
-              source: toFileSource(input.source),
+              source: fileSource,
               url: input.url,
               ...(resolvedVisibility ? { visibility: resolvedVisibility } : {}),
             },
             // if the file is not exist in global file, create a new one
-            !isExist,
+            !currentFile.isExist,
             trx,
           );
 

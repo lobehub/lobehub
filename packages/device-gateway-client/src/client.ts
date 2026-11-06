@@ -181,6 +181,11 @@ export class GatewayClient extends EventEmitter {
     return this.deviceId;
   }
 
+  /** Tunnel HTTP requests and WebSockets this device is serving right now. */
+  get activeTunnelCount(): number {
+    return this.tunnelHost?.activeCount ?? 0;
+  }
+
   get currentConnectionId(): string {
     return this.connectionId;
   }

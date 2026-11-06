@@ -1,16 +1,14 @@
+import { CHANNEL_URL } from '@lobechat/const';
 import { type MouseEvent, useCallback, useEffect, useRef } from 'react';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
-import { channelPath } from '@/features/Channels/paths';
 import { useChannelsEnabled } from '@/features/Channels/useChannelsEnabled';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useActiveLocation } from '@/hooks/useActiveLocation';
 import { cacheScope } from '@/libs/replica';
 import { channelActions, channelSelectors, useChannelStore } from '@/store/channel';
 
-/** A plain left click; modified clicks keep the browser's own handling of the link. */
-const isPlainClick = (event: MouseEvent) =>
-  event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey;
+import { isPlainClick } from './conversations';
 
 /**
  * With Channels on, an agent row opens the person's direct Channel with the Agent. An Agent made
@@ -49,7 +47,7 @@ export const useAgentConversationLink = (agentId: string, agentUrl: string) => {
       };
       void channelActions
         .openDirect(agentId)
-        .then((channelId) => go(channelId ? channelPath(channelId) : agentUrl))
+        .then((channelId) => go(channelId ? CHANNEL_URL(channelId) : agentUrl))
         .catch((error) => {
           console.error('[channel] Failed to open the direct Channel', error);
           go(agentUrl);
@@ -61,6 +59,6 @@ export const useAgentConversationLink = (agentId: string, agentUrl: string) => {
     [agentId, agentUrl, navigate],
   );
 
-  if (directChannelId) return { url: channelPath(directChannelId) };
+  if (directChannelId) return { url: CHANNEL_URL(directChannelId) };
   return { onClick: enabled ? onClick : undefined, url: agentUrl };
 };
