@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { deduplicateRemoteModels, enabledBuiltinIdsMissingFromCatalog } from './utils';
+import {
+  deduplicateRemoteModels,
+  enabledBuiltinIdsMissingFromCatalog,
+  enabledRemoteIdsMissingFromCatalog,
+} from './utils';
 
 describe('enabledBuiltinIdsMissingFromCatalog', () => {
   const builtinIds = ['jzs-max-3.0', 'gpt-5.6-terra', 'claude-sonnet-5'];
@@ -30,6 +34,32 @@ describe('enabledBuiltinIdsMissingFromCatalog', () => {
         { enabled: true, id: 'gpt-5.6-terra' },
       ]),
     ).toEqual([]);
+  });
+});
+
+describe('enabledRemoteIdsMissingFromCatalog', () => {
+  const currentModels = [
+    { enabled: true, id: 'fetched-only', source: 'remote' as const },
+    { enabled: false, id: 'fetched-disabled', source: 'remote' as const },
+    { enabled: true, id: 'still-in-catalog', source: 'remote' as const },
+    { enabled: true, id: 'my-custom', source: 'custom' as const },
+    { enabled: true, id: 'gpt-5.6-terra', source: 'builtin' as const },
+  ];
+
+  it('returns enabled remote rows the catalog omitted', () => {
+    expect(
+      enabledRemoteIdsMissingFromCatalog(new Set(['still-in-catalog']), currentModels),
+    ).toEqual(['fetched-only']);
+  });
+
+  it('excludes custom and builtin rows from the omitted remote ids', () => {
+    expect(enabledRemoteIdsMissingFromCatalog(new Set(['fetched-only']), currentModels)).toEqual([
+      'still-in-catalog',
+    ]);
+  });
+
+  it('does not treat an empty catalog as authoritative', () => {
+    expect(enabledRemoteIdsMissingFromCatalog(new Set(), currentModels)).toEqual([]);
   });
 });
 
