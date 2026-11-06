@@ -68,6 +68,7 @@ import {
   markdownTextEvidenceTypes,
   rendersAsMarkdown,
 } from './MarkdownEvidence';
+import { narrativeMarker } from './markers.stylex';
 import { originTopicHref } from './originLink';
 import {
   type EvidenceCategory,
@@ -415,10 +416,8 @@ const styles = stylex.create({
 
   /* narrative */
   narrative: { marginBlockStart: '24px' },
-  /* A closed <details> shows only its summary; the marker on <details> lets the
-     body hide itself exactly as the old `:not([open]) > :not(summary)` did. */
   narrativeContent: {
-    display: { default: null, [stylex.when.ancestor(':not([open])')]: 'none' },
+    display: { default: null, [stylex.when.ancestor(':not([open])', narrativeMarker)]: 'none' },
   },
   narrativeSummary: {
     cursor: 'pointer',
@@ -1287,7 +1286,7 @@ const ReportViewer = memo<ReportViewerProps>(({ runId: explicitRunId }) => {
           )}
 
           {report?.content && (
-            <details {...stylex.props(styles.narrative, stylex.defaultMarker())}>
+            <details {...stylex.props(styles.narrative, narrativeMarker)}>
               <summary {...stylex.props(styles.narrativeSummary)}>
                 <Icon icon={ChevronRight} size={13} />
                 {t('report.sections.details')}
@@ -1299,7 +1298,7 @@ const ReportViewer = memo<ReportViewerProps>(({ runId: explicitRunId }) => {
           )}
 
           {interactionCost && (
-            <details {...stylex.props(styles.narrative, stylex.defaultMarker())}>
+            <details {...stylex.props(styles.narrative, narrativeMarker)}>
               <summary {...stylex.props(styles.narrativeSummary)}>
                 <Icon icon={ChevronRight} size={13} />
                 {t('report.interaction.title')}
