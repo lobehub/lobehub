@@ -1,8 +1,6 @@
-import {
-  type AIChatModelCard,
-  type AIImageModelCard,
-  type AIVideoModelCard,
-} from '../../types/aiModel';
+import { type AIChatModelCard } from '../../types/aiModel';
+import { siliconcloudImageModels } from './image';
+import { siliconcloudVideoModels } from './video';
 
 // https://siliconflow.cn/zh-cn/models
 const siliconcloudChatModels: AIChatModelCard[] = [
@@ -1647,115 +1645,6 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-02-02',
     type: 'chat',
-  },
-];
-
-const siliconcloudImageModels: AIImageModelCard[] = [
-  {
-    description:
-      'Kolors is a large-scale latent-diffusion text-to-image model by the Kuaishou Kolors team. Trained on billions of text-image pairs, it excels in visual quality, complex semantic accuracy, and Chinese/English text rendering, with strong Chinese content understanding and generation.',
-    displayName: 'Kolors',
-    id: 'Kwai-Kolors/Kolors',
-    parameters: {
-      prompt: {
-        default: '',
-      },
-      seed: { default: null },
-      size: {
-        default: '1024x1024',
-        enum: ['1024x1024', '960x1280', '768x1024', '720x1440', '720x1280'],
-      },
-    },
-    releasedAt: '2024-07-06',
-    type: 'image',
-  },
-  {
-    description:
-      'Qwen-Image is a 20B-parameter image generation foundation model from the Qwen team. It makes major gains in complex text rendering and precise image editing, especially for high-fidelity Chinese/English text. It supports multi-line and paragraph layouts while keeping typography coherent. Beyond text rendering, it supports a wide range of styles from photorealistic to anime, and advanced editing like style transfer, object add/remove, detail enhancement, text editing, and pose control, aiming to be a comprehensive visual creation foundation.',
-    displayName: 'Qwen-Image',
-    id: 'Qwen/Qwen-Image',
-    parameters: {
-      prompt: {
-        default: '',
-      },
-      seed: { default: null },
-      size: {
-        default: '1328x1328',
-        enum: ['1328x1328', '1584x1056', '1140x1472', '1664x928', '928x1664'],
-      },
-    },
-    pricing: {
-      currency: 'CNY',
-      units: [{ name: 'imageGeneration', rate: 0.04, strategy: 'fixed', unit: 'image' }],
-    },
-    releasedAt: '2025-08-04',
-    type: 'image',
-  },
-  {
-    description:
-      'Qwen-Image-Edit-2509 is the latest editing version of Qwen-Image from the Qwen team. Built on the 20B Qwen-Image model, it extends strong text rendering into image editing for precise text edits. It uses a dual-control architecture, sending inputs to Qwen2.5-VL for semantic control and a VAE encoder for appearance control, enabling both semantic- and appearance-level editing. It supports local edits (add/remove/modify) and higher-level semantic edits like IP creation and style transfer while preserving semantics. It achieves SOTA results on multiple benchmarks.',
-    displayName: 'Qwen-Image-Edit (2509)',
-    id: 'Qwen/Qwen-Image-Edit-2509',
-    parameters: {
-      imageUrls: {
-        default: [],
-        maxCount: 3,
-      },
-      prompt: {
-        default: '',
-      },
-      seed: { default: null },
-    },
-    pricing: {
-      currency: 'CNY',
-      units: [{ name: 'imageGeneration', rate: 0.04, strategy: 'fixed', unit: 'image' }],
-    },
-    releasedAt: '2025-09-22',
-    type: 'image',
-  },
-];
-
-const siliconcloudVideoModels: AIVideoModelCard[] = [
-  {
-    description:
-      'Wan2.2-I2V-A14B is one of the first open-source image-to-video (I2V) generation models released by Wan-AI, an AI initiative under Alibaba, to adopt a Mixture of Experts (MoE) architecture. The model focuses on generating smooth and natural dynamic video sequences by combining static images with text prompts. Its core innovation lies in the MoE architecture: a high-noise expert is responsible for handling the coarse structure in the early stages of video generation, while a low-noise expert refines fine-grained details in the later stages. This design improves overall model performance without increasing inference cost. Compared to previous versions, Wan2.2 is trained on a significantly larger dataset, leading to notable improvements in understanding complex motion, aesthetic styles, and semantic content. It produces more stable videos and reduces unrealistic camera movements.',
-    displayName: 'Wan-AI/Wan2.2-I2V-A14B',
-    enabled: true,
-    id: 'Wan-AI/Wan2.2-I2V-A14B',
-    parameters: {
-      imageUrl: {
-        default: null,
-      },
-      prompt: { default: '' },
-      seed: { default: null },
-    },
-    pricing: {
-      currency: 'CNY',
-      units: [{ name: 'videoGeneration', rate: 2, strategy: 'fixed', unit: 'video' }],
-    },
-    releasedAt: '2026-01-28',
-    type: 'video',
-  },
-  {
-    description:
-      'Wan2.2-T2V-A14B is the first open-source video generation model released by Alibaba to adopt a Mixture of Experts (MoE) architecture. The model is designed for text-to-video (T2V) generation tasks and is capable of producing videos up to 5 seconds in length at resolutions of 480P or 720P. By introducing the MoE architecture, the model significantly increases its overall capacity while keeping inference costs nearly unchanged. It includes a high-noise expert that handles the global structure in the early stages of generation, and a low-noise expert that refines fine details in the later stages of the video. In addition, Wan2.2 incorporates carefully curated aesthetic data, with detailed annotations across dimensions such as lighting, composition, and color. This enables more precise and controllable generation of cinematic-quality visuals. Compared to previous versions, the model is trained on a larger dataset, resulting in significantly improved generalization in motion, semantics, and aesthetics, and better handling of complex dynamic effects.',
-    displayName: 'Wan-AI/Wan2.2-T2V-A14B',
-    enabled: true,
-    id: 'Wan-AI/Wan2.2-T2V-A14B',
-    parameters: {
-      prompt: { default: '' },
-      seed: { default: null },
-      size: {
-        default: '1280x720',
-        enum: ['1280x720', '720x1280', '960x960'],
-      },
-    },
-    pricing: {
-      currency: 'CNY',
-      units: [{ name: 'videoGeneration', rate: 2, strategy: 'fixed', unit: 'video' }],
-    },
-    releasedAt: '2026-01-28',
-    type: 'video',
   },
 ];
 
