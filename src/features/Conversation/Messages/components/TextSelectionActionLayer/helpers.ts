@@ -1,7 +1,17 @@
 import type { ChatContextContent } from '@lobechat/types';
 
+export type SelectionToolbarPlacement = 'bottom' | 'top';
+
+export interface SelectionToolbarViewport {
+  /** Bottom edge of the whole selection, used when the toolbar flips below it. */
+  selectionBottom: number;
+  viewportHeight: number;
+  viewportWidth: number;
+}
+
 export interface SelectionToolbarPosition {
   left: number;
+  placement: SelectionToolbarPlacement;
   top: number;
 }
 
@@ -13,6 +23,9 @@ export interface TextSelectionContextParams {
 
 const TOOLBAR_OFFSET = 12;
 const VIEWPORT_MARGIN = 12;
+// Rendered toolbar height (24px small button + 4px padding + 1px border, both sides),
+// rounded up so the flip check never lets the toolbar clip the viewport top.
+const TOOLBAR_HEIGHT = 36;
 const LINE_TOP_TOLERANCE = 3;
 
 export const getSelectionPreview = (selectedText: string): string | undefined => {
@@ -45,15 +58,38 @@ export const isSameTextSelectionContext = (
   !item.pageId &&
   item.content.trim() === selectedText.trim();
 
+/**
+ * Whether the selected text is already pending in the composer context. Derived from
+ * the composer's selections, so it resets once the chip is removed or the message is
+ * sent, and holds across repeated selections of the same text.
+ */
+export const isTextSelectionAdded = (
+  selections: ChatContextContent[],
+  selectedText: string,
+): boolean => selections.some((item) => isSameTextSelectionContext(item, selectedText));
+
+/**
+ * Anchors the toolbar above the first selected line so it never covers the
+ * selection. Only when there is no room above does it flip below the whole
+ * selection, again leaving the selected text visible. A selection taller than
+ * the viewport keeps the toolbar clamped on screen.
+ */
 export const getSelectionToolbarPosition = (
-  rect: DOMRect,
-  viewportWidth: number,
+  firstLineRect: DOMRect,
+  { selectionBottom, viewportHeight, viewportWidth }: SelectionToolbarViewport,
 ): SelectionToolbarPosition => {
-  const center = rect.left + rect.width / 2;
+  const center = firstLineRect.left + firstLineRect.width / 2;
+  const left = Math.min(Math.max(center, VIEWPORT_MARGIN), viewportWidth - VIEWPORT_MARGIN);
+  const top = firstLineRect.top - TOOLBAR_OFFSET;
+
+  if (top - TOOLBAR_HEIGHT >= VIEWPORT_MARGIN) return { left, placement: 'top', top };
+
+  const maxTop = Math.max(viewportHeight - VIEWPORT_MARGIN - TOOLBAR_HEIGHT, VIEWPORT_MARGIN);
 
   return {
-    left: Math.min(Math.max(center, VIEWPORT_MARGIN), viewportWidth - VIEWPORT_MARGIN),
-    top: Math.max(rect.top - TOOLBAR_OFFSET, VIEWPORT_MARGIN),
+    left,
+    placement: 'bottom',
+    top: Math.min(Math.max(selectionBottom + TOOLBAR_OFFSET, VIEWPORT_MARGIN), maxTop),
   };
 };
 
