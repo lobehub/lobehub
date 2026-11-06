@@ -188,6 +188,20 @@ export const getScheduledTaskViewOptions = (
 });
 
 /**
+ * Whether a collection's project groups need the project list to be told apart.
+ * Judged on what the collection renders: the scheduled tab replaces the stored
+ * grouping, so a stored `project` must not hold it behind the project request.
+ */
+export const collectionGroupsByProject = (
+  collection: TaskCollection,
+  viewOptions: TaskListViewOptions,
+): boolean => {
+  const { groupBy, subGroupBy } =
+    collection === 'scheduled' ? getScheduledTaskViewOptions(viewOptions) : viewOptions;
+  return groupBy === 'project' || subGroupBy === 'project';
+};
+
+/**
  * "My tasks" additionally sends `completedTasks` as a server filter
  * (`getVisibleTaskStatuses` / `getCompletedWithin`) rather than applying it to
  * the fetched page.
@@ -286,8 +300,7 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
   // Project groups cannot be told apart until the list that names them loads, so
   // a list view holds its skeleton, or surfaces the failure, instead of
   // flashing every task under "No project".
-  const needsProjectList =
-    !projects && (viewOptions.groupBy === 'project' || viewOptions.subGroupBy === 'project');
+  const needsProjectList = !projects && collectionGroupsByProject(collection, viewOptions);
   const projectListError = needsProjectList ? projectsError : undefined;
   const isProjectListPending = needsProjectList && !projectsError;
   // Group headers of the ordinary list offer the board's column create entry.
