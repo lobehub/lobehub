@@ -3,44 +3,43 @@ import { describe, expect, it, vi } from 'vitest';
 import { AgentRuntimeErrorType } from '../../../types/error';
 import { serializeScopedSignature, type SignatureScope } from '../../../utils/signatureScope';
 import { FIRST_CHUNK_ERROR_KEY } from '../protocol';
+import { createReadableStream, readStreamChunk } from '../utils';
 import { OpenAIStream } from './openai';
 
 describe('OpenAIStream', () => {
   it('should transform OpenAI stream to protocol stream', async () => {
-    const mockOpenAIStream = new ReadableStream({
-      start(controller) {
-        controller.enqueue({
-          choices: [
-            {
-              delta: { content: 'Hello' },
-              index: 0,
-            },
-          ],
-          id: '1',
-        });
-        controller.enqueue({
-          choices: [
-            {
-              delta: { content: ' world!' },
-              index: 1,
-            },
-          ],
-          id: '1',
-        });
-        controller.enqueue({
-          choices: [
-            {
-              delta: null,
-              finish_reason: 'stop',
-              index: 2,
-            },
-          ],
-          id: '1',
-        });
-
-        controller.close();
+    const mockOpenAIStream = createReadableStream([
+      {
+        choices: [
+          {
+            delta: { content: 'Hello' },
+            index: 0,
+          },
+        ],
+        id: '1',
       },
-    });
+
+      {
+        choices: [
+          {
+            delta: { content: ' world!' },
+            index: 1,
+          },
+        ],
+        id: '1',
+      },
+
+      {
+        choices: [
+          {
+            delta: null,
+            finish_reason: 'stop',
+            index: 2,
+          },
+        ],
+        id: '1',
+      },
+    ]);
 
     const onStartMock = vi.fn();
     const onTextMock = vi.fn();
@@ -54,13 +53,7 @@ describe('OpenAIStream', () => {
       },
     });
 
-    const decoder = new TextDecoder();
-    const chunks = [];
-
-    // @ts-ignore
-    for await (const chunk of protocolStream) {
-      chunks.push(decoder.decode(chunk, { stream: true }));
-    }
+    const chunks = await readStreamChunk(protocolStream);
 
     expect(chunks).toEqual([
       'id: 1\n',
@@ -81,21 +74,18 @@ describe('OpenAIStream', () => {
   });
 
   it('should expose missing usage diagnostics when terminal chunk has no usage', async () => {
-    const mockOpenAIStream = new ReadableStream({
-      start(controller) {
-        controller.enqueue({
-          choices: [
-            {
-              delta: {},
-              finish_reason: 'stop',
-              index: 0,
-            },
-          ],
-          id: 'chatcmpl_missing_usage',
-        });
-        controller.close();
+    const mockOpenAIStream = createReadableStream([
+      {
+        choices: [
+          {
+            delta: {},
+            finish_reason: 'stop',
+            index: 0,
+          },
+        ],
+        id: 'chatcmpl_missing_usage',
       },
-    });
+    ]);
     const onFinal = vi.fn();
 
     const protocolStream = OpenAIStream(mockOpenAIStream, {
@@ -132,21 +122,18 @@ describe('OpenAIStream', () => {
   });
 
   it('should emit a content policy error when finish_reason is content_filter', async () => {
-    const mockOpenAIStream = new ReadableStream({
-      start(controller) {
-        controller.enqueue({
-          choices: [
-            {
-              delta: {},
-              finish_reason: 'content_filter',
-              index: 0,
-            },
-          ],
-          id: 'chatcmpl_content_filter',
-        });
-        controller.close();
+    const mockOpenAIStream = createReadableStream([
+      {
+        choices: [
+          {
+            delta: {},
+            finish_reason: 'content_filter',
+            index: 0,
+          },
+        ],
+        id: 'chatcmpl_content_filter',
       },
-    });
+    ]);
     const onError = vi.fn();
     const onFinal = vi.fn();
 
@@ -158,12 +145,7 @@ describe('OpenAIStream', () => {
       },
     });
 
-    const decoder = new TextDecoder();
-    const chunks: string[] = [];
-    // @ts-ignore
-    for await (const chunk of protocolStream) {
-      chunks.push(decoder.decode(chunk, { stream: true }));
-    }
+    const chunks = await readStreamChunk(protocolStream);
 
     const expectedError = {
       body: {
@@ -195,83 +177,53 @@ describe('OpenAIStream', () => {
   });
 
   it('should handle empty stream', async () => {
-    const mockStream = new ReadableStream({
-      start(controller) {
-        controller.close();
-      },
-    });
+    const mockStream = createReadableStream([]);
 
     const protocolStream = OpenAIStream(mockStream);
 
-    const decoder = new TextDecoder();
-    const chunks = [];
-
-    // @ts-ignore
-    for await (const chunk of protocolStream) {
-      chunks.push(decoder.decode(chunk, { stream: true }));
-    }
+    const chunks = await readStreamChunk(protocolStream);
 
     expect(chunks).toEqual([]);
   });
 
   it('should handle delta content null', async () => {
-    const mockOpenAIStream = new ReadableStream({
-      start(controller) {
-        controller.enqueue({
-          choices: [
-            {
-              delta: { content: null },
-              index: 0,
-            },
-          ],
-          id: '3',
-        });
-
-        controller.close();
+    const mockOpenAIStream = createReadableStream([
+      {
+        choices: [
+          {
+            delta: { content: null },
+            index: 0,
+          },
+        ],
+        id: '3',
       },
-    });
+    ]);
 
     const protocolStream = OpenAIStream(mockOpenAIStream);
 
-    const decoder = new TextDecoder();
-    const chunks = [];
-
-    // @ts-ignore
-    for await (const chunk of protocolStream) {
-      chunks.push(decoder.decode(chunk, { stream: true }));
-    }
+    const chunks = await readStreamChunk(protocolStream);
 
     expect(chunks).toEqual(['id: 3\n', 'event: data\n', `data: {"content":null}\n\n`]);
   });
 
   it('should handle content with finish_reason', async () => {
-    const mockOpenAIStream = new ReadableStream({
-      start(controller) {
-        controller.enqueue({
-          id: '123',
-          model: 'deepl',
-          choices: [
-            {
-              index: 0,
-              delta: { role: 'assistant', content: 'Introduce yourself.' },
-              finish_reason: 'stop',
-            },
-          ],
-        });
-
-        controller.close();
+    const mockOpenAIStream = createReadableStream([
+      {
+        id: '123',
+        model: 'deepl',
+        choices: [
+          {
+            index: 0,
+            delta: { role: 'assistant', content: 'Introduce yourself.' },
+            finish_reason: 'stop',
+          },
+        ],
       },
-    });
+    ]);
 
     const protocolStream = OpenAIStream(mockOpenAIStream);
 
-    const decoder = new TextDecoder();
-    const chunks = [];
-
-    // @ts-ignore
-    for await (const chunk of protocolStream) {
-      chunks.push(decoder.decode(chunk, { stream: true }));
-    }
+    const chunks = await readStreamChunk(protocolStream);
 
     expect(chunks).toEqual(
       ['id: 123', 'event: text', `data: "Introduce yourself."\n`].map((i) => `${i}\n`),
@@ -299,22 +251,11 @@ describe('OpenAIStream', () => {
       { id: 'img-1', choices: [{ index: 0, delta: {}, finish_reason: 'stop' }] },
     ];
 
-    const mockOpenAIStream = new ReadableStream({
-      start(controller) {
-        data.forEach((c) => controller.enqueue(c));
-        controller.close();
-      },
-    });
+    const mockOpenAIStream = createReadableStream(data);
 
     const protocolStream = OpenAIStream(mockOpenAIStream);
 
-    const decoder = new TextDecoder();
-    const chunks: string[] = [];
-
-    // @ts-ignore
-    for await (const chunk of protocolStream) {
-      chunks.push(decoder.decode(chunk, { stream: true }));
-    }
+    const chunks = await readStreamChunk(protocolStream);
 
     expect(chunks).toEqual(
       [
@@ -333,27 +274,23 @@ describe('OpenAIStream', () => {
 
   it('should handle content with tool_calls but is an empty object', async () => {
     // data: {"id":"chatcmpl-A7pokGUqSov0JuMkhiHhWU9GRtAgJ", "object":"chat.completion.chunk", "created":1726430846, "model":"gpt-4o-2024-05-13", "choices":[{"index":0, "delta":{"content":" today", "role":"", "tool_calls":[]}, "finish_reason":"", "logprobs":""}], "prompt_annotations":[{"prompt_index":0, "content_filter_results":null}]}
-    const mockOpenAIStream = new ReadableStream({
-      start(controller) {
-        controller.enqueue({
-          choices: [
-            {
-              index: 0,
-              delta: {
-                content: 'Some contents',
-                role: '',
-                tool_calls: [],
-              },
-              finish_reason: '',
-              logprobs: '',
+    const mockOpenAIStream = createReadableStream([
+      {
+        choices: [
+          {
+            index: 0,
+            delta: {
+              content: 'Some contents',
+              role: '',
+              tool_calls: [],
             },
-          ],
-          id: '456',
-        });
-
-        controller.close();
+            finish_reason: '',
+            logprobs: '',
+          },
+        ],
+        id: '456',
       },
-    });
+    ]);
 
     const onToolCallMock = vi.fn();
 
@@ -363,13 +300,7 @@ describe('OpenAIStream', () => {
       },
     });
 
-    const decoder = new TextDecoder();
-    const chunks = [];
-
-    // @ts-ignore
-    for await (const chunk of protocolStream) {
-      chunks.push(decoder.decode(chunk, { stream: true }));
-    }
+    const chunks = await readStreamChunk(protocolStream);
 
     expect(chunks).toEqual(
       ['id: 456', 'event: text', `data: "Some contents"\n`].map((i) => `${i}\n`),
@@ -377,31 +308,21 @@ describe('OpenAIStream', () => {
   });
 
   it('should handle other delta data', async () => {
-    const mockOpenAIStream = new ReadableStream({
-      start(controller) {
-        controller.enqueue({
-          choices: [
-            {
-              delta: { custom_field: 'custom_value' },
-              index: 0,
-            },
-          ],
-          id: '4',
-        });
-
-        controller.close();
+    const mockOpenAIStream = createReadableStream([
+      {
+        choices: [
+          {
+            delta: { custom_field: 'custom_value' },
+            index: 0,
+          },
+        ],
+        id: '4',
       },
-    });
+    ]);
 
     const protocolStream = OpenAIStream(mockOpenAIStream);
 
-    const decoder = new TextDecoder();
-    const chunks = [];
-
-    // @ts-ignore
-    for await (const chunk of protocolStream) {
-      chunks.push(decoder.decode(chunk, { stream: true }));
-    }
+    const chunks = await readStreamChunk(protocolStream);
 
     expect(chunks).toEqual([
       'id: 4\n',
@@ -411,31 +332,21 @@ describe('OpenAIStream', () => {
   });
 
   it('should emit usage when choices are missing but usage exists', async () => {
-    const mockOpenAIStream = new ReadableStream({
-      start(controller) {
-        controller.enqueue({
-          id: '99',
-          usage: {
-            prompt_tokens: 1,
-            completion_tokens: 2,
-            total_tokens: 3,
-            prompt_cache_miss_tokens: 1,
-          },
-        });
-
-        controller.close();
+    const mockOpenAIStream = createReadableStream([
+      {
+        id: '99',
+        usage: {
+          prompt_tokens: 1,
+          completion_tokens: 2,
+          total_tokens: 3,
+          prompt_cache_miss_tokens: 1,
+        },
       },
-    });
+    ]);
 
     const protocolStream = OpenAIStream(mockOpenAIStream);
 
-    const decoder = new TextDecoder();
-    const chunks: string[] = [];
-
-    // @ts-ignore
-    for await (const chunk of protocolStream) {
-      chunks.push(decoder.decode(chunk, { stream: true }));
-    }
+    const chunks = await readStreamChunk(protocolStream);
 
     expect(chunks).toEqual([
       'id: 99\n',
@@ -445,34 +356,25 @@ describe('OpenAIStream', () => {
   });
 
   it('should handle error when there is not correct error', async () => {
-    const mockOpenAIStream = new ReadableStream({
-      start(controller) {
-        controller.enqueue({
-          choices: [
-            {
-              delta: { content: 'Hello' },
-              index: 0,
-            },
-          ],
-          id: '1',
-        });
-        controller.enqueue({
-          id: '1',
-        });
-
-        controller.close();
+    const mockOpenAIStream = createReadableStream([
+      {
+        choices: [
+          {
+            delta: { content: 'Hello' },
+            index: 0,
+          },
+        ],
+        id: '1',
       },
-    });
+
+      {
+        id: '1',
+      },
+    ]);
 
     const protocolStream = OpenAIStream(mockOpenAIStream);
 
-    const decoder = new TextDecoder();
-    const chunks = [];
-
-    // @ts-ignore
-    for await (const chunk of protocolStream) {
-      chunks.push(decoder.decode(chunk, { stream: true }));
-    }
+    const chunks = await readStreamChunk(protocolStream);
 
     expect(chunks).toEqual(
       ['id: 1', 'event: text', `data: "Hello"\n`, 'id: 1', 'event: data', `data: {"id":"1"}\n`].map(
@@ -482,26 +384,17 @@ describe('OpenAIStream', () => {
   });
 
   it('should handle FIRST_CHUNK_ERROR_KEY', async () => {
-    const mockOpenAIStream = new ReadableStream({
-      start(controller) {
-        controller.enqueue({
-          [FIRST_CHUNK_ERROR_KEY]: true,
-          errorType: AgentRuntimeErrorType.ProviderBizError,
-          message: 'Test error',
-        });
-        controller.close();
+    const mockOpenAIStream = createReadableStream([
+      {
+        [FIRST_CHUNK_ERROR_KEY]: true,
+        errorType: AgentRuntimeErrorType.ProviderBizError,
+        message: 'Test error',
       },
-    });
+    ]);
 
     const protocolStream = OpenAIStream(mockOpenAIStream);
 
-    const decoder = new TextDecoder();
-    const chunks = [];
-
-    // @ts-ignore
-    for await (const chunk of protocolStream) {
-      chunks.push(decoder.decode(chunk, { stream: true }));
-    }
+    const chunks = await readStreamChunk(protocolStream);
 
     expect(chunks).toEqual([
       'id: first_chunk_error\n',
@@ -511,15 +404,9 @@ describe('OpenAIStream', () => {
   });
 
   it('should use bizErrorTypeTransformer', async () => {
-    const mockOpenAIStream = new ReadableStream({
-      start(controller) {
-        controller.enqueue(
-          '%FIRST_CHUNK_ERROR%: ' +
-            JSON.stringify({ message: 'Custom error', name: 'CustomError' }),
-        );
-        controller.close();
-      },
-    });
+    const mockOpenAIStream = createReadableStream([
+      '%FIRST_CHUNK_ERROR%: ' + JSON.stringify({ message: 'Custom error', name: 'CustomError' }),
+    ]);
 
     const protocolStream = OpenAIStream(mockOpenAIStream, {
       bizErrorTypeTransformer: () => AgentRuntimeErrorType.PermissionDenied,
@@ -528,13 +415,7 @@ describe('OpenAIStream', () => {
       },
     });
 
-    const decoder = new TextDecoder();
-    const chunks = [];
-
-    // @ts-ignore
-    for await (const chunk of protocolStream) {
-      chunks.push(decoder.decode(chunk, { stream: true }));
-    }
+    const chunks = await readStreamChunk(protocolStream);
 
     expect(chunks).toEqual([
       'id: first_chunk_error\n',
@@ -596,25 +477,11 @@ describe('OpenAIStream', () => {
         },
       ];
 
-      const mockOpenAIStream = new ReadableStream({
-        start(controller) {
-          data.forEach((chunk) => {
-            controller.enqueue(chunk);
-          });
-
-          controller.close();
-        },
-      });
+      const mockOpenAIStream = createReadableStream(data);
 
       const protocolStream = OpenAIStream(mockOpenAIStream);
 
-      const decoder = new TextDecoder();
-      const chunks = [];
-
-      // @ts-ignore
-      for await (const chunk of protocolStream) {
-        chunks.push(decoder.decode(chunk, { stream: true }));
-      }
+      const chunks = await readStreamChunk(protocolStream);
 
       expect(chunks).toEqual(
         [
@@ -695,25 +562,11 @@ describe('OpenAIStream', () => {
         },
       ];
 
-      const mockOpenAIStream = new ReadableStream({
-        start(controller) {
-          data.forEach((chunk) => {
-            controller.enqueue(chunk);
-          });
-
-          controller.close();
-        },
-      });
+      const mockOpenAIStream = createReadableStream(data);
 
       const protocolStream = OpenAIStream(mockOpenAIStream);
 
-      const decoder = new TextDecoder();
-      const chunks = [];
-
-      // @ts-ignore
-      for await (const chunk of protocolStream) {
-        chunks.push(decoder.decode(chunk, { stream: true }));
-      }
+      const chunks = await readStreamChunk(protocolStream);
 
       expect(chunks).toEqual(
         [
@@ -739,35 +592,31 @@ describe('OpenAIStream', () => {
 
   describe('Tools Calling', () => {
     it('should handle OpenAI official tool calls', async () => {
-      const mockOpenAIStream = new ReadableStream({
-        start(controller) {
-          controller.enqueue({
-            choices: [
-              {
-                delta: {
-                  tool_calls: [
-                    {
-                      function: { name: 'tool1', arguments: '{}' },
-                      id: 'call_1',
-                      index: 0,
-                      type: 'function',
-                    },
-                    {
-                      function: { name: 'tool2', arguments: '{}' },
-                      id: 'call_2',
-                      index: 1,
-                    },
-                  ],
-                },
-                index: 0,
+      const mockOpenAIStream = createReadableStream([
+        {
+          choices: [
+            {
+              delta: {
+                tool_calls: [
+                  {
+                    function: { name: 'tool1', arguments: '{}' },
+                    id: 'call_1',
+                    index: 0,
+                    type: 'function',
+                  },
+                  {
+                    function: { name: 'tool2', arguments: '{}' },
+                    id: 'call_2',
+                    index: 1,
+                  },
+                ],
               },
-            ],
-            id: '2',
-          });
-
-          controller.close();
+              index: 0,
+            },
+          ],
+          id: '2',
         },
-      });
+      ]);
 
       const onToolCallMock = vi.fn();
 
@@ -777,13 +626,7 @@ describe('OpenAIStream', () => {
         },
       });
 
-      const decoder = new TextDecoder();
-      const chunks = [];
-
-      // @ts-ignore
-      for await (const chunk of protocolStream) {
-        chunks.push(decoder.decode(chunk, { stream: true }));
-      }
+      const chunks = await readStreamChunk(protocolStream);
 
       expect(chunks).toEqual([
         'id: 2\n',
@@ -795,42 +638,32 @@ describe('OpenAIStream', () => {
     });
 
     it('should handle tool calls without index and type like mistral and minimax', async () => {
-      const mockOpenAIStream = new ReadableStream({
-        start(controller) {
-          controller.enqueue({
-            choices: [
-              {
-                delta: {
-                  tool_calls: [
-                    {
-                      function: { name: 'tool1', arguments: '{}' },
-                      id: 'call_1',
-                    },
-                    {
-                      function: { name: 'tool2', arguments: '{}' },
-                      id: 'call_2',
-                    },
-                  ],
-                },
-                index: 0,
+      const mockOpenAIStream = createReadableStream([
+        {
+          choices: [
+            {
+              delta: {
+                tool_calls: [
+                  {
+                    function: { name: 'tool1', arguments: '{}' },
+                    id: 'call_1',
+                  },
+                  {
+                    function: { name: 'tool2', arguments: '{}' },
+                    id: 'call_2',
+                  },
+                ],
               },
-            ],
-            id: '5',
-          });
-
-          controller.close();
+              index: 0,
+            },
+          ],
+          id: '5',
         },
-      });
+      ]);
 
       const protocolStream = OpenAIStream(mockOpenAIStream);
 
-      const decoder = new TextDecoder();
-      const chunks = [];
-
-      // @ts-ignore
-      for await (const chunk of protocolStream) {
-        chunks.push(decoder.decode(chunk, { stream: true }));
-      }
+      const chunks = await readStreamChunk(protocolStream);
 
       expect(chunks).toEqual([
         'id: 5\n',
@@ -892,15 +725,7 @@ describe('OpenAIStream', () => {
         },
       ];
 
-      const mockOpenAIStream = new ReadableStream({
-        start(controller) {
-          streamData.forEach((data) => {
-            controller.enqueue(data);
-          });
-
-          controller.close();
-        },
-      });
+      const mockOpenAIStream = createReadableStream(streamData);
 
       const onToolCallMock = vi.fn();
 
@@ -910,13 +735,7 @@ describe('OpenAIStream', () => {
         },
       });
 
-      const decoder = new TextDecoder();
-      const chunks = [];
-
-      // @ts-ignore
-      for await (const chunk of protocolStream) {
-        chunks.push(decoder.decode(chunk, { stream: true }));
-      }
+      const chunks = await readStreamChunk(protocolStream);
 
       expect(chunks).toEqual(
         [
@@ -942,58 +761,48 @@ describe('OpenAIStream', () => {
     });
 
     it('should handle tool calls without id using streamContext', async () => {
-      const mockOpenAIStream = new ReadableStream({
-        start(controller) {
-          // First chunk with id to initialize streamContext.tool
-          controller.enqueue({
-            choices: [
-              {
-                delta: {
-                  tool_calls: [
-                    {
-                      function: { name: 'tool1', arguments: '{' },
-                      id: 'call_123',
-                      index: 0,
-                      type: 'function',
-                    },
-                  ],
-                },
-                index: 0,
+      const mockOpenAIStream = createReadableStream([
+        // First chunk with id to initialize streamContext.tool
+        {
+          choices: [
+            {
+              delta: {
+                tool_calls: [
+                  {
+                    function: { name: 'tool1', arguments: '{' },
+                    id: 'call_123',
+                    index: 0,
+                    type: 'function',
+                  },
+                ],
               },
-            ],
-            id: 'stream-context-1',
-          });
-          // Second chunk without id, should use streamContext.tool.id
-          controller.enqueue({
-            choices: [
-              {
-                delta: {
-                  tool_calls: [
-                    {
-                      function: { arguments: '}' },
-                      index: 0,
-                    },
-                  ],
-                },
-                index: 0,
-              },
-            ],
-            id: 'stream-context-1',
-          });
-
-          controller.close();
+              index: 0,
+            },
+          ],
+          id: 'stream-context-1',
         },
-      });
+        // Second chunk without id, should use streamContext.tool.id
+        {
+          choices: [
+            {
+              delta: {
+                tool_calls: [
+                  {
+                    function: { arguments: '}' },
+                    index: 0,
+                  },
+                ],
+              },
+              index: 0,
+            },
+          ],
+          id: 'stream-context-1',
+        },
+      ]);
 
       const protocolStream = OpenAIStream(mockOpenAIStream);
 
-      const decoder = new TextDecoder();
-      const chunks = [];
-
-      // @ts-ignore
-      for await (const chunk of protocolStream) {
-        chunks.push(decoder.decode(chunk, { stream: true }));
-      }
+      const chunks = await readStreamChunk(protocolStream);
 
       expect(chunks).toEqual([
         'id: stream-context-1\n',
@@ -1111,15 +920,7 @@ describe('OpenAIStream', () => {
         },
       ];
 
-      const mockOpenAIStream = new ReadableStream({
-        start(controller) {
-          streamData.forEach((data) => {
-            controller.enqueue(data);
-          });
-
-          controller.close();
-        },
-      });
+      const mockOpenAIStream = createReadableStream(streamData);
 
       const onToolCallMock = vi.fn();
 
@@ -1129,13 +930,7 @@ describe('OpenAIStream', () => {
         },
       });
 
-      const decoder = new TextDecoder();
-      const chunks = [];
-
-      // @ts-ignore
-      for await (const chunk of protocolStream) {
-        chunks.push(decoder.decode(chunk, { stream: true }));
-      }
+      const chunks = await readStreamChunk(protocolStream);
 
       expect(chunks).toEqual(
         [
@@ -1168,32 +963,28 @@ describe('OpenAIStream', () => {
       // OpenRouter returns thoughtSignature in tool_calls for Gemini models
       // This is required for preserving reasoning blocks across turns
       // Ref: https://openrouter.ai/docs/guides/best-practices/reasoning-tokens
-      const mockOpenAIStream = new ReadableStream({
-        start(controller) {
-          controller.enqueue({
-            choices: [
-              {
-                delta: {
-                  tool_calls: [
-                    {
-                      function: { name: 'github__get_me', arguments: '{}' },
-                      id: 'call_123',
-                      index: 0,
-                      type: 'function',
-                      // OpenRouter adds thoughtSignature for Gemini 3 models
-                      thoughtSignature: 'ErEDCq4DAdHtim...',
-                    },
-                  ],
-                },
-                index: 0,
+      const mockOpenAIStream = createReadableStream([
+        {
+          choices: [
+            {
+              delta: {
+                tool_calls: [
+                  {
+                    function: { name: 'github__get_me', arguments: '{}' },
+                    id: 'call_123',
+                    index: 0,
+                    type: 'function',
+                    // OpenRouter adds thoughtSignature for Gemini 3 models
+                    thoughtSignature: 'ErEDCq4DAdHtim...',
+                  },
+                ],
               },
-            ],
-            id: 'or-123',
-          });
-
-          controller.close();
+              index: 0,
+            },
+          ],
+          id: 'or-123',
         },
-      });
+      ]);
 
       const onToolCallMock = vi.fn();
       const thoughtSignatureScope: SignatureScope = { fingerprint: 'a'.repeat(32) };
@@ -1210,13 +1001,7 @@ describe('OpenAIStream', () => {
         payload: { thoughtSignatureScope },
       });
 
-      const decoder = new TextDecoder();
-      const chunks = [];
-
-      // @ts-ignore
-      for await (const chunk of protocolStream) {
-        chunks.push(decoder.decode(chunk, { stream: true }));
-      }
+      const chunks = await readStreamChunk(protocolStream);
 
       expect(chunks).toEqual([
         'id: or-123\n',
@@ -1249,31 +1034,27 @@ describe('OpenAIStream', () => {
 
     it('should NOT include thoughtSignature in output when not present in tool call', async () => {
       // Standard tool calls without thoughtSignature should not include the field
-      const mockOpenAIStream = new ReadableStream({
-        start(controller) {
-          controller.enqueue({
-            choices: [
-              {
-                delta: {
-                  tool_calls: [
-                    {
-                      function: { name: 'search', arguments: '{"query":"test"}' },
-                      id: 'call_456',
-                      index: 0,
-                      type: 'function',
-                      // No thoughtSignature field
-                    },
-                  ],
-                },
-                index: 0,
+      const mockOpenAIStream = createReadableStream([
+        {
+          choices: [
+            {
+              delta: {
+                tool_calls: [
+                  {
+                    function: { name: 'search', arguments: '{"query":"test"}' },
+                    id: 'call_456',
+                    index: 0,
+                    type: 'function',
+                    // No thoughtSignature field
+                  },
+                ],
               },
-            ],
-            id: 'standard-123',
-          });
-
-          controller.close();
+              index: 0,
+            },
+          ],
+          id: 'standard-123',
         },
-      });
+      ]);
 
       const onToolCallMock = vi.fn();
 
@@ -1283,13 +1064,7 @@ describe('OpenAIStream', () => {
         },
       });
 
-      const decoder = new TextDecoder();
-      const chunks = [];
-
-      // @ts-ignore
-      for await (const chunk of protocolStream) {
-        chunks.push(decoder.decode(chunk, { stream: true }));
-      }
+      const chunks = await readStreamChunk(protocolStream);
 
       expect(chunks).toEqual([
         'id: standard-123\n',
@@ -1444,23 +1219,10 @@ describe('OpenAIStream', () => {
         },
       ];
 
-      const mockOpenAIStream = new ReadableStream({
-        start(controller) {
-          streamData.forEach((data) => {
-            controller.enqueue(data);
-          });
-          controller.close();
-        },
-      });
+      const mockOpenAIStream = createReadableStream(streamData);
 
       const protocolStream = OpenAIStream(mockOpenAIStream);
-      const decoder = new TextDecoder();
-      const chunks: string[] = [];
-
-      // @ts-ignore
-      for await (const chunk of protocolStream) {
-        chunks.push(decoder.decode(chunk, { stream: true }));
-      }
+      const chunks = await readStreamChunk(protocolStream);
 
       // Verify the exact output - each tool call chunk should have the correct id based on index
       expect(chunks).toEqual(
@@ -1529,21 +1291,10 @@ describe('OpenAIStream', () => {
         },
       ];
 
-      const mockOpenAIStream = new ReadableStream({
-        start(controller) {
-          data.forEach((chunk) => controller.enqueue(chunk));
-          controller.close();
-        },
-      });
+      const mockOpenAIStream = createReadableStream(data);
 
       const protocolStream = OpenAIStream(mockOpenAIStream);
-      const decoder = new TextDecoder();
-      const chunks: string[] = [];
-
-      // @ts-ignore
-      for await (const chunk of protocolStream) {
-        chunks.push(decoder.decode(chunk, { stream: true }));
-      }
+      const chunks = await readStreamChunk(protocolStream);
 
       expect(chunks).toEqual(
         [
@@ -1675,23 +1426,10 @@ describe('OpenAIStream', () => {
         },
       ];
 
-      const mockOpenAIStream = new ReadableStream({
-        start(controller) {
-          data.forEach((chunk) => {
-            controller.enqueue(chunk);
-          });
-          controller.close();
-        },
-      });
+      const mockOpenAIStream = createReadableStream(data);
 
       const protocolStream = OpenAIStream(mockOpenAIStream);
-      const decoder = new TextDecoder();
-      const chunks = [];
-
-      // @ts-ignore
-      for await (const chunk of protocolStream) {
-        chunks.push(decoder.decode(chunk, { stream: true }));
-      }
+      const chunks = await readStreamChunk(protocolStream);
 
       expect(chunks).toEqual(
         [
@@ -1766,21 +1504,10 @@ describe('OpenAIStream', () => {
         },
       ];
 
-      const mockOpenAIStream = new ReadableStream({
-        start(controller) {
-          data.forEach((chunk) => controller.enqueue(chunk));
-          controller.close();
-        },
-      });
+      const mockOpenAIStream = createReadableStream(data);
 
       const protocolStream = OpenAIStream(mockOpenAIStream);
-      const decoder = new TextDecoder();
-      const chunks = [];
-
-      // @ts-ignore
-      for await (const chunk of protocolStream) {
-        chunks.push(decoder.decode(chunk, { stream: true }));
-      }
+      const chunks = await readStreamChunk(protocolStream);
 
       expect(chunks).toEqual(
         [
@@ -1948,25 +1675,11 @@ describe('OpenAIStream', () => {
         },
       ];
 
-      const mockOpenAIStream = new ReadableStream({
-        start(controller) {
-          data.forEach((chunk) => {
-            controller.enqueue(chunk);
-          });
-
-          controller.close();
-        },
-      });
+      const mockOpenAIStream = createReadableStream(data);
 
       const protocolStream = OpenAIStream(mockOpenAIStream);
 
-      const decoder = new TextDecoder();
-      const chunks = [];
-
-      // @ts-ignore
-      for await (const chunk of protocolStream) {
-        chunks.push(decoder.decode(chunk, { stream: true }));
-      }
+      const chunks = await readStreamChunk(protocolStream);
 
       expect(chunks).toEqual(
         [
@@ -2164,25 +1877,11 @@ describe('OpenAIStream', () => {
         },
       ];
 
-      const mockOpenAIStream = new ReadableStream({
-        start(controller) {
-          data.forEach((chunk) => {
-            controller.enqueue(chunk);
-          });
-
-          controller.close();
-        },
-      });
+      const mockOpenAIStream = createReadableStream(data);
 
       const protocolStream = OpenAIStream(mockOpenAIStream);
 
-      const decoder = new TextDecoder();
-      const chunks = [];
-
-      // @ts-ignore
-      for await (const chunk of protocolStream) {
-        chunks.push(decoder.decode(chunk, { stream: true }));
-      }
+      const chunks = await readStreamChunk(protocolStream);
 
       expect(chunks).toEqual(
         [
@@ -2251,25 +1950,11 @@ describe('OpenAIStream', () => {
         },
       ];
 
-      const mockOpenAIStream = new ReadableStream({
-        start(controller) {
-          data.forEach((chunk) => {
-            controller.enqueue(chunk);
-          });
-
-          controller.close();
-        },
-      });
+      const mockOpenAIStream = createReadableStream(data);
 
       const protocolStream = OpenAIStream(mockOpenAIStream);
 
-      const decoder = new TextDecoder();
-      const chunks = [];
-
-      // @ts-ignore
-      for await (const chunk of protocolStream) {
-        chunks.push(decoder.decode(chunk, { stream: true }));
-      }
+      const chunks = await readStreamChunk(protocolStream);
 
       expect(chunks).toEqual(
         [
@@ -2436,25 +2121,11 @@ describe('OpenAIStream', () => {
         },
       ];
 
-      const mockOpenAIStream = new ReadableStream({
-        start(controller) {
-          data.forEach((chunk) => {
-            controller.enqueue(chunk);
-          });
-
-          controller.close();
-        },
-      });
+      const mockOpenAIStream = createReadableStream(data);
 
       const protocolStream = OpenAIStream(mockOpenAIStream);
 
-      const decoder = new TextDecoder();
-      const chunks = [];
-
-      // @ts-ignore
-      for await (const chunk of protocolStream) {
-        chunks.push(decoder.decode(chunk, { stream: true }));
-      }
+      const chunks = await readStreamChunk(protocolStream);
 
       expect(chunks).toEqual(
         [
@@ -2637,25 +2308,11 @@ describe('OpenAIStream', () => {
         },
       ];
 
-      const mockOpenAIStream = new ReadableStream({
-        start(controller) {
-          data.forEach((chunk) => {
-            controller.enqueue(chunk);
-          });
-
-          controller.close();
-        },
-      });
+      const mockOpenAIStream = createReadableStream(data);
 
       const protocolStream = OpenAIStream(mockOpenAIStream);
 
-      const decoder = new TextDecoder();
-      const chunks = [];
-
-      // @ts-ignore
-      for await (const chunk of protocolStream) {
-        chunks.push(decoder.decode(chunk, { stream: true }));
-      }
+      const chunks = await readStreamChunk(protocolStream);
 
       expect(chunks).toEqual(
         [
@@ -2838,25 +2495,11 @@ describe('OpenAIStream', () => {
         },
       ];
 
-      const mockOpenAIStream = new ReadableStream({
-        start(controller) {
-          data.forEach((chunk) => {
-            controller.enqueue(chunk);
-          });
-
-          controller.close();
-        },
-      });
+      const mockOpenAIStream = createReadableStream(data);
 
       const protocolStream = OpenAIStream(mockOpenAIStream);
 
-      const decoder = new TextDecoder();
-      const chunks = [];
-
-      // @ts-ignore
-      for await (const chunk of protocolStream) {
-        chunks.push(decoder.decode(chunk, { stream: true }));
-      }
+      const chunks = await readStreamChunk(protocolStream);
 
       expect(chunks).toEqual(
         [
@@ -2999,25 +2642,11 @@ describe('OpenAIStream', () => {
         },
       ];
 
-      const mockOpenAIStream = new ReadableStream({
-        start(controller) {
-          data.forEach((chunk) => {
-            controller.enqueue(chunk);
-          });
-
-          controller.close();
-        },
-      });
+      const mockOpenAIStream = createReadableStream(data);
 
       const protocolStream = OpenAIStream(mockOpenAIStream);
 
-      const decoder = new TextDecoder();
-      const chunks = [];
-
-      // @ts-ignore
-      for await (const chunk of protocolStream) {
-        chunks.push(decoder.decode(chunk, { stream: true }));
-      }
+      const chunks = await readStreamChunk(protocolStream);
 
       expect(chunks).toEqual(
         [
@@ -3168,25 +2797,11 @@ describe('OpenAIStream', () => {
         },
       ];
 
-      const mockOpenAIStream = new ReadableStream({
-        start(controller) {
-          data.forEach((chunk) => {
-            controller.enqueue(chunk);
-          });
-
-          controller.close();
-        },
-      });
+      const mockOpenAIStream = createReadableStream(data);
 
       const protocolStream = OpenAIStream(mockOpenAIStream);
 
-      const decoder = new TextDecoder();
-      const chunks = [];
-
-      // @ts-ignore
-      for await (const chunk of protocolStream) {
-        chunks.push(decoder.decode(chunk, { stream: true }));
-      }
+      const chunks = await readStreamChunk(protocolStream);
 
       expect(chunks).toEqual(
         [
@@ -3226,39 +2841,29 @@ describe('OpenAIStream', () => {
     const base64 =
       'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
 
-    const mockOpenAIStream = new ReadableStream({
-      start(controller) {
-        controller.enqueue({
-          choices: [
-            {
-              delta: {
-                images: [
-                  {
-                    type: 'image_url',
-                    image_url: { url: base64 },
-                    index: 0,
-                  },
-                ],
-              },
-              index: 0,
+    const mockOpenAIStream = createReadableStream([
+      {
+        choices: [
+          {
+            delta: {
+              images: [
+                {
+                  type: 'image_url',
+                  image_url: { url: base64 },
+                  index: 0,
+                },
+              ],
             },
-          ],
-          id: '6',
-        });
-
-        controller.close();
+            index: 0,
+          },
+        ],
+        id: '6',
       },
-    });
+    ]);
 
     const protocolStream = OpenAIStream(mockOpenAIStream);
 
-    const decoder = new TextDecoder();
-    const chunks = [];
-
-    // @ts-ignore
-    for await (const chunk of protocolStream) {
-      chunks.push(decoder.decode(chunk, { stream: true }));
-    }
+    const chunks = await readStreamChunk(protocolStream);
 
     expect(chunks).toEqual(['id: 6\n', 'event: base64_image\n', `data: "${base64}"\n\n`]);
   });
@@ -3266,32 +2871,22 @@ describe('OpenAIStream', () => {
   it('should handle finish_reason with markdown image in content', async () => {
     const base64 =
       'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAABAAAAAQACAIAAADwf7zUAAAgAElEQVR4nFy9a5okSY4jCFBU3SOr53HdvcZeYW/YVZnhZqpCYn+AVIuZ7PqqKyPczfQhQgIgSOH/+//9PxRVu7QzX5nvqveVP5mv+3rf+XPt985b2NIVgVgK1jr0da7zrAiegWPhPBABLi1GILhCEMkFnCuOFRFxHN/r/CbOym/om/h1X+d1H/v667rP9328r9g3VNblpoXsAwsnTtnWp0kQ40siih6NixuHlN9Rt7ehv1mbW2dkg1ef03J9zQQpQg5yc/XllveG4wa4arKtSr0NwSCdGEJVNeKlkDZMov695YaQ5NVK3fmjn4OrE9N/U04C0EqT/2HCBxrf9pJe1L2nPBjqhKEq1TEi1Q/OXiIq+IrqX2fUb+qF+2kF10k/4ScwIXidU6/T6vGkA/bSR/fZ7Ok8yOd0s+27CnP8PH3cijINdbAcAAAAASUVORK5CYII=';
-    const mockOpenAIStream = new ReadableStream({
-      start(controller) {
-        controller.enqueue({
-          id: 'chatcmpl-test',
-          choices: [
-            {
-              index: 0,
-              delta: { content: `这有一张图片： ![image](${base64})` },
-              finish_reason: 'stop',
-            },
-          ],
-        });
-
-        controller.close();
+    const mockOpenAIStream = createReadableStream([
+      {
+        id: 'chatcmpl-test',
+        choices: [
+          {
+            index: 0,
+            delta: { content: `这有一张图片： ![image](${base64})` },
+            finish_reason: 'stop',
+          },
+        ],
       },
-    });
+    ]);
 
     const protocolStream = OpenAIStream(mockOpenAIStream);
 
-    const decoder = new TextDecoder();
-    const chunks = [];
-
-    // @ts-ignore
-    for await (const chunk of protocolStream) {
-      chunks.push(decoder.decode(chunk, { stream: true }));
-    }
+    const chunks = await readStreamChunk(protocolStream);
 
     expect(chunks).toEqual([
       'id: chatcmpl-test\n',
@@ -3306,32 +2901,22 @@ describe('OpenAIStream', () => {
   it('should handle finish_reason with multiple markdown images in content', async () => {
     const base64_1 = 'data:image/png;base64,first';
     const base64_2 = 'data:image/jpeg;base64,second';
-    const mockOpenAIStream = new ReadableStream({
-      start(controller) {
-        controller.enqueue({
-          id: 'chatcmpl-multi',
-          choices: [
-            {
-              index: 0,
-              delta: { content: `![img1](${base64_1}) and ![img2](${base64_2})` },
-              finish_reason: 'stop',
-            },
-          ],
-        });
-
-        controller.close();
+    const mockOpenAIStream = createReadableStream([
+      {
+        id: 'chatcmpl-multi',
+        choices: [
+          {
+            index: 0,
+            delta: { content: `![img1](${base64_1}) and ![img2](${base64_2})` },
+            finish_reason: 'stop',
+          },
+        ],
       },
-    });
+    ]);
 
     const protocolStream = OpenAIStream(mockOpenAIStream);
 
-    const decoder = new TextDecoder();
-    const chunks = [];
-
-    // @ts-ignore
-    for await (const chunk of protocolStream) {
-      chunks.push(decoder.decode(chunk, { stream: true }));
-    }
+    const chunks = await readStreamChunk(protocolStream);
 
     expect(chunks).toEqual([
       'id: chatcmpl-multi\n',
@@ -3348,136 +2933,96 @@ describe('OpenAIStream', () => {
 
   it('should handle delta.images with nested image_url.image_url.url structure', async () => {
     const base64 = 'data:image/png;base64,nestedurl';
-    const mockOpenAIStream = new ReadableStream({
-      start(controller) {
-        controller.enqueue({
-          choices: [
-            {
-              delta: {
-                images: [
-                  {
-                    image_url: { image_url: { url: base64 } },
-                  },
-                ],
-              },
-              index: 0,
+    const mockOpenAIStream = createReadableStream([
+      {
+        choices: [
+          {
+            delta: {
+              images: [
+                {
+                  image_url: { image_url: { url: base64 } },
+                },
+              ],
             },
-          ],
-          id: 'nested-url',
-        });
-
-        controller.close();
+            index: 0,
+          },
+        ],
+        id: 'nested-url',
       },
-    });
+    ]);
 
     const protocolStream = OpenAIStream(mockOpenAIStream);
 
-    const decoder = new TextDecoder();
-    const chunks = [];
-
-    // @ts-ignore
-    for await (const chunk of protocolStream) {
-      chunks.push(decoder.decode(chunk, { stream: true }));
-    }
+    const chunks = await readStreamChunk(protocolStream);
 
     expect(chunks).toEqual(['id: nested-url\n', 'event: base64_image\n', `data: "${base64}"\n\n`]);
   });
 
   it('should handle delta.images with direct url property', async () => {
     const base64 = 'data:image/png;base64,directurl';
-    const mockOpenAIStream = new ReadableStream({
-      start(controller) {
-        controller.enqueue({
-          choices: [
-            {
-              delta: {
-                images: [{ url: base64 }],
-              },
-              index: 0,
+    const mockOpenAIStream = createReadableStream([
+      {
+        choices: [
+          {
+            delta: {
+              images: [{ url: base64 }],
             },
-          ],
-          id: 'direct-url',
-        });
-
-        controller.close();
+            index: 0,
+          },
+        ],
+        id: 'direct-url',
       },
-    });
+    ]);
 
     const protocolStream = OpenAIStream(mockOpenAIStream);
 
-    const decoder = new TextDecoder();
-    const chunks = [];
-
-    // @ts-ignore
-    for await (const chunk of protocolStream) {
-      chunks.push(decoder.decode(chunk, { stream: true }));
-    }
+    const chunks = await readStreamChunk(protocolStream);
 
     expect(chunks).toEqual(['id: direct-url\n', 'event: base64_image\n', `data: "${base64}"\n\n`]);
   });
 
   it('should handle delta.images with string format', async () => {
     const base64 = 'data:image/png;base64,stringformat';
-    const mockOpenAIStream = new ReadableStream({
-      start(controller) {
-        controller.enqueue({
-          choices: [
-            {
-              delta: {
-                images: [base64],
-              },
-              index: 0,
+    const mockOpenAIStream = createReadableStream([
+      {
+        choices: [
+          {
+            delta: {
+              images: [base64],
             },
-          ],
-          id: 'string-img',
-        });
-
-        controller.close();
+            index: 0,
+          },
+        ],
+        id: 'string-img',
       },
-    });
+    ]);
 
     const protocolStream = OpenAIStream(mockOpenAIStream);
 
-    const decoder = new TextDecoder();
-    const chunks = [];
-
-    // @ts-ignore
-    for await (const chunk of protocolStream) {
-      chunks.push(decoder.decode(chunk, { stream: true }));
-    }
+    const chunks = await readStreamChunk(protocolStream);
 
     expect(chunks).toEqual(['id: string-img\n', 'event: base64_image\n', `data: "${base64}"\n\n`]);
   });
 
   it('should filter out images without valid url', async () => {
     const base64 = 'data:image/png;base64,validurl';
-    const mockOpenAIStream = new ReadableStream({
-      start(controller) {
-        controller.enqueue({
-          choices: [
-            {
-              delta: {
-                images: [{ invalid: 'data' }, { url: base64 }, null],
-              },
-              index: 0,
+    const mockOpenAIStream = createReadableStream([
+      {
+        choices: [
+          {
+            delta: {
+              images: [{ invalid: 'data' }, { url: base64 }, null],
             },
-          ],
-          id: 'filtered-images',
-        });
-
-        controller.close();
+            index: 0,
+          },
+        ],
+        id: 'filtered-images',
       },
-    });
+    ]);
 
     const protocolStream = OpenAIStream(mockOpenAIStream);
 
-    const decoder = new TextDecoder();
-    const chunks = [];
-
-    // @ts-ignore
-    for await (const chunk of protocolStream) {
-      chunks.push(decoder.decode(chunk, { stream: true }));
-    }
+    const chunks = await readStreamChunk(protocolStream);
 
     expect(chunks).toEqual([
       'id: filtered-images\n',
@@ -3487,75 +3032,55 @@ describe('OpenAIStream', () => {
   });
 
   it('should ignore content when role is tool in finish_reason', async () => {
-    const mockOpenAIStream = new ReadableStream({
-      start(controller) {
-        controller.enqueue({
-          id: 'minimax-tool-role',
-          choices: [
-            {
-              index: 0,
-              delta: { content: 'should be ignored', role: 'tool' },
-              finish_reason: 'stop',
-            },
-          ],
-        });
-
-        controller.close();
+    const mockOpenAIStream = createReadableStream([
+      {
+        id: 'minimax-tool-role',
+        choices: [
+          {
+            index: 0,
+            delta: { content: 'should be ignored', role: 'tool' },
+            finish_reason: 'stop',
+          },
+        ],
       },
-    });
+    ]);
 
     const protocolStream = OpenAIStream(mockOpenAIStream);
 
-    const decoder = new TextDecoder();
-    const chunks = [];
-
-    // @ts-ignore
-    for await (const chunk of protocolStream) {
-      chunks.push(decoder.decode(chunk, { stream: true }));
-    }
+    const chunks = await readStreamChunk(protocolStream);
 
     expect(chunks).toEqual(['id: minimax-tool-role\n', 'event: text\n', `data: null\n\n`]);
   });
 
   it('should handle OpenAI Search Preview annotations in finish_reason', async () => {
-    const mockOpenAIStream = new ReadableStream({
-      start(controller) {
-        controller.enqueue({
-          id: 'openai-search',
-          choices: [
-            {
-              index: 0,
-              delta: {
-                annotations: [
-                  {
-                    type: 'url_citation',
-                    url_citation: {
-                      url: 'https://example.com',
-                      title: 'Example',
-                      start_index: 0,
-                      end_index: 10,
-                    },
+    const mockOpenAIStream = createReadableStream([
+      {
+        id: 'openai-search',
+        choices: [
+          {
+            index: 0,
+            delta: {
+              annotations: [
+                {
+                  type: 'url_citation',
+                  url_citation: {
+                    url: 'https://example.com',
+                    title: 'Example',
+                    start_index: 0,
+                    end_index: 10,
                   },
-                ],
-              },
-              finish_reason: 'stop',
+                },
+              ],
             },
-          ],
-        });
-
-        controller.close();
+            finish_reason: 'stop',
+          },
+        ],
       },
-    });
+    ]);
 
     const protocolStream = OpenAIStream(mockOpenAIStream);
 
-    const decoder = new TextDecoder();
-    const chunks = [];
-
-    // @ts-ignore
-    for await (const chunk of protocolStream) {
-      chunks.push(decoder.decode(chunk, { stream: true }));
-    }
+    const chunks = await readStreamChunk(protocolStream);
 
     expect(chunks).toEqual([
       'id: openai-search\n',
@@ -3568,40 +3093,30 @@ describe('OpenAIStream', () => {
     // OpenRouter's built-in web search may emit empty citation objects like `{}`,
     // which previously crashed rendering (`new URL(undefined)`) and message persistence.
     // See https://github.com/lobehub/lobehub/issues/15043
-    const mockOpenAIStream = new ReadableStream({
-      start(controller) {
-        controller.enqueue({
-          id: 'openrouter-search',
-          choices: [
-            {
-              index: 0,
-              delta: {
-                annotations: [
-                  { type: 'url_citation', url_citation: {} },
-                  {
-                    type: 'url_citation',
-                    url_citation: { url: 'https://example.com', title: 'Example' },
-                  },
-                ],
-              },
-              finish_reason: 'stop',
+    const mockOpenAIStream = createReadableStream([
+      {
+        id: 'openrouter-search',
+        choices: [
+          {
+            index: 0,
+            delta: {
+              annotations: [
+                { type: 'url_citation', url_citation: {} },
+                {
+                  type: 'url_citation',
+                  url_citation: { url: 'https://example.com', title: 'Example' },
+                },
+              ],
             },
-          ],
-        });
-
-        controller.close();
+            finish_reason: 'stop',
+          },
+        ],
       },
-    });
+    ]);
 
     const protocolStream = OpenAIStream(mockOpenAIStream);
 
-    const decoder = new TextDecoder();
-    const chunks = [];
-
-    // @ts-ignore
-    for await (const chunk of protocolStream) {
-      chunks.push(decoder.decode(chunk, { stream: true }));
-    }
+    const chunks = await readStreamChunk(protocolStream);
 
     expect(chunks).toEqual([
       'id: openrouter-search\n',
@@ -3611,82 +3126,70 @@ describe('OpenAIStream', () => {
   });
 
   it('should handle XiaomiMiMo annotations', async () => {
-    const mockOpenAIStream = new ReadableStream({
-      start(controller) {
-        controller.enqueue({
-          id: 'mimo-v2-omni',
-          choices: [
-            {
-              index: 0,
-              delta: {
-                role: 'assistant',
-                content: '',
-                annotations: [
-                  {
-                    type: 'url_citation',
-                    url: 'https://biz.finance.sina.com.cn/usstock/usstock_news.php?symbol=ZNH',
-                    title: '南方航空相关新闻_美股 - 新浪财经',
-                    site_name: 'biz.finance.sina.com.cn',
-                    summary:
-                      '(ZNH) · 格隆汇 APP | 2026 年 03 月 19 日 11:09 港股异动丨航空股跌势不止成本压力巨大国内航司集体上调燃油附加费',
-                  },
-                ],
-              },
+    const mockOpenAIStream = createReadableStream([
+      {
+        id: 'mimo-v2-omni',
+        choices: [
+          {
+            index: 0,
+            delta: {
+              role: 'assistant',
+              content: '',
+              annotations: [
+                {
+                  type: 'url_citation',
+                  url: 'https://biz.finance.sina.com.cn/usstock/usstock_news.php?symbol=ZNH',
+                  title: '南方航空相关新闻_美股 - 新浪财经',
+                  site_name: 'biz.finance.sina.com.cn',
+                  summary:
+                    '(ZNH) · 格隆汇 APP | 2026 年 03 月 19 日 11:09 港股异动丨航空股跌势不止成本压力巨大国内航司集体上调燃油附加费',
+                },
+              ],
             },
-          ],
-        });
-
-        // Second chunk with finish_reason
-        controller.enqueue({
-          id: 'mimo-v2-omni',
-          choices: [
-            {
-              index: 0,
-              delta: {
-                role: 'assistant',
-                content: 'Some response text with annotations, should has no annotations',
-                annotations: [
-                  {
-                    type: 'url_citation',
-                    url: 'https://biz.finance.sina.com.cn/usstock/usstock_news.php?symbol=ZNH',
-                    title: '南方航空相关新闻_美股 - 新浪财经',
-                    site_name: 'biz.finance.sina.com.cn',
-                    summary:
-                      '(ZNH) · 格隆汇 APP | 2026 年 03 月 19 日 11:09 港股异动丨航空股跌势不止成本压力巨大国内航司集体上调燃油附加费',
-                  },
-                ],
-              },
-            },
-          ],
-        });
-
-        // Third chunk with finish_reason
-        controller.enqueue({
-          id: 'mimo-v2-omni',
-          choices: [
-            {
-              index: 0,
-              delta: {
-                content: 'Some response text',
-              },
-              finish_reason: 'stop',
-            },
-          ],
-        });
-
-        controller.close();
+          },
+        ],
       },
-    });
+      // Second chunk with finish_reason
+      {
+        id: 'mimo-v2-omni',
+        choices: [
+          {
+            index: 0,
+            delta: {
+              role: 'assistant',
+              content: 'Some response text with annotations, should has no annotations',
+              annotations: [
+                {
+                  type: 'url_citation',
+                  url: 'https://biz.finance.sina.com.cn/usstock/usstock_news.php?symbol=ZNH',
+                  title: '南方航空相关新闻_美股 - 新浪财经',
+                  site_name: 'biz.finance.sina.com.cn',
+                  summary:
+                    '(ZNH) · 格隆汇 APP | 2026 年 03 月 19 日 11:09 港股异动丨航空股跌势不止成本压力巨大国内航司集体上调燃油附加费',
+                },
+              ],
+            },
+          },
+        ],
+      },
+      // Third chunk with finish_reason
+      {
+        id: 'mimo-v2-omni',
+        choices: [
+          {
+            index: 0,
+            delta: {
+              content: 'Some response text',
+            },
+            finish_reason: 'stop',
+          },
+        ],
+      },
+    ]);
 
     const protocolStream = OpenAIStream(mockOpenAIStream);
 
-    const decoder = new TextDecoder();
-    const chunks = [];
-
-    // @ts-ignore
-    for await (const chunk of protocolStream) {
-      chunks.push(decoder.decode(chunk, { stream: true }));
-    }
+    const chunks = await readStreamChunk(protocolStream);
 
     // Should emit grounding event from first chunk, then text from second chunk
     expect(chunks).toEqual([
@@ -3703,47 +3206,37 @@ describe('OpenAIStream', () => {
   });
 
   it('should handle MiniMax messages with annotations in finish_reason', async () => {
-    const mockOpenAIStream = new ReadableStream({
-      start(controller) {
-        controller.enqueue({
-          id: 'minimax-messages',
-          choices: [
-            {
-              index: 0,
-              messages: [
-                { content: '', role: 'user' },
-                { content: '', role: 'assistant' },
-                { content: '', role: 'tool' },
-                {
-                  content: '',
-                  role: 'assistant',
-                  annotations: [
-                    {
-                      text: '【5†source】',
-                      url: 'https://example.com',
-                      quote: 'Example quote',
-                    },
-                  ],
-                },
-              ],
-              finish_reason: 'tool_calls',
-            },
-          ],
-        });
-
-        controller.close();
+    const mockOpenAIStream = createReadableStream([
+      {
+        id: 'minimax-messages',
+        choices: [
+          {
+            index: 0,
+            messages: [
+              { content: '', role: 'user' },
+              { content: '', role: 'assistant' },
+              { content: '', role: 'tool' },
+              {
+                content: '',
+                role: 'assistant',
+                annotations: [
+                  {
+                    text: '【5†source】',
+                    url: 'https://example.com',
+                    quote: 'Example quote',
+                  },
+                ],
+              },
+            ],
+            finish_reason: 'tool_calls',
+          },
+        ],
       },
-    });
+    ]);
 
     const protocolStream = OpenAIStream(mockOpenAIStream);
 
-    const decoder = new TextDecoder();
-    const chunks = [];
-
-    // @ts-ignore
-    for await (const chunk of protocolStream) {
-      chunks.push(decoder.decode(chunk, { stream: true }));
-    }
+    const chunks = await readStreamChunk(protocolStream);
 
     expect(chunks).toEqual([
       'id: minimax-messages\n',
@@ -3753,33 +3246,23 @@ describe('OpenAIStream', () => {
   });
 
   it('should handle xAI citations in finish_reason', async () => {
-    const mockOpenAIStream = new ReadableStream({
-      start(controller) {
-        controller.enqueue({
-          id: 'xai-citations',
-          choices: [
-            {
-              index: 0,
-              delta: { role: 'assistant' },
-              finish_reason: 'stop',
-            },
-          ],
-          citations: ['https://example1.com', 'https://example2.com'],
-        });
-
-        controller.close();
+    const mockOpenAIStream = createReadableStream([
+      {
+        id: 'xai-citations',
+        choices: [
+          {
+            index: 0,
+            delta: { role: 'assistant' },
+            finish_reason: 'stop',
+          },
+        ],
+        citations: ['https://example1.com', 'https://example2.com'],
       },
-    });
+    ]);
 
     const protocolStream = OpenAIStream(mockOpenAIStream);
 
-    const decoder = new TextDecoder();
-    const chunks = [];
-
-    // @ts-ignore
-    for await (const chunk of protocolStream) {
-      chunks.push(decoder.decode(chunk, { stream: true }));
-    }
+    const chunks = await readStreamChunk(protocolStream);
 
     expect(chunks).toEqual([
       'id: xai-citations\n',
@@ -3789,37 +3272,27 @@ describe('OpenAIStream', () => {
   });
 
   it('should handle finish_reason with usage', async () => {
-    const mockOpenAIStream = new ReadableStream({
-      start(controller) {
-        controller.enqueue({
-          id: 'finish-usage',
-          choices: [
-            {
-              index: 0,
-              delta: {},
-              finish_reason: 'stop',
-            },
-          ],
-          usage: {
-            prompt_tokens: 10,
-            completion_tokens: 20,
-            total_tokens: 30,
+    const mockOpenAIStream = createReadableStream([
+      {
+        id: 'finish-usage',
+        choices: [
+          {
+            index: 0,
+            delta: {},
+            finish_reason: 'stop',
           },
-        });
-
-        controller.close();
+        ],
+        usage: {
+          prompt_tokens: 10,
+          completion_tokens: 20,
+          total_tokens: 30,
+        },
       },
-    });
+    ]);
 
     const protocolStream = OpenAIStream(mockOpenAIStream);
 
-    const decoder = new TextDecoder();
-    const chunks = [];
-
-    // @ts-ignore
-    for await (const chunk of protocolStream) {
-      chunks.push(decoder.decode(chunk, { stream: true }));
-    }
+    const chunks = await readStreamChunk(protocolStream);
 
     expect(chunks).toEqual([
       'id: finish-usage\n',
@@ -3829,37 +3302,27 @@ describe('OpenAIStream', () => {
   });
 
   it('should handle finish_reason with text and usage', async () => {
-    const mockOpenAIStream = new ReadableStream({
-      start(controller) {
-        controller.enqueue({
-          id: 'finish-text-usage',
-          choices: [
-            {
-              index: 0,
-              delta: { content: 'done' },
-              finish_reason: 'stop',
-            },
-          ],
-          usage: {
-            prompt_tokens: 10,
-            completion_tokens: 20,
-            total_tokens: 30,
+    const mockOpenAIStream = createReadableStream([
+      {
+        id: 'finish-text-usage',
+        choices: [
+          {
+            index: 0,
+            delta: { content: 'done' },
+            finish_reason: 'stop',
           },
-        });
-
-        controller.close();
+        ],
+        usage: {
+          prompt_tokens: 10,
+          completion_tokens: 20,
+          total_tokens: 30,
+        },
       },
-    });
+    ]);
 
     const protocolStream = OpenAIStream(mockOpenAIStream);
 
-    const decoder = new TextDecoder();
-    const chunks = [];
-
-    // @ts-ignore
-    for await (const chunk of protocolStream) {
-      chunks.push(decoder.decode(chunk, { stream: true }));
-    }
+    const chunks = await readStreamChunk(protocolStream);
 
     expect(chunks).toEqual([
       'id: finish-text-usage\n',
@@ -3872,46 +3335,36 @@ describe('OpenAIStream', () => {
   });
 
   it('should handle mistral AI Magistral thinking blocks in content array', async () => {
-    const mockOpenAIStream = new ReadableStream({
-      start(controller) {
-        controller.enqueue({
-          id: 'mistral-thinking',
-          choices: [
-            {
-              index: 0,
-              delta: {
-                content: [
-                  {
-                    type: 'thinking',
-                    thinking: [
-                      { type: 'text', text: 'First thought' },
-                      { type: 'text', text: 'Second thought' },
-                      { type: 'other', data: 'ignored' },
-                    ],
-                  },
-                  {
-                    type: 'thinking',
-                    thinking: [{ type: 'text', text: 'Third thought' }],
-                  },
-                ],
-              },
+    const mockOpenAIStream = createReadableStream([
+      {
+        id: 'mistral-thinking',
+        choices: [
+          {
+            index: 0,
+            delta: {
+              content: [
+                {
+                  type: 'thinking',
+                  thinking: [
+                    { type: 'text', text: 'First thought' },
+                    { type: 'text', text: 'Second thought' },
+                    { type: 'other', data: 'ignored' },
+                  ],
+                },
+                {
+                  type: 'thinking',
+                  thinking: [{ type: 'text', text: 'Third thought' }],
+                },
+              ],
             },
-          ],
-        });
-
-        controller.close();
+          },
+        ],
       },
-    });
+    ]);
 
     const protocolStream = OpenAIStream(mockOpenAIStream);
 
-    const decoder = new TextDecoder();
-    const chunks = [];
-
-    // @ts-ignore
-    for await (const chunk of protocolStream) {
-      chunks.push(decoder.decode(chunk, { stream: true }));
-    }
+    const chunks = await readStreamChunk(protocolStream);
 
     expect(chunks).toEqual([
       'id: mistral-thinking\n',
@@ -3921,62 +3374,42 @@ describe('OpenAIStream', () => {
   });
 
   it('should handle empty content and empty reasoning_content (still outputs reasoning)', async () => {
-    const mockOpenAIStream = new ReadableStream({
-      start(controller) {
-        controller.enqueue({
-          id: 'empty-both',
-          choices: [
-            {
-              index: 0,
-              delta: { content: '', reasoning_content: '' },
-            },
-          ],
-        });
-
-        controller.close();
+    const mockOpenAIStream = createReadableStream([
+      {
+        id: 'empty-both',
+        choices: [
+          {
+            index: 0,
+            delta: { content: '', reasoning_content: '' },
+          },
+        ],
       },
-    });
+    ]);
 
     const protocolStream = OpenAIStream(mockOpenAIStream);
 
-    const decoder = new TextDecoder();
-    const chunks = [];
-
-    // @ts-ignore
-    for await (const chunk of protocolStream) {
-      chunks.push(decoder.decode(chunk, { stream: true }));
-    }
+    const chunks = await readStreamChunk(protocolStream);
 
     // When both are empty strings, content becomes null but reasoning_content stays as empty string
     expect(chunks).toEqual(['id: empty-both\n', 'event: reasoning\n', `data: ""\n\n`]);
   });
 
   it('should handle empty content with non-empty reasoning_content', async () => {
-    const mockOpenAIStream = new ReadableStream({
-      start(controller) {
-        controller.enqueue({
-          id: 'empty-content-with-reasoning',
-          choices: [
-            {
-              index: 0,
-              delta: { content: '', reasoning_content: 'some thinking' },
-            },
-          ],
-        });
-
-        controller.close();
+    const mockOpenAIStream = createReadableStream([
+      {
+        id: 'empty-content-with-reasoning',
+        choices: [
+          {
+            index: 0,
+            delta: { content: '', reasoning_content: 'some thinking' },
+          },
+        ],
       },
-    });
+    ]);
 
     const protocolStream = OpenAIStream(mockOpenAIStream);
 
-    const decoder = new TextDecoder();
-    const chunks = [];
-
-    // @ts-ignore
-    for await (const chunk of protocolStream) {
-      chunks.push(decoder.decode(chunk, { stream: true }));
-    }
+    const chunks = await readStreamChunk(protocolStream);
 
     expect(chunks).toEqual([
       'id: empty-content-with-reasoning\n',
@@ -3986,36 +3419,26 @@ describe('OpenAIStream', () => {
   });
 
   it('should handle Gemini empty content with usage', async () => {
-    const mockOpenAIStream = new ReadableStream({
-      start(controller) {
-        controller.enqueue({
-          id: 'gemini-usage',
-          choices: [
-            {
-              index: 0,
-              delta: { content: '' },
-            },
-          ],
-          usage: {
-            prompt_tokens: 5,
-            completion_tokens: 10,
-            total_tokens: 15,
+    const mockOpenAIStream = createReadableStream([
+      {
+        id: 'gemini-usage',
+        choices: [
+          {
+            index: 0,
+            delta: { content: '' },
           },
-        });
-
-        controller.close();
+        ],
+        usage: {
+          prompt_tokens: 5,
+          completion_tokens: 10,
+          total_tokens: 15,
+        },
       },
-    });
+    ]);
 
     const protocolStream = OpenAIStream(mockOpenAIStream);
 
-    const decoder = new TextDecoder();
-    const chunks = [];
-
-    // @ts-ignore
-    for await (const chunk of protocolStream) {
-      chunks.push(decoder.decode(chunk, { stream: true }));
-    }
+    const chunks = await readStreamChunk(protocolStream);
 
     expect(chunks).toEqual([
       'id: gemini-usage\n',
@@ -4026,36 +3449,28 @@ describe('OpenAIStream', () => {
 
   describe('Grounding/Citations', () => {
     it('should handle Perplexity citations', async () => {
-      const mockOpenAIStream = new ReadableStream({
-        start(controller) {
-          controller.enqueue({
-            id: 'perplexity-1',
-            choices: [{ index: 0, delta: { content: 'Here is some info' } }],
-            citations: ['https://source1.com', 'https://source2.com'],
-          });
-          controller.enqueue({
-            id: 'perplexity-1',
-            choices: [{ index: 0, delta: { content: ' more content' } }],
-            citations: ['https://source1.com', 'https://source2.com'],
-          });
-          controller.enqueue({
-            id: 'perplexity-1',
-            choices: [{ index: 0, delta: {}, finish_reason: 'stop' }],
-          });
-
-          controller.close();
+      const mockOpenAIStream = createReadableStream([
+        {
+          id: 'perplexity-1',
+          choices: [{ index: 0, delta: { content: 'Here is some info' } }],
+          citations: ['https://source1.com', 'https://source2.com'],
         },
-      });
+
+        {
+          id: 'perplexity-1',
+          choices: [{ index: 0, delta: { content: ' more content' } }],
+          citations: ['https://source1.com', 'https://source2.com'],
+        },
+
+        {
+          id: 'perplexity-1',
+          choices: [{ index: 0, delta: {}, finish_reason: 'stop' }],
+        },
+      ]);
 
       const protocolStream = OpenAIStream(mockOpenAIStream);
 
-      const decoder = new TextDecoder();
-      const chunks = [];
-
-      // @ts-ignore
-      for await (const chunk of protocolStream) {
-        chunks.push(decoder.decode(chunk, { stream: true }));
-      }
+      const chunks = await readStreamChunk(protocolStream);
 
       expect(chunks).toEqual(
         [
@@ -4076,36 +3491,27 @@ describe('OpenAIStream', () => {
     });
 
     it('should handle Hunyuan search_info.search_results', async () => {
-      const mockOpenAIStream = new ReadableStream({
-        start(controller) {
-          controller.enqueue({
-            id: 'hunyuan-1',
-            choices: [{ index: 0, delta: { content: 'Result' } }],
-            search_info: {
-              search_results: [
-                { title: 'Title 1', url: 'https://result1.com' },
-                { title: 'Title 2', link: 'https://result2.com' },
-              ],
-            },
-          });
-          controller.enqueue({
-            id: 'hunyuan-1',
-            choices: [{ index: 0, delta: {}, finish_reason: 'stop' }],
-          });
-
-          controller.close();
+      const mockOpenAIStream = createReadableStream([
+        {
+          id: 'hunyuan-1',
+          choices: [{ index: 0, delta: { content: 'Result' } }],
+          search_info: {
+            search_results: [
+              { title: 'Title 1', url: 'https://result1.com' },
+              { title: 'Title 2', link: 'https://result2.com' },
+            ],
+          },
         },
-      });
+
+        {
+          id: 'hunyuan-1',
+          choices: [{ index: 0, delta: {}, finish_reason: 'stop' }],
+        },
+      ]);
 
       const protocolStream = OpenAIStream(mockOpenAIStream);
 
-      const decoder = new TextDecoder();
-      const chunks = [];
-
-      // @ts-ignore
-      for await (const chunk of protocolStream) {
-        chunks.push(decoder.decode(chunk, { stream: true }));
-      }
+      const chunks = await readStreamChunk(protocolStream);
 
       expect(chunks).toEqual(
         [
@@ -4123,31 +3529,22 @@ describe('OpenAIStream', () => {
     });
 
     it('should handle Wenxin search_results', async () => {
-      const mockOpenAIStream = new ReadableStream({
-        start(controller) {
-          controller.enqueue({
-            id: 'wenxin-1',
-            choices: [{ index: 0, delta: { content: 'Content' } }],
-            search_results: [{ title: 'Wenxin', url: 'https://wenxin.com' }],
-          });
-          controller.enqueue({
-            id: 'wenxin-1',
-            choices: [{ index: 0, delta: {}, finish_reason: 'stop' }],
-          });
-
-          controller.close();
+      const mockOpenAIStream = createReadableStream([
+        {
+          id: 'wenxin-1',
+          choices: [{ index: 0, delta: { content: 'Content' } }],
+          search_results: [{ title: 'Wenxin', url: 'https://wenxin.com' }],
         },
-      });
+
+        {
+          id: 'wenxin-1',
+          choices: [{ index: 0, delta: {}, finish_reason: 'stop' }],
+        },
+      ]);
 
       const protocolStream = OpenAIStream(mockOpenAIStream);
 
-      const decoder = new TextDecoder();
-      const chunks = [];
-
-      // @ts-ignore
-      for await (const chunk of protocolStream) {
-        chunks.push(decoder.decode(chunk, { stream: true }));
-      }
+      const chunks = await readStreamChunk(protocolStream);
 
       expect(chunks).toEqual(
         [
@@ -4165,35 +3562,26 @@ describe('OpenAIStream', () => {
     });
 
     it('should handle Zhipu web_search and filter empty links', async () => {
-      const mockOpenAIStream = new ReadableStream({
-        start(controller) {
-          controller.enqueue({
-            id: 'zhipu-1',
-            choices: [{ index: 0, delta: { content: 'Search result' } }],
-            web_search: [
-              { title: 'Valid', url: 'https://valid.com' },
-              { title: 'Empty link', link: '' },
-              { title: 'No link' },
-            ],
-          });
-          controller.enqueue({
-            id: 'zhipu-1',
-            choices: [{ index: 0, delta: {}, finish_reason: 'stop' }],
-          });
-
-          controller.close();
+      const mockOpenAIStream = createReadableStream([
+        {
+          id: 'zhipu-1',
+          choices: [{ index: 0, delta: { content: 'Search result' } }],
+          web_search: [
+            { title: 'Valid', url: 'https://valid.com' },
+            { title: 'Empty link', link: '' },
+            { title: 'No link' },
+          ],
         },
-      });
+
+        {
+          id: 'zhipu-1',
+          choices: [{ index: 0, delta: {}, finish_reason: 'stop' }],
+        },
+      ]);
 
       const protocolStream = OpenAIStream(mockOpenAIStream);
 
-      const decoder = new TextDecoder();
-      const chunks = [];
-
-      // @ts-ignore
-      for await (const chunk of protocolStream) {
-        chunks.push(decoder.decode(chunk, { stream: true }));
-      }
+      const chunks = await readStreamChunk(protocolStream);
 
       expect(chunks).toEqual(
         [
@@ -4213,35 +3601,25 @@ describe('OpenAIStream', () => {
 
   describe('Error handling', () => {
     it('should handle stream chunk error and return error chunk', async () => {
-      const mockOpenAIStream = new ReadableStream({
-        start(controller) {
-          // This will cause an error when trying to process
-          controller.enqueue({
-            id: 'error-chunk',
-            choices: [
-              {
-                index: 0,
-                delta: {
-                  // This will trigger the error in tool_calls processing
-                  tool_calls: [{ function: null }],
-                },
+      const mockOpenAIStream = createReadableStream([
+        // This will cause an error when trying to process
+        {
+          id: 'error-chunk',
+          choices: [
+            {
+              index: 0,
+              delta: {
+                // This will trigger the error in tool_calls processing
+                tool_calls: [{ function: null }],
               },
-            ],
-          });
-
-          controller.close();
+            },
+          ],
         },
-      });
+      ]);
 
       const protocolStream = OpenAIStream(mockOpenAIStream);
 
-      const decoder = new TextDecoder();
-      const chunks = [];
-
-      // @ts-ignore
-      for await (const chunk of protocolStream) {
-        chunks.push(decoder.decode(chunk, { stream: true }));
-      }
+      const chunks = await readStreamChunk(protocolStream);
 
       expect(chunks[0]).toBe('id: error-chunk\n');
       expect(chunks[1]).toBe('event: error\n');
@@ -4252,30 +3630,20 @@ describe('OpenAIStream', () => {
     });
 
     it('should handle MiniMax base_resp error with insufficient quota (1008)', async () => {
-      const mockOpenAIStream = new ReadableStream({
-        start(controller) {
-          controller.enqueue({
-            id: 'minimax-error-1008',
-            choices: null,
-            base_resp: {
-              status_code: 1008,
-              status_msg: 'insufficient balance',
-            },
-          });
-
-          controller.close();
+      const mockOpenAIStream = createReadableStream([
+        {
+          id: 'minimax-error-1008',
+          choices: null,
+          base_resp: {
+            status_code: 1008,
+            status_msg: 'insufficient balance',
+          },
         },
-      });
+      ]);
 
       const protocolStream = OpenAIStream(mockOpenAIStream);
 
-      const decoder = new TextDecoder();
-      const chunks = [];
-
-      // @ts-ignore
-      for await (const chunk of protocolStream) {
-        chunks.push(decoder.decode(chunk, { stream: true }));
-      }
+      const chunks = await readStreamChunk(protocolStream);
 
       expect(chunks[0]).toBe('id: minimax-error-1008\n');
       expect(chunks[1]).toBe('event: error\n');
@@ -4285,30 +3653,20 @@ describe('OpenAIStream', () => {
     });
 
     it('should handle MiniMax base_resp error with invalid API key (2049)', async () => {
-      const mockOpenAIStream = new ReadableStream({
-        start(controller) {
-          controller.enqueue({
-            id: 'minimax-error-2049',
-            choices: null,
-            base_resp: {
-              status_code: 2049,
-              status_msg: 'invalid API Key',
-            },
-          });
-
-          controller.close();
+      const mockOpenAIStream = createReadableStream([
+        {
+          id: 'minimax-error-2049',
+          choices: null,
+          base_resp: {
+            status_code: 2049,
+            status_msg: 'invalid API Key',
+          },
         },
-      });
+      ]);
 
       const protocolStream = OpenAIStream(mockOpenAIStream);
 
-      const decoder = new TextDecoder();
-      const chunks = [];
-
-      // @ts-ignore
-      for await (const chunk of protocolStream) {
-        chunks.push(decoder.decode(chunk, { stream: true }));
-      }
+      const chunks = await readStreamChunk(protocolStream);
 
       expect(chunks[0]).toBe('id: minimax-error-2049\n');
       expect(chunks[1]).toBe('event: error\n');
@@ -4317,30 +3675,20 @@ describe('OpenAIStream', () => {
     });
 
     it('should handle MiniMax base_resp error with rate limit (1002)', async () => {
-      const mockOpenAIStream = new ReadableStream({
-        start(controller) {
-          controller.enqueue({
-            id: 'minimax-error-1002',
-            choices: null,
-            base_resp: {
-              status_code: 1002,
-              status_msg: 'request frequency exceeds limit',
-            },
-          });
-
-          controller.close();
+      const mockOpenAIStream = createReadableStream([
+        {
+          id: 'minimax-error-1002',
+          choices: null,
+          base_resp: {
+            status_code: 1002,
+            status_msg: 'request frequency exceeds limit',
+          },
         },
-      });
+      ]);
 
       const protocolStream = OpenAIStream(mockOpenAIStream);
 
-      const decoder = new TextDecoder();
-      const chunks = [];
-
-      // @ts-ignore
-      for await (const chunk of protocolStream) {
-        chunks.push(decoder.decode(chunk, { stream: true }));
-      }
+      const chunks = await readStreamChunk(protocolStream);
 
       expect(chunks[0]).toBe('id: minimax-error-1002\n');
       expect(chunks[1]).toBe('event: error\n');
@@ -4349,30 +3697,20 @@ describe('OpenAIStream', () => {
     });
 
     it('should handle MiniMax base_resp error with context window exceeded (1039)', async () => {
-      const mockOpenAIStream = new ReadableStream({
-        start(controller) {
-          controller.enqueue({
-            id: 'minimax-error-1039',
-            choices: null,
-            base_resp: {
-              status_code: 1039,
-              status_msg: 'token limit exceeded',
-            },
-          });
-
-          controller.close();
+      const mockOpenAIStream = createReadableStream([
+        {
+          id: 'minimax-error-1039',
+          choices: null,
+          base_resp: {
+            status_code: 1039,
+            status_msg: 'token limit exceeded',
+          },
         },
-      });
+      ]);
 
       const protocolStream = OpenAIStream(mockOpenAIStream);
 
-      const decoder = new TextDecoder();
-      const chunks = [];
-
-      // @ts-ignore
-      for await (const chunk of protocolStream) {
-        chunks.push(decoder.decode(chunk, { stream: true }));
-      }
+      const chunks = await readStreamChunk(protocolStream);
 
       expect(chunks[0]).toBe('id: minimax-error-1039\n');
       expect(chunks[1]).toBe('event: error\n');
@@ -4381,30 +3719,20 @@ describe('OpenAIStream', () => {
     });
 
     it('should handle MiniMax base_resp error with fallback to ProviderBizError', async () => {
-      const mockOpenAIStream = new ReadableStream({
-        start(controller) {
-          controller.enqueue({
-            id: 'minimax-error-unknown',
-            choices: null,
-            base_resp: {
-              status_code: 9999,
-              status_msg: 'unknown error',
-            },
-          });
-
-          controller.close();
+      const mockOpenAIStream = createReadableStream([
+        {
+          id: 'minimax-error-unknown',
+          choices: null,
+          base_resp: {
+            status_code: 9999,
+            status_msg: 'unknown error',
+          },
         },
-      });
+      ]);
 
       const protocolStream = OpenAIStream(mockOpenAIStream);
 
-      const decoder = new TextDecoder();
-      const chunks = [];
-
-      // @ts-ignore
-      for await (const chunk of protocolStream) {
-        chunks.push(decoder.decode(chunk, { stream: true }));
-      }
+      const chunks = await readStreamChunk(protocolStream);
 
       expect(chunks[0]).toBe('id: minimax-error-unknown\n');
       expect(chunks[1]).toBe('event: error\n');
