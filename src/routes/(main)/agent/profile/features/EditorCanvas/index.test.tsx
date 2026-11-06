@@ -274,6 +274,37 @@ describe('Agent profile EditorCanvas', () => {
     expect(await screen.findByTestId('prompt-source-editor')).toHaveValue(persistedMarkdown);
   });
 
+  it('syncs source mode when persisted Markdown arrives after editor data', async () => {
+    const editorData = { root: { children: ['parsed source'] } };
+    const persistedMarkdown = '<details>\n\n  late source\n\n</details>';
+    agentStoreState.agentMap = {
+      'agent-a': {
+        editorData,
+        systemRole: undefined,
+      },
+    };
+    editorDocuments.markdown = '';
+
+    render(<EditorCanvas />);
+    act(() => editorProps.last?.onInit());
+    await waitFor(() => expect(editor.setDocument).toHaveBeenCalledWith('json', editorData));
+    fireEvent.click(screen.getByRole('button', { name: 'settingAgent.prompt.mode.source' }));
+    expect(await screen.findByTestId('prompt-source-editor')).toHaveValue('');
+    editor.setDocument.mockClear();
+
+    act(() => {
+      agentStoreState.agentMap = {
+        'agent-a': { editorData, systemRole: persistedMarkdown },
+      };
+      agentStoreMock.listeners.forEach((listener) => listener());
+    });
+
+    await waitFor(() =>
+      expect(screen.getByTestId('prompt-source-editor')).toHaveValue(persistedMarkdown),
+    );
+    expect(editor.setDocument).not.toHaveBeenCalled();
+  });
+
   it('ignores source change callbacks caused by a programmatic value sync', async () => {
     permissionState.allowed = true;
     const initialEditorData = { root: { children: ['initial'] } };

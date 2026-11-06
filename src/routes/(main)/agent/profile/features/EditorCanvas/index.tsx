@@ -350,6 +350,7 @@ const AgentEditorCanvas = memo<AgentEditorCanvasProps>(({ agentId }) => {
       if (editorData && editorData?.root !== undefined) {
         setProgrammaticDocument(editor, 'json', editorData, systemRole);
         lastSyncedEditorDataRef.current = structuredClone(editorData);
+        lastSyncedRoleRef.current = systemRole;
       } else if (systemRole) {
         setProgrammaticDocument(editor, 'markdown', systemRole, systemRole);
         // Record the displayed role so the external-update re-sync below doesn't
@@ -388,15 +389,26 @@ const AgentEditorCanvas = memo<AgentEditorCanvasProps>(({ agentId }) => {
 
     const hasEditorData = !!editorData && editorData?.root !== undefined;
     if (hasEditorData) {
-      lastSyncedRoleRef.current = undefined;
       // A fresh server response is authoritative while this agent has not been
       // edited locally. This replaces stale persisted/hydrated editor data, but
       // preserves the user's current draft once they have typed.
-      if (localEditRef.current || isEqual(lastSyncedEditorDataRef.current, editorData)) return;
+      if (localEditRef.current) return;
+
+      if (isEqual(lastSyncedEditorDataRef.current, editorData)) {
+        // The config store can hydrate editorData before systemRole. Keep the
+        // source pane synchronized when only the persisted Markdown arrives;
+        // rewriting the unchanged JSON document would disturb editor state.
+        if (systemRole == null || lastSyncedRoleRef.current === systemRole) return;
+        lastSyncedRoleRef.current = systemRole;
+        programmaticSourceChangeRef.current = systemRole;
+        setSourceMarkdown(systemRole);
+        return;
+      }
 
       try {
         setProgrammaticDocument(editor, 'json', editorData, systemRole);
         lastSyncedEditorDataRef.current = structuredClone(editorData);
+        lastSyncedRoleRef.current = systemRole;
       } catch (error) {
         console.error('[EditorCanvas] Failed to sync editor content:', error);
       }
