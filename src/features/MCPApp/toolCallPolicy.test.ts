@@ -29,6 +29,7 @@ vi.mock('@/store/tool', () => ({ getToolStoreState: () => toolStore }));
 
 vi.mock('@/store/tool/selectors', () => ({
   pluginSelectors: {
+    isInstalledPluginsServerConfirmed: () => true,
     getCustomPluginById: () => () => undefined,
     getInstalledPluginById: (id: string) => () => plugins.get(id),
   },
@@ -375,5 +376,17 @@ describe('getAppToolCallPolicy', () => {
     expect(await getAppToolCallPolicy('shell', 'run', { toolArgs: { command: 'ls' } })).toBe(
       'allow',
     );
+  });
+});
+
+describe('manual entrypoint policy', () => {
+  it('ignores visibility and treats the click as approval, while preserving disabled tools', async () => {
+    connectors.set('entry', {
+      ...connector('needs_approval'),
+      tools: [{ toolName: 'send', permission: 'needs_approval', metadata: { visibility: [] } }],
+    });
+    expect(await getAppToolCallPolicy('entry', 'send', { fromEntrypoint: true })).toBe('allow');
+    connectors.set('entry', connector('disabled'));
+    expect(await getAppToolCallPolicy('entry', 'send', { fromEntrypoint: true })).toBe('deny');
   });
 });

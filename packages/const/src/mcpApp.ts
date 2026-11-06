@@ -1,7 +1,9 @@
+import type { McpAppThreadEntry } from './mcpAppEntrypoints';
 import type { McpUiToolMeta } from './mcpUiMeta';
 import { resolveMcpUiToolMeta } from './mcpUiMeta';
 import { sha256Hex } from './sha256';
 
+export * from './mcpAppEntrypoints';
 export * from './mcpUiMeta';
 
 /**
@@ -30,9 +32,19 @@ export const isMcpToolVisibleTo = (
  */
 export const buildMcpToolMetadata = (
   visibility: readonly string[] | undefined,
-  ui?: Pick<McpUiToolMeta, 'entrypoints' | 'preferredModelDisplayMode'>,
+  ui?: Pick<McpUiToolMeta, 'entrypoints' | 'preferredModelDisplayMode' | 'visibility'> & {
+    threadEntry?: McpAppThreadEntry;
+  },
 ) => {
-  const metadata = { ...ui, ...(visibility && { visibility: [...visibility] }) };
+  const metadata = {
+    ...(ui?.entrypoints && { entrypoints: ui.entrypoints }),
+    ...(ui?.preferredModelDisplayMode && {
+      preferredModelDisplayMode: ui.preferredModelDisplayMode,
+    }),
+    ...(ui?.threadEntry && { threadEntry: ui.threadEntry }),
+    ...(ui?.visibility && { mcpAppVisibility: ui.visibility }),
+    ...(visibility && { visibility: [...visibility] }),
+  };
   return Object.keys(metadata).length ? metadata : null;
 };
 
@@ -44,8 +56,11 @@ export const buildMcpToolMetadata = (
 export const isSyncedMcpToolVisibleTo = (
   tool: { metadata?: Record<string, unknown> | null },
   audience: McpToolAudience,
+  enabled = false,
 ): boolean => {
-  const visibility = tool.metadata?.visibility;
+  const visibility = enabled
+    ? (tool.metadata?.mcpAppVisibility ?? tool.metadata?.visibility)
+    : tool.metadata?.visibility;
 
   return isMcpToolVisibleTo(
     Array.isArray(visibility)

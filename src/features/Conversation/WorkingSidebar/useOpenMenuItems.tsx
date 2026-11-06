@@ -1,13 +1,18 @@
 import { type DropdownItem, Icon } from '@lobehub/ui';
-import { CheckIcon, SquareTerminalIcon } from 'lucide-react';
+import { CheckIcon, PanelsTopLeftIcon, SquareTerminalIcon } from 'lucide-react';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { mcpEntryTabKey } from '@/features/MCPApp/entrypoints';
+import { useMcpAppEntrypoints } from '@/features/MCPApp/useMcpAppEntrypoints';
 
 import { BROWSER_TAB_KEY, type SidebarTabDescriptor } from './dynamicTabs';
 
 interface OpenMenuOptions {
+  agentId?: string;
   availableTabs: Map<string, SidebarTabDescriptor>;
   extraTabs: { key: string }[];
+  mcpAppsAvailable?: boolean;
   openBrowserTab: () => string | undefined;
   openedTabs: string[];
   openTab: (key: string) => void;
@@ -17,6 +22,8 @@ interface OpenMenuOptions {
 }
 export const useOpenMenuItems = ({
   availableTabs,
+  agentId,
+  mcpAppsAvailable,
   extraTabs,
   openBrowserTab,
   openTab,
@@ -25,7 +32,8 @@ export const useOpenMenuItems = ({
   terminalAvailable,
   toggleTerminalPanel,
 }: OpenMenuOptions) => {
-  const { t } = useTranslation(['chat', 'setting']);
+  const { t } = useTranslation(['chat', 'setting', 'plugin']);
+  const entries = useMcpAppEntrypoints(agentId);
   return useCallback((): DropdownItem[] => {
     const itemOf = (key: string): DropdownItem | undefined => {
       const tab = availableTabs.get(key);
@@ -94,12 +102,38 @@ export const useOpenMenuItems = ({
       'params',
     ]);
 
-    return [workspaceGroup, toolGroup, configurationGroup]
+    const appGroup: DropdownItem | undefined =
+      mcpAppsAvailable && entries.length
+        ? {
+            type: 'group',
+            key: 'mcp-apps',
+            label: groupLabel(t('mcpApp.entrypoints', { ns: 'plugin' })),
+            children: entries.map((entry) => {
+              const key = mcpEntryTabKey(entry.identifier, entry.toolName);
+              return {
+                key,
+                label: entry.title,
+                icon: entry.icon ? (
+                  <img alt={''} height={14} src={entry.icon} width={14} />
+                ) : (
+                  <Icon icon={PanelsTopLeftIcon} size={14} />
+                ),
+                onClick: () => {
+                  openTab(key);
+                  requestTabFocus(key);
+                },
+              };
+            }),
+          }
+        : undefined;
+    return [workspaceGroup, toolGroup, appGroup, configurationGroup]
       .filter((item): item is DropdownItem => Boolean(item))
       .flatMap((item, index, items) =>
         index < items.length - 1 ? [item, { type: 'divider' as const }] : [item],
       );
   }, [
+    entries,
+    mcpAppsAvailable,
     availableTabs,
     extraTabs,
     openBrowserTab,

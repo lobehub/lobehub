@@ -2,11 +2,15 @@ import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
 
 import {
+  buildMcpToolMetadata,
+  getMcpAppEntrypoints,
   getMcpServerFingerprint,
   getMcpToolVisibility,
+  isMcpThreadEntrypoint,
   isMcpToolVisibleTo,
   lacksUiResourceMeta,
   partitionMcpToolsForViews,
+  resolveMcpUiToolMeta,
   withListingUiMeta,
 } from '@lobechat/const/mcpApp';
 import {
@@ -148,6 +152,7 @@ export type ListToolsInput = McpSessionOptions &
 export interface ListedMcpTool {
   description?: string;
   inputSchema: McpTool['inputSchema'];
+  mcpAppMeta?: ReturnType<typeof buildMcpToolMetadata>;
   name: string;
   visibility?: string[];
 }
@@ -176,6 +181,7 @@ interface McpSessionOptions {
 interface McpCallOptions extends McpSessionOptions {
   /** An MCP App view's `tools/call`: only tools visible to the app run. */
   fromApp?: boolean;
+  fromEntrypoint?: boolean;
 }
 
 /**
@@ -204,6 +210,7 @@ const toMcpAppsManifestFields = (tools: McpTool[], enabled = false) => {
   const { appOnlyTools, modelOnlyToolNames } = partitionMcpToolsForViews(tools, enabled);
 
   return {
+    ...(enabled && { mcpAppEntrypoints: getMcpAppEntrypoints(tools, true) }),
     ...(appOnlyTools.length > 0 && { mcpAppOnlyApi: toPluginApi(appOnlyTools) }),
     ...(modelOnlyToolNames.length > 0 && { mcpModelOnlyTools: modelOnlyToolNames }),
   };
@@ -696,6 +703,13 @@ export default class McpCtr extends ControllerModule {
         inputSchema: tool.inputSchema,
         name: tool.name,
         visibility: getMcpToolVisibility(tool._meta),
+        ...(input.mcpApps && {
+          mcpAppMeta: buildMcpToolMetadata(resolveMcpUiToolMeta(tool._meta, false).visibility, {
+            ...resolveMcpUiToolMeta(tool._meta),
+            entrypoints: resolveMcpUiToolMeta(tool._meta).entrypoints ?? [],
+            threadEntry: getMcpAppEntrypoints([tool], true)[0],
+          }),
+        }),
       }));
 
     if (input.http) {
@@ -736,6 +750,7 @@ export default class McpCtr extends ControllerModule {
       return serializePayload(
         await this.runHttpMcpTool(input.http, input.toolName, input.args, {
           fromApp: input.fromApp,
+          fromEntrypoint: input.fromEntrypoint,
           mcpApps: input.mcpApps,
         }),
       );
@@ -870,7 +885,7 @@ export default class McpCtr extends ControllerModule {
       },
       input.toolName,
       input.args,
-      { fromApp: input.fromApp, mcpApps: input.mcpApps },
+      { fromApp: input.fromApp, fromEntrypoint: input.fromEntrypoint, mcpApps: input.mcpApps },
     );
   }
 
@@ -908,10 +923,10 @@ export default class McpCtr extends ControllerModule {
     params: MCPClientParams,
     toolName: string,
     rawArgs: unknown,
-    { fromApp = false, mcpApps = false }: McpCallOptions = {},
+    { fromApp = false, fromEntrypoint = false, mcpApps = false }: McpCallOptions = {},
   ): Promise<{ content: string; state: unknown; success: boolean }> {
     try {
-      const args = safeParseToRecord(rawArgs);
+      const args = fromEntrypoint ? {} : safeParseToRecord(rawArgs);
 
       // Reuse the pooled session (stateful stdio servers keep per-process
       // state such as a selected database). Retry once on a fresh session —
@@ -924,9 +939,24 @@ export default class McpCtr extends ControllerModule {
       const runOn = (client: MCPClient) =>
         this.withClientLease(client, async () => {
           try {
+            if (
+              fromEntrypoint &&
+              !(mcpApps && isMcpThreadEntrypoint(await client.getToolUiMeta(toolName)))
+            ) {
+              const message = 'This tool does not declare an enabled thread entrypoint.';
+              return {
+                content: message,
+                state: { content: [{ text: message, type: 'text' }], isError: true },
+                success: false,
+              };
+            }
             // A view may only call tools whose visibility includes the app,
             // and only while MCP Apps are on
-            if (fromApp && !(mcpApps && (await this.isToolCallableByApp(client, toolName)))) {
+            if (
+              !fromEntrypoint &&
+              fromApp &&
+              !(mcpApps && (await this.isToolCallableByApp(client, toolName)))
+            ) {
               const message = `The tool "${toolName}" can't be called from an interactive view.`;
               return {
                 content: message,
@@ -937,7 +967,12 @@ export default class McpCtr extends ControllerModule {
             }
             // A tool the server keeps from the model is its views' alone, even
             // when the model names it (e.g. from an earlier turn)
-            if (!fromApp && mcpApps && (await this.isToolHiddenFromModel(client, toolName))) {
+            if (
+              !fromEntrypoint &&
+              !fromApp &&
+              mcpApps &&
+              (await this.isToolHiddenFromModel(client, toolName))
+            ) {
               const message = `The tool "${toolName}" can only be called from its interactive view.`;
               return {
                 content: message,
@@ -956,10 +991,15 @@ export default class McpCtr extends ControllerModule {
             // A view gets the tool's own MCP result: its media stays base64
             // `data`, not the uploaded keys the chat stores and renders
             const processed =
-              raw.isError || fromApp ? raw.content : await this.processContentBlocks(raw.content);
-            const content = fromApp
-              ? processed.flatMap((block) => (block.type === 'text' ? [block.text] : [])).join('\n')
-              : await toMarkdown(processed, (key) => this.fileService.getFileHTTPURL(key));
+              raw.isError || fromApp || fromEntrypoint
+                ? raw.content
+                : await this.processContentBlocks(raw.content);
+            const content =
+              fromApp || fromEntrypoint
+                ? processed
+                    .flatMap((block) => (block.type === 'text' ? [block.text] : []))
+                    .join('\n')
+                : await toMarkdown(processed, (key) => this.fileService.getFileHTTPURL(key));
             const state = {
               ...raw,
               content: processed,

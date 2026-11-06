@@ -1,6 +1,7 @@
 import { buildConnectorManifest } from '@lobechat/mecha';
 import { type ToolManifest } from '@lobechat/types';
 
+import { getServerConfigStoreState, serverConfigSelectors } from '@/store/serverConfig';
 import type { ConnectorWithTools } from '@/store/tool/slices/connector/types';
 
 /**
@@ -13,12 +14,16 @@ import type { ConnectorWithTools } from '@/store/tool/slices/connector/types';
 export const buildClientConnectorManifests = (connectors: ConnectorWithTools[]): ToolManifest[] =>
   connectors
     .map((connector) =>
-      buildConnectorManifest({
-        identifier: connector.identifier,
-        isEnabled: connector.isEnabled,
-        name: connector.name,
-        tools: connector.tools ?? [],
-      }),
+      buildConnectorManifest(
+        {
+          identifier: connector.identifier,
+          isEnabled: connector.isEnabled,
+          name: connector.name,
+          tools: connector.tools ?? [],
+        },
+        !!getServerConfigStoreState() &&
+          serverConfigSelectors.enableMcpApps(getServerConfigStoreState()!),
+      ),
     )
     .filter((manifest): manifest is NonNullable<typeof manifest> => !!manifest)
     .map((manifest) => manifest as ToolManifest);

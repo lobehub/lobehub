@@ -29,6 +29,13 @@ import {
 // The `im_layout` trial reads the server-config store; these tests cover the default layout.
 vi.mock('@/features/NavRail/useImLayout', () => ({ useImLayout: () => false }));
 
+// App discovery is covered independently; this suite exercises sidebar layout with its flag off.
+vi.mock('@/features/MCPApp/useMcpAppEntrypoints', () => ({ useMcpAppEntrypoints: () => [] }));
+vi.mock('./../McpEntryTabLabel', () => ({
+  McpEntryTabLabel: () => null,
+  McpEntryTabIcon: () => null,
+}));
+
 // Loaded after the mock harness so module mocks are registered first.
 let AgentWorkingSidebar: ComponentType<{ availableWidth?: number }>;
 

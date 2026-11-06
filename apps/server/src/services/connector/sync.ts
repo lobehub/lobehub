@@ -1,4 +1,8 @@
-import { buildMcpToolMetadata, resolveMcpUiToolMeta } from '@lobechat/const/mcpApp';
+import {
+  buildMcpToolMetadata,
+  getMcpAppEntrypoints,
+  resolveMcpUiToolMeta,
+} from '@lobechat/const/mcpApp';
 
 import type { ConnectorModel, DecryptedConnector } from '@/database/models/connector';
 import type { ConnectorToolModel } from '@/database/models/connectorTool';
@@ -135,8 +139,14 @@ export const syncConnectorToolsById = async (
     // Kept even for view-only tools: a view's call must find the tool synced,
     // while the manifest build leaves it out of the model's tool list.
     metadata: buildMcpToolMetadata(
-      resolveMcpUiToolMeta(t._meta, mcpApps).visibility,
-      mcpApps ? resolveMcpUiToolMeta(t._meta) : undefined,
+      resolveMcpUiToolMeta(t._meta, false).visibility,
+      mcpApps
+        ? {
+            ...resolveMcpUiToolMeta(t._meta),
+            entrypoints: resolveMcpUiToolMeta(t._meta).entrypoints ?? [],
+            threadEntry: getMcpAppEntrypoints([t], true)[0],
+          }
+        : undefined,
     ),
     toolName: t.name,
   }));

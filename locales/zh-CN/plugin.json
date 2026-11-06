@@ -885,6 +885,7 @@
   "mcpApp.context.label": "{{title}} · NOW",
   "mcpApp.context.remove": "移除 App 上下文",
   "mcpApp.entrypoint.error": "无法打开应用，请重试。",
+  "mcpApp.entrypoint.loading": "正在打开应用…",
   "mcpApp.entrypoint.retry": "重试",
   "mcpApp.entrypoints": "应用",
   "mcpApp.message.confirm.cancel": "取消",

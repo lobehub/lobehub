@@ -799,7 +799,14 @@ export class MCPClient {
         )
         .map((tool) => tool.name),
     );
-    return (tools || []) as McpTool[];
+    return (
+      this.mcpApps
+        ? (tools || []).map((tool) => ({
+            ...tool,
+            icons: tool.icons ?? this.mcp.getServerVersion()?.icons,
+          }))
+        : tools || []
+    ) as McpTool[];
   }
 
   /**

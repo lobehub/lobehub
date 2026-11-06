@@ -1,4 +1,4 @@
-import { isSyncedMcpToolVisibleTo } from '@lobechat/const/mcpApp';
+import { isSyncedMcpToolVisibleTo, type McpAppThreadEntry } from '@lobechat/const/mcpApp';
 import type { LobeToolManifest } from '@lobechat/context-engine';
 import type { BuiltinToolResolveContext, LobeBuiltinTool } from '@lobechat/types';
 import debug from 'debug';
@@ -73,11 +73,22 @@ export function patchManifestWithPermissions<M extends { api: readonly { name: s
  * connector must not replace a same-named plugin while contributing nothing
  * to call.
  */
-export const buildConnectorManifest = (connector: ConnectorFacts): LobeToolManifest | undefined => {
+export const buildConnectorManifest = (
+  connector: ConnectorFacts,
+  mcpApps = false,
+): LobeToolManifest | undefined => {
   if (!connector.isEnabled) return undefined;
 
-  const modelTools = connector.tools.filter((tool) => isSyncedMcpToolVisibleTo(tool, 'model'));
-  if (modelTools.length === 0) return undefined;
+  const modelTools = connector.tools.filter((tool) =>
+    isSyncedMcpToolVisibleTo(tool, 'model', mcpApps),
+  );
+  const entries = mcpApps
+    ? connector.tools.flatMap((tool) => {
+        const entry = tool.metadata?.threadEntry as McpAppThreadEntry | undefined;
+        return entry && tool.permission !== 'disabled' ? [entry] : [];
+      })
+    : [];
+  if (modelTools.length === 0 && !entries.length) return undefined;
 
   const api = modelTools.map((tool) => {
     const parameters = (tool.inputSchema ?? { properties: {}, type: 'object' }) as Record<
@@ -103,6 +114,7 @@ export const buildConnectorManifest = (connector: ConnectorFacts): LobeToolManif
   return {
     api,
     identifier: connector.identifier,
+    ...(mcpApps && { mcpAppEntrypoints: entries }),
     meta: {
       avatar: 'MCP_AVATAR',
       description: `${connector.name} connector with ${api.length} tools`,

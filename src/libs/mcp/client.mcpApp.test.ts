@@ -14,6 +14,7 @@ vi.mock('@modelcontextprotocol/client', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   Client: class {
     getProtocolEra = () => 'legacy';
+    getServerVersion = () => ({ icons: [{ src: 'https://example.com/server.png' }] });
     listTools = listTools;
     setNotificationHandler = (method: string, handler: () => void) =>
       notificationHandlers.set(method, handler);

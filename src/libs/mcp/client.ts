@@ -429,7 +429,14 @@ export class MCPClient {
           .map((tool) => tool.name),
       );
       log('Listed %d MCP tool(s)', tools.length);
-      return tools as McpTool[];
+      return (
+        this.mcpApps
+          ? tools.map((tool) => ({
+              ...tool,
+              icons: tool.icons ?? this.mcp.getServerVersion()?.icons,
+            }))
+          : tools
+      ) as McpTool[];
     } catch (e) {
       console.error('Failed to list MCP tools:', getMCPErrorLogMetadata(e));
 

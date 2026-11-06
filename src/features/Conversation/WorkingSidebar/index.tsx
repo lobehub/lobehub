@@ -69,6 +69,7 @@ import { deviceSelectors, useDeviceStore } from '@/store/device';
 import { useElectronStore } from '@/store/electron';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
+import { mcpAppActions } from '@/store/mcpApp/action';
 
 import { type ComposerTarget, createComposerTarget, resolveThreadComposerTarget } from '../types';
 import DeferredSkeleton from './DeferredSkeleton';
@@ -724,6 +725,8 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
       const removableTabs = new Set(tabs.filter((tab) => !pinnedTabsSet.has(tab)));
       if (removableTabs.size === 0) return;
 
+      for (const tab of removableTabs)
+        if (mcpAppsEnabled && tab.startsWith('mcp-app:')) mcpAppActions.close(tab.slice(8));
       const remainingTabs = openedTabs.filter((tab) => !removableTabs.has(tab));
       updateOpenedTabs(() => remainingTabs);
       if (removableTabs.has(activeTab)) {
@@ -739,6 +742,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
     },
     [
       activeTab,
+      mcpAppsEnabled,
       openedTabs,
       openTabsContextKey,
       pinnedTabsSet,
@@ -757,6 +761,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
           tab,
           browserTabMetadata[`${openTabsContextKey}:${tab}`],
           t('workingPanel.browser.title'),
+          activeAgentId,
         ) ?? availableTabs.get(tab),
     )
     .filter((tab): tab is SidebarTabDescriptor => Boolean(tab));
@@ -876,6 +881,8 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
   // immediately fails the fit check and hides the panel.
   const maxPanelWidth = Math.min(MAX_PANEL_WIDTH, Math.max(widthBudget, minDisplayWidth));
   const openMenuItems = useOpenMenuItems({
+    agentId: activeAgentId,
+    mcpAppsAvailable: mcpAppsEnabled && composerTarget.writable,
     availableTabs,
     extraTabs,
     openBrowserTab,
@@ -1087,6 +1094,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
                   composerTarget={composerTarget}
                   openedTabs={openedTabs}
                   visible={!!showRightPanel}
+                  onCloseTab={closeTab}
                   onBrowserMetadataChange={(tab, metadata) => {
                     const metadataKey = `${openTabsContextKey}:${tab}`;
                     setBrowserTabMetadata((current) =>

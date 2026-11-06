@@ -545,6 +545,44 @@ describe('MCPService', () => {
       expect(result.state).toEqual(errorResult);
     });
 
+    it('calls an enabled thread entrypoint with empty arguments regardless of visibility', async () => {
+      mockClient.getToolUiMeta.mockResolvedValue({
+        resourceUri: 'ui://app',
+        entrypoints: [{ type: 'thread' }],
+      });
+      mockClient.isToolHiddenFromModel.mockResolvedValue(true);
+      mockClient.isToolCallableByApp.mockResolvedValue(false);
+      mockClient.callTool.mockResolvedValue({ content: [{ type: 'text', text: 'entry' }] });
+      const result = await mcpService.callTool({
+        clientParams: mockParams,
+        toolName: 'open',
+        argsStr: '{"ignored":true}',
+        mcpApps: true,
+        fromEntrypoint: true,
+      });
+      expect(result.success).toBe(true);
+      expect(mockClient.callTool).toHaveBeenCalledWith('open', {});
+    });
+    it.each([false, true])(
+      'rejects undeclared entrypoints (flag=%s) before calling the tool',
+      async (mcpApps) => {
+        mockClient.getToolUiMeta.mockResolvedValue({
+          resourceUri: 'ui://app',
+          entrypoints: [{ type: 'global' }],
+        });
+        const result = await mcpService.callTool({
+          clientParams: mockParams,
+          toolName: 'open',
+          argsStr: '{}',
+          mcpApps,
+          fromEntrypoint: true,
+        });
+        expect(result.success).toBe(false);
+        expect(mockClient.callTool).not.toHaveBeenCalled();
+        if (!mcpApps) expect(mockClient.getToolUiMeta).not.toHaveBeenCalled();
+      },
+    );
+
     it('should persist the MCP App resource and display preference', async () => {
       mockClient.getToolUiMeta.mockResolvedValue({ preferredModelDisplayMode: 'fullscreen' });
       mockClient.getToolUiResourceUri.mockResolvedValue('ui://weather/view.html');
