@@ -9,7 +9,6 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import type { ProjectDetail } from '@/store/project';
 
 import { isProjectSlugValid } from '../createProjectForm';
-import ProjectCreator from '../ProjectCreator';
 import SettingsSaveBar from './SettingsSaveBar';
 import { useGeneralSettingsForm } from './useProjectGeneralSettings';
 
@@ -144,9 +143,6 @@ export function GeneralSettings({ project }: GeneralSettingsProps) {
             value={draft.description}
             onChange={(e) => setField('description', e.target.value)}
           />
-        </Row>
-        <Row label={t('settings.creator')}>
-          <ProjectCreator createdAt={project.createdAt} userId={project.userId} />
         </Row>
       </div>
       <SettingsSaveBar

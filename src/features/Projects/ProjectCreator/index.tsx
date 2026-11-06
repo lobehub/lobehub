@@ -1,6 +1,6 @@
 'use client';
 
-import { Flexbox, Text } from '@lobehub/ui';
+import { Flexbox, Tag, Text } from '@lobehub/ui';
 import dayjs from 'dayjs';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -17,8 +17,9 @@ export interface ProjectCreatorProps {
 }
 
 /**
- * Who created the project, and when. A workspace project resolves its creator
- * from the workspace members; a personal project is always the signed-in user's.
+ * The project creator as a row of the members list, laid out like `MemberRow`.
+ * A workspace project resolves its creator from the workspace members; a
+ * personal project is always the signed-in user's.
  */
 const ProjectCreator = memo<ProjectCreatorProps>(({ createdAt, userId }) => {
   const { t } = useTranslation('project');
@@ -35,12 +36,15 @@ const ProjectCreator = memo<ProjectCreatorProps>(({ createdAt, userId }) => {
   const name = creator?.fullName || t('settings.creatorUnknown');
 
   return (
-    <Flexbox horizontal align={'center'} gap={8}>
-      <UserAvatar avatar={creator?.avatar} name={name} shape={'circle'} size={24} />
-      <Text weight={500}>{name}</Text>
-      <Text type={'secondary'}>
-        {t('settings.createdAt', { date: dayjs(createdAt).format('YYYY-MM-DD') })}
-      </Text>
+    <Flexbox horizontal align="center" gap={12} paddingBlock={12} paddingInline={16}>
+      <UserAvatar avatar={creator?.avatar} name={name} size={28} />
+      <Flexbox flex={1} style={{ minWidth: 0 }}>
+        <Text ellipsis>{name}</Text>
+        <Text ellipsis fontSize={12} type="secondary">
+          {t('settings.createdAt', { date: dayjs(createdAt).format('YYYY-MM-DD') })}
+        </Text>
+      </Flexbox>
+      <Tag>{t('settings.creator')}</Tag>
     </Flexbox>
   );
 });

@@ -180,10 +180,15 @@ const ProjectFavoriteStar = memo<{ project: ProjectListItem }>(({ project }) => 
   const label = t(isFavorite ? 'favorite.remove' : 'favorite.add');
 
   return (
-    // A favorited star stays visible so the row shows it is pinned.
+    // A favorited star stays visible so the row shows it is pinned. It sits
+    // inside the row link, so its click must not open the project.
     <span
       data-row-action
       className={cx(styles.actions, 'project-row-actions', isFavorite && styles.favorited)}
+      onClick={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+      }}
     >
       <ActionIcon
         aria-label={label}
@@ -265,6 +270,7 @@ const ProjectRow = memo<{ project: ProjectListItem }>(({ project }) => {
           <Text className={styles.identifier} fontSize={12}>
             {project.identifier}
           </Text>
+          <ProjectFavoriteStar project={project} />
         </Flexbox>
         <Flexbox horizontal align={'center'} flex={'none'} gap={4}>
           <ProjectOwnerAvatar userId={project.userId} />
@@ -278,7 +284,6 @@ const ProjectRow = memo<{ project: ProjectListItem }>(({ project }) => {
           {dayjs(project.updatedAt).fromNow()}
         </Text>
       </WorkspaceLink>
-      <ProjectFavoriteStar project={project} />
       <span data-row-action className={cx(styles.actions, 'project-row-actions')}>
         <DropdownMenu items={menuItems} placement={'bottomRight'}>
           <ActionIcon
@@ -347,7 +352,13 @@ const ProjectListPage = memo(() => {
           </Text>
         }
       />
-      <WideScreenContainer gap={16} paddingBlock={16} wrapperStyle={{ flex: 1, overflowY: 'auto' }}>
+      <WideScreenContainer
+        fullWidth
+        gap={16}
+        paddingBlock={16}
+        paddingInline={16}
+        wrapperStyle={{ flex: 1, overflowY: 'auto' }}
+      >
         <Flexbox horizontal align={'center'} gap={12} justify={'space-between'}>
           <SearchBar
             allowClear

@@ -311,7 +311,7 @@
   "settings.allEnvironments": "All environments",
   "settings.configureDirectory": "Add a working directory",
   "settings.createdAt": "Created {{date}}",
-  "settings.creator": "Created by",
+  "settings.creator": "Creator",
   "settings.creatorUnknown": "Former member",
   "settings.description": "Description",
   "settings.deviceOffline": "Device disconnected",

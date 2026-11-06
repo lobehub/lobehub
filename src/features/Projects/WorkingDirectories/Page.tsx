@@ -12,7 +12,6 @@ import { useCurrentProjectDetail, useProjectStore } from '@/store/project';
 
 import { ProjectKnowledgeBaseSettings } from '../KnowledgeBases';
 import { ProjectMemberSettings } from '../Members';
-import ProjectCreator from '../ProjectCreator';
 import { MembersSettings } from '../Review/MembersSettings';
 import { SitesSettings } from '../Review/SitesSettings';
 import { useCanManageProject } from '../useCanManageProject';
@@ -50,12 +49,8 @@ export function ProjectDirectoriesPage() {
       label: t('settings.members'),
       render: () => (
         <Flexbox gap={32}>
-          <Flexbox gap={8}>
-            <Text strong>{t('settings.creator')}</Text>
-            <ProjectCreator createdAt={detail.project.createdAt} userId={detail.project.userId} />
-          </Flexbox>
           <ProjectMemberSettings detail={detail} />
-          <MembersSettings projectId={detail.project.id} />
+          <MembersSettings project={detail.project} />
         </Flexbox>
       ),
     },
