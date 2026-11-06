@@ -1,48 +1,46 @@
-import { createStaticStyles, cx } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 
 import type { ChatInputHistoryEntry } from '../inputHistoryStorage';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  item: css`
-    cursor: pointer;
-
-    overflow: hidden;
-
-    padding-block: 6px;
-    padding-inline: 10px;
-    border-radius: ${cssVar.borderRadius};
-
-    font-size: 13px;
-    line-height: 20px;
-    color: ${cssVar.colorTextSecondary};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-
-    transition: background 0.1s ${cssVar.motionEaseOut};
-  `,
-  itemActive: css`
-    color: ${cssVar.colorText};
-    background: ${cssVar.colorFillSecondary};
-  `,
-  root: css`
-    position: absolute;
-    z-index: 50;
-    inset-block-end: calc(100% + 8px);
-    inset-inline: 0;
-
-    overflow-y: auto;
-
-    max-height: 240px;
-    padding: 4px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorBgElevated};
-    box-shadow: ${cssVar.boxShadowSecondary};
-  `,
-}));
+const styles = stylex.create({
+  item: {
+    cursor: 'pointer',
+    overflow: 'hidden',
+    paddingBlock: '6px',
+    paddingInline: '10px',
+    borderRadius: cssVar.borderRadius,
+    fontSize: '13px',
+    lineHeight: '20px',
+    color: cssVar.colorTextSecondary,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    transition: `background 0.1s ${cssVar.motionEaseOut}`,
+  },
+  itemActive: {
+    color: cssVar.colorText,
+    backgroundColor: cssVar.colorFillSecondary,
+    backgroundImage: 'none',
+  },
+  root: {
+    position: 'absolute',
+    zIndex: 50,
+    insetBlockEnd: 'calc(100% + 8px)',
+    insetInline: '0',
+    overflowY: 'auto',
+    maxHeight: '240px',
+    padding: '4px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgElevated,
+    backgroundImage: 'none',
+    boxShadow: cssVar.boxShadowSecondary,
+  },
+});
 
 /**
  * Normalize a stored markdown prompt into a single-line plain-text preview for
@@ -98,12 +96,12 @@ const InputHistoryPopup = memo<InputHistoryPopupProps>(
     const indices = entries.map((_, index) => index).reverse();
 
     return createPortal(
-      <div className={styles.root} ref={rootRef}>
+      <div {...stylex.props(styles.root)} ref={rootRef}>
         {indices.map((index) => {
           const entry = entries[index];
           return (
             <div
-              className={cx(styles.item, index === activeIndex && styles.itemActive)}
+              {...stylex.props(styles.item, index === activeIndex && styles.itemActive)}
               data-index={index}
               key={`${entry.createdAt}-${index}`}
               onMouseEnter={() => onHover(index)}

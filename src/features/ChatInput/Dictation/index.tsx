@@ -1,6 +1,8 @@
 'use client';
 
-import { createStaticStyles, Spin, Tooltip } from '@lobehub/ui';
+import { Spin, Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Mic, RotateCcw, X } from 'lucide-react';
 import type { MouseEvent } from 'react';
 import { memo, useCallback, useEffect } from 'react';
@@ -16,86 +18,66 @@ import { useDictationControlFocus } from './useDictationControlFocus';
 import { useDictationPrefetch } from './useDictationPrefetch';
 import { useRealtimeDictation } from './useRealtimeDictation';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  cancel: css`
-    color: ${cssVar.colorTextSecondary};
-  `,
-  controlRow: css`
-    display: flex;
-    flex: none;
-    gap: 4px;
-    align-items: center;
-  `,
-  controls: css`
-    display: flex;
-    flex: none;
-    gap: 4px;
-    align-items: center;
-
-    padding: 2px;
-    border-radius: 9999px;
-
-    background: ${cssVar.colorFillSecondary};
-  `,
-  listening: css`
-    transition:
-      color 160ms ease,
-      background 160ms ease,
-      transform 120ms ease;
-
-    && {
-      color: contrast-color(${cssVar.colorPrimary});
-      background: ${cssVar.colorPrimary};
-    }
-
-    &&:hover {
-      color: contrast-color(${cssVar.colorPrimaryHover});
-      background: ${cssVar.colorPrimaryHover};
-    }
-
-    &&:active {
-      transform: scale(0.94);
-      color: contrast-color(${cssVar.colorPrimaryActive});
-      background: ${cssVar.colorPrimaryActive};
-    }
-
-    &&:focus-visible {
-      outline: 2px solid currentcolor;
-      outline-offset: -3px;
-      box-shadow: none;
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      transition: none;
-    }
-  `,
-  listeningStatus: css`
-    position: absolute;
-
-    overflow: hidden;
-
-    width: 1px;
-    height: 1px;
-    margin: -1px;
-    padding: 0;
-    border: 0;
-
-    white-space: nowrap;
-
-    clip: rect(0, 0, 0, 0);
-  `,
-  status: css`
-    overflow: hidden;
-
-    max-width: 160px;
-    padding-inline: 6px 2px;
-
-    font-size: ${cssVar.fontSizeSM};
-    color: ${cssVar.colorTextSecondary};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-}));
+const styles = stylex.create({
+  cancel: { color: cssVar.colorTextSecondary },
+  controlRow: { display: 'flex', flex: 'none', gap: '4px', alignItems: 'center' },
+  controls: {
+    display: 'flex',
+    flex: 'none',
+    gap: '4px',
+    alignItems: 'center',
+    padding: '2px',
+    borderRadius: '9999px',
+    backgroundColor: cssVar.colorFillSecondary,
+    backgroundImage: 'none',
+  },
+  // The emotion version stacked `&&` to outrank the action button's own colors; the
+  // button's lobe-ui styles are layered, so plain StyleX rules win without it.
+  listening: {
+    color: {
+      'default': `contrast-color(${cssVar.colorPrimary})`,
+      ':hover': `contrast-color(${cssVar.colorPrimaryHover})`,
+      ':active': `contrast-color(${cssVar.colorPrimaryActive})`,
+    },
+    backgroundColor: {
+      'default': cssVar.colorPrimary,
+      ':hover': cssVar.colorPrimaryHover,
+      ':active': cssVar.colorPrimaryActive,
+    },
+    backgroundImage: { 'default': 'none', ':hover': 'none', ':active': 'none' },
+    transform: { 'default': null, ':active': 'scale(0.94)' },
+    transition: {
+      'default': 'color 160ms ease, background 160ms ease, transform 120ms ease',
+      '@media (prefers-reduced-motion: reduce)': 'none',
+    },
+    outlineStyle: { 'default': null, ':focus-visible': 'solid' },
+    outlineWidth: { 'default': null, ':focus-visible': '2px' },
+    outlineColor: { 'default': null, ':focus-visible': 'currentcolor' },
+    outlineOffset: { 'default': null, ':focus-visible': '-3px' },
+    boxShadow: { 'default': null, ':focus-visible': 'none' },
+  },
+  listeningStatus: {
+    position: 'absolute',
+    overflow: 'hidden',
+    width: '1px',
+    height: '1px',
+    margin: '-1px',
+    padding: '0',
+    borderStyle: 'none',
+    whiteSpace: 'nowrap',
+    clip: 'rect(0, 0, 0, 0)',
+  },
+  status: {
+    overflow: 'hidden',
+    maxWidth: '160px',
+    paddingInlineStart: '6px',
+    paddingInlineEnd: '2px',
+    fontSize: cssVar.fontSizeSM,
+    color: cssVar.colorTextSecondary,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+});
 
 const Dictation = memo(() => {
   const { t } = useTranslation('chat');
@@ -249,17 +231,17 @@ const Dictation = memo(() => {
     return (
       <div
         aria-label={t('voiceDictation.statusLabel')}
-        className={styles.controlRow}
+        {...stylex.props(styles.controlRow)}
         data-status="listening"
         data-testid="voice-dictation-controls"
         role="group"
       >
-        <span aria-live="polite" className={styles.listeningStatus} role="status">
+        <span aria-live="polite" {...stylex.props(styles.listeningStatus)} role="status">
           {statusText}
         </span>
         <ChatInputAction
           aria-label={t('voiceDictation.stop')}
-          className={styles.listening}
+          className={stylex.props(styles.listening).className}
           data-testid="voice-dictation-stop"
           icon={Mic}
           ref={stopRef}
@@ -274,7 +256,7 @@ const Dictation = memo(() => {
         />
         <ChatInputAction
           aria-label={t('voiceDictation.cancel')}
-          className={styles.cancel}
+          className={stylex.props(styles.cancel).className}
           data-testid="voice-dictation-cancel"
           icon={X}
           ref={cancelRef}
@@ -293,13 +275,13 @@ const Dictation = memo(() => {
   return (
     <div
       aria-label={t('voiceDictation.statusLabel')}
-      className={styles.controlRow}
+      {...stylex.props(styles.controlRow)}
       data-status={status}
       data-testid="voice-dictation-controls"
       role="group"
     >
-      <div className={styles.controls}>
-        <span aria-live="polite" className={styles.status} role="status">
+      <div {...stylex.props(styles.controls)}>
+        <span aria-live="polite" {...stylex.props(styles.status)} role="status">
           {statusText}
         </span>
         {status === 'error' && retryable ? (
@@ -319,7 +301,7 @@ const Dictation = memo(() => {
       </div>
       <ChatInputAction
         aria-label={status === 'error' ? t('voiceDictation.dismiss') : t('voiceDictation.cancel')}
-        className={styles.cancel}
+        className={stylex.props(styles.cancel).className}
         data-testid="voice-dictation-cancel"
         icon={X}
         ref={cancelRef}
