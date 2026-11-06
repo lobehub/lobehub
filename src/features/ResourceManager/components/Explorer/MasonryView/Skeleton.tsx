@@ -43,14 +43,14 @@ const MasonryViewSkeleton = memo<MasonrySkeletonProps>(({ columnCount }) => {
 
   return (
     <div
-      {...sx([styles.grid], undefined, {
+      {...sx(styles.grid, {
         gridTemplateColumns: `repeat(${columnCount}, 1fr)`,
       })}
     >
       {Array.from({ length: itemCount }).map((_, index) => (
         <div
           key={index}
-          {...sx([styles.card], undefined, {
+          {...sx(styles.card, {
             height: heights[index % heights.length],
             opacity: getOpacity(index),
           })}

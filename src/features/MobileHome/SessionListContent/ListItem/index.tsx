@@ -61,10 +61,10 @@ const ListItem = memo<
       actions={actions}
       active={mobile ? false : active}
       avatar={avatarRender}
-      className={stylex.props(styles.container, mobile && styles.mobile).className}
       ref={ref}
       showAction={actions && (isHovering || showAction || mobile)}
       title={<span {...stylex.props(styles.title)}>{title}</span>}
+      xstyle={[styles.container, mobile && styles.mobile]}
       {...(props as any)}
     />
   );

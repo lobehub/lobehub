@@ -1,3 +1,4 @@
+import type { ReworkRecord } from '../review/store';
 import type { SignoffRecord } from '../signoff/store';
 import type { CaseCategory } from './categorize';
 
@@ -83,7 +84,9 @@ export interface VerdictInput {
   calibration: Array<{ status: string }>;
   items: VerdictItem[];
   mutation: { passed: boolean };
+  reworks?: Map<string, ReworkRecord>;
   signoffs: Map<string, SignoffRecord>;
+  unparsedSelectors?: number;
 }
 
 export interface Verdict {
@@ -96,7 +99,9 @@ export const decideVerdict = ({
   calibration,
   items,
   mutation,
+  reworks,
   signoffs,
+  unparsedSelectors,
 }: VerdictInput): Verdict => {
   const states = items.map((item) => ({
     ...item,
@@ -112,15 +117,23 @@ export const decideVerdict = ({
   if (blocking) reasons.push(`blocking ${blocking}`);
   const differences = open((item) => item.category === 'difference');
   if (differences.length) reasons.push(`difference ${differences.length}`);
-  const unsigned = open(
-    (item) => item.category === 'needs-signoff' || item.category === 'unpaired',
-  );
-  if (unsigned.length) {
+  for (const [category, label] of [
+    ['needs-signoff', 'needs sign-off'],
+    ['unpaired', 'unpaired'],
+  ] as const) {
+    const unsigned = open((item) => item.category === category);
+    if (!unsigned.length) continue;
     const stale = unsigned.filter((item) => item.signoff === 'stale').length;
-    reasons.push(`needs sign-off ${unsigned.length}${stale ? ` (${stale} stale)` : ''}`);
+    reasons.push(`${label} ${unsigned.length}${stale ? ` (${stale} stale)` : ''}`);
   }
+  const hashes = new Map(items.map((item) => [item.key, item.hash]));
+  const openReworks = [...(reworks?.values() ?? [])].filter(
+    (rework) => !rework.resolvedAt && hashes.get(rework.key) === rework.hash,
+  ).length;
+  if (openReworks) reasons.push(`rework open ${openReworks}`);
   const mismatches = calibration.filter((entry) => entry.status === 'mismatch').length;
   if (mismatches) reasons.push(`calibration mismatch ${mismatches}`);
   if (!mutation.passed) reasons.push('mutation not fully caught');
+  if (unparsedSelectors) reasons.push(`selector unparsed ${unparsedSelectors}`);
   return { items: states, mergeable: !reasons.length, reasons };
 };

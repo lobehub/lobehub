@@ -54,7 +54,7 @@ const HomePortrait = memo(() => {
         alt=""
         key={hero}
         src={hero}
-        {...sx([styles.image], undefined, { insetInlineEnd: HOME_PORTRAIT_INSET })}
+        {...sx(styles.image, { insetInlineEnd: HOME_PORTRAIT_INSET })}
       />
     </div>
   );

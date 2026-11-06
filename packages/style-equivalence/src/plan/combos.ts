@@ -1,4 +1,4 @@
-export type Combo = Record<string, boolean>;
+export type Combo = Record<string, boolean | string>;
 
 export const FULL_ENUMERATION_LIMIT = 4;
 
@@ -56,7 +56,16 @@ export const pairwiseCombos = (names: string[]): Combo[] => {
   );
 };
 
-export const combosFor = (names: string[]) =>
-  names.length <= FULL_ENUMERATION_LIMIT
-    ? { combos: fullCombos(names), pairwise: false }
-    : { combos: pairwiseCombos(names), pairwise: true };
+export const DOMAIN_COMBO_LIMIT = 64;
+
+export const combosFor = (names: string[], domains: Record<string, string[]> = {}) => {
+  const flags = names.filter((name) => !domains[name]);
+  const pairwise = flags.length > FULL_ENUMERATION_LIMIT;
+  let combos = pairwise ? pairwiseCombos(flags) : fullCombos(flags);
+  for (const name of names)
+    if (domains[name])
+      combos = combos.flatMap((combo) =>
+        domains[name].map((value) => ({ ...combo, [name]: value })),
+      );
+  return { combos, pairwise };
+};

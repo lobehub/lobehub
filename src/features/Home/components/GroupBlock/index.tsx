@@ -102,11 +102,11 @@ const GroupBlock = memo<GroupBlockProps>(
             flex={'none'}
             gap={2}
             justify={'flex-end'}
-            {...sx([
+            {...sx(
               styles.action,
               groupBlockActionMarker,
               (isHovered || actionAlwaysVisible) && styles.actionVisible,
-            ])}
+            )}
           >
             {action}
           </Flexbox>
