@@ -1,4 +1,6 @@
-import { Button, createStaticStyles, cssVar, Flexbox, Icon, Markdown, Text } from '@lobehub/ui';
+import { Button, Flexbox, Icon, Markdown, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
 import { SquareArrowOutUpRight } from 'lucide-react';
 import { memo, type ReactNode, useMemo } from 'react';
@@ -37,36 +39,27 @@ import { goalSelectors, useGoalStore } from '@/store/goal';
  * node → task → topic conversation).
  */
 
-const styles = createStaticStyles(({ css }) => ({
-  attempt: css`
-    padding-block: 6px;
-
-    & + & {
-      border-block-start: 1px dashed ${cssVar.colorBorderSecondary};
-    }
-  `,
-  label: css`
-    font-size: 12px;
-    font-weight: 600;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  linkRow: css`
-    cursor: pointer;
-    border-radius: ${cssVar.borderRadiusSM};
-
-    &:hover {
-      background: ${cssVar.colorFillQuaternary};
-    }
-  `,
-  mono: css`
-    font-family: ${cssVar.fontFamilyCode};
-    font-variant-numeric: tabular-nums;
-  `,
-}));
+const styles = stylex.create({
+  attempt: { paddingBlock: '6px' },
+  // Attempts after the first are divided from the one above.
+  attemptDivided: {
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'dashed',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+  },
+  label: { fontSize: '12px', fontWeight: 600, color: cssVar.colorTextSecondary },
+  linkRow: {
+    cursor: 'pointer',
+    borderRadius: cssVar.borderRadiusSM,
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillQuaternary },
+    backgroundImage: 'none',
+  },
+  mono: { fontFamily: cssVar.fontFamilyCode, fontVariantNumeric: 'tabular-nums' },
+});
 
 const Section = memo<{ children: ReactNode; title: string }>(({ children, title }) => (
   <Flexbox gap={6}>
-    <span className={styles.label}>{title}</span>
+    <span {...stylex.props(styles.label)}>{title}</span>
     {children}
   </Flexbox>
 ));
@@ -81,15 +74,20 @@ const AttemptLedger = memo<{ view: GoalNodeView }>(({ view }) => {
   return (
     <Section title={t('goalProcess.attempts.title')}>
       <Flexbox gap={0}>
-        {view.attempts.map((attempt) => (
+        {view.attempts.map((attempt, index) => (
           <Flexbox
             horizontal
             align={'baseline'}
-            className={styles.attempt}
+            className={stylex.props(styles.attempt, index > 0 && styles.attemptDivided).className}
             gap={10}
             key={attempt.index}
           >
-            <Text className={styles.mono} fontSize={12} style={{ flex: 'none' }} type={'secondary'}>
+            <Text
+              className={stylex.props(styles.mono).className}
+              fontSize={12}
+              style={{ flex: 'none' }}
+              type={'secondary'}
+            >
               {dayjs(attempt.startedAt).format('MM-DD HH:mm')}
             </Text>
             <Text fontSize={12} style={{ flex: 'none' }} type={'secondary'}>
@@ -125,7 +123,7 @@ const NodeLinkRow = memo<{ onClick: () => void; text: string; view: GoalNodeView
     <Flexbox
       horizontal
       align={'center'}
-      className={styles.linkRow}
+      className={stylex.props(styles.linkRow).className}
       gap={6}
       paddingBlock={4}
       paddingInline={4}

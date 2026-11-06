@@ -1,12 +1,5 @@
-import {
-  Accordion,
-  ActionIcon,
-  createStaticStyles,
-  Flexbox,
-  Skeleton,
-  Tag,
-  Text,
-} from '@lobehub/ui';
+import { Accordion, ActionIcon, Flexbox, Skeleton, Tag, Text } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { Maximize2 } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -47,11 +40,7 @@ import { useOpenGoalPage } from './useOpenGoalPage';
  * goal page instead.
  */
 
-const styles = createStaticStyles(({ css }) => ({
-  section: css`
-    padding-block: 8px;
-  `,
-}));
+const styles = stylex.create({ section: { paddingBlock: '8px' } });
 
 const Body = memo(() => {
   const { t } = useTranslation('chat');
@@ -128,7 +117,7 @@ const Body = memo(() => {
                 items={[
                   {
                     children: (
-                      <Flexbox className={styles.section}>
+                      <Flexbox className={stylex.props(styles.section).className}>
                         <Deliverables graph={graph} />
                       </Flexbox>
                     ),
@@ -146,7 +135,7 @@ const Body = memo(() => {
                   },
                   {
                     children: (
-                      <Flexbox className={styles.section}>
+                      <Flexbox className={stylex.props(styles.section).className}>
                         <Findings graph={graph} onSelect={select} />
                       </Flexbox>
                     ),
@@ -164,7 +153,7 @@ const Body = memo(() => {
                   },
                   {
                     children: (
-                      <Flexbox className={styles.section}>
+                      <Flexbox className={stylex.props(styles.section).className}>
                         <Activity graph={graph} onSelect={select} />
                       </Flexbox>
                     ),

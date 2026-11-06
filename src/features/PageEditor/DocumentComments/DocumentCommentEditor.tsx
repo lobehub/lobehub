@@ -13,8 +13,9 @@ import {
   type TopicCommentEditorValue,
 } from '@/features/Portal/TopicComments/editorUtils';
 import { useWorkspaceCommentMentionOption } from '@/features/Portal/TopicComments/useWorkspaceCommentMentionOption';
+import { sx } from '@/styles/sx';
 
-import { styles } from './styles';
+import { fallback, styles } from './styles';
 import { useFreezeHeightWhileResizingImage } from './useFreezeHeightWhileResizingImage';
 
 export type DocumentCommentEditorValue = TopicCommentEditorValue;
@@ -93,10 +94,10 @@ const DocumentCommentEditor = memo<DocumentCommentEditorProps>(
     return (
       <div
         ref={rootRef}
-        className={cx(
+        {...sx(
           styles.commentEditor,
           flush && styles.commentEditorFlush,
-          mentionPlainClassName,
+          cx(fallback.commentEditor, mentionPlainClassName),
         )}
       >
         <EditorCanvas

@@ -1,18 +1,21 @@
-import { Button, Center, createStaticStyles, cssVar, Flexbox, Text } from '@lobehub/ui';
+import { Button, Center, Flexbox, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import FileIcon from '@/components/FileIcon';
 import { localFileService } from '@/services/electron/localFileService';
 
-const styles = createStaticStyles(({ css }) => ({
-  icon: css`
-    width: 64px;
-    height: 64px;
-    border-radius: 14px;
-    background: ${cssVar.colorFillTertiary};
-  `,
-}));
+const styles = stylex.create({
+  icon: {
+    width: '64px',
+    height: '64px',
+    borderRadius: '14px',
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+});
 
 interface UnsupportedPreviewProps {
   filePath: string;
@@ -27,7 +30,7 @@ const UnsupportedPreview = memo<UnsupportedPreviewProps>(({ filePath, isLocalFil
 
   return (
     <Center gap={16} height={'100%'} width={'100%'}>
-      <Center className={styles.icon}>
+      <Center className={stylex.props(styles.icon).className}>
         <FileIcon fileName={filename} size={40} />
       </Center>
       <Flexbox align={'center'} gap={4}>

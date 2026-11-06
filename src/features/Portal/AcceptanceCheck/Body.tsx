@@ -1,18 +1,8 @@
 'use client';
 
 import type { VerifyAgentPlanConfig } from '@lobechat/types';
-import {
-  Button,
-  Center,
-  createStaticStyles,
-  Empty,
-  Flexbox,
-  Icon,
-  Spin,
-  Tag,
-  Text,
-  toast,
-} from '@lobehub/ui';
+import { Button, Center, Empty, Flexbox, Icon, Spin, Tag, Text, toast } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -28,17 +18,17 @@ import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 import { useTaskStore } from '@/store/task';
 
-const styles = createStaticStyles(({ css }) => ({
-  body: css`
-    overflow-y: auto;
-    flex: 1;
-
-    height: 100%;
-    min-height: 0;
-    padding-block: 0 24px;
-    padding-inline: 24px;
-  `,
-}));
+const styles = stylex.create({
+  body: {
+    overflowY: 'auto',
+    flex: '1',
+    height: '100%',
+    minHeight: '0',
+    paddingBlockStart: '0',
+    paddingBlockEnd: '24px',
+    paddingInline: '24px',
+  },
+});
 
 const Body = memo(() => {
   const { t } = useTranslation(['chat', 'verify']);
@@ -106,7 +96,7 @@ const Body = memo(() => {
   const usesMultimodalLlm = requiredEvidence.some((evidence) => evidence.type === 'screenshot');
 
   return (
-    <Flexbox className={styles.body} gap={16}>
+    <Flexbox className={stylex.props(styles.body).className} gap={16}>
       <Flexbox horizontal align={'center'} gap={10}>
         <Icon color={checkMeta.color} icon={checkMeta.icon} size={18} style={{ flex: 'none' }} />
         <Text fontSize={16} weight={600}>

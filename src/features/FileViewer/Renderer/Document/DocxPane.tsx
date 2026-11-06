@@ -1,22 +1,35 @@
 'use client';
 
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+// oxlint-disable-next-line stylex-migration/no-emotion-styles -- docx-preview page DOM gets no className
+import { createStaticStyles, cssVar as cssVarValue } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 
 import Loading from '@/components/Loading/CircleLoading';
+import { sx } from '@/styles/sx';
 
 import { collectDocxSections, type DocxSection } from './docxSections';
 import PaneFooter from './PaneFooter';
 
-const styles = createStaticStyles(({ css }) => ({
-  scroll: css`
-    overflow: auto;
-    flex: 1;
-    background: ${cssVar.colorBgLayout};
+const styles = stylex.create({
+  scroll: {
+    overflow: 'auto',
+    flex: '1',
+    backgroundColor: cssVar.colorBgLayout,
+    backgroundImage: 'none',
+  },
+  wrapper: {
+    display: 'flex',
+    flexDirection: 'column',
+    height: '100%',
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+});
 
-    /* docx-preview renders fixed-size "pages"; keep them centered with a gap.
-       "safe center" falls back to flex-start when the page is wider than the
-       pane, so the left edge stays reachable by horizontal scroll. */
+const fallback = createStaticStyles(({ css }) => ({
+  scroll: css`
     .docx-wrapper {
       display: flex;
       flex-direction: column;
@@ -31,14 +44,8 @@ const styles = createStaticStyles(({ css }) => ({
     .docx-wrapper > section.docx {
       margin-block-end: 0;
       border-radius: 4px;
-      box-shadow: ${cssVar.boxShadowTertiary};
+      box-shadow: ${cssVarValue.boxShadowTertiary};
     }
-  `,
-  wrapper: css`
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    background: ${cssVar.colorBgContainer};
   `,
 }));
 
@@ -112,8 +119,8 @@ const DocxPane = memo<DocxPaneProps>(({ blob, onError }) => {
   );
 
   return (
-    <div className={styles.wrapper}>
-      <div className={styles.scroll} ref={scrollRef}>
+    <div {...stylex.props(styles.wrapper)}>
+      <div {...sx(styles.scroll, fallback.scroll)} ref={scrollRef}>
         {loading && <Loading />}
         <div ref={setContainer} />
       </div>

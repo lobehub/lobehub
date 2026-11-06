@@ -1,6 +1,8 @@
 'use client';
 
-import { ActionIcon, Button, createStaticStyles, cssVar } from '@lobehub/ui';
+import { ActionIcon, Button } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import {
   DownloadIcon,
   MaximizeIcon,
@@ -14,40 +16,34 @@ import { useTranslation } from 'react-i18next';
 
 import { MAX_ZOOM, MIN_ZOOM } from './geometry';
 
-const styles = createStaticStyles(({ css }) => ({
-  bar: css`
-    pointer-events: none;
-
-    position: absolute;
-    z-index: 3;
-    inset-block-start: 8px;
-    inset-inline: 8px;
-
-    display: flex;
-    gap: 8px;
-    align-items: center;
-    justify-content: space-between;
-  `,
-  group: css`
-    pointer-events: auto;
-
-    display: flex;
-    gap: 2px;
-    align-items: center;
-
-    padding: 2px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorBgElevated};
-    box-shadow: ${cssVar.boxShadowTertiary};
-  `,
-  zoomLabel: css`
-    min-width: 56px;
-    padding-inline: 4px;
-    font-variant-numeric: tabular-nums;
-  `,
-}));
+const styles = stylex.create({
+  bar: {
+    pointerEvents: 'none',
+    position: 'absolute',
+    zIndex: 3,
+    insetBlockStart: '8px',
+    insetInline: '8px',
+    display: 'flex',
+    gap: '8px',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  group: {
+    pointerEvents: 'auto',
+    display: 'flex',
+    gap: '2px',
+    alignItems: 'center',
+    padding: '2px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgElevated,
+    backgroundImage: 'none',
+    boxShadow: cssVar.boxShadowTertiary,
+  },
+  zoomLabel: { minWidth: '56px', paddingInline: '4px', fontVariantNumeric: 'tabular-nums' },
+});
 
 interface TopBarProps {
   /** A save is in flight; leaving now would lose its result, so Close waits. */
@@ -79,8 +75,8 @@ const TopBar = ({
   const percent = `${Math.round(zoom * 100)}%`;
 
   return (
-    <div className={styles.bar}>
-      <div aria-label={t('imageViewer.zoom')} className={styles.group} role={'toolbar'}>
+    <div {...stylex.props(styles.bar)}>
+      <div aria-label={t('imageViewer.zoom')} {...stylex.props(styles.group)} role={'toolbar'}>
         <ActionIcon
           aria-label={t('imageViewer.zoomOut')}
           disabled={zoom <= MIN_ZOOM}
@@ -91,7 +87,7 @@ const TopBar = ({
         />
         <Button
           aria-label={`${t('imageViewer.fitToScreen')} (${percent})`}
-          className={styles.zoomLabel}
+          className={stylex.props(styles.zoomLabel).className}
           size={'small'}
           title={t('imageViewer.fitToScreen')}
           type={'text'}
@@ -115,7 +111,11 @@ const TopBar = ({
           onClick={onRotate}
         />
       </div>
-      <div aria-label={t('imageViewer.fileActions')} className={styles.group} role={'toolbar'}>
+      <div
+        aria-label={t('imageViewer.fileActions')}
+        {...stylex.props(styles.group)}
+        role={'toolbar'}
+      >
         <ActionIcon
           aria-label={t('imageViewer.download')}
           icon={DownloadIcon}

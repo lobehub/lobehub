@@ -6,7 +6,9 @@ import { nanoid } from '@lobechat/utils';
 import { type IEditor } from '@lobehub/editor';
 import { HIDE_TOOLBAR_COMMAND } from '@lobehub/editor';
 import { type ChatInputActionsProps } from '@lobehub/editor/react';
-import { Avatar, Block, createStaticStyles, cssVar } from '@lobehub/ui';
+import { Avatar, Block } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -17,16 +19,12 @@ import { useFileStore } from '@/store/file';
 import { usePageAgentPanelControl } from '../RightPanel/OverrideContext';
 import { usePageEditorStore } from '../store';
 
-const styles = createStaticStyles(({ css }) => ({
-  askCopilot: css`
-    border-radius: 6px;
-    color: ${cssVar.colorTextDescription};
-
-    &:hover {
-      color: ${cssVar.colorTextSecondary};
-    }
-  `,
-}));
+const styles = stylex.create({
+  askCopilot: {
+    borderRadius: '6px',
+    color: { 'default': cssVar.colorTextDescription, ':hover': cssVar.colorTextSecondary },
+  },
+});
 
 export const useAskCopilotItem = (
   editor: IEditor | undefined,
@@ -52,7 +50,7 @@ export const useAskCopilotItem = (
             clickable
             horizontal
             align="center"
-            className={styles.askCopilot}
+            className={stylex.props(styles.askCopilot).className}
             gap={8}
             paddingBlock={6}
             paddingInline={12}

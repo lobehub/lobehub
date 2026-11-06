@@ -1,14 +1,8 @@
 'use client';
 
-import {
-  ActionIcon,
-  Button,
-  createStaticStyles,
-  cssVar,
-  Flexbox,
-  Text,
-  TextArea,
-} from '@lobehub/ui';
+import { ActionIcon, Button, Flexbox, Text, TextArea } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { CheckIcon, PencilIcon, XIcon } from 'lucide-react';
 import type { ChangeEvent } from 'react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
@@ -35,21 +29,12 @@ import SkillFrontmatterCard from './SkillFrontmatterCard';
 import TodoList from './TodoList';
 import { useHighlightSave } from './useHighlightSave';
 
-const styles = createStaticStyles(({ css }) => ({
-  content: css`
-    overflow: auto;
-    flex: 1;
-    padding-inline: 16px;
-  `,
-  contentFull: css`
-    /* Width is handled by WideScreenContainer; keep only the scroll host. */
-    overflow: auto;
-    flex: 1;
-  `,
-  textArea: css`
-    font-family: ${cssVar.fontFamilyCode};
-  `,
-}));
+const styles = stylex.create({
+  content: { overflow: 'auto', flex: '1', paddingInline: '16px' },
+  // Width is handled by WideScreenContainer; keep only the scroll host.
+  contentFull: { overflow: 'auto', flex: '1' },
+  textArea: { fontFamily: cssVar.fontFamilyCode },
+});
 
 interface SkillFrontmatterBlockProps {
   documentId: string;
@@ -158,7 +143,7 @@ const SkillFrontmatterBlock = memo<SkillFrontmatterBlockProps>(({ documentId, fr
           {/* Raw YAML is only exposed in edit mode so users can keep advanced frontmatter syntax. */}
           <TextArea
             autoSize={{ maxRows: 12, minRows: 4 }}
-            className={styles.textArea}
+            className={stylex.props(styles.textArea).className}
             value={draft}
             variant="borderless"
             onChange={(event: ChangeEvent<HTMLTextAreaElement>) => {
@@ -307,7 +292,7 @@ const DocumentBody = memo(() => {
           <CharLimitBanner documentId={documentId} />
         </Flexbox>
       )}
-      <div className={fullPage ? styles.contentFull : styles.content}>
+      <div {...stylex.props(fullPage ? styles.contentFull : styles.content)}>
         {fullPage && renderMode.mode !== 'file' ? (
           <WideScreenContainer>{editorContent}</WideScreenContainer>
         ) : (

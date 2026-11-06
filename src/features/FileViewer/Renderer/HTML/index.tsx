@@ -1,6 +1,7 @@
 'use client';
 
-import { Center, createStaticStyles, Flexbox, Spin } from '@lobehub/ui';
+import { Center, Flexbox, Spin } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 
 import AsyncError from '@/components/AsyncError';
@@ -9,13 +10,7 @@ import { InlineHtmlPreview } from '@/components/HtmlPreview';
 import { useTextFileLoader } from '../../hooks/useTextFileLoader';
 import NotSupport from '../../NotSupport';
 
-const styles = createStaticStyles(({ css }) => ({
-  page: css`
-    width: 100%;
-    height: 100%;
-    padding: 0;
-  `,
-}));
+const styles = stylex.create({ page: { width: '100%', height: '100%', padding: '0' } });
 
 interface HTMLViewerProps {
   fileId: string;
@@ -34,7 +29,7 @@ const HTMLViewer = memo<HTMLViewerProps>(({ url }) => {
     );
 
   return (
-    <Flexbox className={styles.page}>
+    <Flexbox className={stylex.props(styles.page).className}>
       {!loading && fileData !== null ? (
         <InlineHtmlPreview content={fileData} />
       ) : (

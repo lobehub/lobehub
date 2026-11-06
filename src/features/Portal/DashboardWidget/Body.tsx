@@ -1,4 +1,6 @@
-import { Button, createStaticStyles, cssVar, Flexbox, Skeleton, Text } from '@lobehub/ui';
+import { Button, Flexbox, Skeleton, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ArrowUpRightIcon, LayoutDashboardIcon } from 'lucide-react';
 import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -15,24 +17,22 @@ import { useServerConfigStore } from '@/store/serverConfig';
 
 import { useOpenDashboard } from './useOpenDashboard';
 
-const styles = createStaticStyles(({ css }) => ({
-  label: css`
-    font-size: 12px;
-    font-weight: 600;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  preview: css`
-    padding: 12px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-  `,
-}));
+const styles = stylex.create({
+  label: { fontSize: '12px', fontWeight: 600, color: cssVar.colorTextSecondary },
+  preview: {
+    padding: '12px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+  },
+});
 
 const Section = memo<{ children: ReactNode; extra?: ReactNode; title: string }>(
   ({ children, extra, title }) => (
     <Flexbox gap={8}>
       <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
-        <span className={styles.label}>{title}</span>
+        <span {...stylex.props(styles.label)}>{title}</span>
         {extra}
       </Flexbox>
       {children}
@@ -56,7 +56,7 @@ const RunPreviewSection = memo<{ runId: string; widgetId: string }>(({ runId, wi
       <Text fontSize={12} type={'secondary'}>
         {t('portal.previewHint')}
       </Text>
-      <div className={styles.preview}>
+      <div {...stylex.props(styles.preview)}>
         {error ? (
           <AsyncError error={error} onRetry={() => void mutate()} />
         ) : run ? (

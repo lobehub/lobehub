@@ -1,4 +1,5 @@
 import { Button, Center, Empty, Flexbox, Text } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { MessageCircle } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -90,14 +91,14 @@ const ThreadBody = memo(() => {
   if (state === 'hidden') return null;
   if (state === 'notFound') {
     return (
-      <Center className={styles.empty}>
+      <Center className={stylex.props(styles.empty).className}>
         <Empty description={t('topicComment.notFound')} icon={MessageCircle} />
       </Center>
     );
   }
   if (state === 'error') {
     return (
-      <Flexbox className={styles.body}>
+      <Flexbox className={stylex.props(styles.body).className}>
         <AsyncError error={root.error} variant={'page'} onRetry={() => void root.mutate()} />
       </Flexbox>
     );
@@ -108,8 +109,8 @@ const ThreadBody = memo(() => {
   if (!root.data) return null;
 
   return (
-    <Flexbox className={styles.body}>
-      <Flexbox className={styles.list} ref={listRef}>
+    <Flexbox className={stylex.props(styles.body).className}>
+      <Flexbox className={stylex.props(styles.list).className} ref={listRef}>
         <CommentCard
           comment={root.data}
           replyCount={replyCount}

@@ -1,112 +1,107 @@
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 
 /** Shared chrome for the floating bottom bar and side panels of the image tools. */
-export const toolStyles = createStaticStyles(({ css }) => ({
-  bar: css`
-    pointer-events: auto;
-
-    display: flex;
-    flex-wrap: nowrap;
-    gap: 4px;
-    align-items: center;
-    justify-content: center;
-
-    max-width: 100%;
-    padding: 4px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 999px;
-
-    background: ${cssVar.colorBgElevated};
-    box-shadow: ${cssVar.boxShadowSecondary};
-  `,
-  divider: css`
-    flex-shrink: 0;
-
-    width: 1px;
-    height: 20px;
-    margin-inline: 4px;
-
-    background: ${cssVar.colorSplit};
-  `,
-  dock: css`
-    pointer-events: none;
-
-    position: absolute;
-    z-index: 3;
-    inset-block-end: 12px;
-    inset-inline: 12px;
-
-    display: flex;
-    justify-content: center;
-  `,
-  hint: css`
-    overflow: hidden;
-    flex-shrink: 1;
-
-    min-width: 0;
-    padding-inline: 8px;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  overlayFill: css`
-    position: absolute;
-    inset: 0;
-  `,
-  panel: css`
-    position: absolute;
-    z-index: 3;
-    inset-block: 52px 68px;
-    inset-inline-end: 8px;
-
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-
-    width: min(280px, calc(100% - 16px));
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorBgElevated};
-    box-shadow: ${cssVar.boxShadowSecondary};
-  `,
+export const toolStyles = stylex.create({
+  bar: {
+    pointerEvents: 'auto',
+    display: 'flex',
+    flexWrap: 'nowrap',
+    gap: '4px',
+    alignItems: 'center',
+    justifyContent: 'center',
+    maxWidth: '100%',
+    padding: '4px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: '999px',
+    backgroundColor: cssVar.colorBgElevated,
+    backgroundImage: 'none',
+    boxShadow: cssVar.boxShadowSecondary,
+  },
+  divider: {
+    flexShrink: 0,
+    width: '1px',
+    height: '20px',
+    marginInline: '4px',
+    backgroundColor: cssVar.colorSplit,
+    backgroundImage: 'none',
+  },
+  dock: {
+    pointerEvents: 'none',
+    position: 'absolute',
+    zIndex: 3,
+    insetBlockEnd: '12px',
+    insetInline: '12px',
+    display: 'flex',
+    justifyContent: 'center',
+  },
+  hint: {
+    overflow: 'hidden',
+    flexShrink: 1,
+    minWidth: 0,
+    paddingInline: '8px',
+    fontSize: '12px',
+    color: cssVar.colorTextSecondary,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  overlayFill: { position: 'absolute', inset: 0 },
+  panel: {
+    position: 'absolute',
+    zIndex: 3,
+    insetBlockStart: '52px',
+    insetBlockEnd: '68px',
+    insetInlineEnd: '8px',
+    overflow: 'hidden',
+    display: 'flex',
+    flexDirection: 'column',
+    width: 'min(280px, calc(100% - 16px))',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgElevated,
+    backgroundImage: 'none',
+    boxShadow: cssVar.boxShadowSecondary,
+  },
   /** The panel on a narrow viewer: a sheet above the bar, as wide as the viewer. */
-  sheet: css`
-    position: absolute;
-    z-index: 3;
-    inset-block-end: 60px;
-    inset-inline: 8px;
-
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-
-    max-height: 40%;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorBgElevated};
-    box-shadow: ${cssVar.boxShadowSecondary};
-  `,
-  swatch: css`
-    cursor: pointer;
-
-    width: 20px;
-    height: 20px;
-    padding: 0;
-    border: 2px solid ${cssVar.colorBorder};
-    border-radius: 50%;
-
-    &[aria-pressed='true'] {
-      outline: 2px solid ${cssVar.colorPrimary};
-      outline-offset: 1px;
-    }
-
-    &:focus-visible {
-      outline: 2px solid ${cssVar.colorPrimaryBorder};
-      outline-offset: 1px;
-    }
-  `,
-}));
+  sheet: {
+    position: 'absolute',
+    zIndex: 3,
+    insetBlockEnd: '60px',
+    insetInline: '8px',
+    overflow: 'hidden',
+    display: 'flex',
+    flexDirection: 'column',
+    maxHeight: '40%',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgElevated,
+    backgroundImage: 'none',
+    boxShadow: cssVar.boxShadowSecondary,
+  },
+  swatch: {
+    cursor: 'pointer',
+    width: '20px',
+    height: '20px',
+    padding: 0,
+    borderWidth: '2px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorder,
+    borderRadius: '50%',
+    outlineColor: { 'default': null, ':focus-visible': cssVar.colorPrimaryBorder },
+    outlineOffset: { 'default': null, ':focus-visible': '1px' },
+    outlineStyle: { 'default': null, ':focus-visible': 'solid' },
+    outlineWidth: { 'default': null, ':focus-visible': '2px' },
+  },
+  swatchPressed: {
+    outlineColor: { 'default': cssVar.colorPrimary, ':focus-visible': cssVar.colorPrimaryBorder },
+    outlineOffset: '1px',
+    outlineStyle: 'solid',
+    outlineWidth: '2px',
+  },
+});

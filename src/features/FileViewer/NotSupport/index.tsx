@@ -1,4 +1,6 @@
-import { Button, Center, createStaticStyles, Flexbox, FluentEmoji } from '@lobehub/ui';
+import { Button, Center, Flexbox, FluentEmoji } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { type ComponentType, type CSSProperties } from 'react';
 import { useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
@@ -6,17 +8,17 @@ import { Trans, useTranslation } from 'react-i18next';
 import { MORE_FILE_PREVIEW_REQUEST_URL } from '@/const/url';
 import { downloadFile } from '@/utils/client/downloadFile';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  page: css`
-    width: 100%;
-    margin: 12px;
-    padding: 24px;
-    border-radius: 4px;
-
-    background: ${cssVar.colorBgContainer};
-    box-shadow: ${cssVar.boxShadowTertiary};
-  `,
-}));
+const styles = stylex.create({
+  page: {
+    width: '100%',
+    margin: '12px',
+    padding: '24px',
+    borderRadius: '4px',
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+    boxShadow: cssVar.boxShadowTertiary,
+  },
+});
 
 interface NotSupportProps {
   fileName?: string;
@@ -31,7 +33,11 @@ const NotSupport: ComponentType<NotSupportProps> = ({ fileName, url, style, tooL
   const [loading, setLoading] = useState(false);
 
   return (
-    <Flexbox className={styles.page} id="not-support-renderer" style={style}>
+    <Flexbox
+      className={stylex.props(styles.page).className}
+      id="not-support-renderer"
+      style={style}
+    >
       <Center height={'100%'}>
         <Flexbox align={'center'} gap={12}>
           <FluentEmoji emoji={'👀'} size={64} />

@@ -1,17 +1,24 @@
-import { css, cx, Flexbox, Markdown } from '@lobehub/ui';
+// oxlint-disable-next-line stylex-migration/no-emotion-styles -- Markdown output gets no className
+import { createStaticStyles, Flexbox, Markdown } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
 import { useEffect } from 'react';
 
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors, dbMessageSelectors } from '@/store/chat/selectors';
+import { sx } from '@/styles/sx';
 
-const md = css`
-  overflow: scroll;
+const styles = stylex.create({
+  md: { overflow: 'scroll' },
+});
 
-  > div {
-    padding-block-end: 40px;
-  }
-`;
+const fallback = createStaticStyles(({ css }) => ({
+  md: css`
+    > div {
+      padding-block-end: 40px;
+    }
+  `,
+}));
 
 const MessageDetailBody = () => {
   const [messageDetailId, clearPortalStack] = useChatStore((s) => [
@@ -32,7 +39,7 @@ const MessageDetailBody = () => {
   return (
     <Flexbox height={'100%'} paddingBlock={'0 12px'} paddingInline={8}>
       {!!content && (
-        <Markdown className={cx(md)} variant={'chat'}>
+        <Markdown {...sx(styles.md, fallback.md)} variant={'chat'}>
           {content}
         </Markdown>
       )}

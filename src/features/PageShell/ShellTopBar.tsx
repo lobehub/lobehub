@@ -1,6 +1,8 @@
 'use client';
 
-import { createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar as cssVarValue, Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ArrowLeft, ChevronsUpDownIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 
@@ -43,58 +45,49 @@ interface ShellTopBarProps {
   titleExtra?: ReactNode;
 }
 
-const styles = createStaticStyles(({ css }) => ({
-  back: css`
-    position: absolute;
-    inset: 0;
-
-    display: grid;
-    place-items: center;
-
-    opacity: 0;
-  `,
-  brand: css`
-    position: relative;
-    inline-size: 26px;
-    block-size: 26px;
-    border-radius: ${cssVar.borderRadius};
-  `,
-  brandInteractive: css`
-    cursor: pointer;
-
-    &:hover .shell-brand-mark {
-      opacity: 0;
-    }
-
-    &:hover .shell-brand-back {
-      opacity: 1;
-    }
-  `,
-  mark: css`
-    position: absolute;
-    inset: 0;
-
-    display: grid;
-    place-items: center;
-
-    opacity: 1;
-  `,
-  root: css`
-    flex: none;
-
-    block-size: 48px;
-    padding-inline: 12px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-
-    background: ${cssVar.colorBgLayout};
-  `,
-  scopePill: css`
-    cursor: default;
-    padding-block: 3px;
-    padding-inline: 6px;
-    border-radius: ${cssVar.borderRadius};
-  `,
-}));
+// The brand mark swaps for a back arrow while the (interactive) brand is hovered.
+const styles = stylex.create({
+  back: {
+    position: 'absolute',
+    inset: 0,
+    display: 'grid',
+    placeItems: 'center',
+    opacity: { default: 0, [stylex.when.ancestor(':hover')]: 1 },
+  },
+  brand: {
+    position: 'relative',
+    inlineSize: '26px',
+    blockSize: '26px',
+    borderRadius: cssVar.borderRadius,
+  },
+  brandInteractive: { cursor: 'pointer' },
+  mark: {
+    position: 'absolute',
+    inset: 0,
+    display: 'grid',
+    placeItems: 'center',
+    opacity: 1,
+  },
+  markInteractive: {
+    opacity: { default: 1, [stylex.when.ancestor(':hover')]: 0 },
+  },
+  root: {
+    flex: 'none',
+    blockSize: '48px',
+    paddingInline: '12px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+    backgroundColor: cssVar.colorBgLayout,
+    backgroundImage: 'none',
+  },
+  scopePill: {
+    cursor: 'default',
+    paddingBlock: '3px',
+    paddingInline: '6px',
+    borderRadius: cssVar.borderRadius,
+  },
+});
 
 const ShellTopBar = ({ actions, onBack, scope, title, titleExtra }: ShellTopBarProps) => {
   const workspace = useActiveWorkspace();
@@ -106,16 +99,20 @@ const ShellTopBar = ({ actions, onBack, scope, title, titleExtra }: ShellTopBarP
   const scopeName = workspace?.name;
 
   return (
-    <Flexbox horizontal align={'center'} className={styles.root} gap={8}>
+    <Flexbox horizontal align={'center'} className={stylex.props(styles.root).className} gap={8}>
       <div
-        className={onBack ? `${styles.brand} ${styles.brandInteractive}` : styles.brand}
+        {...stylex.props(
+          styles.brand,
+          onBack && styles.brandInteractive,
+          onBack && stylex.defaultMarker(),
+        )}
         onClick={onBack}
       >
-        <div className={`shell-brand-mark ${styles.mark}`}>
+        <div {...stylex.props(styles.mark, onBack && styles.markInteractive)}>
           <ProductLogo size={22} />
         </div>
         {onBack && (
-          <div className={`shell-brand-back ${styles.back}`}>
+          <div {...stylex.props(styles.back)}>
             <Icon icon={ArrowLeft} size={17} />
           </div>
         )}
@@ -130,12 +127,17 @@ const ShellTopBar = ({ actions, onBack, scope, title, titleExtra }: ShellTopBarP
 
       {scope ??
         (scopeName && (
-          <Flexbox horizontal align={'center'} className={styles.scopePill} gap={6}>
+          <Flexbox
+            horizontal
+            align={'center'}
+            className={stylex.props(styles.scopePill).className}
+            gap={6}
+          >
             <WorkspaceAvatar avatar={workspace?.avatar} name={scopeName} size={20} />
             <Text fontSize={13} weight={600}>
               {scopeName}
             </Text>
-            {switchable && <ChevronsUpDownIcon color={cssVar.colorTextQuaternary} size={12} />}
+            {switchable && <ChevronsUpDownIcon color={cssVarValue.colorTextQuaternary} size={12} />}
           </Flexbox>
         ))}
 

@@ -1,29 +1,25 @@
 import { type ChatFileItem } from '@lobechat/types';
-import { createStaticStyles, Flexbox, Text } from '@lobehub/ui';
+import { Flexbox, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 
 import FileIcon from '@/components/FileIcon';
 import { useChatStore } from '@/store/chat';
 import { formatSize } from '@/utils/format';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    cursor: pointer;
-
-    overflow: hidden;
-
-    max-width: 420px;
-    padding-block: 8px;
-    padding-inline: 12px;
-    border-radius: 8px;
-
-    background: ${cssVar.colorFillTertiary};
-
-    &:hover {
-      background: ${cssVar.colorFillSecondary};
-    }
-  `,
-}));
+const styles = stylex.create({
+  container: {
+    cursor: 'pointer',
+    overflow: 'hidden',
+    maxWidth: '420px',
+    paddingBlock: '8px',
+    paddingInline: '12px',
+    borderRadius: '8px',
+    backgroundColor: { 'default': cssVar.colorFillTertiary, ':hover': cssVar.colorFillSecondary },
+    backgroundImage: { 'default': 'none', ':hover': 'none' },
+  },
+});
 
 const FileItem = memo<ChatFileItem>(({ name, fileType, size, id }) => {
   const openFilePreview = useChatStore((s) => s.openFilePreview);
@@ -32,7 +28,7 @@ const FileItem = memo<ChatFileItem>(({ name, fileType, size, id }) => {
     <Flexbox
       horizontal
       align={'center'}
-      className={styles.container}
+      className={stylex.props(styles.container).className}
       gap={8}
       onClick={() => {
         openFilePreview({ fileId: id });

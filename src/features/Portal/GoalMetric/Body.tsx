@@ -1,14 +1,7 @@
 import type { GoalSpend } from '@lobechat/types';
-import {
-  createStaticStyles,
-  cssVar,
-  Flexbox,
-  Icon,
-  InputNumber,
-  Text,
-  toast,
-  Tooltip,
-} from '@lobehub/ui';
+import { Flexbox, Icon, InputNumber, Text, toast, Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
 import { memo, type ReactNode, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -49,30 +42,19 @@ import {
  * lives instead of inventing a value.
  */
 
-const styles = createStaticStyles(({ css }) => ({
-  label: css`
-    font-size: 12px;
-    font-weight: 600;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  mono: css`
-    font-family: ${cssVar.fontFamilyCode};
-    font-variant-numeric: tabular-nums;
-  `,
-  row: css`
-    cursor: pointer;
-    padding-block: 6px;
-    padding-inline: 6px;
-    border-radius: ${cssVar.borderRadiusSM};
-
-    &:hover {
-      background: ${cssVar.colorFillQuaternary};
-    }
-  `,
-  staticRow: css`
-    padding-block: 4px;
-  `,
-}));
+const styles = stylex.create({
+  label: { fontSize: '12px', fontWeight: 600, color: cssVar.colorTextSecondary },
+  mono: { fontFamily: cssVar.fontFamilyCode, fontVariantNumeric: 'tabular-nums' },
+  row: {
+    cursor: 'pointer',
+    paddingBlock: '6px',
+    paddingInline: '6px',
+    borderRadius: cssVar.borderRadiusSM,
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillQuaternary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  staticRow: { paddingBlock: '4px' },
+});
 
 const NodeRow = memo<{
   /** Sits right after the title rather than at the row's far end. */
@@ -97,12 +79,17 @@ const NodeRow = memo<{
     <Flexbox
       horizontal
       align={'center'}
-      className={styles.row}
+      className={stylex.props(styles.row).className}
       gap={8}
       onClick={() => (taskId ? openTaskDetail(taskId) : openGoalNode(goalId, nodeId))}
     >
       {view.seq !== undefined && (
-        <Text className={styles.mono} fontSize={12} style={{ flex: 'none' }} type={'secondary'}>
+        <Text
+          className={stylex.props(styles.mono).className}
+          fontSize={12}
+          style={{ flex: 'none' }}
+          type={'secondary'}
+        >
           #{view.seq}
         </Text>
       )}
@@ -130,7 +117,12 @@ const TaskDuration = memo<{ view: GoalNodeView }>(({ view }) => {
   if (!span) return null;
 
   return (
-    <Text className={styles.mono} fontSize={12} style={{ flex: 'none' }} type={'secondary'}>
+    <Text
+      className={stylex.props(styles.mono).className}
+      fontSize={12}
+      style={{ flex: 'none' }}
+      type={'secondary'}
+    >
       {span.endedAt ? formatElapsed(span.endedAt.getTime() - span.startedAt.getTime()) : elapsed}
     </Text>
   );
@@ -333,16 +325,20 @@ const BudgetField = memo<{
 
   return (
     <Flexbox gap={2}>
-      <span className={styles.label}>{label}</span>
+      <span {...stylex.props(styles.label)}>{label}</span>
       <Flexbox horizontal align={'center'} gap={8}>
-        <Text className={styles.mono} style={{ fontSize: 20 }} weight={600}>
+        <Text className={stylex.props(styles.mono).className} style={{ fontSize: 20 }} weight={600}>
           {money ? formatUsd(used) : used}
         </Text>
-        <Text className={styles.mono} style={{ fontSize: 20 }} type={'secondary'}>
+        <Text
+          className={stylex.props(styles.mono).className}
+          style={{ fontSize: 20 }}
+          type={'secondary'}
+        >
           /
         </Text>
         <InputNumber
-          className={styles.mono}
+          className={stylex.props(styles.mono).className}
           controls={false}
           disabled={!canEdit || saving}
           min={0}
@@ -393,14 +389,16 @@ const CostBreakdown = memo<{ graph: GoalGraphView; spend?: GoalSpend }>(({ graph
 
   return (
     <Flexbox gap={4}>
-      <span className={styles.label}>{t('goalProcess.metricDetail.budget.perTaskTitle')}</span>
+      <span {...stylex.props(styles.label)}>
+        {t('goalProcess.metricDetail.budget.perTaskTitle')}
+      </span>
       <Flexbox gap={0}>
         {rows.map((row) => {
           const body = (
             <Flexbox horizontal align={'center'} gap={8} key={row.taskId}>
               {row.view?.seq !== undefined && (
                 <Text
-                  className={styles.mono}
+                  className={stylex.props(styles.mono).className}
                   fontSize={12}
                   style={{ flex: 'none' }}
                   type={'secondary'}
@@ -412,7 +410,7 @@ const CostBreakdown = memo<{ graph: GoalGraphView; spend?: GoalSpend }>(({ graph
                 {row.view?.node.title ?? row.taskId}
               </Text>
               <Text
-                className={styles.mono}
+                className={stylex.props(styles.mono).className}
                 fontSize={12}
                 style={{ flex: 'none', textAlign: 'right', width: columns.tokens }}
                 type={'secondary'}
@@ -420,7 +418,7 @@ const CostBreakdown = memo<{ graph: GoalGraphView; spend?: GoalSpend }>(({ graph
                 {row.tokensLabel}
               </Text>
               <Text
-                className={styles.mono}
+                className={stylex.props(styles.mono).className}
                 style={{ flex: 'none', textAlign: 'right', width: columns.cost }}
                 weight={500}
               >
@@ -433,14 +431,14 @@ const CostBreakdown = memo<{ graph: GoalGraphView; spend?: GoalSpend }>(({ graph
           // carries — still billed, but nothing to open.
           return row.view ? (
             <Flexbox
-              className={styles.row}
+              className={stylex.props(styles.row).className}
               key={row.taskId}
               onClick={() => openTaskDetail(row.taskId)}
             >
               {body}
             </Flexbox>
           ) : (
-            <Flexbox className={styles.staticRow} key={row.taskId}>
+            <Flexbox className={stylex.props(styles.staticRow).className} key={row.taskId}>
               {body}
             </Flexbox>
           );
@@ -461,7 +459,9 @@ const Budget = memo<{ goalId: string; graph: GoalGraphView }>(({ goalId, graph }
   return (
     <Flexbox gap={20}>
       <Flexbox gap={14}>
-        <span className={styles.label}>{t('goalProcess.metricDetail.budget.controlTitle')}</span>
+        <span {...stylex.props(styles.label)}>
+          {t('goalProcess.metricDetail.budget.controlTitle')}
+        </span>
         <BudgetField
           money
           cap={maxTotalCost}
@@ -499,8 +499,14 @@ const Duration = memo<{ goalId: string; graph: GoalGraphView }>(({ goalId, graph
     <Flexbox gap={14}>
       {startedAt && (
         <Flexbox gap={2}>
-          <span className={styles.label}>{t('goalProcess.metricDetail.duration.total')}</span>
-          <Text className={styles.mono} style={{ fontSize: 20 }} weight={600}>
+          <span {...stylex.props(styles.label)}>
+            {t('goalProcess.metricDetail.duration.total')}
+          </span>
+          <Text
+            className={stylex.props(styles.mono).className}
+            style={{ fontSize: 20 }}
+            weight={600}
+          >
             {formatSpan(end.getTime() - startedAt.getTime())}
           </Text>
           <Text fontSize={12} type={'secondary'}>
@@ -512,7 +518,9 @@ const Duration = memo<{ goalId: string; graph: GoalGraphView }>(({ goalId, graph
         </Flexbox>
       )}
       <Flexbox gap={4}>
-        <span className={styles.label}>{t('goalProcess.metricDetail.duration.taskSpans')}</span>
+        <span {...stylex.props(styles.label)}>
+          {t('goalProcess.metricDetail.duration.taskSpans')}
+        </span>
         <Flexbox gap={0}>
           {works.map((view) => {
             const first = view.attempts[0];
@@ -526,7 +534,7 @@ const Duration = memo<{ goalId: string; graph: GoalGraphView }>(({ goalId, graph
                 nodeId={view.node.id}
                 extra={
                   <Text
-                    className={styles.mono}
+                    className={stylex.props(styles.mono).className}
                     fontSize={12}
                     style={{ flex: 'none' }}
                     type={'secondary'}
@@ -564,14 +572,16 @@ const Liveness = memo<{ goalId: string; graph: GoalGraphView }>(({ goalId, graph
   return (
     <Flexbox gap={14}>
       <Flexbox gap={2}>
-        <span className={styles.label}>{t('goalProcess.metricDetail.liveness.latest')}</span>
-        <Text className={styles.mono} style={{ fontSize: 20 }} weight={600}>
+        <span {...stylex.props(styles.label)}>{t('goalProcess.metricDetail.liveness.latest')}</span>
+        <Text className={stylex.props(styles.mono).className} style={{ fontSize: 20 }} weight={600}>
           {latest ? dayjs(latest).format('MM-DD HH:mm') : '—'}
         </Text>
       </Flexbox>
       {running.length > 0 && (
         <Flexbox gap={4}>
-          <span className={styles.label}>{t('goalProcess.metricDetail.liveness.running')}</span>
+          <span {...stylex.props(styles.label)}>
+            {t('goalProcess.metricDetail.liveness.running')}
+          </span>
           <Flexbox gap={0}>
             {running.map((view) => (
               <NodeRow goalId={goalId} graph={graph} key={view.node.id} nodeId={view.node.id} />

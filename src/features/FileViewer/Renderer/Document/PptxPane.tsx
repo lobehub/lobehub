@@ -1,7 +1,9 @@
 'use client';
 
 import type { PptxViewer, SlideHandle, TextSearchResult } from '@aiden0z/pptx-renderer';
-import { ActionIcon, createStaticStyles, cssVar, Input } from '@lobehub/ui';
+import { ActionIcon, Input } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronRightIcon, MinusIcon, PlusIcon, SearchIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -14,53 +16,44 @@ const THUMBNAIL_WIDTH = 74;
 const ZOOM_STEP = 10;
 const ZOOM_RANGE = [25, 400] as const;
 
-const styles = createStaticStyles(({ css }) => ({
-  container: css`
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    background: ${cssVar.colorBgContainer};
-  `,
-  counter: css`
-    flex: none;
-
-    min-width: 42px;
-
-    font-size: 12px;
-    font-variant-numeric: tabular-nums;
-    color: ${cssVar.colorTextSecondary};
-    text-align: center;
-  `,
-  pager: css`
-    flex: none;
-
-    margin-inline-start: 4px;
-
-    font-size: 12px;
-    font-variant-numeric: tabular-nums;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  scroll: css`
-    overflow: auto;
-    flex: 1;
-    background: ${cssVar.colorBgLayout};
-  `,
-  searchRow: css`
-    display: flex;
-    gap: 10px;
-    align-items: center;
-  `,
-  thumb: css`
-    display: block;
-    width: ${THUMBNAIL_WIDTH}px;
-    background: #fff;
-  `,
-  zoom: css`
-    display: flex;
-    flex: none;
-    align-items: center;
-  `,
-}));
+const styles = stylex.create({
+  container: {
+    display: 'flex',
+    flexDirection: 'column',
+    height: '100%',
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  counter: {
+    flex: 'none',
+    minWidth: '42px',
+    fontSize: '12px',
+    fontVariantNumeric: 'tabular-nums',
+    color: cssVar.colorTextSecondary,
+    textAlign: 'center',
+  },
+  pager: {
+    flex: 'none',
+    marginInlineStart: '4px',
+    fontSize: '12px',
+    fontVariantNumeric: 'tabular-nums',
+    color: cssVar.colorTextTertiary,
+  },
+  scroll: {
+    overflow: 'auto',
+    flex: '1',
+    backgroundColor: cssVar.colorBgLayout,
+    backgroundImage: 'none',
+  },
+  searchRow: { display: 'flex', gap: '10px', alignItems: 'center' },
+  thumb: {
+    display: 'block',
+    width: `${THUMBNAIL_WIDTH}px`,
+    backgroundColor: '#fff',
+    backgroundImage: 'none',
+  },
+  zoom: { display: 'flex', flex: 'none', alignItems: 'center' },
+});
 
 const SlideThumbnail = memo<{ index: number; viewer: PptxViewer }>(({ index, viewer }) => {
   const [container, setContainer] = useState<HTMLElement | null>(null);
@@ -79,7 +72,7 @@ const SlideThumbnail = memo<{ index: number; viewer: PptxViewer }>(({ index, vie
     return () => handle?.dispose();
   }, [container, index, viewer]);
 
-  return <div className={styles.thumb} ref={setContainer} />;
+  return <div {...stylex.props(styles.thumb)} ref={setContainer} />;
 });
 
 SlideThumbnail.displayName = 'SlideThumbnail';
@@ -196,7 +189,7 @@ const PptxPane = memo<PptxPaneProps>(({ blob, onError }) => {
   );
 
   const note = searching ? (
-    <div className={styles.searchRow}>
+    <div {...stylex.props(styles.searchRow)}>
       <Input
         autoFocus
         placeholder={t('workingPanel.localFile.document.searchPlaceholder')}
@@ -226,8 +219,8 @@ const PptxPane = memo<PptxPaneProps>(({ blob, onError }) => {
   ) : undefined;
 
   return (
-    <div className={styles.container}>
-      <div className={styles.scroll} ref={setScrollEl}>
+    <div {...stylex.props(styles.container)}>
+      <div {...stylex.props(styles.scroll)} ref={setScrollEl}>
         {loading && <Loading />}
         {/* The viewer owns this node's children — React must never render into it,
             or its bookkeeping breaks when the library replaces the content. */}
@@ -241,17 +234,17 @@ const PptxPane = memo<PptxPaneProps>(({ blob, onError }) => {
         tabs={tabs}
         extra={
           <>
-            <span className={styles.pager}>
+            <span {...stylex.props(styles.pager)}>
               {slideCount > 0 ? `${currentSlide + 1} / ${slideCount}` : ''}
             </span>
-            <div className={styles.zoom}>
+            <div {...stylex.props(styles.zoom)}>
               <ActionIcon
                 icon={MinusIcon}
                 size={'small'}
                 title={t('workingPanel.localFile.document.zoomOut')}
                 onClick={() => stepZoom(-ZOOM_STEP)}
               />
-              <span className={styles.counter}>{zoom}%</span>
+              <span {...stylex.props(styles.counter)}>{zoom}%</span>
               <ActionIcon
                 icon={PlusIcon}
                 size={'small'}

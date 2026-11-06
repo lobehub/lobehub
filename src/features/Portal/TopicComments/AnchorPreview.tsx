@@ -1,5 +1,6 @@
 import type { TopicCommentItem } from '@lobechat/types';
 import { Flexbox, Icon, Tag, Text } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { MessageSquareText } from 'lucide-react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -43,7 +44,7 @@ const AnchorPreview = memo<{ comment: TopicCommentItem }>(({ comment }) => {
   return (
     <Flexbox
       aria-disabled={canLocateMessage ? undefined : true}
-      className={styles.anchor}
+      className={stylex.props(styles.anchor, !canLocateMessage && styles.anchorDisabled).className}
       gap={4}
       role={canLocateMessage ? 'button' : undefined}
       tabIndex={canLocateMessage ? 0 : undefined}

@@ -1,6 +1,8 @@
 'use client';
 
-import { ActionIcon, createStaticStyles, cssVar, cx, Flexbox, Tag, Tooltip } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Tag, Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
 import { ArrowLeftRightIcon, RotateCcwIcon } from 'lucide-react';
 import type { MouseEvent } from 'react';
@@ -24,110 +26,87 @@ const SOURCE_TAG_COLOR: Record<DocumentHistorySaveSource, TagColor> = {
   system: 'gold',
 };
 
-const styles = createStaticStyles(({ css }) => ({
-  description: css`
-    overflow: hidden;
-
-    font-size: 12px;
-    line-height: 1.2;
-    color: ${cssVar.colorTextTertiary};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  rowMain: css`
-    overflow: hidden;
-    flex: 1;
-    min-width: 0;
-  `,
-  actions: css`
-    pointer-events: none;
-
-    position: absolute;
-    inset-block: 50%;
-    inset-inline-end: 10px;
-    transform: translateY(-50%);
-
-    display: flex;
-    gap: 2px;
-    align-items: center;
-
-    opacity: 0;
-
-    transition: opacity ${cssVar.motionDurationMid} ${cssVar.motionEaseInOut};
-  `,
-  currentBadge: css`
-    flex-shrink: 0;
-    margin: 0;
-  `,
-  row: css`
-    cursor: pointer;
-
-    position: relative;
-
-    display: flex;
-    gap: 8px;
-    align-items: center;
-
-    padding-block: 8px;
-    padding-inline: 16px;
-
-    transition: background ${cssVar.motionDurationMid} ${cssVar.motionEaseInOut};
-
-    &:hover,
-    &:focus-within {
-      background: ${cssVar.colorFillQuaternary};
-
-      .history-source-tag {
-        opacity: 0;
-      }
-
-      .history-actions {
-        pointer-events: auto;
-        opacity: 1;
-      }
-    }
-  `,
-  rowCurrent: css`
-    cursor: default;
-
-    &:hover,
-    &:focus-within {
-      background: transparent;
-
-      .history-source-tag {
-        opacity: 1;
-      }
-    }
-  `,
-  rowRight: css`
-    position: relative;
-
-    display: flex;
-    flex-shrink: 0;
-    gap: 8px;
-    align-items: center;
-
-    margin-inline-start: auto;
-  `,
-  rowTime: css`
-    flex-shrink: 0;
-
-    font-size: 13px;
-    font-weight: 600;
-    font-variant-numeric: tabular-nums;
-    line-height: 1;
-    color: ${cssVar.colorText};
-  `,
-  rowTimeCurrent: css`
-    font-size: 14px;
-    color: ${cssVar.colorPrimary};
-  `,
-  sourceTag: css`
-    flex-shrink: 0;
-    margin: 0;
-    transition: opacity ${cssVar.motionDurationMid} ${cssVar.motionEaseInOut};
-  `,
-}));
+const styles = stylex.create({
+  description: {
+    overflow: 'hidden',
+    fontSize: '12px',
+    lineHeight: 1.2,
+    color: cssVar.colorTextTertiary,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  rowMain: { overflow: 'hidden', flex: '1', minWidth: 0 },
+  // Revealed by the hovered / focused row (the row is the marker).
+  actions: {
+    pointerEvents: {
+      default: 'none',
+      [stylex.when.ancestor(':hover')]: 'auto',
+      [stylex.when.ancestor(':focus-within')]: 'auto',
+    },
+    position: 'absolute',
+    insetBlock: '50%',
+    insetInlineEnd: '10px',
+    transform: 'translateY(-50%)',
+    display: 'flex',
+    gap: '2px',
+    alignItems: 'center',
+    opacity: {
+      default: 0,
+      [stylex.when.ancestor(':hover')]: 1,
+      [stylex.when.ancestor(':focus-within')]: 1,
+    },
+    transition: `opacity ${cssVar.motionDurationMid} ${cssVar.motionEaseInOut}`,
+  },
+  currentBadge: { flexShrink: 0, margin: 0 },
+  row: {
+    cursor: 'pointer',
+    position: 'relative',
+    display: 'flex',
+    gap: '8px',
+    alignItems: 'center',
+    paddingBlock: '8px',
+    paddingInline: '16px',
+    transition: `background ${cssVar.motionDurationMid} ${cssVar.motionEaseInOut}`,
+    backgroundColor: {
+      'default': null,
+      ':hover': cssVar.colorFillQuaternary,
+      ':focus-within': cssVar.colorFillQuaternary,
+    },
+    backgroundImage: 'none',
+  },
+  rowCurrent: {
+    cursor: 'default',
+    backgroundColor: 'transparent',
+  },
+  rowRight: {
+    position: 'relative',
+    display: 'flex',
+    flexShrink: 0,
+    gap: '8px',
+    alignItems: 'center',
+    marginInlineStart: 'auto',
+  },
+  rowTime: {
+    flexShrink: 0,
+    fontSize: '13px',
+    fontWeight: 600,
+    fontVariantNumeric: 'tabular-nums',
+    lineHeight: 1,
+    color: cssVar.colorText,
+  },
+  rowTimeCurrent: { fontSize: '14px', color: cssVar.colorPrimary },
+  // The source tag steps aside for the row's actions on hover / focus.
+  sourceTag: {
+    flexShrink: 0,
+    margin: 0,
+    opacity: {
+      default: 1,
+      [stylex.when.ancestor(':hover')]: 0,
+      [stylex.when.ancestor(':focus-within')]: 0,
+    },
+    transition: `opacity ${cssVar.motionDurationMid} ${cssVar.motionEaseInOut}`,
+  },
+});
 
 export interface HistoryListItemProps {
   historyId: string;
@@ -160,25 +139,25 @@ export const HistoryListItem = memo<HistoryListItemProps>(({ historyId, onCompar
 
   return (
     <div
-      className={cx(styles.row, item.isCurrent && styles.rowCurrent)}
+      {...stylex.props(styles.row, item.isCurrent && styles.rowCurrent, stylex.defaultMarker())}
       onClick={item.isCurrent ? undefined : handleCompare}
     >
-      <Flexbox align={'flex-start'} className={styles.rowMain} gap={4}>
+      <Flexbox align={'flex-start'} className={stylex.props(styles.rowMain).className} gap={4}>
         <Tooltip title={formatHistoryAbsoluteTime(item.savedAt)}>
-          <span className={cx(styles.rowTime, item.isCurrent && styles.rowTimeCurrent)}>
+          <span {...stylex.props(styles.rowTime, item.isCurrent && styles.rowTimeCurrent)}>
             {timeLabel}
           </span>
         </Tooltip>
-        <span className={styles.description}>
+        <span {...stylex.props(styles.description)}>
           {authorInfo?.fullName ? `${authorInfo.fullName} · ` : ''}
           {dayjs(item.savedAt).fromNow()}
         </span>
       </Flexbox>
 
-      <div className={styles.rowRight}>
+      <div {...stylex.props(styles.rowRight)}>
         {item.isCurrent && (
           <Tag
-            className={styles.currentBadge}
+            className={stylex.props(styles.currentBadge).className}
             color={'processing'}
             size={'small'}
             variant={'borderless'}
@@ -189,7 +168,7 @@ export const HistoryListItem = memo<HistoryListItemProps>(({ historyId, onCompar
 
         {!item.isCurrent && (
           <Tag
-            className={cx(styles.sourceTag, 'history-source-tag')}
+            className={stylex.props(styles.sourceTag).className}
             color={SOURCE_TAG_COLOR[item.saveSource]}
             size={'small'}
             variant={'borderless'}
@@ -201,7 +180,7 @@ export const HistoryListItem = memo<HistoryListItemProps>(({ historyId, onCompar
           <Flexbox
             horizontal
             align={'center'}
-            className={cx(styles.actions, 'history-actions')}
+            className={stylex.props(styles.actions).className}
             gap={2}
             onClick={handleStopPropagation}
           >

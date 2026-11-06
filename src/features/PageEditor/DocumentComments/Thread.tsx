@@ -1,5 +1,6 @@
 import type { DocumentCommentItem, DocumentCommentThread } from '@lobechat/types';
-import { Button, Center, cx, Flexbox, Skeleton } from '@lobehub/ui';
+import { Button, Center, Flexbox, Skeleton } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { Fragment, memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -289,7 +290,10 @@ const Thread = memo<ThreadProps>(
     );
 
     return (
-      <Flexbox className={cx(styles.thread, compact && styles.threadCompact)} ref={containerRef}>
+      <Flexbox
+        className={stylex.props(styles.thread, compact && styles.threadCompact).className}
+        ref={containerRef}
+      >
         <CommentCard
           comment={root}
           compact={compact}
@@ -302,7 +306,9 @@ const Thread = memo<ThreadProps>(
         />
 
         {(replyCount > 0 || replyTargetId || focusedReplyId) && (
-          <Flexbox className={cx(styles.replyList, compact && styles.replyListCompact)}>
+          <Flexbox
+            className={stylex.props(styles.replyList, compact && styles.replyListCompact).className}
+          >
             {replyTargetId === root.id && (
               <Composer
                 documentId={documentId}

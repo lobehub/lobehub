@@ -1,5 +1,6 @@
 import { ChatInput, ChatInputActionBar, SendButton } from '@lobehub/editor/react';
 import { Flexbox, toast } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { memo, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -68,7 +69,7 @@ const Composer = memo<ComposerProps>(
     if (!workspaceId || !canUseResource) return null;
 
     return (
-      <Flexbox className={styles.composer}>
+      <Flexbox className={stylex.props(styles.composer).className}>
         <ChatInput
           resize={false}
           styles={{ body: { padding: 8 } }}

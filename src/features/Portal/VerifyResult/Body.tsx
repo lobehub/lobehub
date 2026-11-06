@@ -1,6 +1,8 @@
 import type { VerifierType } from '@lobechat/types';
 import { formatDuration as formatDurationMs } from '@lobechat/utils';
-import { Button, createStaticStyles, cssVar, Flexbox, Markdown, Text } from '@lobehub/ui';
+import { Button, Flexbox, Markdown, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ListTree } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { memo } from 'react';
@@ -16,61 +18,52 @@ import { verifyService } from '@/services/verify';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors, threadSelectors } from '@/store/chat/selectors';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  confidenceCard: css`
-    padding: 12px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  confidenceValue: css`
-    font-size: 20px;
-    font-weight: 700;
-    font-variant-numeric: tabular-nums;
-  `,
-  fill: css`
-    height: 100%;
-    border-radius: 999px;
-    transition: width 300ms ${cssVar.motionEaseOut};
-  `,
-  label: css`
-    margin-block-end: 6px;
-    font-size: 12px;
-    font-weight: 600;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  metaKey: css`
-    color: ${cssVar.colorTextTertiary};
-  `,
-  metaRow: css`
-    display: flex;
-    gap: 12px;
-    align-items: center;
-    justify-content: space-between;
-
-    font-size: 13px;
-  `,
-  metaValue: css`
-    overflow: hidden;
-    color: ${cssVar.colorText};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  text: css`
-    font-size: 13px;
-    line-height: 1.7;
-    color: ${cssVar.colorText};
-  `,
-  track: css`
-    overflow: hidden;
-
-    width: 100%;
-    height: 8px;
-    border-radius: 999px;
-
-    background: ${cssVar.colorFillSecondary};
-  `,
-}));
+const styles = stylex.create({
+  confidenceCard: {
+    padding: '12px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  confidenceValue: { fontSize: '20px', fontWeight: 700, fontVariantNumeric: 'tabular-nums' },
+  fill: {
+    height: '100%',
+    borderRadius: '999px',
+    transition: `width 300ms ${cssVar.motionEaseOut}`,
+  },
+  label: {
+    marginBlockEnd: '6px',
+    fontSize: '12px',
+    fontWeight: 600,
+    color: cssVar.colorTextSecondary,
+  },
+  metaKey: { color: cssVar.colorTextTertiary },
+  metaRow: {
+    display: 'flex',
+    gap: '12px',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    fontSize: '13px',
+  },
+  metaValue: {
+    overflow: 'hidden',
+    color: cssVar.colorText,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  text: { fontSize: '13px', lineHeight: 1.7, color: cssVar.colorText },
+  track: {
+    overflow: 'hidden',
+    width: '100%',
+    height: '8px',
+    borderRadius: '999px',
+    backgroundColor: cssVar.colorFillSecondary,
+    backgroundImage: 'none',
+  },
+});
 
 /** Score zone → theme color token, mirroring the A/B/F grade bands. */
 const confidenceColor = (ratio: number): keyof typeof cssVar => {
@@ -93,7 +86,7 @@ const formatDuration = (started?: Date | string | null, completed?: Date | strin
 const Field = memo<{ children: ReactNode; label: string }>(({ label, children }) => {
   return (
     <Flexbox>
-      <div className={styles.label}>{label}</div>
+      <div {...stylex.props(styles.label)}>{label}</div>
       {children}
     </Flexbox>
   );
@@ -167,26 +160,26 @@ const Body = () => {
       style={{ overflow: 'auto' }}
     >
       {ratio !== undefined && (
-        <div className={styles.confidenceCard}>
+        <div {...stylex.props(styles.confidenceCard)}>
           <Flexbox
             horizontal
             align={'baseline'}
             justify={'space-between'}
             style={{ marginBlockEnd: 8 }}
           >
-            <span className={styles.label} style={{ marginBlockEnd: 0 }}>
+            <span className={stylex.props(styles.label).className} style={{ marginBlockEnd: 0 }}>
               {t('detail.confidence')}
             </span>
             <span
-              className={styles.confidenceValue}
+              className={stylex.props(styles.confidenceValue).className}
               style={{ color: cssVar[confidenceColor(ratio)] }}
             >
               {Math.round(ratio * 100)}%
             </span>
           </Flexbox>
-          <div className={styles.track}>
+          <div {...stylex.props(styles.track)}>
             <div
-              className={styles.fill}
+              className={stylex.props(styles.fill).className}
               style={{
                 background: cssVar[confidenceColor(ratio)],
                 width: `${Math.round(ratio * 100)}%`,
@@ -199,9 +192,9 @@ const Body = () => {
       {metaItems.length > 0 && (
         <Flexbox gap={8}>
           {metaItems.map((m) => (
-            <div className={styles.metaRow} key={m.key}>
-              <span className={styles.metaKey}>{m.key}</span>
-              <span className={styles.metaValue}>{m.value}</span>
+            <div {...stylex.props(styles.metaRow)} key={m.key}>
+              <span {...stylex.props(styles.metaKey)}>{m.key}</span>
+              <span {...stylex.props(styles.metaValue)}>{m.value}</span>
             </div>
           ))}
         </Flexbox>
@@ -210,13 +203,13 @@ const Body = () => {
       {/* Original criteria — what this check verifies */}
       {item.description && (
         <Field label={t('detail.summary')}>
-          <div className={styles.text}>{item.description}</div>
+          <div {...stylex.props(styles.text)}>{item.description}</div>
         </Field>
       )}
 
       {instruction && (
         <Field label={t('detail.instruction')}>
-          <Markdown className={styles.text} variant={'chat'}>
+          <Markdown className={stylex.props(styles.text).className} variant={'chat'}>
             {instruction}
           </Markdown>
         </Field>
@@ -233,7 +226,7 @@ const Body = () => {
       {/* Judgment outcome */}
       {sections.map((s) => (
         <Field key={s.key} label={t(`detail.${s.key}` as any)}>
-          <Markdown className={styles.text} variant={'chat'}>
+          <Markdown className={stylex.props(styles.text).className} variant={'chat'}>
             {s.value!}
           </Markdown>
         </Field>

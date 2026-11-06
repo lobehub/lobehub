@@ -24,7 +24,7 @@ import { prefersReducedMotion } from './anchor/commentLocator';
 import { useCommentAnchors } from './anchor/context';
 import DocumentCommentEditor, { type DocumentCommentEditorRef } from './DocumentCommentEditor';
 import type { DocumentCommentSubmitInput } from './optimistic';
-import { COMMENT_INPUT_MAX_HEIGHT, styles } from './styles';
+import { COMMENT_INPUT_MAX_HEIGHT, composerClassNames, styles } from './styles';
 import { useGutterComposerFocus } from './useGutterComposerFocus';
 
 export interface Draft {
@@ -718,7 +718,7 @@ const Composer = memo<ComposerProps>(
       return (
         <Flexbox gap={8} ref={rootRef}>
           <ChatInput
-            className={styles.composerPlain}
+            className={composerClassNames.plain}
             header={showTypoBar ? <TypoBar editor={editor} /> : undefined}
             maxHeight={COMMENT_INPUT_MAX_HEIGHT}
             minHeight={56}
@@ -755,11 +755,11 @@ const Composer = memo<ComposerProps>(
 
     return (
       <Flexbox horizontal align={'flex-start'} gap={12} ref={rootRef}>
-        <Flexbox className={styles.composerAvatar}>
+        <Flexbox className={composerClassNames.avatar}>
           <Avatar avatar={avatar} size={parentCommentId ? 28 : 32} />
         </Flexbox>
         <ChatInput
-          className={styles.composer}
+          className={composerClassNames.input}
           flex={1}
           maxHeight={COMMENT_INPUT_MAX_HEIGHT}
           minHeight={72}
@@ -791,7 +791,7 @@ const Composer = memo<ComposerProps>(
                 {anchor && (
                   <AnchorQuote
                     anchor={anchor}
-                    className={styles.composerAnchor}
+                    xstyle={styles.composerAnchor}
                     onDismiss={clearAnchor}
                   />
                 )}

@@ -1,93 +1,82 @@
-import { createStaticStyles, cssVar, Tabs } from '@lobehub/ui';
+import { Tabs } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { type ReactNode, useEffect, useState } from 'react';
 
-const styles = createStaticStyles(({ css }) => ({
-  footer: css`
-    display: flex;
-    flex: none;
-    gap: 8px;
-    align-items: center;
-
-    padding-block: 6px;
-    padding-inline: 8px;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  modes: css`
-    flex: none;
-    width: auto;
-  `,
-  note: css`
-    flex: none;
-
-    padding-block: 6px;
-    padding-inline: 12px;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  tab: css`
-    cursor: pointer;
-
-    flex: none;
-
-    padding-block: 4px;
-    padding-inline: 12px;
-    border: none;
-    border-radius: 6px;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-    white-space: nowrap;
-
-    background: transparent;
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-
-    &[data-active='true'] {
-      font-weight: 500;
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillSecondary};
-    }
-  `,
-  tabs: css`
-    /* The strip scrolls rather than collapsing: a long section or slide list
-       stays one gesture away instead of hiding behind a dropdown. */
-    scrollbar-width: none;
-
-    overflow-x: auto;
-    display: flex;
-    flex: 1;
-    gap: 4px;
-    align-items: center;
-
-    &::-webkit-scrollbar {
-      display: none;
-    }
-  `,
-  tabVisual: css`
-    cursor: pointer;
-
-    flex: none;
-
-    padding: 0;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 4px;
-
-    background: ${cssVar.colorBgContainer};
-
-    &:hover {
-      border-color: ${cssVar.colorBorder};
-    }
-
-    &[data-active='true'] {
-      border-color: ${cssVar.colorPrimary};
-      box-shadow: 0 0 0 2px ${cssVar.colorPrimaryBg};
-    }
-  `,
-}));
+const styles = stylex.create({
+  footer: {
+    display: 'flex',
+    flex: 'none',
+    gap: '8px',
+    alignItems: 'center',
+    paddingBlock: '6px',
+    paddingInline: '8px',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+  },
+  modes: { flex: 'none', width: 'auto' },
+  note: {
+    flex: 'none',
+    paddingBlock: '6px',
+    paddingInline: '12px',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+    fontSize: '12px',
+    color: cssVar.colorTextTertiary,
+  },
+  tab: {
+    cursor: 'pointer',
+    flex: 'none',
+    paddingBlock: '4px',
+    paddingInline: '12px',
+    borderStyle: 'none',
+    borderRadius: '6px',
+    fontSize: '12px',
+    color: cssVar.colorTextSecondary,
+    whiteSpace: 'nowrap',
+    backgroundColor: {
+      'default': 'transparent',
+      ':hover': cssVar.colorFillTertiary,
+    },
+    backgroundImage: 'none',
+  },
+  tabActive: {
+    fontWeight: 500,
+    color: cssVar.colorText,
+    backgroundColor: cssVar.colorFillSecondary,
+  },
+  // The strip scrolls rather than collapsing: a long section or slide list
+  // stays one gesture away instead of hiding behind a dropdown.
+  tabs: {
+    'scrollbarWidth': 'none',
+    'overflowX': 'auto',
+    'display': 'flex',
+    'flex': '1',
+    'gap': '4px',
+    'alignItems': 'center',
+    '::-webkit-scrollbar': { display: 'none' },
+  },
+  tabVisual: {
+    cursor: 'pointer',
+    flex: 'none',
+    padding: 0,
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: {
+      'default': cssVar.colorBorderSecondary,
+      ':hover': cssVar.colorBorder,
+    },
+    borderRadius: '4px',
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  tabVisualActive: {
+    borderColor: cssVar.colorPrimary,
+    boxShadow: `0 0 0 2px ${cssVar.colorPrimaryBg}`,
+  },
+});
 
 export interface PaneTab {
   key: string;
@@ -138,12 +127,15 @@ const PaneFooter = ({
 
   return (
     <>
-      {note ? <div className={styles.note}>{note}</div> : null}
-      <div className={styles.footer}>
-        <div className={styles.tabs} ref={setStrip}>
+      {note ? <div {...stylex.props(styles.note)}>{note}</div> : null}
+      <div {...stylex.props(styles.footer)}>
+        <div {...stylex.props(styles.tabs)} ref={setStrip}>
           {tabs.map((tab) => (
             <button
-              className={visualTabs ? styles.tabVisual : styles.tab}
+              {...stylex.props(
+                visualTabs ? styles.tabVisual : styles.tab,
+                tab.key === activeTab && (visualTabs ? styles.tabVisualActive : styles.tabActive),
+              )}
               data-active={tab.key === activeTab}
               data-key={tab.key}
               key={tab.key}
@@ -159,7 +151,7 @@ const PaneFooter = ({
         {modes && modes.length > 0 && (
           <Tabs
             activeKey={activeMode}
-            className={styles.modes}
+            className={stylex.props(styles.modes).className}
             items={modes.map((mode) => ({ key: mode.key, label: mode.label }))}
             size={'small'}
             onChange={(key) => onModeChange?.(key as string)}

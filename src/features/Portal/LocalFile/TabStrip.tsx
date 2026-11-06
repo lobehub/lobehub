@@ -1,15 +1,10 @@
 'use client';
 
 import { isDesktop } from '@lobechat/const';
-import {
-  confirmModal,
-  ContextMenuTrigger,
-  createStaticStyles,
-  type DropdownItem,
-  Icon,
-  ScrollArea,
-} from '@lobehub/ui';
+import { confirmModal, ContextMenuTrigger, type DropdownItem, Icon, ScrollArea } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { XIcon } from 'lucide-react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -27,111 +22,71 @@ const resolveSkillName = (filePath: string): string | null => {
   return match ? match[1] : null;
 };
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  tabIcon: css`
-    display: inline-flex;
-    flex-shrink: 0;
-    align-items: center;
-    justify-content: center;
-
-    width: 14px;
-    height: 14px;
-  `,
-  tabClose: css`
-    cursor: pointer;
-
-    display: flex;
-    flex-shrink: 0;
-    align-items: center;
-    justify-content: center;
-
-    width: 16px;
-    height: 16px;
-    padding: 0;
-    border: none;
-    border-radius: 3px;
-
-    color: inherit;
-
-    opacity: 0.6;
-    background: transparent;
-
-    .cm-tab-close-x {
-      display: inline-flex;
-    }
-
-    .cm-tab-close-dot {
-      display: none;
-
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-
-      background: ${cssVar.colorPrimary};
-    }
-
-    &[data-dirty='true'] {
-      .cm-tab-close-x {
-        display: none;
-      }
-
-      .cm-tab-close-dot {
-        display: inline-block;
-      }
-    }
-
-    &:hover {
-      opacity: 1;
-      background: ${cssVar.colorFillSecondary};
-
-      .cm-tab-close-x {
-        display: inline-flex;
-      }
-
-      .cm-tab-close-dot {
-        display: none;
-      }
-    }
-  `,
-  tabItem: css`
-    cursor: pointer;
-    user-select: none;
-
-    display: flex;
-    flex-shrink: 0;
-    gap: 4px;
-    align-items: center;
-
-    max-width: 160px;
-    padding-block: 4px;
-    padding-inline: 8px;
-    border-radius: 6px;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-
-    transition:
-      color 0.15s,
-      background 0.15s;
-
-    &:hover {
-      color: ${cssVar.colorText};
-    }
-  `,
-  tabItemActive: css`
-    color: ${cssVar.colorText};
-    background: ${cssVar.colorFillTertiary};
-  `,
-  tabLabel: css`
-    overflow: hidden;
-    flex: 1;
-
-    min-width: 0;
-
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-}));
+const styles = stylex.create({
+  tabIcon: {
+    display: 'inline-flex',
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '14px',
+    height: '14px',
+  },
+  // The close button shows its X, or a dirty dot until hovered (it is the marker).
+  tabClose: {
+    cursor: 'pointer',
+    display: 'flex',
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '16px',
+    height: '16px',
+    padding: 0,
+    borderStyle: 'none',
+    borderRadius: '3px',
+    color: 'inherit',
+    opacity: { 'default': 0.6, ':hover': 1 },
+    backgroundColor: { 'default': 'transparent', ':hover': cssVar.colorFillSecondary },
+    backgroundImage: 'none',
+  },
+  closeX: { display: 'inline-flex' },
+  closeXDirty: {
+    display: { default: 'none', [stylex.when.ancestor(':hover')]: 'inline-flex' },
+  },
+  closeDot: {
+    display: 'none',
+    width: '8px',
+    height: '8px',
+    borderRadius: '50%',
+    backgroundColor: cssVar.colorPrimary,
+    backgroundImage: 'none',
+  },
+  closeDotDirty: {
+    display: { default: 'inline-block', [stylex.when.ancestor(':hover')]: 'none' },
+  },
+  tabItem: {
+    cursor: 'pointer',
+    userSelect: 'none',
+    display: 'flex',
+    flexShrink: 0,
+    gap: '4px',
+    alignItems: 'center',
+    maxWidth: '160px',
+    paddingBlock: '4px',
+    paddingInline: '8px',
+    borderRadius: '6px',
+    fontSize: '12px',
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
+    transition: 'color 0.15s, background 0.15s',
+  },
+  tabItemActive: { color: cssVar.colorText, backgroundColor: cssVar.colorFillTertiary },
+  tabLabel: {
+    overflow: 'hidden',
+    flex: '1',
+    minWidth: 0,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+});
 
 const SCROLL_AREA_STYLE = {
   background: 'transparent',
@@ -263,12 +218,13 @@ const TabStrip = memo(() => {
         const skillName = resolveSkillName(filePath);
         const label = skillName ?? filename;
         const isActive = id === activeLocalFileId;
+        const dirty = id in dirtyContents;
 
         return (
           <ContextMenuTrigger items={() => getContextMenuItems(id, filePath, index)} key={id}>
             <div
               aria-selected={isActive}
-              className={`${styles.tabItem} ${isActive ? styles.tabItemActive : ''}`}
+              {...stylex.props(styles.tabItem, isActive && styles.tabItemActive)}
               role="tab"
               tabIndex={0}
               title={filePath}
@@ -281,27 +237,31 @@ const TabStrip = memo(() => {
               }}
             >
               {skillName ? (
-                <Icon className={styles.tabIcon} icon={SkillsIcon} size={12} />
+                <Icon
+                  className={stylex.props(styles.tabIcon).className}
+                  icon={SkillsIcon}
+                  size={12}
+                />
               ) : (
-                <span className={styles.tabIcon}>
+                <span {...stylex.props(styles.tabIcon)}>
                   <FileIcon fileName={filename} size={14} variant={'raw'} />
                 </span>
               )}
-              <span className={styles.tabLabel}>{label}</span>
+              <span {...stylex.props(styles.tabLabel)}>{label}</span>
               <button
                 aria-label={`Close ${filename}`}
-                className={styles.tabClose}
-                data-dirty={id in dirtyContents ? 'true' : 'false'}
+                data-dirty={dirty ? 'true' : 'false'}
+                {...stylex.props(styles.tabClose, stylex.defaultMarker())}
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
                   confirmClose(id, filePath, () => closeLocalFileTab(id));
                 }}
               >
-                <span className={'cm-tab-close-x'}>
+                <span {...stylex.props(styles.closeX, dirty && styles.closeXDirty)}>
                   <XIcon size={12} />
                 </span>
-                <span className={'cm-tab-close-dot'} />
+                <span {...stylex.props(styles.closeDot, dirty && styles.closeDotDirty)} />
               </button>
             </div>
           </ContextMenuTrigger>

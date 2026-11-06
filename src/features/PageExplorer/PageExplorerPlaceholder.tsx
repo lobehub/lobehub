@@ -1,15 +1,8 @@
 import { CUSTOM_DOCUMENT_FILE_TYPE } from '@lobechat/const';
 import { Notion } from '@lobehub/icons';
-import {
-  Center,
-  createStaticStyles,
-  cssVar,
-  FileTypeIcon,
-  Flexbox,
-  Icon,
-  Text,
-  Upload,
-} from '@lobehub/ui';
+import { Center, FileTypeIcon, Flexbox, Icon, Text, Upload } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ArrowUpIcon, PlusIcon } from 'lucide-react';
 import React, { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -24,55 +17,39 @@ import { DocumentSourceType } from '@/types/document';
 
 const ICON_SIZE = 80;
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  actionTitle: css`
-    margin-block-start: 12px;
-    font-size: 16px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  card: css`
-    cursor: pointer;
-
-    position: relative;
-
-    overflow: hidden;
-
-    width: 200px;
-    height: 140px;
-    border-radius: ${cssVar.borderRadiusLG};
-
-    font-weight: 500;
-    text-align: center;
-
-    background: ${cssVar.colorFillTertiary};
-    box-shadow: 0 0 0 1px ${cssVar.colorFillTertiary} inset;
-
-    transition: background 0.3s ease-in-out;
-
-    &:hover {
-      background: ${cssVar.colorFillSecondary};
-    }
-  `,
-  glow: css`
-    position: absolute;
-    inset-block-end: -12px;
-    inset-inline-end: 0;
-
-    width: 48px;
-    height: 48px;
-
-    opacity: 0.5;
-    filter: blur(24px);
-  `,
-  icon: css`
-    position: absolute;
-    z-index: 1;
-    inset-block-end: -24px;
-    inset-inline-end: 8px;
-
-    flex: none;
-  `,
-}));
+const styles = stylex.create({
+  actionTitle: { marginBlockStart: '12px', fontSize: '16px', color: cssVar.colorTextSecondary },
+  card: {
+    cursor: 'pointer',
+    position: 'relative',
+    overflow: 'hidden',
+    width: '200px',
+    height: '140px',
+    borderRadius: cssVar.borderRadiusLG,
+    fontWeight: 500,
+    textAlign: 'center',
+    backgroundColor: { 'default': cssVar.colorFillTertiary, ':hover': cssVar.colorFillSecondary },
+    backgroundImage: { 'default': 'none', ':hover': 'none' },
+    boxShadow: `0 0 0 1px ${cssVar.colorFillTertiary} inset`,
+    transition: 'background 0.3s ease-in-out',
+  },
+  glow: {
+    position: 'absolute',
+    insetBlockEnd: '-12px',
+    insetInlineEnd: '0',
+    width: '48px',
+    height: '48px',
+    opacity: 0.5,
+    filter: 'blur(24px)',
+  },
+  icon: {
+    position: 'absolute',
+    zIndex: 1,
+    insetBlockEnd: '-24px',
+    insetInlineEnd: '8px',
+    flex: 'none',
+  },
+});
 
 interface PageExplorerPlaceholderProps {
   hasPages?: boolean;
@@ -250,15 +227,20 @@ const PageExplorerPlaceholder = memo<PageExplorerPlaceholderProps>(
           )}
           <Flexbox horizontal gap={12}>
             <Flexbox
-              className={styles.card}
+              className={stylex.props(styles.card).className}
               padding={16}
               style={canCreate ? undefined : { cursor: 'not-allowed', opacity: 0.5 }}
               onClick={() => handleCreateDocument('', t('pageList.untitled'))}
             >
-              <span className={styles.actionTitle}>{t('pageEditor.empty.createNewDocument')}</span>
-              <div className={styles.glow} style={{ background: cssVar.purple }} />
+              <span {...stylex.props(styles.actionTitle)}>
+                {t('pageEditor.empty.createNewDocument')}
+              </span>
+              <div
+                className={stylex.props(styles.glow).className}
+                style={{ background: cssVar.purple }}
+              />
               <FileTypeIcon
-                className={styles.icon}
+                className={stylex.props(styles.icon).className}
                 color={cssVar.purple}
                 icon={<Icon color={'#fff'} icon={PlusIcon} />}
                 size={ICON_SIZE}
@@ -274,19 +256,22 @@ const PageExplorerPlaceholder = memo<PageExplorerPlaceholderProps>(
               onFiles={([file]) => handleUploadFile(file)}
             >
               <Flexbox
-                className={styles.card}
+                className={stylex.props(styles.card).className}
                 padding={16}
                 style={{
                   cursor: canCreate ? undefined : 'not-allowed',
                   opacity: !canCreate || isUploading ? 0.5 : 1,
                 }}
               >
-                <span className={styles.actionTitle}>
+                <span {...stylex.props(styles.actionTitle)}>
                   {isUploading ? 'Uploading...' : t('pageEditor.empty.uploadFiles')}
                 </span>
-                <div className={styles.glow} style={{ background: cssVar.gold }} />
+                <div
+                  className={stylex.props(styles.glow).className}
+                  style={{ background: cssVar.gold }}
+                />
                 <FileTypeIcon
-                  className={styles.icon}
+                  className={stylex.props(styles.icon).className}
                   color={cssVar.gold}
                   icon={<Icon color={'#fff'} icon={ArrowUpIcon} />}
                   size={ICON_SIZE}
@@ -297,7 +282,7 @@ const PageExplorerPlaceholder = memo<PageExplorerPlaceholderProps>(
 
             {/* Import from Notion */}
             <Flexbox
-              className={styles.card}
+              className={stylex.props(styles.card).className}
               padding={16}
               style={canCreate ? undefined : { cursor: 'not-allowed', opacity: 0.5 }}
               onClick={() => {
@@ -306,10 +291,15 @@ const PageExplorerPlaceholder = memo<PageExplorerPlaceholderProps>(
                 notionImport.handleOpenNotionGuide();
               }}
             >
-              <span className={styles.actionTitle}>{t('pageEditor.empty.importNotion')}</span>
-              <div className={styles.glow} style={{ background: cssVar.geekblue }} />
+              <span {...stylex.props(styles.actionTitle)}>
+                {t('pageEditor.empty.importNotion')}
+              </span>
+              <div
+                className={stylex.props(styles.glow).className}
+                style={{ background: cssVar.geekblue }}
+              />
               <FileTypeIcon
-                className={styles.icon}
+                className={stylex.props(styles.icon).className}
                 color={cssVar.geekblue}
                 icon={<Notion color={'#fff'} />}
                 size={ICON_SIZE}

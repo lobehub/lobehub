@@ -14,9 +14,6 @@ vi.mock('@lobehub/ui', async (importOriginal) => {
 
   return {
     ...actual,
-    createStaticStyles: () => ({
-      content: 'content',
-    }),
     cssVar: {
       colorBgContainer: 'var(--color-bg-container)',
       colorBorderSecondary: 'var(--color-border-secondary)',

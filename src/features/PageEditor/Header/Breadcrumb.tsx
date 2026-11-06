@@ -1,4 +1,6 @@
-import { createStaticStyles, cx, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -7,28 +9,16 @@ import { knowledgeBaseSelectors, useKnowledgeBaseStore } from '@/store/library';
 
 import { usePageEditorStore } from '../store';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  breadcrumb: css`
-    font-size: 14px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  breadcrumbItem: css`
-    cursor: pointer;
-    transition: color ${cssVar.motionDurationSlow};
-
-    &:hover {
-      color: ${cssVar.colorText};
-    }
-  `,
-  currentItem: css`
-    font-weight: 500;
-    color: ${cssVar.colorText};
-  `,
-  separator: css`
-    margin-inline: 8px;
-    color: ${cssVar.colorTextQuaternary};
-  `,
-}));
+const styles = stylex.create({
+  breadcrumb: { fontSize: '14px', color: cssVar.colorTextSecondary },
+  breadcrumbItem: {
+    cursor: 'pointer',
+    transition: `color ${cssVar.motionDurationSlow}`,
+    color: { 'default': null, ':hover': cssVar.colorText },
+  },
+  currentItem: { fontWeight: 500, color: cssVar.colorText },
+  separator: { marginInline: '8px', color: cssVar.colorTextQuaternary },
+});
 
 interface FolderCrumb {
   id: string;
@@ -63,29 +53,44 @@ const Breadcrumb = memo(() => {
   const documentTitle = title || t('pageEditor.titlePlaceholder');
 
   return (
-    <Flexbox horizontal align={'center'} className={styles.breadcrumb} flex={1} gap={0}>
+    <Flexbox
+      horizontal
+      align={'center'}
+      className={stylex.props(styles.breadcrumb).className}
+      flex={1}
+      gap={0}
+    >
       {/* Knowledge Base (root) */}
       {knowledgeBaseId && (
         <>
-          <span className={styles.breadcrumbItem} style={{ cursor: 'default' }}>
+          <span
+            className={stylex.props(styles.breadcrumbItem).className}
+            style={{ cursor: 'default' }}
+          >
             {knowledgeBaseName || 'Knowledge Base'}
           </span>
-          <span className={styles.separator}>/</span>
+          <span {...stylex.props(styles.separator)}>/</span>
         </>
       )}
 
       {/* Folder chain */}
       {folderChain.map((folder: FolderCrumb) => (
         <Flexbox horizontal align={'center'} gap={0} key={folder.id}>
-          <span className={styles.breadcrumbItem} style={{ cursor: 'default' }}>
+          <span
+            className={stylex.props(styles.breadcrumbItem).className}
+            style={{ cursor: 'default' }}
+          >
             {folder.name}
           </span>
-          <span className={styles.separator}>/</span>
+          <span {...stylex.props(styles.separator)}>/</span>
         </Flexbox>
       ))}
 
       {/* Current document title */}
-      <span className={cx(styles.breadcrumbItem, styles.currentItem)} style={{ cursor: 'default' }}>
+      <span
+        className={stylex.props(styles.breadcrumbItem, styles.currentItem).className}
+        style={{ cursor: 'default' }}
+      >
         {documentTitle}
       </span>
     </Flexbox>

@@ -1,4 +1,6 @@
-import { ActionIcon, Center, createStaticStyles, Flexbox } from '@lobehub/ui';
+import { ActionIcon, Center, Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronDownIcon, Settings2Icon } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 
@@ -11,30 +13,24 @@ import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  chevron: css`
-    color: ${cssVar.colorTextQuaternary};
-  `,
-  name: css`
-    overflow: hidden;
-
-    max-width: 120px;
-
-    font-size: 12px;
-    line-height: 1;
-    color: ${cssVar.colorTextSecondary};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  trigger: css`
-    cursor: pointer;
-    border-radius: 6px;
-
-    :hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-}));
+const styles = stylex.create({
+  chevron: { color: cssVar.colorTextQuaternary },
+  name: {
+    overflow: 'hidden',
+    maxWidth: '120px',
+    fontSize: '12px',
+    lineHeight: 1,
+    color: cssVar.colorTextSecondary,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  trigger: {
+    cursor: 'pointer',
+    borderRadius: '6px',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: 'none',
+  },
+});
 
 const CopilotModelSelect = memo(() => {
   const { allowed: canEdit } = usePermission('edit_own_content');
@@ -75,7 +71,7 @@ const CopilotModelSelect = memo(() => {
       >
         <Center
           horizontal
-          className={styles.trigger}
+          className={stylex.props(styles.trigger).className}
           height={28}
           paddingInline={6}
           style={
@@ -83,8 +79,8 @@ const CopilotModelSelect = memo(() => {
           }
         >
           <Flexbox horizontal align={'center'} gap={2}>
-            <span className={styles.name}>{displayName}</span>
-            <ChevronDownIcon className={styles.chevron} size={12} />
+            <span {...stylex.props(styles.name)}>{displayName}</span>
+            <ChevronDownIcon {...stylex.props(styles.chevron)} size={12} />
           </Flexbox>
         </Center>
       </ModelSwitchPanel>

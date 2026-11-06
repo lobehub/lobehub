@@ -1,4 +1,6 @@
-import { createStaticStyles, cssVar, Flexbox, Markdown, Skeleton, Tag, Text } from '@lobehub/ui';
+import { Flexbox, Markdown, Skeleton, Tag, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo, type ReactNode, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -17,26 +19,20 @@ import { useReportChapter, useReportGraph } from './useReportGraph';
  * the panel shows instead of leaving a stale copy open.
  */
 
-const styles = createStaticStyles(({ css }) => ({
-  /**
-   * Review: an outline is enough — no tinted fill, so the detour reads as a
-   * callout beside the map rather than a filled warning block.
-   */
-  detour: css`
-    padding-block: 10px;
-    padding-inline: 12px;
-    border: 1px dashed ${cssVar.colorWarningBorder};
-    border-radius: ${cssVar.borderRadius};
-  `,
-  scroll: css`
-    overflow-y: auto;
-    flex: 1;
-    min-height: 0;
-  `,
-}));
+const styles = stylex.create({
+  detour: {
+    paddingBlock: '10px',
+    paddingInline: '12px',
+    borderWidth: '1px',
+    borderStyle: 'dashed',
+    borderColor: cssVar.colorWarningBorder,
+    borderRadius: cssVar.borderRadius,
+  },
+  scroll: { overflowY: 'auto', flex: '1', minHeight: '0' },
+});
 
 const Frame = ({ children }: { children: ReactNode }) => (
-  <Flexbox className={styles.scroll} gap={16} padding={16}>
+  <Flexbox className={stylex.props(styles.scroll).className} gap={16} padding={16}>
     {children}
   </Flexbox>
 );
@@ -113,7 +109,7 @@ export const ChapterBody = memo(() => {
     <Frame>
       <Flexbox gap={8}>
         {chapter.chapter.detours.map((detour, index) => (
-          <Flexbox className={styles.detour} gap={4} key={index}>
+          <Flexbox className={stylex.props(styles.detour).className} gap={4} key={index}>
             <Flexbox horizontal align={'center'} gap={8}>
               <Tag color={'warning'} size={'small'}>
                 {t(`goalProcess.result.story.detourKind.${detour.kind}`)}

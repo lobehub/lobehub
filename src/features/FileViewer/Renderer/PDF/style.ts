@@ -1,21 +1,18 @@
-import { createStaticStyles } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 
-export const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    height: 100%;
-  `,
-  document: css`
-    position: relative;
-  `,
-  documentContainer: css`
-    flex: 1;
-    padding-block: 10px;
-    background-color: ${cssVar.colorBgLayout};
-  `,
-  page: css`
-    overflow: hidden;
-    margin-block-end: 12px;
-    border-radius: 4px;
-    box-shadow: ${cssVar.boxShadowTertiary};
-  `,
-}));
+export const styles = stylex.create({
+  container: { height: '100%' },
+  document: { position: 'relative' },
+  documentContainer: {
+    flex: '1',
+    paddingBlock: '10px',
+    backgroundColor: cssVar.colorBgLayout,
+  },
+  page: {
+    overflow: 'hidden',
+    marginBlockEnd: '12px',
+    borderRadius: '4px',
+    boxShadow: cssVar.boxShadowTertiary,
+  },
+});

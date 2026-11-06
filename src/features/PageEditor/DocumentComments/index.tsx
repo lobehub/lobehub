@@ -1,6 +1,7 @@
 'use client';
 
 import { Button, Center, Flexbox, Skeleton, Text } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -87,11 +88,16 @@ const DocumentCommentList = memo<{ state: DocumentCommentsState }>(({ state }) =
   return (
     <Flexbox
       data-document-comments
-      className={styles.section}
+      className={stylex.props(styles.section).className}
       gap={24}
       onClick={(event) => event.stopPropagation()}
     >
-      <Flexbox horizontal align={'center'} className={styles.header} gap={8}>
+      <Flexbox
+        horizontal
+        align={'center'}
+        className={stylex.props(styles.header).className}
+        gap={8}
+      >
         {isHeaderLoading ? (
           <>
             <Skeleton height={28} width={48} />
@@ -103,7 +109,7 @@ const DocumentCommentList = memo<{ state: DocumentCommentsState }>(({ state }) =
               {t('pageEditor.comments.title')}
             </Text>
             {summary.data && (
-              <Text className={styles.meta} fontSize={14}>
+              <Text className={stylex.props(styles.meta).className} fontSize={14}>
                 {summary.data.total}
               </Text>
             )}
@@ -118,7 +124,7 @@ const DocumentCommentList = memo<{ state: DocumentCommentsState }>(({ state }) =
       isLoadingInitial ||
       listThreads.length > 0 ||
       pinnedThreadInList ? (
-        <Flexbox className={styles.threadList}>
+        <Flexbox className={stylex.props(styles.threadList).className}>
           {pinnedThreadInList && (
             <Thread
               documentId={documentId}

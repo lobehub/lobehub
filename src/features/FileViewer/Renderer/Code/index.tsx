@@ -1,6 +1,7 @@
 'use client';
 
-import { Center, createStaticStyles, Flexbox, Highlighter, Spin } from '@lobehub/ui';
+import { Center, Flexbox, Highlighter, Spin } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 
 import AsyncError from '@/components/AsyncError';
@@ -9,13 +10,9 @@ import { getLanguageFromFilename } from '@/utils/fileLanguage';
 import { useTextFileLoader } from '../../hooks/useTextFileLoader';
 import NotSupport from '../../NotSupport';
 
-const styles = createStaticStyles(({ css }) => ({
-  page: css`
-    width: 100%;
-    height: 100%;
-    padding-inline: 24px 4px;
-  `,
-}));
+const styles = stylex.create({
+  page: { width: '100%', height: '100%', paddingInlineStart: '24px', paddingInlineEnd: '4px' },
+});
 
 interface CodeViewerProps {
   fileId: string;
@@ -36,7 +33,7 @@ const CodeViewer = memo<CodeViewerProps>(({ url, fileName }) => {
     );
 
   return (
-    <Flexbox className={styles.page}>
+    <Flexbox className={stylex.props(styles.page).className}>
       {!loading && fileData !== null ? (
         <Highlighter language={language} showLanguage={false} variant={'borderless'}>
           {fileData}
