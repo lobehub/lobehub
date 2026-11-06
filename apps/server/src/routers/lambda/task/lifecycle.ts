@@ -128,7 +128,7 @@ export const lifecycleRouter = router({
       }
     }),
   create: taskProcedureWrite.input(createSchema).mutation(async ({ input, ctx }) => {
-    const { goal: legacyGoal, labelIds, ...createInput } = input;
+    const { context, goal: legacyGoal, labelIds, ...createInput } = input;
     if (legacyGoal !== undefined) {
       throw new TRPCError({
         code: 'BAD_REQUEST',
@@ -147,7 +147,8 @@ export const lifecycleRouter = router({
         throw error;
       });
     }
-    const origin = createInput.context?.origin;
+    // Origin is optional: without one the task stores no context, as before.
+    const origin = context?.origin;
     if (origin) {
       await assertTaskOriginAccessible(
         ctx.serverDB,
@@ -160,7 +161,7 @@ export const lifecycleRouter = router({
       const { verify: _legacyVerify, ...taskConfig } = createInput.config ?? {};
       const task = await ctx.taskService.createTask({
         ...createInput,
-        context: origin ? { origin } : undefined,
+        ...(origin && { context: { origin } }),
         parentTaskId: createInput.parentTaskId
           ? (await resolveTaskOrThrow(ctx.taskModel, createInput.parentTaskId)).id
           : undefined,

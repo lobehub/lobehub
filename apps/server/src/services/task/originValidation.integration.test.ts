@@ -223,9 +223,18 @@ describe('assertTaskOriginPatchAllowed (real PostgreSQL)', () => {
     ).rejects.toMatchObject({ code: 'NOT_FOUND' });
   });
 
-  it('rejects a malformed origin', async () => {
+  it('stores an origin the bridge cannot deliver to as sent, like before', async () => {
+    const partial = { topicId: 'tpc_x' };
+
+    await expect(assertTaskOriginPatchAllowed(db, { userId }, undefined, partial)).resolves.toBe(
+      partial,
+    );
+    await expect(assertTaskOriginPatchAllowed(db, { userId }, undefined, null)).resolves.toBeNull();
+  });
+
+  it('rejects a deliverable origin with non-string ids', async () => {
     await expect(
-      assertTaskOriginPatchAllowed(db, { userId }, undefined, { topicId: 'tpc_x' }),
+      assertTaskOriginPatchAllowed(db, { userId }, undefined, { agentId: 1, topicId: 'tpc_x' }),
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
   });
 });

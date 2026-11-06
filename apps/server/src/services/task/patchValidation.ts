@@ -145,7 +145,7 @@ export async function resolveTaskPatchInvariants<Data extends TaskPatchFields>(
       (resolved.context as TaskContext | null)?.origin,
       data.context?.origin,
     );
-    if (origin) data = { ...data, context: { ...data.context, origin } };
+    if (origin !== undefined) data = { ...data, context: { ...data.context, origin } };
   }
 
   // Collaborative edit lock: reject writes to a workspace task another member

@@ -90,25 +90,36 @@ const sameOrigin = (a?: TaskOriginContext, b?: TaskOriginContext) =>
   (a?.topicId ?? null) === (b?.topicId ?? null) &&
   (a?.messageId ?? null) === (b?.messageId ?? null);
 
+// What `TaskResultBridgeService` treats as a delivery target: it delivers
+// whenever both ids are truthy, so the check must cover exactly those origins.
+const isDeliverable = (origin: unknown): boolean => {
+  if (!origin || typeof origin !== 'object') return false;
+  const { agentId, topicId } = origin as Record<string, unknown>;
+  return !!agentId && !!topicId;
+};
+
 /**
  * `task.update` replaces the whole `context` column, and clients ship the
- * current context back unchanged. Only a changed delivery target (agent, topic
- * or anchor message) is re-checked, so re-saving a tool-created origin keeps
- * working while pointing an existing task at someone else's topic does not.
- * Returns the normalized origin to store, or undefined when none was sent.
+ * current context back unchanged. Origin stays optional there, as it was
+ * before: no origin, or one the bridge cannot deliver to (missing agent or
+ * topic), is stored as sent. Only a deliverable target that changed (agent,
+ * topic or anchor message) is checked, so re-saving a tool-created origin
+ * keeps working while pointing a task at someone else's topic does not.
+ * Returns the origin to store: the normalized one when checked, otherwise the
+ * one that was sent.
  */
 export async function assertTaskOriginPatchAllowed(
   db: LobeChatDatabase,
   ctx: OriginAccessCtx,
   current: TaskOriginContext | undefined,
   next: unknown,
-): Promise<TaskOriginContext | undefined> {
-  if (next === undefined || next === null) return undefined;
+): Promise<unknown> {
+  if (!isDeliverable(next)) return next;
   const parsed = taskOriginInputSchema.safeParse(next);
   if (!parsed.success) {
     throw new TRPCError({
       code: 'BAD_REQUEST',
-      message: 'Invalid context.origin: agentId and topicId are required',
+      message: 'Invalid context.origin: agentId and topicId must be non-empty strings',
     });
   }
   if (!sameOrigin(current, parsed.data)) await assertTaskOriginAccessible(db, ctx, parsed.data);

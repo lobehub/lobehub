@@ -59,6 +59,15 @@ describe('Task Router context.origin', () => {
     });
   });
 
+  it('creates a task without an origin and leaves context at its default, as before', async () => {
+    const created = await caller.create({ instruction: 'No one to notify' });
+    const withEmptyContext = await caller.create({ context: {}, instruction: 'Still no one' });
+
+    const model = new TaskModel(serverDB, userId);
+    expect((await model.findById(created.data.id))?.context).toEqual({});
+    expect((await model.findById(withEmptyContext.data.id))?.context).toEqual({});
+  });
+
   it("refuses a forged origin on another user's topic and creates nothing", async () => {
     const own = await seedConversation(serverDB, userId);
     const foreign = await seedConversation(serverDB, otherUserId);
@@ -105,6 +114,20 @@ describe('Task Router context.origin', () => {
     ).resolves.toMatchObject({ success: true });
     const stored = await new TaskModel(serverDB, userId).findById(created.data.id);
     expect(stored?.context).toEqual({ origin: own });
+  });
+
+  it('keeps origin optional on update: a context without a deliverable origin is stored as sent', async () => {
+    const created = await caller.create({ instruction: 'Report back when done' });
+
+    await expect(
+      caller.update({ context: { note: 'kept' }, id: created.data.id }),
+    ).resolves.toMatchObject({ success: true });
+    await expect(
+      caller.update({ context: { origin: { topicId: 'tpc_partial' } }, id: created.data.id }),
+    ).resolves.toMatchObject({ success: true });
+
+    const stored = await new TaskModel(serverDB, userId).findById(created.data.id);
+    expect(stored?.context).toEqual({ origin: { topicId: 'tpc_partial' } });
   });
 
   it('stores the origin ids an update validated, trimmed', async () => {
