@@ -58,6 +58,7 @@
   "table.columns.trigger.enums.verify": "验收",
   "table.columns.trigger.enums.video": "视频生成",
   "table.columns.trigger.title": "触发方式",
+  "table.columns.type.enums.agentRun": "智能体任务费",
   "table.columns.type.enums.chat": "文本生成",
   "table.columns.type.enums.embedding": "嵌入",
   "table.columns.type.enums.imageGeneration": "图像生成",

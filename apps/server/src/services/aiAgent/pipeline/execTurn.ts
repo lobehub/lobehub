@@ -35,6 +35,7 @@ import { buildOperationInitRequest, runOperationInit } from './operationInit';
 import { createHistoryMessagesLoader } from './operationPrep';
 import { resolveRunAgentConfig } from './resolveRunAgentConfig';
 import { loadResumeParentMessage } from './resumeParent';
+import { bindRunFee, claimRunFee, type RunFeeClaim, shouldHoldRunFee } from './runFee';
 import { resolveRunSettings } from './runSettings';
 import { bindRunSlot, claimRunSlot, resolveRunSlotPolicy, type RunSlotClaim } from './runSlot';
 import { traceSendStage } from './sendTracing';
@@ -89,6 +90,7 @@ export const execAgentTurn = async (
   params: InternalExecAgentParams,
   approvalClaim: ApprovalClaimState,
   runSlot: RunSlotClaim = {},
+  runFee: RunFeeClaim = {},
 ): Promise<ExecAgentResult> => {
   const {
     additionalPluginIds,
@@ -289,6 +291,10 @@ export const execAgentTurn = async (
   // Before the turn writes any row: a refused send leaves nothing behind.
   await claimRunSlot(runSlot, {
     policy: resolveRunSlotPolicy(params, { agentConfig, workspaceId: deps.workspaceId }),
+    userId: deps.userId,
+  });
+  await claimRunFee(runFee, {
+    hold: shouldHoldRunFee(params, { agentConfig, workspaceId: deps.workspaceId }),
     userId: deps.userId,
   });
 
@@ -599,6 +605,7 @@ export const execAgentTurn = async (
     continuationOperationId ??
     `op_${Date.now()}_${resolvedAgentId}_${topicId}_${nanoid(8)}`;
   await bindRunSlot(runSlot, deps.userId, operationId);
+  await bindRunFee(runFee, deps.userId, operationId);
 
   // Stages 5–18 — the run's init: the tool surface, the message/context
   // assembly, and the human decision a resumed approval turns into the first
@@ -748,10 +755,12 @@ export const execAgentTurn = async (
         approvalSourceToolMessageIds,
         autoStart,
         onOperationCreated: params.onOperationCreated,
-        // From here the run's completion releases the slot; a run that never
-        // started (failed, or created without auto-start) gives it back.
+        // From here the run's completion releases the slot and settles the
+        // fee; a run that never started (failed, or created without
+        // auto-start) gives both back.
         onScheduled: () => {
           runSlot.handedOff = true;
+          runFee.handedOff = true;
         },
         botContext,
         botPlatformContext,

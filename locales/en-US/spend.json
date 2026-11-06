@@ -58,6 +58,7 @@
   "table.columns.trigger.enums.verify": "Acceptance check",
   "table.columns.trigger.enums.video": "Video generation",
   "table.columns.trigger.title": "Trigger",
+  "table.columns.type.enums.agentRun": "Agent task fee",
   "table.columns.type.enums.chat": "Text generation",
   "table.columns.type.enums.embedding": "Embedding",
   "table.columns.type.enums.imageGeneration": "Image generation",
