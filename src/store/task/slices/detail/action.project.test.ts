@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { cacheScope, createReplicaState, replicaKeys } from '@/libs/replica';
 import { mutate, useClientDataSWR } from '@/libs/swr';
 import { taskService } from '@/services/task';
+import { saveToast } from '@/store/utils/saveToast';
 
 import { useTaskStore } from '../../store';
 import { taskListResource } from '../list/projection';
@@ -23,6 +24,8 @@ vi.mock('@/libs/swr', () => ({
   mutate: vi.fn().mockResolvedValue(undefined),
   useClientDataSWR: vi.fn(() => ({ isValidating: false, mutate: vi.fn() })),
 }));
+
+vi.mock('@/store/utils/saveToast', () => ({ saveToast: vi.fn() }));
 
 vi.mock('@lobehub/ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
@@ -139,6 +142,35 @@ describe('updateTask projectId', () => {
     expect(state().taskListMap[OLD_LIST].total).toBe(2);
     expect(boardIds()).toEqual(['T-1', 'T-2']);
     expect(state().taskListMap[GLOBAL_LIST].items[0].projectId).toBe('p1');
+  });
+
+  it('explains a refused move in the UI language, with no retry that would fail again', async () => {
+    seed();
+    const refused = Object.assign(new Error('Task dependencies cannot cross project boundaries'), {
+      data: { code: 'BAD_REQUEST' },
+    });
+    vi.mocked(taskService.update).mockRejectedValue(refused);
+
+    await state()
+      .updateTask('T-1', { projectId: 'p2' })
+      .catch(() => {});
+
+    expect(saveToast).toHaveBeenCalledWith(refused, {
+      hideCause: true,
+      title: expect.stringContaining("Can't move this task"),
+    });
+  });
+
+  it('keeps the server cause and retry for any other failed save', async () => {
+    seed();
+    const failed = Object.assign(new Error('boom'), { data: { code: 'INTERNAL_SERVER_ERROR' } });
+    vi.mocked(taskService.update).mockRejectedValue(failed);
+
+    await state()
+      .updateTask('T-1', { projectId: 'p2' })
+      .catch(() => {});
+
+    expect(saveToast).toHaveBeenCalledWith(failed, { retry: expect.any(Function) });
   });
 
   it('keeps the row in its project list when the patch does not send a project', async () => {

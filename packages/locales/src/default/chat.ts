@@ -4409,6 +4409,8 @@ export default {
   'taskProject.inheritedFromParent': "A subtask stays in its parent's project",
   'taskProject.label': 'Project',
   'taskProject.loadFailed': 'Failed to load projects',
+  'taskProject.moveRefused':
+    "Can't move this task while its parent, subtasks or dependencies stay in the current project. Move or detach them first.",
   'taskProject.noMatch': 'No matching project',
   'taskProject.none': 'No project',
   'taskProject.searchPlaceholder': 'Search projects…',
