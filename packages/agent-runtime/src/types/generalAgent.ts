@@ -6,6 +6,7 @@ import {
   type RuntimeAdditionalContextFragment,
 } from '@lobechat/types';
 
+import type { ContextBudget } from './instruction';
 import type { AgentState } from './state';
 
 export interface GeneralAgentCallLLMInstructionPayload {
@@ -22,6 +23,14 @@ export interface GeneralAgentCallLLMInstructionPayload {
    * `shouldCompress` so attachment text fits under the compression threshold.
    */
   attachmentPreviewFileIds?: string[];
+  /**
+   * Compression budget checked against the request the context engine builds.
+   * When the engine-built request (messages + tool definitions) exceeds
+   * `compressionThreshold`, `call_llm` returns a `context_over_budget` phase
+   * instead of calling the model. Omitted when compression is disabled or the
+   * context was just compressed.
+   */
+  contextBudget?: ContextBudget;
   /** Force create a new assistant message (e.g., after compression) */
   createAssistantMessage?: boolean;
   isFirstMessage?: boolean;
@@ -120,6 +129,21 @@ export interface GeneralAgentConfig {
   /** Phase-level tools exposed to this agent run. Falls back to AgentState.tools. */
   tools?: any[];
   userId?: string;
+}
+
+/**
+ * Payload for the context_over_budget phase: `call_llm` built the request,
+ * found it over the compression budget, and stopped before calling the model.
+ */
+export interface GeneralAgentContextOverBudgetPayload {
+  /** Adjusted token estimate of the engine-built request */
+  currentTokenCount: number;
+  /**
+   * Messages of the stopped `call_llm`. They can include a planner-appended
+   * turn (e.g. the sub-agent follow-up prompt) that `state.messages` lacks and
+   * compression must keep as the latest user message.
+   */
+  messages: any[];
 }
 
 /**

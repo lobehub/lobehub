@@ -275,7 +275,12 @@ export class AgentRuntime {
         // happened. Counting it up-front would let the fallback in the success
         // and error paths report a model call that never ran, and inflate the
         // `maxSteps` budget with it.
-        if (instruction.type === 'call_llm') executedLlmInstructions += 1;
+        // A `call_llm` that stopped at the compression budget never reached the
+        // model (`context_over_budget`): it neither counts as a model call nor
+        // consumes the seeded assistant placeholder the post-compression turn fills.
+        const llmCallRan =
+          instruction.type === 'call_llm' && result.nextContext?.phase !== 'context_over_budget';
+        if (llmCallRan) executedLlmInstructions += 1;
 
         // Accumulate events
         allEvents.push(...result.events);
@@ -284,12 +289,11 @@ export class AgentRuntime {
         currentState = result.newState;
         latestState = currentState;
 
-
         // A call_llm consumes any resume-seeded assistant placeholder exactly
         // once — it has now either reused that message id or created its own —
         // so clear the seed before the next step. Otherwise a later assistant
         // turn in the same operation would reuse the id and overwrite this one.
-        if (instruction.type === 'call_llm' && currentState.pendingAssistantMessageId) {
+        if (llmCallRan && currentState.pendingAssistantMessageId) {
           currentState.pendingAssistantMessageId = undefined;
         }
 
