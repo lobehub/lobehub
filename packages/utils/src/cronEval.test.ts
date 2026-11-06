@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest';
 
 import {
   findDueOccurrence,
+  findUpcomingOccurrence,
+  hasSameScheduleMinute,
+  isCronOccurrence,
   isExecutionTime,
+  isPreciseSchedulePattern,
+  snapScheduleToStandardMinute,
   validateCronPattern,
   validateScheduleUpdate,
 } from './cronEval';
@@ -478,5 +483,101 @@ describe('validateScheduleUpdate', () => {
       valid: false,
     });
     expect(validateScheduleUpdate(null, { scheduleTimezone: null })).toBeUndefined();
+  });
+});
+
+describe('findUpcomingOccurrence', () => {
+  const at = (currentTime: string, cronPattern: string, extra = {}) =>
+    findUpcomingOccurrence({
+      cronPattern,
+      currentTime: utc(currentTime),
+      timezone: 'UTC',
+      ...extra,
+    });
+
+  it('finds an occurrence before the next tick', () => {
+    expect(at('2026-09-21T09:10:00', '17 9 * * *')).toEqual(utc('2026-09-21T09:17:00'));
+  });
+
+  it('honors the pattern timezone', () => {
+    expect(
+      findUpcomingOccurrence({
+        cronPattern: '17 9 * * *',
+        currentTime: utc('2026-09-21T01:10:00'),
+        timezone: SHANGHAI,
+      }),
+    ).toEqual(utc('2026-09-21T01:17:00'));
+  });
+
+  it('leaves the next tick boundary to that tick', () => {
+    expect(at('2026-09-21T09:10:00', '20 9 * * *')).toBeNull();
+  });
+
+  it('ignores an occurrence after the next tick', () => {
+    expect(at('2026-09-21T09:10:00', '25 9 * * *')).toBeNull();
+  });
+
+  it('does not take the current minute again', () => {
+    expect(at('2026-09-21T09:17:00', '17 9 * * *')).toBeNull();
+  });
+
+  it('skips an occurrence already covered', () => {
+    expect(
+      at('2026-09-21T09:10:00', '17 9 * * *', { lastExecutedAt: utc('2026-09-21T09:17:00') }),
+    ).toBeNull();
+  });
+
+  it('never fires an invalid pattern', () => {
+    expect(at('2026-09-21T09:10:00', 'not a cron')).toBeNull();
+  });
+});
+
+describe('isCronOccurrence', () => {
+  it('matches only instants of the pattern in its timezone', () => {
+    expect(isCronOccurrence('17 9 * * *', SHANGHAI, utc('2026-09-21T01:17:00'))).toBe(true);
+    expect(isCronOccurrence('17 9 * * *', 'UTC', utc('2026-09-21T01:17:00'))).toBe(false);
+  });
+
+  it('treats invalid input as no occurrence', () => {
+    expect(isCronOccurrence('nope', 'UTC', utc('2026-09-21T01:17:00'))).toBe(false);
+    expect(isCronOccurrence('17 9 * * *', 'UTC', new Date('invalid'))).toBe(false);
+  });
+});
+
+describe('isPreciseSchedulePattern', () => {
+  it.each(['0 9 * * *', '30 9 * * *', '00 9 * * *', '0,30 * * * *', '* * * * *', '*/15 * * * *'])(
+    'does not count %s',
+    (pattern) => {
+      expect(isPreciseSchedulePattern(pattern)).toBe(false);
+    },
+  );
+
+  it.each(['17 9 * * *', '0,17 9 * * *', '17-17 9 * * *', '17/60 9 * * *', '59 * * * *'])(
+    'counts %s',
+    (pattern) => {
+      expect(isPreciseSchedulePattern(pattern)).toBe(true);
+    },
+  );
+});
+
+describe('hasSameScheduleMinute', () => {
+  it('compares only the minute field', () => {
+    expect(hasSameScheduleMinute('17 9 * * *', ' 17 10 * * 1')).toBe(true);
+    expect(hasSameScheduleMinute('17 9 * * *', '18 9 * * *')).toBe(false);
+  });
+});
+
+describe('snapScheduleToStandardMinute', () => {
+  it.each([
+    ['17 9 * * 1', '30 9 * * 1'],
+    ['14 9 * * *', '0 9 * * *'],
+    ['45 9 * * *', '0 9 * * *'],
+  ])('moves %s to %s', (pattern, expected) => {
+    expect(snapScheduleToStandardMinute(pattern)).toBe(expected);
+  });
+
+  it('leaves standard and interval patterns alone', () => {
+    expect(snapScheduleToStandardMinute('30 9 * * *')).toBe('30 9 * * *');
+    expect(snapScheduleToStandardMinute('*/15 * * * *')).toBe('*/15 * * * *');
   });
 });
