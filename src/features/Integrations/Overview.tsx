@@ -5,6 +5,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import IntegrationCard from './IntegrationCard';
+import { isDirectorySettling } from './loading';
 import { type IntegrationId, INTEGRATIONS, UPCOMING_INTEGRATIONS } from './registry';
 import { IntegrationsOverviewSkeleton } from './Skeleton';
 import { useGithubIntegration } from './useGithubIntegration';
@@ -64,7 +65,7 @@ const Overview = memo<OverviewProps>(({ onOpen }) => {
 
   // Statuses and the Enabled strip depend on both connection lookups; swap the
   // directory in once they settle instead of letting the strip pop in later.
-  if (github.isInitialLoading || linear.isInitialLoading)
+  if (isDirectorySettling([github, linear]))
     return (
       <IntegrationsOverviewSkeleton
         available={INTEGRATIONS.length}
