@@ -4,8 +4,8 @@ import type {
   SchedulerRunTarget,
   SchedulerState,
   SchedulerStore,
-} from '../botWake/scheduler';
-import { WakeScheduler } from '../botWake/scheduler';
+} from '../scheduler';
+import { WakeScheduler } from '../scheduler';
 
 /** In-memory store with the same contract as the Redis one: mutations are serialized per key. */
 const createStore = () => {

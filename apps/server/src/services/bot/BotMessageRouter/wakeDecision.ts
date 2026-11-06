@@ -12,27 +12,17 @@ import debug from 'debug';
 
 import type { LobeChatDatabase } from '@/database/type';
 import { recordSignalDecision } from '@/server/services/agentSignal/persistence/recordDecision';
-import { aggregateWakeVerdictsAsync } from '@/server/services/agentSignal/scenarios/botWake/aggregator';
-import { parseBotWakeSettings } from '@/server/services/agentSignal/scenarios/botWake/config';
-import type { WakeParticipant } from '@/server/services/agentSignal/scenarios/botWake/conversation';
+import { aggregateWakeVerdictsAsync } from '@/server/services/conversationWake/aggregator';
+import { parseBotWakeSettings } from '@/server/services/conversationWake/config';
+import type { WakeParticipant } from '@/server/services/conversationWake/conversation';
 import {
   CONVERSATION_PROMPT_LINES,
   conversationParticipants,
-  discordMessageTime,
   toConversationLine,
-} from '@/server/services/agentSignal/scenarios/botWake/conversation';
-import {
-  hasConversationLog,
-  judgeExplicitMention,
-  resolveChannelKeys,
-  resolveConversationLogKey,
-  wakeStateKeys,
-} from '@/server/services/agentSignal/scenarios/botWake/facts';
-import { isBotWakeEnabled } from '@/server/services/agentSignal/scenarios/botWake/gate';
-import type {
-  WakeClassify,
-  WakeDutyJudge,
-} from '@/server/services/agentSignal/scenarios/botWake/policies';
+} from '@/server/services/conversationWake/conversation';
+import { judgeExplicitMention, wakeStateKeys } from '@/server/services/conversationWake/facts';
+import { isBotWakeEnabled } from '@/server/services/conversationWake/gate';
+import type { WakeClassify, WakeDutyJudge } from '@/server/services/conversationWake/policies';
 import {
   CLASSIFIER_POLICY_ID,
   createDutyPolicy,
@@ -40,7 +30,7 @@ import {
   DUTY_HELPFUL_TAG,
   DUTY_POLICY_ID,
   OWNER_RULES_POLICY_ID,
-} from '@/server/services/agentSignal/scenarios/botWake/policies';
+} from '@/server/services/conversationWake/policies';
 import type {
   BotWakeConfig,
   WakeChannelState,
@@ -50,11 +40,17 @@ import type {
   WakePolicy,
   WakeSignal,
   WakeStateSnapshot,
-} from '@/server/services/agentSignal/scenarios/botWake/types';
+} from '@/server/services/conversationWake/types';
 import { redisService } from '@/server/services/redis';
 import type { BotWakeChannelFields } from '@/server/services/redis/botWake';
 
 import { getOriginMessageId, isReplayMessage } from '../mergeMessages';
+import {
+  discordMessageTime,
+  hasConversationLog,
+  resolveChannelKeys,
+  resolveConversationLogKey,
+} from '../wake/platformFacts';
 import { buildWakeSignal, type WakeMessageLike } from '../wake/signal';
 
 const log = debug('lobe-server:bot:wake-decision');

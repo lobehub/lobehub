@@ -9,7 +9,7 @@ import {
   MIN_COLLECT_SECONDS,
   MIN_COOLDOWN_SECONDS,
   parseBotWakeSettings,
-} from '@/server/services/agentSignal/scenarios/botWake/config';
+} from '@/server/services/conversationWake/config';
 
 import agentLocale from '../../../../../../../packages/locales/src/default/agent';
 import { botWakeFields, larkBotWakeFields } from '../botWakeFields';

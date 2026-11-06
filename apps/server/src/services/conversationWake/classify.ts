@@ -21,12 +21,12 @@ import { z } from 'zod';
 
 import type { LobeChatDatabase } from '@/database/type';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
-import { describeLine } from '@/server/services/agentSignal/scenarios/botWake/conversation';
+import { describeLine } from '@/server/services/conversationWake/conversation';
 import type {
   WakeClassification,
   WakeClassifierInput,
   WakeClassify,
-} from '@/server/services/agentSignal/scenarios/botWake/policies/classifier';
+} from '@/server/services/conversationWake/policies/classifier';
 
 const log = debug('lobe-server:bot:wake-classifier');
 

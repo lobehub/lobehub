@@ -18,7 +18,7 @@ import { z } from 'zod';
 import type {
   WakeDutyJudge,
   WakeDutyJudgement,
-} from '@/server/services/agentSignal/scenarios/botWake/policies/duty';
+} from '@/server/services/conversationWake/policies/duty';
 
 import type { CreateWakeClassifyOptions } from './classify';
 import { createRuntimeCache, ProbabilitySchema, toPromptInput } from './classify';
