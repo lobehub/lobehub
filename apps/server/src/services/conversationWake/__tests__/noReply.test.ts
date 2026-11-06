@@ -1,7 +1,7 @@
 import { BOT_NO_REPLY_LABELS, BOT_NO_REPLY_REASONS } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
-import { detectNoReply, extractStandDown } from './noReply';
+import { detectNoReply, extractStandDown } from '../noReply';
 
 describe('detectNoReply', () => {
   it.each([

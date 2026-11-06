@@ -64,6 +64,7 @@ const claimed = async (
  *   unknown execution is never redelivered.
  * - Revoked (stopped or isolated): an open job is cancelled.
  * - Accepted draft not yet published: still running, so a retried publish can finish it.
+ * - Stayed silent (a `followup` wake answered with `NO_REPLY`): stays silent, like a reply.
  * - Anything else ended without a reply: failed.
  */
 export const releaseOutcome = (
@@ -74,7 +75,8 @@ export const releaseOutcome = (
   operation: AgentOperationStatus;
   revoke: boolean;
 } => {
-  if (job.publishedMessageId) return { operation: 'done', revoke: false };
+  if (job.publishedMessageId || job.status === 'silent')
+    return { operation: 'done', revoke: false };
   if (job.status === 'failed') return { job: 'failed', operation: 'error', revoke: true };
   if (job.publicationRevoked) return { job: 'cancelled', operation: 'interrupted', revoke: true };
   if (job.acceptedAt && job.draft !== null) return { operation: 'done', revoke: false };
@@ -376,6 +378,34 @@ export class ChannelExecutionRepository {
       await audit(tx, channelId, 'draft_published', job.id, { messageId: reply.id });
 
       return reply.id;
+    });
+
+  /**
+   * The run chose not to answer a `followup` wake (`NO_REPLY`). Settles the job as `silent`:
+   * nothing is published, and its conversation stays reusable like a published reply's. Only a
+   * job woken as `followup` may stay silent; anything else owes an answer and returns false.
+   */
+  silence = async (channelId: string, jobId: string, reason: string) =>
+    withChannelLock(this.db, channelId, async (tx) => {
+      const job = await claimed(tx, channelId, jobId, true);
+      if (job.status === 'silent') return true;
+      if (
+        job.wake?.kind !== 'followup' ||
+        job.publishedMessageId ||
+        job.publicationRevoked ||
+        job.status !== 'running' ||
+        !job.writerHeld
+      )
+        return false;
+
+      await tx
+        .update(channelJobs)
+        // An empty draft marks the run's input as consumed, so the topic carries on next time.
+        .set({ acceptedAt: job.acceptedAt ?? new Date(), draft: '', status: 'silent' })
+        .where(eq(channelJobs.id, job.id));
+      await audit(tx, channelId, 'stayed_silent', job.id, { reason });
+
+      return true;
     });
 
   /**

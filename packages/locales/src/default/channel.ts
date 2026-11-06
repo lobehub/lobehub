@@ -137,6 +137,7 @@ export default {
   'status.completed': 'Replied',
   'status.failed': 'Reply failed',
   'status.cancelled': 'Stopped',
+  'status.silent': 'Stayed quiet',
   'blocked.device_approval_pending': 'Waiting for device approval',
   'blocked.device_offline': 'Waiting for device to connect',
   'blocked.device_required': 'Choose a device for this Agent to run on',
