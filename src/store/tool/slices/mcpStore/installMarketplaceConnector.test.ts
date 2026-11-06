@@ -138,6 +138,9 @@ describe('installMarketplaceConnector', () => {
         sourceType: 'marketplace',
       },
     ] as never;
+    vi.mocked(state.getConnectorForEdit).mockResolvedValue({
+      metadata: { marketplaceInstalled: true },
+    } as never);
     vi.mocked(state.createConnector).mockResolvedValue({ id: 'connector-1', isNew: false });
 
     await install({ type: 'http', url: 'https://mcp.example.com' });
@@ -188,7 +191,13 @@ describe('installMarketplaceConnector', () => {
 
   it('refuses to replace a connector the user added from another source', async () => {
     state.connectors = [
-      { id: 'custom-1', identifier: 'market-mcp', metadata: null, sourceType: 'custom' },
+      {
+        id: 'custom-1',
+        identifier: 'market-mcp',
+        mcpServerUrl: 'https://mine.example.com',
+        metadata: null,
+        sourceType: 'custom',
+      },
     ] as never;
 
     await expect(install({ type: 'http', url: 'https://mcp.example.com' })).rejects.toThrow(

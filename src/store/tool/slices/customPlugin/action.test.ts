@@ -57,10 +57,27 @@ describe('useToolStore:customPlugin', () => {
       const createConnector = vi.fn().mockResolvedValue({ id: 'conn-1', isNew: true });
       const deleteConnector = vi.fn().mockResolvedValue(undefined);
       const syncConnectorTools = vi.fn().mockResolvedValue(undefined);
+      const fetchConnectors = vi.fn().mockResolvedValue(undefined);
+      const getConnectorForEdit = vi.fn();
+      const updateConnector = vi.fn().mockResolvedValue(undefined);
       act(() => {
-        useToolStore.setState({ createConnector, deleteConnector, syncConnectorTools });
+        useToolStore.setState({
+          connectors: [],
+          createConnector,
+          deleteConnector,
+          fetchConnectors,
+          getConnectorForEdit,
+          syncConnectorTools,
+          updateConnector,
+        });
       });
-      return { createConnector, deleteConnector, syncConnectorTools };
+      return {
+        createConnector,
+        deleteConnector,
+        getConnectorForEdit,
+        syncConnectorTools,
+        updateConnector,
+      };
     };
 
     it('adds an http MCP as a custom connector and syncs its tools, writing no plugin row', async () => {
@@ -135,6 +152,86 @@ describe('useToolStore:customPlugin', () => {
         }),
       ).rejects.toThrow('unreachable');
       expect(deleteConnector).not.toHaveBeenCalled();
+    });
+
+    it('refuses to replace a marketplace connector with the same identifier', async () => {
+      const { createConnector } = mockConnectorActions();
+      act(() => {
+        useToolStore.setState({
+          connectors: [
+            {
+              id: 'market-1',
+              identifier: 'shared',
+              mcpConnectionType: 'http',
+              mcpServerUrl: 'https://market.example.com',
+              sourceType: 'marketplace',
+            },
+          ] as never,
+        });
+      });
+
+      await expect(
+        useToolStore.getState().installCustomMcpConnector({
+          config: { type: 'http', url: 'https://mine.example.com' },
+          identifier: 'shared',
+        }),
+      ).rejects.toThrow('already exists');
+      expect(createConnector).not.toHaveBeenCalled();
+    });
+
+    it('restores the custom connector it reinstalled over when the tool sync fails', async () => {
+      const {
+        createConnector,
+        deleteConnector,
+        getConnectorForEdit,
+        syncConnectorTools,
+        updateConnector,
+      } = mockConnectorActions();
+      act(() => {
+        useToolStore.setState({
+          connectors: [
+            {
+              id: 'conn-old',
+              identifier: 'down',
+              mcpConnectionType: 'http',
+              mcpServerUrl: 'https://old.example.com',
+              sourceType: 'custom',
+            },
+          ] as never,
+        });
+      });
+      getConnectorForEdit.mockResolvedValue({
+        credentials: { token: 'old-token', type: 'bearer' },
+        id: 'conn-old',
+        isEnabled: true,
+        mcpConnectionType: 'http',
+        mcpServerUrl: 'https://old.example.com',
+        mcpStdioConfig: null,
+        metadata: { description: 'old' },
+        name: 'Old',
+        oidcConfig: null,
+        status: 'disconnected',
+        tools: [],
+      });
+      createConnector.mockResolvedValue({ id: 'conn-old', isNew: false });
+      syncConnectorTools.mockRejectedValue(new Error('unreachable'));
+
+      await expect(
+        useToolStore.getState().installCustomMcpConnector({
+          config: { type: 'http', url: 'https://down.example.com' },
+          identifier: 'down',
+        }),
+      ).rejects.toThrow('unreachable');
+      expect(deleteConnector).not.toHaveBeenCalled();
+      expect(updateConnector).toHaveBeenCalledWith(
+        'conn-old',
+        expect.objectContaining({
+          credentials: { token: 'old-token', type: 'bearer' },
+          mcpServerUrl: 'https://old.example.com',
+          metadata: { description: 'old' },
+          name: 'Old',
+        }),
+      );
     });
   });
 

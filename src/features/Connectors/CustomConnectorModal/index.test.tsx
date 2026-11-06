@@ -223,4 +223,28 @@ describe('CustomConnectorModal edit save', () => {
     );
     expect(mocks.state.syncConnectorTools).toHaveBeenCalledWith('c1');
   });
+
+  it('lists the tools of an edited HTTP endpoint again', async () => {
+    mocks.state.connector = {
+      ...(mocks.state.connector as object),
+      mcpConnectionType: 'http',
+      mcpServerUrl: 'https://old.example.com',
+    };
+    render(<CustomConnectorModal open connectorId="c1" onClose={() => {}} />);
+    await waitFor(() => expect(screen.getByTestId('seed').textContent).not.toBe('null'));
+
+    await mocks.onSave!({
+      customParams: { mcp: { type: 'http', url: 'https://new.example.com' } },
+      identifier: 'my-mcp',
+    });
+
+    expect(mocks.state.updateConnector).toHaveBeenCalledWith(
+      'c1',
+      expect.objectContaining({
+        mcpConnectionType: 'http',
+        mcpServerUrl: 'https://new.example.com',
+      }),
+    );
+    expect(mocks.state.syncConnectorTools).toHaveBeenCalledWith('c1');
+  });
 });

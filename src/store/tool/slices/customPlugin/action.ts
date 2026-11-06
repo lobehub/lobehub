@@ -7,6 +7,7 @@ import { type LobeToolCustomPlugin, type PluginInstallError } from '@/types/tool
 import { setNamespace } from '@/utils/storeDebug';
 
 import { type ToolStore } from '../../store';
+import { restoreConnector, snapshotReplacedConnector } from '../connector/replaceConnector';
 import { pluginSelectors } from '../plugin/selectors';
 
 const n = setNamespace('customPlugin');
@@ -41,8 +42,9 @@ export class CustomPluginActionImpl {
   }
 
   /**
-   * Add a custom MCP server as a `custom` connector and sync its tools. A row
-   * this call created is removed again when the tool sync fails.
+   * Add a custom MCP server as a `custom` connector and sync its tools. When
+   * the tool sync fails, a row this call created is removed again and a row it
+   * reinstalled over is restored.
    */
   installCustomMcpConnector = async ({
     config,
@@ -57,6 +59,7 @@ export class CustomPluginActionImpl {
     if (isHttp && config.headers && Object.keys(config.headers).length > 0)
       metadata.customHeaders = config.headers;
 
+    const snapshot = await snapshotReplacedConnector(identifier, 'custom', this.#get);
     const { id, isNew } = await createConnector({
       identifier,
       mcpConnectionType: config.type,
@@ -71,10 +74,14 @@ export class CustomPluginActionImpl {
     try {
       await syncConnectorTools(id);
     } catch (error) {
-      if (isNew)
-        await deleteConnector(id).catch((deleteError) => {
-          console.error('[customMcp] rollback of connector %s failed:', id, deleteError);
-        });
+      const rollback = isNew
+        ? deleteConnector(id)
+        : snapshot
+          ? restoreConnector(snapshot, this.#get)
+          : undefined;
+      await rollback?.catch((rollbackError) => {
+        console.error('[customMcp] rollback of connector %s failed:', id, rollbackError);
+      });
       throw error;
     }
   };
