@@ -463,7 +463,7 @@ describe('topic action', () => {
         useChatStore.setState({
           internal_resolveTopicReasoningSnapshot: vi
             .fn()
-            .mockResolvedValue({ deepseekV4GAReasoningEffort: 'high' }),
+            .mockResolvedValue({ reasoningEffort: 'high' }),
         });
       });
 
@@ -475,12 +475,12 @@ describe('topic action', () => {
       });
 
       expect(spy).toHaveBeenCalledWith('builder-topic', {
-        metadata: { reasoningConfig: { deepseekV4GAReasoningEffort: 'high' } },
+        metadata: { reasoningConfig: { reasoningEffort: 'high' } },
         model: 'deepseek-v4-flash',
         provider: 'lobehub',
       });
       expect(useChatStore.getState().topicDataMap[BUILDER_KEY].items[0]).toMatchObject({
-        metadata: { reasoningConfig: { deepseekV4GAReasoningEffort: 'high' } },
+        metadata: { reasoningConfig: { reasoningEffort: 'high' } },
         model: 'deepseek-v4-flash',
       });
     });
@@ -501,7 +501,7 @@ describe('topic action', () => {
                 {
                   ...state.topicDataMap[key].items[0],
                   metadata: {
-                    reasoningConfig: { glm5_2ReasoningEffort: 'max' },
+                    reasoningConfig: { reasoningEffort: 'max' },
                     workingDirectory: '/w',
                   },
                 },
@@ -4360,7 +4360,7 @@ describe('topic action', () => {
         });
         let loaded = false;
         let finishLoad!: () => void;
-        vi.spyOn(aiModelSelectors, 'isModelHasReasoningExtendParams').mockReturnValue(() => true);
+        vi.spyOn(aiModelSelectors, 'isModelHasReasoningControls').mockReturnValue(() => true);
         vi.spyOn(aiModelSelectors, 'isModelReasoningConfigLoaded').mockReturnValue(() => loaded);
         vi.spyOn(aiModelSelectors, 'modelReasoningConfig').mockReturnValue(() => ({
           reasoningEffort: 'high',

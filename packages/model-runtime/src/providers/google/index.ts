@@ -65,7 +65,7 @@ import {
   supportsGoogleSearchOnImageResponseModel,
 } from './modelId';
 import { recordGoogleGenerateContentResponse } from './providerDiagnostics';
-import { resolveGoogleThinkingConfig } from './thinkingResolver';
+import { resolveGoogleThinkingConfig, resolveGoogleThinkingLevel } from './thinkingResolver';
 import { createGoogleTranscription } from './transcribe';
 
 const log = debug('model-runtime:google');
@@ -167,7 +167,11 @@ export class LobeGoogleAI implements LobeRuntimeAI {
 
     try {
       const payload = this.buildPayload(rawPayload);
-      const { model, thinkingBudget, thinkingLevel, imageAspectRatio, imageResolution } = payload;
+      const { model, thinkingBudget, imageAspectRatio, imageResolution } = payload;
+      const thinkingLevel = resolveGoogleThinkingLevel(
+        payload.thinkingLevel,
+        payload.reasoning_effort,
+      );
       const requestPayload = withMappedModelId(payload, this.modelIdMappingOptions);
       const requestModel = requestPayload.model;
       const thoughtSignatureScope = await this.getThoughtSignatureScope(requestModel);

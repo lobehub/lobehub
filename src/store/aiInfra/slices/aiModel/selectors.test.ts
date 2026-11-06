@@ -280,6 +280,86 @@ describe('aiModelSelectors', () => {
     });
   });
 
+  describe('modelReasoningEffortSettings', () => {
+    const effortState = (
+      enabledAiModels: AIProviderStoreState['enabledAiModels'],
+      builtinAiModelList: AIProviderStoreState['builtinAiModelList'] = [],
+    ): AIProviderStoreState => ({ ...mockState, builtinAiModelList, enabledAiModels });
+
+    it('takes an undeclared default from the same model under another provider', () => {
+      const state = effortState(
+        [
+          {
+            id: 'gpt-x',
+            providerId: 'aihubmix',
+            settings: { reasoningEffort: { levels: ['low', 'medium', 'high'] } },
+            type: 'chat',
+          },
+        ] as AIProviderStoreState['enabledAiModels'],
+        [
+          {
+            id: 'gpt-x',
+            providerId: 'openai',
+            settings: { reasoningEffort: { default: 'high', levels: ['low', 'medium', 'high'] } },
+            type: 'chat',
+          },
+        ] as AIProviderStoreState['builtinAiModelList'],
+      );
+
+      expect(aiModelSelectors.modelReasoningEffortSettings('gpt-x', 'aihubmix')(state)).toEqual({
+        default: 'high',
+        levels: ['low', 'medium', 'high'],
+      });
+    });
+
+    // The server reads only bundled cards and the current provider's row.
+    it('ignores a default the user set on the same model under another provider', () => {
+      const state = effortState([
+        {
+          id: 'gpt-x',
+          providerId: 'aihubmix',
+          settings: { reasoningEffort: { levels: ['low', 'medium', 'high'] } },
+          type: 'chat',
+        },
+        {
+          id: 'gpt-x',
+          providerId: 'custom',
+          settings: { reasoningEffort: { default: 'high', levels: ['low', 'medium', 'high'] } },
+          type: 'chat',
+        },
+      ] as AIProviderStoreState['enabledAiModels']);
+
+      expect(aiModelSelectors.modelReasoningEffortSettings('gpt-x', 'aihubmix')(state)).toEqual({
+        default: 'medium',
+        levels: ['low', 'medium', 'high'],
+      });
+    });
+
+    // The runtime borrows the same model's control when the own card has none;
+    // the UI must show that control, or it would hide a level that is sent.
+    it('shows the same model’s control when the own card has none', () => {
+      const state = effortState(
+        [
+          { id: 'gpt-x', providerId: 'lobehub', type: 'chat' },
+        ] as AIProviderStoreState['enabledAiModels'],
+        [
+          {
+            id: 'gpt-x',
+            providerId: 'openai',
+            settings: { reasoningEffort: { levels: ['low', 'medium', 'high'] } },
+            type: 'chat',
+          },
+        ] as AIProviderStoreState['builtinAiModelList'],
+      );
+
+      expect(aiModelSelectors.modelReasoningEffortSettings('gpt-x', 'lobehub')(state)).toEqual({
+        default: 'medium',
+        levels: ['low', 'medium', 'high'],
+      });
+      expect(aiModelSelectors.isModelHasReasoningControls('gpt-x', 'lobehub')(state)).toBe(true);
+    });
+  });
+
   describe('getModelCard', () => {
     it('should find model in enabledAiModels first', () => {
       const state: AIProviderStoreState = {

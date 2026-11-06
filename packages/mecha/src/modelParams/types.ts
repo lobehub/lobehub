@@ -6,7 +6,7 @@ import type {
   ModelMediaCapabilities,
   UserModelRowFacts,
 } from '@lobechat/types';
-import type { AiModelReasoningConfig } from 'model-bank';
+import type { AiModelReasoningConfig, ResolvedReasoningEffortSettings } from 'model-bank';
 
 // The facts a host reads for the rules are also what an operation freezes onto
 // its state, so they are declared once in `@lobechat/types`.
@@ -71,8 +71,10 @@ export interface ResolvedModelExtendParamList {
   modelCard?: ModelCardFacts;
   /** Effective extend params: user row → provider card → canonical card. */
   modelExtendParams?: string[];
-  /** True when any effort-family / reasoningMode param is among `modelExtendParams`. */
-  modelHasReasoningExtendParams: boolean;
+  /** True when the model has a reasoning effort control or a `reasoningMode` param. */
+  modelHasReasoningControls: boolean;
+  /** Effective reasoning effort control with its default resolved: user row → provider card → same model elsewhere. */
+  modelReasoningEffort?: ResolvedReasoningEffortSettings;
   userModelRow?: UserModelRowFacts;
 }
 

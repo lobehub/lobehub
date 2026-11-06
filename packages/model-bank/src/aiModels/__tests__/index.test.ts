@@ -1,7 +1,19 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { ModelProvider } from '../../const/modelProvider';
+import { resolveReasoningEffortSettings } from '../../types/reasoningEffort';
 import { loadModels, LOBE_DEFAULT_MODEL_LIST } from '../index';
+
+/** The effort default a card runs at, resolved like the runtime does. */
+const resolvedEffortDefault = (providerId: string, id: string) => {
+  const own = LOBE_DEFAULT_MODEL_LIST.find(
+    (entry) => entry.providerId === providerId && entry.id === id,
+  );
+  const sameModel = LOBE_DEFAULT_MODEL_LIST.filter((entry) => entry.id === id && entry !== own).map(
+    (entry) => entry.settings?.reasoningEffort,
+  );
+  return resolveReasoningEffortSettings(own?.settings?.reasoningEffort, sameModel)?.default;
+};
 
 describe('loadModels', () => {
   it('returns the static model list by default', async () => {
@@ -156,7 +168,10 @@ describe('Moonshot models', () => {
       (model) => model.providerId === ModelProvider.Moonshot && model.id === 'kimi-k3',
     );
 
-    expect(kimiK3?.settings?.extendParams).toContain('kimiK3ReasoningEffort');
+    expect(kimiK3?.settings?.reasoningEffort).toEqual({
+      default: 'max',
+      levels: ['low', 'high', 'max'],
+    });
   });
 });
 
@@ -177,11 +192,12 @@ describe('Hunyuan models', () => {
         enabled: true,
         maxOutput: 128_000,
         settings: {
-          extendParams: ['hy3ReasoningEffort'],
+          reasoningEffort: { levels: ['no_think', 'low', 'high'] },
         },
         type: 'chat',
       }),
     );
+    expect(resolvedEffortDefault(ModelProvider.Hunyuan, 'hy3')).toBe('low');
   });
 });
 
@@ -320,7 +336,10 @@ describe('recent direct-provider models', () => {
       generation: 'gpt-6.1',
       knowledgeCutoff: '2026-04',
       maxOutput: 128_000,
-      settings: { extendParams: ['gpt6ReasoningEffort', 'textVerbosity'] },
+      settings: {
+        extendParams: ['textVerbosity'],
+        reasoningEffort: { default: 'medium', levels: ['low', 'medium', 'high', 'xhigh', 'max'] },
+      },
     });
     expect(model?.pricing?.units).toContainEqual({
       name: 'textInput_cacheRead',
@@ -340,21 +359,23 @@ describe('recent direct-provider models', () => {
         (entry) => entry.providerId === 'qwen' && entry.id === id,
       );
       expect(models).toHaveLength(1);
-      expect(models[0].settings?.extendParams).toEqual([
-        'qwen38ReasoningEffort',
-        'preserveThinking',
-      ]);
+      expect(models[0].settings?.extendParams).toEqual(['preserveThinking']);
+      expect(models[0].settings?.reasoningEffort).toEqual({
+        controlsThinking: true,
+        levels: ['none', 'low', 'medium', 'xhigh'],
+      });
+      expect(resolvedEffortDefault('qwen', id)).toBe('medium');
     },
   );
 
   it.each([
-    ['openai', 'gpt-6-astra', 'gpt6ReasoningEffort'],
-    ['google', 'gemini-3.8-flash', 'thinkingLevel3'],
-    ['vertexai', 'gemini-3.8-flash', 'thinkingLevel3'],
-    ['xai', 'grok-4.6', 'grok4_6ReasoningEffort'],
-    ['qwen', 'qwen3.8-max', 'qwen38ReasoningEffort'],
-    ['qwen', 'qwen3.8-max-0902', 'qwen38ReasoningEffort'],
-  ])('exposes %s/%s with its reasoning controls', (providerId, id, reasoningParam) => {
+    ['openai', 'gpt-6-astra', 'medium'],
+    ['google', 'gemini-3.8-flash', 'medium'],
+    ['vertexai', 'gemini-3.8-flash', 'medium'],
+    ['xai', 'grok-4.6', 'high'],
+    ['qwen', 'qwen3.8-max', 'medium'],
+    ['qwen', 'qwen3.8-max-0902', 'medium'],
+  ])('exposes %s/%s with its reasoning controls', (providerId, id, defaultEffort) => {
     const model = LOBE_DEFAULT_MODEL_LIST.find(
       (entry) => entry.providerId === providerId && entry.id === id,
     );
@@ -364,7 +385,7 @@ describe('recent direct-provider models', () => {
       enabled: true,
       type: 'chat',
     });
-    expect(model?.settings?.extendParams).toContain(reasoningParam);
+    expect(resolvedEffortDefault(providerId, id)).toBe(defaultEffort);
   });
 });
 
@@ -384,16 +405,16 @@ describe('Gemini 3.8 introductory pricing', () => {
 
 describe('subscription model catalogs', () => {
   it.each([
-    ['chatgpt', 'gpt-6-astra', 'gpt6ReasoningEffort'],
-    ['chatgpt', 'gpt-6.1-sol', 'gpt6ReasoningEffort'],
-    ['supergrok', 'grok-4.6', 'grok4_6ReasoningEffort'],
-  ])('exposes %s/%s without usage-based pricing', (providerId, id, reasoningParam) => {
+    ['chatgpt', 'gpt-6-astra', 'medium'],
+    ['chatgpt', 'gpt-6.1-sol', 'medium'],
+    ['supergrok', 'grok-4.6', 'high'],
+  ])('exposes %s/%s without usage-based pricing', (providerId, id, defaultEffort) => {
     const model = LOBE_DEFAULT_MODEL_LIST.find(
       (entry) => entry.providerId === providerId && entry.id === id,
     );
     expect(model).toMatchObject({ enabled: true, type: 'chat' });
     expect(model?.pricing).toBeUndefined();
-    expect(model?.settings?.extendParams).toContain(reasoningParam);
+    expect(model?.settings?.reasoningEffort?.default).toBe(defaultEffort);
   });
 
   it('keeps the ChatGPT context cap and thinking preservation', () => {
@@ -484,5 +505,28 @@ describe('Google context-caching pricing', () => {
 
   it('lists the audio cache read for Gemini 3 Flash Preview', () => {
     expect(units('gemini-3-flash-preview')).toContainEqual(fixed('audioInput_cacheRead', 0.1));
+  });
+});
+
+describe('reasoning effort declarations', () => {
+  it('declares levels on every card and only a default those levels offer', () => {
+    const invalid = LOBE_DEFAULT_MODEL_LIST.filter((model) => {
+      const spec = model.settings?.reasoningEffort;
+      return (
+        spec &&
+        (spec.levels.length === 0 || (!!spec.default && !spec.levels.includes(spec.default)))
+      );
+    }).map((model) => `${model.providerId}/${model.id}`);
+
+    expect(invalid).toEqual([]);
+  });
+
+  // Regression: M3.1 Flash ran at the upstream default (max) while the control showed high.
+  // Card defaults follow the upstream's documented default, so the control now shows max.
+  it('defaults MiniMax-M3.1-Flash to the upstream default (max)', () => {
+    const model = LOBE_DEFAULT_MODEL_LIST.find(
+      (entry) => entry.providerId === 'minimax' && entry.id === 'MiniMax-M3.1-Flash',
+    );
+    expect(model?.settings?.reasoningEffort?.default).toBe('max');
   });
 });

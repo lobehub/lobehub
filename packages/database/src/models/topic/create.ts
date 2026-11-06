@@ -5,6 +5,7 @@ import { joinTopicAgentsToProjects } from '../../utils/projectTopicAgents';
 import { buildWorkspacePayload } from '../../utils/workspace';
 import type { TopicModelContext } from './context';
 import type { CreateTopicParams, ModelTimingContext } from './types';
+import { withCurrentReasoningPin } from './update';
 
 /**
  * Inserts one topic row. Re-parenting existing messages onto the new topic is
@@ -31,6 +32,7 @@ export const create = async (
     { userId: ctx.userId, workspaceId: ctx.workspaceId },
     {
       ...params,
+      metadata: withCurrentReasoningPin(params.metadata, params),
       agentId: params.agentId || null,
       groupId: params.groupId || null,
       id,

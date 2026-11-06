@@ -76,7 +76,8 @@ export const openaiChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-09-29',
     settings: {
-      extendParams: ['gpt6ReasoningEffort', 'textVerbosity'],
+      extendParams: ['textVerbosity'],
+      reasoningEffort: { default: 'medium', levels: ['low', 'medium', 'high', 'xhigh', 'max'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -140,7 +141,8 @@ export const openaiChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-09-03',
     settings: {
-      extendParams: ['gpt6ReasoningEffort', 'textVerbosity'],
+      extendParams: ['textVerbosity'],
+      reasoningEffort: { default: 'medium', levels: ['low', 'medium', 'high', 'xhigh', 'max'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -209,7 +211,11 @@ export const openaiChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-09-22',
     settings: {
-      extendParams: ['gpt5_6ReasoningEffort', 'textVerbosity'],
+      extendParams: ['textVerbosity'],
+      reasoningEffort: {
+        default: 'medium',
+        levels: ['none', 'low', 'medium', 'high', 'xhigh', 'max'],
+      },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -275,7 +281,11 @@ export const openaiChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-09-22',
     settings: {
-      extendParams: ['gpt5_6ReasoningEffort', 'textVerbosity'],
+      extendParams: ['textVerbosity'],
+      reasoningEffort: {
+        default: 'medium',
+        levels: ['none', 'low', 'medium', 'high', 'xhigh', 'max'],
+      },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -367,7 +377,11 @@ export const openaiChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-07-09',
     settings: {
-      extendParams: ['reasoningMode', 'gpt5_6ReasoningEffort', 'textVerbosity'],
+      extendParams: ['reasoningMode', 'textVerbosity'],
+      reasoningEffort: {
+        default: 'medium',
+        levels: ['none', 'low', 'medium', 'high', 'xhigh', 'max'],
+      },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -433,7 +447,11 @@ export const openaiChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-07-09',
     settings: {
-      extendParams: ['reasoningMode', 'gpt5_6ReasoningEffort', 'textVerbosity'],
+      extendParams: ['reasoningMode', 'textVerbosity'],
+      reasoningEffort: {
+        default: 'medium',
+        levels: ['none', 'low', 'medium', 'high', 'xhigh', 'max'],
+      },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -499,7 +517,11 @@ export const openaiChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-07-09',
     settings: {
-      extendParams: ['reasoningMode', 'gpt5_6ReasoningEffort', 'textVerbosity'],
+      extendParams: ['reasoningMode', 'textVerbosity'],
+      reasoningEffort: {
+        default: 'medium',
+        levels: ['none', 'low', 'medium', 'high', 'xhigh', 'max'],
+      },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -555,7 +577,8 @@ export const openaiChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-04-23',
     settings: {
-      extendParams: ['gpt5_2ReasoningEffort', 'textVerbosity'],
+      extendParams: ['textVerbosity'],
+      reasoningEffort: { levels: ['none', 'low', 'medium', 'high', 'xhigh'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -602,7 +625,8 @@ export const openaiChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-04-23',
     settings: {
-      extendParams: ['gpt5_2ProReasoningEffort', 'textVerbosity'],
+      extendParams: ['textVerbosity'],
+      reasoningEffort: { levels: ['medium', 'high', 'xhigh'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -658,7 +682,8 @@ export const openaiChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-03-05',
     settings: {
-      extendParams: ['gpt5_2ReasoningEffort', 'textVerbosity'],
+      extendParams: ['textVerbosity'],
+      reasoningEffort: { levels: ['none', 'low', 'medium', 'high', 'xhigh'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -704,7 +729,8 @@ export const openaiChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-03-05',
     settings: {
-      extendParams: ['gpt5_2ProReasoningEffort', 'textVerbosity'],
+      extendParams: ['textVerbosity'],
+      reasoningEffort: { levels: ['medium', 'high', 'xhigh'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -736,7 +762,8 @@ export const openaiChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-03-18',
     settings: {
-      extendParams: ['gpt5_2ReasoningEffort', 'textVerbosity'],
+      extendParams: ['textVerbosity'],
+      reasoningEffort: { levels: ['none', 'low', 'medium', 'high', 'xhigh'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -768,7 +795,8 @@ export const openaiChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-03-18',
     settings: {
-      extendParams: ['gpt5_2ReasoningEffort', 'textVerbosity'],
+      extendParams: ['textVerbosity'],
+      reasoningEffort: { levels: ['none', 'low', 'medium', 'high', 'xhigh'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -824,7 +852,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-02-05',
     settings: {
-      extendParams: ['codexMaxReasoningEffort'],
+      reasoningEffort: { levels: ['low', 'medium', 'high', 'xhigh'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -856,7 +884,8 @@ export const openaiChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2025-12-11',
     settings: {
-      extendParams: ['gpt5_2ReasoningEffort', 'textVerbosity'],
+      extendParams: ['textVerbosity'],
+      reasoningEffort: { levels: ['none', 'low', 'medium', 'high', 'xhigh'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -885,7 +914,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2025-12-11',
     settings: {
-      extendParams: ['gpt5_2ProReasoningEffort'],
+      reasoningEffort: { levels: ['medium', 'high', 'xhigh'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -940,7 +969,8 @@ export const openaiChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2025-11-13',
     settings: {
-      extendParams: ['gpt5_1ReasoningEffort', 'textVerbosity'],
+      extendParams: ['textVerbosity'],
+      reasoningEffort: { levels: ['none', 'low', 'medium', 'high'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -1001,7 +1031,8 @@ export const openaiChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2025-08-07',
     settings: {
-      extendParams: ['gpt5ReasoningEffort', 'textVerbosity'],
+      extendParams: ['textVerbosity'],
+      reasoningEffort: { levels: ['minimal', 'low', 'medium', 'high'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -1033,7 +1064,8 @@ export const openaiChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2025-08-07',
     settings: {
-      extendParams: ['gpt5ReasoningEffort', 'textVerbosity'],
+      extendParams: ['textVerbosity'],
+      reasoningEffort: { levels: ['minimal', 'low', 'medium', 'high'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -1063,7 +1095,8 @@ export const openaiChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2025-08-07',
     settings: {
-      extendParams: ['gpt5ReasoningEffort', 'textVerbosity'],
+      extendParams: ['textVerbosity'],
+      reasoningEffort: { levels: ['minimal', 'low', 'medium', 'high'] },
     },
     type: 'chat',
   },

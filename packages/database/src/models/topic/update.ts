@@ -1,11 +1,26 @@
 import type { ChatTopicMetadata } from '@lobechat/types';
 import { and, eq, or, sql } from 'drizzle-orm';
+import { translateLegacyReasoningConfig } from 'model-bank/aiModel';
 
 import { type TopicItem, topics } from '../../schemas';
 import { joinTopicAgentsToProjects } from '../../utils/projectTopicAgents';
 import { recomputeTopicUsage } from '../topicUsage';
 import type { TopicModelContext } from './context';
 import type { TopicMetadataPatch } from './types';
+
+/**
+ * Moves the legacy effort keys a released client still writes in a topic's
+ * reasoning pin to `reasoningEffort`, reading the key the topic's model used.
+ */
+export const withCurrentReasoningPin = <T extends { reasoningConfig?: unknown } | undefined>(
+  metadata: T,
+  model: { model?: string | null; provider?: string | null },
+): T => {
+  const reasoningConfig = metadata?.reasoningConfig;
+  if (!reasoningConfig || typeof reasoningConfig !== 'object') return metadata;
+  const next = translateLegacyReasoningConfig(reasoningConfig, model);
+  return next === reasoningConfig ? metadata : { ...metadata, reasoningConfig: next };
+};
 
 export const update = async (ctx: TopicModelContext, id: string, data: Partial<TopicItem>) => {
   /**
@@ -128,7 +143,7 @@ export interface UpdateMetadataOptions {
 export const updateMetadata = async (
   ctx: TopicModelContext,
   id: string,
-  metadata: TopicMetadataPatch,
+  patch: TopicMetadataPatch,
   options?: UpdateMetadataOptions,
 ) => {
   // Merge into the existing metadata under a row lock so concurrent writers
@@ -143,7 +158,7 @@ export const updateMetadata = async (
   // while preserving the exact (shallow + nested onboardingSession) merge.
   return ctx.db.transaction(async (tx) => {
     const [existing] = await tx
-      .select({ metadata: topics.metadata })
+      .select({ metadata: topics.metadata, model: topics.model, provider: topics.provider })
       .from(topics)
       .where(and(eq(topics.id, id), ctx.ownership()))
       .for('update');
@@ -151,6 +166,8 @@ export const updateMetadata = async (
     // No row (missing or not owned) — nothing to update, mirror the old no-op.
     if (!existing) return [];
     if (options?.onlyIf && !options.onlyIf(existing.metadata)) return [];
+
+    const metadata = withCurrentReasoningPin(patch, existing);
 
     const mergedOnboardingSession =
       existing.metadata?.onboardingSession && metadata.onboardingSession
@@ -186,7 +203,7 @@ export const updateModelPin = async (
   ctx: TopicModelContext,
   id: string,
   {
-    metadata,
+    metadata: pin,
     model,
     provider,
   }: {
@@ -204,6 +221,7 @@ export const updateModelPin = async (
 
     if (!existing) return [];
 
+    const metadata = withCurrentReasoningPin(pin, { model, provider });
     const { reasoningConfig: _stale, ...rest } = existing.metadata ?? {};
     const mergedMetadata: ChatTopicMetadata = {
       ...rest,

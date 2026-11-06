@@ -31,9 +31,9 @@ const ReasoningEffortSelect = memo<ReasoningEffortSelectProps>(({ disabled, mode
   useFetchAiModelReasoningConfig(model, provider);
 
   const {
-    effortKey,
     effortLevels,
     effortValue,
+    hasEffort,
     hasReasoningMode,
     hasReasoningParams,
     modeLevels,
@@ -47,7 +47,7 @@ const ReasoningEffortSelect = memo<ReasoningEffortSelectProps>(({ disabled, mode
   return (
     <Tooltip title={t('settingAgent.runtimeConfig.reasoningEffortHint', { ns: 'setting' })}>
       <div style={{ display: 'flex', gap: 8 }}>
-        {effortKey && (
+        {hasEffort && (
           <Select
             disabled={disabled || updating}
             placeholder={t('reasoningEffort.title', { ns: 'chat' })}
@@ -58,7 +58,8 @@ const ReasoningEffortSelect = memo<ReasoningEffortSelectProps>(({ disabled, mode
               value: level,
             }))}
             onChange={(value) => {
-              if (typeof value === 'string') select({ [effortKey]: value });
+              if (typeof value === 'string')
+                select({ reasoningEffort: value as typeof effortValue });
             }}
           />
         )}

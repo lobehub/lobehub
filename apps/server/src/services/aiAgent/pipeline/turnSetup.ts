@@ -101,12 +101,12 @@ const resolveTopicReasoningSnapshot = async ({
 
   try {
     const aiModelModel = new AiModelModel(deps.db, deps.userId, deps.workspaceId);
-    const { modelHasReasoningExtendParams } = await resolveModelExtendParamsForUser({
+    const { modelHasReasoningControls } = await resolveModelExtendParamsForUser({
       aiModelModel,
       model,
       provider,
     });
-    if (!modelHasReasoningExtendParams) return undefined;
+    if (!modelHasReasoningControls) return undefined;
 
     const reasoningConfig = await aiModelModel.getModelReasoningConfig(model, provider);
     return { reasoningConfig: reasoningConfig ?? {} };

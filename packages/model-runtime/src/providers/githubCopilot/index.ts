@@ -13,6 +13,7 @@ import {
 import { transformResponseAPIToStream } from '../../core/openaiCompatibleFactory';
 import { AnthropicStream, OpenAIResponsesStream, OpenAIStream } from '../../core/streams';
 import { type ChatMethodOptions, type ChatStreamPayload } from '../../types';
+import { resolveAnthropicEffort } from '../anthropic/modelId';
 import { AgentRuntimeErrorType } from '../../types/error';
 import { AgentRuntimeError } from '../../utils/createError';
 import { debugPayload, debugResponse, debugStream } from '../../utils/debugStream';
@@ -228,6 +229,8 @@ export class LobeGithubCopilotAI implements LobeRuntimeAI {
 
         const anthropicPayload = await buildDefaultAnthropicPayload({
           ...(rest as ChatStreamPayload),
+          // The Messages API reads only `effort`; map the unified `reasoning_effort` like the Anthropic adapter.
+          effort: resolveAnthropicEffort(model, rest.effort, rest.reasoning_effort),
           model,
         });
 

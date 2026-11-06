@@ -10,6 +10,7 @@ import { sanitizeAgentApiConfig } from '../../utils/sanitizeAgentApiConfig';
 import { buildWorkspacePayload } from '../../utils/workspace';
 import { RESERVED_AGENT_SLUGS } from './constants';
 import { type AgentModelContext } from './context';
+import { translateSubAgentLegacyEffort } from './subAgentEffort';
 
 export const stripReservedSlug = <T extends { slug?: string | null }>(config: T): T => {
   if (!config.slug || !RESERVED_AGENT_SLUGS.has(config.slug)) return config;
@@ -26,7 +27,7 @@ export const create = async (
 ): Promise<AgentItem> => {
   const config = stripReservedSlug(input);
   const agencyConfig = ctx.withWorkspaceSelectionPolicyDefaults(
-    sanitizeAgentApiConfig(config.agencyConfig),
+    sanitizeAgentApiConfig(translateSubAgentLegacyEffort(config.agencyConfig)),
   );
 
   await ctx.assertWorkspaceDeviceBinding(ctx.workspaceId ?? null, agencyConfig);
@@ -62,7 +63,7 @@ export const batchCreate = async (
   const normalizedConfigs = configs.map((config) => ({
     ...stripReservedSlug(config),
     agencyConfig: ctx.withWorkspaceSelectionPolicyDefaults(
-      sanitizeAgentApiConfig(config.agencyConfig),
+      sanitizeAgentApiConfig(translateSubAgentLegacyEffort(config.agencyConfig)),
     ),
   }));
 

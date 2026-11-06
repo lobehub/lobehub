@@ -7,7 +7,6 @@ import {
 import {
   type ModelExtendParams,
   resolveDefaultEnableAdaptiveThinkingForModel,
-  resolveDefaultThinkingLevelForModel,
 } from '@lobechat/model-runtime/utils/modelExtendParams';
 import type { LobeAgentChatConfig } from '@lobechat/types';
 import type { EnabledAiModel, LobeDefaultAiModelListItem } from 'model-bank';
@@ -17,7 +16,7 @@ import { getChatStoreState } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 
 export type { ModelExtendParams };
-export { resolveDefaultEnableAdaptiveThinkingForModel, resolveDefaultThinkingLevelForModel };
+export { resolveDefaultEnableAdaptiveThinkingForModel };
 
 const toModelCard = (item: EnabledAiModel | LobeDefaultAiModelListItem) => ({
   abilities: item.abilities,
@@ -27,6 +26,7 @@ const toModelCard = (item: EnabledAiModel | LobeDefaultAiModelListItem) => ({
   id: item.id,
   knowledgeCutoff: item.knowledgeCutoff,
   providerId: item.providerId,
+  reasoningEffort: item.settings?.reasoningEffort,
 });
 
 /**
@@ -79,7 +79,11 @@ export const createBrowserModelParamsProviders = ({
     const own = aiModelSelectors.getEnabledModelById(m, p)(state);
     const extendParams = aiModelSelectors.modelExtendParams(m, p)(state);
     if (!own && extendParams === undefined) return null;
-    return { displayName: own?.displayName, extendParams };
+    return {
+      displayName: own?.displayName,
+      extendParams,
+      reasoningEffort: own?.settings?.reasoningEffort,
+    };
   },
   listModelCards: () => {
     const state = getAiInfraStoreState();

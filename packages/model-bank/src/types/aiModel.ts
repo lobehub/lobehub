@@ -6,6 +6,21 @@ import {
   type TTSVoice,
   type VideoModelParamsSchema,
 } from '../standard-parameters';
+import {
+  LEGACY_EXTEND_PARAMS,
+  LEGACY_REASONING_EFFORT_KEYS,
+  migrateModelSettings,
+  type MigrateModelSettingsContext,
+} from './legacyReasoningEffort';
+import {
+  type AiModelReasoningEffortSettings,
+  AiModelReasoningEffortSettingsSchema,
+  type ReasoningEffortLevel,
+  ReasoningEffortLevelSchema,
+} from './reasoningEffort';
+
+export * from './legacyReasoningEffort';
+export * from './reasoningEffort';
 
 export type ModelPriceCurrency = 'CNY' | 'USD';
 
@@ -348,160 +363,45 @@ export interface AIBaseModelCard {
 export const isAiModelVisible = (model: { visible?: boolean }) => model.visible !== false;
 
 /**
- * User-level default reasoning params for a model instance (userId + providerId + modelId),
+ * User-level reasoning picks for a model instance (userId + providerId + modelId),
  * stored under `ai_models.config.chatConfig` on the personal-scope row (workspaceId IS NULL).
+ * Topic pins and sub-agent overrides use the same shape.
  *
- * Field names intentionally mirror the same-named `LobeAgentChatConfig` fields so
- * `applyModelExtendParams` can consume this object unchanged. Deliberately narrow:
- * the reasoning-effort family, Gemini thinking levels, and `reasoningMode`.
- * Numeric thinking budgets and other extend params remain agent-scoped.
+ * Field names mirror the same-named `LobeAgentChatConfig` fields so
+ * `applyModelExtendParams` can consume this object unchanged. The levels a model
+ * accepts and its default come from its card (`settings.reasoningEffort`).
  */
 export interface AiModelReasoningConfig {
-  codexMaxReasoningEffort?: 'low' | 'medium' | 'high' | 'xhigh';
-  deepseekV4GAReasoningEffort?: 'none' | 'low' | 'high' | 'max';
-  deepseekV4ReasoningEffort?: 'none' | 'high' | 'max';
-  effort?: 'low' | 'medium' | 'high' | 'max';
-  glm5_2ReasoningEffort?: 'high' | 'max';
-  glm5_3ReasoningEffort?: 'low' | 'high' | 'max';
-  gpt5_1ReasoningEffort?: 'none' | 'low' | 'medium' | 'high';
-  gpt5_2ProReasoningEffort?: 'medium' | 'high' | 'xhigh';
-  gpt5_2ReasoningEffort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
-  gpt5_6ReasoningEffort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
-  gpt5ReasoningEffort?: 'minimal' | 'low' | 'medium' | 'high';
-  gpt6ReasoningEffort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
-  grok4_3ReasoningEffort?: 'none' | 'low' | 'medium' | 'high';
-  grok4_5ReasoningEffort?: 'low' | 'medium' | 'high';
-  grok4_6ReasoningEffort?: 'low' | 'medium' | 'high' | 'xhigh';
-  grok4_7ReasoningEffort?: 'low' | 'medium' | 'high' | 'xhigh';
-  grok4_20ReasoningEffort?: 'low' | 'medium' | 'high' | 'xhigh';
-  hy3ReasoningEffort?: 'no_think' | 'low' | 'high';
-  kimiK3ReasoningEffort?: 'low' | 'high' | 'max';
-  opus47Effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
-  reasoningEffort?: 'low' | 'medium' | 'high';
+  reasoningEffort?: ReasoningEffortLevel;
   reasoningMode?: 'standard' | 'pro';
-  ring2_6ReasoningEffort?: 'high' | 'xhigh';
-  step3_5ReasoningEffort?: 'low' | 'high';
-  thinkingLevel?: 'minimal' | 'low' | 'medium' | 'high';
-  thinkingLevel2?: 'low' | 'high';
-  thinkingLevel3?: 'low' | 'medium' | 'high';
-  thinkingLevel4?: 'minimal' | 'high';
 }
 
 export const AiModelReasoningConfigSchema = z.object({
-  codexMaxReasoningEffort: z.enum(['low', 'medium', 'high', 'xhigh']).optional(),
-  deepseekV4GAReasoningEffort: z.enum(['none', 'low', 'high', 'max']).optional(),
-  deepseekV4ReasoningEffort: z.enum(['none', 'high', 'max']).optional(),
-  effort: z.enum(['low', 'medium', 'high', 'max']).optional(),
-  glm5_2ReasoningEffort: z.enum(['high', 'max']).optional(),
-  glm5_3ReasoningEffort: z.enum(['low', 'high', 'max']).optional(),
-  gpt5_1ReasoningEffort: z.enum(['none', 'low', 'medium', 'high']).optional(),
-  gpt5_2ProReasoningEffort: z.enum(['medium', 'high', 'xhigh']).optional(),
-  gpt5_2ReasoningEffort: z.enum(['none', 'low', 'medium', 'high', 'xhigh']).optional(),
-  gpt5_6ReasoningEffort: z.enum(['none', 'low', 'medium', 'high', 'xhigh', 'max']).optional(),
-  gpt5ReasoningEffort: z.enum(['minimal', 'low', 'medium', 'high']).optional(),
-  gpt6ReasoningEffort: z.enum(['low', 'medium', 'high', 'xhigh', 'max']).optional(),
-  grok4_3ReasoningEffort: z.enum(['none', 'low', 'medium', 'high']).optional(),
-  grok4_5ReasoningEffort: z.enum(['low', 'medium', 'high']).optional(),
-  grok4_6ReasoningEffort: z.enum(['low', 'medium', 'high', 'xhigh']).optional(),
-  grok4_7ReasoningEffort: z.enum(['low', 'medium', 'high', 'xhigh']).optional(),
-  grok4_20ReasoningEffort: z.enum(['low', 'medium', 'high', 'xhigh']).optional(),
-  hy3ReasoningEffort: z.enum(['no_think', 'low', 'high']).optional(),
-  kimiK3ReasoningEffort: z.enum(['low', 'high', 'max']).optional(),
-  opus47Effort: z.enum(['low', 'medium', 'high', 'xhigh', 'max']).optional(),
-  reasoningEffort: z.enum(['low', 'medium', 'high']).optional(),
+  reasoningEffort: ReasoningEffortLevelSchema.optional(),
   reasoningMode: z.enum(['standard', 'pro']).optional(),
-  ring2_6ReasoningEffort: z.enum(['high', 'xhigh']).optional(),
-  step3_5ReasoningEffort: z.enum(['low', 'high']).optional(),
-  thinkingLevel: z.enum(['minimal', 'low', 'medium', 'high']).optional(),
-  thinkingLevel2: z.enum(['low', 'high']).optional(),
-  thinkingLevel3: z.enum(['low', 'medium', 'high']).optional(),
-  thinkingLevel4: z.enum(['minimal', 'high']).optional(),
 });
 
 /**
- * The extend params covered by AiModelReasoningConfig. Each entry is both an
- * ExtendParamsType value and the AiModelReasoningConfig key it reads from —
- * used to filter which model-instance defaults a given model actually supports.
+ * `AiModelReasoningConfigSchema` for client writes. Released clients still send
+ * the per-model legacy keys (`gpt5_6ReasoningEffort`, `thinkingLevel`, ...),
+ * which the plain object schema would strip, saving an empty pick. This schema
+ * keeps them so the write path can move them to `reasoningEffort` with the
+ * model in hand (`translateLegacyReasoningConfig`). The declared type stays the
+ * current shape, which is all current callers may send.
  */
-export const MODEL_REASONING_EXTEND_PARAMS = Object.keys(
+export const AiModelReasoningConfigWriteSchema = AiModelReasoningConfigSchema.extend(
+  Object.fromEntries(LEGACY_REASONING_EFFORT_KEYS.map((key) => [key, z.string().optional()])),
+) as unknown as z.ZodType<AiModelReasoningConfig, AiModelReasoningConfig>;
+
+/**
+ * The AiModelReasoningConfig keys, i.e. the chat config fields that are user-level
+ * per-model settings rather than agent settings.
+ */
+export const MODEL_REASONING_CONFIG_KEYS = Object.keys(
   AiModelReasoningConfigSchema.shape,
 ) as (keyof AiModelReasoningConfig)[];
 
-/**
- * Ordered level list per reasoning param (low → high), mirroring the
- * ControlsForm slider level definitions so select-style controls can render
- * the same choices.
- */
-export const MODEL_REASONING_PARAM_LEVELS: {
-  [K in keyof AiModelReasoningConfig]-?: readonly NonNullable<AiModelReasoningConfig[K]>[];
-} = {
-  codexMaxReasoningEffort: ['low', 'medium', 'high', 'xhigh'],
-  deepseekV4GAReasoningEffort: ['none', 'low', 'high', 'max'],
-  deepseekV4ReasoningEffort: ['none', 'high', 'max'],
-  effort: ['low', 'medium', 'high', 'max'],
-  glm5_2ReasoningEffort: ['high', 'max'],
-  glm5_3ReasoningEffort: ['low', 'high', 'max'],
-  gpt5_1ReasoningEffort: ['none', 'low', 'medium', 'high'],
-  gpt5_2ProReasoningEffort: ['medium', 'high', 'xhigh'],
-  gpt5_2ReasoningEffort: ['none', 'low', 'medium', 'high', 'xhigh'],
-  gpt5_6ReasoningEffort: ['none', 'low', 'medium', 'high', 'xhigh', 'max'],
-  gpt5ReasoningEffort: ['minimal', 'low', 'medium', 'high'],
-  gpt6ReasoningEffort: ['low', 'medium', 'high', 'xhigh', 'max'],
-  grok4_3ReasoningEffort: ['none', 'low', 'medium', 'high'],
-  grok4_5ReasoningEffort: ['low', 'medium', 'high'],
-  grok4_6ReasoningEffort: ['low', 'medium', 'high', 'xhigh'],
-  grok4_7ReasoningEffort: ['low', 'medium', 'high', 'xhigh'],
-  grok4_20ReasoningEffort: ['low', 'medium', 'high', 'xhigh'],
-  hy3ReasoningEffort: ['no_think', 'low', 'high'],
-  kimiK3ReasoningEffort: ['low', 'high', 'max'],
-  opus47Effort: ['low', 'medium', 'high', 'xhigh', 'max'],
-  reasoningEffort: ['low', 'medium', 'high'],
-  reasoningMode: ['standard', 'pro'],
-  ring2_6ReasoningEffort: ['high', 'xhigh'],
-  step3_5ReasoningEffort: ['low', 'high'],
-  thinkingLevel: ['minimal', 'low', 'medium', 'high'],
-  thinkingLevel2: ['low', 'high'],
-  thinkingLevel3: ['low', 'medium', 'high'],
-  thinkingLevel4: ['minimal', 'high'],
-};
-
-/**
- * Fallback level shown when the user has not saved a model-instance value,
- * mirroring each ControlsForm slider's defaultValue (gpt5_2ReasoningEffort is
- * model-dependent there: 'medium' for gpt-5.5, 'none' otherwise).
- */
-export const MODEL_REASONING_PARAM_DEFAULTS: {
-  [K in keyof AiModelReasoningConfig]-?: NonNullable<AiModelReasoningConfig[K]>;
-} = {
-  codexMaxReasoningEffort: 'medium',
-  deepseekV4GAReasoningEffort: 'high',
-  deepseekV4ReasoningEffort: 'high',
-  effort: 'high',
-  glm5_2ReasoningEffort: 'max',
-  glm5_3ReasoningEffort: 'max',
-  gpt5_1ReasoningEffort: 'none',
-  gpt5_2ProReasoningEffort: 'medium',
-  gpt5_2ReasoningEffort: 'none',
-  gpt5_6ReasoningEffort: 'medium',
-  gpt5ReasoningEffort: 'medium',
-  gpt6ReasoningEffort: 'medium',
-  grok4_3ReasoningEffort: 'low',
-  grok4_5ReasoningEffort: 'high',
-  grok4_6ReasoningEffort: 'high',
-  grok4_7ReasoningEffort: 'high',
-  grok4_20ReasoningEffort: 'medium',
-  hy3ReasoningEffort: 'high',
-  kimiK3ReasoningEffort: 'max',
-  opus47Effort: 'high',
-  reasoningEffort: 'medium',
-  reasoningMode: 'standard',
-  ring2_6ReasoningEffort: 'high',
-  step3_5ReasoningEffort: 'low',
-  thinkingLevel: 'high',
-  thinkingLevel2: 'high',
-  thinkingLevel3: 'high',
-  thinkingLevel4: 'minimal',
-};
+export const REASONING_MODES = ['standard', 'pro'] as const;
 
 export interface AiModelConfig {
   /**
@@ -531,38 +431,10 @@ export type ExtendParamsType =
   | 'preserveThinking'
   | 'enableAdaptiveThinking'
   | 'disableContextCaching'
-  | 'effort'
-  | 'deepseekV4GAReasoningEffort'
-  | 'deepseekV4ReasoningEffort'
-  | 'qwen38ReasoningEffort'
-  | 'reasoningEffort'
   | 'reasoningMode'
-  | 'gpt5ReasoningEffort'
-  | 'gpt5_1ReasoningEffort'
-  | 'gpt5_2ReasoningEffort'
-  | 'gpt5_2ProReasoningEffort'
-  | 'gpt5_6ReasoningEffort'
-  | 'gpt6ReasoningEffort'
-  | 'glm5_2ReasoningEffort'
-  | 'glm5_3ReasoningEffort'
-  | 'grok4_20ReasoningEffort'
-  | 'grok4_3ReasoningEffort'
-  | 'grok4_5ReasoningEffort'
-  | 'grok4_6ReasoningEffort'
-  | 'grok4_7ReasoningEffort'
-  | 'hy3ReasoningEffort'
-  | 'kimiK3ReasoningEffort'
-  | 'ring2_6ReasoningEffort'
-  | 'codexMaxReasoningEffort'
-  | 'opus47Effort'
-  | 'step3_5ReasoningEffort'
   | 'textVerbosity'
   | 'thinking'
   | 'thinkingBudget'
-  | 'thinkingLevel'
-  | 'thinkingLevel2'
-  | 'thinkingLevel3'
-  | 'thinkingLevel4'
   | 'imageAspectRatio'
   | 'imageAspectRatio2'
   | 'imageResolution'
@@ -580,6 +452,11 @@ export interface AiModelSettings {
   disabledParams?: DisabledParamType[];
   extendParams?: ExtendParamsType[];
   /**
+   * The model's reasoning effort control: selectable levels and the default
+   * level sent when the user has not picked one.
+   */
+  reasoningEffort?: AiModelReasoningEffortSettings;
+  /**
    * How the model layer implements search
    */
   searchImpl?: ModelSearchImplementType;
@@ -594,38 +471,10 @@ export const ExtendParamsTypeSchema = z.enum([
   'preserveThinking',
   'enableAdaptiveThinking',
   'disableContextCaching',
-  'effort',
-  'deepseekV4GAReasoningEffort',
-  'deepseekV4ReasoningEffort',
-  'qwen38ReasoningEffort',
-  'reasoningEffort',
   'reasoningMode',
-  'gpt5ReasoningEffort',
-  'gpt5_1ReasoningEffort',
-  'gpt5_2ReasoningEffort',
-  'gpt5_2ProReasoningEffort',
-  'gpt5_6ReasoningEffort',
-  'gpt6ReasoningEffort',
-  'glm5_2ReasoningEffort',
-  'glm5_3ReasoningEffort',
-  'grok4_20ReasoningEffort',
-  'grok4_3ReasoningEffort',
-  'grok4_5ReasoningEffort',
-  'grok4_6ReasoningEffort',
-  'grok4_7ReasoningEffort',
-  'hy3ReasoningEffort',
-  'kimiK3ReasoningEffort',
-  'ring2_6ReasoningEffort',
-  'codexMaxReasoningEffort',
-  'opus47Effort',
-  'step3_5ReasoningEffort',
   'textVerbosity',
   'thinking',
   'thinkingBudget',
-  'thinkingLevel',
-  'thinkingLevel2',
-  'thinkingLevel3',
-  'thinkingLevel4',
   'imageAspectRatio',
   'imageAspectRatio2',
   'imageResolution',
@@ -645,9 +494,36 @@ export const DisabledParamTypeSchema = z.enum([
 export const AiModelSettingsSchema = z.object({
   disabledParams: z.array(DisabledParamTypeSchema).optional(),
   extendParams: z.array(ExtendParamsTypeSchema).optional(),
+  reasoningEffort: AiModelReasoningEffortSettingsSchema.optional(),
   searchImpl: ModelSearchImplementTypeSchema.optional(),
   searchProvider: z.string().optional(),
 });
+
+/**
+ * `AiModelSettingsSchema` for client writes. Released clients still offer the
+ * legacy effort extend params (`gpt5ReasoningEffort`, ...) in the custom-model
+ * form, which `ExtendParamsTypeSchema` rejects; they are accepted here so the
+ * router can move them to `settings.reasoningEffort` (see `migrateModelSettings`).
+ */
+export const AiModelSettingsWriteSchema = AiModelSettingsSchema.extend({
+  extendParams: z
+    .array(z.union([ExtendParamsTypeSchema, z.enum(LEGACY_EXTEND_PARAMS as [string, ...string[]])]))
+    .optional(),
+});
+
+export type AiModelSettingsWrite = z.infer<typeof AiModelSettingsWriteSchema>;
+
+/**
+ * Moves the legacy effort extend params of a client-written `settings` to
+ * `settings.reasoningEffort`; `cardDeclaresEffort` as in `migrateModelSettings`.
+ */
+export const translateLegacyModelSettings = (
+  settings: AiModelSettingsWrite | undefined,
+  context: MigrateModelSettingsContext,
+): AiModelSettings | undefined => {
+  if (!settings) return;
+  return AiModelSettingsSchema.parse(migrateModelSettings(settings, context) ?? settings);
+};
 
 export interface AIChatModelCard extends AIBaseModelCard {
   abilities?: ModelAbilities;

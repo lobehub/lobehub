@@ -13,7 +13,8 @@ import debug from 'debug';
 import {
   type AiModelReasoningConfig,
   type ExtendParamsType,
-  MODEL_REASONING_EXTEND_PARAMS,
+  resolveReasoningEffortLevel,
+  resolveReasoningEffortSettings,
 } from 'model-bank';
 import { ModelProvider } from 'model-bank/modelProvider';
 
@@ -28,8 +29,6 @@ import type {
 } from './types';
 
 const log = debug('mecha:modelParams');
-
-const REASONING_EXTEND_PARAMS = MODEL_REASONING_EXTEND_PARAMS as readonly string[];
 
 const attempt = async <T>(
   label: string,
@@ -59,7 +58,10 @@ export const resolveHistoryCount = (historyCount?: number | null): number | unde
  * Which extend params the model can consume for this user: the user's own
  * row (an explicit empty array opts out), else the provider's card, else the
  * canonical card matched by id across providers — aggregation providers may
- * serve a model without copying its origin `settings.extendParams`.
+ * serve a model without copying its origin `settings.extendParams`. The
+ * reasoning effort control follows the same order, except that a user row
+ * without its own control (a builtin model the user only toggled) inherits the
+ * card's, so the card stays the single source of defaults.
  */
 export const resolveModelExtendParamList = async (
   request: Pick<ModelParamsRequest, 'model' | 'provider'>,
@@ -80,18 +82,32 @@ export const resolveModelExtendParamList = async (
   let modelExtendParams = userModelRow?.extendParams ?? undefined;
   if (modelExtendParams === undefined) {
     modelExtendParams = modelCard?.extendParams ?? undefined;
-    if (!modelExtendParams || modelExtendParams.length === 0) {
+    // A row or card that declares only an effort control has declared its controls: inheriting
+    // another provider's `enableReasoning` would turn an unset preference into disabled thinking.
+    if (
+      (!modelExtendParams || modelExtendParams.length === 0) &&
+      !userModelRow?.reasoningEffort &&
+      !modelCard?.reasoningEffort
+    ) {
       modelExtendParams = canonicalModelCard?.extendParams ?? undefined;
     }
   }
+
+  const modelReasoningEffort = resolveReasoningEffortSettings(
+    userModelRow?.reasoningEffort ?? modelCard?.reasoningEffort ?? undefined,
+    // The own card first, so a user row without a default inherits the card's.
+    [modelCard, ...cards.filter((card) => card !== modelCard && matchesModel(card, model))].map(
+      (card) => card?.reasoningEffort ?? undefined,
+    ),
+  );
 
   return {
     canonicalModelCard,
     modelCard,
     modelExtendParams,
-    modelHasReasoningExtendParams: (modelExtendParams ?? []).some((param) =>
-      REASONING_EXTEND_PARAMS.includes(param),
-    ),
+    modelHasReasoningControls:
+      !!modelReasoningEffort || (modelExtendParams ?? []).includes('reasoningMode'),
+    modelReasoningEffort,
     userModelRow,
   };
 };
@@ -139,11 +155,16 @@ export const readFrozenModelFacts = async (
   providers: ModelParamsProviders,
 ): Promise<FrozenModelFacts> => {
   const { model, provider } = request;
-  const { canonicalModelCard, modelCard, modelHasReasoningExtendParams, userModelRow } =
-    await resolveModelExtendParamList(request, providers);
+  const {
+    canonicalModelCard,
+    modelCard,
+    modelHasReasoningControls,
+    modelReasoningEffort,
+    userModelRow,
+  } = await resolveModelExtendParamList(request, providers);
   // Read the reasoning sources only for models that can consume them, exactly
   // as the per-attempt rules do: a non-reasoning model freezes none.
-  const reasoningConfig = modelHasReasoningExtendParams
+  const reasoningConfig = modelHasReasoningControls
     ? await resolveReasoningConfig(request, providers)
     : undefined;
 
@@ -153,12 +174,26 @@ export const readFrozenModelFacts = async (
   // (`ai_models.config.deploymentName`) replaces the bundled one — otherwise
   // calls 404 wherever only the user's endpoint exists.
   const deploymentName = userModelRow?.deploymentName || modelCard?.deploymentName || undefined;
+  // The effort control is frozen resolved, on the source that answers first
+  // (the user row, else the own card): its spec or default may come from a
+  // same-model card the snapshot does not keep (OpenRouter `openai/o3` takes
+  // its spec from the Vercel AI Gateway card).
+  const frozenUserModelRow =
+    userModelRow?.reasoningEffort && modelReasoningEffort
+      ? { ...userModelRow, reasoningEffort: modelReasoningEffort }
+      : userModelRow;
+  const cardReasoningEffort =
+    !userModelRow?.reasoningEffort && modelReasoningEffort ? modelReasoningEffort : undefined;
+  const cardOverrides = {
+    ...(deploymentName ? { deploymentName } : {}),
+    ...(cardReasoningEffort ? { reasoningEffort: cardReasoningEffort } : {}),
+  };
   const mergedModelCard: ModelCardFacts | undefined = modelCard
-    ? { ...modelCard, ...(deploymentName ? { deploymentName } : {}) }
-    : userModelRow?.deploymentName
-      ? // A custom model has no bundled card; the user row alone still names
-        // its deployment, so freeze a minimal card for the transport.
-        { deploymentName: userModelRow.deploymentName, id: model, providerId: provider }
+    ? { ...modelCard, ...cardOverrides }
+    : Object.keys(cardOverrides).length > 0
+      ? // A custom model has no bundled card; freeze a minimal one for the
+        // user's deployment alias and the inherited effort control.
+        { ...cardOverrides, id: model, providerId: provider }
       : undefined;
 
   return {
@@ -179,7 +214,7 @@ export const readFrozenModelFacts = async (
     model,
     provider,
     reasoningConfig,
-    userModelRow,
+    userModelRow: frozenUserModelRow,
   };
 };
 
@@ -230,7 +265,8 @@ export const resolveModelParams = async (
     canonicalModelCard,
     modelCard,
     modelExtendParams,
-    modelHasReasoningExtendParams,
+    modelHasReasoningControls,
+    modelReasoningEffort,
     userModelRow,
   } = extendParamList;
 
@@ -248,13 +284,15 @@ export const resolveModelParams = async (
   // Only read the reasoning sources when the model can actually consume them
   // (`applyModelExtendParams` ignores them otherwise) — this runs on every
   // LLM attempt, so non-reasoning models must not pay the extra reads.
-  const modelReasoningConfig = modelHasReasoningExtendParams
+  const modelReasoningConfig = modelHasReasoningControls
     ? await resolveReasoningConfig(request, providers)
     : undefined;
 
   const subAgentChatConfigOverride = request.agent.subAgentChatConfigOverride ?? undefined;
+  // A model with an effort control always resolves, so its card default is sent
+  // even when nothing else is configured.
   const effectiveChatConfig =
-    chatConfig || modelReasoningConfig || subAgentChatConfigOverride
+    chatConfig || modelReasoningConfig || subAgentChatConfigOverride || modelReasoningEffort
       ? resolveEffectiveReasoningChatConfig({
           agentChatConfig: chatConfig ?? {},
           modelReasoningConfig,
@@ -278,8 +316,9 @@ export const resolveModelParams = async (
   // must not suppress replay for the thinking-only `deepseek-reasoner`.
   const deepseekV4ThinkingDisabled =
     isDeepSeekV4FamilyModel(model) &&
-    (effectiveChatConfig?.deepseekV4GAReasoningEffort === 'none' ||
-      effectiveChatConfig?.deepseekV4ReasoningEffort === 'none');
+    !!modelReasoningEffort?.controlsThinking &&
+    resolveReasoningEffortLevel(modelReasoningEffort, effectiveChatConfig?.reasoningEffort) ===
+      'none';
   const deepseekForcesPreserveThinking =
     isDeepSeekThinkingEligibleModel(model) && !deepseekV4ThinkingDisabled;
   // Meta always uses Responses with stateless encrypted reasoning replay; the
@@ -309,6 +348,7 @@ export const resolveModelParams = async (
         chatConfig: effectiveChatConfig,
         extendParams: modelExtendParams as ExtendParamsType[] | undefined,
         model,
+        reasoningEffort: modelReasoningEffort,
       })
     : undefined;
   const { searchDecision } = request;

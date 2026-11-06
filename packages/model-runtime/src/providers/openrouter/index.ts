@@ -1,4 +1,8 @@
 import { ModelProvider } from 'model-bank';
+import {
+  type AiModelReasoningEffortSettings,
+  createReasoningEffortSettings,
+} from 'model-bank/aiModel';
 
 import type { OpenAICompatibleFactoryOptions } from '../../core/openaiCompatibleFactory';
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
@@ -190,6 +194,7 @@ export const params = {
         // Merge all applicable extendParams for settings
         ...(() => {
           const extendParams: string[] = [];
+          let reasoningEffort: AiModelReasoningEffortSettings | undefined;
           if (model.description && model.description.includes('`reasoning` `enabled`')) {
             extendParams.push('enableReasoning');
           }
@@ -199,13 +204,23 @@ export const params = {
               model.id.includes('gpt-5.4') ||
               model.id.includes('gpt-5.5'))
           ) {
-            extendParams.push('gpt5_2ReasoningEffort', 'textVerbosity');
+            reasoningEffort = createReasoningEffortSettings([
+              'none',
+              'low',
+              'medium',
+              'high',
+              'xhigh',
+            ]);
+            extendParams.push('textVerbosity');
           } else if (hasReasoning && model.id.includes('gpt-5.1')) {
-            extendParams.push('gpt5_1ReasoningEffort', 'textVerbosity');
+            reasoningEffort = createReasoningEffortSettings(['none', 'low', 'medium', 'high']);
+            extendParams.push('textVerbosity');
           } else if (hasReasoning && model.id.includes('gpt-5')) {
-            extendParams.push('gpt5ReasoningEffort', 'textVerbosity');
+            reasoningEffort = createReasoningEffortSettings(['minimal', 'low', 'medium', 'high']);
+            extendParams.push('textVerbosity');
           } else if (hasReasoning && model.id.includes('openai')) {
-            extendParams.push('reasoningEffort', 'textVerbosity');
+            reasoningEffort = createReasoningEffortSettings(['low', 'medium', 'high']);
+            extendParams.push('textVerbosity');
           }
           if (hasReasoning && model.id.includes('claude')) {
             extendParams.push('enableReasoning', 'reasoningBudgetToken');
@@ -217,12 +232,21 @@ export const params = {
             extendParams.push('reasoningBudgetToken');
           }
           if (hasReasoning && model.id.includes('gemini-3-pro')) {
-            extendParams.push('thinkingLevel2');
+            reasoningEffort = createReasoningEffortSettings(['low', 'high']);
           }
           if (hasReasoning && model.id.includes('gemini-3-flash')) {
-            extendParams.push('thinkingLevel');
+            // Keeps the `high` level these models ran at before the card declared it.
+            reasoningEffort = createReasoningEffortSettings(['minimal', 'low', 'medium', 'high'], {
+              default: 'high',
+            });
           }
-          return extendParams.length > 0 ? { settings: { extendParams } } : {};
+          if (extendParams.length === 0 && !reasoningEffort) return {};
+          return {
+            settings: {
+              ...(extendParams.length > 0 && { extendParams }),
+              ...(reasoningEffort && { reasoningEffort }),
+            },
+          };
         })(),
       };
     });

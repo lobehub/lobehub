@@ -1,0 +1,93 @@
+import { Checkbox, CheckboxGroup, Flexbox, Select, Text } from '@lobehub/ui';
+import {
+  type AiModelReasoningEffortSettings,
+  REASONING_EFFORT_LEVELS,
+  type ReasoningEffortLevel,
+} from 'model-bank/aiModel';
+import { memo, useCallback, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import {
+  setReasoningEffortControlsThinking,
+  setReasoningEffortDefault,
+  updateReasoningEffortLevels,
+} from './utils';
+
+interface ReasoningEffortSettingsFieldProps {
+  disabled?: boolean;
+  onChange?: (value: AiModelReasoningEffortSettings | undefined) => void;
+  value?: AiModelReasoningEffortSettings;
+}
+
+/**
+ * Declares a custom model's reasoning effort control: the levels its API
+ * accepts and, optionally, the one sent when the user has not picked any.
+ * Clearing every level or the default lets it resolve from the same model
+ * under other providers; without one there is no control, and a control
+ * without a default takes the middle level.
+ */
+const ReasoningEffortSettingsField = memo<ReasoningEffortSettingsFieldProps>(
+  ({ disabled, onChange, value }) => {
+    const { t } = useTranslation(['modelProvider', 'chat']);
+
+    const labelOf = useCallback(
+      (level: ReasoningEffortLevel) => {
+        const label = t(`reasoningEffort.levels.${level}`, { ns: 'chat' });
+        // `none` and `no_think` share the label "Off"; the raw value tells them apart.
+        return `${label} (${level})`;
+      },
+      [t],
+    );
+
+    const levelOptions = useMemo(
+      () => REASONING_EFFORT_LEVELS.map((level) => ({ label: labelOf(level), value: level })),
+      [labelOf],
+    );
+
+    const handleLevelsChange = (levels: string[]) =>
+      onChange?.(updateReasoningEffortLevels(value, levels as ReasoningEffortLevel[]));
+
+    return (
+      <Flexbox gap={12}>
+        <CheckboxGroup
+          horizontal
+          disabled={disabled}
+          gap={12}
+          options={levelOptions}
+          style={{ flexWrap: 'wrap' }}
+          value={value?.levels ?? []}
+          onChange={handleLevelsChange}
+        />
+        {value && (
+          <Flexbox horizontal align={'center'} gap={8}>
+            <Text type={'secondary'}>
+              {t('providerModels.item.modelConfig.reasoningEffort.default')}
+            </Text>
+            <Select
+              allowClear
+              disabled={disabled}
+              options={value.levels.map((level) => ({ label: labelOf(level), value: level }))}
+              placeholder={t('providerModels.item.modelConfig.reasoningEffort.defaultPlaceholder')}
+              style={{ minWidth: 160 }}
+              value={value.default}
+              onChange={(level?: ReasoningEffortLevel) =>
+                onChange?.(setReasoningEffortDefault(value, level))
+              }
+            />
+          </Flexbox>
+        )}
+        {value && (
+          <Checkbox
+            checked={!!value.controlsThinking}
+            disabled={disabled}
+            onChange={(checked) => onChange?.(setReasoningEffortControlsThinking(value, checked))}
+          >
+            {t('providerModels.item.modelConfig.reasoningEffort.controlsThinking')}
+          </Checkbox>
+        )}
+      </Flexbox>
+    );
+  },
+);
+
+export default ReasoningEffortSettingsField;

@@ -616,5 +616,44 @@ describe('LobeGithubCopilotAI', () => {
 
       vi.doUnmock('@anthropic-ai/sdk');
     });
+
+    it('should map reasoning_effort to output_config.effort for claude models', async () => {
+      vi.resetModules();
+
+      const anthropicMessagesCreateMock = vi.fn().mockRejectedValue({ status: 500 });
+
+      vi.doMock('@anthropic-ai/sdk', () => {
+        return {
+          default: class MockAnthropic {
+            messages = {
+              create: anthropicMessagesCreateMock,
+            };
+          },
+        };
+      });
+
+      const { LobeGithubCopilotAI: ReloadedLobeGithubCopilotAI } = await import('./index');
+
+      const instance = new ReloadedLobeGithubCopilotAI({
+        bearerToken: 'cached-bearer-token',
+        bearerTokenExpiresAt: Date.now() + 600_000,
+        oauthAccessToken: 'ghu_oauth',
+      });
+
+      await expect(
+        instance.chat({
+          messages: [{ content: 'hello', role: 'user' }],
+          model: 'claude-opus-4.6',
+          reasoning_effort: 'low',
+        } as any),
+      ).rejects.toBeDefined();
+
+      const payload = anthropicMessagesCreateMock.mock.calls[0][0];
+
+      expect(payload.output_config).toEqual({ effort: 'low' });
+      expect(payload).not.toHaveProperty('reasoning_effort');
+
+      vi.doUnmock('@anthropic-ai/sdk');
+    });
   });
 });

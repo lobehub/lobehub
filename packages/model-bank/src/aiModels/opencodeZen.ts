@@ -790,7 +790,7 @@ const opencodeZenChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-02-16',
     settings: {
-      extendParams: ['reasoningEffort'],
+      reasoningEffort: { levels: ['low', 'medium', 'high'] },
     },
     type: 'chat',
   },
@@ -817,7 +817,7 @@ const opencodeZenChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-04-02',
     settings: {
-      extendParams: ['reasoningEffort'],
+      reasoningEffort: { levels: ['low', 'medium', 'high'] },
     },
     type: 'chat',
   },

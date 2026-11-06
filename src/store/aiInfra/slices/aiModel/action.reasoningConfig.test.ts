@@ -100,7 +100,7 @@ describe('AiModelAction reasoning config', () => {
     it('should optimistically merge the value and persist it via the service', async () => {
       act(() => {
         useStore.setState({
-          modelReasoningConfigMap: { 'openai/gpt-5.2': { reasoningEffort: 'low' } },
+          modelReasoningConfigMap: { 'openai/gpt-5.2': { reasoningMode: 'pro' } },
         });
       });
 
@@ -111,17 +111,17 @@ describe('AiModelAction reasoning config', () => {
 
       await act(async () => {
         await result.current.updateModelReasoningConfig('gpt-5.2', 'openai', {
-          gpt5_2ReasoningEffort: 'high',
+          reasoningEffort: 'high',
         });
       });
 
       expect(serviceSpy).toHaveBeenCalledWith('gpt-5.2', 'openai', {
-        gpt5_2ReasoningEffort: 'high',
+        reasoningEffort: 'high',
       });
       // merged with the previous value, not replaced
       expect(useStore.getState().modelReasoningConfigMap['openai/gpt-5.2']).toEqual({
-        gpt5_2ReasoningEffort: 'high',
-        reasoningEffort: 'low',
+        reasoningEffort: 'high',
+        reasoningMode: 'pro',
       });
       expect(useStore.getState().modelReasoningConfigUpdatingKeys).toEqual([]);
     });
@@ -136,19 +136,19 @@ describe('AiModelAction reasoning config', () => {
       const updatingKeysAtFetch: string[][] = [];
       vi.spyOn(aiModelService, 'getAiModelReasoningConfig').mockImplementation(async () => {
         updatingKeysAtFetch.push([...useStore.getState().modelReasoningConfigUpdatingKeys]);
-        return { gpt5_2ReasoningEffort: 'high', reasoningEffort: 'medium' };
+        return { reasoningEffort: 'high', reasoningMode: 'pro' };
       });
 
       await act(async () => {
         await result.current.updateModelReasoningConfig('gpt-5.2', 'openai', {
-          gpt5_2ReasoningEffort: 'high',
+          reasoningEffort: 'high',
         });
       });
 
       expect(updatingKeysAtFetch).toEqual([[]]);
       expect(useStore.getState().modelReasoningConfigMap['openai/gpt-5.2']).toEqual({
-        gpt5_2ReasoningEffort: 'high',
-        reasoningEffort: 'medium',
+        reasoningEffort: 'high',
+        reasoningMode: 'pro',
       });
     });
 
@@ -159,7 +159,7 @@ describe('AiModelAction reasoning config', () => {
 
       await act(async () => {
         await result.current.updateModelReasoningConfig('gpt-5.2', 'openai', {
-          gpt5_2ReasoningEffort: 'high',
+          reasoningEffort: 'high',
         });
       });
 
@@ -171,7 +171,7 @@ describe('AiModelAction reasoning config', () => {
               scope: rowScope(),
             })
           )?.data,
-        ).toEqual({ value: { gpt5_2ReasoningEffort: 'high' } }),
+        ).toEqual({ value: { reasoningEffort: 'high' } }),
       );
     });
 
@@ -268,7 +268,7 @@ describe('AiModelAction reasoning config', () => {
       await expect(async () => {
         await act(async () => {
           await result.current.updateModelReasoningConfig('gpt-5.2', 'openai', {
-            gpt5_2ReasoningEffort: 'high',
+            reasoningEffort: 'high',
           });
         });
       }).rejects.toThrow('Service error');
@@ -289,7 +289,7 @@ describe('AiModelAction reasoning config', () => {
       await expect(async () => {
         await act(async () => {
           await result.current.updateModelReasoningConfig('gpt-5.2', 'openai', {
-            gpt5_2ReasoningEffort: 'high',
+            reasoningEffort: 'high',
           });
         });
       }).rejects.toThrow('Service error');
@@ -302,7 +302,7 @@ describe('AiModelAction reasoning config', () => {
 
   describe('ensureModelReasoningConfig', () => {
     beforeEach(() => {
-      vi.spyOn(aiModelSelectors, 'isModelHasReasoningExtendParams').mockReturnValue(() => true);
+      vi.spyOn(aiModelSelectors, 'isModelHasReasoningControls').mockReturnValue(() => true);
       // Make the runtime-state warm-up a no-op so tests exercise the fetch logic
       act(() => {
         useStore.setState({ isInitAiProviderRuntimeState: true });
@@ -310,7 +310,7 @@ describe('AiModelAction reasoning config', () => {
     });
 
     it('should skip the fetch for models without reasoning extend params', async () => {
-      vi.spyOn(aiModelSelectors, 'isModelHasReasoningExtendParams').mockReturnValue(() => false);
+      vi.spyOn(aiModelSelectors, 'isModelHasReasoningControls').mockReturnValue(() => false);
 
       const { result } = renderHook(() => useStore());
       const serviceSpy = vi.spyOn(aiModelService, 'getAiModelReasoningConfig');
@@ -431,9 +431,9 @@ describe('AiModelAction reasoning config', () => {
     it('paints the persisted config before the network answers, then adopts the server value', async () => {
       await aiModelReasoningConfigResource.storage!.set(
         { queryKey: REASONING_STORAGE_KEY, scope: rowScope() },
-        { data: { value: { gpt5_2ReasoningEffort: 'low' } }, updatedAt: 1 },
+        { data: { value: { reasoningEffort: 'low' } }, updatedAt: 1 },
       );
-      let resolve!: (value: { gpt5_2ReasoningEffort: 'high' }) => void;
+      let resolve!: (value: { reasoningEffort: 'high' }) => void;
       vi.spyOn(aiModelService, 'getAiModelReasoningConfig').mockImplementation(
         () => new Promise((r) => (resolve = r)),
       );
@@ -446,7 +446,7 @@ describe('AiModelAction reasoning config', () => {
       // First frame after a reload: the saved level, before any response
       await waitFor(() =>
         expect(useStore.getState().modelReasoningConfigMap['openai/gpt-5.2']).toEqual({
-          gpt5_2ReasoningEffort: 'low',
+          reasoningEffort: 'low',
         }),
       );
       expect(sync.result.current.isHydrated).toBe(true);
@@ -454,11 +454,11 @@ describe('AiModelAction reasoning config', () => {
         aiModelSelectors.isModelReasoningConfigLoaded('gpt-5.2', 'openai')(useStore.getState()),
       ).toBe(true);
 
-      await act(async () => resolve({ gpt5_2ReasoningEffort: 'high' }));
+      await act(async () => resolve({ reasoningEffort: 'high' }));
 
       await waitFor(() =>
         expect(useStore.getState().modelReasoningConfigMap['openai/gpt-5.2']).toEqual({
-          gpt5_2ReasoningEffort: 'high',
+          reasoningEffort: 'high',
         }),
       );
       await waitFor(async () =>
@@ -469,7 +469,7 @@ describe('AiModelAction reasoning config', () => {
               scope: rowScope(),
             })
           )?.data,
-        ).toEqual({ value: { gpt5_2ReasoningEffort: 'high' } }),
+        ).toEqual({ value: { reasoningEffort: 'high' } }),
       );
     });
 
@@ -592,13 +592,13 @@ describe('AiModelAction reasoning config', () => {
     it('should not clobber an in-flight optimistic value', async () => {
       act(() => {
         useStore.setState({
-          modelReasoningConfigMap: { 'openai/gpt-5.2': { gpt5_2ReasoningEffort: 'high' } },
+          modelReasoningConfigMap: { 'openai/gpt-5.2': { reasoningEffort: 'high' } },
           modelReasoningConfigUpdatingKeys: ['openai/gpt-5.2'],
         });
       });
 
       vi.spyOn(aiModelService, 'getAiModelReasoningConfig').mockResolvedValue({
-        gpt5_2ReasoningEffort: 'low',
+        reasoningEffort: 'low',
       });
 
       renderHook(() => useStore.getState().useFetchAiModelReasoningConfig('gpt-5.2', 'openai'), {
@@ -610,7 +610,7 @@ describe('AiModelAction reasoning config', () => {
       });
 
       expect(useStore.getState().modelReasoningConfigMap['openai/gpt-5.2']).toEqual({
-        gpt5_2ReasoningEffort: 'high',
+        reasoningEffort: 'high',
       });
     });
 
@@ -649,13 +649,15 @@ describe('AiModelAction reasoning config', () => {
       });
 
       act(() => {
-        useStore.getState().seedModelReasoningConfigs(
-          { 'anthropic/claude-sonnet-4-5': { reasoningEffort: 'low' } },
-          [
-            { id: 'gpt-5.2', providerId: 'openai' },
-            { id: 'claude-sonnet-4-5', providerId: 'anthropic' },
-          ] as any,
-        );
+        useStore
+          .getState()
+          .seedModelReasoningConfigs(
+            { 'anthropic/claude-sonnet-4-5': { reasoningEffort: 'low' } },
+            [
+              { id: 'gpt-5.2', providerId: 'openai' },
+              { id: 'claude-sonnet-4-5', providerId: 'anthropic' },
+            ] as any,
+          );
       });
 
       const state = useStore.getState();

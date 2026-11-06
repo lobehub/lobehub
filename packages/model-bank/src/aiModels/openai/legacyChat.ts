@@ -28,7 +28,7 @@ export const openaiLegacyChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2025-04-17',
     settings: {
-      extendParams: ['reasoningEffort'],
+      reasoningEffort: { levels: ['low', 'medium', 'high'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -57,7 +57,7 @@ export const openaiLegacyChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2025-06-10',
     settings: {
-      extendParams: ['reasoningEffort'],
+      reasoningEffort: { levels: ['low', 'medium', 'high'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -88,7 +88,7 @@ export const openaiLegacyChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2025-04-16',
     settings: {
-      extendParams: ['reasoningEffort'],
+      reasoningEffort: { levels: ['low', 'medium', 'high'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -116,7 +116,7 @@ export const openaiLegacyChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2025-01-31',
     settings: {
-      extendParams: ['reasoningEffort'],
+      reasoningEffort: { levels: ['low', 'medium', 'high'] },
     },
     type: 'chat',
   },
@@ -143,7 +143,7 @@ export const openaiLegacyChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2025-03-19',
     settings: {
-      extendParams: ['reasoningEffort'],
+      reasoningEffort: { levels: ['low', 'medium', 'high'] },
     },
     type: 'chat',
   },
@@ -171,7 +171,7 @@ export const openaiLegacyChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2024-12-17',
     settings: {
-      extendParams: ['reasoningEffort'],
+      reasoningEffort: { levels: ['low', 'medium', 'high'] },
     },
     type: 'chat',
   },

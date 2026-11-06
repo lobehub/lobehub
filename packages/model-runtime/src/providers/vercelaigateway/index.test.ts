@@ -275,18 +275,17 @@ describe('LobeVercelAIGatewayAI - custom features', () => {
       const gpt51 = models.find((m) => m.id === 'openai/gpt-5.1-mini');
       const gpt5 = models.find((m) => m.id === 'openai/gpt-5-mini');
 
-      expect(gpt55?.settings?.extendParams).toEqual(
-        expect.arrayContaining(['gpt5_2ReasoningEffort', 'textVerbosity']),
-      );
-      expect(gpt52?.settings?.extendParams).toEqual(
-        expect.arrayContaining(['gpt5_2ReasoningEffort', 'textVerbosity']),
-      );
-      expect(gpt51?.settings?.extendParams).toEqual(
-        expect.arrayContaining(['gpt5_1ReasoningEffort', 'textVerbosity']),
-      );
-      expect(gpt5?.settings?.extendParams).toEqual(
-        expect.arrayContaining(['gpt5ReasoningEffort', 'textVerbosity']),
-      );
+      expect(gpt55?.settings?.extendParams).toEqual(['textVerbosity']);
+      expect(gpt55?.settings?.reasoningEffort?.levels).toEqual([
+        'none',
+        'low',
+        'medium',
+        'high',
+        'xhigh',
+      ]);
+      expect(gpt52?.settings?.reasoningEffort).toEqual(gpt55?.settings?.reasoningEffort);
+      expect(gpt51?.settings?.reasoningEffort?.levels).toEqual(['none', 'low', 'medium', 'high']);
+      expect(gpt5?.settings?.reasoningEffort?.levels).toEqual(['minimal', 'low', 'medium', 'high']);
     });
 
     it('should handle models with missing pricing', async () => {

@@ -1,10 +1,16 @@
 import { TRPCError } from '@trpc/server';
-import { type AiProviderModelListItem } from 'model-bank';
 import {
-  AiModelReasoningConfigSchema,
+  AiModelReasoningConfigWriteSchema,
+  type AiModelSettingsWrite,
+  AiModelSettingsWriteSchema,
   AiModelTypeSchema,
+  type AiProviderModelListItem,
   CreateAiModelSchema,
+  migrateModelSettings,
+  providerCardDeclaresEffort,
   ToggleAiModelEnableSchema,
+  translateLegacyModelSettings,
+  translateLegacyReasoningConfig,
   UpdateAiModelSchema,
 } from 'model-bank';
 import { z } from 'zod';
@@ -23,6 +29,29 @@ import { getServerGlobalConfig } from '@/server/globalConfig';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { getUserScopedAiProviderModelList } from '@/server/services/aiProviderAccess';
 import { type ProviderConfig } from '@/types/user/settings';
+
+/**
+ * Released clients still send the legacy effort extend params in model
+ * settings; these schemas accept them and the procedures move them to
+ * `settings.reasoningEffort` before saving.
+ */
+const CreateAiModelWriteSchema = CreateAiModelSchema.extend({
+  settings: AiModelSettingsWriteSchema.optional(),
+});
+const UpdateAiModelWriteSchema = UpdateAiModelSchema.extend({
+  settings: AiModelSettingsWriteSchema.optional(),
+});
+
+/** Moves legacy effort extend params of a written `settings` to the new spec. */
+const withCurrentSettings = <T extends { settings?: AiModelSettingsWrite }>(
+  { settings, ...rest }: T,
+  providerId: string,
+  id: string,
+) => {
+  if (!settings) return rest;
+  const cardDeclaresEffort = providerCardDeclaresEffort(providerId, id);
+  return { ...rest, settings: translateLegacyModelSettings(settings, { cardDeclaresEffort }) };
+};
 
 const AI_MODEL_UNIQUE_CONSTRAINT = 'ai_models_id_provider_id_user_id_pk';
 
@@ -93,7 +122,13 @@ export const aiModelRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      return ctx.aiModelModel.batchUpdateAiModels(input.id, input.models);
+      const models = input.models.map((model) => {
+        const settings = migrateModelSettings(model?.settings, {
+          cardDeclaresEffort: providerCardDeclaresEffort(input.id, model.id),
+        });
+        return settings ? { ...model, settings } : model;
+      });
+      return ctx.aiModelModel.batchUpdateAiModels(input.id, models);
     }),
 
   // Model deletes are workspace-wide at the model layer (no per-user narrowing),
@@ -116,8 +151,9 @@ export const aiModelRouter = router({
 
   createAiModel: aiModelProcedure
     .use(withScopedPermission('ai_model:create'))
-    .input(CreateAiModelSchema)
-    .mutation(async ({ input, ctx }) => {
+    .input(CreateAiModelWriteSchema)
+    .mutation(async ({ input: rawInput, ctx }) => {
+      const input = withCurrentSettings(rawInput, rawInput.providerId, rawInput.id);
       const existingModel = await ctx.aiModelModel.findByIdAndProvider(input.id, input.providerId);
       if (existingModel) {
         // A preference-only shell (just a saved reasoning config, hidden from
@@ -209,11 +245,12 @@ export const aiModelRouter = router({
       z.object({
         id: z.string(),
         providerId: z.string(),
-        value: UpdateAiModelSchema,
+        value: UpdateAiModelWriteSchema,
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      return ctx.aiModelModel.update(input.id, input.providerId, input.value);
+      const value = withCurrentSettings(input.value, input.providerId, input.id);
+      return ctx.aiModelModel.update(input.id, input.providerId, value);
     }),
 
   // Intentionally NOT gated by `ai_model:update`: this writes a personal
@@ -226,11 +263,15 @@ export const aiModelRouter = router({
       z.object({
         id: z.string(),
         providerId: z.string(),
-        value: AiModelReasoningConfigSchema,
+        value: AiModelReasoningConfigWriteSchema,
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      return ctx.aiModelModel.updateModelReasoningConfig(input.id, input.providerId, input.value);
+      const value = translateLegacyReasoningConfig(input.value, {
+        model: input.id,
+        provider: input.providerId,
+      });
+      return ctx.aiModelModel.updateModelReasoningConfig(input.id, input.providerId, value);
     }),
 
   updateAiModelOrder: aiModelProcedure

@@ -179,15 +179,18 @@ describe('the model list magpie serves', () => {
     expect(cards[0].functionCall).toBe(true);
   });
 
-  it('takes the reasoning parameter from model-bank, which is what makes a level selectable', async () => {
+  it('takes the effort spec from model-bank, which is what makes a level selectable', async () => {
     const cards = await load([
       model({ id: 'moonshot/kimi-k3', reasoning_levels: ['low', 'medium', 'high'] }),
     ]);
 
-    // magpie's levels say the model thinks; the parameter that turns the
-    // strength differs by model family, and only model-bank names it.
+    // magpie's levels say the model thinks; the levels and default the vendor
+    // accepts are only in model-bank.
     expect(cards[0].reasoning).toBe(true);
-    expect(cards[0].settings?.extendParams).toEqual(['kimiK3ReasoningEffort']);
+    expect(cards[0].settings?.reasoningEffort).toEqual({
+      default: 'max',
+      levels: ['low', 'high', 'max'],
+    });
   });
 
   it('leaves the settings empty for a model model-bank does not know', async () => {
@@ -204,7 +207,7 @@ describe('the model list magpie serves', () => {
     // A level beside `reasoning: false` would let a choice be made that the
     // gateway pushes back up to its lowest thinking level.
     expect(cards[0].reasoning).toBe(false);
-    expect(cards[0].settings?.extendParams).toBeUndefined();
+    expect(cards[0].settings?.reasoningEffort).toBeUndefined();
   });
 
   it('carries the params the vendor refuses, so the settings page hides them', async () => {
@@ -227,12 +230,12 @@ describe('the model list magpie serves', () => {
 
   it('reaches model-bank for a routing group too, the group serving that one model', async () => {
     // A group magpie found for kimi-k3, under the id it hands out. Asserting the
-    // reasoning param rather than tool calls keeps this about the lookup: tool
+    // effort spec rather than tool calls keeps this about the lookup: tool
     // calls also come out true from the vendor keyword alone, so they pass
     // whether or not model-bank was reached.
     const cards = await load([model({ id: 'auto/kimi-k3' })]);
 
-    expect(cards[0].settings?.extendParams).toContain('kimiK3ReasoningEffort');
+    expect(cards[0].settings?.reasoningEffort?.default).toBe('max');
   });
 
   it('finds no model-bank entry for a group of the user’s own, leaving the settings empty', async () => {

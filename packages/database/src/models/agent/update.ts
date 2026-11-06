@@ -4,6 +4,11 @@ import { applyWorkingDirByDevicePatch } from '@lobechat/types';
 import { toRecord } from '@lobechat/utils/object';
 import { TRPCError } from '@trpc/server';
 import { and, eq } from 'drizzle-orm';
+import {
+  type ReasoningEffortLevel,
+  stripLegacyEffortKeys,
+  translateLegacyReasoningConfig,
+} from 'model-bank/aiModel';
 import type { PartialDeep } from 'type-fest';
 
 import { merge } from '@/utils/merge';
@@ -279,6 +284,25 @@ export const updateConfig = async (
     mergedApiConfig
   ) {
     delete mergedApiConfig.source;
+  }
+
+  // A new sub-agent effort pick replaces the legacy per-model effort keys
+  // instead of merging next to them. Released clients still send the pick
+  // under a legacy key, which is translated so the pick is kept.
+  const mergedSubAgent = mergedValue.agencyConfig?.subagent;
+  const subAgentChatConfig = toRecord(mergedSubAgent?.chatConfig);
+  const subAgentPatch = toRecord(data.agencyConfig?.subagent?.chatConfig);
+  const subAgentEffort =
+    subAgentPatch &&
+    translateLegacyReasoningConfig(subAgentPatch, {
+      model: mergedSubAgent?.model,
+      provider: mergedSubAgent?.provider,
+    }).reasoningEffort;
+  if (subAgentChatConfig && subAgentEffort !== undefined) {
+    mergedValue.agencyConfig!.subagent!.chatConfig = stripLegacyEffortKeys({
+      ...subAgentChatConfig,
+      reasoningEffort: subAgentEffort as ReasoningEffortLevel,
+    });
   }
 
   mergedValue.agencyConfig = sanitizeAgentApiConfig(mergedValue.agencyConfig) ?? null;

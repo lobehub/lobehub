@@ -1,3 +1,4 @@
+import { type ReasoningEffortLevel, ReasoningEffortLevelSchema } from 'model-bank/aiModel';
 import { z } from 'zod';
 
 import type { SearchMode } from '../search';
@@ -29,13 +30,10 @@ export interface AgentSelfIterationChatConfig {
 }
 
 export interface LobeAgentChatConfig extends AgentMemoryChatConfig, AgentSelfIterationChatConfig {
-  codexMaxReasoningEffort?: 'low' | 'medium' | 'high' | 'xhigh';
   /**
    * Model ID to use for generating compression summaries
    */
   compressionModelId?: string;
-  deepseekV4GAReasoningEffort?: 'none' | 'low' | 'high' | 'max';
-  deepseekV4ReasoningEffort?: 'none' | 'high' | 'max';
 
   /**
    * Disable context caching
@@ -47,7 +45,6 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig, AgentSelfIte
    */
   disableGatewayMode?: boolean;
 
-  effort?: 'low' | 'medium' | 'high' | 'max';
   /**
    * Whether to enable adaptive thinking (Claude Opus 4.6)
    */
@@ -98,24 +95,10 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig, AgentSelfIte
    * Whether to enable streaming output
    */
   enableStreaming?: boolean;
-  glm5_2ReasoningEffort?: 'high' | 'max';
-  glm5_3ReasoningEffort?: 'low' | 'high' | 'max';
-  gpt5_1ReasoningEffort?: 'none' | 'low' | 'medium' | 'high';
-  gpt5_2ProReasoningEffort?: 'medium' | 'high' | 'xhigh';
-  gpt5_2ReasoningEffort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
-  gpt5_6ReasoningEffort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
-  gpt5ReasoningEffort?: 'minimal' | 'low' | 'medium' | 'high';
-  gpt6ReasoningEffort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
-  grok4_3ReasoningEffort?: 'none' | 'low' | 'medium' | 'high';
-  grok4_5ReasoningEffort?: 'low' | 'medium' | 'high';
-  grok4_6ReasoningEffort?: 'low' | 'medium' | 'high' | 'xhigh';
-  grok4_7ReasoningEffort?: 'low' | 'medium' | 'high' | 'xhigh';
-  grok4_20ReasoningEffort?: 'low' | 'medium' | 'high' | 'xhigh';
   /**
    * Number of historical messages
    */
   historyCount?: number;
-  hy3ReasoningEffort?: 'no_think' | 'low' | 'high';
   /**
    * Image aspect ratio for image generation models
    */
@@ -133,22 +116,12 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig, AgentSelfIte
    */
   imageResolution2?: '512' | '1K' | '2K' | '4K';
   inputTemplate?: string;
-  kimiK3ReasoningEffort?: 'low' | 'high' | 'max';
-  /**
-   * Effort level for Claude Opus 4.7 and later (adds xhigh tier between high and max)
-   */
-  opus47Effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 
   /**
    * Whether to preserve and pass historical thinking content to the model
    * (provider support required, e.g. Qwen preserve_thinking)
    */
   preserveThinking?: boolean;
-  /**
-   * Qwen3.8 Max hybrid thinking depth. `none` disables thinking; otherwise sets
-   * `reasoning_effort` to low / medium / xhigh (API default).
-   */
-  qwen38ReasoningEffort?: 'none' | 'low' | 'medium' | 'xhigh';
   reasoningBudgetToken?: number;
   /**
    * Reasoning budget token for models with 32k max (GLM-5/GLM-4.7)
@@ -158,12 +131,16 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig, AgentSelfIte
    * Reasoning budget token for models with 80k max (Qwen3 series)
    */
   reasoningBudgetToken80k?: number;
-  reasoningEffort?: 'low' | 'medium' | 'high';
+  /**
+   * Explicit reasoning effort; only sub-agent overrides still read it from the
+   * agent config. Levels outside the model card's `reasoningEffort.levels` are
+   * not sent.
+   */
+  reasoningEffort?: ReasoningEffortLevel;
   /**
    * Selects the Responses API reasoning execution mode.
    */
   reasoningMode?: 'standard' | 'pro';
-  ring2_6ReasoningEffort?: 'high' | 'xhigh';
   /**
    * Runtime environment configuration (desktop only)
    */
@@ -179,8 +156,6 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig, AgentSelfIte
    */
   skillActivateMode?: 'auto' | 'manual';
 
-  step3_5ReasoningEffort?: 'low' | 'high';
-
   /**
    * Output text verbosity control
    */
@@ -189,10 +164,6 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig, AgentSelfIte
   thinking?: 'disabled' | 'auto' | 'enabled';
 
   thinkingBudget?: number;
-  thinkingLevel?: 'minimal' | 'low' | 'medium' | 'high';
-  thinkingLevel2?: 'low' | 'high';
-  thinkingLevel3?: 'low' | 'medium' | 'high';
-  thinkingLevel4?: 'minimal' | 'high';
   /**
    * Tool-resolution mode. When set it overrides the `enableAgentMode` derivation:
    * - `agent`  full default toolset + plugins + always-on tools
@@ -245,14 +216,9 @@ export const SelfIterationChatConfigSchema = z.object({
 
 export const AgentChatConfigSchema = z
   .object({
-    codexMaxReasoningEffort: z.enum(['low', 'medium', 'high', 'xhigh']).optional(),
-    deepseekV4GAReasoningEffort: z.enum(['none', 'low', 'high', 'max']).optional(),
-    deepseekV4ReasoningEffort: z.enum(['none', 'high', 'max']).optional(),
-    qwen38ReasoningEffort: z.enum(['none', 'low', 'medium', 'xhigh']).optional(),
     compressionModelId: z.string().optional(),
     disableContextCaching: z.boolean().optional(),
     disableGatewayMode: z.boolean().optional(),
-    effort: z.enum(['low', 'medium', 'high', 'max']).optional(),
     enableAdaptiveThinking: z.boolean().optional(),
     enableAgentMode: z.boolean().optional(),
     toolMode: z.enum(['agent', 'chat', 'custom']).optional(),
@@ -266,34 +232,17 @@ export const AgentChatConfigSchema = z
     enableReasoningEffort: z.boolean().optional(),
     enableStreaming: z.boolean().optional(),
     enableStaleToolResultTrim: z.boolean().optional(),
-    gpt5ReasoningEffort: z.enum(['minimal', 'low', 'medium', 'high']).optional(),
-    gpt5_1ReasoningEffort: z.enum(['none', 'low', 'medium', 'high']).optional(),
-    gpt5_2ProReasoningEffort: z.enum(['medium', 'high', 'xhigh']).optional(),
-    gpt5_2ReasoningEffort: z.enum(['none', 'low', 'medium', 'high', 'xhigh']).optional(),
-    gpt5_6ReasoningEffort: z.enum(['none', 'low', 'medium', 'high', 'xhigh', 'max']).optional(),
-    gpt6ReasoningEffort: z.enum(['low', 'medium', 'high', 'xhigh', 'max']).optional(),
-    glm5_2ReasoningEffort: z.enum(['high', 'max']).optional(),
-    glm5_3ReasoningEffort: z.enum(['low', 'high', 'max']).optional(),
-    grok4_20ReasoningEffort: z.enum(['low', 'medium', 'high', 'xhigh']).optional(),
-    grok4_3ReasoningEffort: z.enum(['none', 'low', 'medium', 'high']).optional(),
-    grok4_5ReasoningEffort: z.enum(['low', 'medium', 'high']).optional(),
-    grok4_6ReasoningEffort: z.enum(['low', 'medium', 'high', 'xhigh']).optional(),
-    grok4_7ReasoningEffort: z.enum(['low', 'medium', 'high', 'xhigh']).optional(),
-    hy3ReasoningEffort: z.enum(['no_think', 'low', 'high']).optional(),
-    kimiK3ReasoningEffort: z.enum(['low', 'high', 'max']).optional(),
-    ring2_6ReasoningEffort: z.enum(['high', 'xhigh']).optional(),
     historyCount: z.number().optional(),
     imageAspectRatio: z.string().optional(),
     imageAspectRatio2: z.string().optional(),
     imageResolution: z.enum(['1K', '2K', '4K']).optional(),
     imageResolution2: z.enum(['512', '1K', '2K', '4K']).optional(),
-    opus47Effort: z.enum(['low', 'medium', 'high', 'xhigh', 'max']).optional(),
     runtimeEnv: RuntimeEnvConfigSchema.optional(),
     preserveThinking: z.boolean().optional(),
     reasoningBudgetToken: z.number().optional(),
     reasoningBudgetToken32k: z.number().optional(),
     reasoningBudgetToken80k: z.number().optional(),
-    reasoningEffort: z.enum(['low', 'medium', 'high']).optional(),
+    reasoningEffort: ReasoningEffortLevelSchema.optional(),
     reasoningMode: z.enum(['standard', 'pro']).optional(),
     searchFCModel: z
       .object({
@@ -302,15 +251,10 @@ export const AgentChatConfigSchema = z
       })
       .optional(),
     searchMode: z.enum(['off', 'on', 'auto']).optional(),
-    step3_5ReasoningEffort: z.enum(['low', 'high']).optional(),
     skillActivateMode: z.enum(['auto', 'manual']).optional(),
     textVerbosity: z.enum(['low', 'medium', 'high']).optional(),
     thinking: z.enum(['disabled', 'auto', 'enabled']).optional(),
     thinkingBudget: z.number().optional(),
-    thinkingLevel: z.enum(['minimal', 'low', 'medium', 'high']).optional(),
-    thinkingLevel2: z.enum(['low', 'high']).optional(),
-    thinkingLevel3: z.enum(['low', 'medium', 'high']).optional(),
-    thinkingLevel4: z.enum(['minimal', 'high']).optional(),
     toolResultMaxLength: z.number().default(25000),
     topicGroupMode: z
       .enum(['byTime', 'byProject', 'flat', 'byStatus', 'byAgent', 'byDevice'])
