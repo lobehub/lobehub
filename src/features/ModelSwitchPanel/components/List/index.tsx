@@ -50,9 +50,14 @@ export const List: FC<ListProps> = ({
 }) => {
   const { t: tCommon } = useTranslation('common');
   const newLabel = tCommon('new');
-  const { isModelRestricted, onBeforeModelSelect, onRestrictedModelClick, sortModelLast } =
-    useBusinessModelListGuard();
-  const proLabel = isModelRestricted ? tCommon('pro') : undefined;
+  const {
+    isModelRestricted,
+    onBeforeModelSelect,
+    onRestrictedModelClick,
+    restrictedBadgeLabel,
+    sortModelLast,
+  } = useBusinessModelListGuard();
+  const proLabel = isModelRestricted ? (restrictedBadgeLabel ?? tCommon('pro')) : undefined;
 
   const chatEnabledList = useEnabledChatModels();
   const enabledList = enabledListProp ?? chatEnabledList;
