@@ -66,7 +66,7 @@ const Body = () => {
           justify={'space-between'}
           style={{ paddingBlockEnd: 16, paddingInline: 24 }}
         >
-          <SkeletonBar height={32} radius={8} width={360} />
+          <SkeletonBar height={32} radius={8} width={56} />
           <SkeletonBar height={32} radius={8} width={112} />
         </Flexbox>
         <LiteTable

@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 
 import { usePermission } from '@/hooks/usePermission';
 
-import SettingsHeaderActions from '../features/SettingsHeaderActions';
+import SettingsPageActions from '../features/SettingsPageActions';
 import { createCreateCredModal } from './features/CreateCredModal';
 import CredsList from './features/CredsList';
 import { personalCredsApi } from './features/useCredsApi';
@@ -34,7 +34,7 @@ const Page = ({ mobile }: PageProps) => {
       <Button
         disabled={!canManageCredentials}
         icon={<Icon icon={Plus} />}
-        size={mobile ? 'large' : 'small'}
+        size={mobile ? 'large' : undefined}
         type={'primary'}
         onClick={handleCreate}
       >
@@ -57,7 +57,7 @@ const Page = ({ mobile }: PageProps) => {
   // The shared settings header shows the title; the button joins its right slot.
   return (
     <>
-      <SettingsHeaderActions>{createButton}</SettingsHeaderActions>
+      <SettingsPageActions>{createButton}</SettingsPageActions>
       <CredsList key={refreshKey} />
     </>
   );

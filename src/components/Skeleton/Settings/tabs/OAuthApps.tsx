@@ -11,9 +11,9 @@ const Body = ({ sub }: SettingsTabSkeletonProps) =>
   sub ? <AppDetailSkeleton /> : <AppListSkeleton />;
 
 /** The small "Create" button the list portals into the header; app pages have none. */
-const HeaderRight = ({ sub }: SettingsTabSkeletonProps) =>
-  sub ? null : <SkeletonBar height={24} width={96} />;
+const PageActions = ({ sub }: SettingsTabSkeletonProps) =>
+  sub ? null : <SkeletonBar height={32} width={112} />;
 
-const OAuthAppsSkeleton: SettingsTabSkeleton = { Body, HeaderRight };
+const OAuthAppsSkeleton: SettingsTabSkeleton = { Body, PageActions };
 
 export default OAuthAppsSkeleton;

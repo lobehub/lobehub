@@ -14,13 +14,13 @@ export interface SettingsTabSkeleton {
   /** The tab body inside the shared header + container frame. */
   Body: ComponentType<SettingsTabSkeletonProps>;
   /**
-   * Placeholders for the actions the settled page portals into the header's
-   * right slot (see `SettingsHeaderActions`).
-   */
-  HeaderRight?: ComponentType<SettingsTabSkeletonProps>;
-  /**
    * The whole page, for tabs that draw their own header and container
    * (`OWN_FRAME_TABS`). Mobile still renders `Body` under the mobile header.
    */
   Page?: ComponentType<SettingsTabSkeletonProps>;
+  /**
+   * Placeholders for the actions the settled page portals into the page-actions
+   * row at the top of the content column (see `SettingsPageActions`).
+   */
+  PageActions?: ComponentType<SettingsTabSkeletonProps>;
 }

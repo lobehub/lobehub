@@ -4,7 +4,7 @@ import { useLocation } from 'react-router';
 
 import SettingContainer from '@/features/Setting/SettingContainer';
 import { OWN_FRAME_TABS } from '@/features/Settings/features/ownFrameTabs';
-import SettingsHeaderActions from '@/features/Settings/features/SettingsHeaderActions';
+import SettingsPageActions from '@/features/Settings/features/SettingsPageActions';
 import type { RouteSkeletonProps } from '@/spa/router/routeMeta';
 import { isMobileSurface } from '@/utils/mobileSurface';
 
@@ -34,7 +34,7 @@ export const SettingsBodySkeleton = () => {
 /**
  * Chunk fallback of a settings tab component. `SettingsContent` draws the frame
  * around in-frame tabs before their chunk loads, so they get the body plus their
- * header-action placeholders in the real header; own-frame tabs get their whole
+ * page-action placeholders in the real page-actions row; own-frame tabs get their whole
  * page, except under the mobile layout.
  */
 export const SettingsChunkSkeleton = () => {
@@ -44,10 +44,10 @@ export const SettingsChunkSkeleton = () => {
 
   return (
     <>
-      {skeleton.HeaderRight && (
-        <SettingsHeaderActions>
-          <skeleton.HeaderRight sub={sub} />
-        </SettingsHeaderActions>
+      {skeleton.PageActions && (
+        <SettingsPageActions>
+          <skeleton.PageActions sub={sub} />
+        </SettingsPageActions>
       )}
       <skeleton.Body sub={sub} />
     </>
@@ -74,7 +74,7 @@ const SettingsPageSkeleton = ({ chrome = 'page' }: RouteSkeletonProps) => {
 
   return (
     <SettingsSkeletonFrame
-      right={skeleton.HeaderRight && <skeleton.HeaderRight sub={sub} />}
+      actions={skeleton.PageActions && <skeleton.PageActions sub={sub} />}
       tab={tab}
     >
       {body}

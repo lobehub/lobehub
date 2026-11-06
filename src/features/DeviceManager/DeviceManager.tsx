@@ -19,7 +19,7 @@ import { useTranslation } from 'react-i18next';
 
 import ManagedDeviceCreateEntry from '@/business/client/features/ManagedDeviceCreateEntry';
 import AsyncBoundary from '@/components/AsyncBoundary';
-import SettingsHeaderActions from '@/features/Settings/features/SettingsHeaderActions';
+import SettingsPageActions from '@/features/Settings/features/SettingsPageActions';
 import { useDeviceList } from '@/store/device';
 import { useElectronStore } from '@/store/electron';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
@@ -384,7 +384,7 @@ const DeviceManager = memo<DeviceManagerProps>((props) => {
   const toolbarSlot = toolbarLeading ? (
     toolbar
   ) : (
-    <SettingsHeaderActions fallback={toolbar}>{renderActions('small')}</SettingsHeaderActions>
+    <SettingsPageActions fallback={toolbar}>{renderActions()}</SettingsPageActions>
   );
 
   const list = (

@@ -9,7 +9,7 @@ import { SkillNavListSkeleton } from './Skill';
 import type { SettingsTabSkeleton } from './types';
 
 const SECTIONS = [
-  { key: 'skillGroup.builtinTools', rows: 6 },
+  { key: 'skillGroup.builtinTools', rows: 5 },
   { key: 'skillGroup.communityConnectors', rows: 4 },
 ] as const;
 
@@ -19,8 +19,17 @@ const Line = ({ bar, height, width }: { bar: number; height: number; width: numb
   </Flexbox>
 );
 
+/** The Store icon button and "Add Custom Connector" button on the intro row. */
+const PageActions = () => (
+  <Flexbox horizontal flex={'none'} gap={8}>
+    <SkeletonBar height={32} width={32} />
+    <SkeletonBar height={32} width={176} />
+  </Flexbox>
+);
+
 /**
- * The connector page list (`LeftPanel` in page mode): the intro line, then
+ * The connector page list (`LeftPanel` in page mode): the intro line with the
+ * page actions, then
  * per group a 13px heading with its count and `SkillListRow` page rows — a 36px
  * icon tile, title + summary, status and chevron in a 60px row. Headings and
  * the intro are static copy.
@@ -30,8 +39,16 @@ const PageList = () => {
 
   return (
     <Flexbox aria-busy data-testid={'settings-connector-skeleton'}>
-      <Flexbox paddingInline={12} style={{ flexShrink: 0, paddingBlock: '24px 4px' }}>
+      <Flexbox
+        horizontal
+        align={'center'}
+        gap={16}
+        justify={'space-between'}
+        paddingInline={12}
+        style={{ flexShrink: 0, paddingBlock: '24px 4px' }}
+      >
         <Text type={'secondary'}>{t('skillView.connectorsDesc')}</Text>
+        <PageActions />
       </Flexbox>
       <Flexbox gap={2} style={{ paddingBlockEnd: 24 }}>
         {SECTIONS.map(({ key, rows }) => (
@@ -74,21 +91,13 @@ const PageList = () => {
   );
 };
 
-/** The small Store icon button and "Add Custom Connector" button in the header. */
-const HeaderRight = () => (
-  <Flexbox horizontal gap={8}>
-    <SkeletonBar height={24} width={24} />
-    <SkeletonBar height={24} width={160} />
-  </Flexbox>
-);
-
 /**
- * `ToolSettings` in connector mode draws its own header (title + actions) over
- * a centred 960px column, so the skeleton draws that frame itself.
+ * `ToolSettings` in connector mode draws its own header over a centred 960px
+ * column, so the skeleton draws that frame itself.
  */
 const Page = () => (
   <Flexbox aria-busy flex={1} height={'100%'} style={{ minHeight: 0, overflow: 'hidden' }}>
-    <SettingsSkeletonHeader right={<HeaderRight />} tab={'connector'} />
+    <SettingsSkeletonHeader tab={'connector'} />
     <Flexbox horizontal flex={1} justify={'center'} style={{ overflow: 'hidden' }}>
       <Flexbox style={{ maxWidth: 960, width: '100%' }}>
         <PageList />

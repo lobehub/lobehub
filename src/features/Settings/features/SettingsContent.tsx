@@ -1,6 +1,6 @@
 'use client';
 
-import { Flexbox, Text } from '@lobehub/ui';
+import { Text } from '@lobehub/ui';
 import { Fragment, useEffect, useState } from 'react';
 
 import NavHeader from '@/features/NavHeader';
@@ -13,7 +13,7 @@ import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfi
 import { ManageMemoryButton } from '../memory/features/ManageMemoryButton';
 import { componentMap } from './componentMap';
 import { getSettingsContainerMaxWidth, OWN_FRAME_TABS } from './ownFrameTabs';
-import { SettingsHeaderActionsContext } from './SettingsHeaderActions';
+import { SettingsPageActionsContext, SettingsPageActionsRow } from './SettingsPageActions';
 import { useSettingsTabTitle } from './tabTitles';
 
 const REDIRECT_MAP: Record<string, string> = {
@@ -33,7 +33,7 @@ const SettingsContent = ({ mobile, activeTab }: SettingsContentProps) => {
   const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
   const navigate = useWorkspaceAwareNavigate();
   const title = useSettingsTabTitle(activeTab);
-  const [headerActions, setHeaderActions] = useState<HTMLElement | null>(null);
+  const [pageActions, setPageActions] = useState<HTMLElement | null>(null);
 
   useSettingsAnchorScroll();
 
@@ -92,29 +92,20 @@ const SettingsContent = ({ mobile, activeTab }: SettingsContentProps) => {
         const headerExtra = tabKey === SettingsTabs.Memory ? <ManageMemoryButton /> : undefined;
         return (
           <Fragment key={tabKey}>
-            <NavHeader
-              styles={{ center: { alignItems: 'center' } }}
-              right={
-                <Flexbox horizontal align={'center'} gap={8}>
-                  {headerExtra}
-                  <div
-                    ref={setHeaderActions}
-                    style={{ alignItems: 'center', display: 'flex', gap: 8 }}
-                  />
-                </Flexbox>
-              }
-            >
+            <NavHeader styles={{ center: { alignItems: 'center' } }}>
               {title && <Text weight={500}>{title}</Text>}
             </NavHeader>
-            <SettingsHeaderActionsContext value={headerActions}>
+            <SettingsPageActionsContext value={pageActions}>
               <SettingContainer
                 maxWidth={getSettingsContainerMaxWidth(tabKey)}
                 paddingBlock={'24px 128px'}
                 paddingInline={24}
               >
+                {/* Page actions sit in the content column so they align with the body. */}
+                <SettingsPageActionsRow ref={setPageActions}>{headerExtra}</SettingsPageActionsRow>
                 {content}
               </SettingContainer>
-            </SettingsHeaderActionsContext>
+            </SettingsPageActionsContext>
           </Fragment>
         );
       })}

@@ -5,7 +5,7 @@ import { useParams } from 'react-router';
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import NotFound from '@/components/404';
 import SettingHeader from '@/features/Settings/features/SettingHeader';
-import SettingsHeaderActions from '@/features/Settings/features/SettingsHeaderActions';
+import SettingsPageActions from '@/features/Settings/features/SettingsPageActions';
 import { usePermission } from '@/hooks/usePermission';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors, preferenceSelectors } from '@/store/user/selectors';
@@ -52,7 +52,7 @@ const Page = ({ showSettingHeader = true }: { showSettingHeader?: boolean }) => 
         <SettingHeader extra={canCreate && <CreateAppButton />} title={t('tab.oauthApps')} />
       ) : (
         canCreate && (
-          <SettingsHeaderActions
+          <SettingsPageActions
             // Mobile has no shared header slot; keep Create reachable above the list.
             fallback={
               <Flexbox horizontal justify={'flex-end'}>
@@ -60,8 +60,8 @@ const Page = ({ showSettingHeader = true }: { showSettingHeader?: boolean }) => 
               </Flexbox>
             }
           >
-            <CreateAppButton size={'small'} />
-          </SettingsHeaderActions>
+            <CreateAppButton />
+          </SettingsPageActions>
         )
       )}
       <OAuthApps canEdit={canEdit} />

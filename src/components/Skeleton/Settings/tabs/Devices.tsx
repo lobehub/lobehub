@@ -17,14 +17,14 @@ const Body = ({ sub }: SettingsTabSkeletonProps) =>
   sub ? <DeviceDetailSkeleton /> : <DeviceGridSkeleton />;
 
 /** Small refresh + "Connect device" buttons, list page only. */
-const HeaderRight = ({ sub }: SettingsTabSkeletonProps) =>
+const PageActions = ({ sub }: SettingsTabSkeletonProps) =>
   sub ? null : (
     <Flexbox horizontal align={'center'} gap={8}>
-      <SkeletonBar height={28} width={28} />
-      <SkeletonBar height={28} width={104} />
+      <SkeletonBar height={32} width={32} />
+      <SkeletonBar height={32} width={112} />
     </Flexbox>
   );
 
-const DevicesSkeleton: SettingsTabSkeleton = { Body, HeaderRight };
+const DevicesSkeleton: SettingsTabSkeleton = { Body, PageActions };
 
 export default DevicesSkeleton;

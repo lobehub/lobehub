@@ -8,7 +8,7 @@ import AsyncBoundary from '@/components/AsyncBoundary';
 import AutoSaveHint from '@/components/Editor/AutoSaveHint';
 import { ToolsChannelsSkeleton } from '@/components/Skeleton/Settings/tabs/Tools';
 import SettingHeader from '@/features/Settings/features/SettingHeader';
-import SettingsHeaderActions from '@/features/Settings/features/SettingsHeaderActions';
+import SettingsPageActions from '@/features/Settings/features/SettingsPageActions';
 import { useSaveState } from '@/hooks/useSaveState';
 import { useClientDataSWR } from '@/libs/swr';
 import { searchService } from '@/services/search';
@@ -48,7 +48,7 @@ const ToolSetting = memo<{ showSettingHeader?: boolean }>(({ showSettingHeader =
       {showSettingHeader ? (
         <SettingHeader extra={saveHint} title={t('tab.tools')} />
       ) : (
-        <SettingsHeaderActions
+        <SettingsPageActions
           // Mobile has no shared header slot; keep the save status visible above the form.
           fallback={
             <Flexbox horizontal justify={'flex-end'}>
@@ -57,7 +57,7 @@ const ToolSetting = memo<{ showSettingHeader?: boolean }>(({ showSettingHeader =
           }
         >
           {saveHint}
-        </SettingsHeaderActions>
+        </SettingsPageActions>
       )}
       <AsyncBoundary
         data={isUserStateInit ? data : undefined}

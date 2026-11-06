@@ -50,8 +50,8 @@ export const CredsListSkeleton = ({ rows = 4 }: { rows?: number }) => (
 );
 
 /** The small primary "Create" button the page portals into the header. */
-const HeaderRight = () => <SkeletonBar height={24} width={88} />;
+const PageActions = () => <SkeletonBar height={32} width={96} />;
 
-const CredsSkeleton: SettingsTabSkeleton = { Body: () => <CredsListSkeleton />, HeaderRight };
+const CredsSkeleton: SettingsTabSkeleton = { Body: () => <CredsListSkeleton />, PageActions };
 
 export default CredsSkeleton;

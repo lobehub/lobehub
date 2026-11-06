@@ -1,6 +1,6 @@
 'use client';
 
-import { Flexbox, Text } from '@lobehub/ui';
+import { Flexbox, Tabs, Text } from '@lobehub/ui';
 
 import { LABEL_COLUMN_WIDTHS } from '@/features/WorkspaceSetting/Labels/constants';
 
@@ -77,19 +77,33 @@ export const LabelsListSkeleton = () => {
   );
 };
 
-/** Toolbar (240px search, scope filter, create button) above the label table. */
-const Body = () => (
-  <Flexbox gap={16}>
-    <Flexbox horizontal align={'center'} gap={12} justify={'space-between'}>
-      <Flexbox horizontal align={'center'} gap={8}>
-        <SkeletonBar height={32} radius={8} width={200} />
-        <SkeletonBar height={32} radius={8} width={76} />
+/**
+ * The agent/task label tabs, then the toolbar (search, scope filter, create
+ * button) above the label table.
+ */
+const Body = () => {
+  const text = useSkeletonText('setting');
+
+  return (
+    <Flexbox gap={16}>
+      <Tabs
+        activeKey={'agent'}
+        items={[
+          { key: 'agent', label: text('taskLabels.tabs.agent', 56, 14) },
+          { key: 'task', label: text('taskLabels.tabs.task', 56, 14) },
+        ]}
+      />
+      <Flexbox horizontal align={'center'} gap={12} justify={'space-between'}>
+        <Flexbox horizontal align={'center'} gap={8}>
+          <SkeletonBar height={32} radius={8} width={200} />
+          <SkeletonBar height={32} radius={8} width={76} />
+        </Flexbox>
+        <SkeletonBar height={32} radius={8} width={104} />
       </Flexbox>
-      <SkeletonBar height={32} radius={8} width={104} />
+      <LabelsListSkeleton />
     </Flexbox>
-    <LabelsListSkeleton />
-  </Flexbox>
-);
+  );
+};
 
 const LabelsSkeleton: SettingsTabSkeleton = { Body };
 
