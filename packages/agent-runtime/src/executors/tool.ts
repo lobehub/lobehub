@@ -856,8 +856,10 @@ export const callToolsBatch =
     // rebuilt from it alone would miss its siblings' writes: `clearTodos` then
     // `createTodos` resurrected the cleared items, and `createTodos` then
     // `updateTodos(index: 0)` edited a stale item. Todo calls share the ordered
-    // lane, so each reads the list (and streak) the previous one left behind.
-    let batchTodoItems: ToolRunContext['currentTodos'];
+    // lane, so each reads the list (and streak) the previous one left behind —
+    // through both `currentTodos` (server) and `stepContext.todos`, which the
+    // client transport hands to the lobe-agent client executor.
+    let batchTodos: ReturnType<typeof normalizeTodosState>;
     // Streak per todo call in emission order: todo siblings before it extend
     // the history streak, any other call before it resets it.
     const todoStreaks = new Map<string, number>();
@@ -889,7 +891,10 @@ export const callToolsBatch =
       });
       const isTodoCall = isTodoMutationCall(tool.identifier, tool.apiName);
       if (isTodoCall) {
-        if (batchTodoItems) runContext.currentTodos = batchTodoItems;
+        if (batchTodos) {
+          runContext.currentTodos = batchTodos.items;
+          runContext.stepContext = { ...runContext.stepContext, todos: batchTodos };
+        }
         runContext.todoCallStreak = todoStreaks.get(tool.id);
       }
 
@@ -933,7 +938,7 @@ export const callToolsBatch =
         const isSuccess = executionResult.success;
         if (isTodoCall) {
           const todos = normalizeTodosState(executionResult.state?.todos, nowIso());
-          if (todos) batchTodoItems = todos.items;
+          if (todos) batchTodos = todos;
         }
 
         await host.transports.stream.publishEvent({

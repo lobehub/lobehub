@@ -56,7 +56,12 @@ describe('todo calls within one batch', () => {
     );
 
   /** A minimal todo runtime: each call derives its list from `currentTodos`. */
-  const seen: { apiName: string; streak?: number; todos?: TodoItem[] }[] = [];
+  const seen: {
+    apiName: string;
+    stepTodos?: TodoItem[];
+    streak?: number;
+    todos?: TodoItem[];
+  }[] = [];
 
   beforeEach(() => {
     ({ runTool, host } = createToolExecutorFixture());
@@ -66,7 +71,12 @@ describe('todo calls within one batch', () => {
       async (tool: { apiName: string; arguments: string }, ctx: ToolRunContext) => {
         const args = JSON.parse(tool.arguments);
         const current = (ctx.currentTodos ?? []) as TodoItem[];
-        seen.push({ apiName: tool.apiName, streak: ctx.todoCallStreak, todos: current });
+        seen.push({
+          apiName: tool.apiName,
+          stepTodos: ctx.stepContext?.todos?.items as TodoItem[] | undefined,
+          streak: ctx.todoCallStreak,
+          todos: current,
+        });
 
         // The first call is the slowest: concurrent execution would let the
         // later ones run against the stale snapshot before it settles.
@@ -114,6 +124,22 @@ describe('todo calls within one batch', () => {
           { status: 'todo', text: 'new 2' },
         ],
       },
+    ]);
+  });
+
+  it('mirrors the threaded list into stepContext.todos for the client executor', async () => {
+    // The client transport hands `stepContext` (not `currentTodos`) to the
+    // lobe-agent client executor, so the threaded list must reach it there too.
+    await runBatch([
+      todoCall('call-clear', 'clearTodos', { mode: 'all' }),
+      todoCall('call-create', 'createTodos', { adds: ['new 1'] }),
+      todoCall('call-update', 'updateTodos', { operations: [{ index: 0, type: 'complete' }] }),
+    ]);
+
+    expect(seen.map(({ stepTodos }) => stepTodos)).toEqual([
+      undefined,
+      [],
+      [{ status: 'todo', text: 'new 1' }],
     ]);
   });
 
