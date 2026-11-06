@@ -5,6 +5,7 @@ import {
   type RuntimeImageGenParams,
 } from 'model-bank';
 import { extractDefaultValues, fluxSchnellParamsSchema } from 'model-bank';
+import { nanoBanana2Parameters } from 'model-bank/imageParameters';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useImageStore } from '@/store/image';
@@ -92,6 +93,12 @@ const testImageModels: AIImageModelCard[] = [
     parameters: sizeOnlyModelSchema,
     releasedAt: '2024-01-01',
   },
+  {
+    id: 'user-added-image-model',
+    displayName: 'User Added Image Model',
+    type: 'image',
+    releasedAt: '2024-01-01',
+  },
 ];
 
 const mockProviders = [
@@ -103,7 +110,7 @@ const mockProviders = [
   {
     id: 'custom-provider',
     name: 'Custom Provider',
-    children: [testImageModels[1]],
+    children: [testImageModels[1], testImageModels[4]],
   },
   {
     id: 'single-image-provider',
@@ -242,6 +249,23 @@ describe('GenerationConfigAction', () => {
         prompt: 'initial prompt',
       });
       expect(result.current.parametersSchema).toEqual(fluxSchnellParamsSchema);
+    });
+
+    it('should select a custom image model that has no parameters schema', () => {
+      const { result } = renderHook(() => useImageStore());
+      const nanoBanana2DefaultValues = extractDefaultValues(nanoBanana2Parameters);
+
+      act(() => {
+        result.current.setModelAndProviderOnSelect('user-added-image-model', 'custom-provider');
+      });
+
+      expect(result.current.model).toBe('user-added-image-model');
+      expect(result.current.provider).toBe('custom-provider');
+      expect(result.current.parametersSchema).toEqual(nanoBanana2Parameters);
+      expect(result.current.parameters).toEqual({
+        ...nanoBanana2DefaultValues,
+        prompt: 'initial prompt',
+      });
     });
 
     it('should handle custom model configuration', () => {
