@@ -619,6 +619,8 @@ export default {
     'The model usage your plan allows in any 7 days. The week starts with your first request and resets 7 days later. Usage across your billing month has a limit as well.',
   'plans.limits.sandboxStorage': '{{value}} cloud sandbox storage',
   'plans.limits.support': '{{value}}',
+  'plans.limits.topUpRate': 'Top-up discount',
+  'plans.limits.topUpRate.tooltip': 'Cheaper top-ups than on Free',
   'plans.limits.ultraWeeklySpend': 'Ultra model weekly limit',
   'plans.limits.ultraWeeklySpend.multiple':
     'Ultra model weekly limit: {{multiple}}× that of {{plan}}',
@@ -735,9 +737,6 @@ export default {
   'plans.workspace.sharedCredits': '~{{count}} usage / mo',
   'plans.workspace.freeMembers': 'Up to 3 members (including you)',
   'plans.target': 'Target plan',
-  'plans.topUpDiscount.desc': 'Cheaper top-ups than on Free',
-  'plans.topUpDiscount.monthly': 'Top-up discount with yearly billing',
-  'plans.topUpDiscount.yearly': 'Top-up discount',
   'plans.unlimited': 'Unlimited',
   'plansModal.persistentSandbox.desc':
     'Files your agent writes in the cloud sandbox are discarded when the session ends. Upgrade to keep a persistent working directory that survives sessions and is shared across your topics.',
