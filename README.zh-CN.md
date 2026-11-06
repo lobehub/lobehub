@@ -469,7 +469,7 @@ This project is [LobeHub Community License](./LICENSE) licensed.
 [github-releasedate-shield]: https://img.shields.io/github/release-date/lobehub/lobehub?labelColor=black&style=flat-square
 [github-stars-link]: https://github.com/lobehub/lobehub/stargazers
 [github-stars-shield]: https://img.shields.io/github/stars/lobehub/lobehub?color=ffcb47&labelColor=black&style=flat-square
-[image-banner]: https://raw.githubusercontent.com/lobehub/lobehub/docs/readme-super-agents/docs/readme/banner.webp
+[image-banner]: https://raw.githubusercontent.com/lobehub/lobehub/docs/readme-super-agents/docs/readme/banner-super-agents.webp
 [image-star]: https://github.com/user-attachments/assets/c3b482e7-cef5-4e94-bef9-226900ecfaab
 [issues-link]: https://img.shields.io/github/issues/lobehub/lobehub.svg?style=flat
 [lobe-charts-downloads]: https://img.shields.io/npm/dt/@lobehub/charts?color=8ae8ff&labelColor=black&logo=npm&logoColor=white&style=flat-square
