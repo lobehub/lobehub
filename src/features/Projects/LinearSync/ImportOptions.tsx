@@ -19,7 +19,6 @@ const styles = stylex.create({
 });
 
 interface ImportOptionsProps {
-  disabled?: boolean;
   includeArchived: boolean;
   onIncludeArchivedChange: (checked: boolean) => void;
   onSyncCommentsChange: (checked: boolean) => void;
@@ -29,20 +28,14 @@ interface ImportOptionsProps {
 interface OptionProps {
   checked: boolean;
   desc: string;
-  disabled?: boolean;
   label: string;
   onChange: (checked: boolean) => void;
 }
 
-const Option = memo<OptionProps>(({ checked, desc, disabled, label, onChange }) => (
+const Option = memo<OptionProps>(({ checked, desc, label, onChange }) => (
   <label {...stylex.props(styles.option)}>
     <Flexbox horizontal align={'flex-start'} gap={8}>
-      <Checkbox
-        checked={checked}
-        disabled={disabled}
-        style={{ marginBlockStart: 2 }}
-        onChange={onChange}
-      />
+      <Checkbox checked={checked} style={{ marginBlockStart: 2 }} onChange={onChange} />
       <Flexbox gap={2} style={{ minWidth: 0 }}>
         <Text>{label}</Text>
         <Text fontSize={12} type={'secondary'}>
@@ -57,7 +50,7 @@ Option.displayName = 'LinearImportOption';
 
 /** What an import brings along besides the issues themselves. */
 const ImportOptions = memo<ImportOptionsProps>(
-  ({ disabled, includeArchived, onIncludeArchivedChange, onSyncCommentsChange, syncComments }) => {
+  ({ includeArchived, onIncludeArchivedChange, onSyncCommentsChange, syncComments }) => {
     const { t } = useTranslation('integration');
 
     return (
@@ -69,14 +62,12 @@ const ImportOptions = memo<ImportOptionsProps>(
           <Option
             checked={syncComments}
             desc={t('linear.sync.options.syncCommentsDesc')}
-            disabled={disabled}
             label={t('linear.sync.options.syncComments')}
             onChange={onSyncCommentsChange}
           />
           <Option
             checked={includeArchived}
             desc={t('linear.sync.options.includeArchivedDesc')}
-            disabled={disabled}
             label={t('linear.sync.options.includeArchived')}
             onChange={onIncludeArchivedChange}
           />
