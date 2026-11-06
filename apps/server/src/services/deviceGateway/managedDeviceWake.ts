@@ -60,7 +60,7 @@ const findManagedDevice = async (
   { db, userId, workspaceId }: CallerScope,
   deviceId: string,
 ): Promise<ManagedDeviceTarget | undefined> => {
-  if (!managedDeviceProvider.isAvailable()) return;
+  if (!(await managedDeviceProvider.isAvailable())) return;
 
   try {
     const model = new DeviceModel(db, userId, workspaceId);
@@ -100,7 +100,7 @@ export const findWakeableManagedDevices = async (
   onlineDeviceIds?: string[],
 ): Promise<ManagedDeviceTarget[]> => {
   // Without a gateway a woken device could never be reached.
-  if (!managedDeviceProvider.isAvailable() || !deviceGateway.isConfigured) return [];
+  if (!deviceGateway.isConfigured || !(await managedDeviceProvider.isAvailable())) return [];
 
   const ids = [...new Set(candidateIds.filter((id): id is string => !!id))].filter(
     (id) => !onlineDeviceIds?.includes(id),
