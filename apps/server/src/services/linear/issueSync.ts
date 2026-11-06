@@ -7,6 +7,7 @@ import type {
   LinearSyncResult,
   LinearSyncSkipReason,
   TaskItem,
+  TaskLabel,
 } from '@lobechat/types';
 import { isLinearNoProject } from '@lobechat/types';
 import debug from 'debug';
@@ -18,7 +19,6 @@ import {
   type TaskExternalLinkWithTask,
 } from '@/database/models/taskExternalLink';
 import { TaskLabelModel } from '@/database/models/taskLabel';
-import type { TaskLabelItem } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 
 import { TaskService } from '../task';
@@ -757,16 +757,13 @@ export class LinearIssueSyncService {
       const link = links.get(issue.id);
       if (!link) return [];
       const labels = linearIssueLabels(issue);
-      const synced = new Set(link.metadata?.syncedLabels);
-      const current = new Set(labels.map((label) => label.key));
-      const added = labels.filter((label) => !synced.has(label.key));
-      const removed = [...synced].filter((key) => !current.has(key));
+      const { added, removed } = labelDelta(labels, link.metadata?.syncedLabels);
       if (added.length === 0 && removed.length === 0) return [];
-      return [{ added, current: [...current], link, removed }];
+      return [{ added, labels, link }];
     });
     if (changes.length === 0) return;
 
-    let registry: Map<string, TaskLabelItem>;
+    let registry: Map<string, TaskLabel>;
     try {
       registry = await this.ensureLabels(changes.flatMap((change) => change.added));
     } catch (error) {
@@ -775,9 +772,9 @@ export class LinearIssueSyncService {
       return;
     }
 
-    for (const { added, current, link, removed } of changes) {
+    for (const { labels, link } of changes) {
       try {
-        const changed = await this.applyLabelChange(link, added, removed, current, registry);
+        const changed = await this.applyLabelChange(link, labels, registry);
         if (changed) result.labelsSynced = (result.labelsSynced ?? 0) + 1;
       } catch (error) {
         log('sync labels of %s failed: %O', link.externalIdentifier, error);
@@ -787,7 +784,7 @@ export class LinearIssueSyncService {
   }
 
   /** The registry's label for each of these, created if missing, by {@link linearLabelKey}. */
-  private async ensureLabels(labels: LinearLabelSpec[]): Promise<Map<string, TaskLabelItem>> {
+  private async ensureLabels(labels: LinearLabelSpec[]): Promise<Map<string, TaskLabel>> {
     const model = new TaskLabelModel(this.db, this.userId, this.workspaceId);
     const groups = new Map(
       (
@@ -811,49 +808,54 @@ export class LinearIssueSyncService {
   }
 
   /**
-   * Apply one issue's label change and record it in one transaction. False when
-   * no label of the task was affected, such as one the registry cannot attach.
+   * Apply one issue's label change and record it in one transaction. The change
+   * is worked out again under the link's row lock: another run of a different rule
+   * may have applied labels since the batch was read, and a change based on that
+   * older read would leave its labels on the task, unknown to later syncs. The link
+   * and not the task is locked, since assignments take labels before the task. False
+   * when no label of the task was affected, such as one the registry cannot attach.
    */
   private async applyLabelChange(
     link: TaskExternalLinkWithTask,
-    added: LinearLabelSpec[],
-    removed: string[],
-    current: string[],
-    registry: Map<string, TaskLabelItem>,
+    labels: LinearLabelSpec[],
+    registry: Map<string, TaskLabel>,
   ): Promise<boolean> {
-    const removedLabels = await new TaskLabelModel(
-      this.db,
-      this.userId,
-      this.workspaceId,
-    ).findByNames(removed);
+    return this.db.transaction(async (tx) => {
+      const linkModel = new TaskExternalLinkModel(tx, this.userId, this.workspaceId);
+      const locked = await linkModel.lockForUpdate(link.id);
+      if (!locked) return false;
 
-    // A label group's name is not attachable, and the registry's own grouping can
-    // put two labels of one issue in the same group, which a task cannot carry. The
-    // others still count as synced: retrying them would swap siblings on every run.
-    const groupsTaken = new Set<string>();
-    const add: string[] = [];
-    for (const { key } of added) {
-      const label = registry.get(key);
-      if (!label || label.isGroup) continue;
-      if (label.parentId) {
-        if (groupsTaken.has(label.parentId)) continue;
-        groupsTaken.add(label.parentId);
+      const { added, removed } = labelDelta(labels, locked.metadata?.syncedLabels);
+      if (added.length === 0 && removed.length === 0) return false;
+
+      // A label group's name is not attachable, and the registry's own grouping can
+      // put two labels of one issue in the same group, which a task cannot carry. The
+      // others still count as synced: retrying them would swap siblings on every run.
+      const groupsTaken = new Set<string>();
+      const add: string[] = [];
+      for (const { key } of added) {
+        const label = registry.get(key);
+        // Only a run that raced this one asks for a label the batch did not create.
+        if (!label) throw new Error(`Label not resolved in this run: ${key}`);
+        if (label.isGroup) continue;
+        if (label.parentId) {
+          if (groupsTaken.has(label.parentId)) continue;
+          groupsTaken.add(label.parentId);
+        }
+        add.push(label.id);
       }
-      add.push(label.id);
-    }
 
-    const remove = removedLabels.filter((label) => !label.isGroup).map((label) => label.id);
-    await this.db.transaction(async (tx) => {
-      await new TaskLabelModel(tx, this.userId, this.workspaceId).changeTaskLabels(link.taskId, {
-        add,
-        remove,
-      });
-      await new TaskExternalLinkModel(tx, this.userId, this.workspaceId).recordSyncedLabels(
+      const labelModel = new TaskLabelModel(tx, this.userId, this.workspaceId);
+      const remove = (await labelModel.findByNames(removed))
+        .filter((label) => !label.isGroup)
+        .map((label) => label.id);
+      await labelModel.changeTaskLabels(link.taskId, { add, remove });
+      await linkModel.recordSyncedLabels(
         link.id,
-        current,
+        labels.map((label) => label.key),
       );
+      return add.length > 0 || remove.length > 0;
     });
-    return add.length > 0 || remove.length > 0;
   }
 
   /** Links in this scope whose task the caller can still see. */
@@ -867,6 +869,16 @@ export class LinearIssueSyncService {
     );
   }
 }
+
+/** What changed in Linear since these labels were last applied to the task. */
+const labelDelta = (labels: LinearLabelSpec[], syncedLabels: string[] | undefined) => {
+  const synced = new Set(syncedLabels);
+  const current = new Set(labels.map((label) => label.key));
+  return {
+    added: labels.filter((label) => !synced.has(label.key)),
+    removed: [...synced].filter((key) => !current.has(key)),
+  };
+};
 
 const skip = (result: LinearSyncResult, identifier: string, reason: LinearSyncSkipReason) => {
   result.skippedCount = (result.skippedCount ?? 0) + 1;

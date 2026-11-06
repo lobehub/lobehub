@@ -120,6 +120,16 @@ export class TaskExternalLinkModel {
       .where(and(this.scope(), eq(taskExternalLinks.id, id)));
   }
 
+  /** Lock the link for the rest of the transaction, and read it as it now stands. */
+  async lockForUpdate(id: string): Promise<TaskExternalLinkItem | undefined> {
+    const [row] = await this.db
+      .select()
+      .from(taskExternalLinks)
+      .where(and(this.scope(), eq(taskExternalLinks.id, id)))
+      .for('update');
+    return row;
+  }
+
   /** Record the issue's labels as applied to the link's task. */
   async recordSyncedLabels(id: string, labels: string[]): Promise<void> {
     await this.db
