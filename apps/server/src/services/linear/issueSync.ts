@@ -372,8 +372,9 @@ export class LinearIssueSyncService {
           if (CLOSED_STATE_TYPES.has(issue.state.type)) closing.push(issue.id);
         }
         if (options.syncLabels) {
-          // Only those being closed, like comments: an open issue the filter
-          // misses is left to the rule that lists it.
+          // Only those being closed: an open issue the filter misses is left to
+          // the rule that lists it. Unlike comments, tasks already closed get no
+          // catch-up, which would mean reading their issues again on every run.
           const closingIds = new Set(closing);
           await this.syncLabels(
             fetched.filter((issue) => closingIds.has(issue.id)),
@@ -776,8 +777,8 @@ export class LinearIssueSyncService {
 
     for (const { added, current, link, removed } of changes) {
       try {
-        await this.applyLabelChange(link, added, removed, current, registry);
-        result.labelsSynced = (result.labelsSynced ?? 0) + 1;
+        const changed = await this.applyLabelChange(link, added, removed, current, registry);
+        if (changed) result.labelsSynced = (result.labelsSynced ?? 0) + 1;
       } catch (error) {
         log('sync labels of %s failed: %O', link.externalIdentifier, error);
         skip(result, link.externalIdentifier, 'labelsFailed');
@@ -809,14 +810,17 @@ export class LinearIssueSyncService {
     return new Map(rows.map((label) => [linearLabelKey(label.name), label]));
   }
 
-  /** Apply one issue's label change and record it in one transaction. */
+  /**
+   * Apply one issue's label change and record it in one transaction. False when
+   * no label of the task was affected, such as one the registry cannot attach.
+   */
   private async applyLabelChange(
     link: TaskExternalLinkWithTask,
     added: LinearLabelSpec[],
     removed: string[],
     current: string[],
     registry: Map<string, TaskLabelItem>,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const removedLabels = await new TaskLabelModel(
       this.db,
       this.userId,
@@ -838,16 +842,18 @@ export class LinearIssueSyncService {
       add.push(label.id);
     }
 
+    const remove = removedLabels.filter((label) => !label.isGroup).map((label) => label.id);
     await this.db.transaction(async (tx) => {
       await new TaskLabelModel(tx, this.userId, this.workspaceId).changeTaskLabels(link.taskId, {
         add,
-        remove: removedLabels.filter((label) => !label.isGroup).map((label) => label.id),
+        remove,
       });
       await new TaskExternalLinkModel(tx, this.userId, this.workspaceId).recordSyncedLabels(
         link.id,
         current,
       );
     });
+    return add.length > 0 || remove.length > 0;
   }
 
   /** Links in this scope whose task the caller can still see. */
