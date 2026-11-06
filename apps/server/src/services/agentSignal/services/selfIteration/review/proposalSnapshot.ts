@@ -32,9 +32,14 @@ export interface CaptureSelfReviewProposalSnapshotInput {
 }
 
 const requireCompleteRefineSkillSnapshot = (
+  skillDocumentId: string,
   snapshot: Omit<SelfReviewProposalBaseSnapshot, 'targetType'> | undefined,
 ): Omit<SelfReviewProposalBaseSnapshot, 'targetType'> => {
-  if (!snapshot) throw new Error('Skill target snapshot is required');
+  if (!snapshot) {
+    throw new Error(
+      `Skill target snapshot is required: skillDocumentId "${skillDocumentId}" is neither a managed skill nor a hinted skill document of this agent. Use an id returned by listManagedSkills or getManagedSkill.`,
+    );
+  }
 
   if (!snapshot.agentDocumentId) throw new Error('Skill target agentDocumentId is required');
   if (!snapshot.documentId) throw new Error('Skill target documentId is required');
@@ -91,6 +96,7 @@ export const createSelfReviewProposalSnapshotService = (
       }
       const skillDocumentId = value.trim();
       const snapshot = requireCompleteRefineSkillSnapshot(
+        skillDocumentId,
         await adapters.readSkillTargetSnapshot(skillDocumentId),
       );
 
@@ -116,3 +122,77 @@ export const createSelfReviewProposalSnapshotService = (
     };
   },
 });
+
+/** Checks whether a caller-provided skill snapshot can serve as a compare-and-set base. */
+export const isCompleteSkillTargetSnapshot = (
+  snapshot: unknown,
+): snapshot is SelfReviewProposalBaseSnapshot & {
+  agentDocumentId: string;
+  contentHash: string;
+  documentId: string;
+  targetType: 'skill';
+} => {
+  if (!snapshot || typeof snapshot !== 'object') return false;
+
+  const value = snapshot as SelfReviewProposalBaseSnapshot;
+  const isFilled = (field: unknown) => typeof field === 'string' && field.trim().length > 0;
+
+  return (
+    value.targetType === 'skill' &&
+    isFilled(value.agentDocumentId) &&
+    isFilled(value.contentHash) &&
+    isFilled(value.documentId) &&
+    value.managed === true &&
+    value.writable === true
+  );
+};
+
+/**
+ * Resolves the compare-and-set base and canonical target id for a skill replacement.
+ *
+ * Use when:
+ * - `replaceSkillContentCAS` receives a `skillDocumentId` and an optional `baseSnapshot`
+ *
+ * Expects:
+ * - `baseSnapshot`, when complete, is the snapshot a skill read returned (for example
+ *   `getManagedSkill().baseSnapshot`); it stays the base so preflight rejects content drift
+ *
+ * Returns:
+ * - The base snapshot and the target id preflight compares against. A SKILL.md index id
+ *   resolves to its bundle id, so a read-by-index snapshot passed unchanged still matches.
+ */
+export const resolveReplaceSkillBaseSnapshot = async ({
+  agentId,
+  baseSnapshot,
+  skillDocumentId,
+  snapshotService,
+  userId,
+}: {
+  agentId: string;
+  baseSnapshot: unknown;
+  skillDocumentId: string;
+  snapshotService: ReturnType<typeof createSelfReviewProposalSnapshotService>;
+  userId: string;
+}): Promise<{ baseSnapshot: SelfReviewProposalBaseSnapshot; skillDocumentId: string }> => {
+  const callerSnapshot = isCompleteSkillTargetSnapshot(baseSnapshot) ? baseSnapshot : undefined;
+
+  let current: SelfReviewProposalBaseSnapshot;
+  try {
+    current = await snapshotService.captureActionSnapshot({
+      actionType: 'refine_skill',
+      agentId,
+      input: { skillDocumentId },
+      userId,
+    });
+  } catch (error) {
+    // A complete caller snapshot whose target vanished is a stale write, not a malformed one:
+    // let preflight report `target_deleted` instead of failing the tool call.
+    if (callerSnapshot) return { baseSnapshot: callerSnapshot, skillDocumentId };
+    throw error;
+  }
+
+  return {
+    baseSnapshot: callerSnapshot ?? current,
+    skillDocumentId: current.agentDocumentId ?? skillDocumentId,
+  };
+};

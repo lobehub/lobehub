@@ -30,6 +30,7 @@ import type {
   SkillDetail,
   SkillDocumentRef,
   SkillSummary,
+  SkillTargetDetail,
   SkillTargetInput,
   SkillTargetSnapshot,
 } from './types';
@@ -70,6 +71,43 @@ const toDocumentRef = (doc: SkillAgentDocument): SkillDocumentRef => ({
   filename: doc.filename,
   title: doc.title,
 });
+
+const DEFAULT_SKILL_DESCRIPTION = 'Agent Signal managed skill.';
+
+const hashSkillContent = (content: string | null | undefined) => `sha256:${sha256(content ?? '')}`;
+
+/**
+ * Ordinary agent documents created with `hintIsSkill: true` are skill candidates, not managed
+ * bundles yet. Agent Signal surfaces them as skill evidence, so its skill tools must be able to
+ * read and refine them by the same `agent_documents.id` (T-11861).
+ */
+const isHintedSkillDocument = (doc: SkillAgentDocument) => {
+  if (doc.fileType === SKILL_BUNDLE_FILE_TYPE || doc.fileType === SKILL_INDEX_FILE_TYPE) {
+    return false;
+  }
+
+  const agentSignal = (doc.metadata as { agentSignal?: { hintIsSkill?: unknown } } | null)
+    ?.agentSignal;
+
+  return agentSignal?.hintIsSkill === true;
+};
+
+const toSkillNameCandidate = (value: string | null | undefined) =>
+  (value ?? '')
+    .replace(/\.md$/i, '')
+    .toLowerCase()
+    .replaceAll(/[^a-z0-9]+/g, '-')
+    .replaceAll(/^-+|-+$/g, '')
+    .slice(0, 60)
+    .replace(/-+$/, '');
+
+const readHintedFrontmatter = (content: string | null | undefined) => {
+  try {
+    return parseSkillFrontmatter(content ?? '');
+  } catch {
+    return undefined;
+  }
+};
 
 const buildSkillMetadata = (
   frontmatter: ReturnType<typeof parseSkillFrontmatter>,
@@ -305,13 +343,81 @@ export class SkillManagementDocumentService {
     agentDocumentId: string;
     agentId: string;
   }): Promise<SkillTargetSnapshot | undefined> {
+    return (await this.resolveSkillTarget(input))?.snapshot;
+  }
+
+  /**
+   * Reads a skill write target together with the snapshot later writes compare against.
+   *
+   * Use when:
+   * - Agent Signal tools read a skill before proposing or applying a refinement.
+   *
+   * Expects:
+   * - `agentDocumentId` is a managed bundle id, its SKILL.md index id, or a `hintIsSkill`
+   *   agent document id.
+   *
+   * Returns:
+   * - The managed skill detail or the hinted document, each with a `baseSnapshot` that
+   *   `replaceSkillContentCAS` and `refine_skill` proposals accept unchanged; `undefined`
+   *   when no such target exists for the agent.
+   */
+  async getSkillTarget(input: {
+    agentDocumentId: string;
+    agentId: string;
+  }): Promise<SkillTargetDetail | undefined> {
+    const resolved = await this.resolveSkillTarget(input);
+    if (!resolved) return undefined;
+
+    const baseSnapshot = { ...resolved.snapshot, targetType: 'skill' as const };
+
+    if (resolved.kind === 'hinted') {
+      return {
+        agentDocumentId: resolved.document.id,
+        baseSnapshot,
+        content: resolved.document.content ?? '',
+        documentId: resolved.document.documentId,
+        hintedDocument: true,
+        title: resolved.document.title,
+      };
+    }
+
+    return { ...resolved.detail, baseSnapshot, hintedDocument: false };
+  }
+
+  private async resolveSkillTarget(input: {
+    agentDocumentId: string;
+    agentId: string;
+  }): Promise<
+    | { detail: SkillDetail; kind: 'managed'; snapshot: SkillTargetSnapshot }
+    | { document: SkillAgentDocument; kind: 'hinted'; snapshot: SkillTargetSnapshot }
+    | undefined
+  > {
     const detail = await this.getSkill({
       agentDocumentId: input.agentDocumentId,
       agentId: input.agentId,
       includeContent: true,
     });
 
-    if (!detail) return undefined;
+    if (!detail) {
+      const hinted = await this.findHintedSkillDocument(input.agentId, input.agentDocumentId);
+      if (!hinted) return undefined;
+
+      return {
+        document: hinted,
+        kind: 'hinted',
+        snapshot: {
+          agentDocumentId: hinted.id,
+          contentHash: hashSkillContent(hinted.content),
+          documentId: hinted.documentId,
+          hintedDocument: true,
+          // The skill-management service owns the first write: it promotes the hinted document
+          // into a managed bundle in place, so the target is writable through this service.
+          managed: true,
+          targetTitle: hinted.title,
+          writable: true,
+        },
+      };
+    }
 
     // NOTICE:
     // The content hash is a compare-and-set guard for applying old maintenance proposals.
@@ -319,12 +425,16 @@ export class SkillManagementDocumentService {
     // service so approve/apply can reject proposals when the user or another agent changed the
     // target after the proposal was created.
     return {
-      agentDocumentId: detail.bundle.agentDocumentId,
-      contentHash: `sha256:${sha256(detail.content ?? '')}`,
-      documentId: detail.bundle.documentId,
-      managed: true,
-      targetTitle: detail.title,
-      writable: true,
+      detail,
+      kind: 'managed',
+      snapshot: {
+        agentDocumentId: detail.bundle.agentDocumentId,
+        contentHash: hashSkillContent(detail.content),
+        documentId: detail.bundle.documentId,
+        managed: true,
+        targetTitle: detail.title,
+        writable: true,
+      },
     };
   }
 
@@ -345,7 +455,13 @@ export class SkillManagementDocumentService {
    */
   async replaceSkillIndex(input: ReplaceSkillIndexInput): Promise<SkillDetail | undefined> {
     const resolved = await this.resolveBundle(input.agentId, input);
-    if (!resolved) return undefined;
+    if (!resolved) {
+      const hinted = input.agentDocumentId
+        ? await this.findHintedSkillDocument(input.agentId, input.agentDocumentId)
+        : undefined;
+
+      return hinted ? this.promoteHintedSkillDocument(input, hinted) : undefined;
+    }
 
     const index = await this.getSingleIndex(input.agentId, resolved);
     const description = input.description ?? parseSkillFrontmatter(index.content).description;
@@ -487,6 +603,80 @@ export class SkillManagementDocumentService {
     }
 
     return matches[0];
+  }
+
+  private async findHintedSkillDocument(
+    agentId: string,
+    agentDocumentId: string,
+  ): Promise<SkillAgentDocument | undefined> {
+    const doc = await this.agentDocumentModel.findById(agentDocumentId);
+    if (!doc || doc.agentId !== agentId || !isHintedSkillDocument(doc)) return undefined;
+
+    return doc;
+  }
+
+  /**
+   * Turns a hinted skill document into a managed skill on its first refinement. The document
+   * becomes the bundle's SKILL.md index, so its `agent_documents.id` and backing document id
+   * survive, and its pre-promotion content is kept in document history.
+   */
+  private async promoteHintedSkillDocument(
+    input: ReplaceSkillIndexInput,
+    hinted: SkillAgentDocument,
+  ): Promise<SkillDetail> {
+    const frontmatter = readHintedFrontmatter(hinted.content);
+    const name = await this.pickPromotedSkillName(input.agentId, hinted, frontmatter?.name);
+    const preMutationHistory = await this.documentService.trySaveCurrentDocumentHistory(
+      hinted.documentId,
+      'llm_call',
+    );
+    const detail = await this.createSkill({
+      agentId: input.agentId,
+      bodyMarkdown: input.bodyMarkdown,
+      description:
+        input.description?.trim() || frontmatter?.description?.trim() || DEFAULT_SKILL_DESCRIPTION,
+      name,
+      sourceAgentDocumentId: hinted.id,
+      title: hinted.title?.trim() || name,
+    });
+    const updatedDocument = await this.documentService.getDocumentById(hinted.documentId);
+
+    return {
+      ...detail,
+      ...(updatedDocument?.updatedAt
+        ? { expectedCurrentDocumentUpdatedAt: updatedDocument.updatedAt.toISOString() }
+        : {}),
+      ...(preMutationHistory?.historyId
+        ? { preMutationHistoryId: preMutationHistory.historyId }
+        : {}),
+    };
+  }
+
+  private async pickPromotedSkillName(
+    agentId: string,
+    hinted: SkillAgentDocument,
+    frontmatterName: string | undefined,
+  ): Promise<string> {
+    const idSuffix = hinted.id
+      .toLowerCase()
+      .replaceAll(/[^a-z0-9]/g, '')
+      .slice(0, 8);
+    const base =
+      [frontmatterName, hinted.filename, hinted.title]
+        .map(toSkillNameCandidate)
+        .find((candidate) => candidate.length > 0) ?? '';
+
+    for (const candidate of [base, base ? `${base}-${idSuffix}` : `skill-${idSuffix}`]) {
+      if (!candidate) continue;
+
+      const taken = (
+        await this.agentDocumentModel.listByParentAndFilename(agentId, null, candidate)
+      ).some((doc) => doc.fileType === SKILL_BUNDLE_FILE_TYPE);
+
+      if (!taken) return validateSkillName(candidate);
+    }
+
+    throw new Error(`Skill already exists for hinted document ${hinted.id}`);
   }
 
   private async getSingleIndex(
