@@ -9,6 +9,7 @@ import type {
 import {
   buildAnalyzeMediaContent,
   buildBackgroundSubAgentReceipt,
+  buildSteeredSubAgentReceipt,
   createMediaFileItemsFromMessage,
   createUrlMediaFileItems,
   formatMediaUrlValidationError,
@@ -350,7 +351,7 @@ class LobeAgentExecutionRuntime {
     } else {
       runResult = await startRun();
     }
-    const { started, error, threadId, subOperationId, toolMessageId } = runResult;
+    const { started, error, steered, threadId, subOperationId, toolMessageId } = runResult;
 
     // The child op failed to start — no completion bridge will ever fire to
     // backfill a placeholder, so we must NOT defer/park here. Return a normal
@@ -362,6 +363,17 @@ class LobeAgentExecutionRuntime {
         error ? `Sub-agent ${action}: ${error}` : `Sub-agent ${action}.`,
         'SUB_AGENT_START_FAILED',
       );
+    }
+
+    // Steered a sub-agent that is still running: the instruction joins its next
+    // step, and the running call reports the answer. Nothing to wait for here.
+    if (steered) {
+      return {
+        content: buildSteeredSubAgentReceipt(threadId),
+        state: { status: 'completed', steered: true, threadId },
+        success: true,
+        toolMessageId,
+      };
     }
 
     // Detached: the receipt is the whole tool result and the parent keeps going.

@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { finishOperation } from '../executeStep/completion';
 import { prepareStepInput } from '../executeStep/prepare';
-import { readQueuedMessagesFlag } from '../operationControl';
+import { injectQueuedFollowUp, readQueuedMessagesFlag } from '../operationControl';
 
 const { steerQueueLength } = vi.hoisted(() => ({ steerQueueLength: vi.fn() }));
 vi.mock('@/server/services/redis', () => ({
@@ -76,6 +76,55 @@ describe('server-side steer queue in the step loop', () => {
       await expect(readQueuedMessagesFlag(depsWithFlag(false), 'op-1', 1, stateOf())).resolves.toBe(
         false,
       );
+    });
+  });
+
+  describe('injectQueuedFollowUp — a running sub-agent’s steer queue', () => {
+    const createDeps = (injected?: { messageId: string }) =>
+      ({
+        delegate: { injectQueuedFollowUp: vi.fn().mockResolvedValue(injected) },
+        userId: 'user-1',
+      }) as any;
+    const child = stateOf({
+      origin: {
+        agentId: 'agt-1',
+        lineage: { isSubAgent: true, parentOperationId: 'op-parent' },
+        threadId: 'thd-sub',
+        topicId: 'tpc-1',
+      },
+      status: 'running',
+    });
+
+    it('takes the parent’s queued instruction from the sub-agent’s thread queue', async () => {
+      steerQueueLength.mockResolvedValue(1);
+      const deps = createDeps({ messageId: 'msg-steer' });
+
+      await expect(injectQueuedFollowUp(deps, 'op-child', 2, child)).resolves.toEqual({
+        messageId: 'msg-steer',
+      });
+      const scope = { threadId: 'thd-sub', topicId: 'tpc-1', userId: 'user-1' };
+      expect(steerQueueLength).toHaveBeenCalledWith(scope, 'op-child');
+      expect(deps.delegate.injectQueuedFollowUp).toHaveBeenCalledWith({
+        operationId: 'op-child',
+        scope,
+        state: child,
+      });
+    });
+
+    it('skips the join when nothing waits for the sub-agent', async () => {
+      const deps = createDeps({ messageId: 'msg-steer' });
+
+      await expect(injectQueuedFollowUp(deps, 'op-child', 2, child)).resolves.toBeUndefined();
+      expect(deps.delegate.injectQueuedFollowUp).not.toHaveBeenCalled();
+    });
+
+    it('has no queue for a child run outside a thread', async () => {
+      steerQueueLength.mockResolvedValue(1);
+      const deps = createDeps({ messageId: 'msg-steer' });
+      const noThread = stateOf({ origin: { lineage: { isSubAgent: true }, topicId: 'tpc-1' } });
+
+      await expect(injectQueuedFollowUp(deps, 'op-child', 2, noThread)).resolves.toBeUndefined();
+      expect(steerQueueLength).not.toHaveBeenCalled();
     });
   });
 
@@ -214,6 +263,64 @@ describe('server-side steer queue in the step loop', () => {
       await prepare(deps, 'user_input');
 
       expect(deps.injectQueuedFollowUp).not.toHaveBeenCalled();
+    });
+
+    describe('a running sub-agent steered by its parent', () => {
+      const subAgentOrigin = {
+        agentId: 'agt-1',
+        lineage: { isSubAgent: true, parentOperationId: 'op-parent' },
+        threadId: 'thd-sub',
+        topicId: 'tpc-1',
+      };
+      const prepareChild = (deps: any, phase: string, payload: Record<string, unknown>) =>
+        prepareStepInput(deps, {
+          agentState: stateOf({
+            messages: toolMessages,
+            origin: subAgentOrigin,
+            status: 'running',
+          } as any),
+          params: {
+            context: { payload: { parentMessageId: 'msg-tool', ...payload }, phase },
+            operationId: 'op-child',
+            stepIndex: 4,
+          } as any,
+          stepEntryMessages: undefined as any,
+        });
+
+      it('injects the steer instruction into the sub-agent context on its next step', async () => {
+        const deps = createDeps({ messageId: 'msg-steer' });
+
+        const { currentContext, currentState } = await prepareChild(deps, 'tool_result', {});
+
+        expect(deps.injectQueuedFollowUp).toHaveBeenCalledWith('op-child', 4, expect.anything());
+        // The next LLM call runs on the steer message, read back from the thread.
+        expect(currentContext).toMatchObject({
+          payload: { parentMessageId: 'msg-steer' },
+          phase: 'user_input',
+        });
+        expect(currentState.messages).toEqual(refreshed);
+      });
+
+      it('takes the steer at its final answer instead of finishing without it', async () => {
+        const deps = createDeps({ messageId: 'msg-steer' });
+
+        const { currentContext } = await prepareChild(deps, 'llm_result', {
+          hasToolsCalling: false,
+          result: { content: 'done', tool_calls: [] },
+        });
+
+        expect(deps.injectQueuedFollowUp).toHaveBeenCalled();
+        expect(currentContext).toMatchObject({ phase: 'user_input' });
+      });
+
+      it('runs the tools the model asked for before taking the steer', async () => {
+        const deps = createDeps({ messageId: 'msg-steer' });
+
+        await prepareChild(deps, 'llm_result', { hasToolsCalling: true, toolsCalling: [{}] });
+        await prepareChild(deps, 'llm_result', { result: { tool_calls: [{ id: 'call-2' }] } });
+
+        expect(deps.injectQueuedFollowUp).not.toHaveBeenCalled();
+      });
     });
 
     it('lets the agent park for a tool still waiting for approval first', async () => {

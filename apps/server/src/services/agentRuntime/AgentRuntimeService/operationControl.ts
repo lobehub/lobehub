@@ -10,7 +10,7 @@ import {
   type DeferredToolResultControlInput,
   loadDurableToolResultHooks,
 } from '../hooks/deferredToolResultControl';
-import { steerQueueScopeOf } from '../steerQueueScope';
+import { steerQueueScopeOf, subAgentSteerQueueScopeOf } from '../steerQueueScope';
 import {
   type AgentStepContinuation,
   type OperationStatusResult,
@@ -308,7 +308,10 @@ export async function injectQueuedFollowUp(
   stepIndex: number,
   state: AgentState,
 ): Promise<{ messageId: string } | undefined> {
-  const scope = steerQueueScopeOf(state, deps.userId);
+  // A sub-agent has no composer of its own; its queue holds the steer
+  // instructions its parent sent while it was running.
+  const scope =
+    steerQueueScopeOf(state, deps.userId) ?? subAgentSteerQueueScopeOf(state, deps.userId);
   if (!scope || !deps.delegate.injectQueuedFollowUp) return;
 
   try {
