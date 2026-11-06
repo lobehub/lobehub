@@ -260,7 +260,6 @@ export const ImageCanvas = memo<ImageCanvasProps>(
     const loaded = !!url && loadedUrl === url;
     const develops = useDevelopsOnMount(url, startedAt);
     const generating = !url && !children;
-    const still = !!children;
     const elapsed = useElapsedSeconds(generating ? startedAt : undefined);
     // Computed once per mount: recomputing on every re-render would restart the loops.
     const [auraLayerStyle] = useState(() => auraStyle(seed, startedAt));
@@ -285,15 +284,15 @@ export const ImageCanvas = memo<ImageCanvasProps>(
             )}
           >
             <div {...sx(styles.layer, undefined, auraLayerStyle)}>
-              <div {...stylex.props(styles.auraFocus, still && styles.animationStill)}>
+              <div {...stylex.props(styles.auraFocus, !!children && styles.animationStill)}>
                 <span
-                  {...stylex.props(styles.blob, styles.blobA, still && styles.animationStill)}
+                  {...stylex.props(styles.blob, styles.blobA, !!children && styles.animationStill)}
                 />
                 <span
-                  {...stylex.props(styles.blob, styles.blobB, still && styles.animationStill)}
+                  {...stylex.props(styles.blob, styles.blobB, !!children && styles.animationStill)}
                 />
                 <span
-                  {...stylex.props(styles.blob, styles.blobC, still && styles.animationStill)}
+                  {...stylex.props(styles.blob, styles.blobC, !!children && styles.animationStill)}
                 />
               </div>
             </div>
