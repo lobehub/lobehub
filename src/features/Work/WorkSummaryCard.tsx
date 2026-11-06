@@ -214,7 +214,7 @@ const WorkSummaryCard = memo<WorkSummaryCardProps>(
         <Flexbox
           horizontal
           align={'center'}
-          {...sx([styles.inline, clickable && styles.inlineClickable, xstyle], className)}
+          {...sx(styles.inline, clickable && styles.inlineClickable, xstyle, className)}
           gap={10}
           onClick={clickable ? handleOpen : undefined}
         >
@@ -283,7 +283,7 @@ const WorkSummaryCard = memo<WorkSummaryCardProps>(
       <Flexbox
         horizontal
         align={'center'}
-        {...sx([styles.card, clickable && styles.clickable, xstyle], className)}
+        {...sx(styles.card, clickable && styles.clickable, xstyle, className)}
         gap={12}
         onClick={clickable ? handleOpen : undefined}
       >

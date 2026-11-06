@@ -60,7 +60,6 @@ const draggableStyles = stylex.create({
     minHeight: '100%',
     maxHeight: '100%',
   },
-  // The runtime `style` prop paints the real (vibrancy-aware) background on top.
   panel: {
     userSelect: 'none',
     height: '100%',
@@ -68,6 +67,7 @@ const draggableStyles = stylex.create({
     backgroundColor: stylexCssVar.colorBgLayout,
     backgroundImage: 'none',
   },
+  macPanel: { backgroundColor: 'var(--mac-panel-bg, transparent)' },
 });
 
 interface NavPanelDraggableProps {
@@ -133,7 +133,11 @@ export const NavPanelDraggable = memo<NavPanelDraggableProps>(({ activeContent, 
       showBorder={false}
       style={styles}
       className={cx(
-        stylex.props(draggableStyles.panel, imLayout && draggableStyles.imPanel).className,
+        stylex.props(
+          draggableStyles.panel,
+          isDesktop && isMacOS() && draggableStyles.macPanel,
+          imLayout && draggableStyles.imPanel,
+        ).className,
         fallback.panel,
       )}
       onExpandChange={togglePanel}
@@ -145,13 +149,7 @@ export const NavPanelDraggable = memo<NavPanelDraggableProps>(({ activeContent, 
             visibility, so the layer is force-hidden like HomeLayout does. */}
         {homeContent && (
           <Activity mode={isHomeActive ? 'visible' : 'hidden'} name="NavPanelHome">
-            <div
-              {...sx(
-                [draggableStyles.layer],
-                undefined,
-                isHomeActive ? undefined : hiddenLayerStyle,
-              )}
-            >
+            <div {...sx(draggableStyles.layer, !isHomeActive && hiddenLayerStyle)}>
               {homeContent}
             </div>
           </Activity>

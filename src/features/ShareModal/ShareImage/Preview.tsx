@@ -110,7 +110,7 @@ const Preview = memo<PreviewProps>(
       <div className={previewClassName(widthMode === WidthMode.Narrow ? 'narrow' : 'wide')}>
         <div
           id={previewId}
-          {...(withBackground ? sx([styles.background], undefined, BACKGROUND_STYLE) : undefined)}
+          {...(withBackground ? sx(styles.background, BACKGROUND_STYLE) : undefined)}
         >
           <Flexbox
             gap={16}
@@ -140,7 +140,7 @@ const Preview = memo<PreviewProps>(
                 </Flexbox>
               </Flexbox>
               {withSystemRole && systemRole && (
-                <div {...sx([styles.role], fallback.role)}>
+                <div {...sx(styles.role, fallback.role)}>
                   <Markdown variant={'chat'}>{systemRole}</Markdown>
                 </div>
               )}

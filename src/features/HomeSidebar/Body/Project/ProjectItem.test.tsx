@@ -58,14 +58,14 @@ describe('ProjectItem', () => {
   it('shows the actions menu for a project another member created', () => {
     const { container } = render(<ProjectItem project={project} />);
 
-    expect(container.querySelector('.nav-item-actions')).not.toBeNull();
+    expect(container.querySelector('[data-nav-item-actions]')).not.toBeNull();
   });
 
   it('keeps the actions menu for members without edit permission, who can still favorite', () => {
     permission.allowed = false;
     const { container } = render(<ProjectItem project={project} />);
 
-    expect(container.querySelector('.nav-item-actions')).not.toBeNull();
+    expect(container.querySelector('[data-nav-item-actions]')).not.toBeNull();
   });
 
   // A slug can be renamed from Project Settings, so the favorite keeps the id link.

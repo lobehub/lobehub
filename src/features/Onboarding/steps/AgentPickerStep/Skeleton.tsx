@@ -20,8 +20,8 @@ const AgentPickerSkeleton = memo(() => (
         <div {...stylex.props(styles.skeletonCard)} key={index}>
           <div {...stylex.props(styles.skeletonAvatar)} />
           <div style={{ display: 'flex', flex: 1, flexDirection: 'column', gap: 8, paddingTop: 4 }}>
-            <div {...sx([styles.skeletonLine], undefined, { width: '60%' })} />
-            <div {...sx([styles.skeletonLine], undefined, { width: '90%' })} />
+            <div {...sx(styles.skeletonLine, { width: '60%' })} />
+            <div {...sx(styles.skeletonLine, { width: '90%' })} />
           </div>
         </div>
       ))}

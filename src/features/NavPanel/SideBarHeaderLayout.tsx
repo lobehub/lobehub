@@ -1,6 +1,14 @@
 'use client';
 
-import { Breadcrumb, type BreadcrumbItem, Flexbox, Icon, Text } from '@lobehub/ui';
+import {
+  Breadcrumb,
+  type BreadcrumbItem,
+  // oxlint-disable-next-line stylex-migration/no-emotion-styles -- Breadcrumb links take no className
+  createStaticStyles,
+  Flexbox,
+  Icon,
+  Text,
+} from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { ChevronRightIcon, HomeIcon } from 'lucide-react';
@@ -25,6 +33,14 @@ const containerStyles = stylex.create({
 });
 
 const breadcrumbClassNames = { item: stylex.props(containerStyles.breadcrumbItem).className };
+
+const fallback = createStaticStyles(({ css, cssVar }) => ({
+  breadcrumb: css`
+    a:hover {
+      color: ${cssVar.colorText};
+    }
+  `,
+}));
 
 interface SideBarHeaderLayoutProps {
   backTo?: string;
@@ -70,6 +86,7 @@ const SideBarHeaderLayout = memo<SideBarHeaderLayoutProps>(
     ) : (
       <Flexbox flex={1} paddingInline={6}>
         <Breadcrumb
+          className={fallback.breadcrumb}
           classNames={breadcrumbClassNames}
           separator={<Icon icon={ChevronRightIcon} />}
           items={[

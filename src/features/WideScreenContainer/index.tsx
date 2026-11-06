@@ -44,7 +44,7 @@ const WideScreenContainer = memo<WideScreenContainerProps>(
     return (
       <Flexbox style={wrapperStyle} width={'100%'} onClick={onClick}>
         <Flexbox
-          {...sx([styles.container], className)}
+          {...sx(styles.container, className)}
           paddingInline={fullWidth ? 0 : 16}
           width={
             fullWidth || wideScreen ? '100%' : `min(${minWidth || CONVERSATION_MIN_WIDTH}px, 100%)`

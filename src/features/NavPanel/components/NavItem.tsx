@@ -163,7 +163,7 @@ const NavItem = memo<NavItemProps>(
         data-nav-item
         horizontal
         align={'center'}
-        {...sx([styles.container, xstyle], className, mergedStyle)}
+        {...sx(styles.container, xstyle, className, mergedStyle)}
         clickable={!disabled}
         gap={8}
         height={description ? undefined : 36}
@@ -206,7 +206,7 @@ const NavItem = memo<NavItemProps>(
         <Flexbox
           horizontal
           align={'center'}
-          {...sx([styles.content], undefined, { overflow: 'hidden' })}
+          {...sx(styles.content, { overflow: 'hidden' })}
           flex={1}
           gap={8}
         >
