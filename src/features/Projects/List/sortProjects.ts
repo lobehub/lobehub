@@ -10,7 +10,7 @@ type SortableProject = {
 const time = (value: Date | string) => new Date(value).getTime();
 
 /**
- * Order the sidebar project list for the chosen view. `manual` follows the
+ * Order the project list for the chosen view. `manual` follows the
  * shared `sort_order`, with projects never placed (null) first; the others —
  * and ties — put the newest first.
  */

@@ -68,6 +68,9 @@ export default {
   'directories.autoFileTopics': 'All {{count}} existing topics will be linked to this project.',
   'directories.topicsSkipped':
     'Directory linked. {{count}} topics were left out because they run in another directory or on another device, belong to another project, are still running, or no longer exist.',
+  'settings.createdAt': 'Created {{date}}',
+  'settings.creator': 'Creator',
+  'settings.creatorUnknown': 'Former member',
   'settings.general': 'General',
   'settings.logoHint': 'Click the logo to upload an image or pick an emoji.',
   'settings.saveFailed': 'Could not save the change',
