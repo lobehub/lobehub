@@ -19,12 +19,22 @@ export interface McpAppConversationHost {
   sendMessage: (params: SendMessageParams) => Promise<void>;
 }
 export interface McpAppState {
+  contexts: Record<
+    string,
+    { content: string; identifier: string; scope: string; sent?: string; title: string }
+  >;
   hosts: Record<string, McpAppConversationHost>;
   liveCalls: Record<string, boolean>;
   panels: Record<string, boolean>;
   views: Record<string, McpAppViewState>;
 }
-export const initialState: McpAppState = { hosts: {}, liveCalls: {}, panels: {}, views: {} };
+export const initialState: McpAppState = {
+  contexts: {},
+  hosts: {},
+  liveCalls: {},
+  panels: {},
+  views: {},
+};
 export const useMcpAppStore = createWithEqualityFn<McpAppState>()(
   createDevtools('mcpApp')(() => initialState),
   shallow,

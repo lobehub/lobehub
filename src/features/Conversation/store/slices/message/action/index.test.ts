@@ -3,6 +3,7 @@ import { act } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useChatStore } from '@/store/chat';
+import { mcpAppContext } from '@/store/mcpApp/context';
 
 import type { ConversationContext } from '../../../../types';
 import { createStore } from '../../../index';
@@ -315,5 +316,34 @@ describe('sendMessage composer ownership', () => {
     await expect(result).rejects.toBe(abortError);
     expect(sendMessage).not.toHaveBeenCalled();
     expect(store.getState().inputMessage).toBe('keep this draft');
+  });
+});
+
+describe('MCP App context dispatch', () => {
+  afterEach(() => vi.restoreAllMocks());
+  it('preserves the original request shape when no enabled app context exists', async () => {
+    const store = createTestStore();
+    const sendMessage = vi.fn().mockResolvedValue(undefined);
+    vi.spyOn(useChatStore, 'getState').mockReturnValue({ sendMessage } as any);
+    vi.spyOn(mcpAppContext, 'take').mockReturnValue({ selections: [], restore: vi.fn() });
+    await store.getState().sendMessage({ message: 'hello' });
+    expect(sendMessage.mock.calls[0][0]).not.toHaveProperty('contextSelections');
+    expect(sendMessage.mock.calls[0][0]).not.toHaveProperty('onPreflightFailure');
+  });
+  it('attaches the snapshot and restores it on a failed send', async () => {
+    const selection = {
+      id: 'view',
+      source: 'mcpApp' as const,
+      identifier: 'notes',
+      content: 'selected',
+    };
+    const restore = vi.fn();
+    const store = createTestStore();
+    const sendMessage = vi.fn().mockRejectedValue(new Error('offline'));
+    vi.spyOn(useChatStore, 'getState').mockReturnValue({ sendMessage } as any);
+    vi.spyOn(mcpAppContext, 'take').mockReturnValue({ selections: [selection], restore });
+    await expect(store.getState().sendMessage({ message: 'hello' })).rejects.toThrow('offline');
+    expect(sendMessage.mock.calls[0][0].contextSelections).toEqual([selection]);
+    expect(restore).toHaveBeenCalledOnce();
   });
 });

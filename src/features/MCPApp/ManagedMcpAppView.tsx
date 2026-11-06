@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { mcpAppActions } from '@/store/mcpApp/action';
+import { mcpAppContext } from '@/store/mcpApp/context';
 import { mcpAppSelectors, useMcpAppStore } from '@/store/mcpApp/store';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 
@@ -88,7 +89,8 @@ export const ManagedMcpAppView = ({
             return requested;
           },
           onTeardown: () => mcpAppActions.close(props.toolCallId, true),
-          onUpdateModelContext: () => {},
+          onUpdateModelContext: (params) => mcpAppContext.update(props.toolCallId, params),
+          onDispose: () => mcpAppContext.clear(props.toolCallId),
           preferred,
           retireOnRemove: () =>
             (useMcpAppStore.getState().views[props.toolCallId]?.mode ?? 'inline') === location,

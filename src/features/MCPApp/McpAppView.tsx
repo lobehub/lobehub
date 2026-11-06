@@ -67,6 +67,7 @@ export interface McpAppViewProps {
     onInitialized: (modes: McpAppDisplayMode[], preferred: McpAppDisplayMode) => void;
     onMode: (mode: McpAppDisplayMode) => McpAppDisplayMode;
     onTeardown: () => void;
+    onDispose: () => void;
     onUpdateModelContext: NonNullable<AppViewContext['lifecycle']>['onUpdateModelContext'];
     preferred?: 'inline' | 'fullscreen';
     retireOnRemove: () => boolean;
@@ -211,6 +212,7 @@ const McpAppView = memo<McpAppViewProps>(
       if (!hasFrame) return;
       const frame = iframeRef.current;
       const retireOnRemove = latest.current.presentation?.retireOnRemove;
+      const onDispose = latest.current.presentation?.onDispose;
 
       return () => {
         const session = sessionRef.current;
@@ -221,6 +223,7 @@ const McpAppView = memo<McpAppViewProps>(
           bridgeRef.current = undefined;
           return;
         }
+        onDispose?.();
         const retired = retireAppFrame(frame, {
           // Not removed after all: a session started since replaces this one
           keep: () => {
