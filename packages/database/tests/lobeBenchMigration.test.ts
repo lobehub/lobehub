@@ -110,8 +110,9 @@ describe('LobeBench migration integration', () => {
           userId: 'migration-user',
         })
         .returning();
-      expect(environment.id).toMatch(/^[a-zA-Z0-9]{16}$/);
-      expect(memory.id).toMatch(/^[a-zA-Z0-9]{16}$/);
+      expect(environment.id).toMatch(/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/);
+      expect(memory.id).toMatch(/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/);
+      expect(memory.metadata).toBeNull();
       await client.query(
         `INSERT INTO agent_eval_test_cases (id, dataset_id, environment_id, content)
           VALUES ('migration-case-a', 'migration-dataset', $1, '{"input":"First case"}'),
@@ -200,7 +201,6 @@ describe('LobeBench migration integration', () => {
             attemptId: `retention-run_retention-topic${threadId ? `_${threadId}` : ''}`,
             capturedAt: new Date('2026-10-20T00:00:00Z'),
             embedding,
-            id: `retained-memory-${index}`,
             layer: 'identity' as const,
             payload: { description: 'Saved evidence', nested: { index, values: [1, 2, 3] } },
             runId: 'retention-run',
@@ -217,7 +217,6 @@ describe('LobeBench migration integration', () => {
           attemptId: 'unrelated-run_unrelated-topic_unrelated-thread',
           capturedAt: new Date('2026-10-21T00:00:00Z'),
           embedding,
-          id: 'unrelated-memory',
           layer: 'identity',
           payload: { description: 'Other attempt evidence' },
           runId: 'unrelated-run',
@@ -228,15 +227,20 @@ describe('LobeBench migration integration', () => {
         })
         .returning();
       const memories = () => db.select().from(agentEvalMemories).orderBy(agentEvalMemories.id);
+      // Random uuid keys: compare in the same id order the query returns.
+      const byId = <T extends { id: string }>(rows: T[]) =>
+        [...rows].sort((left, right) => (left.id < right.id ? -1 : left.id > right.id ? 1 : 0));
 
       await client.query("DELETE FROM threads WHERE id = 'deleted-thread'");
-      expect.soft(await memories()).toEqual([
-        ...retainedMemories.map((memory) => ({
-          ...memory,
-          threadId: memory.threadId === 'deleted-thread' ? null : memory.threadId,
-        })),
-        unrelatedMemory,
-      ]);
+      expect.soft(await memories()).toEqual(
+        byId([
+          ...retainedMemories.map((memory) => ({
+            ...memory,
+            threadId: memory.threadId === 'deleted-thread' ? null : memory.threadId,
+          })),
+          unrelatedMemory,
+        ]),
+      );
 
       await client.query("DELETE FROM topics WHERE id = 'retention-topic'");
       expect
@@ -246,10 +250,12 @@ describe('LobeBench migration integration', () => {
         .toEqual([]);
       expect
         .soft(await memories())
-        .toEqual([
-          ...retainedMemories.map((memory) => ({ ...memory, threadId: null, topicId: null })),
-          unrelatedMemory,
-        ]);
+        .toEqual(
+          byId([
+            ...retainedMemories.map((memory) => ({ ...memory, threadId: null, topicId: null })),
+            unrelatedMemory,
+          ]),
+        );
 
       await client.query("DELETE FROM agent_eval_runs WHERE id = 'retention-run'");
       expect(await memories()).toEqual([unrelatedMemory]);

@@ -1,7 +1,6 @@
 import type { EvalMemoryLayer, EvalMemorySource } from '@lobechat/types';
-import { index, jsonb, pgTable, text, vector } from 'drizzle-orm/pg-core';
+import { index, jsonb, pgTable, text, uuid, vector } from 'drizzle-orm/pg-core';
 
-import { createNanoId } from '../utils/idGenerator';
 import { timestamps, timestamptz } from './_helpers';
 import { agentEvalRuns } from './agentEvals';
 import { threads, topics } from './topic';
@@ -18,7 +17,7 @@ import { users } from './user';
 export const agentEvalMemories = pgTable(
   'agent_eval_memories',
   {
-    id: text('id').$defaultFn(createNanoId(16)).primaryKey(),
+    id: uuid('id').defaultRandom().primaryKey(),
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
@@ -49,6 +48,7 @@ export const agentEvalMemories = pgTable(
     capturedAt: timestamptz('captured_at').notNull(),
     /** The Agent removed the entry (identities); kept as evidence, hidden from search. */
     removedReason: text('removed_reason'),
+    metadata: jsonb('metadata').$type<Record<string, unknown>>(),
     ...timestamps,
   },
   (t) => [

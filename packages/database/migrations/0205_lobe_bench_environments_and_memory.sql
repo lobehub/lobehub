@@ -1,5 +1,5 @@
 CREATE TABLE IF NOT EXISTS "agent_eval_memories" (
-	"id" text PRIMARY KEY NOT NULL,
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"user_id" text NOT NULL,
 	"run_id" text NOT NULL,
 	"topic_id" text,
@@ -18,13 +18,14 @@ CREATE TABLE IF NOT EXISTS "agent_eval_memories" (
 	"embedding" vector(1024),
 	"captured_at" timestamp with time zone NOT NULL,
 	"removed_reason" text,
+	"metadata" jsonb,
 	"accessed_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "agent_eval_environments" (
-	"id" text PRIMARY KEY NOT NULL,
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"user_id" text,
 	"workspace_id" text,
 	"identifier" text,
@@ -38,7 +39,7 @@ CREATE TABLE IF NOT EXISTS "agent_eval_environments" (
 );
 --> statement-breakpoint
 ALTER TABLE "agent_eval_test_cases" ALTER COLUMN "user_id" DROP NOT NULL;--> statement-breakpoint
-ALTER TABLE "agent_eval_test_cases" ADD COLUMN IF NOT EXISTS "environment_id" text;--> statement-breakpoint
+ALTER TABLE "agent_eval_test_cases" ADD COLUMN IF NOT EXISTS "environment_id" uuid;--> statement-breakpoint
 ALTER TABLE "agent_eval_memories" DROP CONSTRAINT IF EXISTS "agent_eval_memories_user_id_users_id_fk";--> statement-breakpoint
 ALTER TABLE "agent_eval_memories" ADD CONSTRAINT "agent_eval_memories_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "agent_eval_memories" DROP CONSTRAINT IF EXISTS "agent_eval_memories_run_id_agent_eval_runs_id_fk";--> statement-breakpoint

@@ -20,9 +20,10 @@ import {
   real,
   text,
   uniqueIndex,
+  uuid,
 } from 'drizzle-orm/pg-core';
 
-import { createNanoId, idGenerator } from '../utils/idGenerator';
+import { idGenerator } from '../utils/idGenerator';
 import { createdAt, timestamps, timestamptz } from './_helpers';
 import { agents } from './agent';
 import { topics } from './topic';
@@ -225,7 +226,7 @@ export type AgentEvalDatasetItem = typeof agentEvalDatasets.$inferSelect;
 export const agentEvalEnvironments = pgTable(
   'agent_eval_environments',
   {
-    id: text('id').$defaultFn(createNanoId(16)).primaryKey(),
+    id: uuid('id').defaultRandom().primaryKey(),
 
     // Nullable for system-owned rows; imported packages belong to their owner.
     userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }),
@@ -275,7 +276,7 @@ export const agentEvalTestCases = pgTable(
       .notNull(),
 
     /** Shared runtime configuration; case content can override individual fields. */
-    environmentId: text('environment_id').references(() => agentEvalEnvironments.id, {
+    environmentId: uuid('environment_id').references(() => agentEvalEnvironments.id, {
       onDelete: 'set null',
     }),
 
