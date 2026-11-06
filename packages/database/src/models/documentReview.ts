@@ -544,7 +544,28 @@ export class DocumentReviewModel {
     const workspaceId = this.requireWorkspaceId();
     return this.db.transaction(async (trx) => {
       const tx = trx as LobeChatDatabase;
-      const existing = await this.scoped(tx).listRules(ruleSetId);
+      // Resolve the parent document only to know which row to lock; the value is
+      // re-read below, after the lock, because `DocumentModel.transferTo` holds
+      // that document row until it commits. Locking first is what makes the
+      // later read authoritative instead of a snapshot taken before the transfer.
+      const [parent] = await tx
+        .select({ documentId: documentReviewRuleSets.documentId })
+        .from(documentReviewRuleSets)
+        .where(
+          and(
+            eq(documentReviewRuleSets.id, ruleSetId),
+            eq(documentReviewRuleSets.workspaceId, workspaceId),
+          ),
+        )
+        .limit(1);
+      if (!parent) throw new Error(DOCUMENT_REVIEW_NOT_FOUND);
+
+      await this.assertDocument(tx, parent.documentId);
+
+      // Re-check the set under the document lock. Without this a rule inserted
+      // by the source workspace could land after a transfer has rehomed the set:
+      // the foreign key still resolves, `markRuleSetDraft` matches zero rows, the
+      // API reports success, and the destination never lists the new rule.
       const [ruleSet] = await tx
         .select({ id: documentReviewRuleSets.id })
         .from(documentReviewRuleSets)
@@ -556,6 +577,8 @@ export class DocumentReviewModel {
         )
         .limit(1);
       if (!ruleSet) throw new Error(DOCUMENT_REVIEW_NOT_FOUND);
+
+      const existing = await this.scoped(tx).listRules(ruleSetId);
 
       const [created] = await tx
         .insert(documentReviewRules)
