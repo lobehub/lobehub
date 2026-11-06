@@ -225,10 +225,7 @@ const SkillItem = memo<DiscoverSkillItem>(
               icon={ClockIcon}
               size={14}
             />
-            <PublishedTime
-              className={stylex.props(styles.secondaryDesc).className}
-              date={updatedAt}
-            />
+            <PublishedTime date={updatedAt} xstyle={styles.secondaryDesc} />
           </Flexbox>
           <MetaInfo
             className={stylex.props(styles.secondaryDesc).className}
