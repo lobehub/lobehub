@@ -1,6 +1,7 @@
 CREATE TABLE IF NOT EXISTS "agent_eval_memories" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"user_id" text NOT NULL,
+	"workspace_id" text,
 	"run_id" text NOT NULL,
 	"topic_id" text,
 	"thread_id" text,
@@ -42,6 +43,8 @@ ALTER TABLE "agent_eval_test_cases" ALTER COLUMN "user_id" DROP NOT NULL;--> sta
 ALTER TABLE "agent_eval_test_cases" ADD COLUMN IF NOT EXISTS "environment_id" uuid;--> statement-breakpoint
 ALTER TABLE "agent_eval_memories" DROP CONSTRAINT IF EXISTS "agent_eval_memories_user_id_users_id_fk";--> statement-breakpoint
 ALTER TABLE "agent_eval_memories" ADD CONSTRAINT "agent_eval_memories_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "agent_eval_memories" DROP CONSTRAINT IF EXISTS "agent_eval_memories_workspace_id_workspaces_id_fk";--> statement-breakpoint
+ALTER TABLE "agent_eval_memories" ADD CONSTRAINT "agent_eval_memories_workspace_id_workspaces_id_fk" FOREIGN KEY ("workspace_id") REFERENCES "public"."workspaces"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "agent_eval_memories" DROP CONSTRAINT IF EXISTS "agent_eval_memories_run_id_agent_eval_runs_id_fk";--> statement-breakpoint
 ALTER TABLE "agent_eval_memories" ADD CONSTRAINT "agent_eval_memories_run_id_agent_eval_runs_id_fk" FOREIGN KEY ("run_id") REFERENCES "public"."agent_eval_runs"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "agent_eval_memories" DROP CONSTRAINT IF EXISTS "agent_eval_memories_topic_id_topics_id_fk";--> statement-breakpoint
@@ -57,6 +60,7 @@ CREATE INDEX IF NOT EXISTS "agent_eval_memories_run_id_idx" ON "agent_eval_memor
 CREATE INDEX IF NOT EXISTS "agent_eval_memories_topic_id_idx" ON "agent_eval_memories" USING btree ("topic_id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "agent_eval_memories_thread_id_idx" ON "agent_eval_memories" USING btree ("thread_id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "agent_eval_memories_user_id_idx" ON "agent_eval_memories" USING btree ("user_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "agent_eval_memories_workspace_id_idx" ON "agent_eval_memories" USING btree ("workspace_id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "agent_eval_environments_user_id_idx" ON "agent_eval_environments" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "agent_eval_environments_workspace_id_idx" ON "agent_eval_environments" USING btree ("workspace_id");--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "agent_eval_environments_identifier_user_id_unique" ON "agent_eval_environments" USING btree ("identifier","user_id") WHERE "agent_eval_environments"."identifier" IS NOT NULL AND "agent_eval_environments"."workspace_id" IS NULL;--> statement-breakpoint

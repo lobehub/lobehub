@@ -6,7 +6,7 @@
   },
   "dialect": "postgresql",
   "enums": {},
-  "id": "aacb2e72-bead-4d32-9229-1f8932b8648e",
+  "id": "62c4182f-5344-4639-b52c-21d0b1e61ea1",
   "policies": {},
   "prevId": "f22d5caf-0104-4f65-9ab8-8f6823ea199e",
   "roles": {},
@@ -2772,6 +2772,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "workspace_id": {
+          "name": "workspace_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "run_id": {
           "name": "run_id",
           "type": "text",
@@ -2977,6 +2983,21 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "agent_eval_memories_workspace_id_idx": {
+          "name": "agent_eval_memories_workspace_id_idx",
+          "columns": [
+            {
+              "expression": "workspace_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -2985,6 +3006,15 @@
           "tableFrom": "agent_eval_memories",
           "tableTo": "users",
           "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "agent_eval_memories_workspace_id_workspaces_id_fk": {
+          "name": "agent_eval_memories_workspace_id_workspaces_id_fk",
+          "tableFrom": "agent_eval_memories",
+          "tableTo": "workspaces",
+          "columnsFrom": ["workspace_id"],
           "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"

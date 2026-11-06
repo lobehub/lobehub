@@ -303,6 +303,7 @@ table agent_documents {
 table agent_eval_memories {
   id uuid [pk, not null, default: `gen_random_uuid()`]
   user_id text [not null]
+  workspace_id text
   run_id text [not null]
   topic_id text
   thread_id text
@@ -331,6 +332,7 @@ table agent_eval_memories {
     topic_id [name: 'agent_eval_memories_topic_id_idx']
     thread_id [name: 'agent_eval_memories_thread_id_idx']
     user_id [name: 'agent_eval_memories_user_id_idx']
+    workspace_id [name: 'agent_eval_memories_workspace_id_idx']
   }
 }
 

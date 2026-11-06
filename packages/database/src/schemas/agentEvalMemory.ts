@@ -5,6 +5,7 @@ import { timestamps, timestamptz } from './_helpers';
 import { agentEvalRuns } from './agentEvals';
 import { threads, topics } from './topic';
 import { users } from './user';
+import { workspaces } from './workspace';
 
 /**
  * The Memory of one eval attempt (a run's topic, or one pass@k thread of it):
@@ -21,6 +22,8 @@ export const agentEvalMemories = pgTable(
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
+    /** The run's workspace; null for a personal run. */
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
     runId: text('run_id')
       .references(() => agentEvalRuns.id, { onDelete: 'cascade' })
       .notNull(),
@@ -57,6 +60,7 @@ export const agentEvalMemories = pgTable(
     index('agent_eval_memories_topic_id_idx').on(t.topicId),
     index('agent_eval_memories_thread_id_idx').on(t.threadId),
     index('agent_eval_memories_user_id_idx').on(t.userId),
+    index('agent_eval_memories_workspace_id_idx').on(t.workspaceId),
   ],
 );
 

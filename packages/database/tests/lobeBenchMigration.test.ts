@@ -113,6 +113,7 @@ describe('LobeBench migration integration', () => {
       expect(environment.id).toMatch(/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/);
       expect(memory.id).toMatch(/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/);
       expect(memory.metadata).toBeNull();
+      expect(memory.workspaceId).toBeNull();
       await client.query(
         `INSERT INTO agent_eval_test_cases (id, dataset_id, environment_id, content)
           VALUES ('migration-case-a', 'migration-dataset', $1, '{"input":"First case"}'),
@@ -177,7 +178,7 @@ describe('LobeBench migration integration', () => {
       `);
       expect
         .soft(indexedColumns.rows.map(({ column_name }) => column_name))
-        .toEqual(expect.arrayContaining(['topic_id', 'thread_id']));
+        .toEqual(expect.arrayContaining(['topic_id', 'thread_id', 'workspace_id']));
 
       await client.exec(`
         INSERT INTO users (id) VALUES ('retention-user');
@@ -262,6 +263,29 @@ describe('LobeBench migration integration', () => {
       expect((await client.query('SELECT id FROM agent_eval_runs ORDER BY id')).rows).toEqual([
         { id: 'unrelated-run' },
       ]);
+
+      // A workspace run's Memory goes with its workspace; personal rows stay.
+      await client.exec(`
+        INSERT INTO workspaces (id, slug, name, primary_owner_id)
+          VALUES ('retention-workspace', 'retention-workspace', 'Retention', 'retention-user');
+      `);
+      const [workspaceMemory] = await db
+        .insert(agentEvalMemories)
+        .values({
+          attemptId: 'unrelated-run_unrelated-topic',
+          capturedAt: new Date('2026-10-22T00:00:00Z'),
+          layer: 'identity',
+          payload: { description: 'Workspace attempt evidence' },
+          runId: 'unrelated-run',
+          source: 'agent',
+          topicId: 'unrelated-topic',
+          userId: 'retention-user',
+          workspaceId: 'retention-workspace',
+        })
+        .returning();
+      expect(await memories()).toEqual(byId([unrelatedMemory, workspaceMemory]));
+      await client.query("DELETE FROM workspaces WHERE id = 'retention-workspace'");
+      expect(await memories()).toEqual([unrelatedMemory]);
     } finally {
       await client.close();
     }
