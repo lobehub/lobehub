@@ -51,6 +51,8 @@ export interface TaskUpdatePayload {
   name?: string;
   parentTaskId?: string | null;
   priority?: number;
+  /** `null` takes the task out of its project. */
+  projectId?: string | null;
 }
 
 export interface TaskUpdateOptions {
@@ -653,6 +655,7 @@ export class TaskDetailSliceActionImpl {
       ...task,
       ...(data.name !== undefined ? { name: data.name } : {}),
       ...(data.priority !== undefined ? { priority: data.priority } : {}),
+      ...(data.projectId !== undefined ? { projectId: data.projectId } : {}),
       ...(data.assigneeAgentId !== undefined ? { assigneeAgentId: data.assigneeAgentId } : {}),
       ...(data.assigneeUserId !== undefined ? { assigneeUserId: data.assigneeUserId } : {}),
     }));
@@ -698,7 +701,10 @@ export class TaskDetailSliceActionImpl {
       assigneeAgentId !== undefined ||
       assigneeUserId !== undefined ||
       data.parentTaskId !== undefined ||
-      data.priority !== undefined
+      data.priority !== undefined ||
+      // The optimistic patch drops the row from its old project's lists; only a
+      // refetch can add it to the lists of the project it moved into.
+      data.projectId !== undefined
     ) {
       await Promise.all([
         this.#get().refreshTaskList(),
