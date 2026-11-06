@@ -1,7 +1,7 @@
 import { useToolRenderCapabilities } from '@lobechat/shared-tool-ui';
-import { Flexbox } from '@lobehub/ui';
-import { ActionIcon } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { ActionIcon, Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
 import { FolderOpen } from 'lucide-react';
 import nodePath from 'path-browserify-esm';
@@ -11,55 +11,47 @@ import { useTranslation } from 'react-i18next';
 import FileIcon from '@/components/FileIcon';
 import { formatSize } from '@/utils/format';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    border-radius: 4px;
-    color: ${cssVar.colorTextSecondary};
-
-    :hover {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  dir: css`
-    overflow: hidden;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 11px;
-    line-height: 1.3;
-    color: ${cssVar.colorTextTertiary};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  size: css`
-    flex-shrink: 0;
-
-    min-width: 56px;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 11px;
-    color: ${cssVar.colorTextTertiary};
-    text-align: end;
-  `,
-  time: css`
-    overflow: hidden;
-
-    font-size: 11px;
-    line-height: 1;
-    color: ${cssVar.colorTextDescription};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  title: css`
-    overflow: hidden;
-    display: block;
-
-    line-height: 1.3;
-    color: inherit;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-}));
+const styles = stylex.create({
+  container: {
+    borderRadius: '4px',
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  dir: {
+    overflow: 'hidden',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '11px',
+    lineHeight: 1.3,
+    color: cssVar.colorTextTertiary,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  size: {
+    flexShrink: 0,
+    minWidth: '56px',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '11px',
+    color: cssVar.colorTextTertiary,
+    textAlign: 'end',
+  },
+  time: {
+    overflow: 'hidden',
+    fontSize: '11px',
+    lineHeight: 1,
+    color: cssVar.colorTextDescription,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  title: {
+    overflow: 'hidden',
+    display: 'block',
+    lineHeight: 1.3,
+    color: 'inherit',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+});
 
 interface FileItemProps {
   createdTime?: Date | string;
@@ -103,7 +95,7 @@ const FileItem = memo<FileItemProps>(
       <Flexbox
         horizontal
         align={'center'}
-        className={styles.container}
+        className={stylex.props(styles.container).className}
         gap={12}
         padding={'4px 8px'}
         style={{
@@ -121,16 +113,16 @@ const FileItem = memo<FileItemProps>(
           variant={'raw'}
         />
         <Flexbox flex={1} gap={2} style={{ overflow: 'hidden', minWidth: 0 }}>
-          <div className={styles.title}>{name}</div>
+          <div {...stylex.props(styles.title)}>{name}</div>
           {showTime ? (
             createdTime && (
-              <div className={styles.time}>{dayjs(createdTime).format('MMM DD hh:mm')}</div>
+              <div {...stylex.props(styles.time)}>{dayjs(createdTime).format('MMM DD hh:mm')}</div>
             )
           ) : parentDir ? (
-            <div className={styles.dir}>{parentDir}</div>
+            <div {...stylex.props(styles.dir)}>{parentDir}</div>
           ) : null}
         </Flexbox>
-        {size !== undefined && <span className={styles.size}>{formatSize(size)}</span>}
+        {size !== undefined && <span {...stylex.props(styles.size)}>{formatSize(size)}</span>}
         {!isDirectory && openFolder && path && (
           <ActionIcon
             icon={FolderOpen}

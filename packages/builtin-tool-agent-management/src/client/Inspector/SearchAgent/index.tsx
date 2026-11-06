@@ -1,8 +1,9 @@
 'use client';
 
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
-import { createStaticStyles, cx } from '@lobehub/ui';
+import { cx, Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -10,19 +11,10 @@ import { highlightTextStyles, shinyTextStyles } from '@/styles';
 
 import type { SearchAgentParams, SearchAgentSource } from '../../../types';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  root: css`
-    overflow: hidden;
-    display: flex;
-    gap: 8px;
-    align-items: center;
-  `,
-  title: css`
-    flex-shrink: 0;
-    color: ${cssVar.colorTextSecondary};
-    white-space: nowrap;
-  `,
-}));
+const styles = stylex.create({
+  root: { overflow: 'hidden', display: 'flex', gap: '8px', alignItems: 'center' },
+  title: { flexShrink: 0, color: cssVar.colorTextSecondary, whiteSpace: 'nowrap' },
+});
 
 const getSourceTitleKey = (source: SearchAgentSource = 'all') => {
   switch (source) {
@@ -49,7 +41,7 @@ export const SearchAgentInspector = memo<BuiltinInspectorProps<SearchAgentParams
 
     if (isArgumentsStreaming && !keyword) {
       return (
-        <div className={styles.root}>
+        <div {...stylex.props(styles.root)}>
           <span className={shinyTextStyles.shinyText}>
             {t('builtins.lobe-agent-management.apiName.searchAgent')}
           </span>
@@ -58,8 +50,13 @@ export const SearchAgentInspector = memo<BuiltinInspectorProps<SearchAgentParams
     }
 
     return (
-      <Flexbox horizontal align={'center'} className={styles.root} gap={8}>
-        <span className={cx(styles.title, isArgumentsStreaming && shinyTextStyles.shinyText)}>
+      <Flexbox horizontal align={'center'} className={stylex.props(styles.root).className} gap={8}>
+        <span
+          className={cx(
+            stylex.props(styles.title).className,
+            isArgumentsStreaming && shinyTextStyles.shinyText,
+          )}
+        >
           {t(titleKey)}
         </span>
         {keyword && <span className={highlightTextStyles.primary}>{keyword}</span>}

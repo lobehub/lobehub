@@ -1,9 +1,9 @@
 'use client';
 
 import type { BuiltinRenderProps } from '@lobechat/types';
-import { Flexbox, Markdown } from '@lobehub/ui';
-import { Text } from '@lobehub/ui';
-import { createStaticStyles, cx } from '@lobehub/ui';
+import { Flexbox, Markdown, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -15,49 +15,37 @@ import {
   getCollabStatusTone,
 } from './collabToolUtils';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  agentHeader: css`
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  agentRow: css`
-    padding-block: 8px;
-    padding-inline: 12px;
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  promptBox: css`
-    padding-block: 8px;
-    padding-inline: 12px;
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorFillTertiary};
-  `,
-  sectionLabel: css`
-    margin-block-end: 4px;
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  statusDot: css`
-    flex: none;
+const styles = stylex.create({
+  agentHeader: { fontSize: '12px', color: cssVar.colorTextSecondary },
+  agentRow: {
+    paddingBlock: '8px',
+    paddingInline: '12px',
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  promptBox: {
+    paddingBlock: '8px',
+    paddingInline: '12px',
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+  sectionLabel: { marginBlockEnd: '4px', fontSize: '12px', color: cssVar.colorTextSecondary },
+  statusDot: {
+    flex: 'none',
+    width: '6px',
+    height: '6px',
+    borderRadius: '50%',
+    backgroundColor: cssVar.colorTextQuaternary,
+    backgroundImage: 'none',
+  },
+  statusDotError: { backgroundColor: cssVar.colorError, backgroundImage: 'none' },
+  statusDotProcessing: { backgroundColor: cssVar.colorInfo, backgroundImage: 'none' },
+  statusDotSuccess: { backgroundColor: cssVar.colorSuccess, backgroundImage: 'none' },
+});
 
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-
-    background: ${cssVar.colorTextQuaternary};
-  `,
-  statusDotError: css`
-    background: ${cssVar.colorError};
-  `,
-  statusDotProcessing: css`
-    background: ${cssVar.colorInfo};
-  `,
-  statusDotSuccess: css`
-    background: ${cssVar.colorSuccess};
-  `,
-}));
-
-const STATUS_DOT_CLASS = {
+const STATUS_DOT_STYLE = {
   error: styles.statusDotError,
   muted: undefined,
   processing: styles.statusDotProcessing,
@@ -77,10 +65,10 @@ const CollabToolRender = memo<
     <Flexbox gap={12}>
       {prompt && (
         <div>
-          <Text className={styles.sectionLabel}>
+          <Text className={stylex.props(styles.sectionLabel).className}>
             {t('builtins.codex.collabTool.instruction', { defaultValue: 'Instruction' })}
           </Text>
-          <Flexbox className={styles.promptBox}>
+          <Flexbox className={stylex.props(styles.promptBox).className}>
             <Markdown style={{ maxHeight: 240, overflow: 'auto' }} variant={'chat'}>
               {prompt}
             </Markdown>
@@ -89,17 +77,22 @@ const CollabToolRender = memo<
       )}
       {agents.length > 0 && (
         <div>
-          <Text className={styles.sectionLabel}>
+          <Text className={stylex.props(styles.sectionLabel).className}>
             {t('builtins.codex.collabTool.agents', { defaultValue: 'Subagents' })}
           </Text>
           <Flexbox gap={8}>
             {agents.map((agent, index) => (
-              <Flexbox className={styles.agentRow} gap={4} key={agent.id}>
-                <Flexbox horizontal align={'center'} className={styles.agentHeader} gap={6}>
+              <Flexbox className={stylex.props(styles.agentRow).className} gap={4} key={agent.id}>
+                <Flexbox
+                  horizontal
+                  align={'center'}
+                  className={stylex.props(styles.agentHeader).className}
+                  gap={6}
+                >
                   <span
-                    className={cx(
+                    {...stylex.props(
                       styles.statusDot,
-                      STATUS_DOT_CLASS[getCollabStatusTone(agent.status)],
+                      STATUS_DOT_STYLE[getCollabStatusTone(agent.status)],
                     )}
                   />
                   <span>

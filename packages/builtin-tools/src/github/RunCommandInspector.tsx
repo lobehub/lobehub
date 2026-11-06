@@ -3,56 +3,47 @@
 import { inspectorTextStyles, shinyTextStyles } from '@lobechat/shared-tool-ui/styles';
 import type { BuiltinInspectorProps } from '@lobechat/types';
 import { Github } from '@lobehub/icons';
-import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
+import { cx } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Check, X } from 'lucide-react';
 import { memo } from 'react';
 
 import { getGhSubcommand, type GithubRunCommandArgs, type GithubRunCommandState } from './utils';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  chip: css`
-    overflow: hidden;
-    display: inline-flex;
-    flex-shrink: 1;
-    gap: 6px;
-    align-items: center;
-
-    min-width: 0;
-    padding-block: 2px;
-    padding-inline: 10px;
-    border-radius: 999px;
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  command: css`
-    overflow: hidden;
-
-    min-width: 0;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    color: ${cssVar.colorText};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  ghPrefix: css`
-    flex-shrink: 0;
-
-    margin-inline-end: 6px;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    color: ${cssVar.colorTextDescription};
-  `,
-  icon: css`
-    flex-shrink: 0;
-    margin-inline-end: 6px;
-    color: ${cssVar.colorTextDescription};
-  `,
-  statusIcon: css`
-    margin-inline-start: 4px;
-  `,
-}));
+const styles = stylex.create({
+  chip: {
+    overflow: 'hidden',
+    display: 'inline-flex',
+    flexShrink: 1,
+    gap: '6px',
+    alignItems: 'center',
+    minWidth: 0,
+    paddingBlock: '2px',
+    paddingInline: '10px',
+    borderRadius: '999px',
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+  command: {
+    overflow: 'hidden',
+    minWidth: 0,
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '12px',
+    color: cssVar.colorText,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  ghPrefix: {
+    flexShrink: 0,
+    marginInlineEnd: '6px',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '12px',
+  },
+  ghPrefixColor: { color: cssVar.colorTextDescription },
+  icon: { flexShrink: 0, marginInlineEnd: '6px', color: cssVar.colorTextDescription },
+  statusIcon: { marginInlineStart: '4px' },
+});
 
 const GithubRunCommandInspector = memo<
   BuiltinInspectorProps<GithubRunCommandArgs, GithubRunCommandState>
@@ -68,18 +59,33 @@ const GithubRunCommandInspector = memo<
 
   return (
     <div className={inspectorTextStyles.root}>
-      <Github className={styles.icon} size={14} />
-      <span className={cx(styles.ghPrefix, pulse && shinyTextStyles.shinyText)}>gh</span>
+      <Github className={stylex.props(styles.icon).className} size={14} />
+      <span
+        className={cx(
+          stylex.props(styles.ghPrefix, !pulse && styles.ghPrefixColor).className,
+          pulse && shinyTextStyles.shinyText,
+        )}
+      >
+        gh
+      </span>
       {label && (
-        <span className={styles.chip}>
-          <span className={styles.command}>{label}</span>
+        <span {...stylex.props(styles.chip)}>
+          <span {...stylex.props(styles.command)}>{label}</span>
         </span>
       )}
       {hasResult ? (
         isSuccess ? (
-          <Check className={styles.statusIcon} color={cssVar.colorSuccess} size={14} />
+          <Check
+            className={stylex.props(styles.statusIcon).className}
+            color={cssVar.colorSuccess}
+            size={14}
+          />
         ) : (
-          <X className={styles.statusIcon} color={cssVar.colorError} size={14} />
+          <X
+            className={stylex.props(styles.statusIcon).className}
+            color={cssVar.colorError}
+            size={14}
+          />
         )
       ) : null}
     </div>

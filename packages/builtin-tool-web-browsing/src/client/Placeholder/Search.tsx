@@ -1,7 +1,7 @@
 import type { BuiltinPlaceholderProps, SearchQuery } from '@lobechat/types';
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Skeleton } from '@lobehub/ui';
-import { createStaticStyles, cx } from '@lobehub/ui';
+import { cx, Flexbox, Icon, Skeleton } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { SearchIcon } from 'lucide-react';
 import { memo } from 'react';
 
@@ -11,23 +11,19 @@ import { shinyTextStyles } from '@/styles';
 const ITEM_HEIGHT = 80;
 const ITEM_WIDTH = 160;
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  query: cx(
-    css`
-      padding-block: 4px;
-      padding-inline: 8px;
-      border-radius: 8px;
-
-      font-size: 12px;
-      color: ${cssVar.colorTextSecondary};
-
-      &:hover {
-        background: ${cssVar.colorFillTertiary};
-      }
-    `,
-    shinyTextStyles.shinyText,
-  ),
-}));
+const styles = stylex.create({
+  query: {
+    paddingBlock: '4px',
+    paddingInline: '8px',
+    borderRadius: '8px',
+    fontSize: '12px',
+    color: cssVar.colorTextSecondary,
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+    backgroundClip: { 'default': null, ':hover': 'border-box' },
+    backgroundSize: { 'default': null, ':hover': 'auto' },
+  },
+});
 
 export const Search = memo<BuiltinPlaceholderProps<SearchQuery>>(({ args }) => {
   const { query } = args || {};
@@ -42,7 +38,12 @@ export const Search = memo<BuiltinPlaceholderProps<SearchQuery>>(({ args }) => {
         height={isMobile ? undefined : 32}
         horizontal={!isMobile}
       >
-        <Flexbox horizontal align={'center'} className={styles.query} gap={8}>
+        <Flexbox
+          horizontal
+          align={'center'}
+          className={cx(stylex.props(styles.query).className, shinyTextStyles.shinyText)}
+          gap={8}
+        >
           <Icon icon={SearchIcon} />
           {query ? query : <Skeleton height={20} width={40} />}
         </Flexbox>

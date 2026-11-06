@@ -1,7 +1,9 @@
 'use client';
 
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { createStaticStyles, cx, Flexbox, useTheme } from '@lobehub/ui';
+import { cx, Flexbox, useTheme } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -10,19 +12,10 @@ import { highlightTextStyles, shinyTextStyles } from '@/styles';
 
 import type { CreateAgentParams } from '../../../types';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  root: css`
-    overflow: hidden;
-    display: flex;
-    gap: 8px;
-    align-items: center;
-  `,
-  title: css`
-    flex-shrink: 0;
-    color: ${cssVar.colorTextSecondary};
-    white-space: nowrap;
-  `,
-}));
+const styles = stylex.create({
+  root: { overflow: 'hidden', display: 'flex', gap: '8px', alignItems: 'center' },
+  title: { flexShrink: 0, color: cssVar.colorTextSecondary, whiteSpace: 'nowrap' },
+});
 
 export const CreateAgentInspector = memo<BuiltinInspectorProps<CreateAgentParams>>(
   ({ args, partialArgs, isArgumentsStreaming }) => {
@@ -35,7 +28,7 @@ export const CreateAgentInspector = memo<BuiltinInspectorProps<CreateAgentParams
 
     if (isArgumentsStreaming && !title) {
       return (
-        <div className={styles.root}>
+        <div {...stylex.props(styles.root)}>
           <span className={shinyTextStyles.shinyText}>
             {t('builtins.lobe-agent-management.apiName.createAgent')}
           </span>
@@ -44,8 +37,13 @@ export const CreateAgentInspector = memo<BuiltinInspectorProps<CreateAgentParams
     }
 
     return (
-      <Flexbox horizontal align={'center'} className={styles.root} gap={8}>
-        <span className={cx(styles.title, isArgumentsStreaming && shinyTextStyles.shinyText)}>
+      <Flexbox horizontal align={'center'} className={stylex.props(styles.root).className} gap={8}>
+        <span
+          className={cx(
+            stylex.props(styles.title).className,
+            isArgumentsStreaming && shinyTextStyles.shinyText,
+          )}
+        >
           {t('builtins.lobe-agent-management.inspector.createAgent.title')}
         </span>
         <AgentAvatar

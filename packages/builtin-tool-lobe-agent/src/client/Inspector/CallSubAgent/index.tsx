@@ -1,8 +1,10 @@
 'use client';
 
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { createStaticStyles, cx } from '@lobehub/ui';
+import { cx } from '@lobehub/ui';
 import { GroupBotIcon } from '@lobehub/ui/icons';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -11,42 +13,29 @@ import { inspectorTextStyles, shinyTextStyles } from '@/styles';
 import type { CallSubAgentParams, CallSubAgentState } from '../../../types';
 import { SubAgentStats } from '../../components/SubAgentStats';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  background: css`
-    flex-shrink: 0;
-    font-size: 12px;
-    color: ${cssVar.colorTextDescription};
-  `,
-  chip: css`
-    overflow: hidden;
-    display: inline-flex;
-    flex-shrink: 1;
-    align-items: center;
-
-    min-width: 0;
-    padding-block: 2px;
-    padding-inline: 10px;
-    border-radius: 999px;
-
-    font-size: 12px;
-    color: ${cssVar.colorText};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  icon: css`
-    flex-shrink: 0;
-    color: ${cssVar.colorTextDescription};
-  `,
-  label: css`
-    flex-shrink: 0;
-    color: ${cssVar.colorText};
-  `,
-  root: css`
-    gap: 6px;
-  `,
-}));
+const styles = stylex.create({
+  background: { flexShrink: 0, fontSize: '12px', color: cssVar.colorTextDescription },
+  chip: {
+    overflow: 'hidden',
+    display: 'inline-flex',
+    flexShrink: 1,
+    alignItems: 'center',
+    minWidth: 0,
+    paddingBlock: '2px',
+    paddingInline: '10px',
+    borderRadius: '999px',
+    fontSize: '12px',
+    color: cssVar.colorText,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+  icon: { flexShrink: 0, color: cssVar.colorTextDescription },
+  label: { flexShrink: 0 },
+  labelColor: { color: cssVar.colorText },
+  root: { gap: '6px' },
+});
 
 /**
  * Collapsed row for lobe-agent's `callSubAgent`. Mirrors the Claude Code Agent
@@ -74,14 +63,19 @@ export const CallSubAgentInspector = memo<
   const stats = hasFinalStats ? pluginState : pluginState?.progress;
 
   return (
-    <div className={cx(inspectorTextStyles.root, styles.root)}>
-      <GroupBotIcon className={styles.icon} size={14} />
-      <span className={cx(styles.label, isShiny && shinyTextStyles.shinyText)}>
+    <div className={cx(inspectorTextStyles.root, stylex.props(styles.root).className)}>
+      <GroupBotIcon className={stylex.props(styles.icon).className} size={14} />
+      <span
+        className={cx(
+          stylex.props(styles.label, !isShiny && styles.labelColor).className,
+          isShiny && shinyTextStyles.shinyText,
+        )}
+      >
         {t('builtins.lobe-agent.apiName.callSubAgent')}
       </span>
-      {description && <span className={styles.chip}>{description}</span>}
+      {description && <span {...stylex.props(styles.chip)}>{description}</span>}
       {runningInBackground && (
-        <span className={styles.background}>
+        <span {...stylex.props(styles.background)}>
           {t('builtins.lobe-agent.subAgent.backgroundRunning')}
         </span>
       )}

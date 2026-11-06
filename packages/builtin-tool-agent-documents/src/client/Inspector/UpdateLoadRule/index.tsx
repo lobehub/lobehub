@@ -2,6 +2,7 @@
 
 import type { BuiltinInspectorProps } from '@lobechat/types';
 import { cx } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -17,7 +18,6 @@ export const UpdateLoadRuleInspector = memo<
 
   const id = args?.id || partialArgs?.id;
   const ruleType = args?.rule?.rule || partialArgs?.rule?.rule || pluginState?.rule?.rule;
-  const styles = inspectorChipStyles;
 
   if (isArgumentsStreaming && !id) {
     return (
@@ -34,11 +34,11 @@ export const UpdateLoadRuleInspector = memo<
       <span className={cx((isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText)}>
         {t('builtins.lobe-agent-documents.apiName.updateLoadRule')}
       </span>
-      {id && <span className={styles.idChip}>{formatDocumentId(id)}</span>}
+      {id && <span {...stylex.props(inspectorChipStyles.idChip)}>{formatDocumentId(id)}</span>}
       {ruleType && (
         <>
-          <span className={styles.separator}>·</span>
-          <span className={styles.subdued}>{ruleType}</span>
+          <span {...stylex.props(inspectorChipStyles.separator)}>·</span>
+          <span {...stylex.props(inspectorChipStyles.subdued)}>{ruleType}</span>
         </>
       )}
     </div>

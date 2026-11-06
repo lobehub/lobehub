@@ -29,8 +29,13 @@ export const RemovedIdentityCard = memo<RemovedIdentityCardProps>(({ data }) => 
   if (isEmpty) return null;
 
   return (
-    <Flexbox className={styles.container}>
-      <Flexbox horizontal align={'center'} className={styles.header} gap={8}>
+    <Flexbox className={stylex.props(styles.container).className}>
+      <Flexbox
+        horizontal
+        align={'center'}
+        className={stylex.props(styles.header).className}
+        gap={8}
+      >
         <Trash2 size={14} />
         <Flexbox flex={1}>
           <Text fontSize={13} weight={500}>
@@ -41,7 +46,7 @@ export const RemovedIdentityCard = memo<RemovedIdentityCardProps>(({ data }) => 
       </Flexbox>
 
       {reason && (
-        <Flexbox className={styles.content}>
+        <Flexbox className={stylex.props(styles.content).className}>
           <div {...stylex.props(localStyles.reason)}>{reason}</div>
         </Flexbox>
       )}

@@ -1,9 +1,9 @@
 'use client';
 
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
-import { Avatar, Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
+import { Avatar, cx, Flexbox, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -13,30 +13,17 @@ import { inspectorTextStyles, shinyTextStyles } from '@/styles';
 
 import type { UpdateAgentPromptParams, UpdateAgentPromptState } from '../../../types';
 
-const styles = createStaticStyles(({ css, cssVar: cv }) => ({
-  agentName: css`
-    overflow: hidden;
-
-    max-width: 120px;
-
-    font-weight: 500;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  label: css`
-    flex-shrink: 0;
-    color: ${cv.colorTextSecondary};
-    white-space: nowrap;
-  `,
-  root: css`
-    overflow: hidden;
-    display: flex;
-    gap: 6px;
-    align-items: center;
-
-    min-width: 0;
-  `,
-}));
+const styles = stylex.create({
+  agentName: {
+    overflow: 'hidden',
+    maxWidth: '120px',
+    fontWeight: 500,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  label: { flexShrink: 0, color: cssVar.colorTextSecondary, whiteSpace: 'nowrap' },
+  root: { overflow: 'hidden', display: 'flex', gap: '6px', alignItems: 'center', minWidth: 0 },
+});
 
 export const UpdateAgentPromptInspector = memo<
   BuiltinInspectorProps<UpdateAgentPromptParams, UpdateAgentPromptState>
@@ -82,10 +69,10 @@ export const UpdateAgentPromptInspector = memo<
     : 'builtins.lobe-group-agent-builder.apiName.updateAgentPrompt';
 
   return (
-    <Flexbox horizontal align="center" className={styles.root} gap={6}>
+    <Flexbox horizontal align="center" className={stylex.props(styles.root).className} gap={6}>
       <span
         className={cx(
-          styles.label,
+          stylex.props(styles.label).className,
           (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
         )}
       >
@@ -96,7 +83,7 @@ export const UpdateAgentPromptInspector = memo<
         <>
           <Avatar avatar={agent.avatar ?? undefined} size={18} title={agent.title ?? undefined} />
           <Text
-            className={styles.agentName}
+            className={stylex.props(styles.agentName).className}
             ellipsis={{
               tooltipWhenOverflow: true,
             }}

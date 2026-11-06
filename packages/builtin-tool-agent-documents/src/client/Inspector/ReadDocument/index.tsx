@@ -2,6 +2,7 @@
 
 import type { BuiltinInspectorProps } from '@lobechat/types';
 import { cx } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -17,7 +18,6 @@ export const ReadDocumentInspector = memo<
 
   const id = args?.id || partialArgs?.id;
   const title = pluginState?.title;
-  const styles = inspectorChipStyles;
 
   if (isArgumentsStreaming && !title && !id) {
     return (
@@ -35,9 +35,9 @@ export const ReadDocumentInspector = memo<
         {t('builtins.lobe-agent-documents.apiName.readDocument')}
       </span>
       {title ? (
-        <span className={styles.chip}>{title}</span>
+        <span {...stylex.props(inspectorChipStyles.chip)}>{title}</span>
       ) : (
-        id && <span className={styles.idChip}>{formatDocumentId(id)}</span>
+        id && <span {...stylex.props(inspectorChipStyles.idChip)}>{formatDocumentId(id)}</span>
       )}
     </div>
   );

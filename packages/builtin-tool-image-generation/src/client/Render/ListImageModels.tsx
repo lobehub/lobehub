@@ -1,9 +1,9 @@
 'use client';
 
 import type { BuiltinRenderProps } from '@lobechat/types';
-import { Block, Flexbox } from '@lobehub/ui';
-import { Alert, Button, Text } from '@lobehub/ui';
-import { createStaticStyles, cx } from '@lobehub/ui';
+import { Alert, Block, Button, Flexbox, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -16,92 +16,93 @@ import type {
 
 const COLLAPSED_MODEL_COUNT = 6;
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  actions: css`
-    display: flex;
-    justify-content: center;
-    padding: 4px;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  container: css`
-    padding-block: 4px;
-  `,
-  count: css`
-    flex-shrink: 0;
-
-    padding-block: 2px;
-    padding-inline: 7px;
-    border-radius: 999px;
-
-    font-size: 11px;
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  description: css`
-    font-size: 12px;
-    line-height: 1.5;
-    color: ${cssVar.colorTextSecondary};
-    overflow-wrap: anywhere;
-  `,
-  empty: css`
-    padding-block: 16px;
-    color: ${cssVar.colorTextSecondary};
-    text-align: center;
-  `,
-  missingDescription: css`
-    font-style: italic;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  modelId: css`
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 11px;
-    color: ${cssVar.colorTextTertiary};
-    overflow-wrap: anywhere;
-  `,
-  modelName: css`
-    font-size: 13px;
-    font-weight: 600;
-    color: ${cssVar.colorText};
-    overflow-wrap: anywhere;
-  `,
-  modelRow: css`
-    padding-block: 10px;
-    padding-inline: 12px;
-
-    & + & {
-      border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-    }
-  `,
-  parameters: css`
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 11px;
-    line-height: 1.5;
-    color: ${cssVar.colorTextTertiary};
-    overflow-wrap: anywhere;
-  `,
-  parametersLabel: css`
-    font-family: ${cssVar.fontFamily};
-  `,
-  providerHeader: css`
-    min-width: 0;
-    padding-block: 8px;
-    padding-inline: 12px;
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  providerId: css`
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 11px;
-    color: ${cssVar.colorTextTertiary};
-    overflow-wrap: anywhere;
-  `,
-  providerName: css`
-    font-size: 13px;
-    font-weight: 600;
-    color: ${cssVar.colorText};
-    overflow-wrap: anywhere;
-  `,
-}));
+const styles = stylex.create({
+  actions: {
+    display: 'flex',
+    justifyContent: 'center',
+    paddingBlock: '4px',
+    paddingInline: '4px',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+  },
+  container: {
+    paddingBlock: '4px',
+  },
+  count: {
+    flexShrink: 0,
+    paddingBlock: '2px',
+    paddingInline: '7px',
+    borderRadius: '999px',
+    fontSize: '11px',
+    color: cssVar.colorTextSecondary,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+  description: {
+    fontSize: '12px',
+    lineHeight: 1.5,
+    color: cssVar.colorTextSecondary,
+    overflowWrap: 'anywhere',
+  },
+  empty: {
+    paddingBlock: '16px',
+    color: cssVar.colorTextSecondary,
+    textAlign: 'center',
+  },
+  missingDescription: {
+    fontStyle: 'italic',
+    color: cssVar.colorTextTertiary,
+  },
+  modelId: {
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '11px',
+    color: cssVar.colorTextTertiary,
+    overflowWrap: 'anywhere',
+  },
+  modelName: {
+    fontSize: '13px',
+    fontWeight: 600,
+    color: cssVar.colorText,
+    overflowWrap: 'anywhere',
+  },
+  modelRow: {
+    paddingBlock: '10px',
+    paddingInline: '12px',
+    borderBlockStartWidth: { 'default': null, ':not(:first-child)': '1px' },
+    borderBlockStartStyle: { 'default': null, ':not(:first-child)': 'solid' },
+    borderBlockStartColor: { 'default': null, ':not(:first-child)': cssVar.colorBorderSecondary },
+  },
+  parameters: {
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '11px',
+    lineHeight: 1.5,
+    color: cssVar.colorTextTertiary,
+    overflowWrap: 'anywhere',
+  },
+  parametersLabel: {
+    fontFamily: cssVar.fontFamily,
+  },
+  providerHeader: {
+    minWidth: 0,
+    paddingBlock: '8px',
+    paddingInline: '12px',
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  providerId: {
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '11px',
+    color: cssVar.colorTextTertiary,
+    overflowWrap: 'anywhere',
+  },
+  providerName: {
+    fontSize: '13px',
+    fontWeight: 600,
+    color: cssVar.colorText,
+    overflowWrap: 'anywhere',
+  },
+});
 
 const ProviderSection = memo<{ provider: ImageGenerationProviderModels }>(({ provider }) => {
   const { t } = useTranslation('plugin');
@@ -117,15 +118,15 @@ const ProviderSection = memo<{ provider: ImageGenerationProviderModels }>(({ pro
       <Flexbox
         horizontal
         align={'center'}
-        className={styles.providerHeader}
+        className={stylex.props(styles.providerHeader).className}
         gap={8}
         justify={'space-between'}
       >
         <Flexbox flex={1} gap={1}>
-          <span className={styles.providerName}>{provider.name || provider.id}</span>
-          {showProviderId && <span className={styles.providerId}>{provider.id}</span>}
+          <span {...stylex.props(styles.providerName)}>{provider.name || provider.id}</span>
+          {showProviderId && <span {...stylex.props(styles.providerId)}>{provider.id}</span>}
         </Flexbox>
-        <span className={styles.count}>
+        <span {...stylex.props(styles.count)}>
           {t('builtins.lobe-image-generation.render.modelList.models', {
             count: provider.models.length,
           })}
@@ -139,24 +140,23 @@ const ProviderSection = memo<{ provider: ImageGenerationProviderModels }>(({ pro
           const parameterKeys = model.parameters ? Object.keys(model.parameters) : [];
 
           return (
-            <Flexbox className={styles.modelRow} gap={3} key={model.id}>
+            <Flexbox className={stylex.props(styles.modelRow).className} gap={3} key={model.id}>
               <Flexbox horizontal align={'baseline'} gap={8} wrap={'wrap'}>
-                <span className={styles.modelName}>{displayName}</span>
-                {showModelId && <span className={styles.modelId}>{model.id}</span>}
+                <span {...stylex.props(styles.modelName)}>{displayName}</span>
+                {showModelId && <span {...stylex.props(styles.modelId)}>{model.id}</span>}
               </Flexbox>
               <span
-                className={
-                  model.description
-                    ? styles.description
-                    : cx(styles.description, styles.missingDescription)
-                }
+                {...stylex.props(
+                  styles.description,
+                  !model.description && styles.missingDescription,
+                )}
               >
                 {model.description ||
                   t('builtins.lobe-image-generation.render.modelList.noDescription')}
               </span>
               {parameterKeys.length > 0 && (
-                <span className={styles.parameters}>
-                  <span className={styles.parametersLabel}>
+                <span {...stylex.props(styles.parameters)}>
+                  <span {...stylex.props(styles.parametersLabel)}>
                     {t('builtins.lobe-image-generation.render.modelList.parameters')}:{' '}
                   </span>
                   {parameterKeys.join(', ')}
@@ -168,7 +168,7 @@ const ProviderSection = memo<{ provider: ImageGenerationProviderModels }>(({ pro
       </div>
 
       {remainingCount > 0 && (
-        <div className={styles.actions}>
+        <div {...stylex.props(styles.actions)}>
           <Button
             icon={expanded ? ChevronUp : ChevronDown}
             size={'small'}
@@ -211,14 +211,14 @@ export const ListImageModelsRender = memo<
 
   if (providers.length === 0) {
     return (
-      <Text as={'div'} className={styles.empty}>
+      <Text as={'div'} className={stylex.props(styles.empty).className}>
         {t('builtins.lobe-image-generation.render.modelList.empty')}
       </Text>
     );
   }
 
   return (
-    <Flexbox className={styles.container} gap={12}>
+    <Flexbox className={stylex.props(styles.container).className} gap={12}>
       {providers.map((provider) => (
         <ProviderSection key={provider.id} provider={provider} />
       ))}

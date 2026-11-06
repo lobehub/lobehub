@@ -2,6 +2,7 @@
 
 import type { BuiltinInspectorProps } from '@lobechat/types';
 import { cx } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -18,7 +19,6 @@ export const ReadDocumentInspector = memo<
   BuiltinInspectorProps<ReadDocumentArgs, Record<string, unknown>>
 >(({ args, partialArgs, isArgumentsStreaming, isLoading }) => {
   const { t } = useTranslation('plugin');
-  const styles = inspectorChipStyles;
 
   const type = args?.type ?? partialArgs?.type;
 
@@ -38,7 +38,7 @@ export const ReadDocumentInspector = memo<
         {t('builtins.lobe-web-onboarding.apiName.readDocument')}
       </span>
       {type && (
-        <span className={styles.chip}>
+        <span {...stylex.props(inspectorChipStyles.chip)}>
           {t(`builtins.lobe-web-onboarding.docType.${type}` as const)}
         </span>
       )}

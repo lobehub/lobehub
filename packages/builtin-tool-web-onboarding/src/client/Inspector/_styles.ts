@@ -1,39 +1,38 @@
-import { createStaticStyles } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 
-export const inspectorChipStyles = createStaticStyles(({ css, cssVar }) => ({
-  chip: css`
-    overflow: hidden;
-    display: inline-flex;
-    flex-shrink: 1;
-    gap: 4px;
-    align-items: center;
-
-    min-width: 0;
-    max-width: 240px;
-    padding-block: 2px;
-    padding-inline: 8px;
-    border-radius: 999px;
-
-    font-size: 12px;
-    color: ${cssVar.colorText};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  emoji: css`
-    flex-shrink: 0;
-    font-size: 14px;
-    line-height: 1;
-  `,
-  meta: css`
-    flex-shrink: 0;
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  separator: css`
-    flex-shrink: 0;
-    margin-inline: 4px;
-    color: ${cssVar.colorTextQuaternary};
-  `,
-}));
+export const inspectorChipStyles = stylex.create({
+  chip: {
+    overflow: 'hidden',
+    display: 'inline-flex',
+    flexShrink: 1,
+    gap: '4px',
+    alignItems: 'center',
+    minWidth: 0,
+    maxWidth: '240px',
+    paddingBlock: '2px',
+    paddingInline: '8px',
+    borderRadius: '999px',
+    fontSize: '12px',
+    color: cssVar.colorText,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+  emoji: {
+    flexShrink: 0,
+    fontSize: '14px',
+    lineHeight: 1,
+  },
+  meta: {
+    flexShrink: 0,
+    fontSize: '12px',
+    color: cssVar.colorTextTertiary,
+  },
+  separator: {
+    flexShrink: 0,
+    marginInline: '4px',
+    color: cssVar.colorTextQuaternary,
+  },
+});

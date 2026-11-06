@@ -2,6 +2,7 @@
 
 import type { BuiltinInspectorProps } from '@lobechat/types';
 import { cx } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -19,7 +20,6 @@ export const WriteDocumentInspector = memo<
   BuiltinInspectorProps<WriteDocumentArgs, Record<string, unknown>>
 >(({ args, partialArgs, isArgumentsStreaming, isLoading }) => {
   const { t } = useTranslation('plugin');
-  const styles = inspectorChipStyles;
 
   const type = args?.type ?? partialArgs?.type;
   const content = args?.content ?? partialArgs?.content;
@@ -41,12 +41,12 @@ export const WriteDocumentInspector = memo<
         {t('builtins.lobe-web-onboarding.apiName.writeDocument')}
       </span>
       {type && (
-        <span className={styles.chip}>
+        <span {...stylex.props(inspectorChipStyles.chip)}>
           {t(`builtins.lobe-web-onboarding.docType.${type}` as const)}
         </span>
       )}
       {charCount > 0 && (
-        <span className={styles.meta}>
+        <span {...stylex.props(inspectorChipStyles.meta)}>
           {t('builtins.lobe-web-onboarding.inspector.charCount', { count: charCount })}
         </span>
       )}
