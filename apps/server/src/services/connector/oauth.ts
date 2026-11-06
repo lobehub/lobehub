@@ -1,3 +1,5 @@
+import { isIP } from 'node:net';
+
 import { BRANDING_NAME } from '@lobechat/business-const';
 import { ssrfSafeFetch } from '@lobechat/ssrf-safe-fetch';
 import type {
@@ -5,6 +7,7 @@ import type {
   FetchLike,
   OAuthClientInformationFull,
   OAuthClientInformationMixed,
+  OAuthClientMetadata,
   OAuthTokens,
 } from '@modelcontextprotocol/client';
 import {
@@ -12,6 +15,7 @@ import {
   discoverOAuthProtectedResourceMetadata,
   exchangeAuthorization,
   extractResourceMetadataUrl,
+  isHttpsUrl,
   IssuerMismatchError,
   OAuthError,
   OAuthErrorCode,
@@ -27,18 +31,55 @@ import { appEnv } from '@/envs/app';
 const log = debug('lobe-server:connector:oauth');
 
 export const CONNECTOR_OAUTH_CALLBACK_PATH = '/oauth/connector/callback';
+export const CONNECTOR_CLIENT_METADATA_PATH = '/oauth/connector/client-metadata.json';
+
+const appUrl = (path: string): string => {
+  const base = appEnv.APP_URL;
+  if (!base) {
+    throw new Error('APP_URL is not configured; cannot build connector OAuth URLs');
+  }
+  return new URL(path, base).toString();
+};
 
 /**
  * Fixed redirect URI for all custom-connector OAuth flows. Pre-registration
  * users must register this exact URI with their OAuth app; DCR sends it as a
  * redirect_uri at registration time.
  */
-export const getConnectorRedirectUri = (): string => {
-  const base = appEnv.APP_URL;
-  if (!base) {
-    throw new Error('APP_URL is not configured; cannot build connector OAuth redirect URI');
-  }
-  return new URL(CONNECTOR_OAUTH_CALLBACK_PATH, base).toString();
+export const getConnectorRedirectUri = (): string => appUrl(CONNECTOR_OAUTH_CALLBACK_PATH);
+
+/**
+ * URL of LobeHub's OAuth Client ID Metadata Document (CIMD, SEP-991). It is
+ * also the client_id: authorization servers that support CIMD fetch it to
+ * learn the client instead of requiring registration.
+ */
+export const getConnectorClientMetadataUrl = (): string => appUrl(CONNECTOR_CLIENT_METADATA_PATH);
+
+/** The document served at {@link getConnectorClientMetadataUrl}. */
+export const buildConnectorClientMetadata = (): OAuthClientMetadata & { client_id: string } => ({
+  client_id: getConnectorClientMetadataUrl(),
+  client_name: BRANDING_NAME,
+  client_uri: appUrl('/'),
+  grant_types: ['authorization_code', 'refresh_token'],
+  logo_uri: appUrl('/app-icons/icon-192x192.png'),
+  redirect_uris: [getConnectorRedirectUri()],
+  response_types: ['code'],
+  // A metadata document cannot carry a secret: CIMD clients are public PKCE clients.
+  token_endpoint_auth_method: 'none',
+});
+
+/**
+ * Whether an external authorization server can fetch the metadata document.
+ * It must be HTTPS with a path (SEP-991); local and IP-literal hosts mean a
+ * private deployment the server cannot reach, where DCR still works.
+ */
+const isClientMetadataUrlReachable = (url: string): boolean => {
+  if (!isHttpsUrl(url)) return false;
+  const host = new URL(url).hostname.replaceAll(/^\[|\]$/g, '');
+  if (isIP(host)) return false;
+  return !['localhost', '.localhost', '.local', '.internal'].some((suffix) =>
+    suffix.startsWith('.') ? host.endsWith(suffix) : host === suffix,
+  );
 };
 
 /**
@@ -165,6 +206,71 @@ export const registerDynamicClient = async (params: {
     metadata: params.metadata,
     scope: params.scopes?.join(' '),
   });
+};
+
+export interface ConnectorClient {
+  clientId: string;
+  clientSecret?: string;
+  scheme: OIDCConfig['scheme'];
+  tokenEndpointAuthMethod?: OIDCConfig['tokenEndpointAuthMethod'];
+}
+
+/**
+ * Resolve the OAuth client for an authorization run, in the MCP client
+ * registration priority: a stored client (user pre-registration or an earlier
+ * DCR), then a Client ID Metadata Document when the authorization server
+ * supports it, then RFC 7591 dynamic registration.
+ *
+ * A CIMD client_id is derived from APP_URL, so it is re-derived on every run
+ * instead of being reused, and drops to DCR if the server stops supporting it.
+ * Errors are configuration problems the user must fix on their side.
+ */
+export const resolveConnectorClient = async (params: {
+  authorizationServerUrl: string;
+  existing: OIDCConfig;
+  metadata: AuthorizationServerMetadata;
+  redirectUri: string;
+  scopes?: string[];
+}): Promise<ConnectorClient> => {
+  const { existing, metadata } = params;
+  if (existing.clientId && existing.scheme !== 'client_id_metadata_document') {
+    return {
+      clientId: existing.clientId,
+      clientSecret: existing.clientSecret,
+      scheme: existing.scheme,
+      tokenEndpointAuthMethod: existing.tokenEndpointAuthMethod,
+    };
+  }
+
+  const clientMetadataUrl = getConnectorClientMetadataUrl();
+  const supportsCimd = metadata.client_id_metadata_document_supported === true;
+  if (supportsCimd && isClientMetadataUrlReachable(clientMetadataUrl)) {
+    return {
+      clientId: clientMetadataUrl,
+      scheme: 'client_id_metadata_document',
+      tokenEndpointAuthMethod: 'none',
+    };
+  }
+
+  if (!metadata.registration_endpoint) {
+    throw new Error(
+      supportsCimd
+        ? 'This server only accepts Client ID Metadata Documents, which need LobeHub on a public HTTPS APP_URL. Provide the OAuth Client ID you registered with this server.'
+        : 'This server supports neither Client ID Metadata Documents nor dynamic registration. Provide the OAuth Client ID you registered with this server.',
+    );
+  }
+  const registration = await registerDynamicClient(params).catch((error: unknown) => {
+    throw new Error(
+      `Dynamic client registration failed: ${(error as Error)?.message ?? String(error)}`,
+      { cause: error },
+    );
+  });
+  return {
+    clientId: registration.client_id,
+    clientSecret: registration.client_secret ?? undefined,
+    scheme: 'dcr',
+    tokenEndpointAuthMethod: registeredAuthMethod(registration, metadata),
+  };
 };
 
 const TOKEN_ENDPOINT_AUTH_METHODS = new Set<string>([
