@@ -19,6 +19,7 @@ import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 
 import type { ExecuteTasksParams } from '../../../types';
 import { MemberTaskDetail, MemberTaskTitle, useMemberAnchors } from '../../MemberProgress';
+import { shouldShowGroupResult } from '../../MemberProgress/memberAnchor';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   assignee: css`
@@ -70,7 +71,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
  * what that member did in its own thread.
  */
 const ExecuteTasksRender = memo<BuiltinRenderProps<ExecuteTasksParams, unknown, string>>(
-  ({ args, content, toolCallId }) => {
+  ({ args, content, pluginState, toolCallId }) => {
     const { t } = useTranslation('tool');
     const theme = useTheme();
     const { tasks } = args || {};
@@ -93,8 +94,9 @@ const ExecuteTasksRender = memo<BuiltinRenderProps<ExecuteTasksParams, unknown, 
     }, [tasks, groupAgents]);
 
     const anchors = useMemberAnchors(toolCallId);
+    const showResult = shouldShowGroupResult(resultContent, anchors, pluginState);
 
-    if (!tasksWithAgents.length && !resultContent) return null;
+    if (!tasksWithAgents.length && !showResult) return null;
 
     return (
       <Flexbox className={styles.container} gap={12}>
@@ -143,7 +145,7 @@ const ExecuteTasksRender = memo<BuiltinRenderProps<ExecuteTasksParams, unknown, 
           />
         )}
 
-        {resultContent && (
+        {showResult && (
           <Flexbox gap={4}>
             <Text className={styles.resultLabel}>
               {t('agentGroupManagement.executeTasks.results')}
