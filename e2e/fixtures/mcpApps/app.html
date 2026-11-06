@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MCP Apps acceptance fixture</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font: 15px/1.45 system-ui, sans-serif;
+      }
+      body {
+        margin: 0;
+        padding: 16px;
+        background: Canvas;
+        color: CanvasText;
+      }
+      main {
+        display: grid;
+        gap: 14px;
+        max-width: 760px;
+        margin: 0 auto;
+      }
+      h1 {
+        margin: 0;
+        font-size: 1.25rem;
+      }
+      p {
+        margin: 0;
+      }
+      code,
+      pre {
+        overflow-wrap: anywhere;
+      }
+      section {
+        display: grid;
+        gap: 8px;
+        padding: 12px;
+        border: 1px solid color-mix(in srgb, CanvasText 22%, transparent);
+        border-radius: 10px;
+      }
+      .buttons {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      button {
+        min-height: 36px;
+        padding: 6px 12px;
+        border: 1px solid color-mix(in srgb, CanvasText 30%, transparent);
+        border-radius: 8px;
+        background: Canvas;
+        color: CanvasText;
+        cursor: pointer;
+      }
+      button:focus-visible {
+        outline: 2px solid Highlight;
+        outline-offset: 2px;
+      }
+      pre {
+        margin: 0;
+        max-height: 180px;
+        overflow: auto;
+        white-space: pre-wrap;
+      }
+      #status {
+        min-height: 1.5em;
+        font-weight: 600;
+      }
+      #events {
+        display: grid;
+        gap: 4px;
+        margin: 0;
+        padding-left: 20px;
+      }
+    </style>
+  </head>
+  <body>
+    <main data-testid="mcp-app-fixture">
+      <header>
+        <p>MCP Apps acceptance fixture</p>
+        <h1 id="fixture-title"></h1>
+        <p>Resource: <code id="resource-uri"></code></p>
+      </header>
+
+      <section aria-labelledby="display-heading">
+        <h2 id="display-heading">Display mode</h2>
+        <p>Current host mode: <strong id="display-mode">unknown</strong></p>
+        <div class="buttons">
+          <button data-testid="request-inline" type="button">Request inline</button>
+          <button data-testid="request-fullscreen" type="button">Request fullscreen</button>
+          <button data-testid="request-pip" type="button">Request unsupported PiP</button>
+        </div>
+      </section>
+
+      <section aria-labelledby="context-heading">
+        <h2 id="context-heading">Model context</h2>
+        <p>Marker: <code id="context-marker">MCP_APPS_CONTEXT_ONCE__amber-kite-42</code></p>
+        <div class="buttons">
+          <button data-testid="set-context" type="button">Add fixture context</button>
+          <button data-testid="remove-context" type="button">Remove fixture context</button>
+        </div>
+      </section>
+
+      <section aria-labelledby="teardown-heading">
+        <h2 id="teardown-heading">Teardown</h2>
+        <p>The host handles the request, asks this view to tear down, then removes it.</p>
+        <div class="buttons">
+          <button data-testid="request-teardown" type="button">Request teardown</button>
+        </div>
+      </section>
+
+      <section aria-labelledby="status-heading">
+        <h2 id="status-heading">Bridge status</h2>
+        <p id="status" role="status" aria-live="polite">Waiting for ui/initialize…</p>
+        <pre id="host-context" data-testid="host-context">No host context received yet.</pre>
+      </section>
+
+      <section aria-labelledby="events-heading">
+        <h2 id="events-heading">Protocol events</h2>
+        <ol id="events" data-testid="protocol-events"></ol>
+      </section>
+    </main>
+
+    <script>
+      (() => {
+        const fixture = __FIXTURE_CONFIG__;
+        const marker = 'MCP_APPS_CONTEXT_ONCE__amber-kite-42';
+        const availableModes = fixture.appAvailableDisplayModes ?? ['inline', 'fullscreen'];
+        const pendingRequests = new Map();
+        let nextRequestId = 1;
+        let hostContext = {};
+
+        const statusNode = document.querySelector('#status');
+        const contextNode = document.querySelector('#host-context');
+        const modeNode = document.querySelector('#display-mode');
+        const eventsNode = document.querySelector('#events');
+
+        document.querySelector('#fixture-title').textContent = fixture.label;
+        document.querySelector('#resource-uri').textContent = fixture.resourceUri;
+
+        const log = (message) => {
+          const item = document.createElement('li');
+          item.textContent = message;
+          eventsNode.prepend(item);
+        };
+
+        const showHostContext = () => {
+          modeNode.textContent = hostContext.displayMode ?? 'unknown';
+          contextNode.textContent = JSON.stringify(hostContext, null, 2);
+        };
+
+        const sendRequest = (method, params) => {
+          const id = nextRequestId++;
+          return new Promise((resolve, reject) => {
+            const timer = setTimeout(() => {
+              pendingRequests.delete(id);
+              reject(new Error(`Timed out waiting for ${method}`));
+            }, 10_000);
+
+            pendingRequests.set(id, {
+              resolve: (result) => {
+                clearTimeout(timer);
+                resolve(result);
+              },
+              reject: (error) => {
+                clearTimeout(timer);
+                reject(error);
+              },
+            });
+            window.parent.postMessage({ jsonrpc: '2.0', id, method, params }, '*');
+          });
+        };
+
+        const sendNotification = (method, params = {}) => {
+          window.parent.postMessage({ jsonrpc: '2.0', method, params }, '*');
+          log(`Sent ${method}`);
+        };
+
+        const requestDisplayMode = async (mode) => {
+          if (Array.isArray(hostContext.availableDisplayModes) && !hostContext.availableDisplayModes.includes(mode)) {
+            statusNode.textContent = `Host does not offer ${mode}.`;
+            return;
+          }
+
+          try {
+            const result = await sendRequest('ui/request-display-mode', { mode });
+            statusNode.textContent = `Host selected ${result.mode}.`;
+            log(`ui/request-display-mode requested ${mode}; host returned ${result.mode}`);
+          } catch (error) {
+            statusNode.textContent = `Display mode request failed: ${error.message}`;
+          }
+        };
+
+        const requestUnsupportedMode = async (mode) => {
+          try {
+            const result = await sendRequest('ui/request-display-mode', { mode });
+            statusNode.textContent = 'Host kept ' + result.mode + ' and rejected unsupported ' + mode + '.';
+            log('ui/request-display-mode requested unsupported ' + mode + '; host returned ' + result.mode);
+          } catch (error) {
+            statusNode.textContent = 'Unsupported mode request rejected: ' + error.message;
+          }
+        };
+
+        const updateModelContext = async (content, label) => {
+          try {
+            await sendRequest('ui/update-model-context', { content });
+            statusNode.textContent = label;
+            log(label);
+          } catch (error) {
+            statusNode.textContent = `Context update failed: ${error.message}`;
+          }
+        };
+
+        window.addEventListener('message', (event) => {
+          if (event.source !== window.parent) return;
+          const message = event.data;
+          if (!message || message.jsonrpc !== '2.0') return;
+
+          if (message.method === 'ui/resource-teardown') {
+            log(`Host requested ui/resource-teardown: ${message.params?.reason ?? 'no reason supplied'}`);
+            statusNode.textContent = 'Teardown acknowledged.';
+            if (message.id !== undefined) {
+              window.parent.postMessage({ jsonrpc: '2.0', id: message.id, result: {} }, '*');
+            }
+            return;
+          }
+
+          if (message.method === 'ui/notifications/host-context-changed') {
+            hostContext = { ...hostContext, ...message.params };
+            showHostContext();
+            log('Received ui/notifications/host-context-changed');
+            return;
+          }
+
+          if (message.method === 'ui/notifications/tool-input') {
+            log(`Received tool input: ${JSON.stringify(message.params?.arguments ?? {})}`);
+            return;
+          }
+
+          if (message.method === 'ui/notifications/tool-result') {
+            log(`Received tool result: ${JSON.stringify(message.params ?? {})}`);
+            return;
+          }
+
+          if (message.id !== undefined && pendingRequests.has(message.id)) {
+            const pending = pendingRequests.get(message.id);
+            pendingRequests.delete(message.id);
+            if (message.error) pending.reject(new Error(message.error.message ?? 'Host request failed'));
+            else pending.resolve(message.result ?? {});
+          }
+        });
+
+        document.querySelector('[data-testid="request-inline"]').addEventListener('click', () => {
+          void requestDisplayMode('inline');
+        });
+        document.querySelector('[data-testid="request-fullscreen"]').addEventListener('click', () => {
+          void requestDisplayMode('fullscreen');
+        });
+        document.querySelector('[data-testid="request-pip"]').addEventListener('click', () => {
+          void requestUnsupportedMode('pip');
+        });
+        document.querySelector('[data-testid="set-context"]').addEventListener('click', () => {
+          void updateModelContext([{ type: 'text', text: marker }], 'Fixture context added.');
+        });
+        document.querySelector('[data-testid="remove-context"]').addEventListener('click', () => {
+          void updateModelContext([], 'Fixture context removed.');
+        });
+        document.querySelector('[data-testid="request-teardown"]').addEventListener('click', () => {
+          statusNode.textContent = 'Waiting for host teardown acknowledgement…';
+          sendNotification('ui/notifications/request-teardown');
+        });
+
+        sendRequest('ui/initialize', {
+          protocolVersion: '2026-01-26',
+          appInfo: { name: 'LobeHub MCP Apps acceptance fixture', version: '1.0.0' },
+          appCapabilities: { availableDisplayModes: availableModes },
+        })
+          .then((result) => {
+            hostContext = result.hostContext ?? {};
+            showHostContext();
+            sendNotification('ui/notifications/initialized');
+            statusNode.textContent = 'MCP Apps bridge initialized.';
+          })
+          .catch((error) => {
+            statusNode.textContent = `MCP Apps initialization failed: ${error.message}`;
+          });
+      })();
+    </script>
+  </body>
+</html>
