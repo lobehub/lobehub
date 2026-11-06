@@ -181,6 +181,17 @@ describe('findImportingTests', () => {
     ]);
   });
 
+  it('finds a test importing an index file as ./index', async () => {
+    const search = searchOver(
+      { 'src/scan/index.ts': '', 'src/scan/patch.test.ts': "import { scan } from './index';" },
+      [hostAliases],
+    );
+
+    expect((await findImportingTests(['src/scan/index.ts'], search)).tests).toEqual([
+      'src/scan/patch.test.ts',
+    ]);
+  });
+
   it('stops at three hops', async () => {
     const search = searchOver(
       {
@@ -234,6 +245,9 @@ describe('importerGrepPattern', () => {
     const pattern = new RegExp(importerGrepPattern(['svc'], true));
     expect(pattern.test("from '.'")).toBe(true);
     expect(pattern.test("from '../'")).toBe(true);
+    expect(pattern.test("from './index'")).toBe(true);
+    expect(pattern.test("from '../../index.ts'")).toBe(true);
+    expect(pattern.test("from './other'")).toBe(false);
   });
 });
 
