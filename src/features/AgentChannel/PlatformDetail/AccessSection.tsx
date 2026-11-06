@@ -22,6 +22,7 @@ import type { AccessSectionKey } from './settingsGroups';
 
 type GroupPolicy = 'allowlist' | 'disabled' | 'open';
 type DevicePolicy = 'allowlist' | 'owner';
+type DeviceChannelPolicy = 'allowlist' | 'any';
 
 interface AccessSectionProps {
   disabled?: boolean;
@@ -43,8 +44,9 @@ interface AccessSectionProps {
  * (`allowFrom`), a group policy and a group list. This section lets a person
  * choose one stance per surface and only then shows what that choice needs: the
  * list for "approval" and "listed", the owner's ID for approving. Devices are
- * the owner's alone unless they name people in `deviceAllowFrom`. A list stays
- * mounted when hidden so a saved list is never dropped by a save.
+ * the owner's alone unless they name people in `deviceAllowFrom`, and can be
+ * limited to the channels in `deviceChannelAllowFrom`. A list stays mounted
+ * when hidden so a saved list is never dropped by a save.
  */
 export const AccessSection = memo<AccessSectionProps>(
   ({ disabled, fields, form, onValuesChange, section, userIdExtras }) => {
@@ -59,6 +61,8 @@ export const AccessSection = memo<AccessSectionProps>(
     const groupPolicy = (settings.groupPolicy as GroupPolicy | undefined) ?? 'open';
     const devicePolicy: DevicePolicy =
       settings.devicePolicy === 'allowlist' ? 'allowlist' : 'owner';
+    const deviceChannelPolicy: DeviceChannelPolicy =
+      settings.deviceChannelPolicy === 'allowlist' ? 'allowlist' : 'any';
     const hasPeopleList = countListed(settings.allowFrom) > 0;
 
     const write = useCallback(
@@ -114,6 +118,13 @@ export const AccessSection = memo<AccessSectionProps>(
         value,
       }),
     );
+    const deviceChannelOptions: ChoiceOption<DeviceChannelPolicy>[] = (
+      ['any', 'allowlist'] as const
+    ).map((value) => ({
+      desc: t(`channel.access.device.channel.${value}Desc`),
+      label: t(`channel.access.device.channel.${value}`),
+      value,
+    }));
     const groupOptions: ChoiceOption<GroupPolicy>[] = (
       ['open', 'allowlist', 'disabled'] as const
     ).map((value) => ({
@@ -128,6 +139,7 @@ export const AccessSection = memo<AccessSectionProps>(
     const guestPolicy = byKey.get('guestPolicy');
     const groupAllowFrom = byKey.get('groupAllowFrom');
     const deviceAllowFrom = byKey.get('deviceAllowFrom');
+    const deviceChannelAllowFrom = byKey.get('deviceChannelAllowFrom');
 
     const ownerMissing = !(typeof settings.userId === 'string' && settings.userId.trim());
     const approverMissing = settings.dmPolicy === 'pairing' && ownerMissing;
@@ -202,6 +214,29 @@ export const AccessSection = memo<AccessSectionProps>(
               field={deviceAllowFrom}
               hidden={devicePolicy !== 'allowlist'}
               labelOverride={t('channel.access.device.list')}
+              parentKey="settings"
+            />
+          )}
+          {byKey.has('deviceChannelPolicy') && (
+            <Form.Field divider label={t('channel.access.device.channel.label')} layout="vertical">
+              <ChoiceList
+                aria-label={t('channel.access.device.channel.label')}
+                disabled={disabled}
+                options={deviceChannelOptions}
+                value={deviceChannelPolicy}
+                onChange={(next) => write({ deviceChannelPolicy: next })}
+              />
+            </Form.Field>
+          )}
+          {deviceChannelAllowFrom && (
+            <SchemaField
+              divider
+              descOverride={t('channel.access.device.channel.listHint')}
+              disabled={disabled}
+              emptyOverride={t('channel.access.device.channel.listEmpty')}
+              field={deviceChannelAllowFrom}
+              hidden={deviceChannelPolicy !== 'allowlist'}
+              labelOverride={t('channel.access.device.channel.list')}
               parentKey="settings"
             />
           )}
