@@ -1,6 +1,7 @@
 'use client';
 
 import { stopPropagation } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { Command, defaultFilter } from 'cmdk';
 import { CornerDownLeft } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
@@ -10,6 +11,7 @@ import { useTranslation } from 'react-i18next';
 import AgentAvatar from '@/components/AgentAvatar';
 import { useActiveLocation } from '@/hooks/useActiveLocation';
 import { useGlobalStore } from '@/store/global';
+import { sx } from '@/styles/sx';
 
 import { useCommandMenuAnalytics } from './analytics';
 import AskAgentCommands from './AskAgentCommands';
@@ -19,7 +21,7 @@ import CommandFooter from './components/CommandFooter';
 import CommandInput from './components/CommandInput';
 import MainMenu from './MainMenu';
 import SearchResults from './SearchResults';
-import { styles } from './styles';
+import { fallback, styles } from './styles';
 import ThemeMenu from './ThemeMenu';
 import { useCommandMenu } from './useCommandMenu';
 
@@ -124,10 +126,10 @@ const CommandMenuContent = memo<CommandMenuContentProps>(({ isClosing, onClose }
   );
 
   return (
-    <div className={styles.overlay} data-closing={isClosing} onClick={onClose}>
+    <div {...stylex.props(styles.overlay)} data-closing={isClosing} onClick={onClose}>
       <div onClick={stopPropagation}>
         <Command
-          className={styles.commandRoot}
+          {...sx(styles.commandRoot, fallback.commandRoot)}
           data-closing={isClosing}
           filter={commandFilter}
           shouldFilter={page !== 'ask-ai' && !selectedAgent && !search.trimStart().startsWith('@')}
@@ -174,7 +176,7 @@ const CommandMenuContent = memo<CommandMenuContentProps>(({ isClosing, onClose }
             onTypeFilterChange={searchAnalytics.trackFilterChange}
           />
 
-          <Command.List ref={listRef}>
+          <Command.List {...stylex.props(styles.cmdkList)} ref={listRef}>
             {/* Hide cmdk's Empty when we have search results or are loading them,
                since force-mounted items aren't counted by cmdk's internal filter.
                The unfiltered search view also renders the marketplace fallback
@@ -185,12 +187,17 @@ const CommandMenuContent = memo<CommandMenuContentProps>(({ isClosing, onClose }
               (searchResults.length > 0 ||
                 isSearching ||
                 (!page && !selectedAgent && !typeFilter && !search.trimStart().startsWith('@')))
-            ) && <Command.Empty>{t('cmdk.noResults')}</Command.Empty>}
+            ) && (
+              <Command.Empty {...stylex.props(styles.cmdkEmpty)}>
+                {t('cmdk.noResults')}
+              </Command.Empty>
+            )}
 
             {/* Show send command when agent is selected */}
             {selectedAgent && (
               <Command.Group>
                 <Command.Item
+                  {...stylex.props(styles.cmdkItem)}
                   disabled={!search.trim()}
                   value="send-to-agent"
                   onSelect={handleSendToSelectedAgent}
@@ -202,12 +209,12 @@ const CommandMenuContent = memo<CommandMenuContentProps>(({ isClosing, onClose }
                     shape="square"
                     size={20}
                   />
-                  <div className={styles.itemContent}>
-                    <div className={styles.itemLabel}>
+                  <div {...stylex.props(styles.itemContent)}>
+                    <div {...stylex.props(styles.itemLabel)}>
                       {t('cmdk.sendToAgent', { agent: selectedAgent.title } as any)}
                     </div>
                   </div>
-                  <CornerDownLeft className={styles.icon} />
+                  <CornerDownLeft {...stylex.props(styles.icon)} />
                 </Command.Item>
               </Command.Group>
             )}

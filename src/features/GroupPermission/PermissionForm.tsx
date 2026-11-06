@@ -1,8 +1,9 @@
 'use client';
 
 import type { AgentModelSelectionPolicy, AgentTopicSharePolicy } from '@lobechat/types';
-import { Alert, createStaticStyles, Empty, Icon } from '@lobehub/ui';
+import { Alert, Empty, Icon } from '@lobehub/ui';
 import { Form, type FormGroupItem, useForm } from '@lobehub/ui/form';
+import * as stylex from '@stylexjs/stylex';
 import { Bot, InfoIcon, LockIcon, MonitorSmartphone, Share2, UsersIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -16,17 +17,9 @@ import { useAccessLevelOptions } from '@/features/ResourcePermission/useAccessLe
 import { resolveGroupPermissionSections } from './permissionSections';
 import { useGroupPermission } from './useGroupPermission';
 
-const styles = createStaticStyles(({ css }) => ({
-  // Same one-line-icon alignment the Agent Permission form uses: FormTitle
-  // centres the avatar against title+description, which drops a single-line
-  // icon below the label it belongs to.
-  rowIcon: css`
-    display: flex;
-    align-items: center;
-    align-self: flex-start;
-    height: 1em;
-  `,
-}));
+const styles = stylex.create({
+  rowIcon: { display: 'flex', alignItems: 'center', alignSelf: 'flex-start', height: '1em' },
+});
 
 interface PermissionFormProps {
   groupId: string;
@@ -153,7 +146,7 @@ const PermissionForm = memo<PermissionFormProps>(({ groupId }) => {
         children: [
           {
             avatar: (
-              <span className={styles.rowIcon}>
+              <span {...stylex.props(styles.rowIcon)}>
                 <Icon icon={UsersIcon} size={16} />
               </span>
             ),
@@ -181,7 +174,7 @@ const PermissionForm = memo<PermissionFormProps>(({ groupId }) => {
             ? [
                 {
                   avatar: (
-                    <span className={styles.rowIcon}>
+                    <span {...stylex.props(styles.rowIcon)}>
                       <Icon icon={Share2} size={16} />
                     </span>
                   ),
@@ -213,7 +206,7 @@ const PermissionForm = memo<PermissionFormProps>(({ groupId }) => {
         children: [
           {
             avatar: (
-              <span className={styles.rowIcon}>
+              <span {...stylex.props(styles.rowIcon)}>
                 <Icon icon={Bot} size={16} />
               </span>
             ),
@@ -232,7 +225,7 @@ const PermissionForm = memo<PermissionFormProps>(({ groupId }) => {
           },
           {
             avatar: (
-              <span className={styles.rowIcon}>
+              <span {...stylex.props(styles.rowIcon)}>
                 <Icon icon={MonitorSmartphone} size={16} />
               </span>
             ),

@@ -1,6 +1,8 @@
 import type { BriefArtifactDocument, BriefArtifacts } from '@lobechat/types';
-import { Block, createStaticStyles, cssVar, Flexbox, Icon, Skeleton, Text } from '@lobehub/ui';
+import { Block, cssVar as runtimeCssVar, Flexbox, Icon, Skeleton, Text } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronRightIcon, FileTextIcon, type LucideIcon } from 'lucide-react';
 import { memo, type ReactNode } from 'react';
 
@@ -10,20 +12,19 @@ import { openDocumentModal, preloadDocumentModal } from '@/features/DocumentModa
 
 import { resolveBriefArtifactTarget } from './briefArtifactTarget';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  iconWrap: css`
-    display: flex;
-    flex-shrink: 0;
-    align-items: center;
-    justify-content: center;
-
-    width: 36px;
-    height: 36px;
-    border-radius: 8px;
-
-    background: ${cssVar.colorBgContainer};
-  `,
-}));
+const styles = stylex.create({
+  iconWrap: {
+    display: 'flex',
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '36px',
+    height: '36px',
+    borderRadius: '8px',
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+});
 
 interface BriefArtifactCardProps {
   /** A second line under the title, e.g. what a skill is for. */
@@ -53,8 +54,12 @@ const BriefArtifactCard = ({
     onFocus={onPreload}
     onPointerEnter={onPreload}
   >
-    <div className={styles.iconWrap}>
-      <Icon color={cssVar.colorTextSecondary} icon={icon} size={{ size: 20, strokeWidth: 1.5 }} />
+    <div className={stylex.props(styles.iconWrap).className}>
+      <Icon
+        color={runtimeCssVar.colorTextSecondary}
+        icon={icon}
+        size={{ size: 20, strokeWidth: 1.5 }}
+      />
     </div>
     <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
       <Text ellipsis weight={500}>
@@ -63,7 +68,7 @@ const BriefArtifactCard = ({
       {description}
     </Flexbox>
     <Icon
-      color={cssVar.colorTextQuaternary}
+      color={runtimeCssVar.colorTextQuaternary}
       icon={ChevronRightIcon}
       size={16}
       style={{ flexShrink: 0 }}

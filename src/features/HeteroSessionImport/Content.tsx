@@ -9,7 +9,6 @@ import type {
 import {
   Button,
   Checkbox,
-  createStaticStyles,
   Flexbox,
   Icon,
   Progress,
@@ -19,6 +18,8 @@ import {
   Text,
   useModalContext,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Check, FolderSearch, TriangleAlert, X } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -31,13 +32,15 @@ import { SessionRow } from './SessionList';
 import SidebarTree, { type TreeScope } from './SidebarTree';
 import { deriveSessionStatus, dirKeyOf, fmtTokens, type ImportRowState, selectable } from './utils';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  footer: css`
-    padding-block: 12px;
-    padding-inline: 16px;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-}));
+const styles = stylex.create({
+  footer: {
+    paddingBlock: '12px',
+    paddingInline: '16px',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+  },
+});
 
 const CONTENT_HEIGHT = 'min(680px, calc(100vh - 240px))';
 
@@ -336,7 +339,12 @@ const Content = memo<ContentProps>(({ agentId }) => {
       </Flexbox>
 
       {phase === 'select' && (
-        <Flexbox horizontal align="center" className={styles.footer} justify="space-between">
+        <Flexbox
+          horizontal
+          align="center"
+          className={stylex.props(styles.footer).className}
+          justify="space-between"
+        >
           <Text fontSize={13} type="secondary">
             {selected.size > 0
               ? t('heteroImport.footer.selected', {
@@ -358,7 +366,11 @@ const Content = memo<ContentProps>(({ agentId }) => {
       )}
 
       {phase === 'importing' && (
-        <Flexbox className={styles.footer} gap={4} style={{ width: '100%' }}>
+        <Flexbox
+          className={stylex.props(styles.footer).className}
+          gap={4}
+          style={{ width: '100%' }}
+        >
           <Flexbox horizontal align="center" justify="space-between">
             <Text fontSize={13} type="secondary">
               {t('heteroImport.progress', { done: doneStates.length, total: selectedItems.length })}
@@ -372,7 +384,12 @@ const Content = memo<ContentProps>(({ agentId }) => {
       )}
 
       {phase === 'done' && (
-        <Flexbox horizontal align="center" className={styles.footer} justify="space-between">
+        <Flexbox
+          horizontal
+          align="center"
+          className={stylex.props(styles.footer).className}
+          justify="space-between"
+        >
           <Flexbox horizontal align="center" gap={8}>
             <Icon
               icon={doneStats.failed ? X : Check}

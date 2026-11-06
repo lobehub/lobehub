@@ -17,6 +17,7 @@ import { memo, type MouseEvent, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import BriefCardSummary from '@/features/DailyBrief/BriefCardSummary';
+import { briefCardMarker } from '@/features/DailyBrief/markers.stylex';
 import { styles as briefStyles } from '@/features/DailyBrief/style';
 import { homeType } from '@/features/Home/components/homeType';
 import { RECOMMENDATION_ICON_SIZE } from '@/features/Recommendations/iconSize';
@@ -114,7 +115,7 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
 
     const primaryButton = (
       <Button
-        className={briefStyles.actionBtnPrimary}
+        className={stylex.props(briefStyles.actionBtnPrimary).className}
         disabled={disabled}
         loading={loading || pendingCreate}
         shape={'round'}
@@ -126,7 +127,7 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
 
     return (
       <Block
-        className={cx(briefStyles.card, styles.card)}
+        className={cx(stylex.props(briefStyles.card, briefCardMarker).className, styles.card)}
         gap={12}
         padding={12}
         style={{ borderRadius: cssVar.borderRadiusLG, cursor: 'pointer' }}

@@ -1,6 +1,7 @@
 'use client';
 
-import { ActionIcon, css, cx, Icon, Upload } from '@lobehub/ui';
+import { ActionIcon, Icon, Upload } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronRight, FileUp, LibraryBig, PlusIcon, TypeIcon } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -12,14 +13,17 @@ import ActionDropdown, {
   type ActionDropdownMenuItems,
 } from '../ChatInput/ActionBar/components/ActionDropdown';
 
-const hotArea = css`
-  &::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: transparent;
-  }
-`;
+const styles = stylex.create({
+  hotArea: {
+    '::before': {
+      backgroundColor: 'transparent',
+      backgroundImage: 'none',
+      content: '""',
+      inset: 0,
+      position: 'absolute',
+    },
+  },
+});
 
 interface AttachmentMenuProps {
   disabled?: boolean;
@@ -50,7 +54,7 @@ const AttachmentMenu = memo<AttachmentMenuProps>(
                     void onFiles(files);
                   }}
                 >
-                  <div className={cx(hotArea)}>
+                  <div {...stylex.props(styles.hotArea)}>
                     {t('upload.action.fileOrImageUpload', { ns: 'chat' })}
                   </div>
                 </Upload>

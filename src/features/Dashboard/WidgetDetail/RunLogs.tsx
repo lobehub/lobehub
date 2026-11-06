@@ -1,6 +1,8 @@
 'use client';
 
-import { createStaticStyles, cssVar, Flexbox, Text } from '@lobehub/ui';
+import { Flexbox, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -9,25 +11,23 @@ import type { DashboardWidgetRunItem } from '@/services/dashboard';
 import { ErrorLine } from '../ErrorLine';
 import { truncateLog } from '../utils/format';
 
-const styles = createStaticStyles(({ css }) => ({
-  log: css`
-    overflow: auto;
-
-    max-height: 220px;
-    margin: 0;
-    padding: 8px;
-    border-radius: ${cssVar.borderRadius};
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    line-height: 1.5;
-    color: ${cssVar.colorTextSecondary};
-    word-break: break-all;
-    white-space: pre-wrap;
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-}));
+const styles = stylex.create({
+  log: {
+    overflow: 'auto',
+    maxHeight: '220px',
+    margin: '0',
+    padding: '8px',
+    borderRadius: cssVar.borderRadius,
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '12px',
+    lineHeight: 1.5,
+    color: cssVar.colorTextSecondary,
+    wordBreak: 'break-all',
+    whiteSpace: 'pre-wrap',
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+});
 
 const LogBlock = memo<{ label: string; stream: 'stdout' | 'stderr'; text?: string | null }>(
   ({ label, stream, text }) => {
@@ -40,7 +40,7 @@ const LogBlock = memo<{ label: string; stream: 'stdout' | 'stderr'; text?: strin
           {label}
         </Text>
         {preview.text ? (
-          <pre className={styles.log} data-run-log={stream}>
+          <pre {...stylex.props(styles.log)} data-run-log={stream}>
             {preview.text}
             {preview.truncated && `\n… ${t('run.logTruncated')}`}
           </pre>

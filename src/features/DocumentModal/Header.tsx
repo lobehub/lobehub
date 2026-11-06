@@ -4,6 +4,7 @@ import {
   ActionIcon,
   Avatar,
   copyToClipboard,
+  // oxlint-disable-next-line stylex-migration/no-emotion-styles -- business ShareButton slot takes no className
   createStaticStyles,
   cssVar,
   DropdownMenu,
@@ -33,7 +34,7 @@ import { buildDocumentModalUrl } from './url';
 
 const HEADER_HEIGHT = 44;
 
-const styles = createStaticStyles(({ css }) => ({
+const fallback = createStaticStyles(({ css }) => ({
   shareButton: css`
     & button:not(:hover, :focus-visible) {
       background: transparent;
@@ -95,7 +96,7 @@ const DocumentModalHeader = memo(() => {
       </Flexbox>
       <Flexbox horizontal align={'center'} gap={4}>
         {documentId && (
-          <span className={styles.shareButton}>
+          <span className={fallback.shareButton}>
             <ShareButton documentId={documentId} />
           </span>
         )}

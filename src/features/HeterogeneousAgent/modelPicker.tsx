@@ -1,8 +1,8 @@
 import type { ServerDefaultHeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
-import { createStaticStyles } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import type { LobeDefaultAiModelListItem } from 'model-bank';
 
-import { ModelItemRender, TAG_CLASSNAME } from '@/components/ModelSelect';
+import { ModelItemRender } from '@/components/ModelSelect';
 
 export const MODEL_PICKER_STYLE = { minWidth: 200, width: 'initial' } as const;
 
@@ -19,22 +19,15 @@ export const resolveServerDefaultAgentModels = (
   agentType: ServerDefaultHeterogeneousAgentType | undefined,
 ): ServerDefaultModel[] => (agentType ? (models?.[agentType] ?? []) : []);
 
-export const modelPickerStyles = createStaticStyles(({ css }) => ({
-  compactLabel: css`
-    overflow: hidden;
-
-    min-width: 0;
-    max-width: 100%;
-
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  picker: css`
-    .${TAG_CLASSNAME} {
-      display: none;
-    }
-  `,
-}));
+export const modelPickerStyles = stylex.create({
+  compactLabel: {
+    maxWidth: '100%',
+    minWidth: 0,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+});
 
 export const resolveServerDefaultModelMeta = (
   model: string,

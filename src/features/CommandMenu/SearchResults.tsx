@@ -1,6 +1,7 @@
 import { AGENT_CHAT_TOPIC_URL, GROUP_CHAT_TOPIC_URL, GROUP_CHAT_URL } from '@lobechat/const';
 import { agentDisplayName } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { Command } from 'cmdk';
 import dayjs from 'dayjs';
 import {
@@ -32,6 +33,7 @@ import { useImageStore } from '@/store/image';
 import { generationTopicSelectors as imageGenerationTopicSelectors } from '@/store/image/slices/generationTopic/selectors';
 import { useVideoStore } from '@/store/video';
 import { generationTopicSelectors as videoGenerationTopicSelectors } from '@/store/video/slices/generationTopic/selectors';
+import { sx } from '@/styles/sx';
 import { markdownToTxt } from '@/utils/markdownToTxt';
 
 import type { CommandMenuResultClick } from './analytics';
@@ -499,16 +501,17 @@ const SearchResults = memo<SearchResultsProps>(
 
       return (
         <Command.Item
+          {...stylex.props(styles.cmdkItem)}
           forceMount
           key={`search-more-${type}`}
           keywords={[`zzz-action-${type}`]}
           value={`zzz-action-${type}-search-more`}
           onSelect={() => handleSearchMore(type)}
         >
-          <div className={styles.itemContent}>
-            <div className={styles.itemIcon}>{getIcon(type)}</div>
-            <div className={styles.itemDetails}>
-              <div className={styles.itemTitle}>{titleText}</div>
+          <div {...stylex.props(styles.itemContent)}>
+            <div {...stylex.props(styles.itemIcon)}>{getIcon(type)}</div>
+            <div {...stylex.props(styles.itemDetails)}>
+              <div {...stylex.props(styles.itemTitle)}>{titleText}</div>
             </div>
           </div>
         </Command.Item>
@@ -708,18 +711,16 @@ const SearchResults = memo<SearchResultsProps>(
           <Command.Group forceMount>
             {[1, 2, 3].map((i) => (
               <Command.Item
+                {...stylex.props(styles.cmdkItem)}
                 disabled
                 key={`skeleton-${i}`}
                 keywords={[searchQuery]}
                 value={`${searchQuery}-loading-skeleton-${i}`}
               >
-                <div className={styles.skeleton} style={{ height: 20, width: 20 }} />
+                <div {...sx(styles.skeleton, { height: 20, width: 20 })} />
                 <div style={{ display: 'flex', flex: 1, flexDirection: 'column', gap: 4 }}>
-                  <div className={styles.skeleton} style={{ width: `${60 + i * 10}%` }} />
-                  <div
-                    className={styles.skeleton}
-                    style={{ height: 12, width: `${40 + i * 5}%` }}
-                  />
+                  <div {...sx(styles.skeleton, { width: `${60 + i * 10}%` })} />
+                  <div {...sx(styles.skeleton, { height: 12, width: `${40 + i * 5}%` })} />
                 </div>
               </Command.Item>
             ))}

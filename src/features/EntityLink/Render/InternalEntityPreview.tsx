@@ -1,16 +1,9 @@
 'use client';
 
 import type { VerifyCodingScope } from '@lobechat/types';
-import {
-  ActionIcon,
-  Avatar,
-  createStaticStyles,
-  Flexbox,
-  Freeze,
-  Icon,
-  Popover,
-  Text,
-} from '@lobehub/ui';
+import { ActionIcon, Avatar, Flexbox, Freeze, Icon, Popover, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import type { TFunction } from 'i18next';
 import {
   BadgeCheckIcon,
@@ -37,46 +30,36 @@ import { openTrustedExternalUrl } from '@/utils/openTrustedExternalUrl';
 import type { InternalLinkReference } from '../internalLink';
 import { useAcceptanceBrowserUrl } from './useAcceptanceBrowserUrl';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  content: css`
-    width: 320px;
-    padding: 16px;
-  `,
-  description: css`
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 3;
-
-    line-height: 1.55;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  icon: css`
-    display: grid;
-    flex: none;
-    place-items: center;
-
-    width: 36px;
-    height: 36px;
-    border-radius: ${cssVar.borderRadiusLG};
-
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  title: css`
-    overflow: hidden;
-
-    font-weight: 600;
-    line-height: 1.4;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  type: css`
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-}));
+const styles = stylex.create({
+  content: { width: '320px', padding: '16px' },
+  description: {
+    overflow: 'hidden',
+    display: '-webkit-box',
+    WebkitBoxOrient: 'vertical',
+    WebkitLineClamp: '3',
+    lineHeight: 1.55,
+    color: cssVar.colorTextSecondary,
+  },
+  icon: {
+    display: 'grid',
+    flex: 'none',
+    placeItems: 'center',
+    width: '36px',
+    height: '36px',
+    borderRadius: cssVar.borderRadiusLG,
+    color: cssVar.colorTextSecondary,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+  title: {
+    overflow: 'hidden',
+    fontWeight: 600,
+    lineHeight: 1.4,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  type: { fontSize: '12px', color: cssVar.colorTextTertiary },
+});
 
 interface PreviewData {
   avatar?: string | null;
@@ -269,11 +252,11 @@ export const InternalEntityPreview = memo<InternalEntityPreviewProps>(
     const typeLabel = t(`internalLink.preview.${reference.type}`);
 
     const content = isLoading ? (
-      <div className={styles.content}>
+      <div {...stylex.props(styles.content)}>
         <ArticleSkeleton avatar rows={2} />
       </div>
     ) : (
-      <Flexbox className={styles.content} gap={12}>
+      <Flexbox className={stylex.props(styles.content).className} gap={12}>
         <Flexbox horizontal align="center" gap={12}>
           {reference.type === 'agent' && data?.avatar ? (
             <Avatar
@@ -283,13 +266,13 @@ export const InternalEntityPreview = memo<InternalEntityPreviewProps>(
               size={36}
             />
           ) : (
-            <span className={styles.icon}>
+            <span {...stylex.props(styles.icon)}>
               <Icon icon={icon} size={19} />
             </span>
           )}
           <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
-            <span className={styles.type}>{typeLabel}</span>
-            <span className={styles.title}>{data?.title || fallbackTitle}</span>
+            <span {...stylex.props(styles.type)}>{typeLabel}</span>
+            <span {...stylex.props(styles.title)}>{data?.title || fallbackTitle}</span>
           </Flexbox>
           {browserUrl && (
             <ActionIcon
@@ -301,7 +284,7 @@ export const InternalEntityPreview = memo<InternalEntityPreviewProps>(
           )}
         </Flexbox>
         {data?.description && (
-          <Text className={styles.description} fontSize={13}>
+          <Text className={stylex.props(styles.description).className} fontSize={13}>
             {data.description}
           </Text>
         )}

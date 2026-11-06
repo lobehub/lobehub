@@ -4,6 +4,7 @@ import { memo, type ReactNode, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import BriefCardSummary from '@/features/DailyBrief/BriefCardSummary';
+import { briefCardMarker } from '@/features/DailyBrief/markers.stylex';
 import { styles as briefStyles } from '@/features/DailyBrief/style';
 import { homeType } from '@/features/Home/components/homeType';
 
@@ -66,7 +67,7 @@ export const RecommendationCard = memo<RecommendationCardProps>(
 
     return (
       <Block
-        className={cx(briefStyles.card, styles.card)}
+        className={cx(stylex.props(briefStyles.card, briefCardMarker).className, styles.card)}
         gap={12}
         padding={12}
         style={{ borderRadius: cssVar.borderRadiusLG }}
@@ -97,7 +98,7 @@ export const RecommendationCard = memo<RecommendationCardProps>(
           </Flexbox>
           <Flexbox horizontal align={'center'} gap={8}>
             <Button
-              className={briefStyles.actionBtnPrimary}
+              className={stylex.props(briefStyles.actionBtnPrimary).className}
               loading={loading}
               shape={'round'}
               onClick={handleClick}

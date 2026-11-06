@@ -1,29 +1,28 @@
-import { createStaticStyles } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 
-export const styles = createStaticStyles(({ css, cssVar }) => ({
-  innerContainerDark: css`
-    position: relative;
-
-    overflow: hidden;
-
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadius};
-
-    background: ${cssVar.colorBgContainer};
-  `,
-
-  innerContainerLight: css`
-    position: relative;
-
-    overflow: hidden;
-
-    border: 1px solid ${cssVar.colorBorder};
-    border-radius: ${cssVar.borderRadius};
-
-    background: ${cssVar.colorBgContainer};
-  `,
-
-  outerContainer: css`
-    position: relative;
-  `,
-}));
+export const styles = stylex.create({
+  innerContainerDark: {
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadius,
+    borderStyle: 'solid',
+    borderWidth: '1px',
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  innerContainerLight: {
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+    borderColor: cssVar.colorBorder,
+    borderRadius: cssVar.borderRadius,
+    borderStyle: 'solid',
+    borderWidth: '1px',
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  outerContainer: {
+    position: 'relative',
+  },
+});

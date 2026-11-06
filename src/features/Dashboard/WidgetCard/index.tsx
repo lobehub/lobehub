@@ -1,103 +1,81 @@
 'use client';
 
 import type { WidgetView } from '@lobechat/types';
-import {
-  Center,
-  createStaticStyles,
-  cssVar,
-  cx,
-  Flexbox,
-  Icon,
-  Spin,
-  Text,
-  Tooltip,
-} from '@lobehub/ui';
+import { Center, cssVar as runtimeCssVar, Flexbox, Icon, Spin, Text, Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
 import { CircleDashedIcon } from 'lucide-react';
 import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { DashboardTrendSeries, DashboardWidgetItem } from '@/services/dashboard';
+import { sx } from '@/styles/sx';
 
 import { ErrorLine } from '../ErrorLine';
 import { getWidgetCardBody, getWidgetHealth, getWidgetUpdatedAt } from '../utils/widgetHealth';
 import HealthDot from './HealthDot';
+import { widgetCardMarker } from './markers.stylex';
 import StatusBadges from './StatusBadges';
 import WidgetOutputView from './views';
 import { createLayoutScope, resolveSurface, WIDGET_SURFACE_STYLES } from './views/LayoutView';
 
-const styles = createStaticStyles(({ css }) => ({
-  actions: css`
-    flex: none;
-    opacity: 0;
-    transition: opacity ${cssVar.motionDurationMid};
-
-    &:focus-within {
-      opacity: 1;
-    }
-
-    @media (hover: none) {
-      opacity: 1;
-    }
-  `,
-  body: css`
-    /* Views size their headline to the card (cqi / cqh) and drop details when it is short. */
-    container-type: size;
-    overflow: hidden;
-    flex: 1;
-    min-height: 0;
-  `,
-  bodyScrollable: css`
-    /* Rows past the card height scroll inside the card instead of being clipped. */
-    overflow-y: auto;
-    overscroll-behavior: contain;
-  `,
-  card: css`
-    overflow: hidden;
-
-    height: 100%;
-    padding-block: 14px 12px;
-    padding-inline: 16px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorBgContainer};
-
-    transition:
-      border-color ${cssVar.motionDurationMid},
-      box-shadow ${cssVar.motionDurationMid};
-
-    &:hover {
-      border-color: ${cssVar.colorBorder};
-      box-shadow: ${cssVar.boxShadowTertiary};
-    }
-
-    &:hover [data-widget-actions],
-    &[data-widget-running='true'] [data-widget-actions] {
-      opacity: 1;
-    }
-  `,
-  clickable: css`
-    cursor: pointer;
-  `,
-  failedOutput: css`
-    opacity: 0.6;
-  `,
-  footer: css`
-    flex: none;
-    min-width: 0;
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  header: css`
-    flex: none;
-    min-height: 24px;
-  `,
-  title: css`
-    flex: 1;
-    min-width: 0;
-  `,
-}));
+const styles = stylex.create({
+  actions: {
+    flex: 'none',
+    opacity: {
+      'default': 0,
+      ':focus-within': 1,
+      '@media (hover: none)': 1,
+      [stylex.when.ancestor(':hover', widgetCardMarker)]: 1,
+      [stylex.when.ancestor("[data-widget-running='true']", widgetCardMarker)]: 1,
+    },
+    transition: `opacity ${cssVar.motionDurationMid}`,
+  },
+  body: {
+    // Views size their headline to the card (cqi / cqh) and drop details when it is short.
+    containerType: 'size',
+    flex: '1',
+    minHeight: 0,
+    overflow: 'hidden',
+  },
+  bodyScrollable: { overflowY: 'auto', overscrollBehavior: 'contain' },
+  card: {
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+    borderColor: { 'default': cssVar.colorBorderSecondary, ':hover': cssVar.colorBorder },
+    borderRadius: cssVar.borderRadiusLG,
+    borderStyle: 'solid',
+    borderWidth: '1px',
+    boxShadow: { 'default': null, ':hover': cssVar.boxShadowTertiary },
+    height: '100%',
+    overflow: 'hidden',
+    paddingBlockEnd: '12px',
+    paddingBlockStart: '14px',
+    paddingInline: '16px',
+    transition: `border-color ${cssVar.motionDurationMid}, box-shadow ${cssVar.motionDurationMid}`,
+  },
+  clickable: {
+    cursor: 'pointer',
+  },
+  failedOutput: {
+    opacity: 0.6,
+  },
+  footer: {
+    color: cssVar.colorTextTertiary,
+    flex: 'none',
+    fontSize: '12px',
+    minWidth: 0,
+  },
+  header: {
+    flex: 'none',
+    minHeight: '24px',
+  },
+  title: {
+    flex: '1',
+    minWidth: 0,
+  },
+});
 
 export interface WidgetCardProps {
   /** Header actions (refresh, menu) — a slot so read-only hosts mount none. */
@@ -150,7 +128,7 @@ const WidgetCard = memo<WidgetCardProps>(
     let body: ReactNode;
     if (bodyState === 'output' && output) {
       body = (
-        <div className={cx(health.failed && styles.failedOutput)} style={{ height: '100%' }}>
+        <div {...sx(health.failed && styles.failedOutput, { height: '100%' })}>
           <WidgetOutputView output={output} trend={trend} view={view} />
         </div>
       );
@@ -172,7 +150,7 @@ const WidgetCard = memo<WidgetCardProps>(
     } else {
       body = (
         <Center gap={6} height={'100%'} padding={8}>
-          <Icon color={cssVar.colorTextQuaternary} icon={CircleDashedIcon} size={20} />
+          <Icon color={runtimeCssVar.colorTextQuaternary} icon={CircleDashedIcon} size={20} />
           <Text fontSize={12} type={'secondary'}>
             {t(`widget.state.${bodyState === 'unpublished' ? 'unpublished' : 'noRun'}`)}
           </Text>
@@ -182,7 +160,7 @@ const WidgetCard = memo<WidgetCardProps>(
 
     return (
       <Flexbox
-        className={cx(styles.card, onOpen && styles.clickable, className)}
+        {...sx(styles.card, onOpen && styles.clickable, widgetCardMarker, className)}
         data-widget-id={widget.id}
         data-widget-running={health.running}
         data-widget-surface={surface ? 'custom' : undefined}
@@ -190,12 +168,17 @@ const WidgetCard = memo<WidgetCardProps>(
         style={surface}
         onClick={onOpen}
       >
-        <Flexbox horizontal align={'center'} className={styles.header} gap={6}>
+        <Flexbox
+          horizontal
+          align={'center'}
+          className={stylex.props(styles.header).className}
+          gap={6}
+        >
           {handle}
           {title ?? (
             <Text
               ellipsis
-              className={styles.title}
+              className={stylex.props(styles.title).className}
               style={surface && { color: 'inherit' }}
               title={widget.title}
               weight={500}
@@ -209,7 +192,7 @@ const WidgetCard = memo<WidgetCardProps>(
             <Flexbox
               data-widget-actions
               horizontal
-              className={styles.actions}
+              className={stylex.props(styles.actions).className}
               gap={2}
               onClick={(event) => event.stopPropagation()}
             >
@@ -217,12 +200,12 @@ const WidgetCard = memo<WidgetCardProps>(
             </Flexbox>
           )}
         </Flexbox>
-        <div className={cx(styles.body, scrollable && styles.bodyScrollable)}>{body}</div>
+        <div {...stylex.props(styles.body, scrollable && styles.bodyScrollable)}>{body}</div>
         {updatedAt && (
           <Flexbox
             horizontal
             align={'center'}
-            className={styles.footer}
+            className={stylex.props(styles.footer).className}
             gap={6}
             style={surface && { color: 'inherit', opacity: 0.72 }}
           >

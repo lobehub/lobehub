@@ -1,170 +1,147 @@
-import { createStaticStyles } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 
-export const minimapStyles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    pointer-events: none;
+export const minimapStyles = stylex.create({
+  container: {
+    alignItems: 'end',
+    display: 'flex',
+    flexDirection: 'column',
+    insetBlockEnd: '120px',
+    insetBlockStart: '16px',
+    insetInlineEnd: '8px',
+    justifyContent: 'center',
+    pointerEvents: 'none',
+    position: 'absolute',
+    zIndex: 1,
+  },
+  hoverArea: {
+    alignItems: 'end',
+    display: 'flex',
+    flexDirection: 'column',
+    pointerEvents: 'auto',
+    position: 'relative',
+  },
+  previewPanel: {
+    backgroundColor: cssVar.colorBgElevated,
+    backgroundImage: 'none',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: '8px',
+    borderStyle: 'solid',
+    borderWidth: '1px',
+    boxShadow:
+      '0 6px 16px 0 rgb(0 0 0 / 8%), 0 3px 6px -4px rgb(0 0 0 / 12%), 0 9px 28px 8px rgb(0 0 0 / 5%)',
+    display: 'flex',
+    insetBlockStart: '50%',
+    insetInlineEnd: 0,
+    maxWidth: '360px',
+    minWidth: '240px',
+    opacity: 0,
+    overflow: 'hidden',
+    pointerEvents: 'none',
+    position: 'absolute',
+    transform: 'translateY(-50%) scale(0.96)',
+    transformOrigin: '100% 50%',
+    transition: `opacity ${cssVar.motionDurationMid} ease, transform ${cssVar.motionDurationMid} ease`,
+  },
+  previewPanelVisible: {
+    opacity: 1,
+    pointerEvents: 'auto',
+    transform: 'translateY(-50%) scale(1)',
+  },
+  rail: {
+    'alignItems': 'end',
+    'display': 'flex',
+    'flexDirection': 'column',
+    'gap': 0,
+    'maxHeight': '50vh',
+    'overflowY': 'auto',
+    'scrollbarWidth': 'none',
+    'transition': `opacity ${cssVar.motionDurationMid} ease`,
+    '::-webkit-scrollbar': {
+      display: 'none',
+    },
+  },
+  railFaded: {
+    opacity: 0,
+    pointerEvents: 'none',
+  },
+});
 
-    position: absolute;
-    z-index: 1;
-    inset-block: 16px 120px;
-    inset-inline-end: 8px;
+export const indicatorStyles = stylex.create({
+  indicator: {
+    cursor: 'pointer',
+    flexShrink: 0,
+    height: '12px',
+    minWidth: '5px',
+    paddingBlock: '5px',
+  },
+  indicatorContent: {
+    backgroundColor: cssVar.colorFillSecondary,
+    backgroundImage: 'none',
+    borderRadius: '2px',
+    height: '100%',
+    width: '100%',
+  },
+  indicatorContentActive: {
+    backgroundColor: cssVar.colorPrimary,
+    backgroundImage: 'none',
+  },
+});
 
-    display: flex;
-    flex-direction: column;
-    align-items: end;
-    justify-content: center;
-  `,
-  hoverArea: css`
-    pointer-events: auto;
-
-    position: relative;
-
-    display: flex;
-    flex-direction: column;
-    align-items: end;
-  `,
-  previewPanel: css`
-    pointer-events: none;
-
-    position: absolute;
-    inset-block-start: 50%;
-    inset-inline-end: 0;
-    transform-origin: 100% 50%;
-    transform: translateY(-50%) scale(0.96);
-
-    overflow: hidden;
-    display: flex;
-
-    min-width: 240px;
-    max-width: 360px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 8px;
-
-    opacity: 0;
-    background: ${cssVar.colorBgElevated};
-    box-shadow:
-      0 6px 16px 0 rgb(0 0 0 / 8%),
-      0 3px 6px -4px rgb(0 0 0 / 12%),
-      0 9px 28px 8px rgb(0 0 0 / 5%);
-
-    transition:
-      opacity ${cssVar.motionDurationMid} ease,
-      transform ${cssVar.motionDurationMid} ease;
-  `,
-  previewPanelVisible: css`
-    pointer-events: auto;
-    transform: translateY(-50%) scale(1);
-    opacity: 1;
-  `,
-  rail: css`
-    scrollbar-width: none;
-
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-    gap: 0;
-    align-items: end;
-
-    max-height: 50vh;
-
-    transition: opacity ${cssVar.motionDurationMid} ease;
-
-    /* Hide scrollbar for IE, Edge and Firefox */
-    -ms-overflow-style: none;
-
-    /* Hide scrollbar for Chrome, Safari and Opera */
-    &::-webkit-scrollbar {
-      display: none;
-    }
-  `,
-  railFaded: css`
-    pointer-events: none;
-    opacity: 0;
-  `,
-}));
-
-export const indicatorStyles = createStaticStyles(({ css, cssVar }) => ({
-  indicator: css`
-    cursor: pointer;
-
-    flex-shrink: 0;
-
-    min-width: 5px;
-    height: 12px;
-    padding-block: 5px;
-  `,
-  indicatorContent: css`
-    width: 100%;
-    height: 100%;
-    border-radius: 2px;
-    background: ${cssVar.colorFillSecondary};
-  `,
-  indicatorContentActive: css`
-    background: ${cssVar.colorPrimary};
-  `,
-}));
-
-export const previewStyles = createStaticStyles(({ css, cssVar }) => ({
-  dash: css`
-    flex-shrink: 0;
-    height: 2px;
-    border-radius: 2px;
-    background: ${cssVar.colorFillSecondary};
-  `,
-  dashActive: css`
-    background: ${cssVar.colorPrimary};
-  `,
-  item: css`
-    cursor: pointer;
-
-    padding-block: 6px;
-    padding-inline: 12px;
-    border-radius: 6px;
-
-    color: ${cssVar.colorTextSecondary};
-
-    transition: background-color ${cssVar.motionDurationFast} ease;
-
-    &:hover {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  itemActive: css`
-    color: ${cssVar.colorPrimary};
-  `,
-  label: css`
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 1;
-
-    font-size: 13px;
-    line-height: 1.4;
-    text-align: end;
-    text-overflow: ellipsis;
-    word-break: break-word;
-  `,
-  labelActive: css`
-    font-weight: 500;
-    color: ${cssVar.colorPrimary};
-  `,
-  list: css`
-    scrollbar-width: thin;
-
-    overflow-y: auto;
-
-    max-height: 60vh;
-    padding-block: 4px;
-    padding-inline: 4px;
-
-    &::-webkit-scrollbar {
-      width: 4px;
-    }
-
-    &::-webkit-scrollbar-thumb {
-      border-radius: 2px;
-      background: ${cssVar.colorFillSecondary};
-    }
-  `,
-}));
+export const previewStyles = stylex.create({
+  dash: {
+    backgroundColor: cssVar.colorFillSecondary,
+    backgroundImage: 'none',
+    borderRadius: '2px',
+    flexShrink: 0,
+    height: '2px',
+  },
+  dashActive: {
+    backgroundColor: cssVar.colorPrimary,
+    backgroundImage: 'none',
+  },
+  item: {
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+    borderRadius: '6px',
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
+    cursor: 'pointer',
+    paddingBlock: '6px',
+    paddingInline: '12px',
+    transition: `background-color ${cssVar.motionDurationFast} ease`,
+  },
+  // Hover still wins over the active colour, as it did with the original cascade.
+  itemActive: {
+    color: { 'default': cssVar.colorPrimary, ':hover': cssVar.colorText },
+  },
+  label: {
+    display: '-webkit-box',
+    fontSize: '13px',
+    lineHeight: 1.4,
+    overflow: 'hidden',
+    textAlign: 'end',
+    textOverflow: 'ellipsis',
+    WebkitBoxOrient: 'vertical',
+    WebkitLineClamp: 1,
+    wordBreak: 'break-word',
+  },
+  labelActive: {
+    color: cssVar.colorPrimary,
+    fontWeight: 500,
+  },
+  list: {
+    'maxHeight': '60vh',
+    'overflowY': 'auto',
+    'paddingBlock': '4px',
+    'paddingInline': '4px',
+    'scrollbarWidth': 'thin',
+    '::-webkit-scrollbar': {
+      width: '4px',
+    },
+    '::-webkit-scrollbar-thumb': {
+      backgroundColor: cssVar.colorFillSecondary,
+      backgroundImage: 'none',
+      borderRadius: '2px',
+    },
+  },
+});

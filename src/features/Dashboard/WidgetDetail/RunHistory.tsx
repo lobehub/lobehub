@@ -1,6 +1,8 @@
 'use client';
 
-import { createStaticStyles, cssVar, cx, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
+import { Flexbox, Icon, Tag, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
 import { ChevronDownIcon, ChevronRightIcon } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -20,21 +22,17 @@ const RUN_STATUS_COLOR: Record<string, string> = {
   timeout: 'warning',
 };
 
-const styles = createStaticStyles(({ css }) => ({
-  row: css`
-    cursor: pointer;
-    padding-block: 8px;
-    padding-inline: 8px;
-    border-radius: ${cssVar.borderRadius};
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  rowActive: css`
-    background: ${cssVar.colorFillTertiary};
-  `,
-}));
+const styles = stylex.create({
+  row: {
+    cursor: 'pointer',
+    paddingBlock: '8px',
+    paddingInline: '8px',
+    borderRadius: cssVar.borderRadius,
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  rowActive: { backgroundColor: cssVar.colorFillTertiary, backgroundImage: 'none' },
+});
 
 const RunRow = memo<{ run: DashboardWidgetRunItem; versionNumber?: number }>(
   ({ run, versionNumber }) => {
@@ -47,7 +45,7 @@ const RunRow = memo<{ run: DashboardWidgetRunItem; versionNumber?: number }>(
         <Flexbox
           horizontal
           align={'center'}
-          className={cx(styles.row, open && styles.rowActive)}
+          className={stylex.props(styles.row, open && styles.rowActive).className}
           data-run-id={run.id}
           gap={8}
           onClick={() => setOpen((value) => !value)}

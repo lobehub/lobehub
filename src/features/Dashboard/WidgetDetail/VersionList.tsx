@@ -1,15 +1,8 @@
 'use client';
 
-import {
-  createStaticStyles,
-  cssVar,
-  Flexbox,
-  Highlighter,
-  Icon,
-  Tag,
-  Text,
-  Tooltip,
-} from '@lobehub/ui';
+import { Flexbox, Highlighter, Icon, Tag, Text, Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
 import { BotIcon, ChevronDownIcon, ChevronRightIcon, UserIcon } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -31,24 +24,23 @@ const RUNTIME_LANGUAGE: Record<string, string> = {
   python: 'python',
 };
 
-const styles = createStaticStyles(({ css }) => ({
-  item: css`
-    padding: 10px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadius};
-  `,
-  toggle: css`
-    cursor: pointer;
-    user-select: none;
-  `,
-}));
+const styles = stylex.create({
+  item: {
+    padding: '10px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadius,
+  },
+  toggle: { cursor: 'pointer', userSelect: 'none' },
+});
 
 const VersionItem = memo<{ version: DashboardWidgetVersionItem }>(({ version }) => {
   const { t } = useTranslation('dashboard');
   const [showScript, setShowScript] = useState(false);
 
   return (
-    <Flexbox className={styles.item} data-version={version.version} gap={6}>
+    <Flexbox className={stylex.props(styles.item).className} data-version={version.version} gap={6}>
       <Flexbox horizontal align={'center'} gap={8}>
         <Text weight={600}>{`v${version.version}`}</Text>
         <Tag color={VERSION_STATUS_COLOR[version.status]} size={'small'}>
@@ -83,7 +75,7 @@ const VersionItem = memo<{ version: DashboardWidgetVersionItem }>(({ version }) 
       <Flexbox
         horizontal
         align={'center'}
-        className={styles.toggle}
+        className={stylex.props(styles.toggle).className}
         gap={4}
         onClick={() => setShowScript((value) => !value)}
       >

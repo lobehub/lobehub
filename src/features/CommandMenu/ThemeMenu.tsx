@@ -1,3 +1,4 @@
+import * as stylex from '@stylexjs/stylex';
 import { Command } from 'cmdk';
 import { Monitor, Moon, Sun } from 'lucide-react';
 import { useTheme } from 'next-themes';
@@ -14,35 +15,47 @@ const ThemeMenu = memo(() => {
 
   return (
     <>
-      <Command.Item value="theme-light" onSelect={() => handleThemeChange('light')}>
-        <Sun className={styles.icon} />
-        <div className={styles.itemContent}>
-          <div className={styles.itemDetails}>
-            <div className={styles.itemLabel}>{t('cmdk.themeLight')}</div>
+      <Command.Item
+        {...stylex.props(styles.cmdkItem)}
+        value="theme-light"
+        onSelect={() => handleThemeChange('light')}
+      >
+        <Sun {...stylex.props(styles.icon)} />
+        <div {...stylex.props(styles.itemContent)}>
+          <div {...stylex.props(styles.itemDetails)}>
+            <div {...stylex.props(styles.itemLabel)}>{t('cmdk.themeLight')}</div>
             {theme === 'light' && (
-              <div className={styles.itemDescription}>{t('cmdk.themeCurrent')}</div>
+              <div {...stylex.props(styles.itemDescription)}>{t('cmdk.themeCurrent')}</div>
             )}
           </div>
         </div>
       </Command.Item>
-      <Command.Item value="theme-dark" onSelect={() => handleThemeChange('dark')}>
-        <Moon className={styles.icon} />
-        <div className={styles.itemContent}>
-          <div className={styles.itemDetails}>
-            <div className={styles.itemLabel}>{t('cmdk.themeDark')}</div>
+      <Command.Item
+        {...stylex.props(styles.cmdkItem)}
+        value="theme-dark"
+        onSelect={() => handleThemeChange('dark')}
+      >
+        <Moon {...stylex.props(styles.icon)} />
+        <div {...stylex.props(styles.itemContent)}>
+          <div {...stylex.props(styles.itemDetails)}>
+            <div {...stylex.props(styles.itemLabel)}>{t('cmdk.themeDark')}</div>
             {theme === 'dark' && (
-              <div className={styles.itemDescription}>{t('cmdk.themeCurrent')}</div>
+              <div {...stylex.props(styles.itemDescription)}>{t('cmdk.themeCurrent')}</div>
             )}
           </div>
         </div>
       </Command.Item>
-      <Command.Item value="theme-system" onSelect={() => handleThemeChange('system')}>
-        <Monitor className={styles.icon} />
-        <div className={styles.itemContent}>
-          <div className={styles.itemDetails}>
-            <div className={styles.itemLabel}>{t('cmdk.themeAuto')}</div>
+      <Command.Item
+        {...stylex.props(styles.cmdkItem)}
+        value="theme-system"
+        onSelect={() => handleThemeChange('system')}
+      >
+        <Monitor {...stylex.props(styles.icon)} />
+        <div {...stylex.props(styles.itemContent)}>
+          <div {...stylex.props(styles.itemDetails)}>
+            <div {...stylex.props(styles.itemLabel)}>{t('cmdk.themeAuto')}</div>
             {theme === 'system' && (
-              <div className={styles.itemDescription}>{t('cmdk.themeCurrent')}</div>
+              <div {...stylex.props(styles.itemDescription)}>{t('cmdk.themeCurrent')}</div>
             )}
           </div>
         </div>

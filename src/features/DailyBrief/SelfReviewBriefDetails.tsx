@@ -4,7 +4,8 @@ import {
   type SelfReviewBriefDetails as SelfReviewBriefDetailsModel,
   type SelfReviewProposalContentItem,
 } from '@lobechat/agent-signal/brief';
-import { Button, createStaticStyles, Flexbox, Text } from '@lobehub/ui';
+import { Button, Flexbox, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -17,34 +18,22 @@ import { useSelfReviewTranslator } from './useSelfReviewBriefView';
 /** Rows shown before the rest fold behind "N more". */
 export const SELF_REVIEW_VISIBLE_ROWS = 3;
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  kind: css`
-    flex: none;
-
-    padding-block: 0;
-    padding-inline: 6px;
-    border-radius: ${cssVar.borderRadiusXS};
-
-    font-size: 12px;
-    line-height: 20px;
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  more: css`
-    align-self: flex-start;
-    height: auto;
-    padding: 0;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  rowDescription: css`
-    color: ${cssVar.colorTextTertiary};
-  `,
-  rowTarget: css`
-    font-weight: 500;
-    color: ${cssVar.colorTextSecondary};
-  `,
-}));
+const styles = stylex.create({
+  kind: {
+    flex: 'none',
+    paddingBlock: '0',
+    paddingInline: '6px',
+    borderRadius: cssVar.borderRadiusXS,
+    fontSize: '12px',
+    lineHeight: '20px',
+    color: cssVar.colorTextSecondary,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+  more: { alignSelf: 'flex-start', height: 'auto', padding: '0', color: cssVar.colorTextTertiary },
+  rowDescription: { color: cssVar.colorTextTertiary },
+  rowTarget: { fontWeight: 500, color: cssVar.colorTextSecondary },
+});
 
 interface SelfReviewBriefDetailsProps {
   /** Display name of the agent the proposal is for. */
@@ -101,7 +90,7 @@ const SelfReviewBriefDetails = ({ agentName, content, details }: SelfReviewBrief
                 key={index}
                 style={{ minWidth: 0 }}
               >
-                <span className={styles.kind}>
+                <span {...stylex.props(styles.kind)}>
                   {formatSelfReviewKindLabel(item.kind, translate)}
                 </span>
                 <Text
@@ -109,9 +98,11 @@ const SelfReviewBriefDetails = ({ agentName, content, details }: SelfReviewBrief
                   className={stylex.props(homeType.supporting).className}
                   style={{ flex: 1, minWidth: 0 }}
                 >
-                  {target && <span className={styles.rowTarget}>{target}</span>}
+                  {target && <span {...stylex.props(styles.rowTarget)}>{target}</span>}
                   {target && description && ' — '}
-                  {description && <span className={styles.rowDescription}>{description}</span>}
+                  {description && (
+                    <span {...stylex.props(styles.rowDescription)}>{description}</span>
+                  )}
                 </Text>
               </Flexbox>
             );
@@ -122,7 +113,7 @@ const SelfReviewBriefDetails = ({ agentName, content, details }: SelfReviewBrief
         <Flexbox horizontal align={'center'} gap={12}>
           {hidden > 0 && (
             <Button
-              className={styles.more}
+              className={stylex.props(styles.more).className}
               size={'small'}
               type={'text'}
               onClick={() => setExpanded(true)}
@@ -132,7 +123,7 @@ const SelfReviewBriefDetails = ({ agentName, content, details }: SelfReviewBrief
           )}
           {content && (
             <Button
-              className={styles.more}
+              className={stylex.props(styles.more).className}
               size={'small'}
               type={'text'}
               onClick={() => createSelfReviewProposalModal(content)}

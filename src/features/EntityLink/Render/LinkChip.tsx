@@ -1,42 +1,28 @@
 'use client';
 
 import { isDesktop } from '@lobechat/const';
-import { ActionIcon, createStaticStyles } from '@lobehub/ui';
+import { ActionIcon } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { PanelRightIcon } from 'lucide-react';
 import { memo, type MouseEvent, type ReactNode, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useGlobalStore } from '@/store/global';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  chip: css`
-    color: ${cssVar.colorLink};
-    text-decoration: none;
-    transition: color 0.15s;
-
-    &:hover {
-      color: ${cssVar.colorLinkHover};
-    }
-  `,
-  icon: css`
-    display: inline-flex;
-    margin-inline-end: 4px;
-    vertical-align: -0.15em;
-  `,
-  sideBrowser: css`
-    color: ${cssVar.colorTextTertiary};
-    transition: color 0.15s;
-
-    &:hover {
-      color: ${cssVar.colorText};
-    }
-  `,
-  wrapper: css`
-    display: inline-flex;
-    gap: 2px;
-    align-items: center;
-  `,
-}));
+const styles = stylex.create({
+  chip: {
+    color: { 'default': cssVar.colorLink, ':hover': cssVar.colorLinkHover },
+    textDecoration: 'none',
+    transition: 'color 0.15s',
+  },
+  icon: { display: 'inline-flex', marginInlineEnd: '4px', verticalAlign: '-0.15em' },
+  sideBrowser: {
+    color: { 'default': cssVar.colorTextTertiary, ':hover': cssVar.colorText },
+    transition: 'color 0.15s',
+  },
+  wrapper: { display: 'inline-flex', gap: '2px', alignItems: 'center' },
+});
 
 interface LinkChipProps {
   href?: string;
@@ -59,8 +45,8 @@ const LinkChip = memo<LinkChipProps>(({ href, icon, label }) => {
   );
 
   const link = (
-    <a className={styles.chip} href={href} rel="noopener noreferrer" target="_blank">
-      {icon && <span className={styles.icon}>{icon}</span>}
+    <a {...stylex.props(styles.chip)} href={href} rel="noopener noreferrer" target="_blank">
+      {icon && <span {...stylex.props(styles.icon)}>{icon}</span>}
       {label}
     </a>
   );
@@ -68,14 +54,14 @@ const LinkChip = memo<LinkChipProps>(({ href, icon, label }) => {
   if (!isDesktop || !isWebUrl(href)) return link;
 
   return (
-    <span className={styles.wrapper}>
+    <span {...stylex.props(styles.wrapper)}>
       {link}
       {/* Must stay OUTSIDE the anchor: the desktop preload matches clicks with
           `closest('a')` in the capture phase and stops propagation, so a button
           nested inside the link would never reach this onClick. */}
       <ActionIcon
         data-side-browser
-        className={styles.sideBrowser}
+        className={stylex.props(styles.sideBrowser).className}
         icon={PanelRightIcon}
         size={'small'}
         title={t('messageLink.openInSideBrowser')}

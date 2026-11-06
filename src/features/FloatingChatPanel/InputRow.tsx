@@ -1,6 +1,8 @@
 'use client';
 
-import { createGlobalStyle, createStaticStyles } from '@lobehub/ui';
+// oxlint-disable-next-line stylex-migration/no-emotion-styles -- ::view-transition-* pseudo-elements are global
+import { createGlobalStyle } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { type FocusEvent, memo, useCallback, useEffect, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 
@@ -9,15 +11,15 @@ import { inputSelectors, useConversationStore } from '@/features/Conversation/st
 
 import HoverExpandBar from './HoverExpandBar';
 
-const styles = createStaticStyles(({ css }) => ({
-  row: css`
-    position: relative;
-    flex-shrink: 0;
-  `,
-  surface: css`
-    view-transition-name: floating-chat-panel-input;
-  `,
-}));
+const styles = stylex.create({
+  row: {
+    flexShrink: 0,
+    position: 'relative',
+  },
+  surface: {
+    viewTransitionName: 'floating-chat-panel-input',
+  },
+});
 
 const InputRowViewTransitionStyle = createGlobalStyle`
   ::view-transition-old(floating-chat-panel-input),
@@ -76,7 +78,6 @@ export interface InputRowProps {
 }
 
 const InputRow = memo<InputRowProps>(({ isCollapsed, onExpand, showExpandBar = true }) => {
-  const s = styles;
   const [renderedCollapsed, setRenderedCollapsed] = useState(isCollapsed);
   const [focused, setFocused] = useState(false);
   const focusedRef = useRef(false);
@@ -110,7 +111,7 @@ const InputRow = memo<InputRowProps>(({ isCollapsed, onExpand, showExpandBar = t
     <>
       <InputRowViewTransitionStyle />
       <div
-        className={s.row}
+        {...stylex.props(styles.row)}
         data-collapsed={isCollapsed}
         data-testid="floating-chat-panel-input-row"
         onBlur={handleBlur}
@@ -123,7 +124,7 @@ const InputRow = memo<InputRowProps>(({ isCollapsed, onExpand, showExpandBar = t
             onExpand={onExpand}
           />
         )}
-        <div className={s.surface}>
+        <div {...stylex.props(styles.surface)}>
           <ChatInput
             allowExpand={false}
             compact={effectiveCompact}

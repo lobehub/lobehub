@@ -1,17 +1,8 @@
 import type { HeteroSessionDigest } from '@lobechat/types';
 import { ClaudeCode, Codex } from '@lobehub/icons';
-import {
-  Button,
-  Checkbox,
-  createStaticStyles,
-  cx,
-  Flexbox,
-  Icon,
-  Spin,
-  Tag,
-  Text,
-  Tooltip,
-} from '@lobehub/ui';
+import { Button, Checkbox, Flexbox, Icon, Spin, Tag, Text, Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
 import { Check, RotateCcw, X } from 'lucide-react';
 import { memo } from 'react';
@@ -19,20 +10,16 @@ import { useTranslation } from 'react-i18next';
 
 import { baseName, fmtTokens, type ImportRowState, selectable, type SessionStatus } from './utils';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  row: css`
-    padding-block: 10px;
-    padding-inline: 16px;
-    border-radius: ${cssVar.borderRadius};
-
-    &:hover {
-      background: ${cssVar.colorFillQuaternary};
-    }
-  `,
-  rowDim: css`
-    opacity: 0.45;
-  `,
-}));
+const styles = stylex.create({
+  row: {
+    paddingBlock: '10px',
+    paddingInline: '16px',
+    borderRadius: cssVar.borderRadius,
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillQuaternary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  rowDim: { opacity: 0.45 },
+});
 
 const BRAND = { 'claude-code': ClaudeCode, 'codex': Codex } as const;
 
@@ -136,7 +123,7 @@ export const SessionRow = memo<SessionRowProps>(
       <Flexbox
         horizontal
         align="center"
-        className={cx(styles.row, dim && styles.rowDim)}
+        className={stylex.props(styles.row, dim && styles.rowDim).className}
         data-session-row={digest.sessionId}
         gap={12}
         style={{ cursor: canPick ? 'pointer' : 'default' }}

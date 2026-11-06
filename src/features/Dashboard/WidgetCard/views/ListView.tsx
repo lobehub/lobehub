@@ -1,7 +1,9 @@
 'use client';
 
 import type { WidgetListOutput } from '@lobechat/types';
-import { createStaticStyles, cssVar, Flexbox, Tag, Text } from '@lobehub/ui';
+import { Flexbox, Tag, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -9,23 +11,15 @@ import { useTranslation } from 'react-i18next';
 import { formatWidgetValue } from '../../utils/format';
 import { useIncrementalRows } from './useIncrementalRows';
 
-const styles = createStaticStyles(({ css }) => ({
-  link: css`
-    color: inherit;
-
-    &:hover {
-      color: ${cssVar.colorPrimary};
-    }
-  `,
-  row: css`
-    padding-block: 6px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-
-    &:last-child {
-      border-block-end: none;
-    }
-  `,
-}));
+const styles = stylex.create({
+  link: { color: { 'default': 'inherit', ':hover': cssVar.colorPrimary } },
+  row: {
+    paddingBlock: '6px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: { 'default': 'solid', ':last-child': 'none' },
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+});
 
 interface ListViewProps {
   /** Reveal rows in batches as the card is scrolled instead of mounting them all. */
@@ -55,11 +49,22 @@ const ListView = memo<ListViewProps>(({ output, limit, incremental }) => {
   return (
     <Flexbox>
       {items.map((item, index) => (
-        <Flexbox horizontal align={'center'} className={styles.row} gap={8} key={index}>
+        <Flexbox
+          horizontal
+          align={'center'}
+          className={stylex.props(styles.row).className}
+          gap={8}
+          key={index}
+        >
           <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
             <Text ellipsis weight={500}>
               {item.url ? (
-                <a className={styles.link} href={item.url} rel={'noreferrer'} target={'_blank'}>
+                <a
+                  {...stylex.props(styles.link)}
+                  href={item.url}
+                  rel={'noreferrer'}
+                  target={'_blank'}
+                >
                   {item.title}
                 </a>
               ) : (

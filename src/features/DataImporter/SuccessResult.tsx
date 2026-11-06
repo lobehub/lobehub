@@ -1,17 +1,13 @@
 'use client';
 
-import { Button, createStaticStyles, Flexbox, Icon, Result, Table } from '@lobehub/ui';
+import { Button, Flexbox, Icon, Result, Table } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { CheckCircle } from 'lucide-react';
 import React, { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-const styles = createStaticStyles(({ css, cssVar }) => {
-  return {
-    zeroCell: css`
-      color: ${cssVar.colorTextQuaternary};
-    `,
-  };
-});
+const styles = stylex.create({ zeroCell: { color: cssVar.colorTextQuaternary } });
 
 interface SuccessResultProps {
   dataSource?: {
@@ -29,7 +25,7 @@ const SuccessResult = memo<SuccessResultProps>(({ duration, dataSource, onClickF
   const { t } = useTranslation('common');
 
   const cellRender = (text: string) => {
-    return text ? text : <span className={styles.zeroCell}>0</span>;
+    return text ? text : <span {...stylex.props(styles.zeroCell)}>0</span>;
   };
   return (
     <Result

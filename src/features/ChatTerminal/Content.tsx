@@ -6,7 +6,6 @@ import {
   Button,
   type ContextMenuItem,
   ContextMenuTrigger,
-  createStaticStyles,
   Flexbox,
   Select,
   TabsIndicator,
@@ -15,6 +14,8 @@ import {
   TabsTab,
   Text,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import {
   CopyXIcon,
   PlusIcon,
@@ -36,57 +37,54 @@ import { useTerminalTarget } from './useTerminalTarget';
 
 const EMPTY_TABS: TerminalTab[] = [];
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    overflow: hidden;
-    height: 100%;
-    background: ${cssVar.colorBgContainer};
-  `,
-  indicator: css`
-    && {
-      border-radius: ${cssVar.borderRadius};
-      background: ${cssVar.colorFillSecondary};
-      box-shadow: none;
-    }
-  `,
-  tab: css`
-    && {
-      gap: 4px;
-      height: 24px;
-      padding-inline: 8px 4px;
-      font-weight: normal;
-    }
-
-    &&[data-active] {
-      color: ${cssVar.colorText};
-    }
-  `,
-  tabBar: css`
-    flex: none;
-    padding-block: 4px;
-    padding-inline: 8px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  tabList: css`
-    && {
-      gap: 4px;
-      padding: 0;
-      border-radius: 0;
-      background: none;
-    }
-  `,
-  tabs: css`
-    width: auto;
-  `,
-  view: css`
-    overflow: hidden;
-    flex: 1;
-
-    min-height: 0;
-    padding-block: 4px 8px;
-    padding-inline: 12px;
-  `,
-}));
+const styles = stylex.create({
+  container: {
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+    height: '100%',
+    overflow: 'hidden',
+  },
+  indicator: {
+    backgroundColor: cssVar.colorFillSecondary,
+    backgroundImage: 'none',
+    borderRadius: cssVar.borderRadius,
+    boxShadow: 'none',
+  },
+  tab: {
+    color: { 'default': null, '[data-active]': cssVar.colorText },
+    fontWeight: 'normal',
+    gap: '4px',
+    height: '24px',
+    paddingInlineEnd: '4px',
+    paddingInlineStart: '8px',
+  },
+  tabBar: {
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+    borderBlockEndStyle: 'solid',
+    borderBlockEndWidth: '1px',
+    flex: 'none',
+    paddingBlock: '4px',
+    paddingInline: '8px',
+  },
+  tabList: {
+    backgroundColor: 'transparent',
+    backgroundImage: 'none',
+    borderRadius: 0,
+    gap: '4px',
+    padding: 0,
+  },
+  tabs: {
+    width: 'auto',
+  },
+  view: {
+    flex: '1',
+    minHeight: 0,
+    overflow: 'hidden',
+    paddingBlockEnd: '8px',
+    paddingBlockStart: '4px',
+    paddingInline: '12px',
+  },
+});
 
 const Content = memo(() => {
   const { t } = useTranslation('chat');
@@ -158,21 +156,26 @@ const Content = memo(() => {
   );
 
   return (
-    <Flexbox className={styles.container}>
-      <Flexbox horizontal align={'center'} className={styles.tabBar} gap={4}>
+    <Flexbox className={stylex.props(styles.container).className}>
+      <Flexbox
+        horizontal
+        align={'center'}
+        className={stylex.props(styles.tabBar).className}
+        gap={4}
+      >
         <TabsRoot
-          className={styles.tabs}
+          className={stylex.props(styles.tabs).className}
           size={'small'}
           value={activeTab?.id ?? null}
           onValueChange={(next) => {
             if (typeof next === 'string') setActiveTab(topicKey, next);
           }}
         >
-          <TabsList className={styles.tabList}>
-            <TabsIndicator className={styles.indicator} />
+          <TabsList className={stylex.props(styles.tabList).className}>
+            <TabsIndicator className={stylex.props(styles.indicator).className} />
             {tabs.map((tab) => (
               <ContextMenuTrigger items={() => tabMenuItems(tab.id)} key={tab.id}>
-                <TabsTab className={styles.tab} value={tab.id}>
+                <TabsTab className={stylex.props(styles.tab).className} value={tab.id}>
                   <SquareTerminalIcon size={12} />
                   {tab.title}
                   <ActionIcon
@@ -219,7 +222,7 @@ const Content = memo(() => {
           onClick={() => toggleTerminalPanel(false)}
         />
       </Flexbox>
-      <div className={styles.view}>
+      <div {...stylex.props(styles.view)}>
         {activeTab ? (
           <SplitView
             activePaneId={activeTab.activePaneId}

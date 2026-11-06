@@ -10,6 +10,7 @@ import {
   Text,
   toast,
 } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { Check, ChevronDownIcon, ChevronUpIcon, MoreHorizontal, Trash } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -18,6 +19,7 @@ import BriefCardActions from '@/features/DailyBrief/BriefCardActions';
 import BriefCardArtifacts from '@/features/DailyBrief/BriefCardArtifacts';
 import BriefCardSummary from '@/features/DailyBrief/BriefCardSummary';
 import BriefIcon from '@/features/DailyBrief/BriefIcon';
+import { briefCardMarker } from '@/features/DailyBrief/markers.stylex';
 import { styles as briefStyles } from '@/features/DailyBrief/style';
 import type { BriefItem } from '@/features/DailyBrief/types';
 import Time from '@/features/Home/components/Time';
@@ -81,7 +83,7 @@ const TaskBriefCard = memo<TaskBriefCardProps>(
 
     return (
       <Block
-        className={briefStyles.card}
+        className={stylex.props(briefStyles.card, briefCardMarker).className}
         gap={12}
         paddingBlock={12}
         paddingInline={8}
@@ -96,7 +98,9 @@ const TaskBriefCard = memo<TaskBriefCardProps>(
           {isResolved && !expanded && (
             <Flexbox horizontal align={'center'} gap={4}>
               <Icon color={cssVar.colorTextQuaternary} icon={Check} size={14} />
-              <Text className={briefStyles.resolvedTag}>{t('brief.resolved')}</Text>
+              <Text className={stylex.props(briefStyles.resolvedTag).className}>
+                {t('brief.resolved')}
+              </Text>
             </Flexbox>
           )}
           <Time date={brief.createdAt} />

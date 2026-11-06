@@ -1,6 +1,8 @@
 import { Block, cssVar, cx, Divider, Flexbox, Skeleton } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 
+import { briefCardMarker } from '@/features/DailyBrief/markers.stylex';
 import { styles as briefStyles } from '@/features/DailyBrief/style';
 import { RECOMMENDATION_ICON_SIZE } from '@/features/Recommendations/iconSize';
 
@@ -33,7 +35,7 @@ export const TaskTemplateCardSkeleton = memo<TaskTemplateCardSkeletonProps>(
 
     return (
       <Block
-        className={cx(briefStyles.card, styles.card)}
+        className={cx(stylex.props(briefStyles.card, briefCardMarker).className, styles.card)}
         data-testid={'task-template-card-skeleton'}
         gap={12}
         padding={12}

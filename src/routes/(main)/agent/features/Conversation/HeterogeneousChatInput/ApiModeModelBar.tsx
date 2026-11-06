@@ -4,6 +4,7 @@ import { isServerDefaultHeterogeneousAgentType } from '@lobechat/heterogeneous-a
 import type { HeterogeneousApiConfig } from '@lobechat/types';
 import { applyTopicModelToHeterogeneousProvider } from '@lobechat/types';
 import { Select, TooltipGroup } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
 import { memo, useMemo } from 'react';
 
@@ -28,7 +29,7 @@ interface ApiModeModelBarProps {
 }
 
 const compactTriggerLabel = (option: { title?: string; value?: unknown }) => (
-  <span className={modelPickerStyles.compactLabel}>{compactModelTriggerText(option)}</span>
+  <span {...stylex.props(modelPickerStyles.compactLabel)}>{compactModelTriggerText(option)}</span>
 );
 
 const ApiModeModelBar = memo<ApiModeModelBarProps>(({ agentId }) => {
@@ -106,7 +107,6 @@ const ApiModeModelBar = memo<ApiModeModelBarProps>(({ agentId }) => {
     return (
       <TooltipGroup>
         <Select
-          className={modelPickerStyles.picker}
           labelRender={compactTriggerLabel}
           loading={serverCapabilityLoading}
           options={serverDefaultModelOptions}

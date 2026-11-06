@@ -2,9 +2,7 @@ import type { HeteroSessionDirGroup, HeteroSessionDirPref } from '@lobechat/type
 import { ClaudeCode, Codex } from '@lobehub/icons';
 import {
   ActionIcon,
-  createStaticStyles,
-  cssVar,
-  cx,
+  cssVar as runtimeCssVar,
   DraggablePanel,
   Flexbox,
   Icon,
@@ -12,60 +10,55 @@ import {
   Text,
   Tooltip,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronRight, Eye, EyeOff, Folder, FolderGit2, Timer, X } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { baseName, dirKeyOf } from './utils';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  child: css`
-    cursor: pointer;
-
-    height: 32px;
-    padding-block: 0;
-    padding-inline: 28px 8px;
-    border-radius: ${cssVar.borderRadius};
-
-    .tree-actions {
-      display: none;
-      flex: none;
-      gap: 2px;
-      align-items: center;
-    }
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-
-      .tree-actions {
-        display: flex;
-      }
-
-      .tree-count {
-        display: none;
-      }
-    }
-  `,
-  childActive: css`
-    background: ${cssVar.colorFillSecondary} !important;
-  `,
-  parent: css`
-    cursor: pointer;
-    padding-block: 6px;
-    padding-inline: 8px;
-    border-radius: ${cssVar.borderRadius};
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  sidebar: css`
-    width: 100%;
-    height: 100%;
-    padding-block: 12px;
-    padding-inline: 8px;
-  `,
-}));
+const styles = stylex.create({
+  // A child row is a `stylex.defaultMarker()` element: its actions replace the
+  // count while it is hovered.
+  child: {
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+    borderRadius: cssVar.borderRadius,
+    cursor: 'pointer',
+    height: '32px',
+    paddingBlock: 0,
+    paddingInlineEnd: '8px',
+    paddingInlineStart: '28px',
+  },
+  childActive: {
+    backgroundColor: cssVar.colorFillSecondary,
+    backgroundImage: 'none',
+  },
+  count: {
+    display: { default: null, [stylex.when.ancestor(':hover')]: 'none' },
+  },
+  parent: {
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+    borderRadius: cssVar.borderRadius,
+    cursor: 'pointer',
+    paddingBlock: '6px',
+    paddingInline: '8px',
+  },
+  rowActions: {
+    alignItems: 'center',
+    display: { default: 'none', [stylex.when.ancestor(':hover')]: 'flex' },
+    flex: 'none',
+    gap: '2px',
+  },
+  sidebar: {
+    height: '100%',
+    paddingBlock: '12px',
+    paddingInline: '8px',
+    width: '100%',
+  },
+});
 
 const BRAND = { 'claude-code': ClaudeCode, 'codex': Codex } as const;
 const AGENT_LABEL = { 'claude-code': 'Claude Code', 'codex': 'Codex' } as const;
@@ -99,9 +92,12 @@ const SidebarTree = memo<SidebarTreeProps>(({ groups, scope, onScopeChange, onSe
         <Flexbox
           horizontal
           align="center"
-          className={cx(styles.child, scope === key && styles.childActive)}
           gap={8}
           justify="space-between"
+          className={
+            stylex.props(styles.child, scope === key && styles.childActive, stylex.defaultMarker())
+              .className
+          }
           onClick={() => onScopeChange(key)}
         >
           <Flexbox horizontal align="center" gap={6} style={{ minWidth: 0 }}>
@@ -110,7 +106,7 @@ const SidebarTree = memo<SidebarTreeProps>(({ groups, scope, onScopeChange, onSe
               {baseName(group.workingDirectory)}
             </Text>
           </Flexbox>
-          <span className="tree-actions" onClick={(e) => e.stopPropagation()}>
+          <span {...stylex.props(styles.rowActions)} onClick={(e) => e.stopPropagation()}>
             {isWatched ? (
               <Tooltip title={t('heteroImport.action.unwatch')}>
                 <ActionIcon icon={X} size="small" onClick={() => onSetPref(key, null)} />
@@ -133,7 +129,7 @@ const SidebarTree = memo<SidebarTreeProps>(({ groups, scope, onScopeChange, onSe
               </>
             )}
           </span>
-          <Text className="tree-count" fontSize={12} type="secondary">
+          <Text className={stylex.props(styles.count).className} fontSize={12} type="secondary">
             {group.sessionCount}
           </Text>
         </Flexbox>
@@ -143,18 +139,18 @@ const SidebarTree = memo<SidebarTreeProps>(({ groups, scope, onScopeChange, onSe
 
   return (
     <DraggablePanel
-      backgroundColor={cssVar.colorBgLayout}
+      backgroundColor={runtimeCssVar.colorBgLayout}
       defaultSize={{ width: 232 }}
       expandable={false}
       maxWidth={420}
       minWidth={180}
       placement="left"
     >
-      <ScrollShadow className={styles.sidebar}>
+      <ScrollShadow className={stylex.props(styles.sidebar).className}>
         <Flexbox
           horizontal
           align="center"
-          className={cx(styles.parent, scope === 'all' && styles.childActive)}
+          className={stylex.props(styles.parent, scope === 'all' && styles.childActive).className}
           justify="space-between"
           onClick={() => onScopeChange('all')}
         >
@@ -171,7 +167,7 @@ const SidebarTree = memo<SidebarTreeProps>(({ groups, scope, onScopeChange, onSe
             <Flexbox
               horizontal
               align="center"
-              className={styles.parent}
+              className={stylex.props(styles.parent).className}
               gap={4}
               onClick={() =>
                 setCollapsed((prev) => {
@@ -217,8 +213,10 @@ const SidebarTree = memo<SidebarTreeProps>(({ groups, scope, onScopeChange, onSe
               <Flexbox
                 horizontal
                 align="center"
-                className={cx(styles.parent, scope === source && styles.childActive)}
                 gap={4}
+                className={
+                  stylex.props(styles.parent, scope === source && styles.childActive).className
+                }
                 onClick={() => onScopeChange(source)}
               >
                 <Icon
@@ -266,7 +264,7 @@ const SidebarTree = memo<SidebarTreeProps>(({ groups, scope, onScopeChange, onSe
             <Flexbox
               horizontal
               align="center"
-              className={styles.parent}
+              className={stylex.props(styles.parent).className}
               gap={4}
               onClick={() => setShowIgnored((v) => !v)}
             >
@@ -291,7 +289,7 @@ const SidebarTree = memo<SidebarTreeProps>(({ groups, scope, onScopeChange, onSe
                     <Flexbox
                       horizontal
                       align="center"
-                      className={styles.child}
+                      className={stylex.props(styles.child, stylex.defaultMarker()).className}
                       gap={8}
                       justify="space-between"
                       style={{ opacity: 0.55 }}
@@ -302,7 +300,10 @@ const SidebarTree = memo<SidebarTreeProps>(({ groups, scope, onScopeChange, onSe
                           {baseName(group.workingDirectory)}
                         </Text>
                       </Flexbox>
-                      <span className="tree-actions" onClick={(e) => e.stopPropagation()}>
+                      <span
+                        {...stylex.props(styles.rowActions)}
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         <Tooltip title={t('heteroImport.action.restore')}>
                           <ActionIcon
                             icon={Eye}
