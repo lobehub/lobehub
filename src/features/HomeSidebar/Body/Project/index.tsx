@@ -75,7 +75,7 @@ const Project = memo<ProjectProps>(({ itemKey }) => {
       {
         // A filled brand mark: as a component, the menu's Icon wrapper would paint it with
         // `fill: transparent` (stroke-icon styling) and leave the slot empty.
-        icon: <Github size={16} />,
+        icon: <Github aria-hidden size={16} />,
         key: 'github',
         label: t('create.fromGithub'),
         onClick: () => openCreateProjectFromGithubModal(),
