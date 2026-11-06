@@ -2,7 +2,8 @@
 
 import { type ChatInputProps } from '@lobehub/editor/react';
 import { ChatInput, ChatInputActionBar } from '@lobehub/editor/react';
-import { Center, cx, Flexbox, Skeleton, Text } from '@lobehub/ui';
+// oxlint-disable-next-line stylex-migration/no-emotion-styles -- leftContent is an arbitrary ReactNode
+import { Center, createStaticStyles, cx, Flexbox, Skeleton, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { memo, type ReactNode, use, useEffect } from 'react';
@@ -52,9 +53,16 @@ const styles = stylex.create({
     borderEndEndRadius: '0 !important',
   },
   leftActions: { flex: 'none', minWidth: '0' },
-  leftActionsItem: { flex: 'none' },
   leftSlot: { overflow: 'hidden', flex: '1', minWidth: '0' },
 });
+
+const fallback = createStaticStyles(({ css }) => ({
+  leftActions: css`
+    > * {
+      flex: none !important;
+    }
+  `,
+}));
 
 interface DesktopChatInputProps extends ActionToolbarProps {
   actionBarStyle?: React.CSSProperties;
@@ -181,14 +189,17 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
     // does not create a false gap after the microphone action.
     const leftSlotContent = (
       <Flexbox horizontal align={'center'} flex={'none'} gap={2}>
-        <Flexbox horizontal align={'center'} className={stylex.props(styles.leftActions).className}>
+        <Flexbox
+          horizontal
+          align={'center'}
+          className={cx(stylex.props(styles.leftActions).className, fallback.leftActions)}
+        >
           {leftContent ?? (
             <ActionBar
               disableCollapse
               borderRadius={borderRadius}
               dropdownPlacement={dropdownPlacement}
               extraActionItems={extraActionItems}
-              xstyle={styles.leftActionsItem}
             />
           )}
         </Flexbox>
