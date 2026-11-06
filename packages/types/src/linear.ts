@@ -213,6 +213,11 @@ export interface LinearSyncJobMetadata {
    * requests deep, so a run stops handing off after a few.
    */
   handOffs?: number;
+  /**
+   * A rule run also reads archived issues (`kind: 'rule'`). Picked issues are
+   * looked up by id, which finds archived ones either way.
+   */
+  includeArchived?: boolean;
   /** Picked issues (`kind: 'issues'`). */
   issueIds?: string[];
   kind: 'issues' | 'rule';

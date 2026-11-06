@@ -2,7 +2,7 @@
  * @vitest-environment happy-dom
  */
 import type { LinearIssuePage, LinearIssueSummary } from '@lobechat/types';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { SWRConfig } from 'swr';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -44,10 +44,10 @@ const page = (count: number, hasMore: boolean): LinearIssuePage => ({
   issues: Array.from({ length: count }, (_, index) => issue(index)),
 });
 
-const renderList = () =>
+const renderList = (listFilter: typeof filter & { includeArchived?: boolean } = filter) =>
   render(
     <SWRConfig value={{ dedupingInterval: 0, provider: () => new Map() }}>
-      <IssueList filter={filter} selected={new Set()} onSelectionChange={vi.fn()} />
+      <IssueList filter={listFilter} selected={new Set()} onSelectionChange={vi.fn()} />
     </SWRConfig>,
   );
 
@@ -85,5 +85,25 @@ describe('IssueList header', () => {
     expect(await screen.findByText('linear.sync.list.count:12')).toBeTruthy();
     expect(screen.queryByText(/linear\.sync\.list\.loaded/)).toBeNull();
     expect(mocks.countIssues).not.toHaveBeenCalled();
+  });
+});
+
+describe('IssueList archived issues', () => {
+  it('asks for archived issues on every page, reading on from the cursor', async () => {
+    mocks.listIssues.mockImplementation(async ({ cursor }: { cursor?: string }) =>
+      cursor ? page(3, false) : page(50, true),
+    );
+    mocks.countIssues.mockResolvedValue({ capped: false, count: 53 });
+    const archivedFilter = { ...filter, includeArchived: true };
+
+    renderList(archivedFilter);
+    fireEvent.click(await screen.findByText('linear.sync.list.loadMore'));
+
+    // The first page is refetched too, so the order of calls is not fixed.
+    await waitFor(() =>
+      expect(mocks.listIssues).toHaveBeenCalledWith({ ...archivedFilter, cursor: 'cursor-1' }),
+    );
+    expect(mocks.listIssues).toHaveBeenCalledWith({ ...archivedFilter, cursor: undefined });
+    expect(mocks.countIssues).toHaveBeenCalledWith(archivedFilter);
   });
 });

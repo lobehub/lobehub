@@ -345,7 +345,12 @@ export class LinearSyncJobService {
     const token = await getLinearAccessToken(this.db, rule.connectionId);
     return sync.syncByFilter(
       token,
-      { linearProjectId: rule.linearProjectId, stateTypes: rule.stateTypes, teamId: rule.teamId },
+      {
+        includeArchived: metadata.includeArchived,
+        linearProjectId: rule.linearProjectId,
+        stateTypes: rule.stateTypes,
+        teamId: rule.teamId,
+      },
       { ...options, noCreate: metadata.reconcileOnly, startAfter: metadata.cursor },
     );
   }

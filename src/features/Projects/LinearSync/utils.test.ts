@@ -7,6 +7,7 @@ import {
   canLeaveLinearScopeStep,
   formatLinearSyncResult,
   isActiveLinearSyncJob,
+  linearImportScopeSummary,
   linearIssueListCounts,
   linearScopeProjectLabel,
   linearSyncJobErrorMessage,
@@ -133,6 +134,24 @@ describe('linearIssueListCounts', () => {
       linearIssueListCounts({ hasMore: true, loaded: 100, total: { capped: false, count: 100 } }, t)
         .total,
     ).toBe('linear.sync.list.countAtLeast:100');
+  });
+});
+
+describe('linearImportScopeSummary', () => {
+  const filter = {
+    linearProjectId: null,
+    linearProjectName: null,
+    stateTypes: ['backlog', 'unstarted'],
+    teamName: 'Engineering',
+  };
+
+  it('names archived issues only when they are included', () => {
+    expect(linearImportScopeSummary(filter, { includeArchived: false }, t)).toBe(
+      'Engineering · linear.sync.filter.allProjects · linear.sync.filter.statesSummary:2',
+    );
+    expect(linearImportScopeSummary(filter, { includeArchived: true }, t)).toBe(
+      'Engineering · linear.sync.filter.allProjects · linear.sync.filter.statesSummary:2 · linear.sync.options.includeArchived',
+    );
   });
 });
 
