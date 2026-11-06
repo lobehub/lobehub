@@ -208,6 +208,15 @@ vi.mock('../../TopicListContent/ThreadList', () => ({
 }));
 
 describe('TopicItem active state', () => {
+  beforeEach(() => {
+    useTopicNavigationMock.mockReturnValue({
+      isInAgentSubRoute: false,
+      isInTopicContextRoute: false,
+      navigateToTopic: vi.fn(),
+      routeTopicId: undefined,
+    });
+  });
+
   afterEach(() => {
     scopedTopicMock.value = undefined;
     prefetchMessagesMock.mockClear();
@@ -317,13 +326,6 @@ describe('TopicItem active state', () => {
   });
 
   it('prefixes the cmd-click href with the active workspace slug', () => {
-    useTopicNavigationMock.mockReturnValue({
-      isInAgentSubRoute: false,
-      isInTopicContextRoute: false,
-      navigateToTopic: vi.fn(),
-      routeTopicId: undefined,
-    });
-
     render(<TopicItem id="tpc_test" title="Topic" />);
 
     expect(screen.getByTestId('nav-item')).toHaveAttribute(
@@ -337,12 +339,6 @@ describe('TopicItem active state', () => {
     const now = Date.UTC(2026, 0, 1, 0, 0, 33);
     vi.setSystemTime(now);
     runningStartTimeMock.value = now - 33_000;
-    useTopicNavigationMock.mockReturnValue({
-      isInAgentSubRoute: false,
-      isInTopicContextRoute: false,
-      navigateToTopic: vi.fn(),
-      routeTopicId: undefined,
-    });
 
     render(<TopicItem id="tpc_test" status="running" title="Topic" />);
 
@@ -359,12 +355,6 @@ describe('TopicItem active state', () => {
     const now = Date.UTC(2026, 0, 1, 0, 2, 37);
     vi.setSystemTime(now);
     runningStartTimeMock.value = undefined;
-    useTopicNavigationMock.mockReturnValue({
-      isInAgentSubRoute: false,
-      isInTopicContextRoute: false,
-      navigateToTopic: vi.fn(),
-      routeTopicId: undefined,
-    });
 
     render(
       <TopicItem
@@ -383,12 +373,6 @@ describe('TopicItem active state', () => {
     const now = Date.UTC(2026, 0, 1, 0, 0, 33);
     vi.setSystemTime(now);
     runningStartTimeMock.value = now - 33_000;
-    useTopicNavigationMock.mockReturnValue({
-      isInAgentSubRoute: false,
-      isInTopicContextRoute: false,
-      navigateToTopic: vi.fn(),
-      routeTopicId: undefined,
-    });
 
     render(
       <TopicItem
@@ -454,13 +438,6 @@ describe('TopicItem active state', () => {
   });
 
   it('hides the inline archive action while the topic is running', () => {
-    useTopicNavigationMock.mockReturnValue({
-      isInAgentSubRoute: false,
-      isInTopicContextRoute: false,
-      navigateToTopic: vi.fn(),
-      routeTopicId: undefined,
-    });
-
     render(<TopicItem id="tpc_test" status="running" title="Topic" />);
 
     expect(screen.getByTestId('topic-actions')).toHaveAttribute(
@@ -470,26 +447,12 @@ describe('TopicItem active state', () => {
   });
 
   it('offers the inline archive action once the topic is idle', () => {
-    useTopicNavigationMock.mockReturnValue({
-      isInAgentSubRoute: false,
-      isInTopicContextRoute: false,
-      navigateToTopic: vi.fn(),
-      routeTopicId: undefined,
-    });
-
     render(<TopicItem id="tpc_test" title="Topic" />);
 
     expect(screen.getByTestId('topic-actions')).toHaveAttribute('data-show-inline-archive', 'true');
   });
 
   it('keeps idle topics iconless', () => {
-    useTopicNavigationMock.mockReturnValue({
-      isInAgentSubRoute: false,
-      isInTopicContextRoute: false,
-      navigateToTopic: vi.fn(),
-      routeTopicId: undefined,
-    });
-
     render(<TopicItem id="tpc_test" title="Topic" />);
 
     expect(screen.queryByTestId('topic-item-icon')).not.toBeInTheDocument();
@@ -497,12 +460,6 @@ describe('TopicItem active state', () => {
 
   it('prefetches messages when a topic is an unread completion', async () => {
     topicUnreadCompletedMock.value = true;
-    useTopicNavigationMock.mockReturnValue({
-      isInAgentSubRoute: false,
-      isInTopicContextRoute: false,
-      navigateToTopic: vi.fn(),
-      routeTopicId: undefined,
-    });
 
     render(<TopicItem id="tpc_test" title="Topic" />);
 
@@ -518,12 +475,6 @@ describe('TopicItem active state', () => {
   it('prefetches unread completed messages after the runtime stops', async () => {
     agentRuntimeRunningMock.value = true;
     topicUnreadCompletedMock.value = true;
-    useTopicNavigationMock.mockReturnValue({
-      isInAgentSubRoute: false,
-      isInTopicContextRoute: false,
-      navigateToTopic: vi.fn(),
-      routeTopicId: undefined,
-    });
 
     const { rerender } = render(<TopicItem id="tpc_test" title="Topic" />);
 
@@ -542,13 +493,6 @@ describe('TopicItem active state', () => {
   });
 
   it('shows the topic worktree and branch from structured metadata', () => {
-    useTopicNavigationMock.mockReturnValue({
-      isInAgentSubRoute: false,
-      isInTopicContextRoute: false,
-      navigateToTopic: vi.fn(),
-      routeTopicId: undefined,
-    });
-
     render(
       <TopicItem
         showWorkingDirectory
@@ -571,12 +515,6 @@ describe('TopicItem active state', () => {
   describe('draft hint', () => {
     beforeEach(() => {
       hasDraftMock.value = true;
-      useTopicNavigationMock.mockReturnValue({
-        isInAgentSubRoute: false,
-        isInTopicContextRoute: false,
-        navigateToTopic: vi.fn(),
-        routeTopicId: undefined,
-      });
     });
 
     it('stacks the draft hint under the leading icon on a two-line row', () => {
@@ -606,12 +544,6 @@ describe('TopicItem active state', () => {
   it('keeps the unread dot visible when the topic has a linked pull request', () => {
     topicUnreadCompletedMock.value = true;
     topicMetaCardMock.value = { pullRequest: { state: 'open' } };
-    useTopicNavigationMock.mockReturnValue({
-      isInAgentSubRoute: false,
-      isInTopicContextRoute: false,
-      navigateToTopic: vi.fn(),
-      routeTopicId: undefined,
-    });
 
     render(<TopicItem id="tpc_test" title="Topic" />);
 
@@ -621,12 +553,6 @@ describe('TopicItem active state', () => {
   /** @example A project row is not in the chat store, so only its own status says unread. */
   it('shows the unread dot for a project row whose own status is unread', () => {
     scopedTopicMock.value = { agentId: 'other-agent', agentName: 'Other Agent' };
-    useTopicNavigationMock.mockReturnValue({
-      isInAgentSubRoute: false,
-      isInTopicContextRoute: false,
-      navigateToTopic: vi.fn(),
-      routeTopicId: undefined,
-    });
 
     render(
       <TopicListScopeContext value={{ projectId: 'project-1' }}>
@@ -639,12 +565,6 @@ describe('TopicItem active state', () => {
 
   it('shows the pull request marker once the topic is no longer unread', () => {
     topicMetaCardMock.value = { pullRequest: { state: 'open' } };
-    useTopicNavigationMock.mockReturnValue({
-      isInAgentSubRoute: false,
-      isInTopicContextRoute: false,
-      navigateToTopic: vi.fn(),
-      routeTopicId: undefined,
-    });
 
     render(<TopicItem id="tpc_test" title="Topic" />);
 
@@ -653,15 +573,6 @@ describe('TopicItem active state', () => {
   });
 
   describe('goal marker', () => {
-    beforeEach(() => {
-      useTopicNavigationMock.mockReturnValue({
-        isInAgentSubRoute: false,
-        isInTopicContextRoute: false,
-        navigateToTopic: vi.fn(),
-        routeTopicId: undefined,
-      });
-    });
-
     it('marks a topic that has a goal, ahead of its pull request', () => {
       topicMetaCardMock.value = { pullRequest: { state: 'open' } };
 
@@ -691,12 +602,6 @@ describe('TopicItem active state', () => {
 
   it('adds the CI status to the pull request marker', () => {
     topicMetaCardMock.value = { pullRequest: { ciStatus: 'pending', state: 'open' } };
-    useTopicNavigationMock.mockReturnValue({
-      isInAgentSubRoute: false,
-      isInTopicContextRoute: false,
-      navigateToTopic: vi.fn(),
-      routeTopicId: undefined,
-    });
 
     render(<TopicItem id="tpc_test" title="Topic" />);
 
@@ -709,13 +614,6 @@ describe('TopicItem active state', () => {
   it.each([{ state: 'merged' }, { mergedAt: '2026-11-05T03:58:11Z', state: 'closed' }])(
     'uses the merged PR icon as the avatar badge for %o regardless of CI',
     (pullRequest) => {
-      useTopicNavigationMock.mockReturnValue({
-        isInAgentSubRoute: false,
-        isInTopicContextRoute: false,
-        navigateToTopic: vi.fn(),
-        routeTopicId: undefined,
-      });
-
       for (const ciStatus of ['pending', 'failure', 'success'] as const) {
         topicMetaCardMock.value = { pullRequest: { ...pullRequest, ciStatus } };
 
@@ -736,12 +634,6 @@ describe('TopicItem active state', () => {
     ['completed', 'CircleCheck'],
   ] as const)('keeps the %s status above linked pull request metadata', (status, icon) => {
     topicMetaCardMock.value = { pullRequest: { state: 'open' } };
-    useTopicNavigationMock.mockReturnValue({
-      isInAgentSubRoute: false,
-      isInTopicContextRoute: false,
-      navigateToTopic: vi.fn(),
-      routeTopicId: undefined,
-    });
 
     render(<TopicItem id="tpc_test" status={status} title="Topic" />);
 
