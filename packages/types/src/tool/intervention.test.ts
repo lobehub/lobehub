@@ -9,7 +9,7 @@ describe('classifyToolInterventionPresentation', () => {
       surface: 'form',
     });
   });
-  it('renders Devin questions and provider-specific interactions as forms', () => {
+  it('renders Copilot and Devin questions and Devin permissions as forms', () => {
     expect(classifyToolInterventionPresentation('copilot', 'askUserQuestion')).toEqual({
       interactionKind: 'question',
       surface: 'form',
