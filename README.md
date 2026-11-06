@@ -58,13 +58,13 @@ They take on work by themselves and get better every week.
 - [🧩 Marketplace](#-marketplace)
 - [🛳 Self Hosting](#-self-hosting)
   - [`A` Docker Compose (recommended)](#a-docker-compose-recommended)
-  - [`B` Vercel, Zeabur, Sealos, RepoCloud or Alibaba Cloud](#b-vercel-zeabur-sealos-repocloud-or-alibaba-cloud)
-  - [Model providers](#model-providers)
+  - [`B` One-click deploy](#b-one-click-deploy)
+  - [Configuration](#configuration)
 - [📦 Ecosystem](#-ecosystem)
 - [⌨️ Local Development](#️-local-development)
 - [🤝 Contributing](#-contributing)
 - [❤️ Sponsor](#️-sponsor)
-- [🔗 More Products](#-more-products)
+- [🔬 Research](#-research)
 
 ####
 
@@ -214,11 +214,7 @@ Find agents, MCP servers and skills on [lobehub.com][official-site], add them to
 
 ## 🛳 Self Hosting
 
-Run LobeHub on your own infrastructure and keep your data with you. Docker Compose is the recommended setup; Vercel and other cloud platforms deploy in one click.
-
-> \[!TIP]
->
-> The full guide is in [📘 Build your own LobeHub][docs-self-hosting].
+Run LobeHub on your own infrastructure and keep your data with you. The full guide is in [📘 Build your own LobeHub][docs-self-hosting].
 
 ### `A` Docker Compose (recommended)
 
@@ -226,7 +222,7 @@ Run LobeHub on your own infrastructure and keep your data with you. Docker Compo
 [![][docker-size-shield]][docker-size-link]
 [![][docker-pulls-shield]][docker-pulls-link]
 
-The setup script brings up the whole stack: LobeHub, the agent gateway that runs agents on the server, PostgreSQL, Redis, RustFS for file storage and SearXNG for web search. It runs on Linux and macOS; on Windows, use [WSL 2](https://aka.ms/wsl).
+Starts LobeHub with PostgreSQL, Redis, RustFS file storage, SearXNG search and the agent gateway. Runs on Linux and macOS, or on Windows through [WSL 2](https://aka.ms/wsl).
 
 ```bash
 mkdir lobehub && cd lobehub
@@ -234,27 +230,11 @@ bash <(curl -fsSL https://lobe.li/setup.sh) -l en
 docker compose up -d
 ```
 
-The script asks how LobeHub should be reached: only on this machine (the default), through a port on your network, or behind your own domain with HTTPS. In the default mode, open <http://localhost:3210> once the containers are up.
+Then open <http://localhost:3210>. Ports, LAN and domain modes, and upgrades are covered in the [📘 Docker Compose guide][docs-docker].
 
-> \[!NOTE]
->
-> Ports `3210`, `9000`, `9001`, `8787` and `8788` need to be free. The [📘 Docker Compose guide][docs-docker] covers each mode, upgrades and troubleshooting.
+### `B` One-click deploy
 
-### `B` Vercel, Zeabur, Sealos, RepoCloud or Alibaba Cloud
-
-These platforms deploy LobeHub in one click. Vercel doesn't come with a database or file storage, so prepare them first:
-
-- A PostgreSQL 14+ database, such as Neon or Supabase
-- S3-compatible storage for file uploads, such as Cloudflare R2 or AWS S3
-- The environment variables below. The [📘 Vercel guide][docs-vercel] shows how to generate each secret.
-
-| Variable                                                               | What it's for                          |
-| :--------------------------------------------------------------------- | :------------------------------------- |
-| `APP_URL`                                                              | The URL your deployment is served from |
-| `DATABASE_URL`                                                         | PostgreSQL connection string           |
-| `KEY_VAULTS_SECRET`                                                    | Encrypts the API keys users save       |
-| `AUTH_SECRET`, `JWKS_KEY`                                              | Sign sessions and tokens for sign-in   |
-| `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_BUCKET`, `S3_ENDPOINT` | File storage                           |
+Vercel needs a PostgreSQL database, S3-compatible storage and a few secrets before you deploy. The [📘 Vercel guide][docs-vercel] walks through each one.
 
 <div align="center">
 
@@ -264,15 +244,14 @@ These platforms deploy LobeHub in one click. Vercel doesn't come with a database
 
 </div>
 
-> \[!TIP]
->
-> A forked deployment can fall behind. Keep yours current with [📘 Auto Sync With Latest][docs-upstream-sync].
+### Configuration
 
-### Model providers
+- [📘 Environment variables][docs-env-var]
+- [📘 Model providers][docs-model-provider]: 40+ providers. Set keys in the app's settings or as environment variables.
+- [📘 Authentication][docs-auth]
+- [📘 Keep a forked deployment up to date][docs-upstream-sync]
 
-LobeHub works with 40+ model providers, including OpenAI, Anthropic, Google, DeepSeek, OpenRouter, and Ollama for local models. Add API keys in **Settings → Provider**, or set them for everyone with environment variables such as `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` and `GOOGLE_API_KEY`. The full list is in [📘 Model providers][docs-model-provider], and every other option is in [📘 Environment Variables][docs-env-var].
-
-If you'd rather use one key for many models, a third-party gateway is an option:
+Want one key for many models? A third-party gateway is an option:
 
 |                                                                     | Provider     | Features                                                                                                                  | Proxy URL                 | Link                                               |
 | ------------------------------------------------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------- | ------------------------- | -------------------------------------------------- |
@@ -294,13 +273,27 @@ If you'd rather use one key for many models, a third-party gateway is an option:
 
 ## 📦 Ecosystem
 
-| NPM                                 | Repository                                | Description                                                                                           | Version                                     |
-| ----------------------------------- | ----------------------------------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------- |
-| [@lobehub/ui][lobe-ui-link]         | [lobehub/lobe-ui][lobe-ui-github]         | Open-source UI component library dedicated to building AIGC web applications.                         | [![][lobe-ui-shield]][lobe-ui-link]         |
-| [@lobehub/icons][lobe-icons-link]   | [lobehub/lobe-icons][lobe-icons-github]   | Popular AI / LLM Model Brand SVG Logo and Icon Collection.                                            | [![][lobe-icons-shield]][lobe-icons-link]   |
-| [@lobehub/editor][lobe-editor-link] | [lobehub/lobe-editor][lobe-editor-github] | Extensible rich-text editor built on Meta's Lexical.                                                  | [![][lobe-editor-shield]][lobe-editor-link] |
-| [@lobehub/charts][lobe-charts-link] | [lobehub/lobe-charts][lobe-charts-github] | React chart components built on Recharts.                                                             | [![][lobe-charts-shield]][lobe-charts-link] |
-| [@lobehub/lint][lobe-lint-link]     | [lobehub/lobe-lint][lobe-lint-github]     | Configurations for ESlint, Stylelint, Commitlint, Prettier, Remark, and Semantic Release for LobeHub. | [![][lobe-lint-shield]][lobe-lint-link]     |
+Open-source packages from the LobeHub team that you can use in your own apps.
+
+| [**🍭 LobeUI**][lobe-ui-github] `@lobehub/ui`<br/>_The React UI Kit for AI-Native Web Apps_<br/>LobeHub's open-source React component library for building AI chat and AIGC web apps.<br/><br/>[![][lobe-ui-shield]][lobe-ui-link] [![][lobe-ui-downloads]][lobe-ui-link]                                                                                                                                   | [<img width="400" alt="LobeUI docs" src="https://repository-images.githubusercontent.com/643435168/7514a374-d7de-4c8b-ad61-5460bc0bfe35">][lobe-ui-docs]          |
+| :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [**🥨 LobeIcons**][lobe-icons-github] `@lobehub/icons`<br/>_Every AI Brand, One Icon Set_<br/>340+ AI model and provider logos, ready for React, React Native, or as static SVG / PNG / WEBP.<br/><br/>[![][lobe-icons-shield]][lobe-icons-link] [![][lobe-icons-downloads]][lobe-icons-link]                                                                                                               | [<img width="400" alt="LobeIcons docs" src="https://repository-images.githubusercontent.com/750129442/edc2a03a-a6c4-4f11-89c8-8ffafbb85a7a">][lobe-icons-docs]    |
+| [**📊 LobeCharts**][lobe-charts-github] `@lobehub/charts`<br/>_Charts for Dashboards and Model Leaderboards_<br/>Beautiful React charts for dashboards and AI benchmarks, themed with Lobe UI.<br/><br/>[![][lobe-charts-shield]][lobe-charts-link] [![][lobe-charts-downloads]][lobe-charts-link]                                                                                                          | [<img width="400" alt="LobeCharts docs" src="https://repository-images.githubusercontent.com/752544109/9ab958ba-96f0-4862-a0de-dcc5f8348110">][lobe-charts-docs]  |
+| [**✒️ LobeEditor**][lobe-editor-github] `@lobehub/editor`<br/>_One editor for chat, documents and AI edits._<br/>A rich text editor for React, built on Meta's Lexical, for developers building AI apps: chat composers, Markdown documents and agent-driven editing.<br/><br/>[![][lobe-editor-shield]][lobe-editor-link] [![][lobe-editor-downloads]][lobe-editor-link]                                   | [<img width="400" alt="LobeEditor docs" src="https://repository-images.githubusercontent.com/1020194321/9946b145-8bca-421e-8495-57437907db62">][lobe-editor-docs] |
+| [**📖 DocsKit**][docs-kit-github] `@lobehub/docs-kit`<br/>_The Documentation Kit for React Component Libraries_<br/>LobeHub's documentation toolkit and `lobedocs` CLI. Write MDX next to your React components and get a prerendered docs site with live demos, API tables, search, `skills.md` and `llms.txt`.<br/><br/>[![][docs-kit-shield]][docs-kit-link] [![][docs-kit-downloads]][docs-kit-link]    | [<img width="400" alt="DocsKit docs" src="https://repository-images.githubusercontent.com/1428543135/2026feb8-4091-4f65-8335-0076f3c1143c">][docs-kit-docs]       |
+| [**🌊 Streamdown**][streamdown-github] `@lobehub/streamdown`<br/>_The Streaming Markdown Engine for React_<br/>LobeHub's headless React renderer for markdown that streams in from LLMs. It caches finished blocks, reveals text smoothly character by character, and keeps half-typed LaTeX from flashing.<br/><br/>[![][streamdown-shield]][streamdown-link] [![][streamdown-downloads]][streamdown-link] | [<img width="400" alt="Streamdown docs" src="https://repository-images.githubusercontent.com/1362345259/9438e06e-10ab-4265-b8f5-b396f923b2bb">][streamdown-docs]  |
+
+<details>
+<summary><strong>🧩 More packages</strong></summary>
+
+| [**😀 FluentEmoji**][fluent-emoji-github] `@lobehub/fluent-emoji`<br/>_Expressive Emoji for React, Loaded on Demand_<br/>A React component and helpers that render Microsoft Fluent Emoji in five styles (animated, 3D, modern, flat and mono), with images loaded from a CDN. For React developers who want the same emoji on every platform without bundling image assets; browse them all at [fluent-emoji.lobehub.com](https://fluent-emoji.lobehub.com).<br/><br/>[![][fluent-emoji-shield]][fluent-emoji-link] [![][fluent-emoji-downloads]][fluent-emoji-link] | [<img width="400" alt="FluentEmoji docs" src="https://repository-images.githubusercontent.com/804759710/6a5e449c-48b0-4d56-8dcb-6c94b2a3abaf">][fluent-emoji-docs] |
+| :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [**🎤 LobeTTS**][lobe-tts-github] `@lobehub/tts`<br/>_Give your app a voice, and ears._<br/>Text-to-speech and speech-to-text for server and browser, with React hooks and audio components.<br/><br/>[![][lobe-tts-shield]][lobe-tts-link] [![][lobe-tts-downloads]][lobe-tts-link]                                                                                                                                                                                                                                                                                  | [<img width="400" alt="LobeTTS docs" src="https://repository-images.githubusercontent.com/713462676/d13d3fda-9c5d-457c-a816-4c333cc96363">][lobe-tts-docs]         |
+| [**📐 LobeLint**][lobe-lint-github] `@lobehub/lint`<br/>_Lint, Format and Commit the LobeHub Way_<br/>Shared ESLint, Prettier, Stylelint, Commitlint, Remarklint and semantic-release configs from LobeHub, plus the `create-lobe-lint` CLI that sets them up. Use them in LobeHub projects or in any JavaScript and TypeScript project that wants the same conventions.<br/><br/>[![][lobe-lint-shield]][lobe-lint-link] [![][lobe-lint-downloads]][lobe-lint-link]                                                                                                  | [<img width="400" alt="LobeLint docs" src="https://repository-images.githubusercontent.com/650028465/d47e481a-3d6d-4e9a-92c4-9b586f0a13a2">][lobe-lint-docs]       |
+| [**🌏 LobeI18n**][lobe-i18n] `@lobehub/i18n-cli`<br/>A CLI that translates your i18n files with AI. It splits large files automatically, updates incrementally, and can translate Markdown too.<br/><br/>[![][lobe-i18n-shield]][lobe-i18n-npm]                                                                                                                                                                                                                                                                                                                       | [<img width="400" alt="LobeI18n" src="https://raw.githubusercontent.com/lobehub/lobe-assets/master/assets/lobe-i18n-preview.webp">][lobe-i18n]                     |
+| [**💌 LobeCommit**][lobe-commit]<br/>A CLI tool that uses ChatGPT to generate Gitmoji-based commit messages.                                                                                                                                                                                                                                                                                                                                                                                                                                                          |                                                                                                                                                                    |
+
+</details>
 
 <div align="right">
 
@@ -408,12 +401,11 @@ Every bit counts and your one-time donation sparkles in our galaxy of support! Y
 
 </div>
 
-## 🔗 More Products
+## 🔬 Research
 
-- **[🖥️ LobeHub Desktop & Mobile][lobehub-download]:** The desktop app runs locally and keeps privacy first; the mobile app keeps your agent team with you on the go.
-- **[⌨️ LobeHub CLI][lobehub-cli]:** Install `@lobehub/cli` and use `lh` to manage agents, generations, files and model providers from your terminal.
-- **[🌏 Lobe i18n][lobe-i18n]:** An automation tool for the i18n translation process, powered by ChatGPT. It splits large files automatically, updates incrementally, and lets you customize the OpenAI model, API proxy and temperature.
-- **[💌 Lobe Commit][lobe-commit]:** A CLI tool that uses Langchain/ChatGPT to generate Gitmoji-based commit messages.
+- **[📊 MCPMark][mcpmark]:** A stress-testing benchmark for MCP. Its tasks are realistic, multi-step and verifiable, covering file systems, databases, Playwright browser automation, GitHub and more. Built by EVAL SYS, LobeHub and the National University of Singapore, and open source under Apache-2.0.
+- **[📄 Research paper][mcpmark-paper]:** Read our research paper on Hugging Face Papers.
+- **[🧪 EVAL SYS][eval-sys]:** An evaluation systems organization, one of the teams behind MCPMark.
 
 <div align="right">
 
@@ -462,13 +454,25 @@ This project is [LobeHub Community License](./LICENSE) licensed.
 [docker-size-link]: https://hub.docker.com/r/lobehub/lobehub
 [docker-size-shield]: https://img.shields.io/docker/image-size/lobehub/lobehub?color=369eff&labelColor=black&style=flat-square&sort=semver
 [docs]: https://lobehub.com/docs/usage/start
+[docs-auth]: https://lobehub.com/docs/self-hosting/auth
 [docs-dev-guide]: https://lobehub.com/docs/development/start
 [docs-docker]: https://lobehub.com/docs/self-hosting/platform/docker-compose
 [docs-env-var]: https://lobehub.com/docs/self-hosting/environment-variables
+[docs-kit-docs]: https://docs-kit.lobehub.com/
+[docs-kit-downloads]: https://img.shields.io/npm/dt/@lobehub/docs-kit?color=8ae8ff&labelColor=black&logo=npm&logoColor=white&style=flat-square
+[docs-kit-github]: https://github.com/lobehub/docs-kit
+[docs-kit-link]: https://www.npmjs.com/package/@lobehub/docs-kit
+[docs-kit-shield]: https://img.shields.io/npm/v/@lobehub/docs-kit?color=369eff&labelColor=black&logo=npm&logoColor=white&style=flat-square
 [docs-model-provider]: https://lobehub.com/docs/self-hosting/environment-variables/model-provider
 [docs-self-hosting]: https://lobehub.com/docs/self-hosting/start
 [docs-upstream-sync]: https://lobehub.com/docs/self-hosting/advanced/upstream-sync
 [docs-vercel]: https://lobehub.com/docs/self-hosting/platform/vercel
+[eval-sys]: https://github.com/eval-sys
+[fluent-emoji-docs]: https://fluent-emoji.lobehub.com
+[fluent-emoji-downloads]: https://img.shields.io/npm/dt/@lobehub/fluent-emoji?color=8ae8ff&labelColor=black&logo=npm&logoColor=white&style=flat-square
+[fluent-emoji-github]: https://github.com/lobehub/fluent-emoji
+[fluent-emoji-link]: https://www.npmjs.com/package/@lobehub/fluent-emoji
+[fluent-emoji-shield]: https://img.shields.io/npm/v/@lobehub/fluent-emoji?color=369eff&labelColor=black&logo=npm&logoColor=white&style=flat-square
 [fossa-license-link]: https://app.fossa.com/projects/git%2Bgithub.com%2Flobehub%2Flobehub
 [fossa-license-shield]: https://app.fossa.com/api/projects/git%2Bgithub.com%2Flobehub%2Flobehub.svg?type=large
 [github-action-release-link]: https://github.com/lobehub/lobehub/actions/workflows/release.yml
@@ -493,29 +497,46 @@ This project is [LobeHub Community License](./LICENSE) licensed.
 [image-banner]: https://github.com/user-attachments/assets/5f78ae58-ed4f-4d38-8037-96109fbba58c
 [image-star]: https://github.com/user-attachments/assets/3216e25b-186f-4a54-9cb4-2f124aec0471
 [issues-link]: https://img.shields.io/github/issues/lobehub/lobehub.svg?style=flat
+[lobe-charts-docs]: https://charts.lobehub.com
+[lobe-charts-downloads]: https://img.shields.io/npm/dt/@lobehub/charts?color=8ae8ff&labelColor=black&logo=npm&logoColor=white&style=flat-square
 [lobe-charts-github]: https://github.com/lobehub/lobe-charts
 [lobe-charts-link]: https://www.npmjs.com/package/@lobehub/charts
 [lobe-charts-shield]: https://img.shields.io/npm/v/@lobehub/charts?color=369eff&labelColor=black&logo=npm&logoColor=white&style=flat-square
-[lobe-commit]: https://github.com/lobehub/lobe-commit/tree/master/packages/lobe-commit
+[lobe-commit]: https://github.com/lobehub/lobe-cli-toolbox/tree/master/packages/lobe-commit
+[lobe-editor-docs]: https://editor.lobehub.com
+[lobe-editor-downloads]: https://img.shields.io/npm/dt/@lobehub/editor?color=8ae8ff&labelColor=black&logo=npm&logoColor=white&style=flat-square
 [lobe-editor-github]: https://github.com/lobehub/lobe-editor
 [lobe-editor-link]: https://www.npmjs.com/package/@lobehub/editor
 [lobe-editor-shield]: https://img.shields.io/npm/v/@lobehub/editor?color=369eff&labelColor=black&logo=npm&logoColor=white&style=flat-square
-[lobe-i18n]: https://github.com/lobehub/lobe-commit/tree/master/packages/lobe-i18n
+[lobe-i18n]: https://github.com/lobehub/lobe-cli-toolbox/tree/master/packages/lobe-i18n
+[lobe-i18n-npm]: https://www.npmjs.com/package/@lobehub/i18n-cli
+[lobe-i18n-shield]: https://img.shields.io/npm/v/@lobehub/i18n-cli?color=369eff&labelColor=black&logo=npm&logoColor=white&style=flat-square
+[lobe-icons-docs]: https://icons.lobehub.com
+[lobe-icons-downloads]: https://img.shields.io/npm/dt/@lobehub/icons?color=8ae8ff&labelColor=black&logo=npm&logoColor=white&style=flat-square
 [lobe-icons-github]: https://github.com/lobehub/lobe-icons
 [lobe-icons-link]: https://www.npmjs.com/package/@lobehub/icons
 [lobe-icons-shield]: https://img.shields.io/npm/v/@lobehub/icons?color=369eff&labelColor=black&logo=npm&logoColor=white&style=flat-square
+[lobe-lint-docs]: https://lint.lobehub.com
+[lobe-lint-downloads]: https://img.shields.io/npm/dt/@lobehub/lint?color=8ae8ff&labelColor=black&logo=npm&logoColor=white&style=flat-square
 [lobe-lint-github]: https://github.com/lobehub/lobe-lint
 [lobe-lint-link]: https://www.npmjs.com/package/@lobehub/lint
 [lobe-lint-shield]: https://img.shields.io/npm/v/@lobehub/lint?color=369eff&labelColor=black&logo=npm&logoColor=white&style=flat-square
+[lobe-tts-docs]: https://tts.lobehub.com
+[lobe-tts-downloads]: https://img.shields.io/npm/dt/@lobehub/tts?color=8ae8ff&labelColor=black&logo=npm&logoColor=white&style=flat-square
+[lobe-tts-github]: https://github.com/lobehub/lobe-tts
+[lobe-tts-link]: https://www.npmjs.com/package/@lobehub/tts
+[lobe-tts-shield]: https://img.shields.io/npm/v/@lobehub/tts?color=369eff&labelColor=black&logo=npm&logoColor=white&style=flat-square
+[lobe-ui-docs]: https://ui.lobehub.com
+[lobe-ui-downloads]: https://img.shields.io/npm/dt/@lobehub/ui?color=8ae8ff&labelColor=black&logo=npm&logoColor=white&style=flat-square
 [lobe-ui-github]: https://github.com/lobehub/lobe-ui
 [lobe-ui-link]: https://www.npmjs.com/package/@lobehub/ui
 [lobe-ui-shield]: https://img.shields.io/npm/v/@lobehub/ui?color=369eff&labelColor=black&logo=npm&logoColor=white&style=flat-square
-[lobehub-cli]: https://lobehub.com/cli
-[lobehub-download]: https://lobehub.com/downloads
 [market-agents]: https://lobehub.com/agent
 [market-icons]: https://lobehub.com/icons
 [market-mcp]: https://lobehub.com/mcp
 [market-skills]: https://lobehub.com/skills
+[mcpmark]: https://mcpmark.ai
+[mcpmark-paper]: https://huggingface.co/papers/2509.24002
 [official-site]: https://lobehub.com
 [pr-welcome-link]: https://github.com/lobehub/lobehub/pulls
 [pr-welcome-shield]: https://img.shields.io/badge/🤯_pr_welcome-%E2%86%92-ffcb47?labelColor=black&style=for-the-badge
@@ -536,6 +557,11 @@ This project is [LobeHub Community License](./LICENSE) licensed.
 [share-whatsapp-shield]: https://img.shields.io/badge/-share%20on%20whatsapp-black?labelColor=black&logo=whatsapp&logoColor=white&style=flat-square
 [share-x-link]: https://x.com/intent/tweet?hashtags=chatbot%2CchatGPT%2CopenAI&text=Check%20this%20GitHub%20repository%20out%20%F0%9F%A4%AF%20LobeHub%20-%20An%20open-source%2C%20extensible%20%28Function%20Calling%29%2C%20high-performance%20chatbot%20framework.%20It%20supports%20one-click%20free%20deployment%20of%20your%20private%20ChatGPT%2FLLM%20web%20application.&url=https%3A%2F%2Fgithub.com%2Flobehub%2Flobehub
 [share-x-shield]: https://img.shields.io/badge/-share%20on%20x-black?labelColor=black&logo=x&logoColor=white&style=flat-square
+[streamdown-docs]: https://streamdown.lobehub.com
+[streamdown-downloads]: https://img.shields.io/npm/dt/@lobehub/streamdown?color=8ae8ff&labelColor=black&logo=npm&logoColor=white&style=flat-square
+[streamdown-github]: https://github.com/lobehub/streamdown
+[streamdown-link]: https://www.npmjs.com/package/@lobehub/streamdown
+[streamdown-shield]: https://img.shields.io/npm/v/@lobehub/streamdown?color=369eff&labelColor=black&logo=npm&logoColor=white&style=flat-square
 [submit-agents-link]: https://github.com/lobehub/lobe-chat-agents
 [submit-agents-shield]: https://img.shields.io/badge/🤖/🏪_submit_agent-%E2%86%92-c4f042?labelColor=black&style=for-the-badge
 [vercel-link]: https://app.lobehub.com
