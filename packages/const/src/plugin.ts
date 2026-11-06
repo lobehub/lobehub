@@ -51,3 +51,29 @@ export const MENTION_TAG_REGEX = /<mention\b[^>]*>([\S\s]*?)(?:<\/mention>|$)/;
 
 export const AGENTS_TAG = 'lobeAgents';
 export const AGENTS_TAG_REGEX = /<lobeAgents\b[^>]*(?:\/>|>([\S\s]*?)(?:<\/lobeAgents>|$))/;
+
+/**
+ * `user_connectors.metadata` key a marketplace MCP install sets once it has
+ * finished. An OAuth callback can still connect a row after the user canceled
+ * the install, so a connected marketplace row is callable only with this mark
+ * (or, for installs made before connectors, a `user_installed_plugins` row).
+ */
+export const MARKETPLACE_INSTALL_COMPLETED_KEY = 'marketplaceInstalled';
+
+export const isMarketplaceInstallCompleted = (metadata: unknown): boolean =>
+  !!metadata &&
+  typeof metadata === 'object' &&
+  (metadata as Record<string, unknown>)[MARKETPLACE_INSTALL_COMPLETED_KEY] === true;
+
+/**
+ * A connector the tool runtime can call: an HTTP URL, a stdio command, or a
+ * marketplace server the market hosts (`cloud`). Rows without one only
+ * project tools another executor runs.
+ */
+export const hasCallableMcpEndpoint = (connector: {
+  mcpConnectionType?: string | null;
+  mcpServerUrl?: string | null;
+}): boolean =>
+  !!connector.mcpServerUrl ||
+  connector.mcpConnectionType === 'stdio' ||
+  connector.mcpConnectionType === 'cloud';

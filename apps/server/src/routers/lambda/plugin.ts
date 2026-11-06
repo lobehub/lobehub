@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { PluginModel } from '@/database/models/plugin';
-import { router } from '@/libs/trpc/lambda';
+import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 
 import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
@@ -19,60 +19,28 @@ const pluginProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =
   });
 });
 
+/**
+ * The retired 1.0 create entry points. Released desktop builds and older CLIs
+ * still call them, so they answer with a stable "update" error instead of a
+ * bare 404 — and never write a row.
+ */
+const retiredPluginWrite = authedProcedure.input(z.any()).mutation(() => {
+  throw new TRPCError({
+    code: 'PRECONDITION_FAILED',
+    message:
+      'Installing plugins through this endpoint is no longer supported. Update LobeHub and add MCP servers as connectors.',
+  });
+});
+
+/**
+ * Legacy `user_installed_plugins` rows: read, update and remove only. New MCP
+ * installs are written to `user_connectors` through `connector.create`.
+ */
 export const pluginRouter = router({
-  createOrInstallPlugin: pluginProcedure
-    .use(withScopedPermission('agent:update'))
-    .input(
-      z.object({
-        customParams: z.any().optional(),
-        identifier: z.string(),
-        manifest: z.any(),
-        settings: z.any().optional(),
-        type: z.enum(['plugin', 'customPlugin']),
-      }),
-    )
-    .mutation(async ({ input, ctx }) => {
-      const result = await ctx.pluginModel.findById(input.identifier);
-
-      // if not exist, we should create the plugin
-      if (!result) {
-        const data = await ctx.pluginModel.create({
-          customParams: input.customParams,
-          identifier: input.identifier,
-          manifest: input.manifest,
-          settings: input.settings,
-          type: input.type,
-        });
-
-        return data.identifier;
-      }
-
-      // or we can just update the plugin manifest — but only the creator (or a
-      // workspace owner) may overwrite an existing row's manifest.
-      assertWorkspaceRowManageable(ctx, result.userId, 'plugin');
-      await ctx.pluginModel.update(input.identifier, { manifest: input.manifest });
-    }),
-
-  createPlugin: pluginProcedure
-    .use(withScopedPermission('agent:update'))
-    .input(
-      z.object({
-        customParams: z.any().optional(),
-        identifier: z.string(),
-        manifest: z.any().optional(),
-        type: z.enum(['plugin', 'customPlugin']),
-      }),
-    )
-    .mutation(async ({ input, ctx }) => {
-      const data = await ctx.pluginModel.create({
-        customParams: input.customParams,
-        identifier: input.identifier,
-        manifest: input.manifest,
-        type: input.type,
-      });
-
-      return data.identifier;
-    }),
+  /** @deprecated Retired: rejects without writing. Use `connector.create`. */
+  createOrInstallPlugin: retiredPluginWrite,
+  /** @deprecated Retired: rejects without writing. Use `connector.create`. */
+  createPlugin: retiredPluginWrite,
 
   getPlugins: wsCompatProcedure.use(serverDatabase).query(async ({ ctx }): Promise<LobeTool[]> => {
     const pluginModel = new PluginModel(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined);

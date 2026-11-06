@@ -36,7 +36,7 @@ import type { ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { openConnectorEditDrawer } from '@/features/Connectors/CustomConnectorModal/imperative';
+import { getConnectorConfigureConfig } from '@/features/Connectors/CustomConnectorModal/imperative';
 import { openPluginEditDrawer } from '@/features/PluginDevModal/imperative';
 import { createSkillStoreModal } from '@/features/SkillStore';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -571,8 +571,8 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
   const marketAgentSkills = useToolStore(agentSkillsSelectors.getMarketAgentSkills, isEqual);
   const userAgentSkills = useToolStore(agentSkillsSelectors.getUserAgentSkills, isEqual);
 
-  // Custom connectors (user-added OAuth MCP servers) from the connector store
-  const customConnectors = useToolStore(connectorSelectors.customConnectors, isEqual);
+  // MCP connectors the user added: custom ones and marketplace installs
+  const customConnectors = useToolStore(connectorSelectors.userMcpConnectors, isEqual);
   const isConnectorsInit = useToolStore((s) => s.isConnectorsInit);
   const fetchConnectors = useToolStore((s) => s.fetchConnectors);
   useEffect(() => {
@@ -1189,7 +1189,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
 
         return createManagedSkillItem({
           badge: <Icon icon={McpIcon} size={12} />,
-          configureConfig: { onConfigure: () => openConnectorEditDrawer(connector.id) },
+          configureConfig: getConnectorConfigureConfig(connector),
           deleteConfig: {
             displayName: title,
             onDelete: async () => {

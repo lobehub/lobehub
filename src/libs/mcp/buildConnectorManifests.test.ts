@@ -73,3 +73,20 @@ describe('buildConnectorManifests mcpParams headers', () => {
     expect(params.headers).toBeUndefined();
   });
 });
+
+describe('buildConnectorManifests cloud connectors', () => {
+  it('routes a cloud connector to the cloud executor by identifier', () => {
+    const connector = {
+      ...httpConnector(null, { cloudEndPoint: 'https://cloud.example', customHeaders: { A: '1' } }),
+      mcpConnectionType: 'cloud',
+      mcpServerUrl: null,
+    } as DecryptedConnector;
+
+    expect(mcpParamsOf(connector)).toEqual({
+      headers: { A: '1' },
+      name: 'my-conn',
+      type: 'cloud',
+      url: 'https://cloud.example',
+    });
+  });
+});

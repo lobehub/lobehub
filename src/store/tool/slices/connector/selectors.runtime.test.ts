@@ -60,6 +60,74 @@ describe('marketplace MCP runtime manifests', () => {
       buildClientConnectorManifests(connectorSelectors.executableMcpConnectors(state)),
     ).toEqual([]);
   });
+
+  it('offers a finished connector install of any transport without a plugin row', () => {
+    const marked = { marketplaceInstalled: true };
+    const state = {
+      connectors: [
+        connector({ id: 'http', identifier: 'http-mcp', metadata: marked }),
+        connector({
+          id: 'stdio',
+          identifier: 'stdio-mcp',
+          mcpConnectionType: 'stdio',
+          mcpServerUrl: null,
+          metadata: marked,
+        }),
+        connector({
+          id: 'cloud',
+          identifier: 'cloud-mcp',
+          mcpConnectionType: 'cloud',
+          mcpServerUrl: null,
+          metadata: marked,
+        }),
+      ],
+      installedPlugins: [],
+    } as unknown as ToolStore;
+    expect(connectorSelectors.executableMcpConnectors(state).map((c) => c.identifier)).toEqual([
+      'http-mcp',
+      'stdio-mcp',
+      'cloud-mcp',
+    ]);
+  });
+});
+
+describe('marketplace MCPs installed as connectors', () => {
+  const marked = connector({ metadata: { marketplaceInstalled: true } });
+  const state = (patch: Partial<ToolStore>) =>
+    ({ connectors: [], installedPlugins: [], ...patch }) as unknown as ToolStore;
+
+  it('counts only a finished install as installed', () => {
+    expect(
+      connectorSelectors.isMarketplaceConnectorInstalled('oauth-market')(
+        state({ connectors: [marked] }),
+      ),
+    ).toBe(true);
+    // A connected OAuth row without the install mark is not an install
+    expect(
+      connectorSelectors.isMarketplaceConnectorInstalled('oauth-market')(
+        state({ connectors: [connector({})] }),
+      ),
+    ).toBe(false);
+  });
+
+  it('lists a connector install beside custom connectors unless a legacy row lists it', () => {
+    const custom = connector({ id: 'custom', identifier: 'my-mcp', sourceType: 'custom' });
+    expect(
+      connectorSelectors
+        .userMcpConnectors(state({ connectors: [custom, marked] }))
+        .map((c) => c.identifier),
+    ).toEqual(['my-mcp', 'oauth-market']);
+    expect(
+      connectorSelectors
+        .userMcpConnectors(
+          state({
+            connectors: [custom, marked],
+            installedPlugins: [{ identifier: 'oauth-market' }] as never,
+          }),
+        )
+        .map((c) => c.identifier),
+    ).toEqual(['my-mcp']);
+  });
 });
 
 describe('connectorSelectors.connectorByIdentifierForAgent', () => {
