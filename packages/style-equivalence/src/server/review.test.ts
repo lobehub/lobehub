@@ -227,6 +227,23 @@ describe('review API', () => {
     expect(payload.counts).toMatchObject({ proven: 1, total: 4 });
   });
 
+  it('describes any case for the case page and says whether it sits in the review queue', async () => {
+    const view = async (key: string) =>
+      (await fetch(`${server.url}/api/case/${encodeURIComponent(key)}/review`)).json() as any;
+    const equal = await view('src/A.tsx|A#3');
+    expect(equal.queued).toBe(false);
+    expect(equal.conditions).toEqual(['light/1280/default', 'dark/1280/default']);
+    expect(equal.item).toMatchObject({ canPass: false, category: 'equal', key: 'src/A.tsx|A#3' });
+    expect(equal.item.combos).toHaveLength(1);
+    const difference = await view('src/A.tsx|A#0');
+    expect(difference.queued).toBe(true);
+    expect(difference.item.summary).toEqual(['文字颜色 black → red']);
+    const missing = await fetch(
+      `${server.url}/api/case/${encodeURIComponent('src/A.tsx|Z#9')}/review`,
+    );
+    expect(missing.status).toBe(404);
+  });
+
   it('records a pass in the records reviews', async () => {
     const response = await post({
       action: 'pass',

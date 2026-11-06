@@ -243,6 +243,36 @@ export const reviewPayload = async (stored: StoredRun, layoutComponents: string[
   };
 };
 
+export const caseReview = async (
+  stored: StoredRun,
+  key: string,
+  layoutComponents: string[] = [],
+) => {
+  const { context, items, verdict } = await reviewState(stored);
+  const queued = items.find((item) => item.key === key);
+  const entry = verdict.items.find((item) => item.key === key);
+  if (!queued && !entry) throw new ApiError(404, `UNKNOWN_CASE:${key}`);
+  const item: ReviewItem = queued ?? {
+    ...entry!,
+    canPass: false,
+    needsAgent: false,
+    state: 'passed',
+  };
+  const caseEntry = context.cases.get(key);
+  return {
+    conditions: (stored.run.conditions as string[] | undefined) ?? [],
+    item: describe(
+      item,
+      caseEntry,
+      context.elements.get(key) ?? elementFor(stored, key, caseEntry),
+      stored.evidence[key] as CaseEvidence | undefined,
+      new Set(layoutComponents),
+      standInsFor(key, caseEntry, stored.plans ?? []),
+    ),
+    queued: Boolean(queued),
+  };
+};
+
 const failure = (error: unknown) => {
   const message = error instanceof Error ? error.message : String(error);
   return new ApiError(message.startsWith('NOTE_REQUIRED') ? 400 : 409, message);

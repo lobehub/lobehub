@@ -76,9 +76,9 @@ const styles = stylex.create({
 const isTyping = (target: EventTarget | null) =>
   target instanceof HTMLElement && ['INPUT', 'TEXTAREA'].includes(target.tagName);
 
-export const ReviewPage = () => {
+export const ReviewPage = ({ initialKey }: { initialKey?: string }) => {
   const [payload, setPayload] = useState<ReviewPayload>();
-  const [current, setCurrent] = useState<string>();
+  const [current, setCurrent] = useState<string | undefined>(initialKey);
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();

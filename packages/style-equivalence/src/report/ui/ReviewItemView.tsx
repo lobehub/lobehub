@@ -229,26 +229,24 @@ const AgentNote = ({ item }: { item: ReviewView }) =>
     </div>
   );
 
-export const ReviewItemView = ({
+export const ReviewEvidence = ({
   conditions,
   item,
+  notes = 'needed',
 }: {
   conditions: string[];
   item: ReviewView;
+  notes?: 'needed' | 'written';
 }) => {
   const grid = reviewGrid(item.combos, conditions, item.comboDifferences);
   const visual = hasScreenshots(item);
+  const note = notes === 'needed' ? item.needsAgent : Boolean(item.note);
   return (
-    <section>
-      <h1 {...stylex.props(styles.title)}>{item.title}</h1>
-      <p {...stylex.props(styles.ask)}>
-        {item.ask}
-        {item.rework && `　你上次打回的原因：${item.rework.note}`}
-      </p>
+    <>
       {item.category === 'blocking' && (
         <div {...stylex.props(styles.agent, styles.error)}>{item.errors[0] ?? '渲染失败'}</div>
       )}
-      {item.needsAgent && <AgentNote item={item} />}
+      {note && <AgentNote item={item} />}
       {visual && <Legend />}
       {visual && <ShotGrid columns={grid.columns} item={item} rows={grid.rows} />}
       {visual && grid.states.columns.length > 0 && (
@@ -273,6 +271,23 @@ export const ReviewItemView = ({
         </div>
       )}
       <StyleDetails item={item} />
-    </section>
+    </>
   );
 };
+
+export const ReviewItemView = ({
+  conditions,
+  item,
+}: {
+  conditions: string[];
+  item: ReviewView;
+}) => (
+  <section>
+    <h1 {...stylex.props(styles.title)}>{item.title}</h1>
+    <p {...stylex.props(styles.ask)}>
+      {item.ask}
+      {item.rework && `　你上次打回的原因：${item.rework.note}`}
+    </p>
+    <ReviewEvidence conditions={conditions} item={item} />
+  </section>
+);

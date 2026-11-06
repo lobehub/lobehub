@@ -45,7 +45,7 @@ const styles = stylex.create({
 
 export const App = () => {
   const route = useRoute();
-  if (route.kind === 'review') return <ReviewPage />;
+  if (route.kind === 'review') return <ReviewPage initialKey={route.key} />;
   return <ReportApp route={route} />;
 };
 

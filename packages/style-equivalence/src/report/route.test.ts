@@ -11,4 +11,11 @@ describe('route', () => {
     expect(parseRoute('#/method')).toEqual({ kind: 'method' });
     expect(hrefOf({ anchor: 'border', kind: 'method' })).toBe('#/method#border');
   });
+
+  it('opens one review item by its key', () => {
+    const key = 'src/A.tsx|A#0';
+    expect(hrefOf({ key, kind: 'review' })).toBe(`#/review/${encodeURIComponent(key)}`);
+    expect(parseRoute(hrefOf({ key, kind: 'review' }))).toEqual({ key, kind: 'review' });
+    expect(parseRoute('#/review')).toEqual({ kind: 'review' });
+  });
 });
