@@ -55,11 +55,10 @@
   - [`第 3 个月` 顺利转正](#第-3-个月-顺利转正)
   - [把它们招进你的团队](#把它们招进你的团队)
 - [🧩 市场](#-市场)
+- [📖 文档](#-文档)
 - [🛳 开箱即用](#-开箱即用)
   - [`A` 使用 Docker Compose 部署（推荐）](#a-使用-docker-compose-部署推荐)
   - [`B` 一键部署](#b-一键部署)
-  - [配置](#配置)
-- [📦 生态系统](#-生态系统)
 - [⌨️ 本地开发](#️-本地开发)
 - [🤝 参与贡献](#-参与贡献)
 - [❤ 社区赞助](#-社区赞助)
@@ -235,6 +234,37 @@
 
 </div>
 
+## 📖 文档
+
+全部文档都在 [lobehub.com/zh/docs](https://lobehub.com/zh/docs/usage/start)：
+
+| 部分                                                                              | 内容                                                                       |
+| :-------------------------------------------------------------------------------- | :------------------------------------------------------------------------- |
+| [获取 LobeHub](https://lobehub.com/zh/docs/usage/getting-started/get-lobehub)     | 网页端、macOS、Windows、Linux 和移动端，以及任务在哪里运行                 |
+| [Lobe AI](https://lobehub.com/zh/docs/usage/getting-started/lobe-ai)              | 内置助理，无需配置就能聊天、写代码、做研究、写文章                         |
+| [助理](https://lobehub.com/zh/docs/usage/getting-started/agent)                   | 系统角色、模型、Skills、Connectors、联网搜索、资源库和记忆                 |
+| [Agent 团队](https://lobehub.com/zh/docs/usage/agent/agent-team)                  | 多个助理一起协作：顺序、并行、迭代或辩论模式                               |
+| [连接外部 Agent](https://lobehub.com/zh/docs/usage/agent/connect-external-agents) | 接入 Claude Code、Codex、OpenClaw、Hermes 等，包括项目上下文与权限         |
+| [任务](https://lobehub.com/zh/docs/usage/getting-started/task)                    | 把工作委派给 Agent，跟踪状态、评论追问，一次性运行或按周期重复             |
+| [记忆](https://lobehub.com/zh/docs/usage/getting-started/memory)                  | 可以回看、编辑和删除的结构化记忆                                           |
+| [文稿](https://lobehub.com/zh/docs/usage/getting-started/page)                    | 和助理一起用 Markdown 写长文档                                             |
+| [资源库](https://lobehub.com/zh/docs/usage/getting-started/resource)              | 文档、AI 生成的图片和文稿，助理可以基于它们回答                            |
+| [渠道](https://lobehub.com/zh/docs/usage/channels/overview)                       | 用你自己的机器人接入 Discord、Slack、Telegram、LINE、QQ、微信、飞书和 Lark |
+| [Messenger](https://lobehub.com/zh/docs/usage/messenger/overview)                 | 通过 LobeHub 官方机器人，在 Telegram、Slack、Discord 和微信里和助理对话    |
+| [GitHub 集成](https://lobehub.com/zh/docs/usage/integrations/github)              | 跟踪 Agent 发起的 PR：合并即验收，CI 失败和评审意见回到 Agent              |
+| [市场](https://lobehub.com/zh/docs/usage/community/overview)                      | 社区里的助理、MCP 服务器和技能                                             |
+| [模型服务商](https://lobehub.com/zh/docs/usage/providers)                         | 40 多家服务商、推理平台和本地模型的配置教程                                |
+| [自部署](https://lobehub.com/zh/docs/self-hosting/start)                          | Docker Compose、Vercel 等部署方式                                          |
+| [环境变量](https://lobehub.com/zh/docs/self-hosting/environment-variables)        | 全部配置项，包括模型服务商                                                 |
+| [身份验证](https://lobehub.com/zh/docs/self-hosting/auth)                         | 基于 Better Auth 的登录，支持 Auth0 等 SSO 服务                            |
+| [开发指南](https://lobehub.com/zh/docs/development/start)                         | 技术栈、本地开发环境与贡献规范                                             |
+
+<div align="right">
+
+[![][back-to-top]](#readme-top)
+
+</div>
+
 ## 🛳 开箱即用
 
 在自己的服务器上运行 LobeHub，数据留在你手里。完整教程见 [📘 构建属于自己的 LobeHub][docs-self-hosting]。
@@ -266,37 +296,6 @@ docker compose up -d
 | [![][deploy-button-image]][deploy-link] | [![][deploy-on-zeabur-button-image]][deploy-on-zeabur-link] | [![][deploy-on-sealos-button-image]][deploy-on-sealos-link] | [![][deploy-on-repocloud-button-image]][deploy-on-repocloud-link] | [![][deploy-on-alibaba-cloud-button-image]][deploy-on-alibaba-cloud-link] |
 
 </div>
-
-### 配置
-
-- [📘 环境变量][docs-env-var]
-- [📘 模型服务商][docs-model-provider]：支持 40 多家服务商，可以在应用设置里填写 Key，也可以用环境变量配置
-- [📘 身份验证][docs-auth]
-- [📘 让 Fork 部署保持最新][docs-upstream-sync]
-
-<div align="right">
-
-[![][back-to-top]](#readme-top)
-
-</div>
-
-## 📦 生态系统
-
-LobeHub 团队开源的工具包，也可以用在你自己的应用里。
-
-| 项目                                      | 描述                                                                                                               | NPM                                                                                            |
-| :---------------------------------------- | :----------------------------------------------------------------------------------------------------------------- | :--------------------------------------------------------------------------------------------- |
-| [**🍭 LobeUI**][lobe-ui-github]           | LobeHub 开源的 React 组件库，用于构建 AI 对话与 AIGC 网页应用。                                                    | [![][lobe-ui-shield]][lobe-ui-link] [![][lobe-ui-downloads]][lobe-ui-link]                     |
-| [**🥨 LobeIcons**][lobe-icons-github]     | 340+ 个 AI 模型与服务商 Logo，可用于 React、React Native，也可作为静态 SVG / PNG / WEBP 使用。                     | [![][lobe-icons-shield]][lobe-icons-link] [![][lobe-icons-downloads]][lobe-icons-link]         |
-| [**📊 LobeCharts**][lobe-charts-github]   | 适配 Lobe UI 主题的 React 图表组件，适合数据看板与 AI 基准测试。                                                   | [![][lobe-charts-shield]][lobe-charts-link] [![][lobe-charts-downloads]][lobe-charts-link]     |
-| [**✒️ LobeEditor**][lobe-editor-github]   | 基于 Meta Lexical 的 React 富文本编辑器，适用于对话输入框、Markdown 文档和由 agent 驱动的编辑。                    | [![][lobe-editor-shield]][lobe-editor-link] [![][lobe-editor-downloads]][lobe-editor-link]     |
-| [**📖 DocsKit**][docs-kit-github]         | LobeHub 的文档工具包与 `lobedocs` CLI，把写在 React 组件旁的 MDX 变成预渲染的文档站。                              | [![][docs-kit-shield]][docs-kit-link] [![][docs-kit-downloads]][docs-kit-link]                 |
-| [**🌊 Streamdown**][streamdown-github]    | 无头 React 渲染器，专门渲染 LLM 流式输出的 Markdown。                                                              | [![][streamdown-shield]][streamdown-link] [![][streamdown-downloads]][streamdown-link]         |
-| [**😀 FluentEmoji**][fluent-emoji-github] | 以五种风格在 React 中渲染微软 Fluent Emoji，图片按需从 CDN 加载。                                                  | [![][fluent-emoji-shield]][fluent-emoji-link] [![][fluent-emoji-downloads]][fluent-emoji-link] |
-| [**🎤 LobeTTS**][lobe-tts-github]         | 面向服务端与浏览器的语音合成与语音识别，提供 React Hooks 与音频组件。                                              | [![][lobe-tts-shield]][lobe-tts-link] [![][lobe-tts-downloads]][lobe-tts-link]                 |
-| [**📐 LobeLint**][lobe-lint-github]       | 共享的 ESLint、Prettier、Stylelint、Commitlint、Remarklint 与 semantic-release 配置，以及 `create-lobe-lint` CLI。 | [![][lobe-lint-shield]][lobe-lint-link] [![][lobe-lint-downloads]][lobe-lint-link]             |
-| [**🌏 LobeI18n**][lobe-i18n-github]       | 用 AI 翻译 i18n 文件的 CLI，支持增量更新和 Markdown 翻译。                                                         | [![][lobe-i18n-shield]][lobe-i18n-link] [![][lobe-i18n-downloads]][lobe-i18n-link]             |
-| [**💌 LobeCommit**][lobe-commit-github]   | 用 ChatGPT 生成基于 Gitmoji 的提交信息的 CLI。                                                                     | [![][lobe-commit-shield]][lobe-commit-link] [![][lobe-commit-downloads]][lobe-commit-link]     |
 
 <div align="right">
 
@@ -455,23 +454,11 @@ This project is [LobeHub Community License](./LICENSE) licensed.
 [docker-size-link]: https://hub.docker.com/r/lobehub/lobehub
 [docker-size-shield]: https://img.shields.io/docker/image-size/lobehub/lobehub?color=369eff&labelColor=black&style=flat-square&sort=semver
 [docs]: https://lobehub.com/zh/docs/usage/start
-[docs-auth]: https://lobehub.com/zh/docs/self-hosting/auth
 [docs-dev-guide]: https://lobehub.com/docs/development/start
 [docs-docker]: https://lobehub.com/zh/docs/self-hosting/platform/docker-compose
-[docs-env-var]: https://lobehub.com/zh/docs/self-hosting/environment-variables
-[docs-kit-downloads]: https://img.shields.io/npm/dt/@lobehub/docs-kit?color=8ae8ff&labelColor=black&logo=npm&logoColor=white&style=flat-square
-[docs-kit-github]: https://github.com/lobehub/docs-kit
-[docs-kit-link]: https://www.npmjs.com/package/@lobehub/docs-kit
-[docs-kit-shield]: https://img.shields.io/npm/v/@lobehub/docs-kit?color=369eff&labelColor=black&logo=npm&logoColor=white&style=flat-square
-[docs-model-provider]: https://lobehub.com/zh/docs/self-hosting/environment-variables/model-provider
 [docs-self-hosting]: https://lobehub.com/zh/docs/self-hosting/start
-[docs-upstream-sync]: https://lobehub.com/zh/docs/self-hosting/advanced/upstream-sync
 [docs-vercel]: https://lobehub.com/zh/docs/self-hosting/platform/vercel
 [eval-sys]: https://github.com/eval-sys
-[fluent-emoji-downloads]: https://img.shields.io/npm/dt/@lobehub/fluent-emoji?color=8ae8ff&labelColor=black&logo=npm&logoColor=white&style=flat-square
-[fluent-emoji-github]: https://github.com/lobehub/fluent-emoji
-[fluent-emoji-link]: https://www.npmjs.com/package/@lobehub/fluent-emoji
-[fluent-emoji-shield]: https://img.shields.io/npm/v/@lobehub/fluent-emoji?color=369eff&labelColor=black&logo=npm&logoColor=white&style=flat-square
 [fossa-license-link]: https://app.fossa.com/projects/git%2Bgithub.com%2Flobehub%2Flobehub
 [fossa-license-shield]: https://app.fossa.com/api/projects/git%2Bgithub.com%2Flobehub%2Flobehub.svg?type=large
 [github-action-release-link]: https://github.com/lobehub/lobehub/actions/workflows/release.yml
@@ -498,38 +485,6 @@ This project is [LobeHub Community License](./LICENSE) licensed.
 [image-banner]: https://hub-apac-1.lobeobjects.space/blog/assets/8beb20539c0fdd1b8fbbc6a07f293a78.webp
 [image-star]: https://github.com/user-attachments/assets/c3b482e7-cef5-4e94-bef9-226900ecfaab
 [issues-link]: https://img.shields.io/github/issues/lobehub/lobehub.svg?style=flat
-[lobe-charts-downloads]: https://img.shields.io/npm/dt/@lobehub/charts?color=8ae8ff&labelColor=black&logo=npm&logoColor=white&style=flat-square
-[lobe-charts-github]: https://github.com/lobehub/lobe-charts
-[lobe-charts-link]: https://www.npmjs.com/package/@lobehub/charts
-[lobe-charts-shield]: https://img.shields.io/npm/v/@lobehub/charts?color=369eff&labelColor=black&logo=npm&logoColor=white&style=flat-square
-[lobe-commit-downloads]: https://img.shields.io/npm/dt/@lobehub/commit-cli?color=8ae8ff&labelColor=black&logo=npm&logoColor=white&style=flat-square
-[lobe-commit-github]: https://github.com/lobehub/lobe-cli-toolbox/tree/master/packages/lobe-commit
-[lobe-commit-link]: https://www.npmjs.com/package/@lobehub/commit-cli
-[lobe-commit-shield]: https://img.shields.io/npm/v/@lobehub/commit-cli?color=369eff&labelColor=black&logo=npm&logoColor=white&style=flat-square
-[lobe-editor-downloads]: https://img.shields.io/npm/dt/@lobehub/editor?color=8ae8ff&labelColor=black&logo=npm&logoColor=white&style=flat-square
-[lobe-editor-github]: https://github.com/lobehub/lobe-editor
-[lobe-editor-link]: https://www.npmjs.com/package/@lobehub/editor
-[lobe-editor-shield]: https://img.shields.io/npm/v/@lobehub/editor?color=369eff&labelColor=black&logo=npm&logoColor=white&style=flat-square
-[lobe-i18n-downloads]: https://img.shields.io/npm/dt/@lobehub/i18n-cli?color=8ae8ff&labelColor=black&logo=npm&logoColor=white&style=flat-square
-[lobe-i18n-github]: https://github.com/lobehub/lobe-cli-toolbox/tree/master/packages/lobe-i18n
-[lobe-i18n-link]: https://www.npmjs.com/package/@lobehub/i18n-cli
-[lobe-i18n-shield]: https://img.shields.io/npm/v/@lobehub/i18n-cli?color=369eff&labelColor=black&logo=npm&logoColor=white&style=flat-square
-[lobe-icons-downloads]: https://img.shields.io/npm/dt/@lobehub/icons?color=8ae8ff&labelColor=black&logo=npm&logoColor=white&style=flat-square
-[lobe-icons-github]: https://github.com/lobehub/lobe-icons
-[lobe-icons-link]: https://www.npmjs.com/package/@lobehub/icons
-[lobe-icons-shield]: https://img.shields.io/npm/v/@lobehub/icons?color=369eff&labelColor=black&logo=npm&logoColor=white&style=flat-square
-[lobe-lint-downloads]: https://img.shields.io/npm/dt/@lobehub/lint?color=8ae8ff&labelColor=black&logo=npm&logoColor=white&style=flat-square
-[lobe-lint-github]: https://github.com/lobehub/lobe-lint
-[lobe-lint-link]: https://www.npmjs.com/package/@lobehub/lint
-[lobe-lint-shield]: https://img.shields.io/npm/v/@lobehub/lint?color=369eff&labelColor=black&logo=npm&logoColor=white&style=flat-square
-[lobe-tts-downloads]: https://img.shields.io/npm/dt/@lobehub/tts?color=8ae8ff&labelColor=black&logo=npm&logoColor=white&style=flat-square
-[lobe-tts-github]: https://github.com/lobehub/lobe-tts
-[lobe-tts-link]: https://www.npmjs.com/package/@lobehub/tts
-[lobe-tts-shield]: https://img.shields.io/npm/v/@lobehub/tts?color=369eff&labelColor=black&logo=npm&logoColor=white&style=flat-square
-[lobe-ui-downloads]: https://img.shields.io/npm/dt/@lobehub/ui?color=8ae8ff&labelColor=black&logo=npm&logoColor=white&style=flat-square
-[lobe-ui-github]: https://github.com/lobehub/lobe-ui
-[lobe-ui-link]: https://www.npmjs.com/package/@lobehub/ui
-[lobe-ui-shield]: https://img.shields.io/npm/v/@lobehub/ui?color=369eff&labelColor=black&logo=npm&logoColor=white&style=flat-square
 [market-agents]: https://lobehub.com/zh/agent
 [market-icons]: https://lobehub.com/zh/icons
 [market-mcp]: https://lobehub.com/zh/mcp
@@ -554,10 +509,6 @@ This project is [LobeHub Community License](./LICENSE) licensed.
 [share-whatsapp-shield]: https://img.shields.io/badge/-share%20on%20whatsapp-black?labelColor=black&logo=whatsapp&logoColor=white&style=flat-square
 [share-x-link]: https://x.com/intent/tweet?hashtags=chatbot%2CchatGPT%2CopenAI&text=%E6%8E%A8%E8%8D%90%E4%B8%80%E4%B8%AA%20GitHub%20%E5%BC%80%E6%BA%90%E9%A1%B9%E7%9B%AE%20%F0%9F%A4%AF%20LobeHub%20-%20%E5%BC%80%E6%BA%90%E7%9A%84%E3%80%81%E5%8F%AF%E6%89%A9%E5%B1%95%E7%9A%84%EF%BC%88Function%20Calling%EF%BC%89%E9%AB%98%E6%80%A7%E8%83%BD%E8%81%8A%E5%A4%A9%E6%9C%BA%E5%99%A8%E4%BA%BA%E6%A1%86%E6%9E%B6%E3%80%82%0A%E5%AE%83%E6%94%AF%E6%8C%81%E4%B8%80%E9%94%AE%E5%85%8D%E8%B4%B9%E9%83%A8%E7%BD%B2%E7%A7%81%E4%BA%BA%20ChatGPT%2FLLM%20%E7%BD%91%E9%A1%B5%E5%BA%94%E7%94%A8%E7%A8%8B%E5%BA%8F&url=https%3A%2F%2Fgithub.com%2Flobehub%2Flobehub
 [share-x-shield]: https://img.shields.io/badge/-share%20on%20x-black?labelColor=black&logo=x&logoColor=white&style=flat-square
-[streamdown-downloads]: https://img.shields.io/npm/dt/@lobehub/streamdown?color=8ae8ff&labelColor=black&logo=npm&logoColor=white&style=flat-square
-[streamdown-github]: https://github.com/lobehub/streamdown
-[streamdown-link]: https://www.npmjs.com/package/@lobehub/streamdown
-[streamdown-shield]: https://img.shields.io/npm/v/@lobehub/streamdown?color=369eff&labelColor=black&logo=npm&logoColor=white&style=flat-square
 [submit-agents-link]: https://github.com/lobehub/lobe-chat-agents
 [submit-agents-shield]: https://img.shields.io/badge/🤖/🏪_submit_agent-%E2%86%92-c4f042?labelColor=black&style=for-the-badge
 [vercel-link]: https://chat-preview.lobehub.com
