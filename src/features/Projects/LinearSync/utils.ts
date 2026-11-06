@@ -81,6 +81,7 @@ export const formatLinearSyncResult = (
     result.closed && t('linear.sync.result.closed', { count: result.closed }),
     result.commentsImported &&
       t('linear.sync.result.commentsImported', { count: result.commentsImported }),
+    result.labelsSynced && t('linear.sync.result.labelsSynced', { count: result.labelsSynced }),
     result.keptLocalEdits &&
       t('linear.sync.result.keptLocalEdits', { count: result.keptLocalEdits }),
     skipped && t('linear.sync.result.skipped', { count: skipped }),

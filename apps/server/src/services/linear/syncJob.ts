@@ -66,10 +66,12 @@ export const mergeLinearSyncResults = (
 ): LinearSyncResult => {
   if (!previous) return latest;
   const commentsImported = (previous.commentsImported ?? 0) + (latest.commentsImported ?? 0);
+  const labelsSynced = (previous.labelsSynced ?? 0) + (latest.labelsSynced ?? 0);
   const written = {
     closed: previous.closed + latest.closed,
     ...(commentsImported ? { commentsImported } : {}),
     created: previous.created + latest.created,
+    ...(labelsSynced ? { labelsSynced } : {}),
     updated: previous.updated + latest.updated,
   };
   if (!resumed) return { ...latest, ...written };
@@ -330,6 +332,7 @@ export class LinearSyncJobService {
     const sync = new LinearIssueSyncService(this.db, this.userId, this.workspaceId);
     const options = {
       syncComments: metadata.syncComments,
+      syncLabels: metadata.syncLabels,
       targetProjectId: metadata.projectId,
     };
 
