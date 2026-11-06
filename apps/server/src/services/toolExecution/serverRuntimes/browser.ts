@@ -25,7 +25,8 @@ import { withoutDeviceReplay } from './withoutDeviceReplay';
  * `agent-browser` instead, returning the same result shape — but only when it
  * lists the tool in `supportedTools`.
  *
- * The browser session on the device is keyed by `topic:<topicId>`. The gateway
+ * The browser session on the device is keyed by `topic:<topicId>`, plus the
+ * thread for a sub-agent, which runs in its parent's topic. The gateway
  * tool-call envelope only carries `apiName` + `arguments`, so the runtime rides
  * the run's identity in the args (mirroring how localSystem injects `cwd`); the
  * device strips it back out before invoking the executor.
@@ -240,8 +241,15 @@ export const browserRuntime: ServerRuntimeRegistration = {
         // Carry the run identity so the device resolves the right browser
         // session (`topic:<topicId>`); the agentId rides along so the device can
         // decide whether revealing the panel would yank the user's view. Both
-        // are stripped device-side.
-        const finalArgs = { ...args, __agentId: context.agentId, __topicId: context.topicId };
+        // are stripped device-side. Sub-agents share their parent's topic, so their
+        // thread keeps concurrent ones from driving each other's page; a thread the
+        // user opened stays on the topic's page, the one the panel shows.
+        const finalArgs = {
+          ...args,
+          __agentId: context.agentId,
+          __threadId: context.isSubAgent ? (context.threadId ?? undefined) : undefined,
+          __topicId: context.topicId,
+        };
 
         const result = await executeAuthorizedDeviceToolCall(
           context.serverDB,
