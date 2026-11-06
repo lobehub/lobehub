@@ -97,6 +97,13 @@ const EMPTY_CHAT_UPLOAD_FILE_LIST: UploadFileItem[] = [];
 export class FileActionImpl {
   readonly #get: () => FileStore;
   readonly #set: Setter;
+  /**
+   * The key each in-flight upload's chip currently lives under. A move
+   * (`moveChatUploadFileList`) updates it, so an upload keeps reporting to its
+   * own chip instead of resolving by id — a pending id is only the file name,
+   * and a same-named upload may appear under the old key later.
+   */
+  readonly #inFlightUploads = new Set<{ contextKey: string }>();
 
   constructor(set: Setter, get: () => FileStore, _api?: unknown) {
     void _api;
@@ -123,13 +130,6 @@ export class FileActionImpl {
       false,
       action,
     );
-  };
-
-  #findChatUploadContextKey = (contextKey: string, id: string): string => {
-    const map = this.#get().chatUploadFileListByContext;
-    if (map[contextKey]?.some((file) => file.id === id)) return contextKey;
-
-    return Object.keys(map).find((key) => map[key].some((file) => file.id === id)) ?? contextKey;
   };
 
   addChatContextSelection = ({
@@ -192,6 +192,11 @@ export class FileActionImpl {
   /** Upload half of `moveChatComposerAttachments`. */
   moveChatUploadFileList = (fromContextKey: string, toContextKey: string): void => {
     if (fromContextKey === toContextKey) return;
+
+    // Uploads still being prepared follow the composer even before their chip exists.
+    for (const upload of this.#inFlightUploads) {
+      if (upload.contextKey === fromContextKey) upload.contextKey = toContextKey;
+    }
 
     const source = this.#getChatUploadFileList(fromContextKey);
     if (source.length === 0) return;
@@ -352,14 +357,24 @@ export class FileActionImpl {
     options: ChatUploadOptions = {},
   ): Promise<void> => {
     const { shareId } = options;
-    // An upload reports progress for a while; its chip may have been handed to
-    // another conversation key meanwhile (see `moveChatUploadFileList`), so
-    // each update follows the chip instead of the key the upload started in.
-    const dispatchChatUploadFileList = (payload: UploadFileListDispatch) => {
-      const targetKey =
-        'id' in payload ? this.#findChatUploadContextKey(contextKey, payload.id) : contextKey;
-      this.#get().dispatchChatUploadFileList(targetKey, payload);
-    };
+    const upload = { contextKey };
+    this.#inFlightUploads.add(upload);
+    try {
+      await this.#uploadChatFilesTo(upload, rawFiles, agentId, shareId);
+    } finally {
+      this.#inFlightUploads.delete(upload);
+    }
+  };
+
+  #uploadChatFilesTo = async (
+    upload: { contextKey: string },
+    rawFiles: File[],
+    agentId: string,
+    shareId: string | undefined,
+  ): Promise<void> => {
+    // The chip may be handed to another key mid-upload; dispatch to wherever it is now.
+    const dispatchChatUploadFileList = (payload: UploadFileListDispatch) =>
+      this.#get().dispatchChatUploadFileList(upload.contextKey, payload);
     // 0. skip file in blacklist
     const filteredFiles = rawFiles.filter((file) => !FILE_UPLOAD_BLACKLIST.includes(file.name));
 
