@@ -36,7 +36,15 @@ export const finalizeRunHandler = async (context: WorkflowContext<FinalizeRunPay
   // Step 1: Get run details
   const run = await runStep(context, 'agent-eval-run:get-run', async () => {
     const runModel = new AgentEvalRunModel(db, userId, wsId);
-    return runModel.findById(runId);
+    const row = await runModel.findSummaryById(runId);
+    return row
+      ? {
+          config: { k: row.config?.k },
+          metrics: row.metrics,
+          startedAt: row.startedAt,
+          status: row.status,
+        }
+      : undefined;
   });
 
   if (!run) {
@@ -51,7 +59,16 @@ export const finalizeRunHandler = async (context: WorkflowContext<FinalizeRunPay
   // Step 2: Get all RunTopics (already evaluated in recordTrajectoryCompletion)
   const runTopics = await runStep(context, 'agent-eval-run:get-run-topics', async () => {
     const runTopicModel = new AgentEvalRunTopicModel(db, userId, wsId);
-    return runTopicModel.findByRunId(runId);
+    return (await runTopicModel.findByRunId(runId)).map(
+      ({ evalResult, passed, runId, score, status, topicId }) => ({
+        evalResult,
+        passed,
+        runId,
+        score,
+        status,
+        topicId,
+      }),
+    );
   });
 
   log('Total RunTopics: %d', runTopics.length);
@@ -76,10 +93,16 @@ export const finalizeRunHandler = async (context: WorkflowContext<FinalizeRunPay
   const runStatus =
     externalCount > 0 ? 'external' : nonSuccessCases >= metrics.totalCases ? 'failed' : 'completed';
 
-  await runStep(context, 'agent-eval-run:update-run', async () => {
+  const finalized = await runStep(context, 'agent-eval-run:update-run', async () => {
     const runModel = new AgentEvalRunModel(db, userId, wsId);
-    return runModel.update(runId, { metrics, status: runStatus });
+    return !!(await runModel.finalize(
+      runId,
+      { metrics, status: runStatus },
+      { startedAt: run.startedAt },
+    ));
   });
+
+  if (!finalized) return { cancelled: true };
 
   console.info(
     `[finalize-run] Run ${runId} ${runStatus}: score=${metrics.averageScore.toFixed(2)} pass=${metrics.passedCases}/${metrics.totalCases} error=${metrics.errorCases || 0}`,

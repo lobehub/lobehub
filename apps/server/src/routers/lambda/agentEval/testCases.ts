@@ -1,8 +1,19 @@
+import type { EvalCaseEnvironment } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
+import type { AgentEvalEnvironmentModel } from '@/database/models/agentEval';
+import { AgentEvalDatasetWriteError } from '@/database/models/agentEval/datasetAccess';
 import { router } from '@/libs/trpc/lambda';
+import { mergeCaseEnvironment } from '@/server/services/agentEvalRun/caseEnvironment';
+import {
+  draftCaseFromTopic,
+  TOPIC_HAS_NO_REQUEST,
+  TOPIC_NOT_FOUND,
+} from '@/server/services/agentEvalRun/caseFromTopic';
+import { createEvalRunDeps } from '@/server/services/agentEvalRun/deps';
 
+import { validateEvalConnectorBindings } from './connectorBindings';
 import { agentEvalProcedure, agentEvalProcedureWrite } from './procedures';
 import {
   evalCaseEnvironmentSchema,
@@ -11,6 +22,45 @@ import {
   evalTestCaseMessagesSchema,
   rubricTypeSchema,
 } from './schemas';
+
+/**
+ * Readers get each case with its shared environment merged into
+ * `content.environment` and the environment's name alongside, so the UI
+ * shows the persona, tools and clock a case actually runs with. The case's
+ * own overrides stay available as `environmentOverrides`, so an editor can
+ * change them without writing the merged result back as overrides.
+ */
+async function attachEnvironments<
+  T extends { content: { environment?: EvalCaseEnvironment }; environmentId?: string | null },
+>(
+  environmentModel: AgentEvalEnvironmentModel,
+  testCases: T[],
+): Promise<
+  Array<
+    T & {
+      environment?: { id: string; name: string } | null;
+      environmentOverrides?: EvalCaseEnvironment;
+    }
+  >
+> {
+  const ids = testCases.map((item) => item.environmentId).filter(Boolean) as string[];
+  if (ids.length === 0) return testCases;
+  const rows = await environmentModel.findByIds(ids);
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  return testCases.map((item) => {
+    const shared = item.environmentId ? byId.get(item.environmentId) : undefined;
+    if (!shared) return item;
+    return {
+      ...item,
+      content: {
+        ...item.content,
+        environment: mergeCaseEnvironment(shared.config, item.content.environment),
+      },
+      environment: { id: shared.id, name: shared.name },
+      environmentOverrides: item.content.environment ?? {},
+    };
+  });
+}
 
 export const testCaseRouter = router({
   // ============================================
@@ -21,6 +71,7 @@ export const testCaseRouter = router({
       z.object({
         datasetId: z.string(),
         content: evalTestCaseContentSchema,
+        environmentId: z.string().nullish(),
         evalMode: rubricTypeSchema.optional(),
         evalConfig: evalConfigSchema.optional(),
         metadata: z.record(z.string(), z.unknown()).optional(),
@@ -29,6 +80,11 @@ export const testCaseRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       try {
+        await validateEvalConnectorBindings(
+          ctx.evalConnectorServiceForDataset,
+          input.content.environment?.connectorBindings,
+          input.datasetId,
+        );
         const result = await ctx.testCaseModel.create(input);
         if (!result) {
           throw new TRPCError({
@@ -38,6 +94,9 @@ export const testCaseRouter = router({
         }
         return result;
       } catch (error: any) {
+        if (error instanceof AgentEvalDatasetWriteError) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: error.message });
+        }
         // PostgreSQL errors might be in error.cause
         const pgError = error?.cause || error;
 
@@ -51,6 +110,33 @@ export const testCaseRouter = router({
         throw error;
       }
     }),
+  /**
+   * Draft a case from one of the account's conversations: its last request,
+   * the earlier turns as context, the answering Agent's setup, and rules the
+   * judge model proposes. Nothing is saved; the author edits and saves it.
+   */
+  draftTestCaseFromTopic: agentEvalProcedureWrite
+    .input(
+      z.object({
+        benchmarkId: z.string().optional(),
+        draftRules: z.boolean().optional(),
+        topicId: z.string(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      try {
+        return await draftCaseFromTopic(
+          createEvalRunDeps(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined),
+          input.topicId,
+          { benchmarkId: input.benchmarkId, draftRules: input.draftRules },
+        );
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (message === TOPIC_NOT_FOUND) throw new TRPCError({ code: 'NOT_FOUND', message });
+        if (message === TOPIC_HAS_NO_REQUEST) throw new TRPCError({ code: 'BAD_REQUEST', message });
+        throw error;
+      }
+    }),
   batchCreateTestCases: agentEvalProcedureWrite
     .input(
       z.object({
@@ -58,6 +144,10 @@ export const testCaseRouter = router({
         cases: z.array(
           z.object({
             content: evalTestCaseContentSchema,
+            environmentId: z.string().nullish(),
+            // A copied case keeps its own rules and judge (a case copied into a dataset).
+            evalConfig: evalConfigSchema.optional(),
+            evalMode: rubricTypeSchema.optional(),
             metadata: z.record(z.string(), z.unknown()).optional(),
             sortOrder: z.number().optional(),
           }),
@@ -66,6 +156,12 @@ export const testCaseRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       try {
+        for (const testCase of input.cases)
+          await validateEvalConnectorBindings(
+            ctx.evalConnectorServiceForDataset,
+            testCase.content.environment?.connectorBindings,
+            input.datasetId,
+          );
         const testCases = input.cases.map((c) => ({
           ...c,
           datasetId: input.datasetId,
@@ -73,6 +169,9 @@ export const testCaseRouter = router({
         const result = await ctx.testCaseModel.batchCreate(testCases);
         return { count: result.length, data: result };
       } catch (error: any) {
+        if (error instanceof AgentEvalDatasetWriteError) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: error.message });
+        }
         // PostgreSQL errors might be in error.cause
         const pgError = error?.cause || error;
 
@@ -90,6 +189,7 @@ export const testCaseRouter = router({
     .input(
       z.object({
         id: z.string(),
+        environmentId: z.string().nullish(),
         content: z
           .object({
             input: z.string().optional(),
@@ -108,7 +208,22 @@ export const testCaseRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       const { id, ...data } = input;
-      const result = await ctx.testCaseModel.update(id, data as any);
+      let result;
+      try {
+        await validateEvalConnectorBindings(
+          ctx.evalConnectorServiceForDataset,
+          data.content?.environment?.connectorBindings,
+          data.content?.environment?.connectorBindings
+            ? (await ctx.testCaseModel.findById(id))?.datasetId
+            : undefined,
+        );
+        result = await ctx.testCaseModel.update(id, data);
+      } catch (error) {
+        if (error instanceof AgentEvalDatasetWriteError) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: error.message });
+        }
+        throw error;
+      }
       if (!result) {
         throw new TRPCError({
           code: 'NOT_FOUND',
@@ -144,7 +259,8 @@ export const testCaseRouter = router({
       if (!testCase) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Test case not found' });
       }
-      return testCase;
+      const [resolved] = await attachEnvironments(ctx.environmentModel, [testCase]);
+      return resolved;
     }),
   listTestCases: agentEvalProcedure
     .input(
@@ -159,6 +275,6 @@ export const testCaseRouter = router({
         ctx.testCaseModel.findByDatasetId(input.datasetId, input.limit, input.offset),
         ctx.testCaseModel.countByDatasetId(input.datasetId),
       ]);
-      return { data, total };
+      return { data: await attachEnvironments(ctx.environmentModel, data), total };
     }),
 });

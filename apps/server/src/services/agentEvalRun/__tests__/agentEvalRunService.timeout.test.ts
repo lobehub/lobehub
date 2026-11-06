@@ -2,6 +2,7 @@ import { eq, sql } from 'drizzle-orm';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentEvalRunModel, AgentEvalRunTopicModel } from '@/database/models/agentEval';
+import { AgentEvalExecutionRepo } from '@/database/repositories/agentEvalExecution';
 import { agentEvalRuns, agentEvalRunTopics } from '@/database/schemas';
 import { AgentEvalRunService } from '@/server/services/agentEvalRun';
 import { AgentRuntimeService } from '@/server/services/agentRuntime/AgentRuntimeService';
@@ -400,7 +401,10 @@ describe('AgentEvalRunService', () => {
         .where(eq(agentEvalRunTopics.runId, run.id));
 
       // Execute batchMarkTimeout
-      const timedOut = await runTopicModel.batchMarkTimeout(run.id, 1_200_000);
+      const timedOut = await new AgentEvalExecutionRepo(serverDB, userId).batchMarkTimeout(
+        run.id,
+        1_200_000,
+      );
 
       // Only case 3 (running) should be marked as timeout
       expect(timedOut).toHaveLength(1);

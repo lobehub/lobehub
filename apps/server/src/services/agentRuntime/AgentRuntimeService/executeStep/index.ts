@@ -8,6 +8,7 @@ import {
 } from '@lobechat/observability-otel/modules/agent-runtime';
 import debug from 'debug';
 
+import { hookDispatcher } from '../../hooks';
 import {
   type AgentExecutionParams,
   type AgentExecutionResult,
@@ -369,6 +370,8 @@ export async function executeStep(
       stepStartAt,
     });
   } finally {
+    // Per-worker interceptors are recreated on the next step; retain unrelated callbacks.
+    hookDispatcher.unregisterRuntimeToolHooks(operationId);
     invokeAgentSpan.end();
     abortPoll?.stop();
     stopRunSlotLease?.();

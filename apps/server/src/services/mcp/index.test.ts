@@ -128,6 +128,16 @@ describe('MCPService stdio authorization', () => {
     expect(MCPClient.prototype.initialize).toHaveBeenCalledOnce();
   });
 
+  it('isolates cached MCP sessions for the same URL with different credentials', async () => {
+    const service = new MCPService();
+    const base = { name: 'same-endpoint', type: 'http' as const, url: 'https://mcp.example.com' };
+    await service.listRawTools({ ...base, auth: { type: 'bearer', token: 'first-token' } });
+    await service.listRawTools({ ...base, auth: { type: 'bearer', token: 'second-token' } });
+    await service.listRawTools({ ...base, auth: { type: 'bearer', token: 'first-token' } });
+    expect(MCPClient).toHaveBeenCalledTimes(2);
+    expect(MCPClient.prototype.initialize).toHaveBeenCalledTimes(2);
+  });
+
   it('keeps HTTP MCP available on the web', async () => {
     await expect(
       new MCPService().listRawTools({

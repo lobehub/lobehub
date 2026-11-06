@@ -9,6 +9,8 @@ import {
 } from '../../schemas';
 import { type LobeChatDatabase } from '../../type';
 import { buildWorkspaceWhere } from '../../utils/workspace';
+import { evalRunSummaryConfig } from './run';
+import { activeEvalTestCases } from './testCase';
 
 export class AgentEvalBenchmarkModel {
   private userId: string;
@@ -100,9 +102,12 @@ export class AgentEvalBenchmarkModel {
       .from(agentEvalTestCases)
       .innerJoin(agentEvalDatasets, eq(agentEvalTestCases.datasetId, agentEvalDatasets.id))
       .where(
-        buildWorkspaceWhere(
-          { userId: this.userId, workspaceId: this.workspaceId },
-          agentEvalDatasets,
+        and(
+          buildWorkspaceWhere(
+            { userId: this.userId, workspaceId: this.workspaceId },
+            agentEvalDatasets,
+          ),
+          activeEvalTestCases(),
         ),
       )
       .groupBy(agentEvalDatasets.benchmarkId)
@@ -139,7 +144,10 @@ export class AgentEvalBenchmarkModel {
     const benchmarksWithRuns = await Promise.all(
       rows.map(async (row) => {
         const recentRuns = await this.db
-          .select()
+          .select({
+            ...getTableColumns(agentEvalRuns),
+            config: evalRunSummaryConfig,
+          })
           .from(agentEvalRuns)
           .innerJoin(agentEvalDatasets, eq(agentEvalRuns.datasetId, agentEvalDatasets.id))
           .where(
@@ -169,7 +177,7 @@ export class AgentEvalBenchmarkModel {
           datasetCount: Number(row.datasetCount),
           runCount: Number(row.runCount),
           testCaseCount: Number(row.testCaseCount),
-          recentRuns: recentRuns.map((r) => r.agent_eval_runs),
+          recentRuns,
         };
       }),
     );
