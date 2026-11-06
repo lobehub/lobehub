@@ -150,11 +150,11 @@ export class ChannelRoutingService {
       promptVersion: CHANNEL_ROUTING_PROMPT_VERSION,
       scenario: TRACING_SCENARIOS.ChannelRouting,
     };
-    let judgements: MemberWakeJudgement[] = [];
+    // Bottom-up first: every member's own rules, the same pipeline an IM bot runs. Each model call
+    // in them has its own short deadline, so this settles before the decision model's one starts.
+    const judgements = await this.judgeMembers(channelId, input);
     try {
       return await withTimeout(async () => {
-        // Bottom-up first: every member's own rules, the same pipeline an IM bot runs.
-        judgements = await this.judgeMembers(channelId, input);
         const wakes = (members: MemberWakeJudgement[]) =>
           Object.fromEntries(
             members.map(({ initiation, memberId }) => [memberId, toChannelJobWake(initiation!)]),
@@ -237,15 +237,22 @@ export class ChannelRoutingService {
         );
         const selected = selectChannelResponders(candidates, response, quiet);
         // Arbitrating claims keeps any claimer that is not a confident no, woken for the reason its
-        // own rules gave: none of them owes an answer.
-        const decision: ChannelRoutingDecision =
-          claimed.length && selected.status === 'assigned'
+        // own rules gave: none of them owes an answer. An unusable answer is no verdict on the
+        // claims, so they all stand.
+        const kept =
+          selected.status === 'assigned'
+            ? claimed.filter(({ memberId }) => selected.memberIds.includes(memberId))
+            : selected.status === 'unassigned'
+              ? claimed
+              : [];
+        const decision: ChannelRoutingDecision = !claimed.length
+          ? selected
+          : kept.length
             ? {
-                ...selected,
+                memberIds: kept.map(({ memberId }) => memberId),
                 reason: 'Woken by their own rules; arbitrated by the Channel decision model',
-                wakes: wakes(
-                  claimed.filter(({ memberId }) => selected.memberIds.includes(memberId)),
-                ),
+                status: 'assigned',
+                wakes: wakes(kept),
               }
             : selected;
         return {
@@ -335,7 +342,8 @@ export class ChannelRoutingService {
           return { excluded: false, memberId: candidate.memberId, quiet: false };
         }
       },
-      { concurrency: 4 },
+      // At most 20 candidates reach this point; in parallel, one slow member delays none.
+      { concurrency: input.candidates.length || 1 },
     );
   }
 }

@@ -267,7 +267,10 @@ export class ChannelCoordinator {
         ).findLatestAssistantByOperationId({ operationId, topicId: job.topicId });
         const content = final?.tools?.length ? undefined : extractTextFromMessage(final);
         // A wake nobody asked for may end in silence. Settled like a reply, not a failure.
-        const silence = detectNoReply({ content, wakeKind: job.wake?.kind });
+        // A run that stopped on a tool call (out of steps) did not choose silence: it failed.
+        const silence = final?.tools?.length
+          ? undefined
+          : detectNoReply({ content, wakeKind: job.wake?.kind });
         if (silence && (await this.executions.silence(channelId, jobId, silence.reason))) {
           await this.stopWriters([job]);
           await notifyChannel(this.db, channelId);

@@ -29,6 +29,9 @@ export type ChannelRoutingCandidate = ChannelRoutingInput['candidates'][number];
 /** Platform name a Channel conversation is filed under in wake signals and decision rows. */
 export const CHANNEL_WAKE_PLATFORM = 'lobehub';
 
+/** Labels a member falls back to when it has no name of its own. */
+const GENERIC_MEMBER_NAMES = new Set(['agent']);
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   !!value && typeof value === 'object' && !Array.isArray(value);
 
@@ -52,7 +55,7 @@ export const mergeWakeConfig = (
 export interface MemberWakeJudgement {
   /**
    * Its own rules keep it out of every message nobody addressed to it: scope `none`, a channel
-   * list that leaves this conversation out, or `bot-threads` outside a conversation it is in.
+   * list that leaves this conversation out, or `bot-threads` outside a Thread it follows.
    * Routing does not choose it either.
    */
   excluded: boolean;
@@ -119,7 +122,9 @@ export const judgeMemberWake = async (
   );
   const conversation: WakeConversation = {
     agent: { name: candidate.name, title: candidate.title },
-    botNames: [candidate.name],
+    // The generic label of an unnamed member is a word, not a name: "agent" in a message is not
+    // calling it.
+    botNames: GENERIC_MEMBER_NAMES.has(candidate.name.trim().toLowerCase()) ? [] : [candidate.name],
     lastBotMessage: recent.findLast((line) => line.isBot && line.authorId === candidate.agentId)
       ?.text,
     recent: recent.slice(-CONVERSATION_PROMPT_LINES),
@@ -153,7 +158,7 @@ export const judgeMemberWake = async (
   };
 
   // `bot-threads` speaks up only where it already takes part; routing must not drag it elsewhere.
-  if (rules.scope === 'bot-threads') judgement.excluded = true;
+  if (rules.scope === 'bot-threads' && !input.threadId) judgement.excluded = true;
   if (!canInitiateWake({ dutyPolicy, policies })) return judgement;
 
   const outcome = await decideWakeInitiation({

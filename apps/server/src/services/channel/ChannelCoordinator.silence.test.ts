@@ -79,6 +79,14 @@ describe('Channel completion of a wake that may stay silent', () => {
     expect(executions.publish).not.toHaveBeenCalled();
   });
 
+  it('does not count a follow-up that ran out of steps on a tool call as silence', async () => {
+    findLatest.mockResolvedValue({ content: '', tools: [{ id: 'call' }] });
+    await coordinator({ wake: { kind: 'followup' } }).complete('channel', 'job', 'op');
+
+    expect(executions.silence).not.toHaveBeenCalled();
+    expect(executions.publish).not.toHaveBeenCalled();
+  });
+
   it('publishes the token as text when the member owed an answer', async () => {
     findLatest.mockResolvedValue({ content: 'NO_REPLY' });
     await coordinator({ wake: null }).complete('channel', 'job', 'op');

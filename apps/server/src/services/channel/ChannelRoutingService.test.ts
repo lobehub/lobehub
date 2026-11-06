@@ -504,6 +504,47 @@ describe('members’ own wake rules', () => {
     expect(Object.keys(request.questions)).toEqual(['coder']);
   });
 
+  it('keeps every claim when the arbitration answer is unusable', async () => {
+    withCandidates(answeredMia, answeredMia);
+    mocks.classify.mockResolvedValue({ addressedToBot: 0.9, kind: 'question', reason: 'p=0.9' });
+    mocks.decide.mockResolvedValue({
+      answers: { coder: { probability: 0.9, type: 'boolean' } },
+      model: 'jev-1.14.0',
+    });
+    await run();
+
+    expect(mocks.resolve).toHaveBeenCalledWith(
+      'channel',
+      'message',
+      2,
+      expect.objectContaining({ memberIds: ['coder', 'reviewer'], status: 'assigned' }),
+    );
+  });
+
+  it('lets a bot-threads member be chosen in a Thread it follows, not in the main channel', async () => {
+    const botThreads = { wake: { rules: { scope: 'bot-threads' } } };
+    const questions = async (threadId: string | null) => {
+      mocks.decide.mockClear();
+      mocks.claim.mockResolvedValue({
+        ...input,
+        candidates: [{ ...input.candidates[0], ...botThreads }, input.candidates[1]],
+        threadId,
+      });
+      await run();
+      return Object.keys(mocks.decide.mock.calls[0][0].questions);
+    };
+
+    expect(await questions('thread')).toEqual(['coder', 'reviewer']);
+    expect(await questions(null)).toEqual(['reviewer']);
+  });
+
+  it('does not read the generic label of an unnamed member as its name', async () => {
+    withCandidates({ name: 'Agent' }, {}, 'The agent broke the build again');
+    await run();
+
+    expect(mocks.decide).toHaveBeenCalledTimes(1);
+  });
+
   it('keeps the members its own rules woke when arbitration fails', async () => {
     withCandidates(answeredMia, answeredMia);
     mocks.classify.mockResolvedValue({ addressedToBot: 0.9, kind: 'question', reason: 'p=0.9' });

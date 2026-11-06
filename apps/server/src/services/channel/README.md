@@ -50,7 +50,9 @@ groups merge field by field), parsed by the shared bot-wake schema.
   classifier must confirm the message is for it.
 - **Duties**: the member's duty text covers the message, scored by the duty judge.
 - **Excluded**: scope `none`, a channel list that leaves this conversation out, or `bot-threads`
-  outside a follow-up: the decision model never chooses the member either.
+  in the main channel (it still follows up there, and is chosen normally in a Thread it follows):
+  the decision model never chooses the member either. An unnamed member's generic `Agent` label
+  is not a name the text can call.
 - **Quiet**: the member stayed silent `maxSilentWakes` times since it last answered; routing may still
   choose it, but not wake it on a hunch.
 
@@ -63,8 +65,10 @@ prompt ends with a `channel_wake` block, and it may answer `NO_REPLY`, which set
 
 Owner presence and stand-down have no Channel equivalent and never fire. The classifier and duty
 judge run as the sender, with the deployment's bot-wake model, under a shared hourly budget per
-channel (`CHANNEL_WAKE_MODEL_CALLS_PER_HOUR`); a failed or over-budget call is not a yes. If
-arbitration fails, the members' own wakes still stand.
+channel (`CHANNEL_WAKE_MODEL_CALLS_PER_HOUR`); a failed or over-budget call is not a yes. They run
+for all members in parallel before the decision model's deadline starts. If arbitration fails or
+returns an unusable answer, the members' own wakes still stand. A follow-up whose run stopped on a
+tool call (out of steps) fails; only a chosen silence, or no output at all, settles as `silent`.
 
 ## Decisions and recovery
 
