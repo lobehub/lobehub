@@ -277,7 +277,6 @@ describe('TaskDetailHeaderActions', () => {
     expect(mocks.dropdownItems.map((item) => item?.key)).not.toContain('archive');
     const button = screen.getByRole('button', { name: 'taskList.contextMenu.archive' });
     const moreButton = screen.getAllByRole('button').at(-1);
-    expect(button).not.toBe(moreButton);
     expect(
       button.compareDocumentPosition(moreButton!) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
