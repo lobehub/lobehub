@@ -178,7 +178,7 @@ const LobeBenchDashboard = memo(() => {
         </Flexbox>
         {experiments.length === 0 ? (
           <Empty description={t('lobeBench.overview.experiments.empty')} icon={Beaker}>
-            <Button icon={Plus} style={{ marginTop: 16 }} type={'primary'} onClick={newExperiment}>
+            <Button icon={Plus} style={{ marginTop: 16 }} onClick={newExperiment}>
               {t('lobeBench.overview.newExperiment')}
             </Button>
           </Empty>

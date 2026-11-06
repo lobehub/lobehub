@@ -1,6 +1,9 @@
 'use client';
 
-import type { AgentEvalDatasetPackageBindings } from '@lobechat/types';
+import type {
+  AgentEvalDatasetConnectorRequirement,
+  AgentEvalDatasetPackageBindings,
+} from '@lobechat/types';
 import { Block, Button, Flexbox, Modal, Spin, Text, toast } from '@lobehub/ui';
 import { useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -13,10 +16,6 @@ import { hasPartialConnectorBindings } from './bindings';
 import { openConnectionEditor } from './ConnectionEditor';
 import { ConnectorBindings } from './index';
 
-type Requirements = Awaited<
-  ReturnType<typeof agentEvalService.getDatasetConnectorBindings>
->['requirements'];
-
 const DatasetConnectionsEditor = ({
   datasetId,
   onClose,
@@ -26,7 +25,7 @@ const DatasetConnectionsEditor = ({
   datasetId: string;
   onClose: () => void;
   onSaved: () => Promise<unknown>;
-  requirements: Requirements;
+  requirements: AgentEvalDatasetConnectorRequirement[];
 }) => {
   const { t } = useTranslation('eval');
   const [value, setValue] = useState<AgentEvalDatasetPackageBindings>(() => ({
@@ -122,9 +121,11 @@ export const DatasetConnections = ({
   if (isLoading) return <Spin />;
   if (error) return <AsyncError error={error} variant="inline" onRetry={() => void mutate()} />;
   if (!data) return null;
+  // An older server may omit the field; treat it as a Dataset with no connector needs.
+  const requirements = data.requirements ?? [];
   const missing =
     connectors &&
-    data.requirements.reduce(
+    requirements.reduce(
       (count, requirement) =>
         count +
         requirement.services.filter(
@@ -178,7 +179,7 @@ export const DatasetConnections = ({
             {connectors?.length === 0 && <Text type="secondary">{t('connections.empty')}</Text>}
             <Flexbox gap={16} style={{ maxHeight: 400, overflowY: 'auto' }}>
               {(connectors ?? []).map((connection) => {
-                const usages = data.requirements.filter((requirement) =>
+                const usages = requirements.filter((requirement) =>
                   Object.values(requirement.bindings).some(
                     (binding) => binding.connectorId === connection.id,
                   ),
@@ -262,7 +263,7 @@ export const DatasetConnections = ({
         {editing && (
           <DatasetConnectionsEditor
             datasetId={datasetId}
-            requirements={data.requirements}
+            requirements={requirements}
             onClose={() => setEditing(false)}
             onSaved={async () => {
               await Promise.all([mutate(), refreshConnectors()]);

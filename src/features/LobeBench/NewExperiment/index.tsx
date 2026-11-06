@@ -314,7 +314,7 @@ const NewExperiment = memo(() => {
     setCheckingProviders(true);
     let problems: string[];
     try {
-      const checks = await agentEvalService.checkProviders(providersInPlay);
+      const checks = (await agentEvalService.checkProviders(providersInPlay)) ?? [];
       problems = checks.filter((check) => !check.ok).map((check) => check.provider);
     } catch {
       toast.error(t('lobeBench.new.providerCheckFailed'));

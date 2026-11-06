@@ -159,7 +159,6 @@ const LobeBenchDataset = memo(() => {
         <Flexbox horizontal gap={8} wrap={'wrap'}>
           <Button
             icon={ImportIcon}
-            type={count === 0 ? 'primary' : 'default'}
             onClick={() =>
               importDataset({
                 benchmarkId: dataset.benchmarkId ?? undefined,
@@ -171,7 +170,7 @@ const LobeBenchDataset = memo(() => {
           <Button
             disabled={count === 0}
             icon={Play}
-            type={count === 0 ? 'default' : 'primary'}
+            type={'primary'}
             onClick={() => navigate(`${LOBE_BENCH_PATH}/experiments/new?dataset=${dataset.id}`)}
           >
             {t('lobeBench.picks.run')}
