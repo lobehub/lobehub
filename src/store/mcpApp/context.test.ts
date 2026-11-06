@@ -64,4 +64,19 @@ describe('MCP App context snapshots', () => {
     expect(mcpAppContext.take('topic-a').selections).toEqual([]);
     expect(useMcpAppStore.getState().contexts.a.content).toBe('pending');
   });
+  it('rejects oversized and non-text updates without replacing the last valid context', () => {
+    update('a', 'valid');
+    expect(() => update('a', 'x'.repeat(32_769))).toThrow();
+    expect(() =>
+      mcpAppContext.update('a', {
+        content: [{ type: 'image', data: 'base64', mimeType: 'image/png' }],
+      }),
+    ).toThrow();
+    expect(() =>
+      mcpAppContext.update('a', {
+        structuredContent: { data: 'x'.repeat(32_769) },
+      }),
+    ).toThrow();
+    expect(mcpAppContext.take('topic-a').selections[0].content).toBe('valid');
+  });
 });

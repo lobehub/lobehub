@@ -6,6 +6,9 @@ import { sha256Hex } from './sha256';
 export * from './mcpAppEntrypoints';
 export * from './mcpUiMeta';
 
+/** Maximum text/serialized structured context accepted from a single App view. */
+export const MCP_APP_CONTEXT_MAX_LENGTH = 32_768;
+
 /**
  * Who may call an MCP tool, per MCP Apps (SEP-1865) `_meta.ui.visibility`:
  * `"model"` is the agent's tool list, `"app"` is an interactive view's

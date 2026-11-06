@@ -1,9 +1,9 @@
 import { getDisabledPluginIds } from '@lobechat/types';
 import { useEffect } from 'react';
 
-import { useSingleton } from '@/hooks/useSingleton';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
+import { refreshMcpAppDiscovery } from '@/store/mcpApp/discovery';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { getToolStoreState, useToolStore } from '@/store/tool';
 import { pluginSelectors } from '@/store/tool/selectors';
@@ -11,7 +11,7 @@ import { connectorSelectors } from '@/store/tool/slices/connector/selectors';
 
 import { selectMcpAppEntrypoints } from './entrypoints';
 
-/** Refresh legacy cached discovery once per mounted sidebar, without schema migration. */
+/** Refresh legacy cached discovery once per user session, without schema migration. */
 export const useMcpAppEntrypoints = (agentId?: string) => {
   const enabled = useServerConfigStore(serverConfigSelectors.enableMcpApps);
   const agentPlugins = useAgentStore((s) =>
@@ -22,7 +22,6 @@ export const useMcpAppEntrypoints = (agentId?: string) => {
     s.connectors,
     s.agentConnectors,
   ]);
-  const refreshed = useSingleton(() => new Set<string>());
   useEffect(() => {
     if (!enabled) return;
     const state = getToolStoreState();
@@ -35,13 +34,6 @@ export const useMcpAppEntrypoints = (agentId?: string) => {
   useEffect(() => {
     if (!enabled) return;
     const state = getToolStoreState();
-    const once = (key: string, run: () => Promise<unknown>) => {
-      if (refreshed.has(key)) return;
-      refreshed.add(key);
-      void run().catch((error) =>
-        console.warn('[MCPApp] entrypoint discovery refresh failed', error),
-      );
-    };
     for (const row of [...connectors, ...(agentId ? (agentConnectors[agentId] ?? []) : [])]) {
       const connector = connectorSelectors.connectorByIdentifierForAgent(
         row.identifier,
@@ -53,12 +45,14 @@ export const useMcpAppEntrypoints = (agentId?: string) => {
         connector.tools.some((tool) => !Array.isArray(tool.metadata?.entrypoints)) ||
         !connector.tools.length
       )
-        once(`connector:${connector.id}`, () => state.syncConnectorTools(connector.id));
+        refreshMcpAppDiscovery(`connector:${connector.id}`, () =>
+          state.syncConnectorTools(connector.id),
+        );
     }
     for (const plugin of plugins) {
       const config = plugin.customParams?.mcp;
       if (!config || plugin.manifest?.mcpAppEntrypoints !== undefined) continue;
-      once(`plugin:${plugin.identifier}`, async () => {
+      refreshMcpAppDiscovery(`plugin:${plugin.identifier}`, async () => {
         const [{ mcpService }, { pluginService }] = await Promise.all([
           import('@/services/mcp'),
           import('@/services/plugin'),
@@ -82,7 +76,7 @@ export const useMcpAppEntrypoints = (agentId?: string) => {
         await state.refreshPlugins();
       });
     }
-  }, [enabled, plugins, connectors, agentConnectors, agentId, refreshed]);
+  }, [enabled, plugins, connectors, agentConnectors, agentId]);
   return selectMcpAppEntrypoints(getToolStoreState(), enabled, agentId).filter(
     (entry) => !getDisabledPluginIds(agentPlugins).includes(entry.identifier),
   );

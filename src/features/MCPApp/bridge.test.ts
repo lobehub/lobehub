@@ -261,6 +261,14 @@ describe('feature-enabled MCP App lifecycle', () => {
     });
     expect(response(2)?.result).toEqual({});
   });
+  it('does not restore a stale theme when the app requests a different mode', async () => {
+    const { connection, fromView, sent } = setup({ lifecycle: lifecycle() });
+    await initialize(fromView, ['inline', 'fullscreen']);
+    connection.bridge.setHostContext({ theme: 'dark' });
+    await fromView({ id: 1, method: 'ui/request-display-mode', params: { mode: 'fullscreen' } });
+    const update = sent().findLast((m) => m.method === 'ui/notifications/host-context-changed');
+    expect(update.params.theme).not.toBe('light');
+  });
   it('does not register new request handlers or advertise context when not enabled', async () => {
     const { fromView, response } = setup();
     await initialize(fromView, ['inline', 'fullscreen']);

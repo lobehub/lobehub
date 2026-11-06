@@ -24,12 +24,14 @@ export interface McpAppState {
     string,
     { content: string; identifier: string; scope: string; sent?: string; title: string }
   >;
+  discoveryAttempts: Record<string, number>;
   hosts: Record<string, McpAppConversationHost>;
   liveCalls: Record<string, boolean>;
   panels: Record<string, boolean>;
   views: Record<string, McpAppViewState>;
 }
 export const initialState: McpAppState = {
+  discoveryAttempts: {},
   contexts: {},
   hosts: {},
   liveCalls: {},
