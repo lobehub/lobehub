@@ -19,6 +19,7 @@ import BriefCardActions from '@/features/DailyBrief/BriefCardActions';
 import BriefCardArtifacts from '@/features/DailyBrief/BriefCardArtifacts';
 import BriefCardSummary from '@/features/DailyBrief/BriefCardSummary';
 import BriefIcon from '@/features/DailyBrief/BriefIcon';
+import { briefCardMarker } from '@/features/DailyBrief/markers.stylex';
 import { styles as briefStyles } from '@/features/DailyBrief/style';
 import type { BriefItem } from '@/features/DailyBrief/types';
 import Time from '@/features/Home/components/Time';
@@ -82,7 +83,7 @@ const TaskBriefCard = memo<TaskBriefCardProps>(
 
     return (
       <Block
-        className={stylex.props(briefStyles.card, stylex.defaultMarker()).className}
+        className={stylex.props(briefStyles.card, briefCardMarker).className}
         gap={12}
         paddingBlock={12}
         paddingInline={8}

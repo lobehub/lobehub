@@ -15,6 +15,7 @@ import BriefCardActions from '@/features/DailyBrief/BriefCardActions';
 import BriefCardArtifacts from '@/features/DailyBrief/BriefCardArtifacts';
 import BriefCardSummary from '@/features/DailyBrief/BriefCardSummary';
 import BriefPriorityIcon from '@/features/DailyBrief/BriefPriorityIcon';
+import { briefCardMarker } from '@/features/DailyBrief/markers.stylex';
 import SelfReviewBriefDetails from '@/features/DailyBrief/SelfReviewBriefDetails';
 import { styles as briefStyles } from '@/features/DailyBrief/style';
 import { type BriefItem } from '@/features/DailyBrief/types';
@@ -215,7 +216,7 @@ const InboxBriefCard = memo<InboxBriefCardProps>(({ bare, brief }) => {
 
   return (
     <Block
-      className={stylex.props(briefStyles.card, stylex.defaultMarker()).className}
+      className={stylex.props(briefStyles.card, briefCardMarker).className}
       gap={10}
       padding={12}
       style={{ borderRadius: cssVar.borderRadiusLG }}

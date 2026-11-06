@@ -2,6 +2,7 @@ import { Block, cssVar, cx, Divider, Flexbox, Skeleton } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 
+import { briefCardMarker } from '@/features/DailyBrief/markers.stylex';
 import { styles as briefStyles } from '@/features/DailyBrief/style';
 import { RECOMMENDATION_ICON_SIZE } from '@/features/Recommendations/iconSize';
 
@@ -34,15 +35,12 @@ export const TaskTemplateCardSkeleton = memo<TaskTemplateCardSkeletonProps>(
 
     return (
       <Block
+        className={cx(stylex.props(briefStyles.card, briefCardMarker).className, styles.card)}
         data-testid={'task-template-card-skeleton'}
         gap={12}
         padding={12}
         style={{ borderRadius: cssVar.borderRadiusLG }}
         variant={'outlined'}
-        className={cx(
-          stylex.props(briefStyles.card, stylex.defaultMarker()).className,
-          styles.card,
-        )}
       >
         <Flexbox horizontal align={'center'} gap={16} justify={'space-between'}>
           <Flexbox

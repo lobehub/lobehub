@@ -15,21 +15,20 @@ import { sx } from '@/styles/sx';
 import { ErrorLine } from '../ErrorLine';
 import { getWidgetCardBody, getWidgetHealth, getWidgetUpdatedAt } from '../utils/widgetHealth';
 import HealthDot from './HealthDot';
+import { widgetCardMarker } from './markers.stylex';
 import StatusBadges from './StatusBadges';
 import WidgetOutputView from './views';
 import { createLayoutScope, resolveSurface, WIDGET_SURFACE_STYLES } from './views/LayoutView';
 
 const styles = stylex.create({
-  // Header actions show while the card (a `stylex.defaultMarker()` element) is
-  // hovered or running, or while focus is inside them.
   actions: {
     flex: 'none',
     opacity: {
       'default': 0,
       ':focus-within': 1,
       '@media (hover: none)': 1,
-      [stylex.when.ancestor(':hover')]: 1,
-      [stylex.when.ancestor("[data-widget-running='true']")]: 1,
+      [stylex.when.ancestor(':hover', widgetCardMarker)]: 1,
+      [stylex.when.ancestor("[data-widget-running='true']", widgetCardMarker)]: 1,
     },
     transition: `opacity ${cssVar.motionDurationMid}`,
   },
@@ -161,7 +160,7 @@ const WidgetCard = memo<WidgetCardProps>(
 
     return (
       <Flexbox
-        {...sx(styles.card, onOpen && styles.clickable, stylex.defaultMarker(), className)}
+        {...sx(styles.card, onOpen && styles.clickable, widgetCardMarker, className)}
         data-widget-id={widget.id}
         data-widget-running={health.running}
         data-widget-surface={surface ? 'custom' : undefined}

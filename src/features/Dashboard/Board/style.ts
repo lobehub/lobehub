@@ -4,6 +4,7 @@ import * as stylex from '@stylexjs/stylex';
 import type { CSSProperties } from 'react';
 
 import { DASHBOARD_GRID_COLUMNS, DASHBOARD_GRID_GAP, DASHBOARD_ROW_HEIGHT } from '../utils/layout';
+import { editCellMarker } from './markers.stylex';
 
 const ACTIVE = "[data-active='true']";
 
@@ -81,7 +82,7 @@ export const gridStyles = stylex.create({
     opacity: {
       'default': 0.6,
       ':focus-visible': 1,
-      [stylex.when.ancestor(':hover')]: 1,
+      [stylex.when.ancestor(':hover', editCellMarker)]: 1,
       [ACTIVE]: 1,
     },
     outlineColor: { 'default': null, ':focus-visible': cssVar.colorPrimary },

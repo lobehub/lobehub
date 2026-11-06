@@ -17,6 +17,7 @@ import { memo, type MouseEvent, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import BriefCardSummary from '@/features/DailyBrief/BriefCardSummary';
+import { briefCardMarker } from '@/features/DailyBrief/markers.stylex';
 import { styles as briefStyles } from '@/features/DailyBrief/style';
 import { homeType } from '@/features/Home/components/homeType';
 import { RECOMMENDATION_ICON_SIZE } from '@/features/Recommendations/iconSize';
@@ -126,14 +127,11 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
 
     return (
       <Block
+        className={cx(stylex.props(briefStyles.card, briefCardMarker).className, styles.card)}
         gap={12}
         padding={12}
         style={{ borderRadius: cssVar.borderRadiusLG, cursor: 'pointer' }}
         variant={'outlined'}
-        className={cx(
-          stylex.props(briefStyles.card, stylex.defaultMarker()).className,
-          styles.card,
-        )}
         onClick={handleOpenDetail}
       >
         <Flexbox horizontal align={'center'} gap={16} justify={'space-between'}>
