@@ -1,3 +1,4 @@
+import { MCP_APP_CONTEXT_MAX_LENGTH } from '@lobechat/const/mcpApp';
 import type { ContextSelection } from '@lobechat/types';
 import type { McpUiUpdateModelContextRequest } from '@modelcontextprotocol/ext-apps/app-bridge';
 
@@ -35,11 +36,14 @@ export const mcpAppContext = {
     const view = useMcpAppStore.getState().views[id];
     if (!view || view.dismissed) return;
     const content = [
-      ...(params.content ?? []).map((block) =>
-        block.type === 'text' ? block.text : JSON.stringify(block),
-      ),
+      ...(params.content ?? []).map((block) => {
+        if (block.type !== 'text') throw new Error('Only text model context is supported');
+        return block.text;
+      }),
       ...(params.structuredContent ? [JSON.stringify(params.structuredContent)] : []),
     ].join('\n');
+    if (content.length > MCP_APP_CONTEXT_MAX_LENGTH)
+      throw new Error(`Model context exceeds ${MCP_APP_CONTEXT_MAX_LENGTH} characters`);
     if (!content) {
       this.clear(id);
       return;

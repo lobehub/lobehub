@@ -19,6 +19,23 @@ beforeEach(() => {
 });
 const view = { identifier: 'fixture', messageId: 'message', scope: 'topic-a', title: 'Fixture' };
 describe('MCP App ownership', () => {
+  it('keeps context during migration but removes it immediately on teardown', () => {
+    mcpAppActions.registerView('call', view);
+    useMcpAppStore.setState({
+      contexts: {
+        call: {
+          content: 'pending',
+          identifier: 'fixture',
+          scope: 'topic-a',
+          title: 'Fixture',
+        },
+      },
+    });
+    mcpAppActions.close('call');
+    expect(useMcpAppStore.getState().contexts.call.content).toBe('pending');
+    mcpAppActions.close('call', true);
+    expect(useMcpAppStore.getState().contexts.call).toBeUndefined();
+  });
   it('moves one view between hosts and respects available modes and topic scope', () => {
     mcpAppActions.registerView('call', view);
     mcpAppActions.setAvailableModes('call', ['inline', 'fullscreen']);

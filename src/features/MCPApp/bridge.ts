@@ -92,7 +92,7 @@ export const connectMcpAppBridge = (target: Window, host: McpAppBridgeHost) => {
       if (!display.availableDisplayModes.includes(mode) || (appModes && !appModes.includes(mode)))
         return { mode: current };
       const actual = host.lifecycle!.onRequestDisplayMode(mode, appModes);
-      bridge.setHostContext({ ...host.hostContext, ...display, displayMode: actual });
+      bridge.setHostContext({ ...display, displayMode: actual });
       return { mode: actual };
     };
     bridge.onupdatemodelcontext = async (params) => {

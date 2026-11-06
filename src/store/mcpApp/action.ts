@@ -122,6 +122,9 @@ export class McpAppActionImpl {
     if (view)
       useMcpAppStore.setState(
         (s) => ({
+          ...(dismissed && {
+            contexts: Object.fromEntries(Object.entries(s.contexts).filter(([key]) => key !== id)),
+          }),
           views: {
             ...s.views,
             [id]: { ...view, dismissed: dismissed ?? view.dismissed, mode: 'inline' },

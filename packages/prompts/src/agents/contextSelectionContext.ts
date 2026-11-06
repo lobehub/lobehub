@@ -1,3 +1,4 @@
+import { MCP_APP_CONTEXT_MAX_LENGTH } from '@lobechat/const/mcpApp';
 import type { ContextSelection } from '@lobechat/types';
 
 import { escapeXmlAttr, escapeXmlContent } from '../prompts/search/xmlEscape';
@@ -29,6 +30,8 @@ const formatSelectionAttributes = (selection: ContextSelection): string => {
 };
 
 const getSelectionBody = (selection: ContextSelection): string => {
+  if (selection.source === 'mcpApp')
+    return escapeXmlContent(selection.content.slice(0, MCP_APP_CONTEXT_MAX_LENGTH));
   if (selection.source === 'page' && selection.xml) {
     if (!selection.content || selection.content === selection.xml) return selection.xml;
 

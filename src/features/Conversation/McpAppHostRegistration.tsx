@@ -1,9 +1,11 @@
 import { useEffect } from 'react';
 
+import { useChatStore } from '@/store/chat';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { mcpAppActions } from '@/store/mcpApp/action';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 
+import { getLiveMcpAppToolCalls } from './mcpAppLiveCalls';
 import { useConversationStore, useConversationStoreApi } from './store';
 
 /** Conversation-only integration: reusable app views never import this host's store. */
@@ -26,19 +28,21 @@ export const McpAppHostRegistration = () => {
     // Observe actual in-flight calls, never infer live results from mount time or history hydration.
     const observed = new Set<string>();
     const observe = () => {
-      const state = api.getState();
-      for (const message of state.dbMessages) {
-        message.tools?.forEach((tool, index) => {
-          const operation = state.operationState.getToolOperationState(message.id, index, tool.id);
-          if (operation.isInvoking || operation.isStreaming) {
-            observed.add(tool.id);
-            mcpAppActions.markLive(tool.id);
-          }
-        });
+      for (const id of getLiveMcpAppToolCalls(useChatStore.getState(), scope)) {
+        if (observed.has(id)) continue;
+        observed.add(id);
+        mcpAppActions.markLive(id);
       }
     };
     observe();
-    const unsubscribe = api.subscribe(observe);
+    const unsubscribe = useChatStore.subscribe((state, previous) => {
+      if (
+        state.operations !== previous.operations ||
+        state.toolCallingStreamIds !== previous.toolCallingStreamIds ||
+        state.dbMessagesMap[scope] !== previous.dbMessagesMap[scope]
+      )
+        observe();
+    });
     return () => {
       unsubscribe();
       unregister();
