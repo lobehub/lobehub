@@ -22,7 +22,7 @@
  * guarded by the value it read, and a second run reports nothing to change.
  *
  *   bun scripts/migrateReasoningEffort/index.ts
- *   bun scripts/migrateReasoningEffort/index.ts --apply --batch-size=500
+ *   bun scripts/migrateReasoningEffort/index.ts --apply [--batch-size=1000] [--concurrency=16]
  */
 import { providerCardDeclaresEffort } from 'model-bank';
 import pg from 'pg';
@@ -37,23 +37,43 @@ import {
 
 const { Pool } = pg;
 
-const DEFAULT_BATCH_SIZE = 500;
+const DEFAULT_BATCH_SIZE = 1000;
+const DEFAULT_CONCURRENCY = 16;
+/** Heap pages per scan chunk (8 KB each, so 16 MB). */
+const CHUNK_PAGES = 2048;
+/**
+ * Client-side per-query limit. A chunk scan or write takes a few seconds; a
+ * connection that goes half-open under load would otherwise hang its query
+ * for minutes before the socket errors, so the client gives up and the task
+ * is retried. The server limit is a little longer, so it only cleans up
+ * queries the client abandoned.
+ */
+const QUERY_TIMEOUT_MS = 30_000;
 
-const args = new Set(process.argv.slice(2));
-const apply = args.has('--apply');
-const batchSizeArg = process.argv.find((arg) => arg.startsWith('--batch-size='));
-const batchSize = batchSizeArg
-  ? Number.parseInt(batchSizeArg.slice('--batch-size='.length), 10)
-  : DEFAULT_BATCH_SIZE;
+const intArg = (name: string, fallback: number, max: number) => {
+  const arg = process.argv.find((a) => a.startsWith(`--${name}=`));
+  const value = arg ? Number.parseInt(arg.slice(name.length + 3), 10) : fallback;
+  if (!Number.isInteger(value) || value < 1 || value > max) {
+    throw new Error(`--${name} must be an integer between 1 and ${max}`);
+  }
+  return value;
+};
 
-if (!Number.isInteger(batchSize) || batchSize < 1 || batchSize > 5000) {
-  throw new Error('--batch-size must be an integer between 1 and 5000');
-}
+const apply = process.argv.includes('--apply');
+const batchSize = intArg('batch-size', DEFAULT_BATCH_SIZE, 5000);
+const concurrency = intArg('concurrency', DEFAULT_CONCURRENCY, 64);
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) throw new Error('DATABASE_URL is required');
 
-const pool = new Pool({ connectionString });
+const pool = new Pool({ connectionString, max: concurrency, query_timeout: QUERY_TIMEOUT_MS });
+// A connection the server drops emits `error` on its client (and on the pool
+// when idle); without a listener the process exits. The task using it fails
+// and is retried instead.
+pool.on('error', (error) => console.warn(`[pool] ${error.message}`));
+pool.on('connect', (client) => {
+  client.on('error', (error) => console.warn(`[client] ${error.message}`));
+});
 
 interface Stats {
   applied: number;
@@ -64,59 +84,139 @@ interface Stats {
 }
 
 interface TableJob<Row, Change> {
-  /** Primary keys of every row with a legacy key, in key order. */
-  keys: (client: pg.PoolClient) => Promise<string[]>;
-  /** The rows of `keys` that still have a legacy key. */
-  load: (client: pg.PoolClient, keys: string[]) => Promise<Row[]>;
+  /** Rows with a legacy key whose `ctid` falls in `where` (a TID range). */
+  load: (client: pg.PoolClient, where: string) => Promise<Row[]>;
   name: string;
   /** Applies a batch and returns how many rows still matched their read value. */
   save: (client: pg.PoolClient, changes: Change[]) => Promise<number>;
+  table: string;
   /** Returns the change for a row, flagging an unresolved value conflict. */
   toChange: (row: Row) => { change?: Change; conflict: boolean } | undefined;
 }
 
-const withClient = async <T>(
-  timeout: string,
-  run: (client: pg.PoolClient) => Promise<T>,
-): Promise<T> => {
-  const client = await pool.connect();
-  try {
-    await client.query(`SET statement_timeout = '${timeout}'`);
-    return await run(client);
-  } finally {
-    client.release();
+const startedAt = Date.now();
+const elapsedSeconds = () => ((Date.now() - startedAt) / 1000).toFixed(1);
+
+const MAX_ATTEMPTS = 5;
+
+/**
+ * Runs `run` in its own transaction so `SET LOCAL` holds on a pooled
+ * (transaction-mode) connection. A dropped connection is retried: loads are
+ * reads and every write is guarded by the value it read, so a rerun is safe.
+ */
+const inTransaction = async <T>(run: (client: pg.PoolClient) => Promise<T>): Promise<T> => {
+  for (let attempt = 1; ; attempt += 1) {
+    let client: pg.PoolClient | undefined;
+    try {
+      client = await pool.connect();
+      await client.query(`BEGIN`);
+      await client.query(`SET LOCAL statement_timeout = ${QUERY_TIMEOUT_MS + 5000}`);
+      const result = await run(client);
+      await client.query(`COMMIT`);
+      client.release();
+      return result;
+    } catch (error) {
+      // Destroys the client rather than returning a broken one to the pool.
+      client?.release(error as Error);
+      // A SQL error (it has a SQLSTATE) would fail again; only connection
+      // failures and client timeouts are retried.
+      const sqlState = (error as { code?: string }).code;
+      if (sqlState || attempt >= MAX_ATTEMPTS) throw error;
+      console.warn(`[retry ${attempt}] ${(error as Error).message}`);
+      await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
+    }
   }
 };
 
-const runJob = async <Row, Change>(job: TableJob<Row, Change>): Promise<Stats> => {
-  const stats: Stats = { applied: 0, changed: 0, conflicts: 0, scanned: 0, skipped: 0 };
-  // Collects the matching keys in one sequential scan, then pages by key.
-  // Paging by "the next N matching rows" along the primary key walks most of
-  // the table per page once few rows match (the post-deploy run), and that
-  // page hits the statement timeout.
-  const keys = await withClient('10min', job.keys);
-
-  for (let offset = 0; offset < keys.length; offset += batchSize) {
-    await withClient('120s', async (client) => {
-      const rows = await job.load(client, keys.slice(offset, offset + batchSize));
-      stats.scanned += rows.length;
-
-      const results = rows.map(job.toChange).filter((r) => !!r);
-      const changes = results.flatMap((r) => (r.change ? [r.change] : []));
-      stats.changed += changes.length;
-      stats.conflicts += results.filter((r) => r.conflict).length;
-
-      if (apply && changes.length > 0) {
-        const applied = await job.save(client, changes);
-        stats.applied += applied;
-        stats.skipped += changes.length - applied;
+/**
+ * Runs tasks with at most `concurrency` in flight. A task may enqueue more
+ * tasks (a scan chunk enqueues its writes).
+ */
+const runQueue = (tasks: (() => Promise<void>)[]) =>
+  new Promise<void>((resolve, reject) => {
+    let active = 0;
+    let failed = false;
+    const pump = () => {
+      if (failed) return;
+      if (tasks.length === 0 && active === 0) return resolve();
+      while (active < concurrency && tasks.length > 0) {
+        const task = tasks.shift()!;
+        active += 1;
+        task().then(
+          () => {
+            active -= 1;
+            pump();
+          },
+          (error) => {
+            failed = true;
+            reject(error);
+          },
+        );
       }
-    });
+    };
+    pump();
+  });
 
-    console.log(`[${job.name}] scanned=${stats.scanned} changed=${stats.changed}`);
+/**
+ * Splits each table into heap-page ranges and scans them concurrently, each
+ * chunk writing its changes back in batches. A TID range scan reads only its
+ * own pages, so neither the full-table run (~500k rows) nor the post-deploy
+ * run (a handful of rows) walks the table more than once, and the rows of a
+ * chunk need no index lookups. The last chunk is open-ended so rows on pages
+ * added during the run are still read; a row an app write moves into an
+ * already scanned chunk is left for the next run.
+ */
+const runJobs = async (jobs: TableJob<any, any>[]) => {
+  const results: Record<string, Stats> = {};
+  const tasks: (() => Promise<void>)[] = [];
+  let pending = 0;
+
+  for (const job of jobs) {
+    const stats: Stats = { applied: 0, changed: 0, conflicts: 0, scanned: 0, skipped: 0 };
+    results[job.name] = stats;
+    const {
+      rows: [{ pages }],
+    } = await pool.query<{ pages: number }>(
+      `SELECT (pg_relation_size($1::regclass) / current_setting('block_size')::int)::int AS pages`,
+      [job.table],
+    );
+
+    for (let start = 0; start === 0 || start < pages; start += CHUNK_PAGES) {
+      const end = start + CHUNK_PAGES;
+      const where =
+        `ctid >= '(${start},0)'::tid` + (end < pages ? ` AND ctid < '(${end},0)'::tid` : '');
+      pending += 1;
+      tasks.push(async () => {
+        const rows = await inTransaction((client) => job.load(client, where));
+        stats.scanned += rows.length;
+
+        const outcomes = rows.map(job.toChange).filter((r) => !!r);
+        const changes = outcomes.flatMap((r) => (r.change ? [r.change] : []));
+        stats.changed += changes.length;
+        stats.conflicts += outcomes.filter((r) => r.conflict).length;
+
+        if (apply) {
+          // Writes jump the queue so they overlap the remaining scans instead
+          // of all starting after the last one.
+          for (let offset = 0; offset < changes.length; offset += batchSize) {
+            const batch = changes.slice(offset, offset + batchSize);
+            tasks.unshift(async () => {
+              const applied = await inTransaction((client) => job.save(client, batch));
+              stats.applied += applied;
+              stats.skipped += batch.length - applied;
+            });
+          }
+        }
+        pending -= 1;
+        console.log(
+          `[${elapsedSeconds()}s] ${job.name} chunk ${start}/${pages} scanned=${stats.scanned} changed=${stats.changed} (${pending} chunks left)`,
+        );
+      });
+    }
   }
 
-  return stats;
+  await runQueue(tasks);
+  return results;
 };
 
 /** `UPDATE … FROM (VALUES …)` placeholders for rows of `width` parameters. */
@@ -146,19 +246,12 @@ interface AiModelChange {
 const AI_MODEL_LEGACY_FILTER = `(config->'chatConfig' ?| $1::text[] OR settings->'extendParams' ?| $2::text[])`;
 
 const aiModelsJob: TableJob<AiModelRow, AiModelChange> = {
-  keys: async (client) =>
-    (
-      await client.query<{ k: string }>(
-        `SELECT _id::text AS k FROM ai_models WHERE ${AI_MODEL_LEGACY_FILTER} ORDER BY _id`,
-        [LEGACY_CONFIG_KEYS, LEGACY_EXTEND_PARAMS],
-      )
-    ).rows.map((row) => row.k),
-  load: async (client, keys) =>
+  load: async (client, where) =>
     (
       await client.query<AiModelRow>(
         `SELECT _id, id, provider_id, config, settings FROM ai_models
-         WHERE _id = ANY($3::uuid[]) AND ${AI_MODEL_LEGACY_FILTER}`,
-        [LEGACY_CONFIG_KEYS, LEGACY_EXTEND_PARAMS, keys],
+         WHERE ${where} AND ${AI_MODEL_LEGACY_FILTER}`,
+        [LEGACY_CONFIG_KEYS, LEGACY_EXTEND_PARAMS],
       )
     ).rows,
   name: 'ai_models',
@@ -185,6 +278,7 @@ const aiModelsJob: TableJob<AiModelRow, AiModelChange> = {
     );
     return result.rowCount ?? 0;
   },
+  table: 'ai_models',
   toChange: (row) => {
     const result = migrateAiModelRow({
       chatConfig: row.config?.chatConfig,
@@ -232,20 +326,13 @@ const createJsonPathJob = (
 ): TableJob<JsonPathRow, JsonPathChange> => {
   const accessor = `${column}${path.map((key) => `->'${key}'`).join('')}`;
   return {
-    keys: async (client) =>
-      (
-        await client.query<{ id: string }>(
-          `SELECT id FROM ${table} WHERE ${accessor} ?| $1::text[] ORDER BY id`,
-          [LEGACY_CONFIG_KEYS],
-        )
-      ).rows.map((row) => row.id),
-    load: async (client, keys) =>
+    load: async (client, where) =>
       (
         await client.query<JsonPathRow>(
           `SELECT id, ${modelSql} AS model, ${providerSql} AS provider, ${accessor} AS value
            FROM ${table}
-           WHERE id = ANY($2::text[]) AND ${accessor} ?| $1::text[]`,
-          [LEGACY_CONFIG_KEYS, keys],
+           WHERE ${where} AND ${accessor} ?| $1::text[]`,
+          [LEGACY_CONFIG_KEYS],
         )
       ).rows,
     name: `${table}.${[column, ...path].join('.')}`,
@@ -258,6 +345,7 @@ const createJsonPathJob = (
       );
       return result.rowCount ?? 0;
     },
+    table,
     toChange: (row) => {
       const result = migrateReasoningConfig(
         row.value,
@@ -273,24 +361,18 @@ const run = async () => {
   console.log(`--- migrateReasoningEffort ---`);
   console.log(`Mode: ${apply ? 'apply' : 'dry-run'}`);
   console.log(`DB URL env: DATABASE_URL`);
-  console.log(`Batch size: ${batchSize}`);
-  const startedAt = Date.now();
-
-  const results: Record<string, Stats> = {
-    'ai_models': await runJob(aiModelsJob),
-    'topics.metadata.reasoningConfig': await runJob(
-      createJsonPathJob('topics', 'metadata', ['reasoningConfig'], {
-        modelSql: 'model',
-        providerSql: 'provider',
-      }),
-    ),
-    'agents.agency_config.subagent.chatConfig': await runJob(
-      createJsonPathJob('agents', 'agency_config', ['subagent', 'chatConfig'], {
-        modelSql: "agency_config->'subagent'->>'model'",
-        providerSql: "agency_config->'subagent'->>'provider'",
-      }),
-    ),
-  };
+  console.log(`Batch size: ${batchSize}, concurrency: ${concurrency}`);
+  const results = await runJobs([
+    aiModelsJob,
+    createJsonPathJob('topics', 'metadata', ['reasoningConfig'], {
+      modelSql: 'model',
+      providerSql: 'provider',
+    }),
+    createJsonPathJob('agents', 'agency_config', ['subagent', 'chatConfig'], {
+      modelSql: "agency_config->'subagent'->>'model'",
+      providerSql: "agency_config->'subagent'->>'provider'",
+    }),
+  ]);
 
   console.table(results);
   const total = Object.values(results).reduce(
@@ -301,7 +383,7 @@ const run = async () => {
     }),
     { applied: 0, changed: 0, skipped: 0 },
   );
-  const elapsed = ((Date.now() - startedAt) / 1000).toFixed(1);
+  const elapsed = elapsedSeconds();
   console.log(
     apply
       ? `Done. applied=${total.applied} skipped=${total.skipped} elapsed=${elapsed}s`
