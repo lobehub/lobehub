@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import BoardView from '../Board';
 import { ArtboardFullscreen } from '../Board/Fullscreen';
 import { artboardActions, useArtboardStore } from '../store';
+import { useArtboardFeature } from '../useArtboardFeature';
 
 interface BoardPortalState {
   artboardId?: string;
@@ -29,9 +30,10 @@ const FullscreenPlaceholder = ({ artboardId }: { artboardId: string }) => {
 };
 
 const BoardPortal = ({ state }: BuiltinPortalProps<unknown, BoardPortalState>) => {
+  const { enabled } = useArtboardFeature();
   const artboardId = state?.artboardId;
   const fullscreen = useArtboardStore((s) => s.fullscreen && s.boardId === artboardId);
-  if (!artboardId) return null;
+  if (!enabled || !artboardId) return null;
   if (fullscreen) return <FullscreenPlaceholder artboardId={artboardId} />;
   return (
     // The tool panel pads its body for reading; the board runs edge to edge.

@@ -32,7 +32,9 @@ export class ArtboardActionImpl {
         ...initialState,
         boardId,
         gallery: this.#get().gallery,
+        galleryDrafts: this.#get().galleryDrafts,
         galleryRefs: this.#get().galleryRefs,
+        galleryText: this.#get().galleryText,
         outlineOpen: false,
         verifyOpen: !this.#narrow,
       },
@@ -60,8 +62,25 @@ export class ArtboardActionImpl {
 
   setDrag = (drag: DragPosition | null) => this.#set({ drag }, false, n('drag'));
 
-  setGallery = (gallery: ArtboardState['gallery']) =>
-    this.#set({ gallery, galleryRefs: [] }, false, n('gallery'));
+  setGallery = (gallery: ArtboardState['gallery']) => {
+    const state = this.#get();
+    const galleryDrafts = { ...state.galleryDrafts };
+    if (state.gallery)
+      galleryDrafts[state.gallery.topicId] = { refs: state.galleryRefs, text: state.galleryText };
+    const draft = gallery ? galleryDrafts[gallery.topicId] : undefined;
+    this.#set(
+      {
+        gallery,
+        galleryDrafts,
+        galleryRefs: draft?.refs ?? [],
+        galleryText: draft?.text ?? '',
+      },
+      false,
+      n('gallery'),
+    );
+  };
+
+  setGalleryText = (galleryText: string) => this.#set({ galleryText }, false, n('galleryText'));
 
   addGalleryRef = (ref: ArtboardState['galleryRefs'][number]) =>
     this.#set({ galleryRefs: [...this.#get().galleryRefs, ref] }, false, n('addGalleryRef'));
@@ -73,7 +92,44 @@ export class ArtboardActionImpl {
       n('removeGalleryRef'),
     );
 
-  clearGalleryRefs = () => this.#set({ galleryRefs: [] }, false, n('clearGalleryRefs'));
+  clearGalleryRefs = () => {
+    const { gallery, galleryDrafts } = this.#get();
+    this.#set(
+      {
+        galleryDrafts: gallery
+          ? { ...galleryDrafts, [gallery.topicId]: { refs: [], text: '' } }
+          : galleryDrafts,
+        galleryRefs: [],
+        galleryText: '',
+      },
+      false,
+      n('clearGalleryRefs'),
+    );
+  };
+
+  acceptGalleryDraft = (
+    topicId: string,
+    sent: { refs: ArtboardState['galleryRefs']; text: string },
+  ) => {
+    const state = this.#get();
+    const active = state.gallery?.topicId === topicId;
+    const current = active
+      ? { refs: state.galleryRefs, text: state.galleryText }
+      : state.galleryDrafts[topicId];
+    if (!current) return;
+    const draft = {
+      refs: current.refs.filter((ref) => !sent.refs.includes(ref)),
+      text: current.text === sent.text ? '' : current.text,
+    };
+    this.#set(
+      {
+        galleryDrafts: { ...state.galleryDrafts, [topicId]: draft },
+        ...(active && { galleryRefs: draft.refs, galleryText: draft.text }),
+      },
+      false,
+      n('acceptGalleryDraft'),
+    );
+  };
 
   setFullscreen = (fullscreen: boolean) => this.#set({ fullscreen }, false, n('fullscreen'));
 

@@ -419,6 +419,7 @@ export interface ExecGroupMemberResult {
 }
 
 export interface OperationCreationParams {
+  acceptsArtboardWorks?: boolean;
   /**
    * The client starting this run renders `file` Works (declared via
    * `aiAgent.execAgent`'s `streamFeatures`). Stored on

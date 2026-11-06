@@ -3,10 +3,13 @@
 import { createModal, Flexbox, useModalContext } from '@lobehub/ui';
 
 import BoardView from '../Board';
+import { useArtboardFeature } from '../useArtboardFeature';
 import GalleryFooter from './GalleryFooter';
 
 const GalleryBoard = ({ artboardId }: { artboardId: string }) => {
   const { close } = useModalContext();
+  const { enabled } = useArtboardFeature();
+  if (!enabled) return null;
   return (
     <Flexbox height={'100%'} style={{ minHeight: 0 }} width={'100%'}>
       <BoardView artboardId={artboardId} onExitFullscreen={close} />

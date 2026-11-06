@@ -16,13 +16,19 @@ const translate = (key: string, options?: Record<string, unknown>) =>
   t(key as 'artboard.chat.quote', { ...options, ns: 'project' }) as string;
 
 const resolveTarget = (originTopicId: string | null) => {
-  const { gallery, galleryRefs } = useArtboardStore.getState();
+  const { gallery, galleryRefs, galleryText } = useArtboardStore.getState();
   if (gallery)
     return {
-      clear: artboardActions.clearGalleryRefs,
+      clear: () =>
+        artboardActions.acceptGalleryDraft(gallery.topicId, {
+          refs: galleryRefs,
+          text: galleryText,
+        }),
       context: gallery,
       editor: null,
-      quoted: serializeArtboardReferences(galleryRefs, translate),
+      quoted: [serializeArtboardReferences(galleryRefs, translate), galleryText]
+        .filter(Boolean)
+        .join('\n\n'),
     };
 
   const { activeAgentId, activeTopicId, mainInputEditor } = useChatStore.getState();

@@ -5,7 +5,9 @@ import { useChatStore } from '@/store/chat';
 
 import { openBoardPanel } from './Conversation/openBoardPanel';
 import { ARTBOARD_TOOL } from './Conversation/tool';
+import { useArtboard } from './data/useArtboard';
 import { loadArtboardTool } from './loadArtboardTool';
+import { useArtboardFeature } from './useArtboardFeature';
 
 export const ARTBOARD_SEARCH_PARAM = 'artboard';
 
@@ -20,20 +22,32 @@ const findBoardToolMessage =
       )?.id;
 
 export const useOpenArtboardFromRoute = () => {
+  const { enabled } = useArtboardFeature();
   const [params, setParams] = useSearchParams();
   const artboardId = params.get(ARTBOARD_SEARCH_PARAM);
   const messageId = useChatStore(artboardId ? findBoardToolMessage(artboardId) : () => undefined);
+  const topicId = useChatStore((s) => s.activeTopicId);
+  const { data } = useArtboard(artboardId && !messageId ? artboardId : undefined);
+  const originTopicId = data?.artboard.originTopicId;
 
   useEffect(() => {
-    if (!artboardId || !messageId) return;
-    void loadArtboardTool().then(() => openBoardPanel(messageId));
-    setParams(
-      (prev) => {
-        const next = new URLSearchParams(prev);
-        next.delete(ARTBOARD_SEARCH_PARAM);
-        return next;
-      },
-      { replace: true },
-    );
-  }, [artboardId, messageId, setParams]);
+    if (!enabled || !artboardId || (!messageId && (!topicId || originTopicId !== topicId))) return;
+    let cancelled = false;
+    void loadArtboardTool().then(() => {
+      if (cancelled) return;
+      if (messageId) openBoardPanel(messageId);
+      else openBoardPanel(undefined, artboardId);
+      setParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.delete(ARTBOARD_SEARCH_PARAM);
+          return next;
+        },
+        { replace: true },
+      );
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [artboardId, enabled, messageId, originTopicId, setParams, topicId]);
 };

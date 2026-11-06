@@ -94,3 +94,15 @@ export const nodeState = (view: JourneyView | undefined, frameId: string): FlowN
 
 export const nodeReview = (view: JourneyView | undefined, frameId: string) =>
   nodeAttempts(view, frameId)[0]?.review ?? undefined;
+
+export const framePreview = (
+  view: JourneyView | undefined,
+  frameId: string,
+  showReal: boolean,
+): { kind: 'reference' | 'unavailable' } | { kind: 'screenshot'; url: string } => {
+  if (!showReal) return { kind: 'reference' };
+  const url = nodeAttempts(view, frameId)
+    .flatMap((attempt) => attempt.evidence)
+    .find((evidence) => evidence.type === 'screenshot' && evidence.fileUrl)?.fileUrl;
+  return url ? { kind: 'screenshot', url } : { kind: 'unavailable' };
+};

@@ -4,7 +4,7 @@ import { eq, inArray } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { artboards, projects, tasks, users, workspaces } from '../../schemas';
+import { artboards, projects, tasks, users, workspaceMembers, workspaces } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { ArtboardModel, ArtboardRevisionConflictError } from '../artboard';
 
@@ -37,6 +37,10 @@ beforeEach(async () => {
   await serverDB
     .insert(workspaces)
     .values({ id: workspaceId, name: 'WS', primaryOwnerId: userId, slug: 'artboard-model-ws' });
+  await serverDB.insert(workspaceMembers).values([
+    { userId, workspaceId },
+    { userId: otherUserId, workspaceId },
+  ]);
   await serverDB.insert(projects).values({ id: 'prj_art', name: 'Onboarding', userId });
   await seedTask('task_art_1', 1);
   await seedTask('task_art_2', 2);
@@ -117,5 +121,38 @@ describe('ArtboardModel', () => {
 
     const rows = await serverDB.select().from(artboards).where(eq(artboards.id, board.id));
     expect(rows).toHaveLength(0);
+  });
+
+  it('denies another workspace member every private-task board read and write', async () => {
+    const board = await create(inWorkspace, 'task_art_ws');
+    const member = new ArtboardModel(serverDB, otherUserId, workspaceId);
+    await serverDB.update(tasks).set({ visibility: 'private' }).where(eq(tasks.id, board.taskId));
+
+    expect(await member.findById(board.id)).toBeUndefined();
+    expect(await member.findByTaskId(board.taskId)).toBeUndefined();
+    expect(await member.getRevision(board.id)).toBeUndefined();
+    expect(await member.listByProject('prj_art')).toEqual([]);
+    await expect(
+      member.update(board.id, { expectedRevision: 1, title: 'Changed' }),
+    ).rejects.toThrow();
+    expect(await inWorkspace.findById(board.id)).toMatchObject({ revision: 1, title: board.title });
+  });
+
+  it('follows parent visibility changes and excludes trashed parents', async () => {
+    const board = await create(inWorkspace, 'task_art_ws');
+    const member = new ArtboardModel(serverDB, otherUserId, workspaceId);
+    await serverDB.update(tasks).set({ visibility: 'public' }).where(eq(tasks.id, board.taskId));
+
+    expect(await member.findById(board.id)).toMatchObject({ id: board.id });
+    await member.update(board.id, { expectedRevision: 1, title: 'Shared edit' });
+    await serverDB.update(tasks).set({ isDeleted: true }).where(eq(tasks.id, board.taskId));
+
+    expect(await inWorkspace.findById(board.id)).toBeUndefined();
+    expect(await member.findByTaskId(board.taskId)).toBeUndefined();
+    expect(await member.getRevision(board.id)).toBeUndefined();
+    expect(await inWorkspace.listByProject('prj_art')).toEqual([]);
+    await expect(
+      inWorkspace.update(board.id, { expectedRevision: 2, title: 'Trash edit' }),
+    ).rejects.toThrow();
   });
 });

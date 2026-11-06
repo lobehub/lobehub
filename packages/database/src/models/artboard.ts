@@ -1,7 +1,8 @@
 import type { ArtboardContent, ArtboardPhase } from '@lobechat/types';
-import { and, desc, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, exists, sql } from 'drizzle-orm';
 
 import { type ArtboardRow, artboards } from '../schemas/artboard';
+import { tasks } from '../schemas/task';
 import type { LobeChatDatabase, Transaction } from '../type';
 import { buildWorkspaceWhere } from '../utils/workspace';
 
@@ -39,8 +40,28 @@ export class ArtboardModel {
 
   withTransaction = (tx: Transaction) => new ArtboardModel(tx, this.userId, this.workspaceId);
 
-  private scope = () =>
-    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, artboards);
+  private scope = () => {
+    const context = { userId: this.userId, workspaceId: this.workspaceId };
+    return and(
+      buildWorkspaceWhere(context, artboards),
+      exists(
+        this.db
+          .select({ id: tasks.id })
+          .from(tasks)
+          .where(
+            and(
+              eq(tasks.id, artboards.taskId),
+              buildWorkspaceWhere(context, {
+                isDeleted: tasks.isDeleted,
+                userId: tasks.createdByUserId,
+                visibility: tasks.visibility,
+                workspaceId: tasks.workspaceId,
+              }),
+            ),
+          ),
+      ),
+    );
+  };
 
   create = async (params: CreateArtboardParams): Promise<ArtboardRow> => {
     const [row] = await this.db

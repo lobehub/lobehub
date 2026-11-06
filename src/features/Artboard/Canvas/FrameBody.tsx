@@ -25,13 +25,25 @@ const styles = stylex.create({
   },
 });
 
-const Placeholder = ({ missing, title }: { missing?: boolean; title: string }) => {
+const Placeholder = ({
+  missing,
+  title,
+  unavailable,
+}: {
+  missing?: boolean;
+  title: string;
+  unavailable?: boolean;
+}) => {
   const { t } = useTranslation('project');
   return (
     <div {...stylex.props(canvasStyles.noShot)}>
-      <Icon icon={missing ? ImageOffIcon : LayoutTemplateIcon} size={22} />
+      <Icon icon={missing || unavailable ? ImageOffIcon : LayoutTemplateIcon} size={22} />
       <Text ellipsis style={{ maxWidth: '80%' }} type="secondary">
-        {missing ? t('artboard.frame.missingImage') : title}
+        {unavailable
+          ? t('artboard.verify.noShot')
+          : missing
+            ? t('artboard.frame.missingImage')
+            : title}
       </Text>
     </div>
   );
@@ -41,9 +53,20 @@ interface FrameBodyProps {
   frame: ArtboardFrame;
   imageUrl?: string;
   live: boolean;
+  screenshotUrl?: string | null;
 }
 
-const FrameBody = memo<FrameBodyProps>(({ frame, imageUrl, live }) => {
+const FrameBody = memo<FrameBodyProps>(({ frame, imageUrl, live, screenshotUrl }) => {
+  if (screenshotUrl === null) return <Placeholder unavailable title={frame.title} />;
+  if (screenshotUrl)
+    return (
+      <img
+        alt={frame.title}
+        draggable={false}
+        src={screenshotUrl}
+        {...stylex.props(styles.image)}
+      />
+    );
   const { source } = frame;
   if (source.kind === 'image')
     return imageUrl ? (

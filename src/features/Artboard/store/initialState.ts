@@ -20,7 +20,9 @@ export interface ArtboardState {
   flash: string[];
   fullscreen: boolean;
   gallery: GalleryConversation | null;
+  galleryDrafts: Record<string, { refs: ArtboardReference[]; text: string }>;
   galleryRefs: ArtboardReference[];
+  galleryText: string;
   mode: BoardMode;
   outlineOpen: boolean;
   selected: string | null;
@@ -37,7 +39,9 @@ export const initialState: ArtboardState = {
   flash: [],
   fullscreen: false,
   gallery: null,
+  galleryDrafts: {},
   galleryRefs: [],
+  galleryText: '',
   mode: 'discuss',
   outlineOpen: false,
   selected: null,

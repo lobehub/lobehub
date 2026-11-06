@@ -11,6 +11,7 @@ import Canvas from '../Canvas';
 import { useArtboard } from '../data/useArtboard';
 import { useArtboardRevisionWatch } from '../data/useArtboardRevisionWatch';
 import { artboardActions, useArtboardStore } from '../store';
+import { useArtboardFeature } from '../useArtboardFeature';
 import VerifyPanel from '../Verify';
 import FlowStage from '../Verify/FlowStage';
 import Composer from './Composer';
@@ -132,11 +133,14 @@ interface BoardViewProps {
 }
 
 const BoardView = ({ artboardId, onExitFullscreen }: BoardViewProps) => {
+  const { enabled } = useArtboardFeature();
   const { data, error, isLoading, mutate } = useArtboard(artboardId);
 
   useEffect(() => {
-    artboardActions.bindBoard(artboardId);
-  }, [artboardId]);
+    if (enabled) artboardActions.bindBoard(artboardId);
+  }, [artboardId, enabled]);
+
+  if (!enabled) return null;
 
   if (!data) {
     if (error && !isLoading) return <BoardError onRetry={() => void mutate()} />;

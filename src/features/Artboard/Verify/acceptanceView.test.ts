@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { buildBoardModel } from '../model';
 import { acceptanceJourneyView } from './acceptanceView';
-import { nodeState } from './flow';
+import { framePreview, nodeState } from './flow';
 
 const board = buildBoardModel(
   {
@@ -99,5 +99,26 @@ describe('acceptanceJourneyView', () => {
 
   it('finds nothing for a board whose frames are not in the bundle', () => {
     expect(acceptanceJourneyView(board, { flows: [], rounds: [] } as any)).toBeUndefined();
+  });
+
+  it('switches from the pinned reference to the actual screenshot for the journey frame', () => {
+    const withEvidence = structuredClone(bundle);
+    withEvidence.flows[0].versions[0].runs[0].attempts[0].evidence = [
+      { fileUrl: 'https://evidence.test/log.txt', type: 'log' },
+      { fileUrl: 'https://evidence.test/f1.png', type: 'screenshot' },
+    ];
+    const journey = acceptanceJourneyView(board, withEvidence);
+
+    expect(framePreview(journey, 'f1', false)).toEqual({ kind: 'reference' });
+    expect(framePreview(journey, 'f1', true)).toEqual({
+      kind: 'screenshot',
+      url: 'https://evidence.test/f1.png',
+    });
+    expect(framePreview(journey, 'f1', false)).toEqual({ kind: 'reference' });
+  });
+
+  it('shows unavailable evidence rather than the reference or another frame screenshot', () => {
+    expect(framePreview(view, 'f2', true)).toEqual({ kind: 'unavailable' });
+    expect(framePreview(undefined, 'f1', true)).toEqual({ kind: 'unavailable' });
   });
 });

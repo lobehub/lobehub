@@ -10,9 +10,19 @@ import { useOpenArtboardFromRoute } from './useOpenArtboardFromRoute';
 
 const openBoardPanel = vi.fn();
 let resolveLoad: () => void = () => {};
+const { board, feature } = vi.hoisted(() => ({
+  board: { originTopicId: 't' },
+  feature: { enabled: true, ready: true },
+}));
+
+vi.mock('./useArtboardFeature', () => ({
+  useArtboardFeature: () => ({ enabled: feature.ready && feature.enabled, ready: feature.ready }),
+}));
+
+vi.mock('./data/useArtboard', () => ({ useArtboard: () => ({ data: { artboard: board } }) }));
 
 vi.mock('./Conversation/openBoardPanel', () => ({
-  openBoardPanel: (id: string) => openBoardPanel(id),
+  openBoardPanel: (...args: unknown[]) => openBoardPanel(...args),
 }));
 
 vi.mock('./loadArtboardTool', () => ({
@@ -27,7 +37,10 @@ const wrapper = ({ children }: { children: ReactNode }) =>
 
 beforeEach(() => {
   openBoardPanel.mockReset();
+  Object.assign(feature, { enabled: true, ready: true });
+  board.originTopicId = 't';
   useChatStore.setState({
+    activeTopicId: 't',
     dbMessagesMap: {
       t: [
         {
@@ -49,5 +62,55 @@ describe('useOpenArtboardFromRoute', () => {
     await act(async () => resolveLoad());
 
     expect(openBoardPanel).toHaveBeenCalledWith('tool_1');
+  });
+
+  it.each(['CLI-created board', 'creation message outside the loaded window'])(
+    'opens a %s by its authorized artboard id',
+    async () => {
+      useChatStore.setState({ dbMessagesMap: {} });
+      renderHook(() => useOpenArtboardFromRoute(), { wrapper });
+
+      await act(async () => resolveLoad());
+
+      expect(openBoardPanel).toHaveBeenCalledWith(undefined, 'art_1');
+    },
+  );
+
+  it('waits for the origin conversation before opening a board without a tool message', async () => {
+    useChatStore.setState({ activeTopicId: 'another-topic', dbMessagesMap: {} });
+    const { rerender } = renderHook(() => useOpenArtboardFromRoute(), { wrapper });
+
+    await act(async () => resolveLoad());
+    expect(openBoardPanel).not.toHaveBeenCalled();
+
+    act(() => useChatStore.setState({ activeTopicId: 't' }));
+    rerender();
+    await act(async () => resolveLoad());
+    expect(openBoardPanel).toHaveBeenCalledWith(undefined, 'art_1');
+  });
+
+  it.each([
+    { enabled: false, ready: true },
+    { enabled: true, ready: false },
+  ])(
+    'does not open a saved historical board when flags are $enabled/$ready',
+    async ({ enabled, ready }) => {
+      Object.assign(feature, { enabled, ready });
+      renderHook(() => useOpenArtboardFromRoute(), { wrapper });
+
+      await act(async () => resolveLoad());
+
+      expect(openBoardPanel).not.toHaveBeenCalled();
+    },
+  );
+
+  it('cancels a pending route open when the flag becomes disabled', async () => {
+    const { rerender } = renderHook(() => useOpenArtboardFromRoute(), { wrapper });
+    feature.enabled = false;
+    rerender();
+
+    await act(async () => resolveLoad());
+
+    expect(openBoardPanel).not.toHaveBeenCalled();
   });
 });

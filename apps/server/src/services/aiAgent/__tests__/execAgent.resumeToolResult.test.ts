@@ -145,6 +145,7 @@ vi.mock('@/database/models/userMemory/persona', () => ({
 vi.mock('@/server/services/agentRuntime', () => ({
   AgentRuntimeService: vi.fn().mockImplementation(function () {
     return {
+      acceptsArtboardWorks: vi.fn().mockResolvedValue(false),
       acceptsFileWorks: vi.fn().mockResolvedValue(false),
       acceptsMemberRuntimeEnd: vi.fn().mockResolvedValue(false),
       getLlmExecutor: vi.fn().mockResolvedValue(undefined),

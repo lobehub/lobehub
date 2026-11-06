@@ -6,7 +6,7 @@ import { sx } from '@/styles/sx';
 import { useBoard } from '../BoardContext';
 import type { BoardModel } from '../model';
 import { artboardActions, useArtboardStore } from '../store';
-import { nodeState } from '../Verify/flow';
+import { framePreview, nodeState } from '../Verify/flow';
 import { useJourneyView } from '../Verify/useJourneyView';
 import FrameBody from './FrameBody';
 import FrameLabel from './FrameLabel';
@@ -35,6 +35,7 @@ const FrameNode = ({ frame, k, live }: FrameNodeProps) => {
     flash: st.flash.includes(frame.id),
     related: st.mode === 'discuss' && isRelated(board, st.selected, frame.id),
     selected: st.selected === frame.id,
+    showReal: st.showReal,
     verify: st.mode === 'verify',
   }));
 
@@ -42,6 +43,7 @@ const FrameNode = ({ frame, k, live }: FrameNodeProps) => {
   const muted = s.verify && !inJourney;
   const state = inJourney ? nodeState(journey, frame.id) : undefined;
   const border = s.verify && inJourney ? flowStateColor(state) : undefined;
+  const preview = framePreview(journey, frame.id, s.verify && inJourney && s.showReal);
 
   return (
     <div
@@ -80,6 +82,13 @@ const FrameNode = ({ frame, k, live }: FrameNodeProps) => {
           live={live}
           imageUrl={
             frame.source.kind === 'image' ? board.imageUrls[frame.source.fileId] : undefined
+          }
+          screenshotUrl={
+            preview.kind === 'reference'
+              ? undefined
+              : preview.kind === 'screenshot'
+                ? preview.url
+                : null
           }
         />
       </div>

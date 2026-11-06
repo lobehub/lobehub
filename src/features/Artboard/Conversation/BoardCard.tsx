@@ -8,13 +8,15 @@ import { Block, Button, Flexbox, Icon, Text } from '@lobehub/ui';
 import { PresentationIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
+import { useArtboardFeature } from '../useArtboardFeature';
 import { openBoardPanel } from './openBoardPanel';
 
 type BoardCardProps = BuiltinRenderProps<Partial<CreateArtboardParams>, ArtboardToolState>;
 
 const BoardCard = ({ apiName, args, messageId, pluginError, pluginState }: BoardCardProps) => {
   const { t } = useTranslation('project');
-  if (pluginError || !pluginState?.artboardId) return null;
+  const { enabled } = useArtboardFeature();
+  if (!enabled || pluginError || !pluginState?.artboardId) return null;
 
   const updated = apiName === ArtboardApiName.updateArtboard;
   const open = () => openBoardPanel(messageId);
