@@ -14,4 +14,18 @@ describe('categorizeCase', () => {
       'difference',
     );
   });
+
+  it('ignores unmodeled gaps on an element whose own chain and file rules did not change', () => {
+    const unchanged = { evidence: ['STYLE_CHAIN_UNCHANGED', 'FILE_RULES_UNCHANGED'], flags: [] };
+    expect(categorizeCase(unchanged, { gaps: ['PSEUDO_UNMODELED'], status: 'equal' })).toBe(
+      'equal',
+    );
+    expect(
+      categorizeCase(
+        { evidence: ['STYLE_CHAIN_UNCHANGED'], flags: [] },
+        { gaps: ['PSEUDO_UNMODELED'], status: 'equal' },
+      ),
+    ).toBe('needs-signoff');
+    expect(categorizeCase(unchanged, { gaps: [], status: 'difference' })).toBe('difference');
+  });
 });

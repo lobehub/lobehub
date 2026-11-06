@@ -81,7 +81,7 @@ export interface GeneratingBorderProps {
  */
 const GeneratingBorder = memo<GeneratingBorderProps>(
   ({ children, className, generating, style }) => (
-    <Flexbox {...sx([styles.shell, generating && styles.shellGenerating], className, style)}>
+    <Flexbox {...sx(styles.shell, generating && styles.shellGenerating, className, style)}>
       {children}
     </Flexbox>
   ),

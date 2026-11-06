@@ -279,7 +279,8 @@ const MessageItem = memo<MessageItemProps>(
         {enableHistoryDivider && <History />}
         <Flexbox
           {...sx(
-            [styles.message, shouldDimCreatingMessage && styles.loading],
+            styles.message,
+            shouldDimCreatingMessage && styles.loading,
             ['lobe-messages-0fc10b22-message', className].filter(Boolean).join(' '),
           )}
           data-index={index}
