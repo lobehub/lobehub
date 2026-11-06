@@ -69,7 +69,7 @@ const HoverExpandBar = memo<HoverExpandBarProps>(({ bottomOffset = 0, visible, o
       {...sx(
         styles.bar,
         visible ? styles.visible : styles.hidden,
-        bottomOffset > 0 && { insetBlockEnd: `calc(100% + ${bottomOffset}px)` },
+        bottomOffset > 0 ? { insetBlockEnd: `calc(100% + ${bottomOffset}px)` } : undefined,
       )}
       data-testid="floating-chat-panel-hover-bar"
     >
