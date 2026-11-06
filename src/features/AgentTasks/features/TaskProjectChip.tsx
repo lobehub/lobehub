@@ -1,4 +1,4 @@
-import { Text } from '@lobehub/ui';
+import { cssVar, Text } from '@lobehub/ui';
 import { cssVar as sxVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 
@@ -21,7 +21,10 @@ const styles = stylex.create({
     paddingInline: 6,
     borderWidth: 1,
     borderStyle: 'solid',
-    borderColor: sxVar.colorBorderSecondary,
+    // A translucent fill rather than a border token: those are opaque greys that
+    // match the dark board card, while this stays visible on whichever row, card
+    // or group header it sits on.
+    borderColor: sxVar.colorFill,
     borderRadius: 6,
     lineHeight: 1,
   },
@@ -49,7 +52,8 @@ const TaskProjectChip = ({ projectId }: TaskProjectChipProps) => {
   return (
     <span data-testid={'task-project-chip'} title={project.name} {...stylex.props(styles.chip)}>
       <ProjectAvatar avatar={project.avatar} name={project.name} size={14} />
-      <Text ellipsis fontSize={12} type={'secondary'}>
+      {/* `type="secondary"` resolves to the tertiary text colour, under AA at 12px. */}
+      <Text ellipsis color={cssVar.colorTextSecondary} fontSize={12}>
         {project.name}
       </Text>
     </span>
