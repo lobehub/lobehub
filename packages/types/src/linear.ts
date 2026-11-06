@@ -144,6 +144,8 @@ export interface LinearIssueCount {
 
 /** Why an issue was left alone. */
 export type LinearSyncSkipReason =
+  /** Linear archived it, but the task has a live schedule or heartbeat or an open Goal; a later run retries. */
+  | 'live'
   /** Linear closed it, but the task is running; it is not interrupted. */
   | 'running'
   /** The linked task is in the trash or no longer visible to the caller. */

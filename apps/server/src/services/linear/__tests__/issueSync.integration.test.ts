@@ -25,6 +25,7 @@ import {
 } from '../issueSync';
 
 const linear = vi.hoisted(() => ({
+  getArchivedLinearIssuesByIds: vi.fn(),
   getLinearIssuesByIds: vi.fn(),
   getLinearProjectTeamIds: vi.fn(),
   listLinearIssueComments: vi.fn(),
@@ -38,6 +39,7 @@ vi.mock('../../task/archiveGuard', async (importOriginal) => ({
 }));
 vi.mock('../issues', async (importOriginal) => ({
   ...(await importOriginal<typeof IssuesModule>()),
+  getArchivedLinearIssuesByIds: linear.getArchivedLinearIssuesByIds,
   getLinearIssuesByIds: linear.getLinearIssuesByIds,
   getLinearProjectTeamIds: linear.getLinearProjectTeamIds,
   listLinearIssueComments: linear.listLinearIssueComments,
@@ -69,6 +71,9 @@ const serve = (issues: LinearIssue[]) => {
   linear.listLinearIssues.mockImplementation(async () => ({ hasMore: false, issues }));
   linear.getLinearIssuesByIds.mockImplementation(async (_token: string, ids: string[]) =>
     issues.filter((item) => ids.includes(item.id)),
+  );
+  linear.getArchivedLinearIssuesByIds.mockImplementation(async (_token: string, ids: string[]) =>
+    issues.filter((item) => ids.includes(item.id) && item.archivedAt),
   );
 };
 
@@ -877,6 +882,7 @@ describe('LinearIssueSyncService archived issues (real PostgreSQL, Linear over f
   beforeEach(async () => {
     const actual = await vi.importActual<typeof IssuesModule>('../issues');
     linear.listLinearIssues.mockImplementation(actual.listLinearIssues);
+    linear.getArchivedLinearIssuesByIds.mockImplementation(actual.getArchivedLinearIssuesByIds);
     linear.getLinearIssuesByIds.mockImplementation(actual.getLinearIssuesByIds);
     linear.getLinearProjectTeamIds.mockImplementation(actual.getLinearProjectTeamIds);
     vi.stubGlobal(
@@ -892,6 +898,7 @@ describe('LinearIssueSyncService archived issues (real PostgreSQL, Linear over f
         const nodes = linearIssues
           .filter((item) => includeArchived || !item.archived)
           .filter((item) => !where.id || where.id.in.includes(item.id))
+          .filter((item) => !where.archivedAt || !!item.archivedAt)
           .filter((item) => !where.state || where.state.type.in.includes(item.state.type))
           .filter((item) => !where.team || item.team.id === where.team.id.eq)
           .map(({ archived: _archived, ...rest }) => rest);
@@ -1014,6 +1021,28 @@ describe('LinearIssueSyncService archived issues (real PostgreSQL, Linear over f
       expect(task?.status).not.toBe('completed');
     });
 
+    it('archives a closed task whose issue is archived later, without the option, and asks once', async () => {
+      const service = new LinearIssueSyncService(db, userId);
+      linearIssues = [issue({ id: '1', state: done }), issue({ id: '2', state: done })];
+      await service.syncByFilter(TOKEN, rule);
+
+      // Archived in Linear after closing, so a listing without the option misses it.
+      linearIssues = [archivedIssue('1'), issue({ id: '2', state: done })];
+      const plain = { ...rule, includeArchived: false, stateTypes: ['backlog' as const] };
+      const result = await service.syncByFilter(TOKEN, plain);
+
+      expect(result.archived).toBe(1);
+      expect((await linkedTask('1'))?.archivedAt?.toISOString()).toBe(ARCHIVED_AT);
+      expect((await linkedTask('2'))?.archivedAt).toBeNull();
+
+      // Applied: restored stays restored, and this link is not asked about again.
+      await new TaskArchiveModel(db, userId).unarchive((await linkedTask('1'))!.id);
+      linear.getArchivedLinearIssuesByIds.mockClear();
+      expect((await service.syncByFilter(TOKEN, plain)).archived).toBeUndefined();
+      expect(linear.getArchivedLinearIssuesByIds.mock.calls[0][1]).toEqual(['2']);
+      expect((await linkedTask('1'))?.archivedAt).toBeNull();
+    });
+
     it('does not archive again a task restored in LobeHub', async () => {
       const service = new LinearIssueSyncService(db, userId);
       linearIssues = [archivedIssue('1')];
@@ -1118,6 +1147,7 @@ describe('LinearIssueSyncService archived issues (real PostgreSQL, Linear over f
       linearIssues = [{ ...issue({ archivedAt: ARCHIVED_AT, id: '1' }), archived: true }];
       const live = await service.syncByFilter(TOKEN, rule);
       expect(live.archived).toBeUndefined();
+      expect(live.skipped).toEqual([{ identifier: 'ENG-1', reason: 'live' }]);
       expect((await linkedTask('1'))?.archivedAt).toBeNull();
 
       await db.update(tasks).set({ heartbeatInterval: 0 }).where(eq(tasks.id, task!.id));
@@ -1134,6 +1164,7 @@ describe('LinearIssueSyncService archived issues (real PostgreSQL, Linear over f
       linearIssues = [{ ...issue({ archivedAt: ARCHIVED_AT, id: '1' }), archived: true }];
       const held = await service.syncByFilter(TOKEN, rule);
       expect(held.archived).toBeUndefined();
+      expect(held.skipped).toEqual([{ identifier: 'ENG-1', reason: 'live' }]);
       expect((await linkedTask('1'))?.archivedAt).toBeNull();
 
       openGoals.taskIds.clear();

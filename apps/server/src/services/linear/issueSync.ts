@@ -26,6 +26,7 @@ import { findTasksInOpenGoals } from '../task/archiveGuard';
 import { LinearApiError } from './client';
 import { linearCommentToContent } from './issueComments';
 import {
+  getArchivedLinearIssuesByIds,
   getLinearIssuesByIds,
   getLinearProjectTeamIds,
   LINEAR_PAGE_SIZE,
@@ -252,7 +253,8 @@ export class LinearIssueSyncService {
   /**
    * Sync every issue matching a filter, then close the tasks of linked issues
    * in the filter's teams (for a project, every team it belongs to) that the
-   * filter no longer matches because Linear closed them.
+   * filter no longer matches because Linear closed them, and archive those of
+   * issues Linear archived.
    *
    * With `startAfter`, reading resumes at that cursor (a continuing run), and
    * the closing pass is left to a run that reads from the start, since this
@@ -366,6 +368,19 @@ export class LinearIssueSyncService {
         for (const issue of fetched) {
           if (CLOSED_STATE_TYPES.has(issue.state.type)) closing.push(issue.id);
         }
+      }
+      // Issues archived since their task closed, which Linear also does on its
+      // own after a while. A closed task is not reread above, and a run without
+      // archived issues never lists these. Once applied, a link is not asked again.
+      const closedUnarchived = unseen.filter(
+        (link) => closedTaskIds.has(link.taskId) && !link.metadata?.appliedArchivedAt,
+      );
+      if (closedUnarchived.length > 0) {
+        const archived = await getArchivedLinearIssuesByIds(
+          accessToken,
+          closedUnarchived.map((link) => link.externalId),
+        );
+        await this.syncIssues(archived, { closeOnly: true }, result);
       }
       if (options.syncComments) {
         // The filter no longer reaches these issues, so their comments are
@@ -588,11 +603,10 @@ export class LinearIssueSyncService {
           result.archived = (result.archived ?? 0) + 1;
           counted = true;
         }
-      } else if (outcome === 'running' && !skippedRunning) {
-        skip(result, issue.identifier, 'running');
-        counted = true;
       } else {
-        log('archive of %s waits: task %s is still live', issue.identifier, task.id);
+        // Reported, since the archive is still owed; a later run retries it.
+        if (!skippedRunning) skip(result, issue.identifier, outcome);
+        counted = true;
       }
     }
 

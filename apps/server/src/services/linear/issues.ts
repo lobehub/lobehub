@@ -217,16 +217,10 @@ export const countLinearIssues = async (
   return { capped: hasMore, count };
 };
 
-/**
- * Issues by id, in pages of the API's maximum size. Unknown or inaccessible ids
- * are omitted; archived ones are always returned. An id is asked for because it
- * was picked (archived issues are listed only when asked for, so one picked was
- * meant) or because a task is linked to it, and an issue archived after it was
- * linked must still close its task.
- */
-export const getLinearIssuesByIds = async (
+const fetchLinearIssuesByIds = async (
   accessToken: string,
   ids: string[],
+  where: object = {},
 ): Promise<LinearIssue[]> => {
   const issues: LinearIssue[] = [];
   for (let start = 0; start < ids.length; start += LINEAR_PAGE_SIZE) {
@@ -239,12 +233,32 @@ export const getLinearIssuesByIds = async (
           pageInfo { hasNextPage endCursor }
         }
       }`,
-      { filter: { id: { in: batch } }, first: batch.length },
+      { filter: { ...where, id: { in: batch } }, first: batch.length },
     );
     issues.push(...data.issues.nodes);
   }
   return issues;
 };
+
+/**
+ * Issues by id, in pages of the API's maximum size. Unknown or inaccessible ids
+ * are omitted; archived ones are always returned. An id is asked for because it
+ * was picked (archived issues are listed only when asked for, so one picked was
+ * meant) or because a task is linked to it, and an issue archived after it was
+ * linked must still close its task.
+ */
+export const getLinearIssuesByIds = (accessToken: string, ids: string[]): Promise<LinearIssue[]> =>
+  fetchLinearIssuesByIds(accessToken, ids);
+
+/**
+ * Only the archived ones among these issues. Filtered by Linear, so checking a
+ * long tail of closed issues costs a request per page but returns almost nothing.
+ */
+export const getArchivedLinearIssuesByIds = (
+  accessToken: string,
+  ids: string[],
+): Promise<LinearIssue[]> =>
+  fetchLinearIssuesByIds(accessToken, ids, { archivedAt: { null: false } });
 
 /** A comment on an issue, with what a sync copies onto the task. */
 export interface LinearIssueComment {

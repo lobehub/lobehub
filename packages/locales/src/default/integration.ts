@@ -124,6 +124,8 @@ export default {
   'linear.sync.job.skipReason.commentsFailed':
     'Task synced, but its comments could not be; the next sync retries them',
   'linear.sync.job.skipReason.failed': 'Could not be written; the next sync retries it',
+  'linear.sync.job.skipReason.live':
+    'Archived in Linear, but the task has a live schedule or an open goal; a later sync archives it',
   'linear.sync.job.skipReason.missing': 'No longer in Linear, or not visible to this connection',
   'linear.sync.job.skipReason.running': 'Task is running, so it was not closed',
   'linear.sync.job.skipReason.unavailable': 'Task is in the trash or not visible to you',
