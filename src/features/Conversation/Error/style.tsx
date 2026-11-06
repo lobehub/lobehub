@@ -27,7 +27,7 @@ export const styles = stylex.create({
 export const ErrorActionContainer = memo<CenterProps>(
   ({ children, className, gap = 24, padding = 24, style, ...rest }) => {
     return (
-      <Center {...sx([styles.container], className, style)} gap={gap} padding={padding} {...rest}>
+      <Center {...sx(styles.container, className, style)} gap={gap} padding={padding} {...rest}>
         {children}
       </Center>
     );
@@ -56,7 +56,7 @@ export const FormAction = memo<
     ...rest
   }) => {
     return (
-      <Center {...sx([styles.form], className, style)} gap={gap} {...rest}>
+      <Center {...sx(styles.form, className, style)} gap={gap} {...rest}>
         <Avatar
           animation={animation}
           avatar={avatar}

@@ -221,7 +221,7 @@ const ReviewRow = memo<{ review: ScmEventReview }>(({ review }) => {
           </Text>
         ) : null}
       </Flexbox>
-      <div {...sx([styles.reviewBody], undefined, { paddingInlineStart: 24 })}>{review.body}</div>
+      <div {...sx(styles.reviewBody, { paddingInlineStart: 24 })}>{review.body}</div>
     </Flexbox>
   );
 });

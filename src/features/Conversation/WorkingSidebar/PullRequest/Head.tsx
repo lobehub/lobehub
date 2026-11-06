@@ -75,7 +75,7 @@ export const PrStatePill = memo<{
   const visual = getDetailVisual(pr);
   return (
     <span
-      {...sx([sectionStyles.pill], undefined, {
+      {...sx(sectionStyles.pill, {
         background: `color-mix(in srgb, ${visual.color} 12%, transparent)`,
         color: visual.color,
       })}

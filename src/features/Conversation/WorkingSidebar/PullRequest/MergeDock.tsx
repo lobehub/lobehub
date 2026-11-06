@@ -155,12 +155,12 @@ const MergeDock = memo<MergeDockProps>(
               icon={DOCK_ICON[status.icon]}
               size={14}
               spin={status.icon === 'spinner'}
-              {...sx([styles.icon], undefined, { marginBlockStart: 3 })}
+              {...sx(styles.icon, { marginBlockStart: 3 })}
             />
             <span
               {...sx(
-                [styles.headline, isError && styles.headlineWrap],
-                undefined,
+                styles.headline,
+                isError && styles.headlineWrap,
                 isError ? { color: TONE_COLOR.error } : undefined,
               )}
             >

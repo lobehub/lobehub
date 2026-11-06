@@ -68,7 +68,7 @@ interface SectionProps {
 }
 
 const Section = memo<SectionProps>(({ children, count, onToggle, open = true, title }) => (
-  <Flexbox {...sectionProps()}>
+  <Flexbox {...sectionProps(true)}>
     <Flexbox
       horizontal
       align={'center'}

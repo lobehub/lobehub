@@ -61,7 +61,7 @@ const EditState = dynamic(() => import('./components/EditState'), {
 const actionBarHolder = (
   <div
     {...{ [MESSAGE_ACTION_BAR_PORTAL_ATTRIBUTES.assistantGroup]: '' }}
-    {...sx([selectionStyles.hidden], undefined, { height: '28px' })}
+    {...sx(selectionStyles.hidden, { height: '28px' })}
   />
 );
 

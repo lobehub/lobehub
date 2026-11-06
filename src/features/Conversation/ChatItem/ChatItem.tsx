@@ -130,7 +130,7 @@ const ChatItem = memo<ChatItemProps>(
         gap={8}
         paddingBlock={8}
         {...rest}
-        {...sx([styles.container, chatItemMarker], cx('message-wrapper', className), {
+        {...sx(styles.container, chatItemMarker, cx('message-wrapper', className), {
           paddingInlineStart: isUser ? 36 : 0,
           ...style,
         })}

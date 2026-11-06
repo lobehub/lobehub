@@ -146,7 +146,7 @@ const TodoProgress = memo<TodoProgressProps>(({ className, topAttached }) => {
 
   return (
     <div
-      {...sx([styles.container, topAttached && styles.containerTopAttached], className)}
+      {...sx(styles.container, topAttached && styles.containerTopAttached, className)}
       onClick={toggleExpanded}
     >
       {/* Header */}
@@ -176,7 +176,8 @@ const TodoProgress = memo<TodoProgressProps>(({ className, topAttached }) => {
           </svg>
           <span
             {...sx(
-              [styles.header, !isAIGenerating && styles.headerColor],
+              styles.header,
+              !isAIGenerating && styles.headerColor,
               isAIGenerating ? shinyTextStyles.shinyText : undefined,
             )}
           >

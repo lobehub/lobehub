@@ -3,6 +3,8 @@ import * as stylex from '@stylexjs/stylex';
 
 import { sx } from '@/styles/sx';
 
+import { sectionAfterBreakMarker, sectionMarker } from './markers.stylex';
+
 export const sectionStyles = stylex.create({
   count: {
     paddingBlock: '1px',
@@ -28,17 +30,38 @@ export const sectionStyles = stylex.create({
     fontWeight: 500,
     lineHeight: '20px',
   },
-  // Sections divide themselves from the section above; `sectionProps` marks every
-  // section so the next one can see it as its previous sibling.
+  // Emotion's `& + &` divided a section from the one directly before it. StyleX only has
+  // `~`, so a section that follows a non-section sibling (a header, an empty state) passes
+  // `afterBreak` and keys its divider on a marker no section before that break carries.
   section: {
     flexShrink: 0,
     paddingBlock: '8px',
     paddingInline: '8px',
-    borderBlockStartWidth: { default: null, [stylex.when.siblingBefore(':is(*)')]: '1px' },
-    borderBlockStartStyle: { default: null, [stylex.when.siblingBefore(':is(*)')]: 'solid' },
+    borderBlockStartWidth: {
+      default: null,
+      [stylex.when.siblingBefore(':is(*)', sectionMarker)]: '1px',
+    },
+    borderBlockStartStyle: {
+      default: null,
+      [stylex.when.siblingBefore(':is(*)', sectionMarker)]: 'solid',
+    },
     borderBlockStartColor: {
       default: null,
-      [stylex.when.siblingBefore(':is(*)')]: cssVar.colorBorderSecondary,
+      [stylex.when.siblingBefore(':is(*)', sectionMarker)]: cssVar.colorBorderSecondary,
+    },
+  },
+  sectionAfterBreak: {
+    borderBlockStartWidth: {
+      default: null,
+      [stylex.when.siblingBefore(':is(*)', sectionAfterBreakMarker)]: '1px',
+    },
+    borderBlockStartStyle: {
+      default: null,
+      [stylex.when.siblingBefore(':is(*)', sectionAfterBreakMarker)]: 'solid',
+    },
+    borderBlockStartColor: {
+      default: null,
+      [stylex.when.siblingBefore(':is(*)', sectionAfterBreakMarker)]: cssVar.colorBorderSecondary,
     },
   },
   sectionHeader: { paddingBlockStart: 0, paddingBlockEnd: '4px', paddingInline: '8px' },
@@ -46,6 +69,9 @@ export const sectionStyles = stylex.create({
   skeleton: { paddingBlock: '4px', paddingInline: '8px' },
 });
 
-/** className / style for a sidebar section, with the marker the divider rule keys on. */
-export const sectionProps = (className?: string) =>
-  sx([sectionStyles.section, stylex.defaultMarker()], className);
+export const sectionProps = (afterBreak = false) =>
+  sx(
+    sectionStyles.section,
+    afterBreak && sectionStyles.sectionAfterBreak,
+    afterBreak ? sectionAfterBreakMarker : sectionMarker,
+  );

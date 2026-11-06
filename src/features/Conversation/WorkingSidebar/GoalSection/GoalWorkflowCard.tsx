@@ -396,7 +396,7 @@ const GoalWorkflowCard = memo<{
               gap={8}
             >
               <div {...stylex.props(styles.progress)}>
-                <div {...sx([styles.progressFill], undefined, { width: `${percent}%` })} />
+                <div {...sx(styles.progressFill, { width: `${percent}%` })} />
               </div>
               <Button outdent={'end'} size={'small'} type={'text'} onClick={open}>
                 {t('workingPanel.goal.viewDetails')}

@@ -118,8 +118,8 @@ const FileRow = memo<FileRowProps>(
           aria-expanded={expanded}
           role={'button'}
           {...sx(
-            [styles.row, stylex.defaultMarker()],
-            undefined,
+            styles.row,
+            stylex.defaultMarker(),
             indent ? { paddingInlineStart: 10 + indent } : undefined,
           )}
           tabIndex={0}

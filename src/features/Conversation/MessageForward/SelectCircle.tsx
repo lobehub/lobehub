@@ -38,7 +38,7 @@ interface SelectCircleProps {
  * multi-select rows.
  */
 const SelectCircle = memo<SelectCircleProps>(({ checked, className }) => (
-  <Center {...sx([styles.circle, checked && styles.checked], className)}>
+  <Center {...sx(styles.circle, checked && styles.checked, className)}>
     {checked && <Icon icon={Check} size={14} />}
   </Center>
 ));

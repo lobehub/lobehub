@@ -9,6 +9,7 @@ import { messageStateSelectors, useConversationStore } from '@/features/Conversa
 import { followUpActionSelectors, useFollowUpActionStore } from '@/store/followUpAction';
 import { sx } from '@/styles/sx';
 
+import { chipMarker } from './markers.stylex';
 import { styles } from './style';
 
 interface FollowUpChipsProps {
@@ -48,7 +49,7 @@ const FollowUpChips = memo<FollowUpChipsProps>(({ conversationKey, messageId }) 
         <button
           aria-label={chip.label}
           key={`${messageId}-${i}`}
-          {...sx([styles.chip, stylex.defaultMarker()], undefined, {
+          {...sx(styles.chip, chipMarker, {
             animationDelay: `${i * 60}ms`,
           })}
           type="button"

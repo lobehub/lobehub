@@ -111,7 +111,9 @@ const MessageContent = memo<MessageContentProps>(
       <Flexbox
         gap={16}
         {...sx(
-          [styles.message, variant === 'bubble' && styles.bubble, disabled && styles.disabled],
+          styles.message,
+          variant === 'bubble' && styles.bubble,
+          disabled && styles.disabled,
           [MSG_CONTENT_CLASSNAME, className].filter(Boolean).join(' '),
         )}
         onDoubleClick={onDoubleClick}

@@ -65,7 +65,7 @@ interface ActionsProps {
 const actionBarHolder = (
   <div
     {...{ [MESSAGE_ACTION_BAR_PORTAL_ATTRIBUTES.user]: '' }}
-    {...sx([selectionStyles.hidden], undefined, { height: '28px' })}
+    {...sx(selectionStyles.hidden, { height: '28px' })}
   />
 );
 

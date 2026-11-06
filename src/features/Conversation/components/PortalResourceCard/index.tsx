@@ -122,7 +122,7 @@ const PortalResourceCard = memo<PortalResourceCardProps>(
 
     // Mirrors the inline artifact card shell, while keeping portal-open behavior owned by callers.
     const card = (
-      <Flexbox horizontal align={'center'} {...sx([styles.container], className)}>
+      <Flexbox horizontal align={'center'} {...sx(styles.container, className)}>
         <Flexbox
           horizontal
           align={'center'}

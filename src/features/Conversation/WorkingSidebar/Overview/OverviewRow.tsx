@@ -101,7 +101,7 @@ export const OverviewRow = memo<OverviewRowProps>(
           icon={icon!}
           size={iconSize}
           spin={spin}
-          {...sx([rowStyles.icon], undefined, iconColor ? { color: iconColor } : undefined)}
+          {...sx(rowStyles.icon, iconColor ? { color: iconColor } : undefined)}
         />
       )}
       <span

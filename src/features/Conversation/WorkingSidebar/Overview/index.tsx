@@ -66,7 +66,12 @@ import { sectionProps, sectionStyles } from './sectionStyles';
 
 const styles = stylex.create({
   body: { overflowY: 'auto' },
-  emptyWorkspace: { paddingBlockStart: '28px', paddingBlockEnd: '30px', paddingInline: '20px' },
+  emptyWorkspace: {
+    flexShrink: 0,
+    paddingBlockStart: '28px',
+    paddingBlockEnd: '30px',
+    paddingInline: '20px',
+  },
 });
 
 interface OverviewProps {
@@ -168,6 +173,7 @@ const Overview = memo<OverviewProps>(
     const visibleWorks = works.slice(0, 3);
     const directoryName = workingDirectory ? pathBasename(workingDirectory) : undefined;
     const hasWorkspace = environmentAvailable && !!workingDirectory;
+    const showEmptyWorkspace = environmentAvailable && !workingDirectory;
 
     const isLinkedWorktree = isLinkedWorktreeCheckout(workingDirectory, worktrees);
 
@@ -386,7 +392,7 @@ const Overview = memo<OverviewProps>(
                 iconColor={prVisual.color}
                 trailing={
                   <span
-                    {...sx([sectionStyles.pill], undefined, {
+                    {...sx(sectionStyles.pill, {
                       background: `color-mix(in srgb,  12%, transparent)`,
                       color: ci.color,
                     })}
@@ -469,22 +475,20 @@ const Overview = memo<OverviewProps>(
         {statusDeviceId && <DeviceStatusSection active={active} deviceId={statusDeviceId} />}
 
         <TopicBackgroundActivity topicId={topicId} />
-        {environmentAvailable && !workingDirectory && (
+        {showEmptyWorkspace && (
           <Empty
+            className={stylex.props(styles.emptyWorkspace).className}
             description={t('workingPanel.overview.workspace.emptyDesc')}
             icon={LaptopIcon}
             title={t('workingPanel.overview.workspace.empty')}
-            className={
-              sx([sectionStyles.section, styles.emptyWorkspace, stylex.defaultMarker()]).className
-            }
           />
         )}
 
-        <GoalSection className={sectionProps().className} />
-        <ProgressSection className={sectionProps().className} />
+        <GoalSection className={sectionProps(showEmptyWorkspace).className} />
+        <ProgressSection className={sectionProps(showEmptyWorkspace).className} />
 
         {visibleWorks.length > 0 && (
-          <Flexbox {...sectionProps()}>
+          <Flexbox {...sectionProps(showEmptyWorkspace)}>
             <Flexbox
               horizontal
               align={'center'}
@@ -520,9 +524,9 @@ const Overview = memo<OverviewProps>(
 
         {/* Thread rows open in the Portal; the list labels itself as subagents and
             sits in its own section so the resource rows below aren't grouped under it. */}
-        {topicId && <ThreadListSection topicId={topicId} />}
+        {topicId && <ThreadListSection afterBreak={showEmptyWorkspace} topicId={topicId} />}
 
-        <Flexbox {...sectionProps()}>
+        <Flexbox {...sectionProps(showEmptyWorkspace)}>
           {hasWorkspace && (
             <OverviewRow
               weak

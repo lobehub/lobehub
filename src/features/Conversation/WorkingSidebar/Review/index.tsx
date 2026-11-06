@@ -1,8 +1,15 @@
 'use client';
 
 import type { GitWorkingTreePatch } from '@lobechat/electron-client-ipc';
-import { Center, type DropdownItem, DropdownMenu, Empty, Flexbox } from '@lobehub/ui';
-import { ActionIcon, Spin } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Center,
+  type DropdownItem,
+  DropdownMenu,
+  Empty,
+  Flexbox,
+  Spin,
+} from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import {
@@ -582,7 +589,7 @@ const Review = memo<ReviewProps>(
           </Center>
         ) : (
           <Flexbox horizontal {...stylex.props(styles.body)} flex={1} width={'100%'}>
-            <Flexbox flex={1} ref={listRef} {...sx([styles.list], undefined, { overflow: 'auto' })}>
+            <Flexbox flex={1} ref={listRef} {...sx(styles.list, { overflow: 'auto' })}>
               {groups.map((group) => {
                 const groupTotals = group.patches.reduce(
                   (acc, p) => {
