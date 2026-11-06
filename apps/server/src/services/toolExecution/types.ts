@@ -346,6 +346,12 @@ export interface ToolExecutionContext {
   taskId?: string;
   /** Current thread ID for thread-scoped conversations */
   threadId?: string | null;
+  /**
+   * Todo-mutating calls made right before this one with no other tool call in
+   * between, counted by the runtime executors. The lobe-agent todo APIs pause
+   * once it reaches their limit.
+   */
+  todoCallStreak?: number;
   /** Stable LLM tool call ID for structured tool outcome identity. */
   toolCallId?: string;
   toolManifestMap: Record<string, LobeToolManifest>;

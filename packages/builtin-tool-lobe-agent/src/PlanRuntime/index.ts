@@ -58,8 +58,35 @@ export interface PlanRuntimeContext {
   messageId?: string;
   signal?: AbortSignal;
   taskId?: string;
+  /**
+   * Todo-mutating calls made right before this one with no other tool call in
+   * between. Supplied by the server runtime; undefined disables the pause.
+   */
+  todoCallStreak?: number;
   topicId?: string;
 }
+
+/**
+ * Consecutive todo calls allowed before the todo APIs pause. A real plan needs a
+ * create plus a few status flips between pieces of work; ten in a row with
+ * nothing else is a model re-managing its list instead of working (production:
+ * ~490 todo calls in one 33-minute run, each answering "success").
+ */
+export const TODO_CALL_STREAK_LIMIT = 10;
+
+export interface PlanRuntimeOptions {
+  /** Consecutive todo calls allowed before the todo APIs pause. */
+  todoCallStreakLimit?: number;
+}
+
+/**
+ * Appended to every result that changed nothing. Without it a no-op reads as a
+ * fresh success, which the looping model took as progress and repeated.
+ */
+const NO_CHANGE_HINT =
+  'The todo list is already in this state, so calling again will not change it. Continue with the actual task.';
+
+const normalizeText = (text: string) => text.trim();
 
 const toPlan = (doc: PlanDocument, completed = false): Plan => ({
   completed,
@@ -99,9 +126,11 @@ const readTodosFromPlan = (doc: PlanDocument | null): TodoItem[] => {
 
 export class PlanExecutionRuntime {
   private service: PlanRuntimeService;
+  private todoCallStreakLimit: number;
 
-  constructor(service: PlanRuntimeService) {
+  constructor(service: PlanRuntimeService, options: PlanRuntimeOptions = {}) {
     this.service = service;
+    this.todoCallStreakLimit = options.todoCallStreakLimit ?? TODO_CALL_STREAK_LIMIT;
   }
 
   private async resolveExistingTodos(context: PlanRuntimeContext): Promise<TodoItem[]> {
@@ -114,6 +143,41 @@ export class PlanExecutionRuntime {
     if (!context.topicId) return [];
     const plan = await this.service.findPlanByTopic(context.topicId);
     return readTodosFromPlan(plan);
+  }
+
+  /**
+   * Refuse a todo mutation once the streak limit is reached, without touching
+   * the list. The refusal carries no `todos` state, so the list it reports stays
+   * the one message history already holds; the next non-todo tool call resets
+   * the streak.
+   */
+  private async pauseIfLooping(
+    apiName: string,
+    context: PlanRuntimeContext,
+  ): Promise<BuiltinToolResult | undefined> {
+    const streak = context.todoCallStreak ?? 0;
+    if (streak < this.todoCallStreakLimit) return;
+
+    console.warn('[lobe-agent] todo tools paused for a todo-only call streak', {
+      apiName,
+      streak,
+      topicId: context.topicId,
+    });
+
+    const existingTodos = await this.resolveExistingTodos(context);
+
+    return {
+      content: [
+        `⏸️ Todo tools paused: this is todo call ${streak + 1} in a row with no other work in between. Nothing was changed.`,
+        'Stop calling createTodos / updateTodos / clearTodos. The list below is current: do the actual work for the next item (or reply to the user), then update the list once.',
+        formatTodoStateSummary(existingTodos, new Date().toISOString()),
+      ].join('\n\n'),
+      error: {
+        message: `Todo tools paused after ${streak} consecutive todo calls`,
+        type: 'TodoCallLoop',
+      },
+      success: false,
+    };
   }
 
   private async syncTodosToPlan(topicId: string, todos: TodoState): Promise<void> {
@@ -142,12 +206,55 @@ export class PlanExecutionRuntime {
       return { content: 'No items provided to add.', success: false };
     }
 
+    const paused = await this.pauseIfLooping('createTodos', context);
+    if (paused) return paused;
+
     const existingTodos = await this.resolveExistingTodos(context);
-    const updatedTodos = [...existingTodos, ...itemsToAdd];
     const now = new Date().toISOString();
 
-    const addedList = itemsToAdd.map((item) => `- ${item.text}`).join('\n');
-    const actionSummary = `✅ Added ${itemsToAdd.length} item${itemsToAdd.length > 1 ? 's' : ''}:\n${addedList}`;
+    // Re-creating an item that is still open duplicates it rather than adding
+    // work. Completed items may legitimately come back as a new round.
+    const openTexts = new Set(
+      existingTodos
+        .filter((item) => item.status !== 'completed')
+        .map((item) => normalizeText(item.text)),
+    );
+    const newItems: TodoItem[] = [];
+    const duplicates: string[] = [];
+    for (const item of itemsToAdd) {
+      const text = normalizeText(item.text);
+      if (openTexts.has(text)) {
+        duplicates.push(item.text);
+        continue;
+      }
+      openTexts.add(text);
+      newItems.push(item);
+    }
+
+    const duplicateSummary =
+      duplicates.length > 0
+        ? `ℹ️ Skipped ${duplicates.length} item${duplicates.length > 1 ? 's' : ''} already on the list:\n${duplicates.map((text) => `- ${text}`).join('\n')}`
+        : '';
+
+    if (newItems.length === 0) {
+      return {
+        content: [
+          `${duplicateSummary}\n\n${NO_CHANGE_HINT}`,
+          formatTodoStateSummary(existingTodos, now),
+        ].join('\n\n'),
+        state: { createdItems: [], todos: { items: existingTodos, updatedAt: now } },
+        success: true,
+      };
+    }
+
+    const updatedTodos = [...existingTodos, ...newItems];
+    const addedList = newItems.map((item) => `- ${item.text}`).join('\n');
+    const actionSummary = [
+      `✅ Added ${newItems.length} item${newItems.length > 1 ? 's' : ''}:\n${addedList}`,
+      duplicateSummary,
+    ]
+      .filter(Boolean)
+      .join('\n\n');
 
     const todoState: TodoState = { items: updatedTodos, updatedAt: now };
 
@@ -156,7 +263,7 @@ export class PlanExecutionRuntime {
     return {
       content: actionSummary + '\n\n' + formatTodoStateSummary(updatedTodos, now),
       state: {
-        createdItems: itemsToAdd.map((item) => item.text),
+        createdItems: newItems.map((item) => item.text),
         todos: todoState,
       },
       success: true,
@@ -173,10 +280,20 @@ export class PlanExecutionRuntime {
       return { content: 'No operations provided.', success: false };
     }
 
+    const paused = await this.pauseIfLooping('updateTodos', context);
+    if (paused) return paused;
+
     const existingTodos = await this.resolveExistingTodos(context);
     const updatedTodos = [...existingTodos];
     const results: string[] = [];
     const skipped: string[] = [];
+    let changed = false;
+
+    const setItem = (index: number, item: TodoItem) => {
+      const current = updatedTodos[index];
+      if (current.text !== item.text || current.status !== item.status) changed = true;
+      updatedTodos[index] = item;
+    };
 
     operations.forEach((op, position) => {
       const label = `Operation ${position + 1}`;
@@ -195,6 +312,7 @@ export class PlanExecutionRuntime {
         case 'add': {
           if (op.text) {
             updatedTodos.push({ status: 'todo', text: op.text });
+            changed = true;
             results.push(`Added: "${op.text}"`);
           } else {
             skipped.push(`${label} ("add"): missing "text"`);
@@ -215,7 +333,7 @@ export class PlanExecutionRuntime {
             const updatedItem = { ...updatedTodos[index] };
             if (op.newText !== undefined) updatedItem.text = op.newText;
             if (op.status !== undefined) updatedItem.status = op.status;
-            updatedTodos[index] = updatedItem;
+            setItem(index, updatedItem);
             results.push(`Updated item ${index + 1}`);
           }
           break;
@@ -224,6 +342,7 @@ export class PlanExecutionRuntime {
           const index = resolveIndex();
           if (index !== undefined) {
             const removed = updatedTodos.splice(index, 1)[0];
+            changed = true;
             results.push(`Removed: "${removed.text}"`);
           }
           break;
@@ -231,7 +350,7 @@ export class PlanExecutionRuntime {
         case 'complete': {
           const index = resolveIndex();
           if (index !== undefined) {
-            updatedTodos[index] = { ...updatedTodos[index], status: 'completed' };
+            setItem(index, { ...updatedTodos[index], status: 'completed' });
             results.push(`Completed: "${updatedTodos[index].text}"`);
           }
           break;
@@ -239,7 +358,7 @@ export class PlanExecutionRuntime {
         case 'processing': {
           const index = resolveIndex();
           if (index !== undefined) {
-            updatedTodos[index] = { ...updatedTodos[index], status: 'processing' };
+            setItem(index, { ...updatedTodos[index], status: 'processing' });
             results.push(`In progress: "${updatedTodos[index].text}"`);
           }
           break;
@@ -274,9 +393,23 @@ export class PlanExecutionRuntime {
       };
     }
 
-    const actionSummary = `🔄 Applied ${results.length} operation${results.length > 1 ? 's' : ''}:\n${results.map((r) => `- ${r}`).join('\n')}`;
-
     const todoState: TodoState = { items: updatedTodos, updatedAt: now };
+
+    if (!changed) {
+      return {
+        content: [
+          `ℹ️ No change. ${NO_CHANGE_HINT}`,
+          skippedSummary,
+          formatTodoStateSummary(updatedTodos, now),
+        ]
+          .filter(Boolean)
+          .join('\n\n'),
+        state: { todos: todoState },
+        success: true,
+      };
+    }
+
+    const actionSummary = `🔄 Applied ${results.length} operation${results.length > 1 ? 's' : ''}:\n${results.map((r) => `- ${r}`).join('\n')}`;
 
     if (context.topicId) await this.syncTodosToPlan(context.topicId, todoState);
 
@@ -295,12 +428,16 @@ export class PlanExecutionRuntime {
   ): Promise<BuiltinToolResult> => {
     const { mode } = params;
 
+    const paused = await this.pauseIfLooping('clearTodos', context);
+    if (paused) return paused;
+
     const existingTodos = await this.resolveExistingTodos(context);
 
     if (existingTodos.length === 0) {
       const now = new Date().toISOString();
       return {
-        content: 'Todo list is already empty.\n\n' + formatTodoStateSummary([], now),
+        content:
+          `Todo list is already empty. ${NO_CHANGE_HINT}\n\n` + formatTodoStateSummary([], now),
         state: {
           clearedCount: 0,
           mode,
@@ -323,7 +460,7 @@ export class PlanExecutionRuntime {
       clearedCount = existingTodos.length - updatedTodos.length;
       actionSummary =
         clearedCount === 0
-          ? 'No completed items to clear.'
+          ? `No completed items to clear. ${NO_CHANGE_HINT}`
           : `🧹 Cleared ${clearedCount} completed item${clearedCount > 1 ? 's' : ''}.`;
     }
 
