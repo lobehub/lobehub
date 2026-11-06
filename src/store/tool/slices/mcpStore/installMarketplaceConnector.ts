@@ -1,4 +1,4 @@
-import { isMarketplaceInstallCompleted, MARKETPLACE_INSTALL_COMPLETED_KEY } from '@lobechat/const';
+import { MARKETPLACE_INSTALL_COMPLETED_KEY } from '@lobechat/const';
 import type { ToolManifest } from '@lobechat/types';
 import debug from 'debug';
 
@@ -29,13 +29,19 @@ interface InstallMarketplaceConnectorParams {
   signal: AbortSignal;
 }
 
-const buildCreatePayload = (
-  { connection, description, icon, identifier, name }: InstallMarketplaceConnectorParams,
-  /** Reinstalling over a finished install: `create` replaces the metadata, so keep the mark. */
-  wasInstalled: boolean,
-): CreateConnectorPayload => {
+/**
+ * The replacement row never carries the install mark, even over a finished
+ * install: until its tools are synced it must stay uncallable. The mark is
+ * written last, and a failed reinstall restores the previous row with its mark.
+ */
+const buildCreatePayload = ({
+  connection,
+  description,
+  icon,
+  identifier,
+  name,
+}: InstallMarketplaceConnectorParams): CreateConnectorPayload => {
   const metadata: Record<string, unknown> = { avatar: icon, description };
-  if (wasInstalled) metadata[MARKETPLACE_INSTALL_COMPLETED_KEY] = true;
   if (connection.headers) metadata.customHeaders = connection.headers;
   const base = { identifier, metadata, name, sourceType: 'marketplace' as const };
 
@@ -108,10 +114,7 @@ export const installMarketplaceConnector = async (
     connectorId = connector.id;
   } else {
     snapshot = await snapshotReplacedConnector(identifier, 'marketplace', get);
-    const wasInstalled = isMarketplaceInstallCompleted(snapshot?.metadata);
-    ({ id: connectorId, isNew } = await get().createConnector(
-      buildCreatePayload(params, wasInstalled),
-    ));
+    ({ id: connectorId, isNew } = await get().createConnector(buildCreatePayload(params)));
   }
 
   try {

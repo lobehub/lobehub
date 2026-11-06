@@ -1,4 +1,4 @@
-import { CURRENT_VERSION, isDesktop } from '@lobechat/const';
+import { CURRENT_VERSION, hasCallableMcpEndpoint, isDesktop } from '@lobechat/const';
 import {
   getMcpServerFingerprint,
   isSyncedMcpToolVisibleTo,
@@ -230,8 +230,9 @@ class MCPService {
 
     // An agent's own connectors may not be loaded on the client yet; with no
     // plugin to fall back to, let the server resolve the identifier for the agent.
+    // A market-hosted (cloud) connector has no URL: the server's connector route runs it.
     const isConnector = connector
-      ? connector.isEnabled && (!!connector.mcpServerUrl || connector.mcpConnectionType === 'stdio')
+      ? connector.isEnabled && hasCallableMcpEndpoint(connector)
       : !!agentId && !plugin;
     if (isConnector) {
       const { lambdaClient } = await import('@/libs/trpc/client');
