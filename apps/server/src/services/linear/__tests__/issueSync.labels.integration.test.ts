@@ -271,11 +271,13 @@ describe('LinearIssueSyncService labels (real PostgreSQL)', () => {
     serve([issue({ id: '1', ...labels({ name: 'C' }) })]);
     await service.syncByFilter(TOKEN, rule, syncLabels);
 
+    // Stale only outside a transaction: the batch is old, the read under the lock is not.
     const read = TaskExternalLinkModel.prototype.findByExternalIds;
     const stale = vi
       .spyOn(TaskExternalLinkModel.prototype, 'findByExternalIds')
       .mockImplementation(async function (this: TaskExternalLinkModel, provider, ids) {
         const rows = await read.call(this, provider, ids);
+        if ((this as unknown as { db: unknown }).db !== db) return rows;
         return rows.map((row) => ({ ...row, metadata: { ...row.metadata, syncedLabels: ['a'] } }));
       });
     serve([issue({ id: '1', ...labels({ name: 'B' }) })]);

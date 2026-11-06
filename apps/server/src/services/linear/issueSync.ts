@@ -916,11 +916,12 @@ export class LinearIssueSyncService {
 
   /**
    * Apply one issue's label change and record it in one transaction. The change
-   * is worked out again under the link's row lock: another run of a different rule
+   * is worked out again under the task's row lock: another run of a different rule
    * may have applied labels since the batch was read, and a change based on that
-   * older read would leave its labels on the task, unknown to later syncs. The link
-   * and not the task is locked, since assignments take labels before the task. False
-   * when no label of the task was affected, such as one the registry cannot attach.
+   * older read would leave its labels on the task, unknown to later syncs. Locks
+   * follow the order of every other writer: labels, then the task, then the link.
+   * False when no label of the task was affected, such as one the registry cannot
+   * attach.
    */
   private async applyLabelChange(
     link: TaskExternalLinkWithTask,
@@ -928,11 +929,20 @@ export class LinearIssueSyncService {
     registry: Map<string, TaskLabel>,
   ): Promise<boolean> {
     return this.db.transaction(async (tx) => {
+      const labelModel = new TaskLabelModel(tx, this.userId, this.workspaceId);
+      await labelModel.lockForShare(
+        labels.flatMap(({ key }) => {
+          const label = registry.get(key);
+          return label ? [label.id] : [];
+        }),
+      );
+      const tasks = new TaskModel(tx, this.userId, this.workspaceId);
+      if (!(await tasks.lockForUpdate(link.taskId))) return false;
       const linkModel = new TaskExternalLinkModel(tx, this.userId, this.workspaceId);
-      const locked = await linkModel.lockForUpdate(link.id);
-      if (!locked) return false;
+      const [current] = await linkModel.findByExternalIds('linear', [link.externalId]);
+      if (!current || current.taskId !== link.taskId) return false;
 
-      const { added, removed } = labelDelta(labels, locked.metadata?.syncedLabels);
+      const { added, removed } = labelDelta(labels, current.metadata?.syncedLabels);
       if (added.length === 0 && removed.length === 0) return false;
 
       // A label group's name is not attachable, and the registry's own grouping can
@@ -952,7 +962,6 @@ export class LinearIssueSyncService {
         add.push(label.id);
       }
 
-      const labelModel = new TaskLabelModel(tx, this.userId, this.workspaceId);
       const remove = (await labelModel.findByNames(removed))
         .filter((label) => !label.isGroup)
         .map((label) => label.id);
