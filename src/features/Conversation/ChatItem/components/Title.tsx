@@ -1,10 +1,12 @@
 import { agentDisplayName } from '@lobechat/types';
 import { Text } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActivityTime } from '@/hooks/useActivityTime';
 
+import { revealStyles } from '../revealStyles';
 import { type ChatItemProps } from '../type';
 
 export interface TitleProps {
@@ -31,6 +33,7 @@ const Title = memo<TitleProps>(({ showTitle, time, avatar, titleAddon }) => {
         <Text
           aria-label="published-date"
           as={'time'}
+          className={stylex.props(revealStyles.time).className}
           fontSize={12}
           title={timeTitle}
           type={'secondary'}

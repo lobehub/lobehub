@@ -6,15 +6,14 @@ import {
   Alert,
   Avatar,
   Button,
-  createStaticStyles,
-  cssVar,
-  cx,
   Divider,
   Flexbox,
   Icon,
   Text,
   toast,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
 import { PlusIcon, XIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -43,18 +42,14 @@ import type {
 } from './resolvePendingAuthTools';
 import { resolvePendingAuthTools } from './resolvePendingAuthTools';
 
-const styles = createStaticStyles(({ css }) => ({
-  // Reveal the remove icon only when the row is hovered.
-  row: css`
-    &:hover .tool-auth-remove {
-      opacity: 1;
-    }
-  `,
-  removeIcon: css`
-    opacity: 0;
-    transition: opacity 0.2s ease;
-  `,
-}));
+const styles = stylex.create({
+  // The row carries the default marker; the remove icon shows only while it is hovered.
+  row: { cursor: 'pointer' },
+  removeIcon: {
+    opacity: { default: 0, [stylex.when.ancestor(':hover')]: 1 },
+    transition: 'opacity 0.2s ease',
+  },
+});
 
 // Tools that require Market authentication
 const MARKET_AUTH_TOOLS = [
@@ -239,19 +234,16 @@ const ComposioToolAuthItem = memo<ComposioToolAuthItemProps>(({ tool, onAuthComp
     <Flexbox
       horizontal
       align="center"
-      className={cx(styles.row)}
+      {...stylex.props(styles.row, stylex.defaultMarker())}
       gap={12}
       justify="space-between"
-      style={{
-        cursor: 'pointer',
-      }}
       onClick={handleAuthorize}
     >
       <Flexbox horizontal align="center" gap={8}>
         {renderIcon()}
         <Text>{tool.label}</Text>
         <ActionIcon
-          className={cx('tool-auth-remove', styles.removeIcon)}
+          {...stylex.props(styles.removeIcon)}
           icon={XIcon}
           size="small"
           title={t('toolAuth.remove')}
@@ -326,17 +318,16 @@ const LobehubToolAuthItem = ({ tool }: LobehubToolAuthItemProps) => {
     <Flexbox
       horizontal
       align="center"
-      className={cx(styles.row)}
+      {...stylex.props(styles.row, stylex.defaultMarker())}
       gap={12}
       justify="space-between"
-      style={{ cursor: 'pointer' }}
       onClick={handleAuthorize}
     >
       <Flexbox horizontal align="center" gap={8}>
         {icon}
         <Text>{tool.label}</Text>
         <ActionIcon
-          className={cx('tool-auth-remove', styles.removeIcon)}
+          {...stylex.props(styles.removeIcon)}
           icon={XIcon}
           size="small"
           title={t('toolAuth.remove')}
@@ -392,19 +383,16 @@ const MarketToolAuthItem = memo<MarketToolAuthItemProps>(({ tool }) => {
     <Flexbox
       horizontal
       align="center"
-      className={cx(styles.row)}
+      {...stylex.props(styles.row, stylex.defaultMarker())}
       gap={12}
       justify="space-between"
-      style={{
-        cursor: 'pointer',
-      }}
       onClick={handleSignIn}
     >
       <Flexbox horizontal align="center" gap={8}>
         <Avatar alt={tool.label} avatar={tool.avatar} size={20} style={{ flex: 'none' }} />
         <Text>{tool.label}</Text>
         <ActionIcon
-          className={cx('tool-auth-remove', styles.removeIcon)}
+          {...stylex.props(styles.removeIcon)}
           icon={XIcon}
           size="small"
           title={t('toolAuth.remove')}

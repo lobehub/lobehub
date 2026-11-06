@@ -1,5 +1,7 @@
 import type { DeviceGitPullRequestCheck } from '@lobechat/types';
-import { createStaticStyles, Icon } from '@lobehub/ui';
+import { Icon } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ExternalLinkIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -9,14 +11,10 @@ import { electronSystemService } from '@/services/electron/system';
 import { OverviewRow } from '../Overview/OverviewRow';
 import { formatCheckDuration, getCheckVisual, TONE_COLOR } from './prVisual';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  duration: css`
-    font-family: ${cssVar.fontFamilyCode};
-  `,
-  list: css`
-    padding-inline-start: 18px;
-  `,
-}));
+const styles = stylex.create({
+  duration: { fontFamily: cssVar.fontFamilyCode },
+  list: { paddingInlineStart: '18px' },
+});
 
 interface ChecksListProps {
   checks: DeviceGitPullRequestCheck[];
@@ -26,7 +24,7 @@ const ChecksList = memo<ChecksListProps>(({ checks }) => {
   const { t } = useTranslation('chat');
   const hasRequiredCheck = checks.some((check) => check.required);
   return (
-    <div className={styles.list}>
+    <div {...stylex.props(styles.list)}>
       {checks.map((check, index) => {
         const visual = getCheckVisual(check.status);
         const duration =
@@ -47,7 +45,7 @@ const ChecksList = memo<ChecksListProps>(({ checks }) => {
                 {hasRequiredCheck && !check.required && (
                   <span>{t('workingPanel.pr.check.optional')}</span>
                 )}
-                {duration && <span className={styles.duration}>{duration}</span>}
+                {duration && <span {...stylex.props(styles.duration)}>{duration}</span>}
                 {check.detailsUrl && <Icon icon={ExternalLinkIcon} size={12} />}
               </>
             }

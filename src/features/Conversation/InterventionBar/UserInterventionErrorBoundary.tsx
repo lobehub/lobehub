@@ -1,7 +1,9 @@
 'use client';
 
 import { safeParseJSON } from '@lobechat/utils';
-import { createStaticStyles, Flexbox, Highlighter, Icon, Text } from '@lobehub/ui';
+import { Flexbox, Highlighter, Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { AlertTriangle } from 'lucide-react';
 import type { ErrorInfo, ReactNode } from 'react';
 import { Component, memo, useMemo } from 'react';
@@ -13,38 +15,27 @@ import { toolInterventionSelectors } from '@/store/user/selectors';
 
 import ApprovalActions from '../Messages/AssistantGroup/Tool/Detail/Intervention/ApprovalActions';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  description: css`
-    overflow: hidden;
-    flex: 1;
-
-    min-width: 0;
-
-    color: ${cssVar.colorTextSecondary};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  icon: css`
-    flex: none;
-    color: ${cssVar.colorWarning};
-  `,
-  notice: css`
-    display: flex;
-    gap: 6px;
-    align-items: center;
-
-    min-width: 0;
-    padding-block: 2px;
-
-    font-size: 12px;
-    line-height: 1.5;
-  `,
-  title: css`
-    flex: none;
-    font-weight: 500;
-    color: ${cssVar.colorWarning};
-  `,
-}));
+const styles = stylex.create({
+  description: {
+    overflow: 'hidden',
+    flex: '1',
+    minWidth: '0',
+    color: cssVar.colorTextSecondary,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  icon: { flex: 'none', color: cssVar.colorWarning },
+  notice: {
+    display: 'flex',
+    gap: '6px',
+    alignItems: 'center',
+    minWidth: '0',
+    paddingBlock: '2px',
+    fontSize: '12px',
+    lineHeight: 1.5,
+  },
+  title: { flex: 'none', fontWeight: 500, color: cssVar.colorWarning },
+});
 
 interface UserInterventionFallbackProps {
   actionsPortalTarget?: HTMLDivElement | null;
@@ -100,10 +91,10 @@ const UserInterventionFallback = memo<UserInterventionFallbackProps>(
 
     return (
       <Flexbox gap={8}>
-        <div className={styles.notice}>
-          <Icon className={styles.icon} icon={AlertTriangle} size={14} />
-          <span className={styles.title}>{t('tool.intervention.renderFallback.title')}</span>
-          <span className={styles.description}>
+        <div {...stylex.props(styles.notice)}>
+          <Icon className={stylex.props(styles.icon).className} icon={AlertTriangle} size={14} />
+          <span {...stylex.props(styles.title)}>{t('tool.intervention.renderFallback.title')}</span>
+          <span {...stylex.props(styles.description)}>
             {t('tool.intervention.renderFallback.description')}
           </span>
         </div>

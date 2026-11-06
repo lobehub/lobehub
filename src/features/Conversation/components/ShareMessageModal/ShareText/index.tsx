@@ -1,5 +1,6 @@
 import { type UIChatMessage } from '@lobechat/types';
 import { Button, copyToClipboard, Flexbox, toast } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
 import { CopyIcon } from 'lucide-react';
 import { memo } from 'react';
@@ -59,14 +60,14 @@ const ShareText = memo<ShareTextProps>(({ item }) => {
 
   return (
     <>
-      <Flexbox className={styles.body} gap={16} horizontal={!isMobile}>
+      <Flexbox className={stylex.props(styles.body).className} gap={16} horizontal={!isMobile}>
         <Preview content={content} />
-        <Flexbox className={styles.sidebar} gap={12}>
+        <Flexbox className={stylex.props(styles.sidebar).className} gap={12}>
           {!isMobile && button}
         </Flexbox>
       </Flexbox>
       {isMobile && (
-        <Flexbox horizontal className={styles.footer} gap={8}>
+        <Flexbox horizontal className={stylex.props(styles.footer).className} gap={8}>
           {button}
         </Flexbox>
       )}

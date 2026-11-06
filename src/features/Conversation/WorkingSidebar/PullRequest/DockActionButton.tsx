@@ -3,7 +3,9 @@ import type {
   DeviceGitPullRequestDetail,
   DeviceGitPullRequestMergeMethod,
 } from '@lobechat/types';
-import { Button, createStaticStyles, type DropdownItem, SplitButton } from '@lobehub/ui';
+import { Button, type DropdownItem, SplitButton } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -12,31 +14,31 @@ import { MERGE_METHODS } from './mergeMethodStorage';
 import type { TranslateKey } from './prVisual';
 import type { PullRequestBusy } from './usePullRequestActions';
 
-const tone = (base: string, hover: string) => `
-  && > :where(button, a) {
-    border-color: ${base};
-    background: ${base};
-  }
+const ITEM_HOVER = ':has(> :where(button, a):hover:not(:disabled, [aria-disabled="true"]))';
 
-  &&:has(> :where(button, a):hover:not(:disabled, [aria-disabled='true'])) > :where(button, a) {
-    border-color: ${hover};
-    background: ${hover};
-  }
-`;
-
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  toneError: css`
-    ${tone(cssVar.colorError, cssVar.colorErrorHover)}
-  `,
-  toneSuccess: css`
-    ${tone(cssVar.colorSuccess, cssVar.colorSuccessHover)}
-  `,
-}));
+const styles = stylex.create({
+  toneError: {
+    '--lobe-color-primary': cssVar.colorError,
+    '--lobe-color-primary-hover': cssVar.colorErrorHover,
+    '--lobe-color-primary-active': {
+      default: cssVar.colorError,
+      [ITEM_HOVER]: cssVar.colorErrorHover,
+    },
+  },
+  toneSuccess: {
+    '--lobe-color-primary': cssVar.colorSuccess,
+    '--lobe-color-primary-hover': cssVar.colorSuccessHover,
+    '--lobe-color-primary-active': {
+      default: cssVar.colorSuccess,
+      [ITEM_HOVER]: cssVar.colorSuccessHover,
+    },
+  },
+});
 
 const TONE_CLASS = {
-  error: styles.toneError,
+  error: stylex.props(styles.toneError).className,
   plain: undefined,
-  success: styles.toneSuccess,
+  success: stylex.props(styles.toneSuccess).className,
 };
 
 type SplitAction = Extract<DockAction, { kind: 'merge' | 'autoMerge' | 'updateBranch' }>;

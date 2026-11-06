@@ -67,7 +67,9 @@ vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
 
 const mockNavItems = {
   bottomMenuItems: [],
-  topNavItems: [{ hidden: false, icon: 'icon', key: 'dashboard', title: 'Dashboard', url: '/dashboard' }],
+  topNavItems: [
+    { hidden: false, icon: 'icon', key: 'dashboard', title: 'Dashboard', url: '/dashboard' },
+  ],
 };
 
 vi.mock('@/hooks/useNavLayout', () => ({

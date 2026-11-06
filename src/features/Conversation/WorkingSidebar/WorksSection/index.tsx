@@ -1,5 +1,7 @@
 import type { WorkListItem } from '@lobechat/types';
-import { ActionIcon, Center, createStaticStyles, Empty, Flexbox, Spin } from '@lobehub/ui';
+import { ActionIcon, Center, Empty, Flexbox, Spin } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
 import { ClipboardListIcon, HistoryIcon, ListIcon } from 'lucide-react';
 import { memo, useEffect, useMemo, useRef } from 'react';
@@ -21,23 +23,24 @@ const WORKS_VIEW_MODE_STORAGE_KEY = 'lobechat-working-panel-works-view-mode';
 
 const EMPTY_HISTORY: WorkListItem[] = [];
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    min-height: 0;
-    padding-block: 8px;
-    padding-inline: 8px 12px;
-  `,
-  modeToolbar: css`
-    flex-shrink: 0;
-    align-self: flex-end;
-  `,
-  workCard: css`
-    overflow: hidden;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 8px;
-    background: ${cssVar.colorFillQuaternary};
-  `,
-}));
+const styles = stylex.create({
+  container: {
+    minHeight: '0',
+    paddingBlock: '8px',
+    paddingInlineStart: '8px',
+    paddingInlineEnd: '12px',
+  },
+  modeToolbar: { flexShrink: 0, alignSelf: 'flex-end' },
+  workCard: {
+    overflow: 'hidden',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: '8px',
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+});
 
 const WorksModeToolbar = memo<{
   mode: WorksViewMode;
@@ -46,7 +49,7 @@ const WorksModeToolbar = memo<{
   const { t } = useTranslation('chat');
 
   return (
-    <Flexbox horizontal className={styles.modeToolbar} gap={4}>
+    <Flexbox horizontal className={stylex.props(styles.modeToolbar).className} gap={4}>
       <ActionIcon
         active={mode === 'summary'}
         icon={ListIcon}
@@ -184,13 +187,17 @@ const WorksSection = memo<WorksSectionProps>(({ active = true }) => {
 
     return mode === 'summary'
       ? summaryData.map((work) => (
-          <WorkSummaryCard className={styles.workCard} item={work} key={work.id} />
+          <WorkSummaryCard
+            className={stylex.props(styles.workCard).className}
+            item={work}
+            key={work.id}
+          />
         ))
       : historyData.map((work) => <WorkVersionHistoryCard key={work.id} work={work} />);
   })();
 
   return (
-    <Flexbox className={styles.container} flex={1} gap={12}>
+    <Flexbox className={stylex.props(styles.container).className} flex={1} gap={12}>
       <WorksModeToolbar mode={mode} setMode={setMode} />
       {content}
     </Flexbox>

@@ -8,8 +8,10 @@ import { LOADING_FLAT } from '@/const/message';
 import { MESSAGE_ACTION_BAR_PORTAL_ATTRIBUTES } from '@/const/messageActionPortal';
 import { ChatItem } from '@/features/Conversation/ChatItem';
 import ErrorMessageExtra, { useErrorContent } from '@/features/Conversation/Error';
+import { selectionStyles } from '@/features/Conversation/MessageForward/selectionStyles';
 import { AssistantMessageExtra } from '@/features/Conversation/Messages/Assistant/Extra';
 import { normalizeThinkTags, processWithArtifact } from '@/features/Conversation/utils/markdown';
+import { sx } from '@/styles/sx';
 import { type UIChatMessage } from '@/types/index';
 
 import { useAgentMeta } from '../../../hooks';
@@ -22,7 +24,10 @@ import {
 import AutoScrollShadow from './AutoScrollShadow';
 
 const actionBarHolder = (
-  <div {...{ [MESSAGE_ACTION_BAR_PORTAL_ATTRIBUTES.assistant]: '' }} style={{ height: '28px' }} />
+  <div
+    {...{ [MESSAGE_ACTION_BAR_PORTAL_ATTRIBUTES.assistant]: '' }}
+    {...sx(selectionStyles.hidden, { height: '28px' })}
+  />
 );
 
 interface CouncilMemberProps {

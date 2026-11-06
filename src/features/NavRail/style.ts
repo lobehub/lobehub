@@ -36,13 +36,13 @@ export const styles = stylex.create({
     width: '30px',
     height: '30px',
     borderRadius: cssVar.borderRadius,
-    color: { default: cssVar.colorTextSecondary, ':hover': cssVar.colorText },
-    backgroundColor: { default: null, ':hover': cssVar.colorFillTertiary },
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
     transition: 'color 0.15s, background-color 0.15s',
   },
   itemActive: {
     color: cssVar.colorText,
-    backgroundColor: { default: cssVar.colorFillSecondary, ':hover': cssVar.colorFillSecondary },
+    backgroundColor: { 'default': cssVar.colorFillSecondary, ':hover': cssVar.colorFillSecondary },
   },
   rail: {
     userSelect: 'none',

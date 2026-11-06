@@ -1,34 +1,29 @@
 import type { DeviceGitLinkedPullRequest } from '@lobechat/types';
-import { createStaticStyles, Flexbox, Skeleton } from '@lobehub/ui';
+import { Flexbox, Skeleton } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 
-import { sectionStyles } from '../Overview/sectionStyles';
+import { sectionProps, sectionStyles } from '../Overview/sectionStyles';
 import PrHead, { PrStatePill, PrTitle } from './Head';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  dock: css`
-    flex-shrink: 0;
-    padding-block: 8px 10px;
-    padding-inline: 8px;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  root: css`
-    flex: 1;
-    min-height: 0;
-  `,
-  row: css`
-    min-height: 32px;
-    padding-block: 5px;
-    padding-inline: 8px;
-  `,
-  sectionBody: css`
-    padding-block: 2px 6px;
-    padding-inline: 8px;
-  `,
-}));
+const styles = stylex.create({
+  dock: {
+    flexShrink: 0,
+    paddingBlockStart: '8px',
+    paddingBlockEnd: '10px',
+    paddingInline: '8px',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+  },
+  root: { flex: '1', minHeight: '0' },
+  row: { minHeight: '32px', paddingBlock: '5px', paddingInline: '8px' },
+  sectionBody: { paddingBlockStart: '2px', paddingBlockEnd: '6px', paddingInline: '8px' },
+});
 
 const Row = ({ trailing = 48 }: { trailing?: number }) => (
-  <Flexbox horizontal align={'center'} className={styles.row} gap={8}>
+  <Flexbox horizontal align={'center'} className={stylex.props(styles.row).className} gap={8}>
     <Skeleton height={14} radius={4} width={14} />
     <Skeleton.Text width={'55%'} />
     <Skeleton height={12} radius={4} style={{ marginInlineStart: 'auto' }} width={trailing} />
@@ -36,15 +31,15 @@ const Row = ({ trailing = 48 }: { trailing?: number }) => (
 );
 
 const SectionTitle = ({ width = 64 }: { width?: number }) => (
-  <div className={sectionStyles.sectionHeader}>
+  <div {...stylex.props(sectionStyles.sectionHeader)}>
     <Skeleton height={10} radius={4} width={width} />
   </div>
 );
 
 const PullRequestSkeleton = memo(({ summary }: { summary?: DeviceGitLinkedPullRequest }) => {
   return (
-    <Flexbox className={styles.root}>
-      <Flexbox className={styles.root}>
+    <Flexbox className={stylex.props(styles.root).className}>
+      <Flexbox className={stylex.props(styles.root).className}>
         <PrHead
           meta={
             <>
@@ -65,26 +60,26 @@ const PullRequestSkeleton = memo(({ summary }: { summary?: DeviceGitLinkedPullRe
             )
           }
         />
-        <Flexbox className={sectionStyles.section}>
+        <Flexbox {...sectionProps()}>
           <SectionTitle width={72} />
-          <div className={styles.sectionBody}>
+          <div {...stylex.props(styles.sectionBody)}>
             <Skeleton.Text fontSize={13} rows={3} width={['100%', '88%', '46%']} />
           </div>
         </Flexbox>
-        <Flexbox className={sectionStyles.section}>
+        <Flexbox {...sectionProps()}>
           <SectionTitle width={40} />
           <Row trailing={72} />
         </Flexbox>
-        <Flexbox className={sectionStyles.section}>
+        <Flexbox {...sectionProps()}>
           <SectionTitle width={56} />
         </Flexbox>
-        <Flexbox className={sectionStyles.section}>
+        <Flexbox {...sectionProps()}>
           <SectionTitle width={52} />
           <Row />
           <Row />
         </Flexbox>
       </Flexbox>
-      <div className={styles.dock}>
+      <div {...stylex.props(styles.dock)}>
         <Row trailing={40} />
         <Flexbox
           horizontal

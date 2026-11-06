@@ -25,6 +25,25 @@ declare module 'verification:component' {
     tableLayout: 'auto' | 'fixed';
   }
   export const LiteTable: ComponentType<Props>;
+  export const ConversationChatItem: ComponentType<{
+    'actions'?: ReactNode;
+    'avatar': { avatar: string; title: string };
+    'data-message-locate-highlight'?: string;
+    'id': string;
+    'message': ReactNode;
+    'placement': 'left' | 'right';
+    'showTitle'?: boolean;
+    'time'?: number;
+  }>;
+  export const PullRequestDockActionButton: ComponentType<{
+    action: Record<string, unknown> & { kind: string };
+    bypass?: boolean;
+    detail: { baseRefName: string; headRefName: string; headRefOid: string };
+    onAction: () => Promise<boolean>;
+    onPickMethod: () => void;
+    onToggleBypass: () => void;
+    secondary?: boolean;
+  }>;
   export const WorkPreview: ComponentType<{
     item: WorkSummaryItem;
     title: string;

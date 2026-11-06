@@ -1,4 +1,6 @@
-import { Button, createStaticStyles, cssVar, cx, Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import { Button, Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { RefreshCwIcon, SquareTerminalIcon, TriangleAlertIcon } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -8,7 +10,10 @@ import {
   OverviewRow,
   rowStyles,
 } from '@/features/Conversation/WorkingSidebar/Overview/OverviewRow';
-import { sectionStyles } from '@/features/Conversation/WorkingSidebar/Overview/sectionStyles';
+import {
+  sectionProps,
+  sectionStyles,
+} from '@/features/Conversation/WorkingSidebar/Overview/sectionStyles';
 
 import {
   type Activity,
@@ -20,31 +25,22 @@ import {
 } from './state';
 import StopButton from './StopButton';
 
-const styles = createStaticStyles(({ css }) => ({
-  critical: css`
-    color: ${cssVar.colorError};
-  `,
-  metrics: css`
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 11.5px;
-  `,
-  selected: css`
-    @keyframes background-activity-flash {
-      from {
-        background: ${cssVar.colorWarningBg};
-      }
-    }
+const flash = stylex.keyframes({
+  from: { backgroundColor: cssVar.colorWarningBg },
+});
 
-    border-radius: 8px;
-    animation: background-activity-flash 1.6s ease-out;
-  `,
-  stale: css`
-    opacity: 0.55;
-  `,
-  warning: css`
-    color: ${cssVar.colorWarning};
-  `,
-}));
+const styles = stylex.create({
+  critical: { color: cssVar.colorError },
+  metrics: { fontFamily: cssVar.fontFamilyCode, fontSize: '11.5px' },
+  selected: {
+    borderRadius: '8px',
+    animationName: flash,
+    animationDuration: '1.6s',
+    animationTimingFunction: 'ease-out',
+  },
+  stale: { opacity: 0.55 },
+  warning: { color: cssVar.colorWarning },
+});
 
 function ActivityRow({ activity, selected }: { activity: Activity; selected: boolean }) {
   const { t } = useTranslation('chat');
@@ -55,25 +51,25 @@ function ActivityRow({ activity, selected }: { activity: Activity; selected: boo
   const alert = activity.severity !== 'normal';
   const tone = activity.severity === 'critical' ? styles.critical : styles.warning;
   return (
-    <div className={cx(selected && styles.selected)} ref={ref}>
+    <div {...stylex.props(selected && styles.selected)} ref={ref}>
       <OverviewRow
         title={t('backgroundActivity.processCount', { count: activity.processes.length })}
         value={activity.label}
         iconNode={
           alert ? (
             <Tooltip title={t('backgroundActivity.highUsage')}>
-              <Icon className={tone} icon={TriangleAlertIcon} size={16} />
+              <Icon {...stylex.props(tone)} icon={TriangleAlertIcon} size={16} />
             </Tooltip>
           ) : (
-            <Icon className={rowStyles.icon} icon={SquareTerminalIcon} size={16} />
+            <Icon {...stylex.props(rowStyles.icon)} icon={SquareTerminalIcon} size={16} />
           )
         }
         trailing={
           <>
-            <span className={cx(styles.metrics, alert && tone)}>
+            <span {...stylex.props(styles.metrics, alert && tone)}>
               {formatMemory(activity.memoryMB)}
             </span>
-            <span className={styles.metrics}>{formatCpu(activity.cpuPercent)}</span>
+            <span {...stylex.props(styles.metrics)}>{formatCpu(activity.cpuPercent)}</span>
             <StopButton rootId={activity.rootId} />
           </>
         }
@@ -89,21 +85,21 @@ export function TopicBackgroundActivity({ topicId }: { topicId?: string }) {
   const activities = state.activities.filter((row) => row.topicId === topicId);
   if (activities.length === 0 && !state.error) return null;
   return (
-    <Flexbox className={sectionStyles.section}>
+    <Flexbox {...sectionProps()}>
       <Flexbox
         horizontal
         align={'center'}
-        className={sectionStyles.sectionHeader}
+        {...stylex.props(sectionStyles.sectionHeader)}
         justify={'space-between'}
       >
         <Flexbox horizontal align={'center'} gap={6}>
-          <span className={sectionStyles.sectionTitle}>{t('backgroundActivity.title')}</span>
+          <span {...stylex.props(sectionStyles.sectionTitle)}>{t('backgroundActivity.title')}</span>
           {activities.length > 0 && (
-            <span className={sectionStyles.count}>{activities.length}</span>
+            <span {...stylex.props(sectionStyles.count)}>{activities.length}</span>
           )}
         </Flexbox>
         {activities.length > 1 && (
-          <span className={cx(rowStyles.rowTrailing, styles.metrics)}>
+          <span {...stylex.props(rowStyles.rowTrailing, styles.metrics)}>
             {formatMemory(activities.reduce((sum, row) => sum + row.memoryMB, 0))} ·{' '}
             {formatCpu(sumCpu(activities))}
           </span>
@@ -127,7 +123,7 @@ export function TopicBackgroundActivity({ topicId }: { topicId?: string }) {
           }
         />
       )}
-      <div className={cx(state.error && styles.stale)}>
+      <div {...stylex.props(state.error && styles.stale)}>
         {activities.map((activity) => (
           <ActivityRow
             activity={activity}

@@ -1,4 +1,5 @@
 import { ChatInput } from '@lobehub/editor/react';
+import * as stylex from '@stylexjs/stylex';
 import { memo, useCallback, useMemo, useState } from 'react';
 
 import { useConversationResourceAccess } from '../hooks/useConversationResourceAccess';
@@ -73,8 +74,8 @@ const InterventionBar = memo<InterventionBarProps>(({ interventions }) => {
   return (
     <ChatInput
       data-pending-hotkey-scope
-      className={styles.container}
-      footer={<div className={styles.actions} ref={setActionsPortalTarget} />}
+      className={stylex.props(styles.container).className}
+      footer={<div {...stylex.props(styles.actions)} ref={setActionsPortalTarget} />}
       // The card's action row — Stop sits beside Submit inside `ApprovalActions`
       // and the whole row portals in here.
       maxHeight={'50vh' as any}

@@ -9,10 +9,12 @@ import { memo, useCallback, useMemo } from 'react';
 import AssistantMessageNotice from '@/business/client/components/AssistantMessageNotice';
 import { MESSAGE_ACTION_BAR_PORTAL_ATTRIBUTES } from '@/const/messageActionPortal';
 import { ChatItem } from '@/features/Conversation/ChatItem';
+import { selectionStyles } from '@/features/Conversation/MessageForward/selectionStyles';
 import { useMessageCommentCount } from '@/features/TopicComment/hooks';
 import MessageCommentBadge from '@/features/TopicComment/MessageCommentBadge';
 import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors, userProfileSelectors } from '@/store/user/selectors';
+import { sx } from '@/styles/sx';
 
 import { ReactionDisplay } from '../../components/Reaction';
 import ErrorMessageExtra, { useErrorContent } from '../../Error';
@@ -32,7 +34,10 @@ import ThreadExecutionSummary from './components/ThreadExecutionSummary';
 import { AssistantMessageExtra } from './Extra';
 
 const actionBarHolder = (
-  <div {...{ [MESSAGE_ACTION_BAR_PORTAL_ATTRIBUTES.assistant]: '' }} style={{ height: '28px' }} />
+  <div
+    {...{ [MESSAGE_ACTION_BAR_PORTAL_ATTRIBUTES.assistant]: '' }}
+    {...sx(selectionStyles.hidden, { height: '28px' })}
+  />
 );
 
 interface AssistantMessageProps {

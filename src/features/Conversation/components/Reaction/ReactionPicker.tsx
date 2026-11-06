@@ -2,7 +2,9 @@
 
 import data from '@emoji-mart/data';
 import Picker from '@emoji-mart/react';
-import { ActionIcon, createStaticStyles, Flexbox, Popover, Tooltip, useTheme } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Popover, Tooltip, useTheme } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { PlusIcon, SmilePlus } from 'lucide-react';
 import { type FC, memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -16,51 +18,36 @@ import { useConversationStore } from '../../store';
 
 const QUICK_REACTIONS = ['👍', '👎', '❤️', '😄', '😂', '😅', '🎉', '😢', '🤔', '🚀'];
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  emojiButton: css`
-    cursor: pointer;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    width: 32px;
-    height: 32px;
-    border-radius: ${cssVar.borderRadius};
-
-    font-size: 18px;
-
-    transition: all 0.2s;
-
-    &:hover {
-      transform: scale(1.1);
-      background: ${cssVar.colorFillSecondary};
-    }
-  `,
-  moreButton: css`
-    cursor: pointer;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    width: 32px;
-    height: 32px;
-    border-radius: ${cssVar.borderRadius};
-
-    color: ${cssVar.colorTextTertiary};
-
-    transition: all 0.2s;
-
-    &:hover {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillSecondary};
-    }
-  `,
-  pickerContainer: css`
-    padding: 4px;
-  `,
-}));
+const styles = stylex.create({
+  emojiButton: {
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '32px',
+    height: '32px',
+    borderRadius: cssVar.borderRadius,
+    fontSize: '18px',
+    transition: 'all 0.2s',
+    transform: { 'default': null, ':hover': 'scale(1.1)' },
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillSecondary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  moreButton: {
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '32px',
+    height: '32px',
+    borderRadius: cssVar.borderRadius,
+    color: { 'default': cssVar.colorTextTertiary, ':hover': cssVar.colorText },
+    transition: 'all 0.2s',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillSecondary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  pickerContainer: { padding: '4px' },
+});
 
 interface ReactionPickerProps {
   messageId: string;
@@ -102,13 +89,18 @@ const ReactionPicker: FC<ReactionPickerProps> = memo(({ messageId, trigger }) =>
       onEmojiSelect={(emoji: any) => handleSelect(emoji.native)}
     />
   ) : (
-    <Flexbox horizontal className={styles.pickerContainer} gap={4} wrap="wrap">
+    <Flexbox
+      horizontal
+      className={stylex.props(styles.pickerContainer).className}
+      gap={4}
+      wrap="wrap"
+    >
       {QUICK_REACTIONS.map((emoji) => (
-        <div className={styles.emojiButton} key={emoji} onClick={() => handleSelect(emoji)}>
+        <div {...stylex.props(styles.emojiButton)} key={emoji} onClick={() => handleSelect(emoji)}>
           {emoji}
         </div>
       ))}
-      <div className={styles.moreButton} onClick={() => setShowFullPicker(true)}>
+      <div {...stylex.props(styles.moreButton)} onClick={() => setShowFullPicker(true)}>
         <PlusIcon size={16} />
       </div>
     </Flexbox>

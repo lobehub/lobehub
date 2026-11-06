@@ -1,4 +1,6 @@
-import { createStaticStyles, Flexbox, Text } from '@lobehub/ui';
+import { Flexbox, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ClipboardList } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -7,104 +9,79 @@ import { type MarkdownElementProps } from '../type';
 import { useTaskCardScope } from './context';
 import { type ParsedTaskContent, parseTaskContent } from './parseTaskContent';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  divider: css`
-    inline-size: 100%;
-    block-size: 1px;
-    background: ${cssVar.colorSplit};
-  `,
-  fallback: css`
-    overflow: auto;
-
-    padding-block: 12px;
-    padding-inline: 14px;
-    border: 1px dashed ${cssVar.colorBorderSecondary};
-    border-radius: 8px;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-    white-space: pre-wrap;
-  `,
-  fieldKey: css`
-    flex: none;
-    min-inline-size: 64px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  fieldRow: css`
-    font-size: 13px;
-    line-height: 1.6;
-  `,
-  fieldValue: css`
-    color: ${cssVar.colorTextSecondary};
-    word-break: break-word;
-  `,
-  headerIcon: css`
-    display: flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-
-    inline-size: 32px;
-    block-size: 32px;
-
-    color: ${cssVar.colorTextSecondary};
-  `,
-  identifier: css`
-    flex: none;
-
-    padding-block: 1px;
-    padding-inline: 6px;
-    border-radius: 4px;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  instruction: css`
-    font-size: 13px;
-    line-height: 1.7;
-    color: ${cssVar.colorText};
-    white-space: pre-wrap;
-  `,
-  rawList: css`
-    margin: 0;
-    padding: 0;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    line-height: 1.6;
-    color: ${cssVar.colorTextSecondary};
-    list-style: none;
-
-    li {
-      white-space: pre-wrap;
-    }
-  `,
-  section: css`
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-
-    summary {
-      cursor: pointer;
-      padding-block: 4px;
-      color: ${cssVar.colorTextSecondary};
-
-      &:hover {
-        color: ${cssVar.colorText};
-      }
-    }
-  `,
-}));
+const styles = stylex.create({
+  divider: {
+    inlineSize: '100%',
+    blockSize: '1px',
+    backgroundColor: cssVar.colorSplit,
+    backgroundImage: 'none',
+  },
+  fallback: {
+    overflow: 'auto',
+    paddingBlock: '12px',
+    paddingInline: '14px',
+    borderWidth: '1px',
+    borderStyle: 'dashed',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: '8px',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '12px',
+    color: cssVar.colorTextSecondary,
+    whiteSpace: 'pre-wrap',
+  },
+  fieldKey: { flex: 'none', minInlineSize: '64px', color: cssVar.colorTextTertiary },
+  fieldRow: { fontSize: '13px', lineHeight: 1.6 },
+  fieldValue: { color: cssVar.colorTextSecondary, wordBreak: 'break-word' },
+  headerIcon: {
+    display: 'flex',
+    flex: 'none',
+    alignItems: 'center',
+    justifyContent: 'center',
+    inlineSize: '32px',
+    blockSize: '32px',
+    color: cssVar.colorTextSecondary,
+  },
+  identifier: {
+    flex: 'none',
+    paddingBlock: '1px',
+    paddingInline: '6px',
+    borderRadius: '4px',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '12px',
+    color: cssVar.colorTextSecondary,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  instruction: {
+    fontSize: '13px',
+    lineHeight: 1.7,
+    color: cssVar.colorText,
+    whiteSpace: 'pre-wrap',
+  },
+  rawItem: { whiteSpace: 'pre-wrap' },
+  rawList: {
+    margin: 0,
+    padding: 0,
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '12px',
+    lineHeight: 1.6,
+    color: cssVar.colorTextSecondary,
+    listStyle: 'none',
+  },
+  section: { fontSize: '12px', color: cssVar.colorTextTertiary },
+  sectionSummary: {
+    cursor: 'pointer',
+    paddingBlock: '4px',
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
+  },
+});
 
 const FieldRow = memo<{ label: string; value?: string }>(({ label, value }) => {
   if (!value) return null;
   return (
-    <Flexbox horizontal className={styles.fieldRow} gap={8}>
-      <span className={styles.fieldKey}>{label}</span>
-      <span className={styles.fieldValue}>{value}</span>
+    <Flexbox horizontal {...stylex.props(styles.fieldRow)} gap={8}>
+      <span {...stylex.props(styles.fieldKey)}>{label}</span>
+      <span {...stylex.props(styles.fieldValue)}>{value}</span>
     </Flexbox>
   );
 });
@@ -112,13 +89,15 @@ const FieldRow = memo<{ label: string; value?: string }>(({ label, value }) => {
 const RawSection = memo<{ items: string[]; label: string }>(({ items, label }) => {
   if (!items || items.length === 0) return null;
   return (
-    <details className={styles.section}>
-      <summary>
+    <details {...stylex.props(styles.section)}>
+      <summary {...stylex.props(styles.sectionSummary)}>
         {label} ({items.length})
       </summary>
-      <ul className={styles.rawList}>
+      <ul {...stylex.props(styles.rawList)}>
         {items.map((line, idx) => (
-          <li key={idx}>{line}</li>
+          <li {...stylex.props(styles.rawItem)} key={idx}>
+            {line}
+          </li>
         ))}
       </ul>
     </details>
@@ -136,7 +115,7 @@ const Render = memo<TaskRenderProps>(({ children }) => {
   const { t } = useTranslation('chat');
 
   if (!enabled) {
-    return <pre className={styles.fallback}>{text}</pre>;
+    return <pre {...stylex.props(styles.fallback)}>{text}</pre>;
   }
 
   const titleText = parsed.name || parsed.identifier || '';
@@ -144,12 +123,14 @@ const Render = memo<TaskRenderProps>(({ children }) => {
   return (
     <Flexbox gap={12}>
       <Flexbox horizontal align={'center'} gap={12}>
-        <span className={styles.headerIcon}>
+        <span {...stylex.props(styles.headerIcon)}>
           <ClipboardList size={16} />
         </span>
         <Flexbox flex={1} gap={4} style={{ minWidth: 0 }}>
           <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
-            {parsed.identifier && <span className={styles.identifier}>{parsed.identifier}</span>}
+            {parsed.identifier && (
+              <span {...stylex.props(styles.identifier)}>{parsed.identifier}</span>
+            )}
             <Text ellipsis style={{ flex: 1, minWidth: 0 }} weight={500}>
               {titleText}
             </Text>
@@ -159,12 +140,12 @@ const Render = memo<TaskRenderProps>(({ children }) => {
 
       {parsed.instruction && (
         <>
-          <div className={styles.divider} />
+          <div {...stylex.props(styles.divider)} />
           <Flexbox gap={4}>
             <Text fontSize={12} type={'secondary'}>
               {t('taskCard.field.instruction')}
             </Text>
-            <div className={styles.instruction}>{parsed.instruction}</div>
+            <div {...stylex.props(styles.instruction)}>{parsed.instruction}</div>
           </Flexbox>
         </>
       )}

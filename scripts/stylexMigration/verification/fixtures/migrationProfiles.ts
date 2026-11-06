@@ -1,6 +1,11 @@
 import type { FixtureProfile } from './fixtureRegistry';
 
 export const migrationFixtures = [
+  ['ConversationChatItem', 'src/features/Conversation/ChatItem/ChatItem.tsx'],
+  [
+    'PullRequestDockActionButton',
+    'src/features/Conversation/WorkingSidebar/PullRequest/DockActionButton.tsx',
+  ],
   ['SidebarGroupItem', 'src/features/HomeSidebar/Body/Agent/Modals/ConfigGroupModal/GroupItem.tsx'],
   ['ToolbarActionButton', 'src/features/Portal/LocalFile/PreviewToolbar.tsx'],
   ['PreviewToolbar', 'src/features/Portal/LocalFile/PreviewToolbar.tsx'],
@@ -9,6 +14,50 @@ export const migrationFixtures = [
 ] as const;
 
 export const migrationProfiles: Record<string, FixtureProfile> = {
+  ConversationChatItem: {
+    boundaries: [
+      ['ChatItem/ChatItem.tsx', '../store'],
+      ['ChatItem/ChatItem.tsx', '../FollowUp/FollowUpChips'],
+      ['ChatItem/ChatItem.tsx', './components/Avatar'],
+      ['ChatItem/ChatItem.tsx', './components/ErrorContent'],
+      ['ChatItem/ChatItem.tsx', './components/MessageContent'],
+      ['ChatItem/components/Actions.tsx', '../../store'],
+      ['ChatItem/components/Actions.tsx', '@/store/agent'],
+      ['ChatItem/components/Actions.tsx', '@/store/agent/selectors'],
+      ['ChatItem/components/Actions.tsx', '@/utils/env'],
+      ['ChatItem/components/Title.tsx', '@/hooks/useActivityTime'],
+      ['MessageForward/MessageSelectionWrapper.tsx', '../store'],
+      ['MessageForward/MessageSelectionWrapper.tsx', '@/store/global'],
+      ['MessageForward/MessageSelectionWrapper.tsx', '@/store/global/selectors'],
+    ].map(([file, source]) => ({
+      importer: `src/features/Conversation/${file}`,
+      source,
+      replacement: 'fixtures/ChatItemFixtureData.tsx',
+    })),
+    dependencies: ['lucide-react', 'i18next', 'react-i18next', 'zod'],
+    selector: '[data-component-mount] .message-wrapper',
+    variants: [
+      { id: 'assistant', states: ['default', 'hover'] },
+      { id: 'user', states: ['default', 'hover'] },
+      { id: 'popup-open' },
+      { id: 'locate-highlight' },
+      { id: 'selection-assistant', states: ['default', 'hover'] },
+      { id: 'selection-user' },
+      { id: 'dark-assistant', appearance: 'dark', states: ['default', 'hover'] },
+    ],
+  },
+  PullRequestDockActionButton: {
+    dependencies: ['lucide-react', 'i18next', 'react-i18next'],
+    selector: '[data-component-mount] button',
+    variants: [
+      { id: 'merge-success', states: ['default', 'hover', 'focus-visible'] },
+      { id: 'merge-error', states: ['default', 'hover', 'focus-visible'] },
+      { id: 'merge-plain', states: ['default', 'hover'] },
+      { id: 'update-busy', states: ['default', 'hover'] },
+      { id: 'secondary', states: ['default', 'hover'] },
+      { id: 'dark-merge-error', appearance: 'dark', states: ['default', 'hover'] },
+    ],
+  },
   SidebarGroupItem: {
     dependencies: ['lucide-react', 'i18next', 'react-i18next'],
     i18n: true,

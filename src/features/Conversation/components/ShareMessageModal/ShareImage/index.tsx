@@ -1,6 +1,7 @@
 import { agentDisplayName, type UIChatMessage } from '@lobechat/types';
 import { Button, Flexbox, Switch, Tabs } from '@lobehub/ui';
 import { Form, type FormFieldProps, useForm } from '@lobehub/ui/form';
+import * as stylex from '@stylexjs/stylex';
 import { CopyIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -107,7 +108,7 @@ const ShareImage = memo<{ message: UIChatMessage; mobile?: boolean; uniqueId?: s
 
     return (
       <>
-        <Flexbox className={styles.body} gap={16} horizontal={!isMobile}>
+        <Flexbox className={stylex.props(styles.body).className} gap={16} horizontal={!isMobile}>
           <Preview
             context={context}
             title={title}
@@ -115,13 +116,13 @@ const ShareImage = memo<{ message: UIChatMessage; mobile?: boolean; uniqueId?: s
             message={message}
             previewId={previewId}
           />
-          <Flexbox className={styles.sidebar} gap={12}>
+          <Flexbox className={stylex.props(styles.sidebar).className} gap={12}>
             <Form form={form} items={settings} itemsType={'flat'} {...FORM_STYLE} />
             {!isMobile && button}
           </Flexbox>
         </Flexbox>
         {isMobile && (
-          <Flexbox horizontal className={styles.footer} gap={8}>
+          <Flexbox horizontal className={stylex.props(styles.footer).className} gap={8}>
             {button}
           </Flexbox>
         )}
