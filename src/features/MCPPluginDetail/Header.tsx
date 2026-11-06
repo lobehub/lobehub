@@ -16,6 +16,8 @@ import {
   Tooltip,
   useResponsive,
 } from '@lobehub/ui';
+import { cssVar as vars } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import {
   BookmarkIcon,
   BookmarkMinusIcon,
@@ -43,14 +45,14 @@ import InstallationIcon from '../../components/MCPDepsIcon';
 import PublishedTime from '../../components/PublishedTime';
 import { useDetailContext } from './DetailProvider';
 
+const timeStyles = stylex.create({
+  time: { fontSize: '12px', color: vars.colorTextDescription },
+});
+
 const styles = createStaticStyles(({ css }) => {
   return {
     desc: css`
       color: ${cssVar.colorTextSecondary};
-    `,
-    time: css`
-      font-size: 12px;
-      color: ${cssVar.colorTextDescription};
     `,
     version: css`
       font-family: ${cssVar.fontFamilyCode};
@@ -234,7 +236,7 @@ const Header = memo<{ inModal?: boolean; mobile?: boolean }>(({ mobile: isMobile
             )}
             {isClaimed && <Tag size={'small'}>{t('isClaimed')}</Tag>}
             <Icon icon={DotIcon} />
-            <PublishedTime className={styles.time} date={(updatedAt || createdAt) as string} />
+            <PublishedTime date={(updatedAt || createdAt) as string} xstyle={timeStyles.time} />
           </Flexbox>
         </Flexbox>
       </Flexbox>

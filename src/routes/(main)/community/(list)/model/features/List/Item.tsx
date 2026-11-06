@@ -145,8 +145,8 @@ const ModelItem = memo<DiscoverModelItem>(
             <Flexbox horizontal align={'center'} gap={4}>
               <Icon icon={ClockIcon} size={14} />
               <PublishedTime
-                className={stylex.props(styles.secondaryDesc).className}
                 date={releasedAt || dayjs().toISOString()}
+                xstyle={styles.secondaryDesc}
               />
             </Flexbox>
             <Popover
