@@ -68,8 +68,10 @@ export const listByRootOperation = async (
     rootOperationIds: [params.rootOperationId],
   });
 
-  /* v8 ignore next -- unreachable: listByRootOperations pre-seeds an entry for every requested id */
-  return map[params.rootOperationId] ?? [];
+  return nonNull(
+    map[params.rootOperationId],
+    'the work summary bucket of a requested root operation',
+  );
 };
 
 export const listByRootOperations = async (
@@ -204,11 +206,14 @@ export const listSummariesByRootOperations = async (
   );
 
   for (const summary of summaries) {
-    const rootOperationId = anchorByWorkId.get(summary.id);
-    /* v8 ignore next -- unreachable: rows are filtered to anchorByWorkId keys, whose values are requested ids */
-    if (!rootOperationId || !(rootOperationId in result)) continue;
-    if (result[rootOperationId].length >= limit) continue;
-    result[rootOperationId].push(summary);
+    // Rows are filtered to anchorByWorkId keys, whose values are requested ids,
+    // and `result` holds a bucket for each of those ids.
+    const bucket = nonNull(
+      result[nonNull(anchorByWorkId.get(summary.id), 'the anchor of a listed work')],
+      'the work summary bucket of a requested root operation',
+    );
+    if (bucket.length >= limit) continue;
+    bucket.push(summary);
   }
 
   return result;

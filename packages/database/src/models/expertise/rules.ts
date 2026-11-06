@@ -12,7 +12,7 @@ import {
 import { buildWorkspaceWhere } from '../../utils/workspace';
 import { type ExpertiseContext } from './context';
 import { listDomainsBoundTo } from './domains';
-import { countHitsBySource } from './lineage';
+import { withHitsBySource } from './lineage';
 
 /** Whose a listed group is: the reviewer's own rules, or one agent's self-learning. */
 export type ExpertiseGroupOwner =
@@ -128,10 +128,7 @@ export const listRules = async (ctx: ExpertiseContext) => {
       .orderBy(asc(expertiseBindings.sortOrder)),
   ]);
 
-  const bySource = await countHitsBySource(
-    ctx,
-    lessons.map((lesson) => lesson.id),
-  );
+  const lessonsWithHits = await withHitsBySource(ctx, lessons);
 
   // Bucket once by domain: the page now spans every agent's domains, so filtering the full
   // lesson and binding lists per group would grow with groups × rows.
@@ -144,11 +141,10 @@ export const listRules = async (ctx: ExpertiseContext) => {
     }
     return map;
   };
-  const lessonsByDomain = byDomain(lessons);
+  const lessonsByDomain = byDomain(lessonsWithHits);
   const bindingsByDomain = byDomain(bindings);
 
-  const ownerOf = (domainId: string): ExpertiseGroupOwner | null => {
-    const mounts = bindingsByDomain.get(domainId) ?? [];
+  const ownerOf = (mounts: typeof bindings): ExpertiseGroupOwner | null => {
     if (mounts.some((binding) => !binding.agentId)) return { kind: 'mine' };
     const agent = mounts.find((binding) => binding.visibleAgentId);
     // Only mounted on agents the viewer cannot see: nothing of it belongs on their page.
@@ -165,8 +161,9 @@ export const listRules = async (ctx: ExpertiseContext) => {
   };
 
   const owned = bound.flatMap(({ domain }) => {
-    const owner = ownerOf(domain.id);
-    return owner ? [{ domain, owner }] : [];
+    const mounts = bindingsByDomain.get(domain.id);
+    const owner = mounts && ownerOf(mounts);
+    return owner ? [{ domain, mounts, owner }] : [];
   });
   // The reviewer's groups lead in their own order; each agent's follow together, agents in the
   // order their first group was mounted.
@@ -180,7 +177,7 @@ export const listRules = async (ctx: ExpertiseContext) => {
     .sort((a, b) => rank(a.entry) - rank(b.entry) || a.index - b.index)
     .map(({ entry }) => entry);
 
-  return ordered.map(({ domain, owner }) => ({
+  return ordered.map(({ domain, mounts, owner }) => ({
     owner,
     domain: {
       domainFilter: domain.domainFilter,
@@ -194,32 +191,19 @@ export const listRules = async (ctx: ExpertiseContext) => {
       // reader uses for `taughtByUser`.
       .map(({ originRunId, ...lesson }) => ({
         ...lesson,
-        /* v8 ignore start -- unreachable: the fallback; countHitsBySource maps every lesson id it was given, and it was given all of them */
-        ...(bySource.get(lesson.id) ?? {
-          conversationHitCount: 0,
-          materialHitCount: 0,
-          rejectionHitCount: 0,
-        }),
-        /* v8 ignore stop */
         authored: lesson.createdByUserId != null && originRunId == null,
       })),
-    scopes: (
-      bindingsByDomain.get(domain.id) ??
-      /* v8 ignore start -- unreachable: the `[]` arm; ownerOf keeps a group only when it has at least one visible binding */
-      []
-    )
-      /* v8 ignore stop */
-      .map((binding) => {
-        if (binding.projectId) {
-          return { id: binding.projectId, kind: 'project' as const, title: binding.projectName };
-        }
-        if (binding.agentId) {
-          return { id: binding.agentId, kind: 'agent' as const, title: binding.agentTitle };
-        }
-        return binding.boundWorkspaceId
-          ? { id: binding.boundWorkspaceId, kind: 'workspace' as const, title: null }
-          : { id: binding.boundUserId!, kind: 'user' as const, title: null };
-      }),
+    scopes: mounts.map((binding) => {
+      if (binding.projectId) {
+        return { id: binding.projectId, kind: 'project' as const, title: binding.projectName };
+      }
+      if (binding.agentId) {
+        return { id: binding.agentId, kind: 'agent' as const, title: binding.agentTitle };
+      }
+      return binding.boundWorkspaceId
+        ? { id: binding.boundWorkspaceId, kind: 'workspace' as const, title: null }
+        : { id: binding.boundUserId!, kind: 'user' as const, title: null };
+    }),
   }));
 };
 
