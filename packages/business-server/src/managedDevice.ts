@@ -15,8 +15,11 @@ export interface ManagedDeviceScope {
 }
 
 export interface ManagedDeviceProvider {
-  /** Whether this deployment offers managed cloud devices at all. */
-  isAvailable: () => boolean;
+  /**
+   * Whether this deployment offers managed cloud devices at all. Async: a
+   * deployment may read this from its database.
+   */
+  isAvailable: () => Promise<boolean>;
   /** Phases of the caller's managed devices, keyed by `devices.deviceId`. */
   listStates: (scope: ManagedDeviceScope) => Promise<Record<string, ManagedDevicePhase>>;
   /**
@@ -27,7 +30,7 @@ export interface ManagedDeviceProvider {
 }
 
 export const managedDeviceProvider: ManagedDeviceProvider = {
-  isAvailable: () => false,
+  isAvailable: async () => false,
   listStates: async () => ({}),
   wake: async () => {},
 };
