@@ -146,6 +146,17 @@ describe('ssrfSafeFetch', () => {
       });
     });
 
+    it('does not log a block when silent is set, but still throws', async () => {
+      mockFetch.mockImplementation(() => {
+        throw new Error('DNS lookup 10.0.0.5 is not allowed. Because, It is private IP address.');
+      });
+
+      await expect(
+        ssrfSafeFetch('https://lobe.example.com/f/1', { method: 'HEAD' }, { silent: true }),
+      ).rejects.toThrow(/SSRF blocked/);
+      expect(console.error).not.toHaveBeenCalled();
+    });
+
     const unsupportedSchemeUrls = [
       'file:///etc/passwd', // File protocol
       'ftp://internal.company.com/secrets', // FTP protocol
