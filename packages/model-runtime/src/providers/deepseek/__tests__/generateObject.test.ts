@@ -143,7 +143,7 @@ describe('LobeDeepSeekAnthropicAI generateObject', () => {
     expect(payload.tool_choice).toEqual({ name: 'task_topic_handoff', type: 'tool' });
   });
 
-  it('should disable thinking for V4 tools-mode requests', async () => {
+  it('should use auto tool choice with a prompt instruction for V4 tools-mode requests', async () => {
     const tools = [
       {
         function: {
@@ -158,8 +158,10 @@ describe('LobeDeepSeekAnthropicAI generateObject', () => {
     await instance.generateObject({ ...generateObjectPayload, schema: undefined, tools } as any);
     let payload = getLastRequestPayload();
 
+    // DeepSeek treats `any` as `auto`, so tools mode relies on the instruction.
     expect(payload.thinking).toEqual({ type: 'disabled' });
-    expect(payload.tool_choice).toEqual({ type: 'any' });
+    expect(payload.tool_choice).toEqual({ type: 'auto' });
+    expect(payload.system?.[0]?.text).toContain('calling one of the provided tools');
 
     await instance.generateObject({
       ...generateObjectPayload,

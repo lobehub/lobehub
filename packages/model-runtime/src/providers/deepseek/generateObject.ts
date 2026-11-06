@@ -32,6 +32,11 @@ export const createDeepSeekAnthropicGenerateObject = async (
   //   the schema tool (mirrors `buildDeepSeekGenerateObjectPayload`).
   // - Thinking active (caller-enabled V4, thinking-only deepseek-reasoner):
   //   use `auto` plus a prompt instruction instead of a forced tool_choice.
+  // - Tools mode (several caller tools, e.g. the group-chat supervisor): the
+  //   endpoint now treats `any` as `auto` even with thinking disabled, so it no
+  //   longer forces a call. Send `auto` plus the "call one of the tools"
+  //   instruction regardless of thinking.
+  //   https://api-docs.deepseek.com/guides/anthropic_api#tool_choice
   // Check the mapped request model too: a router can map a logical id to the
   // upstream V4 id.
   const modelIds = [payload.model, config?.requestModel];
@@ -65,7 +70,7 @@ export const createDeepSeekAnthropicGenerateObject = async (
 
   return createAnthropicGenerateObject(sanitizedClient, payload, options, pricing, {
     requestModel: config?.requestModel,
-    autoToolChoice: thinkingActive,
+    autoToolChoice: thinkingActive || !!payload.tools,
     requestParams,
     schemaToolChoice: 'tool',
   });
