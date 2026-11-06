@@ -1,8 +1,10 @@
 'use client';
 
-import './Sections.css';
-
-import { Flexbox } from '@lobehub/ui';
+import {
+  // oxlint-disable-next-line stylex-migration/no-emotion-styles -- Form.Group renders its body without a slot
+  createStaticStyles,
+  Flexbox,
+} from '@lobehub/ui';
 import { Form } from '@lobehub/ui/form';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
@@ -197,6 +199,16 @@ const styles = stylex.create({
   },
 });
 
+const fallback = createStaticStyles(({ css }) => ({
+  flush: css`
+    overflow: hidden;
+
+    [data-form-group-body] {
+      padding: 0;
+    }
+  `,
+}));
+
 const widthAt = (index: number, widths: number[]) => widths[index % widths.length];
 
 /** Matches the 16px/25px title line of a filled group head. */
@@ -235,7 +247,7 @@ const Group = ({
 
   return (
     <Form.Group
-      className={flush ? 'lobe-sections-05ee388b-flush' : undefined}
+      className={flush ? fallback.flush : undefined}
       collapsible={false}
       desc={description ?? (desc || descKey ? <GroupDesc /> : undefined)}
       extra={extraSize ? <SkeletonBar {...extraSize} /> : undefined}
