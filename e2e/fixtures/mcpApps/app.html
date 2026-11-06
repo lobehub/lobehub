@@ -178,11 +178,6 @@
         };
 
         const requestDisplayMode = async (mode) => {
-          if (Array.isArray(hostContext.availableDisplayModes) && !hostContext.availableDisplayModes.includes(mode)) {
-            statusNode.textContent = `Host does not offer ${mode}.`;
-            return;
-          }
-
           try {
             const result = await sendRequest('ui/request-display-mode', { mode });
             statusNode.textContent = `Host selected ${result.mode}.`;
