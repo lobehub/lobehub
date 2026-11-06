@@ -128,6 +128,7 @@ interface UploadCardProps {
   onUploadFiles?: (files: File[]) => void | Promise<void>;
   style?: CSSProperties;
   variant?: 'card' | 'circle';
+  xstyle?: stylex.StyleXStyles;
 }
 
 const UploadCard = memo<UploadCardProps>(
@@ -144,6 +145,7 @@ const UploadCard = memo<UploadCardProps>(
     className,
     style,
     variant = 'card',
+    xstyle,
   }) => {
     const inputRef = useRef<HTMLInputElement>(null);
     const uploadWithProgress = useFileStore((s) => s.uploadWithProgress);
@@ -221,7 +223,10 @@ const UploadCard = memo<UploadCardProps>(
       return (
         <>
           {fileInput}
-          <div {...sx(uploadCardStyles.addCircle, className, style)} onClick={handleFileSelect}>
+          <div
+            {...sx(uploadCardStyles.addCircle, className, xstyle, style)}
+            onClick={handleFileSelect}
+          >
             <Plus size={14} />
           </div>
         </>
@@ -234,7 +239,13 @@ const UploadCard = memo<UploadCardProps>(
           {fileInput}
           <Block
             clickable
-            {...sx(uploadCardMarker, uploadCardStyles.filledCard(zIndex), className, restStyle)}
+            {...sx(
+              uploadCardMarker,
+              uploadCardStyles.filledCard(zIndex),
+              className,
+              xstyle,
+              restStyle,
+            )}
             variant={'outlined'}
             onClick={handleFileSelect}
           >
@@ -294,7 +305,7 @@ const UploadCard = memo<UploadCardProps>(
           align={'center'}
           gap={4}
           justify={'center'}
-          {...sx(uploadCardStyles.placeholderCard, className, style)}
+          {...sx(uploadCardStyles.placeholderCard, className, xstyle, style)}
           variant={'filled'}
           onClick={handleFileSelect}
         >

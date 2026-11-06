@@ -15,7 +15,6 @@ const EXPAND_OFFSET = 4;
 const styles = stylex.create({
   addCirclePos: {
     position: 'absolute',
-    zIndex: 100,
     insetBlockEnd: '-2px',
     insetInlineEnd: '-2px',
   },
@@ -159,10 +158,11 @@ const InlineVideoFrames = memo<InlineVideoFramesProps>(
           {canAddMore &&
             (shouldCollapse ? (
               <UploadCard
-                className={stylex.props(styles.addCirclePos).className}
                 maxFileSize={maxFileSize}
                 multiple={!!onUploadFiles}
+                style={{ zIndex: 100 }}
                 variant="circle"
+                xstyle={styles.addCirclePos}
                 onRemove={() => {}}
                 onUploadFiles={onUploadFiles}
                 onUpload={(data) => {
