@@ -1,7 +1,8 @@
 'use client';
 
 import { ChatInput, ChatInputActionBar, SendButton } from '@lobehub/editor/react';
-import { createStaticStyles, Flexbox, TextArea } from '@lobehub/ui';
+import { Flexbox, TextArea } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import type { KeyboardEvent, ReactNode } from 'react';
 import { memo } from 'react';
 
@@ -26,12 +27,7 @@ interface GenerationPromptInputProps {
   value?: string;
 }
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  textarea: css`
-    padding: 0;
-    border-radius: 0;
-  `,
-}));
+const styles = stylex.create({ textarea: { padding: '0', borderRadius: '0' } });
 
 const GenerationPromptInput = memo<GenerationPromptInputProps>(
   ({
@@ -66,7 +62,7 @@ const GenerationPromptInput = memo<GenerationPromptInputProps>(
     const textarea = (
       <TextArea
         autoSize={{ maxRows, minRows }}
-        className={styles.textarea}
+        className={stylex.props(styles.textarea).className}
         disabled={disabled}
         placeholder={placeholder}
         value={value}

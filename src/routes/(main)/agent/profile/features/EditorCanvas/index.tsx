@@ -3,7 +3,9 @@
 import type { IEditor } from '@lobehub/editor';
 import { ReactMentionPlugin, ReactTablePlugin, ReactToolbarPlugin } from '@lobehub/editor';
 import { Editor } from '@lobehub/editor/react';
-import { ActionIcon, createStaticStyles, cssVar, Flexbox, toast } from '@lobehub/ui';
+import { ActionIcon, Flexbox, toast } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
 import { CodeXmlIcon, LetterTextIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
@@ -27,30 +29,22 @@ import { selectors as profileSelectors } from '../store/selectors';
 import TypoBar from './TypoBar';
 import { useSlashItems } from './useSlashItems';
 
-const styles = createStaticStyles(({ css }) => ({
-  editorShell: css`
-    min-height: 300px;
-    padding-block: 18px;
-    padding-inline: 18px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  root: css`
-    padding-block-end: 16px;
-  `,
-  sourceEditor: css`
-    min-height: 262px;
-    background: transparent;
-  `,
-  title: css`
-    cursor: default;
-    font-size: 16px;
-    font-weight: 600;
-    color: ${cssVar.colorText};
-  `,
-}));
+const styles = stylex.create({
+  editorShell: {
+    minHeight: '300px',
+    paddingBlock: '18px',
+    paddingInline: '18px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  root: { paddingBlockEnd: '16px' },
+  sourceEditor: { minHeight: '262px', backgroundColor: 'transparent', backgroundImage: 'none' },
+  title: { cursor: 'default', fontSize: '16px', fontWeight: 600, color: cssVar.colorText },
+});
 
 interface AgentEditorCanvasProps {
   agentId: string;
@@ -424,11 +418,11 @@ const AgentEditorCanvas = memo<AgentEditorCanvasProps>(({ agentId }) => {
   ]);
 
   return (
-    <Flexbox className={styles.root} gap={16}>
+    <Flexbox className={stylex.props(styles.root).className} gap={16}>
       <Flexbox gap={4}>
         <Flexbox horizontal align={'center'} distribution={'space-between'} gap={8}>
           <Flexbox horizontal align={'center'} gap={6}>
-            <div className={styles.title}>{t('settingAgent.prompt.title')}</div>
+            <div {...stylex.props(styles.title)}>{t('settingAgent.prompt.title')}</div>
             <InfoTooltip
               iconStyle={{ cursor: 'help' }}
               size={'small'}
@@ -475,7 +469,7 @@ const AgentEditorCanvas = memo<AgentEditorCanvasProps>(({ agentId }) => {
         </Flexbox>
       </Flexbox>
       <div
-        className={styles.editorShell}
+        className={stylex.props(styles.editorShell).className}
         style={
           editable ? undefined : { cursor: 'not-allowed', opacity: 0.65, pointerEvents: 'none' }
         }
@@ -513,7 +507,7 @@ const AgentEditorCanvas = memo<AgentEditorCanvasProps>(({ agentId }) => {
         </div>
         {activeEditorMode === 'source' && contentInit && (
           <CodeEditorPane
-            className={styles.sourceEditor}
+            className={stylex.props(styles.sourceEditor).className}
             language={'markdown'}
             readOnly={!editable || streamingInProgress}
             value={sourceMarkdown}

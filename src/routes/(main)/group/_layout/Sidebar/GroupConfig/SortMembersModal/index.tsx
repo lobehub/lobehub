@@ -1,7 +1,9 @@
 'use client';
 
 import { type AgentGroupMember } from '@lobechat/types';
-import { createStaticStyles, Flexbox, SortableList } from '@lobehub/ui';
+import { Flexbox, SortableList } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -13,18 +15,16 @@ import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 
 import MemberItem from './MemberItem';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  item: css`
-    height: 40px;
-    padding-inline: 8px;
-    border-radius: ${cssVar.borderRadius};
-    transition: background 0.2s ease-in-out;
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-}));
+const styles = stylex.create({
+  item: {
+    height: '40px',
+    paddingInline: '8px',
+    borderRadius: cssVar.borderRadius,
+    transition: 'background 0.2s ease-in-out',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+});
 
 interface SortMembersModalProps {
   groupId: string;
@@ -67,7 +67,7 @@ const SortMembersModal = memo<SortMembersModalProps>(({ groupId, open, onCancel 
             <SortableList.Item
               horizontal
               align={'center'}
-              className={styles.item}
+              className={stylex.props(styles.item).className}
               gap={8}
               id={item.id}
             >

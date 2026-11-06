@@ -1,6 +1,7 @@
 'use client';
 
-import { Alert, Button, createStaticStyles, Flexbox } from '@lobehub/ui';
+import { Alert, Button, Flexbox } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -9,20 +10,10 @@ import WideScreenContainer from '@/features/WideScreenContainer';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 
-const styles = createStaticStyles(({ css }) => ({
-  // base-ui stacks title and description in a gapless column, and both use a
-  // 20px line height — without this they read as one run-on paragraph.
-  description: css`
-    margin-block-start: 2px;
-  `,
-  // The action column is top-aligned by default, which strands the button in
-  // the corner as soon as the diagnosis wraps. Centre it against the whole
-  // block, and keep a gutter so wrapped text never runs up against it.
-  retry: css`
-    align-self: center;
-    padding-inline-start: 12px;
-  `,
-}));
+const styles = stylex.create({
+  description: { marginBlockStart: '2px' },
+  retry: { alignSelf: 'center', paddingInlineStart: '12px' },
+});
 
 /**
  * Surfaces an agent-config fetch failure above the chat input with a retry
@@ -50,7 +41,6 @@ const AgentConfigError = memo(() => {
       <Flexbox paddingBlock={'0 18px'}>
         <Alert
           showIcon
-          classNames={{ action: styles.retry, description: styles.description }}
           description={errorMessage}
           title={t('agentConfigError.title')}
           type={'error'}
@@ -59,6 +49,10 @@ const AgentConfigError = memo(() => {
               {t('agentConfigError.retry')}
             </Button>
           }
+          classNames={{
+            action: stylex.props(styles.retry).className,
+            description: stylex.props(styles.description).className,
+          }}
         />
       </Flexbox>
     </WideScreenContainer>

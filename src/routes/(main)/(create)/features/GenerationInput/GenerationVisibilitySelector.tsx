@@ -1,6 +1,8 @@
 'use client';
 
-import { Block, createStaticStyles, cssVar, Icon } from '@lobehub/ui';
+import { Block, Icon } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { LockIcon, UsersIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -17,28 +19,24 @@ interface GenerationVisibilitySelectorProps {
   visibility: 'private' | 'public';
 }
 
-const styles = createStaticStyles(({ css }) => ({
-  chip: css`
-    flex-shrink: 0;
-
-    min-width: 76px;
-    max-width: 128px;
-    height: 36px;
-
-    white-space: nowrap;
-  `,
-  label: css`
-    overflow: hidden;
-
-    min-width: 0;
-
-    font-size: 14px;
-    line-height: 1;
-    color: ${cssVar.colorText};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-}));
+const styles = stylex.create({
+  chip: {
+    flexShrink: 0,
+    minWidth: '76px',
+    maxWidth: '128px',
+    height: '36px',
+    whiteSpace: 'nowrap',
+  },
+  label: {
+    overflow: 'hidden',
+    minWidth: '0',
+    fontSize: '14px',
+    lineHeight: 1,
+    color: cssVar.colorText,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+});
 
 const GenerationVisibilitySelector = memo<GenerationVisibilitySelectorProps>(
   ({ disabledReason, onChange, visibility }) => {
@@ -54,14 +52,14 @@ const GenerationVisibilitySelector = memo<GenerationVisibilitySelectorProps>(
           clickable
           horizontal
           align="center"
-          className={styles.chip}
+          className={stylex.props(styles.chip).className}
           gap={6}
           paddingBlock={4}
           paddingInline={10}
           variant={'borderless'}
         >
           <Icon color={cssVar.colorTextDescription} icon={IconComp} size={14} />
-          <span className={styles.label}>{label}</span>
+          <span {...stylex.props(styles.label)}>{label}</span>
         </Block>
       </TaskVisibilityTag>
     );

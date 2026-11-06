@@ -1,18 +1,15 @@
-import { Button, confirmModal, createStaticStyles, Flexbox, Text, toast } from '@lobehub/ui';
+import { Button, confirmModal, Flexbox, Text, toast } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useUserMemoryStore } from '@/store/userMemory';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  title: css`
-    font-size: 28px;
-    font-weight: 700;
-    line-height: 1.4;
-    color: ${cssVar.colorText};
-  `,
-}));
+const styles = stylex.create({
+  title: { fontSize: '28px', fontWeight: 700, lineHeight: 1.4, color: cssVar.colorText },
+});
 
 const PersonaHeader = () => {
   const { t } = useTranslation(['memory', 'common']);
@@ -43,7 +40,7 @@ const PersonaHeader = () => {
 
   return (
     <Flexbox horizontal align={'center'} gap={16} justify={'space-between'}>
-      <Text as={'h1'} className={styles.title}>
+      <Text as={'h1'} className={stylex.props(styles.title).className}>
         Persona
       </Text>
       {!workspaceId && (

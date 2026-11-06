@@ -1,6 +1,8 @@
 'use client';
 
-import { Block, createStaticStyles, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Block, Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { BotIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -17,13 +19,9 @@ import Time from '@/routes/(main)/memory/features/Time';
 import { useUserMemoryStore } from '@/store/userMemory';
 import { LayersEnum } from '@/types/userMemory';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  suggestionsTitle: css`
-    font-size: 12px;
-    font-weight: 500;
-    color: ${cssVar.colorTextSecondary};
-  `,
-}));
+const styles = stylex.create({
+  suggestionsTitle: { fontSize: '12px', fontWeight: 500, color: cssVar.colorTextSecondary },
+});
 
 interface PreferenceDetailProps {
   /** Layer-specific row id (`preferenceId`). */
@@ -76,7 +74,12 @@ const PreferenceDetail = memo<PreferenceDetailProps>(({ id: preferenceId }) => {
 
       {preference.suggestions && (
         <Block gap={8} padding={16} variant={'filled'}>
-          <Flexbox horizontal align={'center'} className={styles.suggestionsTitle} gap={6}>
+          <Flexbox
+            horizontal
+            align={'center'}
+            className={stylex.props(styles.suggestionsTitle).className}
+            gap={6}
+          >
             <Icon icon={BotIcon} size={16} />
             <span>{t('preference.suggestions')}</span>
           </Flexbox>

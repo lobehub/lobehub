@@ -16,8 +16,6 @@ import {
   ActionIcon,
   Button,
   CopyButton,
-  createStaticStyles,
-  cssVar,
   Flexbox,
   Icon,
   Input,
@@ -29,6 +27,8 @@ import {
   Tooltip,
   TooltipGroup,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { CheckCircle2, KeyRound, PencilLine, RefreshCw, XCircle } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -49,153 +49,115 @@ import { binaryService } from '@/services/electron/binary';
 import { useAiInfraStore } from '@/store/aiInfra';
 import { aiProviderSelectors } from '@/store/aiInfra/slices/aiProvider/selectors';
 
+import { commandFieldMarker, detailRowMarker } from './markers.stylex';
+
 const COMMAND_LINE_HEIGHT = 28;
 const SERVER_DEFAULT_PROVIDER_VALUE = 'server-default';
 const USER_PROVIDER_VALUE_PREFIX = 'provider:';
 
-const styles = createStaticStyles(({ css }) => ({
-  card: css`
-    padding-block: 16px 4px;
-    padding-inline: 16px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  cardHeader: css`
-    display: flex;
-    gap: 12px;
-    align-items: flex-start;
-    justify-content: space-between;
-  `,
-  cardTitleWrap: css`
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-    gap: 8px;
-
-    min-width: 0;
-  `,
-  cardTitle: css`
-    display: flex;
-    gap: 8px;
-    align-items: center;
-  `,
-  metaRow: css`
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    align-items: center;
-
-    min-width: 0;
-  `,
-  metaText: css`
-    font-size: 13px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  pathWrap: css`
-    display: flex;
-    gap: 4px;
-    align-items: center;
-
-    min-width: 0;
-    max-width: 100%;
-  `,
-  detailList: css`
-    margin-block-start: 4px;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  detailRow: css`
-    display: flex;
-    gap: 16px;
-    align-items: center;
-
-    min-height: 48px;
-    padding-block: 8px;
-
-    & + & {
-      border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-    }
-  `,
-  detailLabel: css`
-    flex-shrink: 0;
-    width: 96px;
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  detailContent: css`
-    display: flex;
-    flex: 1;
-    flex-wrap: wrap;
-    gap: 8px;
-    align-items: center;
-
-    min-width: 0;
-    height: ${COMMAND_LINE_HEIGHT}px;
-  `,
-  commandField: css`
-    &:hover .command-edit-button {
-      pointer-events: auto;
-      opacity: 1;
-    }
-  `,
-  commandInput: css`
-    width: 100%;
-    height: ${COMMAND_LINE_HEIGHT}px;
-    border-radius: 999px;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 14px;
-  `,
-  commandInputWrap: css`
-    display: flex;
-    align-items: center;
-
-    width: min(320px, 100%);
-    max-width: 100%;
-    height: ${COMMAND_LINE_HEIGHT}px;
-  `,
-  commandDisplay: css`
-    display: inline-flex;
-    align-items: center;
-
-    box-sizing: border-box;
-    max-width: 100%;
-    height: ${COMMAND_LINE_HEIGHT}px;
-    padding-block: 0;
-    padding-inline: 12px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 999px;
-
-    background: ${cssVar.colorFillSecondary};
-  `,
-  commandEditButton: css`
-    pointer-events: none;
-    opacity: 0;
-    transition: opacity 0.2s ease;
-  `,
-  commandText: css`
-    min-width: 0;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 14px;
-    line-height: 20px;
-    color: ${cssVar.colorText};
-  `,
-  accountValue: css`
-    font-size: 15px;
-    color: ${cssVar.colorText};
-  `,
-  path: css`
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  unavailableText: css`
-    font-size: 13px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-}));
+const styles = stylex.create({
+  card: {
+    paddingBlockStart: '16px',
+    paddingBlockEnd: '4px',
+    paddingInline: '16px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  cardHeader: {
+    display: 'flex',
+    gap: '12px',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+  },
+  cardTitleWrap: { display: 'flex', flex: '1', flexDirection: 'column', gap: '8px', minWidth: '0' },
+  cardTitle: { display: 'flex', gap: '8px', alignItems: 'center' },
+  metaRow: { display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center', minWidth: '0' },
+  metaText: { fontSize: '13px', color: cssVar.colorTextSecondary },
+  pathWrap: { display: 'flex', gap: '4px', alignItems: 'center', minWidth: '0', maxWidth: '100%' },
+  detailList: {
+    marginBlockStart: '4px',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+  },
+  detailRow: {
+    display: 'flex',
+    gap: '16px',
+    alignItems: 'center',
+    minHeight: '48px',
+    paddingBlock: '8px',
+    borderBlockStartWidth: {
+      default: null,
+      [stylex.when.siblingBefore(':is(*)', detailRowMarker)]: '1px',
+    },
+    borderBlockStartStyle: {
+      default: null,
+      [stylex.when.siblingBefore(':is(*)', detailRowMarker)]: 'solid',
+    },
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+  },
+  detailLabel: { flexShrink: 0, width: '96px', fontSize: '12px', color: cssVar.colorTextTertiary },
+  detailContent: {
+    display: 'flex',
+    flex: '1',
+    flexWrap: 'wrap',
+    gap: '8px',
+    alignItems: 'center',
+    minWidth: '0',
+    height: `${COMMAND_LINE_HEIGHT}px`,
+  },
+  commandInput: {
+    width: '100%',
+    height: `${COMMAND_LINE_HEIGHT}px`,
+    borderRadius: '999px',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '14px',
+  },
+  commandInputWrap: {
+    display: 'flex',
+    alignItems: 'center',
+    width: 'min(320px, 100%)',
+    maxWidth: '100%',
+    height: `${COMMAND_LINE_HEIGHT}px`,
+  },
+  commandDisplay: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    boxSizing: 'border-box',
+    maxWidth: '100%',
+    height: `${COMMAND_LINE_HEIGHT}px`,
+    paddingBlock: '0',
+    paddingInline: '12px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: '999px',
+    backgroundColor: cssVar.colorFillSecondary,
+    backgroundImage: 'none',
+  },
+  commandEditButton: {
+    pointerEvents: {
+      default: 'none',
+      [stylex.when.ancestor(':hover', commandFieldMarker)]: 'auto',
+    },
+    opacity: { default: 0, [stylex.when.ancestor(':hover', commandFieldMarker)]: 1 },
+    transition: 'opacity 0.2s ease',
+  },
+  commandText: {
+    minWidth: '0',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '14px',
+    lineHeight: '20px',
+    color: cssVar.colorText,
+  },
+  accountValue: { fontSize: '15px', color: cssVar.colorText },
+  path: { fontFamily: cssVar.fontFamilyCode, fontSize: '12px', color: cssVar.colorTextTertiary },
+  unavailableText: { fontSize: '13px', color: cssVar.colorTextSecondary },
+});
 
 interface ServerDefaultModel {
   model: string;
@@ -232,24 +194,33 @@ const LocalRuntimeStatusCard = memo<{ provider: HeterogeneousProviderConfig }>((
   const AgentIcon = providerConfig?.icon;
 
   return (
-    <Flexbox className={styles.card} gap={12}>
-      <div className={styles.cardHeader}>
-        <div className={styles.cardTitleWrap}>
-          <div className={styles.cardTitle}>
+    <Flexbox className={stylex.props(styles.card).className} gap={12}>
+      <div {...stylex.props(styles.cardHeader)}>
+        <div {...stylex.props(styles.cardTitleWrap)}>
+          <div {...stylex.props(styles.cardTitle)}>
             {AgentIcon && <AgentIcon size={16} />}
             <Text strong>{providerConfig?.title || provider.type}</Text>
           </div>
-          <Flexbox horizontal align="center" className={styles.metaRow} gap={8}>
+          <Flexbox
+            horizontal
+            align="center"
+            className={stylex.props(styles.metaRow).className}
+            gap={8}
+          >
             <Tag color="success" style={{ marginInlineEnd: 0 }}>
               {t('heterogeneousStatus.runtime.bundled')}
             </Tag>
-            <Text className={styles.metaText}>{t('heterogeneousStatus.runtime.description')}</Text>
+            <Text className={stylex.props(styles.metaText).className}>
+              {t('heterogeneousStatus.runtime.description')}
+            </Text>
           </Flexbox>
         </div>
       </div>
-      <div className={styles.detailList}>
-        <div className={styles.detailRow}>
-          <Text className={styles.detailLabel}>{t('heterogeneousStatus.auth.label')}</Text>
+      <div {...stylex.props(styles.detailList)}>
+        <div {...stylex.props(detailRowMarker, styles.detailRow)}>
+          <Text className={stylex.props(styles.detailLabel).className}>
+            {t('heterogeneousStatus.auth.label')}
+          </Text>
           <Flexbox horizontal align="center" flex={1} gap={8} justify="space-between">
             <Flexbox horizontal align="center" gap={8}>
               <Icon
@@ -593,7 +564,7 @@ const CliHeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
         return (
           <Flexbox horizontal align="center" gap={8}>
             <Spin size="small" style={{ opacity: 0.6 }} />
-            <Text className={styles.metaText}>
+            <Text className={stylex.props(styles.metaText).className}>
               {t('heterogeneousStatus.detecting', { name: displayName })}
             </Text>
           </Flexbox>
@@ -604,7 +575,7 @@ const CliHeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
         return (
           <Flexbox horizontal align="center" gap={8} style={{ flexWrap: 'wrap' }}>
             <Icon color="var(--lobe-color-error)" icon={XCircle} size={16} />
-            <Text className={styles.unavailableText}>
+            <Text className={stylex.props(styles.unavailableText).className}>
               {t('heterogeneousStatus.unavailable', { name: displayName })}
             </Text>
           </Flexbox>
@@ -612,7 +583,12 @@ const CliHeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
       }
 
       return (
-        <Flexbox horizontal align="center" className={styles.metaRow} gap={8}>
+        <Flexbox
+          horizontal
+          align="center"
+          className={stylex.props(styles.metaRow).className}
+          gap={8}
+        >
           {status.version && (
             <Tag color="processing" style={{ marginInlineEnd: 0 }}>
               {status.version}
@@ -620,8 +596,13 @@ const CliHeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
           )}
           {status.path && (
             <Tooltip title={status.path}>
-              <Flexbox horizontal align="center" className={styles.pathWrap} gap={4}>
-                <Text ellipsis className={styles.path}>
+              <Flexbox
+                horizontal
+                align="center"
+                className={stylex.props(styles.pathWrap).className}
+                gap={4}
+              >
+                <Text ellipsis className={stylex.props(styles.path).className}>
                   {status.path}
                 </Text>
                 <CopyButton content={status.path} size="small" />
@@ -634,13 +615,15 @@ const CliHeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
 
     const renderCommandEditor = () => {
       return (
-        <div className={`${styles.detailRow} ${styles.commandField}`}>
-          <Text className={styles.detailLabel}>{t('heterogeneousStatus.command.label')}</Text>
-          <div className={styles.detailContent}>
+        <div {...stylex.props(detailRowMarker, commandFieldMarker, styles.detailRow)}>
+          <Text className={stylex.props(styles.detailLabel).className}>
+            {t('heterogeneousStatus.command.label')}
+          </Text>
+          <div {...stylex.props(styles.detailContent)}>
             {isEditingCommand ? (
-              <div className={styles.commandInputWrap}>
+              <div {...stylex.props(styles.commandInputWrap)}>
                 <Input
-                  className={styles.commandInput}
+                  className={stylex.props(styles.commandInput).className}
                   disabled={!canEdit || savingCommand}
                   placeholder={t('heterogeneousStatus.command.placeholder')}
                   ref={commandInputRef}
@@ -666,8 +649,8 @@ const CliHeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
                 />
               </div>
             ) : (
-              <div className={styles.commandDisplay}>
-                <Text ellipsis className={styles.commandText}>
+              <div {...stylex.props(styles.commandDisplay)}>
+                <Text ellipsis className={stylex.props(styles.commandText).className}>
                   {resolvedCommand}
                 </Text>
               </div>
@@ -676,7 +659,7 @@ const CliHeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
               <Tooltip title={t('heterogeneousStatus.command.edit')}>
                 <ActionIcon
                   aria-label={t('heterogeneousStatus.command.edit')}
-                  className={`command-edit-button ${styles.commandEditButton}`}
+                  className={stylex.props(styles.commandEditButton).className}
                   disabled={!canEdit}
                   icon={PencilLine}
                   size="small"
@@ -698,8 +681,10 @@ const CliHeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
         (authMode === 'api' && !!providerApiConfig && !localProviderApiAvailable);
 
       return (
-        <div className={styles.detailRow}>
-          <Text className={styles.detailLabel}>{t('heterogeneousStatus.auth.label')}</Text>
+        <div {...stylex.props(detailRowMarker, styles.detailRow)}>
+          <Text className={stylex.props(styles.detailLabel).className}>
+            {t('heterogeneousStatus.auth.label')}
+          </Text>
           <Flexbox horizontal align="center" gap={8} style={{ flexWrap: 'wrap' }}>
             <Segmented
               disabled={!canEdit}
@@ -721,12 +706,14 @@ const CliHeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
               }}
             />
             {!runnableApiAvailable && serverDefaultLoading ? (
-              <Text className={styles.unavailableText}>
+              <Text className={stylex.props(styles.unavailableText).className}>
                 {t('heterogeneousStatus.apiMode.serverDefault.checking')}
               </Text>
             ) : !runnableApiAvailable && serverDefaultUnavailableReason ? (
               <>
-                <Text className={styles.unavailableText}>{serverDefaultUnavailableReason}</Text>
+                <Text className={stylex.props(styles.unavailableText).className}>
+                  {serverDefaultUnavailableReason}
+                </Text>
                 {onServerDefaultRetry && (
                   <Button size="small" type="text" onClick={onServerDefaultRetry}>
                     {t('heterogeneousStatus.apiMode.serverDefault.retry')}
@@ -734,7 +721,7 @@ const CliHeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
                 )}
               </>
             ) : showLocalProviderUnavailable && !apiModeAvailable ? (
-              <Text className={styles.unavailableText}>
+              <Text className={stylex.props(styles.unavailableText).className}>
                 {t(
                   apiModeWorkspaceBlocked
                     ? 'heterogeneousStatus.apiMode.workspaceUnsupported'
@@ -759,21 +746,27 @@ const CliHeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
 
       return (
         <>
-          <div className={styles.detailRow}>
-            <Text className={styles.detailLabel}>{t('heterogeneousStatus.account.label')}</Text>
+          <div {...stylex.props(detailRowMarker, styles.detailRow)}>
+            <Text className={stylex.props(styles.detailLabel).className}>
+              {t('heterogeneousStatus.account.label')}
+            </Text>
             <Flexbox horizontal align="center" gap={8} style={{ flexWrap: 'wrap' }}>
               {auth.email && (
-                <Text ellipsis className={styles.accountValue}>
+                <Text ellipsis className={stylex.props(styles.accountValue).className}>
                   {auth.email}
                 </Text>
               )}
             </Flexbox>
           </div>
           {auth.subscriptionType && (
-            <div className={styles.detailRow}>
-              <Text className={styles.detailLabel}>{t('heterogeneousStatus.plan.label')}</Text>
+            <div {...stylex.props(detailRowMarker, styles.detailRow)}>
+              <Text className={stylex.props(styles.detailLabel).className}>
+                {t('heterogeneousStatus.plan.label')}
+              </Text>
               <Flexbox horizontal align="center" gap={8} style={{ flexWrap: 'wrap' }}>
-                <Text className={styles.accountValue}>{auth.subscriptionType.toUpperCase()}</Text>
+                <Text className={stylex.props(styles.accountValue).className}>
+                  {auth.subscriptionType.toUpperCase()}
+                </Text>
               </Flexbox>
             </div>
           )}
@@ -792,8 +785,10 @@ const CliHeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
 
       return (
         <>
-          <div className={styles.detailRow}>
-            <Text className={styles.detailLabel}>{t('heterogeneousStatus.apiMode.provider')}</Text>
+          <div {...stylex.props(detailRowMarker, styles.detailRow)}>
+            <Text className={stylex.props(styles.detailLabel).className}>
+              {t('heterogeneousStatus.apiMode.provider')}
+            </Text>
             <TooltipGroup>
               <Select
                 popupMatchSelectWidth
@@ -810,10 +805,12 @@ const CliHeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
             </TooltipGroup>
           </div>
           {serverDefaultSelected ? (
-            <div className={styles.detailRow}>
-              <Text className={styles.detailLabel}>{t('heterogeneousStatus.apiMode.model')}</Text>
+            <div {...stylex.props(detailRowMarker, styles.detailRow)}>
+              <Text className={stylex.props(styles.detailLabel).className}>
+                {t('heterogeneousStatus.apiMode.model')}
+              </Text>
               {serverDefaultLoading ? (
-                <Text className={styles.unavailableText}>
+                <Text className={stylex.props(styles.unavailableText).className}>
                   {t('heterogeneousStatus.apiMode.serverDefault.checking')}
                 </Text>
               ) : selectedServerDefaultModel ? (
@@ -832,7 +829,7 @@ const CliHeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
                 </TooltipGroup>
               ) : (
                 <Flexbox horizontal align="center" gap={8} style={{ flexWrap: 'wrap' }}>
-                  <Text className={styles.unavailableText}>
+                  <Text className={stylex.props(styles.unavailableText).className}>
                     {serverDefaultUnavailableReason ||
                       t('heterogeneousStatus.apiMode.serverDefault.noModels')}
                   </Text>
@@ -845,8 +842,10 @@ const CliHeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
               )}
             </div>
           ) : providerApiConfig ? (
-            <div className={styles.detailRow}>
-              <Text className={styles.detailLabel}>{t('heterogeneousStatus.apiMode.model')}</Text>
+            <div {...stylex.props(detailRowMarker, styles.detailRow)}>
+              <Text className={stylex.props(styles.detailLabel).className}>
+                {t('heterogeneousStatus.apiMode.model')}
+              </Text>
               <ModelSelect
                 initialWidth
                 disabled={!canEdit || !apiModeAvailable}
@@ -863,10 +862,12 @@ const CliHeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
               />
             </div>
           ) : (
-            <div className={styles.detailRow}>
-              <Text className={styles.detailLabel}>{t('heterogeneousStatus.apiMode.model')}</Text>
+            <div {...stylex.props(detailRowMarker, styles.detailRow)}>
+              <Text className={stylex.props(styles.detailLabel).className}>
+                {t('heterogeneousStatus.apiMode.model')}
+              </Text>
               <Flexbox horizontal align="center" gap={8} style={{ flexWrap: 'wrap' }}>
-                <Text className={styles.unavailableText}>
+                <Text className={stylex.props(styles.unavailableText).className}>
                   {t(
                     provider.type === 'codex'
                       ? 'heterogeneousStatus.apiMode.noResponsesProviders'
@@ -874,7 +875,7 @@ const CliHeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
                   )}
                 </Text>
                 <Text
-                  className={styles.metaText}
+                  className={stylex.props(styles.metaText).className}
                   style={{ cursor: 'pointer', textDecoration: 'underline' }}
                   onClick={() => navigate('/settings/provider')}
                 >
@@ -884,8 +885,14 @@ const CliHeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
             </div>
           )}
           {provider.type === 'claude-code' && providerApiConfig && (
-            <div className={styles.detailRow} style={{ alignItems: 'flex-start' }}>
-              <Text className={styles.detailLabel} style={{ paddingBlockStart: 14 }}>
+            <div
+              className={stylex.props(detailRowMarker, styles.detailRow).className}
+              style={{ alignItems: 'flex-start' }}
+            >
+              <Text
+                className={stylex.props(styles.detailLabel).className}
+                style={{ paddingBlockStart: 14 }}
+              >
                 {t('heterogeneousStatus.apiMode.smallFastModel')}
               </Text>
               <Flexbox gap={4} style={{ flex: 1, minWidth: 0 }}>
@@ -911,7 +918,7 @@ const CliHeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
                     void handleSmallFastModelChange(null);
                   }}
                 />
-                <Text className={styles.metaText}>
+                <Text className={stylex.props(styles.metaText).className}>
                   {t('heterogeneousStatus.apiMode.smallFastModelDesc')}
                 </Text>
               </Flexbox>
@@ -922,14 +929,14 @@ const CliHeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
     };
 
     return (
-      <Flexbox className={styles.card} gap={12}>
-        <div className={styles.cardHeader}>
-          <div className={styles.cardTitleWrap}>
-            <div className={styles.cardTitle}>
+      <Flexbox className={stylex.props(styles.card).className} gap={12}>
+        <div {...stylex.props(styles.cardHeader)}>
+          <div {...stylex.props(styles.cardTitleWrap)}>
+            <div {...stylex.props(styles.cardTitle)}>
               {AgentIcon && <AgentIcon size={16} />}
               <Text strong>{`${displayName} CLI`}</Text>
             </div>
-            <div className={styles.metaRow}>
+            <div {...stylex.props(styles.metaRow)}>
               {renderStatusTag()}
               {renderStatusMeta()}
             </div>
@@ -945,7 +952,7 @@ const CliHeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
             />
           </Tooltip>
         </div>
-        <div className={styles.detailList}>
+        <div {...stylex.props(styles.detailList)}>
           {renderCommandEditor()}
           {renderAuthMode()}
           {renderSubscriptionAccount()}

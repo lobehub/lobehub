@@ -1,40 +1,39 @@
 'use client';
 
-import { createStaticStyles, Flexbox, Text } from '@lobehub/ui';
+import { Flexbox, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
 import { type ReactNode } from 'react';
 import { memo } from 'react';
 
 import { type GroupBy } from './index';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  itemWrapper: css`
-    position: relative;
-    padding-inline-start: 24px;
-  `,
-  periodHeader: css`
-    position: sticky;
-    z-index: 10;
-    inset-block-start: 0;
-
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  timelineDot: css`
-    position: absolute;
-    inset-block-start: 20px;
-    inset-inline-start: 0;
-
-    width: 16px;
-    height: 16px;
-    border: 1px solid ${cssVar.colorBorder};
-    border-radius: 50%;
-
-    background: ${cssVar.colorBgElevated};
-    box-shadow: 0 2px 4px -2px rgb(0 0 0 / 40%);
-  `,
-}));
+const styles = stylex.create({
+  itemWrapper: { position: 'relative', paddingInlineStart: '24px' },
+  periodHeader: {
+    position: 'sticky',
+    zIndex: 10,
+    insetBlockStart: '0',
+    color: cssVar.colorTextSecondary,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  timelineDot: {
+    position: 'absolute',
+    insetBlockStart: '20px',
+    insetInlineStart: '0',
+    width: '16px',
+    height: '16px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorder,
+    borderRadius: '50%',
+    backgroundColor: cssVar.colorBgElevated,
+    backgroundImage: 'none',
+    boxShadow: '0 2px 4px -2px rgb(0 0 0 / 40%)',
+  },
+});
 
 interface PeriodHeaderProps {
   groupBy?: GroupBy;
@@ -49,7 +48,13 @@ export const PeriodHeader = memo<PeriodHeaderProps>(({ periodKey, groupBy = 'day
       : dayjs(periodKey).format('MMMM D, YYYY');
 
   return (
-    <Flexbox horizontal align={'center'} className={styles.periodHeader} gap={12} paddingBlock={8}>
+    <Flexbox
+      horizontal
+      align={'center'}
+      className={stylex.props(styles.periodHeader).className}
+      gap={12}
+      paddingBlock={8}
+    >
       <Text weight={500}>{periodName}</Text>
     </Flexbox>
   );
@@ -61,8 +66,8 @@ interface TimelineItemWrapperProps {
 
 export const TimelineItemWrapper = memo<TimelineItemWrapperProps>(({ children }) => {
   return (
-    <div className={styles.itemWrapper}>
-      <div className={styles.timelineDot} />
+    <div {...stylex.props(styles.itemWrapper)}>
+      <div {...stylex.props(styles.timelineDot)} />
       {children}
     </div>
   );

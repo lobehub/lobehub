@@ -1,7 +1,9 @@
 'use client';
 
 import { agentDisplayName } from '@lobechat/types';
-import { ActionIcon, createStaticStyles, Flexbox } from '@lobehub/ui';
+import { ActionIcon, Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { UserMinus } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -21,17 +23,14 @@ import { userProfileSelectors } from '@/store/user/slices/auth/selectors';
 
 import GroupMemberItem from './GroupMemberItem';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  memberTrigger: css`
-    border-radius: ${cssVar.borderRadius};
-    transition: background 0.2s ${cssVar.motionEaseOut};
-
-    &[data-popup-open],
-    &[data-active='true'] {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-}));
+const styles = stylex.create({
+  memberTrigger: {
+    backgroundColor: { 'default': null, ':is([data-popup-open])': cssVar.colorFillTertiary },
+    borderRadius: cssVar.borderRadius,
+    transition: `background 0.2s ${cssVar.motionEaseOut}`,
+  },
+  memberTriggerActive: { backgroundColor: cssVar.colorFillTertiary, backgroundImage: 'none' },
+});
 
 interface GroupMemberProps {
   addModalOpen: boolean;
@@ -113,8 +112,10 @@ const GroupMember = memo<GroupMemberProps>(({ addModalOpen, onAddModalOpenChange
           groupMembers.map((item) => (
             <AgentProfilePopup agent={item} agentId={item.id} groupId={groupId} key={item.id}>
               <div
-                className={styles.memberTrigger}
-                data-active={isProfileRoute && activeTab === item.id ? 'true' : undefined}
+                {...stylex.props(
+                  styles.memberTrigger,
+                  isProfileRoute && activeTab === item.id && styles.memberTriggerActive,
+                )}
                 onDoubleClick={() => handleMemberDoubleClick(item.id)}
               >
                 <GroupMemberItem

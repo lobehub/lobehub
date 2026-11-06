@@ -4,7 +4,6 @@ import { useAutoAnimate } from '@formkit/auto-animate/react';
 import {
   ActionIconGroup,
   Block,
-  createStaticStyles,
   Flexbox,
   Grid,
   Image,
@@ -13,6 +12,8 @@ import {
   Text,
   toast,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
 import { omit } from 'es-toolkit/compat';
 import { CopyIcon, RotateCcwSquareIcon, Trash2 } from 'lucide-react';
@@ -30,39 +31,15 @@ import { AsyncTaskErrorType } from '@/types/asyncTask';
 import { type GenerationBatch } from '@/types/generation';
 
 import { GenerationItem } from './GenerationItem';
+import { batchMarker } from './markers.stylex';
 import { ReferenceImages } from './ReferenceImages';
 
-const styles = createStaticStyles(({ css, cssVar, cx }) => ({
-  batchActions: cx(
-    'batch-actions',
-    css`
-      opacity: 0;
-      transition: opacity 0.1s ${cssVar.motionEaseInOut};
-    `,
-  ),
-  batchDeleteButton: css`
-    &:hover {
-      border-color: ${cssVar.colorError} !important;
-      color: ${cssVar.colorError} !important;
-      background: ${cssVar.colorErrorBg} !important;
-    }
-  `,
-  container: css`
-    &:hover {
-      .batch-actions {
-        opacity: 1;
-      }
-    }
-  `,
-
-  prompt: css`
-    pre {
-      overflow: hidden !important;
-      padding-block: 4px;
-      font-size: 13px;
-    }
-  `,
-}));
+const styles = stylex.create({
+  batchActions: {
+    opacity: { default: 0, [stylex.when.ancestor(':hover', batchMarker)]: 1 },
+    transition: `opacity 0.1s ${cssVar.motionEaseInOut}`,
+  },
+});
 
 interface GenerationBatchItemProps {
   batch: GenerationBatch;
@@ -149,7 +126,7 @@ export const GenerationBatchItem = memo<GenerationBatchItemProps>(({ batch }) =>
   }
 
   return (
-    <Block className={styles.container} gap={8} variant="borderless">
+    <Block className={stylex.props(batchMarker).className} gap={8} variant="borderless">
       <Flexbox horizontal align={'flex-start'} gap={16}>
         <ReferenceImages imageUrl={batch.config?.imageUrl} imageUrls={batch.config?.imageUrls} />
         <Markdown variant={'chat'}>{batch.prompt}</Markdown>
@@ -202,7 +179,7 @@ export const GenerationBatchItem = memo<GenerationBatchItemProps>(({ batch }) =>
           </Text>
         </Flexbox>
       </Flexbox>
-      <Flexbox horizontal align={'center'} className={styles.batchActions}>
+      <Flexbox horizontal align={'center'} className={stylex.props(styles.batchActions).className}>
         <ActionIconGroup
           items={[
             {

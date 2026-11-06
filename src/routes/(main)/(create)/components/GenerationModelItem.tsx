@@ -2,7 +2,9 @@
 
 import { BRANDING_PROVIDER } from '@lobechat/business-const';
 import { CREDITS_PER_DOLLAR } from '@lobechat/const/currency';
-import { createStaticStyles, cx, Flexbox, Popover, Text } from '@lobehub/ui';
+import { Flexbox, Popover, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import type { AiModelForSelect } from 'model-bank';
 import numeral from 'numeral';
 import { memo, useMemo } from 'react';
@@ -16,24 +18,17 @@ import { serverConfigSelectors } from '@/store/serverConfig/selectors';
 
 const POPOVER_MAX_WIDTH = 320;
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  descriptionText: css`
-    color: ${cssVar.colorTextSecondary};
-  `,
-  descriptionText_dark: css`
-    color: ${cssVar.colorText};
-  `,
-  priceText: css`
-    font-weight: 500;
-    color: ${cssVar.colorTextTertiary};
-    word-break: keep-all;
-    white-space: nowrap;
-  `,
-  priceText_dark: css`
-    font-weight: 500;
-    color: ${cssVar.colorTextLightSolid};
-  `,
-}));
+const styles = stylex.create({
+  descriptionText: { color: cssVar.colorTextSecondary },
+  descriptionText_dark: { color: cssVar.colorText },
+  priceText: {
+    fontWeight: 500,
+    color: cssVar.colorTextTertiary,
+    wordBreak: 'keep-all',
+    whiteSpace: 'nowrap',
+  },
+  priceText_dark: { fontWeight: 500, color: cssVar.colorTextLightSolid },
+});
 
 export interface GenerationModelItemProps extends AiModelForSelect {
   /**
@@ -135,12 +130,21 @@ const GenerationModelItem = memo<GenerationModelItemProps>(
       return (
         <Flexbox gap={8} style={{ maxWidth: POPOVER_MAX_WIDTH }}>
           {description && (
-            <Text className={cx(styles.descriptionText, isDarkMode && styles.descriptionText_dark)}>
+            <Text
+              className={
+                stylex.props(styles.descriptionText, isDarkMode && styles.descriptionText_dark)
+                  .className
+              }
+            >
               {description}
             </Text>
           )}
           {priceLabel && (
-            <Text className={cx(styles.priceText, isDarkMode && styles.priceText_dark)}>
+            <Text
+              className={
+                stylex.props(styles.priceText, isDarkMode && styles.priceText_dark).className
+              }
+            >
               {priceLabel}
             </Text>
           )}

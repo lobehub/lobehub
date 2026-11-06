@@ -30,6 +30,7 @@ declare module 'verification:component' {
     title: string;
   }>;
   export const WorkPreviewStatus: typeof WorkPreview;
+  export const PersonaDetail: ComponentType<{ children: string }>;
   export const PreviewToolbar: ComponentType<{
     actions?: ReactNode;
     path: string;

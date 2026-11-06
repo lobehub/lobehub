@@ -10,8 +10,6 @@ import {
   Button as BaseButton,
   Button,
   createModal,
-  createStaticStyles,
-  cssVar,
   Flexbox,
   Icon,
   Select,
@@ -20,6 +18,8 @@ import {
   Tooltip,
   useModalContext,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { t as i18nT } from 'i18next';
 import { BotIcon, CheckCircle2, MonitorSmartphone, RefreshCw, XCircle } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
@@ -34,63 +34,54 @@ import { deviceService } from '@/services/device';
 import { useAgentStore } from '@/store/agent';
 import { isDevicePresenceUnknown, useDeviceList } from '@/store/device';
 
-const styles = createStaticStyles(({ css }) => ({
-  card: css`
-    padding-block: 16px 4px;
-    padding-inline: 16px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  cardHeader: css`
-    display: flex;
-    gap: 12px;
-    align-items: center;
-    justify-content: space-between;
-
-    padding-block-end: 12px;
-  `,
-  title: css`
-    font-size: 14px;
-    font-weight: 500;
-  `,
-  detailList: css`
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  detailRow: css`
-    display: flex;
-    gap: 16px;
-    align-items: center;
-
-    min-height: 44px;
-    padding-block: 6px;
-
-    & + & {
-      border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-    }
-  `,
-  detailLabel: css`
-    flex-shrink: 0;
-    width: 96px;
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  detailContent: css`
-    display: flex;
-    flex: 1;
-    flex-wrap: wrap;
-    gap: 6px;
-    align-items: center;
-
-    min-width: 0;
-  `,
-  deviceItem: css`
-    display: flex;
-    gap: 6px;
-    align-items: center;
-  `,
-}));
+const styles = stylex.create({
+  card: {
+    paddingBlockStart: '16px',
+    paddingBlockEnd: '4px',
+    paddingInline: '16px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  cardHeader: {
+    display: 'flex',
+    gap: '12px',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBlockEnd: '12px',
+  },
+  title: { fontSize: '14px', fontWeight: 500 },
+  detailList: {
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+  },
+  detailRow: {
+    display: 'flex',
+    gap: '16px',
+    alignItems: 'center',
+    minHeight: '44px',
+    paddingBlock: '6px',
+  },
+  detailRowDivider: {
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+  },
+  detailLabel: { flexShrink: 0, width: '96px', fontSize: '12px', color: cssVar.colorTextTertiary },
+  detailContent: {
+    display: 'flex',
+    flex: '1',
+    flexWrap: 'wrap',
+    gap: '6px',
+    alignItems: 'center',
+    minWidth: '0',
+  },
+  deviceItem: { display: 'flex', gap: '6px', alignItems: 'center' },
+});
 
 interface ChangeDeviceContentProps {
   currentDeviceId?: string;
@@ -191,7 +182,7 @@ const ChangeDeviceContent = memo<ChangeDeviceContentProps>(
             value={selectedDeviceId}
             options={onlineDevices.map((d) => ({
               label: (
-                <div className={styles.deviceItem}>
+                <div {...stylex.props(styles.deviceItem)}>
                   <Icon icon={BotIcon} size={14} />
                   <span>{d.hostname}</span>
                   <Tag color="success" style={{ marginInlineEnd: 0 }}>
@@ -391,11 +382,11 @@ const RemoteAgentConfigCard = memo<RemoteAgentConfigCardProps>(
     };
 
     return (
-      <Flexbox className={styles.card} gap={0}>
-        <div className={styles.cardHeader}>
+      <Flexbox className={stylex.props(styles.card).className} gap={0}>
+        <div {...stylex.props(styles.cardHeader)}>
           <Flexbox horizontal align="center" gap={8}>
             <Icon icon={MonitorSmartphone} size={16} />
-            <Text strong className={styles.title}>
+            <Text strong className={stylex.props(styles.title).className}>
               {t('platformAgentConfig.title')}
             </Text>
           </Flexbox>
@@ -410,16 +401,20 @@ const RemoteAgentConfigCard = memo<RemoteAgentConfigCardProps>(
             />
           </Tooltip>
         </div>
-        <div className={styles.detailList}>
-          <div className={styles.detailRow}>
-            <Text className={styles.detailLabel}>{t('platformAgentConfig.platform.label')}</Text>
-            <div className={styles.detailContent}>
+        <div {...stylex.props(styles.detailList)}>
+          <div {...stylex.props(styles.detailRow)}>
+            <Text className={stylex.props(styles.detailLabel).className}>
+              {t('platformAgentConfig.platform.label')}
+            </Text>
+            <div {...stylex.props(styles.detailContent)}>
               <Tag style={{ marginInlineEnd: 0 }}>{platformName}</Tag>
             </div>
           </div>
-          <div className={styles.detailRow}>
-            <Text className={styles.detailLabel}>{t('platformAgentConfig.device.label')}</Text>
-            <div className={styles.detailContent}>
+          <div {...stylex.props(styles.detailRow, styles.detailRowDivider)}>
+            <Text className={stylex.props(styles.detailLabel).className}>
+              {t('platformAgentConfig.device.label')}
+            </Text>
+            <div {...stylex.props(styles.detailContent)}>
               {boundDevice ? (
                 <Flexbox horizontal align="center" gap={6}>
                   <Text ellipsis style={{ fontSize: 14 }}>
@@ -445,15 +440,15 @@ const RemoteAgentConfigCard = memo<RemoteAgentConfigCardProps>(
               )}
             </div>
           </div>
-          <div className={styles.detailRow}>
-            <Text className={styles.detailLabel}>
+          <div {...stylex.props(styles.detailRow, styles.detailRowDivider)}>
+            <Text className={stylex.props(styles.detailLabel).className}>
               {t('platformAgentConfig.availability.label')}
             </Text>
-            <div className={styles.detailContent}>{renderAvailability()}</div>
+            <div {...stylex.props(styles.detailContent)}>{renderAvailability()}</div>
           </div>
-          <div className={styles.detailRow}>
-            <div className={styles.detailLabel} />
-            <div className={styles.detailContent}>
+          <div {...stylex.props(styles.detailRow, styles.detailRowDivider)}>
+            <div {...stylex.props(styles.detailLabel)} />
+            <div {...stylex.props(styles.detailContent)}>
               <Button size="small" onClick={handleOpenChangeDevice}>
                 {t('platformAgentConfig.changeDevice')}
               </Button>

@@ -1,21 +1,24 @@
-import { createStaticStyles, Flexbox, Grid, Skeleton } from '@lobehub/ui';
+import { Flexbox, Grid, Skeleton } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 
 import { type ViewMode } from './ViewModeSwitcher';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  card: css`
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-
-    padding: 16px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorBgContainer};
-  `,
-}));
+const styles = stylex.create({
+  card: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '12px',
+    padding: '16px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+});
 
 const Loading = memo<{ rows?: number; viewMode?: ViewMode }>(({ viewMode, rows = 3 }) => {
   if (viewMode === 'timeline') {
@@ -34,7 +37,7 @@ const Loading = memo<{ rows?: number; viewMode?: ViewMode }>(({ viewMode, rows =
   return (
     <Grid gap={12} maxItemWidth={240} paddingBlock={8} rows={rows}>
       {Array.from({ length: 6 }).map((_, i) => (
-        <Flexbox className={styles.card} key={i}>
+        <Flexbox className={stylex.props(styles.card).className} key={i}>
           <Skeleton.Text fontSize={16} lineHeight={1.4} width={'80%'} />
           <Skeleton.Text rows={5} style={{ marginBottom: 0 }} />
           <Flexbox horizontal gap={8}>

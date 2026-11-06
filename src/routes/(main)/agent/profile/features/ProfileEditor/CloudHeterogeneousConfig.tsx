@@ -6,8 +6,6 @@ import {
   Avatar,
   Button,
   confirmModal,
-  createStaticStyles,
-  cssVar,
   Flexbox,
   Input,
   InputPassword,
@@ -17,6 +15,8 @@ import {
   Text,
   toast,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { CheckCircle2, KeyRound, X } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -33,95 +33,63 @@ import { usePermission } from '@/hooks/usePermission';
 import { refreshScopedCreds, useCredsForContext, usePersonalCreds } from '@/hooks/useScopedCreds';
 import { deleteClaudeCodeToken, saveClaudeCodeToken } from '@/services/claudeCodeToken';
 
-const styles = createStaticStyles(({ css }) => ({
-  card: css`
-    padding-block: 16px 12px;
-    padding-inline: 16px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
+import { repoItemMarker } from './markers.stylex';
 
-    background: ${cssVar.colorBgContainer};
-  `,
-  credOption: css`
-    display: flex;
-    gap: 8px;
-    align-items: center;
-  `,
-  manageLink: css`
-    cursor: pointer;
-    font-size: 12px;
-    color: ${cssVar.colorPrimary};
-
-    &:hover {
-      text-decoration: underline;
-    }
-  `,
-  repoItem: css`
-    cursor: pointer;
-
-    display: flex;
-    gap: 8px;
-    align-items: center;
-
-    min-height: 36px;
-    padding-block: 6px;
-    padding-inline: 8px;
-    border-radius: ${cssVar.borderRadiusSM};
-
-    transition: background 0.15s;
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-
-      .repo-delete-btn {
-        opacity: 1;
-      }
-    }
-  `,
-  repoItemActive: css`
-    background: ${cssVar.colorFillSecondary};
-  `,
-  repoDeleteBtn: css`
-    cursor: pointer;
-
-    flex-shrink: 0;
-
-    margin-inline-start: auto;
-    padding: 2px;
-    border: none;
-    border-radius: 4px;
-
-    color: ${cssVar.colorTextTertiary};
-
-    opacity: 0;
-    background: transparent;
-
-    transition:
-      opacity 0.15s,
-      color 0.15s;
-
-    &:hover {
-      color: ${cssVar.colorError};
-    }
-  `,
-  repoList: css`
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  `,
-  sectionDesc: css`
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  sectionDivider: css`
-    margin-block: 12px;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  sectionLabel: css`
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-}));
+const styles = stylex.create({
+  card: {
+    paddingBlockStart: '16px',
+    paddingBlockEnd: '12px',
+    paddingInline: '16px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  credOption: { display: 'flex', gap: '8px', alignItems: 'center' },
+  manageLink: {
+    cursor: 'pointer',
+    fontSize: '12px',
+    color: cssVar.colorPrimary,
+    textDecoration: { 'default': null, ':hover': 'underline' },
+  },
+  repoItem: {
+    cursor: 'pointer',
+    display: 'flex',
+    gap: '8px',
+    alignItems: 'center',
+    minHeight: '36px',
+    paddingBlock: '6px',
+    paddingInline: '8px',
+    borderRadius: cssVar.borderRadiusSM,
+    transition: 'background 0.15s',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  repoDeleteBtn: {
+    opacity: { default: 0, [stylex.when.ancestor(':hover', repoItemMarker)]: 1 },
+    cursor: 'pointer',
+    flexShrink: 0,
+    marginInlineStart: 'auto',
+    padding: '2px',
+    borderStyle: 'none',
+    borderRadius: '4px',
+    color: { 'default': cssVar.colorTextTertiary, ':hover': cssVar.colorError },
+    backgroundColor: 'transparent',
+    backgroundImage: 'none',
+    transition: 'opacity 0.15s,\n      color 0.15s',
+  },
+  repoList: { display: 'flex', flexDirection: 'column', gap: '2px' },
+  sectionDesc: { fontSize: '12px', color: cssVar.colorTextSecondary },
+  sectionDivider: {
+    marginBlock: '12px',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+  },
+  sectionLabel: { fontSize: '12px', color: cssVar.colorTextTertiary },
+});
 
 interface CloudHeterogeneousConfigProps {
   onEnvChange: (env: Record<string, string>) => Promise<void> | void;
@@ -152,7 +120,9 @@ const TokenSection = memo<TokenSectionProps>(
         <Flexbox gap={8}>
           <Flexbox horizontal align="center" gap={6}>
             <KeyRound size={12} />
-            <span className={styles.sectionLabel}>{t('heterogeneousStatus.cloud.tokenLabel')}</span>
+            <span {...stylex.props(styles.sectionLabel)}>
+              {t('heterogeneousStatus.cloud.tokenLabel')}
+            </span>
           </Flexbox>
           <Flexbox horizontal align="center" gap={8}>
             <Text fontSize={12} type={'warning'}>
@@ -229,12 +199,14 @@ const TokenSection = memo<TokenSectionProps>(
         <Flexbox horizontal align="center" justify="space-between">
           <Flexbox horizontal align="center" gap={6}>
             <KeyRound size={12} />
-            <span className={styles.sectionLabel}>{t('heterogeneousStatus.cloud.tokenLabel')}</span>
+            <span {...stylex.props(styles.sectionLabel)}>
+              {t('heterogeneousStatus.cloud.tokenLabel')}
+            </span>
           </Flexbox>
           <Flexbox horizontal align="center" gap={12}>
             {configured && tokenStatus.editable && !editing && (
               <span
-                className={styles.manageLink}
+                {...stylex.props(styles.manageLink)}
                 onClick={() => {
                   if (!canEdit) return;
 
@@ -245,7 +217,7 @@ const TokenSection = memo<TokenSectionProps>(
               </span>
             )}
             {canRemove && canEdit && !(configured && editing) && (
-              <span className={styles.manageLink} onClick={handleRemove}>
+              <span {...stylex.props(styles.manageLink)} onClick={handleRemove}>
                 {t('heterogeneousStatus.cloud.tokenRemove')}
               </span>
             )}
@@ -296,7 +268,9 @@ const TokenSection = memo<TokenSectionProps>(
           </Text>
         )}
 
-        <span className={styles.sectionDesc}>{t('heterogeneousStatus.cloud.tokenDesc')}</span>
+        <span {...stylex.props(styles.sectionDesc)}>
+          {t('heterogeneousStatus.cloud.tokenDesc')}
+        </span>
       </Flexbox>
     );
   },
@@ -333,18 +307,18 @@ const RepoListSection = memo<RepoListSectionProps>(({ repos, onReposChange }) =>
 
   return (
     <Flexbox gap={8}>
-      <span className={styles.sectionLabel}>{t('heterogeneousStatus.cloud.repoLabel')}</span>
+      <span {...stylex.props(styles.sectionLabel)}>{t('heterogeneousStatus.cloud.repoLabel')}</span>
 
       {repos.length > 0 && (
-        <div className={styles.repoList}>
+        <div {...stylex.props(styles.repoList)}>
           {repos.map((repo) => (
-            <div className={styles.repoItem} key={repo}>
+            <div {...stylex.props(repoItemMarker, styles.repoItem)} key={repo}>
               <Github size={14} style={{ flexShrink: 0 }} />
               <Text ellipsis fontSize={13} style={{ flex: 1 }}>
                 {repo}
               </Text>
               <button
-                className={`${styles.repoDeleteBtn} repo-delete-btn`}
+                {...stylex.props(styles.repoDeleteBtn)}
                 disabled={!canEdit}
                 onClick={(e) => removeRepo(repo, e)}
               >
@@ -369,7 +343,7 @@ const RepoListSection = memo<RepoListSectionProps>(({ repos, onReposChange }) =>
         </Button>
       </Flexbox>
 
-      <span className={styles.sectionDesc}>{t('heterogeneousStatus.cloud.repoDesc')}</span>
+      <span {...stylex.props(styles.sectionDesc)}>{t('heterogeneousStatus.cloud.repoDesc')}</span>
     </Flexbox>
   );
 });
@@ -415,7 +389,7 @@ const CloudHeterogeneousConfig = memo<CloudHeterogeneousConfigProps>(
     );
     const githubCredOptions = githubCreds.map((cred) => ({
       label: (
-        <span className={styles.credOption}>
+        <span {...stylex.props(styles.credOption)}>
           {cred.oauthAvatar ? <Avatar avatar={cred.oauthAvatar} size={16} /> : <Github size={14} />}
           <span>{cred.name}</span>
           {cred.oauthUsername && (
@@ -448,7 +422,7 @@ const CloudHeterogeneousConfig = memo<CloudHeterogeneousConfigProps>(
     }
 
     return (
-      <div className={styles.card}>
+      <div {...stylex.props(styles.card)}>
         <Flexbox gap={16}>
           {/* ── Claude Code OAuth Token ── */}
           <TokenSection
@@ -459,18 +433,21 @@ const CloudHeterogeneousConfig = memo<CloudHeterogeneousConfigProps>(
             onSaved={() => void refreshScopedCreds()}
           />
 
-          <div className={styles.sectionDivider} />
+          <div {...stylex.props(styles.sectionDivider)} />
 
           {/* ── GitHub OAuth Credential ── */}
           <Flexbox gap={8}>
             <Flexbox horizontal align="center" justify="space-between">
               <Flexbox horizontal align="center" gap={6}>
                 <Github size={12} />
-                <span className={styles.sectionLabel}>
+                <span {...stylex.props(styles.sectionLabel)}>
                   {t('heterogeneousStatus.cloud.githubLabel')}
                 </span>
               </Flexbox>
-              <span className={styles.manageLink} onClick={() => navigate('/settings/credential')}>
+              <span
+                {...stylex.props(styles.manageLink)}
+                onClick={() => navigate('/settings/credential')}
+              >
                 {t('heterogeneousStatus.cloud.manageCredentials')}
               </span>
             </Flexbox>
@@ -489,10 +466,12 @@ const CloudHeterogeneousConfig = memo<CloudHeterogeneousConfigProps>(
               onChange={(key) => saveEnv({ GITHUB_CRED_KEY: typeof key === 'string' ? key : '' })}
             />
 
-            <span className={styles.sectionDesc}>{t('heterogeneousStatus.cloud.githubDesc')}</span>
+            <span {...stylex.props(styles.sectionDesc)}>
+              {t('heterogeneousStatus.cloud.githubDesc')}
+            </span>
           </Flexbox>
 
-          <div className={styles.sectionDivider} />
+          <div {...stylex.props(styles.sectionDivider)} />
 
           {/* ── Repository list ── */}
           <RepoListSection repos={repos} onReposChange={handleReposChange} />

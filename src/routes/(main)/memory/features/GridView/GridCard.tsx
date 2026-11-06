@@ -1,33 +1,27 @@
-import { Block, Center, createStaticStyles, cssVar, cx, Flexbox, Tag, Text } from '@lobehub/ui';
+import { Block, Center, Flexbox, Tag, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { type ReactNode } from 'react';
 import { memo } from 'react';
 
 import HashTags from '../HashTags';
+import { memoryCardMarker } from '../markers.stylex';
 import Time from '../Time';
 import { useCateColor } from '../useCateColor';
 
-const ACTION_CLASSNAME = 'memory-masonry-actions';
-
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  actions: css`
-    transition: opacity 0.15s ease;
-  `,
-  masonryCard: css`
-    cursor: pointer;
-    position: relative;
-    background: ${cssVar.colorFillQuaternary};
-    box-shadow: 0 0 0 1px ${cssVar.colorFillTertiary} inset;
-    .${ACTION_CLASSNAME} {
-      opacity: 0;
-    }
-
-    &:hover {
-      .${ACTION_CLASSNAME} {
-        opacity: 1;
-      }
-    }
-  `,
-}));
+const styles = stylex.create({
+  actions: {
+    opacity: { default: 0, [stylex.when.ancestor(':hover', memoryCardMarker)]: 1 },
+    transition: 'opacity 0.15s ease',
+  },
+  masonryCard: {
+    cursor: 'pointer',
+    position: 'relative',
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+    boxShadow: `0 0 0 1px ${cssVar.colorFillTertiary} inset`,
+  },
+});
 
 interface GridCardProps {
   actions?: ReactNode;
@@ -58,7 +52,7 @@ const GridCard = memo<GridCardProps>(
     const cateColor = useCateColor(cate);
     return (
       <Block
-        className={styles.masonryCard}
+        className={stylex.props(memoryCardMarker, styles.masonryCard).className}
         gap={4}
         height={'100%'}
         padding={4}
@@ -165,7 +159,7 @@ const GridCard = memo<GridCardProps>(
           <Flexbox
             horizontal
             align={'center'}
-            className={cx(ACTION_CLASSNAME, styles.actions)}
+            className={stylex.props(styles.actions).className}
             flex={1}
             gap={4}
             justify={'flex-end'}

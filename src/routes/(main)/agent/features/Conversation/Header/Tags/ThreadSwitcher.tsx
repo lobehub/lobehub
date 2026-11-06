@@ -1,85 +1,63 @@
 'use client';
 
-import { createStaticStyles, cx, Flexbox, Popover } from '@lobehub/ui';
+import { Flexbox, Popover } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useChatStore } from '@/store/chat';
 import { threadSelectors } from '@/store/chat/selectors';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  item: css`
-    cursor: pointer;
-
-    overflow: hidden;
-
-    padding-block: 6px;
-    padding-inline: 10px;
-    border-radius: 6px;
-
-    font-size: 13px;
-    color: ${cssVar.colorText};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-
-    transition: background 0.15s;
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  itemActive: css`
-    font-weight: 600;
-    background: ${cssVar.colorFillSecondary};
-
-    &:hover {
-      background: ${cssVar.colorFillSecondary};
-    }
-  `,
-  trigger: css`
-    cursor: pointer;
-
-    overflow: hidden;
-    display: inline-block;
-
-    min-width: 0;
-    padding-block: 2px;
-    padding-inline: 6px;
-    border: none;
-    border-radius: 6px;
-
-    font-size: 14px;
-    font-weight: 600;
-    line-height: 1.5;
-    color: ${cssVar.colorText};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-
-    background: transparent;
-    outline: none;
-
-    transition: background 0.15s;
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-
-    &:focus {
-      outline: none;
-      box-shadow: none;
-    }
-
-    /* Keep a visible landmark for keyboard focus (mirrors DeviceCard). */
-    &:focus-visible {
-      outline: 2px solid ${cssVar.colorPrimary};
-      outline-offset: -1px;
-    }
-
-    &[data-popup-open] {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-}));
+const styles = stylex.create({
+  item: {
+    cursor: 'pointer',
+    overflow: 'hidden',
+    paddingBlock: '6px',
+    paddingInline: '10px',
+    borderRadius: '6px',
+    fontSize: '13px',
+    color: cssVar.colorText,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: 'none',
+    transition: 'background 0.15s',
+  },
+  itemActive: {
+    fontWeight: 600,
+    backgroundColor: cssVar.colorFillSecondary,
+    backgroundImage: 'none',
+  },
+  trigger: {
+    cursor: 'pointer',
+    overflow: 'hidden',
+    display: 'inline-block',
+    minWidth: 0,
+    paddingBlock: '2px',
+    paddingInline: '6px',
+    borderWidth: 0,
+    borderStyle: 'none',
+    borderRadius: '6px',
+    fontSize: '14px',
+    fontWeight: 600,
+    lineHeight: 1.5,
+    color: cssVar.colorText,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    backgroundColor: { 'default': 'transparent', ':hover': cssVar.colorFillTertiary },
+    backgroundImage: 'none',
+    outline: {
+      'default': 'none',
+      // Keep a visible landmark for keyboard focus (mirrors DeviceCard).
+      ':focus-visible': `2px solid ${cssVar.colorPrimary}`,
+    },
+    outlineOffset: { 'default': null, ':focus-visible': '-1px' },
+    boxShadow: { 'default': null, ':focus': 'none' },
+    transition: 'background 0.15s',
+  },
+  triggerOpen: { backgroundColor: cssVar.colorFillTertiary },
+});
 
 interface ThreadSwitcherProps {
   title: string;
@@ -90,7 +68,6 @@ const ThreadSwitcher = memo<ThreadSwitcherProps>(({ title }) => {
   const activeThreadId = useChatStore((s) => s.activeThreadId);
   const threads = useChatStore(threadSelectors.currentTopicThreads);
   const switchThread = useChatStore((s) => s.switchThread);
-
   const [open, setOpen] = useState(false);
 
   const handleSwitch = (id: string) => {
@@ -113,8 +90,8 @@ const ThreadSwitcher = memo<ThreadSwitcherProps>(({ title }) => {
     >
       {threads.map((thread) => (
         <div
-          className={cx(styles.item, thread.id === activeThreadId && styles.itemActive)}
           key={thread.id}
+          {...stylex.props(styles.item, thread.id === activeThreadId && styles.itemActive)}
           onClick={() => handleSwitch(thread.id)}
         >
           {thread.title || t('thread.title')}
@@ -126,7 +103,7 @@ const ThreadSwitcher = memo<ThreadSwitcherProps>(({ title }) => {
   return (
     <Popover
       arrow={false}
-      classNames={{ trigger: styles.trigger }}
+      classNames={{ trigger: stylex.props(styles.trigger, open && styles.triggerOpen).className }}
       content={content}
       nativeButton={false}
       open={open}

@@ -8,7 +8,9 @@ import {
   isServerDefaultHeterogeneousAgentType,
 } from '@lobechat/heterogeneous-agents';
 import type { HeterogeneousApiConfig, HeterogeneousAuthMode } from '@lobechat/types';
-import { Alert, Button, createStaticStyles, cssVar, Flexbox } from '@lobehub/ui';
+import { Alert, Button, Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
 import { ChevronDown, MonitorSmartphone, Wrench } from 'lucide-react';
 import React, { memo } from 'react';
@@ -41,26 +43,20 @@ import WorkspaceAgentDevicePolicy from './WorkspaceAgentDevicePolicy';
 import { WorkspaceAgentModelPolicy } from './WorkspaceAgentModelPolicy';
 import { WorkspaceAgentPolicyCard } from './WorkspaceAgentPolicyCard';
 
-const styles = createStaticStyles(({ css }) => ({
-  configLabel: css`
-    font-size: 12px;
-    line-height: 1;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  configStack: css`
-    container-type: inline-size;
-  `,
-  configPanel: css`
-    padding: 24px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  topArea: css`
-    cursor: default;
-    margin-block-end: 28px;
-  `,
-}));
+const styles = stylex.create({
+  configLabel: { fontSize: '12px', lineHeight: 1, color: cssVar.colorTextTertiary },
+  configStack: { containerType: 'inline-size' },
+  configPanel: {
+    padding: '24px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  topArea: { cursor: 'default', marginBlockEnd: '28px' },
+});
 
 const ProfileEditor = memo(() => {
   const { t } = useTranslation(['setting', 'agent']);
@@ -265,7 +261,7 @@ const ProfileEditor = memo(() => {
   return (
     <>
       <Flexbox
-        className={styles.topArea}
+        className={stylex.props(styles.topArea).className}
         onClick={(e) => {
           e.stopPropagation();
         }}
@@ -273,7 +269,7 @@ const ProfileEditor = memo(() => {
         {/* Header: Avatar + Name + Description */}
         <AgentHeader />
         <Flexbox
-          className={styles.configStack}
+          className={stylex.props(styles.configStack).className}
           gap={8}
           paddingBlock={isRemoteHetero ? '8px 0' : undefined}
         >
@@ -319,9 +315,11 @@ const ProfileEditor = memo(() => {
               </WorkspaceAgentPolicyCard>
             </>
           ) : (
-            <Flexbox className={styles.configPanel} gap={10}>
+            <Flexbox className={stylex.props(styles.configPanel).className} gap={10}>
               <Flexbox horizontal align={'center'} gap={12} justify={'space-between'}>
-                <div className={styles.configLabel}>{t('settingAgent.runtimeConfig.title')}</div>
+                <div {...stylex.props(styles.configLabel)}>
+                  {t('settingAgent.runtimeConfig.title')}
+                </div>
                 <RunPriorityHint agentId={agentId} />
               </Flexbox>
               <Flexbox horizontal align={'center'} gap={12} justify={'flex-start'} wrap={'wrap'}>
