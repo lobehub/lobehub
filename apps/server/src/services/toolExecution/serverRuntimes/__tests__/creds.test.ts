@@ -5,8 +5,13 @@ import { MarketService } from '@/server/services/market';
 import { type ToolExecutionContext } from '../../types';
 import { credsRuntime, ServerCredsService } from '../creds';
 
-const { getMember } = vi.hoisted(() => ({
+const { getMember, resolveSandboxSessionConfig } = vi.hoisted(() => ({
   getMember: vi.fn(),
+  resolveSandboxSessionConfig: vi.fn(),
+}));
+
+vi.mock('@/server/services/sandbox', () => ({
+  resolveSandboxSessionConfig,
 }));
 
 vi.mock('@/database/models/workspaceMember', () => ({
@@ -25,6 +30,11 @@ describe('credsRuntime', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     getMember.mockResolvedValue({ role: 'member' });
+    resolveSandboxSessionConfig.mockResolvedValue({
+      claim: null,
+      drive: 'personal',
+      mode: 'ephemeral',
+    });
   });
 
   it('signs verified workspace context into the Market trusted-client identity', async () => {
@@ -118,6 +128,69 @@ describe('credsRuntime', () => {
 
     expect(result.success).toBe(false);
     expect(result.error?.message).toContain('unavailable in shared conversations');
+  });
+
+  // Regression test (T-11862): injection is often a topic's first sandbox
+  // call, so it creates the session. Without the topic's placement it landed
+  // in the throwaway sandbox, and the next drive/persistent `runCommand`
+  // replaced that sandbox — "session expired and was recreated", with no
+  // credential variables and no ~/.creds left. The request has to name the
+  // same sandbox the cloud-sandbox runtime's commands do.
+  it('injects into the sandbox the topic commands run in', async () => {
+    resolveSandboxSessionConfig.mockResolvedValue({
+      claim: { key: 'claim' },
+      drive: 'personal',
+      environment: 'instance-1',
+      mode: 'persistent',
+      specification: { internetAccess: true },
+    });
+    const inject = vi.fn().mockResolvedValue({ success: true });
+    vi.mocked(MarketService).mockImplementation(function () {
+      return { market: { creds: { inject } } } as any;
+    });
+
+    const runtime = await credsRuntime.factory({
+      toolManifestMap: {},
+      topicId: 'topic-1',
+      userId: 'user-1',
+    });
+
+    await (runtime as any).injectCredsToSandbox({ keys: ['aliyun-ram'] });
+
+    expect(inject).toHaveBeenCalledWith(
+      expect.objectContaining({
+        keys: ['aliyun-ram'],
+        sandboxInstanceId: 'instance-1',
+        sandboxMode: 'persistent',
+        sandboxSpecification: { internetAccess: true },
+        topicId: 'topic-1',
+      }),
+    );
+  });
+
+  it('names a drive placement without an instance', async () => {
+    resolveSandboxSessionConfig.mockResolvedValue({
+      claim: { key: 'claim' },
+      cwd: 'projects/demo',
+      drive: 'personal',
+      mode: 'drive',
+    });
+    const inject = vi.fn().mockResolvedValue({ success: true });
+    vi.mocked(MarketService).mockImplementation(function () {
+      return { market: { creds: { inject } } } as any;
+    });
+
+    const runtime = await credsRuntime.factory({
+      toolManifestMap: {},
+      topicId: 'topic-1',
+      userId: 'user-1',
+    });
+
+    await (runtime as any).injectCredsToSandbox({ keys: ['github'] });
+
+    const [request] = inject.mock.calls[0];
+    expect(request.sandboxMode).toBe('drive');
+    expect(request.sandboxInstanceId).toBeUndefined();
   });
 });
 
