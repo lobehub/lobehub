@@ -117,27 +117,16 @@ describe('settings useCategory', () => {
     expect(getItemKeys()).not.toContain(SettingsTabs.OAuthApps);
   });
 
-  it('shows Integrations in the Account group without any Labs flag', () => {
-    const { result } = renderHook(() => useCategory(), { wrapper: createWrapper(true) });
-    const accountGroup = result.current.find((group) => group.key === SettingsGroupKey.Account);
-    expect(accountGroup?.items.map((item) => item.key)).toContain(SettingsTabs.Integrations);
-  });
-
-  // The drives are what a persistent sandbox run keeps files on. Every Cloud
-  // account can reach them with no opt-in; a self-hosted deployment has no
-  // drive service, so it gets no tab.
-  it('shows Storage beside Environments wherever business features are on', () => {
-    expect(getItemKeys()).not.toContain(SettingsTabs.Drive);
-
+  // The sandbox drives moved to Docs → Sandbox Storage; settings keep only the
+  // environment definitions.
+  it('keeps Environments in settings without a sandbox storage tab', () => {
     const { result } = renderHook(() => useCategory(), {
       wrapper: createWrapper(true, true),
     });
     const generalGroup = result.current.find((group) => group.key === SettingsGroupKey.General);
-    expect(generalGroup?.items.map((item) => item.key)).toEqual(
-      expect.arrayContaining([SettingsTabs.Environments, SettingsTabs.Drive]),
-    );
     const keys = generalGroup!.items.map((item) => item.key);
-    expect(keys.indexOf(SettingsTabs.Drive)).toBe(keys.indexOf(SettingsTabs.Environments) + 1);
+    expect(keys).toContain(SettingsTabs.Environments);
+    expect(keys).not.toContain('drive');
   });
 
   it('shows OAuth Apps when the Labs preference is enabled', () => {

@@ -45,6 +45,7 @@ import {
   ConnectorOwnershipInjector,
   ContextSelectionsInjector,
   DiscordContextProvider,
+  DocumentReferenceContextInjector,
   EvalContextSystemInjector,
   ExpertiseContextInjector,
   ForceFinishSummaryInjector,
@@ -87,6 +88,7 @@ const log = debug('context-engine:MessagesEngine');
 
 /** `AttachmentsIdentifier` from `@lobechat/builtin-tool-attachments`, inlined to avoid a package cycle */
 const ATTACHMENTS_TOOL_ID = 'lobe-attachments';
+const AGENT_DOCUMENTS_TOOL_ID = 'lobe-agent-documents';
 
 /**
  * MessagesEngine - High-level message processing engine
@@ -200,6 +202,7 @@ export class MessagesEngine {
       initialContext,
       stepContext,
       topicReferences,
+      documentReferences,
       enableSystemDate,
       timezone,
     } = this.params;
@@ -253,6 +256,9 @@ export class MessagesEngine {
     // Oversized file previews may only promise `readAttachment` when the model is actually sent that
     // tool; custom / exclusive tool modes, share visitors and clients without it get a plain preview.
     const canReadAttachment = toolIds.includes(ATTACHMENTS_TOOL_ID) && !!canUseFC(model, provider);
+    // Same gate for referenced agent documents: only point at `readDocument` when it is sent.
+    const canReadDocuments =
+      toolIds.includes(AGENT_DOCUMENTS_TOOL_ID) && !!canUseFC(model, provider);
     const injectedActivatedSkills =
       isAgentMode && (skillsConfig?.enabledSkills?.length ?? 0) > 0
         ? selectActivatedSkills(skillsConfig?.enabledSkills)
@@ -468,6 +474,12 @@ export class MessagesEngine {
       new TopicReferenceContextInjector({
         enabled: !!(topicReferences && topicReferences.length > 0),
         topicReferences,
+      }),
+      // Document Reference context (dragged/referenced agent documents to last user message)
+      new DocumentReferenceContextInjector({
+        canReadDocuments,
+        documentReferences,
+        enabled: !!(documentReferences && documentReferences.length > 0),
       }),
 
       // =============================================

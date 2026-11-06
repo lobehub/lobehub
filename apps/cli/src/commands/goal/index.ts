@@ -20,6 +20,7 @@ import { confirm, outputJson, printTable, truncate } from '../../utils/format';
 import { log } from '../../utils/logger';
 import { resolveAppUrlBuilder } from '../task/url';
 import { registerGoalAccessCommands } from './access';
+import { registerGoalArchiveCommands } from './archive';
 import {
   ensureCreatedGoalTaskModel,
   parseGoalModelConfig,
@@ -863,6 +864,7 @@ export function registerGoalCommand(program: Command) {
     .option('--agent <id>', 'Filter by responsible agent')
     .option('--project <id>', 'Filter by project')
     .option('--status <status...>', 'Filter by lifecycle status')
+    .option('--archived', 'List only archived goals (hidden otherwise)')
     .option('--limit <n>', 'Maximum rows', '50')
     .option('--json [fields]', 'Output JSON')
     .action(async (options) => {
@@ -870,6 +872,7 @@ export function registerGoalCommand(program: Command) {
         await getTrpcClient()
       ).goal.list.query({
         agentId: options.agent,
+        archived: options.archived || undefined,
         limit: Number.parseInt(options.limit, 10),
         projectId: options.project,
         statuses: options.status,
@@ -1185,6 +1188,7 @@ export function registerGoalCommand(program: Command) {
     );
 
   registerGoalAccessCommands(goal);
+  registerGoalArchiveCommands(goal);
   registerGoalAssignmentCommands(goal);
 
   goal

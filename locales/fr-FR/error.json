@@ -89,7 +89,6 @@
   "response.GoogleAIBlockReason.SAFETY": "Le contenu a été bloqué pour des raisons de sécurité. Veuillez l'ajuster et réessayer.",
   "response.GoogleAIBlockReason.SPII": "Le contenu peut inclure des informations personnelles sensibles (SPII). Veuillez supprimer les détails sensibles et réessayer.",
   "response.GoogleAIBlockReason.default": "Le contenu a été bloqué ({{blockReason}}). Veuillez l'ajuster et réessayer.",
-  "response.InsufficientBudgetForModel": "Vos crédits restants sont insuffisants pour ce modèle. Veuillez recharger vos crédits, passer à un plan supérieur ou essayer un modèle moins coûteux.",
   "response.InvalidAccessCode": "Code d'accès invalide ou vide. Veuillez entrer le bon code ou ajouter une clé API personnalisée.",
   "response.LobeHubModelDeprecated": "Le modèle \"{{model}}\" n'est plus disponible. Veuillez choisir un modèle actuel dans le sélecteur de modèles.",
   "response.ModelContentModerationCooldown": "Cette demande n'a pas pu utiliser le modèle sélectionné ou les modèles associés en raison d'une restriction temporaire de sécurité de contenu. Réessayez plus tard ou choisissez un autre modèle.",
@@ -122,8 +121,6 @@
   "response.RemoteServerTimeout": "La connexion au serveur a expiré. Cela indique généralement un problème de réseau local — veuillez vérifier la qualité de votre réseau, vos paramètres de proxy ou de VPN et réessayer.",
   "response.RemoteServerUnreachable": "Le serveur n'a pas pu être atteint. Cela indique généralement un problème de réseau local — veuillez vérifier votre connexion internet, vos paramètres de proxy ou de VPN et réessayer.",
   "response.ServerAgentRuntimeError": "Désolé, le service Agent est actuellement indisponible. Veuillez réessayer plus tard ou nous contacter par e-mail.",
-  "response.SubscriptionPlanLimit": "Votre quota d'abonnement est épuisé. Veuillez passer à un plan supérieur ou configurer une API personnalisée.",
-  "response.SubscriptionPlanLimitUltimate": "Votre quota d'abonnement est épuisé. Veuillez recharger votre crédit ou configurer une API personnalisée.",
   "response.SystemTimeNotMatchError": "Désolé, l'heure de votre système ne correspond pas à celle du serveur. Veuillez la corriger et réessayer.",
   "response.UnknownChatFetchError": "Désolé, une erreur inconnue s'est produite. Veuillez consulter les informations ci-dessous ou réessayer.",
   "response.UnreadableServerResponse": "Le serveur a renvoyé une réponse que l'application n'a pas pu lire. Il s'agit généralement d'un problème temporaire de réseau ou de passerelle — veuillez réessayer dans un instant.",
@@ -213,13 +210,9 @@
   "workspaceFrozenByAdmin.frozenAt": "Gelé le",
   "workspaceFrozenByAdmin.reason": "Raison",
   "workspaceFrozenByAdmin.title": "L'espace de travail est gelé",
-  "workspaceFrozenByRiskControl.available": "Crédits disponibles",
-  "workspaceFrozenByRiskControl.bannerDescription": "Ajoutez des crédits pour reprendre les dépenses.",
   "workspaceFrozenByRiskControl.bannerHint": "Cliquez pour plus de détails",
   "workspaceFrozenByRiskControl.bannerTitle": "Espace de travail gelé par le contrôle des risques",
   "workspaceFrozenByRiskControl.contactSupport": "Contacter le support",
-  "workspaceFrozenByRiskControl.description": "Cet espace de travail a été automatiquement gelé par le contrôle des risques après la détection de dépenses anormales. Contactez le support pour examiner et demander le dégel.",
   "workspaceFrozenByRiskControl.frozenAt": "Gelé le",
-  "workspaceFrozenByRiskControl.title": "Espace de travail automatiquement gelé par le contrôle des risques",
-  "workspaceFrozenByRiskControl.topup": "Recharger des crédits"
+  "workspaceFrozenByRiskControl.title": "Espace de travail automatiquement gelé par le contrôle des risques"
 }

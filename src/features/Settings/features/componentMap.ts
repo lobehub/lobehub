@@ -59,9 +59,6 @@ export const componentMap = {
   [SettingsTabs.Devices]: dynamic(() => import('../devices'), {
     loading: loading('Settings > Devices'),
   }),
-  [SettingsTabs.Drive]: dynamic(() => import('../drive'), {
-    loading: loading('Settings > Drive'),
-  }),
   [SettingsTabs.Environments]: dynamic(() => import('../environments'), {
     loading: loading('Settings > Environments'),
   }),

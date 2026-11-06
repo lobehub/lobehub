@@ -80,4 +80,14 @@ describe('createProjectForm', () => {
       ),
     ).toEqual({ coordinatorAgentId: 'agt_1', name: 'Launch', slug: 'launch' });
   });
+
+  it('sends neither a project type nor a site, whatever the caller passes', () => {
+    expect(
+      buildCreateProjectRequest({ name: 'Launch' }, {
+        mainAgentMode: 'dedicated',
+        siteOrigin: 'https://launch.dev',
+        type: 'web',
+      } as never),
+    ).toEqual({ name: 'Launch' });
+  });
 });

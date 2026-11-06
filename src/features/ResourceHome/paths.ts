@@ -3,12 +3,15 @@ import { FilesTabs } from '@/types/files';
 import { getIdFromIdentifier, standardizeIdentifier } from '@/utils/identifier';
 
 /**
- * Docs (`/resource`) has four sections: the home dashboard, the drive (every
- * uploaded file by type), the library gallery and the Works gallery. Paths are
- * written without the workspace prefix; navigation adds it.
+ * Docs (`/resource`) has five sections: the home dashboard, the drive (every
+ * uploaded file by type), the cloud sandbox's storage, the library gallery and
+ * the Works gallery. Paths are written without the workspace prefix;
+ * navigation adds it.
  */
 export const RESOURCE_HOME_PATH = '/resource';
 export const DRIVE_PATH = '/resource/drive';
+/** The cloud sandbox's drives (public / personal) and their usage. */
+export const SANDBOX_STORAGE_PATH = '/resource/sandbox-storage';
 export const LIBRARY_INDEX_PATH = '/resource/library';
 export const WORKS_PATH = '/resource/works';
 
@@ -116,7 +119,7 @@ export const resolveResourceRoute = (
   return { kind: 'redirect', to: RESOURCE_HOME_PATH };
 };
 
-export type DocsSection = 'drive' | 'home' | 'library' | 'works';
+export type DocsSection = 'drive' | 'home' | 'library' | 'sandboxStorage' | 'works';
 
 /**
  * Which top-level Docs section a pathname belongs to. Business routes under
@@ -131,6 +134,7 @@ export const resolveDocsSection = (
   const [section] = segments;
   if (!section) return 'home';
   if (section === 'drive') return 'drive';
+  if (section === 'sandbox-storage') return 'sandboxStorage';
   if (section === 'library') return 'library';
   if (section === 'works') return 'works';
   if (worksPaths.includes(`${RESOURCE_HOME_PATH}/${section}`)) return 'works';

@@ -25,11 +25,19 @@ const conversationKey = (s: State): string => {
   });
 };
 
+/**
+ * The key this conversation's composer files its draft, uploads and context
+ * selections under. Unlike `conversationKey` it keeps `documentId`, so a page
+ * copilot gets its own key.
+ */
+const composerKey = (s: State): string => messageMapKey(s.context);
+
 const hooks = (s: State) => s.hooks;
 const hook = (hookName: keyof State['hooks']) => (s: State) => s.hooks[hookName];
 
 export const contextSelectors = {
   agentId,
+  composerKey,
   context,
   conversationKey,
   groupId,

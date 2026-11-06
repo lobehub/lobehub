@@ -27,12 +27,13 @@ import { goalKeys } from '@/libs/swr/keys';
 import { aiChatService } from '@/services/aiChat';
 import { type GoalListItem, goalService } from '@/services/goal';
 import { type MetricSeriesWithPoints, metricService } from '@/services/metric';
+import { taskGroupListResource, taskListResource } from '@/store/task/slices/list/projection';
 import type { StoreSetter } from '@/store/types';
 import { useUserStore } from '@/store/user';
 import { systemAgentSelectors, userGeneralSettingsSelectors } from '@/store/user/selectors';
 import { isTrpcErrorCode } from '@/utils/trpcError';
 
-import { goalStatusesForFilter } from './goalListFilter';
+import { goalArchivedForFilter, goalStatusesForFilter } from './goalListFilter';
 import { buildGoalTitleMessages } from './goalTitle';
 import { useGoalStore } from './index';
 import type { GoalListFilter, GoalState, GoalViewMode } from './initialState';
@@ -213,6 +214,7 @@ export class GoalActionImpl {
       fetcher: ({ agentId, filter, projectId }) =>
         goalService.list({
           agentId,
+          archived: goalArchivedForFilter(filter),
           limit: GOAL_LIST_FETCH_LIMIT,
           projectId,
           statuses: goalStatusesForFilter(filter),
@@ -342,6 +344,32 @@ export class GoalActionImpl {
   pauseGoal = async (goalId: string): Promise<void> => {
     await goalService.pause(goalId);
     await this.refreshGoalGraph(goalId);
+  };
+
+  /**
+   * Archive a goal, or restore it. The row moves between every list's ordinary
+   * tabs and its Archived tab, so it leaves every list it is held in at once
+   * and each list — loaded tabs, the home rail — re-reads where it belongs now.
+   * The goal's Tasks are archived and restored with it, so the task lists and
+   * boards re-read too.
+   */
+  archiveGoal = async (goalId: string, archived: boolean): Promise<void> => {
+    await goalService.archive(goalId, archived);
+    this.#goalListRows.remove(goalId);
+    // The archive has landed; a refresh that fails afterwards is a stale view,
+    // not a failed archive, so it is logged rather than reported as one.
+    const refreshes = await Promise.allSettled([
+      this.refreshGoalGraph(goalId),
+      revalidateReplica(goalListResource),
+      revalidateReplica(homeGoalListResource),
+      revalidateReplica(topicGoalListResource),
+      revalidateReplica(taskListResource),
+      revalidateReplica(taskGroupListResource),
+    ]);
+    for (const result of refreshes) {
+      if (result.status === 'rejected')
+        console.error('[goal:archive] refresh failed after archiving', result.reason);
+    }
   };
 
   closeGoal = async (goalId: string, status: 'achieved' | 'canceled'): Promise<void> => {

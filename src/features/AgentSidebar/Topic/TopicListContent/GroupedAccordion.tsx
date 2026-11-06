@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 
 import NavItem from '@/features/NavPanel/components/NavItem';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
+import { useLocalMachineDeviceIds } from '@/hooks/useLocalMachineDeviceIds';
 import { useTopicGroupCollapse } from '@/hooks/useTopicGroupCollapse';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
@@ -46,6 +47,7 @@ const GroupedAccordion = memo<GroupedAccordionProps>(({ GroupItem }) => {
     s.activeTopicId,
   ]);
 
+  const localDeviceIds = useLocalMachineDeviceIds();
   const groupSelector = useMemo(
     () =>
       topicSelectors.groupedTopicsForSidebar(
@@ -53,8 +55,9 @@ const GroupedAccordion = memo<GroupedAccordionProps>(({ GroupItem }) => {
         topicSortBy,
         topicGroupMode,
         topicIncludeCompleted,
+        localDeviceIds,
       ),
-    [topicPageSize, topicSortBy, topicGroupMode, topicIncludeCompleted],
+    [topicPageSize, topicSortBy, topicGroupMode, topicIncludeCompleted, localDeviceIds],
   );
   const agentGroups = useChatStore(groupSelector, isEqual);
   const scoped = useScopedSidebarTopics(

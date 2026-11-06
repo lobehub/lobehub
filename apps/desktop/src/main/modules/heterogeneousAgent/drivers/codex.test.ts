@@ -268,6 +268,7 @@ describe('withCodexContextArgs', () => {
   it('reaches the app-server thread config as plain strings', () => {
     const params = buildCodexAppServerThreadParams(withCodexContextArgs('codex', env), '/work');
     expect(params.config).toEqual({
+      'features.default_mode_request_user_input': true,
       'shell_environment_policy.set.LOBEHUB_AGENT_ID': 'agt_1',
       'shell_environment_policy.set.LOBEHUB_CLI': cliPath,
       'shell_environment_policy.set.LOBEHUB_OPERATION_ID': 'op "1"',

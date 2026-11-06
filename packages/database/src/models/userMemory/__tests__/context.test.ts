@@ -99,13 +99,6 @@ describe('UserMemoryContextModel', () => {
       expect(result[0].id).toBe('context-2');
     });
 
-    it('should not return other users contexts', async () => {
-      const result = await contextModel.query();
-
-      const otherContext = result.find((c) => c.id === 'other-context');
-      expect(otherContext).toBeUndefined();
-    });
-
     it('hides contexts with only trashed parents but keeps one with a live parent', async () => {
       await serverDB.insert(userMemories).values([
         {

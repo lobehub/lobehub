@@ -4,8 +4,10 @@ import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { ChevronDownIcon, ChevronUpIcon } from 'lucide-react';
 import type { CSSProperties, ReactNode } from 'react';
-import { memo, useRef } from 'react';
+import { memo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { REVEAL_IN_PAGE_EVENT, type RevealInPageEvent } from '@/utils/findInDom';
 
 import { useCollapsible } from './useCollapsible';
 
@@ -85,6 +87,7 @@ const CollapsibleContent = memo<CollapsibleContentProps>(
     const contentRef = useRef<HTMLDivElement | null>(null);
 
     const {
+      expand,
       isCollapsed,
       maxHeight,
       shouldCollapse,
@@ -98,6 +101,20 @@ const CollapsibleContent = memo<CollapsibleContentProps>(
       onOverflowChange,
       overflowThreshold,
     });
+
+    // Find in page landed on text clipped by the clamp: open so it can be seen.
+    useEffect(() => {
+      const content = contentRef.current;
+      if (!content || !isCollapsed) return;
+      const handleReveal = (event: Event) => {
+        const { bottom } = (event as RevealInPageEvent).detail;
+        const fade = Math.min(DEFAULT_FADE_HEIGHT, maxHeight * FADE_RATIO);
+        // Text under the fade mask counts as hidden too.
+        if (bottom > content.getBoundingClientRect().bottom - fade) expand();
+      };
+      content.addEventListener(REVEAL_IN_PAGE_EVENT, handleReveal);
+      return () => content.removeEventListener(REVEAL_IN_PAGE_EVENT, handleReveal);
+    }, [expand, isCollapsed, maxHeight]);
 
     return (
       <div {...stylex.props(styles.container)}>

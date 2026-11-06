@@ -436,6 +436,7 @@ export interface ListHeterogeneousAgentModelsParams {
   type:
     | 'codebuddy'
     | 'codex'
+    | 'copilot'
     | 'cursor'
     | 'devin'
     | 'droid'

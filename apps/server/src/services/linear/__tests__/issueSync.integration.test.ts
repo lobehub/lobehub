@@ -1,7 +1,11 @@
 // @vitest-environment node
 import { type LobeChatDatabase } from '@lobechat/database';
 import { getTestDB } from '@lobechat/database/test-utils';
-import { LINEAR_DEFAULT_IMPORT_STATE_TYPES, LINEAR_OPEN_ISSUE_STATE_TYPES } from '@lobechat/types';
+import {
+  LINEAR_DEFAULT_IMPORT_STATE_TYPES,
+  LINEAR_NO_PROJECT_ID,
+  LINEAR_OPEN_ISSUE_STATE_TYPES,
+} from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -188,6 +192,32 @@ describe('LinearIssueSyncService (real PostgreSQL)', () => {
         teamId: 'team-pkg',
       }),
     ).rejects.toThrow('timeout');
+  });
+
+  it('syncs a team’s issues without a project, never looking No project up as a project', async () => {
+    const noProjectFilter = {
+      linearProjectId: LINEAR_NO_PROJECT_ID,
+      stateTypes: [...filter.stateTypes],
+      teamId: TEAM,
+    };
+    serve([issue({ id: '1' })]);
+    const service = new LinearIssueSyncService(db, userId);
+    expect((await service.syncByFilter(TOKEN, noProjectFilter)).created).toBe(1);
+
+    // Moved into a project and closed there: the team-wide closing pass still closes it.
+    linear.listLinearIssues.mockResolvedValue({ hasMore: false, issues: [] });
+    linear.getLinearIssuesByIds.mockResolvedValue([
+      issue({
+        id: '1',
+        project: { id: 'project-1', name: 'Later' },
+        state: { name: 'Done', type: 'completed' },
+      }),
+    ]);
+    const result = await service.syncByFilter(TOKEN, noProjectFilter);
+
+    expect(linear.getLinearProjectTeamIds).not.toHaveBeenCalled();
+    expect(result.closed).toBe(1);
+    expect((await linkedTask('1'))?.status).toBe('completed');
   });
 
   it('does not interrupt a running task when its issue is closed', async () => {
@@ -829,5 +859,89 @@ describe('LinearIssueSyncService comments (real PostgreSQL)', () => {
     await expect(service.importIssues(TOKEN, ['1'], { syncComments: true })).rejects.toThrow(
       'revoked',
     );
+  });
+});
+
+describe('LinearIssueSyncService archived issues (real PostgreSQL, Linear over fetch)', () => {
+  /** Linear's own rule: archived issues are left out unless the query asks for them. */
+  let linearIssues: (LinearIssue & { archived?: boolean })[] = [];
+
+  beforeEach(async () => {
+    const actual = await vi.importActual<typeof IssuesModule>('../issues');
+    linear.listLinearIssues.mockImplementation(actual.listLinearIssues);
+    linear.getLinearIssuesByIds.mockImplementation(actual.getLinearIssuesByIds);
+    linear.getLinearProjectTeamIds.mockImplementation(actual.getLinearProjectTeamIds);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_url: string, init: RequestInit) => {
+        const { query, variables } = JSON.parse(init.body as string) as {
+          query: string;
+          variables: { filter?: any; includeArchived?: boolean };
+        };
+        const includeArchived =
+          variables.includeArchived === true || query.includes('includeArchived: true');
+        const { filter: where = {} } = variables;
+        const nodes = linearIssues
+          .filter((item) => includeArchived || !item.archived)
+          .filter((item) => !where.id || where.id.in.includes(item.id))
+          .filter((item) => !where.state || where.state.type.in.includes(item.state.type))
+          .filter((item) => !where.team || item.team.id === where.team.id.eq)
+          .map(({ archived: _archived, ...rest }) => rest);
+        return new Response(
+          JSON.stringify({
+            data: { issues: { nodes, pageInfo: { endCursor: null, hasNextPage: false } } },
+          }),
+          { status: 200 },
+        );
+      }),
+    );
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    linearIssues = [];
+  });
+
+  const done = { name: 'Done', type: 'completed' } as const;
+
+  it('syncs archived issues of a rule only when the run asks for them', async () => {
+    linearIssues = [
+      issue({ id: '1', state: done }),
+      { ...issue({ id: '2', state: done }), archived: true },
+    ];
+    const service = new LinearIssueSyncService(db, userId);
+    const rule = { stateTypes: ['completed' as const], teamId: TEAM };
+
+    const plain = await service.syncByFilter(TOKEN, rule);
+    expect(plain.created).toBe(1);
+    expect(await linkedTask('2')).toBeNull();
+
+    const withArchived = await service.syncByFilter(TOKEN, { ...rule, includeArchived: true });
+    expect(withArchived).toMatchObject({ created: 1, unchanged: 1 });
+    expect((await linkedTask('2'))?.status).toBe('completed');
+  });
+
+  it('imports a picked archived issue instead of reporting it missing', async () => {
+    linearIssues = [{ ...issue({ id: '1', state: done }), archived: true }];
+
+    const result = await new LinearIssueSyncService(db, userId).importIssues(TOKEN, ['1']);
+
+    expect(result).toMatchObject({ created: 1, skipped: [], skippedCount: 0 });
+    expect((await linkedTask('1'))?.status).toBe('completed');
+  });
+
+  it('closes the task of a linked issue Linear completed and archived since', async () => {
+    linearIssues = [issue({ id: '1' })];
+    const service = new LinearIssueSyncService(db, userId);
+    await service.syncByFilter(TOKEN, { ...filter, stateTypes: [...filter.stateTypes] });
+
+    linearIssues = [{ ...issue({ id: '1', state: done }), archived: true }];
+    const result = await service.syncByFilter(TOKEN, {
+      ...filter,
+      stateTypes: [...filter.stateTypes],
+    });
+
+    expect(result.closed).toBe(1);
+    expect((await linkedTask('1'))?.status).toBe('completed');
   });
 });

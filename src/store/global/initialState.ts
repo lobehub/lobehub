@@ -45,6 +45,7 @@ export type WorkingSidebarTab =
   | 'files'
   | 'overview'
   | 'params'
+  | 'pr'
   | 'review'
   | 'search'
   | 'skills'
@@ -79,8 +80,6 @@ export enum SettingsTabs {
   Credits = 'credits',
   Creds = 'credential',
   Devices = 'devices',
-  /** The cloud sandbox's network drives — labelled “Storage”; `storage` is local data. */
-  Drive = 'drive',
   Environments = 'environments',
   Hotkey = 'hotkey',
   /** @deprecated Use ServiceModel instead */
@@ -253,6 +252,7 @@ export interface SystemStatus {
    * in the Home inbox. Append-only and capped, see `appendDismissedIslandKey`.
    */
   dismissedIslandItemKeys?: string[];
+  dismissedProjectOnboarding?: Record<string, boolean>;
   /**
    * List options of each Docs sidebar page section, kept apart so narrowing
    * Shared docs never changes what My docs shows.
@@ -478,7 +478,8 @@ export interface SystemStatus {
      * `hideCompleted` it replaces before normalization could migrate it.
      */
     completedTasks?: 'all' | 'day' | 'month' | 'none' | 'week';
-    groupBy: 'assignee' | 'member' | 'none' | 'priority' | 'status';
+    /** `label:<groupId>` groups by one label group. */
+    groupBy: 'assignee' | 'member' | 'none' | 'priority' | 'status' | `label:${string}`;
     /** @deprecated Replaced by `completedTasks`; read once to migrate. */
     hideCompleted?: boolean;
     nestedSubTasks: boolean;
@@ -486,7 +487,7 @@ export interface SystemStatus {
     orderCompletedByRecency: boolean;
     orderDirection: 'asc' | 'desc';
     showSubTasks: boolean;
-    subGroupBy: 'assignee' | 'member' | 'none' | 'priority' | 'status';
+    subGroupBy: 'assignee' | 'member' | 'none' | 'priority' | 'status' | `label:${string}`;
   };
   /**
    * Height of the chat bottom terminal panel. Persisted so resizing survives remounts.
@@ -598,6 +599,12 @@ export interface GlobalState {
   sidebarKey: SidebarTabKey;
   status: SystemStatus;
   statusStorage: AsyncLocalStorage<SystemStatus>;
+  /**
+   * URL of the PR the mounted Working Sidebar's PR tab shows, so a Work card for
+   * the same PR can open that tab instead of leaving the app. Session state:
+   * deliberately outside the persisted `status`.
+   */
+  workingSidebarPullRequestUrl?: string;
 }
 
 export const INITIAL_STATUS = {

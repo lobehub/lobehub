@@ -115,6 +115,15 @@ describe('Labs settings page', () => {
     expect(within(splitView).getByText('stage.alpha.label')).toBeDefined();
   });
 
+  it('puts the self-evolving usage note on its own line below the description', () => {
+    renderPage();
+
+    const desc = screen.getByText('features.selfLearning.desc');
+    const note = screen.getByText('features.selfLearning.note');
+    expect(note).not.toBe(desc);
+    expect(desc.nextElementSibling).toBe(note);
+  });
+
   it('renders the OAuth Apps lab toggle', () => {
     renderPage();
 
@@ -175,8 +184,8 @@ describe('Labs settings page', () => {
     const claudeCodeSdk = screen.getByText('features.claudeCodeSdk.title');
     expect(within(claudeCodeSdk).getByText('stage.alpha.label')).toBeDefined();
 
-    const inputMarkdown = screen.getByText('features.inputMarkdown.title');
-    expect(within(inputMarkdown).getByText('stage.beta.label')).toBeDefined();
+    const goals = screen.getByText('features.goals.title');
+    expect(within(goals).getByText('stage.beta.label')).toBeDefined();
   });
 
   it('explains what each stage means via the tag tooltip', () => {

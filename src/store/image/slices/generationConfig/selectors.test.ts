@@ -207,4 +207,31 @@ describe('imageGenerationConfigSelectors', () => {
       );
     });
   });
+
+  describe('isAnimatedOutput', () => {
+    const gifSchema: ModelParamsSchema = {
+      outputFormat: { default: 'png', enum: ['png', 'gif'] },
+      prompt: { default: '' },
+    };
+
+    it('is true only when the model declares outputFormat and GIF is selected', () => {
+      const gif = merge(initialStore, {
+        parameters: { outputFormat: 'gif', prompt: '' },
+        parametersSchema: gifSchema,
+      });
+      const png = merge(initialStore, {
+        parameters: { outputFormat: 'png', prompt: '' },
+        parametersSchema: gifSchema,
+      });
+
+      expect(imageGenerationConfigSelectors.isAnimatedOutput(gif)).toBe(true);
+      expect(imageGenerationConfigSelectors.isAnimatedOutput(png)).toBe(false);
+    });
+
+    it('ignores a stale GIF value on a model without outputFormat', () => {
+      const state = merge(initialStore, { parameters: { outputFormat: 'gif', prompt: '' } });
+
+      expect(imageGenerationConfigSelectors.isAnimatedOutput(state)).toBe(false);
+    });
+  });
 });

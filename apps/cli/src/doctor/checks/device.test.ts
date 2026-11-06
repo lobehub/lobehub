@@ -209,6 +209,27 @@ describe('device.daemon', () => {
     expect(outcome.detail).toContain('left over');
   });
 
+  it('repairs only the stale process observed by the check', async () => {
+    state.daemonStatus = {
+      pid: 4,
+      connectionStatus: 'connected',
+      gatewayUrl: 'wss://gw',
+      startedAt: '',
+    };
+    const outcome = await runCheck(deviceChecks, 'device.daemon');
+    state.daemonStatus = { ...state.daemonStatus, pid: 42 };
+    const check = deviceChecks.find((item) => item.id === 'device.daemon')!;
+    await check.repair!(makeContext(), {
+      ...outcome,
+      durationMs: 0,
+      group: 'device',
+      id: check.id,
+      title: check.title,
+    });
+    expect(removePid).toHaveBeenCalledWith(4);
+    expect(removeStatus).toHaveBeenCalledWith(4);
+  });
+
   it('does not call a live daemon connected without its own report', async () => {
     state.daemonPid = 42;
     state.daemonStatus = null;

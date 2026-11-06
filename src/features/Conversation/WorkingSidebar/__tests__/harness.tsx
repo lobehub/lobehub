@@ -144,6 +144,7 @@ const globalStore = vi.hoisted(() => ({
   updateSystemStatus: vi.fn(),
   toggleRightPanel: vi.fn(),
   toggleTerminalPanel: vi.fn(),
+  setWorkingSidebarPullRequestUrl: vi.fn(),
   setWorkingSidebarTab: vi.fn(),
   status: {
     portalWidth: 400 as number | undefined,

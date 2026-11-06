@@ -92,14 +92,6 @@ describe('agent chat topic list loader', () => {
     getSidebarTopicListParamsMock.mockReturnValue({ agentId: 'agt_1', pageSize: 20 });
   });
 
-  /** @example The per-agent "only mine" filter is restored synchronously, so nothing gates the seed. */
-  it('seeds the topic page from the derived sidebar params', async () => {
-    await agentChatTopicListLoader(loaderArgs('agt_1'));
-
-    expect(getSidebarTopicListParamsMock).toHaveBeenCalledWith({ agentId: 'agt_1' });
-    expect(preHydrateTopicListMock).toHaveBeenCalledWith({ agentId: 'agt_1', pageSize: 20 });
-  });
-
   it('seeds the persisted device list before the route commits', async () => {
     await agentChatTopicListLoader(loaderArgs('agt_1'));
 

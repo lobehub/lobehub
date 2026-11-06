@@ -151,7 +151,9 @@ export const buildCodexAppServerThreadParams = (
   cwd: string,
   initialModel?: string,
 ): ThreadStartParams => {
-  const config: Record<string, JsonValue> = {};
+  const config: Record<string, JsonValue> = {
+    'features.default_mode_request_user_input': true,
+  };
   let effectiveCwd = cwd;
   let ephemeral = false;
   let model = initialModel;

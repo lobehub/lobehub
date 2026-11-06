@@ -425,6 +425,11 @@ export const deviceKeys = {
     workspaceId,
     deviceId,
   ]),
+  systemInfo: def('device:systemInfo', (workspaceId: string | null, deviceId: string) => [
+    'device:systemInfo',
+    workspaceId,
+    deviceId,
+  ]),
   browseDirectory: def(
     'device:browseDirectory',
     (workspaceId: string | null, deviceId: string, path?: string, cursor?: string) =>
@@ -542,6 +547,22 @@ export const fileKeys = {
 // with cached prefixes — e.g. share/topicInfo is `share:` not `topic:`, portal
 // header is `portal:` not `document:`.
 // =========================================================================
+
+// ---- MCP Apps (interactive tool result views) -----------------------------
+export const mcpAppKeys = {
+  resource: def(
+    'mcpApp:resource',
+    (
+      identifier: string,
+      uri: string,
+      {
+        agentId,
+        onThisDevice = false,
+        server,
+      }: { agentId?: string; onThisDevice?: boolean; server?: string },
+    ) => ['mcpApp:resource', identifier, uri, agentId ?? null, onThisDevice, server ?? null],
+  ),
+};
 
 // ---- api key (settings/apikey) -------------------------------------------
 export const apiKeyKeys = {
@@ -983,6 +1004,11 @@ export const electronKeys = {
   remoteServerConfig: def('electron:getRemoteServerConfig', () => [
     'electron:getRemoteServerConfig',
   ]),
+  /** This machine's derived device id in a workspace (local, no network). */
+  workspaceDeviceId: def('electron:getWorkspaceDeviceId', (workspaceId: string) => [
+    'electron:getWorkspaceDeviceId',
+    workspaceId,
+  ]),
 };
 
 /**
@@ -998,6 +1024,10 @@ export const matchDomain =
 /**
  * Aggregate registry — one entry point for every domain's keys.
  */
+export const taskLabelKeys = {
+  list: def('taskLabel:list', () => ['taskLabel:list'] as const),
+};
+
 export const swrKeys = {
   agent: agentConfigKeys,
   agentDocument: agentDocumentSWRKeys,
@@ -1037,6 +1067,7 @@ export const swrKeys = {
   serverConfig: serverConfigKeys,
   share: shareKeys,
   stats: statsKeys,
+  taskLabel: taskLabelKeys,
   thread: threadKeys,
   tool: toolKeys,
   topic: topicKeys,

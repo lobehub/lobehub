@@ -127,6 +127,7 @@
   "workingDirectory.refreshFolders": "Refresh folders",
   "workingDirectory.refreshGitStatus": "Refresh branch & PR status",
   "workingDirectory.removeRecent": "Remove from recent",
+  "workingDirectory.removeRecentFailed": "Could not remove this folder. Please try again.",
   "workingDirectory.removeWorktreeAction": "Delete worktree",
   "workingDirectory.removeWorktreeConfirm": "Delete worktree “{{name}}”? This removes the worktree directory but keeps its branch. Git will refuse if it has uncommitted changes.",
   "workingDirectory.removeWorktreeFailed": "Delete worktree failed",

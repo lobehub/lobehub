@@ -89,7 +89,6 @@
   "response.GoogleAIBlockReason.SAFETY": "De inhoud is geblokkeerd om veiligheidsredenen. Pas het aan en probeer het opnieuw.",
   "response.GoogleAIBlockReason.SPII": "De inhoud kan gevoelige persoonlijke informatie (SPII) bevatten. Verwijder gevoelige details en probeer het opnieuw.",
   "response.GoogleAIBlockReason.default": "De inhoud is geblokkeerd ({{blockReason}}). Pas het aan en probeer het opnieuw.",
-  "response.InsufficientBudgetForModel": "Uw resterende tegoed is onvoldoende voor dit model. Vul uw tegoed aan, upgrade uw abonnement, of probeer een goedkoper model.",
   "response.InvalidAccessCode": "Ongeldige of lege toegangscode. Voer de juiste toegangscode in of voeg een aangepaste API-sleutel toe.",
   "response.LobeHubModelDeprecated": "Het model \"{{model}}\" is niet langer beschikbaar. Kies alstublieft een actueel model uit de modelkiezer.",
   "response.ModelContentModerationCooldown": "Dit verzoek kon het geselecteerde model of gerelateerde modellen niet gebruiken vanwege een tijdelijke inhoudsveiligheidsbeperking. Probeer het later opnieuw of kies een ander model.",
@@ -122,8 +121,6 @@
   "response.RemoteServerTimeout": "De verbinding met de server is verlopen. Dit duidt meestal op een lokaal netwerkprobleem — controleer uw netwerkkwaliteit, proxy- of VPN-instellingen en probeer het opnieuw.",
   "response.RemoteServerUnreachable": "De server kon niet worden bereikt. Dit duidt meestal op een lokaal netwerkprobleem — controleer uw internetverbinding, proxy- of VPN-instellingen en probeer het opnieuw.",
   "response.ServerAgentRuntimeError": "Sorry, de Agent-service is momenteel niet beschikbaar. Probeer later opnieuw of neem contact met ons op via e-mail.",
-  "response.SubscriptionPlanLimit": "Je abonnementspunten zijn op. Upgrade naar een hoger plan of configureer een aangepaste model-API om verder te gaan.",
-  "response.SubscriptionPlanLimitUltimate": "Je abonnementspunten zijn op. Vul je tegoed aan of configureer een aangepaste model-API om verder te gaan.",
   "response.SystemTimeNotMatchError": "Sorry, je systeemtijd komt niet overeen met de server. Controleer je tijdinstellingen en probeer opnieuw.",
   "response.UnknownChatFetchError": "Sorry, er is een onbekende fout opgetreden bij het verzoek. Controleer de informatie hieronder of probeer opnieuw.",
   "response.UnreadableServerResponse": "De server gaf een antwoord dat de app niet kon lezen. Dit is meestal een tijdelijk netwerk- of gatewayprobleem — probeer het over een moment opnieuw.",
@@ -213,13 +210,9 @@
   "workspaceFrozenByAdmin.frozenAt": "Bevroren op",
   "workspaceFrozenByAdmin.reason": "Reden",
   "workspaceFrozenByAdmin.title": "Werkruimte is bevroren",
-  "workspaceFrozenByRiskControl.available": "Beschikbare tegoeden",
-  "workspaceFrozenByRiskControl.bannerDescription": "Vul tegoeden aan om uitgaven te hervatten.",
   "workspaceFrozenByRiskControl.bannerHint": "Klik voor details",
   "workspaceFrozenByRiskControl.bannerTitle": "Werkruimte geblokkeerd door risicobeheer",
   "workspaceFrozenByRiskControl.contactSupport": "Neem contact op met ondersteuning",
-  "workspaceFrozenByRiskControl.description": "Deze werkruimte is automatisch bevroren door risicobeheer na het detecteren van abnormale uitgaven. Neem contact op met ondersteuning om dit te beoordelen en een verzoek in te dienen om de werkruimte te ontgrendelen.",
   "workspaceFrozenByRiskControl.frozenAt": "Bevroren op",
-  "workspaceFrozenByRiskControl.title": "Werkruimte automatisch bevroren door risicobeheer",
-  "workspaceFrozenByRiskControl.topup": "Kredieten aanvullen"
+  "workspaceFrozenByRiskControl.title": "Werkruimte automatisch bevroren door risicobeheer"
 }

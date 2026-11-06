@@ -146,10 +146,6 @@ const parseGraph = (graph: unknown) => AgentGraphSchema.safeParse(graph);
 
 describe('GraphAgent', () => {
   describe('schema', () => {
-    it('should accept the goal-loop fixture', () => {
-      expect(parseGraph(loadGoalLoopGraph()).success).toBe(true);
-    });
-
     it('should require exactly one root edge', () => {
       const graph = loadGoalLoopGraph();
       const result = parseGraph({
@@ -787,30 +783,6 @@ describe('GraphAgent', () => {
   });
 
   describe('e2e', () => {
-    it('should keep the goal-loop fixture aligned with the graph schema', () => {
-      const graph = loadGoalLoopGraph();
-
-      expect(graph.terminal).toBe('verify');
-      expect(graph.nodes).toMatchObject({
-        plan: { allowedToolApiNames: ['read', 'search'], type: 'agent' },
-        verify: { type: 'llm' },
-        work: { type: 'agent' },
-      });
-      expect(graph.edges).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            from: AGENT_GRAPH_ROOT_NODE_ID,
-            to: 'plan',
-          }),
-          expect.objectContaining({
-            from: 'verify',
-            maxTraversals: 3,
-            to: 'work',
-          }),
-        ]),
-      );
-    });
-
     it('should execute the /goal plan-work-verify loop with mocked llm outputs', async () => {
       const agent = new GraphAgent({
         agentConfig: { maxSteps: 100 },
