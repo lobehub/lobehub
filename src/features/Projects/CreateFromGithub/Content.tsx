@@ -139,12 +139,18 @@ const CreateFromGithubContent = () => {
   return (
     <>
       <Flexbox gap={16} padding={16}>
+        {/* Picking a connected repository is the primary path; the URL field is the fallback. */}
+        <RepositoryList
+          selected={repository?.fullName}
+          onConnect={connectGithub}
+          onSelect={selectRepository}
+        />
+
         <Flexbox gap={6}>
           <Text fontSize={13} weight={500}>
             {t('createFromGithub.urlLabel')}
           </Text>
           <Input
-            autoFocus
             aria-invalid={urlInvalid}
             placeholder={t('createFromGithub.urlPlaceholder')}
             style={urlInvalid ? { borderColor: cssVar.colorError } : undefined}
@@ -158,12 +164,6 @@ const CreateFromGithubContent = () => {
             </Text>
           )}
         </Flexbox>
-
-        <RepositoryList
-          selected={repository?.fullName}
-          onConnect={connectGithub}
-          onSelect={selectRepository}
-        />
 
         {repository && (
           <Flexbox horizontal gap={12}>

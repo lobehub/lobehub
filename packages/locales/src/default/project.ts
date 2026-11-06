@@ -190,7 +190,7 @@ export default {
   'create.title': 'New project',
   'createFromGithub.connect': 'Connect GitHub',
   'createFromGithub.disconnected':
-    'Connect GitHub to choose from your repositories, or paste a public repository URL above.',
+    'Connect GitHub to choose from your repositories, or paste a public repository URL below.',
   'createFromGithub.duplicateIdentifier':
     'Another project already uses this identifier. Choose a different one.',
   'createFromGithub.duplicateName':
@@ -207,12 +207,12 @@ export default {
   'createFromGithub.searchPlaceholder': 'Search repositories…',
   'createFromGithub.title': 'New project from GitHub',
   'createFromGithub.truncated':
-    "Only {{count}} repositories are listed. If yours isn't here, paste its URL above.",
+    "Only {{count}} repositories are listed. If yours isn't here, paste its URL below.",
   'createFromGithub.unconfigured':
-    "GitHub isn't set up on this server. Paste a public repository URL above.",
+    "GitHub isn't set up on this server. Paste a public repository URL below.",
   'createFromGithub.urlInvalid':
     'Enter a GitHub repository URL, such as https://github.com/owner/repo.',
-  'createFromGithub.urlLabel': 'Repository URL',
+  'createFromGithub.urlLabel': 'Or paste a repository URL',
   'createFromGithub.urlPlaceholder': 'https://github.com/owner/repo',
   'disabled.action': 'Enable in Labs',
   'disabled.title': 'Project workspaces are an Alpha experiment',
