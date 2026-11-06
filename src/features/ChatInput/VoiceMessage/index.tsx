@@ -142,7 +142,7 @@ export const VoiceMessageControl = memo<VoiceMessageControlProps>(
               {waveform.map((level, index) => (
                 <span
                   key={index}
-                  {...sx(styles.bar, undefined, {
+                  {...sx(styles.bar, {
                     height: `${Math.max(4, Math.round(level * 18))}px`,
                   })}
                 />
@@ -192,7 +192,7 @@ export const VoiceMessageControl = memo<VoiceMessageControlProps>(
 
           {progress !== undefined && (
             <div aria-hidden {...stylex.props(styles.progress)}>
-              <div {...sx(styles.progressValue, undefined, { width: `${progress}%` })} />
+              <div {...sx(styles.progressValue, { width: `${progress}%` })} />
             </div>
           )}
         </div>

@@ -44,14 +44,12 @@ const styles = stylex.create({
     backgroundColor: cssVar.colorBgContainer,
     backgroundImage: 'none',
   },
-  // Longhand corners: they outrank the editor's own `border-radius` shorthand, which
-  // the emotion version had to beat with `!important`.
   inputFullscreen: {
     borderStyle: 'none',
-    borderStartStartRadius: 0,
-    borderStartEndRadius: 0,
-    borderEndStartRadius: 0,
-    borderEndEndRadius: 0,
+    borderStartStartRadius: '0 !important',
+    borderStartEndRadius: '0 !important',
+    borderEndStartRadius: '0 !important',
+    borderEndEndRadius: '0 !important',
   },
   leftActions: { flex: 'none', minWidth: '0' },
   leftActionsItem: { flex: 'none' },

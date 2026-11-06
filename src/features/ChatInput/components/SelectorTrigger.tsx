@@ -75,7 +75,7 @@ const SelectorTrigger = memo<TriggerProps>(
     <div
       {...rest}
       aria-label={ariaLabel}
-      {...sx([styles.trigger, stylex.defaultMarker()], className, style)}
+      {...sx(styles.trigger, stylex.defaultMarker(), className, style)}
     >
       {fast && <Icon icon={ZapIcon} size={12} />}
       <span {...stylex.props(styles.label)}>{text}</span>
