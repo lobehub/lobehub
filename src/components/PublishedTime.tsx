@@ -52,7 +52,7 @@ const PublishedTime: FC<PublishedTimeProps> = ({ date, style, className, templat
     <time
       aria-label={'published-date'}
       dateTime={formatTime(date)}
-      {...sx([styles.time], className, style)}
+      {...sx(styles.time, className, style)}
     >
       {time}
     </time>

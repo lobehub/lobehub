@@ -210,26 +210,60 @@ const canonicalOf = (
 const isSx = (node: ts.Expression): node is ts.CallExpression =>
   ts.isCallExpression(node) && compact(node.expression) === 'sx';
 
+const slotReferences = (root: ts.Node, found: string[] = []): string[] => {
+  if (ts.isPropertyAccessExpression(root) && ts.isIdentifier(unwrap(root.expression)))
+    found.push(compact(root));
+  else ts.forEachChild(root, (child) => void slotReferences(child, found));
+  return found;
+};
+
+const isStylexArgument = (node: ts.Expression, properties: SlotProperties | undefined) => {
+  const references = slotReferences(node);
+  return references.length > 0 && references.every((reference) => !!properties?.[reference]);
+};
+
+const sxArguments = (call: ts.CallExpression) => {
+  const found: Array<{ node: ts.Expression; stylex?: true }> = [];
+  for (const argument of call.arguments) {
+    const node = unwrap(argument);
+    if (!ts.isArrayLiteralExpression(node)) {
+      found.push({ node });
+      continue;
+    }
+    if (node.elements.some(ts.isSpreadElement)) return undefined;
+    for (const element of node.elements) found.push({ node: unwrap(element), stylex: true });
+  }
+  return found;
+};
+
 const sxValue = (
   call: ts.CallExpression,
   properties: SlotProperties | undefined,
   atoms: string[],
 ) => {
-  const [styles, className, style] = call.arguments;
-  if (!styles || (style && !EMPTY.has(compact(style)))) return undefined;
+  const argumentsOf = sxArguments(call);
+  if (!argumentsOf?.length) return undefined;
   const unit = newUnit();
   const ctx: Context = { atoms, depth: 0, joins: [], unit, units: [unit] };
   ctx.unit.propsCalls += 1;
-  ctx.depth += 1;
-  const own = termsOf(styles, ctx);
-  ctx.depth -= 1;
-  const extra = className ? termsOf(className, ctx) : [];
-  if (!own || !extra) return undefined;
+  const terms: string[] = [];
+  for (const { node, stylex: inArray } of argumentsOf) {
+    if (ts.isObjectLiteralExpression(node)) {
+      if (node.properties.length === 0) continue;
+      return undefined;
+    }
+    const stylex = inArray || isStylexArgument(node, properties);
+    if (stylex) ctx.depth += 1;
+    const part = termsOf(node, ctx);
+    if (stylex) ctx.depth -= 1;
+    if (!part) return undefined;
+    terms.push(...part);
+  }
   const merged = ctx.units.every(
     (item) => item.propsCalls <= 1 && !(item.propsCalls === 1 && item.outside > 0),
   );
   return merged && joinsDisjoint(ctx.joins, properties)
-    ? { prop: 'className', value: { terms: [...own, ...extra] } }
+    ? { prop: 'className', value: { terms } }
     : undefined;
 };
 

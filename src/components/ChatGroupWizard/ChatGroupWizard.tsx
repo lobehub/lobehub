@@ -671,7 +671,7 @@ const ChatGroupWizard = memo<ChatGroupWizardProps>(
                 </Flexbox>
                 <Flexbox horizontal align="center" gap={12}>
                   <div
-                    {...sx([isHostRemoved && styles.modelSelectDisabled], undefined, {
+                    {...sx(isHostRemoved && styles.modelSelectDisabled, {
                       opacity: isHostRemoved ? 0.6 : 1,
                     })}
                   >

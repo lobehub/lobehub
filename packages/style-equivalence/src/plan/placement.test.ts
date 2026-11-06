@@ -49,6 +49,31 @@ describe('placementPreserved', () => {
     ).toBe(true);
   });
 
+  describe('variadic sx', () => {
+    const properties = { 'styles.a': ['display'], 'styles.b': ['color'] };
+    const preserved = (head: string, slots: Record<string, string[]> = properties) =>
+      placementPreserved(
+        [el('Text', [cls('cx(styles.a, active && styles.b, className)')])],
+        [el('Text', [spread(head)])],
+        { properties: { base: slots, head: slots } },
+      );
+
+    it('reads StyleX slots and a caller className in any argument', () => {
+      expect(preserved('sx(styles.a, active && styles.b, className)')).toBe(true);
+      expect(preserved('sx([styles.a, active && styles.b], className)')).toBe(true);
+    });
+
+    it('does not treat a class from outside StyleX as a StyleX slot', () => {
+      expect(preserved('sx(styles.a, active && styles.b, fallback.content)')).toBe(false);
+      expect(preserved('sx(styles.a, active && styles.b, className)', {})).toBe(false);
+    });
+
+    it('leaves a call carrying an inline style unproven', () => {
+      expect(preserved('sx(styles.a, active && styles.b, className, { width: 1 })')).toBe(false);
+      expect(preserved('sx(styles.a, active && styles.b, className, {})')).toBe(true);
+    });
+  });
+
   it('accepts cx terms with conditions rewritten into one stylex.props call', () => {
     expect(
       placementPreserved(

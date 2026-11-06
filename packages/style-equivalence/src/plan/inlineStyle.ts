@@ -12,7 +12,7 @@ interface SxStyle {
   without: string;
 }
 
-const sxStyleOf = (element: StyleElement): SxStyle | undefined => {
+const sxStyleOf = (element: StyleElement, styleExpr: string): SxStyle | undefined => {
   for (const [index, binding] of element.bindings.entries()) {
     if (!binding.spread) continue;
     const source = ts.createSourceFile('t.ts', `(${binding.expr});`, ts.ScriptTarget.Latest, true);
@@ -21,14 +21,19 @@ const sxStyleOf = (element: StyleElement): SxStyle | undefined => {
     while (call && ts.isParenthesizedExpression(call)) call = call.expression;
     if (!call || !ts.isCallExpression(call) || compact(call.expression.getText(source)) !== 'sx')
       continue;
-    const style = call.arguments[2];
-    if (!style || call.arguments.length !== 3) continue;
+    const position = call.arguments.findIndex(
+      (argument, index) => index > 0 && compact(argument.getText(source)) === compact(styleExpr),
+    );
+    if (position < 0) continue;
+    const style = call.arguments[position];
     const offset = 1;
     const start = style.getStart(source) - offset;
     const end = style.end - offset;
     const without = `${binding.expr.slice(0, start)}undefined${binding.expr.slice(end)}`;
     const kept = new Set(
-      call.arguments.slice(0, 2).flatMap((argument) => [...valueIdentifiers(argument)]),
+      call.arguments
+        .filter((_, index) => index !== position)
+        .flatMap((argument) => [...valueIdentifiers(argument)]),
     );
     return {
       binding: index,
@@ -57,9 +62,9 @@ export const sharedInlineStyles = (chains: Record<'base' | 'head', StyleElement[
       ['head', right, left],
       ['base', left, right],
     ] as const) {
-      const sx = sxStyleOf(own);
-      if (!sx || !other.styleExpr || other.runtimeStyle) continue;
-      if (compact(other.styleExpr) !== sx.style) continue;
+      if (!other.styleExpr || other.runtimeStyle) continue;
+      const sx = sxStyleOf(own, other.styleExpr);
+      if (!sx) continue;
       (found[side] ??= []).push({
         binding: sx.binding,
         index,

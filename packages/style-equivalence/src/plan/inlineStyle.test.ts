@@ -21,17 +21,17 @@ export const Split = ({ handlers, view }) => (
 
 const base = baseWith();
 
-const head = (
-  style = '{ left: `${view.ratio * 100}%` }',
-  spread = '',
-) => `import * as stylex from '@stylexjs/stylex';
+const headWith = (call: string, spread = '') => `import * as stylex from '@stylexjs/stylex';
 
 import { sx } from '@/styles/sx';
 
 const styles = stylex.create({ divider: { width: '4px' } });
 
-export const Split = ({ handlers, view }) => <div ${spread}{...sx([styles.divider], undefined, ${style})} />;
+export const Split = ({ handlers, view }) => <div ${spread}{...${call}} />;
 `;
+
+const head = (style = '{ left: `${view.ratio * 100}%` }', spread = '') =>
+  headWith(`sx([styles.divider], undefined, ${style})`, spread);
 
 const plan = (after: string, before = base) => {
   const pair = {
@@ -82,5 +82,14 @@ describe('an inline style moved from the style prop into sx', () => {
     const [entry] = plan(head('{\n  left: `${view.ratio * 100}%`,\n}')).plan.cases;
     expect(entry.inlineStyles?.head).toHaveLength(1);
     expect(entry.flags).toEqual([]);
+  });
+
+  it('finds the style in a variadic sx call, whatever its position', () => {
+    const style = '{ left: `${view.ratio * 100}%` }';
+    const [entry] = plan(headWith(`sx(styles.divider, ${style}, 'caller')`)).plan.cases;
+    expect(entry.flags).toEqual([]);
+    expect(entry.inlineStyles?.head).toEqual([
+      { binding: 0, index: 0, without: "sx(styles.divider, undefined, 'caller')" },
+    ]);
   });
 });
