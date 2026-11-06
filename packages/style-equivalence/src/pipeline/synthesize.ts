@@ -6,10 +6,14 @@ import type { ProjectConfig } from '../config';
 import { extractFile, type FileExtraction } from '../extract';
 import { generateHost, HOST_HTML } from '../generate/host';
 import { generateModule } from '../generate/module';
+import { carriedClasses, globalRulesChanged } from '../plan/globalRules';
 import { type FilePlan, planFile, type Side } from '../plan/planFile';
+import { packageFile } from '../source/aliases';
 import { resolveSpecifier } from '../source/declarations';
 import type { ScopeFile } from '../source/scope';
 import { fileFlags } from '../verdict/fileItems';
+import { fileReader, flagUncheckedCallers, gitGrepWord } from './forwardCallers';
+import { markUnchangedChains } from './unchanged';
 
 export const HOST_DIR = '.style-equivalence-host';
 export const RUNTIME = path.resolve(import.meta.dirname, '../generate/hostRuntime.tsx');
@@ -32,11 +36,13 @@ export const moduleReader =
       : undefined;
   };
 
-export const stylesheetReader = (root: string) => (fromFile: string, specifier: string) => {
-  if (!specifier.startsWith('.')) return undefined;
-  const target = path.resolve(root, path.dirname(fromFile), specifier);
-  return existsSync(target) ? readFileSync(target, 'utf8') : undefined;
-};
+export const stylesheetReader =
+  (root: string, aliases: Record<string, string> = {}) =>
+  (fromFile: string, specifier: string) => {
+    const local = resolveSpecifier(root, fromFile, specifier, aliases);
+    const target = local ? path.join(root, local) : packageFile(root, fromFile, specifier);
+    return target && existsSync(target) ? readFileSync(target, 'utf8') : undefined;
+  };
 
 export interface Synthesis {
   extractions: Record<string, Record<Side, FileExtraction>>;
@@ -50,6 +56,7 @@ export const synthesize = async (
 ): Promise<Synthesis> => {
   const extractions: Synthesis['extractions'] = {};
   const plans: FilePlan[] = [];
+  const planned: Array<{ file: string; pair: Record<Side, FileExtraction>; plan: FilePlan }> = [];
   for (const entry of scope) {
     const file = entry.head ?? entry.base!;
     const read = async (side: Side) => {
@@ -59,16 +66,34 @@ export const synthesize = async (
       return extractFile(code, source, {
         adapters: config.adapters,
         layoutComponents: config.layoutComponents,
+        readBaseModule: side === 'head' ? moduleReader(roots.base, config.aliases) : undefined,
         readModule: moduleReader(roots[side], config.aliases),
-        readStylesheet: stylesheetReader(roots[side]),
+        readStylesheet: stylesheetReader(roots[side], config.aliases),
+        realComponents: config.realComponents,
       });
     };
     const pair = { base: await read('base'), head: await read('head') };
     const plan = planFile(file, pair.base, pair.head, config);
+    markUnchangedChains(plan, pair, {
+      aliases: config.aliases,
+      roots,
+      sources: { base: entry.base, head: entry.head },
+    });
+    planned.push({ file, pair, plan });
+  }
+  const carried = carriedClasses(planned.flatMap(({ pair }) => [pair.base, pair.head]));
+  for (const { file, pair, plan } of planned) {
+    const global = globalRulesChanged(pair.base, pair.head, carried);
+    if (global) plan.gaps.push(global);
     if (!plan.cases.length && !plan.unpaired.length && !fileFlags(plan, pair).length) continue;
     extractions[file] = pair;
     plans.push(plan);
   }
+  await flagUncheckedCallers(plans, {
+    extractions,
+    grep: gitGrepWord(roots.head),
+    read: fileReader(roots.head),
+  });
   return { extractions, plans };
 };
 

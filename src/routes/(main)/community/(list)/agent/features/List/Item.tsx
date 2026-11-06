@@ -176,11 +176,7 @@ const AssistantItem = memo<DiscoverAssistantItem>(
               </Flexbox>
               {author && (
                 <div
-                  {...sx(
-                    !!userName && styles.author,
-                    undefined,
-                    userName ? undefined : { color: 'inherit' },
-                  )}
+                  {...sx(!!userName && styles.author, userName ? undefined : { color: 'inherit' })}
                   onClick={userName ? handleAuthorClick : undefined}
                 >
                   {author}
