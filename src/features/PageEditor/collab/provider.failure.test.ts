@@ -74,7 +74,7 @@ describe('PageCollabProvider failures', () => {
     );
   });
 
-  // LOBE-15419: the room relays the server's refusal to store an over-limit page.
+  // The room relays the server's refusal to store an over-limit page.
   it('reports a page refused for its length without failing the join', () => {
     const { events, room } = setup();
     room.deliver(synced());
@@ -98,7 +98,7 @@ describe('PageCollabProvider failures', () => {
     expect(events.onFailure).not.toHaveBeenCalled();
   });
 
-  // LOBE-15419: a page already over the limit is stored again once it stops growing.
+  // A page already over the limit is stored again once it stops growing.
   it('reports when the server stores a refused page again', () => {
     const { events, room } = setup();
     room.deliver(synced());
