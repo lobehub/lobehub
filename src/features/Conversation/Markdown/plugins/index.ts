@@ -24,13 +24,15 @@ export const markdownElements: MarkdownElement[] = [
   Thinking,
   LobeArtifact,
   LobeThinking,
+  // Before the self-closing tag plugins, which split the `<task>` html block
+  // into fragments and would break the raw task body
+  Task,
   LocalFile,
   Mention,
   ReferTopic,
   ReferDocument,
   Skill,
   Tool,
-  Task,
   ScmEvent,
   GoalTurn,
   UserFeedback,
