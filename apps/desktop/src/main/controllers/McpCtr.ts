@@ -190,9 +190,9 @@ const toPluginApi = (tools: McpTool[]) =>
     parameters: item.inputSchema as any,
   }));
 
-const toModelApi = (tools: McpTool[]) =>
+const toModelApi = (tools: McpTool[], enabled = false) =>
   toPluginApi(
-    tools.filter((tool) => isMcpToolVisibleTo(getMcpToolVisibility(tool._meta), 'model')),
+    tools.filter((tool) => isMcpToolVisibleTo(getMcpToolVisibility(tool._meta, enabled), 'model')),
   );
 
 /**
@@ -200,8 +200,8 @@ const toModelApi = (tools: McpTool[]) =>
  * which `api` tools they may not, so the view-call policy finds every tool a
  * view may reach without the model seeing the view-only ones.
  */
-const toMcpAppsManifestFields = (tools: McpTool[]) => {
-  const { appOnlyTools, modelOnlyToolNames } = partitionMcpToolsForViews(tools);
+const toMcpAppsManifestFields = (tools: McpTool[], enabled = false) => {
+  const { appOnlyTools, modelOnlyToolNames } = partitionMcpToolsForViews(tools, enabled);
 
   return {
     ...(appOnlyTools.length > 0 && { mcpAppOnlyApi: toPluginApi(appOnlyTools) }),
@@ -601,7 +601,7 @@ export default class McpCtr extends ControllerModule {
       const manifest = await this.withClientLease(client, () => client!.listManifests());
       const identifier = input.name;
 
-      const api = toModelApi(manifest.tools || []);
+      const api = toModelApi(manifest.tools || [], input.mcpApps);
 
       return serializePayload({
         api,
@@ -614,7 +614,7 @@ export default class McpCtr extends ControllerModule {
           title: input.metadata?.name || identifier,
         },
         ...manifest,
-        ...toMcpAppsManifestFields(manifest.tools || []),
+        ...toMcpAppsManifestFields(manifest.tools || [], input.mcpApps),
         mcpParams: params,
         type: 'mcp' as any,
       });
@@ -660,13 +660,13 @@ export default class McpCtr extends ControllerModule {
     const client = await this.createClient(params, { mcpApps: input.mcpApps });
     try {
       const tools = await client.listTools();
-      const api = toModelApi(tools);
+      const api = toModelApi(tools, input.mcpApps);
       const identifier = input.identifier;
 
       return serializePayload({
         api,
         identifier,
-        ...toMcpAppsManifestFields(tools),
+        ...toMcpAppsManifestFields(tools, input.mcpApps),
         mcpParams: params,
         meta: {
           avatar: input.metadata?.avatar || 'MCP_AVATAR',
@@ -774,13 +774,13 @@ export default class McpCtr extends ControllerModule {
       this.withClientLease(client, async () => {
         const result = await client.readResource(input.uri);
         // A view's _meta.ui may be declared once, on its resources/list entry
-        if (!lacksUiResourceMeta(result)) return result;
+        if (!lacksUiResourceMeta(result, true)) return result;
 
         const listed = await client.listResources().catch((error) => {
           logger.warn('Failed to list resources for MCP App metadata:', { error });
           return [];
         });
-        return withListingUiMeta(result, input.uri, listed);
+        return withListingUiMeta(result, input.uri, listed, true);
       });
     // Reading is idempotent, so unlike tool calls a dead transport is retried
     // too: the stale session is evicted and the read runs once on a fresh one.

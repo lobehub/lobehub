@@ -1,7 +1,11 @@
 import { spawn } from 'node:child_process';
 import type { Readable } from 'node:stream';
 
-import { getMcpToolVisibility, isMcpToolVisibleTo } from '@lobechat/const/mcpApp';
+import {
+  getMcpToolVisibility,
+  isMcpToolVisibleTo,
+  resolveMcpUiToolMeta,
+} from '@lobechat/const/mcpApp';
 import { toRecord } from '@lobechat/utils/object';
 import type { Progress, Transport } from '@modelcontextprotocol/client';
 import {
@@ -365,6 +369,7 @@ export class MCPClient {
   private stdioParams?: { args?: string[]; command: string; env?: Record<string, string> };
   /** tool name → `ui://` resource URI, filled from the last `listTools` */
   private uiResourceUris?: Map<string, string>;
+  private readonly mcpApps: boolean;
   /**
    * The tools a view may call (`_meta.ui.visibility` with "app", or unset), from
    * the same listing. An allow-list: a name the listing didn't name is refused.
@@ -388,6 +393,7 @@ export class MCPClient {
       mcpApps?: boolean;
     } = {},
   ) {
+    this.mcpApps = mcpApps;
     this.mcp = new Client(
       { name: 'lobehub-desktop-mcp-client', version: '1.0.0' },
       {
@@ -769,8 +775,7 @@ export class MCPClient {
     const { tools } = await this.mcp.listTools();
     this.uiResourceUris = new Map(
       (tools || []).flatMap((tool) => {
-        const meta = tool._meta as Record<string, any> | undefined;
-        const uri = meta?.ui?.resourceUri ?? meta?.['ui/resourceUri'];
+        const uri = resolveMcpUiToolMeta(tool._meta, this.mcpApps).resourceUri;
         return typeof uri === 'string' && uri.startsWith('ui://')
           ? [[tool.name, uri] as const]
           : [];
@@ -778,12 +783,14 @@ export class MCPClient {
     );
     this.appVisibleTools = new Set(
       (tools || [])
-        .filter((tool) => isMcpToolVisibleTo(getMcpToolVisibility(tool._meta), 'app'))
+        .filter((tool) => isMcpToolVisibleTo(getMcpToolVisibility(tool._meta, this.mcpApps), 'app'))
         .map((tool) => tool.name),
     );
     this.modelHiddenTools = new Set(
       (tools || [])
-        .filter((tool) => !isMcpToolVisibleTo(getMcpToolVisibility(tool._meta), 'model'))
+        .filter(
+          (tool) => !isMcpToolVisibleTo(getMcpToolVisibility(tool._meta, this.mcpApps), 'model'),
+        )
         .map((tool) => tool.name),
     );
     return (tools || []) as McpTool[];

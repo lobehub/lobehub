@@ -123,3 +123,24 @@ describe('desktop MCPClient.isToolCallableByApp for names the listing did not na
     await expect(client.isToolCallableByApp('not_listed')).resolves.toBe(false);
   });
 });
+
+describe('desktop MCPClient legacy UI feature gate', () => {
+  it.each([false, true])(
+    'only interprets OpenAI compatibility with mcpApps=%s',
+    async (mcpApps) => {
+      listTools.mockResolvedValue({
+        tools: [
+          {
+            _meta: { 'openai/outputTemplate': 'ui://legacy', 'openai/visibility': 'private' },
+            name: 'legacy',
+          },
+        ],
+      });
+      const client = new MCPClient(params, { mcpApps });
+      await expect(client.getToolUiResourceUri('legacy')).resolves.toBe(
+        mcpApps ? 'ui://legacy' : undefined,
+      );
+      await expect(client.isToolHiddenFromModel('legacy')).resolves.toBe(mcpApps);
+    },
+  );
+});

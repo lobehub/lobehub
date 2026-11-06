@@ -1,3 +1,4 @@
+import { resolveMcpUiResourceMeta } from '@lobechat/const/mcpApp';
 import type { MessageMetadata } from '@lobechat/types';
 import type { CallToolResult, ReadResourceResult } from '@modelcontextprotocol/client';
 import type {
@@ -34,7 +35,7 @@ export const pickAppResource = (
   else if ('blob' in content && typeof content.blob === 'string') html = decodeBase64(content.blob);
   if (!html) return;
 
-  const meta = (content._meta as { ui?: McpUiResourceMeta } | undefined)?.ui;
+  const meta = resolveMcpUiResourceMeta(content._meta);
 
   return { html, meta };
 };
