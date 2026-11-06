@@ -16,6 +16,7 @@ import { useParams } from 'react-router';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
 import { RouteLoading } from '@/components/Skeleton/RouteSegment';
+import { DatasetConnections } from '@/features/AgentEval/ConnectorBindings/DatasetConnections';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { agentEvalService } from '@/services/agentEval';
@@ -307,6 +308,8 @@ const DatasetDetail = memo(() => {
                 </Flexbox>
               )}
             </Flexbox>
+
+            <DatasetConnections datasetId={dataset.id} editable={!!dataset.userId} />
 
             {/* Test Cases */}
             <Flexbox gap={12}>
