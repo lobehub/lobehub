@@ -6,6 +6,7 @@ import {
   GOAL_REPORT_TASK_TITLE,
 } from '@lobechat/const/goal';
 import type { GoalGraphSnapshot, GoalReportDispatch, GoalReportTrigger } from '@lobechat/types';
+import { TRPCError } from '@trpc/server';
 
 import { AgentModel } from '@/database/models/agent';
 import { GoalGraphModel } from '@/database/models/goalGraph';
@@ -147,7 +148,7 @@ export class GoalReportService {
       }
       await this.taskModel.update(taskId, { error: null, instruction, status: 'backlog' });
     } else {
-      const task = await new TaskService(this.db, this.userId, this.workspaceId).createTask({
+      const task = await this.createReportTask({
         assigneeAgentId,
         assigneeUserId: await new GoalAssignmentService(
           this.db,
@@ -184,6 +185,22 @@ export class GoalReportService {
       trigger: 'goal',
     });
     return { operationId: run.operationId, taskId };
+  };
+
+  /**
+   * The result is already claimed and is never dispatched again, so a creator
+   * who stops being assignable after their ownership was resolved must not cost
+   * the Goal its report: the Task goes unassigned instead. A rejection the owner
+   * did not cause fails the second attempt the same way and still surfaces.
+   */
+  private createReportTask = async (input: Parameters<TaskService['createTask']>[0]) => {
+    const taskService = new TaskService(this.db, this.userId, this.workspaceId);
+    try {
+      return await taskService.createTask(input);
+    } catch (error) {
+      if (!input.assigneeUserId || !(error instanceof TRPCError)) throw error;
+      return taskService.createTask({ ...input, assigneeUserId: undefined });
+    }
   };
 
   /** The goal agent narrates its own Goal; the executor is the fallback. */
