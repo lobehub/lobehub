@@ -50,6 +50,7 @@ They take on work by themselves and get better every week.
 
 - [👋🏻 Getting Started & Join Our Community](#-getting-started--join-our-community)
 - [✨ Features](#-features)
+  - [From new hire to one of the team](#from-new-hire-to-one-of-the-team)
   - [`Day 1` Welcome to the team](#day-1-welcome-to-the-team)
   - [`Week 1` Its first task](#week-1-its-first-task)
   - [`Month 1–2` Settling in as the team grows](#month-12-settling-in-as-the-team-grows)
@@ -102,13 +103,38 @@ Whether for users or professional developers, LobeHub will be your AI Agent play
 
 ## ✨ Features
 
-LobeHub puts super-agents on your team. Add them to the chats your team already uses, such as Slack, Discord, Telegram, Lark, LINE or WeChat. They take on requests nobody assigned, hand the coding to Claude Code or Codex, come back with evidence you can check, and learn from every correction.
+<div align="center">
 
-The story below follows one of them, Lobe AI, from its first day on your team until it passes its review.
+### From new hire to one of the team
 
-| `Day 1`                                           | `Week 1`                                 | `Month 1–2`                                                              | `Month 3`                                             |
-| :------------------------------------------------ | :--------------------------------------- | :----------------------------------------------------------------------- | :---------------------------------------------------- |
-| [Welcome to the team](#day-1-welcome-to-the-team) | [Its first task](#week-1-its-first-task) | [Settling in as the team grows](#month-12-settling-in-as-the-team-grows) | [It passes its review](#month-3-it-passes-its-review) |
+See what Lobe AI gets done, from its first day in your team chat onward.
+
+<sub>WHAT MAKES A SUPER-AGENT</sub>
+
+</div>
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <b>🔌 Flexible access</b><br/>
+      Plug in any IM app, agent or model, all in one place.
+    </td>
+    <td width="50%" valign="top">
+      <b>⚡ Parallel work</b><br/>
+      Runs several tasks at once, so you don't have to chase each one.
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <b>🙋 Finds its own work</b><br/>
+      Takes on the tasks that suit it, without someone passing messages along.
+    </td>
+    <td width="50%" valign="top">
+      <b>📈 Gets more expert</b><br/>
+      The more you use it, the faster an agent builds up its expertise.
+    </td>
+  </tr>
+</table>
 
 ### `Day 1` Welcome to the team
 
