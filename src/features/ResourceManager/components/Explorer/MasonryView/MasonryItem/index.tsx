@@ -354,14 +354,12 @@ const MasonryFileItem = memo<MasonryFileItemProps>(
         draggable={!!knowledgeBaseId}
         ref={cardRef}
         {...sx(
-          [
-            styles.card,
-            stylex.defaultMarker(),
-            selected && styles.selected,
-            isDragging && styles.dragging,
-            isOver && styles.dragOver,
-          ],
-          isOver ? fallback.dragOver : undefined,
+          styles.card,
+          stylex.defaultMarker(),
+          selected && styles.selected,
+          isDragging && styles.dragging,
+          isOver && styles.dragOver,
+          isOver && fallback.dragOver,
         )}
         onDragEnd={handleDragEnd}
         onDragLeave={handleDragLeave}
@@ -373,7 +371,7 @@ const MasonryFileItem = memo<MasonryFileItemProps>(
         }}
       >
         <div
-          {...sx([styles.checkbox, selected && styles.checkboxSelected], undefined, {
+          {...sx(styles.checkbox, selected && styles.checkboxSelected, {
             cursor: selectable ? 'pointer' : 'not-allowed',
           })}
           title={selectable ? undefined : t('FileManager.selection.onlyOwn')}

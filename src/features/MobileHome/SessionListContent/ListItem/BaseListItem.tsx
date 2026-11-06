@@ -43,12 +43,13 @@ const BaseListItem = memo<ListItemProps>(
     addon,
     pin,
     styles: customStyles,
+    xstyle,
     ...rest
   }) => {
     const loadingNode = <Icon spin icon={Loader2} />;
 
     const pinNode = pin && (
-      <div {...sx([styles.pin], classNames?.pin, customStyles?.pin)}>
+      <div {...sx(styles.pin, classNames?.pin, customStyles?.pin)}>
         <div {...stylex.props(styles.triangle)} />
       </div>
     );
@@ -57,7 +58,7 @@ const BaseListItem = memo<ListItemProps>(
       <Flexbox
         horizontal
         gap={4}
-        {...sx([styles.actions], classNames?.actions, {
+        {...sx(styles.actions, classNames?.actions, {
           display: showAction ? undefined : 'none',
           ...customStyles?.actions,
         })}
@@ -69,7 +70,7 @@ const BaseListItem = memo<ListItemProps>(
 
     const timeNode = date && (
       <div
-        {...sx([styles.date], classNames?.date, {
+        {...sx(styles.date, classNames?.date, {
           opacity: showAction ? 0 : undefined,
           ...customStyles?.date,
         })}
@@ -86,7 +87,7 @@ const BaseListItem = memo<ListItemProps>(
         gap={8}
         padding={12}
         ref={ref}
-        {...sx([styles.root, active && styles.active], className, style)}
+        {...sx(styles.root, active && styles.active, xstyle, className, style)}
         onMouseEnter={() => {
           onHoverChange?.(true);
         }}
@@ -105,16 +106,12 @@ const BaseListItem = memo<ListItemProps>(
           style={{ overflow: 'hidden', ...customStyles?.container }}
         >
           {avatar ?? <Icon icon={MessageSquare} style={{ marginTop: 4 }} />}
-          <Flexbox gap={4} {...sx([styles.content], classNames?.content, customStyles?.content)}>
-            <Text
-              ellipsis
-              as={'h3'}
-              {...sx([styles.title], classNames?.title, customStyles?.title)}
-            >
+          <Flexbox gap={4} {...sx(styles.content, classNames?.content, customStyles?.content)}>
+            <Text ellipsis as={'h3'} {...sx(styles.title, classNames?.title, customStyles?.title)}>
               {title}
             </Text>
             {description && (
-              <Text ellipsis {...sx([styles.desc], classNames?.desc, customStyles?.desc)}>
+              <Text ellipsis {...sx(styles.desc, classNames?.desc, customStyles?.desc)}>
                 {description}
               </Text>
             )}

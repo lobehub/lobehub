@@ -100,12 +100,12 @@ const InputFallback = memo<InputFallbackProps>(
       <div
         aria-busy
         data-testid="home-input-fallback"
-        {...sx([styles.root], undefined, {
+        {...sx(styles.root, {
           height: HOME_INPUT_FRAME_HEIGHT + HOME_INPUT_BOTTOM_PADDING,
           paddingBlockEnd: HOME_INPUT_BOTTOM_PADDING,
         })}
       >
-        <div {...sx([styles.frame], undefined, { height: HOME_INPUT_FRAME_HEIGHT })}>
+        <div {...sx(styles.frame, { height: HOME_INPUT_FRAME_HEIGHT })}>
           <textarea
             autoFocus
             aria-label={placeholder}
@@ -121,7 +121,7 @@ const InputFallback = memo<InputFallbackProps>(
             horizontal
             align="center"
             justify="space-between"
-            {...sx([styles.actionBar], undefined, { height: HOME_INPUT_ACTION_BAR_HEIGHT })}
+            {...sx(styles.actionBar, { height: HOME_INPUT_ACTION_BAR_HEIGHT })}
           >
             <Flexbox horizontal align="center" gap={6}>
               <ModeSelect value={mode} onChange={onModeChange} />
