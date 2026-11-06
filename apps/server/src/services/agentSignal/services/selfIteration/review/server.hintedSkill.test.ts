@@ -141,12 +141,16 @@ describe('nightly review runtime with a hinted skill document', () => {
       {},
     );
 
-    expect(result).toMatchObject({ documentId: 'hinted-doc-1', historyId: 'history-exact-1' });
+    expect(result).toMatchObject({ documentId: 'hinted-doc-1' });
     expect(result).not.toHaveProperty('status');
+    // History keeps the pre-promotion content, but receipts must not offer a content-only
+    // undo: restoring plain Markdown into the new SKILL.md index would break listSkills.
     expect(documentService.trySaveCurrentDocumentHistory).toHaveBeenCalledWith(
       'hinted-doc-1',
       'llm_call',
     );
+    expect(result).not.toHaveProperty('historyId');
+    expect(result).not.toHaveProperty('expectedCurrentDocumentUpdatedAt');
 
     const promoted = agentDocumentModel.documents.find((doc) => doc.id === HINTED_ID);
     expect(promoted).toMatchObject({
@@ -300,6 +304,7 @@ describe('skill-management runtime with a hinted skill document', () => {
 
     expect(result).toMatchObject({ documentId: 'hinted-doc-1', summary: expect.any(String) });
     expect(result).not.toHaveProperty('status');
+    expect(result).not.toHaveProperty('historyId');
     expect(agentDocumentModel.documents.find((doc) => doc.id === HINTED_ID)?.fileType).toBe(
       SKILL_INDEX_FILE_TYPE,
     );

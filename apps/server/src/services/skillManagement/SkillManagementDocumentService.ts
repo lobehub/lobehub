@@ -626,11 +626,15 @@ export class SkillManagementDocumentService {
   ): Promise<SkillDetail> {
     const frontmatter = readHintedFrontmatter(hinted.content);
     const name = await this.pickPromotedSkillName(input.agentId, hinted, frontmatter?.name);
-    const preMutationHistory = await this.documentService.trySaveCurrentDocumentHistory(
-      hinted.documentId,
-      'llm_call',
-    );
-    const detail = await this.createSkill({
+    await this.documentService.trySaveCurrentDocumentHistory(hinted.documentId, 'llm_call');
+
+    // NOTICE:
+    // No `preMutationHistoryId` / `expectedCurrentDocumentUpdatedAt` here, so receipts do not
+    // offer undo. Receipt rollback restores only the backing document content; after a
+    // promotion that would put frontmatter-less Markdown into a SKILL.md index and break
+    // `listSkills` for the agent, while the new bundle and index binding stayed in place.
+    // Removal condition: receipt rollback can demote an index back to an ordinary document.
+    return this.createSkill({
       agentId: input.agentId,
       bodyMarkdown: input.bodyMarkdown,
       description:
@@ -639,17 +643,6 @@ export class SkillManagementDocumentService {
       sourceAgentDocumentId: hinted.id,
       title: hinted.title?.trim() || name,
     });
-    const updatedDocument = await this.documentService.getDocumentById(hinted.documentId);
-
-    return {
-      ...detail,
-      ...(updatedDocument?.updatedAt
-        ? { expectedCurrentDocumentUpdatedAt: updatedDocument.updatedAt.toISOString() }
-        : {}),
-      ...(preMutationHistory?.historyId
-        ? { preMutationHistoryId: preMutationHistory.historyId }
-        : {}),
-    };
   }
 
   private async pickPromotedSkillName(
