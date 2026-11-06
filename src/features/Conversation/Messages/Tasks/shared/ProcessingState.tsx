@@ -215,7 +215,7 @@ const ProcessingState = memo<ProcessingStateProps>(
 
           {/* Progress Bar */}
           <div {...stylex.props(styles.progress)}>
-            <div {...sx([styles.progressBar], undefined, { width: `${progress}%` })} />
+            <div {...sx(styles.progressBar, { width: `${progress}%` })} />
             <div {...stylex.props(styles.progressShimmer)} />
           </div>
 
@@ -292,7 +292,7 @@ const ProcessingState = memo<ProcessingStateProps>(
 
         {/* Progress Bar */}
         <div {...stylex.props(styles.progressCompact)}>
-          <div {...sx([styles.progressBar], undefined, { width: `${progress}%` })} />
+          <div {...sx(styles.progressBar, { width: `${progress}%` })} />
           <div {...stylex.props(styles.progressShimmer)} />
         </div>
 

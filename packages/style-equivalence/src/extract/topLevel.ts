@@ -1,11 +1,13 @@
 import ts from 'typescript';
 
 import { valueIdentifiers } from './identifiers';
+import { type ImportedClass, importedClassOf } from './importedClasses';
 import type { StyleAdapter, StylesheetBinding } from './types';
 
 const STYLESHEET = /\.css$/;
 
 export interface TopLevel {
+  importedClasses: Map<string, ImportedClass>;
   importOf: Map<string, ts.ImportDeclaration>;
   keptStatements: Set<ts.Statement>;
   prelude: () => string;
@@ -52,6 +54,7 @@ export const collectTopLevel = (
   const declarations = new Map<string, ts.Statement>();
   const styleSymbols = new Set<string>();
   const styleFactories = new Map<string, ts.CallExpression>();
+  const importedClasses = new Map<string, ImportedClass>();
   const sideEffectCss: string[] = [];
   const stylesheets: TopLevel['stylesheets'] = [];
 
@@ -90,9 +93,13 @@ export const collectTopLevel = (
               names.push([element.name.text, (element.propertyName ?? element.name).text]);
         for (const [local, imported] of names) {
           const factory = importedFactory(module, imported, adapters);
-          if (!factory) continue;
-          styleSymbols.add(local);
-          styleFactories.set(local, factory);
+          if (factory) {
+            styleSymbols.add(local);
+            styleFactories.set(local, factory);
+            continue;
+          }
+          const derived = importedClassOf(module, imported, local, adapters);
+          if (derived) importedClasses.set(local, derived);
         }
       }
       continue;
@@ -162,6 +169,7 @@ export const collectTopLevel = (
   };
 
   return {
+    importedClasses,
     importOf,
     keptStatements,
     prelude,

@@ -1,14 +1,17 @@
 import { execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { parseArgs, promisify } from 'node:util';
 
-import { runComparison } from '../run';
+import { loadConfig, runComparison } from '../run';
 import { runSelfTest } from '../selftest';
 import { formatSelfTest } from '../selftest/run';
 import { saveSelfTest } from '../selftest/store';
 import { DEFAULT_UI_DIR, startServer } from '../server';
+import { loadRun } from '../server/api';
 import { runStack } from '../stack';
+import { annotateList, applyNotes, latestRunForPr, type NoteInput, reworkList } from './review';
 import { formatStack, formatSummary } from './summary';
 
 const run = promisify(execFile);
@@ -19,7 +22,9 @@ const HELP = `style-equivalence — compare styled elements between two revision
   bun run style-eq --base <ref> --head <ref>
   bun run style-eq --stack [--stack-base <branch>]
   bun run style-eq self-test
-  bun run style-eq serve <run-id|run-dir> [--port <n>]
+  bun run style-eq serve <run-id|run-dir> [--port <n>] [--pin]
+  bun run style-eq rework <run-id|run-dir|--pr <number>> [--json]
+  bun run style-eq annotate <run-id|run-dir> [--json] [--apply <notes.json>]
 
 Options:
   --config <file>     project config (default scripts/stylexMigration/style-equivalence.config.ts)
@@ -27,6 +32,7 @@ Options:
   --keep-worktrees    keep base/head worktrees for debugging
   --skip-calibration  do not run the project's real-mount calibration
   --mutations <n>     mutants to sample from equal cases (default 10, 0 turns it off)
+  --pin               serve exactly this run instead of following newer runs on the same base
 `;
 
 const DEFAULT_STACK_BASE = 'test/stylex-migration-stack';
@@ -44,28 +50,36 @@ const ensureObject = async (repo: string, sha: string) => {
 
 const resolvePullRequest = async (repo: string, pr: string) => {
   if (!/^[1-9]\d*$/.test(pr)) throw new Error('INVALID_PR_NUMBER');
-  const { stdout } = await run('gh', ['pr', 'view', pr, '--json', 'baseRefOid,headRefOid'], {
-    cwd: repo,
-  });
-  const { baseRefOid, headRefOid } = JSON.parse(stdout) as {
+  const { stdout } = await run(
+    'gh',
+    ['pr', 'view', pr, '--json', 'baseRefOid,headRefOid,headRefName,number,title'],
+    { cwd: repo },
+  );
+  const { baseRefOid, headRefName, headRefOid, number, title } = JSON.parse(stdout) as {
     baseRefOid: string;
+    headRefName: string;
     headRefOid: string;
+    number: number;
+    title: string;
   };
   await ensureObject(repo, baseRefOid);
   await ensureObject(repo, headRefOid);
-  return { base: baseRefOid, head: headRefOid };
+  return { base: baseRefOid, head: headRefOid, pr: { branch: headRefName, number, title } };
 };
 
 const main = async () => {
   const { positionals, values } = parseArgs({
     allowPositionals: true,
     options: {
+      'apply': { type: 'string' },
       'base': { type: 'string' },
       'config': { type: 'string' },
       'head': { type: 'string' },
       'help': { short: 'h', type: 'boolean' },
+      'json': { type: 'boolean' },
       'keep-worktrees': { type: 'boolean' },
       'mutations': { type: 'string' },
+      'pin': { type: 'boolean' },
       'port': { type: 'string' },
       'pr': { type: 'string' },
       'records': { type: 'string' },
@@ -87,6 +101,42 @@ const main = async () => {
     process.exitCode = report.passed ? 0 : 1;
     return;
   }
+  const runDirOf = async (target: string | undefined) => {
+    if (!target && values.pr) return latestRunForPr(recordsDir, Number(values.pr));
+    if (!target) throw new Error('Specify a run id, a run directory or --pr <number>');
+    const dir = existsSync(path.resolve(target))
+      ? path.resolve(target)
+      : path.join(recordsDir, target);
+    if (!existsSync(path.join(dir, 'run.json'))) throw new Error(`No stored run at ${dir}`);
+    return dir;
+  };
+  if (positionals[0] === 'rework') {
+    const stored = await loadRun(await runDirOf(positionals[1]));
+    console.log(await reworkList(stored, values.json ? 'json' : 'text'));
+    return;
+  }
+  if (positionals[0] === 'annotate') {
+    const stored = await loadRun(await runDirOf(positionals[1]));
+    if (values.apply) {
+      const notes = JSON.parse(await readFile(path.resolve(values.apply), 'utf8')) as NoteInput[];
+      await applyNotes(stored, notes);
+      console.log(`Stored ${notes.length} notes.`);
+      return;
+    }
+    const list = await annotateList(stored);
+    if (values.json) return void console.log(JSON.stringify(list, null, 2));
+    if (!list.length) return void console.log('没有需要 agent 读码的项。');
+    for (const entry of list)
+      console.log(
+        [
+          `- ${entry.key} [${entry.state}]`,
+          `  ${entry.ask}`,
+          `  ${entry.source.base}`,
+          `  ${entry.source.head}`,
+        ].join('\n'),
+      );
+    return;
+  }
   if (positionals[0] === 'serve') {
     const target = positionals[1];
     if (!target) throw new Error('serve takes a run id or run directory');
@@ -102,7 +152,17 @@ const main = async () => {
         maxBuffer: 64 * 1024 ** 2,
       });
     }
-    const server = await startServer({ port: Number(values.port ?? 0), recordsDir, runDir });
+    const layoutComponents = await loadConfig(configFile).then(
+      (config) => config.layoutComponents,
+      (): string[] => [],
+    );
+    const server = await startServer({
+      layoutComponents,
+      pin: values.pin ?? false,
+      port: Number(values.port ?? 0),
+      recordsDir,
+      runDir,
+    });
     console.log(`Report: ${server.url}`);
     await new Promise<void>((resolve) => {
       process.once('SIGINT', resolve);
