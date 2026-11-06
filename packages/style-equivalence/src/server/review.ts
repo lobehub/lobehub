@@ -2,6 +2,7 @@ import type { StyleElement } from '../extract';
 import type { Combo } from '../plan/combos';
 import { isIntrinsicTag, PASS_THROUGH_VARIABLES } from '../plan/planFile';
 import { askSentence, comboLabel, differenceSummary } from '../report/plain';
+import { defaultReworkNote } from '../report/review';
 import { declarationBlocks } from '../review/declarations';
 import {
   elementSignature,
@@ -302,12 +303,18 @@ export const applyReview = async (
       });
     } else {
       const pr = runPr(stored);
+      const view = describe(
+        item,
+        context.cases.get(item.key),
+        context.elements.get(item.key),
+        stored.evidence[item.key] as CaseEvidence | undefined,
+      );
       const record = reworkRecord(
         item,
         {
           base: String(stored.run.base ?? ''),
           head: String(stored.run.head ?? ''),
-          note,
+          note: note.trim() ? note : defaultReworkNote(view),
           pr,
           reviewer,
           runId: String(stored.run.runId ?? ''),

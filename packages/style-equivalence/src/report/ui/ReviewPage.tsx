@@ -5,7 +5,7 @@ import { CheckCheck } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { fetchReview, postReview, type ReviewPayload } from '../api';
-import { completionText, keyAction, nextSelection } from '../review';
+import { completionText, hasRenderedDifference, keyAction, nextSelection } from '../review';
 import { PageState } from './PageState';
 import { ReviewBar } from './ReviewBar';
 import { ReviewItemView } from './ReviewItemView';
@@ -81,7 +81,8 @@ export const ReviewPage = ({ initialKey }: { initialKey?: string }) => {
   const act = useCallback(
     async (action: 'pass' | 'rework') => {
       if (!item || busy) return;
-      const needsNote = action === 'rework' || item.category === 'difference';
+      const needsNote =
+        action === 'rework' ? !hasRenderedDifference(item) : item.category === 'difference';
       if (needsNote && !note.trim()) return void inputRef.current?.focus();
       setBusy(action);
       try {

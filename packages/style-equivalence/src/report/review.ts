@@ -186,3 +186,37 @@ export const describeConditions = (labels: string[]) => {
     return `${themeName(theme)} · ${parts.join('；')}`;
   });
 };
+
+interface DifferenceView {
+  category: string;
+  comboDifferences: ComboDifference[];
+  combos: Array<{ index: number; label: string }>;
+  differingConditions: string[];
+  summary: string[];
+}
+
+export const hasRenderedDifference = (item: DifferenceView) =>
+  item.category === 'difference' ||
+  item.differingConditions.length > 0 ||
+  item.comboDifferences.length > 0;
+
+const MAX_NOTE_GROUPS = 3;
+
+export const defaultReworkNote = (item: DifferenceView) => {
+  if (!hasRenderedDifference(item)) return '';
+  const labels = new Map(item.combos.map((combo) => [combo.index, combo.label]));
+  const named = item.combos.length > 1;
+  const groups = groupDifferences(
+    item.comboDifferences.map((entry) => ({ ...entry, label: labels.get(entry.combo) ?? '默认' })),
+  );
+  if (!groups.length) return item.summary.length ? `不一样：${item.summary.join('；')}` : '';
+  const parts = groups.slice(0, MAX_NOTE_GROUPS).map((group) => {
+    const where =
+      group.entries.length === 1
+        ? conditionName(group.entries[0].condition)
+        : `${group.entries.length} 个条件`;
+    return `${named ? `${group.label} · ` : ''}${group.summary.join('；')}（${where}）`;
+  });
+  const rest = groups.length - parts.length;
+  return `不一样：${parts.join('；')}${rest > 0 ? `；另有 ${rest} 种差异` : ''}`;
+};

@@ -5,6 +5,7 @@ import { Check, Undo2 } from 'lucide-react';
 import type { ReactNode, RefObject } from 'react';
 
 import type { ReviewView } from '../api';
+import { defaultReworkNote, hasRenderedDifference } from '../review';
 
 const styles = stylex.create({
   bar: {
@@ -44,7 +45,21 @@ const ActionTooltip = ({
 const passBlocker = (item: ReviewView, note: string) => {
   if (!item.canPass)
     return item.state === 'waiting-agent' ? '等 agent 读完代码才能操作' : '这一项只能打回';
-  if (item.category === 'difference' && !note.trim()) return '有差异的项要先写一句为什么没问题';
+  if (item.category === 'difference' && !note.trim())
+    return '通过要先写一句为什么不一样也没问题，打回不用写';
+};
+
+const placeholderOf = (differs: boolean, passNeedsNote: boolean) => {
+  if (!differs) return '打回原因（打回时必填），比如「在线时多了一圈灰边」';
+  return passNeedsNote
+    ? '原因可不填：打回时默认记下这处差异；通过时要写一句为什么不一样也没问题'
+    : '原因可不填：打回时默认记下这处差异，也可以写你自己的原因';
+};
+
+const reworkTitleOf = (item: ReviewView, differs: boolean, note: string) => {
+  if (item.state === 'waiting-agent') return '等 agent 读完代码才能操作';
+  if (!differs) return '打回，原因必填';
+  return note.trim() ? '打回，记下你写的原因' : `打回，默认记下：${defaultReworkNote(item)}`;
 };
 
 export const ReviewBar = ({
@@ -68,9 +83,14 @@ export const ReviewBar = ({
   onRework: () => void;
   position: string;
 }) => {
-  const passNeedsNote = item.category === 'difference';
+  const passNeedsNote = item.canPass && item.category === 'difference';
   const waiting = item.state === 'waiting-agent';
   const blocker = passBlocker(item, note);
+  const differs = hasRenderedDifference(item);
+  const hints = [
+    blocker,
+    !differs && !waiting && !note.trim() ? '打回要先写原因' : undefined,
+  ].filter(Boolean);
   return (
     <Flexbox gap={8} {...stylex.props(styles.bar)}>
       <Flexbox horizontal align="flex-end" gap={8}>
@@ -78,21 +98,13 @@ export const ReviewBar = ({
           aria-label="打回原因"
           autoSize={{ maxRows: 4, minRows: 1 }}
           disabled={Boolean(busy)}
+          placeholder={placeholderOf(differs, passNeedsNote)}
           ref={inputRef}
           style={{ flex: 1 }}
           value={note}
-          placeholder={
-            passNeedsNote
-              ? '写一句：为什么不一样也没问题，或者哪里要改'
-              : '打回原因（打回时必填），比如「在线时多了一圈灰边」'
-          }
           onChange={(event) => onNote(event.target.value)}
         />
-        <ActionTooltip
-          blocked={waiting}
-          hotkey="n"
-          title={waiting ? '等 agent 读完代码才能操作' : '打回，原因必填'}
-        >
+        <ActionTooltip blocked={waiting} hotkey="n" title={reworkTitleOf(item, differs, note)}>
           <Button
             danger
             disabled={Boolean(busy) || waiting}
@@ -123,7 +135,7 @@ export const ReviewBar = ({
         ) : (
           <Text fontSize={12} type="secondary">
             {position}
-            {blocker ? ` · ${blocker}` : ''}
+            {hints.map((hint) => ` · ${hint}`).join('')}
           </Text>
         )}
         <Flexbox flex={1} />
