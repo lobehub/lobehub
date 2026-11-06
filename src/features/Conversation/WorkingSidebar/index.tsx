@@ -5,16 +5,13 @@ import {
   createStaticStyles,
   cssVar,
   cx,
-  type DropdownItem,
   DropdownMenu,
   Flexbox,
-  Icon,
   Skeleton,
 } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import {
   BoxesIcon,
-  CheckIcon,
   ClipboardListIcon,
   FilesIcon,
   FileTextIcon,
@@ -25,7 +22,6 @@ import {
   PlusIcon,
   SearchIcon,
   Settings2Icon,
-  SquareTerminalIcon,
 } from 'lucide-react';
 import { AnimatePresence } from 'motion/react';
 import * as m from 'motion/react-m';
@@ -84,6 +80,7 @@ import {
   isBrowserTab,
   isCanvasTab,
   isDynamicTab,
+  isMcpAppTab,
   type SidebarTabDescriptor,
 } from './dynamicTabs';
 import FilesPane from './Files/FilesPane';
@@ -99,6 +96,8 @@ import ResourcesSection from './ResourcesSection';
 import Review from './Review';
 import { TopicSearchPane } from './Search';
 import { useExtraWorkingSidebarTabs } from './useExtraWorkingSidebarTabs';
+import { useMcpAppSidebar } from './useMcpAppSidebar';
+import { useOpenMenuItems } from './useOpenMenuItems';
 import { useRetainAfterHide } from './useRetainAfterHide';
 import { useSandboxFilesDirectory } from './useSandboxFilesDirectory';
 import { useTabContextMenuItems } from './useTabContextMenuItems';
@@ -529,6 +528,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
       t,
     ],
   );
+  const { enabled: mcpAppsEnabled } = useMcpAppSidebar(composerTarget);
   const availableTabs = useMemo(
     () => new Map(tabDescriptors.map((tab) => [tab.key, tab])),
     [tabDescriptors],
@@ -536,8 +536,11 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
   const availableTabsSignature = JSON.stringify(tabDescriptors.map((tab) => tab.key));
   const isAvailableTab = useCallback(
     (tab: string) =>
-      availableTabs.has(tab) || (browserAvailable && isBrowserTab(tab)) || isCanvasTab(tab),
-    [availableTabs, browserAvailable],
+      availableTabs.has(tab) ||
+      (browserAvailable && isBrowserTab(tab)) ||
+      isCanvasTab(tab) ||
+      (mcpAppsEnabled && isMcpAppTab(tab)),
+    [availableTabs, browserAvailable, mcpAppsEnabled],
   );
   const openTabsContextKey = topicId
     ? `topic:${topicId}`
@@ -872,90 +875,16 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
   // Also cap the drag range so releasing a drag can never persist a width that
   // immediately fails the fit check and hides the panel.
   const maxPanelWidth = Math.min(MAX_PANEL_WIDTH, Math.max(widthBudget, minDisplayWidth));
-  const openMenuItems = useCallback((): DropdownItem[] => {
-    const itemOf = (key: string): DropdownItem | undefined => {
-      const tab = availableTabs.get(key);
-      if (!tab) return undefined;
-
-      if (key === BROWSER_TAB_KEY) {
-        return {
-          icon: <Icon icon={tab.icon} size={14} />,
-          key,
-          label: tab.label,
-          onClick: () => {
-            const browserTab = openBrowserTab();
-            if (browserTab) requestTabFocus(browserTab);
-          },
-        };
-      }
-
-      return {
-        icon: <Icon icon={openedTabs.includes(key) ? CheckIcon : tab.icon} size={14} />,
-        key,
-        label: tab.label,
-        onClick: () => {
-          openTab(key);
-          requestTabFocus(key);
-        },
-      };
-    };
-    const groupLabel = (label: string) => <span style={{ textTransform: 'none' }}>{label}</span>;
-    const group = (key: string, label: string, keys: string[]): DropdownItem | undefined => {
-      const children = keys.map(itemOf).filter((item): item is DropdownItem => Boolean(item));
-      return children.length
-        ? { children, key, label: groupLabel(label), type: 'group' }
-        : undefined;
-    };
-
-    const workspaceGroup = group('workspace', t('workingPanel.openMenu.workspace'), [
-      'search',
-      'review',
-      'pr',
-      'files',
-      'works',
-      'comments',
-      'skills',
-      'documents',
-      'web',
-      ...extraTabs.map((tab) => tab.key),
-    ]);
-    const toolChildren = [itemOf('browser')].filter((item): item is DropdownItem => Boolean(item));
-    if (terminalAvailable) {
-      toolChildren.push({
-        icon: <Icon icon={SquareTerminalIcon} size={14} />,
-        key: 'terminal',
-        label: t('workingPanel.openMenu.terminal'),
-        onClick: () => toggleTerminalPanel(true),
-      });
-    }
-    const toolGroup = toolChildren.length
-      ? {
-          children: toolChildren,
-          key: 'tools',
-          label: groupLabel(t('workingPanel.openMenu.tools')),
-          type: 'group' as const,
-        }
-      : undefined;
-    const configurationGroup = group('configuration', t('workingPanel.openMenu.configuration'), [
-      'params',
-    ]);
-
-    return [workspaceGroup, toolGroup, configurationGroup]
-      .filter((item): item is DropdownItem => Boolean(item))
-      .flatMap((item, index, items) =>
-        index < items.length - 1 ? [item, { type: 'divider' as const }] : [item],
-      );
-  }, [
+  const openMenuItems = useOpenMenuItems({
     availableTabs,
     extraTabs,
     openBrowserTab,
     openTab,
     openedTabs,
     requestTabFocus,
-    t,
     terminalAvailable,
     toggleTerminalPanel,
-  ]);
+  });
 
   // The floating card keeps a 16px margin on each side; the docked panel has none.
   const overviewGutter = imLayout ? 0 : 32;

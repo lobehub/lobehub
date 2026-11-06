@@ -1,9 +1,11 @@
 import { Flexbox } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { Globe2Icon, PanelsTopLeftIcon } from 'lucide-react';
-import { Activity, lazy, memo } from 'react';
+import { Activity, lazy, memo, useEffect, useRef } from 'react';
 
 import { canvasIdOfTab } from '@/store/global/initialState';
+import { mcpAppActions } from '@/store/mcpApp/action';
+import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 
 import type { ComposerTarget } from '../types';
 import CanvasPane from './Canvas/CanvasPane';
@@ -15,6 +17,7 @@ import {
   isCanvasTab,
   type SidebarTabDescriptor,
 } from './dynamicTabs';
+import { McpAppPane, McpAppTabLabel } from './McpAppPane';
 
 const BrowserPane = lazy(() => import('./Browser'));
 
@@ -37,6 +40,8 @@ export const dynamicTabDescriptor = (
   browserMetadata: BrowserTabMetadata | undefined,
   browserFallbackLabel: string,
 ): SidebarTabDescriptor | undefined => {
+  if (tab.startsWith('mcp-app:'))
+    return { icon: PanelsTopLeftIcon, key: tab, label: <McpAppTabLabel id={tab.slice(8)} /> };
   const canvasId = canvasIdOfTab(tab);
   if (canvasId) {
     return { icon: PanelsTopLeftIcon, key: tab, label: <CanvasTabLabel canvasId={canvasId} /> };
@@ -74,32 +79,50 @@ const DynamicTabPanes = memo<DynamicTabPanesProps>(
     onBrowserMetadataChange,
     openedTabs,
     visible,
-  }) => (
-    <>
-      {browserAvailable &&
-        openedTabs.filter(isBrowserTab).map((tab) => {
-          const sessionId = browserSessionIdOfTab(browserSessionId, tab);
+  }) => {
+    const enabled = useServerConfigStore(serverConfigSelectors.enableMcpApps);
+    const previous = useRef<string[]>([]);
+    useEffect(() => {
+      for (const tab of previous.current)
+        if (!openedTabs.includes(tab)) mcpAppActions.close(tab.slice(8));
+      previous.current = openedTabs.filter((tab) => tab.startsWith('mcp-app:'));
+    }, [openedTabs]);
+    return (
+      <>
+        {enabled &&
+          composerTarget.writable &&
+          openedTabs
+            .filter((tab) => tab.startsWith('mcp-app:'))
+            .map((tab) => (
+              <Flexbox flex={1} key={tab} style={activeTab === tab ? PANE : HIDDEN_PANE}>
+                <McpAppPane id={tab.slice(8)} scope={composerTarget.contextKey} />
+              </Flexbox>
+            ))}
+        {browserAvailable &&
+          openedTabs.filter(isBrowserTab).map((tab) => {
+            const sessionId = browserSessionIdOfTab(browserSessionId, tab);
 
-          return (
-            <Flexbox flex={1} key={sessionId} style={activeTab === tab ? PANE : HIDDEN_PANE}>
-              <BrowserPane
-                agentId={agentId}
-                composerTarget={composerTarget}
-                sessionId={sessionId}
-                onMetadataChange={(metadata) => onBrowserMetadataChange(tab, metadata)}
-              />
+            return (
+              <Flexbox flex={1} key={sessionId} style={activeTab === tab ? PANE : HIDDEN_PANE}>
+                <BrowserPane
+                  agentId={agentId}
+                  composerTarget={composerTarget}
+                  sessionId={sessionId}
+                  onMetadataChange={(metadata) => onBrowserMetadataChange(tab, metadata)}
+                />
+              </Flexbox>
+            );
+          })}
+        {openedTabs.filter(isCanvasTab).map((tab) => (
+          <Activity key={tab} mode={visible && activeTab === tab ? 'visible' : 'hidden'}>
+            <Flexbox flex={1} style={PANE}>
+              <CanvasPane canvasId={canvasIdOfTab(tab)!} />
             </Flexbox>
-          );
-        })}
-      {openedTabs.filter(isCanvasTab).map((tab) => (
-        <Activity key={tab} mode={visible && activeTab === tab ? 'visible' : 'hidden'}>
-          <Flexbox flex={1} style={PANE}>
-            <CanvasPane canvasId={canvasIdOfTab(tab)!} />
-          </Flexbox>
-        </Activity>
-      ))}
-    </>
-  ),
+          </Activity>
+        ))}
+      </>
+    );
+  },
 );
 
 DynamicTabPanes.displayName = 'WorkingSidebarDynamicTabPanes';

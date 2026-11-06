@@ -125,6 +125,8 @@ vi.mock('@/store/chat/selectors', () => ({
 
 vi.mock('@/store/serverConfig', () => ({
   featureFlagsSelectors: vi.fn(),
+  serverConfigSelectors: { enableMcpApps: () => false },
+  getServerConfigStoreState: () => undefined,
   useServerConfigStore: () => ({}),
 }));
 
