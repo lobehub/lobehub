@@ -28,8 +28,8 @@ const KEYS: Record<string, 'next' | 'pass' | 'previous' | 'rework'> = {
   y: 'pass',
 };
 
-export const keyAction = (key: string, typing: boolean) =>
-  typing ? undefined : KEYS[key.toLowerCase()];
+export const keyAction = (key: string, typing: boolean, covered = false) =>
+  typing || covered ? undefined : KEYS[key.toLowerCase()];
 
 export interface ComboDifference {
   combo: number;

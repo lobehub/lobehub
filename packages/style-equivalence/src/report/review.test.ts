@@ -60,6 +60,11 @@ describe('keyAction', () => {
   it('ignores every shortcut while the reviewer is typing', () => {
     for (const key of ['j', 'k', 'y', 'n']) expect(keyAction(key, true)).toBeUndefined();
   });
+
+  it('ignores every shortcut while a panel covers the queue', () => {
+    for (const key of ['j', 'k', 'y', 'n']) expect(keyAction(key, false, true)).toBeUndefined();
+    expect(keyAction('j', false, false)).toBe('next');
+  });
 });
 
 describe('reviewGrid', () => {

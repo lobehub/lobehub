@@ -41,6 +41,9 @@ const styles = stylex.create({
 const isTyping = (target: EventTarget | null) =>
   target instanceof HTMLElement && ['INPUT', 'TEXTAREA'].includes(target.tagName);
 
+const inDialog = (target: EventTarget | null) =>
+  target instanceof Element && Boolean(target.closest('[role="dialog"]'));
+
 export const ReviewPage = ({ initialKey }: { initialKey?: string }) => {
   const [payload, setPayload] = useState<ReviewPayload>();
   const [current, setCurrent] = useState<string | undefined>(initialKey);
@@ -97,7 +100,7 @@ export const ReviewPage = ({ initialKey }: { initialKey?: string }) => {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (!payload || event.metaKey || event.ctrlKey || event.altKey) return;
-      const action = keyAction(event.key, isTyping(event.target));
+      const action = keyAction(event.key, isTyping(event.target), panel || inDialog(event.target));
       if (!action) return;
       event.preventDefault();
       const index = payload.items.findIndex((entry) => entry.key === current);
@@ -109,7 +112,7 @@ export const ReviewPage = ({ initialKey }: { initialKey?: string }) => {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [act, current, item, payload, select]);
+  }, [act, current, item, panel, payload, select]);
 
   if (!payload)
     return (

@@ -2,7 +2,7 @@ import { Button, Flexbox, Hotkey, Text, TextArea, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { Check, Undo2 } from 'lucide-react';
-import type { RefObject } from 'react';
+import type { ReactNode, RefObject } from 'react';
 
 import type { ReviewView } from '../api';
 
@@ -16,7 +16,30 @@ const styles = stylex.create({
     paddingBlock: 12,
     paddingInline: 32,
   },
+  trigger: { display: 'inline-flex' },
 });
+
+const ActionTooltip = ({
+  blocked,
+  children,
+  hotkey,
+  title,
+}: {
+  blocked: boolean;
+  children: ReactNode;
+  hotkey: string;
+  title: string;
+}) => (
+  <Tooltip hotkey={hotkey} title={title}>
+    <span
+      aria-label={blocked ? title : undefined}
+      tabIndex={blocked ? 0 : undefined}
+      {...stylex.props(styles.trigger)}
+    >
+      {children}
+    </span>
+  </Tooltip>
+);
 
 const passBlocker = (item: ReviewView, note: string) => {
   if (!item.canPass)
@@ -65,7 +88,11 @@ export const ReviewBar = ({
           }
           onChange={(event) => onNote(event.target.value)}
         />
-        <Tooltip hotkey="n" title={waiting ? '等 agent 读完代码才能操作' : '打回，原因必填'}>
+        <ActionTooltip
+          blocked={waiting}
+          hotkey="n"
+          title={waiting ? '等 agent 读完代码才能操作' : '打回，原因必填'}
+        >
           <Button
             danger
             disabled={Boolean(busy) || waiting}
@@ -75,8 +102,8 @@ export const ReviewBar = ({
           >
             打回
           </Button>
-        </Tooltip>
-        <Tooltip hotkey="y" title={blocker ?? '通过这一项'}>
+        </ActionTooltip>
+        <ActionTooltip blocked={Boolean(blocker)} hotkey="y" title={blocker ?? '通过这一项'}>
           <Button
             disabled={Boolean(busy || blocker)}
             icon={Check}
@@ -86,7 +113,7 @@ export const ReviewBar = ({
           >
             通过
           </Button>
-        </Tooltip>
+        </ActionTooltip>
       </Flexbox>
       <Flexbox horizontal align="center" gap={12}>
         {error ? (
