@@ -17,10 +17,6 @@ vi.mock('@lobechat/shared-tool-ui/styles', () => ({
   shinyTextStyles: { shinyText: 'shiny-text' },
 }));
 
-vi.mock('@lobehub/ui', () => ({}));
-
-vi.mock('@lobehub/ui', () => ({}));
-
 describe('AskUserQuestionInspector', () => {
   afterEach(cleanup);
 
