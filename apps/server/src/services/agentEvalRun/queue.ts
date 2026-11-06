@@ -1,7 +1,9 @@
 import type { EvalRunConfig } from '@lobechat/types';
+import pMap from 'p-map';
 
 import { AgentEvalRunWorkflow } from '@/server/workflows/agentEvalRun';
 
+import { QUEUED_TRIGGER_CONCURRENCY } from './constants';
 import type { EvalRunDeps } from './types';
 
 /**
@@ -33,8 +35,9 @@ export async function dispatchQueuedCases(
 
   const claimed = await deps.executionRepo.claimQueuedCases(runId, limit);
   const failed: string[] = [];
-  await Promise.all(
-    claimed.map(async (testCaseId) => {
+  await pMap(
+    claimed,
+    async (testCaseId) => {
       try {
         await AgentEvalRunWorkflow.triggerExecuteTestCase({
           runId,
@@ -45,7 +48,8 @@ export async function dispatchQueuedCases(
         console.error('[agentEvalRun] failed to start queued case', runId, testCaseId, error);
         failed.push(testCaseId);
       }
-    }),
+    },
+    { concurrency: QUEUED_TRIGGER_CONCURRENCY },
   );
   // A slot whose start never left must not stay taken until it goes stale.
   await deps.executionRepo.releaseQueuedCases(runId, failed);

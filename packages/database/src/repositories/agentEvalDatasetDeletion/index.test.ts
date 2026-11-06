@@ -1,23 +1,25 @@
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { getTestDB } from '../../../core/getTestDB';
+import { getTestDB } from '../../core/getTestDB';
+import { AgentEvalDatasetModel } from '../../models/agentEval/dataset';
+import { ConnectorModel } from '../../models/connector';
+import { ConnectorToolModel } from '../../models/connectorTool';
 import {
   agentEvalDatasets,
   userConnectors,
   userConnectorTools,
   users,
   workspaces,
-} from '../../../schemas';
-import { ConnectorModel } from '../../connector';
-import { ConnectorToolModel } from '../../connectorTool';
-import { AgentEvalDatasetModel } from '../dataset';
+} from '../../schemas';
+import { AgentEvalDatasetDeletionRepo } from './index';
 
 const db = await getTestDB();
 const userId = 'dataset-delete-owner';
 const otherUserId = 'dataset-delete-other';
 const workspaceId = 'dataset-delete-workspace';
 const datasets = new AgentEvalDatasetModel(db, userId);
+const deletion = new AgentEvalDatasetDeletionRepo(db, userId);
 const gateKeeper = {
   decrypt: async (ciphertext: string) => ({ plaintext: ciphertext.replace(/^sealed:/, '') }),
   encrypt: async (plaintext: string) => `sealed:${plaintext}`,
@@ -84,7 +86,7 @@ describe('Dataset deletion removes its private evaluation connections', () => {
     expect(own.credentials).toMatch(/^sealed:/);
     expect(await db.select().from(userConnectorTools)).toHaveLength(2);
 
-    await datasets.delete(first.id);
+    await deletion.deleteDataset(first.id);
 
     expect(await datasets.findById(first.id)).toBeUndefined();
     expect((await db.select().from(userConnectors)).map(({ id }) => id).sort()).toEqual(
@@ -122,9 +124,9 @@ describe('Dataset deletion removes its private evaluation connections', () => {
         userId,
       })
       .returning();
-    await new AgentEvalDatasetModel(db, otherUserId).delete(owned.id);
-    await datasets.delete('missing-dataset');
-    await datasets.delete(system.id);
+    await new AgentEvalDatasetDeletionRepo(db, otherUserId).deleteDataset(owned.id);
+    await deletion.deleteDataset('missing-dataset');
+    await deletion.deleteDataset(system.id);
     expect((await db.select().from(userConnectors)).map(({ id }) => id).sort()).toEqual(
       [connection.id, systemConnection.id].sort(),
     );
@@ -133,18 +135,19 @@ describe('Dataset deletion removes its private evaluation connections', () => {
 
   it('cleans workspace connections across creators only from the authorized workspace scope', async () => {
     const workspaceDatasets = new AgentEvalDatasetModel(db, userId, workspaceId);
+    const workspaceDeletion = new AgentEvalDatasetDeletionRepo(db, userId, workspaceId);
     const dataset = await workspaceDatasets.create({ identifier: 'shared', name: 'Shared' });
     const shared = await createConnection(dataset.id, otherUserId, workspaceId);
     await ConnectorToolModel.forEvaluation(db, userId, dataset.id, workspaceId).upsertMany(
       shared.id,
       [{ crudType: 'read', toolName: 'read' }],
     );
-    await datasets.delete(dataset.id);
+    await deletion.deleteDataset(dataset.id);
     expect(
       await db.select().from(userConnectors).where(eq(userConnectors.id, shared.id)),
     ).toHaveLength(1);
 
-    await workspaceDatasets.delete(dataset.id);
+    await workspaceDeletion.deleteDataset(dataset.id);
     expect(await db.select().from(userConnectors)).toEqual([]);
     expect(await db.select().from(userConnectorTools)).toEqual([]);
   });

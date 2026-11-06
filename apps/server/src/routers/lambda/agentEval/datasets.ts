@@ -143,7 +143,7 @@ export const datasetRouter = router({
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input, ctx }) => {
       try {
-        const result = await ctx.datasetModel.delete(input.id);
+        const result = await ctx.datasetDeletionRepo.deleteDataset(input.id);
         // Check if any rows were affected
         if (result.rowCount === 0) {
           return {

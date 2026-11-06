@@ -11,6 +11,7 @@ import {
 } from '@/database/models/agentEval';
 import { ConnectorModel } from '@/database/models/connector';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
+import { AgentEvalDatasetDeletionRepo } from '@/database/repositories/agentEvalDatasetDeletion';
 import { AgentEvalDatasetConnectorRepo } from '@/database/repositories/agentEvalDatasetPackage/datasetConnectorBindings';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
@@ -52,6 +53,7 @@ export const agentEvalProcedure = wsCompatProcedure.use(serverDatabase).use(asyn
       },
       datasetModel: new AgentEvalDatasetModel(ctx.serverDB, ctx.userId, wsId),
       datasetConnectorRepo: new AgentEvalDatasetConnectorRepo(ctx.serverDB, ctx.userId, wsId),
+      datasetDeletionRepo: new AgentEvalDatasetDeletionRepo(ctx.serverDB, ctx.userId, wsId),
       environmentModel: new AgentEvalEnvironmentModel(ctx.serverDB, ctx.userId, wsId),
       experimentModel: new AgentEvalExperimentModel(ctx.serverDB, ctx.userId, wsId),
       runModel: new AgentEvalRunModel(ctx.serverDB, ctx.userId, wsId),

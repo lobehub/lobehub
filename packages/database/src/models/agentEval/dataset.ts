@@ -1,13 +1,8 @@
 import type { AgentEvalTestCaseInsert } from '@lobechat/types';
-import { and, asc, count, desc, eq, inArray, isNotNull, isNull, or, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, inArray, isNotNull, isNull, or } from 'drizzle-orm';
 import isEqual from 'fast-deep-equal';
 
-import {
-  agentEvalDatasets,
-  agentEvalTestCases,
-  type NewAgentEvalDataset,
-  userConnectors,
-} from '../../schemas';
+import { agentEvalDatasets, agentEvalTestCases, type NewAgentEvalDataset } from '../../schemas';
 import { type LobeChatDatabase } from '../../type';
 import { buildWorkspaceWhere, normalizeWorkspaceId } from '../../utils/workspace';
 import {
@@ -96,37 +91,6 @@ export class AgentEvalDatasetModel {
       }
       return result;
     });
-
-  /**
-   * Delete a dataset by id
-   */
-  delete = async (id: string) => {
-    return this.db.transaction(async (tx) => {
-      const [dataset] = await tx
-        .select({ id: agentEvalDatasets.id })
-        .from(agentEvalDatasets)
-        .where(and(eq(agentEvalDatasets.id, id), this.mutableOwnership()))
-        .for('update');
-      if (dataset) {
-        // The Dataset marker has no FK. Remove its private credentials in the
-        // same transaction; connection tools cascade through their existing FK.
-        await tx
-          .delete(userConnectors)
-          .where(
-            and(
-              buildWorkspaceWhere(
-                { userId: this.userId, workspaceId: this.workspaceId },
-                userConnectors,
-              ),
-              sql`${userConnectors.metadata} -> 'agentEval' ->> 'datasetId' = ${dataset.id}`,
-            ),
-          );
-      }
-      return tx
-        .delete(agentEvalDatasets)
-        .where(and(eq(agentEvalDatasets.id, id), this.mutableOwnership()));
-    });
-  };
 
   /**
    * Query datasets (system + user/workspace-owned) with test case counts
