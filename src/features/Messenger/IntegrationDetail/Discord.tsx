@@ -1,6 +1,7 @@
 'use client';
 
 import { Button, Icon, Text } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { LinkIcon, ServerIcon, Trash2Icon, UserIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -145,7 +146,7 @@ const DiscordDetail = memo<DiscordDetailProps>(({ appId, botUsername, name, onBa
         )
       )}
       {!hasLinks && !hasInstallations && (
-        <div className={styles.emptyRow}>{t('messenger.detail.connections.empty')}</div>
+        <div {...stylex.props(styles.emptyRow)}>{t('messenger.detail.connections.empty')}</div>
       )}
     </DetailLayout>
   );

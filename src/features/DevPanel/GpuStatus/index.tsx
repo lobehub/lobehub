@@ -1,83 +1,71 @@
 'use client';
 
 import type { GpuStatus } from '@lobechat/electron-client-ipc';
-import { createStaticStyles, cssVar, cx, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Fragment, memo, useEffect, useState } from 'react';
 
 import { devDockPanelStyles } from '@/features/DevDock/panelStyles';
 import { electronDevtoolsService } from '@/services/electron/devtools';
 
-const styles = createStaticStyles(({ css }) => ({
-  device: css`
-    display: grid;
-    grid-template-columns: 96px 1fr;
-    flex-shrink: 0;
-    gap: 4px 8px;
+const styles = stylex.create({
+  device: {
+    display: 'grid',
+    gridTemplateColumns: '96px 1fr',
+    flexShrink: 0,
+    rowGap: '4px',
+    columnGap: '8px',
+    paddingBlock: '10px',
+    paddingInline: '12px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '11px',
+    color: cssVar.colorTextSecondary,
+  },
+  empty: {
+    padding: '24px',
+    fontSize: '12px',
+    color: cssVar.colorTextTertiary,
+    textAlign: 'center',
+  },
+  error: { color: cssVar.colorError },
+  key: { color: cssVar.colorTextQuaternary },
+  legend: {
+    flexShrink: 0,
+    paddingBlockStart: '8px',
+    paddingBlockEnd: '12px',
+    paddingInline: '12px',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+    fontSize: '10px',
+    lineHeight: 1.6,
+    color: cssVar.colorTextQuaternary,
+  },
+  muted: { color: cssVar.colorTextTertiary },
+  ok: { color: cssVar.colorSuccess },
+  rows: { overflow: 'auto', flex: '1', minHeight: '0' },
+  row: {
+    display: 'grid',
+    gridTemplateColumns: '1fr 200px',
+    gap: '8px',
+    alignItems: 'center',
+    paddingBlock: '5px',
+    paddingInline: '12px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '11px',
+  },
+  value: { overflowWrap: 'anywhere' },
+  warn: { color: cssVar.colorWarning },
+});
 
-    padding-block: 10px;
-    padding-inline: 12px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 11px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  empty: css`
-    padding: 24px;
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-    text-align: center;
-  `,
-  error: css`
-    color: ${cssVar.colorError};
-  `,
-  key: css`
-    color: ${cssVar.colorTextQuaternary};
-  `,
-  legend: css`
-    flex-shrink: 0;
-
-    padding-block: 8px 12px;
-    padding-inline: 12px;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-
-    font-size: 10px;
-    line-height: 1.6;
-    color: ${cssVar.colorTextQuaternary};
-  `,
-  muted: css`
-    color: ${cssVar.colorTextTertiary};
-  `,
-  ok: css`
-    color: ${cssVar.colorSuccess};
-  `,
-  rows: css`
-    overflow: auto;
-    flex: 1;
-    min-height: 0;
-  `,
-  row: css`
-    display: grid;
-    grid-template-columns: 1fr 200px;
-    gap: 8px;
-    align-items: center;
-
-    padding-block: 5px;
-    padding-inline: 12px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 11px;
-  `,
-  value: css`
-    overflow-wrap: anywhere;
-  `,
-  warn: css`
-    color: ${cssVar.colorWarning};
-  `,
-}));
-
-const statusClass = (status: string): string => {
+const statusStyle = (status: string) => {
   if (status.startsWith('enabled')) return styles.ok;
   if (status.includes('software')) return styles.warn;
   if (status.endsWith('_ok')) return styles.muted;
@@ -114,8 +102,8 @@ const GpuStatusPanel = memo(() => {
 
   if (failed)
     return (
-      <div className={devDockPanelStyles.root}>
-        <div className={styles.empty}>GPU status unavailable over ipc.</div>
+      <div {...stylex.props(devDockPanelStyles.root)}>
+        <div {...stylex.props(styles.empty)}>GPU status unavailable over ipc.</div>
       </div>
     );
   if (!status) return null;
@@ -123,26 +111,26 @@ const GpuStatusPanel = memo(() => {
   const features = Object.entries(status.featureStatus).sort(([a], [b]) => a.localeCompare(b));
 
   return (
-    <Flexbox className={devDockPanelStyles.root}>
-      <div className={styles.device}>
+    <Flexbox className={stylex.props(devDockPanelStyles.root).className}>
+      <div {...stylex.props(styles.device)}>
         {DEVICE_LABELS.map(([label, key]) => (
           <Fragment key={key}>
-            <span className={styles.key}>{label}</span>
-            <span className={cx(styles.value, !status[key] && styles.muted)}>
+            <span {...stylex.props(styles.key)}>{label}</span>
+            <span {...stylex.props(styles.value, !status[key] && styles.muted)}>
               {status[key] ?? '—'}
             </span>
           </Fragment>
         ))}
       </div>
-      <div className={styles.rows}>
+      <div {...stylex.props(styles.rows)}>
         {features.map(([feature, value]) => (
-          <div className={styles.row} key={feature}>
-            <span className={styles.muted}>{feature}</span>
-            <span className={statusClass(value)}>{value}</span>
+          <div {...stylex.props(styles.row)} key={feature}>
+            <span {...stylex.props(styles.muted)}>{feature}</span>
+            <span {...stylex.props(statusStyle(value))}>{value}</span>
           </div>
         ))}
       </div>
-      <div className={styles.legend}>
+      <div {...stylex.props(styles.legend)}>
         `enabled_*` runs on the GPU, `*_software` fell back to the CPU renderer, `*_off_ok` is
         switched off by design, and anything else is a hard disable worth investigating on
         chrome://gpu. Read once when the panel opens — reopen it to re-sample.

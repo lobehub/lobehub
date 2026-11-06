@@ -1,22 +1,19 @@
 'use client';
 
-import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo, useEffect, useState } from 'react';
 
-const styles = createStaticStyles(({ css }) => ({
-  low: css`
-    color: ${cssVar.colorError};
-  `,
-  mid: css`
-    color: ${cssVar.colorWarning};
-  `,
-  text: css`
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 11px;
-    font-feature-settings: 'tnum';
-    color: ${cssVar.colorTextTertiary};
-  `,
-}));
+const styles = stylex.create({
+  low: { color: cssVar.colorError },
+  mid: { color: cssVar.colorWarning },
+  text: {
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '11px',
+    fontFeatureSettings: "'tnum'",
+    color: cssVar.colorTextTertiary,
+  },
+});
 
 const FpsWidget = memo(() => {
   const [fps, setFps] = useState<number | null>(null);
@@ -45,7 +42,7 @@ const FpsWidget = memo(() => {
 
   return (
     <span
-      className={cx(styles.text, fps < 30 ? styles.low : fps < 50 ? styles.mid : undefined)}
+      {...stylex.props(styles.text, fps < 30 ? styles.low : fps < 50 ? styles.mid : undefined)}
       title={'Frames per second'}
     >
       {fps} FPS

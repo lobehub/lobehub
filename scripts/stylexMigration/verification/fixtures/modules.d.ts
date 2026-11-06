@@ -107,6 +107,8 @@ declare module 'verification:component' {
     tag: string;
     onClick: () => void;
   }>;
+  export const TabItem: ComponentType<Record<string, unknown>>;
+  export const ReplicaEntryTable: ComponentType<Record<string, unknown>>;
 }
 
 declare module 'verification:locale/chat' {

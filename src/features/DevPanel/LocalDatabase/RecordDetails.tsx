@@ -1,6 +1,7 @@
 'use client';
 
-import { cx, Input } from '@lobehub/ui';
+import { Input } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { useState } from 'react';
 
 import { devDockPanelStyles } from '@/features/DevDock/panelStyles';
@@ -23,13 +24,13 @@ const RecordDetails = ({ row }: RecordDetailsProps) => {
   return (
     <aside
       aria-label={'Selected record details'}
-      className={cx(styles.detailsPane, devDockPanelStyles.paneDividerStart)}
+      {...stylex.props(styles.detailsPane, devDockPanelStyles.paneDividerStart)}
     >
-      <div className={devDockPanelStyles.paneHeader}>Details</div>
-      <div className={devDockPanelStyles.paneSearch}>
+      <div {...stylex.props(devDockPanelStyles.paneHeader)}>Details</div>
+      <div {...stylex.props(devDockPanelStyles.paneSearch)}>
         <Input
           allowClear
-          className={devDockPanelStyles.searchInput}
+          className={stylex.props(devDockPanelStyles.searchInput).className}
           disabled={!row}
           placeholder={'Search fields…'}
           size={'small'}
@@ -39,17 +40,17 @@ const RecordDetails = ({ row }: RecordDetailsProps) => {
         />
       </div>
       {row ? (
-        <div className={styles.detailFields}>
+        <div {...stylex.props(styles.detailFields)}>
           {visibleFields.length === 0 ? (
-            <div className={styles.empty}>No fields match.</div>
+            <div {...stylex.props(styles.empty)}>No fields match.</div>
           ) : (
             visibleFields.map((field) => (
-              <div className={styles.detailField} key={field.id}>
-                <div className={styles.detailLabel}>
+              <div {...stylex.props(styles.detailField)} key={field.id}>
+                <div {...stylex.props(styles.detailLabel)}>
                   <span>{field.label}</span>
-                  <span className={styles.detailType}>{field.type}</span>
+                  <span {...stylex.props(styles.detailType)}>{field.type}</span>
                 </div>
-                <pre className={styles.detailValue}>
+                <pre {...stylex.props(styles.detailValue)}>
                   {formatLocalDatabaseFieldValue(field.value)}
                 </pre>
               </div>
@@ -57,7 +58,7 @@ const RecordDetails = ({ row }: RecordDetailsProps) => {
           )}
         </div>
       ) : (
-        <div className={styles.empty}>Select a row to inspect its fields.</div>
+        <div {...stylex.props(styles.empty)}>Select a row to inspect its fields.</div>
       )}
     </aside>
   );

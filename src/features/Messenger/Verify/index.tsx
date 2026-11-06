@@ -1,6 +1,7 @@
 'use client';
 
 import { Button, Flexbox } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router';
@@ -69,7 +70,7 @@ const MessengerVerifyPage = memo(() => {
 
   if (!randomId) {
     return (
-      <Flexbox align="center" className={styles.card} gap={24}>
+      <Flexbox align="center" className={stylex.props(styles.card).className} gap={24}>
         <Heading subtitle={t('verify.error.missingToken')} title={t('verify.error.title')} />
       </Flexbox>
     );
@@ -92,7 +93,7 @@ const MessengerVerifyPage = memo(() => {
 
   if (!isSignedIn) {
     return (
-      <Flexbox align="center" className={styles.card} gap={32}>
+      <Flexbox align="center" className={stylex.props(styles.card).className} gap={32}>
         {platform && <IconRow platform={platform} />}
         <Heading subtitle={t('verify.signInRequired')} title={t('verify.confirm.title')} />
         <Button block href={signInUrl} size="large" type="primary">
@@ -104,7 +105,7 @@ const MessengerVerifyPage = memo(() => {
 
   if (!platform) {
     return (
-      <Flexbox align="center" className={styles.card} gap={24}>
+      <Flexbox align="center" className={stylex.props(styles.card).className} gap={24}>
         <Heading subtitle={t('verify.error.expired')} title={t('verify.error.title')} />
       </Flexbox>
     );
@@ -121,7 +122,7 @@ const MessengerVerifyPage = memo(() => {
   if (!existingLinkSWR.data && tokenStatus !== 'active') {
     if (tokenSWR.error) {
       return (
-        <Flexbox align="center" className={styles.card} gap={24}>
+        <Flexbox align="center" className={stylex.props(styles.card).className} gap={24}>
           <Heading
             subtitle={getMessengerErrorMessage(tokenSWR.error, t, 'verify.error.expired')}
             title={t('verify.error.title')}
@@ -132,7 +133,7 @@ const MessengerVerifyPage = memo(() => {
 
     if (tokenStatus === 'consumed') {
       return (
-        <Flexbox align="center" className={styles.card} gap={24}>
+        <Flexbox align="center" className={stylex.props(styles.card).className} gap={24}>
           <Heading
             subtitle={t('verify.error.alreadyConsumed')}
             title={t('verify.error.alreadyConsumedTitle')}
@@ -142,7 +143,7 @@ const MessengerVerifyPage = memo(() => {
     }
 
     return (
-      <Flexbox align="center" className={styles.card} gap={24}>
+      <Flexbox align="center" className={stylex.props(styles.card).className} gap={24}>
         <Heading subtitle={t('verify.error.expired')} title={t('verify.error.title')} />
       </Flexbox>
     );

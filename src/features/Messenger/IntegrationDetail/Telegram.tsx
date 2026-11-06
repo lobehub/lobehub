@@ -1,6 +1,7 @@
 'use client';
 
 import { Button, Icon } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { LinkIcon, Trash2Icon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -94,7 +95,7 @@ const TelegramDetail = memo<TelegramDetailProps>(({ appId, botUsername, name, on
           onUnlink={() => handleUnlink('')}
         />
       ) : (
-        <div className={styles.emptyRow}>{t('messenger.detail.connections.empty')}</div>
+        <div {...stylex.props(styles.emptyRow)}>{t('messenger.detail.connections.empty')}</div>
       )}
     </DetailLayout>
   );

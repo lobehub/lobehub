@@ -1,7 +1,9 @@
 'use client';
 
 import type { UIChatMessage } from '@lobechat/types';
-import { Block, createStaticStyles, Flexbox, Text } from '@lobehub/ui';
+import { Block, Flexbox, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Component, memo, type ReactNode, useMemo } from 'react';
 
 import { type ConversationContext, ConversationProvider } from '@/features/Conversation';
@@ -15,17 +17,18 @@ import {
 } from './lifecycleMode';
 import type { ApiEntry } from './useDevtoolsEntries';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  missingShell: css`
-    padding-block: 12px;
-    padding-inline: 16px;
-    border: 1px dashed ${cssVar.colorBorderSecondary};
-    border-radius: 12px;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-}));
+const styles = stylex.create({
+  missingShell: {
+    paddingBlock: '12px',
+    paddingInline: '16px',
+    borderWidth: '1px',
+    borderStyle: 'dashed',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: '12px',
+    fontSize: '12px',
+    color: cssVar.colorTextTertiary,
+  },
+});
 
 /** Catches a render/inspector crash so one bad fixture can't blank the page. */
 export class RenderBoundary extends Component<
@@ -60,7 +63,7 @@ export class RenderBoundary extends Component<
 }
 
 const Missing = ({ kind }: { kind: string }) => (
-  <div className={styles.missingShell}>No {kind} component registered for this API.</div>
+  <div {...stylex.props(styles.missingShell)}>No {kind} component registered for this API.</div>
 );
 
 const coerceInspectorContent = (value: unknown): string | null => {

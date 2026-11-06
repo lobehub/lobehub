@@ -34,16 +34,16 @@ export const styles = stylex.create({
     paddingBlock: '8px',
     paddingInline: '8px',
     borderRadius: cssVar.borderRadiusLG,
-    color: { default: cssVar.colorText, ':hover': cssVar.colorText },
+    color: { 'default': cssVar.colorText, ':hover': cssVar.colorText },
     textDecoration: 'none',
-    backgroundColor: { default: null, ':hover': cssVar.colorFillTertiary },
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
     transition: 'background-color 0.15s',
   },
   rowPinned: {
-    backgroundColor: { default: cssVar.colorFillQuaternary, ':hover': cssVar.colorFillTertiary },
+    backgroundColor: { 'default': cssVar.colorFillQuaternary, ':hover': cssVar.colorFillTertiary },
   },
   rowActive: {
-    backgroundColor: { default: cssVar.colorFillSecondary, ':hover': cssVar.colorFillSecondary },
+    backgroundColor: { 'default': cssVar.colorFillSecondary, ':hover': cssVar.colorFillSecondary },
   },
   running: {
     color: cssVar.colorSuccess,

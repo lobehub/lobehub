@@ -1,7 +1,8 @@
 'use client';
 
 import type { MemoryDump } from '@lobechat/electron-client-ipc';
-import { Button, cx, Flexbox } from '@lobehub/ui';
+import { Button, Flexbox } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { Fragment, memo, useState } from 'react';
 
 import { isDesktop } from '@/const/version';
@@ -18,9 +19,9 @@ import { styles } from './styles';
 const MB = 1024 * 1024;
 
 const Stat = memo<{ hint?: string; label: string; value: string }>(({ hint, label, value }) => (
-  <div className={styles.cell} title={hint}>
-    <span className={styles.key}>{label}</span>
-    <span className={styles.value}>{value}</span>
+  <div {...stylex.props(styles.cell)} title={hint}>
+    <span {...stylex.props(styles.key)}>{label}</span>
+    <span {...stylex.props(styles.value)}>{value}</span>
   </div>
 ));
 
@@ -37,7 +38,7 @@ const Overview = memo<{ residentMB: number | null; sample: MemorySample }>(
         : null;
 
     return (
-      <div className={styles.overview}>
+      <div {...stylex.props(styles.overview)}>
         {renderer && (
           <Fragment>
             <Stat
@@ -116,15 +117,15 @@ const Breakdown = memo(() => {
 
   return (
     <Fragment>
-      <div className={styles.sectionTitle}>
+      <div {...stylex.props(styles.sectionTitle)}>
         <span>Breakdown</span>
-        <span className={cx(styles.muted, styles.mono)}>
+        <span {...stylex.props(styles.mono, styles.muted)}>
           {dump
             ? `captured ${new Date(dump.capturedAt).toLocaleTimeString()}`
             : 'memory-infra dump'}
         </span>
         <span style={{ flex: 1 }} />
-        {error && <span className={cx(styles.error, styles.mono)}>{error}</span>}
+        {error && <span {...stylex.props(styles.error, styles.mono)}>{error}</span>}
         <Button disabled={loading} size={'small'} onClick={collectGarbage}>
           {'GC'}
         </Button>
@@ -148,18 +149,18 @@ const ProcessTable = memo(() => {
 
   return (
     <Fragment>
-      <div className={styles.sectionTitle}>Processes</div>
+      <div {...stylex.props(styles.sectionTitle)}>Processes</div>
       {[...processes]
         .sort((a, b) => b.workingSetMB - a.workingSetMB)
         .map((process) => (
-          <div className={cx(styles.row, styles.mono)} key={process.pid}>
+          <div {...stylex.props(styles.row, styles.mono)} key={process.pid}>
             <span>
               {process.type}
-              {process.name && <span className={styles.muted}> · {process.name}</span>}
-              <span className={styles.muted}> pid {process.pid}</span>
+              {process.name && <span {...stylex.props(styles.muted)}> · {process.name}</span>}
+              <span {...stylex.props(styles.muted)}> pid {process.pid}</span>
             </span>
             <span style={{ textAlign: 'end' }}>{formatCompactSize(process.workingSetMB * MB)}</span>
-            <span className={styles.muted}>cpu {process.cpuPercent.toFixed(1)}%</span>
+            <span {...stylex.props(styles.muted)}>cpu {process.cpuPercent.toFixed(1)}%</span>
           </div>
         ))}
     </Fragment>
@@ -175,10 +176,10 @@ const MemoryPopover = memo(() => {
   if (!samples) return null;
 
   return (
-    <Flexbox className={cx(devDockPanelStyles.root, styles.popover)}>
+    <Flexbox className={stylex.props(devDockPanelStyles.root, styles.popover).className}>
       <Overview residentMB={residentMB} sample={samples.latest} />
       <HistoryChart history={samples.history} />
-      <div className={styles.scroll}>
+      <div {...stylex.props(styles.scroll)}>
         {isDesktop && (
           <Fragment>
             <Breakdown />
@@ -186,7 +187,7 @@ const MemoryPopover = memo(() => {
           </Fragment>
         )}
       </div>
-      <div className={styles.legend}>
+      <div {...stylex.props(styles.legend)}>
         Overview samples every 2s. Breakdown attaches the CDP debugger to this renderer and requests
         one detailed memory-infra dump (~1s): v8 is the JS heap, partition_alloc holds Blink strings
         and buffers, web_cache keeps decoded script sources, blink_gc is the DOM and CSSOM, canvas

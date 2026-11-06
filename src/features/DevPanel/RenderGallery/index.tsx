@@ -1,6 +1,8 @@
 'use client';
 
-import { createStaticStyles, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { useEffect, useState } from 'react';
 
 import { useAgentStore } from '@/store/agent';
@@ -16,31 +18,30 @@ import Sidebar from './Sidebar';
 import ToolPage from './ToolPage';
 import { useDevtoolsEntries } from './useDevtoolsEntries';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  empty: css`
-    flex: 1;
-    align-items: center;
-    justify-content: center;
-
-    font-size: 14px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  main: css`
-    overflow: hidden;
-    flex: 1;
-
-    min-width: 0;
-    min-height: 0;
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  page: css`
-    overflow: hidden;
-    width: 100%;
-    height: 100%;
-    background: ${cssVar.colorBgContainer};
-  `,
-}));
+const styles = stylex.create({
+  empty: {
+    flex: '1',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: '14px',
+    color: cssVar.colorTextTertiary,
+  },
+  main: {
+    overflow: 'hidden',
+    flex: '1',
+    minWidth: '0',
+    minHeight: '0',
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  page: {
+    overflow: 'hidden',
+    width: '100%',
+    height: '100%',
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+});
 
 const RenderGallery = () => {
   const { defaultToolset, menuItems, toolsetMap } = useDevtoolsEntries();
@@ -75,13 +76,15 @@ const RenderGallery = () => {
   }, []);
 
   return (
-    <Flexbox horizontal className={styles.page}>
+    <Flexbox horizontal className={stylex.props(styles.page).className}>
       <Sidebar items={menuItems} selectedKey={identifier} onSelect={setIdentifier} />
-      <Flexbox className={styles.main}>
+      <Flexbox className={stylex.props(styles.main).className}>
         {toolset ? (
           <ToolPage toolset={toolset} />
         ) : (
-          <Flexbox className={styles.empty}>No builtin tool renders registered.</Flexbox>
+          <Flexbox className={stylex.props(styles.empty).className}>
+            No builtin tool renders registered.
+          </Flexbox>
         )}
       </Flexbox>
     </Flexbox>

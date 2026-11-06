@@ -1,6 +1,7 @@
 'use client';
 
 import { Alert, Block, Button, Flexbox, Icon, Input, Select, Text, toast } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { SendIcon } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -126,13 +127,13 @@ export const MessengerPushSection = memo<MessengerPushSectionProps>(
                 })}
           </Text>
         </Flexbox>
-        <Block className={styles.card}>
+        <Block className={stylex.props(styles.card).className}>
           <Flexbox gap={12}>
             <Flexbox horizontal align="center" gap={12}>
-              <div className={styles.rowIcon}>
+              <div {...stylex.props(styles.rowIcon)}>
                 <Icon icon={SendIcon} />
               </div>
-              <Flexbox className={styles.rowIdentity} flex={1} gap={4}>
+              <Flexbox className={stylex.props(styles.rowIdentity).className} flex={1} gap={4}>
                 <Text style={{ fontSize: 12 }} type="secondary">
                   {t('messenger.push.title')}
                 </Text>

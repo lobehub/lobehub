@@ -1,17 +1,9 @@
 'use client';
 
 import { Github } from '@lobehub/icons';
-import {
-  ActionIcon,
-  createStaticStyles,
-  cssVar,
-  Flexbox,
-  Icon,
-  Tabs,
-  Tag,
-  Text,
-  Tooltip,
-} from '@lobehub/ui';
+import { ActionIcon, Flexbox, Icon, Tabs, Tag, Text, Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
 import {
   FolderGit2Icon,
@@ -34,40 +26,35 @@ import TabPane from './TabPane';
 import { useCanEditEnvironment } from './useCanEditEnvironment';
 import { type SandboxEnvironment, useEnvironmentActions } from './useEnvironmentData';
 
-const styles = createStaticStyles(({ css }) => ({
-  container: css`
-    padding-block: 16px;
-    padding-inline: 20px;
-  `,
-  header: css`
-    padding-block-end: 16px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  /** The same dot the row uses between its facts. */
-  metaDivider: css`
-    flex: none;
-
-    width: 3px;
-    height: 3px;
-    border-radius: 50%;
-
-    background: ${cssVar.colorTextQuaternary};
-  `,
-  iconTile: css`
-    display: flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-
-    width: 32px;
-    height: 32px;
-    border-radius: ${cssVar.borderRadius};
-
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-}));
+const styles = stylex.create({
+  container: { paddingBlock: '16px', paddingInline: '20px' },
+  header: {
+    paddingBlockEnd: '16px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+  metaDivider: {
+    flex: 'none',
+    width: '3px',
+    height: '3px',
+    borderRadius: '50%',
+    backgroundColor: cssVar.colorTextQuaternary,
+    backgroundImage: 'none',
+  },
+  iconTile: {
+    display: 'flex',
+    flex: 'none',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '32px',
+    height: '32px',
+    borderRadius: cssVar.borderRadius,
+    color: cssVar.colorTextSecondary,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+});
 
 type DetailTab = 'overview' | EnvironmentFormSection;
 
@@ -109,9 +96,14 @@ const EnvironmentDetailPanel = memo<EnvironmentDetailPanelProps>(({ environment,
     t('environments.meta.unknownCreator');
 
   return (
-    <Flexbox className={styles.container} gap={20}>
-      <Flexbox horizontal align={'center'} className={styles.header} gap={12}>
-        <span className={styles.iconTile}>
+    <Flexbox className={stylex.props(styles.container).className} gap={20}>
+      <Flexbox
+        horizontal
+        align={'center'}
+        className={stylex.props(styles.header).className}
+        gap={12}
+      >
+        <span className={stylex.props(styles.iconTile).className}>
           <Github size={18} />
         </span>
         <Flexbox flex={1} gap={4} style={{ minWidth: 0 }}>
@@ -134,7 +126,7 @@ const EnvironmentDetailPanel = memo<EnvironmentDetailPanelProps>(({ environment,
                 {creator}
               </Text>
             </Flexbox>
-            <span className={styles.metaDivider} />
+            <span {...stylex.props(styles.metaDivider)} />
             {/* The same relative phrasing as the row, so the panel does not
                   answer "when" in a different voice; the exact instant is a
                   hover away. */}

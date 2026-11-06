@@ -1,7 +1,9 @@
 'use client';
 
 import type { AppMenuNode } from '@lobechat/electron-client-ipc';
-import { createStaticStyles, cx, DropdownMenu, Tooltip } from '@lobehub/ui';
+import { cx, DropdownMenu, Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronDown } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -19,53 +21,41 @@ import {
   runWhenMenuFocusSettles,
 } from './editingFocus';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  chevron: css`
-    flex-shrink: 0;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  logo: css`
-    display: flex;
-    gap: 4px;
-    align-items: center;
-    justify-content: center;
-
-    width: 100%;
-    height: 100%;
-  `,
-  menu: css`
-    width: 176px;
-    min-width: 176px;
-  `,
-  trigger: css`
-    cursor: pointer;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    width: 44px;
-    height: 28px;
-
-    /* Align the mark with the sidebar navigation icons below. */
-    margin-inline-start: -4px;
-    padding: 0;
-    border: none;
-    border-radius: 8px;
-
-    background: transparent;
-
-    &:hover,
-    &[data-popup-open] {
-      background: ${cssVar.colorFillTertiary};
-    }
-
-    &:focus-visible {
-      outline: 2px solid ${cssVar.colorPrimary};
-      outline-offset: 2px;
-    }
-  `,
-}));
+const styles = stylex.create({
+  chevron: { flexShrink: 0, color: cssVar.colorTextTertiary },
+  logo: {
+    display: 'flex',
+    gap: '4px',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    height: '100%',
+  },
+  menu: { width: '176px', minWidth: '176px' },
+  trigger: {
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '44px',
+    height: '28px',
+    // Align the mark with the sidebar navigation icons below.
+    marginInlineStart: '-4px',
+    padding: 0,
+    borderStyle: 'none',
+    borderRadius: '8px',
+    backgroundColor: {
+      'default': 'transparent',
+      ':hover': cssVar.colorFillTertiary,
+      '[data-popup-open]': cssVar.colorFillTertiary,
+    },
+    backgroundImage: 'none',
+    outlineWidth: { 'default': null, ':focus-visible': '2px' },
+    outlineStyle: { 'default': null, ':focus-visible': 'solid' },
+    outlineColor: { 'default': null, ':focus-visible': cssVar.colorPrimary },
+    outlineOffset: { 'default': null, ':focus-visible': '2px' },
+  },
+});
 
 const WindowsAppMenu = memo(() => {
   const { t } = useTranslation('electron');
@@ -110,7 +100,7 @@ const WindowsAppMenu = memo(() => {
       items={items}
       placement={'bottomLeft'}
       popupProps={{
-        className: styles.menu,
+        className: stylex.props(styles.menu).className,
         finalFocus: () => {
           const element = editingTargetRef.current?.element;
           return element?.isConnected ? element : true;
@@ -123,7 +113,7 @@ const WindowsAppMenu = memo(() => {
     >
       <button
         aria-label={t('navigation.appMenu')}
-        className={cx(electronStylish.nodrag, styles.trigger)}
+        className={cx(electronStylish.nodrag, stylex.props(styles.trigger).className)}
         type={'button'}
         onPointerDown={() => {
           if (menuOpen) return;
@@ -135,9 +125,9 @@ const WindowsAppMenu = memo(() => {
           placement={'bottomLeft'}
           title={t('navigation.appMenu')}
         >
-          <span className={styles.logo}>
+          <span {...stylex.props(styles.logo)}>
             <ProductLogo size={16} type={'mono'} />
-            <ChevronDown aria-hidden className={styles.chevron} size={12} />
+            <ChevronDown aria-hidden className={stylex.props(styles.chevron).className} size={12} />
           </span>
         </Tooltip>
       </button>

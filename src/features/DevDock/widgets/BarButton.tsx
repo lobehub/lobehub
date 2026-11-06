@@ -1,6 +1,7 @@
 'use client';
 
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import type { LucideIcon } from 'lucide-react';
 import { memo } from 'react';
 
@@ -8,32 +9,24 @@ import { memo } from 'react';
  * Shared with the dropdown-style widgets (locale / workspace role), whose
  * trigger has to be a plain element instead of a `<button>` with `onClick`.
  */
-export const barButtonStyles = createStaticStyles(({ css }) => ({
-  button: css`
-    cursor: pointer;
-
-    display: inline-flex;
-    flex-shrink: 0;
-    gap: 4px;
-    align-items: center;
-
-    height: 20px;
-    padding-inline: 4px;
-    border: none;
-    border-radius: 4px;
-
-    font-size: 11px;
-    color: ${cssVar.colorTextSecondary};
-    white-space: nowrap;
-
-    background: transparent;
-
-    &:hover {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-}));
+export const barButtonStyles = stylex.create({
+  button: {
+    cursor: 'pointer',
+    display: 'inline-flex',
+    flexShrink: 0,
+    gap: '4px',
+    alignItems: 'center',
+    height: '20px',
+    paddingInline: '4px',
+    borderStyle: 'none',
+    borderRadius: '4px',
+    fontSize: '11px',
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
+    whiteSpace: 'nowrap',
+    backgroundColor: { 'default': 'transparent', ':hover': cssVar.colorFillTertiary },
+    backgroundImage: 'none',
+  },
+});
 
 interface BarButtonProps {
   icon: LucideIcon;
@@ -43,7 +36,7 @@ interface BarButtonProps {
 }
 
 const BarButton = memo<BarButtonProps>(({ icon: Icon, label, onClick, title }) => (
-  <button className={barButtonStyles.button} title={title} type={'button'} onClick={onClick}>
+  <button {...stylex.props(barButtonStyles.button)} title={title} type={'button'} onClick={onClick}>
     <Icon size={11} />
     <span>{label}</span>
   </button>

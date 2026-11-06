@@ -60,17 +60,6 @@ vi.mock('@lobehub/ui', async (importOriginal) => {
       ),
       confirmModal: (...args: unknown[]) => mockConfirmModal(...args),
     }),
-    async (importOriginal) => ({
-      ...(await importOriginal<object>()),
-      createStaticStyles: () => ({
-        backButton: 'backButton',
-        card: 'card',
-        emptyRow: 'emptyRow',
-        rowIcon: 'rowIcon',
-        rowIdentity: 'rowIdentity',
-        scopeValue: 'scopeValue',
-      }),
-    }),
   ];
   const merged: Record<string, unknown> = { ...actual };
   for (const factory of factories) {
@@ -171,7 +160,10 @@ describe('Messenger UserAgentConnection', () => {
     expect(within(personalOption).queryByText('demo-user')).not.toBeInTheDocument();
     expect(within(personalOption).getByTestId('personal-tag')).toHaveTextContent('personal');
     expect(within(personalOption).queryByText('个人')).not.toBeInTheDocument();
-    expect(screen.getByTestId('scope-select')).toHaveAttribute('data-value-class', 'scopeValue');
+    expect(screen.getByTestId('scope-select')).toHaveAttribute(
+      'data-value-class',
+      expect.stringContaining('scopeValue'),
+    );
   });
 
   it('defaults an agent-less personal connection to LobeAI', () => {

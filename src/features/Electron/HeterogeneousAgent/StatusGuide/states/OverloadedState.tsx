@@ -1,3 +1,4 @@
+// oxlint-disable-next-line stylex-migration/no-emotion-styles -- Highlighter <pre> output gets no className
 import { Button, createStaticStyles, Flexbox, Highlighter, Spin, Text } from '@lobehub/ui';
 import { Ban, RotateCcw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -6,7 +7,7 @@ import GuideActions from '../GuideActions';
 import GuideShell from '../GuideShell';
 import type { HeterogeneousAgentGuideStateProps } from '../types';
 
-const styles = createStaticStyles(({ css }) => ({
+const fallback = createStaticStyles(({ css }) => ({
   errorDetails: css`
     && pre {
       padding: 12px;
@@ -82,7 +83,7 @@ const OverloadedState = ({
           <Highlighter
             wrap
             actionIconSize={'small'}
-            classNames={{ content: styles.errorDetails }}
+            classNames={{ content: fallback.errorDetails }}
             language={'log'}
             style={{ maxHeight: 200, overflow: 'auto' }}
             variant={'outlined'}

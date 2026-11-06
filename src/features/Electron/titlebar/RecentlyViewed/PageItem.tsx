@@ -1,6 +1,7 @@
 'use client';
 
-import { ActionIcon, cx, Flexbox, Icon } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Icon } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { Pin, PinOff } from 'lucide-react';
 import React, { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -11,7 +12,7 @@ import { useElectronStore } from '@/store/electron';
 
 import { type ResolvedTab } from '../TabBar/hooks/useResolvedTabs';
 import { isSameTabTarget } from '../TabBar/scope';
-import { useStyles } from './styles';
+import { styles } from './styles';
 
 interface PageItemProps {
   isPinned: boolean;
@@ -23,7 +24,6 @@ const PageItem = memo<PageItemProps>(({ item, isPinned, onClose }) => {
   const { t } = useTranslation('electron');
   const navigate = useWorkspaceAwareNavigate();
   const location = useActiveLocation();
-  const styles = useStyles;
 
   const pinPage = useElectronStore((s) => s.pinPage);
   const unpinPage = useElectronStore((s) => s.unpinPage);
@@ -50,14 +50,18 @@ const PageItem = memo<PageItemProps>(({ item, isPinned, onClose }) => {
     <Flexbox
       horizontal
       align="center"
-      className={cx(styles.item, isActive && styles.itemActive)}
       gap={8}
+      className={
+        stylex.props(styles.item, isActive && styles.itemActive, stylex.defaultMarker()).className
+      }
       onClick={handleClick}
     >
-      {meta.icon && <Icon className={styles.icon} icon={meta.icon} size="small" />}
-      <span className={styles.itemTitle}>{meta.title}</span>
+      {meta.icon && (
+        <Icon className={stylex.props(styles.icon).className} icon={meta.icon} size="small" />
+      )}
+      <span {...stylex.props(styles.itemTitle)}>{meta.title}</span>
       <ActionIcon
-        className={cx('actionIcon', styles.actionIcon)}
+        className={stylex.props(styles.actionIcon).className}
         icon={isPinned ? PinOff : Pin}
         size="small"
         title={isPinned ? t('navigation.unpin') : t('navigation.pin')}

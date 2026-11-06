@@ -55,10 +55,6 @@ vi.mock('@lobehub/ui', async (importOriginal) => {
         </select>
       ),
     }),
-    async (importOriginal) => ({
-      ...((await importOriginal()) as Record<string, unknown>),
-      createStaticStyles: () => ({ error: 'error', qrSlot: 'qrSlot', setup: 'setup' }),
-    }),
   ];
   const merged: Record<string, unknown> = { ...actual };
   for (const factory of factories) {
@@ -113,7 +109,7 @@ vi.mock('./shared', () => ({
   DetailLayout: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
   IntegrationDetailSkeleton: () => null,
   UserAgentConnection: () => null,
-  styles: { card: 'card', rowIcon: 'rowIcon', rowIdentity: 'rowIdentity' },
+  styles: {},
   useLinkActions: () => ({ handleSetActive: vi.fn(), handleUnlink: vi.fn() }),
   useMessengerData: () => ({ installations: [], links: [] }),
 }));

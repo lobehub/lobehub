@@ -1,5 +1,7 @@
 'use client';
 
+import * as stylex from '@stylexjs/stylex';
+
 import { devDockPanelStyles } from '@/features/DevDock/panelStyles';
 
 import { inspectorStyles as styles } from '../inspectorStyles';
@@ -26,8 +28,8 @@ const ReplicaPanel = () => {
   const namespace = selected?.resource.namespace;
 
   return (
-    <div className={devDockPanelStyles.root}>
-      <div className={styles.workspace}>
+    <div {...stylex.props(devDockPanelStyles.root)}>
+      <div {...stylex.props(styles.workspace)}>
         <ResourceList
           resources={visibleResources}
           search={resourceSearch}

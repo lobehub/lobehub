@@ -1,17 +1,8 @@
 'use client';
 
-import {
-  Alert,
-  Block,
-  Button,
-  createStaticStyles,
-  Flexbox,
-  Icon,
-  QRCode,
-  Spin,
-  Text,
-  toast,
-} from '@lobehub/ui';
+import { Alert, Block, Button, Flexbox, Icon, QRCode, Spin, Text, toast } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { InfoIcon, MessageCircleIcon, RefreshCwIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -33,41 +24,39 @@ import {
 const POLL_INTERVAL_MS = 2000;
 const QR_SIZE = 200;
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  code: css`
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 20px;
-    font-weight: 600;
-    letter-spacing: 0.08em;
-  `,
-  qrSlot: css`
-    display: flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-
-    width: ${QR_SIZE + 20}px;
-    height: ${QR_SIZE + 20}px;
-    padding: 9px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  setup: css`
-    align-items: center;
-
-    padding-block: 32px;
-    padding-inline: 20px;
-    border: 1px solid ${cssVar.colorBorder};
-    border-radius: ${cssVar.borderRadius};
-  `,
-  tips: css`
-    max-width: 480px;
-    font-size: ${cssVar.fontSize};
-    text-align: center;
-  `,
-}));
+const styles = stylex.create({
+  code: {
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '20px',
+    fontWeight: 600,
+    letterSpacing: '0.08em',
+  },
+  qrSlot: (size: string) => ({
+    display: 'flex',
+    flex: 'none',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: size,
+    height: size,
+    padding: '9px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  }),
+  setup: {
+    alignItems: 'center',
+    paddingBlock: '32px',
+    paddingInline: '20px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorder,
+    borderRadius: cssVar.borderRadius,
+  },
+  tips: { maxWidth: '480px', fontSize: cssVar.fontSize, textAlign: 'center' },
+});
 
 interface LinqLinkSession {
   code: string;
@@ -186,7 +175,7 @@ const LinqLinkSetup = memo<LinqLinkSetupProps>(({ disabled, onLinked }) => {
   }, [disabled, finishLinked, stopPolling, t]);
 
   return (
-    <Block className={styles.setup}>
+    <Block className={stylex.props(styles.setup).className}>
       <Flexbox align="center" gap={12}>
         {state.stage === 'idle' && (
           <Button
@@ -201,7 +190,7 @@ const LinqLinkSetup = memo<LinqLinkSetupProps>(({ disabled, onLinked }) => {
         {(state.stage === 'loading' || state.stage === 'linked') && <Spin size="large" />}
         {state.stage === 'waiting' && (
           <>
-            <div className={styles.qrSlot}>
+            <div {...stylex.props(styles.qrSlot(`${QR_SIZE + 20}px`))}>
               <QRCode
                 aria-label={t('messenger.linq.setupTitle')}
                 bgColor="#fff"
@@ -212,7 +201,7 @@ const LinqLinkSetup = memo<LinqLinkSetupProps>(({ disabled, onLinked }) => {
               />
             </div>
             <Text type="secondary">{t('messenger.linq.code.label')}</Text>
-            <Text className={styles.code} data-testid="linq-link-code">
+            <Text className={stylex.props(styles.code).className} data-testid="linq-link-code">
               {state.session.code}
             </Text>
             <Text type="secondary">
@@ -259,7 +248,7 @@ const LinqLinkSetup = memo<LinqLinkSetupProps>(({ disabled, onLinked }) => {
           </Flexbox>
         )}
 
-        <Text className={styles.tips} type="secondary">
+        <Text className={stylex.props(styles.tips).className} type="secondary">
           <Icon icon={InfoIcon} style={{ marginInlineEnd: 4 }} />
           {t('messenger.linq.code.tip')}
         </Text>

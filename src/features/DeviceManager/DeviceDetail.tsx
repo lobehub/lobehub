@@ -6,8 +6,6 @@ import {
   ActionIcon,
   Button,
   CopyButton,
-  createStaticStyles,
-  cssVar,
   Flexbox,
   Icon,
   Input,
@@ -17,6 +15,8 @@ import {
   Text,
   toast,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import {
   ArrowLeftIcon,
   BotIcon,
@@ -46,52 +46,43 @@ import FieldLabel from './FieldLabel';
 import { getDeviceIcon } from './getDeviceIcon';
 import { useCanEditDevice, useCanOperateDevice } from './useCanEditDevice';
 
-const styles = createStaticStyles(({ css }) => ({
-  // Presence badge on the icon tile's corner — same treatment as the card the
-  // user just clicked, so the page reads as that card opened up.
-  iconTile: css`
-    position: relative;
-
-    display: flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-
-    width: 56px;
-    height: 56px;
-    border-radius: 14px;
-
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  path: css`
-    overflow: hidden;
-    flex: 1;
-
-    min-width: 0;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: ${cssVar.fontSizeSM};
-    color: ${cssVar.colorTextSecondary};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  presence: css`
-    position: absolute;
-    inset-block-end: -3px;
-    inset-inline-end: -3px;
-
-    width: 14px;
-    height: 14px;
-    border: 2px solid ${cssVar.colorBgLayout};
-    border-radius: 50%;
-  `,
-  recentItem: css`
-    padding-block: 8px;
-    padding-inline: 8px;
-  `,
-}));
+const styles = stylex.create({
+  iconTile: {
+    position: 'relative',
+    display: 'flex',
+    flex: 'none',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '56px',
+    height: '56px',
+    borderRadius: '14px',
+    color: cssVar.colorTextSecondary,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+  path: {
+    overflow: 'hidden',
+    flex: '1',
+    minWidth: '0',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: cssVar.fontSizeSM,
+    color: cssVar.colorTextSecondary,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  presence: {
+    position: 'absolute',
+    insetBlockEnd: '-3px',
+    insetInlineEnd: '-3px',
+    width: '14px',
+    height: '14px',
+    borderWidth: '2px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBgLayout,
+    borderRadius: '50%',
+  },
+  recentItem: { paddingBlock: '8px', paddingInline: '8px' },
+});
 
 const DETAIL_TABS = ['overview', 'files', 'agents'] as const;
 type DetailTab = (typeof DETAIL_TABS)[number];
@@ -286,10 +277,10 @@ const DeviceDetail = memo<DeviceDetailProps>(({ device, isConfirmed, isCurrent, 
 
       {/* ─── Header: title (renamed in place), then the copyable device id ─── */}
       <Flexbox horizontal align={'center'} gap={16}>
-        <span className={styles.iconTile}>
+        <span {...stylex.props(styles.iconTile)}>
           {getDeviceIcon(device.platform, 26)}
           <span
-            className={styles.presence}
+            className={stylex.props(styles.presence).className}
             style={{ background: online ? cssVar.colorSuccess : cssVar.colorTextQuaternary }}
             title={
               presenceUnknown
@@ -332,7 +323,7 @@ const DeviceDetail = memo<DeviceDetailProps>(({ device, isConfirmed, isCurrent, 
           )}
           <Flexbox horizontal align={'center'} gap={6} wrap={'wrap'}>
             <Flexbox horizontal align={'center'} gap={2} style={{ minWidth: 0 }}>
-              <span className={styles.path} title={device.deviceId}>
+              <span {...stylex.props(styles.path)} title={device.deviceId}>
                 {device.deviceId}
               </span>
               <CopyButton content={device.deviceId} size={'small'} />
@@ -410,7 +401,7 @@ const DeviceDetail = memo<DeviceDetailProps>(({ device, isConfirmed, isCurrent, 
               ) : device.defaultCwd ? (
                 // Code font only when there's an actual path to read; empty falls back
                 // to the same dash style as Name so the two fields look consistent.
-                <Text className={styles.path}>{device.defaultCwd}</Text>
+                <Text className={stylex.props(styles.path).className}>{device.defaultCwd}</Text>
               ) : (
                 <Text type={'secondary'}>—</Text>
               )}
@@ -441,13 +432,13 @@ const DeviceDetail = memo<DeviceDetailProps>(({ device, isConfirmed, isCurrent, 
                   items={workingDirs.map((d) => ({ id: d.path, repoType: d.repoType }))}
                   renderItem={(item: { id: string; repoType?: 'git' | 'github' }) => (
                     <SortableList.Item
-                      className={styles.recentItem}
+                      className={stylex.props(styles.recentItem).className}
                       id={item.id}
                       variant={'filled'}
                     >
                       <SortableList.DragHandle />
                       <DirIcon repoType={item.repoType} />
-                      <Text className={styles.path} title={item.id}>
+                      <Text className={stylex.props(styles.path).className} title={item.id}>
                         {item.id}
                       </Text>
                       <ActionIcon
@@ -466,12 +457,12 @@ const DeviceDetail = memo<DeviceDetailProps>(({ device, isConfirmed, isCurrent, 
                   <Flexbox
                     horizontal
                     align={'center'}
-                    className={styles.recentItem}
+                    className={stylex.props(styles.recentItem).className}
                     gap={8}
                     key={d.path}
                   >
                     <DirIcon repoType={d.repoType} />
-                    <Text className={styles.path} title={d.path}>
+                    <Text className={stylex.props(styles.path).className} title={d.path}>
                       {d.path}
                     </Text>
                   </Flexbox>

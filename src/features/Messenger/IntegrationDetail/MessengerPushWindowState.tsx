@@ -1,6 +1,8 @@
 'use client';
 
-import { Button, createStaticStyles, Flexbox, Icon, Skeleton, Tag, Text } from '@lobehub/ui';
+import { Button, Flexbox, Icon, Skeleton, Tag, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { CheckCircle2Icon, ClockIcon, MoonIcon, RefreshCwIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -11,33 +13,30 @@ export type MessengerPushWindowSnapshot = Awaited<
   ReturnType<typeof messengerService.getMessengerPushWindow>
 >;
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  quotaText: css`
-    font-size: 13px;
-    color: ${cssVar.colorText};
-    white-space: nowrap;
-
-    > span {
-      color: ${cssVar.colorTextSecondary};
-    }
-  `,
-  statBar: css`
-    width: 4px;
-    height: 16px;
-    border-radius: 2px;
-    background: ${cssVar.colorFillSecondary};
-
-    &[data-filled='true'] {
-      background: ${cssVar.colorInfo};
-    }
-  `,
-}));
+const styles = stylex.create({
+  quotaText: {
+    fontSize: '13px',
+    color: cssVar.colorText,
+    whiteSpace: 'nowrap',
+  },
+  quotaTotal: { color: cssVar.colorTextSecondary },
+  statBar: {
+    width: '4px',
+    height: '16px',
+    borderRadius: '2px',
+    backgroundColor: {
+      'default': cssVar.colorFillSecondary,
+      '[data-filled="true"]': cssVar.colorInfo,
+    },
+    backgroundImage: 'none',
+  },
+});
 
 /** Discrete best-effort quota meter: one bar per locally tracked send. */
 const QuotaBars = memo<{ remaining: number; total: number }>(({ remaining, total }) => (
   <Flexbox horizontal align="center" gap={3}>
     {Array.from({ length: total }, (_, index) => (
-      <div className={styles.statBar} data-filled={index < remaining} key={index} />
+      <div {...stylex.props(styles.statBar)} data-filled={index < remaining} key={index} />
     ))}
   </Flexbox>
 ));
@@ -128,9 +127,9 @@ export const MessengerPushWindowState = memo<MessengerPushWindowStateProps>(
         </Flexbox>
         <Flexbox horizontal align="center" gap={8}>
           <QuotaBars remaining={status.remaining} total={status.maxSends} />
-          <span className={styles.quotaText}>
+          <span {...stylex.props(styles.quotaText)}>
             {status.remaining}
-            <span> / {status.maxSends}</span>
+            <span {...stylex.props(styles.quotaTotal)}> / {status.maxSends}</span>
           </span>
         </Flexbox>
       </Flexbox>

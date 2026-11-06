@@ -1,109 +1,97 @@
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 
-export const styles = createStaticStyles(({ css }) => ({
-  bar: css`
-    height: 4px;
-    border-radius: 2px;
-    background: ${cssVar.colorFillSecondary};
-  `,
-  barFill: css`
-    height: 100%;
-    border-radius: 2px;
-    background: ${cssVar.colorInfo};
-  `,
-  caption: css`
-    padding-block: 6px;
-    padding-inline: 12px;
-    font-size: 10px;
-    color: ${cssVar.colorTextQuaternary};
-  `,
-  cell: css`
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  `,
-  error: css`
-    color: ${cssVar.colorError};
-  `,
-  key: css`
-    font-size: 10px;
-    color: ${cssVar.colorTextQuaternary};
-  `,
-  legend: css`
-    flex-shrink: 0;
-
-    padding-block: 8px 12px;
-    padding-inline: 12px;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-
-    font-size: 10px;
-    line-height: 1.6;
-    color: ${cssVar.colorTextQuaternary};
-  `,
-  mono: css`
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 11px;
-    font-feature-settings: 'tnum';
-    color: ${cssVar.colorTextSecondary};
-  `,
-  muted: css`
-    color: ${cssVar.colorTextTertiary};
-  `,
-  popover: css`
-    width: min(640px, calc(100vw - 32px));
-    max-height: min(70vh, 720px);
-  `,
-  overview: css`
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    flex-shrink: 0;
-    gap: 8px 12px;
-
-    padding-block: 10px;
-    padding-inline: 12px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  row: css`
-    display: grid;
-    grid-template-columns: 1fr 96px 120px;
-    gap: 8px;
-    align-items: center;
-
-    padding-block: 4px;
-    padding-inline: 12px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  rowClickable: css`
-    cursor: pointer;
-
-    &:hover {
-      background: ${cssVar.colorFillQuaternary};
-    }
-  `,
-  scroll: css`
-    overflow: auto;
-    flex: 1;
-    min-height: 0;
-    max-height: 360px;
-  `,
-  sectionTitle: css`
-    display: flex;
-    gap: 8px;
-    align-items: center;
-
-    padding-block: 8px;
-    padding-inline: 12px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-
-    font-size: 11px;
-    font-weight: 600;
-    color: ${cssVar.colorText};
-  `,
-  value: css`
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 11px;
-    font-feature-settings: 'tnum';
-    color: ${cssVar.colorText};
-    white-space: nowrap;
-  `,
-}));
+export const styles = stylex.create({
+  bar: {
+    height: '4px',
+    borderRadius: '2px',
+    backgroundColor: cssVar.colorFillSecondary,
+    backgroundImage: 'none',
+  },
+  barFill: {
+    height: '100%',
+    borderRadius: '2px',
+    backgroundColor: cssVar.colorInfo,
+    backgroundImage: 'none',
+  },
+  caption: {
+    paddingBlock: '6px',
+    paddingInline: '12px',
+    fontSize: '10px',
+    color: cssVar.colorTextQuaternary,
+  },
+  cell: { display: 'flex', flexDirection: 'column', gap: '2px' },
+  error: { color: cssVar.colorError },
+  key: { fontSize: '10px', color: cssVar.colorTextQuaternary },
+  legend: {
+    flexShrink: 0,
+    paddingBlockStart: '8px',
+    paddingBlockEnd: '12px',
+    paddingInline: '12px',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+    fontSize: '10px',
+    lineHeight: 1.6,
+    color: cssVar.colorTextQuaternary,
+  },
+  mono: {
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '11px',
+    fontFeatureSettings: "'tnum'",
+    color: cssVar.colorTextSecondary,
+  },
+  muted: { color: cssVar.colorTextTertiary },
+  overview: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(4, 1fr)',
+    flexShrink: 0,
+    rowGap: '8px',
+    columnGap: '12px',
+    paddingBlock: '10px',
+    paddingInline: '12px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+  popover: {
+    width: 'min(640px, calc(100vw - 32px))',
+    maxHeight: 'min(70vh, 720px)',
+  },
+  row: {
+    display: 'grid',
+    gridTemplateColumns: '1fr 96px 120px',
+    gap: '8px',
+    alignItems: 'center',
+    paddingBlock: '4px',
+    paddingInline: '12px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+  rowClickable: {
+    cursor: 'pointer',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillQuaternary },
+  },
+  scroll: { overflow: 'auto', flex: '1', minHeight: 0, maxHeight: '360px' },
+  sectionTitle: {
+    display: 'flex',
+    gap: '8px',
+    alignItems: 'center',
+    paddingBlock: '8px',
+    paddingInline: '12px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+    fontSize: '11px',
+    fontWeight: 600,
+    color: cssVar.colorText,
+  },
+  value: {
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '11px',
+    fontFeatureSettings: "'tnum'",
+    color: cssVar.colorText,
+    whiteSpace: 'nowrap',
+  },
+});

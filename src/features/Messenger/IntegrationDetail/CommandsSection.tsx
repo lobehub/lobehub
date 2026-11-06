@@ -1,6 +1,8 @@
 'use client';
 
-import { Block, createStaticStyles, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Block, Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import type { LucideIcon } from 'lucide-react';
 import {
   ArrowLeftRightIcon,
@@ -18,44 +20,41 @@ import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfi
 
 import type { MessengerPlatform } from '../constants';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  card: css`
-    overflow: hidden;
-    padding: 0;
-    border: 1px solid ${cssVar.colorBorder};
-    border-radius: ${cssVar.borderRadius};
-  `,
-  command: css`
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 13px;
-    font-weight: 500;
-    color: ${cssVar.colorText};
-  `,
-  row: css`
-    padding-block: 12px;
-    padding-inline: 16px;
-
-    &:not(:last-child) {
-      border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-    }
-  `,
-  // Mirrors the `rowIcon` treatment of the Connections cards in shared.tsx so
-  // the two sections on the detail page read as one visual language.
-  rowIcon: css`
-    display: flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-
-    width: 36px;
-    height: 36px;
-    border-radius: 8px;
-
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-}));
+const styles = stylex.create({
+  card: {
+    overflow: 'hidden',
+    padding: '0',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorder,
+    borderRadius: cssVar.borderRadius,
+  },
+  command: {
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '13px',
+    fontWeight: 500,
+    color: cssVar.colorText,
+  },
+  row: {
+    paddingBlock: '12px',
+    paddingInline: '16px',
+    borderBlockEndWidth: { 'default': null, ':not(:last-child)': '1px' },
+    borderBlockEndStyle: { 'default': null, ':not(:last-child)': 'solid' },
+    borderBlockEndColor: { 'default': null, ':not(:last-child)': cssVar.colorBorderSecondary },
+  },
+  rowIcon: {
+    display: 'flex',
+    flex: 'none',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '36px',
+    height: '36px',
+    borderRadius: '8px',
+    color: cssVar.colorTextSecondary,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+});
 
 type MessengerCommandName = 'agents' | 'feedback' | 'help' | 'new' | 'start' | 'stop' | 'switch';
 
@@ -112,14 +111,20 @@ const CommandsSection = memo<CommandsSectionProps>(({ platform }) => {
           {t('messenger.detail.commands.hint')}
         </Text>
       </Flexbox>
-      <Block className={styles.card}>
+      <Block className={stylex.props(styles.card).className}>
         {commands.map(({ icon, name }) => (
-          <Flexbox horizontal align="center" className={styles.row} gap={16} key={name}>
+          <Flexbox
+            horizontal
+            align="center"
+            className={stylex.props(styles.row).className}
+            gap={16}
+            key={name}
+          >
             <Flexbox horizontal align="center" flex="none" gap={12}>
-              <div className={styles.rowIcon}>
+              <div {...stylex.props(styles.rowIcon)}>
                 <Icon icon={icon} size="small" />
               </div>
-              <code className={styles.command}>/{name}</code>
+              <code {...stylex.props(styles.command)}>/{name}</code>
             </Flexbox>
             <Text style={{ flex: 1, fontSize: 12, minWidth: 0, textAlign: 'end' }} type="secondary">
               {t(`messenger.detail.commands.${name}` as any)}

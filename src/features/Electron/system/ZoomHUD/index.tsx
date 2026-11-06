@@ -1,7 +1,8 @@
 'use client';
 
 import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { AnimatePresence } from 'motion/react';
 import * as m from 'motion/react-m';
 import { memo, useEffect, useRef, useState } from 'react';
@@ -9,53 +10,50 @@ import { useTranslation } from 'react-i18next';
 
 const HUD_DURATION_MS = 1500;
 
-const styles = createStaticStyles(({ css }) => ({
-  caption: css`
-    margin-block-start: 2px;
-
-    font-size: 11px;
-    font-weight: 500;
-    line-height: 1;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  hud: css`
-    pointer-events: none;
-
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    align-items: center;
-    justify-content: center;
-
-    width: 144px;
-    height: 108px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 22px;
-
-    background: ${cssVar.colorBgElevated};
-    backdrop-filter: blur(28px) saturate(1.6);
-    box-shadow: ${cssVar.boxShadowSecondary};
-  `,
-  layer: css`
-    pointer-events: none;
-
-    position: fixed;
-    z-index: 1500;
-    inset-block-start: 28%;
-    inset-inline: 0;
-
-    display: flex;
-    justify-content: center;
-  `,
-  num: css`
-    font-size: 34px;
-    font-weight: 600;
-    font-variant-numeric: tabular-nums;
-    line-height: 1;
-    color: ${cssVar.colorText};
-    letter-spacing: -0.02em;
-  `,
-}));
+const styles = stylex.create({
+  caption: {
+    marginBlockStart: '2px',
+    fontSize: '11px',
+    fontWeight: 500,
+    lineHeight: 1,
+    color: cssVar.colorTextTertiary,
+  },
+  hud: {
+    pointerEvents: 'none',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '4px',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '144px',
+    height: '108px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: '22px',
+    backgroundColor: cssVar.colorBgElevated,
+    backgroundImage: 'none',
+    backdropFilter: 'blur(28px) saturate(1.6)',
+    boxShadow: cssVar.boxShadowSecondary,
+  },
+  layer: {
+    pointerEvents: 'none',
+    position: 'fixed',
+    zIndex: 1500,
+    insetBlockStart: '28%',
+    insetInline: '0',
+    display: 'flex',
+    justifyContent: 'center',
+  },
+  num: {
+    fontSize: '34px',
+    fontWeight: 600,
+    fontVariantNumeric: 'tabular-nums',
+    lineHeight: 1,
+    color: cssVar.colorText,
+    letterSpacing: '-0.02em',
+  },
+});
 
 const ZoomHUD = memo(() => {
   const { t } = useTranslation('common');
@@ -78,17 +76,17 @@ const ZoomHUD = memo(() => {
   return (
     <AnimatePresence>
       {factor !== null && (
-        <div className={styles.layer}>
+        <div {...stylex.props(styles.layer)}>
           <m.div
             animate={{ opacity: 1, scale: 1 }}
             aria-live="polite"
-            className={styles.hud}
+            {...stylex.props(styles.hud)}
             exit={{ opacity: 0, scale: 0.96 }}
             initial={{ opacity: 0, scale: 0.92 }}
             transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
           >
-            <span className={styles.num}>{Math.round(factor * 100)}%</span>
-            <span className={styles.caption}>{t('zoom')}</span>
+            <span {...stylex.props(styles.num)}>{Math.round(factor * 100)}%</span>
+            <span {...stylex.props(styles.caption)}>{t('zoom')}</span>
           </m.div>
         </div>
       )}

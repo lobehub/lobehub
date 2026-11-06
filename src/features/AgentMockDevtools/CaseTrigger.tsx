@@ -1,117 +1,90 @@
 import type { MockCase } from '@lobechat/agent-mock';
-import {
-  createStaticStyles,
-  cssVar,
-  Flexbox,
-  Input,
-  Popover,
-  Text,
-  usePopoverContext,
-} from '@lobehub/ui';
+import { Flexbox, Input, Popover, Text, usePopoverContext } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronDown } from 'lucide-react';
 import { memo, type ReactNode, useMemo, useState } from 'react';
 
 import { useMockCases } from './hooks/useMockCases';
 import { useAgentMockStore } from './store/agentMockStore';
 
-const styles = createStaticStyles(({ css }) => ({
-  empty: css`
-    padding: 16px;
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-    text-align: center;
-  `,
-  group: css`
-    padding-block: 8px 4px;
-    padding-inline: 12px;
-
-    font-size: 11px;
-    font-weight: 500;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  item: css`
-    cursor: pointer;
-
-    display: flex;
-    gap: 8px;
-    align-items: center;
-    justify-content: space-between;
-
-    padding-block: 6px;
-    padding-inline: 12px;
-    border-inline-start: 1px solid transparent;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  itemActive: css`
-    border-inline-start-color: ${cssVar.colorText};
-    font-weight: 500;
-    color: ${cssVar.colorText};
-    background: ${cssVar.colorFillSecondary};
-  `,
-  itemMeta: css`
-    flex-shrink: 0;
-    font-size: 11px;
-    font-feature-settings: 'tnum';
-    color: ${cssVar.colorTextTertiary};
-  `,
-  itemName: css`
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  list: css`
-    overflow-y: auto;
-    max-height: 360px;
-    padding-block: 4px;
-  `,
-  panel: css`
-    width: 320px;
-  `,
-  search: css`
-    padding-block: 8px 4px;
-    padding-inline: 8px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  trigger: css`
-    cursor: pointer;
-    user-select: none;
-
-    display: inline-flex;
-    gap: 6px;
-    align-items: center;
-
-    max-width: 240px;
-    padding-block: 4px;
-    padding-inline: 8px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 6px;
-
-    font-size: 12px;
-    font-weight: 500;
-    color: ${cssVar.colorText};
-
-    background: ${cssVar.colorBgContainer};
-
-    &:hover {
-      border-color: ${cssVar.colorBorder};
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  triggerName: css`
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  triggerPlaceholder: css`
-    color: ${cssVar.colorTextTertiary};
-  `,
-}));
+const styles = stylex.create({
+  empty: {
+    padding: '16px',
+    fontSize: '12px',
+    color: cssVar.colorTextTertiary,
+    textAlign: 'center',
+  },
+  group: {
+    paddingBlockStart: '8px',
+    paddingBlockEnd: '4px',
+    paddingInline: '12px',
+    fontSize: '11px',
+    fontWeight: 500,
+    color: cssVar.colorTextTertiary,
+  },
+  item: {
+    cursor: 'pointer',
+    display: 'flex',
+    gap: '8px',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBlock: '6px',
+    paddingInline: '12px',
+    borderInlineStartWidth: '1px',
+    borderInlineStartStyle: 'solid',
+    borderInlineStartColor: 'transparent',
+    fontSize: '12px',
+    color: cssVar.colorTextSecondary,
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  itemActive: {
+    borderInlineStartColor: cssVar.colorText,
+    fontWeight: 500,
+    color: cssVar.colorText,
+    backgroundColor: cssVar.colorFillSecondary,
+    backgroundImage: 'none',
+  },
+  itemMeta: {
+    flexShrink: 0,
+    fontSize: '11px',
+    fontFeatureSettings: "'tnum'",
+    color: cssVar.colorTextTertiary,
+  },
+  itemName: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+  list: { overflowY: 'auto', maxHeight: '360px', paddingBlock: '4px' },
+  panel: { width: '320px' },
+  search: {
+    paddingBlockStart: '8px',
+    paddingBlockEnd: '4px',
+    paddingInline: '8px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+  trigger: {
+    cursor: 'pointer',
+    userSelect: 'none',
+    display: 'inline-flex',
+    gap: '6px',
+    alignItems: 'center',
+    maxWidth: '240px',
+    paddingBlock: '4px',
+    paddingInline: '8px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: { 'default': cssVar.colorBorderSecondary, ':hover': cssVar.colorBorder },
+    borderRadius: '6px',
+    fontSize: '12px',
+    fontWeight: 500,
+    color: cssVar.colorText,
+    backgroundColor: { 'default': cssVar.colorBgContainer, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': 'none', ':hover': 'none' },
+  },
+  triggerName: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+  triggerPlaceholder: { color: cssVar.colorTextTertiary },
+});
 
 const countTools = (c: MockCase): number => {
   if (typeof c.meta?.toolCount === 'number') return c.meta.toolCount;
@@ -155,8 +128,8 @@ const CasePanel = memo<CasePanelProps>(({ selectedCaseId, setSelectedCaseId }) =
   };
 
   return (
-    <div className={styles.panel}>
-      <div className={styles.search}>
+    <div {...stylex.props(styles.panel)}>
+      <div {...stylex.props(styles.search)}>
         <Input
           autoFocus
           placeholder="Search cases…"
@@ -165,12 +138,12 @@ const CasePanel = memo<CasePanelProps>(({ selectedCaseId, setSelectedCaseId }) =
           onChange={(e) => setQuery(e.target.value)}
         />
       </div>
-      <div className={styles.list}>
-        {totalVisible === 0 && <div className={styles.empty}>No cases match.</div>}
+      <div {...stylex.props(styles.list)}>
+        {totalVisible === 0 && <div {...stylex.props(styles.empty)}>No cases match.</div>}
         {groups.map((group) =>
           group.items.length === 0 ? null : (
             <Flexbox key={group.key} style={{ paddingBlockEnd: 4 }}>
-              <div className={styles.group}>
+              <div {...stylex.props(styles.group)}>
                 {group.label} ({group.items.length})
               </div>
               {group.items.map((c) => {
@@ -179,12 +152,12 @@ const CasePanel = memo<CasePanelProps>(({ selectedCaseId, setSelectedCaseId }) =
                 const tools = countTools(c);
                 return (
                   <div
-                    className={`${styles.item} ${active ? styles.itemActive : ''}`}
+                    {...stylex.props(styles.item, active && styles.itemActive)}
                     key={c.id}
                     onClick={() => handlePick(c.id)}
                   >
-                    <span className={styles.itemName}>{c.name}</span>
-                    <span className={styles.itemMeta}>
+                    <span {...stylex.props(styles.itemName)}>{c.name}</span>
+                    <span {...stylex.props(styles.itemMeta)}>
                       {events}e · {tools}t
                     </span>
                   </div>
@@ -220,11 +193,11 @@ export const CaseTrigger = memo<CaseTriggerProps>(({ children, placement = 'bott
       trigger={['click']}
     >
       {children ?? (
-        <span className={styles.trigger}>
+        <span {...stylex.props(styles.trigger)}>
           {current ? (
-            <span className={styles.triggerName}>{current.name}</span>
+            <span {...stylex.props(styles.triggerName)}>{current.name}</span>
           ) : (
-            <Text className={styles.triggerPlaceholder}>Pick a case</Text>
+            <Text className={stylex.props(styles.triggerPlaceholder).className}>Pick a case</Text>
           )}
           <ChevronDown size={12} />
         </span>

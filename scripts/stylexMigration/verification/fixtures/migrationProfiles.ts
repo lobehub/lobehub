@@ -6,6 +6,8 @@ export const migrationFixtures = [
   ['PreviewToolbar', 'src/features/Portal/LocalFile/PreviewToolbar.tsx'],
   ['WorkPreview', 'src/features/WorkGallery/WorkPreview.tsx'],
   ['WorkPreviewStatus', 'src/features/WorkGallery/WorkPreview.tsx'],
+  ['TabItem', 'src/features/Electron/titlebar/TabBar/TabItem.tsx'],
+  ['ReplicaEntryTable', 'src/features/DevPanel/Replica/EntryTable.tsx'],
 ] as const;
 
 export const migrationProfiles: Record<string, FixtureProfile> = {
@@ -98,5 +100,57 @@ export const migrationProfiles: Record<string, FixtureProfile> = {
         appearance,
       })),
     ),
+  },
+  TabItem: {
+    assets: ['fixtures/TabItemData.ts'],
+    dependencies: ['lucide-react', 'i18next', 'react-i18next', 'motion'],
+    settleFrames: 2,
+    selector: '[data-component-mount] [data-tier]',
+    selectors: { 'focus-visible': '[data-component-mount] [data-tab-close]' },
+    variants: [
+      ...['full', 'full-active', 'compact', 'compact-active', 'full-split', 'full-dragging'].map(
+        (id) => ({ id, states: ['default', 'hover', 'focus-visible'] as const }),
+      ),
+      ...[
+        'narrow',
+        'icon',
+        'pinned',
+        'pinned-active',
+        'pinned-dragging',
+        'full-lone',
+        'full-active-dragging',
+      ].map((id) => ({ id, states: ['default', 'hover'] as const })),
+      {
+        id: 'dark-full-active',
+        appearance: 'dark' as const,
+        states: ['default', 'hover'] as const,
+      },
+      { id: 'dark-full', appearance: 'dark' as const, states: ['default', 'hover'] as const },
+    ],
+    boundaries: ['./hooks/useTabPreview', './hooks/useTabRunning', './hooks/useTabUnread'].map(
+      (source) => ({
+        importer: 'src/features/Electron/titlebar/TabBar/TabItem.tsx',
+        source,
+        replacement: 'fixtures/TabItemData.ts',
+      }),
+    ),
+  },
+  ReplicaEntryTable: {
+    assets: ['fixtures/ReplicaEntryTableData.ts'],
+    dependencies: ['lucide-react'],
+    selector: '[data-component-mount] tbody tr',
+    variants: [
+      { id: 'rows', states: ['default', 'hover', 'focus-visible'] as const },
+      { id: 'selected', states: ['default', 'hover', 'focus-visible'] as const },
+      { id: 'dark-selected', appearance: 'dark' as const, states: ['default', 'hover'] as const },
+      { id: 'empty' },
+    ],
+    boundaries: [
+      {
+        importer: 'src/features/DevPanel/Replica/EntryTable.tsx',
+        source: './useReplicaInspector',
+        replacement: 'fixtures/ReplicaEntryTableData.ts',
+      },
+    ],
   },
 };

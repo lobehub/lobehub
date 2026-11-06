@@ -1,6 +1,7 @@
 'use client';
 
-import { cx, Input } from '@lobehub/ui';
+import { Input } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { Boxes, Table2 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -33,16 +34,16 @@ const ListItem = ({ active, count, icon: Icon, indent, name, onClick }: ListItem
     aria-pressed={active}
     title={name}
     type={'button'}
-    className={cx(
+    {...stylex.props(
       styles.listItem,
       indent && styles.listItemNested,
       active && styles.listItemActive,
     )}
     onClick={onClick}
   >
-    <Icon className={styles.listIcon} size={14} />
-    <span className={styles.listName}>{name}</span>
-    <span className={styles.listCount}>{count}</span>
+    <Icon className={stylex.props(styles.listIcon).className} size={14} />
+    <span {...stylex.props(styles.listName)}>{name}</span>
+    <span {...stylex.props(styles.listCount)}>{count}</span>
   </button>
 );
 
@@ -63,13 +64,13 @@ const CollectionList = ({
   return (
     <aside
       aria-label={'Database collections'}
-      className={cx(styles.sidePane, devDockPanelStyles.paneDividerEnd)}
+      {...stylex.props(styles.sidePane, devDockPanelStyles.paneDividerEnd)}
     >
-      <div className={devDockPanelStyles.paneHeader}>Collections</div>
-      <div className={devDockPanelStyles.paneSearch}>
+      <div {...stylex.props(devDockPanelStyles.paneHeader)}>Collections</div>
+      <div {...stylex.props(devDockPanelStyles.paneSearch)}>
         <Input
           allowClear
-          className={devDockPanelStyles.searchInput}
+          className={stylex.props(devDockPanelStyles.searchInput).className}
           placeholder={'Search collections…'}
           size={'small'}
           value={search}
@@ -77,9 +78,11 @@ const CollectionList = ({
           onChange={(event) => setSearch(event.target.value)}
         />
       </div>
-      <div className={styles.list}>
+      <div {...stylex.props(styles.list)}>
         {visibleCollections.length === 0 ? (
-          <div className={styles.empty}>{search ? 'No collections match.' : 'No collections.'}</div>
+          <div {...stylex.props(styles.empty)}>
+            {search ? 'No collections match.' : 'No collections.'}
+          </div>
         ) : (
           visibleCollections.map(({ entryCount, name }) => {
             const active = name === selectedCollection;

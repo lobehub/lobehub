@@ -1,17 +1,8 @@
 'use client';
 
-import {
-  ActionIcon,
-  createStaticStyles,
-  cssVar,
-  cx,
-  Flexbox,
-  Input,
-  Select,
-  Text,
-  TextArea,
-  toast,
-} from '@lobehub/ui';
+import { ActionIcon, Flexbox, Input, Select, Text, TextArea, toast } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { CheckIcon, PencilIcon, XIcon } from 'lucide-react';
 import { type KeyboardEvent, memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -20,42 +11,32 @@ import { useIMECompositionEvent } from '@/hooks/useIMECompositionEvent';
 
 import { describeError } from './errorMessage';
 
-const styles = createStaticStyles(({ css }) => ({
-  /**
-   * The value at rest looks like a field, not like prose: a bordered box the
-   * same height the input will have, so entering edit mode changes what is in
-   * the box and not where everything below it sits.
-   */
-  display: css`
-    display: flex;
-    gap: 8px;
-    align-items: center;
-
-    min-height: 36px;
-    padding-block: 6px;
-    padding-inline: 12px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadius};
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  multiline: css`
-    align-items: flex-start;
-  `,
-  value: css`
-    flex: 1;
-
-    min-width: 0;
-
-    font-size: 13px;
-    line-height: 22px;
-    word-break: break-word;
-    white-space: pre-wrap;
-  `,
-  placeholder: css`
-    color: ${cssVar.colorTextQuaternary};
-  `,
-}));
+const styles = stylex.create({
+  display: {
+    display: 'flex',
+    gap: '8px',
+    alignItems: 'center',
+    minHeight: '36px',
+    paddingBlock: '6px',
+    paddingInline: '12px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadius,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  multiline: { alignItems: 'flex-start' },
+  value: {
+    flex: '1',
+    minWidth: '0',
+    fontSize: '13px',
+    lineHeight: '22px',
+    wordBreak: 'break-word',
+    whiteSpace: 'pre-wrap',
+  },
+  placeholder: { color: cssVar.colorTextQuaternary },
+});
 
 interface InlineFieldProps {
   desc?: ReactNode;
@@ -225,8 +206,8 @@ const InlineField = memo<InlineFieldProps>(
             />
           </Flexbox>
         ) : (
-          <div className={cx(styles.display, multiline && styles.multiline)}>
-            <span className={cx(styles.value, !value && styles.placeholder)}>
+          <div {...stylex.props(styles.display, multiline && styles.multiline)}>
+            <span {...stylex.props(styles.value, !value && styles.placeholder)}>
               {value || placeholder}
             </span>
             <ActionIcon icon={PencilIcon} size={'small'} title={t('edit')} onClick={open} />

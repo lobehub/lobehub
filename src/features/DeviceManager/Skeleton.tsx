@@ -1,6 +1,8 @@
 'use client';
 
-import { createStaticStyles, cssVar, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 
 import SkeletonBar from '@/components/Skeleton/Bar';
@@ -8,75 +10,59 @@ import SkeletonBar from '@/components/Skeleton/Bar';
 import DeviceGrid from './DeviceGrid';
 import { UsageMeterSkeleton } from './DeviceHealth/UsageMeter';
 
-const styles = createStaticStyles(({ css }) => ({
+const styles = stylex.create({
   // Same frame and sections as `DeviceCard`.
-  body: css`
-    padding-block: 20px 16px;
-    padding-inline: 20px;
-  `,
-  card: css`
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-
-    min-width: 0;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  footer: css`
-    margin-block-start: auto;
-    padding-block: 12px;
-    padding-inline: 20px;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  infoGrid: css`
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    gap: 16px;
-  `,
-  meterGroup: css`
-    display: grid;
-    grid-template-columns: 96px minmax(0, 1fr) 36px;
-    gap: 8px 12px;
-    align-items: center;
-  `,
+  body: { paddingBlockStart: '20px', paddingBlockEnd: '16px', paddingInline: '20px' },
+  card: {
+    overflow: 'hidden',
+    display: 'flex',
+    flexDirection: 'column',
+    minWidth: 0,
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
   // Always two rows of cards, whatever the column count the grid steps to.
-  twoRows: css`
-    & > :nth-child(n + 3) {
-      display: none;
-    }
-
-    @container device-grid (min-width: 560px) {
-      & > :nth-child(n + 3) {
-        display: flex;
-      }
-
-      & > :nth-child(n + 5) {
-        display: none;
-      }
-    }
-
-    @container device-grid (min-width: 880px) {
-      & > :nth-child(n + 5) {
-        display: flex;
-      }
-
-      & > :nth-child(n + 7) {
-        display: none;
-      }
-    }
-
-    @container device-grid (min-width: 1200px) {
-      & > :nth-child(n + 7) {
-        display: flex;
-      }
-    }
-  `,
-}));
+  cardFrom1200: {
+    display: {
+      'default': 'none',
+      '@container device-grid (min-width: 1200px)': 'flex',
+    },
+  },
+  cardFrom560: {
+    display: {
+      'default': 'none',
+      '@container device-grid (min-width: 560px)': 'flex',
+    },
+  },
+  cardFrom880: {
+    display: {
+      'default': 'none',
+      '@container device-grid (min-width: 880px)': 'flex',
+    },
+  },
+  footer: {
+    marginBlockStart: 'auto',
+    paddingBlock: '12px',
+    paddingInline: '20px',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  infoGrid: { display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '16px' },
+  meterGroup: {
+    display: 'grid',
+    gridTemplateColumns: '96px minmax(0, 1fr) 36px',
+    rowGap: '8px',
+    columnGap: '12px',
+    alignItems: 'center',
+  },
+});
 
 /** A text placeholder centered in the line box of the text it stands in for. */
 const Line = ({
@@ -93,9 +79,20 @@ const Line = ({
   </Flexbox>
 );
 
-const CardSkeleton = () => (
-  <div className={styles.card}>
-    <Flexbox className={styles.body} gap={20}>
+const CardSkeleton = ({ index }: { index: number }) => (
+  <div
+    {...stylex.props(
+      styles.card,
+      index >= 6
+        ? styles.cardFrom1200
+        : index >= 4
+          ? styles.cardFrom880
+          : index >= 2
+            ? styles.cardFrom560
+            : undefined,
+    )}
+  >
+    <Flexbox className={stylex.props(styles.body).className} gap={20}>
       <Flexbox horizontal align={'flex-start'} gap={16}>
         <SkeletonBar height={48} radius={12} width={48} />
         <Flexbox flex={1} gap={4} style={{ minWidth: 0 }}>
@@ -103,7 +100,7 @@ const CardSkeleton = () => (
           <Line barHeight={12} height={20} width={'36%'} />
         </Flexbox>
       </Flexbox>
-      <div className={styles.infoGrid}>
+      <div {...stylex.props(styles.infoGrid)}>
         {Array.from({ length: 2 }, (_, index) => (
           <Flexbox gap={4} key={index} style={{ minWidth: 0 }}>
             <Line barHeight={12} height={20} width={'56%'} />
@@ -111,12 +108,12 @@ const CardSkeleton = () => (
           </Flexbox>
         ))}
       </div>
-      <div className={styles.meterGroup}>
+      <div {...stylex.props(styles.meterGroup)}>
         <UsageMeterSkeleton />
         <UsageMeterSkeleton />
       </div>
     </Flexbox>
-    <Flexbox horizontal align={'center'} className={styles.footer} gap={8}>
+    <Flexbox horizontal align={'center'} className={stylex.props(styles.footer).className} gap={8}>
       <SkeletonBar height={8} radius={'50%'} width={8} />
       <Line barHeight={12} height={20} width={'48%'} />
     </Flexbox>
@@ -128,9 +125,9 @@ const CardSkeleton = () => (
  * outlines — so loading → loaded is a content swap, not a relayout (ux §4.1).
  */
 export const DeviceGridSkeleton = memo(() => (
-  <DeviceGrid className={styles.twoRows}>
+  <DeviceGrid>
     {Array.from({ length: 8 }, (_, index) => (
-      <CardSkeleton key={index} />
+      <CardSkeleton index={index} key={index} />
     ))}
   </DeviceGrid>
 ));

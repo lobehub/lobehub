@@ -1,17 +1,8 @@
 'use client';
 
-import {
-  Block,
-  Button,
-  confirmModal,
-  createStaticStyles,
-  Flexbox,
-  Icon,
-  Select,
-  Tag,
-  Text,
-  toast,
-} from '@lobehub/ui';
+import { Block, Button, confirmModal, Flexbox, Icon, Select, Tag, Text, toast } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ArrowLeftIcon, CheckCircle2Icon, Trash2Icon, UserIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { memo, useEffect, useMemo, useState } from 'react';
@@ -36,51 +27,44 @@ import {
 } from '../scopeOptions';
 import CommandsSection from './CommandsSection';
 
-export const styles = createStaticStyles(({ css, cssVar }) => ({
-  backButton: css`
-    cursor: pointer;
-
-    display: inline-flex;
-    gap: 6px;
-    align-items: center;
-
-    color: ${cssVar.colorTextSecondary};
-
-    &:hover {
-      color: ${cssVar.colorText};
-    }
-  `,
-  card: css`
-    padding: 16px;
-    border: 1px solid ${cssVar.colorBorder};
-    border-radius: ${cssVar.borderRadius};
-  `,
-  emptyRow: css`
-    padding-block: 32px;
-    padding-inline: 16px;
-    border: 1px dashed ${cssVar.colorBorder};
-    border-radius: ${cssVar.borderRadius};
-
-    color: ${cssVar.colorTextSecondary};
-    text-align: center;
-  `,
-  rowIcon: css`
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    width: 36px;
-    height: 36px;
-    border-radius: 8px;
-
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  rowIdentity: css`
-    min-width: 0;
-  `,
-}));
+export const styles = stylex.create({
+  backButton: {
+    cursor: 'pointer',
+    display: 'inline-flex',
+    gap: '6px',
+    alignItems: 'center',
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
+  },
+  card: {
+    padding: '16px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorder,
+    borderRadius: cssVar.borderRadius,
+  },
+  emptyRow: {
+    paddingBlock: '32px',
+    paddingInline: '16px',
+    borderWidth: '1px',
+    borderStyle: 'dashed',
+    borderColor: cssVar.colorBorder,
+    borderRadius: cssVar.borderRadius,
+    color: cssVar.colorTextSecondary,
+    textAlign: 'center',
+  },
+  rowIcon: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '36px',
+    height: '36px',
+    borderRadius: '8px',
+    color: cssVar.colorTextSecondary,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+  rowIdentity: { minWidth: 0 },
+});
 
 export interface ConnectionRowProps {
   action?: ReactNode;
@@ -97,11 +81,11 @@ export const ConnectionRow = memo<ConnectionRowProps>(
     const { t } = useTranslation('messenger');
 
     return (
-      <Block className={styles.card}>
+      <Block className={stylex.props(styles.card).className}>
         <Flexbox gap={12}>
           <Flexbox horizontal align="center" gap={12}>
-            <div className={styles.rowIcon}>{icon}</div>
-            <Flexbox className={styles.rowIdentity} flex={1} gap={2}>
+            <div {...stylex.props(styles.rowIcon)}>{icon}</div>
+            <Flexbox className={stylex.props(styles.rowIdentity).className} flex={1} gap={2}>
               <Text style={{ fontSize: 12 }} type="secondary">
                 {label}
               </Text>
@@ -157,7 +141,7 @@ export const DetailLayout = memo<DetailLayoutProps>(
     return (
       <Flexbox gap={20}>
         <Flexbox horizontal align="center" gap={8}>
-          <span className={styles.backButton} onClick={onBack}>
+          <span {...stylex.props(styles.backButton)} onClick={onBack}>
             <Icon icon={ArrowLeftIcon} size="small" />
           </span>
           <Text strong style={{ fontSize: 20 }}>
@@ -165,7 +149,7 @@ export const DetailLayout = memo<DetailLayoutProps>(
           </Text>
         </Flexbox>
 
-        <Block className={styles.card}>
+        <Block className={stylex.props(styles.card).className}>
           <Flexbox horizontal align="center" gap={16}>
             <PlatformAvatar platform={platform} size={48} />
             <Flexbox flex={1} gap={2}>

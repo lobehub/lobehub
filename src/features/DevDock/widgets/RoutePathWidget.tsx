@@ -1,6 +1,7 @@
 'use client';
 
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useLocation } from 'react-router';
 
@@ -10,20 +11,18 @@ import { useElectronStore } from '@/store/electron';
 
 import { readableRoutePath } from './routePathDisplay';
 
-const styles = createStaticStyles(({ css }) => ({
-  path: css`
-    overflow: hidden;
-    display: block;
-
-    max-width: 100%;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 11px;
-    color: ${cssVar.colorTextTertiary};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-}));
+const styles = stylex.create({
+  path: {
+    overflow: 'hidden',
+    display: 'block',
+    maxWidth: '100%',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '11px',
+    color: cssVar.colorTextTertiary,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+});
 
 const RoutePathWidget = memo(() => {
   const { pathname } = useLocation();
@@ -34,7 +33,7 @@ const RoutePathWidget = memo(() => {
   const path = readableRoutePath((isDesktop && activeTabUrl) || pathname);
 
   return (
-    <span className={styles.path} title={path}>
+    <span {...stylex.props(styles.path)} title={path}>
       {path}
     </span>
   );
