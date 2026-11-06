@@ -16,6 +16,7 @@ import type { LobeChatDatabase } from '@/database/type';
 
 import { TaskService } from '../task';
 import { TaskRunnerService } from '../taskRunner';
+import { GoalAssignmentService } from './assignment';
 import { buildGoalReportInstruction, decideGoalReport } from './report';
 
 const REPORT_MAX_STEPS = 40;
@@ -148,6 +149,11 @@ export class GoalReportService {
     } else {
       const task = await new TaskService(this.db, this.userId, this.workspaceId).createTask({
         assigneeAgentId,
+        assigneeUserId: await new GoalAssignmentService(
+          this.db,
+          this.userId,
+          this.workspaceId,
+        ).resolveTaskOwner(graph.goal, assigneeAgentId),
         config: { checkpoint: { topic: { after: false } } },
         description: `Wrap-up report of ${graph.goal.title}`.slice(0, TASK_DESCRIPTION_MAX_LENGTH),
         instruction,

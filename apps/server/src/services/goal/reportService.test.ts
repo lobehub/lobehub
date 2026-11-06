@@ -325,6 +325,18 @@ describe('GoalService wrap-up branch', () => {
     expect(reportTaskRuns()).toHaveLength(0);
   });
 
+  it('assigns the wrap-up Task to the Goal creator', async () => {
+    const service = new GoalService(serverDB, userId);
+    const { acceptanceTaskId, goalId, taskModel } = await runToAcceptance(service);
+    await taskModel.updateStatus(acceptanceTaskId, 'completed');
+    await service.tick(goalId);
+    await service.tick(goalId);
+
+    const [{ taskId }] = reportTaskRuns().map(([params]: any) => params);
+    const task = await taskModel.findById(taskId);
+    expect(task?.assigneeUserId).toBe(userId);
+  });
+
   /**
    * Regression: a heterogeneous wrap-up agent never receives server tools, so an
    * instruction naming only the report tool could never be followed.
