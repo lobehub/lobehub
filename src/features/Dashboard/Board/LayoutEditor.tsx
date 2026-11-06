@@ -45,6 +45,7 @@ import {
 } from '../utils/layout';
 import WidgetCard from '../WidgetCard';
 import { openWidgetEditModal } from '../WidgetEditModal';
+import { editCellMarker } from './markers.stylex';
 import { cellStyle, gridProps, gridStyles } from './style';
 
 type Size = { h: number; w: number };
@@ -142,7 +143,7 @@ const EditableCell = memo<EditableCellProps>(({ entry, layout, onResize, editabl
       {...sx(
         gridStyles.cell,
         gridStyles.editCell,
-        stylex.defaultMarker(),
+        editCellMarker,
         isDragging && gridStyles.cellDragging,
         {
           ...cellStyle(layout),
