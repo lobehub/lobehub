@@ -54,7 +54,8 @@ vi.mock('@lobechat/utils', async (importOriginal) => {
 
 describe('FileService', () => {
   let service: FileService;
-  const mockDb = { transaction: (run: (tx: unknown) => unknown) => run({}) } as any;
+  const recordTx = { name: 'record-tx' };
+  const mockDb = { transaction: (run: (tx: unknown) => unknown) => run(recordTx) } as any;
   const mockUserId = 'test-user';
   let mockFileModel: any;
   let mockTempManager: any;
@@ -389,7 +390,7 @@ describe('FileService', () => {
           }),
         }),
         expect.any(Boolean),
-        undefined,
+        recordTx,
       );
     });
 
@@ -417,7 +418,7 @@ describe('FileService', () => {
           }),
         }),
         expect.any(Boolean),
-        undefined,
+        recordTx,
       );
     });
   });
@@ -584,7 +585,7 @@ describe('FileService', () => {
           fileHash: 'new-hash',
         }),
         true, // insertToGlobalFiles = true when hash doesn't exist
-        undefined,
+        recordTx,
       );
     });
 
@@ -605,7 +606,7 @@ describe('FileService', () => {
           fileHash: 'existing-hash',
         }),
         false, // insertToGlobalFiles = false when hash exists
-        undefined,
+        recordTx,
       );
       expect(mockFileModel.updateGlobalFile).not.toHaveBeenCalled();
     });
@@ -631,7 +632,7 @@ describe('FileService', () => {
           metadata: { dirname: 'new', filename: 'test.txt', path: 'new/path.txt' },
           url: 'new/path.txt',
         },
-        undefined,
+        recordTx,
       );
       expect(mockFileModel.create).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -639,7 +640,7 @@ describe('FileService', () => {
           url: 'new/path.txt',
         }),
         false,
-        undefined,
+        recordTx,
       );
       consoleSpy.mockRestore();
     });
@@ -668,7 +669,7 @@ describe('FileService', () => {
           url: 'new/path.txt',
         }),
         false,
-        undefined,
+        recordTx,
       );
     });
   });
