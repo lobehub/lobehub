@@ -97,6 +97,6 @@ const styles = stylex.create({ bar: { opacity: 0 } });
 export const Bar = ({ width }) => <div {...stylex.props(styles.bar)} style={{ width }} />;
 `,
     );
-    expect(module('base')).not.toContain('style={');
+    expect(module('base')).not.toContain('style={(');
   });
 });

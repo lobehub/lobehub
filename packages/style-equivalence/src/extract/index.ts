@@ -15,7 +15,7 @@ import {
   usageKinds,
   valueIdentifierNodes,
 } from './identifiers';
-import { applyRenderedStyle, renderedStyle } from './renderedStyle';
+import { applyRenderedStyle, renderedStyle, slotStylesOf } from './renderedStyle';
 import { classifyRules, classNamesIn, foreignClassNames } from './selectors';
 import { collectTables } from './tables';
 import { collectTopLevel } from './topLevel';
@@ -294,8 +294,10 @@ export const extractFile = (
         if (!ts.isJsxExpression(initializer) || !initializer.expression) continue;
         const expression = initializer.expression;
         if (name === 'icon' && isJsxNode(expression)) iconNode = expression;
-        if (referencesStyle(expression, name)) {
+        const slotStyles = slotStylesOf(name, opening.tagName.getText(ast), expression, top);
+        if (referencesStyle(expression, name) || slotStyles) {
           bindingOf(expression, name, false);
+          if (slotStyles && ts.isIdentifier(expression)) bindings.at(-1)!.expansion = slotStyles;
           continue;
         }
         const literal = literalOf(expression);

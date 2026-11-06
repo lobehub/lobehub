@@ -57,3 +57,35 @@ export const applyRenderedStyle = (
     kinds.set(name, [...(kinds.get(name) ?? []), 'boolean']);
   }
 };
+
+const SLOT_GLOBALS = new Set(['undefined']);
+
+const constInitializer = (ast: ts.SourceFile, name: string) => {
+  for (const statement of ast.statements) {
+    if (!ts.isVariableStatement(statement)) continue;
+    if (!(statement.declarationList.flags & ts.NodeFlags.Const)) continue;
+    for (const declaration of statement.declarationList.declarations)
+      if (ts.isIdentifier(declaration.name) && declaration.name.text === name)
+        return declaration.initializer;
+  }
+  return undefined;
+};
+
+export const slotStylesOf = (
+  name: string,
+  tag: string,
+  expression: ts.Expression,
+  { importOf }: { importOf: Map<string, ts.ImportDeclaration> },
+) => {
+  if (name !== 'styles' || /^[a-z]/.test(tag)) return undefined;
+  const object = ts.isIdentifier(expression)
+    ? constInitializer(expression.getSourceFile(), expression.text)
+    : expression;
+  if (!object || !ts.isObjectLiteralExpression(object)) return undefined;
+  const slots = object.properties.every(
+    (property) =>
+      ts.isPropertyAssignment(property) && ts.isObjectLiteralExpression(property.initializer),
+  );
+  const rendered = slots && renderedStyle(object, importOf, SLOT_GLOBALS);
+  return rendered && !rendered.locals.length ? object.getText() : undefined;
+};
