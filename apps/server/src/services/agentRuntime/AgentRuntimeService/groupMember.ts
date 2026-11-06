@@ -1,6 +1,7 @@
 import { type AgentState } from '@lobechat/agent-runtime';
 import { getGroupMemberAnchorIndex, type GroupMemberAnchorMetadata } from '@lobechat/types';
 import debug from 'debug';
+import pMap from 'p-map';
 
 import {
   extractTextFromMessage,
@@ -106,8 +107,9 @@ async function loadGroupMemberAnchors(
   const children = await deps.serverDB.query.messages.findMany({
     where: (m, { and, eq }) => and(eq(m.parentId, groupToolMessageId), eq(m.role, 'tool')),
   });
-  return Promise.all(
-    children.map(async (child) => {
+  return pMap(
+    children,
+    async (child) => {
       const plugin = await deps.serverDB.query.messagePlugins.findFirst({
         where: (mp, { eq }) => eq(mp.id, child.id),
       });
@@ -121,7 +123,8 @@ async function loadGroupMemberAnchors(
         ),
         status: (plugin?.state as { status?: string } | null | undefined)?.status,
       };
-    }),
+    },
+    { concurrency: 5 },
   );
 }
 
