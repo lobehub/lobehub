@@ -65,6 +65,7 @@ import { default as search1api } from './search1api';
 import { default as sensenova } from './sensenova';
 import { default as siliconcloud } from './siliconcloud';
 import { default as spark } from './spark';
+import { default as steadyrouter } from './steadyrouter';
 import { default as stepfun } from './stepfun';
 import { default as straico } from './straico';
 import { default as streamlake } from './streamlake';
@@ -179,6 +180,7 @@ const staticModelMap: ModelsMap = {
   sensenova,
   siliconcloud,
   spark,
+  steadyrouter,
   stepfun,
   straico,
   streamlake,
@@ -299,6 +301,7 @@ export { default as search1api } from './search1api';
 export { default as sensenova } from './sensenova';
 export { default as siliconcloud } from './siliconcloud';
 export { default as spark } from './spark';
+export { default as steadyrouter } from './steadyrouter';
 export { default as stepfun } from './stepfun';
 export { default as straico } from './straico';
 export { default as streamlake } from './streamlake';
