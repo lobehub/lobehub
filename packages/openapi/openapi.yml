@@ -22307,6 +22307,10 @@ paths:
                   type: integer
                   minimum: 0
                   maximum: 4
+                projectId:
+                  type:
+                    - string
+                    - "null"
                 schedulePattern:
                   type:
                     - string
