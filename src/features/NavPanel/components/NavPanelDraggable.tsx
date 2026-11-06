@@ -1,6 +1,8 @@
 'use client';
 
-import { createStaticStyles, cssVar, cx, DraggablePanel } from '@lobehub/ui';
+import { cssVar, cx, DraggablePanel } from '@lobehub/ui';
+import { cssVar as stylexCssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { type ReactNode } from 'react';
 import { Activity, memo, Suspense, useMemo, useRef } from 'react';
 
@@ -8,8 +10,6 @@ import NavPanelUpgradeEntry from '@/business/client/features/NavPanelUpgradeEntr
 import { isDesktop } from '@/const/version';
 import { MAC_VIBRANCY_BACKGROUND } from '@/features/Electron/system/macWindowFullscreen';
 import Footer from '@/features/HomeSidebar/Footer';
-import { USER_DROPDOWN_ICON_ID } from '@/features/NavPanel/constants';
-import { TOGGLE_BUTTON_ID } from '@/features/NavPanel/ToggleLeftPanelButton';
 import { LIST_COLUMN_BACKGROUND } from '@/features/NavRail/const';
 import { useImLayout } from '@/features/NavRail/useImLayout';
 import { useGlobalStore } from '@/store/global';
@@ -18,93 +18,57 @@ import {
   NAV_PANEL_MIN_WIDTH,
   systemStatusSelectors,
 } from '@/store/global/selectors';
+import { sx } from '@/styles/sx';
 import { isMacOS } from '@/utils/platform';
 
 import { useNavPanelSizeChangeHandler } from '../hooks/useNavPanel';
-import { BACK_BUTTON_ID } from './BackButton';
+import { fallback } from './style';
 
-const draggableStyles = createStaticStyles(({ css, cssVar }) => ({
-  // `im_layout`: the list column inside the rail wrap, divided from the content.
-  imPanel: css`
-    border-inline-end: 1px solid ${cssVar.colorBorderSecondary};
-    background: ${LIST_COLUMN_BACKGROUND};
-  `,
-  content: css`
-    position: relative;
-
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-
-    height: 100%;
-    min-height: 100%;
-    max-height: 100%;
-  `,
-  inner: css`
-    position: relative;
-
-    overflow: hidden;
-    flex: 1;
-
-    min-width: 240px;
-    max-width: 100%;
-    min-height: 0;
-  `,
-  layer: css`
-    position: absolute;
-    inset: 0;
-
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-
-    min-width: 240px;
-    max-width: 100%;
-    min-height: 100%;
-    max-height: 100%;
-  `,
-  panel: css`
-    user-select: none;
-    height: 100%;
-    color: ${cssVar.colorTextSecondary};
-    background: ${isDesktop && isMacOS() ? MAC_VIBRANCY_BACKGROUND : cssVar.colorBgLayout};
-
-    * {
-      user-select: none;
-    }
-
-    #${TOGGLE_BUTTON_ID} {
-      width: 0 !important;
-      opacity: 0;
-      transition:
-        opacity,
-        width 0.2s ${cssVar.motionEaseOut};
-    }
-
-    #${USER_DROPDOWN_ICON_ID} {
-      width: 0 !important;
-      opacity: 0;
-      transition:
-        opacity,
-        width 0.2s ${cssVar.motionEaseOut};
-    }
-    #${BACK_BUTTON_ID} {
-      width: 24px !important;
-    }
-
-    &:hover {
-      #${TOGGLE_BUTTON_ID} {
-        width: 32px !important;
-        opacity: 1;
-      }
-
-      #${USER_DROPDOWN_ICON_ID} {
-        width: 14px !important;
-        opacity: 1;
-      }
-    }
-  `,
-}));
+const draggableStyles = stylex.create({
+  content: {
+    position: 'relative',
+    overflow: 'hidden',
+    display: 'flex',
+    flexDirection: 'column',
+    height: '100%',
+    minHeight: '100%',
+    maxHeight: '100%',
+  },
+  inner: {
+    position: 'relative',
+    overflow: 'hidden',
+    flex: '1',
+    minWidth: '240px',
+    maxWidth: '100%',
+    minHeight: '0',
+  },
+  imPanel: {
+    borderInlineEndWidth: '1px',
+    borderInlineEndStyle: 'solid',
+    borderInlineEndColor: stylexCssVar.colorBorderSecondary,
+    backgroundColor: `color-mix(in srgb, ${stylexCssVar.colorBgContainer} 55%, ${stylexCssVar.colorBgLayout})`,
+    backgroundImage: 'none',
+  },
+  layer: {
+    position: 'absolute',
+    inset: 0,
+    overflow: 'hidden',
+    display: 'flex',
+    flexDirection: 'column',
+    minWidth: '240px',
+    maxWidth: '100%',
+    minHeight: '100%',
+    maxHeight: '100%',
+  },
+  panel: {
+    userSelect: 'none',
+    height: '100%',
+    color: stylexCssVar.colorTextSecondary,
+    backgroundColor: stylexCssVar.colorBgLayout,
+    backgroundImage: 'none',
+  },
+  macPanel: { backgroundColor: 'var(--mac-panel-bg, transparent)' },
+});
 
 interface NavPanelDraggableProps {
   activeContent: {
@@ -115,7 +79,7 @@ interface NavPanelDraggableProps {
 }
 
 const classNames = {
-  content: draggableStyles.content,
+  content: stylex.props(draggableStyles.content).className,
 };
 
 const hiddenLayerStyle = { display: 'none' };
@@ -158,7 +122,7 @@ export const NavPanelDraggable = memo<NavPanelDraggableProps>(({ activeContent, 
 
   return (
     <DraggablePanel
-      className={cx(draggableStyles.panel, imLayout && draggableStyles.imPanel)}
+      data-nav-panel-draggable
       classNames={classNames}
       defaultSize={defaultSize}
       expand={expand}
@@ -168,25 +132,30 @@ export const NavPanelDraggable = memo<NavPanelDraggableProps>(({ activeContent, 
       placement="left"
       showBorder={false}
       style={styles}
+      className={cx(
+        stylex.props(
+          draggableStyles.panel,
+          isDesktop && isMacOS() && draggableStyles.macPanel,
+          imLayout && draggableStyles.imPanel,
+        ).className,
+        fallback.panel,
+      )}
       onExpandChange={togglePanel}
       onSizeDragging={handleSizeChange}
     >
-      <div className={draggableStyles.inner}>
+      <div {...stylex.props(draggableStyles.inner)}>
         {/* Home stays mounted while a route-owned panel is active so its list
             state survives the round trip. Activity keeps the fibers but not the
             visibility, so the layer is force-hidden like HomeLayout does. */}
         {homeContent && (
           <Activity mode={isHomeActive ? 'visible' : 'hidden'} name="NavPanelHome">
-            <div
-              className={draggableStyles.layer}
-              style={isHomeActive ? undefined : hiddenLayerStyle}
-            >
+            <div {...sx(draggableStyles.layer, isHomeActive ? undefined : hiddenLayerStyle)}>
               {homeContent}
             </div>
           </Activity>
         )}
         {!isHomeActive && (
-          <div className={draggableStyles.layer} key={activeContent.key}>
+          <div {...stylex.props(draggableStyles.layer)} key={activeContent.key}>
             {activeContent.node}
           </div>
         )}

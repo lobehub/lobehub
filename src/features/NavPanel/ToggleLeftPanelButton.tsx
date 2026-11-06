@@ -31,10 +31,9 @@ interface ToggleLeftPanelButtonProps {
   forceVisible?: boolean;
   icon?: ActionIconProps['icon'];
   /**
-   * DOM id for the button. Defaults to the shared {@link TOGGLE_BUTTON_ID} which
-   * NavPanelDraggable targets for its hover-reveal CSS. Pass a custom id (or `null`)
-   * to opt out — e.g. for a persistent instance rendered outside the sidebar panel,
-   * to avoid duplicate ids and the hover-hide behavior.
+   * DOM id for the button. Defaults to the shared {@link TOGGLE_BUTTON_ID}. Pass a
+   * custom id (or `null`) for a persistent instance rendered outside the sidebar
+   * panel, to avoid duplicate ids.
    */
   id?: string | null;
   showActive?: boolean;

@@ -8,7 +8,7 @@ import { ImageType, imageTypeOptions, useScreenshot } from '@/hooks/useScreensho
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 
-import ExportLayout, { ToolbarDivider } from '../components/ExportLayout';
+import ExportLayout, { exportActionClassName, ToolbarDivider } from '../components/ExportLayout';
 import { SelectChip, ToggleChip } from '../components/OptionChips';
 import { useShareData } from '../ShareDataProvider';
 import Preview from './Preview';
@@ -46,10 +46,21 @@ const ShareImage = memo<{ mobile?: boolean }>(({ mobile }) => {
     <ExportLayout
       actions={
         <>
-          <Button icon={CopyIcon} loading={copyLoading} onClick={() => onCopy()}>
+          <Button
+            className={exportActionClassName}
+            icon={CopyIcon}
+            loading={copyLoading}
+            onClick={() => onCopy()}
+          >
             {t('shareModal.actions.copyImage')}
           </Button>
-          <Button icon={DownloadIcon} loading={loading} type={'primary'} onClick={onDownload}>
+          <Button
+            className={exportActionClassName}
+            icon={DownloadIcon}
+            loading={loading}
+            type={'primary'}
+            onClick={onDownload}
+          >
             {t('shareModal.actions.download')}
           </Button>
         </>

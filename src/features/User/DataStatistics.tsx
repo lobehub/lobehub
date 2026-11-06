@@ -1,7 +1,9 @@
 'use client';
 
 import { type FlexboxProps } from '@lobehub/ui';
-import { Badge, createStaticStyles, cssVar, Flexbox, Spin, Tooltip } from '@lobehub/ui';
+import { Badge, Flexbox, Spin, Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { isUndefined } from 'es-toolkit/compat';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -15,31 +17,17 @@ import { useServerConfigStore } from '@/store/serverConfig';
 import { formatShortenNumber } from '@/utils/format';
 import { today } from '@/utils/time';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  card: css`
-    padding-block: 6px;
-    padding-inline: 8px;
-    border-radius: ${cssVar.borderRadius};
-    background: ${cssVar.colorFillTertiary};
-
-    &:hover {
-      background: ${cssVar.colorFillSecondary};
-    }
-  `,
-  count: css`
-    font-size: 16px;
-    font-weight: bold;
-    line-height: 1.2;
-  `,
-  title: css`
-    font-size: 12px;
-    line-height: 1.2;
-    color: ${cssVar.colorTextDescription};
-  `,
-  today: css`
-    font-size: 12px;
-  `,
-}));
+const styles = stylex.create({
+  card: {
+    paddingBlock: '6px',
+    paddingInline: '8px',
+    borderRadius: cssVar.borderRadius,
+    backgroundColor: { 'default': cssVar.colorFillTertiary, ':hover': cssVar.colorFillSecondary },
+    backgroundImage: { 'default': 'none', ':hover': 'none' },
+  },
+  count: { fontSize: '16px', fontWeight: 'bold', lineHeight: 1.2 },
+  title: { fontSize: '12px', lineHeight: 1.2, color: cssVar.colorTextDescription },
+});
 
 const DataStatistics = memo<Omit<FlexboxProps, 'children'>>(({ style, ...rest }) => {
   const mobile = useServerConfigStore((s) => s.isMobile);
@@ -103,15 +91,15 @@ const DataStatistics = memo<Omit<FlexboxProps, 'children'>>(({ style, ...rest })
             <Flexbox
               horizontal
               align={'center'}
-              className={styles.card}
+              className={stylex.props(styles.card).className}
               flex={showBadge && !mobile ? 2 : 1}
               gap={4}
               justify={'space-between'}
               key={item.key}
             >
               <Flexbox gap={2}>
-                <div className={styles.count}>{formatShortenNumber(item.count)}</div>
-                <div className={styles.title}>{item.title}</div>
+                <div {...stylex.props(styles.count)}>{formatShortenNumber(item.count)}</div>
+                <div {...stylex.props(styles.title)}>{item.title}</div>
               </Flexbox>
               {showBadge && (
                 <Tooltip title={t('dataStatistics.today')}>
@@ -130,11 +118,11 @@ const DataStatistics = memo<Omit<FlexboxProps, 'children'>>(({ style, ...rest })
         }
 
         return (
-          <Flexbox className={styles.card} flex={1} gap={2} key={item.key}>
+          <Flexbox className={stylex.props(styles.card).className} flex={1} gap={2} key={item.key}>
             <Flexbox horizontal>
-              <div className={styles.count}>{formatShortenNumber(item.count)}</div>
+              <div {...stylex.props(styles.count)}>{formatShortenNumber(item.count)}</div>
             </Flexbox>
-            <div className={styles.title}>{item.title}</div>
+            <div {...stylex.props(styles.title)}>{item.title}</div>
           </Flexbox>
         );
       })}

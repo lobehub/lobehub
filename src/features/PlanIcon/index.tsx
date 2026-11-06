@@ -1,5 +1,7 @@
 import { Plans } from '@lobechat/types';
-import { Center, createStaticStyles, cssVar, Flexbox, Tag } from '@lobehub/ui';
+import { Center, Flexbox, Tag } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Atom, Box, CircleSlash, Crown, Gem, Rocket, Sparkle, Zap } from 'lucide-react';
 import { type CSSProperties, type MouseEvent } from 'react';
 import { memo } from 'react';
@@ -64,12 +66,9 @@ export const themes = {
   },
 } satisfies Record<Plans, unknown>;
 
-const styles = createStaticStyles(({ css }) => ({
-  icon: css`
-    flex: none;
-    box-shadow: 0 0 0 1px ${cssVar.colorFillSecondary};
-  `,
-}));
+const styles = stylex.create({
+  icon: { flex: 'none', boxShadow: `0 0 0 1px ${cssVar.colorFillSecondary}` },
+});
 
 const getPlanIconMetrics = (size: number) => ({
   glyphSize: Math.max(12, Math.round(size / 2)),
@@ -133,7 +132,7 @@ const PlanIcon = memo<PlanIconProps>(
 
     const iconContent = (
       <Center
-        className={styles.icon}
+        className={stylex.props(styles.icon).className}
         height={size}
         style={iconStyle}
         width={size}

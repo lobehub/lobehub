@@ -1,22 +1,38 @@
 import { DEFAULT_INBOX_TITLE } from '@lobechat/const';
 import { agentDisplayName, type ConversationContext, type UIChatMessage } from '@lobechat/types';
-import { cx, Flexbox, Markdown, Text } from '@lobehub/ui';
+// oxlint-disable-next-line stylex-migration/no-emotion-styles -- Markdown output gets no className
+import { createStaticStyles, Flexbox, Markdown, Text } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 
 import AgentAvatar from '@/components/AgentAvatar';
 import { ProductLogo } from '@/components/Branding';
 import { ModelTag } from '@/components/LobeIcons';
+import { imageUrl } from '@/const/url';
 import PluginTag from '@/features/PluginTag';
 import { filterToolIds } from '@/helpers/toolFilters';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors, agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
+import { sx } from '@/styles/sx';
 
 import pkg from '../../../../package.json';
-import { containerStyles } from '../style';
+import { previewClassName } from '../style';
 import ChatList from './ChatList';
 import { styles } from './style';
 import { type FieldType } from './type';
 import { WidthMode } from './type';
+
+const fallback = createStaticStyles(({ css }) => ({
+  role: css`
+    * {
+      font-size: 12px !important;
+    }
+  `,
+}));
+
+const BACKGROUND_STYLE = {
+  backgroundImage: `url(${imageUrl('screenshot_background.webp')})`,
+};
 
 interface PreviewProps extends FieldType {
   context: ConversationContext;
@@ -91,20 +107,19 @@ const Preview = memo<PreviewProps>(
     const displayPlugins = headerPlugins || currentPlugins;
 
     return (
-      <div
-        className={cx(
-          containerStyles.preview,
-          widthMode === WidthMode.Narrow
-            ? containerStyles.previewNarrow
-            : containerStyles.previewWide,
-        )}
-      >
-        <div className={withBackground ? styles.background : undefined} id={previewId}>
+      <div className={previewClassName(widthMode === WidthMode.Narrow ? 'narrow' : 'wide')}>
+        <div
+          id={previewId}
+          {...(withBackground ? sx(styles.background, BACKGROUND_STYLE) : undefined)}
+        >
           <Flexbox
-            className={cx(styles.container, withBackground && styles.container_withBackground_true)}
             gap={16}
+            className={
+              stylex.props(styles.container, withBackground && styles.container_withBackground_true)
+                .className
+            }
           >
-            <div className={styles.header}>
+            <div {...stylex.props(styles.header)}>
               <Flexbox horizontal align={'center'} gap={12}>
                 <AgentAvatar
                   agentId={resolvedAgentId}
@@ -125,16 +140,16 @@ const Preview = memo<PreviewProps>(
                 </Flexbox>
               </Flexbox>
               {withSystemRole && systemRole && (
-                <div className={styles.role}>
+                <div {...sx(styles.role, fallback.role)}>
                   <Markdown variant={'chat'}>{systemRole}</Markdown>
                 </div>
               )}
             </div>
             <ChatList context={context} ids={[]} messages={messages} />
             {withFooter ? (
-              <Flexbox align={'center'} className={styles.footer} gap={4}>
+              <Flexbox align={'center'} className={stylex.props(styles.footer).className} gap={4}>
                 <ProductLogo type={'combine'} />
-                <div className={styles.url}>{pkg.homepage}</div>
+                <div {...stylex.props(styles.url)}>{pkg.homepage}</div>
               </Flexbox>
             ) : (
               <div />

@@ -87,10 +87,15 @@ const Recommendations = memo<RecommendationsProps>(({ variant = 'default' }) => 
     <Button
       className={stylex.props(groupBlockActionStyles.button).className}
       disabled={!canRefresh && !isRefreshing}
-      icon={<RefreshCw className={isRefreshing ? styles.refreshSpin : undefined} size={12} />}
       size={'small'}
       title={tCommon('taskTemplate.action.refresh.button')}
       type={'text'}
+      icon={
+        <RefreshCw
+          className={isRefreshing ? stylex.props(styles.refreshSpin).className : undefined}
+          size={12}
+        />
+      }
       onClick={handleRefresh}
     />
   );
@@ -137,7 +142,7 @@ const Recommendations = memo<RecommendationsProps>(({ variant = 'default' }) => 
   return (
     <Flexbox gap={12}>
       <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
-        <Text className={styles.subtitle} fontSize={12}>
+        <Text className={stylex.props(styles.subtitle).className} fontSize={12}>
           {t('recommendations.subtitle')}
         </Text>
         {taskTemplatesState.mode === 'cards' && (

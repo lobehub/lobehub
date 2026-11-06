@@ -23,7 +23,7 @@ export const suppressNextClick = () => {
 
 // Pressing on a row's own buttons (the ⋯ menu) must never pick the row up.
 const startsOnRowAction = (event: Event) =>
-  event.target instanceof Element && !!event.target.closest('.nav-item-actions');
+  event.target instanceof Element && !!event.target.closest('[data-nav-item-actions]');
 
 export class RowMouseSensor extends MouseSensor {
   static activators = [

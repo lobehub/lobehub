@@ -1,47 +1,51 @@
-import { createStaticStyles } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 
-import { imageUrl } from '@/const/url';
-
-export const styles = createStaticStyles(({ css, cssVar }) => ({
-  background: css`
-    padding: 24px;
-
-    background-color: ${cssVar.colorBgLayout};
-    background-image: url(${imageUrl('screenshot_background.webp')});
-    background-position: center;
-    background-size: 120% 120%;
-  `,
-  container: css`
-    background: ${cssVar.colorBgContainer};
-  `,
-  container_withBackground_true: css`
-    overflow: hidden;
-    border: 2px solid ${cssVar.colorBorder};
-    border-radius: ${cssVar.borderRadiusLG};
-  `,
-  footer: css`
-    padding: 16px;
-    border-block-start: 1px solid ${cssVar.colorBorder};
-  `,
-  header: css`
-    margin-block-end: -24px;
-    padding-block: 16px;
-    padding-inline: 24px;
-    border-block-end: 1px solid ${cssVar.colorBorder};
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  role: css`
-    margin-block-start: 12px;
-    padding-block-start: 12px;
-    border-block-start: 1px dashed ${cssVar.colorBorderSecondary};
-    opacity: 0.75;
-
-    * {
-      font-size: 12px !important;
-    }
-  `,
-  url: css`
-    color: ${cssVar.colorTextDescription};
-  `,
-}));
+// The background image URL is resolved at runtime (`imageUrl`), so Preview sets
+// `backgroundImage` inline next to this class.
+export const styles = stylex.create({
+  background: {
+    padding: '24px',
+    backgroundColor: cssVar.colorBgLayout,
+    backgroundPosition: 'center',
+    backgroundSize: '120% 120%',
+  },
+  container: {
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  container_withBackground_true: {
+    overflow: 'hidden',
+    borderWidth: '2px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorder,
+    borderRadius: cssVar.borderRadiusLG,
+  },
+  footer: {
+    padding: '16px',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorder,
+  },
+  header: {
+    marginBlockEnd: '-24px',
+    paddingBlock: '16px',
+    paddingInline: '24px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorder,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  role: {
+    marginBlockStart: '12px',
+    paddingBlockStart: '12px',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'dashed',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+    opacity: 0.75,
+  },
+  url: {
+    color: cssVar.colorTextDescription,
+  },
+});

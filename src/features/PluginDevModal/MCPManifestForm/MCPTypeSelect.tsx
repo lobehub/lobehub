@@ -1,95 +1,62 @@
-import { Center, createStaticStyles, cssVar, cx, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Center, Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { CheckIcon, RouterIcon, TerminalIcon } from 'lucide-react';
 import React, { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { isDesktop } from '@/const/version';
 
-const styles = createStaticStyles(({ css }) => ({
-  active: css`
-    border-color: ${cssVar.colorPrimary};
-
-    &:hover {
-      border-color: ${cssVar.colorPrimary};
-    }
-  `,
-  cardDescription: css`
-    font-size: ${cssVar.fontSizeSM};
-    color: ${cssVar.colorTextDescription};
-  `,
-  cardTitle: css`
-    font-weight: bold;
-  `,
-  checkIcon: css`
-    position: absolute;
-    inset-block-start: 12px;
-    inset-inline-end: 12px;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
-
-    color: ${cssVar.colorBgContainer};
-
-    background-color: ${cssVar.colorPrimary};
-  `,
-  container: css`
-    cursor: pointer;
-
-    position: relative;
-
-    width: 100%;
-    padding-block: 12px;
-    padding-inline: 16px;
-    border: 1px solid ${cssVar.colorBorder};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background-color: ${cssVar.colorBgContainer};
-
-    transition:
-      border-color 0.3s ${cssVar.motionEaseInOut},
-      box-shadow 0.3s ${cssVar.motionEaseInOut};
-
-    &:hover {
-      border-color: ${cssVar.colorPrimaryHover};
-    }
-  `,
-  disabled: css`
-    cursor: not-allowed;
-    border-color: ${cssVar.colorBorder};
-    opacity: 0.5;
-    background-color: ${cssVar.colorBgContainerDisabled};
-
-    &:hover {
-      border-color: ${cssVar.colorBorder};
-    }
-  `,
-  featureIcon: css`
-    color: ${cssVar.colorTextSecondary};
-  `,
-  featureItem: css`
-    display: flex;
-    gap: 8px;
-    align-items: center;
-  `,
-  featureText: css`
-    font-size: ${cssVar.fontSizeSM};
-    color: ${cssVar.colorTextSecondary};
-  `,
-}));
+const styles = stylex.create({
+  active: { borderColor: { 'default': cssVar.colorPrimary, ':hover': cssVar.colorPrimary } },
+  cardDescription: { fontSize: cssVar.fontSizeSM, color: cssVar.colorTextDescription },
+  cardTitle: { fontWeight: 'bold' },
+  checkIcon: {
+    position: 'absolute',
+    insetBlockStart: '12px',
+    insetInlineEnd: '12px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '20px',
+    height: '20px',
+    borderRadius: '50%',
+    color: cssVar.colorBgContainer,
+    backgroundColor: cssVar.colorPrimary,
+  },
+  container: {
+    cursor: 'pointer',
+    position: 'relative',
+    width: '100%',
+    paddingBlock: '12px',
+    paddingInline: '16px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: { 'default': cssVar.colorBorder, ':hover': cssVar.colorPrimaryHover },
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgContainer,
+    transition: `border-color 0.3s ${cssVar.motionEaseInOut},
+      box-shadow 0.3s ${cssVar.motionEaseInOut}`,
+  },
+  disabled: {
+    cursor: 'not-allowed',
+    borderColor: { 'default': cssVar.colorBorder, ':hover': cssVar.colorBorder },
+    opacity: 0.5,
+    backgroundColor: cssVar.colorBgContainerDisabled,
+  },
+  featureIcon: { color: cssVar.colorTextSecondary },
+  featureItem: { display: 'flex', gap: '8px', alignItems: 'center' },
+  featureText: { fontSize: cssVar.fontSizeSM, color: cssVar.colorTextSecondary },
+});
 
 // Helper component for feature list items (moved from MCPManifestForm)
 const FeatureItem = memo(({ children }: { children: React.ReactNode }) => {
   return (
-    <div className={styles.featureItem}>
-      <Center className={styles.featureIcon}>
+    <div {...stylex.props(styles.featureItem)}>
+      <Center className={stylex.props(styles.featureIcon).className}>
         <CheckIcon color={cssVar.colorSuccess} size={16} />
       </Center>
-      <div className={styles.featureText}>{children}</div>
+      <div {...stylex.props(styles.featureText)}>{children}</div>
     </div>
   );
 });
@@ -130,13 +97,19 @@ const MCPTypeSelect = ({ value, onChange }: MCPTypeSelectProps) => {
         const disabled = itemValue === 'stdio' && !isDesktop;
         return (
           <Flexbox
-            className={cx(styles.container, isActive && styles.active, disabled && styles.disabled)}
             gap={12}
             key={itemValue}
             style={{ flex: 1 }} // Make cards take equal width
+            className={
+              stylex.props(styles.container, isActive && styles.active, disabled && styles.disabled)
+                .className
+            }
             onClick={disabled ? undefined : () => handleSelect(itemValue)}
           >
-            <Center className={styles.checkIcon} style={{ opacity: isActive ? 1 : 0 }}>
+            <Center
+              className={stylex.props(styles.checkIcon).className}
+              style={{ opacity: isActive ? 1 : 0 }}
+            >
               <CheckIcon size={14} />
             </Center>
 
@@ -145,8 +118,8 @@ const MCPTypeSelect = ({ value, onChange }: MCPTypeSelectProps) => {
                 <Icon icon={icon} style={{ fontSize: 16 }} />
               </Center>
               <Flexbox>
-                <div className={styles.cardTitle}>{label}</div>
-                <div className={styles.cardDescription}>{description}</div>
+                <div {...stylex.props(styles.cardTitle)}>{label}</div>
+                <div {...stylex.props(styles.cardDescription)}>{description}</div>
               </Flexbox>
             </Flexbox>
             <Flexbox gap={8}>

@@ -1,5 +1,5 @@
 import type { MarketplaceCategory } from '@lobechat/builtin-tool-web-onboarding/agentMarketplace';
-import { cx } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -21,7 +21,7 @@ const CategoryFilter = memo<CategoryFilterProps>(({ active, allLabel, categories
   const renderPill = (value: ActiveCategory, label: string) => (
     <button
       aria-pressed={active === value}
-      className={cx(styles.pill, active === value && styles.pillActive)}
+      {...stylex.props(styles.pill, active === value && styles.pillActive)}
       key={value}
       type="button"
       onClick={() => onChange(value)}
@@ -31,7 +31,7 @@ const CategoryFilter = memo<CategoryFilterProps>(({ active, allLabel, categories
   );
 
   return (
-    <div className={styles.filterBar}>
+    <div {...stylex.props(styles.filterBar)}>
       {renderPill('all', allLabel)}
       {categories.map((category) => renderPill(category, tTool(CATEGORY_LABEL_KEYS[category])))}
     </div>

@@ -1,6 +1,7 @@
 'use client';
 
-import { Button, createModal, createStaticStyles, cx, Flexbox, Input, Spin } from '@lobehub/ui';
+import { Button, createModal, Flexbox, Input, Spin } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronLeft, ChevronRight, Expand } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -8,107 +9,79 @@ import { useTranslation } from 'react-i18next';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { Document, Page } from '@/libs/pdfjs';
 
-import { containerStyles } from '../style';
+import { previewClassName } from '../style';
 
-const styles = createStaticStyles(({ css }) => ({
-  containerWrapper: css`
-    position: relative;
-    width: 100%;
-    height: 100%;
-  `,
-  documentLoading: css`
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-
-    height: 100%;
-    padding: 20px;
-  `,
-  expandButton: css`
-    position: absolute;
-    z-index: 1000;
-    inset-block-start: 20px;
-    inset-inline-end: 20px;
-  `,
-  footerNavigation: css`
-    position: absolute;
-    z-index: 10;
-    inset-block-end: 0;
-    inset-inline: 0;
-
-    padding: 12px;
-    border-block-start: 1px solid color-mix(in srgb, black 10%, transparent);
-
-    background: color-mix(in srgb, white 90%, transparent);
-    backdrop-filter: blur(8px);
-  `,
-  fullscreenButton: css`
-    border-color: white;
-    color: white;
-  `,
-  fullscreenContent: css`
-    display: flex;
-    align-items: flex-start;
-    justify-content: center;
-
-    min-height: 100%;
-    padding: 20px;
-  `,
-  fullscreenModal: css`
-    position: relative;
-    overflow: auto;
-    height: 90vh;
-  `,
-  fullscreenNavigation: css`
-    position: fixed;
-    z-index: 1001;
-    inset-block-end: 20px;
-    inset-inline-start: 50%;
-    transform: translateX(-50%);
-
-    padding-block: 12px;
-    padding-inline: 20px;
-    border-radius: 8px;
-
-    background: color-mix(in srgb, black 70%, transparent);
-    backdrop-filter: blur(8px);
-  `,
-  fullscreenPageInput: css`
-    width: 60px;
-  `,
-  fullscreenPageText: css`
-    min-width: 20px;
-    font-size: 14px;
-    color: white;
-  `,
-  loadingState: css`
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-
-    height: 100%;
-    min-height: 320px;
-  `,
-  loadingText: css`
-    margin-block-start: 8px;
-    color: #666;
-  `,
-  pageInput: css`
-    width: 50px;
-  `,
-  pageNumberText: css`
-    font-size: 12px;
-    color: #666;
-  `,
-  previewContainer: css`
-    display: flex;
-    align-items: flex-start;
-    justify-content: center;
-    padding: 12px;
-  `,
-}));
+const styles = stylex.create({
+  containerWrapper: { position: 'relative', width: '100%', height: '100%' },
+  documentLoading: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: '100%',
+    padding: '20px',
+  },
+  expandButton: {
+    position: 'absolute',
+    zIndex: 1000,
+    insetBlockStart: '20px',
+    insetInlineEnd: '20px',
+  },
+  footerNavigation: {
+    position: 'absolute',
+    zIndex: 10,
+    insetBlockEnd: 0,
+    insetInline: 0,
+    padding: '12px',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: 'color-mix(in srgb, black 10%, transparent)',
+    backgroundColor: 'color-mix(in srgb, white 90%, transparent)',
+    backgroundImage: 'none',
+    backdropFilter: 'blur(8px)',
+  },
+  fullscreenButton: { borderColor: 'white', color: 'white' },
+  fullscreenContent: {
+    display: 'flex',
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+    minHeight: '100%',
+    padding: '20px',
+  },
+  fullscreenModal: { position: 'relative', overflow: 'auto', height: '90vh' },
+  fullscreenNavigation: {
+    position: 'fixed',
+    zIndex: 1001,
+    insetBlockEnd: '20px',
+    insetInlineStart: '50%',
+    transform: 'translateX(-50%)',
+    paddingBlock: '12px',
+    paddingInline: '20px',
+    borderRadius: '8px',
+    backgroundColor: 'color-mix(in srgb, black 70%, transparent)',
+    backgroundImage: 'none',
+    backdropFilter: 'blur(8px)',
+  },
+  fullscreenPageInput: { width: '60px' },
+  fullscreenPageText: { minWidth: '20px', fontSize: '14px', color: 'white' },
+  loadingState: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: '100%',
+    minHeight: '320px',
+  },
+  loadingText: { marginBlockStart: '8px', color: '#666' },
+  pageInput: { width: '50px' },
+  pageNumberText: { fontSize: '12px', color: '#666' },
+  previewContainer: {
+    display: 'flex',
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+    padding: '12px',
+  },
+});
 
 interface FullscreenContentProps {
   initialPage: number;
@@ -132,8 +105,8 @@ const FullscreenContent = memo<FullscreenContentProps>(({ pdfDataUri, initialPag
   };
 
   return (
-    <div className={styles.fullscreenModal}>
-      <div className={styles.fullscreenContent}>
+    <div {...stylex.props(styles.fullscreenModal)}>
+      <div {...stylex.props(styles.fullscreenContent)}>
         <Document
           file={pdfDataUri}
           onLoadSuccess={({ numPages: total }: { numPages: number }) => setNumPages(total)}
@@ -148,10 +121,10 @@ const FullscreenContent = memo<FullscreenContentProps>(({ pdfDataUri, initialPag
       </div>
 
       {numPages > 1 && (
-        <div className={styles.fullscreenNavigation}>
+        <div {...stylex.props(styles.fullscreenNavigation)}>
           <Flexbox horizontal align="center" gap={12}>
             <Button
-              className={styles.fullscreenButton}
+              className={stylex.props(styles.fullscreenButton).className}
               disabled={pageNumber <= 1}
               icon={<ChevronLeft size={16} />}
               size="small"
@@ -160,7 +133,7 @@ const FullscreenContent = memo<FullscreenContentProps>(({ pdfDataUri, initialPag
             />
             <Flexbox horizontal align="center" gap={8}>
               <Input
-                className={styles.fullscreenPageInput}
+                className={stylex.props(styles.fullscreenPageInput).className}
                 max={numPages}
                 min={1}
                 size="small"
@@ -172,10 +145,10 @@ const FullscreenContent = memo<FullscreenContentProps>(({ pdfDataUri, initialPag
                   if (!isNaN(value)) goToPage(value);
                 }}
               />
-              <span className={styles.fullscreenPageText}>/ {numPages}</span>
+              <span {...stylex.props(styles.fullscreenPageText)}>/ {numPages}</span>
             </Flexbox>
             <Button
-              className={styles.fullscreenButton}
+              className={stylex.props(styles.fullscreenButton).className}
               disabled={pageNumber >= numPages}
               icon={<ChevronRight size={16} />}
               size="small"
@@ -208,7 +181,6 @@ interface PdfPreviewProps {
 }
 
 const PdfPreview = memo<PdfPreviewProps>(({ pdfData }) => {
-  const localStyles = styles;
   const { t } = useTranslation('chat');
   const isMobile = useIsMobile();
 
@@ -240,10 +212,10 @@ const PdfPreview = memo<PdfPreviewProps>(({ pdfData }) => {
 
   if (!pdfData) {
     return (
-      <div className={cx(containerStyles.preview, containerStyles.previewText)}>
-        <div className={localStyles.loadingState}>
+      <div className={previewClassName('text')}>
+        <div {...stylex.props(styles.loadingState)}>
           <Spin size={24} />
-          <div className={localStyles.loadingText}>{t('shareModal.generatingPdf')}</div>
+          <div {...stylex.props(styles.loadingText)}>{t('shareModal.generatingPdf')}</div>
         </div>
       </div>
     );
@@ -256,9 +228,9 @@ const PdfPreview = memo<PdfPreviewProps>(({ pdfData }) => {
   };
 
   return (
-    <div className={localStyles.containerWrapper}>
+    <div {...stylex.props(styles.containerWrapper)}>
       <Button
-        className={localStyles.expandButton}
+        className={stylex.props(styles.expandButton).className}
         icon={<Expand size={16} />}
         size="small"
         type="text"
@@ -266,18 +238,14 @@ const PdfPreview = memo<PdfPreviewProps>(({ pdfData }) => {
       />
 
       <div
-        className={cx(
-          containerStyles.preview,
-          containerStyles.previewText,
-          localStyles.previewContainer,
-        )}
+        className={`${previewClassName('text')} ${stylex.props(styles.previewContainer).className}`}
       >
         <Document
           file={pdfDataUri}
           loading={
-            <div className={localStyles.documentLoading}>
+            <div {...stylex.props(styles.documentLoading)}>
               <Spin />
-              <div className={localStyles.loadingText}>{t('shareModal.loadingPdf')}</div>
+              <div {...stylex.props(styles.loadingText)}>{t('shareModal.loadingPdf')}</div>
             </div>
           }
           onLoadSuccess={onDocumentLoadSuccess}
@@ -292,7 +260,7 @@ const PdfPreview = memo<PdfPreviewProps>(({ pdfData }) => {
       </div>
 
       {numPages > 1 && (
-        <div className={localStyles.footerNavigation}>
+        <div {...stylex.props(styles.footerNavigation)}>
           <Flexbox horizontal align="center" gap={8} justify="center">
             <Button
               disabled={pageNumber <= 1}
@@ -303,7 +271,7 @@ const PdfPreview = memo<PdfPreviewProps>(({ pdfData }) => {
             />
             <Flexbox horizontal align="center" gap={4}>
               <Input
-                className={localStyles.pageInput}
+                className={stylex.props(styles.pageInput).className}
                 max={numPages}
                 min={1}
                 size="small"
@@ -315,7 +283,7 @@ const PdfPreview = memo<PdfPreviewProps>(({ pdfData }) => {
                   if (!isNaN(value)) goToPage(value);
                 }}
               />
-              <span className={localStyles.pageNumberText}>/ {numPages}</span>
+              <span {...stylex.props(styles.pageNumberText)}>/ {numPages}</span>
             </Flexbox>
             <Button
               disabled={pageNumber >= numPages}

@@ -3,11 +3,14 @@
 import {
   Breadcrumb,
   type BreadcrumbItem,
+  // oxlint-disable-next-line stylex-migration/no-emotion-styles -- Breadcrumb links take no className
   createStaticStyles,
   Flexbox,
   Icon,
   Text,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronRightIcon, HomeIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { memo } from 'react';
@@ -20,21 +23,22 @@ import { isModifierClick } from '@/utils/navigation';
 import BackButton from './components/BackButton';
 import ToggleLeftPanelButton from './ToggleLeftPanelButton';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  breadcrumb: css`
-    li,
-    li[aria-current='page'] {
-      font-size: 12px;
-      font-weight: normal;
-      color: ${cssVar.colorTextDescription};
-    }
+const containerStyles = stylex.create({
+  breadcrumbItem: {
+    color: cssVar.colorTextDescription,
+    fontSize: '12px',
+    fontWeight: 'normal',
+  },
+  container: { overflow: 'hidden' },
+});
 
+const breadcrumbClassNames = { item: stylex.props(containerStyles.breadcrumbItem).className };
+
+const fallback = createStaticStyles(({ css, cssVar }) => ({
+  breadcrumb: css`
     a:hover {
       color: ${cssVar.colorText};
     }
-  `,
-  container: css`
-    overflow: hidden;
   `,
 }));
 
@@ -82,7 +86,8 @@ const SideBarHeaderLayout = memo<SideBarHeaderLayoutProps>(
     ) : (
       <Flexbox flex={1} paddingInline={6}>
         <Breadcrumb
-          className={styles.breadcrumb}
+          className={fallback.breadcrumb}
+          classNames={breadcrumbClassNames}
           separator={<Icon icon={ChevronRightIcon} />}
           items={[
             homeItem ?? {
@@ -111,7 +116,7 @@ const SideBarHeaderLayout = memo<SideBarHeaderLayoutProps>(
       <Flexbox
         horizontal
         align={'center'}
-        className={styles.container}
+        className={stylex.props(containerStyles.container).className}
         flex={'none'}
         justify={'space-between'}
         padding={'8px 6px'}

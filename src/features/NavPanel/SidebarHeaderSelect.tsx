@@ -1,7 +1,9 @@
 'use client';
 
 import type { BlockProps } from '@lobehub/ui';
-import { ActionIcon, Block, createStaticStyles, Popover, Text } from '@lobehub/ui';
+import { ActionIcon, Block, Popover, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronsUpDownIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { memo } from 'react';
@@ -9,13 +11,12 @@ import { memo } from 'react';
 import Avatar from '@/components/Avatar';
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  trigger: css`
-    &[data-popup-open] {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-}));
+const styles = stylex.create({
+  trigger: {
+    backgroundColor: { 'default': null, ':is([data-popup-open])': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':is([data-popup-open])': 'none' },
+  },
+});
 
 interface SidebarHeaderSelectPopoverProps {
   children: ReactNode;
@@ -26,7 +27,7 @@ interface SidebarHeaderSelectPopoverProps {
 export const SidebarHeaderSelectPopover = memo<SidebarHeaderSelectPopoverProps>(
   ({ children, content, width = 280 }) => (
     <Popover
-      classNames={{ trigger: styles.trigger }}
+      classNames={{ trigger: stylex.props(styles.trigger).className }}
       content={content}
       nativeButton={false}
       placement={'bottomLeft'}

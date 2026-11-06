@@ -1,5 +1,7 @@
 import { type ItemType } from '@lobehub/ui';
-import { createStaticStyles, cssVar, Flexbox, Icon, SearchBar, stopPropagation } from '@lobehub/ui';
+import { Flexbox, Icon, SearchBar, stopPropagation } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronRight, ExternalLink, Settings, Store } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -37,24 +39,25 @@ const filterItems = (items: ItemType[], keyword: string): ItemType[] => {
     .filter(Boolean) as ItemType[];
 };
 
-const styles = createStaticStyles(({ css }) => ({
-  footer: css`
-    padding: 4px;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  header: css`
-    padding-block: 8px;
-    padding-inline: 8px;
-    border-block-end: 1px solid ${cssVar.colorFill};
-    background: transparent;
-  `,
-  scroller: css`
-    overflow: hidden auto;
-  `,
-  trailingIcon: css`
-    opacity: 0.5;
-  `,
-}));
+const styles = stylex.create({
+  footer: {
+    padding: '4px',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+  },
+  header: {
+    paddingBlock: '8px',
+    paddingInline: '8px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorFill,
+    backgroundColor: 'transparent',
+    backgroundImage: 'none',
+  },
+  scroller: { overflowX: 'hidden', overflowY: 'auto' },
+  trailingIcon: { opacity: 0.5 },
+});
 
 interface PopoverContentProps {
   items: ItemType[];
@@ -76,7 +79,7 @@ const PopoverContent = memo<PopoverContentProps>(({ items, onOpenStore, onClose 
 
   return (
     <Flexbox style={{ maxHeight: 500, width: '100%' }}>
-      <div className={styles.header} onClick={stopPropagation}>
+      <div {...stylex.props(styles.header)} onClick={stopPropagation}>
         <SearchBar
           allowClear
           placeholder={t('tools.search')}
@@ -88,16 +91,20 @@ const PopoverContent = memo<PopoverContentProps>(({ items, onOpenStore, onClose 
           onKeyDown={stopPropagation}
         />
       </div>
-      <ScrollSignalProvider className={styles.scroller} style={{ flex: 1 }}>
+      <ScrollSignalProvider className={stylex.props(styles.scroller).className} style={{ flex: 1 }}>
         {isEmpty ? <Empty /> : <ToolsList items={filteredItems} />}
       </ScrollSignalProvider>
-      <div className={styles.footer}>
+      <div {...stylex.props(styles.footer)}>
         <div className={toolsListStyles.item} role="button" tabIndex={0} onClick={onOpenStore}>
           <div className={toolsListStyles.itemIcon}>
             <Icon icon={Store} size={SKILL_ICON_SIZE} />
           </div>
           <div className={toolsListStyles.itemContent}>{t('skillStore.title')}</div>
-          <Icon className={styles.trailingIcon} icon={ChevronRight} size={16} />
+          <Icon
+            className={stylex.props(styles.trailingIcon).className}
+            icon={ChevronRight}
+            size={16}
+          />
         </div>
         <div
           className={toolsListStyles.item}
@@ -112,7 +119,11 @@ const PopoverContent = memo<PopoverContentProps>(({ items, onOpenStore, onClose 
             <Icon icon={Settings} size={SKILL_ICON_SIZE} />
           </div>
           <div className={toolsListStyles.itemContent}>{t('tools.plugins.management')}</div>
-          <Icon className={styles.trailingIcon} icon={ExternalLink} size={16} />
+          <Icon
+            className={stylex.props(styles.trailingIcon).className}
+            icon={ExternalLink}
+            size={16}
+          />
         </div>
       </div>
     </Flexbox>

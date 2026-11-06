@@ -1,99 +1,80 @@
-import { createStaticStyles } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 
-export const styles = createStaticStyles(({ css, cssVar }) => ({
-  badge: css`
-    width: 32px;
-    height: 32px;
-    border-radius: 9px;
-
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillTertiary};
-
-    transition:
-      background 200ms ${cssVar.motionEaseOut},
-      color 200ms ${cssVar.motionEaseOut};
-  `,
-  badgeActive: css`
-    color: ${cssVar.colorSuccess};
-    background: ${cssVar.colorSuccessBg};
-  `,
-  container: css`
-    padding: 16px;
-  `,
-  divider: css`
-    height: 1px;
-    margin-inline: 4px;
-    background: ${cssVar.colorBorderSecondary};
-  `,
-  exportHint: css`
-    overflow: hidden;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextDescription};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  exportIcon: css`
-    flex: none;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  exportLabel: css`
-    flex: 1;
-    text-align: start;
-  `,
-  exportRow: css`
-    cursor: pointer;
-
-    display: flex;
-    gap: 10px;
-    align-items: center;
-
-    width: 100%;
-    min-height: 44px;
-    margin-block-start: 6px;
-    padding-inline: 10px;
-    border: none;
-    border-radius: ${cssVar.borderRadius};
-
-    font: inherit;
-    color: ${cssVar.colorText};
-
-    background: transparent;
-
-    transition: background 150ms ${cssVar.motionEaseOut};
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-
-    &:focus-visible {
-      outline: 2px solid ${cssVar.colorPrimaryBorder};
-      outline-offset: -2px;
-    }
-  `,
-  notice: css`
-    padding-block: 8px;
-    padding-inline: 10px;
-    border-radius: ${cssVar.borderRadius};
-
-    font-size: 12px;
-    line-height: 1.5;
-    color: ${cssVar.colorWarningText};
-
-    background: ${cssVar.colorWarningBg};
-  `,
-  panel: css`
-    padding: 6px;
-  `,
-  section: css`
-    padding-block: 10px 12px;
-    padding-inline: 10px;
-  `,
-  url: css`
-    flex: 1;
-    min-width: 0;
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-  `,
-}));
+export const styles = stylex.create({
+  badge: {
+    width: '32px',
+    height: '32px',
+    borderRadius: '9px',
+    color: cssVar.colorTextSecondary,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+    transition: `background 200ms ${cssVar.motionEaseOut},
+      color 200ms ${cssVar.motionEaseOut}`,
+  },
+  badgeActive: {
+    color: cssVar.colorSuccess,
+    backgroundColor: cssVar.colorSuccessBg,
+    backgroundImage: 'none',
+  },
+  container: { padding: '16px' },
+  divider: {
+    height: '1px',
+    marginInline: '4px',
+    backgroundColor: cssVar.colorBorderSecondary,
+    backgroundImage: 'none',
+  },
+  exportHint: {
+    overflow: 'hidden',
+    fontSize: '12px',
+    color: cssVar.colorTextDescription,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  exportIcon: { flex: 'none', color: cssVar.colorTextTertiary },
+  exportLabel: { flex: '1', textAlign: 'start' },
+  exportRow: {
+    cursor: 'pointer',
+    display: 'flex',
+    gap: '10px',
+    alignItems: 'center',
+    width: '100%',
+    minHeight: '44px',
+    marginBlockStart: '6px',
+    paddingInline: '10px',
+    borderWidth: 0,
+    borderStyle: 'none',
+    borderRadius: cssVar.borderRadius,
+    font: 'inherit',
+    color: cssVar.colorText,
+    backgroundColor: { 'default': 'transparent', ':hover': cssVar.colorFillTertiary },
+    backgroundImage: 'none',
+    transition: `background 150ms ${cssVar.motionEaseOut}`,
+    outlineWidth: { 'default': null, ':focus-visible': '2px' },
+    outlineStyle: { 'default': null, ':focus-visible': 'solid' },
+    outlineColor: { 'default': null, ':focus-visible': cssVar.colorPrimaryBorder },
+    outlineOffset: { 'default': null, ':focus-visible': '-2px' },
+  },
+  notice: {
+    paddingBlock: '8px',
+    paddingInline: '10px',
+    borderRadius: cssVar.borderRadius,
+    fontSize: '12px',
+    lineHeight: 1.5,
+    color: cssVar.colorWarningText,
+    backgroundColor: cssVar.colorWarningBg,
+    backgroundImage: 'none',
+  },
+  panel: { padding: '6px' },
+  section: {
+    paddingBlockStart: '10px',
+    paddingBlockEnd: '12px',
+    paddingInline: '10px',
+  },
+  url: {
+    flex: '1',
+    minWidth: '0',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '12px',
+  },
+});

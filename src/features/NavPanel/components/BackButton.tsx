@@ -1,4 +1,5 @@
 import { ActionIcon, type ActionIconProps } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronLeftIcon } from 'lucide-react';
 import { memo, type MouseEvent } from 'react';
 
@@ -8,6 +9,12 @@ import { appNavigate } from '@/features/Electron/navigation/appNavigate';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 
 export const BACK_BUTTON_ID = 'lobe-back-button';
+
+const styles = stylex.create({
+  inNavPanel: {
+    width: { 'default': null, ':is([data-nav-panel-draggable] *)': '24px !important' },
+  },
+});
 
 const BackButton = memo<ActionIconProps & { to?: string }>(({ to = '/', onClick, ...rest }) => {
   const activeSlug = useActiveWorkspaceSlug();
@@ -28,6 +35,7 @@ const BackButton = memo<ActionIconProps & { to?: string }>(({ to = '/', onClick,
   return (
     <a href={resolvedTo} onClick={handleClick}>
       <ActionIcon
+        className={stylex.props(styles.inNavPanel).className}
         icon={ChevronLeftIcon}
         id={BACK_BUTTON_ID}
         size={DESKTOP_HEADER_ICON_SMALL_SIZE}

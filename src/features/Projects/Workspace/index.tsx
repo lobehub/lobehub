@@ -1,6 +1,8 @@
 'use client';
 
-import { createStaticStyles, cssVar, Flexbox, Text } from '@lobehub/ui';
+import { Flexbox, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
@@ -14,38 +16,27 @@ import { labPreferSelectors } from '@/store/user/selectors';
 
 import ProjectComposer from './ProjectComposer';
 
-const styles = createStaticStyles(({ css }) => ({
-  content: css`
-    overflow: auto;
-    width: 100%;
-    height: 100%;
-  `,
-  heading: css`
-    text-align: center;
-  `,
-  intro: css`
-    width: 100%;
-    max-width: 760px;
-    margin-inline: auto;
-  `,
-  page: css`
-    box-sizing: border-box;
-    width: min(1060px, calc(100% - 64px));
-    min-height: 100%;
-    margin-inline: auto;
-    padding-block: 48px;
-
-    @media (width <= 720px) {
-      width: calc(100% - 40px);
-      padding-block: 32px;
-    }
-  `,
-  shell: css`
-    overflow: hidden;
-    height: 100%;
-    background: ${cssVar.colorBgContainer};
-  `,
-}));
+const styles = stylex.create({
+  content: { overflow: 'auto', width: '100%', height: '100%' },
+  heading: { textAlign: 'center' },
+  intro: { width: '100%', maxWidth: '760px', marginInline: 'auto' },
+  page: {
+    boxSizing: 'border-box',
+    width: {
+      'default': 'min(1060px, calc(100% - 64px))',
+      '@media (width <= 720px)': 'calc(100% - 40px)',
+    },
+    marginInline: 'auto',
+    minHeight: '100%',
+    paddingBlock: { 'default': '48px', '@media (width <= 720px)': '32px' },
+  },
+  shell: {
+    overflow: 'hidden',
+    height: '100%',
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+});
 
 const ProjectWorkspace = memo(() => {
   const { t } = useTranslation('project');
@@ -60,11 +51,11 @@ const ProjectWorkspace = memo(() => {
   if (!detail) return <RouteLoading />;
 
   return (
-    <Flexbox className={styles.shell} flex={1}>
-      <div className={styles.content}>
-        <Flexbox className={styles.page} gap={0} justify={'center'}>
-          <Flexbox className={styles.intro} gap={18}>
-            <Flexbox align={'center'} className={styles.heading} gap={5}>
+    <Flexbox className={stylex.props(styles.shell).className} flex={1}>
+      <div className={stylex.props(styles.content).className}>
+        <Flexbox className={stylex.props(styles.page).className} gap={0} justify={'center'}>
+          <Flexbox className={stylex.props(styles.intro).className} gap={18}>
+            <Flexbox align={'center'} className={stylex.props(styles.heading).className} gap={5}>
               <Text fontSize={26} weight={650}>
                 {t('overview.title')}
               </Text>

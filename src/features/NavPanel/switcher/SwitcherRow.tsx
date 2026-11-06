@@ -1,4 +1,6 @@
-import { Avatar, Block, createStaticStyles, cssVar, Icon, Text } from '@lobehub/ui';
+import { Avatar, Block, Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { CheckIcon } from 'lucide-react';
 import { memo } from 'react';
 
@@ -6,24 +8,18 @@ import AgentAvatar from '@/components/AgentAvatar';
 
 import type { SwitcherItem } from './switcherItems';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  current: css`
-    background: ${cssVar.colorFillTertiary};
-  `,
-  row: css`
-    cursor: pointer;
-
-    overflow: hidden;
-    flex: none;
-
-    padding-inline: 8px;
-    border-radius: ${cssVar.borderRadius};
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-}));
+const styles = stylex.create({
+  current: { backgroundColor: cssVar.colorFillTertiary, backgroundImage: 'none' },
+  row: {
+    cursor: 'pointer',
+    overflow: 'hidden',
+    flex: 'none',
+    paddingInline: '8px',
+    borderRadius: cssVar.borderRadius,
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+});
 
 interface SwitcherRowProps {
   active?: boolean;
@@ -38,11 +34,15 @@ const SwitcherRow = memo<SwitcherRowProps>(({ active, item, kind, onSelect, priv
     clickable
     horizontal
     align={'center'}
-    className={active ? `${styles.row} ${styles.current}` : styles.row}
     flex={'none'}
     gap={8}
     height={36}
     variant={'borderless'}
+    className={
+      active
+        ? stylex.props(styles.row, styles.current).className
+        : stylex.props(styles.row).className
+    }
     onClick={() => onSelect(item.id)}
   >
     {kind === 'agent' ? (

@@ -6,6 +6,7 @@ import { type IconProps } from '@lobehub/ui';
 import {
   Block,
   Button,
+  // oxlint-disable-next-line stylex-migration/no-emotion-styles -- needs lobe-ui slot: Steps.connector
   createStaticStyles,
   cssVar,
   Flexbox,
@@ -24,8 +25,7 @@ import { ProductLogo } from '@/components/Branding';
 import { PRIVACY_URL, TERMS_URL } from '@/const/url';
 import { useUserStore } from '@/store/user';
 
-// `&&` outranks base-ui's own vertical connector rule so the rail centres under the 32px icons.
-const styles = createStaticStyles(({ css }) => ({
+const fallback = createStaticStyles(({ css }) => ({
   steps: css`
     && > li > span[aria-hidden] {
       inset-block-start: 36px;
@@ -98,7 +98,7 @@ const TelemetryStep = memo<TelemetryStepProps>(({ onNext }) => {
         <Text as={'p'}>{t('telemetry.desc')}</Text>
       </Flexbox>
       <Steps
-        className={styles.steps}
+        className={fallback.steps}
         orientation={'vertical'}
         styles={{ indicator: { border: 'none', height: 32, width: 32 } }}
         items={[

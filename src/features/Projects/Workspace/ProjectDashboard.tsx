@@ -1,19 +1,9 @@
 'use client';
 
 import type { TaskStatus, WorkSummaryItem } from '@lobechat/types';
-import {
-  Block,
-  Button,
-  Center,
-  createStaticStyles,
-  cssVar,
-  Empty,
-  Flexbox,
-  Icon,
-  Progress,
-  Tag,
-  Text,
-} from '@lobehub/ui';
+import { Block, Button, Center, Empty, Flexbox, Icon, Progress, Tag, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import {
   BadgeCheckIcon,
   CheckCircle2Icon,
@@ -44,97 +34,87 @@ import { goalSelectors, useGoalStore } from '@/store/goal';
 import type { ProjectDetail } from '@/store/project';
 import { useWorkStore, workActions, workSelectors } from '@/store/work';
 
-const styles = createStaticStyles(({ css }) => ({
-  attention: css`
-    padding-block: 10px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-
-    &:last-child {
-      border-block-end: 0;
-    }
-  `,
-  columns: css`
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 300px;
-    gap: 32px;
-    align-items: start;
-
-    margin-block-start: 40px;
-
-    @media (width <= 960px) {
-      grid-template-columns: 1fr;
-    }
-  `,
-  goal: css`
-    padding-block: 12px;
-    padding-inline: 14px;
-    border-radius: 12px;
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  goalGrid: css`
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 10px;
-
-    @media (width <= 760px) {
-      grid-template-columns: 1fr;
-    }
-  `,
-  main: css`
-    min-width: 0;
-  `,
-  progress: css`
-    padding: 18px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 16px;
-    background: color-mix(in srgb, ${cssVar.colorBgContainer} 84%, ${cssVar.colorFillQuaternary});
-  `,
-  rail: css`
-    position: sticky;
-    inset-block-start: 24px;
-    min-width: 0;
-  `,
-  railCard: css`
-    padding: 16px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 16px;
-    background: color-mix(in srgb, ${cssVar.colorBgContainer} 78%, transparent);
-  `,
-  summaryLink: css`
-    cursor: pointer;
-
-    display: flex;
-    justify-content: space-between;
-
-    margin-inline: -6px;
-    padding-block: 2px;
-    padding-inline: 6px;
-    border: none;
-    border-radius: 6px;
-
-    font: inherit;
-
-    background: transparent;
-
-    &:hover,
-    &:focus-visible {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  section: css`
-    padding-block: 18px;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  works: css`
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px;
-
-    @media (width <= 760px) {
-      grid-template-columns: 1fr;
-    }
-  `,
-}));
+const styles = stylex.create({
+  attention: {
+    paddingBlock: '10px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: { 'default': 'solid', ':last-child': 'none' },
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+  columns: {
+    display: 'grid',
+    gridTemplateColumns: { 'default': 'minmax(0, 1fr) 300px', '@media (width <= 960px)': '1fr' },
+    gap: '32px',
+    alignItems: 'start',
+    marginBlockStart: '40px',
+  },
+  goal: {
+    paddingBlock: '12px',
+    paddingInline: '14px',
+    borderRadius: '12px',
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  goalGrid: {
+    display: 'grid',
+    gridTemplateColumns: {
+      'default': 'repeat(3, minmax(0, 1fr))',
+      '@media (width <= 760px)': '1fr',
+    },
+    gap: '10px',
+  },
+  main: { minWidth: '0' },
+  progress: {
+    padding: '18px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: '16px',
+    backgroundColor: `color-mix(in srgb, ${cssVar.colorBgContainer} 84%, ${cssVar.colorFillQuaternary})`,
+    backgroundImage: 'none',
+  },
+  rail: { position: 'sticky', insetBlockStart: '24px', minWidth: '0' },
+  railCard: {
+    padding: '16px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: '16px',
+    backgroundColor: `color-mix(in srgb, ${cssVar.colorBgContainer} 78%, transparent)`,
+    backgroundImage: 'none',
+  },
+  summaryLink: {
+    cursor: 'pointer',
+    display: 'flex',
+    justifyContent: 'space-between',
+    marginInline: '-6px',
+    paddingBlock: '2px',
+    paddingInline: '6px',
+    borderStyle: 'none',
+    borderRadius: '6px',
+    font: 'inherit',
+    backgroundColor: {
+      'default': 'transparent',
+      ':hover': cssVar.colorFillTertiary,
+      ':focus-visible': cssVar.colorFillTertiary,
+    },
+    backgroundImage: 'none',
+  },
+  section: {
+    paddingBlock: '18px',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+  },
+  works: {
+    display: 'grid',
+    gridTemplateColumns: {
+      'default': 'repeat(2, minmax(0, 1fr))',
+      '@media (width <= 760px)': '1fr',
+    },
+    gap: '10px',
+  },
+});
 
 const TERMINAL_STATUSES = new Set<TaskStatus | string>(['canceled', 'completed']);
 const EMPTY_WORKS: WorkSummaryItem[] = [];
@@ -194,8 +174,8 @@ const ProjectDashboard = memo<ProjectDashboardProps>(({ detail, projectId }) => 
   const goalPreview = useMemo(() => goals.slice(0, 3), [goals]);
 
   return (
-    <div className={styles.columns}>
-      <Flexbox className={styles.main} gap={24}>
+    <div {...stylex.props(styles.columns)}>
+      <Flexbox className={stylex.props(styles.main).className} gap={24}>
         <Flexbox gap={12}>
           <SectionTitle title={t('overview.goalProgress')} />
           {goalSWR.error && goalListView === undefined ? (
@@ -217,7 +197,7 @@ const ProjectDashboard = memo<ProjectDashboardProps>(({ detail, projectId }) => 
               </Center>
             </Block>
           ) : (
-            <Flexbox className={styles.progress} gap={16}>
+            <Flexbox className={stylex.props(styles.progress).className} gap={16}>
               <Flexbox horizontal align={'flex-start'} justify={'space-between'}>
                 <Flexbox gap={4}>
                   <Text weight={600}>{t('overview.goalSummary')}</Text>
@@ -230,9 +210,9 @@ const ProjectDashboard = memo<ProjectDashboardProps>(({ detail, projectId }) => 
                 </Text>
               </Flexbox>
               <Progress percent={progress} showInfo={false} />
-              <div className={styles.goalGrid}>
+              <div {...stylex.props(styles.goalGrid)}>
                 {goalPreview.map(({ goal }) => (
-                  <Flexbox className={styles.goal} gap={5} key={goal.id}>
+                  <Flexbox className={stylex.props(styles.goal).className} gap={5} key={goal.id}>
                     <Flexbox horizontal align={'center'} gap={6}>
                       <Icon
                         color={goal.status === 'achieved' ? cssVar.colorSuccess : undefined}
@@ -253,7 +233,7 @@ const ProjectDashboard = memo<ProjectDashboardProps>(({ detail, projectId }) => 
           )}
         </Flexbox>
 
-        <Flexbox className={styles.section} gap={8}>
+        <Flexbox className={stylex.props(styles.section).className} gap={8}>
           <SectionTitle
             action={t('overview.viewAllTasks')}
             count={activeTasks.length}
@@ -282,7 +262,7 @@ const ProjectDashboard = memo<ProjectDashboardProps>(({ detail, projectId }) => 
           )}
         </Flexbox>
 
-        <Flexbox className={styles.section} gap={12}>
+        <Flexbox className={stylex.props(styles.section).className} gap={12}>
           <SectionTitle count={works.length} title={t('overview.latestWorks')} />
           {workSync.error && worksPending ? (
             <AsyncError
@@ -301,7 +281,7 @@ const ProjectDashboard = memo<ProjectDashboardProps>(({ detail, projectId }) => 
               title={t('overview.worksEmptyTitle')}
             />
           ) : (
-            <div className={styles.works}>
+            <div {...stylex.props(styles.works)}>
               {works.map((work: WorkSummaryItem) => (
                 <WorkSummaryCard item={work} key={work.id} onOpen={openWork} />
               ))}
@@ -310,8 +290,8 @@ const ProjectDashboard = memo<ProjectDashboardProps>(({ detail, projectId }) => 
         </Flexbox>
       </Flexbox>
 
-      <Flexbox className={styles.rail} gap={16}>
-        <Flexbox className={styles.railCard} gap={12}>
+      <Flexbox className={stylex.props(styles.rail).className} gap={16}>
+        <Flexbox className={stylex.props(styles.railCard).className} gap={12}>
           <SectionTitle count={attentionTasks.length} title={t('overview.needsAttention')} />
           {attentionTasks.length === 0 ? (
             <Flexbox align={'center'} gap={8} paddingBlock={12}>
@@ -322,7 +302,7 @@ const ProjectDashboard = memo<ProjectDashboardProps>(({ detail, projectId }) => 
             </Flexbox>
           ) : (
             attentionTasks.map((task) => (
-              <Flexbox className={styles.attention} gap={4} key={task.id}>
+              <Flexbox className={stylex.props(styles.attention).className} gap={4} key={task.id}>
                 <Text weight={500}>{task.name || task.instruction}</Text>
                 <Text fontSize={12} type={task.status === 'failed' ? 'danger' : 'secondary'}>
                   {task.status === 'failed' ? t('overview.taskFailed') : t('overview.taskWaiting')}
@@ -340,7 +320,7 @@ const ProjectDashboard = memo<ProjectDashboardProps>(({ detail, projectId }) => 
           )}
         </Flexbox>
 
-        <Flexbox className={styles.railCard} gap={12}>
+        <Flexbox className={stylex.props(styles.railCard).className} gap={12}>
           <SectionTitle title={t('overview.projectSummary')} />
           <Flexbox horizontal justify={'space-between'}>
             <Text type={'secondary'}>{t('sections.goals')}</Text>
@@ -351,7 +331,7 @@ const ProjectDashboard = memo<ProjectDashboardProps>(({ detail, projectId }) => 
             <Text>{tasks.length}</Text>
           </Flexbox>
           <button
-            className={styles.summaryLink}
+            className={stylex.props(styles.summaryLink).className}
             type={'button'}
             onClick={() => navigate(getProjectSettingsPath(projectReference, 'members'))}
           >
@@ -359,7 +339,7 @@ const ProjectDashboard = memo<ProjectDashboardProps>(({ detail, projectId }) => 
             <Text>{detail.agents?.length ?? 0}</Text>
           </button>
           <button
-            className={styles.summaryLink}
+            className={stylex.props(styles.summaryLink).className}
             type={'button'}
             onClick={() => navigate(getProjectSettingsPath(projectReference, 'knowledge'))}
           >

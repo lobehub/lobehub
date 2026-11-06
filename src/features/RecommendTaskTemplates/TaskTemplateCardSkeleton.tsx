@@ -1,4 +1,4 @@
-import { Block, cssVar, cx, Divider, Flexbox, Skeleton } from '@lobehub/ui';
+import { Block, cssVar, Divider, Flexbox, Skeleton } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 
@@ -35,7 +35,7 @@ export const TaskTemplateCardSkeleton = memo<TaskTemplateCardSkeletonProps>(
 
     return (
       <Block
-        className={cx(stylex.props(briefStyles.card, briefCardMarker).className, styles.card)}
+        className={stylex.props(briefStyles.card, styles.card, briefCardMarker).className}
         data-testid={'task-template-card-skeleton'}
         gap={12}
         padding={12}

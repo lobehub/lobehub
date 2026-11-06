@@ -1,14 +1,11 @@
-import { cx, Markdown } from '@lobehub/ui';
+import { Markdown } from '@lobehub/ui';
 import { memo } from 'react';
 
-import { containerStyles } from '../style';
+import { previewClassName } from '../style';
 
 const Preview = memo<{ content: string }>(({ content }) => {
   return (
-    <div
-      className={cx(containerStyles.preview, containerStyles.previewText)}
-      style={{ padding: '24px 28px' }}
-    >
+    <div className={previewClassName('text')} style={{ padding: '24px 28px' }}>
       <Markdown variant={'chat'}>{content}</Markdown>
     </div>
   );
