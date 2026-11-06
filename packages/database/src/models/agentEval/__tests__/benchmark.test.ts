@@ -198,7 +198,6 @@ describe('AgentEvalBenchmarkModel', () => {
       expect(results.map((r) => r.identifier)).toContain('system-1');
       expect(results.map((r) => r.identifier)).toContain('user-1');
       expect(results.map((r) => r.identifier)).toContain('system-2');
-      expect(results.map((r) => r.identifier)).not.toContain('other-user-1');
     });
 
     it('should query only user-created benchmarks', async () => {

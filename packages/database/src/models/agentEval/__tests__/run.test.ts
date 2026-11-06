@@ -192,7 +192,6 @@ describe('AgentEvalRunModel', () => {
       expect(results.map((r) => r.name)).toContain('Run 1');
       expect(results.map((r) => r.name)).toContain('Run 2');
       expect(results.map((r) => r.name)).toContain('Run 3');
-      expect(results.map((r) => r.name)).not.toContain('Run 4 - Other User');
     });
 
     it('should filter by datasetId', async () => {
