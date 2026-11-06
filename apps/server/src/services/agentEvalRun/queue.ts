@@ -49,6 +49,11 @@ export async function dispatchQueuedCases(
   );
   // A slot whose start never left must not stay taken until it goes stale.
   await deps.executionRepo.releaseQueuedCases(runId, failed);
+  // With nothing started, no case will end to refill the queue: fail so the
+  // caller's durable step retries the dispatch instead of leaving the run idle.
+  if (claimed.length > 0 && failed.length === claimed.length) {
+    throw new Error(`Could not start any queued case of run ${runId}`);
+  }
   return claimed.filter((id) => !failed.includes(id));
 }
 

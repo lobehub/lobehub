@@ -124,12 +124,24 @@ describe('runs with a concurrency limit (maxConcurrency)', () => {
   });
 
   it('gives back the slot of a case whose start could not be triggered', async () => {
+    const { run, cases } = await setupQueuedRun(3, { maxConcurrency: 2 });
+    triggerSpy.mockRejectedValueOnce(new Error('qstash down'));
+    const service = new AgentEvalRunService(serverDB, userId);
+
+    expect(await service.dispatchQueuedCases(run.id)).toEqual([cases[1].testCase.id]);
+    expect((await topicOf(run.id, cases[0].testCase.id))?.evalResult?.dispatchedAt).toBe(undefined);
+    expect(await service.dispatchQueuedCases(run.id)).toEqual([cases[0].testCase.id]);
+  });
+
+  it('fails the dispatch when no queued case could be started, so the step is retried', async () => {
     const { run, cases } = await setupQueuedRun(2, { maxConcurrency: 1 });
     triggerSpy.mockRejectedValueOnce(new Error('qstash down'));
     const service = new AgentEvalRunService(serverDB, userId);
 
-    expect(await service.dispatchQueuedCases(run.id)).toEqual([]);
-    expect((await topicOf(run.id, cases[0].testCase.id))?.evalResult?.dispatchedAt).toBe(undefined);
+    await expect(service.dispatchQueuedCases(run.id)).rejects.toThrow(
+      /Could not start any queued case/,
+    );
+    // The released slot is handed out again on the retry.
     expect(await service.dispatchQueuedCases(run.id)).toEqual([cases[0].testCase.id]);
   });
 
