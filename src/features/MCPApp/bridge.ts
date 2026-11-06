@@ -1,15 +1,27 @@
 import { CURRENT_VERSION } from '@lobechat/const';
+import type { McpAppDisplayMode } from '@lobechat/const/mcpApp';
 import type { CallToolResult } from '@modelcontextprotocol/client';
 import {
   AppBridge,
   type McpUiHostContext,
   type McpUiSizeChangedNotification,
+  type McpUiUpdateModelContextRequest,
   PostMessageTransport,
 } from '@modelcontextprotocol/ext-apps/app-bridge';
 
-export const buildHostContext = (isDark: boolean): McpUiHostContext => ({
-  availableDisplayModes: ['inline'],
-  displayMode: 'inline',
+export interface AppDisplayContext {
+  availableDisplayModes: McpAppDisplayMode[];
+  containerDimensions?: McpUiHostContext['containerDimensions'];
+  displayMode: McpAppDisplayMode;
+}
+
+export const buildHostContext = (
+  isDark: boolean,
+  display?: AppDisplayContext,
+): McpUiHostContext => ({
+  availableDisplayModes: display?.availableDisplayModes ?? ['inline'],
+  displayMode: display?.displayMode ?? 'inline',
+  ...(display?.containerDimensions && { containerDimensions: display.containerDimensions }),
   locale: navigator.language,
   platform: 'web',
   theme: isDark ? 'dark' : 'light',
@@ -27,6 +39,17 @@ export interface McpAppBridgeHost {
     signal: AbortSignal,
   ) => Promise<CallToolResult>;
   hostContext: McpUiHostContext;
+  /** Only supplied by a feature-enabled host. */
+  lifecycle?: {
+    getDisplayContext: () => AppDisplayContext;
+    onInitialized?: (appModes?: McpAppDisplayMode[]) => void;
+    onRequestDisplayMode: (
+      mode: McpAppDisplayMode,
+      appModes?: McpAppDisplayMode[],
+    ) => McpAppDisplayMode;
+    onTeardown: () => void;
+    onUpdateModelContext: (params: McpUiUpdateModelContextRequest['params']) => void;
+  };
   onSizeChange: (height: number) => void;
   /**
    * Open an http(s) link the view asked for; resolves `false` when the host
@@ -52,9 +75,34 @@ export const connectMcpAppBridge = (target: Window, host: McpAppBridgeHost) => {
   const bridge = new AppBridge(
     null,
     { name: 'LobeHub', version: CURRENT_VERSION },
-    { message: { text: {} }, openLinks: {}, serverTools: {} },
+    {
+      message: { text: {} },
+      openLinks: {},
+      serverTools: {},
+      ...(host.lifecycle && { updateModelContext: { text: {} } }),
+    },
     { hostContext: host.hostContext },
   );
+
+  if (host.lifecycle) {
+    bridge.onrequestdisplaymode = async ({ mode }) => {
+      const display = host.lifecycle!.getDisplayContext();
+      const current = display.displayMode;
+      const appModes = bridge.getAppCapabilities()?.availableDisplayModes;
+      if (!display.availableDisplayModes.includes(mode) || (appModes && !appModes.includes(mode)))
+        return { mode: current };
+      const actual = host.lifecycle!.onRequestDisplayMode(mode, appModes);
+      bridge.setHostContext({ ...host.hostContext, ...display, displayMode: actual });
+      return { mode: actual };
+    };
+    bridge.onupdatemodelcontext = async (params) => {
+      host.lifecycle!.onUpdateModelContext(params);
+      return {};
+    };
+    bridge.onrequestteardown = () => {
+      void teardown(3000).then(() => host.lifecycle!.onTeardown());
+    };
+  }
 
   bridge.oncalltool = ({ arguments: args, name }, { mcpReq }) =>
     host.callTool(name, args ?? {}, mcpReq.signal);
@@ -83,6 +131,7 @@ export const connectMcpAppBridge = (target: Window, host: McpAppBridgeHost) => {
   let initialized = false;
   const handleInitialized = () => {
     initialized = true;
+    host.lifecycle?.onInitialized?.(bridge.getAppCapabilities()?.availableDisplayModes);
     void bridge.sendToolInput({ arguments: host.toolInput() });
     void Promise.resolve(host.toolResult()).then((result) => bridge.sendToolResult(result));
   };
@@ -97,24 +146,25 @@ export const connectMcpAppBridge = (target: Window, host: McpAppBridgeHost) => {
     void bridge.close();
   };
 
+  /**
+   * Tell the view it is going away (`ui/resource-teardown`) and give it up to
+   * `timeoutMs` to finish (save pending edits) before the session closes. A
+   * view that never initialized has nothing to finish.
+   */
+  const teardown = async (timeoutMs: number) => {
+    if (initialized) {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      await Promise.race([
+        bridge.teardownResource({}).catch(() => {}),
+        new Promise<void>((resolve) => (timer = setTimeout(resolve, timeoutMs))),
+      ]);
+      clearTimeout(timer);
+    }
+    dispose();
+  };
   return {
     bridge,
     dispose,
-    /**
-     * Tell the view it is going away (`ui/resource-teardown`) and give it up to
-     * `timeoutMs` to finish (save pending edits) before the session closes. A
-     * view that never initialized has nothing to finish.
-     */
-    teardown: async (timeoutMs: number) => {
-      if (initialized) {
-        let timer: ReturnType<typeof setTimeout> | undefined;
-        await Promise.race([
-          bridge.teardownResource({}).catch(() => {}),
-          new Promise<void>((resolve) => (timer = setTimeout(resolve, timeoutMs))),
-        ]);
-        clearTimeout(timer);
-      }
-      dispose();
-    },
+    teardown,
   };
 };
