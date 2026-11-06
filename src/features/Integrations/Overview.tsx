@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 
 import IntegrationCard from './IntegrationCard';
 import { type IntegrationId, INTEGRATIONS, UPCOMING_INTEGRATIONS } from './registry';
+import { IntegrationsOverviewSkeleton } from './Skeleton';
 import { useGithubIntegration } from './useGithubIntegration';
 import { useLinearIntegration } from './useLinearIntegration';
 
@@ -60,6 +61,16 @@ const Overview = memo<OverviewProps>(({ onOpen }) => {
     linear: linear.enabled,
   };
   const enabled = INTEGRATIONS.filter((item) => enabledById[item.id]);
+
+  // Statuses and the Enabled strip depend on both connection lookups; swap the
+  // directory in once they settle instead of letting the strip pop in later.
+  if (github.isInitialLoading || linear.isInitialLoading)
+    return (
+      <IntegrationsOverviewSkeleton
+        available={INTEGRATIONS.length}
+        upcoming={UPCOMING_INTEGRATIONS.length}
+      />
+    );
 
   return (
     <Flexbox gap={24}>

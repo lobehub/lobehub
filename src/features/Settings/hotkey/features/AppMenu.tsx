@@ -6,7 +6,7 @@ import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 
-import { SettingsSectionSkeleton } from '@/components/Skeleton';
+import { AppMenuHotkeysSkeleton } from '@/components/Skeleton/Settings/tabs/Hotkey';
 import { FORM_STYLE } from '@/const/layoutTokens';
 import { isDesktop } from '@/const/version';
 import { SettingsSearchAnchor } from '@/features/SettingsSearch/anchor';
@@ -35,20 +35,7 @@ const AppMenuHotkeys = memo(() => {
 
   const hotkeys = useMemo(() => collectAppMenuHotkeys(data ?? []), [data]);
 
-  if (isLoading)
-    return (
-      <SettingsSectionSkeleton
-        groups={[
-          {
-            // Hotkey recorder inputs settle at 335x36.
-            control: { height: 36, width: 335 },
-            rows: 8,
-            titleWidth: 96,
-            withDesc: false,
-          },
-        ]}
-      />
-    );
+  if (isLoading) return <AppMenuHotkeysSkeleton />;
 
   if (hotkeys.length === 0) return null;
 

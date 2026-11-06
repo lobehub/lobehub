@@ -32,12 +32,13 @@ import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
-import SkeletonList from '@/features/NavPanel/components/SkeletonList';
+import { LabelsListSkeleton } from '@/components/Skeleton/Settings/tabs/Labels';
 import { useFetchAgentLabels } from '@/hooks/useFetchAgentLabels';
 import { usePermission } from '@/hooks/usePermission';
 import { useHomeStore } from '@/store/home';
 import { agentLabelSelectors } from '@/store/home/selectors';
 
+import { LABEL_COLUMN_WIDTHS } from './constants';
 import { openDeleteLabelModal } from './DeleteLabelModal';
 import { isDuplicateLabelNameError } from './errors';
 import { openLabelFormModal } from './LabelFormModal';
@@ -71,10 +72,12 @@ interface LabelRowProps {
 }
 
 /** Shared column widths so the header and rows stay aligned. */
-const NAME_COL_WIDTH = 200;
-const USAGE_COL_WIDTH = 88;
-const CREATED_COL_WIDTH = 96;
-const ACTION_COL_WIDTH = 32;
+const {
+  action: ACTION_COL_WIDTH,
+  created: CREATED_COL_WIDTH,
+  name: NAME_COL_WIDTH,
+  usage: USAGE_COL_WIDTH,
+} = LABEL_COLUMN_WIDTHS;
 
 const LabelRow = memo<LabelRowProps>(
   ({ canManage, label, manageBlockedReason, onDelete, onEdit, onRestoreConflict }) => {
@@ -336,7 +339,7 @@ const WorkspaceLabelsContent = memo(() => {
         )}
       </Flexbox>
       {!isInit && isLoading ? (
-        <SkeletonList rows={4} />
+        <LabelsListSkeleton />
       ) : error && !isInit ? (
         // A failed load must not read as "you have no labels" — the two look
         // identical here and lead the user to create duplicates of labels that

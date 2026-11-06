@@ -6,7 +6,6 @@ import {
   Button,
   confirmModal,
   Flexbox,
-  Skeleton,
   Tabs,
   Tag,
   Text,
@@ -26,6 +25,7 @@ import { normalizeAsyncError } from '@/libs/swr/normalizeError';
 import { oauthAppSelectors, useOAuthAppStore } from '@/store/oauthApp';
 import { type UpdateOAuthAppParams } from '@/types/oauthApp';
 
+import AppDetailSkeleton from '../AppDetailSkeleton';
 import { confirmDisableOAuthApp } from '../confirmDisable';
 import { showClientSecretModal } from '../SecretModal';
 import BasicInfoCard from './BasicInfoCard';
@@ -36,15 +36,6 @@ import RedirectUrisCard from './RedirectUrisCard';
 import SectionCard from './SectionCard';
 
 const styles = stylex.create({
-  card: {
-    padding: '16px',
-    borderWidth: '1px',
-    borderStyle: 'solid',
-    borderColor: cssVar.colorBorderSecondary,
-    borderRadius: cssVar.borderRadiusLG,
-    backgroundColor: cssVar.colorBgContainer,
-    backgroundImage: 'none',
-  },
   dangerCard: {
     padding: '16px',
     borderWidth: '1px',
@@ -76,15 +67,7 @@ const styles = stylex.create({
   meta: { fontSize: '12px', color: cssVar.colorTextTertiary },
 });
 
-/** The app page while it loads; also shown while the Labs flag resolves on a direct visit. */
-export const AppDetailSkeleton = () => (
-  <Flexbox gap={16}>
-    <Skeleton.Text rows={1} width={200} />
-    <div {...stylex.props(styles.card)}>
-      <Skeleton.Text rows={4} />
-    </div>
-  </Flexbox>
-);
+export { default as AppDetailSkeleton } from '../AppDetailSkeleton';
 
 const TAB_KEYS = ['overview', 'credentials', 'advanced'] as const;
 
