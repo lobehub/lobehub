@@ -531,6 +531,7 @@ export default {
   'plans.cloud.sync': 'Global cloud sync',
   'plans.cloud.title': 'Cloud service',
   'plans.compare.agentMemory': 'Agent memory',
+  'plans.compare.agentRunFee': 'Fee per agent task',
   'plans.compare.artifactSiteSize': 'Max size per site',
   'plans.compare.artifactSites': 'Active Artifact sites',
   'plans.compare.baseline': 'Limits are compared as multiples of {{plan}}.',
@@ -583,6 +584,9 @@ export default {
   'plans.legacy.upgradeOnly': 'A legacy plan can only be upgraded to a higher-tier plan',
   'plans.limits.agentMemory.unavailable': 'Agent memory',
   'plans.limits.agentMemory.unlimited': 'Agent memory',
+  'plans.limits.agentRunFee': '{{value}} per agent task',
+  'plans.limits.agentRunFee.tooltip':
+    'Charged from your balance when an agent task you start finishes, on top of its model usage. Tasks that fail, or that you stop within 30 seconds, are free.',
   'plans.limits.artifactSiteSize': 'Up to {{value}} per published site',
   'plans.limits.artifactSites': 'Up to {{value}} active Artifact sites',
   'plans.limits.concurrentAgentRuns': '{{value}} agent tasks at once',
