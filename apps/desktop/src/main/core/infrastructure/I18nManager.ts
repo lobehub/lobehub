@@ -170,8 +170,15 @@ export class I18nManager {
 
   private async loadLocale(language: string) {
     logger.debug(`Loading locale for language: ${language}`);
-    // Preload base namespaces
-    await Promise.all(['menu', 'dialog', 'common'].map((ns) => this.loadNamespace(language, ns)));
+    const languages =
+      language === 'en' || language.startsWith('en-') ? [language] : [language, 'en'];
+
+    // Preload base namespaces and the English fallback for non-English locales.
+    await Promise.all(
+      languages.flatMap((lng) =>
+        ['menu', 'dialog', 'common'].map((ns) => this.loadNamespace(lng, ns)),
+      ),
+    );
   }
 
   /**
