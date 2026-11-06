@@ -140,9 +140,9 @@ See what Lobe AI gets done, from its first day in your team chat onward.
 
 You add it to your team chat and ask it to read up. By lunch it has gone through the history and said hello to everyone.
 
-![Before it starts, it reads up](https://raw.githubusercontent.com/lobehub/lobehub/docs/readme-super-agents/docs/readme/day1-welcome.webp)
+![Before it starts, it reads up](https://hub-apac-1.lobeobjects.space/blog/assets/ed6fc1ef1e21e4add545c1e83c32fcb4.webp)
 
-![Lobe AI's IM Bots settings, its team badge and its Day 1 checklist](https://raw.githubusercontent.com/lobehub/lobehub/docs/readme-super-agents/docs/readme/day1-arrival.webp)
+![Lobe AI's IM Bots settings, its team badge and its Day 1 checklist](https://hub-apac-1.lobeobjects.space/blog/assets/a1c721a3cbe9cb8ec0f515217322b514.webp)
 
 <div align="right">
 
@@ -154,11 +154,11 @@ You add it to your team chat and ask it to read up. By lunch it has gone through
 
 Someone posts a feature request in Discord and nobody assigns it. Lobe AI takes it on, and you only step in once, to accept the result.
 
-![Picks it up: nobody tags it, and it takes the request anyway](https://raw.githubusercontent.com/lobehub/lobehub/docs/readme-super-agents/docs/readme/week1-pick-up.webp)
+![Picks it up: nobody tags it, and it takes the request anyway](https://hub-apac-1.lobeobjects.space/blog/assets/b0c761a9084a5958d4205e5d056fa3ae.webp)
 
-![Hands it in: you check the evidence, accept, and the PR merges](https://raw.githubusercontent.com/lobehub/lobehub/docs/readme-super-agents/docs/readme/week1-hand-in.webp)
+![Hands it in: you check the evidence, accept, and the PR merges](https://hub-apac-1.lobeobjects.space/blog/assets/b8635a2bf3b600697068d70690a62438.webp)
 
-![Reports back: it replies in the original thread](https://raw.githubusercontent.com/lobehub/lobehub/docs/readme-super-agents/docs/readme/week1-report-back.webp)
+![Reports back: it replies in the original thread](https://hub-apac-1.lobeobjects.space/blog/assets/3e187a7e1fd004238163b58e20c59817.webp)
 
 <div align="right">
 
@@ -170,9 +170,9 @@ Someone posts a feature request in Discord and nobody assigns it. Lobe AI takes 
 
 Everyone now has their own agent, and design, releases and docs each have a dedicated one. Lobe AI is still learning when to speak up and when to stay quiet.
 
-![One brief every morning](https://raw.githubusercontent.com/lobehub/lobehub/docs/readme-super-agents/docs/readme/month2-brief.webp)
+![One brief every morning](https://hub-apac-1.lobeobjects.space/blog/assets/c4e5bac0c35f840d9476256996e93e49.webp)
 
-![It's learning when to speak up](https://raw.githubusercontent.com/lobehub/lobehub/docs/readme-super-agents/docs/readme/month2-learning.webp)
+![It's learning when to speak up](https://hub-apac-1.lobeobjects.space/blog/assets/bc065ed83d1ab0862aea98a7216ff787.webp)
 
 <div align="right">
 
@@ -184,7 +184,7 @@ Everyone now has their own agent, and design, releases and docs each have a dedi
 
 When it started, it got about half of these right. Now it rarely misses, and every correction you gave it has become a lesson it keeps.
 
-![What it has learned](https://raw.githubusercontent.com/lobehub/lobehub/docs/readme-super-agents/docs/readme/month3-review.webp)
+![What it has learned](https://hub-apac-1.lobeobjects.space/blog/assets/82c6818a9dc6fa27cf5aea75a092b448.webp)
 
 <div align="right">
 
@@ -498,7 +498,7 @@ This project is [LobeHub Community License](./LICENSE) licensed.
 [github-releasedate-shield]: https://img.shields.io/github/release-date/lobehub/lobehub?labelColor=black&style=flat-square
 [github-stars-link]: https://github.com/lobehub/lobehub/stargazers
 [github-stars-shield]: https://img.shields.io/github/stars/lobehub/lobehub?color=ffcb47&labelColor=black&style=flat-square
-[image-banner]: https://raw.githubusercontent.com/lobehub/lobehub/docs/readme-super-agents/docs/readme/banner-super-agents.webp
+[image-banner]: https://hub-apac-1.lobeobjects.space/blog/assets/8beb20539c0fdd1b8fbbc6a07f293a78.webp
 [image-star]: https://github.com/user-attachments/assets/3216e25b-186f-4a54-9cb4-2f124aec0471
 [issues-link]: https://img.shields.io/github/issues/lobehub/lobehub.svg?style=flat
 [lobe-charts-downloads]: https://img.shields.io/npm/dt/@lobehub/charts?color=8ae8ff&labelColor=black&logo=npm&logoColor=white&style=flat-square
