@@ -122,7 +122,7 @@ const SplitView = ({
             />
           )}
           <div
-            {...sx([styles.pane, stylex.defaultMarker()], undefined, {
+            {...sx(styles.pane, stylex.defaultMarker(), {
               flex: `${flex[index]} 1 0`,
             })}
             data-inactive-pane={split && pane.id !== activePaneId ? '' : undefined}

@@ -129,7 +129,7 @@ const CommandMenuContent = memo<CommandMenuContentProps>(({ isClosing, onClose }
     <div {...stylex.props(styles.overlay)} data-closing={isClosing} onClick={onClose}>
       <div onClick={stopPropagation}>
         <Command
-          {...sx([styles.commandRoot], fallback.commandRoot)}
+          {...sx(styles.commandRoot, fallback.commandRoot)}
           data-closing={isClosing}
           filter={commandFilter}
           shouldFilter={page !== 'ask-ai' && !selectedAgent && !search.trimStart().startsWith('@')}

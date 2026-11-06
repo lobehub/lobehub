@@ -717,12 +717,10 @@ const SearchResults = memo<SearchResultsProps>(
                 keywords={[searchQuery]}
                 value={`${searchQuery}-loading-skeleton-${i}`}
               >
-                <div {...sx([styles.skeleton], undefined, { height: 20, width: 20 })} />
+                <div {...sx(styles.skeleton, { height: 20, width: 20 })} />
                 <div style={{ display: 'flex', flex: 1, flexDirection: 'column', gap: 4 }}>
-                  <div {...sx([styles.skeleton], undefined, { width: `${60 + i * 10}%` })} />
-                  <div
-                    {...sx([styles.skeleton], undefined, { height: 12, width: `${40 + i * 5}%` })}
-                  />
+                  <div {...sx(styles.skeleton, { width: `${60 + i * 10}%` })} />
+                  <div {...sx(styles.skeleton, { height: 12, width: `${40 + i * 5}%` })} />
                 </div>
               </Command.Item>
             ))}

@@ -140,13 +140,10 @@ const EditableCell = memo<EditableCellProps>(({ entry, layout, onResize, editabl
   return (
     <div
       {...sx(
-        [
-          gridStyles.cell,
-          gridStyles.editCell,
-          stylex.defaultMarker(),
-          isDragging && gridStyles.cellDragging,
-        ],
-        undefined,
+        gridStyles.cell,
+        gridStyles.editCell,
+        stylex.defaultMarker(),
+        isDragging && gridStyles.cellDragging,
         {
           ...cellStyle(layout),
           transform: CSS.Translate.toString(transform),

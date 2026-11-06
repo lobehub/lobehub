@@ -132,7 +132,7 @@ const ProjectDashboardsPage = memo<{ projectId: string }>(({ projectId }) => {
         }
       />
       <div {...stylex.props(pageStyles.scroll)}>
-        <div {...sx([pageStyles.canvas], undefined, { gap: 32 })}>
+        <div {...sx(pageStyles.canvas, { gap: 32 })}>
           <Flexbox
             horizontal
             align={'flex-end'}

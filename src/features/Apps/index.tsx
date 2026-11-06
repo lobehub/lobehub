@@ -96,7 +96,7 @@ const AppsPage = () => {
           </article>
 
           <article {...stylex.props(styles.card)}>
-            <div {...sx([styles.cardBody], undefined, { paddingBottom: 20 })}>
+            <div {...sx(styles.cardBody, { paddingBottom: 20 })}>
               <h2 {...stylex.props(styles.cardTitle)}>{t('apps.messenger.title')}</h2>
               <Text style={{ marginTop: 8 }} type="secondary">
                 {t('apps.messenger.desc')}

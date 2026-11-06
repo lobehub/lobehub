@@ -185,7 +185,7 @@ function ActivityRows({ activity, selected }: { activity: Activity; selected: bo
     <>
       <div
         aria-expanded={open}
-        {...sx([tableStyles.row, selected && tableStyles.selected], undefined, {
+        {...sx(tableStyles.row, selected && tableStyles.selected, {
           gridTemplateColumns: GRID,
         })}
         ref={ref}
@@ -222,9 +222,9 @@ function ActivityRows({ activity, selected }: { activity: Activity; selected: bo
       </div>
       {open &&
         processTree(activity.processes).map(({ depth, row }) => (
-          <div {...sx([tableStyles.proc], undefined, { gridTemplateColumns: GRID })} key={row.id}>
+          <div {...sx(tableStyles.proc, { gridTemplateColumns: GRID })} key={row.id}>
             <span />
-            <span {...sx([tableStyles.procName], undefined, { paddingInlineStart: depth * 14 })}>
+            <span {...sx(tableStyles.procName, { paddingInlineStart: depth * 14 })}>
               {depth > 0 && '└ '}
               {row.name}
             </span>
@@ -276,7 +276,7 @@ export default function ActivityTable() {
         )
       ) : (
         <div {...stylex.props(state.error && tableStyles.stale)}>
-          <div {...sx([tableStyles.head], undefined, { gridTemplateColumns: GRID })}>
+          <div {...sx(tableStyles.head, { gridTemplateColumns: GRID })}>
             <span />
             <span {...stylex.props(tableStyles.headLabel)}>
               {t('backgroundActivity.title')} · {state.activities.length}

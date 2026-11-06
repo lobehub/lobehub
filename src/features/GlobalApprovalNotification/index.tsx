@@ -73,7 +73,7 @@ const GlobalApprovalNotification = memo(() => {
 
   return (
     <div
-      {...sx([styles.wrapper], undefined, {
+      {...sx(styles.wrapper, {
         '--global-approval-top': `${TOP_OFFSET}px`,
       } as any)}
     >

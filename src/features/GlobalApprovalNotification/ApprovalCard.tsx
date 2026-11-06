@@ -172,7 +172,7 @@ const ApprovalCard = memo<ApprovalCardProps>(({ group, onCollapse }) => {
         <div {...stylex.props(styles.requestContext)}>
           <div {...stylex.props(styles.headerTitle)}>{topicTitle || t('globalApproval.title')}</div>
           {userRequest && (
-            <div {...sx([styles.userRequestBody], fallback.userRequestBody)}>
+            <div {...sx(styles.userRequestBody, fallback.userRequestBody)}>
               <MarkdownMessage>{userRequest}</MarkdownMessage>
             </div>
           )}
