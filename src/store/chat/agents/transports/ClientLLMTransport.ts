@@ -402,6 +402,8 @@ export class ClientLLMTransport implements LLMTransport {
     let streamError: unknown;
 
     await chatService.getChatCompletion(payload as any, {
+      // Context-compression summaries bill under the run that triggered them.
+      operationId: this.context.operationId,
       onErrorHandle: (error) => {
         streamError = createStreamExecutionError(error);
         handlers?.onError?.(streamError);
