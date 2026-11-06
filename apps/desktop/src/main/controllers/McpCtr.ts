@@ -18,6 +18,7 @@ import {
 import { getMcpServerDescription } from '@lobechat/utils/mcpServerDescription';
 
 import FileService from '@/services/fileSrv';
+import GatewayConnectionService from '@/services/gatewayConnectionSrv';
 import { createLogger } from '@/utils/logger';
 
 import { getDesktopEnv } from '../env';
@@ -941,6 +942,7 @@ export default class McpCtr extends ControllerModule {
       elicitation,
       result,
       owner,
+      () => this.app.getService(GatewayConnectionService).resolveCurrentDeviceId(),
     );
   }
 

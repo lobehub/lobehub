@@ -308,11 +308,12 @@ export async function allPendingToolsFulfilled(
     if (knownFulfilledMessageId && plugin.id === knownFulfilledMessageId) continue;
 
     const message = await deps.messageModel.findById(plugin.id);
-    const pluginState = plugin.state as { status?: string } | null;
+    const pluginState = plugin.state as { status?: string; mcpClientComplete?: boolean } | null;
     const fulfilled =
       (!!message?.content && message.content.length > 0) ||
       pluginState?.status === 'completed' ||
-      pluginState?.status === 'error';
+      pluginState?.status === 'error' ||
+      (tc.type === 'mcp' && pluginState?.mcpClientComplete === true);
     if (!fulfilled) return false;
   }
   return true;

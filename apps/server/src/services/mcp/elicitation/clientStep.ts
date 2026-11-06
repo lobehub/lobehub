@@ -9,6 +9,7 @@ import { resolveToolTimeoutMs } from '@/server/modules/AgentRuntime/resolveToolT
 import { QueueService } from '@/server/services/queue';
 import { LocalQueueServiceImpl } from '@/server/services/queue/impls';
 import { archiveToolResultIfNeeded } from '@/server/services/toolExecution/archiveToolResult';
+import type { ToolExecutionResultResponse } from '@/server/services/toolExecution/types';
 
 import type { McpCallIdentity, McpElicitationService } from './McpElicitationService';
 import { resolveMcpInvocationManifest } from './resume';
@@ -251,32 +252,59 @@ export async function executeClientMcpTool(
       error: { code: 'MCP_CLIENT_TOOL_FAILED', kind: 'stop' as const, message },
     };
   }
-  if (!result.deferred) {
-    const controlled = await service.runtime.controlCompletedToolResult({
-      operationId: identity.operationId,
-      toolMessageId,
-      result,
-    });
-    const archived = controlled.blocked
-      ? { content: controlled.result.content }
-      : await archiveToolResultIfNeeded({
-          ...(step.resultPolicy ?? { canReadArchive: true }),
-          content: controlled.result.content,
-          agentId: operation.agentId,
-          topicId: operation.topicId,
-          identifier: identity.identifier,
-          toolCallId: identity.toolCallId,
-          serverDB: service.db,
-          userId: service.userId,
-          workspaceId: service.workspaceId,
-        });
-    await service.messages.updateToolMessage(toolMessageId, {
-      content: archived.content,
-      pluginError: controlled.result.error ?? null,
-      pluginState: { ...controlled.result.state, mcpClientComplete: true },
-      onlyIfEmpty: true,
-    });
+  if (!result.deferred) await completeClientMcpTool(service, identity, result);
+}
+
+/** The durable worker and native relay publish the same finalized receipt after renderer loss. */
+export async function completeClientMcpTool(
+  service: McpElicitationService,
+  identity: McpCallIdentity,
+  result: ToolExecutionResultResponse,
+) {
+  const { operation, tool } = await service.assertIdentity(identity);
+  const toolMessageId = await service.ensureToolMessage(identity);
+  const step = operation.metadata?.clientMcpStep as ClientMcpStep | undefined;
+  if (!step?.toolMessageIds.includes(toolMessageId) || tool.type !== 'mcp')
+    throw new Error('Not an owned MCP call');
+  const [row, plugin] = await Promise.all([
+    service.messages.findById(toolMessageId),
+    service.messages.findMessagePlugin(toolMessageId),
+  ]);
+  if (row?.content || row?.error || plugin?.error || plugin?.state?.mcpClientComplete) {
+    // A retry may follow a committed receipt whose projection cleanup failed.
+    await service.messages.updateMessagePlugin(toolMessageId, { intervention: { status: 'none' } });
+    return;
   }
+  if (!service.runtime) throw new Error('Client MCP result host is unavailable');
+  const controlled = await service.runtime.controlCompletedToolResult({
+    operationId: identity.operationId,
+    toolMessageId,
+    result,
+  });
+  const archived = controlled.blocked
+    ? { content: controlled.result.content }
+    : await archiveToolResultIfNeeded({
+        ...(step.resultPolicy ?? { canReadArchive: true }),
+        content: controlled.result.content,
+        agentId: operation.agentId,
+        topicId: operation.topicId,
+        identifier: identity.identifier,
+        toolCallId: identity.toolCallId,
+        serverDB: service.db,
+        userId: service.userId,
+        workspaceId: service.workspaceId,
+      });
+  const saved = await service.messages.updateToolMessage(toolMessageId, {
+    content: archived.content,
+    pluginError: controlled.result.error ?? null,
+    pluginState: { ...controlled.result.state, mcpElicitation: null, mcpClientComplete: true },
+    ...(controlled.blocked && { replacePluginState: true }),
+    onlyIfEmpty: true,
+  });
+  if (!saved.success) throw new Error('Client MCP completion could not be saved');
+  await service.messages.updateMessagePlugin(toolMessageId, {
+    intervention: { status: 'none' },
+  });
 }
 
 /** A client may disappear before any interaction opens; queued work still has a durable deadline. */

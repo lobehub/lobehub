@@ -24,6 +24,7 @@ import {
   allPendingToolsFulfilled,
   type AsyncToolDeps,
   resolveAsyncToolOnComplete,
+  tryResumeParentFromAsyncTool,
 } from '../../agentRuntime/AgentRuntimeService/asyncTool';
 import { LocalQueueServiceImpl } from '../../queue/impls/local';
 import { mcpConnectionBinding } from './binding';
@@ -961,6 +962,93 @@ it('archives the complete long continuation result with the original configured 
     topicId: 'mcp-topic',
   });
   expect(persisted.content).toBe(full);
+});
+
+it('releases a two-MCP async barrier exactly once when the first continuation has only an App view', async () => {
+  const tools = [identity.toolCallId, 'mcp-sibling'].map((id) => ({
+    id,
+    identifier: 'fixture',
+    apiName: 'form',
+    arguments: '{}',
+    type: 'mcp' as const,
+  }));
+  await messageModel.update(identity.assistantMessageId, { tools });
+  const pending = await Promise.all(
+    tools.map((tool) =>
+      service.open(
+        { ...identity, toolCallId: tool.id },
+        {
+          legacy: false,
+          deadline: Date.now() + 60000,
+          requests: {},
+          checkpoint: {
+            inputRequired: { resultType: 'input_required', requestState: tool.id },
+            round: 1,
+          },
+        },
+      ),
+    ),
+  );
+  await db
+    .update(agentOperations)
+    .set({ status: 'waiting_for_async_tool' })
+    .where(eq(agentOperations.id, identity.operationId));
+  const state = {
+    status: 'waiting_for_async_tool',
+    pendingToolsCalling: tools,
+    pendingToolMessageIds: Object.fromEntries(
+      pending.map((entry, i) => [tools[i].id, entry.toolMessageId]),
+    ),
+    stepCount: 2,
+  };
+  const schedule = vi.fn().mockResolvedValue('queued');
+  const deps = {
+    serverDB: db,
+    userId: owner,
+    messageModel,
+    coordinator: { loadAgentState: async () => state },
+    queueService: { scheduleMessage: schedule },
+    baseURL: 'http://localhost',
+    maybeScheduleAsyncToolVerify: vi.fn(),
+  } as unknown as AsyncToolDeps;
+  deps.allPendingToolsFulfilled = (...args) => allPendingToolsFulfilled(deps, ...args);
+  deps.resolveAsyncToolOnComplete = (...args) => resolveAsyncToolOnComplete(deps, ...args);
+  probes.resume.mockImplementation((params, options) =>
+    tryResumeParentFromAsyncTool(deps, params, options),
+  );
+  probes.execute.mockResolvedValueOnce({
+    content: '',
+    success: true,
+    executionTime: 1,
+    state: { mcpApp: { resourceUri: 'ui://fixture/view', server: 'fixture' } },
+  });
+  for (let i = 0; i < pending.length; i++) {
+    const rid = randomUUID();
+    await service.claim(pending[i].item.id, rid, {
+      [MCP_CONTINUATION_CONTROL]: { action: 'accept' },
+    });
+    await executeMcpElicitationResume(service, pending[i].item.id, rid);
+    expect(schedule).toHaveBeenCalledTimes(i);
+  }
+  // A watchdog with no read-your-writes exception also recognizes the completed empty result.
+  expect(
+    await allPendingToolsFulfilled(deps, tools, undefined, {
+      messageIds: state.pendingToolMessageIds,
+    }),
+  ).toBe(true);
+  await tryResumeParentFromAsyncTool(deps, { parentOperationId: identity.operationId });
+  expect(schedule).toHaveBeenCalledOnce();
+  expect((await messageModel.findById(pending[0].toolMessageId))?.content).toBe('');
+  expect(
+    (await messageModel.findMessagePlugin(pending[0].toolMessageId))?.state?.mcpApp,
+  ).toMatchObject({ resourceUri: 'ui://fixture/view' });
+  expect(probes.execute).toHaveBeenCalledTimes(2);
+  expect(
+    await allPendingToolsFulfilled(deps, [{ ...tools[0], type: 'builtin' }], undefined, {
+      messageIds: state.pendingToolMessageIds,
+    }),
+  ).toBe(false);
+  probes.resume.mockReset();
 });
 
 it('retains a timed-out receipt and its recovery projection after parent dispatch fails, then recovers with a fresh service', async () => {

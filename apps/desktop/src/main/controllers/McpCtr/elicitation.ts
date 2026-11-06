@@ -1,6 +1,7 @@
 import type { McpElicitationHost } from '@lobechat/mcp-elicitation';
 import { mcpInvocationKey } from '@lobechat/mcp-elicitation/transport';
 import type { McpElicitationCall } from '@lobechat/mcp-elicitation/types';
+import { toRecord } from '@lobechat/utils/object';
 import type { ElicitResult } from '@modelcontextprotocol/client';
 
 import { createLogger } from '@/utils/logger';
@@ -29,6 +30,7 @@ export async function relayNativeMcpResult(
   elicitation: McpElicitationCall | undefined,
   result: NativeMcpResult,
   owner: NativeMcpOwner,
+  resolveDeviceId: () => Promise<string | undefined>,
 ) {
   if (!elicitation?.relayResult) return true;
   const [serverUrl, token] = await Promise.all([
@@ -41,6 +43,18 @@ export async function relayNativeMcpResult(
     config.getDesktopBootstrapIdentity().userId !== owner.userId
   )
     return false;
+  // This callback outlives the renderer's markLocalView. Stamp the same local
+  // identity here, before the receipt is published, without mutating the tool result.
+  const state = toRecord(result.state);
+  const view = toRecord(state?.mcpApp);
+  if (state && view) {
+    const deviceId = await resolveDeviceId();
+    const { mcpApp: _view, ...rest } = state;
+    result = {
+      ...result,
+      state: { ...rest, ...(deviceId && { mcpApp: { ...view, deviceId } }) },
+    };
+  }
   const response = await fetch(`${serverUrl}/trpc/lambda/mcpElicitation.producerResult`, {
     method: 'POST',
     headers: {

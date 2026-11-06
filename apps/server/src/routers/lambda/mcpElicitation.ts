@@ -13,6 +13,7 @@ import { aiAgentBaseProcedure } from '@/server/routers/lambda/aiAgent/procedures
 import { AgentRuntimeService } from '@/server/services/agentRuntime';
 import {
   cancelClientMcpStep,
+  completeClientMcpTool,
   registerClientMcpStep,
   scheduleClientMcpTool,
 } from '@/server/services/mcp/elicitation/clientStep';
@@ -174,11 +175,12 @@ export const mcpElicitationRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       const userId = await resolveMcpProducerUser(ctx, input.identity, input.delegation);
-      const interactions = new McpElicitationService(
-        ctx.serverDB,
-        userId,
-        ctx.workspaceId ?? undefined,
-      );
+      const interactions =
+        userId === ctx.userId
+          ? ctx.mcpElicitation
+          : new AgentRuntimeService(ctx.serverDB, userId, {
+              workspaceId: ctx.workspaceId ?? undefined,
+            }).createMcpElicitationService();
       const { operation } = await interactions.assertIdentity(input.identity, true);
       if (['done', 'error', 'interrupted', 'abandoned'].includes(operation.status))
         return { success: true, ignored: true };
@@ -187,17 +189,17 @@ export const mcpElicitationRouter = router({
         input.identity.assistantMessageId,
       );
       if (operation.metadata?.clientMcpStep && toolMessageId) {
-        await interactions.messages.updateToolMessage(toolMessageId, {
-          content: input.result.content,
-          pluginState: { ...input.result.state, mcpElicitation: null, mcpClientComplete: true },
-          pluginError: input.result.success
-            ? null
-            : (input.result.error ?? { message: input.result.content }),
-          onlyIfEmpty: true,
-        });
-        await interactions.messages.updateMessagePlugin(toolMessageId, {
-          intervention: { status: 'none' },
-        });
+        await completeClientMcpTool(
+          interactions,
+          { ...input.identity, toolMessageId: input.identity.toolMessageId ?? toolMessageId },
+          {
+            ...input.result,
+            executionTime: 0,
+            error: input.result.success
+              ? undefined
+              : (input.result.error ?? { message: input.result.content }),
+          },
+        );
         return { success: true };
       }
       await redisService.agentToolResults.publishMcpResult(

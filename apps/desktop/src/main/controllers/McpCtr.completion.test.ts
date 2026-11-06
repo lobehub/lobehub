@@ -17,11 +17,19 @@ it('delivers the original receipt after a relay failure with no renderer and nev
     getRemoteServerUrl: async () => 'https://server.example',
     getAccessToken: async () => 'private-oidc',
     getDesktopBootstrapIdentity: () => ({ userId }),
+    resolveCurrentDeviceId: async () => 'origin-desktop',
   };
-  const ctr = new McpCtr({ getController: () => config, getService: () => null } as unknown as App);
+  const ctr = new McpCtr({
+    getController: () => config,
+    getService: () => config,
+  } as unknown as App);
   const execute = vi
     .spyOn(ctr as unknown as { runMcpToolOnce: () => Promise<unknown> }, 'runMcpToolOnce')
-    .mockResolvedValue({ content: 'committed receipt', state: {}, success: true });
+    .mockResolvedValue({
+      content: 'committed receipt',
+      state: { mcpApp: { resourceUri: 'ui://fixture/view', server: 'fingerprint' } },
+      success: true,
+    });
   const relay: string[] = [];
   let failures = 1;
   const network = vi.fn(async (url: string, init: RequestInit) => {
@@ -58,6 +66,11 @@ it('delivers the original receipt after a relay failure with no renderer and nev
   await vi.advanceTimersByTimeAsync(500);
   expect(relay).toHaveLength(2);
   expect(relay[0]).toBe(relay[1]);
+  expect(JSON.parse(relay[1]).json.result.state.mcpApp).toEqual({
+    resourceUri: 'ui://fixture/view',
+    server: 'fingerprint',
+    deviceId: 'origin-desktop',
+  });
   await ctr.runStdioMcpTool(input);
   expect(execute).toHaveBeenCalledOnce();
   expect(relay).toHaveLength(2);
