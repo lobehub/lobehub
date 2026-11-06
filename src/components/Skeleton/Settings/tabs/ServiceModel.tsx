@@ -12,7 +12,6 @@ import {
 
 import SkeletonBar from '../../Bar';
 import SettingsSectionSkeleton from '../Section';
-import moduleStyles from '../Section.module.css';
 import { useSkeletonText } from '../useSkeletonText';
 import type { SettingsTabSkeleton } from './types';
 
@@ -36,7 +35,7 @@ const TierGroup = ({
   title: string;
 }) => (
   <Form.Group
-    className={moduleStyles.group}
+    className={'lobe-section-96565f37-group'}
     collapsible={false}
     desc={text(desc, 220, 12)}
     title={text(title, 80, 18)}
