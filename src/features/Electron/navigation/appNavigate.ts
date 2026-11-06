@@ -1,7 +1,12 @@
 import { stableWorkspaceAwareNavigate } from '@/features/Workspace/stableWorkspaceAwareNavigate';
 import { type WorkspaceAwareNavigateOptions } from '@/features/Workspace/workspaceAwarePath';
 
-export type AppNavigateTarget = 'activeTab' | 'newTab';
+/**
+ * - `activeTab`: navigate the focused tab.
+ * - `existingTab`: activate a tab already showing the url, else behave like `activeTab`.
+ * - `newTab`: always open a new tab.
+ */
+export type AppNavigateTarget = 'activeTab' | 'existingTab' | 'newTab';
 
 export interface AppNavigateOptions extends WorkspaceAwareNavigateOptions {
   target?: AppNavigateTarget;

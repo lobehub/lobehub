@@ -50,8 +50,12 @@ export interface ShowDesktopNotificationParams {
    *
    * `escape` tells the renderer to use this path literally instead of applying
    * the currently active workspace prefix.
+   *
+   * `preferExistingTab` (desktop) activates a tab already showing `path`
+   * instead of rewriting the focused tab; without a match it falls back to the
+   * plain active-tab navigation. Older renderers ignore it.
    */
-  navigate?: { escape?: boolean; path: string; replace?: boolean };
+  navigate?: { escape?: boolean; path: string; preferExistingTab?: boolean; replace?: boolean };
   requestAttention?: boolean;
   sender?: DesktopNotificationSender;
   silent?: boolean;

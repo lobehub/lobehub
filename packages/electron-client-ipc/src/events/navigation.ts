@@ -49,8 +49,15 @@ export interface NavigationBroadcastEvents {
 
   /**
    * Ask renderer to navigate within the SPA without reloading the whole page.
+   * `preferExistingTab` activates a tab already showing `path` (falls back to
+   * the active tab when none matches).
    */
-  navigate: (data: { escape?: boolean; path: string; replace?: boolean }) => void;
+  navigate: (data: {
+    escape?: boolean;
+    path: string;
+    preferExistingTab?: boolean;
+    replace?: boolean;
+  }) => void;
 
   /** Ask the renderer to open the all-agents surface. */
   openAllAgents: () => void;
