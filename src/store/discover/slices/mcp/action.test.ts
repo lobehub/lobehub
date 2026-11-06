@@ -222,19 +222,13 @@ describe('MCPSlice (replica)', () => {
   });
 
   describe('useMcpCategories', () => {
-    it('does not revalidate the categories on window focus', async () => {
-      renderHook(() => useStore.getState().useMcpCategories({ q: 'github' }));
-
-      const [call] = await syncCalls('mcpCategories');
-      expect(call.config.revalidateOnFocus).toBe(false);
-    });
-
     it('requests category counts with the search term and the locale', async () => {
       const { discoverService } = await import('@/services/discover');
 
       renderHook(() => useStore.getState().useMcpCategories({ q: 'github' }));
 
       const [call] = await syncCalls('mcpCategories');
+      expect(call.config.revalidateOnFocus).toBe(false);
       await call.fetcher();
 
       expect(discoverService.getMcpCategories).toHaveBeenCalledWith({
