@@ -10,6 +10,7 @@ import { useFetchAvailableAgents } from '@/hooks/useFetchAvailableAgents';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import AssistantTurnSettledWatcher from './AssistantTurnSettledWatcher';
+import { McpAppHostRegistration } from './McpAppHostRegistration';
 import { createStore, Provider } from './store';
 import StoreUpdater from './StoreUpdater';
 import {
@@ -127,6 +128,7 @@ export const ConversationProvider = memo<ConversationProviderProps>(
           skipFetch={skipFetch}
         />
         <AssistantTurnSettledWatcher />
+        <McpAppHostRegistration />
         <ConversationContextPrefetcher context={context} />
         {children}
       </Provider>
