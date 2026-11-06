@@ -93,6 +93,30 @@ describe('resolveModelParams', () => {
       expect(facts.modelKnowledgeCutoff).toBe('2024-01');
     });
 
+    it('keeps an effort-only own card from inheriting the canonical card extend params', async () => {
+      const facts = await resolveModelParams(
+        request({ model: 'glm-5', provider: 'opencode' }),
+        providers({
+          listModelCards: () => [
+            {
+              abilities: {},
+              id: 'glm-5',
+              providerId: 'opencode',
+              reasoningEffort: { levels: ['low', 'medium', 'high'] },
+            },
+            {
+              abilities: {},
+              extendParams: ['enableReasoning', 'reasoningBudgetToken32k'],
+              id: 'glm-5',
+              providerId: 'qwen',
+            },
+          ],
+        }),
+      );
+      expect(facts.modelExtendParams).toBeUndefined();
+      expect(facts.modelReasoningEffort?.levels).toEqual(['low', 'medium', 'high']);
+    });
+
     it('applies the effective config to the payload params', async () => {
       const facts = await resolveModelParams(
         request(),

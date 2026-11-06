@@ -82,7 +82,9 @@ export const resolveModelExtendParamList = async (
   let modelExtendParams = userModelRow?.extendParams ?? undefined;
   if (modelExtendParams === undefined) {
     modelExtendParams = modelCard?.extendParams ?? undefined;
-    if (!modelExtendParams || modelExtendParams.length === 0) {
+    // A card that declares only an effort control has declared its controls: inheriting another
+    // provider's `enableReasoning` would turn an unset preference into disabled thinking.
+    if ((!modelExtendParams || modelExtendParams.length === 0) && !modelCard?.reasoningEffort) {
       modelExtendParams = canonicalModelCard?.extendParams ?? undefined;
     }
   }
