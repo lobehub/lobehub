@@ -27,6 +27,8 @@ import { usePermission } from '@/hooks/usePermission';
 import { useSingleton } from '@/hooks/useSingleton';
 import { cacheScope } from '@/libs/replica';
 import type { ChannelQueuedSendInput } from '@/store/channel';
+import { useHomeStore } from '@/store/home';
+import { homeAgentListSelectors } from '@/store/home/selectors';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
@@ -34,7 +36,7 @@ import { userProfileSelectors } from '@/store/user/selectors';
 import { ComposerActions } from './ComposerActions';
 import { MemberAvatar } from './MemberAvatar';
 import { isCurrentUserMember, memberName } from './memberName';
-import { getMentionGroups } from './mentionGroups';
+import { getMentionGroups, mentionDescription } from './mentionGroups';
 import type { ChannelMentionInvite } from './mentions';
 import {
   $insertChannelMentionBoundary,
@@ -313,12 +315,25 @@ export function Composer({
                       t('deletedMember'),
                       !!workspaceId,
                     ).flatMap<ISlashOption>((group) => {
-                      const items = group.members.map((member) => ({
-                        icon: <MemberAvatar member={member} size={24} />,
-                        key: member.id,
-                        label: memberName(member, t('deletedMember')),
-                        metadata: { type: 'channel-member', id: member.id },
-                      }));
+                      // Read when the picker opens; subscribing would rerender on every list change.
+                      const agents = homeAgentListSelectors.allAgents(useHomeStore.getState());
+                      const items = group.members.map((member) => {
+                        const label = memberName(member, t('deletedMember'));
+                        const agent = member.agentId
+                          ? agents.find((item) => item.id === member.agentId)
+                          : undefined;
+                        return {
+                          description: mentionDescription(
+                            label,
+                            agent?.title,
+                            agent?.description || member.description,
+                          ),
+                          icon: <MemberAvatar member={member} size={24} />,
+                          key: member.id,
+                          label,
+                          metadata: { type: 'channel-member', id: member.id },
+                        };
+                      });
                       return group.actorType
                         ? [
                             {
@@ -389,6 +404,7 @@ export function Composer({
                 aria-label={t('send')}
                 disabled={busy || attachments.blocked}
                 loading={busy}
+                shape="round"
                 size={28}
                 type="primary"
                 onSend={() => void send()}

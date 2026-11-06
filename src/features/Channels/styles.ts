@@ -96,18 +96,14 @@ export const styles = stylex.create({
       },
     },
   },
+  /** A plain centered date; a rule on each side read heavier than the messages it separates. */
   dateDivider: {
     display: 'flex',
     alignItems: 'center',
-    gap: 12,
+    justifyContent: 'center',
     paddingBlock: 12,
     fontSize: cssVar.fontSizeSM,
     color: cssVar.colorTextSecondary,
-  },
-  dateLine: {
-    flex: '1',
-    height: 1,
-    backgroundColor: cssVar.colorBorderSecondary,
   },
   /** Floats over the row's top-right corner while the row is hovered or focused. */
   messageToolbar: {
@@ -202,8 +198,8 @@ export const styles = stylex.create({
     minWidth: 0,
     maxHeight: 240,
     // Buttons sit on the last line; glyphs ride high in the line box, so drop the
-    // text 2px to center it on the 28px icons beside it.
-    marginBlockEnd: -2,
+    // text 1px to center it on the 28px icons beside it.
+    marginBlockEnd: -1,
   },
   /** Takes the composer's place while the channel or thread is archived. */
   archivedNotice: {
