@@ -11,6 +11,9 @@ import { resolveAppUrlBuilder } from './task/url';
 
 // ── Helpers ────────────────────────────────────────────────
 
+/** Upper bound for `--all`: at 100 rows a page this covers 100k documents. */
+const MAX_ALL_PAGES = 1000;
+
 function readBodyContent(options: { body?: string; bodyFile?: string }): string | undefined {
   if (options.bodyFile) {
     if (!fs.existsSync(options.bodyFile)) {
@@ -31,28 +34,104 @@ export function registerDocCommand(program: Command) {
 
   doc
     .command('list')
-    .description('List documents')
-    .option('-L, --limit <n>', 'Maximum number of items to fetch', '30')
+    .description('List documents, one page at a time')
+    .option('-L, --limit <n>', 'Page size (1-100)', '30')
+    .option('--page <n>', 'Zero-based page index; 0 is the first page of the sort order', '0')
+    .option('--sort-by <field>', 'Sort field: createdAt | updatedAt | title', 'updatedAt')
+    .option('--all', 'Walk every page and return all matching documents')
     .option('--file-type <type>', 'Filter by file type')
     .option('--source-type <type>', 'Filter by source type (file, web, api, topic)')
     .option('--json [fields]', 'Output JSON, optionally specify fields (comma-separated)')
     .action(
       async (options: {
+        all?: boolean;
         fileType?: string;
         json?: string | boolean;
         limit?: string;
+        page?: string;
+        sortBy?: string;
         sourceType?: string;
       }) => {
         const client = await getTrpcClient();
-        const pageSize = Number.parseInt(options.limit || '30', 10);
 
-        const query: { fileTypes?: string[]; pageSize: number; sourceTypes?: string[] } = {
-          pageSize,
-        };
+        const pageSize = Number.parseInt(options.limit || '30', 10);
+        if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > 100) {
+          log.error('--limit must be an integer between 1 and 100');
+          process.exit(1);
+          return;
+        }
+
+        const sortBy = options.sortBy || 'updatedAt';
+        if (sortBy !== 'createdAt' && sortBy !== 'updatedAt' && sortBy !== 'title') {
+          log.error('--sort-by must be one of: createdAt, updatedAt, title');
+          process.exit(1);
+          return;
+        }
+
+        const startPage = Number.parseInt(options.page || '0', 10);
+        if (!Number.isInteger(startPage) || startPage < 0) {
+          log.error('--page must be a non-negative integer');
+          process.exit(1);
+          return;
+        }
+
+        const query: {
+          current: number;
+          fileTypes?: string[];
+          pageSize: number;
+          sortBy: 'createdAt' | 'title' | 'updatedAt';
+          sourceTypes?: string[];
+        } = { current: startPage, pageSize, sortBy };
         if (options.fileType) query.fileTypes = [options.fileType];
         if (options.sourceType) query.sourceTypes = [options.sourceType];
-        const result = await client.document.queryDocuments.query(query);
-        const docs = Array.isArray(result) ? result : ((result as any).items ?? []);
+
+        const fetchPage = async (page: number) => {
+          const result = await client.document.queryDocuments.query({ ...query, current: page });
+          const items = Array.isArray(result) ? result : ((result as any).items ?? []);
+          const total = Array.isArray(result) ? undefined : (result as any).total;
+          return { items, total };
+        };
+
+        let docs: any[] = [];
+        let total: number | undefined;
+        let page = startPage;
+        // `--all` normally stops when the server runs out of rows. If it stops
+        // because of MAX_ALL_PAGES instead, the result is incomplete and the
+        // caller has to be told rather than handed a short list as if complete.
+        let truncated = false;
+
+        if (options.all) {
+          // Walk forward until the server runs out of rows. The cap keeps a bad
+          // `total` from turning the loop into an unbounded request stream.
+          let exhausted = false;
+          for (let i = 0; i < MAX_ALL_PAGES; i++) {
+            const chunk = await fetchPage(page);
+            total = chunk.total ?? total;
+            if (chunk.items.length === 0) {
+              exhausted = true;
+              break;
+            }
+
+            docs = docs.concat(chunk.items);
+            if (total !== undefined ? docs.length >= total : chunk.items.length < pageSize) {
+              exhausted = true;
+              break;
+            }
+            page += 1;
+          }
+          truncated = !exhausted;
+          page = startPage;
+        } else {
+          const chunk = await fetchPage(page);
+          docs = chunk.items;
+          total = chunk.total;
+        }
+
+        const pageCount =
+          total === undefined ? undefined : Math.max(1, Math.ceil(total / pageSize));
+        const hasNext =
+          !options.all &&
+          (total === undefined ? docs.length === pageSize : page + 1 < (pageCount ?? 0));
 
         if (options.json !== undefined) {
           const fields = typeof options.json === 'string' ? options.json : undefined;
@@ -60,11 +139,24 @@ export function registerDocCommand(program: Command) {
             withUrls(docs, await resolveUrlBuilder(client), resourcePath.document),
             fields,
           );
+          // Keep stdout valid JSON — the pagination hint goes to stderr.
+          if (hasNext) {
+            process.stderr.write(
+              `${docs.length} row(s) returned, more available — continue with --page ${page + 1}\n`,
+            );
+          }
+          if (truncated) {
+            process.stderr.write(
+              `Warning: --all stopped at the ${MAX_ALL_PAGES}-page cap after ${docs.length}${total === undefined ? '' : ` of ${total}`} document(s); the list is incomplete — narrow the filters or raise --limit\n`,
+            );
+          }
           return;
         }
 
         if (docs.length === 0) {
-          console.log('No documents found.');
+          console.log(
+            total ? `No documents on page ${page + 1} (${total} total).` : 'No documents found.',
+          );
           return;
         }
 
@@ -76,6 +168,26 @@ export function registerDocCommand(program: Command) {
         ]);
 
         printTable(rows, ['ID', 'TITLE', 'TYPE', 'UPDATED']);
+
+        if (options.all) {
+          if (truncated) {
+            log.warn(
+              `Showing ${docs.length}${total === undefined ? '' : ` of ${total}`} — stopped at the ${MAX_ALL_PAGES}-page cap, so the list is incomplete; narrow the filters or raise --limit`,
+            );
+          } else {
+            log.info(`Total: ${total ?? docs.length} (all pages)`);
+          }
+          return;
+        }
+
+        const from = page * pageSize + 1;
+        const to = page * pageSize + docs.length;
+        const range = `${from}-${to}${total === undefined ? '' : ` of ${total}`}`;
+        const pager =
+          pageCount === undefined ? `page ${page + 1}` : `page ${page + 1}/${pageCount}`;
+        log.info(
+          `${range} · ${pager}${hasNext ? ` · next: --page ${page + 1}` : ' · last page'}`,
+        );
       },
     );
 

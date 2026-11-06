@@ -42,6 +42,7 @@ const MessageText = ({ content, names }: { content: string; names: string[] }) =
 };
 
 export const ChannelMessage = ({
+  delivery,
   detail,
   continuation = false,
   message,
@@ -54,6 +55,8 @@ export const ChannelMessage = ({
   onJumpToMessage,
 }: {
   continuation?: boolean;
+  /** For a message the server has not confirmed: its send status, in place of routing. */
+  delivery?: ReactNode;
   detail: ChannelDetail;
   isRoot?: boolean;
   highlighted?: boolean;
@@ -118,7 +121,6 @@ export const ChannelMessage = ({
         showTitle
         agentId={message.author.type === 'agent' ? message.author.id : undefined}
         avatarProps={{ size: 36 }}
-        belowMessage={isRequest ? <MessageRoutingStatus message={message} /> : undefined}
         gap={4}
         id={message.id}
         paddingBlock={compact ? 2 : 8}
@@ -141,6 +143,9 @@ export const ChannelMessage = ({
           avatar: authorAvatar(message.author),
           title: message.author.name || t('deletedMember'),
         }}
+        belowMessage={
+          delivery ?? (isRequest ? <MessageRoutingStatus message={message} /> : undefined)
+        }
         customAvatarRender={(_, avatar) => (
           <Flexbox {...stylex.props(styles.messageAvatar)}>
             {isOwnMessage ? <UserAvatar size={36} /> : avatar}
@@ -183,7 +188,7 @@ export const ChannelMessage = ({
         titleAddon={
           <>
             {timestamp}
-            {isRequest && <MessageFailureMark detail={detail} message={message} />}
+            {isRequest && !delivery && <MessageFailureMark detail={detail} message={message} />}
           </>
         }
       />

@@ -44,7 +44,9 @@ import type { AgentTextBlock } from './types';
  * every transport:
  *
  * - **Credentials.** The cloud sandbox is handed a user-scoped JWT, and a
- *   desktop client-mode run inherits the machine's own `lh login`. The
+ *   desktop client-mode run is handed the app's own sign-in as
+ *   `LOBEHUB_JWT_FILE` (older desktops left it to the machine's `lh login`,
+ *   which `lh` now names as the fix when it is missing). The
  *   device-dispatch paths (desktop gateway, `lh connect`) put the run's narrow
  *   `hetero-operation` token in `LOBEHUB_JWT`, which `oidcAuth` refuses on every
  *   user-scoped endpoint. `lh topic view` reads through an operation route

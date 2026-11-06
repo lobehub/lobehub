@@ -19,14 +19,38 @@ const styles = stylex.create({
 });
 
 interface ImportOptionsProps {
-  disabled?: boolean;
+  includeArchived: boolean;
+  onIncludeArchivedChange: (checked: boolean) => void;
   onSyncCommentsChange: (checked: boolean) => void;
   syncComments: boolean;
 }
 
+interface OptionProps {
+  checked: boolean;
+  desc: string;
+  label: string;
+  onChange: (checked: boolean) => void;
+}
+
+const Option = memo<OptionProps>(({ checked, desc, label, onChange }) => (
+  <label {...stylex.props(styles.option)}>
+    <Flexbox horizontal align={'flex-start'} gap={8}>
+      <Checkbox checked={checked} style={{ marginBlockStart: 2 }} onChange={onChange} />
+      <Flexbox gap={2} style={{ minWidth: 0 }}>
+        <Text>{label}</Text>
+        <Text fontSize={12} type={'secondary'}>
+          {desc}
+        </Text>
+      </Flexbox>
+    </Flexbox>
+  </label>
+));
+
+Option.displayName = 'LinearImportOption';
+
 /** What an import brings along besides the issues themselves. */
 const ImportOptions = memo<ImportOptionsProps>(
-  ({ disabled, onSyncCommentsChange, syncComments }) => {
+  ({ includeArchived, onIncludeArchivedChange, onSyncCommentsChange, syncComments }) => {
     const { t } = useTranslation('integration');
 
     return (
@@ -34,24 +58,20 @@ const ImportOptions = memo<ImportOptionsProps>(
         <Text fontSize={12} type={'secondary'} weight={500}>
           {t('linear.sync.options.importTitle')}
         </Text>
-        <div {...stylex.props(styles.group)}>
-          <label {...stylex.props(styles.option)}>
-            <Flexbox horizontal align={'flex-start'} gap={8}>
-              <Checkbox
-                checked={syncComments}
-                disabled={disabled}
-                style={{ marginBlockStart: 2 }}
-                onChange={onSyncCommentsChange}
-              />
-              <Flexbox gap={2} style={{ minWidth: 0 }}>
-                <Text>{t('linear.sync.options.syncComments')}</Text>
-                <Text fontSize={12} type={'secondary'}>
-                  {t('linear.sync.options.syncCommentsDesc')}
-                </Text>
-              </Flexbox>
-            </Flexbox>
-          </label>
-        </div>
+        <Flexbox gap={12} {...stylex.props(styles.group)}>
+          <Option
+            checked={syncComments}
+            desc={t('linear.sync.options.syncCommentsDesc')}
+            label={t('linear.sync.options.syncComments')}
+            onChange={onSyncCommentsChange}
+          />
+          <Option
+            checked={includeArchived}
+            desc={t('linear.sync.options.includeArchivedDesc')}
+            label={t('linear.sync.options.includeArchived')}
+            onChange={onIncludeArchivedChange}
+          />
+        </Flexbox>
       </Flexbox>
     );
   },

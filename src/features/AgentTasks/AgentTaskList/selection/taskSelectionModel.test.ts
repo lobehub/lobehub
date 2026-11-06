@@ -5,6 +5,7 @@ import {
   countTasksCreatedByOthers,
   isEditableTarget,
   mergeOutcomes,
+  pickTasksToPrivatize,
   pruneSelection,
   selectRange,
   toggleSelection,
@@ -76,5 +77,25 @@ describe('taskSelectionModel', () => {
     expect(countTasksCreatedByOthers(tasks, 'me')).toBe(2);
     expect(countTasksCreatedByOthers(tasks, undefined)).toBe(0);
     expect(countTasksCreatedByOthers([], 'me')).toBe(0);
+  });
+});
+
+describe('pickTasksToPrivatize', () => {
+  it('picks the public tasks that are not running and flags teammates’ tasks as takeovers', () => {
+    expect(
+      pickTasksToPrivatize(
+        [
+          { createdByUserId: 'me', id: 'own', status: 'backlog', visibility: 'public' },
+          { createdByUserId: 'other', id: 'theirs', status: 'paused', visibility: 'public' },
+          { createdByUserId: 'me', id: 'private', status: 'backlog', visibility: 'private' },
+          { createdByUserId: 'other', id: 'running', status: 'running', visibility: 'public' },
+          { id: 'legacy', status: 'backlog', visibility: null },
+        ],
+        'me',
+      ),
+    ).toEqual([
+      { id: 'own', takeOwnership: false },
+      { id: 'theirs', takeOwnership: true },
+    ]);
   });
 });

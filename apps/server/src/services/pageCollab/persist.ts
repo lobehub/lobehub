@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 
+import type { DocumentWriteSource } from '@lobechat/types';
 import debug from 'debug';
 
 import type { LobeChatDatabase } from '@/database/type';
@@ -49,7 +50,16 @@ export const persistPageState = async (
   db: LobeChatDatabase,
   documentId: string,
   state: Uint8Array,
-  options: { history?: DocumentHistoryAttribution; saveSource: DocumentHistorySaveSource },
+  options: {
+    history?: DocumentHistoryAttribution;
+    saveSource: DocumentHistorySaveSource;
+    /**
+     * Who wrote the room's latest changes; decides whether the per-document
+     * character limit applies. The room's own projection carries browser edits,
+     * so it defaults to `user`.
+     */
+    writeSource?: DocumentWriteSource;
+  },
 ): Promise<boolean> => {
   const meta = await getResourceMeta(db, 'document', documentId);
   if (!meta) return false;
@@ -77,6 +87,7 @@ export const persistPageState = async (
     editorData: editorData as unknown as Record<string, unknown>,
     history: options.history,
     origin: 'room-projection',
+    writeSource: options.writeSource,
     ...(writtenOutsideRoom
       ? { breakAutosaveWindow: true, saveSource: 'system' as const }
       : { saveSource: options.saveSource }),

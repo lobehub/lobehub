@@ -2824,6 +2824,35 @@ describe('HeterogeneousAgentCtr', () => {
       return { cliArgs, command, ctr, options, sessionId, writes };
     };
 
+    /**
+     * `lh` in a local Codex run had only the run's ids, fell back to the machine's own `lh login`
+     * that most users never made, and failed with "No credential anywhere".
+     */
+    it("hands lh the app's sign-in as a file, never the token in argv", async () => {
+      const { proc } = createFakeProc();
+      nextFakeProc = proc;
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        getController: () => ({
+          getAccessToken: async () => 'app-access-token',
+          getRemoteServerUrl: async () => 'https://app.lobehub.com/',
+        }),
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({ agentType: 'codex', command: 'codex' });
+      await ctr.sendPrompt({ operationId: 'op-test', prompt: 'hi', sessionId });
+
+      const { args, options } = spawnCalls[0];
+      const filePath = path.join(appStoragePath, 'cli-auth', 'jwt');
+      expect(options.env).toMatchObject({
+        LOBEHUB_JWT_FILE: filePath,
+        LOBEHUB_SERVER: 'https://app.lobehub.com',
+      });
+      expect(args).toContain(`shell_environment_policy.set.LOBEHUB_JWT_FILE="${filePath}"`);
+      expect(args.join(' ')).not.toContain('app-access-token');
+      expect(await readFile(filePath, 'utf8')).toBe('app-access-token');
+    });
+
     it.each(['codex', 'opencode'] as const)('runs %s via relay', async (agentType) => {
       const { proc } = createFakeProc();
       nextFakeProc = proc;

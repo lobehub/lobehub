@@ -1,4 +1,4 @@
-import type { TaskStatus } from '@lobechat/types';
+import type { TaskLabelRef, TaskStatus } from '@lobechat/types';
 
 import type {
   TaskGroupItem,
@@ -10,8 +10,11 @@ import type { CreateTaskContentProps } from '../CreateTaskModal/CreateTaskConten
 import type { TaskGroupBy, TaskGroupMeta } from './listViewOptions';
 import {
   getTaskAssigneeGroupMeta,
+  getTaskLabelGroupId,
+  getTaskLabelGroupMeta,
   getTaskMemberGroupMeta,
   getTaskPriorityGroupMeta,
+  isTaskLabelGroupBy,
   sortGroupEntries,
 } from './listViewOptions';
 
@@ -64,7 +67,12 @@ export const STATUS_KANBAN_COLUMNS: KanbanColumnDefinition[] = [
 ];
 
 export const normalizeKanbanGroupBy = (groupBy: TaskGroupBy): TaskKanbanGroupBy =>
-  groupBy === 'assignee' || groupBy === 'member' || groupBy === 'priority' ? groupBy : 'status';
+  groupBy === 'assignee' ||
+  groupBy === 'member' ||
+  groupBy === 'priority' ||
+  isTaskLabelGroupBy(groupBy)
+    ? groupBy
+    : 'status';
 
 export interface KanbanGroupQueryInput {
   agentId?: string;
@@ -116,8 +124,9 @@ export const buildKanbanColumns = (
   if (groupBy === 'status') return STATUS_KANBAN_COLUMNS;
 
   const groupEntries = taskGroups.map((group) => {
-    const meta =
-      groupBy === 'assignee'
+    const meta = isTaskLabelGroupBy(groupBy)
+      ? getTaskLabelGroupMeta(groupBy, group.labelId)
+      : groupBy === 'assignee'
         ? getTaskAssigneeGroupMeta(group.assigneeAgentId)
         : groupBy === 'member'
           ? getTaskMemberGroupMeta(group.assigneeUserId)
@@ -170,11 +179,86 @@ export const getKanbanTaskPatch = (
   }
 };
 
+/**
+ * The labels a card carries after a drop on a label board: the task's label
+ * from the board's group is swapped for the column's (or dropped for "no
+ * label"); its other labels stay. `undefined` when the drop changes nothing.
+ */
+export const getKanbanLabelPatch = (
+  task: Pick<TaskListItem, 'labels'>,
+  groupBy: TaskKanbanGroupBy,
+  column: KanbanColumnDefinition,
+): { labels: TaskLabelRef[] } | undefined => {
+  const groupId = getTaskLabelGroupId(groupBy);
+  const meta = column.groupMeta;
+  if (!groupId || !meta || meta.groupBy !== groupBy) return;
+
+  const current = task.labels ?? [];
+  const currentInGroup = current.find((label) => label.parentId === groupId);
+  const targetId = meta.labelId ?? null;
+  if ((currentInGroup?.id ?? null) === targetId) return;
+
+  const rest = current.filter((label) => label.parentId !== groupId);
+  return {
+    labels: targetId
+      ? [...rest, { color: meta.labelColor, id: targetId, name: meta.label, parentId: groupId }]
+      : rest,
+  };
+};
+
 /** Pinned on the new task, so it lands in the column it was created from. */
 export interface KanbanColumnCreateDefaults {
   assigneeAgentId?: string;
+  /**
+   * Labels of a label column (and, when nested, of its parent group); the
+   * "No label" column pins none.
+   */
+  labelIds?: string[];
   priority?: number;
 }
+
+/**
+ * Whether a task group offers a create entry, and what the new task is pinned
+ * to. Shared by board columns and list group headers so both views offer the
+ * entry on the same groups. `undefined` means no entry: a task created there
+ * could not be guaranteed to land in that group.
+ */
+export const getTaskGroupCreateDefaults = (
+  groupMeta: TaskGroupMeta | undefined,
+): KanbanColumnCreateDefaults | undefined => {
+  if (isTaskLabelGroupBy(groupMeta?.groupBy)) {
+    return groupMeta?.labelId ? { labelIds: [groupMeta.labelId] } : {};
+  }
+  switch (groupMeta?.groupBy) {
+    // New tasks start in backlog, so only that status group can receive one.
+    case 'status': {
+      return groupMeta.status === 'backlog' ? {} : undefined;
+    }
+    case 'priority': {
+      return { priority: groupMeta.priority ?? 0 };
+    }
+    // The unassigned group has no entry: the modal cannot pin "no agent".
+    case 'assignee': {
+      return groupMeta.assigneeId ? { assigneeAgentId: groupMeta.assigneeId } : undefined;
+    }
+  }
+};
+
+/**
+ * Create defaults of a sub-group: it must satisfy its parent group too, so the
+ * entry exists only when both levels offer one, and their pins are combined.
+ */
+export const getTaskSubGroupCreateDefaults = (
+  parentMeta: TaskGroupMeta | undefined,
+  subMeta: TaskGroupMeta | undefined,
+): KanbanColumnCreateDefaults | undefined => {
+  const parent = getTaskGroupCreateDefaults(parentMeta);
+  const sub = getTaskGroupCreateDefaults(subMeta);
+  if (!parent || !sub) return undefined;
+  // Two label groupings each pin one label; the task needs both to sit here.
+  const labelIds = [...(parent.labelIds ?? []), ...(sub.labelIds ?? [])];
+  return { ...parent, ...sub, ...(labelIds.length > 0 ? { labelIds } : {}) };
+};
 
 /**
  * Whether a column offers a create entry, and what the new task is pinned to.
@@ -185,15 +269,9 @@ export const getKanbanColumnCreateDefaults = (
   groupBy: TaskKanbanGroupBy,
   column: KanbanColumnDefinition,
 ): KanbanColumnCreateDefaults | undefined => {
-  if (groupBy === 'status' && column.key === 'backlog') return {};
-  if (groupBy === 'priority' && column.groupMeta?.groupBy === 'priority') {
-    return { priority: column.groupMeta.priority ?? 0 };
-  }
-  // The unassigned column has no entry: the modal cannot pin "no agent".
-  if (groupBy === 'assignee' && column.groupMeta?.groupBy === 'assignee') {
-    const { assigneeId } = column.groupMeta;
-    return assigneeId ? { assigneeAgentId: assigneeId } : undefined;
-  }
+  if (groupBy === 'status') return column.key === 'backlog' ? {} : undefined;
+  if (column.groupMeta?.groupBy !== groupBy) return undefined;
+  return getTaskGroupCreateDefaults(column.groupMeta);
 };
 
 /**
@@ -205,6 +283,7 @@ export const getKanbanCreateTaskModalProps = (
   scope: { agentId?: string; projectId?: string },
 ): CreateTaskContentProps => ({
   agentId: defaults.assigneeAgentId ?? scope.agentId,
+  defaultLabelIds: defaults.labelIds?.length ? defaults.labelIds : undefined,
   defaultPriority: defaults.priority,
   // An agent-scoped board only holds that agent's tasks.
   lockAssignee: !!scope.agentId,

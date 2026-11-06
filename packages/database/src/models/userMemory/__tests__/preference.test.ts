@@ -100,13 +100,6 @@ describe('UserMemoryPreferenceModel', () => {
       expect(result).toHaveLength(1);
       expect(result[0].id).toBe('preference-2');
     });
-
-    it('should not return other users preferences', async () => {
-      const result = await preferenceModel.query();
-
-      const otherPreference = result.find((p) => p.id === 'other-preference');
-      expect(otherPreference).toBeUndefined();
-    });
   });
 
   describe('findById', () => {

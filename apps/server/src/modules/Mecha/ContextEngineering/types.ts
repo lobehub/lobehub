@@ -6,6 +6,7 @@ import type {
   AgentManagementContext,
   BotPlatformContext,
   DiscordContext,
+  DocumentReferenceItem,
   EvalContext,
   FileContent,
   GroupAgentBuilderContext,
@@ -194,6 +195,9 @@ export interface ServerMessagesEngineParams {
   // ========== Topic References ==========
   /** Topic reference summaries to inject into last user message */
   topicReferences?: TopicReferenceItem[];
+  // ========== Document References ==========
+  /** Agent documents referenced via `<refer_document>`, injected into last user message */
+  documentReferences?: DocumentReferenceItem[];
   // ========== User memory ==========
   /** User memory configuration */
   userMemory?: ServerUserMemoryConfig;

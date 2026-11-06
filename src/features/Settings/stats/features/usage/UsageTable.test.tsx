@@ -95,7 +95,7 @@ const renderTable = () =>
 
 describe('UsageTable', () => {
   it.each([
-    ['en-US', 'Voice Transcription'],
+    ['en-US', 'Voice transcription'],
     ['zh-CN', '语音转写'],
   ])('renders the speech-recognition icon and label in %s', async (lng, label) => {
     const i18n = createInstance();

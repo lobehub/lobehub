@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import type { DeviceLocalFilePreviewFailure } from './deviceFilePreviewFailure';
+import type { ManagedDevicePhase } from './managedDevice';
 
 /** Structured context for an unavailable logical device. */
 export interface DeviceUnavailableErrorData {
@@ -184,7 +185,7 @@ export const getWorkingDirEffectivePath = (
   return entry.git?.activeWorktree || entry.path;
 };
 
-export { deriveWorktreePath } from './worktreePath';
+export { deriveWorktreePath, type DeriveWorktreePathOptions } from './worktreePath';
 
 export interface WorkingDirEntry extends WorkingDirConfig {
   /**
@@ -353,6 +354,14 @@ export interface DeviceListItem {
   hostname: string | null;
   identitySource: string | null;
   lastSeen: string;
+  /**
+   * Managed cloud devices only: the lifecycle phase the managed device
+   * provider reports, so a sleeping device reads as sleeping instead of as an
+   * offline machine. `undefined` for other devices, and for a managed device
+   * whose phase is unknown (provider unavailable or the device not in its
+   * answer).
+   */
+  managedPhase?: ManagedDevicePhase;
   /**
    * What the client reported about itself on its last connect — the desktop
    * app sends `appVersion` (plus runtime versions), the CLI `cliVersion`.

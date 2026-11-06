@@ -75,6 +75,8 @@ import {
 } from './pipeline/groupMemberApproval';
 import { resolveNewThread } from './pipeline/newThread';
 import { createGroupAgentTopic, type PrecreatedTopicDeps } from './pipeline/precreatedTopic';
+import { releaseUnstartedRunFee, type RunFeeClaim } from './pipeline/runFee';
+import { releaseUnstartedRunSlot, type RunSlotClaim } from './pipeline/runSlot';
 import { scheduleAgentRun } from './pipeline/scheduleAgentRun';
 import { runWithTopicStart, type TopicStartDeps } from './pipeline/topicStart';
 import { bindTopicWorkingDirectory } from './pipeline/topicWorkingDirectory';
@@ -527,9 +529,14 @@ export class AiAgentService {
       rollbackSnapshot: [],
     };
 
+    const runSlot: RunSlotClaim = {};
+    const runFee: RunFeeClaim = {};
+
     try {
-      return await execAgentTurn(this.execAgentTurnDeps, params, approvalClaim);
+      return await execAgentTurn(this.execAgentTurnDeps, params, approvalClaim, runSlot, runFee);
     } finally {
+      await releaseUnstartedRunSlot(runSlot, this.userId);
+      await releaseUnstartedRunFee(runFee, this.userId);
       if (
         !approvalClaim.continuationPrepared &&
         !approvalClaim.continuationStarted &&

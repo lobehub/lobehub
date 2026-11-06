@@ -4,6 +4,7 @@ import {
   AccordionItem,
   AccordionRoot,
   AccordionTrigger,
+  ActionIcon,
   Block,
   Center,
   cssVar,
@@ -12,7 +13,8 @@ import {
   Flexbox,
   Text,
 } from '@lobehub/ui';
-import { ClipboardCheckIcon } from 'lucide-react';
+import * as stylex from '@stylexjs/stylex';
+import { ClipboardCheckIcon, Plus } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -25,8 +27,14 @@ import { taskListSelectors } from '@/store/task/selectors';
 import { COMPLETE_TASK_LIST_MAX_ITEMS } from '@/store/task/slices/list/action';
 import type { TaskListItem } from '@/store/task/slices/list/initialState';
 
+import { createTaskModal } from '../CreateTaskModal';
 import type { TaskItemRouteScope } from '../features/AgentTaskItem';
 import AgentTaskItem from '../features/AgentTaskItem';
+import {
+  getKanbanCreateTaskModalProps,
+  getTaskGroupCreateDefaults,
+  getTaskSubGroupCreateDefaults,
+} from './kanbanBoardModel';
 import type { TaskGroupBy, TaskGroupMeta, TaskListViewOptions } from './listViewOptions';
 import {
   buildTaskRows,
@@ -34,11 +42,13 @@ import {
   compareTaskItems,
   groupTaskItems,
   isTaskHiddenByCompletedFilter,
+  normalizeTaskGroupBy,
 } from './listViewOptions';
 import SelectableTaskRow, { selectableTaskItemClassName } from './selection/SelectableTaskRow';
 import { useTaskSelectionStore } from './selection/store';
 import TaskBulkActionBar from './selection/TaskBulkActionBar';
 import { isEditableTarget } from './selection/taskSelectionModel';
+import { useTaskBatchUndo } from './selection/undo/useTaskBatchUndo';
 import { useSelectionScope } from './selection/useSelectionScope';
 import TaskGroupLabel from './TaskGroupLabel';
 import TaskItemSkeleton from './TaskItemSkeleton';
@@ -47,7 +57,19 @@ import { flattenTaskListEntries } from './taskListVirtualModel';
 import TaskRowIndent from './TaskRowIndent';
 import { useClosestScrollParent } from './useClosestScrollParent';
 
+/** Scope inherited by tasks created from a group header. */
+export interface TaskListCreateScope {
+  agentId?: string;
+  projectId?: string;
+}
+
 interface TaskListProps {
+  /**
+   * Offers a create entry on group headers (like the board's column headers),
+   * pinning the group's field on the new task. Omit where creating is not
+   * allowed or the collection cannot guarantee where a new task lands.
+   */
+  createScope?: TaskListCreateScope;
   /**
    * Settled signal — truthy once the list behind `queryKey` has a value in the
    * store, `undefined` while unsettled. Derived from the same entry as the rows,
@@ -86,22 +108,37 @@ interface TaskListProps {
 /** Row height the window sizes itself by before it has measured real rows. */
 const DEFAULT_ROW_HEIGHT = 52;
 
-const TASK_GROUP_BY_VALUES = new Set<TaskGroupBy>([
-  'assignee',
-  'automationMode',
-  'member',
-  'none',
-  'priority',
-  'status',
-]);
+const styles = stylex.create({
+  // A flex box centres the icon instead of a transform on the icon itself,
+  // which its own pressed / focused styles would override.
+  action: {
+    alignItems: 'center',
+    display: 'flex',
+    insetBlock: 0,
+    insetInlineEnd: 10,
+    position: 'absolute',
+  },
+  header: {
+    position: 'relative',
+  },
+});
 
-const normalizeGroupBy = (value: TaskGroupBy | string | undefined, fallback: TaskGroupBy) => {
-  if (!value) return fallback;
-  return TASK_GROUP_BY_VALUES.has(value as TaskGroupBy) ? (value as TaskGroupBy) : fallback;
-};
+/** Room kept at the title's end for the create entry, so a sub-group rule stops before it. */
+const CREATE_ENTRY_GUTTER = 28;
 
-const renderGroupTitle = (group: TaskGroupMeta, count: number, sub?: boolean) => (
-  <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
+const renderGroupTitle = (
+  group: TaskGroupMeta,
+  count: number,
+  sub?: boolean,
+  withCreateEntry?: boolean,
+) => (
+  <Flexbox
+    horizontal
+    align={'center'}
+    gap={8}
+    justify={'space-between'}
+    style={withCreateEntry ? { marginInlineEnd: CREATE_ENTRY_GUTTER } : undefined}
+  >
     <TaskGroupLabel group={group} />
     <Text fontSize={12} type={'secondary'}>
       {count}
@@ -116,26 +153,53 @@ const renderGroupTitle = (group: TaskGroupMeta, count: number, sub?: boolean) =>
  * It renders no content: the rows it opens are the sibling virtual items.
  */
 const TaskGroupHeader = memo<{
+  createScope?: TaskListCreateScope;
   item: Extract<TaskListVirtualItem, { kind: 'group' | 'subGroup' }>;
   onToggle: (key: string) => void;
-}>(({ item, onToggle }) => {
+}>(({ createScope, item, onToggle }) => {
+  const { t } = useTranslation('chat');
   const sub = item.kind === 'subGroup';
+  const createDefaults = !createScope
+    ? undefined
+    : item.kind === 'subGroup'
+      ? getTaskSubGroupCreateDefaults(item.parentMeta, item.meta)
+      : getTaskGroupCreateDefaults(item.meta);
+  const openCreate = useCallback(() => {
+    if (!createScope || !createDefaults) return;
+    createTaskModal(getKanbanCreateTaskModalProps(createDefaults, createScope));
+  }, [createDefaults, createScope]);
+
   return (
     <div style={{ paddingTop: item.first ? 0 : sub ? 6 : 16 }}>
-      <AccordionRoot
-        indicatorPlacement={'end'}
-        value={item.collapsed ? [] : [item.key]}
-        variant={sub ? 'borderless' : 'filled'}
-        onValueChange={() => onToggle(item.key)}
-      >
-        <AccordionItem value={item.key}>
-          <AccordionHeader>
-            <AccordionTrigger style={{ paddingBlock: sub ? 6 : 8, paddingInline: 14 }}>
-              {renderGroupTitle(item.meta, item.count, sub)}
-            </AccordionTrigger>
-          </AccordionHeader>
-        </AccordionItem>
-      </AccordionRoot>
+      <div {...stylex.props(styles.header)}>
+        <AccordionRoot
+          indicatorPlacement={'start'}
+          value={item.collapsed ? [] : [item.key]}
+          variant={sub ? 'borderless' : 'filled'}
+          onValueChange={() => onToggle(item.key)}
+        >
+          <AccordionItem value={item.key}>
+            <AccordionHeader>
+              <AccordionTrigger style={{ paddingBlock: sub ? 6 : 8, paddingInline: 14 }}>
+                {renderGroupTitle(item.meta, item.count, sub, !!createDefaults)}
+              </AccordionTrigger>
+            </AccordionHeader>
+          </AccordionItem>
+        </AccordionRoot>
+        {createDefaults && (
+          // Outside the trigger so clicking it opens the modal without toggling
+          // the group; the collapse indicator sits at the start (like Linear),
+          // so the entry takes the header's far end.
+          <div {...stylex.props(styles.action)}>
+            <ActionIcon
+              icon={Plus}
+              size={'small'}
+              title={t('taskList.kanban.addTask')}
+              onClick={openCreate}
+            />
+          </div>
+        )}
+      </div>
     </div>
   );
 });
@@ -154,6 +218,7 @@ const VIRTUAL_LIST_COMPONENTS: Components<TaskListVirtualItem, TaskListVirtualCo
 
 const TaskList = memo<TaskListProps>((props) => {
   const {
+    createScope,
     data,
     error,
     filter,
@@ -179,8 +244,8 @@ const TaskList = memo<TaskListProps>((props) => {
   // let the missing rows vanish silently. Alternate collections (`items`)
   // paginate on their own.
   const isTruncated = !items && storeTasksTotal > COMPLETE_TASK_LIST_MAX_ITEMS;
-  const groupBy = normalizeGroupBy(options.groupBy, 'status');
-  const subGroupBy = normalizeGroupBy(options.subGroupBy, 'none');
+  const groupBy = normalizeTaskGroupBy(options.groupBy, 'status');
+  const subGroupBy = normalizeTaskGroupBy(options.subGroupBy, 'none');
   const effectiveSubGroupBy = groupBy === 'none' ? 'none' : subGroupBy;
   const unfinishedTasks = useMemo(
     () =>
@@ -273,6 +338,11 @@ const TaskList = memo<TaskListProps>((props) => {
   }, [selectableIds]);
   const selectionScope = props.selectionScope ?? (items ? 'items' : (queryKey ?? ''));
   useSelectionScope(selectionScope);
+  const { undoLast } = useTaskBatchUndo();
+  const undoLastRef = useRef(undoLast);
+  useEffect(() => {
+    undoLastRef.current = undoLast;
+  }, [undoLast]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -293,6 +363,17 @@ const TaskList = memo<TaskListProps>((props) => {
         if (selectableIdsRef.current.length === 0) return;
         event.preventDefault();
         selection.selectAll(selectableIdsRef.current);
+        return;
+      }
+      // ⌘/Ctrl+Z: undo the most recent batch action (session-wide stack, so it
+      // still works after its toast is gone). Shift+⌘Z is left to the page.
+      if (
+        event.key.toLowerCase() === 'z' &&
+        (event.metaKey || event.ctrlKey) &&
+        !event.shiftKey &&
+        !event.altKey
+      ) {
+        if (undoLastRef.current()) event.preventDefault();
         return;
       }
       if (event.key === 'Escape' && selection.selectedIds.length > 0 && !selection.progress) {
@@ -320,7 +401,8 @@ const TaskList = memo<TaskListProps>((props) => {
 
   const renderItem = useCallback(
     (_index: number, item: TaskListVirtualItem) => {
-      if (item.kind !== 'row') return <TaskGroupHeader item={item} onToggle={toggleCollapsed} />;
+      if (item.kind !== 'row')
+        return <TaskGroupHeader createScope={createScope} item={item} onToggle={toggleCollapsed} />;
       return (
         // Matches the 2px row gap the former Block wrapper gave the list.
         <div style={{ paddingBlock: 1, paddingInline: 2 }}>
@@ -347,7 +429,7 @@ const TaskList = memo<TaskListProps>((props) => {
         </div>
       );
     },
-    [getSelectionOrder, routeScope, toggleCollapsed],
+    [createScope, getSelectionOrder, routeScope, toggleCollapsed],
   );
 
   const skeleton = (

@@ -300,6 +300,42 @@ table agent_documents {
   }
 }
 
+table agent_eval_memories {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  user_id text [not null]
+  workspace_id text
+  run_id text [not null]
+  topic_id text
+  thread_id text
+  attempt_id text [not null]
+  layer text [not null]
+  source text [not null]
+  fixture_hash text
+  title text
+  summary text
+  details text
+  memory_category text
+  memory_type text
+  tags jsonb
+  payload jsonb [not null]
+  embedding vector(1024)
+  captured_at "timestamp with time zone" [not null]
+  removed_reason text
+  metadata jsonb
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    attempt_id [name: 'agent_eval_memories_attempt_id_idx']
+    run_id [name: 'agent_eval_memories_run_id_idx']
+    topic_id [name: 'agent_eval_memories_topic_id_idx']
+    thread_id [name: 'agent_eval_memories_thread_id_idx']
+    user_id [name: 'agent_eval_memories_user_id_idx']
+    workspace_id [name: 'agent_eval_memories_workspace_id_idx']
+  }
+}
+
 table agent_eval_benchmarks {
   id text [pk, not null]
   identifier text [not null]
@@ -347,6 +383,27 @@ table agent_eval_datasets {
     user_id [name: 'agent_eval_datasets_user_id_idx']
     workspace_id [name: 'agent_eval_datasets_workspace_id_idx']
     (workspace_id, identifier) [name: 'agent_eval_datasets_identifier_workspace_id_unique', unique]
+  }
+}
+
+table agent_eval_environments {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  user_id text
+  workspace_id text
+  identifier text
+  name text [not null]
+  description text
+  config jsonb [not null]
+  metadata jsonb
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    user_id [name: 'agent_eval_environments_user_id_idx']
+    workspace_id [name: 'agent_eval_environments_workspace_id_idx']
+    (identifier, user_id) [name: 'agent_eval_environments_identifier_user_id_unique', unique]
+    (identifier, workspace_id) [name: 'agent_eval_environments_identifier_workspace_id_unique', unique]
   }
 }
 
@@ -434,9 +491,10 @@ table agent_eval_runs {
 
 table agent_eval_test_cases {
   id text [pk, not null]
-  user_id text [not null]
+  user_id text
   workspace_id text
   dataset_id text [not null]
+  environment_id uuid
   content jsonb [not null]
   eval_mode text
   eval_config jsonb
@@ -449,6 +507,7 @@ table agent_eval_test_cases {
   indexes {
     user_id [name: 'agent_eval_test_cases_user_id_idx']
     dataset_id [name: 'agent_eval_test_cases_dataset_id_idx']
+    environment_id [name: 'agent_eval_test_cases_environment_id_idx']
     sort_order [name: 'agent_eval_test_cases_sort_order_idx']
     workspace_id [name: 'agent_eval_test_cases_workspace_id_idx']
   }
@@ -1427,6 +1486,7 @@ table channels {
   sequence integer [not null, default: 0]
   status text [not null, default: 'active']
   visibility text [not null, default: 'private']
+  config jsonb
   metadata jsonb [default: `{}`]
   deleted_at "timestamp with time zone"
   is_deleted boolean
@@ -2370,6 +2430,7 @@ table goals {
   subject_id text
   started_at "timestamp with time zone"
   completed_at "timestamp with time zone"
+  archived_at "timestamp with time zone"
   visibility text [not null, default: 'public']
   deleted_at "timestamp with time zone"
   is_deleted boolean
@@ -3432,6 +3493,7 @@ table project_sites {
   name varchar(255) [not null]
   origins text[] [not null]
   acceptance_id uuid
+  last_seen_at "timestamp with time zone"
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
@@ -4324,6 +4386,46 @@ table task_external_links {
   }
 }
 
+table task_label_links {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  task_id text [not null]
+  label_id uuid [not null]
+  user_id text [not null]
+  workspace_id text
+  created_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (task_id, label_id) [name: 'task_label_links_task_id_label_id_unique', unique]
+    label_id [name: 'task_label_links_label_id_idx']
+    user_id [name: 'task_label_links_user_id_idx']
+    workspace_id [name: 'task_label_links_workspace_id_idx']
+  }
+}
+
+table task_labels {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  user_id text
+  workspace_id text
+  parent_id uuid
+  is_group boolean [not null, default: false]
+  name text [not null]
+  description text
+  color text
+  sort_order integer [not null, default: 0]
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    
+    user_id [name: 'task_labels_user_id_idx']
+    workspace_id [name: 'task_labels_workspace_id_idx']
+    parent_id [name: 'task_labels_parent_id_idx']
+    (user_id, name) [name: 'task_labels_user_id_name_unique', unique]
+    (workspace_id, name) [name: 'task_labels_workspace_id_name_unique', unique]
+  }
+}
+
 table threads {
   id text [pk, not null]
   title text
@@ -4447,6 +4549,44 @@ table topics {
     sender_id [name: 'topics_sender_id_idx']
     workspace_id [name: 'topics_workspace_id_idx']
     () [name: 'topics_extract_status_gin_idx']
+  }
+}
+
+table topic_analyses {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  topic_id text [not null]
+  user_id text [not null]
+  workspace_id text
+  taxonomy_version text [not null]
+  category text [not null]
+  secondary_category text
+  intent text
+  outcome text
+  labels jsonb
+  metadata jsonb
+  model text
+  provider text
+  topic_model text
+  topic_provider text
+  total_tokens integer
+  total_input_tokens integer
+  total_output_tokens integer
+  total_cost "numeric(20, 6)"
+  llm_calls integer
+  tool_calls integer
+  user_messages integer
+  assistant_messages integer
+  last_message_id text
+  last_message_updated_at "timestamp with time zone"
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (topic_id, taxonomy_version) [name: 'topic_analyses_topic_version_unique', unique]
+    (user_id, created_at) [name: 'topic_analyses_user_id_created_at_idx']
+    (workspace_id, created_at) [name: 'topic_analyses_workspace_id_created_at_idx']
+    (taxonomy_version, category) [name: 'topic_analyses_version_category_idx']
   }
 }
 
@@ -5440,7 +5580,8 @@ table workspace_invitations {
   role text [not null, default: 'member']
   token text [not null, unique]
   status text [not null, default: 'pending']
-  expires_at "timestamp with time zone" [not null]
+  reusable boolean [not null, default: false]
+  expires_at "timestamp with time zone"
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
 
@@ -5449,6 +5590,7 @@ table workspace_invitations {
     inviter_id [name: 'workspace_invitations_inviter_id_idx']
     email [name: 'workspace_invitations_email_idx']
     token [name: 'workspace_invitations_token_idx']
+    
   }
 }
 

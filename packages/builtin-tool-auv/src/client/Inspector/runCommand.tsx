@@ -34,20 +34,20 @@ function getActivity(argv: string[] = []): keyof typeof activityIcons {
   if (options.includes('--help') || options.includes('-h')) return 'help';
   if (options.includes('--dry-run')) return 'preview';
   const command = argv[0] === 'invoke' ? (argv[1] ?? '') : '';
-  if (['display.capture', 'window.capture', 'screen.captureRegion'].includes(command))
+  if (['display.capture', 'window.capture', 'display.captureRegion'].includes(command))
     return 'capture';
   if (['input.typeText', 'input.pasteText'].includes(command)) return 'input';
-  if (['input.key', 'input.keys', 'input.keyboard'].includes(command)) return 'keyboard';
-  if (['input.focusText', 'input.axFocusText'].includes(command)) return 'focus';
+  if (['input.pressKeys', 'input.performKeyboardInputs'].includes(command)) return 'keyboard';
+  if (command === 'accessibility.focusText') return 'focus';
   if (
     [
       'display.list',
       'window.list',
-      'app.probePermissions',
+      'permission.probe',
       'window.findText',
       'window.waitForText',
-      'screen.findText',
-      'screen.waitForText',
+      'display.findText',
+      'display.waitForText',
     ].includes(command)
   )
     return 'inspect';

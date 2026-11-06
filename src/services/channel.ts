@@ -34,18 +34,26 @@ class ChannelService {
     lambdaClient.channel.rename.mutate({ channelId, title });
   addUser = (channelId: string, userId: string) =>
     lambdaClient.channel.addUser.mutate({ channelId, userId });
-  userCandidates = async (channelId: string, search: string) =>
+  /** Without a Channel, the people a new Channel in the active workspace can start with. */
+  userCandidates = async (channelId: string | undefined, search: string) =>
     (await lambdaClient.channel.userCandidates.query({ channelId, search })).data;
   addAgent = (channelId: string, agent: ChannelAgentSelection) =>
     lambdaClient.channel.addAgent.mutate({ agent, channelId });
-  create = (input: { agents: ChannelAgentSelection[]; projectId?: string; title: string }) =>
-    lambdaClient.channel.create.mutate(input);
+  create = (input: {
+    agents: ChannelAgentSelection[];
+    projectId?: string;
+    title: string;
+    userIds?: string[];
+  }) => lambdaClient.channel.create.mutate(input);
   createGroupFromDirect = (input: {
     agents: ChannelAgentSelection[];
     channelId: string;
     title: string;
     userIds: string[];
   }) => lambdaClient.channel.createGroupFromDirect.mutate(input);
+  /** The caller's direct Channel with an Agent, opened if missing; null when it cannot answer there. */
+  openDirect = async (input: { agentId: string; localDeviceId?: string }) =>
+    (await lambdaClient.channel.openDirect.mutate(input)).data;
   detail = async (params: ChannelViewParams): Promise<ChannelDetail> =>
     (await lambdaClient.channel.detail.query(params)).data;
   list = async (): Promise<ChannelListItem[]> => (await lambdaClient.channel.list.query()).data;

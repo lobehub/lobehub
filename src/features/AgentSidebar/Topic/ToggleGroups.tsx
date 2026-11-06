@@ -4,6 +4,7 @@ import { Maximize2, Minimize2 } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useLocalMachineDeviceIds } from '@/hooks/useLocalMachineDeviceIds';
 import { useTopicGroupCollapse } from '@/hooks/useTopicGroupCollapse';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
@@ -22,6 +23,7 @@ const ToggleGroups = memo(() => {
   const topicIncludeCompleted = useUserStore(preferenceSelectors.topicIncludeCompleted);
   const { topicGroupMode } = useAgentTopicGroupMode();
 
+  const localDeviceIds = useLocalMachineDeviceIds();
   const groupSelector = useMemo(
     () =>
       topicSelectors.groupedTopicsForSidebar(
@@ -29,8 +31,9 @@ const ToggleGroups = memo(() => {
         topicSortBy,
         topicGroupMode,
         topicIncludeCompleted,
+        localDeviceIds,
       ),
-    [topicPageSize, topicSortBy, topicGroupMode, topicIncludeCompleted],
+    [topicPageSize, topicSortBy, topicGroupMode, topicIncludeCompleted, localDeviceIds],
   );
   const agentGroups = useChatStore(groupSelector, isEqual);
   const scoped = useScopedSidebarTopics(

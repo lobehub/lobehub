@@ -90,8 +90,10 @@ export default {
   'linear.sync.error.reconnect':
     'The Linear connection has expired. Reconnect the workspace, then try again.',
   'linear.sync.filter.allProjects': 'All projects',
+  'linear.sync.filter.noProject': 'No project',
   'linear.sync.filter.project': 'Linear project',
-  'linear.sync.filter.projectHint': 'Keep All projects to include every issue in the team.',
+  'linear.sync.filter.projectHint':
+    'Keep All projects to include every issue in the team, or pick No project for issues not in any project.',
   'linear.sync.filter.states': 'Issue states to sync',
   'linear.sync.filter.statesHint': 'Canceled issues are left out by default.',
   'linear.sync.filter.statesSummary': '{{count}} states',
@@ -134,9 +136,11 @@ export default {
   'linear.sync.job.titleRule': 'Rule: {{rule}}',
   'linear.sync.job.titleRuleDeleted': 'Rule (deleted)',
   'linear.sync.list.count': '{{count}} issues',
+  'linear.sync.list.countAtLeast': '{{count}}+ issues',
   'linear.sync.list.empty': 'No issues match these filters.',
   'linear.sync.list.linked': 'Synced · {{task}}',
   'linear.sync.list.loadMore': 'Load more',
+  'linear.sync.list.loaded': '{{count}} loaded',
   'linear.sync.list.openInLinear': 'Open in Linear',
   'linear.sync.list.pickTeam': 'Choose a team to see its issues.',
   'linear.sync.list.selectAll': 'Select all {{count}} loaded',
@@ -149,6 +153,11 @@ export default {
     'Sync every issue matching these filters now, and keep the filters to sync again later',
   'linear.sync.modal.title': 'Import issues from {{account}}',
   'linear.sync.options.importTitle': 'Import options',
+  'linear.sync.options.includeArchived': 'Include archived issues',
+  'linear.sync.options.includeArchivedDesc':
+    'Also list and import issues archived in Linear, which are left out otherwise',
+  'linear.sync.options.includeArchivedRuleDesc':
+    'Also sync issues archived in Linear that match this rule',
   'linear.sync.options.syncComments': 'Sync comments',
   'linear.sync.options.syncCommentsDesc':
     "Copy each issue's Linear comments into the task's activity, keeping the author and time",

@@ -5,6 +5,7 @@ import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import TaskLabelChips from '@/features/TaskLabels/TaskLabelChips';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useTaskStore } from '@/store/task';
 import type { TaskListItem } from '@/store/task/slices/list/initialState';
@@ -151,6 +152,7 @@ const AgentTaskItem = memo<TaskItemProps>((props) => {
         onRequestSubtasks={handleRequestSubtasks}
         onSubtaskClick={handleSubtaskClick}
       />
+      <TaskLabelChips labels={task.labels} />
     </Flexbox>
   );
 
@@ -159,15 +161,14 @@ const AgentTaskItem = memo<TaskItemProps>((props) => {
       {shouldShowMemberAssignee(activeWorkspaceId, task.assigneeUserId) && (
         <AssigneeMemberSelector
           currentUserId={task.assigneeUserId}
-          disabled={status === 'running'}
           taskCreatorId={task.createdByUserId}
           taskIdentifier={task.id}
           taskVisibility={task.visibility}
         >
           {task.assigneeUserId ? (
-            <AssigneeUserAvatar tooltip={status !== 'running'} userId={task.assigneeUserId} />
+            <AssigneeUserAvatar tooltip userId={task.assigneeUserId} />
           ) : (
-            <Tooltip title={status === 'running' ? undefined : tChat('taskList.assignTo')}>
+            <Tooltip title={tChat('taskList.assignTo')}>
               <UnassignedAssigneeIcon kind={'human'} />
             </Tooltip>
           )}
@@ -247,6 +248,7 @@ const AgentTaskItem = memo<TaskItemProps>((props) => {
           </Flexbox>
           <Flexbox horizontal align={'center'} gap={8} style={FLEX_MIN_WIDTH_0}>
             <TaskPriorityTag priority={task.priority} taskIdentifier={task.id} />
+            <TaskLabelChips labels={task.labels} max={2} />
             {scheduleNode}
             {timeNode}
           </Flexbox>

@@ -10,6 +10,7 @@ import {
   isLocalHeterogeneousType,
   LOCAL_HETEROGENEOUS_AGENT_TYPES,
   type LocalHeterogeneousAgentType,
+  usesHeterogeneousSessionInitialModel,
 } from '@lobechat/heterogeneous-agents';
 import { AskUserBridge } from '@lobechat/heterogeneous-agents/askUser';
 import { LobeBuiltinMcpServer } from '@lobechat/heterogeneous-agents/builtinMcp';
@@ -35,6 +36,7 @@ import {
   spawnAgent,
   spawnDshAcpSession,
 } from '@lobechat/heterogeneous-agents/spawn';
+import { toCodexServiceTier } from '@lobechat/types';
 import { isRecord } from '@lobechat/utils/object';
 import type { Command } from 'commander';
 
@@ -89,7 +91,6 @@ const SUPPORTED_AGENT_COMMANDS = HETEROGENEOUS_AGENT_CONFIGS.map(
 ).join(', ');
 const CODEX_REASONING_EFFORT_CONFIG_KEY = 'model_reasoning_effort';
 const CODEX_SERVICE_TIER_CONFIG_KEY = 'service_tier';
-
 /**
  * Runtime factories for `lh hetero exec`. Pi uses RPC; other agents fall
  * through to the generic one-shot `spawnAgent`.
@@ -137,6 +138,7 @@ const spawnAgentOrRuntime = (
 ): Promise<Awaited<ReturnType<typeof spawnAgent>>> => {
   if (nativeCodex)
     return createCodexAgentHandle({
+      askUserBridge: spawnOpts.askUserBridge,
       clientVersion: cliVersion,
       args: spawnOpts.extraArgs ?? [],
       commandPath: spawnOpts.command!,
@@ -247,39 +249,36 @@ const collectAgentArg = (value: string, previous: string[] = []): string[] => [.
 const buildExtraArgs = (
   options: Pick<ExecOptions, 'agentArg' | 'effort' | 'mode' | 'model' | 'speed' | 'type'>,
 ): string[] | undefined => {
+  const modelArg = options.model ? ['--model', options.model] : [];
   const selectorArgs =
     options.type === 'amp'
-      ? [...(options.mode ? ['--mode', options.mode] : [])]
+      ? options.mode
+        ? ['--mode', options.mode]
+        : []
       : options.type === 'droid' || options.type === 'trae'
         ? []
         : options.type === 'codex'
           ? [
-              ...(options.model ? ['--model', options.model] : []),
+              ...modelArg,
               ...(options.effort
                 ? ['-c', `${CODEX_REASONING_EFFORT_CONFIG_KEY}="${options.effort}"`]
                 : []),
               ...(options.speed
-                ? ['-c', `${CODEX_SERVICE_TIER_CONFIG_KEY}="${options.speed}"`]
+                ? ['-c', `${CODEX_SERVICE_TIER_CONFIG_KEY}="${toCodexServiceTier(options.speed)}"`]
                 : []),
             ]
           : options.type === 'claude-code' ||
               options.type === 'codebuddy' ||
               options.type === 'grok-build'
-            ? [
-                ...(options.model ? ['--model', options.model] : []),
-                ...(options.effort ? ['--effort', options.effort] : []),
-              ]
+            ? [...modelArg, ...(options.effort ? ['--effort', options.effort] : [])]
             : options.type === 'cursor' ||
                 options.type === 'devin' ||
                 options.type === 'kimi-code' ||
                 options.type === 'opencode' ||
                 options.type === 'pi'
-              ? [...(options.model ? ['--model', options.model] : [])]
-              : options.type === 'qoder'
-                ? [
-                    ...(options.model ? ['--model', options.model] : []),
-                    ...(options.effort ? ['--reasoning-effort', options.effort] : []),
-                  ]
+              ? modelArg
+              : options.type === 'copilot' || options.type === 'qoder'
+                ? [...modelArg, ...(options.effort ? ['--reasoning-effort', options.effort] : [])]
                 : [];
   const extraArgs = [...(options.agentArg ?? []), ...selectorArgs];
 
@@ -745,15 +744,10 @@ const exec = async (options: ExecOptions): Promise<void> => {
 
   // ─── AskUserQuestion MCP — remote Human-in-the-loop ────────────────────────
   //
-  // Mount the same `lobe_cc` MCP server the desktop app uses, but resolve the
-  // bridge over the server's Redis stream instead of Electron IPC:
-  //   - request out: `bridge.events()` ride the normal ingest sink → server
-  //     `heteroIngest` → Redis stream → renderer shows the AskUserQuestion card.
-  //   - response back: the sandbox can't read Redis, so a long-poll pulls the
-  //     `agent_intervention_response` off the stream (published by the browser's
-  //     `submitHeteroIntervention`) and resolves the pending bridge call.
-  // The bridge's own 5-min timeout is the backstop, so a dropped poll or an
-  // absent user never strands CC.
+  // MCP and native Codex share the desktop's AskUserBridge. Requests flow
+  // through durable ingest to the question card; long-poll returns browser
+  // answers from the server's Redis stream to the blocked native callback.
+  // The bridge timeout bounds the wait, including native Codex requests.
   const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
   let askServer: LobeBuiltinMcpServer | undefined;
   let askBridge: AskUserBridge | undefined;
@@ -762,21 +756,24 @@ const exec = async (options: ExecOptions): Promise<void> => {
   if (
     serverIngest &&
     (agentType === 'claude-code' ||
+      (agentType === 'codex' && options.codexAppServer) ||
+      agentType === 'copilot' ||
       agentType === 'cursor' ||
       agentType === 'droid' ||
       agentType === 'devin' ||
       agentType === 'qoder') &&
     serverIngester
   ) {
-    if (agentType === 'cursor' || agentType === 'droid') {
+    if (
+      agentType === 'codex' ||
+      agentType === 'copilot' ||
+      agentType === 'cursor' ||
+      agentType === 'devin' ||
+      agentType === 'droid'
+    ) {
       askBridge = new AskUserBridge(operationId, {
         identifier: agentType === 'cursor' ? 'claude-code' : agentType,
         provider: agentType,
-      });
-    } else if (agentType === 'devin') {
-      askBridge = new AskUserBridge(operationId, {
-        identifier: 'devin',
-        provider: 'devin',
       });
     } else {
       askServer = new LobeBuiltinMcpServer();
@@ -1269,10 +1266,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
     // server agents. Ask Claude Code for content-block deltas so the current conversation
     // receives text while the process is running, not only the terminal assistant snapshot.
     includePartialMessages: options.type === 'claude-code',
-    initialModel:
-      options.type === 'droid' || options.type === 'devin' || options.type === 'trae'
-        ? options.model
-        : undefined,
+    initialModel: usesHeterogeneousSessionInitialModel(options.type) ? options.model : undefined,
     // Keep Claude Code's stdin open while it can still use input: closing it
     // early makes print mode kill background tasks after 10 minutes.
     liveInput: options.type === 'claude-code',
@@ -1446,7 +1440,7 @@ export function registerHeteroCommand(program: Command) {
     .option('--effort <level>', 'Forward a resolved reasoning effort selection to the agent CLI')
     .option(
       '--speed <mode>',
-      'Forward a resolved speed selection to the agent CLI (codex only; `fast` requests the Fast service tier)',
+      'Forward a resolved speed selection to the agent CLI (codex only; `normal`, `fast`, or `ultrafast` selects the service tier)',
     )
     .option(
       '--agent-arg <arg>',

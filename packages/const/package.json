@@ -10,6 +10,7 @@
     "./desktopGlobalShortcuts": "./src/desktopGlobalShortcuts.ts",
     "./goal": "./src/goal.ts",
     "./hotkeys": "./src/hotkeys.ts",
+    "./mcpApp": "./src/mcpApp.ts",
     "./mediaRef": "./src/mediaRef.ts",
     "./plugin": "./src/plugin.ts",
     "./rbac": "./src/rbac.ts",
@@ -26,7 +27,7 @@
     "@lobechat/types": "workspace:*"
   },
   "peerDependencies": {
-    "@icons-pack/react-simple-icons": "^13.8.0",
+    "@icons-pack/react-simple-icons": "^13.15.1",
     "@lobehub/ui": "^6.0.4"
   }
 }

@@ -786,4 +786,17 @@ describe('systemStatusSelectors', () => {
       expect(systemStatusSelectors.homeGoalsCollapsed(s)).toBe(true);
     });
   });
+
+  describe('projectOnboardingDismissed', () => {
+    it('is false until the card of that project is dismissed', () => {
+      const s: GlobalState = merge(initialState, {
+        status: { dismissedProjectOnboarding: { 'project-1': true } },
+      });
+      expect(systemStatusSelectors.projectOnboardingDismissed('project-1')(s)).toBe(true);
+      expect(systemStatusSelectors.projectOnboardingDismissed('project-2')(s)).toBe(false);
+      expect(systemStatusSelectors.projectOnboardingDismissed('project-2')(initialState)).toBe(
+        false,
+      );
+    });
+  });
 });

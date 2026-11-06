@@ -680,6 +680,11 @@ const HETEROGENEOUS_CLI_AGENT_OPTIONS = {
   'codex': {
     validateKeywords: ['codex'],
   },
+  'copilot': {
+    validateHelpKeywords: ['--acp'],
+    validateKeywords: ['github copilot cli', 'copilot'],
+    validatePattern: /^v?\d+\.\d+\.\d+(?:[-+][\dA-Za-z.-]+)?$/,
+  },
   'cursor': {
     validateFlag: '--help',
     validatePattern: /^Usage: agent[\s\S]*Cursor Agent/im,
@@ -806,6 +811,19 @@ const getWellKnownCommandPaths = (agentType: HeterogeneousCliAgentType): string[
         path.join('/Applications', bundledCli),
         path.join(homedir(), 'Applications', bundledCli),
       ]);
+    }
+    case 'copilot': {
+      if (platform() === 'win32') {
+        return [path.join(homedir(), 'AppData', 'Roaming', 'npm', 'copilot.cmd')];
+      }
+      if (platform() !== 'darwin' && platform() !== 'linux') return [];
+
+      return [
+        path.join(homedir(), '.local', 'bin', 'copilot'),
+        path.join(homedir(), '.bun', 'bin', 'copilot'),
+        path.join(homedir(), '.npm-global', 'bin', 'copilot'),
+        path.join(homedir(), 'Library', 'pnpm', 'copilot'),
+      ];
     }
     case 'cursor': {
       if (platform() !== 'darwin' && platform() !== 'linux') return [];

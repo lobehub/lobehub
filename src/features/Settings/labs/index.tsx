@@ -87,7 +87,7 @@ const LabsForm = memo(() => {
     LAB_FEATURES.map(({ flag }, index) => [flag, labChecked[index]]),
   );
 
-  const toFormItem = ({ flag, i18nKey, stage }: LabFeatureItem): FormFieldProps => ({
+  const toFormItem = ({ flag, i18nKey, noteI18nKey, stage }: LabFeatureItem): FormFieldProps => ({
     children: (
       <Switch
         checked={checkedByFlag[flag]}
@@ -95,7 +95,14 @@ const LabsForm = memo(() => {
         onChange={(next: boolean) => updateLab({ [flag]: next })}
       />
     ),
-    desc: tLabs(`features.${i18nKey}.desc`),
+    desc: noteI18nKey ? (
+      <Flexbox>
+        <span>{tLabs(`features.${i18nKey}.desc`)}</span>
+        <span>{tLabs(`features.${noteI18nKey}.note`)}</span>
+      </Flexbox>
+    ) : (
+      tLabs(`features.${i18nKey}.desc`)
+    ),
     label: (
       <SettingsSearchAnchor id={`labs-${flag}`}>
         <Flexbox horizontal align={'center'} gap={8}>

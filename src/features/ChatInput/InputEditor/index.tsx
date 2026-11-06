@@ -24,15 +24,19 @@ import { useIMECompositionEvent } from '@/hooks/useIMECompositionEvent';
 import { usePermission } from '@/hooks/usePermission';
 import { useSingleton } from '@/hooks/useSingleton';
 import { aiChatService } from '@/services/aiChat';
+import {
+  prepareMentionedMarketAgent,
+  prepareMentionedMarketSkill,
+} from '@/services/mentionMarketInstall';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import {
-  labPreferSelectors,
   settingsSelectors,
   systemAgentSelectors,
+  userGeneralSettingsSelectors,
   userProfileSelectors,
 } from '@/store/user/selectors';
 
@@ -40,6 +44,7 @@ import { useAgentId } from '../hooks/useAgentId';
 import { useChatInputDraft } from '../hooks/useChatInputDraft';
 import { useChatInputHistory } from '../hooks/useChatInputHistory';
 import { useChatInputResourceAccess } from '../hooks/useChatInputResourceAccess';
+import { useChatInputUploadKey } from '../hooks/useChatInputUpload';
 import { useEffectiveModel } from '../hooks/useEffectiveModel';
 import { useLargeFileLocalPath } from '../hooks/useLargeFileLocalPath';
 import { useChatInputStore, useStoreApi } from '../store';
@@ -51,9 +56,18 @@ import {
 import { createInputCompletionError, isInputCompletionAbortError } from './inputCompletionError';
 import InputHistoryPopup, { getHistoryPreviewText } from './InputHistoryPopup';
 import { INSERT_LOCAL_FILE_TAG_COMMAND } from './LocalFileTag';
+import { searchMarketForMention, toMarketAgentItem, toMarketSkillItem } from './marketMentionItems';
+import {
+  AGENT_CATEGORY_IDS,
+  DEFAULT_MENTION_GROUP_LIMIT,
+  limitMentionGroups,
+  mergeIntoCategory,
+  SEARCH_MENTION_GROUP_LIMIT,
+  SKILL_PRECEDING_IDS,
+} from './mentionMenuSections';
 import { mentionPlainClassName } from './mentionStyle';
 import Placeholder, { type PlaceholderVariant } from './Placeholder';
-import { CHAT_INPUT_EMBED_PLUGINS, createChatInputRichPlugins } from './plugins';
+import { createChatInputRichPlugins } from './plugins';
 import { INSERT_REFER_TOPIC_COMMAND } from './ReferTopic';
 import { useLocalFileTag } from './useLocalFileTag';
 import { useMentionCategories } from './useMentionCategories';
@@ -140,7 +154,7 @@ const InputEditor = memo<{
   });
 
   // --- Category-based mention system ---
-  const categories = useMentionCategories();
+  const { categories, market } = useMentionCategories();
 
   // Get agent's model info for vision support check and handle paste upload
   const { model, provider } = useEffectiveModel(agentId);
@@ -151,9 +165,11 @@ const InputEditor = memo<{
   const { enableLocalFileTag, searchLocalFiles } = useLocalFileTag();
 
   const allMentionItems = useMemo(() => categories.flatMap((c) => c.items), [categories]);
+  // Before the user types, agents and skills (installed first, then the
+  // Market's top entries) show only a few each; typing filters all of them.
   const mentionSections = useMemo<ISlashSectionOption[]>(
     () =>
-      categories.map((category) => ({
+      limitMentionGroups(categories, DEFAULT_MENTION_GROUP_LIMIT).map((category) => ({
         items: category.items,
         key: `mention-section-${category.id}`,
         label: category.label,
@@ -178,30 +194,58 @@ const InputEditor = memo<{
       search: { leadOffset: number; matchingString: string; replaceableString: string } | null,
     ) => {
       if (search?.matchingString) {
-        const [localFileItems, mentionItems] = await Promise.all([
+        const [localFileItems, mentionItems, marketResult] = await Promise.all([
           searchLocalFiles(search.matchingString),
           Promise.resolve(fuse.search(search.matchingString).map((r) => r.item)),
+          searchMarketForMention(search.matchingString, market),
         ]);
 
         const rankByKey = new Map(mentionItems.map((item, index) => [String(item.key), index]));
-        const matchedSections = categories
-          .map((category): ISlashSectionOption => {
-            const items = category.items
-              .filter((item) => rankByKey.has(String(item.key)))
-              .sort(
-                (a, b) =>
-                  (rankByKey.get(String(a.key)) ?? Number.MAX_SAFE_INTEGER) -
-                  (rankByKey.get(String(b.key)) ?? Number.MAX_SAFE_INTEGER),
-              );
+        let matchedCategories = categories.map((category) => ({
+          ...category,
+          items: category.items
+            .filter((item) => rankByKey.has(String(item.key)))
+            .sort(
+              (a, b) =>
+                (rankByKey.get(String(a.key)) ?? Number.MAX_SAFE_INTEGER) -
+                (rankByKey.get(String(b.key)) ?? Number.MAX_SAFE_INTEGER),
+            ),
+        }));
 
-            return {
-              items,
-              key: `mention-section-${category.id}`,
-              label: category.label,
-              type: 'section',
-            };
-          })
-          .filter((section) => section.items.length > 0);
+        // Search reaches beyond the prefetched top entries; uninstalled matches
+        // join the same sections as installed ones.
+        if (market.agentCategory) {
+          matchedCategories = mergeIntoCategory(
+            matchedCategories,
+            {
+              ...market.agentCategory,
+              items: marketResult.agents
+                .filter((agent) => !market.installedAgentSources.has(agent.identifier))
+                .map((agent) => toMarketAgentItem(agent, market.agentVisibility)),
+            },
+            AGENT_CATEGORY_IDS,
+          );
+        }
+        matchedCategories = mergeIntoCategory(
+          matchedCategories,
+          {
+            ...market.skillCategory,
+            items: marketResult.skills
+              .filter((skill) => !market.installedSkills.has(skill.identifier))
+              .map(toMarketSkillItem),
+          },
+          SKILL_PRECEDING_IDS,
+        );
+
+        const matchedSections = limitMentionGroups(
+          matchedCategories,
+          SEARCH_MENTION_GROUP_LIMIT,
+        ).map((category): ISlashSectionOption => ({
+          items: category.items,
+          key: `mention-section-${category.id}`,
+          label: category.label,
+          type: 'section',
+        }));
 
         if (localFileItems.length > 0) {
           return [
@@ -219,10 +263,12 @@ const InputEditor = memo<{
       }
       return mentionSections;
     },
-    [categories, fuse, mentionSections, searchLocalFiles, t],
+    [categories, fuse, market, mentionSections, searchLocalFiles, t],
   );
 
-  const enableMention = isMentionEnabled && (allMentionItems.length > 0 || enableLocalFileTag);
+  const enableMention =
+    isMentionEnabled &&
+    (allMentionItems.length > 0 || enableLocalFileTag || market.agents || market.skills);
   const heterogeneousName = heterogeneousType
     ? (HETEROGENEOUS_TYPE_LABELS[heterogeneousType] ?? heterogeneousType)
     : undefined;
@@ -231,7 +277,13 @@ const InputEditor = memo<{
     isMentionEnabled &&
     !heterogeneousName &&
     categories.some((category) => category.id === 'agent');
-  const { handleUploadFiles } = useUploadFiles({ agentId, model, provider });
+  const uploadContextKey = useChatInputUploadKey();
+  const { handleUploadFiles } = useUploadFiles({
+    agentId,
+    contextKey: uploadContextKey,
+    model,
+    provider,
+  });
   const routeLargeFilesToLocalPaths = useLargeFileLocalPath(agentId, editor);
   const handlePasteFiles = useCallback(
     (files: File[]) => handleUploadFiles(routeLargeFilesToLocalPaths(files)),
@@ -255,7 +307,7 @@ const InputEditor = memo<{
     };
   }, [state.isEmpty]);
 
-  const enableRichRender = useUserStore(labPreferSelectors.enableInputMarkdown);
+  const enablePasteAutoConvert = useUserStore(userGeneralSettingsSelectors.enablePasteAutoConvert);
 
   const slashActionItems = useSlashActionItems();
   const slashItems = useCallback(
@@ -473,6 +525,7 @@ const InputEditor = memo<{
         type: String(option.metadata.actionType),
       };
       editor.dispatchCommand(INSERT_ACTION_TAG_COMMAND, payload);
+      if (option.metadata.marketSkill) prepareMentionedMarketSkill(payload.type);
     } else if (option.metadata?.type === 'localFile') {
       editor.dispatchCommand(INSERT_LOCAL_FILE_TAG_COMMAND, {
         isDirectory: !!option.metadata.isDirectory,
@@ -480,6 +533,14 @@ const InputEditor = memo<{
         path: String(option.metadata.path ?? ''),
       });
     } else {
+      // Ready a Market agent (its hidden copy and Market skills) as soon as it is
+      // picked; the send then only waits for what is still unfinished.
+      if (typeof option.metadata?.marketIdentifier === 'string') {
+        prepareMentionedMarketAgent(
+          option.metadata.marketIdentifier,
+          option.metadata.marketVisibility === 'private' ? 'private' : 'public',
+        );
+      }
       // Agent options carry a ReactNode label; the chip needs the plain name
       // kept in `metadata.label`. Other types (member) still use `label` itself.
       editor.dispatchCommand(INSERT_MENTION_COMMAND, {
@@ -507,17 +568,11 @@ const InputEditor = memo<{
     [isSlashEnabled, slashItems],
   );
 
-  const richRenderProps = useMemo(() => {
-    const basePlugins = !enableRichRender
-      ? CHAT_INPUT_EMBED_PLUGINS
-      : createChatInputRichPlugins({ linkPlugin: false });
+  const plugins = useMemo(() => {
+    const basePlugins = createChatInputRichPlugins({ linkPlugin: false });
 
-    const plugins = autoCompletePlugin ? [...basePlugins, autoCompletePlugin] : basePlugins;
-
-    return !enableRichRender
-      ? { enablePasteMarkdown: false, markdownOption: false, plugins }
-      : { plugins };
-  }, [enableRichRender, autoCompletePlugin]);
+    return autoCompletePlugin ? [...basePlugins, autoCompletePlugin] : basePlugins;
+  }, [autoCompletePlugin]);
 
   const handleEditorInit = useCallback(
     (editor: IEditor) => {
@@ -562,8 +617,9 @@ const InputEditor = memo<{
         editor={editor}
         getPopupContainer={() => (slashMenuRef as any)?.current ?? null}
         {...{ slashPlacement }}
-        {...richRenderProps}
+        enablePasteMarkdown={enablePasteAutoConvert}
         mentionOption={mentionOption}
+        plugins={plugins}
         slashOption={slashOption}
         type={'text'}
         variant={'chat'}

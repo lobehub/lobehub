@@ -391,11 +391,6 @@ describe('Multi-Round Tool Execution', () => {
       // The chain detector combines consecutive assistant+tool rounds into a single assistantGroup
       expect(finalState.messages.length).toBeGreaterThan(0);
 
-      // After state.messages stores parse-processed UIChatMessage[]
-      // Tool messages are wrapped in virtual 'assistantGroup' nodes by conversation-flow parse()
-      // The chain detector combines consecutive assistant+tool rounds into a single assistantGroup
-      expect(finalState.messages.length).toBeGreaterThan(0);
-
       // parse() combines the multi-round assistant+tool chain into one assistantGroup
       const assistantGroupMessages = finalState.messages.filter(
         (m: { role: string }) => m.role === 'assistantGroup',

@@ -5,7 +5,9 @@ import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { taskDetailPath } from '@/features/AgentTasks/shared/taskDetailPath';
+import { getDraft, saveDraft } from '@/features/ChatInput/draftStorage';
 import type { SendButtonHandler } from '@/features/ChatInput/store/initialState';
+import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import { useSend } from './useSend';
 
@@ -26,13 +28,16 @@ const messageErrorMock = vi.hoisted(() => vi.fn());
 const messageSuccessMock = vi.hoisted(() => vi.fn());
 
 const chatState = vi.hoisted(() => ({
+  activeAgentId: '' as string,
+  activeTopicId: undefined as string | undefined,
   inputMessage: 'hello',
   mainInputEditor: {
     clearContent: clearContentMock,
     getJSONState: vi.fn(() => ({ type: 'doc' })),
-  },
+  } as Record<string, unknown>,
   sendMessage: sendMessageMock,
 }));
+const homeEditor = chatState.mainInputEditor;
 
 const fileState = vi.hoisted(() => ({
   chatContextSelectionsByContext: {} as Record<string, any[]>,
@@ -158,7 +163,8 @@ vi.mock('@/store/file', () => {
     fileChatSelectors: {
       chatContextSelections: (contextKey: string) => (state: typeof fileState) =>
         state.chatContextSelectionsByContext[contextKey] ?? [],
-      chatUploadFileList: (state: typeof fileState) => state.chatUploadFileList,
+      chatUploadFileList: (contextKey: string) => (state: typeof fileState) =>
+        contextKey === 'home' ? state.chatUploadFileList : [],
     },
     useFileStore,
   };
@@ -182,13 +188,16 @@ describe('Home InputArea useSend', () => {
     sendMessageMock.mockReset();
     clearContentMock.mockReset();
     clearChatUploadFileListMock.mockReset();
-    clearChatUploadFileListMock.mockImplementation((submittedIds?: string[]) => {
-      fileState.chatUploadFileList = submittedIds
-        ? fileState.chatUploadFileList.filter(
-            (file: { id: string }) => !submittedIds.includes(file.id),
-          )
-        : [];
-    });
+    clearChatUploadFileListMock.mockImplementation(
+      (contextKey: string, submittedIds?: string[]) => {
+        if (contextKey !== 'home') return;
+        fileState.chatUploadFileList = submittedIds
+          ? fileState.chatUploadFileList.filter(
+              (file: { id: string }) => !submittedIds.includes(file.id),
+            )
+          : [];
+      },
+    );
     clearChatContextSelectionsMock.mockReset();
     restoreChatContextSelectionsMock.mockReset();
     createTaskMock.mockReset();
@@ -199,6 +208,10 @@ describe('Home InputArea useSend', () => {
     homeDailyBriefState.advance.mockReset();
     homeDailyBriefState.currentPair = undefined;
     chatState.inputMessage = 'hello';
+    chatState.activeAgentId = '';
+    chatState.activeTopicId = undefined;
+    chatState.mainInputEditor = homeEditor;
+    localStorage.clear();
     fileState.chatContextSelectionsByContext = {};
     fileState.chatUploadFileList = [];
     homeState.inputActiveMode = null;
@@ -493,6 +506,96 @@ describe('Home InputArea useSend', () => {
     });
 
     expect(routerMock.replace).toHaveBeenCalledWith('/agent/agt_inbox/tpc_created');
+  });
+
+  describe('when the server refuses the run after Home navigated away', () => {
+    // ROOT CAUSE:
+    //
+    // A Home send navigates to the agent's blank conversation and clears the
+    // Home editor without waiting for the run. When the server then refuses the
+    // run (for example, the plan's concurrent-run limit), `sendMessage` restores
+    // the text into the editor captured at send time — the unmounted Home
+    // editor. The conversation composer reads its draft only on mount, so
+    // before the fix the refusal notice showed over an empty composer.
+    const paragraph = (text: string) => ({ children: [{ text, type: 'text' }], type: 'paragraph' });
+    const doc = (...texts: string[]) => ({
+      root: { children: texts.map(paragraph), type: 'root' },
+    });
+    const typedDraft = doc('hello');
+    const blankKey = 'main_agt_inbox_new';
+
+    const sendAndGetRefusal = async () => {
+      const { result } = renderHook(() => useSend());
+      await act(async () => {
+        await result.current.send({
+          clearContent: vi.fn(),
+          editor: {} as Parameters<SendButtonHandler>[0]['editor'],
+          getEditorData: () => typedDraft,
+          getMarkdownContent: () => 'hello',
+        });
+      });
+      return sendMessageMock.mock.calls[0][0].onPreflightFailure as () => void;
+    };
+
+    const mountConversationEditor = (content = '') => {
+      const editor = {
+        getJSONState: vi.fn(() => (content ? doc(content) : doc())),
+        getMarkdownContent: vi.fn(() => content),
+        setJSONState: vi.fn(),
+      };
+      chatState.activeAgentId = 'agt_inbox';
+      chatState.mainInputEditor = editor;
+      return editor;
+    };
+
+    it('writes the message into the mounted conversation composer', async () => {
+      const refuse = await sendAndGetRefusal();
+      const conversationEditor = mountConversationEditor();
+
+      refuse();
+
+      expect(conversationEditor.setJSONState).toHaveBeenCalledWith(typedDraft);
+    });
+
+    it('saves the message as the blank-conversation draft before the composer mounts', async () => {
+      const refuse = await sendAndGetRefusal();
+
+      refuse();
+
+      expect(blankKey).toBe(messageMapKey({ agentId: 'agt_inbox', topicId: null }));
+      expect(getDraft(blankKey)).toEqual(typedDraft);
+    });
+
+    it('appends the message after what the conversation composer already holds', async () => {
+      const refuse = await sendAndGetRefusal();
+      const conversationEditor = mountConversationEditor('an earlier draft');
+
+      refuse();
+
+      expect(conversationEditor.setJSONState).toHaveBeenCalledWith(
+        doc('an earlier draft', 'hello'),
+      );
+    });
+
+    it('appends the message to an existing blank-conversation draft', async () => {
+      saveDraft(blankKey, doc('an earlier draft'));
+      const refuse = await sendAndGetRefusal();
+
+      refuse();
+
+      expect(getDraft(blankKey)).toEqual(doc('an earlier draft', 'hello'));
+    });
+
+    it('saves a draft instead of filling the composer of another topic', async () => {
+      const refuse = await sendAndGetRefusal();
+      const conversationEditor = mountConversationEditor();
+      chatState.activeTopicId = 'tpc_other';
+
+      refuse();
+
+      expect(conversationEditor.setJSONState).not.toHaveBeenCalled();
+      expect(getDraft(blankKey)).toEqual(typedDraft);
+    });
   });
 
   it('sends chat-mode messages to the Agent selected on Home', async () => {

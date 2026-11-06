@@ -22,8 +22,15 @@ export const resolveOperationInitSlots = async ({
 }): Promise<OperationInitSlots> => {
   const { audio, video, vision } = discovery.modelMediaCapabilities;
 
+  const { executionPlan } = discovery;
+
   return {
-    activeDeviceId: discovery.activeDeviceId,
+    // A waking managed device is bound to the operation but not to the prep
+    // above, so its tool calls go to it (and answer `DEVICE_WAKING` until it
+    // is online) without any device RPC on the request path.
+    activeDeviceId:
+      discovery.activeDeviceId ??
+      (executionPlan?.kind === 'device-wakeable' ? executionPlan.deviceId : undefined),
     activeDeviceScope: discovery.activeDeviceScope,
     agentGroup: discovery.operationAgentGroup,
     // Run context the context engine injects into the system message —
@@ -31,7 +38,7 @@ export const resolveOperationInitSlots = async ({
     connectorOwnershipNote: discovery.connectorOwnershipNote,
     deviceSystemInfo:
       Object.keys(prep.deviceSystemInfo).length > 0 ? prep.deviceSystemInfo : undefined,
-    executionPlan: discovery.executionPlan,
+    executionPlan,
     expertise: prep.expertise,
     initialContext,
     initialMessages: prep.allMessages,

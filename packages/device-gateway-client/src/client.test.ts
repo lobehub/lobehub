@@ -639,6 +639,19 @@ describe('GatewayClient', () => {
       expect(closeAll).toHaveBeenCalledWith('DEVICE_DISCONNECTED');
     });
 
+    it('reports the tunnel host active count, and 0 when serving is off', () => {
+      vi.spyOn((client as any).tunnelHost, 'activeCount', 'get').mockReturnValue(2);
+      expect(client.activeTunnelCount).toBe(2);
+
+      const offClient = new GatewayClient({
+        autoReconnect: false,
+        gatewayUrl: 'https://gateway.test.com',
+        token: 'tok',
+        tunnel: false,
+      });
+      expect(offClient.activeTunnelCount).toBe(0);
+    });
+
     it('answers tunnel_open with TUNNEL_DISABLED when serving is off', async () => {
       const offClient = new GatewayClient({
         autoReconnect: false,

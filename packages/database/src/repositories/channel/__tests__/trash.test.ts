@@ -89,6 +89,38 @@ describe('Channel recycle bin', () => {
     expect(await asOwner.list()).toHaveLength(1);
   });
 
+  it('restores and purges a private workspace channel in the deleting admin’s scope', async () => {
+    const { channel, member, asMember } = await fixture.createTeamChannel();
+    expect(channel.visibility).toBe('private');
+    await db.update(channelMembers).set({ role: 'admin' }).where(eq(channelMembers.id, member.id));
+    // The trash handler scopes by the registry row, whose user is the deleter, not the creator.
+    const asDeleter = () => new ChannelTrashRepository(db, fixture.memberId, fixture.workspaceId);
+    await asMember.remove(channel.id);
+    expect(await asDeleter().restore(channel.id)).toBe(true);
+    expect(await asMember.list()).toHaveLength(1);
+
+    await asMember.remove(channel.id);
+    await expect(asDeleter().purge(channel.id)).resolves.toBe('purged');
+    expect(await db.select().from(channels).where(eq(channels.id, channel.id))).toEqual([]);
+  });
+
+  it('drops the registry rows of threads trashed on their own when the channel is purged', async () => {
+    const repo = new ChannelRepository(db, fixture.ownerId);
+    const { channel } = await repo.create({ title: 'With a trashed branch' });
+    const root = await repo.send(channel.id, {
+      content: 'Root',
+      requestKey: 'root',
+      routing: 'fallback',
+    });
+    const thread = await repo.createThread(channel.id, { rootMessageId: root.id });
+    await repo.removeThread(channel.id, thread.id);
+    await repo.remove(channel.id);
+    expect(await registry().findByResource('channelThread', thread.id)).toBeDefined();
+
+    await expect(trash().purge(channel.id)).resolves.toBe('purged');
+    expect(await registry().findByResource('channelThread', thread.id)).toBeUndefined();
+  });
+
   it('does not restore or purge another personal user’s channel, or purge a live channel', async () => {
     const repo = new ChannelRepository(db, fixture.ownerId);
     const { channel } = await repo.create({ title: 'Private' });

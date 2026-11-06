@@ -97,7 +97,6 @@
   "moveToTrash": "Mover canal para a lixeira",
   "moveToTrashConfirm": "Mover “{{title}}” para a lixeira? Respostas serão interrompidas. Você pode restaurar o canal e seu histórico da lixeira. Agentes e arquivos serão mantidos.",
   "moveToTrashSuccess": "Canal movido para a lixeira",
-  "nameAutoPlaceholder": "Deixe em branco para nomeá-lo com base em seus membros",
   "nameOptional": "Nome do canal (opcional)",
   "noDevice": "Nenhum dispositivo",
   "noDevices": "Nenhum dispositivo está conectado. Conecte um e escolha-o aqui.",

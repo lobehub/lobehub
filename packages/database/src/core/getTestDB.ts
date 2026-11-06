@@ -1,7 +1,3 @@
-import { join } from 'node:path';
-
-import { PGlite } from '@electric-sql/pglite';
-import { vector } from '@electric-sql/pglite/vector';
 import { drizzle as nodeDrizzle } from 'drizzle-orm/node-postgres';
 import { migrate as nodeMigrate } from 'drizzle-orm/node-postgres/migrator';
 import { drizzle as pgliteDrizzle } from 'drizzle-orm/pglite';
@@ -12,8 +8,7 @@ import { serverDBEnv } from '@/config/db';
 
 import * as schema from '../schemas';
 import type { LobeChatDatabase } from '../type';
-
-const migrationsFolder = join(__dirname, '../../migrations');
+import { createPGlite, migrationsFolder, readPGliteSnapshot } from './pgliteSnapshot';
 
 const isServerDBMode = process.env.TEST_SERVER_DB === '1';
 
@@ -42,11 +37,13 @@ export const getTestDB = async (): Promise<LobeChatDatabase> => {
   // Client DB mode (PGlite)
   if (testClientDB) return testClientDB as unknown as LobeChatDatabase;
 
-  const pglite = new PGlite({ extensions: { vector } });
+  const snapshot = readPGliteSnapshot();
+  const pglite = createPGlite(snapshot);
   testClientDB = pgliteDrizzle({ client: pglite, schema });
 
+  // The global setup's snapshot is already migrated; without it, migrate here.
   // pg_search migrations skip themselves when the extension is unavailable, as in PGlite.
-  await pgliteMigrate(testClientDB, { migrationsFolder });
+  if (!snapshot) await pgliteMigrate(testClientDB, { migrationsFolder });
 
   return testClientDB as unknown as LobeChatDatabase;
 };
