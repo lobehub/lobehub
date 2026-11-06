@@ -420,6 +420,21 @@ export const deviceKeys = {
     workspaceId,
     deviceId,
   ]),
+  /** One opening of the batch CLI update: its plan, then the devices it waits on. */
+  cliBatchPlan: def(
+    'device:cliBatchPlan',
+    (workspaceId: string | null, visibility: string, runId: string) => [
+      'device:cliBatchPlan',
+      workspaceId,
+      visibility,
+      runId,
+    ],
+  ),
+  cliBatchFollow: def('device:cliBatchFollow', (workspaceId: string | null, batchId: string) => [
+    'device:cliBatchFollow',
+    workspaceId,
+    batchId,
+  ]),
   appUpdateState: def('device:appUpdateState', (workspaceId: string | null, deviceId: string) => [
     'device:appUpdateState',
     workspaceId,

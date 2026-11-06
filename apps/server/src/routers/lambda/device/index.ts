@@ -3,6 +3,7 @@ import { mergeRouters, router } from '@/libs/trpc/lambda';
 
 import { workspaceDeviceWorkingDirProcedures } from '../deviceWorkspaceWorkingDirs';
 import { agentsRouter } from './agents';
+import { cliBatchUpdateRouter } from './cliBatchUpdate';
 import { gitRouter } from './git';
 import { operateRouter } from './operate';
 import { projectFilesRouter } from './projectFiles';
@@ -11,6 +12,7 @@ import { workspaceRouter } from './workspace';
 
 export const deviceRouter = mergeRouters(
   agentsRouter,
+  cliBatchUpdateRouter,
   registryRouter,
   gitRouter,
   projectFilesRouter,

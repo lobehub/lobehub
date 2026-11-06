@@ -1139,3 +1139,31 @@ export interface DeviceCliRestartParams {
 export type DeviceCliUpdateStateResult =
   | { state: DeviceCliUpdateState; status: 'ok' }
   | { message: string; status: 'rejected' | 'unavailable' | 'unsupported' };
+
+/**
+ * One device in a batch CLI update. `ready` (check only) has an update and an
+ * idle CLI; `requested` (update only) was sent the restart and is followed
+ * through `operation`; every other outcome is why the device was skipped.
+ */
+export type DeviceCliBatchOutcome =
+  'busy' | 'failed' | 'inProgress' | 'offline' | 'ready' | 'requested' | 'unsupported' | 'upToDate';
+
+export interface DeviceCliBatchEntry {
+  deviceId: string;
+  message?: string;
+  operation?: DeviceCliUpdateOperation;
+  outcome: DeviceCliBatchOutcome;
+  state?: DeviceCliUpdateState;
+}
+
+/**
+ * Most devices one `updateClis` request may target. Larger pools are sent in
+ * chunks, which also keeps each request well inside a function's time limit.
+ */
+export const DEVICE_CLI_BATCH_MAX_TARGETS = 50;
+
+export interface DeviceCliBatchTarget {
+  deviceId: string;
+  /** Idempotency key for this device's restart; reuse it to retry. */
+  requestId: string;
+}

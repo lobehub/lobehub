@@ -173,6 +173,16 @@ class DeviceService {
     return lambdaClient.device.restartCli.mutate(input);
   }
 
+  /** Plan a batch CLI update for one workspace visibility tab; nothing restarts. */
+  checkCliUpdates(input: Parameters<DeviceClient['checkCliUpdates']['mutate']>[0]) {
+    return lambdaClient.device.checkCliUpdates.mutate(input);
+  }
+
+  /** Update the CLI on planned devices; each is re-checked before it restarts. */
+  updateClis(input: Parameters<DeviceClient['updateClis']['mutate']>[0]) {
+    return lambdaClient.device.updateClis.mutate(input);
+  }
+
   /**
    * Interactive terminal on the device. `createTerminalSession` opens a PTY and
    * the rest drive it: `writeTerminal` for input, `readTerminal` to drain

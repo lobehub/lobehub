@@ -23,6 +23,7 @@ import { useDeviceList } from '@/store/device';
 import { useElectronStore } from '@/store/electron';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 
+import { CliBatchUpdateButton } from './CliBatchUpdate';
 import DeviceCard from './DeviceCard';
 import DeviceGrid from './DeviceGrid';
 import { getDeviceListBoundary } from './deviceListBoundary';
@@ -340,6 +341,9 @@ const DeviceManager = memo<DeviceManagerProps>((props) => {
     <Flexbox horizontal align={'center'} gap={16} justify={'space-between'}>
       <div style={{ minWidth: 0 }}>{toolbarLeading}</div>
       <Flexbox horizontal align={'center'} gap={8} style={{ flex: 'none' }}>
+        {isWorkspace && visibility && (
+          <CliBatchUpdateButton devices={devices} visibility={visibility} />
+        )}
         <Button
           icon={<Icon icon={RefreshCwIcon} />}
           loading={isValidating}

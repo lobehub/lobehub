@@ -1,8 +1,9 @@
-import { ActionIcon, Button, confirmModal, Flexbox, Popover, Text } from '@lobehub/ui';
+import { ActionIcon, Button, confirmModal, Flexbox, Text } from '@lobehub/ui';
 import { DownloadIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import ErrorDetails from '../ErrorDetails';
 import { useDeviceCliUpdate } from './useDeviceCliUpdate';
 
 export const CliUpdate = ({
@@ -115,30 +116,7 @@ export const CliUpdate = ({
             {t('devices.cliUpdate.requestFailed')}
           </Text>
         )}
-        {errorDetails && (
-          <Popover
-            placement={'bottomLeft'}
-            styles={{ content: { maxWidth: 'min(400px, 80vw)' } }}
-            trigger={'click'}
-            content={
-              <Text
-                fontSize={12}
-                style={{
-                  maxHeight: 200,
-                  overflow: 'auto',
-                  whiteSpace: 'pre-wrap',
-                  wordBreak: 'break-word',
-                }}
-              >
-                {errorDetails}
-              </Text>
-            }
-          >
-            <Button size={'small'} style={{ alignSelf: 'flex-start' }} type={'text'}>
-              {t('devices.cliUpdate.showDetails')}
-            </Button>
-          </Popover>
-        )}
+        {errorDetails && <ErrorDetails details={errorDetails} />}
         {update.ambiguous && view !== 'success' && (
           <Text fontSize={12} type={'danger'}>
             {t('devices.cliUpdate.ambiguous')}

@@ -6,6 +6,37 @@ export default {
   'chatPreference.assist.desc':
     'Personal preferences: they only apply to you, in your personal space and every workspace.',
   'chatPreference.assist.title': 'Chat Assist',
+  'devices.cliBatch.action': 'Update CLIs',
+  'devices.cliBatch.checking': 'Checking the CLI on each device…',
+  'devices.cliBatch.closeHint': 'You can close this dialog; each update continues on its device.',
+  'devices.cliBatch.confirmDesc':
+    'Each CLI goes offline briefly while it restarts. Devices with running tasks are skipped.',
+  'devices.cliBatch.empty': 'No device here runs the CLI yet.',
+  'devices.cliBatch.manualHint':
+    'CLIs that are not connected or run in the foreground need a manual update: run this on the device, then restart lh connect.',
+  'devices.cliBatch.nothingToUpdate': 'No device needs an update right now.',
+  'devices.cliBatch.plan_one': '{{count}} device will update to the latest CLI and restart.',
+  'devices.cliBatch.plan_other': '{{count}} devices will update to the latest CLI and restart.',
+  'devices.cliBatch.progress':
+    '{{updated}} updated · {{pending}} updating · {{failed}} failed · {{skipped}} skipped',
+  'devices.cliBatch.recheck': 'Check again',
+  'devices.cliBatch.sendFailed':
+    'Could not confirm the updates were sent. Check again to see where each device stands.',
+  'devices.cliBatch.status.busy': 'Skipped: running tasks',
+  'devices.cliBatch.status.failed': 'Failed',
+  'devices.cliBatch.status.inProgress': 'Already updating',
+  'devices.cliBatch.status.offline': 'CLI not connected',
+  'devices.cliBatch.status.pending': 'Updating…',
+  'devices.cliBatch.status.ready': 'Will update',
+  'devices.cliBatch.status.success': 'Updated',
+  'devices.cliBatch.status.timedOut': 'Not confirmed',
+  'devices.cliBatch.status.unsupported': 'Update manually',
+  'devices.cliBatch.status.upToDate': 'Up to date',
+  'devices.cliBatch.submit_one': 'Update {{count}} device',
+  'devices.cliBatch.submit_other': 'Update {{count}} devices',
+  'devices.cliBatch.timedOutDetail':
+    'The restart was not confirmed within five minutes. Check again to see where it stands.',
+  'devices.cliBatch.title': 'Update CLI on all devices',
   'devices.cliUpdate.restart': 'Restart CLI',
   'devices.cliUpdate.update': 'Update and restart',
   'devices.cliUpdate.confirmDesc':
