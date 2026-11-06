@@ -16,7 +16,7 @@ const styles = stylex.create({
 const Body = ({ children }: PropsWithChildren) => {
   return (
     <Flexbox
-      {...sx([styles.body], 'portal-body')}
+      {...sx(styles.body, 'portal-body')}
       height={'100%'}
       style={{ flex: 1, height: 0, position: 'relative' }}
       width={'100%'}

@@ -81,7 +81,7 @@ const components: MarkdownProps['components'] = {
     <strong {...rest} {...sx(styles.strong, className, style)} />
   ),
   ul: ({ node: _node, className, style, ...rest }: ElementProps<'ul'>) => (
-    <ul {...rest} {...sx([stylex.defaultMarker(), styles.ul], className, style)} />
+    <ul {...rest} {...sx(stylex.defaultMarker(), styles.ul, className, style)} />
   ),
 };
 

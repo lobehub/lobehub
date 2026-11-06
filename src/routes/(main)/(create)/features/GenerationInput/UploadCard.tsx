@@ -221,7 +221,7 @@ const UploadCard = memo<UploadCardProps>(
       return (
         <>
           {fileInput}
-          <div {...sx([uploadCardStyles.addCircle], className, style)} onClick={handleFileSelect}>
+          <div {...sx(uploadCardStyles.addCircle, className, style)} onClick={handleFileSelect}>
             <Plus size={14} />
           </div>
         </>
@@ -234,7 +234,7 @@ const UploadCard = memo<UploadCardProps>(
           {fileInput}
           <Block
             clickable
-            {...sx([uploadCardMarker, uploadCardStyles.filledCard(zIndex)], className, restStyle)}
+            {...sx(uploadCardMarker, uploadCardStyles.filledCard(zIndex), className, restStyle)}
             variant={'outlined'}
             onClick={handleFileSelect}
           >
@@ -273,6 +273,7 @@ const UploadCard = memo<UploadCardProps>(
                 className={stylex.props(uploadCardStyles.closeButton).className}
                 icon={X}
                 size={12}
+                style={{ borderRadius: '50%' }}
                 variant="outlined"
                 onClick={(e) => {
                   e.stopPropagation();
@@ -293,7 +294,7 @@ const UploadCard = memo<UploadCardProps>(
           align={'center'}
           gap={4}
           justify={'center'}
-          {...sx([uploadCardStyles.placeholderCard], className, style)}
+          {...sx(uploadCardStyles.placeholderCard, className, style)}
           variant={'filled'}
           onClick={handleFileSelect}
         >
