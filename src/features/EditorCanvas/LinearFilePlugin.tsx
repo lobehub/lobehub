@@ -212,7 +212,7 @@ export const LinearFileCard = memo<LinearFileCardProps>(({ node, uploadTracker }
           {...stylex.props(styles.progressTrack)}
           role="progressbar"
         >
-          <div {...sx(styles.progress, undefined, { width: `${progress}%` })} />
+          <div {...sx(styles.progress, { width: `${progress}%` })} />
         </div>
       </div>
     );

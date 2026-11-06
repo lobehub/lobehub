@@ -95,7 +95,8 @@ const DocumentCommentEditor = memo<DocumentCommentEditorProps>(
       <div
         ref={rootRef}
         {...sx(
-          [styles.commentEditor, flush && styles.commentEditorFlush],
+          styles.commentEditor,
+          flush && styles.commentEditorFlush,
           cx(fallback.commentEditor, mentionPlainClassName),
         )}
       >

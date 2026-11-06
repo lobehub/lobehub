@@ -361,7 +361,7 @@ const ImageViewer = ({
       >
         <div
           ref={stageRef}
-          {...sx(styles.stage, undefined, {
+          {...sx(styles.stage, {
             cursor: zoom > 1 ? 'grab' : undefined,
             insetBlockEnd: reserve.bottom ?? 0,
             insetInlineEnd: reserve.right ?? 0,
@@ -372,7 +372,7 @@ const ImageViewer = ({
           onPointerUp={endPan}
         >
           <div
-            {...sx(styles.frame, undefined, {
+            {...sx(styles.frame, {
               height: box.height,
               transform: `translate(-50%, -50%) translate(${pan.x}px, ${pan.y}px) rotate(${rotation}deg)`,
               visibility: status === 'loaded' ? 'visible' : 'hidden',

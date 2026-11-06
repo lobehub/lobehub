@@ -53,7 +53,7 @@ const MarkupPreview = ({ comments = [], shapes = [] }: MarkupPreviewProps) => {
   return createPortal(
     <div
       data-testid={'image-markup-preview'}
-      {...sx(toolStyles.overlayFill, undefined, { pointerEvents: 'none' })}
+      {...sx(toolStyles.overlayFill, { pointerEvents: 'none' })}
     >
       {shapes.length > 0 && (
         <canvas

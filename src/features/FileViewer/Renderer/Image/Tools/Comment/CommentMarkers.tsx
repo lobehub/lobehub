@@ -81,7 +81,7 @@ const CommentMarkers = ({ activeId, comments, onSelect, rotation }: CommentMarke
           <span
             data-active={active}
             data-testid={'image-comment-region'}
-            {...sx([markerStyles.region, active && markerStyles.regionActive], undefined, {
+            {...sx(markerStyles.region, active && markerStyles.regionActive, {
               height: `${comment.anchor.rect.height * 100}%`,
               left: `${comment.anchor.rect.x * 100}%`,
               top: `${comment.anchor.rect.y * 100}%`,
@@ -95,7 +95,7 @@ const CommentMarkers = ({ activeId, comments, onSelect, rotation }: CommentMarke
           tabIndex={onSelect ? undefined : -1}
           title={comment.text}
           type={'button'}
-          {...sx([markerStyles.pin, active && markerStyles.pinActive], undefined, {
+          {...sx(markerStyles.pin, active && markerStyles.pinActive, {
             left: `${origin.x * 100}%`,
             pointerEvents: onSelect ? undefined : 'none',
             top: `${origin.y * 100}%`,

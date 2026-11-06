@@ -424,7 +424,7 @@ const EventItem = memo<{
       className={stylex.props(styles.item, last ? styles.itemLast : styles.itemRail).className}
       gap={10}
     >
-      <span {...sx(styles.badge, undefined, { background: tone.bg })}>
+      <span {...sx(styles.badge, { background: tone.bg })}>
         <Icon color={tone.fg} icon={icon} size={12} />
       </span>
       <Flexbox flex={1} gap={6} style={{ minWidth: 0 }}>

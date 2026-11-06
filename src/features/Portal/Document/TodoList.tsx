@@ -150,7 +150,7 @@ const TodoList = memo(() => {
         {/* Progress Bar */}
         <Flexbox horizontal gap={8} style={{ marginTop: 8 }}>
           <div {...stylex.props(styles.progress)}>
-            <div {...sx(styles.progressFill, undefined, { width: `${progressPercent}%` })} />
+            <div {...sx(styles.progressFill, { width: `${progressPercent}%` })} />
           </div>
         </Flexbox>
 

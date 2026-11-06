@@ -202,7 +202,7 @@ const CommentMode = ({ markup, onChange, onExit, onSent }: CommentModeProps) => 
           <div
             aria-label={t('imageViewer.comment.hint')}
             data-testid={'image-comment-layer'}
-            {...sx(toolStyles.overlayFill, undefined, { cursor: 'crosshair', touchAction: 'none' })}
+            {...sx(toolStyles.overlayFill, { cursor: 'crosshair', touchAction: 'none' })}
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
@@ -220,7 +220,7 @@ const CommentMode = ({ markup, onChange, onExit, onSent }: CommentModeProps) => 
             {pendingAnchor?.type === 'region' && (
               <span
                 data-active
-                {...sx([markerStyles.region, markerStyles.regionActive], undefined, {
+                {...sx(markerStyles.region, markerStyles.regionActive, {
                   height: `${pendingAnchor.rect.height * 100}%`,
                   left: `${pendingAnchor.rect.x * 100}%`,
                   top: `${pendingAnchor.rect.y * 100}%`,
@@ -233,7 +233,7 @@ const CommentMode = ({ markup, onChange, onExit, onSent }: CommentModeProps) => 
                 <span
                   aria-hidden
                   data-active
-                  {...sx([markerStyles.pin, markerStyles.pinActive], undefined, {
+                  {...sx(markerStyles.pin, markerStyles.pinActive, {
                     left: `${draftOrigin.x * 100}%`,
                     top: `${draftOrigin.y * 100}%`,
                     transform: `rotate(${-rotation}deg)`,
@@ -243,7 +243,7 @@ const CommentMode = ({ markup, onChange, onExit, onSent }: CommentModeProps) => 
                 </span>
                 <div
                   data-testid={'image-comment-draft'}
-                  {...sx(styles.draft, undefined, {
+                  {...sx(styles.draft, {
                     left: `${draftOrigin.x * 100}%`,
                     top: `${draftOrigin.y * 100}%`,
                     transform: `rotate(${-rotation}deg) translate(${draftScreen && draftScreen.x > 0.6 ? 'calc(-100% - 16px)' : '16px'}, ${draftScreen && draftScreen.y > 0.6 ? '-100%' : '0'})`,

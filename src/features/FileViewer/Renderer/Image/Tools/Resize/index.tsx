@@ -75,7 +75,6 @@ const styles = stylex.create({
     backgroundImage: 'none',
   },
   sizeInput: { flexShrink: 0, width: '84px' },
-  sizeInputCompact: { width: '72px' },
 });
 
 // Handles sit just inside the crop corners so they stay grabbable when the
@@ -181,7 +180,7 @@ const ResizeMode = ({ onExit }: ResizeModeProps) => {
               aria-label={`${cropSize.width} × ${cropSize.height}`}
               data-testid={'image-crop-box'}
               role={'group'}
-              {...sx(styles.box, undefined, {
+              {...sx(styles.box, {
                 height: `${crop.height * 100}%`,
                 left: `${crop.x * 100}%`,
                 top: `${crop.y * 100}%`,
@@ -195,7 +194,7 @@ const ResizeMode = ({ onExit }: ResizeModeProps) => {
             >
               {HANDLES.map(({ cursor, handle, x, y }) => (
                 <span
-                  {...sx(styles.handle, undefined, {
+                  {...sx(styles.handle, {
                     cursor,
                     left: x,
                     top: y,
@@ -241,7 +240,7 @@ const ResizeMode = ({ onExit }: ResizeModeProps) => {
           <span {...stylex.props(toolStyles.divider)} />
           <Input
             aria-label={t('imageViewer.resize.width')}
-            className={stylex.props(styles.sizeInput, compact && styles.sizeInputCompact).className}
+            className={stylex.props(styles.sizeInput).className}
             data-compact={compact}
             inputMode={'numeric'}
             max={MAX_OUTPUT_EDGE}
@@ -269,7 +268,7 @@ const ResizeMode = ({ onExit }: ResizeModeProps) => {
           />
           <Input
             aria-label={t('imageViewer.resize.height')}
-            className={stylex.props(styles.sizeInput, compact && styles.sizeInputCompact).className}
+            className={stylex.props(styles.sizeInput).className}
             data-compact={compact}
             inputMode={'numeric'}
             max={MAX_OUTPUT_EDGE}

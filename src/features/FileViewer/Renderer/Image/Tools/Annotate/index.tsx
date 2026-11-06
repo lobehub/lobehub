@@ -160,7 +160,7 @@ const AnnotateMode = ({ markup, onChange, onExit, onSent }: AnnotateModeProps) =
             data-testid={'image-annotate-canvas'}
             ref={canvasRef}
             role={'img'}
-            {...sx(styles.overlayFill, undefined, {
+            {...sx(styles.overlayFill, {
               cursor: 'crosshair',
               height: '100%',
               touchAction: 'none',
@@ -202,7 +202,7 @@ const AnnotateMode = ({ markup, onChange, onExit, onSent }: AnnotateModeProps) =
             // One swatch that steps through the colors keeps a narrow bar on one line.
             <button
               aria-label={`${t('imageViewer.annotate.color')}: ${t(`imageViewer.annotate.colorName.${ANNOTATION_COLOR_NAMES[color as AnnotationColor]}`)}`}
-              {...sx(styles.swatch, undefined, { background: color })}
+              {...sx(styles.swatch, { background: color })}
               title={t('imageViewer.annotate.color')}
               type={'button'}
               onClick={() => setColor(nextOf(ANNOTATION_COLORS, color as AnnotationColor))}
@@ -218,7 +218,7 @@ const AnnotateMode = ({ markup, onChange, onExit, onSent }: AnnotateModeProps) =
                   aria-label={t(`imageViewer.annotate.colorName.${ANNOTATION_COLOR_NAMES[value]}`)}
                   aria-pressed={color === value}
                   key={value}
-                  {...sx([styles.swatch, color === value && styles.swatchPressed], undefined, {
+                  {...sx(styles.swatch, color === value && styles.swatchPressed, {
                     background: value,
                   })}
                   type={'button'}

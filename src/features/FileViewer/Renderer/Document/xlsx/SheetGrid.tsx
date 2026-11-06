@@ -108,13 +108,10 @@ const GridCell = memo<{
 }>(({ cell, frozenColOffset, frozenRow, lastFrozenCol, lastFrozenRow }) => (
   <td
     {...sx(
-      [
-        styles.cell,
-        frozenRow && styles.frozenCell,
-        lastFrozenCol && styles.frozenColumnLast,
-        lastFrozenRow && styles.frozenLastCell,
-      ],
-      undefined,
+      styles.cell,
+      frozenRow && styles.frozenCell,
+      lastFrozenCol && styles.frozenColumnLast,
+      lastFrozenRow && styles.frozenLastCell,
       {
         ...toCssStyle(cell.s),
         ...(frozenColOffset === undefined ? {} : stickyColumnStyle(frozenColOffset, frozenRow)),
@@ -174,12 +171,9 @@ const SheetGrid = memo<SheetGridProps>(({ sheet }) => {
               <th
                 key={index}
                 {...sx(
-                  [
-                    styles.gutter,
-                    styles.headCell,
-                    index === frozenCols - 1 && styles.frozenColumnLast,
-                  ],
-                  undefined,
+                  styles.gutter,
+                  styles.headCell,
+                  index === frozenCols - 1 && styles.frozenColumnLast,
                   index >= frozenCols
                     ? undefined
                     : { insetInlineStart: frozenColOffsets[index], zIndex: 4 },

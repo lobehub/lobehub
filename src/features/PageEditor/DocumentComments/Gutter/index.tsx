@@ -80,13 +80,10 @@ const PanelBody = memo<{ state: DocumentCommentsState }>(({ state }) => {
         key={id}
         ref={registerCard(id)}
         {...sx(
-          [
-            styles.gutterCard,
-            top !== undefined && styles.gutterCardPositioned,
-            active && styles.gutterCardActive,
-            id === PENDING_CARD_ID && styles.gutterCardComposer,
-          ],
-          undefined,
+          styles.gutterCard,
+          top !== undefined && styles.gutterCardPositioned,
+          active && styles.gutterCardActive,
+          id === PENDING_CARD_ID && styles.gutterCardComposer,
           { insetInlineEnd: GUTTER_INSET_END, insetInlineStart: GUTTER_INSET_START, top },
         )}
         onClick={id === PENDING_CARD_ID ? undefined : () => selectRoot(id)}

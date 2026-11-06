@@ -279,7 +279,7 @@ const AIEditMode = ({ deps, onExit, operation }: AIEditModeProps) => {
                 data-testid={'image-erase-canvas'}
                 ref={canvasRef}
                 role={'img'}
-                {...sx([toolStyles.overlayFill, styles.mask], undefined, {
+                {...sx(toolStyles.overlayFill, styles.mask, {
                   cursor: running ? 'progress' : 'crosshair',
                   height: '100%',
                   touchAction: 'none',

@@ -60,7 +60,7 @@ const ArtifactItem = memo<ArtifactItemProps>(({ payload, messageId, identifier =
         </Flexbox>
         <Flexbox>
           {isToolHasUI && (
-            <div {...sx([styles.tag, styles.tagBlue], undefined, { cursor: 'pointer' })} title="">
+            <div {...sx(styles.tag, styles.tagBlue, { cursor: 'pointer' })} title="">
               <Icon icon={CircuitBoard} />
             </div>
           )}

@@ -242,7 +242,7 @@ const BlockCommentMarker = memo<{ hostRef: React.RefObject<HTMLElement | null> }
     // listener of its own needed here.
     <div
       ref={markerRef}
-      {...sx(styles.blockMarker, undefined, {
+      {...sx(styles.blockMarker, {
         top: target.top,
         width: DEFAULT_BLOCK_ANCHOR_PADDING,
       })}
