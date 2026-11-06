@@ -155,7 +155,6 @@ const RepositoryList = ({ onConnect, onSelect, selected }: RepositoryListProps) 
       {label}
       <SearchBar
         allowClear
-        autoFocus
         placeholder={t('createFromGithub.searchPlaceholder')}
         value={keyword}
         onChange={(event) => setKeyword(event.target.value)}
