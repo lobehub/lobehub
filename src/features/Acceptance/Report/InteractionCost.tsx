@@ -287,7 +287,7 @@ const InteractionCostPanel = memo<InteractionCostPanelProps>(
                     {segments.length > 0 ? (
                       segments.map((segment) => (
                         <span
-                          {...sx([styles.phaseSegment, operatorStyle(segment.key)], undefined, {
+                          {...sx(styles.phaseSegment, operatorStyle(segment.key), {
                             width: `${
                               maxPhaseSeconds > 0 ? (segment.seconds / maxPhaseSeconds) * 100 : 0
                             }%`,
@@ -301,11 +301,9 @@ const InteractionCostPanel = memo<InteractionCostPanelProps>(
                       ))
                     ) : (
                       <>
+                        <span {...sx(styles.phaseSegment, { width: `${activeWidth}%` })} />
                         <span
-                          {...sx([styles.phaseSegment], undefined, { width: `${activeWidth}%` })}
-                        />
-                        <span
-                          {...sx([styles.phaseSegment, styles.operatorRMs], undefined, {
+                          {...sx(styles.phaseSegment, styles.operatorRMs, {
                             width: `${waitWidth}%`,
                           })}
                           data-operator={'R_ms'}

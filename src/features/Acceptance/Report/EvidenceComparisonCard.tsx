@@ -1,9 +1,15 @@
 'use client';
 
+import {
+  // oxlint-disable-next-line stylex-migration/no-emotion-styles -- media inside markdown, document and video evidence renderers
+  createStaticStyles,
+} from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import type { ReactNode } from 'react';
 import { memo } from 'react';
+
+import { sx } from '@/styles/sx';
 
 /** The `metadata.comparison` an evidence artifact may carry (authored at ingest). */
 export interface EvidenceComparisonMeta {
@@ -114,6 +120,18 @@ const styles = stylex.create({
   content: { flex: '1', minWidth: '0' },
 });
 
+const fallback = createStaticStyles(({ css }) => ({
+  content: css`
+    img,
+    video {
+      display: block;
+      width: 100%;
+      border: none !important;
+      border-radius: 0 !important;
+    }
+  `,
+}));
+
 const comparisonMediaStyles = stylex.create({
   image: {
     display: 'block',
@@ -124,6 +142,8 @@ const comparisonMediaStyles = stylex.create({
     borderRadius: 0,
   },
   video: {
+    display: 'block',
+    width: '100%',
     borderWidth: 'medium',
     borderStyle: 'none',
     borderColor: 'currentcolor',
@@ -176,7 +196,7 @@ export const EvidenceComparisonCard = memo<EvidenceComparisonCardProps>(
                 <span {...stylex.props(styles.caption)}>{side.caption}</span>
               </div>
             )}
-            <div {...stylex.props(styles.content)}>{side.content}</div>
+            <div {...sx(styles.content, fallback.content)}>{side.content}</div>
           </div>
         ))}
       </div>

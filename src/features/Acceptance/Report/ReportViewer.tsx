@@ -1233,9 +1233,9 @@ const ReportViewer = memo<ReportViewerProps>(({ runId: explicitRunId }) => {
                 to its own line anyway, and then reads as an afterthought
                 rather than as the report's headline state. */}
             {verdict && (
-              <div {...sx([styles.heroLine], undefined, { marginBlockEnd: 2 })}>
+              <div {...sx(styles.heroLine, { marginBlockEnd: 2 })}>
                 <span
-                  {...sx([styles.pill], undefined, {
+                  {...sx(styles.pill, {
                     background: VERDICT_META[verdict].bg,
                     color: VERDICT_META[verdict].color,
                   })}

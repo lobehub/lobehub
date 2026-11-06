@@ -822,7 +822,7 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
               </Center>
             )
           ) : (
-            <div {...sx([styles.list], undefined, selecting ? { userSelect: 'none' } : undefined)}>
+            <div {...sx(styles.list, selecting ? { userSelect: 'none' } : undefined)}>
               {showGroups ? (
                 <Accordion
                   gap={4}

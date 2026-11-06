@@ -104,7 +104,7 @@ export const CriterionRow = ({
     horizontal
     align={'center'}
     gap={10}
-    {...sx([styles.row, stylex.defaultMarker(), onOpen && styles.rowClickable], className)}
+    {...sx(styles.row, stylex.defaultMarker(), onOpen && styles.rowClickable, className)}
     role={onOpen ? 'button' : undefined}
     tabIndex={onOpen ? 0 : undefined}
     onClick={onOpen}
@@ -128,7 +128,7 @@ interface CriterionListProps {
 
 /** Outlined container that gives `CriterionRow` children their between-row borders. */
 export const CriterionList = ({ children, className }: CriterionListProps) => (
-  <Block {...sx([styles.list], className)} variant={'outlined'}>
+  <Block {...sx(styles.list, className)} variant={'outlined'}>
     {children}
   </Block>
 );

@@ -314,7 +314,7 @@ const MetricComparisonRenderer = memo<{
                   </span>
                   <div {...stylex.props(styles.bar)}>
                     <div
-                      {...sx([barStyle], undefined, {
+                      {...sx(barStyle, {
                         width: `${Math.max(3, (Math.abs(value) / maximum) * 100)}%`,
                       })}
                     />
@@ -514,13 +514,13 @@ const HeatmapRenderer = memo<{
     <ViewCard context={view.context} title={view.title}>
       <div {...stylex.props(styles.body)}>
         <div
-          {...sx([styles.heatmap], undefined, {
+          {...sx(styles.heatmap, {
             gridTemplateColumns: `minmax(64px, auto) repeat(${xValues.length}, 1fr)`,
           })}
         >
           <span />
           {xValues.map((value) => (
-            <span {...sx([styles.axisLabel], undefined, { textAlign: 'center' })} key={value}>
+            <span {...sx(styles.axisLabel, { textAlign: 'center' })} key={value}>
               {value}
             </span>
           ))}
@@ -534,7 +534,7 @@ const HeatmapRenderer = memo<{
                 return (
                   <span
                     key={`${x}-${y}`}
-                    {...sx([styles.heatmapCell], undefined, {
+                    {...sx(styles.heatmapCell, {
                       background: `color-mix(in srgb, ${cssVar.colorInfo} ${intensity * 100}%, ${cssVar.colorBgContainer})`,
                       color: intensity > 0.58 ? cssVar.colorTextLightSolid : cssVar.colorText,
                     })}
