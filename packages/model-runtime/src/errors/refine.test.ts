@@ -13,6 +13,20 @@ describe('refineErrorCode', () => {
     ).toBeUndefined();
   });
 
+  // OpenAI answers a request whose image link it cannot fetch with a
+  // generic 400; the adapter's ProviderBizError must become the media code the
+  // server runtime acts on, not the bare UpstreamHttpError bucket.
+  it('refines a 400 remote media download failure into RemoteMediaDownloadFailed', () => {
+    expect(
+      refineErrorCode({
+        errorType: AgentRuntimeErrorType.ProviderBizError,
+        httpStatus: 400,
+        message: 'Error while downloading https://app.lobehub.com/f/file_vAKwgeDznm71.',
+        provider: 'openai',
+      }),
+    ).toBe(AgentRuntimeErrorType.RemoteMediaDownloadFailed);
+  });
+
   describe('un-typed throw wrappers', () => {
     // A raw `Error` (e.g. a Drizzle "Failed query: …" throw) is wrapped by
     // formatErrorForState as InternalServerError (HTTP 500). It must still reach

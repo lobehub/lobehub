@@ -247,6 +247,8 @@ export const AgentRuntimeErrorType = {
   ProviderNetworkError: 'ProviderNetworkError',
   /** Provider timed out while downloading a remote image or file URL. */
   RemoteMediaDownloadTimeout: 'RemoteMediaDownloadTimeout',
+  /** Provider could not download a remote image or file URL (gone, denied or unreachable). */
+  RemoteMediaDownloadFailed: 'RemoteMediaDownloadFailed',
   /** Proxy/router has no channel for the requested model (key pool exhausted, no upstream). */
   NoAvailableChannel: 'NoAvailableChannel',
   /** Upstream content-moderation / safety filter rejected the input or output. */
