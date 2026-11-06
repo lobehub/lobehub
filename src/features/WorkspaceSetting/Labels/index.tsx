@@ -5,7 +5,6 @@ import {
   ActionIcon,
   Button,
   confirmModal,
-  createStaticStyles,
   DropdownMenu,
   Empty,
   Flexbox,
@@ -15,6 +14,8 @@ import {
   toast,
   Tooltip,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
 import isEqual from 'fast-deep-equal';
 import {
@@ -41,26 +42,23 @@ import { openDeleteLabelModal } from './DeleteLabelModal';
 import { isDuplicateLabelNameError } from './errors';
 import { openLabelFormModal } from './LabelFormModal';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  dot: css`
-    flex: none;
-
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-
-    background: ${cssVar.colorFill};
-  `,
-  row: css`
-    padding-block: 10px;
-    padding-inline: 12px;
-    border-radius: ${cssVar.borderRadius};
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-}));
+const styles = stylex.create({
+  dot: {
+    flex: 'none',
+    width: '10px',
+    height: '10px',
+    borderRadius: '50%',
+    backgroundColor: cssVar.colorFill,
+    backgroundImage: 'none',
+  },
+  row: {
+    paddingBlock: '10px',
+    paddingInline: '12px',
+    borderRadius: cssVar.borderRadius,
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+});
 
 interface LabelRowProps {
   canManage: boolean;
@@ -158,7 +156,7 @@ const LabelRow = memo<LabelRowProps>(
     );
 
     return (
-      <Flexbox horizontal align={'center'} className={styles.row} gap={12}>
+      <Flexbox horizontal align={'center'} className={stylex.props(styles.row).className} gap={12}>
         <Flexbox
           horizontal
           align={'center'}
@@ -167,7 +165,7 @@ const LabelRow = memo<LabelRowProps>(
           style={{ width: NAME_COL_WIDTH }}
         >
           <span
-            className={styles.dot}
+            className={stylex.props(styles.dot).className}
             style={label.color ? { background: label.color } : undefined}
           />
           <Text ellipsis weight={500}>
