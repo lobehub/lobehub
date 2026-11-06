@@ -505,7 +505,7 @@ describe('Home InputArea useSend', () => {
   });
 
   describe('when the server refuses the run after Home navigated away', () => {
-    // ROOT CAUSE (LOBE-15420):
+    // ROOT CAUSE:
     //
     // A Home send navigates to the agent's blank conversation and clears the
     // Home editor without waiting for the run. When the server then refuses the

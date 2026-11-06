@@ -174,8 +174,8 @@ describe('DocumentStore - Editor Actions (plan character limit)', () => {
     });
   });
 
-  // LOBE-15419: a room page's body never goes through performSave, so the room
-  // relays the server's refusal and the page shows it the same way.
+  // A room page's body never goes through performSave, so the room relays the
+  // server's refusal and the page shows it the same way.
   describe('room pages', () => {
     const roomRefusal = { actual: 501_502, limit: 500_000, plan: 'plus' };
 
@@ -225,8 +225,8 @@ describe('DocumentStore - Editor Actions (plan character limit)', () => {
       expect(result.current.documents['doc-1'].saveStatus).toBe('failed');
     });
 
-    // LOBE-15419: a page already over the limit is stored once it stops growing,
-    // while it is still longer than the limit.
+    // A page already over the limit is stored once it stops growing, while it
+    // is still longer than the limit.
     it('clears the refusal when the server stores the still over-limit page', () => {
       const { result } = renderHook(() => useDocumentStore());
       initRoomDoc(result);
