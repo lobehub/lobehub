@@ -310,6 +310,7 @@ export class ClientLLMTransport implements LLMTransport {
         {
           ...modelParameters.options,
           metadata: this.context.metadata,
+          operationId: this.context.operationId,
           onErrorHandle: (error) => {
             streamError = createStreamExecutionError(error);
           },

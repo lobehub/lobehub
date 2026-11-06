@@ -124,6 +124,15 @@ describe('ClientLLMTransport.stream · conversation affinity', () => {
   });
 });
 
+describe('ClientLLMTransport.runAttempt · usage attribution', () => {
+  it('sends the run operation id so the call usage groups with its run', async () => {
+    vi.mocked(chatService.getChatCompletion).mockClear();
+    await createTransport().transport.runAttempt(input);
+
+    expect(vi.mocked(chatService.getChatCompletion).mock.calls[0][1]?.operationId).toBe('op-1');
+  });
+});
+
 describe('ClientLLMTransport.runAttempt · empty-completion grounding guard', () => {
   beforeEach(() => {
     finishGrounding = grounding;
