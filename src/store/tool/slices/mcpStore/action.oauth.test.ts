@@ -91,6 +91,7 @@ beforeEach(() => {
       return { id: 'connector-1', isNew: true };
     }),
     deleteConnector: vi.fn().mockResolvedValue(undefined),
+    getConnectorForEdit: vi.fn(async () => connected()),
     startConnectorOAuth: vi.fn().mockResolvedValue('https://oauth.example/authorize'),
     fetchConnectors: vi.fn(async () => {
       state.connectors = [connected() as never];

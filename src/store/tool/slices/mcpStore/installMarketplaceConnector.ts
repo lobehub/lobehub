@@ -80,37 +80,84 @@ const syncCloudTools = async (connectorId: string, manifest: ToolManifest) => {
   });
 };
 
+type ConnectorSnapshot = Awaited<ReturnType<ToolStore['getConnectorForEdit']>>;
+type ConnectorPatch = Parameters<ToolStore['updateConnector']>[1];
+
+/**
+ * Put a reinstalled connector back the way it was before `create` overwrote
+ * it. Its tools are untouched by a failed sync, so a row that was connected is
+ * re-marked connected from its own tool list without reaching the server.
+ */
+const restoreConnector = async (snapshot: ConnectorSnapshot, get: () => ToolStore) => {
+  const { credentials, id, mcpServerUrl, mcpStdioConfig, oidcConfig, status, tools } = snapshot;
+  await get().updateConnector(id, {
+    // The edit read withholds OAuth tokens; never clear them with that `null`.
+    ...(credentials || !oidcConfig
+      ? { credentials: (credentials ?? null) as ConnectorPatch['credentials'] }
+      : {}),
+    isEnabled: snapshot.isEnabled,
+    mcpConnectionType: (snapshot.mcpConnectionType ??
+      undefined) as ConnectorPatch['mcpConnectionType'],
+    mcpServerUrl: mcpServerUrl ?? undefined,
+    mcpStdioConfig: mcpStdioConfig ?? undefined,
+    metadata: snapshot.metadata ?? {},
+    name: snapshot.name,
+  });
+  if (status !== 'connected') return;
+  await lambdaClient.connector.syncToolsFromClientById.mutate({
+    id,
+    tools: tools.map((tool) => ({
+      description: tool.description ?? undefined,
+      inputSchema: (tool.inputSchema ?? undefined) as Record<string, unknown> | undefined,
+      toolName: tool.toolName,
+      visibility: (tool.metadata as { visibility?: string[] } | null)?.visibility,
+    })),
+  });
+  await get().fetchConnectors();
+};
+
 /**
  * Store a marketplace MCP install as a `user_connectors` row with its tools,
  * then mark the install finished. Only the mark lets the runtime call a
- * marketplace row (see `isMarketplaceInstallCompleted`). A row this call
- * created is removed again when a later step fails or the install is canceled.
+ * marketplace row (see `isMarketplaceInstallCompleted`). When a later step
+ * fails or the install is canceled, a row this call created is removed and a
+ * row it reinstalled over is restored.
  */
 export const installMarketplaceConnector = async (
   params: InstallMarketplaceConnectorParams,
   get: () => ToolStore,
 ): Promise<void> => {
   const { identifier, isOAuth, manifest, signal } = params;
-  const { createConnector, deleteConnector, syncConnectorTools, updateConnector } = get();
 
   let connectorId: string;
   let isNew = false;
+  let snapshot: ConnectorSnapshot | undefined;
 
   if (isOAuth) {
     const connector = connectorSelectors.connectorByIdentifier(identifier)(get());
     if (!connector) throw new Error('The MCP connector did not finish authorization');
     connectorId = connector.id;
   } else {
+    // `create` upserts on the identifier: read the stored row first, not a stale list.
+    await get().fetchConnectors();
     const existing = connectorSelectors.connectorByIdentifier(identifier)(get());
+    if (existing && existing.sourceType !== 'marketplace') {
+      throw new Error(
+        `A connector with the identifier "${identifier}" already exists. Remove it before installing this MCP from the marketplace.`,
+      );
+    }
+    if (existing) snapshot = await get().getConnectorForEdit(existing.id);
     const wasInstalled = isMarketplaceInstallCompleted(existing?.metadata);
-    ({ id: connectorId, isNew } = await createConnector(buildCreatePayload(params, wasInstalled)));
+    ({ id: connectorId, isNew } = await get().createConnector(
+      buildCreatePayload(params, wasInstalled),
+    ));
   }
 
   try {
     if (!isOAuth) {
       signal.throwIfAborted();
       if (params.connection.type === 'cloud') await syncCloudTools(connectorId, manifest);
-      else await syncConnectorTools(connectorId);
+      else await get().syncConnectorTools(connectorId);
     }
 
     signal.throwIfAborted();
@@ -118,14 +165,22 @@ export const installMarketplaceConnector = async (
     // never write the mark alone over headers / endpoint the row carries.
     const connector = connectorSelectors.connectorById(connectorId)(get());
     if (!connector) throw new Error('The installed MCP connector could not be loaded');
-    await updateConnector(connectorId, {
+    await get().updateConnector(connectorId, {
       metadata: { ...connector.metadata, [MARKETPLACE_INSTALL_COMPLETED_KEY]: true },
     });
+    // A cancel that arrived while the mark was written still undoes the install.
+    signal.throwIfAborted();
   } catch (error) {
+    // A failed rollback is only logged: an unmarked row stays uncallable.
     if (isNew) {
-      await deleteConnector(connectorId).catch((deleteError) => {
-        // An unmarked row stays uncallable; log it so a leftover can be traced.
-        log('rollback of connector %s (%s) failed: %O', connectorId, identifier, deleteError);
+      await get()
+        .deleteConnector(connectorId)
+        .catch((rollbackError) => {
+          log('rollback of connector %s (%s) failed: %O', connectorId, identifier, rollbackError);
+        });
+    } else if (snapshot) {
+      await restoreConnector(snapshot, get).catch((rollbackError) => {
+        log('restore of connector %s (%s) failed: %O', connectorId, identifier, rollbackError);
       });
     }
     throw error;
