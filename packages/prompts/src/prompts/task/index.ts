@@ -1,5 +1,11 @@
 import type { TaskDetailData, TaskDetailWorkspaceNode, TaskStatus } from '@lobechat/types';
 
+import {
+  commentPreviewHint,
+  formatCommentActivity,
+  selectCommentsWithBody,
+} from './formatTaskComments';
+
 // ── Formatting helpers for Task tool responses ──
 
 const priorityLabel = (p?: number | null): string => {
@@ -344,6 +350,9 @@ export const formatTaskDetail = (t: TaskDetailData): string => {
   if (t.activities && t.activities.length > 0) {
     lines.push('');
     lines.push('Activities:');
+    const commentsWithBody = selectCommentsWithBody(t.activities);
+    const previewHint = commentPreviewHint(t.activities, commentsWithBody);
+    if (previewHint) lines.push(previewHint);
     for (const act of t.activities) {
       const idSuffix = act.id ? `  ${act.id}` : '';
       if (act.type === 'topic') {
@@ -363,10 +372,7 @@ export const formatTaskDetail = (t: TaskDetailData): string => {
           `  ${briefIcon(act.briefType || '')} ${act.time || ''} Brief [${act.briefType}] ${act.title}${priStr}${resolved}${idSuffix}`,
         );
       } else if (act.type === 'comment') {
-        const author = act.agentId ? '🤖 agent' : '👤 user';
-        const content = act.content || '';
-        const truncated = content.length > 80 ? content.slice(0, 80) + '...' : content;
-        lines.push(`  💭 ${act.time || ''} ${author} ${truncated}${idSuffix}`);
+        lines.push(...formatCommentActivity(t, act, commentsWithBody.has(act)));
       } else if (act.type === 'property') {
         const actor = assignmentParticipantLabel(act.author, 'system');
         const change = act.propertyChange;
@@ -1030,5 +1036,6 @@ export type { BuildTaskDetailPromptInput } from './buildTaskDetailPrompt';
 export { buildTaskDetailPrompt } from './buildTaskDetailPrompt';
 export type { BuildTaskListPromptInput } from './buildTaskListPrompt';
 export { buildTaskListPrompt } from './buildTaskListPrompt';
+export { formatTaskComment } from './formatTaskComments';
 export type { TaskManagerPromptDefaults } from './taskManagerDefaults';
 export { buildTaskManagerDefaultsPrompt } from './taskManagerDefaults';
