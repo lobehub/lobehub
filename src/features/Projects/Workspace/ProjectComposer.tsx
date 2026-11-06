@@ -22,6 +22,7 @@ import ProjectAgentSelect from './ProjectAgentSelect';
 import { projectComposerAgents } from './projectComposerAgents';
 import {
   AttachmentsNotReadyError,
+  getProjectComposerContextKey,
   type ProjectComposerMode,
   useProjectComposer,
 } from './useProjectComposer';
@@ -91,7 +92,13 @@ const ProjectComposer = memo<ProjectComposerProps>(({ detail, request }) => {
   );
   const model = useAgentStore((s) => agentByIdSelectors.getAgentModelById(agentId)(s));
   const provider = useAgentStore((s) => agentByIdSelectors.getAgentModelProviderById(agentId)(s));
-  const { handleUploadFiles } = useUploadFiles({ agentId, model, provider });
+  const contextSelectionKey = getProjectComposerContextKey(project.id);
+  const { handleUploadFiles } = useUploadFiles({
+    agentId,
+    contextKey: contextSelectionKey,
+    model,
+    provider,
+  });
 
   const submit: SendButtonHandler = async (params) => {
     try {
@@ -122,7 +129,7 @@ const ProjectComposer = memo<ProjectComposerProps>(({ detail, request }) => {
         <ChatInputProvider
           agentId={agentId}
           allowExpand={false}
-          contextSelectionKey={`project-home:${project.id}`}
+          contextSelectionKey={contextSelectionKey}
           leftActions={leftActions}
           rightActions={rightActions}
           sendButtonProps={sendButtonProps}
