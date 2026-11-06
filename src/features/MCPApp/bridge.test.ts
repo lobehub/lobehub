@@ -199,3 +199,105 @@ describe('connectMcpAppBridge', () => {
     }
   });
 });
+
+describe('feature-enabled MCP App lifecycle', () => {
+  afterEach(() => {
+    document.body.innerHTML = '';
+    vi.restoreAllMocks();
+  });
+  const lifecycle = (): NonNullable<McpAppBridgeHost['lifecycle']> => ({
+    getDisplayContext: () => ({
+      availableDisplayModes: ['inline', 'fullscreen'],
+      displayMode: 'inline',
+    }),
+    onInitialized: vi.fn(),
+    onRequestDisplayMode: vi.fn((mode) => mode),
+    onTeardown: vi.fn(),
+    onUpdateModelContext: vi.fn(),
+  });
+  const initialize = async (fromView: ReturnType<typeof setup>['fromView'], modes: string[]) => {
+    await fromView({
+      id: 90,
+      method: 'ui/initialize',
+      params: {
+        appCapabilities: { availableDisplayModes: modes },
+        appInfo: { name: 'test', version: '1' },
+        protocolVersion: '2026-01-26',
+      },
+    });
+    await fromView({ method: 'ui/notifications/initialized' });
+  };
+  it('reports actual modes and refuses modes outside the app capabilities', async () => {
+    const callbacks = lifecycle();
+    const { fromView, response, sent } = setup({ lifecycle: callbacks });
+    await initialize(fromView, ['inline']);
+    await fromView({ id: 1, method: 'ui/request-display-mode', params: { mode: 'fullscreen' } });
+    expect(response(1)?.result).toEqual({ mode: 'inline' });
+    expect(callbacks.onRequestDisplayMode).not.toHaveBeenCalled();
+    expect(sent().find((m) => m.id === 90).result.hostCapabilities.updateModelContext).toEqual({
+      text: {},
+    });
+  });
+  it('pushes the mode and replaces model context through the host callback', async () => {
+    const callbacks = lifecycle();
+    const { fromView, response, sent } = setup({ lifecycle: callbacks });
+    await initialize(fromView, ['inline', 'fullscreen']);
+    await fromView({ id: 1, method: 'ui/request-display-mode', params: { mode: 'fullscreen' } });
+    expect(response(1)?.result).toEqual({ mode: 'fullscreen' });
+    expect(
+      sent().some(
+        (m) =>
+          m.method === 'ui/notifications/host-context-changed' &&
+          m.params.displayMode === 'fullscreen',
+      ),
+    ).toBe(true);
+    await fromView({
+      id: 2,
+      method: 'ui/update-model-context',
+      params: { content: [{ type: 'text', text: 'latest' }] },
+    });
+    expect(callbacks.onUpdateModelContext).toHaveBeenLastCalledWith({
+      content: [{ type: 'text', text: 'latest' }],
+    });
+    expect(response(2)?.result).toEqual({});
+  });
+  it('does not register new request handlers or advertise context when not enabled', async () => {
+    const { fromView, response } = setup();
+    await initialize(fromView, ['inline', 'fullscreen']);
+    expect(response(90)?.result.hostCapabilities.updateModelContext).toBeUndefined();
+    await fromView({
+      id: 1,
+      method: 'ui/update-model-context',
+      params: { structuredContent: { value: 'ignored' } },
+    });
+    expect(response(1)?.error).toBeDefined();
+  });
+  it('tears the resource down before notifying its host to remove the view', async () => {
+    const callbacks = lifecycle();
+    const { connection, fromView, sent } = setup({ lifecycle: callbacks });
+    await initialize(fromView, ['inline']);
+    await fromView({ method: 'ui/notifications/request-teardown' });
+    expect(callbacks.onTeardown).not.toHaveBeenCalled();
+    const request = sent().find((m) => m.method === 'ui/resource-teardown');
+    expect(request).toBeDefined();
+    await fromView({ id: request.id, result: {} });
+    expect(callbacks.onTeardown).toHaveBeenCalledOnce();
+    connection.dispose();
+  });
+  it('uses fixed panel dimensions and inline maximum height', () => {
+    expect(
+      buildHostContext(false, {
+        availableDisplayModes: ['inline', 'fullscreen'],
+        containerDimensions: { width: 600, height: 800 },
+        displayMode: 'fullscreen',
+      }).containerDimensions,
+    ).toEqual({ width: 600, height: 800 });
+    expect(
+      buildHostContext(false, {
+        availableDisplayModes: ['inline'],
+        containerDimensions: { width: 400, maxHeight: 2000 },
+        displayMode: 'inline',
+      }).displayMode,
+    ).toBe('inline');
+  });
+});
