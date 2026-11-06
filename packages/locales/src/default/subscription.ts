@@ -735,6 +735,9 @@ export default {
   'plans.workspace.sharedCredits': '~{{count}} usage / mo',
   'plans.workspace.freeMembers': 'Up to 3 members (including you)',
   'plans.target': 'Target plan',
+  'plans.topUpDiscount.desc': 'Cheaper top-ups than on Free',
+  'plans.topUpDiscount.monthly': 'Top-up discount with yearly billing',
+  'plans.topUpDiscount.yearly': 'Top-up discount',
   'plans.unlimited': 'Unlimited',
   'plansModal.persistentSandbox.desc':
     'Files your agent writes in the cloud sandbox are discarded when the session ends. Upgrade to keep a persistent working directory that survives sessions and is shared across your topics.',
