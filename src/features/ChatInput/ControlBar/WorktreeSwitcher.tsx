@@ -1,3 +1,5 @@
+import './gitMenuTrigger.css';
+
 import { deriveWorktreePath, type DeviceGitWorktreeListItem } from '@lobechat/types';
 import {
   confirmModal,
@@ -39,7 +41,6 @@ import { useTranslation } from 'react-i18next';
 import { gitService } from '@/services/git';
 
 import { openCreateWorktreeModal } from './CreateWorktreeModal';
-import gitMenuTriggerStyles from './gitMenuTrigger.module.css';
 import { useSwitchWorktree } from './useSwitchWorktree';
 import { useWorktreeHomeDir } from './useWorktreeHomeDir';
 import { getPathName, isDisabled, normalizeDisplayPath } from './worktreeHelpers';
@@ -598,7 +599,7 @@ const WorktreeSwitcher = memo<WorktreeSwitcherProps>(
         <DropdownMenuTrigger>
           <div
             aria-disabled={disabled}
-            className={gitMenuTriggerStyles.trigger}
+            className={'lobe-git-menu-trigger-7cf96368-trigger'}
             data-disabled={disabled || undefined}
           >
             {open ? trigger : <Tooltip title={triggerTitle}>{trigger}</Tooltip>}

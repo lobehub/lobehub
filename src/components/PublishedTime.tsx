@@ -43,8 +43,9 @@ interface PublishedTimeProps {
   date: string;
   style?: CSSProperties;
   template?: string;
+  xstyle?: stylex.StyleXStyles;
 }
-const PublishedTime: FC<PublishedTimeProps> = ({ date, style, className, template }) => {
+const PublishedTime: FC<PublishedTimeProps> = ({ date, style, className, template, xstyle }) => {
   const { t } = useTranslation('common');
   const time = formatDate(date, t as (key: string) => string, template);
 
@@ -52,7 +53,7 @@ const PublishedTime: FC<PublishedTimeProps> = ({ date, style, className, templat
     <time
       aria-label={'published-date'}
       dateTime={formatTime(date)}
-      {...sx([styles.time], className, style)}
+      {...sx(styles.time, xstyle, className, style)}
     >
       {time}
     </time>

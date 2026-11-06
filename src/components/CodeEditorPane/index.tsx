@@ -1,5 +1,7 @@
 'use client';
 
+import './style.css';
+
 import {
   type CodeMirrorOptions,
   type ICodeMirrorInstance,
@@ -13,7 +15,6 @@ import { useIsDark } from '@/hooks/useIsDark';
 import { detectIndentStyle } from './indent';
 import { getEditorLanguage } from './language';
 import StatusBar, { type CursorPosition } from './StatusBar';
-import styles from './style.module.css';
 
 /**
  * The parts of the underlying CodeMirror 6 view that the compat wrapper does
@@ -214,8 +215,11 @@ const CodeEditorPane = memo<CodeEditorPaneProps>(
     }, [isDark]);
 
     return (
-      <div className={`${styles.container} ${className ?? ''}`.trim()} style={style}>
-        <div className={styles.editorArea}>
+      <div
+        className={`${'lobe-code-editor-pane-d8fecd5f-container'} ${className ?? ''}`.trim()}
+        style={style}
+      >
+        <div className={'lobe-code-editor-pane-d8fecd5f-editor-area'}>
           <textarea className={'cm-textarea'} ref={textareaRef} />
         </div>
         {showStatusBar && (

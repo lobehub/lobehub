@@ -1,10 +1,10 @@
 'use client';
 
+import './GuideModal.css';
+
 import { Button, createModal, Flexbox, type ModalInstance, useModalContext } from '@lobehub/ui';
 import { type ReactNode } from 'react';
 import { memo } from 'react';
-
-import styles from './GuideModal.module.css';
 
 interface GuideModalContentProps {
   cancelText?: ReactNode;
@@ -31,7 +31,7 @@ const GuideModalContent = memo<GuideModalContentProps>(
     };
 
     return (
-      <Flexbox className={styles.body}>
+      <Flexbox className={'lobe-guide-modal-92efaf88-body'}>
         {cover}
         <Flexbox gap={4} padding={16}>
           <h3>{title}</h3>

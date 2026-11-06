@@ -1,5 +1,7 @@
 'use client';
 
+import './QuotaAccountManagerModal.css';
+
 import { isDesktop } from '@lobechat/const';
 import {
   currentUtilization,
@@ -45,8 +47,6 @@ import {
 } from '@/store/agentQuota';
 import { useElectronStore } from '@/store/electron';
 import { electronGatewaySelectors } from '@/store/electron/selectors';
-
-import radioGroupStyles from './QuotaAccountManagerModal.module.css';
 
 const styles = stylex.create({
   footer: {
@@ -417,7 +417,7 @@ const QuotaAccountManager = memo<QuotaAccountManagerProps>(({ agentId, deviceId 
         <AccountReadingsSync accountId={a.id} key={a.id} />
       ))}
       <RadioGroup
-        className={radioGroupStyles.radioGroup}
+        className={'lobe-quota-account-manager-modal-2f1ccb6d-radio-group'}
         gap={2}
         horizontal={false}
         // Which mode is active is unknown until the bindings are on screen. The
