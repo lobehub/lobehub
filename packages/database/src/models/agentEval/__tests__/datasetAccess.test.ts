@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
+import { AgentEvalDatasetDeletionRepo } from '../../../repositories/agentEvalDatasetDeletion';
 import {
   agentEvalDatasets,
   agentEvalEnvironments,
@@ -259,7 +260,7 @@ describe('fixed Lobe Bench datasets', () => {
       { identifier: 'fixed', metadata: fixedMetadata, name: 'Fixed' },
       [{ content: { input: 'Copy' } }],
     );
-    await datasets.delete(fixed.id);
+    await new AgentEvalDatasetDeletionRepo(db, userId).deleteDataset(fixed.id);
     expect(await datasets.findById(fixed.id)).toBeUndefined();
   });
 });
