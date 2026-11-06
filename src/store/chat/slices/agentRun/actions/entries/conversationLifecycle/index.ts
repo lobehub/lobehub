@@ -142,8 +142,9 @@ import { mergePartialPersistedMessages, resolveSendResponseMessages } from '../p
 import { resolveExistingTopicForRun } from '../resolveExistingTopic';
 import { type ContextCompressionOptions, executeContextCompression } from './compression';
 import { resolveRunCwd, resolveSendProjectRun, type SourceTopicDirectory } from './runCwd';
-import { readSendEditorState, restoreSendEditorState } from './sendEditorState';
+import { readSendEditorState } from './sendEditorState';
 import { showSendErrorInContext } from './sendErrorNotice';
+import { recoverFailedSend } from './sendFailureRecovery';
 
 /**
  * Extended params for sendMessage with context
@@ -161,6 +162,9 @@ export interface SendMessageWithContextParams extends SendMessageParams {
    * at all, so a failed send is not written into the global one.
    */
   inputEditor?: ChatInputEditor | null;
+  inputEditorSnapshot?: { json: string | undefined };
+  /** A provider can reuse its editor for another conversation while a send is pending. */
+  isInputEditorCurrent?: () => boolean;
   /** Restore composer-owned context when sending fails before a message owns it. */
   onPreflightFailure?: () => void;
   /**
@@ -277,6 +281,8 @@ export class ConversationLifecycleActionImpl {
     context,
     contextSelections,
     inputEditor,
+    inputEditorSnapshot,
+    isInputEditorCurrent,
     messages: inputMessages,
     optimisticUserMessageId,
     parentId: inputParentId,
@@ -341,7 +347,7 @@ export class ConversationLifecycleActionImpl {
     // Only an omitted editor falls back to the main composer. Explicit null
     // keeps headless sends from restoring a sibling surface's editor.
     const targetInputEditor = inputEditor === undefined ? mainInputEditor : inputEditor;
-    const sendEditorSnapshot = {
+    const sendEditorSnapshot = inputEditorSnapshot ?? {
       json: preserveComposer ? undefined : JSON.stringify(readSendEditorState(targetInputEditor)),
     };
     const ownerAgentId = context.agentId;
@@ -877,38 +883,31 @@ export class ConversationLifecycleActionImpl {
       const ids = options?.preserveOptimisticUser ? [tempAssistantId] : [tempId, tempAssistantId];
       this.#get().internal_dispatchMessage({ ids, type: 'deleteMessages' }, { operationId });
     };
-    /**
-     * Restore a refused send's draft before persistence in every runtime.
-     * Keep any newer edits made while the start request was pending.
-     */
+    // Refusals must preserve newer input and the editor's conversation ownership.
     const restoreComposerAfterFailedSend = (error: unknown) => {
       if (preserveComposer || hasNotifiedMessageAccepted) return;
-
-      // Cancellation is a deliberate user action with its own restore path
-      // (`inputEditorTempState` is replayed by the cancel flow); re-filling the
-      // composer here would fight it.
-      const isAbort =
-        error instanceof Error &&
-        (error.message.includes('aborted') || error.name === 'AbortError');
-      if (isAbort) return;
-
-      this.#get().updateOperationMetadata(operationId, {
-        inputSendErrorMsg: error instanceof Error ? error.message : 'Unknown error',
-      });
-
-      const op = this.#get().operations[operationId];
-      restoreSendEditorState(
-        targetInputEditor,
-        op?.metadata.inputEditorTempState,
+      recoverFailedSend({
+        context,
+        editor: targetInputEditor,
+        error,
+        get: this.#get,
+        isEditorCurrent:
+          isInputEditorCurrent ??
+          (() => {
+            const state = this.#get();
+            const key = messageMapKey({
+              agentId: state.activeAgentId,
+              groupId: state.activeGroupId,
+              threadId: state.activeThreadId,
+              topicId: state.activeTopicId,
+            });
+            return key === contextKey || key === currentContextKey;
+          }),
         message,
-        sendEditorSnapshot,
-      );
-
-      // The editor snapshot covers only text. A send rejected after the composer
-      // was cleared (e.g. the server refusing an offline bound device) would
-      // otherwise still swallow the cleared uploads and context selections —
-      // hand them back to the caller that captured them before clearing.
-      onPreflightFailure?.();
+        onPreflightFailure,
+        operationId,
+        snapshot: sendEditorSnapshot,
+      });
     };
     const restoreUnacceptedVoiceMessageContext = () => {
       if (!optimisticUserMessageId || hasNotifiedMessageAccepted) return;

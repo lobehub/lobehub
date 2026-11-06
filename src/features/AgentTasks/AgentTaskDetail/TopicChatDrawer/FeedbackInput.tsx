@@ -5,7 +5,9 @@ import { ChevronDownIcon, MessageCirclePlus } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { NoticeAlert } from '@/components/NoticeAlert';
 import { AttachmentUploadButton } from '@/features/AttachmentInput';
+import { FailedSendDrafts } from '@/features/Conversation/ChatInput/FailedSendDrafts';
 import OpStatusTray from '@/features/Conversation/ChatInput/OpStatusTray';
 import QueueTray from '@/features/Conversation/ChatInput/QueueTray';
 import SendErrorAlert from '@/features/Conversation/ChatInput/SendErrorAlert';
@@ -19,7 +21,9 @@ import {
   insertFilesIntoEditor,
 } from '@/features/EditorCanvas/editorAttachments';
 import { useEnterToSend } from '@/hooks/useEnterToSend';
+import { useServerConfigStore } from '@/store/serverConfig';
 
+import { taskGatewayAvailability } from './taskGatewayAvailability';
 import { useComposerFocus } from './useComposerFocus';
 import { useFollowUpQueue } from './useFollowUpQueue';
 import { useTaskFollowUpSubmit } from './useTaskFollowUpSubmit';
@@ -41,6 +45,7 @@ const FeedbackInput = memo<FeedbackInputProps>(
   ({ defaultExpanded = false, disableCollapse = false, focusRequest }) => {
     const { t } = useTranslation('chat');
     const editor = useEditor();
+    const gatewayAvailability = useServerConfigStore(taskGatewayAvailability);
     const stopGenerating = useConversationStore((s) => s.stopGenerating);
     const [hasContent, setHasContent] = useState(false);
     const [hasAttachments, setHasAttachments] = useState(false);
@@ -106,6 +111,19 @@ const FeedbackInput = memo<FeedbackInputProps>(
     );
 
     if (!canUseResource) return <OpStatusTray seamless />;
+    if (gatewayAvailability !== 'available') {
+      return (
+        <Flexbox gap={8}>
+          <FailedSendDrafts />
+          <NoticeAlert
+            description={t(`taskDetail.gateway.${gatewayAvailability}.description`)}
+            title={t(`taskDetail.gateway.${gatewayAvailability}.title`)}
+            type={'secondary'}
+          />
+          <OpStatusTray seamless />
+        </Flexbox>
+      );
+    }
 
     const sendErrorAlert = sendMessageError && sendMessageError !== dismissedSendError && (
       <SendErrorAlert
@@ -120,6 +138,7 @@ const FeedbackInput = memo<FeedbackInputProps>(
     if (!composerExpanded) {
       return (
         <Flexbox gap={8}>
+          <FailedSendDrafts />
           {sendErrorAlert}
           <OpStatusTray seamless />
           <Button block icon={MessageCirclePlus} type={'fill'} onClick={expand}>
@@ -131,6 +150,7 @@ const FeedbackInput = memo<FeedbackInputProps>(
 
     return (
       <Flexbox gap={hasQueuedMessages ? 0 : 8}>
+        <FailedSendDrafts />
         {sendErrorAlert}
         {hasQueuedMessages ? (
           // Same stack as the main composer: the queue and the run status ride

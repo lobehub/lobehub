@@ -20,23 +20,26 @@ export const restoreSendEditorState = (
   editorData: unknown,
   message: string,
   initialSnapshot?: { json: string | undefined },
-) => {
+): boolean => {
   try {
+    if (!editor) return false;
     if (initialSnapshot && JSON.stringify(readSendEditorState(editor)) !== initialSnapshot.json)
-      return;
+      return false;
 
     if (editorData) {
-      if (editor?.setJSONState) {
+      if (editor.setJSONState) {
         editor.setJSONState(editorData);
       } else {
-        editor?.setDocument('json', JSON.stringify(editorData));
+        editor.setDocument('json', JSON.stringify(editorData));
       }
     } else {
-      editor?.setDocument('markdown', message);
+      editor.setDocument('markdown', message);
     }
+    return true;
   } catch (error) {
     // A composer may unmount during the request. Recovery must not interrupt
     // operation cleanup or leave optimistic messages looking persisted.
     console.error('[sendMessage] Failed to restore composer:', error);
+    return false;
   }
 };

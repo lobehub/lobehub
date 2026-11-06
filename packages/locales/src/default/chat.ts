@@ -2174,6 +2174,23 @@ export default {
   'taskDetail.find.placeholder': 'Find in this task',
   'taskDetail.find.position': '{{current}}/{{total}}',
   'taskDetail.find.prev': 'Previous match',
+  'input.failedSend.attachments': 'This message includes attachments.',
+  'input.failedSend.copy': 'Copy message',
+  'input.failedSend.hint':
+    'Kept in this session. Save or clear your current draft, then restore this message to retry.',
+  'input.failedSend.keepCurrentDraft':
+    'Save or clear your current draft before restoring the unsent message.',
+  'input.failedSend.restore': 'Restore message',
+  'input.failedSend.title': 'Message not sent',
+  'taskDetail.gateway.loading.title': 'Checking task replies',
+  'taskDetail.gateway.loading.description':
+    'Loading the execution settings. Your draft will not be sent yet.',
+  'taskDetail.gateway.error.title': 'Task reply settings could not be loaded',
+  'taskDetail.gateway.error.description':
+    'Reload the page to check whether task replies are available.',
+  'taskDetail.gateway.unavailable.title': 'Task replies are unavailable',
+  'taskDetail.gateway.unavailable.description':
+    'Ask your administrator to configure and enable Agent Gateway for this deployment, then reload the page. Existing messages remain available.',
   'taskDetail.followUpFailed': 'Couldn’t send the follow-up. Your message is kept — try again.',
   'taskDetail.gatewayRequired':
     'Task replies require Agent Gateway. Ask your administrator to configure and enable it. Your message has been kept.',

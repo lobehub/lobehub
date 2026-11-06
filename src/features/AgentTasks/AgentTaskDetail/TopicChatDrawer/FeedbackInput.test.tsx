@@ -73,6 +73,9 @@ vi.mock('@/features/EditorCanvas', () => ({
   },
 }));
 
+vi.mock('@/features/Conversation/ChatInput/FailedSendDrafts', () => ({
+  FailedSendDrafts: () => null,
+}));
 vi.mock('@/features/AttachmentInput', () => ({ AttachmentUploadButton: () => null }));
 vi.mock('@/features/Conversation/ChatInput/OpStatusTray', () => ({ default: () => null }));
 vi.mock('@/features/Conversation/ChatInput/QueueTray', () => ({ default: () => null }));
@@ -97,6 +100,7 @@ vi.mock('@/features/Conversation/store', () => ({
 }));
 vi.mock('@/hooks/useEnterToSend', () => ({ useEnterToSend: () => () => true }));
 vi.mock('@/store/serverConfig', () => ({
+  useServerConfigStore: () => 'available',
   getServerConfigStoreState: () => ({
     serverConfig: { agentGatewayUrl: 'https://gateway.example.com', enableGatewayMode: true },
   }),
@@ -157,6 +161,7 @@ describe('FeedbackInput', () => {
       editorData: UPLOADED_DOC,
       forceRuntime: 'gateway',
       message: 'why so slow',
+      onBeforeSendFailure: expect.any(Function),
     });
   });
 });

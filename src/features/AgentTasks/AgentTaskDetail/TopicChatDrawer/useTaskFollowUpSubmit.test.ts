@@ -2,6 +2,9 @@ import type { IEditor } from '@lobehub/editor';
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { useChatStore } from '@/store/chat';
+import { messageMapKey } from '@/store/chat/utils/messageMapKey';
+
 import { useTaskFollowUpSubmit } from './useTaskFollowUpSubmit';
 
 const mocks = vi.hoisted(() => ({
@@ -57,6 +60,7 @@ beforeEach(() => {
   mocks.sendMessage.mockReset().mockResolvedValue(undefined);
   mocks.config = { agentGatewayUrl: 'https://gateway.example.com', enableGatewayMode: true };
   mocks.context = { agentId: 'agent', topicId: 'topic' };
+  useChatStore.setState({ failedSendDrafts: {} });
 });
 
 describe('useTaskFollowUpSubmit', () => {
@@ -70,7 +74,7 @@ describe('useTaskFollowUpSubmit', () => {
 
     await act(async () => result.current.handleSubmit());
 
-    expect(mocks.toastError).toHaveBeenCalledWith('taskDetail.gatewayRequired', expect.anything());
+    expect(mocks.toastError).toHaveBeenCalledWith('taskDetail.gatewayRequired');
     expect(editor.cleanDocument).not.toHaveBeenCalled();
     expect(onClear).not.toHaveBeenCalled();
     expect(mocks.sendMessage).not.toHaveBeenCalled();
@@ -87,6 +91,7 @@ describe('useTaskFollowUpSubmit', () => {
       editorData: draft,
       forceRuntime: 'gateway',
       message: 'follow-up',
+      onBeforeSendFailure: expect.any(Function),
     });
     expect(mocks.toastError).not.toHaveBeenCalled();
   });
@@ -97,12 +102,22 @@ describe('useTaskFollowUpSubmit', () => {
 
     await act(async () => result.current.handleSubmit());
 
-    expect(editor.setDocument).toHaveBeenCalledWith('json', JSON.stringify(draft), undefined);
-    expect(mocks.toastError).toHaveBeenCalledWith('taskDetail.followUpFailed', expect.anything());
+    expect(editor.setDocument).toHaveBeenCalledWith('json', JSON.stringify(draft));
+    expect(mocks.toastError).toHaveBeenCalledWith('taskDetail.followUpFailed');
     expect(result.current.submitting).toBe(false);
 
     await act(async () => result.current.handleSubmit());
     expect(mocks.sendMessage).toHaveBeenCalledTimes(2);
+  });
+
+  it('recovers when a provider hook blocks the send without throwing', async () => {
+    mocks.sendMessage.mockImplementationOnce(async ({ onBeforeSendFailure }) => {
+      onBeforeSendFailure();
+    });
+    const { editor, result } = setup();
+    await act(async () => result.current.handleSubmit());
+    expect(editor.setDocument).toHaveBeenCalledWith('json', JSON.stringify(draft));
+    expect(result.current.submitting).toBe(false);
   });
 
   it('does not send a duplicate before React updates the pending state', async () => {
@@ -148,6 +163,11 @@ describe('useTaskFollowUpSubmit', () => {
       });
 
       expect(editor.setDocument).not.toHaveBeenCalled();
+      expect(
+        useChatStore.getState().failedSendDrafts[
+          messageMapKey({ agentId: 'agent', topicId: 'topic' })
+        ],
+      ).toEqual([expect.objectContaining({ editorData: draft, message: 'follow-up' })]);
       expect(result.current.submitting).toBe(false);
     },
   );

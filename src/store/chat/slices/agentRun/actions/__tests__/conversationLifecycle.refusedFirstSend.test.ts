@@ -39,6 +39,58 @@ afterEach(() => {
 });
 
 describe('sendMessage refused by the server on a new topic', () => {
+  it.each(['new draft', 'another topic'])(
+    'keeps the refused payload recoverable after %s',
+    async (change) => {
+      const context = { agentId: TEST_IDS.SESSION_ID, topicId: 'existing-topic' };
+      const contextKey = messageMapKey(context);
+      let document = typedDraft;
+      let ownsEditor = true;
+      let reject!: (error: Error) => void;
+      const editor = {
+        getDocument: () => document,
+        setDocument: vi.fn(),
+      };
+      useChatStore.setState({
+        activeAgentId: context.agentId,
+        activeTopicId: context.topicId,
+        executeGatewayAgent: vi.fn(
+          () =>
+            new Promise((_, fail) => {
+              reject = fail;
+            }),
+        ) as any,
+        isGatewayModeEnabled: () => true,
+        refreshMessages: vi.fn(),
+        refreshTopic: vi.fn(),
+      });
+      const sending = useChatStore.getState().sendMessage({
+        context,
+        editorData: typedDraft,
+        inputEditor: editor as any,
+        isInputEditorCurrent: () => ownsEditor,
+        message: 'refused follow-up',
+      });
+      await vi.waitFor(() => expect(reject).toBeTypeOf('function'));
+      if (change === 'new draft') document = { root: { children: [], type: 'new-draft' } };
+      else ownsEditor = false;
+      reject(new Error('Gateway refused startup'));
+      await sending;
+
+      const state = useChatStore.getState();
+      expect(editor.setDocument).not.toHaveBeenCalled();
+      expect(state.failedSendDrafts[contextKey]).toEqual([
+        expect.objectContaining({ editorData: typedDraft, message: 'refused follow-up' }),
+      ]);
+      expect(state.dbMessagesMap[contextKey]).toEqual([]);
+      state.cleanupCompletedOperations(-1);
+      expect(useChatStore.getState().failedSendDrafts[contextKey]).toHaveLength(1);
+      expect(
+        useChatStore.getState().failedSendDrafts[messageMapKey({ ...context, topicId: 'other' })],
+      ).toBeUndefined();
+    },
+  );
+
   // ROOT CAUSE:
   //
   // A first send mints a topic, and its operation, error notice and restored
