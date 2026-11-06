@@ -370,7 +370,7 @@ describe('AgentRuntimeService', () => {
 
     it('multi-member: holds (no group-tool backfill, no resume) until the barrier is met', async () => {
       (service as any).serverDB.query = {
-        messagePlugins: { findFirst: vi.fn() },
+        messagePlugins: { findMany: vi.fn().mockResolvedValue([]) },
         messages: {
           findMany: vi
             .fn()
@@ -402,7 +402,7 @@ describe('AgentRuntimeService', () => {
 
     it('multi-member: last completion backfills the group tool and resumes', async () => {
       (service as any).serverDB.query = {
-        messagePlugins: { findFirst: vi.fn() },
+        messagePlugins: { findMany: vi.fn().mockResolvedValue([]) },
         messages: {
           findMany: vi.fn().mockResolvedValue([
             { content: 'a', id: 'anchor-0', role: 'tool' },
@@ -461,18 +461,20 @@ describe('AgentRuntimeService', () => {
       ];
       (service as any).serverDB.query = {
         messagePlugins: {
-          // Resolve the anchor id the drizzle `where` callback asks for.
-          findFirst: vi.fn(async ({ where }) => {
-            let id: string | undefined;
-            where({ id: 'id' }, { eq: (_column: unknown, value: string) => (id = value) });
-            return { state: { status: id === 'anchor-2' ? 'error' : 'completed' } };
-          }),
+          findMany: vi.fn(async () =>
+            anchors.map((anchor) => ({
+              id: anchor.id,
+              state: { status: anchor.id === 'anchor-2' ? 'error' : 'completed' },
+            })),
+          ),
         },
         messages: { findMany: vi.fn().mockResolvedValue(anchors) },
       };
 
       await completeLastMember(3);
 
+      // One plugin read per pass (barrier count, then the result), not one per member.
+      expect((service as any).serverDB.query.messagePlugins.findMany).toHaveBeenCalledTimes(2);
       const groupWrite = updateToolMessage.mock.calls.find(([id]) => id === 'grp-tool-1');
       expect(groupWrite?.[1].content).toBe(
         [
@@ -559,7 +561,9 @@ describe('AgentRuntimeService', () => {
       });
       (service as any).serverDB.query = {
         messagePlugins: {
-          findFirst: vi.fn().mockResolvedValue({ state: { status: 'completed' } }),
+          findMany: vi.fn(async () =>
+            anchors.map((anchor) => ({ id: anchor.id, state: { status: 'completed' } })),
+          ),
         },
         messages: { findMany: vi.fn(async () => anchors) },
       };
@@ -603,7 +607,9 @@ describe('AgentRuntimeService', () => {
       const rows = [...anchors, group];
       (service as any).serverDB.query = {
         messages: { findMany: vi.fn(async () => anchors) },
-        messagePlugins: { findFirst: vi.fn().mockResolvedValue({ state: {} }) },
+        messagePlugins: {
+          findMany: vi.fn(async () => anchors.map((anchor) => ({ id: anchor.id, state: {} }))),
+        },
       };
       (service as any).messageModel.findById = vi.fn(async (id) =>
         rows.find((row) => row.id === id),

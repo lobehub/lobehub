@@ -1,7 +1,6 @@
 import { type AgentState } from '@lobechat/agent-runtime';
 import { getGroupMemberAnchorIndex, type GroupMemberAnchorMetadata } from '@lobechat/types';
 import debug from 'debug';
-import pMap from 'p-map';
 
 import {
   extractTextFromMessage,
@@ -107,25 +106,32 @@ async function loadGroupMemberAnchors(
   const children = await deps.serverDB.query.messages.findMany({
     where: (m, { and, eq }) => and(eq(m.parentId, groupToolMessageId), eq(m.role, 'tool')),
   });
-  return pMap(
-    children,
-    async (child) => {
-      const plugin = await deps.serverDB.query.messagePlugins.findFirst({
-        where: (mp, { eq }) => eq(mp.id, child.id),
-      });
-      const metadata = child.metadata as { groupMemberAnchor?: GroupMemberAnchorMetadata } | null;
-      return {
-        agentId: metadata?.groupMemberAnchor?.agentId,
-        content: child.content ?? '',
-        index: getGroupMemberAnchorIndex(
-          { metadata, role: 'tool', tool_call_id: plugin?.toolCallId },
-          'tool',
-        ),
-        status: (plugin?.state as { status?: string } | null | undefined)?.status,
-      };
-    },
-    { concurrency: 5 },
-  );
+  if (children.length === 0) return [];
+
+  // One read for every anchor's plugin row: this runs on each member's
+  // completion, so a per-anchor query grows quadratically with the fan-out.
+  const plugins = await deps.serverDB.query.messagePlugins.findMany({
+    where: (mp, { inArray }) =>
+      inArray(
+        mp.id,
+        children.map((child) => child.id),
+      ),
+  });
+  const pluginById = new Map(plugins.map((plugin) => [plugin.id, plugin]));
+
+  return children.map((child) => {
+    const plugin = pluginById.get(child.id);
+    const metadata = child.metadata as { groupMemberAnchor?: GroupMemberAnchorMetadata } | null;
+    return {
+      agentId: metadata?.groupMemberAnchor?.agentId,
+      content: child.content ?? '',
+      index: getGroupMemberAnchorIndex(
+        { metadata, role: 'tool', tool_call_id: plugin?.toolCallId },
+        'tool',
+      ),
+      status: (plugin?.state as { status?: string } | null | undefined)?.status,
+    };
+  });
 }
 
 /**
