@@ -1,6 +1,8 @@
 import { isDesktop } from '@lobechat/const';
 import {
+  getMcpAppEntrypoints,
   getMcpServerFingerprint,
+  isMcpThreadEntrypoint,
   lacksUiResourceMeta,
   partitionMcpToolsForViews,
   withListingUiMeta,
@@ -264,6 +266,7 @@ export class MCPService {
      * call while `mcpApps` is off, return a failed result without reaching the tool.
      */
     fromApp?: boolean;
+    fromEntrypoint?: boolean;
     /**
      * Runtime flag `mcp_apps` for the calling user. On: the session advertises
      * MCP Apps and the result carries the tool's `ui://` view. Off: the call
@@ -276,20 +279,37 @@ export class MCPService {
     const {
       clientParams,
       fromApp = false,
+      fromEntrypoint = false,
       mcpApps = false,
       toolName,
       argsStr,
       processContentBlocks: processContentBlocksFn,
     } = options;
 
-    const args = safeParseJSON(argsStr);
+    const args = fromEntrypoint ? {} : safeParseJSON(argsStr);
 
     const run = async (client: MCPClient) => {
       log('Calling MCP tool: %s', toolName);
 
+      if (
+        fromEntrypoint &&
+        !(mcpApps && isMcpThreadEntrypoint(await client.getToolUiMeta(toolName)))
+      ) {
+        const message = 'This tool does not declare an enabled thread entrypoint.';
+        return {
+          content: message,
+          state: { content: [{ text: message, type: 'text' }], isError: true },
+          success: false,
+        };
+      }
+
       // Resolved before the call: a stale-session error here is retried by
       // withSessionRetry, which must never re-run a tool that already executed.
-      if (fromApp && !(mcpApps && (await client.isToolCallableByApp(toolName)))) {
+      if (
+        !fromEntrypoint &&
+        fromApp &&
+        !(mcpApps && (await client.isToolCallableByApp(toolName)))
+      ) {
         const message = `The tool "${toolName}" can't be called from an interactive view.`;
         return {
           content: message,
@@ -299,7 +319,12 @@ export class MCPService {
       }
       // A tool the server keeps from the model is its views' alone, even when
       // the model names it (e.g. from an earlier turn)
-      if (!fromApp && mcpApps && (await client.isToolHiddenFromModel(toolName))) {
+      if (
+        !fromEntrypoint &&
+        !fromApp &&
+        mcpApps &&
+        (await client.isToolHiddenFromModel(toolName))
+      ) {
         const message = `The tool "${toolName}" can only be called from its interactive view.`;
         return {
           content: message,
@@ -321,7 +346,7 @@ export class MCPService {
         // not the uploaded URLs the chat stores
         const processedResult = await MCPService.processToolCallResult(
           result,
-          fromApp ? undefined : processContentBlocksFn,
+          fromApp || fromEntrypoint ? undefined : processContentBlocksFn,
         );
 
         // MCP Apps: let the chat UI know which `ui://` resource renders this
@@ -623,10 +648,11 @@ export class MCPService {
   private toMcpAppsManifestFields = (
     data: McpTool[],
     enabled = false,
-  ): Pick<ToolManifest, 'mcpAppOnlyApi' | 'mcpModelOnlyTools'> => {
+  ): Pick<ToolManifest, 'mcpAppOnlyApi' | 'mcpModelOnlyTools' | 'mcpAppEntrypoints'> => {
     const { appOnlyTools, modelOnlyToolNames } = partitionMcpToolsForViews(data, enabled);
 
     return {
+      ...(enabled && { mcpAppEntrypoints: getMcpAppEntrypoints(data, true) }),
       ...(appOnlyTools.length > 0 && { mcpAppOnlyApi: this.toLobeApi(appOnlyTools) }),
       ...(modelOnlyToolNames.length > 0 && { mcpModelOnlyTools: modelOnlyToolNames }),
     };

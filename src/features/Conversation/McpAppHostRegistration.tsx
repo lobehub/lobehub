@@ -24,12 +24,16 @@ export const McpAppHostRegistration = () => {
       },
     });
     // Observe actual in-flight calls, never infer live results from mount time or history hydration.
+    const observed = new Set<string>();
     const observe = () => {
       const state = api.getState();
       for (const message of state.dbMessages) {
         message.tools?.forEach((tool, index) => {
           const operation = state.operationState.getToolOperationState(message.id, index, tool.id);
-          if (operation.isInvoking || operation.isStreaming) mcpAppActions.markLive(tool.id);
+          if (operation.isInvoking || operation.isStreaming) {
+            observed.add(tool.id);
+            mcpAppActions.markLive(tool.id);
+          }
         });
       }
     };
@@ -38,6 +42,7 @@ export const McpAppHostRegistration = () => {
     return () => {
       unsubscribe();
       unregister();
+      mcpAppActions.forgetLive([...observed]);
     };
   }, [api, enabled, scope, writable]);
   return null;

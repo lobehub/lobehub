@@ -170,3 +170,13 @@ describe('getMcpServerFingerprint outside a secure context', () => {
     }
   });
 });
+
+describe('persisted compatibility visibility gate', () => {
+  it('does not retain legacy visibility behavior after the flag is disabled', () => {
+    const row = {
+      metadata: buildMcpToolMetadata(undefined, { visibility: ['app'], entrypoints: [] }),
+    };
+    expect(isSyncedMcpToolVisibleTo(row, 'model', true)).toBe(false);
+    expect(isSyncedMcpToolVisibleTo(row, 'model', false)).toBe(true);
+  });
+});

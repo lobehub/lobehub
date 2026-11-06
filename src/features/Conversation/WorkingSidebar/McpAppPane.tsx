@@ -10,11 +10,6 @@ import { useElectronStore } from '@/store/electron';
 import { electronGatewaySelectors } from '@/store/electron/selectors/gateway';
 import { mcpAppSelectors, useMcpAppStore } from '@/store/mcpApp/store';
 
-export const McpAppTabLabel = ({ id }: { id: string }) => {
-  const view = useMcpAppStore(mcpAppSelectors.view(id));
-  return <>{view?.title ?? 'App'}</>;
-};
-
 export const McpAppPane = ({ id, scope }: { id: string; scope: string }) => {
   const { t } = useTranslation('plugin');
   const view = useMcpAppStore(mcpAppSelectors.view(id));
@@ -31,6 +26,7 @@ export const McpAppPane = ({ id, scope }: { id: string; scope: string }) => {
       apiName={message.plugin.apiName}
       arguments={message.plugin.arguments}
       fallback={<Text>{message.content}</Text>}
+      icon={view.icon}
       identifier={message.plugin.identifier}
       location={'fullscreen'}
       messageId={message.id}
@@ -39,6 +35,7 @@ export const McpAppPane = ({ id, scope }: { id: string; scope: string }) => {
       result={{ content: payload?.content ?? message.content, state: unwrapMcpToolState(state) }}
       scope={scope}
       server={mcpApp.server}
+      title={view.title}
       toolCallId={id}
       host={{
         agentId: message.agentId ?? host?.agentId,

@@ -8,6 +8,7 @@ import { createDevtools } from '../middleware/createDevtools';
 export interface McpAppViewState {
   availableModes?: McpAppDisplayMode[];
   dismissed?: boolean;
+  icon?: string;
   identifier: string;
   messageId?: string;
   mode: 'inline' | 'fullscreen';

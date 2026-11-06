@@ -56,6 +56,7 @@ import {
   pruneMissingAutoConnectorTools,
   syncConnectorToolsById,
 } from '@/server/services/connector/sync';
+import { isMcpAppsEnabled } from '@/server/services/mcp/featureGate';
 import {
   resolveConnectorAuthorizerId,
   resolveUserDisplayMap,
@@ -867,6 +868,7 @@ export const connectorRouter = router({
         args: z.string().optional(),
         /** An MCP App view's `tools/call`: only tools visible to the app run. */
         fromApp: z.boolean().optional(),
+        fromEntrypoint: z.boolean().optional(),
         identifier: z.string().min(1),
         /** With `fromApp`: the server the view came from (`getMcpServerFingerprint`). */
         server: z.string().optional(),
@@ -1033,6 +1035,7 @@ export const connectorRouter = router({
             toolName: z.string(),
             /** The MCP tool's `_meta.ui.visibility`, when it declares one. */
             visibility: z.array(z.string()).optional(),
+            mcpAppMeta: z.record(z.string(), z.unknown()).optional(),
           }),
         ),
         /** An install: `auto` tools the client no longer lists are dropped. */
@@ -1045,6 +1048,7 @@ export const connectorRouter = router({
       // Same gate as `syncTools` — rewrites the connector's tool rows.
       await assertConnectorMaintainable(ctx, target);
 
+      const mcpApps = await isMcpAppsEnabled(ctx.userId);
       const syncInputs = input.tools.map((t) => ({
         crudType: inferCrudType(t.toolName),
         // Applies to new tools only: a synced tool keeps the permission it has
@@ -1054,7 +1058,7 @@ export const connectorRouter = router({
         // Refreshed on every sync, unlike the permission: an `always` the
         // manifest asks for stays mandatory whatever the permission is
         metadata: withMandatoryApprovalMark(
-          buildMcpToolMetadata(t.visibility),
+          mcpApps && t.mcpAppMeta ? t.mcpAppMeta : buildMcpToolMetadata(t.visibility),
           t.humanIntervention,
         ),
         toolName: t.toolName,

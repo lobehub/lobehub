@@ -52,6 +52,33 @@ describe('McpCtr MCP Apps', () => {
     ctr = new McpCtr(mockApp);
   });
 
+  it.each([false, true])(
+    'validates thread entrypoints on the desktop (flag=%s)',
+    async (mcpApps) => {
+      const client = makeClient({
+        getToolUiMeta: vi
+          .fn()
+          .mockResolvedValue({ resourceUri: 'ui://app', entrypoints: [{ type: 'thread' }] }),
+        isToolCallableByApp: vi.fn().mockResolvedValue(false),
+        isToolHiddenFromModel: vi.fn().mockResolvedValue(true),
+      });
+      mcpClientMocks.mockReturnValue(client);
+      const result = await ctr.runStdioMcpTool({
+        args: '{"ignored":1}',
+        params: stdioParams,
+        toolName: 'open',
+        mcpApps,
+        fromEntrypoint: true,
+      } as any);
+      expect(result.success).toBe(mcpApps);
+      if (mcpApps) expect(client.callTool).toHaveBeenCalledWith('open', {});
+      else {
+        expect(client.callTool).not.toHaveBeenCalled();
+        expect(client.getToolUiMeta).not.toHaveBeenCalled();
+      }
+    },
+  );
+
   it('marks results of tools that declare a ui:// view while MCP Apps are on', async () => {
     mcpClientMocks.mockReturnValue(
       makeClient({

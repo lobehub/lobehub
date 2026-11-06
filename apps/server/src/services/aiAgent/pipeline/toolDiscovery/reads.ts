@@ -16,6 +16,7 @@ import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { refreshExpiredConnectorTokens } from '@/server/services/connector/tokens';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDevices';
+import { isMcpAppsEnabled } from '@/server/services/mcp/featureGate';
 
 import type { ExecRunContext } from '../../types';
 import { markDegradedStage, traceDiscoveryStage } from '../discoveryTracing';
@@ -255,7 +256,11 @@ const readDiscoverableConnectors = async (
     );
     return {
       connectorsMcp: refreshed,
-      manifests: buildConnectorManifests(refreshed, tools) as LobeToolManifest[],
+      manifests: buildConnectorManifests(
+        refreshed,
+        tools,
+        await isMcpAppsEnabled(deps.userId),
+      ) as LobeToolManifest[],
       tools,
     };
   } catch (error) {

@@ -1,6 +1,5 @@
 import { Flexbox } from '@lobehub/ui';
 
-import { McpAppContextChips } from '../../McpAppContextChips';
 import ContextList from './ContextList';
 
 /**
@@ -10,7 +9,6 @@ import ContextList from './ContextList';
 const ContextContainer = () => {
   return (
     <Flexbox paddingInline={8}>
-      <McpAppContextChips />
       <ContextList />
     </Flexbox>
   );

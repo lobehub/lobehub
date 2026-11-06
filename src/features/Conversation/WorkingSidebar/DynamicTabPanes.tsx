@@ -5,6 +5,7 @@ import { Activity, lazy, memo, useEffect, useRef } from 'react';
 
 import { canvasIdOfTab } from '@/store/global/initialState';
 import { mcpAppActions } from '@/store/mcpApp/action';
+import { useMcpAppStore } from '@/store/mcpApp/store';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 
 import type { ComposerTarget } from '../types';
@@ -17,8 +18,13 @@ import {
   isCanvasTab,
   type SidebarTabDescriptor,
 } from './dynamicTabs';
-import { McpAppPane, McpAppTabLabel } from './McpAppPane';
+import { McpAppTabIcon, McpAppTabLabel } from './McpAppTabLabel';
+import { McpEntryTabIcon, McpEntryTabLabel } from './McpEntryTabLabel';
 
+const McpAppPane = lazy(() => import('./McpAppPane').then((m) => ({ default: m.McpAppPane })));
+const McpEntryPane = lazy(() =>
+  import('./McpEntryPane').then((m) => ({ default: m.McpEntryPane })),
+);
 const BrowserPane = lazy(() => import('./Browser'));
 
 // Inline, because StyleX layout rules can lose to the `.lobe-flex` class of
@@ -39,9 +45,22 @@ export const dynamicTabDescriptor = (
   tab: string,
   browserMetadata: BrowserTabMetadata | undefined,
   browserFallbackLabel: string,
+  agentId?: string,
 ): SidebarTabDescriptor | undefined => {
+  if (tab.startsWith('mcp-entry:'))
+    return {
+      icon: PanelsTopLeftIcon,
+      key: tab,
+      iconNode: <McpEntryTabIcon agentId={agentId} tab={tab} />,
+      label: <McpEntryTabLabel agentId={agentId} tab={tab} />,
+    };
   if (tab.startsWith('mcp-app:'))
-    return { icon: PanelsTopLeftIcon, key: tab, label: <McpAppTabLabel id={tab.slice(8)} /> };
+    return {
+      icon: PanelsTopLeftIcon,
+      iconNode: <McpAppTabIcon id={tab.slice(8)} />,
+      key: tab,
+      label: <McpAppTabLabel id={tab.slice(8)} />,
+    };
   const canvasId = canvasIdOfTab(tab);
   if (canvasId) {
     return { icon: PanelsTopLeftIcon, key: tab, label: <CanvasTabLabel canvasId={canvasId} /> };
@@ -65,6 +84,7 @@ interface DynamicTabPanesProps {
   browserSessionId: string;
   composerTarget: ComposerTarget;
   onBrowserMetadataChange: (tab: string, metadata: BrowserTabMetadata) => void;
+  onCloseTab: (tab: string) => void;
   openedTabs: string[];
   visible: boolean;
 }
@@ -78,9 +98,19 @@ const DynamicTabPanes = memo<DynamicTabPanesProps>(
     composerTarget,
     onBrowserMetadataChange,
     openedTabs,
+    onCloseTab,
     visible,
   }) => {
     const enabled = useServerConfigStore(serverConfigSelectors.enableMcpApps);
+    const views = useMcpAppStore((s) => s.views);
+    useEffect(() => {
+      if (!enabled) return;
+      for (const tab of openedTabs) {
+        const view = views[tab.slice(8)];
+        if (tab.startsWith('mcp-app:') && view && (view.dismissed || view.mode === 'inline'))
+          onCloseTab(tab);
+      }
+    }, [views, openedTabs, onCloseTab, enabled]);
     const previous = useRef<string[]>([]);
     useEffect(() => {
       for (const tab of previous.current)
@@ -96,6 +126,24 @@ const DynamicTabPanes = memo<DynamicTabPanesProps>(
             .map((tab) => (
               <Flexbox flex={1} key={tab} style={activeTab === tab ? PANE : HIDDEN_PANE}>
                 <McpAppPane id={tab.slice(8)} scope={composerTarget.contextKey} />
+              </Flexbox>
+            ))}
+        {enabled &&
+          composerTarget.writable &&
+          openedTabs
+            .filter((tab) => tab.startsWith('mcp-entry:'))
+            .map((tab) => (
+              <Flexbox
+                flex={1}
+                key={`${composerTarget.contextKey}:${tab}`}
+                style={activeTab === tab ? PANE : HIDDEN_PANE}
+              >
+                <McpEntryPane
+                  agentId={agentId}
+                  scope={composerTarget.contextKey}
+                  tab={tab}
+                  onClose={onCloseTab}
+                />
               </Flexbox>
             ))}
         {browserAvailable &&

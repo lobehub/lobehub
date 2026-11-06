@@ -77,6 +77,18 @@ export class McpAppActionImpl {
         'mcpApp/markLive',
       );
   };
+  forgetLive = (ids: string[]) => {
+    const forgotten = new Set(ids);
+    useMcpAppStore.setState(
+      (s) => ({
+        liveCalls: Object.fromEntries(
+          Object.entries(s.liveCalls).filter(([id]) => !forgotten.has(id)),
+        ),
+      }),
+      false,
+      'mcpApp/forgetLive',
+    );
+  };
   consumeLive = (id: string) => {
     const live = enabled() && useMcpAppStore.getState().liveCalls[id];
     if (live)
@@ -105,11 +117,16 @@ export class McpAppActionImpl {
     if (mode === 'fullscreen') useGlobalStore.getState().openWorkingSidebar(mcpAppTabKey(id));
     return mode;
   };
-  close = (id: string, dismissed = false) => {
+  close = (id: string, dismissed?: boolean) => {
     const view = useMcpAppStore.getState().views[id];
     if (view)
       useMcpAppStore.setState(
-        (s) => ({ views: { ...s.views, [id]: { ...view, dismissed, mode: 'inline' } } }),
+        (s) => ({
+          views: {
+            ...s.views,
+            [id]: { ...view, dismissed: dismissed ?? view.dismissed, mode: 'inline' },
+          },
+        }),
         false,
         'mcpApp/close',
       );
