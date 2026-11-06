@@ -62,12 +62,11 @@ export const styles = stylex.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingBlock: '10px',
-    borderBlockStartWidth: { default: null, [stylex.when.siblingBefore(':is(*)')]: '1px' },
-    borderBlockStartStyle: { default: null, [stylex.when.siblingBefore(':is(*)')]: 'solid' },
-    borderBlockStartColor: {
-      default: null,
-      [stylex.when.siblingBefore(':is(*)')]: cssVar.colorBorderSecondary,
-    },
+  },
+  infoRowDivided: {
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
   },
   infoValue: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
   successBubble: { color: '#fff', backgroundColor: '#22c55e', backgroundImage: 'none' },
@@ -228,8 +227,11 @@ export const ConfirmCard = memo<ConfirmCardProps>(
 
         <Block padding={4} style={{ width: '100%' }} variant={'outlined'}>
           <Flexbox paddingInline={16}>
-            {infoRows.map((row) => (
-              <div {...stylex.props(styles.infoRow)} key={row.label}>
+            {infoRows.map((row, index) => (
+              <div
+                {...stylex.props(styles.infoRow, index > 0 && styles.infoRowDivided)}
+                key={row.label}
+              >
                 <Text type="secondary">{row.label}</Text>
                 <Text strong className={stylex.props(styles.infoValue).className} title={row.value}>
                   {row.value}
