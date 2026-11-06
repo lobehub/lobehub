@@ -4,11 +4,11 @@ import SettingHeader from '@/features/Settings/features/SettingHeader';
 
 import ProxyForm from './features/ProxyForm';
 
-const Page = () => {
+const Page = ({ showSettingHeader = true }: { showSettingHeader?: boolean }) => {
   const { t } = useTranslation('setting');
   return (
     <>
-      <SettingHeader title={t('tab.proxy')} />
+      {showSettingHeader && <SettingHeader title={t('tab.proxy')} />}
       <ProxyForm />
     </>
   );

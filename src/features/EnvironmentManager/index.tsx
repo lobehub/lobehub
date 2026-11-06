@@ -16,11 +16,11 @@ import { memo, type ReactNode, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
-import ListSkeleton from '@/components/ListSkeleton';
 
 import { openCreateEnvironmentModal } from './CreateEnvironmentModal';
 import EnvironmentDetailPanel from './EnvironmentDetailPanel';
 import EnvironmentItem from './EnvironmentItem';
+import { EnvironmentListSkeleton } from './Skeleton';
 import { type CreatedEnvironment, useEnvironments } from './useEnvironmentData';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -177,6 +177,7 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(({ tabs, visibility }) 
       errorVariant={'block'}
       isEmpty={environments.length === 0}
       isLoading={!ready}
+      loading={<EnvironmentListSkeleton />}
       empty={
         // Inside the same frame the rows land in, sized to the skeleton's
         // rows: loading, empty and loaded are one surface whose contents
@@ -201,13 +202,6 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(({ tabs, visibility }) 
               )}
             />
           </Center>
-        </Flexbox>
-      }
-      loading={
-        <Flexbox className={styles.listCol}>
-          <Flexbox padding={4}>
-            <ListSkeleton />
-          </Flexbox>
         </Flexbox>
       }
       onRetry={refresh}

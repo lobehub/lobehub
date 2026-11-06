@@ -6,7 +6,7 @@ import isEqual from 'fast-deep-equal';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { SettingsSectionSkeleton } from '@/components/Skeleton';
+import { DesktopHotkeysSkeleton } from '@/components/Skeleton/Settings/tabs/Hotkey';
 import { DESKTOP_HOTKEYS_REGISTRATION } from '@/const/desktopGlobalShortcuts';
 import { FORM_STYLE } from '@/const/layoutTokens';
 import { SettingsSearchAnchor } from '@/features/SettingsSearch/anchor';
@@ -43,20 +43,7 @@ const HotkeySetting = memo(() => {
 
   const [loading, setLoading] = useState(false);
 
-  if (!isHotkeysInit)
-    return (
-      <SettingsSectionSkeleton
-        groups={[
-          {
-            // Hotkey recorder inputs settle at 335x36.
-            control: { height: 36, width: 335 },
-            rows: DESKTOP_HOTKEYS_REGISTRATION.length,
-            titleWidth: 96,
-            withDesc: false,
-          },
-        ]}
-      />
-    );
+  if (!isHotkeysInit) return <DesktopHotkeysSkeleton />;
 
   const updateHotkey = async (id: DesktopHotkeyItem['id'], value: string) => {
     setLoading(true);
