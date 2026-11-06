@@ -198,6 +198,7 @@ export const connectAppView = ({
       }
     },
     hostContext: buildHostContext(getContext().isDark, getContext().display),
+    getHostContext: () => buildHostContext(getContext().isDark, getContext().display),
     onSizeChange: (nextHeight) => onHeight(Math.min(nextHeight, MAX_APP_VIEW_HEIGHT)),
     // A view can ask without a gesture and carry data in the URL, so the
     // user sees the link before it opens

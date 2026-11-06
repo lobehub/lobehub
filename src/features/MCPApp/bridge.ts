@@ -38,6 +38,8 @@ export interface McpAppBridgeHost {
     args: Record<string, unknown>,
     signal: AbortSignal,
   ) => Promise<CallToolResult>;
+  /** Latest complete context, including theme changes after connection. */
+  getHostContext?: () => McpUiHostContext;
   hostContext: McpUiHostContext;
   /** Only supplied by a feature-enabled host. */
   lifecycle?: {
@@ -92,7 +94,11 @@ export const connectMcpAppBridge = (target: Window, host: McpAppBridgeHost) => {
       if (!display.availableDisplayModes.includes(mode) || (appModes && !appModes.includes(mode)))
         return { mode: current };
       const actual = host.lifecycle!.onRequestDisplayMode(mode, appModes);
-      bridge.setHostContext({ ...display, displayMode: actual });
+      bridge.setHostContext({
+        ...(host.getHostContext?.() ?? host.hostContext),
+        ...display,
+        displayMode: actual,
+      });
       return { mode: actual };
     };
     bridge.onupdatemodelcontext = async (params) => {
