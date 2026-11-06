@@ -273,7 +273,7 @@ export const ImageCanvas = memo<ImageCanvasProps>(
         : badge;
 
     return (
-      <div {...sx(styles.canvas, undefined, { aspectRatio: ratio })}>
+      <div {...sx(styles.canvas, { aspectRatio: ratio })}>
         {develops && (
           <div
             aria-hidden
@@ -283,7 +283,7 @@ export const ImageCanvas = memo<ImageCanvasProps>(
               !!children && styles.auraStill,
             )}
           >
-            <div {...sx(styles.layer, undefined, auraLayerStyle)}>
+            <div {...sx(styles.layer, auraLayerStyle)}>
               <div {...stylex.props(styles.auraFocus, !!children && styles.animationStill)}>
                 <span
                   {...stylex.props(styles.blob, styles.blobA, !!children && styles.animationStill)}
