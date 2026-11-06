@@ -1,3 +1,5 @@
+import { sameStyleValue } from './colors';
+
 export interface SnapshotNode {
   box: number[];
   key: string;
@@ -403,7 +405,7 @@ export const compareSnapshots = (
     const oldStyle = before.styles[oldNode.style];
     const newStyle = after.styles[newNode.style];
     for (const property of new Set([...Object.keys(oldStyle), ...Object.keys(newStyle)])) {
-      if (oldStyle[property] !== newStyle[property])
+      if (!sameStyleValue(oldStyle[property], newStyle[property]))
         differences.push({ after: newStyle[property], before: oldStyle[property], key, property });
     }
   }
