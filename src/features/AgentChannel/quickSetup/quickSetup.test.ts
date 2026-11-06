@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
+import defaultAgentLocale from '@/locales/default/agent';
+
 import { connectStepIndex, getInlineFieldKeys, getSetupGuide } from './guides';
 import {
   buildDiscordInviteUrl,
   buildSlackCreateAppUrl,
   buildSlackManifest,
+  DINGTALK_CONSOLE_URL,
   DISCORD_BOT_PERMISSIONS,
   MAX_TRANSIENT_POLL_FAILURES,
   REGISTRATION_NAME_MAX_LENGTH,
@@ -151,6 +154,48 @@ describe('getSetupGuide', () => {
     expect(guide.steps[1].link?.href).toBe('https://api.slack.com/apps/A1/oauth');
   });
 
+  it('walks DingTalk from an internal app to a published Stream-mode robot', () => {
+    const guide = getSetupGuide('dingtalk', { applicationId: 'dingabc', appName: 'Moss' })!;
+
+    expect(guide.guide).toBe('dingtalk');
+    expect(guide.scanToCreate).toBeUndefined();
+    expect(guide.steps.map((step) => step.key)).toEqual([
+      'create',
+      'robot',
+      'permissions',
+      'publish',
+    ]);
+    // The console cannot be deep-linked by Client ID, so the link never depends on it.
+    expect(guide.steps[0].link).toEqual({ href: DINGTALK_CONSOLE_URL, label: 'openConsole' });
+    expect(DINGTALK_CONSOLE_URL).toMatch(/^https:\/\/open-dev\.dingtalk\.com\//);
+  });
+
+  it('tells DingTalk webhook bots to configure HTTP callback, not Stream mode', () => {
+    const stepKeys = (connectionMode: string) =>
+      getSetupGuide('dingtalk', { appName: 'Moss', connectionMode })!.steps.map((step) => step.key);
+
+    expect(stepKeys('webhook')).toContain('robotWebhook');
+    expect(stepKeys('webhook')).not.toContain('robot');
+    expect(stepKeys('websocket')).toContain('robot');
+    expect(defaultAgentLocale['channel.quickSetup.dingtalk.robotWebhook.title']).toMatch(
+      /HTTP callback/,
+    );
+  });
+
+  it('asks for the DingTalk Client ID and Secret inline and leaves RobotCode optional', () => {
+    expect([...getInlineFieldKeys('dingtalk')]).toEqual(['applicationId', 'clientSecret']);
+    expect(getInlineFieldKeys('dingtalk').has('robotCode')).toBe(false);
+  });
+
+  it('has English copy for every DingTalk step', () => {
+    for (const step of getSetupGuide('dingtalk', { appName: 'Moss' })!.steps) {
+      for (const part of ['title', 'desc'] as const) {
+        const key = `channel.quickSetup.dingtalk.${step.key}.${part}`;
+        expect(defaultAgentLocale[key as keyof typeof defaultAgentLocale], key).toBeTruthy();
+      }
+    }
+  });
+
   it('has no guide for platforms with their own flow', () => {
     expect(getSetupGuide('wechat', { appName: 'Moss' })).toBeUndefined();
   });
@@ -164,7 +209,16 @@ describe('getSetupGuide', () => {
   });
 
   it('never asks for one credential in two steps', () => {
-    for (const platform of ['discord', 'slack', 'telegram', 'qq', 'line', 'feishu', 'lark']) {
+    for (const platform of [
+      'discord',
+      'slack',
+      'telegram',
+      'qq',
+      'line',
+      'feishu',
+      'lark',
+      'dingtalk',
+    ]) {
       const guide = getSetupGuide(platform, { appName: 'Moss' })!;
       const keys = guide.steps.flatMap((step) => step.fields ?? []);
 
@@ -187,6 +241,8 @@ describe('getSetupGuide', () => {
     expect(at('discord')).toEqual(['create', 'credentials', 'bot', 'invite', 'connect']);
     expect(at('telegram')).toEqual(['botfather', 'token', 'connect', 'privacy']);
     expect(at('line')).toEqual(['account', 'messagingApi', 'credentials', 'connect', 'webhook']);
+    // Stream mode needs the saved bot's connection, so the robot setup follows the save.
+    expect(at('dingtalk')).toEqual(['create', 'connect', 'robot', 'permissions', 'publish']);
     expect(connectStepIndex([{ key: 'only' }])).toBe(1);
     expect(
       connectStepIndex([

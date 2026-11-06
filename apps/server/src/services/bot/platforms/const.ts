@@ -40,6 +40,7 @@ export const shouldPostProcessingMessage = (settings?: Record<string, unknown>):
  * Platforms not listed render no tooltip — only the generic description.
  */
 const USER_ID_TOOLTIP_BY_PLATFORM: Record<string, string> = {
+  dingtalk: 'channel.userIdHint.dingtalk',
   discord: 'channel.userIdHint.discord',
   // Feishu and Lark share `sharedSchema`, which always passes 'feishu' — the
   // tooltip copy mentions both products so it reads naturally for either.
@@ -96,13 +97,14 @@ export function makeUserIdField(platform?: string): FieldSchema {
  * itself emits.
  *
  * Picked per-platform since each platform has a primary audience: Chinese
- * platforms (Feishu / QQ / WeChat) ship Chinese strings, the rest ship
+ * platforms (DingTalk / Feishu / QQ / WeChat) ship Chinese strings, the rest ship
  * English. Languages without an entry in the system-string dictionary
  * gracefully fall back to `DEFAULT_LANG` ('en-US') at render time.
  */
 export type BotReplyLocale = Locales;
 
 const PLATFORM_REPLY_LOCALES: Record<string, BotReplyLocale> = {
+  dingtalk: 'zh-CN',
   discord: 'en-US',
   feishu: 'zh-CN',
   imessage: 'en-US',

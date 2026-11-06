@@ -13,6 +13,7 @@ import { AgentBotProviderModel } from '@/database/models/agentBotProvider';
 import type { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 
 import { platformRegistry, resolveConnectionMode } from '../../bot/platforms';
+import { buildMessageGatewayRefusalStatus } from '../gatewayMapping';
 import {
   type getMessageGatewayClient,
   type MessageGatewayHost,
@@ -111,6 +112,14 @@ export async function buildDesiredConnections(
         // The webhook URL is set once when the user saves the bot config
         // (via startClientViaGateway). No action needed during periodic sync.
         if (connectionMode === 'webhook') continue;
+
+        // No handler on the gateway: a connect can only fail, every round.
+        if (definition.messageGatewayUnsupported) {
+          await updateBotRuntimeStatus(
+            buildMessageGatewayRefusalStatus(definition, provider.applicationId),
+          );
+          continue;
+        }
 
         let allowed = true;
         try {

@@ -7,7 +7,7 @@ import { gatewayEnv } from '@/envs/gateway';
 import type { BotRuntimeStatus } from '@/types/botRuntimeStatus';
 
 import { hasPassiveListeningRule } from '../agentSignal/scenarios/botWake/config';
-import { extractWatchKeywordEntries } from '../bot/platforms';
+import { extractWatchKeywordEntries, type PlatformDefinition } from '../bot/platforms';
 import type {
   MessageGatewayCapabilities,
   MessageGatewayConnectionConfig,
@@ -37,6 +37,22 @@ export function mapGatewayStatusToRuntimeStatus(
     }
   }
 }
+
+/**
+ * Runtime status for a provider asking for a persistent connection on a platform
+ * the message gateway has no handler for. Shared by the explicit connect and the
+ * reconcile, so a bot that never went through connect still explains itself.
+ */
+export const buildMessageGatewayRefusalStatus = (
+  definition: Pick<PlatformDefinition, 'id' | 'name'>,
+  applicationId: string,
+) => ({
+  applicationId,
+  errorCode: 'webhook_mode_required',
+  errorMessage: `${definition.name} cannot use a persistent connection on this deployment yet. Switch the connection mode to Webhook and set the platform's callback address to the Webhook URL shown here.`,
+  platform: definition.id,
+  status: BOT_RUNTIME_STATUSES.failed,
+});
 
 /**
  * Derive edge-filtering capabilities for a bot-channel connection from its

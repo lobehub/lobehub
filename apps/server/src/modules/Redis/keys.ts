@@ -40,6 +40,12 @@ export const RedisKeyNamespace = {
    */
   BOT_WAKE: 'bot-wake',
   /**
+   * Short-lived reply routes an IM platform hands out with an inbound message
+   * (DingTalk's `sessionWebhook`), kept so the process that posts the reply
+   * can use them even when another one received the message.
+   */
+  BOT_REPLY: 'bot-reply',
+  /**
    * AI generation related keys (agent welcome, placeholders, etc.)
    */
   AI_GENERATION: 'aiGeneration',
@@ -101,6 +107,15 @@ export const RedisKeys = {
      */
     nightlyTopics: (userId: string, localDate: string): string =>
       `nightly_topics:v1:${userId}:${localDate}`,
+  },
+  /** Bot reply-route scope — see {@link RedisKeyNamespace.BOT_REPLY}. */
+  botReply: {
+    /**
+     * Latest DingTalk `sessionWebhook` for one conversation of one bot.
+     * Full key: bot-reply:dingtalk_session_webhook:v1:{applicationId}:{threadId}
+     */
+    dingtalkSessionWebhook: (applicationId: string, threadId: string): string =>
+      `dingtalk_session_webhook:v1:${applicationId}:${threadId}`,
   },
   /**
    * Bot-wake scope — see {@link RedisKeyNamespace.BOT_WAKE}. `{key}` is a channel or thread key
@@ -278,6 +293,7 @@ export const RedisKeyScopeNamespace = {
   agentSignal: RedisKeyNamespace.AGENT_SIGNAL,
   agentSteer: RedisKeyNamespace.AGENT_STEER,
   aiGeneration: RedisKeyNamespace.AI_GENERATION,
+  botReply: RedisKeyNamespace.BOT_REPLY,
   botWake: RedisKeyNamespace.BOT_WAKE,
   integrations: RedisKeyNamespace.INTEGRATIONS,
   lobechat: RedisKeyNamespace.LOBEHUB,

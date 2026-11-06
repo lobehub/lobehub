@@ -1,6 +1,7 @@
 import { agentIdentity } from './agentIdentity';
 import { agentRunSlots } from './agentRunSlots';
 import { agentSignal } from './agentSignal';
+import { botReply } from './botReply';
 import { botWake } from './botWake';
 import { deviceSystemInfo } from './deviceSystemInfo';
 import { linear } from './linear';
@@ -15,6 +16,7 @@ export const redisService = {
   agentIdentity,
   agentRunSlots,
   agentSignal,
+  botReply,
   botWake,
   deviceSystemInfo,
   linear,

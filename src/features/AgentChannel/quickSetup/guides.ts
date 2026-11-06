@@ -3,6 +3,7 @@ import {
   buildDiscordInviteUrl,
   buildSlackAppPageUrl,
   buildSlackCreateAppUrl,
+  DINGTALK_CONSOLE_URL,
   DISCORD_DEVELOPER_PORTAL_URL,
   FEISHU_CONSOLE_URL,
   LINE_ACCOUNT_ENTRY_URL,
@@ -56,6 +57,8 @@ export interface SetupGuideContext {
   /** Application ID already in the form, unlocking deep links into that app. */
   applicationId?: string;
   appName: string;
+  /** Connection mode selected in the form, for steps that differ between modes. */
+  connectionMode?: string;
 }
 
 /**
@@ -64,7 +67,7 @@ export interface SetupGuideContext {
  */
 export const getSetupGuide = (
   platformId: string,
-  { applicationId, appDescription, appName }: SetupGuideContext,
+  { applicationId, appDescription, appName, connectionMode }: SetupGuideContext,
 ): SetupGuide | undefined => {
   const appId = applicationId?.trim() || undefined;
 
@@ -151,6 +154,24 @@ export const getSetupGuide = (
         steps: [
           { key: 'create', link: { href: QQ_BOT_CONSOLE_URL, label: 'openConsole' } },
           { key: 'credentials', fields: ['applicationId', 'appSecret'] },
+        ],
+      };
+    }
+    case 'dingtalk': {
+      return {
+        guide: 'dingtalk',
+        // The robot, its receiving mode and the send permission only take effect once a
+        // version is published, so they follow the save. In webhook mode that save is also
+        // what produces the callback URL the robot step asks for.
+        steps: [
+          {
+            key: 'create',
+            fields: ['applicationId', 'clientSecret'],
+            link: { href: DINGTALK_CONSOLE_URL, label: 'openConsole' },
+          },
+          { key: connectionMode === 'webhook' ? 'robotWebhook' : 'robot' },
+          { key: 'permissions' },
+          { key: 'publish' },
         ],
       };
     }

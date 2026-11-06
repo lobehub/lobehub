@@ -1,0 +1,225 @@
+---
+title: Connect LobeHub to DingTalk (钉钉)
+description: >-
+  Learn how to create a DingTalk internal app robot and connect it to your
+  LobeHub agent as a message channel, enabling your AI assistant to chat with
+  team members in DingTalk single chats and group @-mentions.
+tags:
+  - DingTalk
+  - 钉钉
+  - Message Channels
+  - Bot Setup
+  - Integration
+---
+
+# Connect LobeHub to DingTalk (钉钉)
+
+By connecting a DingTalk channel to your LobeHub agent, members of your organization can talk to the AI assistant directly in DingTalk, through single (one-on-one) chats and by @-mentioning the robot in group chats.
+
+## Prerequisites
+
+- A LobeHub account with an active subscription
+- A DingTalk organization account with permission to create internal apps (企业内部应用) in the DingTalk developer console
+
+## Connection Modes
+
+LobeHub supports two connection modes for DingTalk robots:
+
+- **WebSocket** — Uses DingTalk's **Stream mode** (Stream 模式): LobeHub keeps an outbound long-lived connection to DingTalk, so no public callback URL is required. This is DingTalk's recommended mode and the default for new bots.
+- **Webhook** — Uses DingTalk's **HTTP callback** (HTTP 回调) mode: DingTalk posts each message to a LobeHub callback URL. Use this mode if your robot already has a message receiving address configured.
+
+> **LobeHub Cloud:** Only Webhook mode is available for DingTalk for now. Set the robot to **HTTP 回调**. Self-hosted deployments can use either mode, unless they run an external message gateway.
+
+> **Note:** The mode you select in LobeHub must match the **message receiving mode** (消息接收模式) set on the robot in the DingTalk developer console.
+
+## Step 1: Create a DingTalk Internal App Robot
+
+<Steps>
+  ### Open the Developer Console
+
+  Visit [open-dev.dingtalk.com](https://open-dev.dingtalk.com/) and sign in with your DingTalk organization account.
+
+  ### Create an Internal App
+
+  Go to **应用开发** (App Development) → **企业内部应用** (Internal Apps) and click **创建应用** (Create App). Fill in the app name (e.g., "LobeHub Assistant"), description, and icon, then save.
+
+  ### Copy App Credentials
+
+  Open the app and go to **凭证与基础信息** (Credentials & Basic Info). Copy:
+
+  - **Client ID** (formerly AppKey, usually starts with `ding`)
+  - **Client Secret** (formerly AppSecret)
+
+  > **Important:** Keep your Client Secret confidential. Never share it in a group chat or a public screenshot.
+
+  ### Add the Robot Capability
+
+  In the app, go to **添加应用能力** (Add App Capability) and add **机器人** (Robot). Fill in the robot information, such as its name, avatar, and description.
+
+  ### Set the Message Receiving Mode
+
+  On the robot configuration page, set **消息接收模式** (Message Receiving Mode):
+
+  - **Stream 模式** (Stream mode) — Matches LobeHub's default **WebSocket** connection mode. No callback address is needed. Not available on LobeHub Cloud yet.
+  - **HTTP 回调** (HTTP callback) — For LobeHub's **Webhook** mode, including all robots on LobeHub Cloud. You will paste the LobeHub callback URL here after Step 2.
+
+  Save the robot configuration.
+
+  ### Grant Permissions
+
+  Go to **权限管理** (Permission Management) and grant:
+
+  - `qyapi_robot_sendmsg` — **企业内机器人发送消息权限** (permission for the internal robot to send messages). Required so the robot can send replies outside the short-lived reply session, such as proactive direct messages and group sends.
+
+  If you want the agent to read files, images, or other attachments that users send, it is also recommended to grant the robot permission for downloading files from messages it receives (机器人接收消息的文件下载).
+</Steps>
+
+## Step 2: Configure DingTalk in LobeHub
+
+<Steps>
+  ### Open Channel Settings
+
+  In LobeHub, navigate to your agent's settings, then select the **Channels** tab. Click **DingTalk** from the platform list.
+
+  ### Fill in App Credentials
+
+  Enter the following fields:
+
+  - **Client ID (AppKey)** — The Client ID from your DingTalk app
+  - **Client Secret (AppSecret)** — The Client Secret from your DingTalk app
+  - **RobotCode** (optional) — Leave blank in most cases. An internal-app robot's RobotCode is its Client ID, which LobeHub uses when this field is empty. Fill it in only if the robot page shows a different code.
+
+  ### Select Connection Mode
+
+  In **Advanced Settings**, choose the **Connection Mode**:
+
+  - **WebSocket** (default) — For robots using **Stream 模式**.
+  - **Webhook** — For robots using **HTTP 回调**. After saving, copy the callback URL for the next step.
+
+  ### Save Configuration
+
+  Click **Save Configuration**. LobeHub saves the bot, then connects it by checking the credentials against DingTalk's access token endpoint:
+
+  - With an invalid Client ID or Client Secret, the configuration is still saved but the connection fails, and the page shows the error from DingTalk. Fix the credentials and save again to reconnect.
+  - Permission, network, and rate-limit problems reported by DingTalk are shown so you can fix them and try again.
+
+  Your credentials are encrypted and stored securely.
+
+  - In **WebSocket mode**, LobeHub connects to DingTalk over Stream mode automatically.
+  - In **Webhook mode**, a **Webhook URL** is shown after saving. Go back to the robot configuration in the DingTalk developer console and paste it as the robot's message receiving address (消息接收地址), then save.
+</Steps>
+
+### Signature and Encryption in Webhook Mode
+
+With HTTP callbacks, you don't need to configure any extra signature or encryption parameters in LobeHub or DingTalk:
+
+- **Signature:** DingTalk sends a `timestamp` (Unix milliseconds) and a `sign` header with each callback. LobeHub uses your **Client Secret** to compute `Base64(HmacSHA256(timestamp + "\n" + Client Secret))` and compares the result. A request is rejected with `401` if the signature is missing or doesn't match, or if `timestamp` differs from the current time by more than 1 hour.
+- **Encryption:** The robot message callback body is plain JSON, so there is no Token or `aes_key` to fill in. Those two values under DingTalk's **Event Subscription** (事件订阅) are not used for this callback. HTTPS protects the callback content, so the **Webhook URL** must be a publicly reachable HTTPS address. LobeHub Cloud already meets this; on a self-hosted deployment, open LobeHub through its public HTTPS domain before copying the URL.
+
+> **After rotating the Client Secret:** Update it in LobeHub as well. Otherwise DingTalk's callbacks are rejected for a signature mismatch and the robot stops replying.
+
+## Step 3: Publish the App
+
+<Steps>
+  ### Create and Publish a Version
+
+  In the DingTalk developer console, go to **版本管理与发布** (Version Management & Release), create a new version, and publish it. Internal app releases do not go through a platform review.
+
+  ### Set the Visibility Range
+
+  When publishing, set the **可见范围** (visibility range) to include the members or departments who should use the robot. Members outside the range cannot find or chat with it.
+</Steps>
+
+## Step 4: Test the Connection
+
+Back in LobeHub's channel settings, click **Test Connection** to verify the credentials. Then, in DingTalk, search for the robot by name and send it a message in a single chat. The robot should reply through your LobeHub agent.
+
+## Set Your Platform Identity (Recommended)
+
+One optional field under **Advanced Settings** carries a lot of weight in day-to-day use — fill it in once and most surprises go away.
+
+### Your Platform User ID
+
+This is your own DingTalk `userId` (staff ID, 员工 ID) inside your organization — **not** your phone number or DingTalk ID shown on your profile. It is used by:
+
+- **Pairing approval** — required when **DM Policy** is set to **Pairing**, since `/approve <code>` is the owner's command and the runtime checks the sender against this ID.
+- **AI tools push** — lets the agent reach you proactively (reminders, notifications) by mapping its internal user reference to your DingTalk account.
+- **Anti-lockout** — auto-trusted by **Allowed Users**, so scoping the bot to teammates won't accidentally lock you out.
+
+To get it, either:
+
+- Open the DingTalk admin console → **Contacts** (通讯录) → your member details, and copy the userId; or
+- Send `/whoami` to the robot in a single chat.
+
+Paste it into **Your Platform User ID** in LobeHub's Advanced Settings.
+
+## Add the Robot to a Group Chat
+
+To use the robot in a DingTalk group:
+
+1. Open the group's **群设置** (Group Settings) → **机器人** (Robots) → **添加机器人** (Add Robot)
+2. Search for your internal app robot by name and add it
+3. @-mention the robot in a message to trigger a response
+
+> DingTalk only delivers group messages that @-mention the robot. In single chats, the robot receives every message.
+
+## Access Policies
+
+Two independent policies gate inbound traffic. Both default to **Open**.
+
+### Allowed User IDs (global)
+
+A populated **Allowed Users** list is a global gate — single chats *and* group `@mentions` are restricted to listed DingTalk `userId` values. Empty means "no user-level filter".
+
+### DM Policy
+
+- **Open (default)** — Any member who can see the robot can chat with it one-on-one (subject to the global allowlist when set).
+- **Allowlist** — Single chats require the sender to be in **Allowed Users**. Differs from `Open` only when the list is empty: `Allowlist` then fails closed (no single chats).
+- **Pairing** — Same gate as `Allowlist`, but a non-listed sender receives a one-time pairing code instead of a flat rejection. Approve via `/approve <code>` and the applicant is auto-appended to **Allowed Users**. Requires **Your Platform User ID** to be set and a configured Redis backend.
+- **Disabled** — The robot ignores all single chats and only responds to group `@mentions`.
+
+### Group Policy
+
+Controls which DingTalk groups the robot will respond in.
+
+- **Open (default)** — Respond to `@mentions` in any group the robot has been added to.
+- **Allowlist** — Respond only in groups whose conversation ID (`openConversationId`, usually starts with `cid`) is listed in **Allowed Channels**.
+- **Disabled** — Ignore all group traffic; the robot only responds to single chats.
+
+See the [Channels overview](/docs/usage/channels/overview#direct-message-policy) for cross-platform details.
+
+## Configuration Reference
+
+| Field                         | Required | Description                                                                                     |
+| ----------------------------- | -------- | ----------------------------------------------------------------------------------------------- |
+| **Client ID (AppKey)**        | Yes      | Your DingTalk internal app's Client ID                                                          |
+| **Client Secret (AppSecret)** | Yes      | Your DingTalk internal app's Client Secret (encrypted at rest)                                  |
+| **RobotCode**                 | No       | Defaults to the Client ID. Fill in only if the robot page shows a different code                |
+| **Connection Mode**           | No       | `websocket` (default, DingTalk Stream mode) or `webhook` (DingTalk HTTP callback)               |
+| **Webhook URL**               | —        | Shown after saving in Webhook mode; paste into the robot's message receiving address            |
+| **Character Limit**           | No       | Maximum characters per reply message (default and maximum: 4000)                                |
+| **Concurrency Mode**          | No       | `queue` (default), `burst`, or `debounce` — how concurrent messages are batched                 |
+| **Allowed Users**             | No       | DingTalk `userId` values. Global gate — applies to single chats and group @mentions             |
+| **DM Policy**                 | No       | `open` (default), `allowlist`, `pairing`, or `disabled` — who is allowed to chat with the robot |
+| **Group Policy**              | No       | `open` (default), `allowlist`, or `disabled` — where the robot responds to @mentions            |
+| **Allowed Channels**          | No       | DingTalk group conversation IDs. Used when Group Policy is Allowlist                            |
+
+## Limitations
+
+- **No message editing** — DingTalk robot messages cannot be edited, so intermediate steps are not streamed. Only the final reply is sent.
+- **No reactions** — DingTalk robots have no reaction API.
+- **Group attachments** — When users @-mention the robot in a group, DingTalk does not deliver audio, video, or file messages; send them in a single chat instead.
+- **Outbound files** — Images with a public URL are sent as images; other files the agent sends are delivered as links.
+
+## Troubleshooting
+
+- **Connection fails with invalid credentials:** Copy the Client ID and Client Secret again from **凭证与基础信息** without extra spaces.
+- **Connection fails with a permission or network error:** Check that the app is not disabled, that any IP allowlist on the app allows LobeHub, and try again later if DingTalk reports rate limiting.
+- **Connecting fails and asks you to switch the connection mode:** WebSocket mode is not available on this deployment. Switch to **Webhook** and set the robot to **HTTP 回调**.
+- **Bot not receiving messages (WebSocket mode):** Confirm the robot's message receiving mode is **Stream 模式** and the app version containing the robot has been published.
+- **Bot not receiving messages (Webhook mode):** Confirm the robot uses **HTTP 回调** and the message receiving address matches the **Webhook URL** shown in LobeHub.
+- **Callbacks return `401 Invalid signature`:** The Client Secret in LobeHub doesn't match the app's current Client Secret (common after rotating it), or the callback's `timestamp` differs from the current time by more than 1 hour. Copy the Client Secret again and save. If requests pass through a proxy, confirm it preserves the `timestamp` and `sign` headers.
+- **Robot cannot be found:** Check the app's visibility range (可见范围) includes the user, and that the app has been published.
+- **Bot ignores group messages:** Make sure the robot was added to the group and the message @-mentions it. Check **Group Policy** in Advanced Settings.
+- **Bot ignores single chats:** Check **DM Policy**. If it is `Allowlist`, confirm the sender's `userId` is listed in **Allowed Users**.
+- **Replies stop after a while or proactive messages fail:** Confirm `qyapi_robot_sendmsg` is granted in **权限管理**.
