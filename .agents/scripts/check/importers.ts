@@ -127,6 +127,19 @@ export const resolveSpecifier = (
   return [...new Set(resolved)];
 };
 
+/**
+ * Non-wildcard alias names that resolve to a file (`~test-utils` → `tests/utils.tsx`).
+ * Their specifiers need not end in the file's name, so the grep must search them too.
+ */
+export const exactAliasNames = (file: string, aliases: PathAliases[], files: Set<string>) =>
+  aliases.flatMap((table) =>
+    Object.entries(table.paths)
+      .filter(
+        ([pattern, targets]) => !pattern.includes('*') && resolveFirst(targets, '', files) === file,
+      )
+      .map(([pattern]) => pattern),
+  );
+
 /** The deepest table covering a file: the repo whose config runs it. */
 const ownerOf = (file: string, aliases: PathAliases[]) =>
   aliases
@@ -157,7 +170,14 @@ const findOwnedImportingTests = async (
   for (let depth = 0; depth < MAX_IMPORT_DEPTH && frontier.length > 0; depth++) {
     const targets = new Set(frontier);
     const candidates = await search.grep(
-      [...new Set(frontier.map(specifierTail))],
+      [
+        ...new Set(
+          frontier.flatMap((file) => [
+            specifierTail(file),
+            ...exactAliasNames(file, aliases, search.files),
+          ]),
+        ),
+      ],
       frontier.some((file) => /^index\.[^.]+$/.test(path.basename(file))),
     );
     const eligible = candidates.filter(

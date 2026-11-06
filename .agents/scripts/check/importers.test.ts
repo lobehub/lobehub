@@ -181,6 +181,20 @@ describe('findImportingTests', () => {
     ]);
   });
 
+  it('finds a test importing the file through an exact alias with another name', async () => {
+    const search = searchOver(
+      {
+        'tests/utils.tsx': '',
+        'src/services/plugin.test.ts': "import { render } from '~test-utils';",
+      },
+      [{ dir: '', paths: { '~test-utils': ['tests/utils.tsx'] } }],
+    );
+
+    expect((await findImportingTests(['tests/utils.tsx'], search)).tests).toEqual([
+      'src/services/plugin.test.ts',
+    ]);
+  });
+
   it('finds a test importing an index file as ./index', async () => {
     const search = searchOver(
       { 'src/scan/index.ts': '', 'src/scan/patch.test.ts': "import { scan } from './index';" },
