@@ -226,7 +226,7 @@ const ApiKey: FC = () => {
       render: (apiKey) =>
         apiKey.expiresAt ? (
           <span
-            {...stylex.props(isExpired(apiKey) && styles.expired)}
+            {...stylex.props(isExpired(apiKey) ? styles.expired : null)}
             title={apiKey.expiresAt.toLocaleString()}
           >
             {isExpired(apiKey) ? t('apikey.status.expired') : apiKey.expiresAt.toLocaleDateString()}

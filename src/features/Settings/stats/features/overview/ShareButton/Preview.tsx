@@ -100,7 +100,7 @@ const Preview = memo(() => {
 
   return (
     <div {...sx(styles.preview, cx(lobeStaticStylish.noScrollbar, fallback.preview))}>
-      <div {...sx(styles.background, undefined, backgroundImage)} id={'preview'}>
+      <div {...sx(styles.background, backgroundImage)} id={'preview'}>
         <Center className={stylex.props(styles.container).className} gap={12} padding={24}>
           <ProductLogo size={24} type={'text'} />
           <div {...stylex.props(styles.title)}>{t('stats.share.title')}</div>

@@ -294,7 +294,7 @@ const OAuthDeviceFlowAuth = memo<OAuthDeviceFlowAuthProps>(
 
     return (
       <>
-        <div {...sx(styles.card, undefined, cardWidth)}>
+        <div {...sx(styles.card, cardWidth)}>
           <div {...stylex.props(styles.header)}>
             {/* The badge is a property of the provider, not an action on it, so
                 it sits with the name rather than among the controls. */}

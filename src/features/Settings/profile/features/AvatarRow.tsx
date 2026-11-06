@@ -81,7 +81,7 @@ const AvatarRow = () => {
     <Upload maxCount={1} onFiles={([file]) => handleUploadAvatar(file)}>
       <div {...stylex.props(styles.wrapper, stylex.defaultMarker())}>
         <UserAvatar size={40} />
-        <div {...sx(styles.overlay, undefined, uploading ? { opacity: 1 } : undefined)}>
+        <div {...sx(styles.overlay, uploading && { opacity: 1 })}>
           <Icon
             color={cssVar.colorTextLightSolid}
             icon={uploading ? Loader2Icon : PencilIcon}
