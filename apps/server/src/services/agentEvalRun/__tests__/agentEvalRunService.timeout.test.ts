@@ -238,15 +238,45 @@ describe('AgentEvalRunService', () => {
       });
     });
 
-    it('should return false and skip when run started less than timeout ago', async () => {
+    it('should return false when no running case is older than the timeout', async () => {
+      const { run } = await setupMultiCaseRun([{ assistantOutput: null }]);
+      const runModel = new AgentEvalRunModel(serverDB, userId);
+      await runModel.update(run.id, { status: 'running' });
+      await serverDB
+        .update(agentEvalRunTopics)
+        .set({ createdAt: sql`NOW() - interval '5 minutes'`, status: 'running' })
+        .where(eq(agentEvalRunTopics.runId, run.id));
+
       const service = new AgentEvalRunService(serverDB, userId);
       const changed = await service.checkAndHandleRunTimeout({
+        ...(await runModel.findById(run.id))!,
         config: { timeout: 1_200_000 },
-        id: 'any-run-id',
-        startedAt: new Date(), // just now
       });
 
       expect(changed).toBe(false);
+      const [topic] = await new AgentEvalRunTopicModel(serverDB, userId).findByRunId(run.id);
+      expect(topic.status).toBe('running');
+    });
+
+    it('should still time out a stuck case after a retry moved the run start time', async () => {
+      const { run } = await setupMultiCaseRun([{ assistantOutput: null }]);
+      const runModel = new AgentEvalRunModel(serverDB, userId);
+      // A retry moves startedAt to now; the case that kept running began 25 min ago.
+      await runModel.update(run.id, { startedAt: new Date(), status: 'running' });
+      await serverDB
+        .update(agentEvalRunTopics)
+        .set({ createdAt: sql`NOW() - interval '25 minutes'`, status: 'running' })
+        .where(eq(agentEvalRunTopics.runId, run.id));
+
+      const service = new AgentEvalRunService(serverDB, userId);
+      const changed = await service.checkAndHandleRunTimeout({
+        ...(await runModel.findById(run.id))!,
+        config: { timeout: 1_200_000 },
+      });
+
+      expect(changed).toBe(true);
+      const [topic] = await new AgentEvalRunTopicModel(serverDB, userId).findByRunId(run.id);
+      expect(topic.status).toBe('timeout');
     });
   });
 

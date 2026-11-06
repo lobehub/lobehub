@@ -235,12 +235,9 @@ export async function checkAndHandleRunTimeout(
   const perCaseTimeout = (run.config?.timeout as number) ?? 1_200_000; // 20 min default
   const now = Date.now();
 
-  // Early exit: if run started less than timeout ago, no topic could have timed out
-  if (run.startedAt && now - new Date(run.startedAt).getTime() < perCaseTimeout) {
-    return false;
-  }
-
-  // Single SQL: mark pending topics where created_at + timeout < NOW() as 'timeout'
+  // Each case is timed from its own start, never from the run's: a retry moves
+  // the run's startedAt (its generation stamp) while untouched cases keep running.
+  // Single SQL: mark running topics where created_at + timeout < NOW() as 'timeout'
   const timedOutRows = await deps.executionRepo.batchMarkTimeout(run.id, perCaseTimeout);
   if (timedOutRows.length === 0) return false;
 
