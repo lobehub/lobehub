@@ -3,9 +3,13 @@ import debug from 'debug';
 
 import { MarketService } from '@/server/services/market';
 
+import { createFailureCooldown, warnSandboxDegraded } from './failureCooldown';
 import { SandboxStorageFilesError } from './storageFiles';
 
 const log = debug('lobe-server:sandbox:drive-folder');
+
+/** Per drive: one that cannot answer about one folder cannot answer about the next. */
+const unreachableDrives = createFailureCooldown();
 
 /**
  * How long a folder that was there is believed to still be there.
@@ -68,6 +72,7 @@ export const driveFolderExists = async ({
   const cachedAt = existsCache.get(cacheKey);
   if (cachedAt !== undefined && Date.now() - cachedAt < EXISTS_TTL_MS) return true;
   if (cachedAt !== undefined) existsCache.delete(cacheKey);
+  if (unreachableDrives.isCoolingDown(claim.key)) return undefined;
 
   try {
     await new MarketService({
@@ -83,6 +88,8 @@ export const driveFolderExists = async ({
     if (error instanceof SandboxStorageFilesError && error.status === 404) return false;
 
     log('Could not check drive folder %s on %s: %O', path, claim.key, error);
+    warnSandboxDegraded('drive', { key: claim.key, path, reason: 'folderCheckFailed' }, error);
+    unreachableDrives.record(claim.key);
     return undefined;
   }
 };
@@ -92,6 +99,7 @@ export const driveFolderCacheSize = () => existsCache.size;
 
 /** Forget what is known about a drive's folders, after a write that may have moved them. */
 export const forgetDriveFolders = (storageKey: string) => {
+  unreachableDrives.clear(storageKey);
   for (const key of existsCache.keys()) {
     if (key.startsWith(`${storageKey}\0`)) existsCache.delete(key);
   }

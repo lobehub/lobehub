@@ -545,6 +545,30 @@ describe('runStep handler', () => {
       stepIndex: 2,
     });
   });
+
+  // Debug lines from the same request sit next to a 500 in the logs and read
+  // like its cause, so the real reason gets a line of its own.
+  it('logs the cause of a 500 as one structured line', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mockGetOperationMetadata.mockResolvedValue({ userId: 'user-1' });
+    mockExecuteStep.mockRejectedValue(new Error('boom'));
+
+    const { ctx } = buildContext({ body: validBody });
+    await runStep(ctx);
+
+    const line = error.mock.calls
+      .map(([first]) => first)
+      .find((first) => typeof first === 'string' && first.includes('agent.run_step.failed'));
+    expect(JSON.parse(line as string)).toMatchObject({
+      error: 'boom',
+      errorName: 'Error',
+      event: 'agent.run_step.failed',
+      externalRetryCount: 0,
+      operationId: 'op-1',
+      stepIndex: 2,
+    });
+    error.mockRestore();
+  });
 });
 
 describe('runStepHealth handler', () => {

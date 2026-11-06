@@ -59,4 +59,27 @@ describe('driveFolderExists', () => {
 
     expect(driveFolderCacheSize()).toBe(1000);
   });
+
+  describe('when the drive cannot answer', () => {
+    it('should report the drive layer once and leave it alone for the window', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      listFiles.mockRejectedValue(new Error('upstream 503'));
+
+      await expect(check('a')).resolves.toBeUndefined();
+      await expect(check('b')).resolves.toBeUndefined();
+
+      expect(listFiles).toHaveBeenCalledTimes(1);
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(JSON.parse(warn.mock.calls[0][0])).toMatchObject({
+        event: 'sandbox.placement.degraded',
+        layer: 'drive',
+        reason: 'folderCheckFailed',
+      });
+
+      listFiles.mockResolvedValue({ entries: [] });
+      vi.advanceTimersByTime(15_000);
+      await expect(check('a')).resolves.toBe(true);
+      warn.mockRestore();
+    });
+  });
 });
