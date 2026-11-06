@@ -72,6 +72,10 @@ describe('todo calls within one batch', () => {
         // later ones run against the stale snapshot before it settles.
         if (seen.length === 1) await new Promise((resolve) => setTimeout(resolve, 20));
 
+        if (!tool.apiName.endsWith('Todos')) {
+          return { attempts: 1, result: { content: 'ok', state: {}, success: true } };
+        }
+
         let items: TodoItem[];
         if (tool.apiName === 'clearTodos') items = [];
         else if (tool.apiName === 'createTodos')
@@ -135,6 +139,28 @@ describe('todo calls within one batch', () => {
 
     // One todo call already sits in history after the user message.
     expect(seen.map(({ streak }) => streak)).toEqual([1, 2, 3]);
+  });
+
+  it('resets the streak at a non-todo call emitted earlier in the batch', async () => {
+    const readFile = {
+      apiName: 'readFile',
+      arguments: '{}',
+      id: 'call-read',
+      identifier: 'local-system',
+      type: 'builtin' as const,
+    };
+
+    await runBatch([
+      todoCall('call-1', 'updateTodos', { operations: [{ index: 0, type: 'complete' }] }),
+      readFile as any,
+      todoCall('call-2', 'updateTodos', { operations: [{ index: 1, type: 'complete' }] }),
+    ]);
+
+    const streaks = Object.fromEntries(
+      seen.filter((call) => call.apiName === 'updateTodos').map((call, i) => [i, call.streak]),
+    );
+    // call-1 follows the todo call in history; call-2 follows real work.
+    expect(streaks).toEqual({ 0: 1, 1: 0 });
   });
 
   it('keeps the previous list when a todo call returns no todos state', async () => {

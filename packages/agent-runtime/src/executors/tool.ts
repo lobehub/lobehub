@@ -858,11 +858,20 @@ export const callToolsBatch =
     // `updateTodos(index: 0)` edited a stale item. Todo calls share the ordered
     // lane, so each reads the list (and streak) the previous one left behind.
     let batchTodoItems: ToolRunContext['currentTodos'];
-    let batchTodoCalls = 0;
-    const historyTodoStreak = countTrailingTodoCalls(
+    // Streak per todo call in emission order: todo siblings before it extend
+    // the history streak, any other call before it resets it.
+    const todoStreaks = new Map<string, number>();
+    let todoStreak = countTrailingTodoCalls(
       state.messages,
       new Set(toolsCalling.map((tool) => tool.id)),
     );
+    for (const tool of toolsCalling) {
+      if (!isTodoMutationCall(tool.identifier, tool.apiName)) {
+        todoStreak = 0;
+        continue;
+      }
+      todoStreaks.set(tool.id, todoStreak++);
+    }
 
     const runOne = async (tool: ChatToolPayload) => {
       const existingMessageId = Object.hasOwn(existingToolMessageIds, tool.id)
@@ -881,8 +890,7 @@ export const callToolsBatch =
       const isTodoCall = isTodoMutationCall(tool.identifier, tool.apiName);
       if (isTodoCall) {
         if (batchTodoItems) runContext.currentTodos = batchTodoItems;
-        runContext.todoCallStreak = historyTodoStreak + batchTodoCalls;
-        batchTodoCalls++;
+        runContext.todoCallStreak = todoStreaks.get(tool.id);
       }
 
       await host.transports.stream.publishEvent({
