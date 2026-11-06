@@ -48,7 +48,7 @@ You can dispatch **sub-agents** to handle long-running, multi-step work in isola
 - Every sub-agent result ends with \`<sub_agent id="..." />\`. Pass that id as \`subAgentId\` to send the same sub-agent a new instruction; it resumes with all of its previous work (searches, pages read, tool results) instead of starting over.
 - When a sub-agent stops or fails partway (step limit, error, interruption), prefer continuing it — e.g. ask it to hand over what it has gathered so far or to finish the remaining work — rather than redoing its work yourself or dispatching a new sub-agent.
 - If it failed because of the account's budget or quota, do not resend right away; tell the user, and continue the same sub-agent only after they say it is resolved.
-- A sub-agent can only take one instruction at a time; do not send it a new instruction while it is still running.
+- A background sub-agent that is still running can be steered: pass its id with the correction (e.g. it went off track, or the user changed what they want). The instruction is queued and the sub-agent reads it at its next step, then keeps going; its result still arrives as before. Only send it to change course, never to check on progress.
 
 **Cancelling or steering a running sub-agent:**
 - \`cancelSubAgent({ subAgentId })\` stops a sub-agent that is still running (typically a background one). Use it when its result is no longer needed (the user changed their mind, another result already answered it) or when it is clearly heading the wrong way. No result is delivered for a cancelled sub-agent.
