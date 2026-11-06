@@ -43,6 +43,8 @@ beforeEach(() => {
       return { id: 'connector-1', isNew: true };
     }),
     deleteConnector: vi.fn().mockResolvedValue(undefined),
+    fetchConnectors: vi.fn().mockResolvedValue(undefined),
+    getConnectorForEdit: vi.fn(),
     syncConnectorTools: vi.fn().mockResolvedValue(undefined),
     updateConnector: vi.fn().mockResolvedValue(undefined),
   } as unknown as ToolStore;
@@ -129,7 +131,12 @@ describe('installMarketplaceConnector', () => {
 
   it('keeps the install mark when reinstalling over a finished install', async () => {
     state.connectors = [
-      { id: 'connector-1', identifier: 'market-mcp', metadata: { marketplaceInstalled: true } },
+      {
+        id: 'connector-1',
+        identifier: 'market-mcp',
+        metadata: { marketplaceInstalled: true },
+        sourceType: 'marketplace',
+      },
     ] as never;
     vi.mocked(state.createConnector).mockResolvedValue({ id: 'connector-1', isNew: false });
 
@@ -177,5 +184,97 @@ describe('installMarketplaceConnector', () => {
     ).rejects.toThrow();
     expect(state.deleteConnector).toHaveBeenCalledWith('connector-1');
     expect(state.updateConnector).not.toHaveBeenCalled();
+  });
+
+  it('refuses to replace a connector the user added from another source', async () => {
+    state.connectors = [
+      { id: 'custom-1', identifier: 'market-mcp', metadata: null, sourceType: 'custom' },
+    ] as never;
+
+    await expect(install({ type: 'http', url: 'https://mcp.example.com' })).rejects.toThrow(
+      'already exists',
+    );
+    expect(state.createConnector).not.toHaveBeenCalled();
+    expect(state.deleteConnector).not.toHaveBeenCalled();
+  });
+
+  it('restores the connector it reinstalled over when the sync fails', async () => {
+    state.connectors = [
+      {
+        id: 'connector-1',
+        identifier: 'market-mcp',
+        metadata: { marketplaceInstalled: true },
+        sourceType: 'marketplace',
+      },
+    ] as never;
+    vi.mocked(state.getConnectorForEdit).mockResolvedValue({
+      credentials: { token: 'old-token', type: 'bearer' },
+      id: 'connector-1',
+      isEnabled: true,
+      mcpConnectionType: 'http',
+      mcpServerUrl: 'https://old.example',
+      mcpStdioConfig: null,
+      metadata: { avatar: 'old', marketplaceInstalled: true },
+      name: 'Old MCP',
+      oidcConfig: null,
+      status: 'connected',
+      tools: [
+        {
+          description: 'Search',
+          inputSchema: { type: 'object' },
+          metadata: { visibility: ['model'] },
+          toolName: 'search',
+        },
+      ],
+    } as never);
+    vi.mocked(state.createConnector).mockResolvedValue({ id: 'connector-1', isNew: false });
+    vi.mocked(state.syncConnectorTools).mockRejectedValue(new Error('unreachable'));
+
+    await expect(install({ type: 'http', url: 'https://new.example' })).rejects.toThrow(
+      'unreachable',
+    );
+
+    expect(state.deleteConnector).not.toHaveBeenCalled();
+    expect(state.updateConnector).toHaveBeenCalledWith('connector-1', {
+      credentials: { token: 'old-token', type: 'bearer' },
+      isEnabled: true,
+      mcpConnectionType: 'http',
+      mcpServerUrl: 'https://old.example',
+      mcpStdioConfig: undefined,
+      metadata: { avatar: 'old', marketplaceInstalled: true },
+      name: 'Old MCP',
+    });
+    expect(lambdaClient.connector.syncToolsFromClientById.mutate).toHaveBeenCalledWith({
+      id: 'connector-1',
+      tools: [
+        {
+          description: 'Search',
+          inputSchema: { type: 'object' },
+          toolName: 'search',
+          visibility: ['model'],
+        },
+      ],
+    });
+  });
+
+  it('rolls back when the install is canceled while the mark is written', async () => {
+    const controller = new AbortController();
+    vi.mocked(state.updateConnector).mockImplementation(async () => controller.abort());
+
+    await expect(
+      installMarketplaceConnector(
+        {
+          connection: { type: 'http', url: 'https://mcp.example.com' },
+          identifier: 'market-mcp',
+          isOAuth: false,
+          manifest,
+          name: 'Market MCP',
+          signal: controller.signal,
+        },
+        () => state,
+      ),
+    ).rejects.toThrow();
+    expect(state.updateConnector).toHaveBeenCalled();
+    expect(state.deleteConnector).toHaveBeenCalledWith('connector-1');
   });
 });

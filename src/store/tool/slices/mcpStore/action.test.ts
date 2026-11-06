@@ -715,7 +715,12 @@ describe('mcpStore actions', () => {
       });
       const syncConnectorTools = vi.fn();
       act(() =>
-        useToolStore.setState({ createConnector, syncConnectorTools, updateConnector: vi.fn() }),
+        useToolStore.setState({
+          createConnector,
+          fetchConnectors: vi.fn(),
+          syncConnectorTools,
+          updateConnector: vi.fn(),
+        }),
       );
       vi.spyOn(discoverService, 'reportMcpInstallResult').mockResolvedValue(undefined as any);
       vi.spyOn(discoverService, 'getMcpDetail').mockResolvedValue(mockPlugin as any);

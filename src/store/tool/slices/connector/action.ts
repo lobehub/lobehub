@@ -414,7 +414,9 @@ export class ConnectorActionImpl {
         | { headers: Record<string, string>; type: 'header' }
         | null;
       isEnabled?: boolean;
+      mcpConnectionType?: 'cloud' | 'http' | 'stdio';
       mcpServerUrl?: string;
+      mcpStdioConfig?: { args?: string[]; command: string; env?: Record<string, string> };
       metadata?: Record<string, unknown>;
       name?: string;
       oidcConfig?: {
