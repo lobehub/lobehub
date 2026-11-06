@@ -23,7 +23,7 @@ const InlineTable = <T extends object>({
     size={'small'}
     className={
       sx(
-        [hoverToActive && hoverStyles.hoverToActive],
+        hoverToActive && hoverStyles.hoverToActive,
         cx('lobe-inline-table-b75cf865-table', className),
       ).className
     }

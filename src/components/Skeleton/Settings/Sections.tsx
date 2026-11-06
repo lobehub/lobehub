@@ -267,9 +267,7 @@ const Tiles = ({
   tileHeight: number;
   tiles: number;
 }) => (
-  <div
-    {...sx([styles.grid], undefined, { gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` })}
-  >
+  <div {...sx(styles.grid, { gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` })}>
     {Array.from({ length: tiles }).map((_, index) => (
       <Flexbox
         horizontal
@@ -408,7 +406,7 @@ const CardGrid = ({
   size: 'large' | 'small';
 }) => (
   <div
-    {...sx([styles.grid], undefined, {
+    {...sx(styles.grid, {
       gap,
       gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
     })}

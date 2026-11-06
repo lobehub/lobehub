@@ -1,13 +1,13 @@
 import type { CaseResult } from '../analyze/diff';
 import type { FileExtraction } from '../extract';
 import type { FilePlan, PlanCase, Side } from '../plan/planFile';
+import { readReviews, reviewScope } from '../review/store';
 import {
   type CaseHashInput,
   collectCaseHashInput,
   collectFileHashInput,
   contentHash,
 } from '../signoff/hash';
-import { readSignoffs } from '../signoff/store';
 import type { ScopeFile } from '../source/scope';
 import type { CaseCategory } from './categorize';
 import { fileFlags, fileItemKey } from './fileItems';
@@ -25,8 +25,11 @@ export interface AssembleInput {
   extractions: Record<string, Record<Side, FileExtraction>>;
   mutation: { passed: boolean };
   plans: FilePlan[];
+  pr?: number;
+  recordsDir: string;
   roots: Record<Side, string>;
   scope: ScopeFile[];
+  unparsedSelectors: string[];
   verifierVersion: string;
 }
 
@@ -94,15 +97,18 @@ export const assembleVerdict = async (input: AssembleInput) => {
       key,
     });
   }
-  const signoffs = await readSignoffs(
-    input.roots.head,
+  const { passes: signoffs, reworks } = await readReviews(
+    input.recordsDir,
     items.map((item) => item.file),
+    reviewScope(items, input.pr),
   );
   const verdict: Verdict = decideVerdict({
     calibration: input.calibration,
     items,
     mutation: input.mutation,
+    reworks,
     signoffs,
+    unparsedSelectors: input.unparsedSelectors.length,
   });
   return { evidence, verdict };
 };

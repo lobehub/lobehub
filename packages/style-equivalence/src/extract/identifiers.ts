@@ -39,6 +39,7 @@ export const valueIdentifierNodes = (root: ts.Node, options: IdentifierOptions =
   const found: ts.Identifier[] = [];
   const visit = (node: ts.Node) => {
     if (options.skipJsx && isJsxNode(node)) return;
+    if (ts.isTypeNode(node)) return;
     if (ts.isIdentifier(node) && !isNameOnly(node) && (options.includeTags || !isTagName(node)))
       found.push(node);
     if (ts.isShorthandPropertyAssignment(node)) found.push(node.name);
@@ -132,3 +133,11 @@ export const declaredLocally = (node: ts.Identifier) => {
   }
   return false;
 };
+
+export const literalText = (node: ts.Node) =>
+  ts.isStringLiteralLike(node) ||
+  ts.isTemplateHead(node) ||
+  ts.isTemplateMiddle(node) ||
+  ts.isTemplateTail(node)
+    ? node.text
+    : undefined;
