@@ -73,6 +73,8 @@ const toDocumentRef = (doc: SkillAgentDocument): SkillDocumentRef => ({
 });
 
 const DEFAULT_SKILL_DESCRIPTION = 'Agent Signal managed skill.';
+/** Prefix of backing `documents.id` values, as opposed to uuid `agent_documents.id` bindings. */
+const BACKING_DOCUMENT_ID_PREFIX = 'docs_';
 
 const hashSkillContent = (content: string | null | undefined) => `sha256:${sha256(content ?? '')}`;
 
@@ -573,7 +575,7 @@ export class SkillManagementDocumentService {
     target: SkillTargetInput,
   ): Promise<SkillAgentDocument | undefined> {
     if (target.agentDocumentId) {
-      const doc = await this.agentDocumentModel.findById(target.agentDocumentId);
+      const doc = await this.findAgentDocument(agentId, target.agentDocumentId);
       if (doc && doc.agentId === agentId) {
         if (doc.fileType === SKILL_BUNDLE_FILE_TYPE) return doc;
 
@@ -609,10 +611,26 @@ export class SkillManagementDocumentService {
     agentId: string,
     agentDocumentId: string,
   ): Promise<SkillAgentDocument | undefined> {
-    const doc = await this.agentDocumentModel.findById(agentDocumentId);
+    const doc = await this.findAgentDocument(agentId, agentDocumentId);
     if (!doc || doc.agentId !== agentId || !isHintedSkillDocument(doc)) return undefined;
 
     return doc;
+  }
+
+  /**
+   * Nightly-review evidence lists a skill's backing `documents.id` (`docs_…`) next to its
+   * `agent_documents.id`, and models pass either one. A backing id must not reach the uuid
+   * `agent_documents.id` lookup, where Postgres rejects it and the read fails outright.
+   */
+  private async findAgentDocument(
+    agentId: string,
+    id: string,
+  ): Promise<SkillAgentDocument | undefined> {
+    if (id.startsWith(BACKING_DOCUMENT_ID_PREFIX)) {
+      return this.agentDocumentModel.findByDocumentId(agentId, id);
+    }
+
+    return this.agentDocumentModel.findById(id);
   }
 
   /**

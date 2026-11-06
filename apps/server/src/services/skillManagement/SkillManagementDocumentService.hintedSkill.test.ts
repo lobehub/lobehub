@@ -40,6 +40,52 @@ describe('SkillManagementDocumentService hinted skill documents', () => {
     });
   });
 
+  it('resolves skill targets by their backing docs_ id as well as the binding id', async () => {
+    const { agentDocumentModel, service } = createService();
+    agentDocumentModel.documents.push(
+      createAgentDocument({
+        agentId: 'agent-1',
+        content: 'Steps.',
+        documentId: 'docs_hinted',
+        id: 'adoc-hinted',
+        metadata: hintedMetadata,
+      }),
+    );
+    const managed = await service.createSkill({
+      agentId: 'agent-1',
+      bodyMarkdown: '# Release',
+      description: 'Release notes',
+      name: 'release-notes',
+      title: 'Release Notes',
+    });
+    // Give the bundle a real-shaped backing id, keeping its SKILL.md index attached.
+    const bundle = agentDocumentModel.documents.find(
+      (doc) => doc.id === managed.bundle.agentDocumentId,
+    )!;
+    agentDocumentModel.documents.find((doc) => doc.parentId === bundle.documentId)!.parentId =
+      'docs_bundle';
+    bundle.documentId = 'docs_bundle';
+    const findById = vi.spyOn(agentDocumentModel, 'findById');
+
+    await expect(
+      service.getSkillTarget({ agentDocumentId: 'docs_hinted', agentId: 'agent-1' }),
+    ).resolves.toMatchObject({
+      agentDocumentId: 'adoc-hinted',
+      baseSnapshot: { agentDocumentId: 'adoc-hinted', documentId: 'docs_hinted' },
+      hintedDocument: true,
+    });
+    await expect(
+      service.getSkillTarget({ agentDocumentId: 'docs_bundle', agentId: 'agent-1' }),
+    ).resolves.toMatchObject({
+      baseSnapshot: { agentDocumentId: managed.bundle.agentDocumentId },
+      hintedDocument: false,
+      name: 'release-notes',
+    });
+    // A docs_ id must never reach the uuid agent_documents.id lookup (Postgres rejects it).
+    expect(findById).not.toHaveBeenCalledWith('docs_hinted');
+    expect(findById).not.toHaveBeenCalledWith('docs_bundle');
+  });
+
   it('ignores ordinary documents and hinted documents of another agent', async () => {
     const { agentDocumentModel, service } = createService();
     agentDocumentModel.documents.push(
