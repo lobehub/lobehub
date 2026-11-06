@@ -21,10 +21,6 @@ describe('channelsInScope', () => {
     expect(channelsInScope(channels)?.map((c) => c.id)).toEqual(['standalone', 'legacy']);
   });
 
-  it('leaves direct Agent Channels out of the list', () => {
-    expect(channelsInScope(channels)?.map((c) => c.id)).not.toContain('direct');
-  });
-
   it('waits for the list to load', () => {
     expect(channelsInScope(undefined, 'pro_1')).toBeUndefined();
   });
