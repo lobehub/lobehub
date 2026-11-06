@@ -455,6 +455,29 @@ describe('ImageEditTools', () => {
       expect(screen.getByTestId('image-markup-send')).toBeEnabled();
     });
 
+    // Regression: a thread switch within the same topic kept agent and topic, so
+    // the text went to the new thread while the image stayed in the old one.
+    it('does not hand the marks to another thread of the same topic', async () => {
+      fileStore.uploadChatFiles.mockImplementation(async (_contextKey: string, [file]: File[]) => {
+        useComposerDraftBus.setState({ contextKey: 'thread_agt_current_tpc_1_thd_other' });
+        fileStore.chatUploadFileList = [{ file, id: 'file_chat', status: 'success' }];
+      });
+      const { overlay } = renderTools();
+      fireEvent.click(screen.getByText('imageViewer.tool.annotate'));
+      drawBox(overlay);
+
+      await act(async () => {
+        fireEvent.click(screen.getByTestId('image-markup-send'));
+      });
+
+      await waitFor(() => expect(toast.error).toHaveBeenCalledWith('imageViewer.markup.failed'));
+      expect(fileStore.dispatchChatUploadFileList).toHaveBeenCalledWith('main_agt_current_tpc_1', {
+        id: 'file_chat',
+        type: 'removeFile',
+      });
+      expect(useComposerDraftBus.getState().draft).toBeNull();
+    });
+
     // Regression: marks added while the handoff uploaded were cleared unsent.
     it('keeps marks added while the image was uploading', async () => {
       let finishUpload!: () => void;

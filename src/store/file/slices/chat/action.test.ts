@@ -253,6 +253,118 @@ describe('useFileStore:chat', () => {
     expect(uploadList()).toEqual([newerFile, submittedFile]);
   });
 
+  // Regression: one global upload list showed a conversation's attachments in
+  // every other conversation, while its text draft stayed behind.
+  it('keeps the uploads of each conversation to itself', () => {
+    const { result } = renderHook(() => useStore());
+    const fileA = { id: 'a', status: 'success' };
+    const fileB = { id: 'b', status: 'success' };
+
+    act(() => {
+      useStore.setState({ chatUploadFileListByContext: {} });
+      result.current.dispatchChatUploadFileList('topic-a', {
+        files: [fileA] as any,
+        type: 'addFiles',
+      });
+      result.current.dispatchChatUploadFileList('topic-b', {
+        files: [fileB] as any,
+        type: 'addFiles',
+      });
+    });
+
+    expect(result.current.chatUploadFileListByContext).toEqual({
+      'topic-a': [fileA],
+      'topic-b': [fileB],
+    });
+
+    act(() => {
+      result.current.clearChatUploadFileList('topic-a');
+    });
+
+    // Back on topic-b its upload is untouched; the emptied topic-a bucket is gone.
+    expect(result.current.chatUploadFileListByContext).toEqual({ 'topic-b': [fileB] });
+  });
+
+  it('moves staged uploads and context selections together to the new key', () => {
+    const { result } = renderHook(() => useStore());
+    const staged = { id: 'staged', status: 'success' };
+    const existing = { id: 'existing', status: 'success' };
+    const selection: ChatContextContent = { content: 'quote', id: 'sel', type: 'text' };
+
+    act(() => {
+      useStore.setState({
+        chatContextSelectionsByContext: { blank: [selection] },
+        chatUploadFileListByContext: { blank: [staged], topic: [existing] } as any,
+      });
+      result.current.moveChatComposerAttachments('blank', 'topic');
+    });
+
+    expect(result.current.chatUploadFileListByContext).toEqual({ topic: [existing, staged] });
+    expect(result.current.chatContextSelectionsByContext).toEqual({ topic: [selection] });
+  });
+
+  // Regression: a moved in-flight upload was found by its pending id (the file
+  // name), so a same-named upload staged later under the old key took its result.
+  it('reports a moved in-flight upload to its own chip, not a same-named later one', async () => {
+    mockAgentMode({ enableAgentMode: true, heterogeneous: false });
+    const { result } = renderHook(() => useStore());
+    const finishes: (() => void)[] = [];
+    vi.spyOn(result.current, 'uploadWithProgress').mockImplementation(
+      ({ file, onStatusUpdate }) =>
+        new Promise((resolve) => {
+          const n = finishes.length + 1;
+          finishes.push(() => {
+            onStatusUpdate?.({
+              id: file.name,
+              type: 'updateFile',
+              value: { fileUrl: `url-${n}`, id: `server-${n}`, status: 'success' },
+            });
+            resolve({ id: `server-${n}`, url: `url-${n}` } as any);
+          });
+        }),
+    );
+    useStore.setState({ chatUploadFileListByContext: {} });
+
+    let firstUpload!: Promise<void>;
+    let secondUpload!: Promise<void>;
+    await act(async () => {
+      firstUpload = result.current.uploadChatFiles(
+        'blank',
+        [new File(['a'], 'notes.txt', { type: 'text/plain' })],
+        AGENT_ID,
+      );
+      await vi.waitFor(() => expect(finishes).toHaveLength(1));
+    });
+
+    // The blank conversation becomes a topic mid-upload; the user then stages a
+    // same-named file in the next blank conversation.
+    await act(async () => {
+      result.current.moveChatUploadFileList('blank', 'topic');
+      secondUpload = result.current.uploadChatFiles(
+        'blank',
+        [new File(['b'], 'notes.txt', { type: 'text/plain' })],
+        AGENT_ID,
+      );
+      await vi.waitFor(() => expect(finishes).toHaveLength(2));
+    });
+
+    await act(async () => {
+      finishes[0]();
+      await firstUpload;
+    });
+
+    const lists = useStore.getState().chatUploadFileListByContext;
+    expect(lists.topic).toEqual([
+      expect.objectContaining({ fileUrl: 'url-1', id: 'server-1', status: 'success' }),
+    ]);
+    expect(lists.blank).toEqual([expect.objectContaining({ id: 'notes.txt', status: 'pending' })]);
+
+    await act(async () => {
+      finishes[1]();
+      await secondUpload;
+    });
+  });
+
   it('uploadChatFiles should reject unsupported files before upload in chat mode', async () => {
     // chat mode: agent mode disabled and not a heterogeneous agent
     mockAgentMode({ enableAgentMode: false, heterogeneous: false });

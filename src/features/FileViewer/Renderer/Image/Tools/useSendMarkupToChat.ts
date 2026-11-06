@@ -83,13 +83,18 @@ export const useSendMarkupToChat = () => {
         // under the same name; only the item this upload adds counts.
         // The export and upload take a while; if the user moved to another
         // conversation meanwhile, the marks must not land there.
+        // The composer key also tells threads of one topic apart, so the image
+        // and its text cannot split across two of them.
         const isStillTarget = () => {
           const chat = useChatStore.getState();
+          const bus = useComposerDraftBus.getState();
           return (
             aliveRef.current &&
-            useComposerDraftBus.getState().attached === attached &&
+            bus.attached === attached &&
             (!attached ||
-              (chat.activeAgentId === activeAgentId && chat.activeTopicId === activeTopicId))
+              (bus.contextKey === contextKey &&
+                chat.activeAgentId === activeAgentId &&
+                chat.activeTopicId === activeTopicId))
           );
         };
         if (!isStillTarget())
