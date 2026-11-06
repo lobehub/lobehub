@@ -13,6 +13,8 @@ The default endpoint is `http://localhost:39742/mcp` (`MCP_APP_FIXTURE_PORT` ove
 
 The fixture provides inline/fullscreen tool preferences, a resource with both display modes and no tool preference, an empty thread entrypoint, the legacy `openai/outputTemplate`, conflicting `openai/ui` and `lobehub/ui` metadata, an app-only tool, and a model tool for disabled-tool coverage. Its HTML uses the MCP Apps JSON-RPC `postMessage` bridge directly. The teardown button sends the SDK-supported `ui/notifications/request-teardown`; the host's `ui/resource-teardown` request is acknowledged before removal.
 
+The thread entrypoint is app-only (`ui.visibility: ['app']`), so opening it from the sidebar also exercises the rule that manual entrypoints ignore model visibility.
+
 `smoke.mts` exercises initialize/session negotiation, initialization notification, tool listing and metadata, a tool call, and resource read. It is a fixture protocol smoke only; it does not run the product acceptance cases.
 
 ## Deterministic local model fixture
