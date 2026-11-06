@@ -2,6 +2,7 @@ import { TASK_STATUSES } from '@lobechat/builtin-tool-task';
 import { DEFAULT_INBOX_AVATAR } from '@lobechat/const';
 import {
   agentDisplayName,
+  formatTaskLabelPath,
   TASK_LIST_FILTER_NONE,
   type TaskListFilterDateField,
   type TaskListFilterSetField,
@@ -18,6 +19,7 @@ import {
   CircleDashedIcon,
   FolderClosedIcon,
   SignalHighIcon,
+  TagIcon,
   UserRoundIcon,
   UserRoundPenIcon,
 } from 'lucide-react';
@@ -29,12 +31,16 @@ import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspace
 import { useFetchWorkspaceMembers } from '@/business/client/hooks/useFetchWorkspaceMembers';
 import { useWorkspaceMembers } from '@/business/client/hooks/useWorkspaceMembers';
 import UserAvatar from '@/components/UserAvatar';
+import TaskLabelDot from '@/features/TaskLabels/TaskLabelDot';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
+import { useFetchTaskLabels } from '@/hooks/useFetchTaskLabels';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
 import { useCurrentProjectList, useProjectStore } from '@/store/project';
+import { useTaskStore } from '@/store/task';
+import { taskLabelSelectors } from '@/store/task/selectors';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
@@ -111,6 +117,9 @@ export const useTaskFilterFields = ({
   const useFetchProjectList = useProjectStore((s) => s.useFetchProjectList);
   useFetchProjectList(!projectId);
   const projects = useCurrentProjectList();
+
+  useFetchTaskLabels();
+  const taskLabels = useTaskStore(taskLabelSelectors.labels);
 
   return useMemo(() => {
     const statusField: TaskFilterSetFieldDef = {
@@ -253,6 +262,40 @@ export const useTaskFilterFields = ({
       ],
     };
 
+    // A group value matches any label of the group; groups are listed before
+    // their labels so "Type" reads as "any Type".
+    const labelOptions: TaskFilterOption[] = [
+      {
+        icon: <Icon icon={TagIcon} size={OPTION_ICON_SIZE} />,
+        label: t('taskLabel.noLabels'),
+        value: TASK_LIST_FILTER_NONE,
+      },
+    ];
+    for (const label of taskLabels) {
+      if (label.parentId) continue;
+      labelOptions.push({
+        icon: <TaskLabelDot color={label.color} />,
+        label: label.isGroup ? t('taskLabel.anyInGroup', { name: label.name }) : label.name,
+        value: label.id,
+      });
+      if (!label.isGroup) continue;
+      for (const child of taskLabels) {
+        if (child.parentId !== label.id) continue;
+        labelOptions.push({
+          icon: <TaskLabelDot color={child.color} />,
+          label: formatTaskLabelPath(child, taskLabels),
+          value: child.id,
+        });
+      }
+    }
+    const labelField: TaskFilterSetFieldDef = {
+      icon: TagIcon,
+      key: 'label',
+      kind: 'set',
+      label: t('taskList.filter.field.label'),
+      options: labelOptions,
+    };
+
     const dateFields: TaskFilterDateFieldDef[] = [
       {
         icon: CalendarPlusIcon,
@@ -281,6 +324,7 @@ export const useTaskFilterFields = ({
       assigneeField,
       creatorField,
       ...(projectId ? [] : [projectField]),
+      labelField,
       ...dateFields,
     ];
   }, [
@@ -296,5 +340,6 @@ export const useTaskFilterFields = ({
     selfUserId,
     sidebarAgents,
     t,
+    taskLabels,
   ]);
 };
