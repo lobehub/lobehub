@@ -284,7 +284,12 @@ describe('compressContext executor', () => {
   it('summarizes the engine-built conversation and leaves the seeded placeholder out of the group', async () => {
     const latestUser = { content: 'keep going', id: 'msg-user', role: 'user' };
     const history = [
-      { content: 'old objective', id: 'msg-old', role: 'user' },
+      {
+        content: 'old objective',
+        fileList: [{ content: 'long paper', id: 'file-paper' }],
+        id: 'msg-old',
+        role: 'user',
+      },
       { content: 'huge raw tool output', id: 'msg-tool', role: 'tool' },
     ];
     messagesQuery.mockResolvedValue([
@@ -315,7 +320,11 @@ describe('compressContext executor', () => {
     );
     expect(contextBuild).toHaveBeenCalledWith(
       expect.objectContaining({
-        payload: expect.objectContaining({ messages: history, tools: [] }),
+        payload: expect.objectContaining({
+          attachmentPreviewFileIds: ['file-paper'],
+          messages: history,
+          tools: [],
+        }),
       }),
     );
     expect(compressionBuildPrompt).toHaveBeenCalledWith({

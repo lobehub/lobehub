@@ -185,6 +185,12 @@ export const compressContext =
             await transports.context.build({
               model: compressionModel.model,
               payload: {
+                // The summary needs what an attachment is, not its full text:
+                // previewing every file keeps token-dense attachments from
+                // expanding the compression prompt past the window.
+                attachmentPreviewFileIds: messagesToCompress.flatMap(
+                  (message) => message.fileList?.map((file: { id: string }) => file.id) ?? [],
+                ),
                 messages: messagesToCompress,
                 model: compressionModel.model,
                 provider: compressionModel.provider,
