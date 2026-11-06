@@ -554,6 +554,10 @@ export class TaskModel {
     return dependencies.removeDependency(this.ctx, taskId, dependsOnId);
   }
 
+  async hasDependencyOutsideProject(taskId: string, projectId: string | null): Promise<boolean> {
+    return dependencies.hasDependencyOutsideProject(this.ctx, taskId, projectId);
+  }
+
   async getDependencies(taskId: string) {
     return dependencies.getDependencies(this.ctx, taskId);
   }

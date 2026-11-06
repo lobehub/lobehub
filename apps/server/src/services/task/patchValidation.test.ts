@@ -42,9 +42,7 @@ const buildContext = (rows: Record<string, Record<string, unknown>> = {}) => {
   const taskModel = {
     findAllDescendants: vi.fn().mockResolvedValue([]),
     findById: vi.fn(async (id: string) => storedTask(id, rows[id])),
-    findByIds: vi.fn(async (ids: string[]) => ids.map((id) => storedTask(id, rows[id]))),
-    getDependencies: vi.fn().mockResolvedValue([]),
-    getDependents: vi.fn().mockResolvedValue([]),
+    hasDependencyOutsideProject: vi.fn().mockResolvedValue(false),
     hasSubtaskOutsideProject: vi.fn().mockResolvedValue(false),
     resolve: vi.fn(async (id: string) => storedTask(id, rows[id])),
   };
@@ -346,17 +344,15 @@ describe('resolveTaskPatchInvariants project', () => {
     expect(taskModel.hasSubtaskOutsideProject).toHaveBeenCalledWith('task-1', 'project-2');
   });
 
-  it.each([
-    ['dependency', 'getDependencies', { dependsOnId: 'other-1', taskId: 'task-1' }],
-    ['dependent', 'getDependents', { dependsOnId: 'task-1', taskId: 'other-1' }],
-  ] as const)('refuses a move that strands a %s', async (_label, method, row) => {
+  it('refuses a move that strands a dependency', async () => {
     const { context, taskModel } = buildContext();
-    taskModel[method].mockResolvedValue([row]);
+    taskModel.hasDependencyOutsideProject.mockResolvedValue(true);
     await expect(
       resolveTaskPatchInvariants(context, { data: { projectId: 'project-2' }, id: 'task-1' }),
     ).rejects.toMatchObject({
       code: 'BAD_REQUEST',
       message: expect.stringContaining('dependencies cannot cross project boundaries'),
     });
+    expect(taskModel.hasDependencyOutsideProject).toHaveBeenCalledWith('task-1', 'project-2');
   });
 });
