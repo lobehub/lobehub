@@ -27,6 +27,7 @@
 import { providerCardDeclaresEffort } from 'model-bank';
 import pg from 'pg';
 
+import { isRetryableError } from './retry';
 import {
   LEGACY_CONFIG_KEYS,
   LEGACY_EXTEND_PARAMS,
@@ -118,10 +119,7 @@ const inTransaction = async <T>(run: (client: pg.PoolClient) => Promise<T>): Pro
     } catch (error) {
       // Destroys the client rather than returning a broken one to the pool.
       client?.release(error as Error);
-      // A SQL error (it has a SQLSTATE) would fail again; only connection
-      // failures and client timeouts are retried.
-      const sqlState = (error as { code?: string }).code;
-      if (sqlState || attempt >= MAX_ATTEMPTS) throw error;
+      if (!isRetryableError(error) || attempt >= MAX_ATTEMPTS) throw error;
       console.warn(`[retry ${attempt}] ${(error as Error).message}`);
       await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
     }
