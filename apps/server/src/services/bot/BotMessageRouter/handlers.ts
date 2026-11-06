@@ -10,6 +10,7 @@ import { parseBotWakeSettings } from '@/server/services/conversationWake/config'
 import { createWakeDutyJudge } from '@/server/services/conversationWake/dutyJudge';
 import { isBotWakeEnabled } from '@/server/services/conversationWake/gate';
 import { createWakeIdentityLoader } from '@/server/services/conversationWake/identity';
+import type { WakeInitiation } from '@/server/services/conversationWake/initiation';
 
 import { AgentBridgeService } from '../AgentBridgeService';
 import { buildBotContext } from '../buildBotContext';
@@ -54,7 +55,6 @@ import {
 } from './utils';
 import {
   type BotWakeEntryPoint,
-  type BotWakeInitiation,
   botWakeKindFor,
   type BotWakeObservation,
   type BotWakeReason,
@@ -389,7 +389,7 @@ export function registerHandlers(
     message: WakeMessageLike,
     thread: { id: string },
     threadSubscribed = false,
-  ): Promise<BotWakeInitiation | undefined> =>
+  ): Promise<WakeInitiation | undefined> =>
     wakeRecorder.initiate(
       observationOf(entryPoint, message, thread, 'skip', 'not-addressed', threadSubscribed),
     );
