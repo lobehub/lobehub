@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { appendFile, mkdir, writeFile } from 'node:fs/promises';
 import { createServer, type IncomingMessage } from 'node:http';
 import path from 'node:path';
@@ -45,18 +45,21 @@ const messageText = (message: ChatMessage) => {
 };
 
 const selectTool = (body: ChatRequest) => {
-  const latestUserMessage = [...(body.messages ?? [])]
-    .reverse()
-    .find(({ role }) => role === 'user');
+  const messages = body.messages ?? [];
+  const userIndex = messages.findLastIndex(({ role }) => role === 'user');
+  const latestUserMessage = messages[userIndex];
   if (!latestUserMessage) return undefined;
+  if (messages.slice(userIndex + 1).some(({ role }) => role === 'tool')) return undefined;
   const text = messageText(latestUserMessage);
-  const advertised = new Set(
-    (body.tools ?? [])
-      .map(({ function: fn }) => fn?.name)
-      .filter((name): name is string => Boolean(name)),
-  );
-
-  return toolNames.find((name) => advertised.has(name) && text.includes(name));
+  const requested = toolNames.find((name) => text.includes(name));
+  if (!requested) return undefined;
+  const hashed = `MD5HASH_${createHash('md5').update(requested).digest('hex').slice(0, 12)}`;
+  return body.tools
+    ?.map(({ function: fn }) => fn?.name)
+    .find((name) => {
+      const api = name?.split('____')[1];
+      return name === requested || api === requested || api === hashed;
+    });
 };
 
 const contextEcho = (body: ChatRequest) => {
