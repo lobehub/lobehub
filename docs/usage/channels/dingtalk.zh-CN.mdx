@@ -97,7 +97,7 @@ LobeHub 支持两种钉钉机器人连接模式：
 
   点击 **保存配置**。LobeHub 会保存机器人，然后通过钉钉的 accessToken 接口校验凭证并建立连接：
 
-  - Client ID 或 Client Secret 无效时，保存会被拒绝并提示错误。
+  - Client ID 或 Client Secret 无效时，配置仍会保存，但连接失败，页面会显示钉钉返回的错误。修正凭证后再次保存即可重新连接。
   - 钉钉返回的权限、网络或限流问题也会提示出来，修正后重试即可。
 
   您的凭证将被加密并安全存储。
@@ -105,6 +105,15 @@ LobeHub 支持两种钉钉机器人连接模式：
   - 在 **WebSocket 模式** 下，LobeHub 会自动通过 Stream 模式连接钉钉。
   - 在 **Webhook 模式** 下，保存后将显示 **Webhook URL**。回到钉钉开发者后台的机器人配置，把它粘贴为机器人的消息接收地址并保存。
 </Steps>
+
+### Webhook 模式的签名与加密
+
+使用 HTTP 回调时，无需在 LobeHub 或钉钉中配置额外的签名或加密参数：
+
+- **签名：** 钉钉在每次回调的请求头中携带 `timestamp`（毫秒时间戳）和 `sign`。LobeHub 使用您填写的 **Client Secret** 按 `Base64(HmacSHA256(timestamp + "\n" + Client Secret))` 计算并比对。签名缺失、不匹配，或 `timestamp` 与当前时间相差超过 1 小时，请求都会被拒绝并返回 `401`。
+- **加密：** 机器人消息回调的请求体是明文 JSON，因此没有 Token 或 `aes_key` 需要填写。钉钉 **事件订阅** 中的这两项不用于此回调。回调内容由 HTTPS 保护，因此 **Webhook URL** 必须是公网可访问的 HTTPS 地址。LobeHub Cloud 已满足此要求；自托管部署请通过公网 HTTPS 域名访问 LobeHub 后再复制该地址。
+
+> **轮换 Client Secret 后：** 请同时在 LobeHub 中更新。否则钉钉的回调会因签名不匹配而被拒绝，机器人将不再回复。
 
 ## 第三步：发布应用
 
@@ -206,6 +215,7 @@ LobeHub 支持两种钉钉机器人连接模式：
 - **连接失败并提示切换连接模式：** 当前部署不支持 WebSocket 模式。请切换到 **Webhook**，并把机器人设置为 **HTTP 回调**。
 - **收不到消息（WebSocket 模式）：** 确认机器人的消息接收模式为 **Stream 模式**，并且包含机器人能力的应用版本已经发布。
 - **收不到消息（Webhook 模式）：** 确认机器人使用 **HTTP 回调**，且消息接收地址与 LobeHub 中显示的 **Webhook URL** 一致。
+- **回调返回 `401 Invalid signature`：** LobeHub 中的 Client Secret 与该应用当前的 Client Secret 不一致（常见于轮换之后），或回调的 `timestamp` 与当前时间相差超过 1 小时。重新复制 Client Secret 并保存；如果请求经过代理转发，确认 `timestamp` 和 `sign` 请求头被原样保留。
 - **搜索不到机器人：** 检查应用的 **可见范围** 是否包含该成员，以及应用是否已发布。
 - **群聊不回复：** 确认机器人已加入该群，且消息中 @ 了机器人；同时检查高级设置中的 **群组策略**。
 - **单聊不回复：** 检查 **私信策略**。如果是 `Allowlist`，确认发送者的 `userId` 已在 **允许的用户** 中。

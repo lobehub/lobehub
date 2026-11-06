@@ -100,7 +100,7 @@ LobeHub supports two connection modes for DingTalk robots:
 
   Click **Save Configuration**. LobeHub saves the bot, then connects it by checking the credentials against DingTalk's access token endpoint:
 
-  - An invalid Client ID or Client Secret is rejected with an error.
+  - With an invalid Client ID or Client Secret, the configuration is still saved but the connection fails, and the page shows the error from DingTalk. Fix the credentials and save again to reconnect.
   - Permission, network, and rate-limit problems reported by DingTalk are shown so you can fix them and try again.
 
   Your credentials are encrypted and stored securely.
@@ -108,6 +108,15 @@ LobeHub supports two connection modes for DingTalk robots:
   - In **WebSocket mode**, LobeHub connects to DingTalk over Stream mode automatically.
   - In **Webhook mode**, a **Webhook URL** is shown after saving. Go back to the robot configuration in the DingTalk developer console and paste it as the robot's message receiving address (消息接收地址), then save.
 </Steps>
+
+### Signature and Encryption in Webhook Mode
+
+With HTTP callbacks, you don't need to configure any extra signature or encryption parameters in LobeHub or DingTalk:
+
+- **Signature:** DingTalk sends a `timestamp` (Unix milliseconds) and a `sign` header with each callback. LobeHub uses your **Client Secret** to compute `Base64(HmacSHA256(timestamp + "\n" + Client Secret))` and compares the result. A request is rejected with `401` if the signature is missing or doesn't match, or if `timestamp` differs from the current time by more than 1 hour.
+- **Encryption:** The robot message callback body is plain JSON, so there is no Token or `aes_key` to fill in. Those two values under DingTalk's **Event Subscription** (事件订阅) are not used for this callback. HTTPS protects the callback content, so the **Webhook URL** must be a publicly reachable HTTPS address. LobeHub Cloud already meets this; on a self-hosted deployment, open LobeHub through its public HTTPS domain before copying the URL.
+
+> **After rotating the Client Secret:** Update it in LobeHub as well. Otherwise DingTalk's callbacks are rejected for a signature mismatch and the robot stops replying.
 
 ## Step 3: Publish the App
 
@@ -209,6 +218,7 @@ See the [Channels overview](/docs/usage/channels/overview#direct-message-policy)
 - **Connecting fails and asks you to switch the connection mode:** WebSocket mode is not available on this deployment. Switch to **Webhook** and set the robot to **HTTP 回调**.
 - **Bot not receiving messages (WebSocket mode):** Confirm the robot's message receiving mode is **Stream 模式** and the app version containing the robot has been published.
 - **Bot not receiving messages (Webhook mode):** Confirm the robot uses **HTTP 回调** and the message receiving address matches the **Webhook URL** shown in LobeHub.
+- **Callbacks return `401 Invalid signature`:** The Client Secret in LobeHub doesn't match the app's current Client Secret (common after rotating it), or the callback's `timestamp` differs from the current time by more than 1 hour. Copy the Client Secret again and save. If requests pass through a proxy, confirm it preserves the `timestamp` and `sign` headers.
 - **Robot cannot be found:** Check the app's visibility range (可见范围) includes the user, and that the app has been published.
 - **Bot ignores group messages:** Make sure the robot was added to the group and the message @-mentions it. Check **Group Policy** in Advanced Settings.
 - **Bot ignores single chats:** Check **DM Policy**. If it is `Allowlist`, confirm the sender's `userId` is listed in **Allowed Users**.
