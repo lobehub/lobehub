@@ -26,7 +26,7 @@ import { type CaseCategory, categorizeCase } from './verdict/categorize';
 
 const run = promisify(execFile);
 
-export const VERIFIER_VERSION = '1.0.0';
+export const VERIFIER_VERSION = '2.13.0';
 export const DEFAULT_MUTATIONS = 10;
 
 export interface RunOptions {
@@ -38,9 +38,16 @@ export interface RunOptions {
   keepWorktrees?: boolean;
   mutationOperators?: MutationOperator[];
   mutations?: number;
+  pr?: PullRequestInfo;
   recordsDir: string;
   repo: string;
   restrictTo?: string[];
+}
+
+export interface PullRequestInfo {
+  branch: string;
+  number: number;
+  title: string;
 }
 
 export interface CaseRecord {
@@ -226,8 +233,11 @@ export const runComparison = async (options: RunOptions): Promise<RunResult> => 
       extractions: synthesis.extractions,
       mutation,
       plans: synthesis.plans,
+      pr: options.pr?.number,
+      recordsDir: options.recordsDir,
       roots,
       scope,
+      unparsedSelectors: capture.unparsedSelectors,
       verifierVersion: VERIFIER_VERSION,
     });
     const result: RunResult = {
@@ -254,11 +264,13 @@ export const runComparison = async (options: RunOptions): Promise<RunResult> => 
       durationMs: result.durationMs,
       head,
       pageErrors: capture.pageErrors,
+      ...(options.pr ? { pr: options.pr } : {}),
       repo: options.repo,
       runId,
       scope,
       states: capture.states,
       unparsedMedia: capture.unparsedMedia,
+      unparsedSelectors: capture.unparsedSelectors,
       verifierVersion: VERIFIER_VERSION,
       widths: capture.widths,
     });

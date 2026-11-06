@@ -463,11 +463,9 @@ const MemberSelectionModal = memo<MemberSelectionModalProps>(
                   </Flexbox>
                   <Flexbox horizontal align="center" gap={12}>
                     <div
-                      {...sx(
-                        [styles.hostModelSelect, isHostRemoved && styles.modelSelectDisabled],
-                        undefined,
-                        { opacity: isHostRemoved ? 0.6 : 1 },
-                      )}
+                      {...sx(styles.hostModelSelect, isHostRemoved && styles.modelSelectDisabled, {
+                        opacity: isHostRemoved ? 0.6 : 1,
+                      })}
                     >
                       <ModelSelect
                         requiredAbilities={['functionCall']}

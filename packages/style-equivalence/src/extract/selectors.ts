@@ -91,3 +91,5 @@ export const foreignClassNames = (
 
 export const classNamesIn = (selector: string) =>
   (analyze(selector)?.classes ?? []).filter((item) => !item.global).map((item) => item.name);
+
+export const targetsInnerTag = (selector: string) => analyze(selector)?.innerType ?? true;

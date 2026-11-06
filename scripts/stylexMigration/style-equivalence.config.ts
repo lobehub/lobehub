@@ -44,6 +44,15 @@ const config: ProjectConfig = {
   cxFallback: { name: 'cx', source: '@lobehub/ui' },
   hostWrapper: 'styleEquivalenceHost.tsx',
   layoutComponents: ['Flexbox', 'Center', 'Block'],
+  realComponents: {
+    Tabs: {
+      leaf: true,
+      sample: (content) =>
+        `items={[{ key: 'first', label: 'Ag 文本 Text' }, { key: 'second', label: <>${content}</> }]}`,
+      source: '@lobehub/ui',
+    },
+    Text: { source: '@lobehub/ui', tag: { default: 'div', prop: 'as' } },
+  },
   vite: async (root) => {
     const { stylexPlugin } = await fromRevision<typeof StylexModule>(
       root,
