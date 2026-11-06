@@ -8,7 +8,7 @@ import type { EditLockService } from '@/server/services/editLock';
 import type { TaskService } from '@/server/services/task';
 
 import { assertArchivedTaskStaysIdle } from './archiveGuard';
-import { assertResultingScheduleValid } from './scheduleValidation';
+import { assertPreciseScheduleAllowed, assertResultingScheduleValid } from './scheduleValidation';
 import { findTaskOrThrow, resolveTaskOrThrow } from './utils';
 
 /**
@@ -131,6 +131,11 @@ export async function resolveTaskPatchInvariants<Data extends TaskPatchFields>(
 
   const resolved = await resolveTaskOrThrow(ctx.taskModel, id);
   assertResultingScheduleValid(resolved, data);
+  await assertPreciseScheduleAllowed(
+    { userId: ctx.userId, workspaceId: ctx.workspaceId },
+    resolved.schedulePattern,
+    data.schedulePattern,
+  );
   assertArchivedTaskStaysIdle(resolved, data);
 
   // Collaborative edit lock: reject writes to a workspace task another member
