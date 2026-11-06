@@ -50,7 +50,7 @@ const USAGE = `Usage: bun run check [files...] [--lint] [--test] [--related] [--
   --staged  collect staged files only (pre-commit scope); ignored with explicit files
   --lint    lint pipelines (with autofix)
   --test    related tests: same-name tests plus tests importing the files (up to 3 hops)
-  --related exact related tests via \`vitest related\` from every owning config; slow (tens of seconds)
+  --related \`vitest related\` over the full module graph; slow (tens of seconds)
   --type    full type-check; alone, file collection is skipped
   --alint   model-backed rules (packages/alint); opt-in, needs \`bun run alint:setup\``;
 
@@ -170,9 +170,14 @@ export const runCli = async (config: CheckConfig) => {
     // Changed tests run themselves; `vitest related` covers every test reaching a source file.
     testFiles = files.filter((file) => isTestFile(file));
     const sources = files.filter((file) => isSourceFile(file) && !isTestFile(file));
+    const importing = await collectImportingTests(sources);
     const [direct, related] = await Promise.all([
       runTestGroups(testFiles),
-      runRelatedGroups(sources, (file) => resolveMount(config.repos, file).mount.dir),
+      runRelatedGroups(
+        sources,
+        importing.tests,
+        (file) => resolveMount(config.repos, file).mount.dir,
+      ),
     ]);
     tests = {
       failedOutput: [...direct.failedOutput, ...related.outcome.failedOutput],

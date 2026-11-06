@@ -208,10 +208,15 @@ export const findImportingTests = async (
 /** Escape a literal for a POSIX extended regular expression. */
 const escapeEre = (value: string) => value.replaceAll(/[$()*+.?[\\\]^{|}]/g, '\\$&');
 
-/** `git grep -E` pattern for specifiers ending in one of the tails (plus `.`/`..` for index files). */
+/**
+ * `git grep -E` pattern for specifiers ending in one of the tails. For index
+ * files it also matches specifiers made only of `.`/`..` segments, optionally
+ * ending in `index` (`'.'`, `'../'`, `'./index'`, `'../../index.ts'`).
+ */
 export const importerGrepPattern = (tails: string[], includeDotImports: boolean) => {
   const named = `["']([^"']*/)?(${tails.map(escapeEre).join('|')})(/index)?(\\.[cm]?[jt]sx?)?["']`;
-  return includeDotImports ? `${named}|["']\\.\\.?/?["']` : named;
+  const dots = `["']\\.\\.?(/\\.\\.)*(/(index(\\.[cm]?[jt]sx?)?)?)?["']`;
+  return includeDotImports ? `${named}|${dots}` : named;
 };
 
 /** Parse a tsconfig: JSON plus comments and trailing commas. */
