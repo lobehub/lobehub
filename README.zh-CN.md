@@ -112,9 +112,9 @@ LobeHub 让 Super-Agents 加入你的团队。把它们拉进团队已经在用�
 
 你把它拉进群，让它先看看以前的聊天记录。午饭前它就看完了，也跟大家打过了招呼。
 
-![开工前，先看聊天记录](https://raw.githubusercontent.com/lobehub/lobehub/canary/docs/readme/day1-welcome.zh-CN.webp)
+![开工前，先看聊天记录](https://raw.githubusercontent.com/lobehub/lobehub/docs/readme-super-agents/docs/readme/day1-welcome.zh-CN.webp)
 
-![Lobe AI 的 IM 机器人设置、工牌和第一天的入职清单](https://raw.githubusercontent.com/lobehub/lobehub/canary/docs/readme/day1-arrival.webp)
+![Lobe AI 的 IM 机器人设置、工牌和第一天的入职清单](https://raw.githubusercontent.com/lobehub/lobehub/docs/readme-super-agents/docs/readme/day1-arrival.webp)
 
 <div align="right">
 
@@ -126,11 +126,11 @@ LobeHub 让 Super-Agents 加入你的团队。把它们拉进团队已经在用�
 
 有人在 Discord 里提了个需求，没人指派，Lobe AI 自己接了。整件事你只在最后验收了一次。
 
-![接活：没人 @ 它，它自己接下了需求](https://raw.githubusercontent.com/lobehub/lobehub/canary/docs/readme/week1-pick-up.zh-CN.webp)
+![接活：没人 @ 它，它自己接下了需求](https://raw.githubusercontent.com/lobehub/lobehub/docs/readme-super-agents/docs/readme/week1-pick-up.zh-CN.webp)
 
-![交付：你看完证据点了验收，PR 自动合入](https://raw.githubusercontent.com/lobehub/lobehub/canary/docs/readme/week1-hand-in.zh-CN.webp)
+![交付：你看完证据点了验收，PR 自动合入](https://raw.githubusercontent.com/lobehub/lobehub/docs/readme-super-agents/docs/readme/week1-hand-in.zh-CN.webp)
 
-![汇报：回到原来的讨论串里汇报](https://raw.githubusercontent.com/lobehub/lobehub/canary/docs/readme/week1-report-back.zh-CN.webp)
+![汇报：回到原来的讨论串里汇报](https://raw.githubusercontent.com/lobehub/lobehub/docs/readme-super-agents/docs/readme/week1-report-back.zh-CN.webp)
 
 <div align="right">
 
@@ -142,9 +142,9 @@ LobeHub 让 Super-Agents 加入你的团队。把它们拉进团队已经在用�
 
 每个人都有了自己的 agent，设计、发版和文档也各有一个专门的 agent。Lobe AI 还在学什么时候该说话，什么时候别打扰。
 
-![每天早上一份简报](https://raw.githubusercontent.com/lobehub/lobehub/canary/docs/readme/month2-brief.zh-CN.webp)
+![每天早上一份简报](https://raw.githubusercontent.com/lobehub/lobehub/docs/readme-super-agents/docs/readme/month2-brief.zh-CN.webp)
 
-![它在学什么时候该说话](https://raw.githubusercontent.com/lobehub/lobehub/canary/docs/readme/month2-learning.zh-CN.webp)
+![它在学什么时候该说话](https://raw.githubusercontent.com/lobehub/lobehub/docs/readme-super-agents/docs/readme/month2-learning.zh-CN.webp)
 
 <div align="right">
 
@@ -156,7 +156,7 @@ LobeHub 让 Super-Agents 加入你的团队。把它们拉进团队已经在用�
 
 刚来时差不多一半对一半错，现在很少出错。你纠正过它的地方，都成了它记住的经验。
 
-![它都学会了什么](https://raw.githubusercontent.com/lobehub/lobehub/canary/docs/readme/month3-review.zh-CN.webp)
+![它都学会了什么](https://raw.githubusercontent.com/lobehub/lobehub/docs/readme-super-agents/docs/readme/month3-review.zh-CN.webp)
 
 <div align="right">
 

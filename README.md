@@ -115,9 +115,9 @@ The story below follows one of them, Lobe AI, from its first day on your team un
 
 You add it to your team chat and ask it to read up. By lunch it has gone through the history and said hello to everyone.
 
-![Before it starts, it reads up](https://raw.githubusercontent.com/lobehub/lobehub/canary/docs/readme/day1-welcome.webp)
+![Before it starts, it reads up](https://raw.githubusercontent.com/lobehub/lobehub/docs/readme-super-agents/docs/readme/day1-welcome.webp)
 
-![Lobe AI's IM Bots settings, its team badge and its Day 1 checklist](https://raw.githubusercontent.com/lobehub/lobehub/canary/docs/readme/day1-arrival.webp)
+![Lobe AI's IM Bots settings, its team badge and its Day 1 checklist](https://raw.githubusercontent.com/lobehub/lobehub/docs/readme-super-agents/docs/readme/day1-arrival.webp)
 
 <div align="right">
 
@@ -129,11 +129,11 @@ You add it to your team chat and ask it to read up. By lunch it has gone through
 
 Someone posts a feature request in Discord and nobody assigns it. Lobe AI takes it on, and you only step in once, to accept the result.
 
-![Picks it up: nobody tags it, and it takes the request anyway](https://raw.githubusercontent.com/lobehub/lobehub/canary/docs/readme/week1-pick-up.webp)
+![Picks it up: nobody tags it, and it takes the request anyway](https://raw.githubusercontent.com/lobehub/lobehub/docs/readme-super-agents/docs/readme/week1-pick-up.webp)
 
-![Hands it in: you check the evidence, accept, and the PR merges](https://raw.githubusercontent.com/lobehub/lobehub/canary/docs/readme/week1-hand-in.webp)
+![Hands it in: you check the evidence, accept, and the PR merges](https://raw.githubusercontent.com/lobehub/lobehub/docs/readme-super-agents/docs/readme/week1-hand-in.webp)
 
-![Reports back: it replies in the original thread](https://raw.githubusercontent.com/lobehub/lobehub/canary/docs/readme/week1-report-back.webp)
+![Reports back: it replies in the original thread](https://raw.githubusercontent.com/lobehub/lobehub/docs/readme-super-agents/docs/readme/week1-report-back.webp)
 
 <div align="right">
 
@@ -145,9 +145,9 @@ Someone posts a feature request in Discord and nobody assigns it. Lobe AI takes 
 
 Everyone now has their own agent, and design, releases and docs each have a dedicated one. Lobe AI is still learning when to speak up and when to stay quiet.
 
-![One brief every morning](https://raw.githubusercontent.com/lobehub/lobehub/canary/docs/readme/month2-brief.webp)
+![One brief every morning](https://raw.githubusercontent.com/lobehub/lobehub/docs/readme-super-agents/docs/readme/month2-brief.webp)
 
-![It's learning when to speak up](https://raw.githubusercontent.com/lobehub/lobehub/canary/docs/readme/month2-learning.webp)
+![It's learning when to speak up](https://raw.githubusercontent.com/lobehub/lobehub/docs/readme-super-agents/docs/readme/month2-learning.webp)
 
 <div align="right">
 
@@ -159,7 +159,7 @@ Everyone now has their own agent, and design, releases and docs each have a dedi
 
 When it started, it got about half of these right. Now it rarely misses, and every correction you gave it has become a lesson it keeps.
 
-![What it has learned](https://raw.githubusercontent.com/lobehub/lobehub/canary/docs/readme/month3-review.webp)
+![What it has learned](https://raw.githubusercontent.com/lobehub/lobehub/docs/readme-super-agents/docs/readme/month3-review.webp)
 
 <div align="right">
 
