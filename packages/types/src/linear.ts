@@ -156,6 +156,9 @@ export type LinearSyncSkipReason =
   | 'failed'
   /** The task was synced, but its Linear comments were not; the next sync retries them. */
   | 'commentsFailed'
+  | 'duplicateCommentsFailed'
+  | 'duplicateLimit'
+  | 'duplicateNotClosed'
   /** Picked for import, but Linear no longer returns it (deleted, or not visible). */
   | 'missing';
 
@@ -223,6 +226,11 @@ export interface LinearSyncJobMetadata {
    * requests deep, so a run stops handing off after a few.
    */
   handOffs?: number;
+  /**
+   * Picked issues already imported get another task instead of updating theirs
+   * (`kind: 'issues'`). Absent: no duplicates, as for jobs queued before this.
+   */
+  importDuplicates?: boolean;
   /**
    * A rule run also reads archived issues (`kind: 'rule'`). Picked issues are
    * looked up by id, which finds archived ones either way.

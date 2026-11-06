@@ -123,6 +123,12 @@ export default {
   'linear.sync.job.skipReason.closed': 'Closed in Linear and never imported',
   'linear.sync.job.skipReason.commentsFailed':
     'Task synced, but its comments could not be; the next sync retries them',
+  'linear.sync.job.skipReason.duplicateCommentsFailed':
+    'New task created, but its comments could not be copied',
+  'linear.sync.job.skipReason.duplicateLimit':
+    'Not copied: one import creates up to 100 tasks. Pick it again to copy it',
+  'linear.sync.job.skipReason.duplicateNotClosed':
+    'New task created, but it could not be closed like its issue',
   'linear.sync.job.skipReason.failed': 'Could not be written; the next sync retries it',
   'linear.sync.job.skipReason.live':
     'Archived in Linear, but the task has a live schedule or an open goal; a later sync archives it',
@@ -160,6 +166,9 @@ export default {
     'Also list and import issues archived in Linear, and archive their tasks here too',
   'linear.sync.options.includeArchivedRuleDesc':
     'Also sync issues archived in Linear that match this rule, and archive their tasks',
+  'linear.sync.options.skipDuplicates': 'Skip duplicates',
+  'linear.sync.options.skipDuplicatesDesc':
+    "Picked issues that were already imported update their existing task. Turn off to create a new task for each; later syncs won't update those copies.",
   'linear.sync.options.syncComments': 'Sync comments',
   'linear.sync.options.syncCommentsDesc':
     "Copy each issue's Linear comments into the task's activity, keeping the author and time",
