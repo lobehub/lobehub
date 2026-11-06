@@ -36,6 +36,7 @@ class LinearService {
   /** Starts a background import; returns the job id. */
   startImport = async (params: {
     connectionId: string;
+    importDuplicates?: boolean;
     issueIds: string[];
     projectId: string;
     syncComments?: boolean;

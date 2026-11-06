@@ -10,7 +10,7 @@ import useSWR from 'swr';
 import { linearKeys } from '@/features/Integrations/Linear/swrKeys';
 import { linearService } from '@/services/linear';
 
-import ImportOptions from './ImportOptions';
+import ImportOptions, { ImportOption } from './ImportOptions';
 import IssueList from './IssueList';
 import RunStep from './RunStep';
 import ScopeStep from './ScopeStep';
@@ -46,6 +46,8 @@ const ImportIssuesContent = memo<LinearIssueImportModalOptions>(
     const [syncComments, setSyncComments] = useState(true);
     // Archived issues stay out, as in Linear, unless asked for.
     const [includeArchived, setIncludeArchived] = useState(false);
+    // An issue maps to one task unless asked otherwise, so importing twice stays safe.
+    const [skipDuplicates, setSkipDuplicates] = useState(true);
     const [starting, setStarting] = useState<'import' | 'rule' | null>(null);
     const [jobId, setJobId] = useState<string>();
     // Shown as the running title until the job loads, so a single import never reads as a rule sync.
@@ -112,6 +114,7 @@ const ImportIssuesContent = memo<LinearIssueImportModalOptions>(
       start('import', () =>
         linearService.startImport({
           connectionId: connection.id,
+          importDuplicates: !skipDuplicates,
           issueIds: [...selected],
           projectId,
           syncComments,
@@ -251,6 +254,12 @@ const ImportIssuesContent = memo<LinearIssueImportModalOptions>(
                 teamId: filter.teamId!,
               }}
               onSelectionChange={changeSelection}
+            />
+            <ImportOption
+              checked={skipDuplicates}
+              desc={t('linear.sync.options.skipDuplicatesDesc')}
+              label={t('linear.sync.options.skipDuplicates')}
+              onChange={setSkipDuplicates}
             />
           </Flexbox>
         ) : null}

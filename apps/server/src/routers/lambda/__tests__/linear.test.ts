@@ -1057,6 +1057,29 @@ describe('linearRouter', () => {
       );
     });
 
+    it('imports duplicates only when an import asks for them', async () => {
+      const connection = await connect({ userId });
+      mocks.getToken.mockResolvedValue('token');
+      mocks.runSync.mockResolvedValue({ ok: true });
+      mocks.importIssues.mockResolvedValue(syncResult);
+      const start = (importDuplicates?: boolean) =>
+        caller({ userId }).startImport({
+          connectionId: connection.id,
+          importDuplicates,
+          issueIds: ['issue-1'],
+          projectId,
+        });
+
+      await new LinearSyncJobService(serverDB, userId).run((await start()).id);
+      expect(mocks.importIssues.mock.lastCall?.[2].importDuplicates).toBeUndefined();
+
+      await new LinearSyncJobService(serverDB, userId).run((await start(false)).id);
+      expect(mocks.importIssues.mock.lastCall?.[2].importDuplicates).toBeUndefined();
+
+      await new LinearSyncJobService(serverDB, userId).run((await start(true)).id);
+      expect(mocks.importIssues.mock.lastCall?.[2].importDuplicates).toBe(true);
+    });
+
     it('leaves archived issues out of a rule run unless that run asks for them', async () => {
       const connection = await connect({ userId });
       mocks.getToken.mockResolvedValue('token');

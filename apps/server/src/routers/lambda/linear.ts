@@ -166,6 +166,8 @@ export const linearRouter = router({
     .input(
       projectInput.extend({
         connectionId: z.string().uuid(),
+        /** Create another task for an issue already imported, instead of updating its task. */
+        importDuplicates: z.boolean().optional(),
         issueIds: z.array(z.string().min(1)).min(1).max(MAX_IMPORT_ISSUES),
         /** Also copy each issue's Linear comments onto its task. */
         syncComments: z.boolean().optional(),
@@ -178,6 +180,7 @@ export const linearRouter = router({
       await callLinear(() => getLinearAccessToken(ctx.serverDB, input.connectionId));
       const id = await startJob(ctx, {
         connectionId: input.connectionId,
+        importDuplicates: input.importDuplicates || undefined,
         issueIds: [...new Set(input.issueIds)],
         kind: 'issues',
         projectId: input.projectId,
