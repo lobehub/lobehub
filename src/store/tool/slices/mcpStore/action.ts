@@ -1,4 +1,4 @@
-import { CURRENT_VERSION, isDesktop } from '@lobechat/const';
+import { CURRENT_VERSION, hasCallableMcpEndpoint, isDesktop } from '@lobechat/const';
 import { type ToolManifest } from '@lobechat/types';
 import { type PluginItem } from '@lobehub/market-sdk';
 import { type TRPCClientError } from '@trpc/client';
@@ -16,7 +16,6 @@ import {
 } from '@/libs/replica';
 import { discoverService } from '@/services/discover';
 import { mcpService } from '@/services/mcp';
-import { pluginService } from '@/services/plugin';
 import { globalHelpers } from '@/store/global/helpers';
 import { mcpStoreSelectors } from '@/store/tool/selectors';
 import { type StoreSetter } from '@/store/types';
@@ -34,8 +33,8 @@ import { sleep } from '@/utils/sleep';
 import { setNamespace } from '@/utils/storeDebug';
 
 import { type ToolStore } from '../../store';
-import { pluginSelectors } from '../plugin/selectors';
 import { type MCPPluginListData, type MCPStoreState } from './initialState';
+import { installMarketplaceConnector } from './installMarketplaceConnector';
 import { installOAuthPlugin } from './installOAuthPlugin';
 import { MCP_PLUGIN_LIST_KEY, type MCPPluginListParams, mcpPluginListResource } from './projection';
 
@@ -275,7 +274,7 @@ export class PluginMCPStoreActionImpl {
     // Extract haveCloudEndpoint after plugin is loaded
     const { haveCloudEndpoint } = plugin || {};
 
-    const { updateInstallLoadingState, refreshPlugins, updateMCPInstallProgress } = this.#get();
+    const { updateInstallLoadingState, updateMCPInstallProgress } = this.#get();
 
     // Create AbortController for canceling installation
     const abortController = new AbortController();
@@ -653,21 +652,25 @@ export class PluginMCPStoreActionImpl {
         finalConnection.headers = mergedCloudHeaders;
       }
 
-      await pluginService.installPlugin({
-        // For mcp, store connection info in customParams field first
-        customParams: { mcp: finalConnection },
-        identifier: plugin.identifier,
-        manifest,
-        settings: isOAuth ? undefined : normalizedConfig,
-        type: 'plugin',
-      });
+      // The install lands in `user_connectors`; no `user_installed_plugins` row is written.
+      await installMarketplaceConnector(
+        {
+          connection: finalConnection,
+          description: plugin.description,
+          icon: plugin.icon,
+          identifier: plugin.identifier,
+          isOAuth,
+          manifest,
+          name: manifest.meta?.title || data.name || plugin.identifier,
+          signal: abortController.signal,
+        },
+        this.#get,
+      );
 
       // Check if already cancelled
       if (abortController.signal.aborted) {
         return;
       }
-
-      await refreshPlugins();
 
       // Step 7: Complete installation
       updateMCPInstallProgress(identifier, {
@@ -963,21 +966,22 @@ export class PluginMCPStoreActionImpl {
   };
 
   uninstallMCPPlugin = async (identifier: string): Promise<void> => {
-    // Persisted display projections omit OAuth configuration. Confirm them
-    // before deciding whether this installation owns server-held credentials.
-    if (pluginSelectors.isInstalledPluginsCacheOnly(this.#get())) {
-      await this.#get().refreshPlugins();
-    }
-    const connection = pluginSelectors.getInstalledPluginById(identifier)(this.#get())?.customParams
-      ?.mcp;
-    if (connection?.type === 'http' && connection.auth?.type === 'oauth2') {
-      await this.#get().fetchConnectors();
-      const connector = this.#get().connectors.find(
-        (item) =>
-          item.identifier === identifier && item.sourceType === 'marketplace' && item.mcpServerUrl,
-      );
-      if (connector) await this.#get().deleteConnector(connector.id);
-    }
+    // The install's connector: every install since connectors, and the OAuth
+    // credentials of older ones. Endpoint-less rows are only tool projections.
+    // Best effort: with the list unavailable, match what the store already holds.
+    await this.#get()
+      .fetchConnectors()
+      .catch(() => {});
+    const connector = this.#get().connectors.find(
+      (item) =>
+        item.identifier === identifier &&
+        item.sourceType === 'marketplace' &&
+        hasCallableMcpEndpoint(item),
+    );
+    if (connector) await this.#get().deleteConnector(connector.id);
+
+    // Installs made before connectors also keep a legacy plugin row; removing
+    // a missing one is a no-op on the server.
     await this.#get().uninstallPlugin(identifier);
 
     discoverService.reportMcpEvent({

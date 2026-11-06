@@ -13,3 +13,15 @@ export const openConnectorEditDrawer = (connectorId: string) =>
       onEditSuccess={close}
     />
   ));
+
+/**
+ * The picker's "Configure" action for a connector row. A market-hosted (cloud)
+ * marketplace connector has no connection settings, so it gets none.
+ */
+export const getConnectorConfigureConfig = (connector: {
+  id: string;
+  mcpConnectionType: string | null;
+}) =>
+  connector.mcpConnectionType === 'cloud'
+    ? undefined
+    : { onConfigure: () => openConnectorEditDrawer(connector.id) };

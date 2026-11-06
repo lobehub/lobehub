@@ -3,6 +3,7 @@ import { MoreHorizontalIcon, Trash2 } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { openConnectorEditDrawer } from '@/features/Connectors/CustomConnectorModal/imperative';
 import { createMcpSettingsModal } from '@/features/MCP/MCPSettings/McpSettingsModal';
 import { createPluginDetailModal } from '@/features/PluginDetailModal';
 import { usePermission } from '@/hooks/usePermission';
@@ -11,6 +12,7 @@ import { agentSelectors } from '@/store/agent/selectors';
 import { useServerConfigStore } from '@/store/serverConfig';
 import { pluginHelpers, useToolStore } from '@/store/tool';
 import { mcpStoreSelectors, pluginSelectors } from '@/store/tool/selectors';
+import { connectorSelectors } from '@/store/tool/slices/connector';
 import { type LobeToolType } from '@/types/tool/tool';
 
 import EditCustomPlugin from './EditCustomPlugin';
@@ -23,14 +25,16 @@ interface ActionsProps {
 
 const Actions = memo<ActionsProps>(({ identifier, type, isMCP }) => {
   const mobile = useServerConfigStore((s) => s.isMobile);
+  const isCustomPlugin = type === 'customPlugin';
+  const isCommunityMCP = !isCustomPlugin && isMCP;
   const [installed, installing, unInstallPlugin, installMCPPlugin] = useToolStore((s) => [
     pluginSelectors.isPluginInstalled(identifier)(s),
     mcpStoreSelectors.isPluginInstallLoading(identifier)(s),
-    s.uninstallCustomPlugin,
+    // A community MCP may be installed as a connector, which only this removes.
+    isCommunityMCP ? s.uninstallMCPPlugin : s.uninstallCustomPlugin,
     s.installMCPPlugin,
   ]);
 
-  const isCustomPlugin = type === 'customPlugin';
   const { t } = useTranslation('plugin');
   const plugin = useToolStore(pluginSelectors.getToolManifestById(identifier));
   const { allowed: canCreate } = usePermission('create_content');
@@ -39,6 +43,13 @@ const Actions = memo<ActionsProps>(({ identifier, type, isMCP }) => {
     s.togglePlugin,
     agentSelectors.currentAgentPlugins(s).includes(identifier),
   ]);
+  // A marketplace MCP installed as a connector (no legacy row): its settings
+  // live on the connector, not in the plugin settings modal.
+  const marketConnector = useToolStore((s) =>
+    isCommunityMCP
+      ? connectorSelectors.marketplaceMcpConnectors(s).find((c) => c.identifier === identifier)
+      : undefined,
+  );
   const hasSettings = pluginHelpers.isSettingSchemaNonEmpty(plugin?.settings);
   // Painted from the local cache: settings and connection parameters only
   // arrive with the server's records, so configuring waits for them.
@@ -46,16 +57,21 @@ const Actions = memo<ActionsProps>(({ identifier, type, isMCP }) => {
 
   const [showModal, setModal] = useState(false);
 
-  const isCommunityMCP = !isCustomPlugin && isMCP;
-  const showConfigureButton = isCustomPlugin || isMCP || hasSettings;
+  // A market-hosted (cloud) connector has no connection settings to edit.
+  const showConfigureButton = marketConnector
+    ? marketConnector.mcpConnectionType !== 'cloud'
+    : isCustomPlugin || isMCP || hasSettings;
+  const confirming = isConfirming && !marketConnector;
 
   const configureButton = (
     <Button
-      disabled={!canEdit || isConfirming}
-      loading={isConfirming}
+      disabled={!canEdit || confirming}
+      loading={confirming}
       onClick={() => {
-        if (!canEdit || isConfirming) return;
-        if (isCustomPlugin) {
+        if (!canEdit || confirming) return;
+        if (marketConnector) {
+          openConnectorEditDrawer(marketConnector.id);
+        } else if (isCustomPlugin) {
           setModal(true);
         } else if (isCommunityMCP) {
           createMcpSettingsModal({ identifier });

@@ -13,6 +13,12 @@ vi.mock('@/server/services/mcp', () => ({
   mcpService: { callTool: vi.fn(), readUiResource: vi.fn() },
 }));
 vi.mock('@/server/services/deviceGateway', () => ({ deviceGateway: { isConfigured: false } }));
+const callCloudMcpEndpoint = vi.hoisted(() => vi.fn());
+vi.mock('@/server/services/discover', () => ({
+  DiscoverService: vi.fn(function DiscoverService() {
+    return { callCloudMcpEndpoint };
+  }),
+}));
 const mcpAppsEnabled = vi.hoisted(() => vi.fn().mockResolvedValue(false));
 vi.mock('@/server/services/mcp/featureGate', () => ({ isMcpAppsEnabled: mcpAppsEnabled }));
 vi.mock('./tokens', () => ({ ensureFreshConnectorToken: vi.fn(async (c) => c) }));
@@ -277,6 +283,31 @@ describe('callConnectorToolById', () => {
     });
   });
 
+  it('runs a cloud connector tool through the market cloud gateway', async () => {
+    callCloudMcpEndpoint.mockResolvedValue({ content: [{ text: 'found', type: 'text' }] });
+    const cloud = {
+      ...connector,
+      credentials: null,
+      mcpConnectionType: 'cloud',
+      mcpServerUrl: null,
+    };
+    const ctx = { ...makeCtx([cloud], [tool()]), userId: 'user-1' };
+
+    const res = await callConnectorToolById(
+      { args: '{"q":"x"}', identifier: 'my-conn', toolName: 'do_thing' },
+      ctx,
+    );
+
+    expect(callCloudMcpEndpoint).toHaveBeenCalledWith({
+      apiParams: { q: 'x' },
+      identifier: 'my-conn',
+      toolName: 'do_thing',
+    });
+    expect(res).toMatchObject({ content: 'found', success: true });
+    expect(mcpService.callTool).not.toHaveBeenCalled();
+    expect(ensureFreshConnectorToken).not.toHaveBeenCalled();
+  });
+
   it('still returns the tool result when the background refresh scheduler throws', async () => {
     // The refresh is a pure optimization; a failure in it must never break the
     // tool call the user actually asked for.
@@ -344,7 +375,7 @@ describe('readConnectorUiResourceById', () => {
     );
   });
 
-  it('rejects missing, disabled and stdio connectors', async () => {
+  it('rejects missing, disabled, stdio and cloud connectors', async () => {
     await expect(
       readConnectorUiResourceById(
         { identifier: 'x', server: SERVER, uri: 'ui://app' },
@@ -361,6 +392,12 @@ describe('readConnectorUiResourceById', () => {
       readConnectorUiResourceById(
         { identifier: 'my-conn', server: SERVER, uri: 'ui://app' },
         makeCtx([{ ...connector, mcpConnectionType: 'stdio' }], []),
+      ),
+    ).rejects.toHaveProperty('code', 'BAD_REQUEST');
+    await expect(
+      readConnectorUiResourceById(
+        { identifier: 'my-conn', server: SERVER, uri: 'ui://app' },
+        makeCtx([{ ...connector, mcpConnectionType: 'cloud', mcpServerUrl: null }], []),
       ),
     ).rejects.toHaveProperty('code', 'BAD_REQUEST');
     expect(mcpService.readUiResource).not.toHaveBeenCalled();

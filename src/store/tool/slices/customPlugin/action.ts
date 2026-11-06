@@ -8,9 +8,23 @@ import { setNamespace } from '@/utils/storeDebug';
 
 import { type ToolStore } from '../../store';
 import { pluginSelectors } from '../plugin/selectors';
-import { defaultCustomPlugin } from './initialState';
 
 const n = setNamespace('customPlugin');
+
+export interface CustomMcpConnectorParams {
+  config: {
+    args?: string[];
+    command?: string;
+    env?: Record<string, string>;
+    headers?: Record<string, string>;
+    type: 'http' | 'stdio';
+    url?: string;
+  };
+  description?: string;
+  icon?: string;
+  identifier: string;
+  name?: string;
+}
 
 type Setter = StoreSetter<ToolStore>;
 export const createCustomPluginSlice = (set: Setter, get: () => ToolStore, _api?: unknown) =>
@@ -26,11 +40,43 @@ export class CustomPluginActionImpl {
     this.#get = get;
   }
 
-  installCustomPlugin = async (value: LobeToolCustomPlugin): Promise<void> => {
-    await pluginService.createCustomPlugin(value);
+  /**
+   * Add a custom MCP server as a `custom` connector and sync its tools. A row
+   * this call created is removed again when the tool sync fails.
+   */
+  installCustomMcpConnector = async ({
+    config,
+    description,
+    icon,
+    identifier,
+    name,
+  }: CustomMcpConnectorParams): Promise<void> => {
+    const { createConnector, deleteConnector, syncConnectorTools } = this.#get();
+    const isHttp = config.type === 'http';
+    const metadata: Record<string, unknown> = { avatar: icon, description };
+    if (isHttp && config.headers && Object.keys(config.headers).length > 0)
+      metadata.customHeaders = config.headers;
 
-    await this.#get().refreshPlugins();
-    this.#set({ newCustomPlugin: defaultCustomPlugin }, false, n('saveToCustomPluginList'));
+    const { id, isNew } = await createConnector({
+      identifier,
+      mcpConnectionType: config.type,
+      mcpServerUrl: isHttp ? config.url?.trim() : undefined,
+      mcpStdioConfig: isHttp
+        ? undefined
+        : { args: config.args ?? [], command: (config.command ?? '').trim(), env: config.env },
+      metadata,
+      name: name || identifier,
+      sourceType: 'custom',
+    });
+    try {
+      await syncConnectorTools(id);
+    } catch (error) {
+      if (isNew)
+        await deleteConnector(id).catch((deleteError) => {
+          console.error('[customMcp] rollback of connector %s failed:', id, deleteError);
+        });
+      throw error;
+    }
   };
 
   reinstallCustomPlugin = async (id: string): Promise<void> => {

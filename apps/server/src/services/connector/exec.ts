@@ -6,6 +6,7 @@ import type { DecryptedConnector } from '@/database/models/connector';
 import { ConnectorMcpConnectionType, ConnectorToolPermission } from '@/database/schemas';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { mcpService } from '@/server/services/mcp';
+import { callCloudMcpTool } from '@/server/services/mcp/cloudTool';
 import { isMcpAppsEnabled } from '@/server/services/mcp/featureGate';
 
 import { buildLastSyncedAtMap, scheduleStaleConnectorToolsRefresh } from './refresh';
@@ -172,6 +173,17 @@ export const callConnectorToolById = async (
     );
   }
 
+  // A market-hosted stdio server: no session to open, the market's cloud
+  // gateway runs the tool by identifier.
+  if (connector.mcpConnectionType === ConnectorMcpConnectionType.cloud) {
+    return callCloudMcpTool({
+      args: params.args,
+      identifier: connector.identifier,
+      toolName: params.toolName,
+      userId: ctx.userId,
+    });
+  }
+
   const fresh = await ensureFreshConnectorToken(connector, ctx.connectorModel);
 
   return mcpService.callTool({
@@ -205,10 +217,13 @@ export const readConnectorUiResourceById = async (
   if (!connector.isEnabled) {
     throw new ConnectorToolCallError('FORBIDDEN', 'Connector is disabled');
   }
-  if (connector.mcpConnectionType === ConnectorMcpConnectionType.stdio) {
+  if (
+    connector.mcpConnectionType === ConnectorMcpConnectionType.stdio ||
+    connector.mcpConnectionType === ConnectorMcpConnectionType.cloud
+  ) {
     throw new ConnectorToolCallError(
       'BAD_REQUEST',
-      'Interactive views are not supported for stdio connectors yet',
+      `Interactive views are not supported for ${connector.mcpConnectionType} connectors yet`,
     );
   }
   // A cloud server can't reach a localhost / LAN endpoint, and resource reads
