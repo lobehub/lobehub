@@ -2876,6 +2876,7 @@
   "taskProject.inheritedFromParent": "子任务归属于父任务所在的项目",
   "taskProject.label": "项目",
   "taskProject.loadFailed": "项目加载失败",
+  "taskProject.moveRefused": "父任务、子任务或依赖仍在当前项目中，无法移动此任务。请先移动或解除它们。",
   "taskProject.noMatch": "未找到匹配的项目",
   "taskProject.none": "无项目",
   "taskProject.searchPlaceholder": "搜索项目…",

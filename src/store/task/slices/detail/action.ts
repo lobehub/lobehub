@@ -11,6 +11,7 @@ import { t } from 'i18next';
 import { cacheScope, createReplicaSlice, recordLens, revalidateReplica } from '@/libs/replica';
 import { subscribeCacheScope } from '@/libs/replica/cacheScopeEvents';
 import { useClientDataSWR } from '@/libs/swr';
+import { normalizeAsyncError } from '@/libs/swr/normalizeError';
 import { taskService } from '@/services/task';
 import { workService } from '@/services/work';
 import { goalGraphResource } from '@/store/goal/projection';
@@ -685,6 +686,15 @@ export class TaskDetailSliceActionImpl {
               ...options,
               source: 'external',
             }));
+        // A refused project move repeats on retry until its links are moved, and the
+        // server's reason is English-only, so the toast says what to do instead.
+        if (data.projectId !== undefined && normalizeAsyncError(error).code === 'BAD_REQUEST') {
+          saveToast(error, {
+            hideCause: true,
+            title: t('taskProject.moveRefused', { ns: 'chat' }),
+          });
+          return;
+        }
         saveToast(error, { retry });
       },
       setStatus: (status) => this.#get().internal_setTaskSaveStatus(id, status),
