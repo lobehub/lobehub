@@ -540,6 +540,14 @@ export interface AgentState {
    * for human-in-the-loop operations.
    */
   pendingToolsCalling?: ChatToolPayload[];
+  /**
+   * Message the parked turn's pending tool rows hang under: the assistant that
+   * emitted the calls, or the tool row itself when a resume reuses it. Scopes
+   * the async-tool barrier's `tool_call_id` lookup to this turn — providers can
+   * repeat ids (`call_0`, a function name), so an id alone can match a
+   * completed row from an earlier turn, another run, or another user.
+   */
+  pendingToolsParentMessageId?: string;
   // --- Plan ---
   /** How the run executes. Frozen at creation. */
   plan?: AgentRunPlan;
