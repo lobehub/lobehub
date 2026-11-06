@@ -165,11 +165,10 @@ export default {
   'create.identifierLabel': 'Identifier (optional)',
   'create.identifierPlaceholder': 'ACE',
   'create.mainAgentDedicatedDescription':
-    'Creates an agent named after the project, with its avatar and the Project label. It stays in your agents list. Your choice is reused next time.',
+    'Creates an agent named after the project, with its avatar and the Project label. It stays in your agents list.',
   'create.mainAgentDedicatedPlaceholder': 'Named after the project',
   'create.mainAgentDedicatedTag': 'New',
-  'create.mainAgentDescription':
-    'Manages this project’s conversations, tasks, and goals. Your choice is reused next time.',
+  'create.mainAgentDescription': 'Manages this project’s conversations, tasks, and goals.',
   'create.mainAgentLabel': 'Main agent',
   'create.mainAgentMode.dedicated': 'Create a dedicated agent',
   'create.mainAgentMode.existing': 'Use an existing agent',
