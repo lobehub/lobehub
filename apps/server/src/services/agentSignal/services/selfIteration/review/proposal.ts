@@ -88,6 +88,8 @@ export interface SelfReviewProposalBaseSnapshot {
   documentId?: string;
   /** Last document update timestamp observed when the proposal was created. */
   documentUpdatedAt?: string;
+  /** Whether the target was a `hintIsSkill` document that the first write promotes into a skill. */
+  hintedDocument?: boolean;
   /** Whether the target was managed by Agent Signal. */
   managed?: boolean;
   /** Hash of the agent system prompt observed when the proposal was created. */

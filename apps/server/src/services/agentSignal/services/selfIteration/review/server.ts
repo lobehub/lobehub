@@ -53,7 +53,11 @@ import {
   supersedeSelfReviewProposal,
 } from './proposal';
 import { createSelfReviewProposalPreflightService } from './proposalPreflight';
-import { createSelfReviewProposalSnapshotService } from './proposalSnapshot';
+import {
+  createSelfReviewProposalSnapshotService,
+  isCompleteSkillTargetSnapshot,
+  resolveReplaceSkillBaseSnapshot,
+} from './proposalSnapshot';
 import {
   groupRecurringReviewIdeas,
   listNightlyReceiptLocalDates,
@@ -304,37 +308,45 @@ const withCompleteProposalSnapshots = async ({
         return rawAction;
       }
 
+      const baseSnapshot = await snapshotService.captureActionSnapshot({
+        actionType,
+        agentId,
+        input: getProposalActionSnapshotInput(action),
+        userId,
+      });
+
+      if (actionType !== 'refine_skill' || !baseSnapshot.agentDocumentId) {
+        return { ...action, baseSnapshot };
+      }
+
+      // A SKILL.md index id resolves to its bundle id in the snapshot; rewrite the action's
+      // target ids to match, or approve-time preflight reports `target_type_changed`.
+      const operation = toRecordOrEmpty(action.operation);
+
       return {
         ...action,
-        baseSnapshot: await snapshotService.captureActionSnapshot({
-          actionType,
-          agentId,
-          input: getProposalActionSnapshotInput(action),
-          userId,
-        }),
+        baseSnapshot,
+        ...(action.operation
+          ? {
+              operation: {
+                ...operation,
+                input: {
+                  ...toRecordOrEmpty(operation.input),
+                  skillDocumentId: baseSnapshot.agentDocumentId,
+                },
+              },
+            }
+          : {}),
+        target: {
+          ...toRecordOrEmpty(action.target),
+          skillDocumentId: baseSnapshot.agentDocumentId,
+        },
       };
     }),
   );
 
   return { ...input, actions };
 };
-
-const isCompleteRefineToolSnapshot = (
-  snapshot: ReplaceSkillContentCASInput['baseSnapshot'],
-): snapshot is NonNullable<ReplaceSkillContentCASInput['baseSnapshot']> & {
-  agentDocumentId: string;
-  contentHash: string;
-  documentId: string;
-} =>
-  snapshot?.targetType === 'skill' &&
-  typeof snapshot.agentDocumentId === 'string' &&
-  snapshot.agentDocumentId.trim().length > 0 &&
-  typeof snapshot.contentHash === 'string' &&
-  snapshot.contentHash.trim().length > 0 &&
-  typeof snapshot.documentId === 'string' &&
-  snapshot.documentId.trim().length > 0 &&
-  snapshot.managed === true &&
-  snapshot.writable === true;
 
 const withCompleteReplaceSkillSnapshot = async ({
   agentId,
@@ -347,29 +359,22 @@ const withCompleteReplaceSkillSnapshot = async ({
   snapshotService: ReturnType<typeof createSelfReviewProposalSnapshotService>;
   userId: string;
 }): Promise<ReplaceSkillContentCASInput> => {
-  if (isCompleteRefineToolSnapshot(input.baseSnapshot)) return input;
-
-  const baseSnapshot = await snapshotService.captureActionSnapshot({
-    actionType: 'refine_skill',
+  // NOTICE:
+  // `replaceSkillContentCAS` can be called with either the managed skill bundle id or its
+  // SKILL.md index agent document id, and with the `baseSnapshot` a skill read returned.
+  // Resolution maps both ids to the bundle id that approve-time preflight compares against,
+  // so a valid index-targeted write is not reported as target drift (`target_type_changed`),
+  // and a caller snapshot stays the compare-and-set base (T-11861).
+  // Removal condition: remove only if preflight natively accepts equivalent bundle/index ids.
+  const resolved = await resolveReplaceSkillBaseSnapshot({
     agentId,
-    input: {
-      skillDocumentId: input.skillDocumentId,
-    },
+    baseSnapshot: input.baseSnapshot,
+    skillDocumentId: input.skillDocumentId,
+    snapshotService,
     userId,
   });
 
-  return {
-    ...input,
-    baseSnapshot,
-    // NOTICE:
-    // `replaceSkillContentCAS` can be called with either the managed skill bundle id or its
-    // SKILL.md index agent document id. Snapshot capture resolves both to the bundle id, and
-    // approve-time preflight compares the action target against that resolved bundle id.
-    // Without normalizing here, a valid index-targeted write is reported as target drift
-    // (`target_type_changed`) even though it points to the same managed skill.
-    // Removal condition: remove only if preflight natively accepts equivalent bundle/index ids.
-    skillDocumentId: baseSnapshot.agentDocumentId ?? input.skillDocumentId,
-  };
+  return { ...input, ...resolved };
 };
 
 const createProposalProjectionFromToolInput = ({
@@ -635,23 +640,14 @@ export const createReviewRuntimePrimitives = (
         summary: `Created managed skill ${result.name}.`,
       };
     },
+    // Skill reads stay in the reviewed agent's scope, the same scope writes and snapshot
+    // capture use: reading another agent's skill would hand back a target no write can reach.
     getManagedSkill: async (rawInput) => {
-      const { agentId: targetAgentId, skillDocumentId } = rawInput as {
-        agentId?: string;
-        skillDocumentId: string;
-      };
+      const { skillDocumentId } = rawInput as { skillDocumentId: string };
 
-      return skillDocumentService.getSkill({
-        agentDocumentId: skillDocumentId,
-        agentId: targetAgentId ?? agentId,
-        includeContent: true,
-      });
+      return skillDocumentService.getSkillTarget({ agentDocumentId: skillDocumentId, agentId });
     },
-    listManagedSkills: async (rawInput) => {
-      const { agentId: targetAgentId } = rawInput as { agentId?: string };
-
-      return skillDocumentService.listSkills({ agentId: targetAgentId ?? agentId });
-    },
+    listManagedSkills: async () => skillDocumentService.listSkills({ agentId }),
     listSelfReviewProposals: async (rawInput) => {
       const { agentId: targetAgentId } = rawInput as { agentId?: string };
       const digest = await listServerSelfReviewProposalActivity({
@@ -708,7 +704,7 @@ export const createReviewRuntimePrimitives = (
         };
       }
 
-      if (!isCompleteRefineToolSnapshot(enriched.baseSnapshot)) {
+      if (!isCompleteSkillTargetSnapshot(enriched.baseSnapshot)) {
         return {
           resourceId: enriched.skillDocumentId,
           status: 'skipped_unsupported',
