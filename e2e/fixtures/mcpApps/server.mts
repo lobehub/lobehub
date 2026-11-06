@@ -256,7 +256,7 @@ const registerFixtureTools = (server: McpServer) => {
     'fixture_thread_entrypoint',
     'ui://mcp-apps/thread-entrypoint',
     'Open the app through an empty thread entrypoint configuration.',
-    toolMetadata('ui://mcp-apps/thread-entrypoint', 'inline', [{ type: 'thread' }]),
+    toolMetadata('ui://mcp-apps/thread-entrypoint', 'inline', [{ type: 'thread' }], ['app']),
   );
   registerTool(
     'fixture_legacy_output_template',

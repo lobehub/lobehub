@@ -73,6 +73,7 @@ try {
   assert.equal(defaultModeMeta.resourceUri, 'ui://mcp-apps/resource-modes-no-tool-preference');
   const thread = tools.find(({ name }) => name === 'fixture_thread_entrypoint');
   assert.deepEqual(resolveMcpUiToolMeta(thread?._meta).entrypoints, [{ type: 'thread' }]);
+  assert.deepEqual(resolveMcpUiToolMeta(thread?._meta).visibility, ['app']);
   const legacy = tools.find(({ name }) => name === 'fixture_legacy_output_template');
   assert.equal(legacy?._meta?.['openai/outputTemplate'], 'ui://mcp-apps/legacy-output-template');
   const conflict = tools.find(({ name }) => name === 'fixture_ui_metadata_conflict');
