@@ -471,9 +471,11 @@ export class LinearIssueSyncService {
     let current = task;
     if (closed) current = (await this.close(task, issue.state.type)) ?? task;
     result.created += 1;
-    if (issue.archivedAt && (await this.archive(current, issue.archivedAt))) {
+    if (
+      issue.archivedAt &&
+      (await this.archiveOnce(issue, issue.archivedAt, task.id)) === 'archived'
+    ) {
       result.archived = (result.archived ?? 0) + 1;
-      await this.linkModel.update(link.id, { metadata: linkMetadata(issue, issue.archivedAt) });
     }
     return { link, task: current };
   }
@@ -558,14 +560,12 @@ export class LinearIssueSyncService {
       }
     }
 
-    let current = task;
     let skippedRunning = false;
     if (CLOSED_STATE_TYPES.has(issue.state.type) && !CLOSED_TASK_STATUSES.has(task.status)) {
       // Rechecked under the row lock: the task may have started since the batch was read.
       const closed =
-        task.status === 'running' ? undefined : await this.close(task, issue.state.type);
+        task.status !== 'running' && (await this.close(task, issue.state.type)) !== undefined;
       if (closed) {
-        current = closed;
         result.closed += 1;
       } else {
         skip(result, issue.identifier, 'running');
@@ -581,14 +581,14 @@ export class LinearIssueSyncService {
         ? (issue.archivedAt ?? undefined)
         : undefined;
     if (issue.archivedAt && !appliedArchivedAt) {
-      if (current.archivedAt) {
-        // Archived in LobeHub first: that stays as it is.
+      const outcome = await this.archiveOnce(issue, issue.archivedAt, task.id);
+      if (outcome === 'archived' || outcome === 'applied') {
         appliedArchivedAt = issue.archivedAt;
-      } else if (await this.archive(current, issue.archivedAt)) {
-        appliedArchivedAt = issue.archivedAt;
-        result.archived = (result.archived ?? 0) + 1;
-        counted = true;
-      } else if (current.status === 'running' && !skippedRunning) {
+        if (outcome === 'archived') {
+          result.archived = (result.archived ?? 0) + 1;
+          counted = true;
+        }
+      } else if (outcome === 'running' && !skippedRunning) {
         skip(result, issue.identifier, 'running');
         counted = true;
       } else {
@@ -661,23 +661,52 @@ export class LinearIssueSyncService {
 
   /**
    * Archive the task like its issue, at Linear's time, under the rules of a
-   * manual archive. False when it is still live (running, a schedule or heartbeat
-   * that can fire, or unfinished in an open Goal), which a later run retries.
+   * manual archive, recording it on the link in one transaction. Rechecked under
+   * the row lock: a run working from an older read must not archive again a task
+   * restored since another run applied this archive.
+   *
+   * - `archived`: done by this call;
+   * - `applied`: nothing to do: already applied, or archived in LobeHub first,
+   *   which stays as it is and is recorded;
+   * - `running` / `live`: left for a later run, since it is running, has a schedule
+   *   or heartbeat that can fire, or is unfinished in an open Goal.
    */
-  private async archive(task: TaskItem, archivedAt: string): Promise<boolean> {
-    const inOpenGoal = await findTasksInOpenGoals(
-      this.db,
-      { userId: this.userId, workspaceId: this.workspaceId },
-      [task],
-    );
-    if (inOpenGoal.size > 0) return false;
+  private async archiveOnce(
+    issue: LinearIssue,
+    archivedAt: string,
+    taskId: string,
+  ): Promise<'applied' | 'archived' | 'live' | 'running'> {
+    return this.db.transaction(async (tx) => {
+      const tasks = new TaskModel(tx, this.userId, this.workspaceId);
+      await tasks.lockForUpdate(taskId);
+      const links = new TaskExternalLinkModel(tx, this.userId, this.workspaceId);
+      const [link] = await links.findByExternalIds('linear', [issue.id]);
+      const task = await tasks.findById(taskId);
+      if (!link || link.taskId !== taskId || !task) return 'live';
+      if (link.metadata?.appliedArchivedAt === archivedAt) return 'applied';
 
-    const [archived] = await new TaskArchiveModel(
-      this.db,
-      this.userId,
-      this.workspaceId,
-    ).archiveMany([task.id], { at: sql`${archivedAt}::timestamptz` });
-    return !!archived;
+      const record = () => links.update(link.id, { metadata: linkMetadata(issue, archivedAt) });
+      if (task.archivedAt) {
+        await record();
+        return 'applied';
+      }
+
+      const inOpenGoal = await findTasksInOpenGoals(
+        tx,
+        { userId: this.userId, workspaceId: this.workspaceId },
+        [task],
+      );
+      if (inOpenGoal.size > 0) return 'live';
+
+      const [archived] = await new TaskArchiveModel(tx, this.userId, this.workspaceId).archiveMany(
+        [taskId],
+        { at: sql`${archivedAt}::timestamptz` },
+      );
+      if (!archived) return task.status === 'running' ? 'running' : 'live';
+
+      await record();
+      return 'archived';
+    });
   }
 
   /**

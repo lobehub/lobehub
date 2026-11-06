@@ -1028,6 +1028,27 @@ describe('LinearIssueSyncService archived issues (real PostgreSQL, Linear over f
       expect((await linkedTask('1'))?.archivedAt).toBeNull();
     });
 
+    it('does not archive again from an older read a task restored since', async () => {
+      const service = new LinearIssueSyncService(db, userId);
+      linearIssues = [issue({ id: '1', state: done })];
+      await service.syncByFilter(TOKEN, rule);
+      // What an overlapping run read before this archive was applied.
+      const [staleLink] = await new TaskExternalLinkModel(db, userId).findByExternalIds('linear', [
+        '1',
+      ]);
+      const staleTask = await linkedTask('1');
+
+      linearIssues = [archivedIssue('1')];
+      await service.syncByFilter(TOKEN, rule);
+      await new TaskArchiveModel(db, userId).unarchive(staleTask!.id);
+
+      const result = { archived: undefined, closed: 0, skipped: [], unchanged: 0 };
+      await (service as any).syncLinked(archivedIssue('1'), staleLink, staleTask, {}, result);
+
+      expect(result.archived).toBeUndefined();
+      expect((await linkedTask('1'))?.archivedAt).toBeNull();
+    });
+
     it('keeps the task archived when Linear restores the issue, and applies a new archive', async () => {
       const service = new LinearIssueSyncService(db, userId);
       linearIssues = [archivedIssue('1')];
