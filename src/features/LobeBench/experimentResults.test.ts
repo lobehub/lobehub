@@ -495,6 +495,27 @@ describe('experiment results', () => {
     );
   });
 
+  it('neutralizes spreadsheet formulas in exported text, including after leading whitespace', () => {
+    const csv = createExperimentResultsCsv(
+      [
+        {
+          id: 'a',
+          category: '\t@SUM(A1)',
+          index: 3,
+          results: ['-2+3', '\r=1'],
+          title: '=HYPERLINK("https://example.test")',
+        },
+      ],
+      ['+Model', ' @Other'],
+    );
+    expect(csv).toBe(
+      [
+        "#,Case,Category,'+Model,' @Other",
+        `3,"'=HYPERLINK(""https://example.test"")",'\t@SUM(A1),'-2+3,"'\r=1"`,
+      ].join('\n'),
+    );
+  });
+
   it('exports exactly the selected native cases, in case order, without inventing missing results', () => {
     const csvCases = cases.map((item, index) => ({
       ...item,

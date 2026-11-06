@@ -263,6 +263,18 @@ interface ExperimentCsvCase extends ExperimentCase {
   title: string;
 }
 
+const FORMULA_TRIGGERS = new Set(['=', '+', '-', '@']);
+
+/**
+ * Spreadsheet apps evaluate a cell that starts with a formula trigger, even
+ * after leading whitespace or control characters. Prefix such text with `'`
+ * so an exported case title or model name is shown as text, never run.
+ */
+const neutralizeSpreadsheetFormula = (text: string) => {
+  const first = [...text].find((char) => char.trim() !== '' && char.charCodeAt(0) > 0x1f);
+  return first && FORMULA_TRIGGERS.has(first) ? `'${text}` : text;
+};
+
 /** A complete export of the experiment selection, independent of on-screen filters. */
 export const createExperimentResultsCsv = (
   cases: ExperimentCsvCase[],
@@ -270,7 +282,7 @@ export const createExperimentResultsCsv = (
   selectedIds?: string[],
 ) => {
   const quote = (value: string | number) => {
-    const text = String(value);
+    const text = typeof value === 'string' ? neutralizeSpreadsheetFormula(value) : String(value);
     return /[",\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
   };
   const rows = [...scopeExperimentCases(cases, selectedIds).cases]

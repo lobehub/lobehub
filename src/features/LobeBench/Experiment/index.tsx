@@ -45,7 +45,6 @@ import {
 import { ExperimentResultsState } from '@/features/LobeBench/ExperimentResultsLoading';
 import {
   CASE_LEVELS,
-  type CaseLevel,
   describeSettings,
   experimentPartMeta,
   experimentPartsOf,
@@ -78,6 +77,7 @@ import {
 
 import { heatStyle } from './heatStyle';
 import { LaunchPage } from './LaunchPage';
+import { useExperimentViewState } from './useExperimentViewState';
 
 const styles = stylex.create({
   container: {
@@ -135,7 +135,9 @@ const ExperimentDashboard = memo(() => {
     () => (experimentMeta ? experimentPartsOf(experimentMeta) : []),
     [experimentMeta],
   );
-  const [partIndex, setPartIndex] = useState(0);
+  const view = useExperimentViewState(experimentId);
+  const { category, filterOverride, level, openCase, partIndex } = view;
+  const { setCategory, setFilter, setLevel, setOpenCase, setPartIndex } = view;
   const part = parts[Math.min(partIndex, parts.length - 1)];
   const meta = useMemo(
     () => (experimentMeta && part ? experimentPartMeta(experimentMeta, part) : experimentMeta),
@@ -225,18 +227,8 @@ const ExperimentDashboard = memo(() => {
   }, [active, runs, refreshResults]);
 
   const [tab, setTab] = useState<Tab>('results');
-  const [filterOverride, setFilter] = useState<ExperimentCaseFilter>();
   const filter = filterOverride ?? defaultExperimentCaseFilter(contenders.length);
-  const [category, setCategory] = useState<string>();
-  const [level, setLevel] = useState<CaseLevel>();
-  const [openCase, setOpenCase] = useState<string>();
   const [refreshing, setRefreshing] = useState(false);
-  useEffect(() => {
-    setFilter(undefined);
-    setCategory(undefined);
-    setLevel(undefined);
-    setOpenCase(undefined);
-  }, [experimentId]);
 
   const resources = [
     { error: experimentsError, loaded: isInit },
