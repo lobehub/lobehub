@@ -714,14 +714,9 @@ describe('mcpStore actions', () => {
         return { id: row.id, isNew: true };
       });
       const syncConnectorTools = vi.fn();
-      act(() =>
-        useToolStore.setState({
-          createConnector,
-          fetchConnectors: vi.fn(),
-          syncConnectorTools,
-          updateConnector: vi.fn(),
-        }),
-      );
+      const fetchConnectors = vi.fn();
+      act(() => useToolStore.setState({ createConnector, fetchConnectors, syncConnectorTools }));
+      act(() => useToolStore.setState({ updateConnector: vi.fn() }));
       vi.spyOn(discoverService, 'reportMcpInstallResult').mockResolvedValue(undefined as any);
       vi.spyOn(discoverService, 'getMcpDetail').mockResolvedValue(mockPlugin as any);
     });
