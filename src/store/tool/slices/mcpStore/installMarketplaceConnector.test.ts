@@ -129,7 +129,7 @@ describe('installMarketplaceConnector', () => {
     expect(state.updateConnector).not.toHaveBeenCalled();
   });
 
-  it('keeps the install mark when reinstalling over a finished install', async () => {
+  it('leaves the install mark off the replacement until its tools are synced', async () => {
     state.connectors = [
       {
         id: 'connector-1',
@@ -141,12 +141,21 @@ describe('installMarketplaceConnector', () => {
     vi.mocked(state.getConnectorForEdit).mockResolvedValue({
       metadata: { marketplaceInstalled: true },
     } as never);
-    vi.mocked(state.createConnector).mockResolvedValue({ id: 'connector-1', isNew: false });
+    vi.mocked(state.createConnector).mockImplementation(async () => {
+      state.connectors = [{ id: 'connector-1', metadata: { avatar: 'icon' } }] as never;
+      return { id: 'connector-1', isNew: false };
+    });
 
     await install({ type: 'http', url: 'https://mcp.example.com' });
 
-    expect(vi.mocked(state.createConnector).mock.calls[0][0].metadata).toMatchObject({
-      marketplaceInstalled: true,
+    expect(vi.mocked(state.createConnector).mock.calls[0][0].metadata).not.toHaveProperty(
+      'marketplaceInstalled',
+    );
+    expect(vi.mocked(state.syncConnectorTools).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(state.updateConnector).mock.invocationCallOrder[0],
+    );
+    expect(state.updateConnector).toHaveBeenCalledWith('connector-1', {
+      metadata: { avatar: 'icon', marketplaceInstalled: true },
     });
   });
 

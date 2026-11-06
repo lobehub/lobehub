@@ -162,6 +162,35 @@ describe('MCPService', () => {
       );
     });
 
+    it('runs a market-hosted (cloud) connector through the server connector route', async () => {
+      const { lambdaClient } = await import('@/libs/trpc/client');
+      mockGetToolStoreState.mockReturnValue({
+        connectors: [
+          {
+            id: 'cloud-id',
+            identifier: 'cloud-mcp',
+            isEnabled: true,
+            mcpConnectionType: 'cloud',
+            mcpServerUrl: null,
+          },
+        ],
+      });
+      vi.mocked(lambdaClient.connector.callTool.mutate).mockResolvedValue({
+        content: 'ok',
+        success: true,
+      } as never);
+
+      await mcpService.invokeMcpToolCall(
+        { apiName: 'search', arguments: '{}', identifier: 'cloud-mcp' } as ChatToolPayload,
+        {},
+      );
+
+      expect(lambdaClient.connector.callTool.mutate).toHaveBeenCalledWith(
+        expect.objectContaining({ identifier: 'cloud-mcp', toolName: 'search' }),
+        expect.anything(),
+      );
+    });
+
     describe('stdio connectors', () => {
       const payload: ChatToolPayload = {
         id: 'local-call',
