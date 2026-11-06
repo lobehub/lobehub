@@ -6,6 +6,8 @@ export const migrationFixtures = [
   ['PreviewToolbar', 'src/features/Portal/LocalFile/PreviewToolbar.tsx'],
   ['WorkPreview', 'src/features/WorkGallery/WorkPreview.tsx'],
   ['WorkPreviewStatus', 'src/features/WorkGallery/WorkPreview.tsx'],
+  ['AcceptanceReport', 'src/features/Acceptance/Report/ReportViewer.tsx'],
+  ['AcceptanceEvidenceList', 'src/features/Acceptance/Viewer/Evidence/EvidenceList.tsx'],
 ] as const;
 
 export const migrationProfiles: Record<string, FixtureProfile> = {
@@ -98,5 +100,64 @@ export const migrationProfiles: Record<string, FixtureProfile> = {
         appearance,
       })),
     ),
+  },
+  AcceptanceReport: {
+    dependencies: [
+      'lucide-react',
+      'i18next',
+      'react-i18next',
+      'react-router',
+      'path-browserify-esm',
+      'es-toolkit',
+    ],
+    settleFrames: 2,
+    variants: [
+      { id: 'horizontal' },
+      { id: 'vertical' },
+      { id: 'dark-horizontal', appearance: 'dark' },
+    ],
+    boundaries: [
+      { importer: 'src/features/Acceptance/Report/ReportViewer.tsx', source: '../hooks' },
+      { importer: 'src/features/Acceptance/Report/ReportViewer.tsx', source: './TerminalEvidence' },
+      {
+        importer: 'src/features/Acceptance/Report/MarkdownEvidence.tsx',
+        source: '@/features/FileViewer/hooks/useTextFileLoader',
+      },
+    ].map((boundary) => ({ ...boundary, replacement: 'fixtures/AcceptanceReportData.ts' })),
+  },
+  AcceptanceEvidenceList: {
+    assets: ['fixtures/AcceptanceEvidenceData.ts'],
+    dependencies: [
+      'lucide-react',
+      'i18next',
+      'react-i18next',
+      'react-router',
+      'path-browserify-esm',
+      'es-toolkit',
+    ],
+    exportName: 'EvidenceList',
+    settleFrames: 2,
+    variants: [
+      { id: 'screenshot' },
+      { id: 'tall' },
+      { id: 'unsized' },
+      { id: 'gif' },
+      { id: 'video' },
+      { id: 'dark-screenshot', appearance: 'dark' },
+    ],
+    boundaries: [
+      {
+        importer: 'src/features/Acceptance/Viewer/Evidence/EvidenceList.tsx',
+        source: '../../Report/TerminalEvidence',
+      },
+      {
+        importer: 'src/features/Acceptance/Report/MarkdownEvidence.tsx',
+        source: '@/features/FileViewer/hooks/useTextFileLoader',
+      },
+      {
+        importer: 'src/features/Acceptance/Viewer/AcceptanceScope.tsx',
+        source: './useAcceptanceBundle',
+      },
+    ].map((boundary) => ({ ...boundary, replacement: 'fixtures/AcceptanceEvidenceData.ts' })),
   },
 };
