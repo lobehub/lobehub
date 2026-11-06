@@ -35,6 +35,7 @@ import {
 import { getChatGroupStoreState } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { getChatStoreState } from '@/store/chat';
+import { getServerConfigStoreState, serverConfigSelectors } from '@/store/serverConfig';
 import { getToolStoreState } from '@/store/tool';
 import { toolSelectors } from '@/store/tool/selectors';
 import { useUserStore } from '@/store/user';
@@ -347,6 +348,9 @@ export const contextEngineering = async ({
       provider,
     },
     run: {
+      enableMcpAppContext:
+        !!getServerConfigStoreState() &&
+        serverConfigSelectors.enableMcpApps(getServerConfigStoreState()!),
       additionalContexts,
       // MessagesEngine force-disables skills / agent-document injectors when this
       // is `false` (chat mode). ChatService resolves it from stored user intent

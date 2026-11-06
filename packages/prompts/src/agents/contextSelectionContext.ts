@@ -13,6 +13,8 @@ const formatSelectionAttributes = (selection: ContextSelection): string => {
   const attrs = [`source="${selection.source}"`];
 
   if (selection.title) attrs.push(`title="${escapeXmlAttr(selection.title)}"`);
+  if (selection.source === 'mcpApp')
+    attrs.push(`identifier="${escapeXmlAttr(selection.identifier)}"`);
   if (selection.source === 'page') attrs.push(`pageId="${escapeXmlAttr(selection.pageId)}"`);
   if (selection.source === 'code') {
     attrs.push(`filePath="${escapeXmlAttr(selection.filePath)}"`);

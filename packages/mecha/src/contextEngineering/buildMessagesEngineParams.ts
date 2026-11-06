@@ -29,6 +29,7 @@ export const buildMessagesEngineParams = (snapshot: ContextSnapshot): MessagesEn
     additionalContexts: run.additionalContexts,
     enableAgentMode: run.enableAgentMode,
     enableExpertise: run.enableExpertise,
+    enableMcpAppContext: run.enableMcpAppContext,
     expertise: run.expertise,
     forceFinish: run.forceFinish,
     formatHistorySummary: run.formatHistorySummary,

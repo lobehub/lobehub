@@ -466,7 +466,10 @@ export class MessagesEngine {
       // Selected tools (ephemeral user-selected @tool for this request)
       new SelectedToolInjector({ enabled: hasSelectedTools, selectedTools }),
       // Generic user-attached selections from chat/code/text contexts.
-      new ContextSelectionsInjector({ enabled: true }),
+      new ContextSelectionsInjector({
+        enabled: true,
+        mcpAppsEnabled: this.params.enableMcpAppContext,
+      }),
       // Local-system file snapshots (replay send-time @file reads as real tool results)
       new LocalSystemToolSnapshotInjector({ enabled: true }),
       // Project context (members, linked knowledge, open tasks) for a run inside a project
