@@ -1,4 +1,5 @@
 import type { TaskStatus } from './index';
+import type { TaskLabelRef } from './label';
 
 /**
  * The Tasks page filter (Linear-style "Add Filter"): a set of independent
@@ -62,6 +63,7 @@ export const TASK_LIST_FILTER_SET_FIELDS = [
   'assignee',
   'creator',
   'project',
+  'label',
 ] as const;
 export type TaskListFilterSetField = (typeof TASK_LIST_FILTER_SET_FIELDS)[number];
 
@@ -84,6 +86,12 @@ export interface TaskListFilter {
    * (`toTaskListFilterAgentCreator`) match `createdByAgentId`.
    */
   creator?: TaskListFilterSet<string>;
+  /**
+   * Label ids. A task matches a value when it carries that label, or — for a
+   * label group's id — any label of that group. `TASK_LIST_FILTER_NONE`
+   * stands for "no labels at all". `is` matches any value, `isNot` none.
+   */
+  label?: TaskListFilterSet<string>;
   /** `priority`, a missing one counting as 0 ("no priority"). */
   priority?: TaskListFilterSet<number>;
   /** `projectId`; may hold `TASK_LIST_FILTER_NONE`. */
@@ -136,6 +144,7 @@ export const normalizeTaskListFilter = (
     content: content || undefined,
     createdAt: normalizeDate(filter.createdAt),
     creator: normalizeSet(filter.creator),
+    label: normalizeSet(filter.label),
     priority: normalizeSet(filter.priority),
     project: normalizeSet(filter.project),
     status: normalizeSet(filter.status),
@@ -165,6 +174,8 @@ export interface TaskListFilterTarget {
   description?: string | null;
   identifier?: string | null;
   instruction?: string | null;
+  /** Labels the row carries; a row without the field counts as unlabeled. */
+  labels?: Pick<TaskLabelRef, 'id' | 'parentId'>[] | null;
   name?: string | null;
   priority?: number | null;
   projectId?: string | null;
@@ -193,6 +204,25 @@ const matchesCreator = (
     (!!task.createdByUserId && set.values.includes(task.createdByUserId)) ||
     (!!task.createdByAgentId &&
       set.values.includes(toTaskListFilterAgentCreator(task.createdByAgentId)));
+  return set.operator === 'isNot' ? !included : included;
+};
+
+/**
+ * A label value matches a carried label by id, or a label group by any of its
+ * labels; "none" matches a row without labels. Mirrors `buildLabelCondition`.
+ */
+const matchesLabels = (
+  set: TaskListFilterSet<string> | undefined,
+  task: TaskListFilterTarget,
+): boolean => {
+  if (!set || set.values.length === 0) return true;
+  const labels = task.labels ?? [];
+  const included =
+    (set.values.includes(TASK_LIST_FILTER_NONE) && labels.length === 0) ||
+    labels.some(
+      (label) =>
+        set.values.includes(label.id) || (!!label.parentId && set.values.includes(label.parentId)),
+    );
   return set.operator === 'isNot' ? !included : included;
 };
 
@@ -241,6 +271,7 @@ export const matchesTaskListFilter = (
     matchesSet(filter.assignee, task.assigneeUserId, TASK_LIST_FILTER_NONE) &&
     matchesCreator(filter.creator, task) &&
     matchesSet(filter.project, task.projectId, TASK_LIST_FILTER_NONE) &&
+    matchesLabels(filter.label, task) &&
     matchesDate(filter.createdAt, task.createdAt, now) &&
     matchesDate(filter.updatedAt, task.updatedAt, now) &&
     matchesDate(filter.completedAt, task.completedAt, now) &&

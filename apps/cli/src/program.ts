@@ -11,6 +11,7 @@ import { registerChannelCommand } from './commands/channel';
 import { registerCompletionCommand } from './commands/completion';
 import { registerConfigCommand } from './commands/config';
 import { registerConnectCommand } from './commands/connect';
+import { registerConnectorCommand } from './commands/connector';
 import { registerDashboardCommand } from './commands/dashboard';
 import { registerDeviceCommand } from './commands/device';
 import { registerDocCommand } from './commands/doc';
@@ -119,6 +120,7 @@ export function createProgram() {
   registerDashboardCommand(program);
   registerWidgetCommand(program);
   registerPluginCommand(program);
+  registerConnectorCommand(program);
   registerWorkspaceCommand(program);
   registerUserCommand(program);
   registerVerifyCommand(program);

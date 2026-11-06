@@ -47,6 +47,7 @@
   "deleteThreadSuccess": "线程已移至回收站",
   "deletedMember": "已离开的成员",
   "deviceRequired": "请为编程 Agent 选择在线设备和工作目录。",
+  "directComposer": "发消息给 {{name}}",
   "directoryRequired": "请为每台设备选择工作目录。",
   "environment.agentUnavailable": "此 Agent 已不可用，请移除后选择其他 Agent。",
   "environment.checkingDevice": "正在确认状态",

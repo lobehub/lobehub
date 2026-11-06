@@ -858,6 +858,9 @@ importers:
       '@lobechat/utils':
         specifier: workspace:*
         version: link:../../packages/utils
+      '@modelcontextprotocol/client':
+        specifier: ~2.4.0
+        version: 2.4.0
       '@trpc/client':
         specifier: ^11.18.0
         version: 11.19.0(@trpc/server@11.19.0(typescript@6.0.3))(typescript@6.0.3)

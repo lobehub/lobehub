@@ -2,14 +2,15 @@
 
 ## Core Commands
 
-- `lh task list [--status <status>] [--root] [--parent <id>] [--agent <id>] [-L <limit>] [--tree]` - List tasks
+- `lh task list [--status <status>] [--root] [--parent <id>] [--agent <id>] [--label <name>] [--unlabeled] [-L <limit>] [--tree]` - List tasks
   - `--status`: pending, running, paused, completed, failed, canceled
   - `--root`: Only root tasks (no parent)
+  - `--label`: Tasks carrying any of these labels (repeatable / comma-separated; a label group name matches any label in it)
   - `--tree`: Display as tree structure
 - `lh task view <id>` - View task details (instruction, documents, activities)
-- `lh task create -i <instruction> [-n <name>] [--agent <id>] [--parent <id>] [--priority <0-4>]` - Create task
+- `lh task create -i <instruction> [-n <name>] [--agent <id>] [--parent <id>] [--priority <0-4>] [--label <name>]` - Create task
   - Priority: 0=none, 1=urgent, 2=high, 3=normal, 4=low
-- `lh task edit <id> [-n <name>] [-i <instruction>] [--status <status>] [--priority <0-4>] [--agent <id>]` - Update task
+- `lh task edit <id> [-n <name>] [-i <instruction>] [--status <status>] [--priority <0-4>] [--agent <id>] [--label <name>] [--remove-label <name>]` - Update task
 - `lh task delete <id> [--yes]` - Delete task
 - `lh task clear [--yes]` - Delete all tasks
 - `lh task tree <id>` - Show subtask tree with dependencies
@@ -56,6 +57,15 @@
 - `lh task dep add <taskId> <dependsOnId> [--type <blocks|relates>]` - Add dependency
 - `lh task dep rm <taskId> <dependsOnId>` - Remove dependency
 - `lh task dep list <taskId>` - List dependencies
+
+## Label Commands
+
+Labels are shared by the workspace. `--label` only takes existing names (`Bug`, or `Type/Bug` for a label in a group); an unknown name fails with suggestions instead of creating a label. A task carries at most one label per label group — adding another one from the same group replaces it.
+
+- `lh task label list` - List labels and label groups with task counts
+- `lh task label create <name> [--color <hex>] [--group] [--parent <group>]` - Create a label (or a group with `--group`)
+- `lh task label edit <label> [-n <name>] [--color <hex>] [--parent <group|none>]` - Rename, recolor or move a label
+- `lh task label delete <label> [--yes]` - Delete a label (a group deletes its labels too)
 
 ## Topic Commands
 

@@ -92,6 +92,7 @@ export default {
   'send': 'Send',
   'sendFailed': 'Message was not sent. Your draft is preserved; try again.',
   'composer': 'Message #{{name}}',
+  'directComposer': 'Message {{name}}',
   'threadComposer': 'Reply in thread',
   'stopReply': 'Stop reply',
   'main': 'Channel conversation',

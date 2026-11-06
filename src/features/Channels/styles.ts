@@ -190,16 +190,17 @@ export const styles = stylex.create({
   composerRow: {
     display: 'flex',
     alignItems: 'flex-end',
-    gap: 4,
-    paddingBlock: 4,
-    paddingInline: 4,
+    gap: 8,
+    minHeight: 44,
+    paddingBlock: 8,
+    paddingInline: 8,
   },
   composerEditor: {
     overflowY: 'auto',
     flex: '1',
     minWidth: 0,
     maxHeight: 240,
-    paddingBlock: 0,
+    paddingBlock: 2,
   },
   /** Takes the composer's place while the channel or thread is archived. */
   archivedNotice: {

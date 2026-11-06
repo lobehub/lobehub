@@ -1,6 +1,6 @@
 import { INVITATION_EXPIRY_DAYS } from '@lobechat/const';
 import { and, eq } from 'drizzle-orm';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
 import {
@@ -37,6 +37,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   await serverDB.delete(users);
 });
 
@@ -739,6 +740,20 @@ describe('WorkspaceMemberModel', () => {
         live.id,
       ]);
       expect(await model.countLinkInvitations(workspaceId)).toBe(1);
+    });
+
+    it('countLinkInvitations degrades to 0 when the aggregate returns no row', async () => {
+      // `count()` always yields exactly one row, so the `?? 0` is a driver-level
+      // guard: a backend that answers with no row must not hand `undefined` to
+      // the per-workspace cap check.
+      const spy = vi.spyOn(serverDB, 'select').mockReturnValueOnce({
+        from: () => ({ where: async () => [] }),
+      } as unknown as ReturnType<LobeChatDatabase['select']>);
+
+      expect(
+        await new WorkspaceMemberModel(serverDB, inviterId).countLinkInvitations(workspaceId),
+      ).toBe(0);
+      expect(spy).toHaveBeenCalledTimes(1);
     });
 
     it('revokeLinkInvitation revokes only that live link of that workspace', async () => {

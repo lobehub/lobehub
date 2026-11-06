@@ -2,6 +2,11 @@ import type { ChannelListItem, RecentItem, SidebarAgentItem } from '@lobechat/ty
 
 import { markdownToTxt } from '@/utils/markdownToTxt';
 
+/** A plain left click; modified clicks keep the browser's own handling of the link. */
+export const isPlainClick = (
+  event: Pick<MouseEvent, 'altKey' | 'button' | 'ctrlKey' | 'metaKey' | 'shiftKey'>,
+) => event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey;
+
 export interface Conversation {
   /** Latest activity: the newer of the item itself and its latest topic. */
   activeAt: Date;
