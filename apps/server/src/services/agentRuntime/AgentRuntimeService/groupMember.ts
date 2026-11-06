@@ -181,9 +181,10 @@ export async function buildGroupMemberResultsContent(
     ]
       .filter(Boolean)
       .join(' ');
-    // A member can quote markup back (e.g. from a fetched page); keep it from
-    // closing its block early and posing as another member's result.
-    const body = anchor.content.trim().replaceAll('</member_result', '<\\/member_result');
+    // A member can quote markup back (e.g. from a fetched page); encode any
+    // opening or closing delimiter so it can neither end its own block nor
+    // open one that poses as another member's result.
+    const body = anchor.content.trim().replaceAll(/<(\/?member_result)/gi, '&lt;$1');
     return `<member_result ${attributes}>\n${body || '(no textual answer)'}\n</member_result>`;
   });
   return [`${summary} Each member's result follows.`, ...results].join('\n\n');
