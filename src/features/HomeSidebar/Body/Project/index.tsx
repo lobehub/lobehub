@@ -14,7 +14,7 @@ import {
   Flexbox,
   Text,
 } from '@lobehub/ui';
-import { ArrowDownUpIcon, ArrowRightIcon, FolderPlusIcon, PlusIcon } from 'lucide-react';
+import { ArrowDownUpIcon, ArrowRightIcon, PlusIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -67,13 +67,15 @@ const Project = memo<ProjectProps>(({ itemKey }) => {
   const createMenuItems = useMemo<DropdownItem[]>(
     () => [
       {
-        icon: FolderPlusIcon,
+        icon: PlusIcon,
         key: 'blank',
         label: t('create.blank'),
         onClick: () => openCreateProjectModal(),
       },
       {
-        icon: Github,
+        // A filled brand mark: as a component, the menu's Icon wrapper would paint it with
+        // `fill: transparent` (stroke-icon styling) and leave the slot empty.
+        icon: <Github size={16} />,
         key: 'github',
         label: t('create.fromGithub'),
         onClick: () => openCreateProjectFromGithubModal(),
