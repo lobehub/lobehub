@@ -5,6 +5,7 @@ import type {
   TaskKanbanGroupBy,
   TaskListItem,
 } from '@/store/task/slices/list/initialState';
+import { TASK_NO_PROJECT_GROUP_KEY } from '@/store/task/slices/list/projection';
 
 import type { CreateTaskContentProps } from '../CreateTaskModal/CreateTaskContent';
 import type { TaskGroupBy, TaskGroupMeta } from './listViewOptions';
@@ -14,6 +15,7 @@ import {
   getTaskLabelGroupMeta,
   getTaskMemberGroupMeta,
   getTaskPriorityGroupMeta,
+  getTaskProjectGroupMeta,
   isTaskLabelGroupBy,
   sortGroupEntries,
 } from './listViewOptions';
@@ -70,6 +72,7 @@ export const normalizeKanbanGroupBy = (groupBy: TaskGroupBy): TaskKanbanGroupBy 
   groupBy === 'assignee' ||
   groupBy === 'member' ||
   groupBy === 'priority' ||
+  groupBy === 'project' ||
   isTaskLabelGroupBy(groupBy)
     ? groupBy
     : 'status';
@@ -117,6 +120,32 @@ export const buildKanbanGroupQuery = ({
   return { allAgents: true, automated: false, excludeStatuses, groupBy };
 };
 
+/**
+ * Folds the columns of projects the caller cannot see into "No project": the
+ * server groups by the raw column, but only the visible project list can name a
+ * column. Before that list loads there is nothing to decide from.
+ */
+export const mergeUnresolvedProjectGroups = <T extends TaskGroupItem>(
+  groups: T[],
+  projects: ReadonlyArray<{ id: string }> | undefined,
+): T[] => {
+  if (!projects) return groups;
+  const visible = new Set(projects.map((project) => project.id));
+  const orphans = groups.filter((group) => group.projectId && !visible.has(group.projectId));
+  if (orphans.length === 0) return groups;
+  return groups
+    .filter((group) => !orphans.includes(group))
+    .map((group) =>
+      group.key === TASK_NO_PROJECT_GROUP_KEY
+        ? ({
+            ...group,
+            tasks: [...group.tasks, ...orphans.flatMap((orphan) => orphan.tasks)],
+            total: orphans.reduce((sum, orphan) => sum + orphan.total, group.total),
+          } as T)
+        : group,
+    );
+};
+
 export const buildKanbanColumns = (
   taskGroups: TaskGroupItem[],
   groupBy: TaskKanbanGroupBy,
@@ -130,7 +159,9 @@ export const buildKanbanColumns = (
         ? getTaskAssigneeGroupMeta(group.assigneeAgentId)
         : groupBy === 'member'
           ? getTaskMemberGroupMeta(group.assigneeUserId)
-          : getTaskPriorityGroupMeta(group.priority);
+          : groupBy === 'project'
+            ? getTaskProjectGroupMeta(group.projectId)
+            : getTaskPriorityGroupMeta(group.priority);
     return [meta, group.tasks as TaskListItem[]] as [TaskGroupMeta, TaskListItem[]];
   });
 
@@ -174,6 +205,9 @@ export const getKanbanTaskPatch = (
   if (groupBy === 'priority' && column.groupMeta?.groupBy === 'priority') {
     return { priority: column.groupMeta.priority ?? 0 };
   }
+  if (groupBy === 'project' && column.groupMeta?.groupBy === 'project') {
+    return { projectId: column.groupMeta.projectId ?? null };
+  }
   if (groupBy === 'status' && column.targetStatus) {
     return { status: column.targetStatus as TaskStatus };
   }
@@ -215,6 +249,7 @@ export interface KanbanColumnCreateDefaults {
    */
   labelIds?: string[];
   priority?: number;
+  projectId?: string;
 }
 
 /**
@@ -236,6 +271,10 @@ export const getTaskGroupCreateDefaults = (
     }
     case 'priority': {
       return { priority: groupMeta.priority ?? 0 };
+    }
+    // A new task starts without a project, so "No project" pins nothing.
+    case 'project': {
+      return groupMeta.projectId ? { projectId: groupMeta.projectId } : {};
     }
     // The unassigned group has no entry: the modal cannot pin "no agent".
     case 'assignee': {
@@ -287,7 +326,7 @@ export const getKanbanCreateTaskModalProps = (
   defaultPriority: defaults.priority,
   // An agent-scoped board only holds that agent's tasks.
   lockAssignee: !!scope.agentId,
-  projectId: scope.projectId,
+  projectId: defaults.projectId ?? scope.projectId,
   // The board has no inline entry to minimize into.
   showInlineToggle: false,
 });

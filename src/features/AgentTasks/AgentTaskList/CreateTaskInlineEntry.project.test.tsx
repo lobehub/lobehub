@@ -88,7 +88,7 @@ vi.mock('../features/TaskPriorityTag', () => ({ default: () => null }));
 vi.mock('../features/TaskVisibilityChipLabel', () => ({ default: () => null }));
 vi.mock('../features/TaskVisibilityTag', () => ({ default: () => null }));
 vi.mock('../features/UnassignedAssigneeIcon', () => ({ UnassignedAssigneeIcon: () => null }));
-vi.mock('../features/TaskProjectChip', () => ({
+vi.mock('../features/TaskProjectPickerChip', () => ({
   default: ({
     onChange,
     value,

@@ -3283,6 +3283,7 @@ export default {
   'taskList.groupBy.member': 'Assignee',
   'taskList.groupBy.none': 'No grouping',
   'taskList.groupBy.priority': 'Priority',
+  'taskList.groupBy.project': 'Project',
   'taskList.groupBy.schedule': 'Schedule',
   'taskList.groupBy.status': 'Status',
   'taskList.orderBy.assignee': 'Agent',

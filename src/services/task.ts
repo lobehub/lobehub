@@ -61,7 +61,7 @@ class TaskService {
     completedWithin?: TaskCompletedWindow;
     excludeStatuses?: TaskStatus[];
     filter?: TaskListFilter;
-    groupBy?: 'assignee' | 'label' | 'member' | 'priority';
+    groupBy?: 'assignee' | 'label' | 'member' | 'priority' | 'project';
     groups?: Array<{
       key: string;
       limit?: number;

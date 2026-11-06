@@ -55,3 +55,48 @@ describe('project scope of a task collection', () => {
     expect(next?.groups[0].total).toBe(2);
   });
 });
+
+describe('a project board', () => {
+  const projectBoard = (): TaskGroupListValue =>
+    ({
+      groupBy: 'project',
+      groups: [
+        { key: 'project:p1', projectId: 'p1', tasks: [row('a', 'p1'), row('b', 'p1')], total: 2 },
+        { key: 'project:none', projectId: null, tasks: [], total: 0 },
+      ],
+    }) as unknown as TaskGroupListValue;
+
+  it('moves a card to "No project" when its project is cleared', () => {
+    const next = taskGroupListEntity.map(projectBoard(), 'a', (task) => ({
+      ...task,
+      projectId: null,
+    }));
+
+    expect(next.groups[0]).toMatchObject({ total: 1 });
+    expect(next.groups[0].tasks.map((task) => task.id)).toEqual(['b']);
+    expect(next.groups[1]).toMatchObject({ total: 1 });
+    expect(next.groups[1].tasks.map((task) => task.id)).toEqual(['a']);
+  });
+
+  it('opens a column for the first task of a project', () => {
+    const next = taskGroupListEntity.map(projectBoard(), 'a', (task) => ({
+      ...task,
+      projectId: 'p2',
+    }));
+
+    expect(next.groups[2]).toMatchObject({ key: 'project:p2', projectId: 'p2', total: 1 });
+    expect(next.groups[2].tasks[0].projectId).toBe('p2');
+    expect(next.groups[0].total).toBe(1);
+  });
+
+  it('leaves the columns alone when something else changes', () => {
+    const next = taskGroupListEntity.map(projectBoard(), 'a', (task) => ({
+      ...task,
+      status: 'running',
+    }));
+
+    expect(next.groups[0].tasks.map((task) => task.id)).toEqual(['a', 'b']);
+    expect(next.groups[0].tasks[0].status).toBe('running');
+    expect(next.groups[0].total).toBe(2);
+  });
+});
