@@ -10,7 +10,7 @@ import type { DecisionActor, DecisionRow } from './decisionList';
  */
 
 /** What picking an option does to the work that raised the question. */
-export type DecisionEffect = 'fail' | 'retire' | 'retry';
+export type DecisionEffect = 'fail' | 'hold' | 'retire' | 'retry';
 
 export interface DecisionGraphOption {
   description?: string;

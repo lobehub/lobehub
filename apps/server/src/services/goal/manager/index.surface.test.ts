@@ -134,6 +134,20 @@ describe('goal manager public surface', () => {
         reason: 'blocked',
       }).success,
     ).toBe(false);
+    // A takeover can keep the blocked Task for the owner instead of retrying it.
+    expect(
+      goalPlanSchema.safeParse({
+        action: 'escalate',
+        ask: {
+          options: [
+            { effect: 'retry', id: 'waive', label: 'Waive' },
+            { effect: 'hold', id: 'wait_for_admin', label: 'Wait for the admin' },
+          ],
+          question: 'What now?',
+        },
+        reason: 'blocked',
+      }).success,
+    ).toBe(true);
     expect(decideFailedTurn(new Error('boom'), {}, 0)).toMatchObject({
       action: 'retry',
       charged: true,
