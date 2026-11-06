@@ -16,6 +16,7 @@ import pMap from 'p-map';
 import { AgentModel } from '@/database/models/agent';
 import { GoalGraphModel } from '@/database/models/goalGraph';
 import { TaskModel } from '@/database/models/task';
+import { TaskLabelModel } from '@/database/models/taskLabel';
 import { TaskTopicModel } from '@/database/models/taskTopic';
 import { UserModel } from '@/database/models/user';
 import { VerifyRunModel } from '@/database/models/verifyRun';
@@ -107,6 +108,7 @@ export class TaskDetailService {
       workspace,
       acceptance,
       goal,
+      labels,
     ] = await Promise.all([
       this.taskModel.findAllDescendants(task.id),
       this.taskModel.getDependencies(task.id),
@@ -119,6 +121,7 @@ export class TaskDetailService {
       new GoalGraphModel(this.db, this.userId, this.workspaceId)
         .findGoalByTaskId(task.id)
         .catch(() => undefined),
+      new TaskLabelModel(this.db, this.userId, this.workspaceId).getTaskLabels(task.id),
     ]);
 
     // What the reader is shown, not what was written: a burst of edits to one
@@ -523,6 +526,7 @@ export class TaskDetailService {
       id: task.id,
       identifier: task.identifier,
       instruction: task.instruction,
+      labels,
       name: task.name,
       parent,
       priority: task.priority,

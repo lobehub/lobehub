@@ -153,6 +153,11 @@ export default {
     'Sync every issue matching these filters now, and keep the filters to sync again later',
   'linear.sync.modal.title': 'Import issues from {{account}}',
   'linear.sync.options.importTitle': 'Import options',
+  'linear.sync.options.includeArchived': 'Include archived issues',
+  'linear.sync.options.includeArchivedDesc':
+    'Also list and import issues archived in Linear, which are left out otherwise',
+  'linear.sync.options.includeArchivedRuleDesc':
+    'Also sync issues archived in Linear that match this rule',
   'linear.sync.options.syncComments': 'Sync comments',
   'linear.sync.options.syncCommentsDesc':
     "Copy each issue's Linear comments into the task's activity, keeping the author and time",

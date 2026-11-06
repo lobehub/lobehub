@@ -825,8 +825,8 @@ export class DocumentService {
 
       // Checked before anything is persisted. Room projections are checked too:
       // the room accepts browser edits without measuring them, so the
-      // projection is the only place a collaborative page's length is enforced
-      // (LOBE-15419). `restoreFromHistoryId` is not an exemption: the client
+      // projection is the only place a collaborative page's length is enforced.
+      // `restoreFromHistoryId` is not an exemption: the client
       // sends it with a body the server does not match against the version, so
       // only server-side restores opt out via `writeSource`. Editor data is
       // measured too because it can arrive without `content`.

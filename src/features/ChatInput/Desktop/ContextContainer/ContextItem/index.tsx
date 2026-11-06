@@ -13,6 +13,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { FileUploadErrorActions } from '@/business/client/features/FileUploadErrorActions';
+import { useChatInputUploadKey } from '@/features/ChatInput/hooks/useChatInputUpload';
 import { useEventCallback } from '@/hooks/useEventCallback';
 import { useFileStore } from '@/store/file';
 import { type UploadFileItem } from '@/types/files/upload';
@@ -83,6 +84,7 @@ type FileItemProps = UploadFileItem;
 const ContextItem = memo<FileItemProps>((props) => {
   const { error, errorCode, file, id, status, tasks, uploadState } = props;
   const { t } = useTranslation(['chat', 'common']);
+  const contextKey = useChatInputUploadKey();
   const removeChatUploadFile = useFileStore((s) => s.removeChatUploadFile);
   const retryChatUploadFile = useFileStore((s) => s.retryChatUploadFile);
   const { busy, canPreview, canRetry, indicator, progress } = getUploadChipState(props);
@@ -94,7 +96,7 @@ const ContextItem = memo<FileItemProps>((props) => {
     if (canPreview) void openFilePreviewModal(props);
   });
   const handleClose = useEventCallback(() => {
-    void removeChatUploadFile(id);
+    if (contextKey) void removeChatUploadFile(contextKey, id);
   });
 
   const detail = (
@@ -185,7 +187,7 @@ const ContextItem = memo<FileItemProps>((props) => {
               size={{ blockSize: 24, size: 12 }}
               title={t('retry', { ns: 'common' })}
               onClick={() => {
-                void retryChatUploadFile(id);
+                if (contextKey) void retryChatUploadFile(contextKey, id);
               }}
             />
           )}

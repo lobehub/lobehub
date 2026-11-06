@@ -94,6 +94,9 @@ export const createConversationComposer = (conversation: { agentId: string; topi
 const isAbort = (error: unknown) =>
   error instanceof Error && (error.name === 'AbortError' || error.message.includes('aborted'));
 
+/** The project home composer's key for its draft attachments and context selections. */
+export const getProjectComposerContextKey = (projectId: string) => `project-home:${projectId}`;
+
 export class AttachmentsNotReadyError extends Error {
   constructor() {
     super('Attachments are still uploading');
@@ -119,7 +122,8 @@ export const useProjectComposer = (
   /** Rejects when nothing left the composer, so the caller can report it. */
   const send: SendButtonHandler = async ({ clearContent, getEditorData, getMarkdownContent }) => {
     const message = getMarkdownContent().trim();
-    const files = fileChatSelectors.chatUploadFileList(useFileStore.getState());
+    const composerKey = getProjectComposerContextKey(project.id);
+    const files = fileChatSelectors.chatUploadFileList(composerKey)(useFileStore.getState());
     if ((!message && files.length === 0) || sending) return;
     if (files.some((file) => file.status !== 'success' || !file.fileUrl))
       throw new AttachmentsNotReadyError();
@@ -138,7 +142,10 @@ export const useProjectComposer = (
           projectId: project.id,
         });
         clearContent();
-        clearChatUploadFileList(files.map((file) => file.id));
+        clearChatUploadFileList(
+          composerKey,
+          files.map((file) => file.id),
+        );
         if (task) navigate(taskDetailPath(task.identifier, undefined, task.name));
         return;
       }
@@ -156,7 +163,7 @@ export const useProjectComposer = (
       // accepted it. From here the conversation's composer owns the draft, so a
       // refused send puts it back there rather than here.
       clearContent();
-      clearChatUploadFileList();
+      clearChatUploadFileList(composerKey);
       navigate(getProjectTopicPath(project.slug ?? project.id, topic.id));
 
       const conversation = createConversationComposer({ agentId, topicId: topic.id });
@@ -164,7 +171,9 @@ export const useProjectComposer = (
       let filesRestored = false;
       const restoreFiles = () => {
         filesRestored = true;
-        useFileStore.getState().restoreChatUploadFileList(files);
+        useFileStore
+          .getState()
+          .restoreChatUploadFileList(messageMapKey({ agentId, topicId: topic.id }), files);
       };
       sendMessage({
         context: { agentId, topicId: topic.id, ...(workspaceSlug ? { workspaceSlug } : {}) },

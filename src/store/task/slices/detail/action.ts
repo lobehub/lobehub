@@ -349,6 +349,7 @@ export class TaskDetailSliceActionImpl {
     editorData?: unknown;
     /** Bind a goal entity (`goals` row) to the created task. */
     instruction: string;
+    labelIds?: string[];
     name?: string;
     parentTaskId?: string;
     priority?: number;

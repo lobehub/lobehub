@@ -2,8 +2,11 @@ import type { ChannelJobBlockCode } from '@lobechat/types';
 
 import type { ChannelViewParams } from '@/services/channel';
 
+import { channelOutboxKey, type ChannelOutgoingMessage } from './outbox';
 import { channelViewKey } from './projection';
 import type { ChannelState } from './store';
+
+const NO_OUTGOING: ChannelOutgoingMessage[] = [];
 
 /** These wait for a device or a person rather than for earlier work to finish. */
 const EXTERNAL_BLOCKS = new Set<ChannelJobBlockCode>([
@@ -41,4 +44,7 @@ export const channelSelectors = {
   directByAgent: (agentId: string) => (state: ChannelState) =>
     state.listMap.all?.find((channel) => channel.agentId === agentId && !channel.projectId),
   list: (state: ChannelState) => state.listMap.all,
+  /** This tab's messages for one conversation that its loaded pages do not hold yet. */
+  outgoing: (channelId: string, threadId?: string | null) => (state: ChannelState) =>
+    state.outbox[channelOutboxKey(channelId, threadId)] ?? NO_OUTGOING,
 };
