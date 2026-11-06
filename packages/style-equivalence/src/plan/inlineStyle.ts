@@ -62,7 +62,7 @@ export const sharedInlineStyles = (chains: Record<'base' | 'head', StyleElement[
       ['head', right, left],
       ['base', left, right],
     ] as const) {
-      if (!other.styleExpr || other.runtimeStyle) continue;
+      if (!other.styleExpr || other.runtimeStyle || other.inlineStyle) continue;
       const sx = sxStyleOf(own, other.styleExpr);
       if (!sx) continue;
       (found[side] ??= []).push({
