@@ -4,11 +4,10 @@
 
 # LobeHub
 
-LobeHub organizes your agents into 7×24 operation.
+**Super-Agents on Your Team**
 
-It hires, schedules, reports on your entire AI team.
-
-You stay in charge — without staying online.
+Add super-agents to the chats your team already uses.<br/>
+They take on work by themselves and get better every week.
 
 **English** · [简体中文](./README.zh-CN.md) · [Official Site][official-site] · [Changelog][changelog] · [Documents][docs] · [Blog][blog] · [Feedback][github-issues-link]
 
@@ -38,8 +37,6 @@ You stay in charge — without staying online.
 [![][share-mastodon-shield]][share-mastodon-link]
 [![][share-linkedin-shield]][share-linkedin-link]
 
-<sup>Your Chief Agent Operator</sup>
-
 <a href="https://www.producthunt.com/products/lobehub?embed=true&amp;utm_source=badge-top-post-badge&amp;utm_medium=badge&amp;utm_campaign=badge-lobehub-2" target="_blank" rel="noopener noreferrer"><img alt="LobeHub - Your Chief Agent Operator for multi-agent work | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/top-post-badge.svg?post_id=1147569&amp;theme=light&amp;period=daily&amp;t=1779247564355"></a> <a href="https://trendshift.io/repositories/19224" target="_blank"><img src="https://trendshift.io/api/badge/repositories/19224" alt="lobehub%2Flobehub | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
 
 [![](https://vercel.com/oss/program-badge.svg)](https://vercel.com/oss)
@@ -53,10 +50,11 @@ You stay in charge — without staying online.
 
 - [👋🏻 Getting Started & Join Our Community](#-getting-started--join-our-community)
 - [✨ Features](#-features)
-  - [Operator: Agents as the Unit of Work](#operator-agents-as-the-unit-of-work)
-  - [Create: Agents as the Unit of Work](#create-agents-as-the-unit-of-work)
-  - [Collaborate: Scale New Forms of Collaboration Networks](#collaborate-scale-new-forms-of-collaboration-networks)
-  - [Evolve: Co-evolution of Humans and Agents](#evolve-co-evolution-of-humans-and-agents)
+  - [`Day 1` Welcome to the team](#day-1-welcome-to-the-team)
+  - [`Week 1` Its first task](#week-1-its-first-task)
+  - [`Month 1–2` Settling in as the team grows](#month-12-settling-in-as-the-team-grows)
+  - [`Month 3` It passes its review](#month-3-it-passes-its-review)
+  - [Bring them onto your team](#bring-them-onto-your-team)
 - [🛳 Self Hosting](#-self-hosting)
   - [`A` Deploying with Vercel, Zeabur , Sealos or Alibaba Cloud](#a-deploying-with-vercel-zeabur--sealos-or-alibaba-cloud)
   - [`B` Deploying with Docker](#b-deploying-with-docker)
@@ -105,24 +103,21 @@ Whether for users or professional developers, LobeHub will be your AI Agent play
 
 ## ✨ Features
 
-Today’s agents are one-off, task-driven tools. They lack context, live in isolation, and require manual hand-offs between different windows and models. While some maintain memory, it is often global, shallow, and impersonal. In this mode, users are forced to toggle between fragmented conversations, making it difficult to form structured productivity.
+LobeHub puts super-agents on your team. Add them to the chats your team already uses, such as Slack, Discord, Telegram, WhatsApp, iMessage, Lark or WeChat. They take on requests nobody assigned, hand the coding to Claude Code or Codex, come back with evidence you can check, and learn from every correction.
 
-**LobeHub changes everything.**
+The story below follows one of them, Lobe AI, from its first day on your team until it passes its review.
 
-LobeHub is a work-and-lifestyle space to find, build, and collaborate with agent teammates that grow with you. In LobeHub, we treat **Agents as the unit of work**, providing an infrastructure where humans and agents co-evolve.
+| `Day 1`                                           | `Week 1`                                 | `Month 1–2`                                                              | `Month 3`                                             |
+| :------------------------------------------------ | :--------------------------------------- | :----------------------------------------------------------------------- | :---------------------------------------------------- |
+| [Welcome to the team](#day-1-welcome-to-the-team) | [Its first task](#week-1-its-first-task) | [Settling in as the team grows](#month-12-settling-in-as-the-team-grows) | [It passes its review](#month-3-it-passes-its-review) |
 
-![](https://github.com/user-attachments/assets/89d1c402-a62b-4794-82ea-17e5ee1a6165)
+### `Day 1` Welcome to the team
 
-### Operator: Agents as the Unit of Work
+You add it to your team chat and ask it to read up. By lunch it has gone through the history and said hello to everyone.
 
-Hires, schedules, and reports on your entire AI team.
+![Before it starts, it reads up](https://raw.githubusercontent.com/lobehub/lobehub/canary/docs/readme/day1-welcome.webp)
 
-- **More productivity. Fewer tools**: Bring all your agents under one roof.
-- **IM Gateway**: Agents where you already chat.
-
-![](https://github.com/user-attachments/assets/7b08d6d9-9dff-4b06-a919-324630554509)
-
-[![][back-to-top]](#readme-top)
+![Lobe AI's IM Bots settings, its team badge and its Day 1 checklist](https://raw.githubusercontent.com/lobehub/lobehub/canary/docs/readme/day1-arrival.webp)
 
 <div align="right">
 
@@ -130,18 +125,15 @@ Hires, schedules, and reports on your entire AI team.
 
 </div>
 
-![](https://github.com/user-attachments/assets/81e89324-fc66-4024-99a3-aa8e16ec8184)
+### `Week 1` Its first task
 
-### Create: Agents as the Unit of Work
+Someone posts a feature request in Discord and nobody assigns it. Lobe AI takes it on, and you only step in once, to accept the result.
 
-Building a personalized AI team starts with the **Agent Builder**. You can describe what you need once, and the agent setup starts right away, applying auto-configurations so you can use it instantly.
+![Picks it up: nobody tags it, and it takes the request anyway](https://raw.githubusercontent.com/lobehub/lobehub/canary/docs/readme/week1-pick-up.webp)
 
-- **Unified Intelligence**: Seamlessly access any model and any modality—all under your control.
-- **10,000+ Skills**: Connect your agents to the skills you use every day with a library of over 10,000 tools and MCP-compatible plugins.
+![Hands it in: you check the evidence, accept, and the PR merges](https://raw.githubusercontent.com/lobehub/lobehub/canary/docs/readme/week1-hand-in.webp)
 
-![](https://github.com/user-attachments/assets/949b8166-486d-4750-ad7a-cfe7bfcb84e3)
-
-[![][back-to-top]](#readme-top)
+![Reports back: it replies in the original thread](https://raw.githubusercontent.com/lobehub/lobehub/canary/docs/readme/week1-report-back.webp)
 
 <div align="right">
 
@@ -149,20 +141,13 @@ Building a personalized AI team starts with the **Agent Builder**. You can descr
 
 </div>
 
-![](https://hub-apac-1.lobeobjects.space/blog/assets/771ff3d30b9ef93e65e55021cc43d356.webp)
+### `Month 1–2` Settling in as the team grows
 
-### Collaborate: Scale New Forms of Collaboration Networks
+Everyone now has their own agent, and design, releases and docs each have a dedicated one. Lobe AI is still learning when to speak up and when to stay quiet.
 
-LobeHub introduces **Agent Groups**, allowing you to work with agents like real teammates. The system assembles the right agents for the task, enabling parallel collaboration and iterative improvement.
+![One brief every morning](https://raw.githubusercontent.com/lobehub/lobehub/canary/docs/readme/month2-brief.webp)
 
-- **Pages**: Write and refine content with multiple agents in one place with a shared context.
-- **Schedule**: Schedule runs and let agents do the work at the right time, even while you are away.
-- **Project**: Organize work by project to keep everything structured and easy to track.
-- **Workspace**: A shared space for teams to collaborate with agents, ensuring clear ownership and visibility across the organization.
-
-![](https://github.com/user-attachments/assets/e51526c6-e09c-4a5a-9cec-dcd3fd68a3a8)
-
-[![][back-to-top]](#readme-top)
+![It's learning when to speak up](https://raw.githubusercontent.com/lobehub/lobehub/canary/docs/readme/month2-learning.webp)
 
 <div align="right">
 
@@ -170,16 +155,11 @@ LobeHub introduces **Agent Groups**, allowing you to work with agents like real 
 
 </div>
 
-![](https://hub-apac-1.lobeobjects.space/blog/assets/fe98eae9fcb6acc47c8e1fb69bdb4b50.webp)
+### `Month 3` It passes its review
 
-### Evolve: Co-evolution of Humans and Agents
+When it started, it got about half of these right. Now it rarely misses, and every correction you gave it has become a lesson it keeps.
 
-The best AI is one that understands you deeply. LobeHub features **Personal Memory** that builds a clear understanding of your needs.
-
-- **Continual Learning**: Your agents learn from how you work, adapting their behavior to act at the right moment.
-- **White-Box Memory**: We believe in transparency. Your agents use structured, editable memory, giving you full control over what they remember.
-
-![](https://github.com/user-attachments/assets/5c6e16f0-7f47-4baf-9aeb-3a00deb8ff5b)
+![What it has learned](https://raw.githubusercontent.com/lobehub/lobehub/canary/docs/readme/month3-review.webp)
 
 <div align="right">
 
@@ -187,7 +167,15 @@ The best AI is one that understands you deeply. LobeHub features **Personal Memo
 
 </div>
 
-> ✨ more features will be added when LobeHub evolve.
+<div align="center">
+
+### Bring them onto your team
+
+Start with one, and add more when you need them.
+
+[**Try LobeHub Cloud**][vercel-link] · [**Self-host it**](#-self-hosting)
+
+</div>
 
 <div align="right">
 

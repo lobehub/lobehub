@@ -4,11 +4,10 @@
 
 # LobeHub
 
-LobeHub 帮你把专属 Agent 组织成 7×24 不打烊的高效队伍：
+**Super-Agents on Your Team**
 
-自动为你招募适配的 AI 队友、调度任务排班、汇总生成工作报告，
-
-你始终掌控全局，从此不用再时刻在线盯守，真正解放自己的时间。
+把 Super-Agents 拉进你们团队的群。<br/>
+它们会自己接活，每周都在进步。
 
 [English](./README.md) · **简体中文** · [官网][official-site] · [更新日志][changelog] · [文档][docs] · [博客][blog] · [反馈问题][github-issues-link]
 
@@ -37,8 +36,6 @@ LobeHub 帮你把专属 Agent 组织成 7×24 不打烊的高效队伍：
 [![][share-weibo-shield]][share-weibo-link]
 [![][share-mastodon-shield]][share-mastodon-link]
 
-<sup>你的首席 Agent 运营官</sup>
-
 <a href="https://www.producthunt.com/products/lobehub?embed=true&amp;utm_source=badge-top-post-badge&amp;utm_medium=badge&amp;utm_campaign=badge-lobehub-2" target="_blank" rel="noopener noreferrer"><img alt="LobeHub - Your Chief Agent Operator for multi-agent work | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/top-post-badge.svg?post_id=1147569&amp;theme=light&amp;period=daily&amp;t=1779247564355"></a> <a href="https://trendshift.io/repositories/19224" target="_blank"><img src="https://trendshift.io/api/badge/repositories/19224" alt="lobehub%2Flobehub | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
 [![][github-hello-shield]][github-hello-url]
 
@@ -51,10 +48,11 @@ LobeHub 帮你把专属 Agent 组织成 7×24 不打烊的高效队伍：
 
 - [👋🏻 开始使用 & 交流](#-开始使用--交流)
 - [✨ 特性一览](#-特性一览)
-  - [运营：你制定策略，我们负责运行 Agent。](#运营你制定策略我们负责运行-agent)
-  - [创建：以 Agent 为工作单元](#创建以-agent-为工作单元)
-  - [协作：扩展新型协作网络](#协作扩展新型协作网络)
-  - [进化：人类与 Agent 的共生进化](#进化人类与-agent-的共生进化)
+  - [`第 1 天` 欢迎入职](#第-1-天-欢迎入职)
+  - [`第 1 周` 第一个任务](#第-1-周-第一个任务)
+  - [`第 1–2 个月` 慢慢上手，团队也在加人](#第-12-个月-慢慢上手团队也在加人)
+  - [`第 3 个月` 顺利转正](#第-3-个月-顺利转正)
+  - [把它们招进你的团队](#把它们招进你的团队)
 - [🛳 开箱即用](#-开箱即用)
   - [`A` 使用 Vercel、Zeabur 、Sealos 或 阿里云计算巢 部署](#a-使用-vercelzeabur-sealos-或-阿里云计算巢-部署)
   - [`B` 使用 Docker 部署](#b-使用-docker-部署)
@@ -102,24 +100,21 @@ LobeHub 帮你把专属 Agent 组织成 7×24 不打烊的高效队伍：
 
 ## ✨ 特性一览
 
-现有的 Agent 大多是一次性、以任务为驱动的工具。它们缺乏上下文，孤立运行，并且需要在不同窗口和模型之间手动交接。即使有记忆，也往往是全局的、浅层的且缺乏个性。在这种模式下，用户被迫在分散的对话之间来回切换，难以形成结构化的生产流程。
+LobeHub 让 Super-Agents 加入你的团队。把它们拉进团队已经在用的聊天工具，比如 Slack、Discord、Telegram、WhatsApp、iMessage、飞书或微信。没人指派的需求它们会自己接下，代码交给 Claude Code 或 Codex 写，交付时带着你能核对的证据，你的每一次纠正它们都会记住。
 
-**LobeHub 改变一切。**
+下面以 Lobe AI 为例，看它从进群第一天到转正都做了些什么。
 
-LobeHub 是一个工作与生活空间，用于发现、构建并与会随着您一起成长的 Agent 队友协作。在 LobeHub 中，我们将 **Agent 视为工作单元**，提供一个让人类与 Agent 共同进化的基础设施。
+| `第 1 天`                     | `第 1 周`                         | `第 1–2 个月`                                              | `第 3 个月`                     |
+| :---------------------------- | :-------------------------------- | :--------------------------------------------------------- | :------------------------------ |
+| [欢迎入职](#第-1-天-欢迎入职) | [第一个任务](#第-1-周-第一个任务) | [慢慢上手，团队也在加人](#第-12-个月-慢慢上手团队也在加人) | [顺利转正](#第-3-个月-顺利转正) |
 
-![](https://github.com/user-attachments/assets/89d1c402-a62b-4794-82ea-17e5ee1a6165)
+### `第 1 天` 欢迎入职
 
-### 运营：你制定策略，我们负责运行 Agent。
+你把它拉进群，让它先看看以前的聊天记录。午饭前它就看完了，也跟大家打过了招呼。
 
-雇用、排程并汇报你整个 AI 团队的工作
+![开工前，先看聊天记录](https://raw.githubusercontent.com/lobehub/lobehub/canary/docs/readme/day1-welcome.zh-CN.webp)
 
-- **更高生产力，更少工具**：将你所有的 Agent 集中在一个平台。
-- **IM 网关**： Agent 连接到您每天使用的技能。
-
-![](https://github.com/user-attachments/assets/7b08d6d9-9dff-4b06-a919-324630554509)
-
-[![][back-to-top]](#readme-top)
+![Lobe AI 的 IM 机器人设置、工牌和第一天的入职清单](https://raw.githubusercontent.com/lobehub/lobehub/canary/docs/readme/day1-arrival.webp)
 
 <div align="right">
 
@@ -127,18 +122,15 @@ LobeHub 是一个工作与生活空间，用于发现、构建并与会随着您
 
 </div>
 
-![](https://github.com/user-attachments/assets/81e89324-fc66-4024-99a3-aa8e16ec8184)
+### `第 1 周` 第一个任务
 
-### 创建：以 Agent 为工作单元
+有人在 Discord 里提了个需求，没人指派，Lobe AI 自己接了。整件事你只在最后验收了一次。
 
-构建个性化 AI 团队从 **Agent Builder** 开始。您只需描述一次需求，Agent 配置即可立即启动，自动应用配置以便您立刻使用。
+![接活：没人 @ 它，它自己接下了需求](https://raw.githubusercontent.com/lobehub/lobehub/canary/docs/readme/week1-pick-up.zh-CN.webp)
 
-- **统一智能**：无缝访问任何模型与任何模态 —— 全部由您掌控。
-- **1 万 + 技能**：通过超过 10,000 个工具和与 MCP 兼容的插件，将 Agent 连接到您每天使用的技能。
+![交付：你看完证据点了验收，PR 自动合入](https://raw.githubusercontent.com/lobehub/lobehub/canary/docs/readme/week1-hand-in.zh-CN.webp)
 
-![](https://github.com/user-attachments/assets/949b8166-486d-4750-ad7a-cfe7bfcb84e3)
-
-[![][back-to-top]](#readme-top)
+![汇报：回到原来的讨论串里汇报](https://raw.githubusercontent.com/lobehub/lobehub/canary/docs/readme/week1-report-back.zh-CN.webp)
 
 <div align="right">
 
@@ -146,20 +138,13 @@ LobeHub 是一个工作与生活空间，用于发现、构建并与会随着您
 
 </div>
 
-![](https://hub-apac-1.lobeobjects.space/blog/assets/771ff3d30b9ef93e65e55021cc43d356.webp)
+### `第 1–2 个月` 慢慢上手，团队也在加人
 
-### 协作：扩展新型协作网络
+每个人都有了自己的 agent，设计、发版和文档也各有一个专门的 agent。Lobe AI 还在学什么时候该说话，什么时候别打扰。
 
-LobeHub 引入了 **Agent Groups**，让您可以像对待真实队友一样与 Agent 协同工作。系统会为任务组装合适的 Agent，支持并行协作与迭代改进。
+![每天早上一份简报](https://raw.githubusercontent.com/lobehub/lobehub/canary/docs/readme/month2-brief.zh-CN.webp)
 
-- **页面（Pages）**：在同一位置与多个 Agent 共同撰写和润色内容，共享上下文。
-- **日程（Schedule）**：安排运行，让 Agent 在合适的时间完成工作，即使您不在也能继续执行。
-- **项目（Project）**：按项目组织工作，保持一切结构化且易于跟踪。
-- **工作区（Workspace）**：供团队与 Agent 协作的共享空间，确保明确的所有权和组织内的可见性。
-
-![](https://github.com/user-attachments/assets/e51526c6-e09c-4a5a-9cec-dcd3fd68a3a8)
-
-[![][back-to-top]](#readme-top)
+![它在学什么时候该说话](https://raw.githubusercontent.com/lobehub/lobehub/canary/docs/readme/month2-learning.zh-CN.webp)
 
 <div align="right">
 
@@ -167,16 +152,11 @@ LobeHub 引入了 **Agent Groups**，让您可以像对待真实队友一样与 
 
 </div>
 
-![](https://hub-apac-1.lobeobjects.space/blog/assets/fe98eae9fcb6acc47c8e1fb69bdb4b50.webp)
+### `第 3 个月` 顺利转正
 
-### 进化：人类与 Agent 的共生进化
+刚来时差不多一半对一半错，现在很少出错。你纠正过它的地方，都成了它记住的经验。
 
-最好的 AI 是能深入理解您的那一种。LobeHub 提供了构建清晰用户理解的 **个人记忆（Personal Memory）**。
-
-- **持续学习**：您的 Agent 会从您的工作方式中学习，调整其行为以在恰当时刻采取行动。
-- **白盒记忆**：我们相信透明性。您的 Agent 使用结构化、可编辑的记忆，让您完全掌控它们记住的内容。
-
-![](https://github.com/user-attachments/assets/5c6e16f0-7f47-4baf-9aeb-3a00deb8ff5b)
+![它都学会了什么](https://raw.githubusercontent.com/lobehub/lobehub/canary/docs/readme/month3-review.zh-CN.webp)
 
 <div align="right">
 
@@ -184,7 +164,15 @@ LobeHub 引入了 **Agent Groups**，让您可以像对待真实队友一样与 
 
 </div>
 
-> ✨ 随着产品迭代持续更新，我们将会带来更多更多令人激动的功能！
+<div align="center">
+
+### 把它们招进你的团队
+
+先招一个，需要了再加。
+
+[**试用 LobeHub Cloud**][vercel-link] · [**自己部署**](#-开箱即用)
+
+</div>
 
 <div align="right">
 
