@@ -3,6 +3,29 @@ import { describe, expect, it, vi } from 'vitest';
 import { readSendEditorState, restoreSendEditorState } from './sendEditorState';
 
 describe('send editor recovery', () => {
+  it.each(['native', 'wrapped'])('keeps a newer draft in a %s editor', (kind) => {
+    let document = { root: { children: [{ text: '' }] } };
+    const editor = {
+      ...(kind === 'wrapped'
+        ? { getJSONState: () => document, setJSONState: vi.fn() }
+        : { getDocument: () => document }),
+      setDocument: vi.fn(),
+    };
+    const initialSnapshot = { json: JSON.stringify(readSendEditorState(editor)) };
+    document = { root: { children: [{ text: 'new draft' }] } };
+
+    restoreSendEditorState(
+      editor,
+      { root: { children: [{ text: 'old draft' }] } },
+      'old draft',
+      initialSnapshot,
+    );
+
+    expect(readSendEditorState(editor)).toEqual(document);
+    expect(editor.setDocument).not.toHaveBeenCalled();
+    if (kind === 'wrapped') expect(editor.setJSONState).not.toHaveBeenCalled();
+  });
+
   it('reads and restores a native editor document, including attachment nodes', () => {
     const draft = { root: { children: [{ fileId: 'file_1', type: 'file' }] } };
     const editor = { getDocument: vi.fn(() => draft), setDocument: vi.fn() };

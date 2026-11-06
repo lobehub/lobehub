@@ -19,8 +19,12 @@ export const restoreSendEditorState = (
   editor: SendEditor | null | undefined,
   editorData: unknown,
   message: string,
+  initialSnapshot?: { json: string | undefined },
 ) => {
   try {
+    if (initialSnapshot && JSON.stringify(readSendEditorState(editor)) !== initialSnapshot.json)
+      return;
+
     if (editorData) {
       if (editor?.setJSONState) {
         editor.setJSONState(editorData);

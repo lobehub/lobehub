@@ -338,12 +338,12 @@ export class ConversationLifecycleActionImpl {
 
     let editorData = inputEditorData;
     const { executeClientAgent, mainInputEditor } = this.#get();
-    // `inputEditor` names the editor that owns this send. An explicit `null`
-    // means "this send has no composer editor": an embedded reply (a task run's
-    // inline follow-up) must not fall back to ChatStore's global editor, which
-    // belongs to a sibling surface and would be refilled with this send's text
-    // when it fails. Only an omitted editor falls back to the global one.
+    // Only an omitted editor falls back to the main composer. Explicit null
+    // keeps headless sends from restoring a sibling surface's editor.
     const targetInputEditor = inputEditor === undefined ? mainInputEditor : inputEditor;
+    const sendEditorSnapshot = {
+      json: preserveComposer ? undefined : JSON.stringify(readSendEditorState(targetInputEditor)),
+    };
     const ownerAgentId = context.agentId;
     const selectedSkills = parseSelectedSkillsFromEditorData(editorData);
     const selectedTools = parseSelectedToolsFromEditorData(editorData);
@@ -878,15 +878,8 @@ export class ConversationLifecycleActionImpl {
       this.#get().internal_dispatchMessage({ ids, type: 'deleteMessages' }, { operationId });
     };
     /**
-     * Put the typed message back in the composer when a send fails before the
-     * user message was persisted. The composer is cleared the instant Enter is
-     * pressed, so without this the text is gone for good — the run never
-     * happened, and there is no persisted row to recover it from.
-     *
-     * Shared by all three runtime branches. Gateway and hetero previously only
-     * logged and deleted the optimistic pair, so a server-side start refusal
-     * (e.g. the topic-start reservation reporting the topic busy) was
-     * indistinguishable from the message being silently swallowed.
+     * Restore a refused send's draft before persistence in every runtime.
+     * Keep any newer edits made while the start request was pending.
      */
     const restoreComposerAfterFailedSend = (error: unknown) => {
       if (preserveComposer || hasNotifiedMessageAccepted) return;
@@ -904,7 +897,12 @@ export class ConversationLifecycleActionImpl {
       });
 
       const op = this.#get().operations[operationId];
-      restoreSendEditorState(targetInputEditor, op?.metadata.inputEditorTempState, message);
+      restoreSendEditorState(
+        targetInputEditor,
+        op?.metadata.inputEditorTempState,
+        message,
+        sendEditorSnapshot,
+      );
 
       // The editor snapshot covers only text. A send rejected after the composer
       // was cleared (e.g. the server refusing an offline bound device) would
