@@ -28,6 +28,7 @@ export interface McpAppToolState {
    * desktop can serve them.
    */
   deviceId?: string;
+  preferredModelDisplayMode?: 'inline' | 'fullscreen';
   resourceUri: string;
   /**
    * The MCP server that produced the result (`getMcpServerFingerprint`). The
@@ -94,13 +95,25 @@ export const unwrapMcpToolState = <T = any>(state: T): T => {
 export const getMcpAppFromState = (state: unknown): McpAppToolState | undefined => {
   const mcpApp = (
     unwrapMcpToolState(state) as
-      { mcpApp?: { deviceId?: unknown; resourceUri?: unknown; server?: unknown } } | undefined
+      | {
+          mcpApp?: {
+            deviceId?: unknown;
+            preferredModelDisplayMode?: unknown;
+            resourceUri?: unknown;
+            server?: unknown;
+          };
+        }
+      | undefined
   )?.mcpApp;
   if (!isUiUri(mcpApp?.resourceUri)) return;
 
   return {
     ...(typeof mcpApp.deviceId === 'string' && { deviceId: mcpApp.deviceId }),
     resourceUri: mcpApp.resourceUri,
+    ...((mcpApp.preferredModelDisplayMode === 'inline' ||
+      mcpApp.preferredModelDisplayMode === 'fullscreen') && {
+      preferredModelDisplayMode: mcpApp.preferredModelDisplayMode,
+    }),
     ...(typeof mcpApp.server === 'string' && { server: mcpApp.server }),
   };
 };

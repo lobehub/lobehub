@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import type { Readable } from 'node:stream';
 
+import type { McpUiToolMeta } from '@lobechat/const/mcpApp';
 import {
   getMcpToolVisibility,
   isMcpToolVisibleTo,
@@ -370,6 +371,7 @@ export class MCPClient {
   /** tool name → `ui://` resource URI, filled from the last `listTools` */
   private uiResourceUris?: Map<string, string>;
   private readonly mcpApps: boolean;
+  private toolUiMeta?: Map<string, McpUiToolMeta>;
   /**
    * The tools a view may call (`_meta.ui.visibility` with "app", or unset), from
    * the same listing. An allow-list: a name the listing didn't name is refused.
@@ -413,6 +415,7 @@ export class MCPClient {
     // voids what its last listing taught; the next lookup lists them again
     this.mcp.setNotificationHandler('notifications/tools/list_changed', () => {
       this.uiResourceUris = undefined;
+      this.toolUiMeta = undefined;
       this.appVisibleTools = undefined;
       this.modelHiddenTools = undefined;
       this.toolListingFailedAt = undefined;
@@ -773,6 +776,9 @@ export class MCPClient {
 
   async listTools() {
     const { tools } = await this.mcp.listTools();
+    this.toolUiMeta = this.mcpApps
+      ? new Map(tools.map((tool) => [tool.name, resolveMcpUiToolMeta(tool._meta)]))
+      : undefined;
     this.uiResourceUris = new Map(
       (tools || []).flatMap((tool) => {
         const uri = resolveMcpUiToolMeta(tool._meta, this.mcpApps).resourceUri;
@@ -842,6 +848,12 @@ export class MCPClient {
    * The MCP Apps `ui://` resource a tool renders its result with, if any.
    * Lists tools once per client to learn it.
    */
+  async getToolUiMeta(toolName: string) {
+    if (!this.mcpApps) return undefined;
+    await this.ensureToolsListed();
+    return this.toolUiMeta?.get(toolName);
+  }
+
   async getToolUiResourceUri(toolName: string): Promise<string | undefined> {
     await this.ensureToolsListed();
 

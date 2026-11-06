@@ -949,6 +949,9 @@ export default class McpCtr extends ControllerModule {
             const uiResourceUri = mcpApps
               ? await this.getToolUiResourceUri(client, toolName)
               : undefined;
+            const preferredModelDisplayMode = uiResourceUri
+              ? (await client.getToolUiMeta(toolName))?.preferredModelDisplayMode
+              : undefined;
             const raw = (await client.callTool(toolName, args)) as ToolCallResult;
             // A view gets the tool's own MCP result: its media stays base64
             // `data`, not the uploaded keys the chat stores and renders
@@ -966,6 +969,7 @@ export default class McpCtr extends ControllerModule {
                 !raw.isError && {
                   mcpApp: {
                     resourceUri: uiResourceUri,
+                    ...(preferredModelDisplayMode && { preferredModelDisplayMode }),
                     server: await getMcpServerFingerprint(params),
                   },
                 }),
