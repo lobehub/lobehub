@@ -315,8 +315,9 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
         }
 
         await updateConnector(connectorId, patch);
-        // A changed command can expose different tools: list them again.
-        if (!isHttp) await syncConnectorTools(connectorId);
+        // A changed endpoint, command or credential can expose different tools:
+        // list them again. An OAuth connector is synced by its callback instead.
+        if (!(isHttp && authType === 'oauth2')) await syncConnectorTools(connectorId);
 
         if (authType === 'oauth2' && isHttp) {
           const popup = ctx?.oauthPopup;

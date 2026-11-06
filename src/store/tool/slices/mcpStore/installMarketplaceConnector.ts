@@ -3,6 +3,11 @@ import type { ToolManifest } from '@lobechat/types';
 import debug from 'debug';
 
 import { lambdaClient } from '@/libs/trpc/client';
+import {
+  type ConnectorSnapshot,
+  restoreConnector,
+  snapshotReplacedConnector,
+} from '@/store/tool/slices/connector/replaceConnector';
 import { connectorSelectors } from '@/store/tool/slices/connector/selectors';
 import type { ToolStore } from '@/store/tool/store';
 
@@ -80,42 +85,6 @@ const syncCloudTools = async (connectorId: string, manifest: ToolManifest) => {
   });
 };
 
-type ConnectorSnapshot = Awaited<ReturnType<ToolStore['getConnectorForEdit']>>;
-type ConnectorPatch = Parameters<ToolStore['updateConnector']>[1];
-
-/**
- * Put a reinstalled connector back the way it was before `create` overwrote
- * it. Its tools are untouched by a failed sync, so a row that was connected is
- * re-marked connected from its own tool list without reaching the server.
- */
-const restoreConnector = async (snapshot: ConnectorSnapshot, get: () => ToolStore) => {
-  const { credentials, id, mcpServerUrl, mcpStdioConfig, oidcConfig, status, tools } = snapshot;
-  await get().updateConnector(id, {
-    // The edit read withholds OAuth tokens; never clear them with that `null`.
-    ...(credentials || !oidcConfig
-      ? { credentials: (credentials ?? null) as ConnectorPatch['credentials'] }
-      : {}),
-    isEnabled: snapshot.isEnabled,
-    mcpConnectionType: (snapshot.mcpConnectionType ??
-      undefined) as ConnectorPatch['mcpConnectionType'],
-    mcpServerUrl: mcpServerUrl ?? undefined,
-    mcpStdioConfig: mcpStdioConfig ?? undefined,
-    metadata: snapshot.metadata ?? {},
-    name: snapshot.name,
-  });
-  if (status !== 'connected') return;
-  await lambdaClient.connector.syncToolsFromClientById.mutate({
-    id,
-    tools: tools.map((tool) => ({
-      description: tool.description ?? undefined,
-      inputSchema: (tool.inputSchema ?? undefined) as Record<string, unknown> | undefined,
-      toolName: tool.toolName,
-      visibility: (tool.metadata as { visibility?: string[] } | null)?.visibility,
-    })),
-  });
-  await get().fetchConnectors();
-};
-
 /**
  * Store a marketplace MCP install as a `user_connectors` row with its tools,
  * then mark the install finished. Only the mark lets the runtime call a
@@ -138,16 +107,8 @@ export const installMarketplaceConnector = async (
     if (!connector) throw new Error('The MCP connector did not finish authorization');
     connectorId = connector.id;
   } else {
-    // `create` upserts on the identifier: read the stored row first, not a stale list.
-    await get().fetchConnectors();
-    const existing = connectorSelectors.connectorByIdentifier(identifier)(get());
-    if (existing && existing.sourceType !== 'marketplace') {
-      throw new Error(
-        `A connector with the identifier "${identifier}" already exists. Remove it before installing this MCP from the marketplace.`,
-      );
-    }
-    if (existing) snapshot = await get().getConnectorForEdit(existing.id);
-    const wasInstalled = isMarketplaceInstallCompleted(existing?.metadata);
+    snapshot = await snapshotReplacedConnector(identifier, 'marketplace', get);
+    const wasInstalled = isMarketplaceInstallCompleted(snapshot?.metadata);
     ({ id: connectorId, isNew } = await get().createConnector(
       buildCreatePayload(params, wasInstalled),
     ));
