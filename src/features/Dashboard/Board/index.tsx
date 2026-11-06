@@ -117,7 +117,7 @@ const DashboardBoard = memo<DashboardBoardProps>(({ dashboardId, empty }) => {
           <div {...gridProps()} data-dashboard-grid={'view'}>
             {ordered.map(({ item, view, widget }) => (
               <div
-                {...sx([gridStyles.cell], undefined, cellStyle(layouts[item.id]))}
+                {...sx(gridStyles.cell, cellStyle(layouts[item.id]))}
                 data-layout-cell={item.id}
                 key={item.id}
               >

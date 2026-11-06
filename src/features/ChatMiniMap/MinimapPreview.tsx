@@ -37,7 +37,7 @@ export const MinimapPreview = memo<MinimapPreviewProps>(
               onClick={() => onJump(virtuosoIndex)}
             >
               <span {...stylex.props(styles.label, isActive && styles.labelActive)}>{label}</span>
-              <div {...sx([styles.dash, isActive && styles.dashActive], undefined, { width })} />
+              <div {...sx(styles.dash, isActive && styles.dashActive, { width })} />
             </Flexbox>
           );
         })}

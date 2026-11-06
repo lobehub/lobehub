@@ -129,7 +129,7 @@ const WidgetCard = memo<WidgetCardProps>(
     let body: ReactNode;
     if (bodyState === 'output' && output) {
       body = (
-        <div {...sx([health.failed && styles.failedOutput], undefined, { height: '100%' })}>
+        <div {...sx(health.failed && styles.failedOutput, { height: '100%' })}>
           <WidgetOutputView output={output} trend={trend} view={view} />
         </div>
       );
@@ -161,7 +161,7 @@ const WidgetCard = memo<WidgetCardProps>(
 
     return (
       <Flexbox
-        {...sx([styles.card, onOpen && styles.clickable, stylex.defaultMarker()], className)}
+        {...sx(styles.card, onOpen && styles.clickable, stylex.defaultMarker(), className)}
         data-widget-id={widget.id}
         data-widget-running={health.running}
         data-widget-surface={surface ? 'custom' : undefined}

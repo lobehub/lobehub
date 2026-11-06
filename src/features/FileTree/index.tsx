@@ -175,7 +175,7 @@ const TreeNode = memo<{
 
     const nodeContent = (
       <div
-        {...sx([styles.item, isSelected && styles.itemSelected], undefined, {
+        {...sx(styles.item, isSelected && styles.itemSelected, {
           paddingInlineStart: 8 + depth * 16,
         })}
         title={node.path}
@@ -299,7 +299,7 @@ const FileTree = memo<FileTreeProps>(
 
     const rootFileContent = rootFilePath && rootFileLabel && (
       <div
-        {...sx([styles.item, isRootFileSelected && styles.itemSelected], undefined, {
+        {...sx(styles.item, isRootFileSelected && styles.itemSelected, {
           paddingInlineStart: 8,
         })}
         onClick={() => onSelectFile(rootFilePath)}

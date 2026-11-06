@@ -36,7 +36,7 @@ const DashboardWidgetGrid = memo<DashboardWidgetGridProps>(({ widgets }) => {
       <div {...gridProps()} data-dashboard-grid={'widgets'}>
         {widgets.map((widget) => (
           <div
-            {...sx([gridStyles.cell], undefined, cellStyle(layouts[widget.id]))}
+            {...sx(gridStyles.cell, cellStyle(layouts[widget.id]))}
             data-widget-id={widget.id}
             key={widget.id}
           >

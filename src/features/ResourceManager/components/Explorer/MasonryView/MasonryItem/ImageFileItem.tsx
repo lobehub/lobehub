@@ -177,7 +177,7 @@ const ImageFileItem = memo<ImageFileItemProps>(
 
     return (
       <>
-        <div {...sx([styles.imageWrapper], undefined, { aspectRatio })}>
+        <div {...sx(styles.imageWrapper, { aspectRatio })}>
           {!imageLoaded && (
             <div
               {...stylex.props(

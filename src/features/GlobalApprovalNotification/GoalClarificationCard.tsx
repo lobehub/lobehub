@@ -66,7 +66,7 @@ const GoalClarificationCard = memo<GoalClarificationCardProps>(
 
         {group.requirement && (
           <div {...stylex.props(styles.requestContext)}>
-            <div {...sx([styles.userRequestBody], fallback.userRequestBody)}>
+            <div {...sx(styles.userRequestBody, fallback.userRequestBody)}>
               <MarkdownMessage>{group.requirement}</MarkdownMessage>
             </div>
           </div>

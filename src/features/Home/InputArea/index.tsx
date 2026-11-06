@@ -82,7 +82,7 @@ const InputArea = ({
       : t(`dashboard.placeholder.${mode}`);
 
   const editorSlot = (
-    <div {...sx([styles.inputSlot], undefined, { minHeight: HOME_INPUT_RESERVED_HEIGHT })}>
+    <div {...sx(styles.inputSlot, { minHeight: HOME_INPUT_RESERVED_HEIGHT })}>
       <EditorSlot
         agentId={agentId}
         contextSelectionKey={contextSelectionKey}

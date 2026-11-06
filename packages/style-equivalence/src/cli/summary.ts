@@ -1,7 +1,7 @@
 import type { CalibrationResult } from '../calibration';
 import type { StyleDifference } from '../capture/snapshot';
 import type { MutantResult, MutationReport } from '../mutation/run';
-import type { Verdict } from '../verdict';
+import type { Verdict, VerdictItem } from '../verdict';
 import type { CaseCategory } from '../verdict/categorize';
 
 export interface SummaryInput {
@@ -20,8 +20,9 @@ export interface SummaryInput {
     mutants: Array<Pick<MutantResult, 'caseKey' | 'description' | 'outcome'>>;
   };
   runDir: string;
-  unpaired: number;
-  verdict: Pick<Verdict, 'mergeable' | 'reasons'>;
+  verdict: Pick<Verdict, 'mergeable' | 'reasons'> & {
+    items: Array<Pick<VerdictItem, 'category' | 'key'>>;
+  };
 }
 
 const TOP = 10;
@@ -56,15 +57,21 @@ const mutationLines = ({ mutation }: SummaryInput) => {
   ];
 };
 
+const countLine = ({ verdict }: SummaryInput) => {
+  const of = (category: VerdictItem['category']) =>
+    verdict.items.filter((item) => item.category === category);
+  const signoff = of('needs-signoff');
+  const files = signoff.filter((item) => item.key.endsWith('|file')).length;
+  return `difference ${of('difference').length} · needs sign-off ${signoff.length} (${signoff.length - files} cases · ${files} files) · unpaired ${of('unpaired').length} · blocking ${of('blocking').length} · equal ${of('equal').length}`;
+};
+
 export const formatSummary = (input: SummaryInput) => {
-  const count = (category: CaseCategory) =>
-    input.cases.filter((entry) => entry.category === category).length;
   const lines = [
     input.verdict.mergeable
       ? 'verdict mergeable'
       : `verdict not mergeable: ${input.verdict.reasons.join(' · ')}`,
     `style-equivalence ${input.base.slice(0, 7)}..${input.head.slice(0, 7)} · ${input.files.length} files · ${input.cases.length} cases · ${input.comparisons} comparisons · ${Math.round(input.durationMs / 1000)}s`,
-    `difference ${count('difference')} · needs sign-off ${count('needs-signoff') + input.unpaired} · blocking ${count('blocking')} · equal ${count('equal')}`,
+    countLine(input),
     ...mutationLines(input),
     ...calibrationLines(input),
   ];

@@ -43,6 +43,8 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import { useAiInfraStore } from '@/store/aiInfra';
 import { aiProviderSelectors } from '@/store/aiInfra/selectors';
 
+import { galleryThumbWrapMarker } from './markers.stylex';
+
 const GALLERY_STYLES = AGENT_ARTWORK_STYLES;
 const LOBE_STYLE_PREVIEW =
   CHIEF_AGENT_ARTWORKS.find((item) => item.id === 'sienna')?.avatar ??
@@ -102,7 +104,6 @@ const styles = stylex.create({
     objectFit: 'cover',
     transition: `filter ${cssVar.motionDurationFast}`,
   },
-  // The marker for `referenceRemove`, which shows while the thumbnail is hovered.
   galleryThumbWrap: { position: 'relative' },
   referenceEmpty: {
     aspectRatio: '1',
@@ -118,7 +119,7 @@ const styles = stylex.create({
     zIndex: 1,
     insetBlockStart: '2px',
     insetInlineEnd: '2px',
-    opacity: { default: 0, [stylex.when.ancestor(':hover')]: 1 },
+    opacity: { default: 0, [stylex.when.ancestor(':hover', galleryThumbWrapMarker)]: 1 },
     backgroundColor: `color-mix(in srgb, ${cssVar.colorBgContainer} 72%, transparent)`,
     backgroundImage: 'none',
     backdropFilter: 'blur(8px)',
@@ -700,7 +701,7 @@ const ArtworkStudioContent = memo<ArtworkStudioContentProps>(
                             openFilePicker(referenceInputRef.current);
                         }}
                       >
-                        <div {...stylex.props(styles.galleryThumbWrap, stylex.defaultMarker())}>
+                        <div {...stylex.props(styles.galleryThumbWrap, galleryThumbWrapMarker)}>
                           {referenceImage ? (
                             <>
                               <img

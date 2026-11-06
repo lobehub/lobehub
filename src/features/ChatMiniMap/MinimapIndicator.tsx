@@ -19,7 +19,7 @@ export const MinimapIndicator = memo<MinimapIndicatorProps>(
         aria-current={isActive ? 'true' : undefined}
         aria-label={t('minimap.jumpToMessage', { index: position + 1 })}
         id={id}
-        {...sx([styles.indicator], undefined, { width })}
+        {...sx(styles.indicator, { width })}
         onClick={() => onJump(virtuosoIndex)}
       >
         <div

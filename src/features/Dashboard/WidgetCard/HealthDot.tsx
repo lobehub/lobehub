@@ -54,7 +54,7 @@ const HealthDot = memo<{ health: WidgetHealth }>(({ health }) => {
   return (
     <span
       aria-hidden
-      {...sx([styles.dot, tone === 'running' && styles.running], undefined, {
+      {...sx(styles.dot, tone === 'running' && styles.running, {
         background: HEALTH_TONE_COLOR[tone],
       })}
       data-widget-health={tone}
