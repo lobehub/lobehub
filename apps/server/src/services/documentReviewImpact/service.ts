@@ -200,10 +200,15 @@ export class DocumentReviewImpactService {
       .slice(0, IMPACT_MAX_ITEMS)
       .map((draft) => toImpactInput(draft, currentText));
 
-    const items = await this.repository.saveImpacts(session.id, inputs);
-    if (baseHistoryId !== session.baseHistoryId) {
-      await this.repository.setBaseline(session.id, baseHistoryId);
-    }
+    // Pin the baseline in the same write that stores the items. A separate
+    // `setBaseline` call could interleave with a concurrent analysis: A saves
+    // impacts, B saves impacts, B pins its baseline, A pins its own — and the
+    // panel then shows one run's items against another run's comparison.
+    const items = await this.repository.saveImpacts(
+      session.id,
+      inputs,
+      baseHistoryId === session.baseHistoryId ? undefined : { baseHistoryId },
+    );
 
     const counts = inputs.reduce(
       (total, input) => {

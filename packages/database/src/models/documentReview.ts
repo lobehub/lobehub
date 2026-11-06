@@ -213,6 +213,26 @@ export class DocumentReviewModel {
             ),
           );
       }
+
+      // Reactivating an archived session revives checks that were settled
+      // against whatever the body looked like when the session was archived.
+      // `invalidateDocumentChecks` only walks active sessions, so nothing else
+      // will ever move them: `runChecks` picks `unchecked` rows and
+      // `recheckChecks` picks `needs_recheck` ones, leaving a stale `passed`
+      // standing forever. Send them back for re-verification instead.
+      if (value.status === 'active' && current.status !== 'active') {
+        await tx
+          .update(documentReviewCheckResults)
+          .set({ status: 'needs_recheck' })
+          .where(
+            and(
+              eq(documentReviewCheckResults.sessionId, id),
+              eq(documentReviewCheckResults.workspaceId, workspaceId),
+              ne(documentReviewCheckResults.status, 'unchecked'),
+              ne(documentReviewCheckResults.status, 'needs_recheck'),
+            ),
+          );
+      }
       return session;
     });
   };
@@ -232,10 +252,19 @@ export class DocumentReviewModel {
   // Impact items
   // ---------------------------------------------------------------------------
 
-  /** Replace a session's impact list with a fresh analysis result. */
+  /**
+   * Replace a session's impact list with a fresh analysis result.
+   *
+   * `options.baseHistoryId` pins the baseline in the same transaction, under the
+   * same session lock. Splitting the two let concurrent analyses interleave —
+   * A saved its impacts, B saved its own, B pinned its baseline, then A pinned
+   * its baseline — so the panel rendered one run's impacts against another
+   * run's comparison, and the next Analyze silently changed meaning.
+   */
   replaceImpacts = async (
     sessionId: string,
     items: DocumentReviewImpactInput[],
+    options?: { baseHistoryId?: null | string },
   ): Promise<DocumentReviewImpactItem[]> => {
     const workspaceId = this.requireWorkspaceId();
     return this.db.transaction(async (trx) => {
@@ -266,27 +295,43 @@ export class DocumentReviewModel {
             eq(documentReviewImpacts.workspaceId, workspaceId),
           ),
         );
-      if (items.length === 0) return [];
 
-      return tx
-        .insert(documentReviewImpacts)
-        .values(
-          items.map((item, index) => ({
-            category: item.category,
-            confidence: item.confidence ?? null,
-            kind: item.kind,
-            reason: item.reason,
-            relatedAnchor: item.relatedAnchor ?? null,
-            sessionId,
-            severity: item.severity ?? 'medium',
-            sortOrder: index,
-            sourceAnchor: item.sourceAnchor ?? null,
-            title: item.title,
-            trigger: item.trigger ?? null,
-            workspaceId,
-          })),
-        )
-        .returning();
+      const saved =
+        items.length === 0
+          ? []
+          : await tx
+              .insert(documentReviewImpacts)
+              .values(
+                items.map((item, index) => ({
+                  category: item.category,
+                  confidence: item.confidence ?? null,
+                  kind: item.kind,
+                  reason: item.reason,
+                  relatedAnchor: item.relatedAnchor ?? null,
+                  sessionId,
+                  severity: item.severity ?? 'medium',
+                  sortOrder: index,
+                  sourceAnchor: item.sourceAnchor ?? null,
+                  title: item.title,
+                  trigger: item.trigger ?? null,
+                  workspaceId,
+                })),
+              )
+              .returning();
+
+      if (options?.baseHistoryId !== undefined) {
+        await tx
+          .update(documentReviewSessions)
+          .set({ baseHistoryId: options.baseHistoryId })
+          .where(
+            and(
+              eq(documentReviewSessions.id, sessionId),
+              eq(documentReviewSessions.workspaceId, workspaceId),
+            ),
+          );
+      }
+
+      return saved;
     });
   };
 

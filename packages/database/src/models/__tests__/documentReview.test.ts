@@ -137,6 +137,44 @@ describe('DocumentReviewModel', () => {
       expect(await model.findSessionById(session.id)).toBeUndefined();
     });
 
+    it('sends settled checks back for re-verification when an archived session is reactivated', async () => {
+      const { checks, session } = await setupChecklist();
+      await model.transitionCheck(checks[0].id, { event: 'check', outcome: 'passed' });
+      await model.transitionCheck(checks[1].id, { event: 'check', outcome: 'failed' });
+      await model.updateSession(session.id, { status: 'archived' });
+
+      await model.updateSession(session.id, { status: 'active' });
+
+      // The body may have changed while the session sat archived; a `passed`
+      // recorded against the old body must not survive the reactivation.
+      expect((await model.findCheckResultById(checks[0].id))?.status).toBe('needs_recheck');
+      expect((await model.findCheckResultById(checks[1].id))?.status).toBe('needs_recheck');
+    });
+
+    it('pins the baseline in the same write that replaces the impacts', async () => {
+      const { session } = await setupChecklist();
+      const [history] = await serverDB
+        .insert(documentHistories)
+        .values({
+          documentId,
+          editorData: {},
+          saveSource: 'manual' as const,
+          savedAt: new Date(),
+          userId: ownerId,
+          workspaceId,
+        })
+        .returning();
+
+      await model.replaceImpacts(
+        session.id,
+        [{ category: 'semantic', kind: 'obligation', reason: 'r', title: 't' }],
+        { baseHistoryId: history.id },
+      );
+
+      expect((await model.findSessionById(session.id))?.baseHistoryId).toBe(history.id);
+      expect(await model.listImpacts(session.id)).toHaveLength(1);
+    });
+
     it('replaces impacts in order and distinguishes textual from semantic', async () => {
       const session = await model.createSession({ documentId });
       await model.replaceImpacts(session.id, [

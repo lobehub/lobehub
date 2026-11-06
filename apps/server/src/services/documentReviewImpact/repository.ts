@@ -41,8 +41,8 @@ export interface ImpactAnalysisRepository {
   saveImpacts: (
     sessionId: string,
     items: DocumentReviewImpactInput[],
+    options?: { baseHistoryId?: null | string },
   ) => Promise<DocumentReviewImpactItem[]>;
-  setBaseline: (sessionId: string, historyId: string) => Promise<void>;
 }
 
 export class DrizzleImpactRepository implements ImpactAnalysisRepository {
@@ -112,11 +112,9 @@ export class DrizzleImpactRepository implements ImpactAnalysisRepository {
   saveImpacts = async (
     sessionId: string,
     items: DocumentReviewImpactInput[],
-  ): Promise<DocumentReviewImpactItem[]> => this.reviewModel.replaceImpacts(sessionId, items);
-
-  setBaseline = async (sessionId: string, historyId: string): Promise<void> => {
-    await this.reviewModel.updateSession(sessionId, { baseHistoryId: historyId });
-  };
+    options?: { baseHistoryId?: null | string },
+  ): Promise<DocumentReviewImpactItem[]> =>
+    this.reviewModel.replaceImpacts(sessionId, items, options);
 
   findImpact = async (impactId: string): Promise<DocumentReviewImpactItem | undefined> =>
     this.reviewModel.findImpactById(impactId);

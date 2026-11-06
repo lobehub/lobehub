@@ -34,7 +34,12 @@ class MemoryRepository implements ImpactAnalysisRepository {
   loadBaseline = async (documentId: string, historyId: string) =>
     this.document?.id === documentId && this.baseline?.id === historyId ? this.baseline : undefined;
 
-  saveImpacts = async (sessionId: string, items: DocumentReviewImpactInput[]) => {
+  saveImpacts = async (
+    sessionId: string,
+    items: DocumentReviewImpactInput[],
+    options?: { baseHistoryId?: null | string },
+  ) => {
+    if (options?.baseHistoryId !== undefined) this.savedBaseline = options.baseHistoryId ?? '';
     const now = new Date();
     this.impacts = items.map((item, index) => ({
       accessedAt: now,
@@ -56,10 +61,6 @@ class MemoryRepository implements ImpactAnalysisRepository {
       workspaceId: 'ws_test',
     }));
     return this.impacts;
-  };
-
-  setBaseline = async (_sessionId: string, historyId: string) => {
-    this.savedBaseline = historyId;
   };
 
   findImpact = async (impactId: string) => this.impacts.find((impact) => impact.id === impactId);
@@ -200,6 +201,14 @@ describe('DocumentReviewImpactService', () => {
 
     expect(result.items).toHaveLength(6);
     expect(repository.savedBaseline).toBe('hist_base');
+  });
+
+  it('leaves the session baseline alone when the run keeps it', async () => {
+    const { repository, service } = buildService();
+
+    await service.analyze({ sessionId: 'drs_session' });
+
+    expect(repository.savedBaseline).toBeUndefined();
   });
 
   it('reports no difference between identical versions instead of an empty list', async () => {
