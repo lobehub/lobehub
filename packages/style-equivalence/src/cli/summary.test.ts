@@ -69,13 +69,25 @@ describe('formatSummary', () => {
         requested: 10,
       },
       runDir: '/repo/.records/style-equivalence/run-1',
-      unpaired: 3,
-      verdict: { mergeable: false, reasons: ['blocking 1', 'difference 1', 'needs sign-off 4'] },
+      verdict: {
+        items: [
+          { category: 'difference', key: 'src/Controls.tsx|SectionHeader#0' },
+          { category: 'needs-signoff', key: 'src/Controls.tsx|ControlLabel#0' },
+          { category: 'needs-signoff', key: 'src/A.tsx|file' },
+          { category: 'equal', key: 'src/A.tsx|A#0' },
+          { category: 'blocking', key: 'src/B.tsx|B#0' },
+          { category: 'unpaired', key: 'src/B.tsx|unpaired:base:B#1' },
+          { category: 'unpaired', key: 'src/B.tsx|unpaired:base:B#2' },
+          { category: 'unpaired', key: 'src/B.tsx|unpaired:head:B#3' },
+        ],
+        mergeable: false,
+        reasons: ['blocking 1', 'difference 1', 'needs sign-off 2', 'unpaired 3'],
+      },
     });
     expect(text.split('\n')).toEqual([
-      'verdict not mergeable: blocking 1 · difference 1 · needs sign-off 4',
+      'verdict not mergeable: blocking 1 · difference 1 · needs sign-off 2 · unpaired 3',
       'style-equivalence 60dee14..f0a8fd0 · 3 files · 4 cases · 96 comparisons · 82s',
-      'difference 1 · needs sign-off 4 · blocking 1 · equal 1',
+      'difference 1 · needs sign-off 2 (1 cases · 1 files) · unpaired 3 · blocking 1 · equal 1',
       'mutation 9/9 caught · 2 equivalent dropped (requested 10)',
       'calibration 1 agree · 0 mismatch · 1 inconclusive',
       'Top root causes:',
@@ -114,8 +126,7 @@ describe('formatSummary', () => {
         requested: 2,
       },
       runDir: '/r',
-      unpaired: 0,
-      verdict: { mergeable: false, reasons: ['mutation not fully caught'] },
+      verdict: { items: [], mergeable: false, reasons: ['mutation not fully caught'] },
     });
     expect(text.split('\n')[0]).toBe('verdict not mergeable: mutation not fully caught');
     expect(text.split('\n').slice(3, 7)).toEqual([

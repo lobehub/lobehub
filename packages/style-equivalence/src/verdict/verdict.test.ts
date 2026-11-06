@@ -92,6 +92,25 @@ describe('decideVerdict', () => {
     expect(verdict({ signoffs: new Map() }).mergeable).toBe(false);
   });
 
+  it('refuses a run whose page held selectors it could not evaluate', () => {
+    const result = decideVerdict({
+      calibration: [],
+      items: [],
+      mutation: { passed: true },
+      signoffs: new Map(),
+      unparsedSelectors: 2,
+    });
+    expect(result).toMatchObject({ mergeable: false, reasons: ['selector unparsed 2'] });
+  });
+
+  it('counts unsigned unpaired elements apart from unsigned cases', () => {
+    expect(verdict({ signoffs: new Map() }).reasons).toEqual([
+      'difference 1',
+      'needs sign-off 2',
+      'unpaired 1',
+    ]);
+  });
+
   it('treats a sign-off whose hash no longer matches as stale', () => {
     const changed = items.map((entry) =>
       entry.key === 'src/A.tsx|A#1' ? { ...entry, hash: 'hash-after-source-change' } : entry,
