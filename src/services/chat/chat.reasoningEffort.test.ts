@@ -38,16 +38,6 @@ const mockCreateHeaderWithAuth = vi.hoisted(() =>
   vi.fn(async ({ headers }: { headers: Record<string, string> }) => headers),
 );
 
-// Helper to compute expected date content from SystemDateProvider
-const getCurrentDateContent = () => {
-  const tz = 'UTC';
-  const today = new Date();
-  const year = today.toLocaleString('en-US', { timeZone: tz, year: 'numeric' });
-  const month = today.toLocaleString('en-US', { month: '2-digit', timeZone: tz });
-  const day = today.toLocaleString('en-US', { day: '2-digit', timeZone: tz });
-  return `Current date: ${year}-${month}-${day} (${tz})`;
-};
-
 /**
  * Default mock resolvedAgentConfig for tests
  */
