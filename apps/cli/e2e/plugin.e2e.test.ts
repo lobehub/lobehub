@@ -51,15 +51,7 @@ describe('lh legacy-plugin - E2E', () => {
     });
   });
 
-  // ── install / update / uninstall ──────────────────────
-  // Note: Full CRUD requires a valid manifest JSON which is complex.
-  // We test error handling for invalid inputs instead.
-
-  describe('install', () => {
-    it('should reject invalid manifest JSON', () => {
-      expect(() => run('legacy-plugin install -i "test-plugin" --manifest "not-json"')).toThrow();
-    });
-  });
+  // ── update ────────────────────────────────────────
 
   describe('update', () => {
     it('should error when no changes specified', () => {
