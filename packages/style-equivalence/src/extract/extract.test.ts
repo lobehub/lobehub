@@ -233,3 +233,64 @@ ${body}
     expect(variables).toEqual([{ kind: 'unknown', name: 'item' }]);
   });
 });
+
+describe('extractFile slot properties', () => {
+  it('records the properties each Emotion slot sets, including nested rules and conditions', () => {
+    const code = `import { createStaticStyles } from '@lobehub/ui';
+const styles = createStaticStyles(({ css, cssVar }) => ({
+  activated: css\`
+    color: \${cssVar.colorSuccess};
+    background: \${cssVar.colorSuccessBg};
+  \`,
+  listItem: css\`
+    padding-block: 10px;
+    &:not(:last-child) { border-block-end: 1px solid red; }
+    @media (max-width: 600px) { font-size: 12px; }
+  \`,
+}));
+export const A = () => <span className={styles.activated} />;
+`;
+    expect(extractFile(code, 'a.tsx', options).slotProperties).toEqual({
+      'styles.activated': ['background', 'color'],
+      'styles.listItem': ['border-block-end', 'font-size', 'padding-block'],
+    });
+  });
+
+  it('leaves out an Emotion slot whose declarations it cannot read', () => {
+    const code = `import { createStaticStyles } from '@lobehub/ui';
+const styles = createStaticStyles(({ css }) => ({
+  mixed: css\`
+    \${mixin}
+    color: red;
+  \`,
+  computed: css\`
+    \${side}: 0;
+  \`,
+  plain: css\`color: red;\`,
+}));
+export const A = () => <span className={styles.plain} />;
+`;
+    expect(extractFile(code, 'a.tsx', options).slotProperties).toEqual({
+      'styles.plain': ['color'],
+    });
+  });
+
+  it('records the properties each StyleX slot sets as kebab-case names', () => {
+    const code = `import * as stylex from '@stylexjs/stylex';
+const styles = stylex.create({
+  activated: { color: 'green', backgroundColor: 'white', backgroundImage: 'none' },
+  dot: { borderWidth: { default: null, ':hover': '1px' }, '::placeholder': { color: 'gray' } },
+  dynamic: (size) => ({ width: size, WebkitLineClamp: 2 }),
+  spread: { ...base, color: 'red' },
+  vars: { '--accent': 'red' },
+});
+export const A = () => <span {...stylex.props(styles.activated)} />;
+`;
+    expect(extractFile(code, 'a.tsx', options).slotProperties).toEqual({
+      'styles.activated': ['background-color', 'background-image', 'color'],
+      'styles.dot': ['border-width', 'color'],
+      'styles.dynamic': ['-webkit-line-clamp', 'width'],
+      'styles.vars': ['--accent'],
+    });
+  });
+});

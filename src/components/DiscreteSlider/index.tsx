@@ -103,13 +103,13 @@ const DiscreteSlider = memo<DiscreteSliderProps>(
     );
 
     return (
-      <Flexbox gap={6} {...sx([styles.root], className, style)}>
+      <Flexbox gap={6} {...sx(styles.root, className, style)}>
         {formatTooltip && currentOption ? (
           <Tooltip title={formatTooltip(currentOption.value)}>{slider}</Tooltip>
         ) : (
           slider
         )}
-        <div {...sx([styles.labels], undefined, { gridTemplateColumns })}>
+        <div {...sx(styles.labels, { gridTemplateColumns })}>
           {options.map((option, index) => {
             const isFirst = index === 0;
             const isLast = index === options.length - 1;
@@ -121,7 +121,7 @@ const DiscreteSlider = memo<DiscreteSliderProps>(
                 aria-label={option.ariaLabel}
                 disabled={disabled}
                 key={option.value}
-                {...sx([styles.label, index === currentIndex && styles.selectedLabel], undefined, {
+                {...sx(styles.label, index === currentIndex && styles.selectedLabel, {
                   textAlign,
                   ...option.style,
                 })}
