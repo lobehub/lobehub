@@ -14,29 +14,13 @@ import type { LobeChatDatabase } from '@/database/type';
 import { TaskRunnerService } from '../../../taskRunner';
 import { UserSkillService } from '../../../userSkill';
 import { GoalCriteriaGeneratorService } from '../../criteriaGenerator';
-import { registerGoalServiceTestCleanup } from '../../testUtils';
+import { createBatchDecomposition, registerGoalServiceTestCleanup } from '../../testUtils';
 import { GoalService } from '../index';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 const userId = 'goal-service-test-user';
 
 registerGoalServiceTestCleanup(serverDB, userId);
-
-const createBatchDecomposition = () => ({
-  problemStatement: '把 50 个同构的 store 迁移到 replica',
-  rollout: {
-    recipeOutline: '把 store 换成 replica 支撑的实现',
-    repeatable: true,
-    unitCount: 50,
-    units: Array.from({ length: 50 }, (_, i) => `Unit ${i + 1}`),
-    variants: [],
-  },
-  tasks: Array.from({ length: 5 }, (_, i) => ({
-    dependsOn: [],
-    instruction: `把 src/store/store${i + 1}.ts 换成 replica 实现`,
-    title: `Unit ${i + 1}`,
-  })),
-});
 
 describe('GoalService', () => {
   it('re-opens the broken unit as a new task when the canary loop restarts', async () => {
