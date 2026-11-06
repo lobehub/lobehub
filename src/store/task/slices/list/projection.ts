@@ -122,6 +122,9 @@ export const taskGroupKeyByStatus: Record<TaskStatus, string> = {
 /** The "No project" column of a board grouped by project. */
 export const TASK_NO_PROJECT_GROUP_KEY = 'project:none';
 
+/** The one column for tasks filed under projects the caller cannot see. */
+export const TASK_UNAVAILABLE_PROJECT_GROUP_KEY = 'project:unavailable';
+
 /** Kanban column of a task's project when the board groups by project. */
 export const taskGroupKeyByProject = (projectId: string | null | undefined) =>
   projectId ? `project:${projectId}` : TASK_NO_PROJECT_GROUP_KEY;

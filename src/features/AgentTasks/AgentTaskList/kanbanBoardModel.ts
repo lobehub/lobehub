@@ -5,7 +5,7 @@ import type {
   TaskKanbanGroupBy,
   TaskListItem,
 } from '@/store/task/slices/list/initialState';
-import { TASK_NO_PROJECT_GROUP_KEY } from '@/store/task/slices/list/projection';
+import { TASK_UNAVAILABLE_PROJECT_GROUP_KEY } from '@/store/task/slices/list/projection';
 
 import type { CreateTaskContentProps } from '../CreateTaskModal/CreateTaskContent';
 import type { TaskGroupBy, TaskGroupMeta } from './listViewOptions';
@@ -121,9 +121,10 @@ export const buildKanbanGroupQuery = ({
 };
 
 /**
- * Folds the columns of projects the caller cannot see into "No project": the
- * server groups by the raw column, but only the visible project list can name a
- * column. Before that list loads there is nothing to decide from.
+ * Folds the columns of projects the caller cannot see into one "Unavailable
+ * project" column: the server groups by the raw column, but only the visible
+ * project list can name a column. Before that list loads there is nothing to
+ * decide from.
  */
 export const mergeUnresolvedProjectGroups = <T extends TaskGroupItem>(
   groups: T[],
@@ -133,17 +134,14 @@ export const mergeUnresolvedProjectGroups = <T extends TaskGroupItem>(
   const visible = new Set(projects.map((project) => project.id));
   const orphans = groups.filter((group) => group.projectId && !visible.has(group.projectId));
   if (orphans.length === 0) return groups;
-  return groups
-    .filter((group) => !orphans.includes(group))
-    .map((group) =>
-      group.key === TASK_NO_PROJECT_GROUP_KEY
-        ? ({
-            ...group,
-            tasks: [...group.tasks, ...orphans.flatMap((orphan) => orphan.tasks)],
-            total: orphans.reduce((sum, orphan) => sum + orphan.total, group.total),
-          } as T)
-        : group,
-    );
+  const unavailable = {
+    ...orphans[0],
+    hasMore: orphans.some((orphan) => orphan.hasMore),
+    key: TASK_UNAVAILABLE_PROJECT_GROUP_KEY,
+    tasks: orphans.flatMap((orphan) => orphan.tasks),
+    total: orphans.reduce((sum, orphan) => sum + orphan.total, 0),
+  } as T;
+  return [...groups.filter((group) => !orphans.includes(group)), unavailable];
 };
 
 export const buildKanbanColumns = (
@@ -166,7 +164,8 @@ export const buildKanbanColumns = (
   });
 
   return sortGroupEntries(groupEntries, groupBy).map(([groupMeta]) => ({
-    droppable: true,
+    // Nobody can file a task under a project they cannot see.
+    droppable: !groupMeta.projectUnavailable,
     groupMeta,
     key: groupMeta.key,
     targetStatus: null,

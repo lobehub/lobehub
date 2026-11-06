@@ -68,25 +68,42 @@ describe('project board columns', () => {
       'project',
     );
 
-    expect(columns.map((column) => column.key)).toEqual(['project:none']);
+    expect(columns.map((column) => column.key)).toEqual(['project:unavailable', 'project:none']);
+    expect(columns[0].droppable).toBe(false);
+    expect(columns[1].droppable).toBe(true);
     expect(JSON.stringify(columns)).not.toContain('gone');
   });
 });
 
 describe('mergeUnresolvedProjectGroups', () => {
-  it('folds unseen projects into "No project", tasks and totals included', () => {
-    const [none, ...rest] = mergeUnresolvedProjectGroups(
+  it('folds unseen projects into one column, leaving "No project" with only unlinked tasks', () => {
+    const merged = mergeUnresolvedProjectGroups(
       [
         group('project:none', null, ['t0']),
         group('project:proj_a', 'proj_a', ['t1']),
         group('project:gone', 'gone', ['t2', 't3']),
+        group('project:gone2', 'gone2', ['t4']),
       ],
       projects,
     );
+    const byKey = new Map(merged.map((item) => [item.key, item]));
 
-    expect(none.tasks.map((task) => task.id)).toEqual(['t0', 't2', 't3']);
-    expect(none.total).toBe(3);
-    expect(rest.map((item) => item.key)).toEqual(['project:proj_a']);
+    expect(byKey.get('project:none')?.tasks.map((task) => task.id)).toEqual(['t0']);
+    expect(byKey.get('project:none')?.total).toBe(1);
+    expect(byKey.get('project:unavailable')?.tasks.map((task) => task.id)).toEqual([
+      't2',
+      't3',
+      't4',
+    ]);
+    expect(byKey.get('project:unavailable')?.total).toBe(3);
+    expect([...byKey.keys()]).not.toContain('project:gone');
+  });
+
+  it('keeps tasks of unseen projects on a board with no "No project" column', () => {
+    const merged = mergeUnresolvedProjectGroups([group('project:gone', 'gone', ['t1'])], projects);
+
+    expect(merged.map((item) => item.key)).toEqual(['project:unavailable']);
+    expect(merged[0].tasks.map((task) => task.id)).toEqual(['t1']);
   });
 
   it('decides nothing before the list has loaded', () => {
