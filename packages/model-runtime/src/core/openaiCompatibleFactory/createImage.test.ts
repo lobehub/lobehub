@@ -1,9 +1,9 @@
 // @vitest-environment node
-import * as imageToBase64Module from '../../utils/imageToBase64';
 import type OpenAI from 'openai';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { CreateImagePayload } from '../../types/image';
+import * as imageToBase64Module from '../../utils/imageToBase64';
 import * as uriParserModule from '../../utils/uriParser';
 import { createOpenAICompatibleImage } from './createImage';
 
@@ -839,6 +839,67 @@ describe('createOpenAICompatibleImage', () => {
       await expect(createOpenAICompatibleImage(mockClient, payload, 'openai')).rejects.toThrow(
         'Invalid image response: first data item is null or undefined',
       );
+    });
+  });
+
+  describe('image mode - animated GIF output', () => {
+    it('sends GIF fields in snake_case and returns a GIF data URI', async () => {
+      vi.mocked(mockClient.images.generate).mockResolvedValue({
+        data: [{ b64_json: 'R0lGODlh' }],
+        output_format: 'gif',
+      } as any);
+
+      const result = await createOpenAICompatibleImage(
+        mockClient,
+        {
+          model: 'gpt-image-2.6-flare',
+          params: { frameCount: 12, frameDurationMs: 120, outputFormat: 'gif', prompt: 'a cat' },
+        },
+        'openai',
+      );
+
+      const args = vi.mocked(mockClient.images.generate).mock.calls[0][0] as any;
+      expect(args).toMatchObject({ frame_count: 12, frame_duration_ms: 120, output_format: 'gif' });
+      expect(args).not.toHaveProperty('frameCount');
+      expect(result.imageUrl).toBe('data:image/gif;base64,R0lGODlh');
+    });
+
+    it('drops frame fields for static output', async () => {
+      vi.mocked(mockClient.images.generate).mockResolvedValue({
+        data: [{ b64_json: 'png' }],
+      } as any);
+
+      const result = await createOpenAICompatibleImage(
+        mockClient,
+        {
+          model: 'gpt-image-2.6-flare',
+          params: { frameCount: 9, frameDurationMs: 200, outputFormat: 'png', prompt: 'a cat' },
+        },
+        'openai',
+      );
+
+      const args = vi.mocked(mockClient.images.generate).mock.calls[0][0] as any;
+      expect(args.output_format).toBe('png');
+      expect(args).not.toHaveProperty('frame_count');
+      expect(args).not.toHaveProperty('frame_duration_ms');
+      expect(result.imageUrl).toBe('data:image/png;base64,png');
+    });
+
+    it('rejects GIF output with reference images before downloading them', async () => {
+      global.fetch = vi.fn();
+
+      await expect(
+        createOpenAICompatibleImage(
+          mockClient,
+          {
+            model: 'gpt-image-2.6-flare',
+            params: { imageUrls: ['https://example.com/a.png'], outputFormat: 'gif', prompt: 'p' },
+          },
+          'openai',
+        ),
+      ).rejects.toThrow('Animated GIF output does not support reference images');
+      expect(global.fetch).not.toHaveBeenCalled();
+      expect(mockClient.images.edit).not.toHaveBeenCalled();
     });
   });
 

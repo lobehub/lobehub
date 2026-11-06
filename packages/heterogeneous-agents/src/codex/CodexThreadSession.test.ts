@@ -1,5 +1,6 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { AskUserBridge } from '../askUser';
 import {
   CodexAppServerConnectionError,
   CodexAppServerRpcError,
@@ -28,6 +29,7 @@ interface ClientHarness {
   resolveThreadStart: () => void;
   resolveTurnStart: () => void;
   resume: (model?: string) => Promise<void> | void;
+  serverRequest: (method: string, params: unknown) => Promise<unknown>;
 }
 
 const createClientHarness = (
@@ -48,6 +50,7 @@ const createClientHarness = (
 ): ClientHarness => {
   let disconnectHandler: (() => void) | undefined;
   let notificationHandler: ((method: string, params: unknown) => Promise<void>) | undefined;
+  let serverRequestHandler: ((method: string, params: unknown) => unknown) | undefined;
   let registration:
     | {
         onResume: (response: unknown) => Promise<void> | void;
@@ -152,7 +155,10 @@ const createClientHarness = (
       notificationHandler = handler;
       return vi.fn();
     }),
-    subscribeServerRequests: vi.fn(() => vi.fn()),
+    subscribeServerRequests: vi.fn((_threadId, handler) => {
+      serverRequestHandler = handler;
+      return vi.fn();
+    }),
   };
 
   return {
@@ -166,6 +172,7 @@ const createClientHarness = (
     resolveTurnStart,
     resume: (model = 'gpt-5.5-codex') =>
       registration?.onResume({ model, thread: { id: options.initialThreadId ?? 'thread-1' } }),
+    serverRequest: async (method, params) => serverRequestHandler?.(method, params),
   };
 };
 
@@ -209,6 +216,226 @@ const createSession = (
 };
 
 describe('CodexThreadSession', () => {
+  describe('native user input', () => {
+    const contexts: Array<{ bridge: AskUserBridge; session: CodexThreadSession }> = [];
+    afterEach(() => {
+      for (const { bridge, session } of contexts.splice(0)) {
+        bridge.cancelAll();
+        session.close();
+      }
+    });
+    const question = {
+      header: 'Database',
+      id: 'database',
+      isOther: true,
+      isSecret: false,
+      options: [{ description: 'Preserve existing data', label: 'Keep' }],
+      question: 'Keep the database?',
+    };
+    const request = (questions = [question]) => ({
+      autoResolutionMs: null,
+      isBlocking: true,
+      itemId: 'question-1',
+      questions,
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+    });
+    const start = async () => {
+      const harness = createClientHarness({ autoComplete: false });
+      const { events, session } = createSession(harness);
+      const bridge = new AskUserBridge('op-question', { identifier: 'codex', provider: 'codex' });
+      contexts.push({ bridge, session });
+      const running = session.run({
+        askUserBridge: bridge,
+        input: [{ text: 'Ask me', text_elements: [], type: 'text' }],
+        onRawMessage: vi.fn(),
+        operationId: 'op-question',
+      });
+      await vi.waitFor(() =>
+        expect(harness.requests.some((r) => r.method === 'turn/start')).toBe(true),
+      );
+      return { bridge, events, harness, running, session };
+    };
+    const finish = async (ctx: Awaited<ReturnType<typeof start>>) => {
+      await ctx.harness.notify('turn/completed', {
+        threadId: 'thread-1',
+        turn: turn('turn-1', 'completed'),
+      });
+      await ctx.running;
+      ctx.session.close();
+    };
+
+    it('presents native questions and returns selected/custom answers by their original ids', async () => {
+      const ctx = await start();
+      const reply = ctx.harness.serverRequest(
+        'item/tool/requestUserInput',
+        request([question, { ...question, id: 'name', options: null, question: 'Database name?' }]),
+      );
+      await vi.waitFor(() => expect(ctx.bridge.pendingCount).toBe(1));
+      const intervention = await ctx.bridge.events()[Symbol.asyncIterator]().next();
+      expect(intervention.value).toMatchObject({
+        data: {
+          apiName: 'askUserQuestion',
+          identifier: 'codex',
+          provider: 'codex',
+          toolCallId: 'question-1',
+        },
+        operationId: 'op-question',
+        type: 'agent_intervention_request',
+      });
+      ctx.bridge.resolve('question-1', {
+        result: { 'Keep the database?': 'Keep', 'Database name?': 'archive' },
+      });
+      await expect(reply).resolves.toEqual({
+        answers: { database: { answers: ['Keep'] }, name: { answers: ['archive'] } },
+      });
+      expect(ctx.events).toContainEqual(
+        expect.objectContaining({
+          type: 'tool_result',
+          data: expect.objectContaining({
+            pluginState: {
+              askUserAnswers: { 'Keep the database?': 'Keep', 'Database name?': 'archive' },
+            },
+            toolCallId: 'question-1',
+          }),
+        }),
+      );
+      await finish(ctx);
+    });
+
+    it.each(['user_cancelled', 'timeout'] as const)(
+      'resolves %s without inventing an answer',
+      async (cancelReason) => {
+        const ctx = await start();
+        const reply = ctx.harness.serverRequest('item/tool/requestUserInput', request());
+        await vi.waitFor(() => expect(ctx.bridge.pendingCount).toBe(1));
+        ctx.bridge.resolve('question-1', { cancelled: true, cancelReason });
+        await expect(reply).resolves.toEqual({ answers: {} });
+        await finish(ctx);
+      },
+    );
+
+    it('maps whole-form free text and supplementary notes without losing them', async () => {
+      const ctx = await start();
+      const reply = ctx.harness.serverRequest('item/tool/requestUserInput', request());
+      await vi.waitFor(() => expect(ctx.bridge.pendingCount).toBe(1));
+      ctx.bridge.resolve('question-1', {
+        result: { __freeform__: 'Use a snapshot', __supplement__: 'Read only' },
+      });
+      await expect(reply).resolves.toEqual({
+        answers: { database: { answers: ['Use a snapshot', 'Read only'] } },
+      });
+      await finish(ctx);
+    });
+
+    it('releases a pending question on interruption', async () => {
+      const ctx = await start();
+      const reply = ctx.harness.serverRequest('item/tool/requestUserInput', request());
+      await vi.waitFor(() => expect(ctx.bridge.pendingCount).toBe(1));
+      await ctx.session.interrupt();
+      await expect(reply).resolves.toEqual({ answers: {} });
+      await ctx.running;
+      expect(ctx.bridge.pendingCount).toBe(0);
+      ctx.session.close();
+    });
+
+    it('uses the native deadline and clears a timed-out question', async () => {
+      const ctx = await start();
+      vi.useFakeTimers();
+      try {
+        const reply = ctx.harness.serverRequest('item/tool/requestUserInput', {
+          ...request(),
+          autoResolutionMs: 100,
+        });
+        await vi.advanceTimersByTimeAsync(0);
+        expect(ctx.bridge.pendingCount).toBe(1);
+        await vi.advanceTimersByTimeAsync(100);
+        await expect(reply).resolves.toEqual({ answers: {} });
+        expect(ctx.bridge.pendingCount).toBe(0);
+        const stream = ctx.bridge.events()[Symbol.asyncIterator]();
+        await stream.next();
+        expect((await stream.next()).value).toMatchObject({
+          data: { cancelled: true, cancelReason: 'timeout' },
+          type: 'agent_intervention_response',
+        });
+        await finish(ctx);
+      } finally {
+        vi.useRealTimers();
+        ctx.session.close();
+      }
+    });
+
+    it.each(['disconnect', 'close', 'complete'] as const)(
+      'clears questions when the turn ends via %s',
+      async (end) => {
+        const ctx = await start();
+        const reply = ctx.harness.serverRequest('item/tool/requestUserInput', request());
+        await vi.waitFor(() => expect(ctx.bridge.pendingCount).toBe(1));
+        if (end === 'disconnect') ctx.harness.disconnect();
+        else if (end === 'close') ctx.session.close();
+        else
+          await ctx.harness.notify('turn/completed', {
+            threadId: 'thread-1',
+            turn: turn('turn-1', 'completed'),
+          });
+        await expect(reply).resolves.toEqual({ answers: {} });
+        await ctx.running;
+        expect(ctx.bridge.pendingCount).toBe(0);
+        ctx.session.close();
+      },
+    );
+
+    it('rejects secret or ambiguous questions before persisting them', async () => {
+      const ctx = await start();
+      await expect(
+        ctx.harness.serverRequest(
+          'item/tool/requestUserInput',
+          request([{ ...question, isSecret: true }]),
+        ),
+      ).rejects.toThrow();
+      await expect(
+        ctx.harness.serverRequest('item/tool/requestUserInput', request([question, question])),
+      ).rejects.toThrow();
+      expect(ctx.bridge.pendingCount).toBe(0);
+      expect(ctx.events.some((event) => event.type === 'tool_start')).toBe(false);
+      await finish(ctx);
+    });
+
+    it('rejects a request from another turn without displaying a question', async () => {
+      const ctx = await start();
+      await expect(
+        ctx.harness.serverRequest('item/tool/requestUserInput', {
+          ...request(),
+          turnId: 'old-turn',
+        }),
+      ).rejects.toThrow();
+      expect(ctx.bridge.pendingCount).toBe(0);
+      await finish(ctx);
+    });
+
+    it('leaves the operation bridge usable when startup fails before a turn begins', async () => {
+      const harness = createClientHarness({ connectError: new Error('unavailable') });
+      const { session } = createSession(harness);
+      const bridge = new AskUserBridge('retry-operation', {
+        identifier: 'codex',
+        provider: 'codex',
+      });
+      await expect(
+        session.run({
+          askUserBridge: bridge,
+          input: [],
+          onRawMessage: vi.fn(),
+          operationId: 'retry-operation',
+        }),
+      ).rejects.toThrow('unavailable');
+      const answer = bridge.pending({ arguments: {}, toolCallId: 'retry-question' });
+      expect(bridge.pendingCount).toBe(1);
+      bridge.cancelAll();
+      await expect(answer).resolves.toMatchObject({ cancelled: true });
+      session.close();
+    });
+  });
+
   const provenance = (operationId: string) => ({
     LOBEHUB_AGENT_ID: 'agent',
     LOBEHUB_OPERATION_ID: operationId,

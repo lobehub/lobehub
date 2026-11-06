@@ -100,6 +100,7 @@ export class HomeRepository {
         avatar: agents.avatar,
         backgroundColor: agents.backgroundColor,
         description: agents.description,
+        forkedFromIdentifier: sql<string | null>`${agents.params}->>'forkedFromIdentifier'`,
         id: agents.id,
         name: agents.name,
         model: agents.model,
@@ -297,6 +298,7 @@ export class HomeRepository {
       avatar: string | null;
       backgroundColor: string | null;
       description: string | null;
+      forkedFromIdentifier: string | null;
       id: string;
       name: string | null;
       model: string | null;
@@ -354,6 +356,7 @@ export class HomeRepository {
           avatar: meta.avatar,
           backgroundColor: a.backgroundColor,
           description: a.description,
+          forkedFromIdentifier: a.forkedFromIdentifier,
           groupId: a.sessionGroupId,
           heterogeneousType: a.agencyConfig?.heterogeneousProvider?.type ?? null,
           id: a.id,

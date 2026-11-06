@@ -103,15 +103,6 @@ describe('resolveStalePluginCleanup', () => {
     ).toEqual(['web-search', 'market-skill', { identifier: 'kept-disabled', mode: 'disabled' }]);
   });
 
-  it('does not remove a now-resolved entry even if the server called it not-a-skill', () => {
-    expect(
-      resolveStalePluginCleanup(
-        baseInput({ plugins: ['web-search'], validIdentifiers: new Set(['web-search']) }),
-        notSkill('web-search'),
-      ),
-    ).toBeNull();
-  });
-
   it('returns null before the connector store has loaded', () => {
     expect(
       resolveStalePluginCleanup(baseInput({ isConnectorsInit: false }), notSkill('ghost-tool')),

@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createReplicaState } from '@/libs/replica';
 
 import { useTaskStore } from '../../store';
+import { taskGroupListQueryKey, taskListQueryKey } from './projection';
 
 // Mock task service
 vi.mock('@/services/task', () => ({
@@ -541,12 +542,12 @@ describe('TaskListSliceAction', () => {
     });
 
     it('walks every page with a keyset cursor and merges them', async () => {
-      const rows = dataset(230);
+      const rows = dataset(730);
       serve(() => rows);
 
       const result = await runFetcher({ complete: true });
 
-      expect(taskServiceList).toHaveBeenCalledTimes(3);
+      expect(taskServiceList).toHaveBeenCalledTimes(2);
       expect(taskServiceList).toHaveBeenNthCalledWith(
         1,
         expect.not.objectContaining({ after: expect.anything() }),
@@ -554,16 +555,12 @@ describe('TaskListSliceAction', () => {
       expect(taskServiceList).toHaveBeenNthCalledWith(
         2,
         expect.objectContaining({
-          after: { at: rows[99].createdAt, seq: rows[99].seq },
-          limit: 100,
+          after: { at: rows[499].createdAt, seq: rows[499].seq },
+          limit: 500,
         }),
       );
-      expect(taskServiceList).toHaveBeenNthCalledWith(
-        3,
-        expect.objectContaining({ after: { at: rows[199].createdAt, seq: rows[199].seq } }),
-      );
-      expect(result.data).toHaveLength(230);
-      expect(result.total).toBe(230);
+      expect(result.data).toHaveLength(730);
+      expect(result.total).toBe(730);
     });
 
     it('issues a single request when the first page already holds everything', async () => {
@@ -579,12 +576,12 @@ describe('TaskListSliceAction', () => {
     // never see the last live row; the cursor keeps walking from the last row
     // it holds, so nothing live is skipped.
     it('does not skip a row when a task is deleted between two pages', async () => {
-      let rows = dataset(101);
+      let rows = dataset(501);
       serve(() => rows);
       vi.mocked(taskServiceList).mockImplementationOnce(async (params: any) => {
         const page = rows.slice(0, params.limit);
         rows = rows.filter((r) => r.seq !== 50); // deleted after page one was read
-        return { data: page, success: true, total: 101 } as any;
+        return { data: page, success: true, total: 501 } as any;
       });
 
       const result = await runFetcher({ complete: true });
@@ -592,7 +589,7 @@ describe('TaskListSliceAction', () => {
       const ids = result.data.map((r) => r.id);
       expect(new Set(ids).size).toBe(ids.length);
       expect(ids).toContain('t1'); // the last live row, which an offset walk drops
-      expect(result.total).toBe(101);
+      expect(result.total).toBe(501);
     });
 
     it('stops at the row ceiling and keeps the real total so the UI can say so', async () => {
@@ -600,7 +597,7 @@ describe('TaskListSliceAction', () => {
 
       const result = await runFetcher({ complete: true });
 
-      expect(taskServiceList).toHaveBeenCalledTimes(10);
+      expect(taskServiceList).toHaveBeenCalledTimes(2);
       expect(result.data).toHaveLength(1000);
       expect(result.total).toBe(1500);
     });
@@ -615,5 +612,130 @@ describe('TaskListSliceAction', () => {
         expect.not.objectContaining({ limit: expect.anything() }),
       );
     });
+  });
+});
+
+describe('internal_beginCollectionTasksOptimistic', () => {
+  const task = (id: string, status = 'backlog', extra: Record<string, unknown> = {}) =>
+    ({ id, identifier: id.toUpperCase(), priority: 0, status, ...extra }) as any;
+  const listKey = (includeArchived?: boolean) =>
+    taskListQueryKey({ allAgents: true, includeArchived, visibility: 'all' } as any);
+  const boardKey = taskGroupListQueryKey({ groupBy: 'status', visibility: 'all' } as any);
+  const seed = () =>
+    useTaskStore.setState({
+      taskGroupListMap: {
+        [boardKey]: {
+          groupBy: 'status',
+          groups: [
+            { key: 'backlog', tasks: [task('a'), task('b'), task('c')], total: 3 },
+            { key: 'done', tasks: [], total: 0 },
+          ],
+        } as any,
+      },
+      taskListMap: {
+        [listKey()]: { items: [task('a'), task('b'), task('c')], total: 3 },
+        [listKey(true)]: { items: [task('a'), task('b')], total: 2 },
+      },
+    });
+  const items = (key: string) => useTaskStore.getState().taskListMap[key].items;
+  const column = (key: string) =>
+    useTaskStore
+      .getState()
+      .taskGroupListMap[boardKey].groups.find((group) => group.key === key)!
+      .tasks.map((t) => t.id);
+
+  it('patches every selected row in every loaded list and board at once', () => {
+    seed();
+    useTaskStore
+      .getState()
+      .internal_beginCollectionTasksOptimistic(['a', 'b'], (t) => ({ ...t, status: 'completed' }));
+
+    expect(items(listKey()).map((t) => t.status)).toEqual(['completed', 'completed', 'backlog']);
+    expect(items(listKey(true)).map((t) => t.status)).toEqual(['completed', 'completed']);
+    // The status board moves the cards.
+    expect(column('backlog')).toEqual(['c']);
+    expect(column('done')).toEqual(['a', 'b']);
+  });
+
+  it('removes rows only where the patch says so, by collection', () => {
+    seed();
+    useTaskStore
+      .getState()
+      .internal_beginCollectionTasksOptimistic(['a'], (t, query) =>
+        query.includeArchived ? { ...t, archivedAt: new Date() } : undefined,
+      );
+
+    expect(items(listKey()).map((t) => t.id)).toEqual(['b', 'c']);
+    expect(useTaskStore.getState().taskListMap[listKey()].total).toBe(2);
+    expect(items(listKey(true)).map((t) => t.id)).toEqual(['a', 'b']);
+    expect(items(listKey(true))[0].archivedAt).toBeInstanceOf(Date);
+  });
+
+  it('commit keeps only the rows the server changed, with its values', () => {
+    seed();
+    const patch = (t: any) => ({ ...t, status: 'completed' });
+    const overlay = useTaskStore
+      .getState()
+      .internal_beginCollectionTasksOptimistic(['a', 'b'], patch);
+
+    overlay.commit(new Map([['a', (t: any) => ({ ...patch(t), completedAt: 'server' })]]));
+
+    expect(items(listKey()).map((t) => [t.id, t.status])).toEqual([
+      ['a', 'completed'],
+      ['b', 'backlog'],
+      ['c', 'backlog'],
+    ]);
+    expect((items(listKey())[0] as any).completedAt).toBe('server');
+    expect(column('backlog')).toEqual(['b', 'c']);
+    expect(column('done')).toEqual(['a']);
+  });
+
+  it('rollback restores every collection exactly', () => {
+    seed();
+    const before = useTaskStore.getState();
+    const overlay = useTaskStore
+      .getState()
+      .internal_beginCollectionTasksOptimistic(['a', 'b', 'c'], () => undefined);
+    expect(items(listKey())).toEqual([]);
+
+    overlay.rollback();
+
+    expect(useTaskStore.getState().taskListMap).toEqual(before.taskListMap);
+    expect(useTaskStore.getState().taskGroupListMap).toEqual(before.taskGroupListMap);
+  });
+
+  it('leaves collections that hold none of the rows untouched', () => {
+    seed();
+    const untouched = useTaskStore.getState().taskListMap[listKey(true)];
+    useTaskStore
+      .getState()
+      .internal_beginCollectionTasksOptimistic(['c'], (t) => ({ ...t, priority: 3 }));
+
+    expect(useTaskStore.getState().taskListMap[listKey(true)]).toBe(untouched);
+  });
+});
+
+describe('internal_beginCollectionTasksOptimistic query shape', () => {
+  it("tells the patch each collection's assignee scope", () => {
+    const row = { id: 'a', identifier: 'A', status: 'backlog' } as any;
+    const agentKey = taskListQueryKey({ agentId: 'alpha', visibility: 'all' } as any);
+    const mineKey = taskListQueryKey({ scope: 'assigned', visibility: 'all' } as any);
+    useTaskStore.setState({
+      taskListMap: {
+        [agentKey]: { items: [row], total: 1 },
+        [mineKey]: { items: [row], total: 1 },
+      },
+    });
+    const seen: unknown[] = [];
+    useTaskStore.getState().internal_beginCollectionTasksOptimistic(['a'], (t, query) => {
+      seen.push(query);
+      return t;
+    });
+    expect(seen).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ agentId: 'alpha', includeArchived: false }),
+        expect.objectContaining({ includeArchived: false, scope: 'assigned' }),
+      ]),
+    );
   });
 });

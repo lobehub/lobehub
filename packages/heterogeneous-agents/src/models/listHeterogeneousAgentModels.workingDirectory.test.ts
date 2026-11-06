@@ -29,7 +29,7 @@ describe('model discovery working directory', () => {
       fixture,
       String.raw`const engine = process.argv[2];
 const model = process.cwd() === ${JSON.stringify(project)} ? 'project-model' : 'host-model';
-if (['codex', 'droid', 'trae'].includes(engine)) {
+if (['codex', 'copilot', 'droid', 'trae'].includes(engine)) {
   require('node:readline').createInterface({ input: process.stdin }).on('line', (line) => {
     const message = JSON.parse(line);
     if (message.id === undefined) return;

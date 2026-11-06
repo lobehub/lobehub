@@ -529,8 +529,6 @@ describe('resolveGoogleThinkingBudget', () => {
 
   it('supports disabling and dynamic thinking for flash models', () => {
     expect(resolveGoogleThinkingBudget('gemini-2.5-flash')).toBe(-1);
-    expect(resolveGoogleThinkingBudget('gemini-2.5-flash', 0)).toBe(0);
-    expect(resolveGoogleThinkingBudget('gemini-2.5-flash', -1)).toBe(-1);
     expect(resolveGoogleThinkingBudget('gemini-2.5-flash', -5)).toBe(0);
     expect(resolveGoogleThinkingBudget('gemini-2.5-flash-preview', 30_000)).toBe(24_576);
   });

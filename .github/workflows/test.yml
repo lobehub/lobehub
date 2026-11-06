@@ -82,6 +82,9 @@ jobs:
       - name: Verify hotfix operator CLI
         run: node --test .github/scripts/hotfixWorkflow.test.mjs
 
+      - name: Verify desktop release workflows
+        run: node --test .github/scripts/desktop-publish-s3.test.mjs .github/scripts/release-desktop-canary.test.mjs
+
       - name: Test CLI build configuration, bundle and model-facing docs
         run: bunx vitest run --config vitest.config.mts --silent='passed-only' tsdown.config.test.ts bundle.test.ts src/modelFacingDocs.test.ts
         working-directory: apps/cli
@@ -95,7 +98,7 @@ jobs:
           done
 
       - name: Upload coverage to Codecov
-        if: always()
+        if: ${{ !cancelled() }}
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
         run: |
@@ -383,11 +386,14 @@ jobs:
             echo "rules and fixtures unchanged; skipping calibration"
           fi
 
+  # Test Server is usually the last Test CI job to finish. A 2 vs 3 shard run on the
+  # same commit cut its slowest shard from 17-19 to 12-13 min; a 4th shard would only
+  # wait on Test App instead.
   test-server:
     strategy:
       matrix:
-        shard: [1, 2]
-    name: Test Server (shard ${{ matrix.shard }}/2)
+        shard: [1, 2, 3]
+    name: Test Server (shard ${{ matrix.shard }}/3)
 
     runs-on: ubuntu-latest
 
@@ -409,7 +415,7 @@ jobs:
         run: pnpm install
 
       - name: Test Server Coverage
-        run: bunx vitest --coverage --silent='passed-only' --reporter=default --coverage.reportsDirectory=./apps/server/coverage --project server --shard=${{ matrix.shard }}/2
+        run: bunx vitest --coverage --silent='passed-only' --reporter=default --coverage.reportsDirectory=./apps/server/coverage --project server --shard=${{ matrix.shard }}/3
 
       # See the App shard above: uploaded together by `upload-sharded-coverage`.
       - name: Save Server Coverage shard
@@ -469,7 +475,7 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./coverage-shards/coverage-server-1/lcov.info,./coverage-shards/coverage-server-2/lcov.info
+          files: ./coverage-shards/coverage-server-1/lcov.info,./coverage-shards/coverage-server-2/lcov.info,./coverage-shards/coverage-server-3/lcov.info
           disable_search: true
           flags: server
           name: server

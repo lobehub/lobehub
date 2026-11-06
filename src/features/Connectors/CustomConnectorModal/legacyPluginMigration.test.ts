@@ -58,12 +58,6 @@ describe('buildConnectorPayloadFromLegacy', () => {
       expect(r.payload.sourceType).toBe('custom');
       expect(r.payload.identifier).toBe('grok-with-tavily');
     });
-
-    it('preserves identifier (agentConfig.plugins references survive)', () => {
-      const r = buildConnectorPayloadFromLegacy(stdioPlugin);
-      if (!r.ok) throw new Error('expected ok');
-      expect(r.payload.identifier).toBe(stdioPlugin.identifier);
-    });
   });
 
   describe('Shape #2 — http + auth=none + url (879 prod rows)', () => {

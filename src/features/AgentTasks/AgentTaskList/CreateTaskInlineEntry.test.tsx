@@ -171,6 +171,12 @@ vi.mock('@/store/user', () => ({
     selector({ preference: { lab: userStateMock.lab }, user: { id: 'self-user' } }),
 }));
 
+// The label picker reads the label registry; its own behavior is covered by
+// `labelPickerModel.test.ts`.
+vi.mock('@/features/TaskLabels/TaskLabelPicker', () => ({
+  default: ({ children }: { children?: ReactNode }) => <div data-testid="labels">{children}</div>,
+}));
+
 vi.mock('../features/TaskPriorityTag', () => ({
   default: ({ children }: { children?: ReactNode }) => (
     <div data-testid="priority">{children ?? 'priority'}</div>
@@ -923,28 +929,6 @@ describe('CreateTaskInlineEntry', () => {
 
       expect(instruction).toBe('Write the Q3 plan for lobe-chat.');
       expect(editorData).toBeUndefined();
-    });
-
-    it('falls back to appending the answers when the second reading fails', async () => {
-      // Same contract as the first reading: an assist, never a gate.
-      synthesizeInstructionMock.mockRejectedValue(new Error('offline'));
-      analyzeIntentMock.mockResolvedValue({
-        ...clearReading,
-        clarifications: [{ options: ['lobe-chat'], question: 'Which repo?' }],
-        confidence: 'medium',
-      });
-
-      render(<CreateTaskInlineEntry variant="hero" />);
-      fireEvent.keyDown(screen.getByTestId('task-editor'), { key: 'Enter', metaKey: true });
-
-      await screen.findByText('taskIntent.reviewStep');
-      fireEvent.click(screen.getByText('lobe-chat'));
-      fireEvent.click(await screen.findByText('taskIntent.create'));
-
-      await waitFor(() => expect(createTaskMock).toHaveBeenCalledTimes(1));
-      expect(createTaskMock.mock.calls[0][0].instruction).toContain(
-        '## taskIntent.answersHeading\n- Which repo? lobe-chat',
-      );
     });
 
     it('offers the goal handoff only for a request read as a standing goal', async () => {

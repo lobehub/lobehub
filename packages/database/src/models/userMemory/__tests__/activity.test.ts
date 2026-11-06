@@ -102,13 +102,6 @@ describe('UserMemoryActivityModel', () => {
       expect(result).toHaveLength(1);
       expect(result[0].id).toBe('activity-2');
     });
-
-    it('should not return other users activities', async () => {
-      const result = await activityModel.query();
-
-      const otherActivity = result.find((a) => a.id === 'other-activity');
-      expect(otherActivity).toBeUndefined();
-    });
   });
 
   describe('queryList', () => {

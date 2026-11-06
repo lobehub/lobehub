@@ -92,4 +92,59 @@ describe('AgentOperationModel coverage', () => {
 
     expect(await proxied.getMaxDurationSeconds()).toBe(0);
   });
+
+  it('retires the abandonment claim without dropping the existing metadata', async () => {
+    await model.recordStart({
+      metadata: { keep: true },
+      operationId: 'op-cov-abandon-finalize',
+    });
+
+    await model.markAbandonmentFinalized('op-cov-abandon-finalize');
+
+    const [row] = await serverDB
+      .select({ metadata: agentOperations.metadata })
+      .from(agentOperations)
+      .where(eq(agentOperations.id, 'op-cov-abandon-finalize'));
+    expect(row.metadata).toMatchObject({ abandonment: { phase: 'finalized' }, keep: true });
+  });
+
+  it('persists the parent hand-off while marking the abandonment as pending', async () => {
+    await model.recordStart({
+      metadata: { keep: 'value' },
+      operationId: 'op-cov-abandon-handoff',
+    });
+
+    await model.markAbandonmentHandoffPending('op-cov-abandon-handoff', {
+      childOperationId: 'op-cov-abandon-handoff',
+      parentOperationId: 'op-cov-parent-handoff',
+    });
+
+    const [row] = await serverDB
+      .select({ metadata: agentOperations.metadata })
+      .from(agentOperations)
+      .where(eq(agentOperations.id, 'op-cov-abandon-handoff'));
+    const abandonment = (
+      row.metadata as { abandonment?: { at?: string; handoff?: unknown; phase?: string } }
+    ).abandonment;
+    expect(abandonment?.phase).toBe('handoff_pending');
+    expect(abandonment?.handoff).toEqual({
+      childOperationId: 'op-cov-abandon-handoff',
+      parentOperationId: 'op-cov-parent-handoff',
+    });
+    expect(Number.isNaN(Date.parse(abandonment?.at ?? ''))).toBe(false);
+    expect(row.metadata).toMatchObject({ keep: 'value' });
+  });
+
+  it('ignores abandonment marks for an operation owned by another user', async () => {
+    await model.recordStart({ operationId: 'op-cov-abandon-foreign' });
+    const otherModel = new AgentOperationModel(serverDB, 'agent-operation-cov-user-2');
+
+    await otherModel.markAbandonmentFinalized('op-cov-abandon-foreign');
+
+    const [row] = await serverDB
+      .select({ metadata: agentOperations.metadata })
+      .from(agentOperations)
+      .where(eq(agentOperations.id, 'op-cov-abandon-foreign'));
+    expect(row.metadata).not.toMatchObject({ abandonment: { phase: 'finalized' } });
+  });
 });

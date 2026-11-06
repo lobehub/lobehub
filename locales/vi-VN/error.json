@@ -89,7 +89,6 @@
   "response.GoogleAIBlockReason.SAFETY": "Nội dung đã bị chặn vì lý do an toàn. Vui lòng điều chỉnh và thử lại.",
   "response.GoogleAIBlockReason.SPII": "Nội dung có thể bao gồm thông tin cá nhân nhạy cảm (SPII). Vui lòng xóa các chi tiết nhạy cảm và thử lại.",
   "response.GoogleAIBlockReason.default": "Nội dung đã bị chặn ({{blockReason}}). Vui lòng điều chỉnh và thử lại.",
-  "response.InsufficientBudgetForModel": "Số dư tín dụng của bạn không đủ để sử dụng mô hình này. Vui lòng nạp thêm tín dụng, nâng cấp gói của bạn hoặc thử một mô hình ít tốn kém hơn.",
   "response.InvalidAccessCode": "Mã truy cập không hợp lệ hoặc để trống. Vui lòng nhập mã truy cập chính xác hoặc thêm API Key tùy chỉnh.",
   "response.LobeHubModelDeprecated": "Mô hình \"{{model}}\" không còn khả dụng. Vui lòng chọn một mô hình hiện tại từ bộ chọn mô hình.",
   "response.ModelContentModerationCooldown": "Yêu cầu này không thể sử dụng mô hình đã chọn hoặc các mô hình liên quan do hạn chế tạm thời về an toàn nội dung. Hãy thử lại sau hoặc chọn một mô hình khác.",
@@ -122,8 +121,6 @@
   "response.RemoteServerTimeout": "Kết nối đến máy chủ đã hết thời gian chờ. Điều này thường cho thấy vấn đề với mạng cục bộ — vui lòng kiểm tra chất lượng mạng, proxy hoặc cài đặt VPN của bạn và thử lại.",
   "response.RemoteServerUnreachable": "Không thể kết nối đến máy chủ. Điều này thường cho thấy vấn đề với mạng cục bộ — vui lòng kiểm tra kết nối internet, proxy hoặc cài đặt VPN của bạn và thử lại.",
   "response.ServerAgentRuntimeError": "Xin lỗi, dịch vụ Agent hiện không khả dụng. Vui lòng thử lại sau hoặc liên hệ với chúng tôi qua email để được hỗ trợ.",
-  "response.SubscriptionPlanLimit": "Điểm gói đăng ký của bạn đã hết, bạn không thể sử dụng tính năng này. Vui lòng nâng cấp gói hoặc cấu hình API mô hình tùy chỉnh.",
-  "response.SubscriptionPlanLimitUltimate": "Điểm gói đăng ký của bạn đã hết, bạn không thể sử dụng tính năng này. Vui lòng nạp thêm điểm hoặc cấu hình API mô hình tùy chỉnh.",
   "response.SystemTimeNotMatchError": "Xin lỗi, thời gian hệ thống của bạn không khớp với máy chủ. Vui lòng kiểm tra lại thời gian hệ thống và thử lại.",
   "response.UnknownChatFetchError": "Xin lỗi, đã xảy ra lỗi yêu cầu không xác định. Vui lòng kiểm tra thông tin bên dưới hoặc thử lại.",
   "response.UnreadableServerResponse": "Máy chủ đã trả về một phản hồi mà ứng dụng không thể đọc được. Đây thường là một vấn đề tạm thời về mạng hoặc cổng — vui lòng thử lại sau một lúc.",
@@ -213,13 +210,9 @@
   "workspaceFrozenByAdmin.frozenAt": "Đã đóng băng vào lúc",
   "workspaceFrozenByAdmin.reason": "Lý do",
   "workspaceFrozenByAdmin.title": "Không gian làm việc bị đóng băng",
-  "workspaceFrozenByRiskControl.available": "Số dư khả dụng",
-  "workspaceFrozenByRiskControl.bannerDescription": "Nạp thêm số dư để tiếp tục chi tiêu.",
   "workspaceFrozenByRiskControl.bannerHint": "Nhấp để xem chi tiết",
   "workspaceFrozenByRiskControl.bannerTitle": "Không gian làm việc bị đóng băng bởi kiểm soát rủi ro",
   "workspaceFrozenByRiskControl.contactSupport": "Liên hệ hỗ trợ",
-  "workspaceFrozenByRiskControl.description": "Không gian làm việc này đã tự động bị đóng băng bởi kiểm soát rủi ro sau khi phát hiện chi tiêu bất thường. Liên hệ hỗ trợ để xem xét và yêu cầu mở lại.",
   "workspaceFrozenByRiskControl.frozenAt": "Đã đóng băng vào lúc",
-  "workspaceFrozenByRiskControl.title": "Không gian làm việc tự động bị đóng băng bởi kiểm soát rủi ro",
-  "workspaceFrozenByRiskControl.topup": "Nạp thêm tín dụng"
+  "workspaceFrozenByRiskControl.title": "Không gian làm việc tự động bị đóng băng bởi kiểm soát rủi ro"
 }

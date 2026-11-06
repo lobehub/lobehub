@@ -150,6 +150,16 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
     isGlobal ? 'all' : 'review',
     isGlobal ? cacheScope : undefined,
   );
+  // Archived goals are left out of `all`, so a scope whose every goal was put
+  // away reads as empty. Ask the Archived tab of the same scope the empty check
+  // reads, but only then: the onboarding state would otherwise hide the tab the
+  // goals went to.
+  const archivedProbe = {
+    agentId: isGlobal ? undefined : agentId,
+    filter: 'archived' as const,
+    globalScope: isGlobal ? cacheScope : undefined,
+    projectId,
+  };
   const listView = useGoalStore(goalSelectors.goalListView(scopeId));
   const allGoalsView = useGoalStore(goalSelectors.goalListView(allGoalsScopeId));
   const tabView = useGoalStore(
@@ -163,14 +173,45 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
     goalSelectors.goalListView(goalListKey({ agentId, filter: 'review', projectId })),
   );
   const goals = useMemo(() => listView?.goals ?? [], [listView]);
-  const agentFilterOptions = useMemo(
-    () => (isGlobal ? goalAgentFilterOptions(allGoalsView?.goals ?? []) : []),
-    [allGoalsView, isGlobal],
-  );
   // Whether the scope has any goal at all — on the cross-agent page that is
   // every agent's list, so narrowing to one agent shows the filtered-empty
   // state rather than the first-goal onboarding.
-  const hasNoGoals = (isGlobal ? (allGoalsView?.goals.length ?? 0) : goals.length) === 0;
+  const isScopeEmpty =
+    (isGlobal ? (allGoalsView?.goals.length ?? 0) : goals.length) === 0 && !isLoading;
+  // The cross-agent Archived tab also lists its agent options from the scope's
+  // archived goals: `all` leaves them out, so an agent whose every goal was
+  // archived would otherwise be missing from the picker of the tab holding them.
+  const readsArchivedScope = isScopeEmpty || (isGlobal && filter === 'archived');
+  const archivedSync = useFetchGoals(
+    readsArchivedScope ? archivedProbe.agentId : undefined,
+    readsArchivedScope ? archivedProbe.projectId : undefined,
+    'archived',
+    readsArchivedScope ? archivedProbe.globalScope : undefined,
+  );
+  const archivedView = useGoalStore(goalSelectors.goalListView(goalListKey(archivedProbe)));
+  const agentFilterOptions = useMemo(
+    () =>
+      isGlobal
+        ? goalAgentFilterOptions((filter === 'archived' ? archivedView : allGoalsView)?.goals ?? [])
+        : [],
+    [allGoalsView, archivedView, filter, isGlobal],
+  );
+  // Onboarding only once the probe has answered "nothing archived either":
+  // while it is in flight the page holds its skeleton, and a failed probe keeps
+  // the tabs (the Archived tab then reads and reports its own failure) rather
+  // than a first-goal screen that would hide them.
+  // A persisted empty projection is not an answer either: the last live goal
+  // may have been archived elsewhere since, so an empty hydrated row waits for
+  // the revalidation in flight.
+  const isArchivedProbePending =
+    isScopeEmpty &&
+    !archivedSync.error &&
+    (archivedView === undefined || (archivedView.goals.length === 0 && archivedSync.isValidating));
+  const hasNoGoals =
+    isScopeEmpty &&
+    !isArchivedProbePending &&
+    archivedView !== undefined &&
+    archivedView.goals.length === 0;
   const summary = useMemo(() => {
     const total = listView?.total ?? goals.length;
     // An aggregate that has not answered is unknown, not zero. Falling back to
@@ -250,7 +291,7 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
         paddingInline={16}
         wrapperStyle={{ flex: 1, overflowY: 'auto' }}
       >
-        {isLoading ? (
+        {isLoading || isArchivedProbePending ? (
           <GoalSkeleton chrome={'body'} />
         ) : error && listView === undefined ? (
           // Only a read that left nothing to show becomes the page: a failed
@@ -353,6 +394,10 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
                       {
                         label: t('goalPage.filter.achieved'),
                         value: 'achieved',
+                      },
+                      {
+                        label: t('goalPage.filter.archived'),
+                        value: 'archived',
                       },
                     ]}
                     onChange={(value) => setFilter(value as GoalListFilter)}

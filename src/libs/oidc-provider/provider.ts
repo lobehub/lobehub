@@ -12,7 +12,14 @@ import { OIDC_ISSUER_PATH, OIDC_ROUTES } from '@/libs/oidc-provider/routes';
 import { normalizeLocale } from '@/locales/resources';
 import { findSiteForOrigin } from '@/server/services/projectReview/sites';
 
-import { accessTokenTTL, isAcceptanceReviewClient, reviewResourceServer } from './acceptanceReview';
+import {
+  accessTokenTTL,
+  defaultResourceFor,
+  extensionCorsDecision,
+  extensionResourceServer,
+  isAcceptanceReviewClient,
+  reviewResourceServer,
+} from './acceptanceReview';
 import { isOIDCUserBanned } from './access-control';
 import { DrizzleAdapter } from './adapter';
 import { stampClientLastUsed } from './clientLastUsed';
@@ -75,6 +82,9 @@ export const createOIDCProvider = async (db: LobeChatDatabase): Promise<Provider
       // The acceptance toolbar runs on whatever origin the delivered product is
       // previewed on; its token is scoped to one acceptance by audience.
       if (isAcceptanceReviewClient(client?.clientId)) return true;
+
+      const extension = extensionCorsDecision(client?.clientId, origin);
+      if (extension !== null) return extension;
 
       // Check if the client allows this origin
       // A common strategy is to allow origins of all registered redirect_uris
@@ -149,11 +159,14 @@ export const createOIDCProvider = async (db: LobeChatDatabase): Promise<Provider
       },
       introspection: { enabled: true },
       resourceIndicators: {
-        defaultResource: () => API_AUDIENCE,
+        defaultResource: (ctx, client) => defaultResourceFor(client?.clientId, API_AUDIENCE),
         enabled: true,
 
         getResourceServerInfo: async (ctx, resourceIndicator) => {
           logProvider('getResourceServerInfo called with indicator: %s', resourceIndicator); // <-- Add this log line
+          const extension = extensionResourceServer(ctx.oidc.client?.clientId, resourceIndicator);
+          if (extension === 'reject') throw new errors.InvalidTarget();
+          if (extension) return extension;
           const review = reviewResourceServer(
             ctx.oidc.client?.clientId,
             resourceIndicator,

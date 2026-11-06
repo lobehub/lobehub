@@ -581,7 +581,7 @@ describe('AgentRuntimeService', () => {
 
         expect(call.content).toBe(
           'Sub-agent did not complete (error): stopped by a LobeHub billing limit (InsufficientBudgetForModel): ' +
-            "the account's LobeHub credits are too low for this model; the account owner has to top up or upgrade. " +
+            "the account's LobeHub balance is too low for this model; the account owner has to top up or upgrade. " +
             'This limit is shared by every sub-agent and by this conversation, so retrying or dispatching more sub-agents on the same model will not get past it; ' +
             'a sub-agent that runs on a less expensive model may still fit. ' +
             'Otherwise finish with what you already have and tell the user about the limit.',
@@ -593,11 +593,11 @@ describe('AgentRuntimeService', () => {
       it.each([
         [
           'workspace',
-          "the workspace's shared LobeHub credits can't cover this model's estimated cost",
+          "the workspace's shared LobeHub balance can't cover this model's estimated cost",
         ],
         [
           'workspace_member',
-          "this member's workspace credit allowance can't cover this model's estimated cost",
+          "this member's workspace usage allowance can't cover this model's estimated cost",
         ],
       ])('names the %s allowance as the one to raise', async (scope, expected) => {
         const call = await bridgeContent(budgetError('InsufficientBudgetForModel', scope));
@@ -624,7 +624,7 @@ describe('AgentRuntimeService', () => {
         expect(shortfall.content).toContain('less expensive model may still fit');
 
         const exhausted = await bridgeContent(budgetError('FreePlanLimit', 'workspace'));
-        expect(exhausted.content).toContain("the workspace's shared LobeHub credits are used up");
+        expect(exhausted.content).toContain("the workspace's shared LobeHub balance is used up");
         expect(exhausted.content).toContain('more sub-agents will not get past it');
         expect(exhausted.content).not.toContain('less expensive model');
       });

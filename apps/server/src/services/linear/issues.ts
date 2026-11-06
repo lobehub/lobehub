@@ -1,8 +1,10 @@
 import type {
+  LinearIssueCount,
   LinearIssueStateType,
   LinearProjectSummary,
   LinearTeamSummary,
 } from '@lobechat/types';
+import { isLinearNoProject } from '@lobechat/types';
 
 import { linearGraphql } from './client';
 
@@ -90,6 +92,13 @@ export const listLinearProjects = async (
 };
 
 export interface LinearIssueFilter {
+  /**
+   * Also match archived issues. Archiving is not a state: Linear sets
+   * `archivedAt` and leaves `state` alone, and its issue queries skip archived
+   * issues unless asked. Absent: archived issues are left out, as in Linear.
+   */
+  includeArchived?: boolean;
+  /** A Linear project, `LINEAR_NO_PROJECT_ID` for issues in none, or empty for the whole team. */
   linearProjectId?: string | null;
   stateTypes: LinearIssueStateType[];
   teamId: string;
@@ -98,13 +107,15 @@ export interface LinearIssueFilter {
 /**
  * A project filters by project alone: a Linear project can belong to several
  * teams, and its issues may all live in a team other than the chosen one.
+ * "No project" keeps the team and drops every issue that has a project.
  */
-const toIssueFilter = ({ linearProjectId, stateTypes, teamId }: LinearIssueFilter) => ({
-  state: { type: { in: stateTypes } },
-  ...(linearProjectId
-    ? { project: { id: { eq: linearProjectId } } }
-    : { team: { id: { eq: teamId } } }),
-});
+const toIssueFilter = ({ linearProjectId, stateTypes, teamId }: LinearIssueFilter) => {
+  const state = { type: { in: stateTypes } };
+  const team = { id: { eq: teamId } };
+  if (isLinearNoProject(linearProjectId)) return { project: { null: true }, state, team };
+  if (linearProjectId) return { project: { id: { eq: linearProjectId } }, state };
+  return { state, team };
+};
 
 /** Ids of every team a project belongs to; none when the project does not exist. */
 export const getLinearProjectTeamIds = async (
@@ -144,8 +155,8 @@ export const listLinearIssues = async (
 ): Promise<{ cursor?: string; hasMore: boolean; issues: LinearIssue[] }> => {
   const data = await linearGraphql<{ issues: Connection<LinearIssue> }>(
     accessToken,
-    `query LobeIssues($first: Int!, $after: String, $filter: IssueFilter) {
-      issues(first: $first, after: $after, orderBy: updatedAt, filter: $filter) {
+    `query LobeIssues($first: Int!, $after: String, $filter: IssueFilter, $includeArchived: Boolean) {
+      issues(first: $first, after: $after, orderBy: updatedAt, filter: $filter, includeArchived: $includeArchived) {
         nodes { ${ISSUE_FIELDS} }
         pageInfo { hasNextPage endCursor }
       }
@@ -154,6 +165,7 @@ export const listLinearIssues = async (
       after: options.after,
       filter: toIssueFilter(filter),
       first: Math.min(options.first ?? LINEAR_PAGE_SIZE, LINEAR_PAGE_SIZE),
+      includeArchived: !!filter.includeArchived,
     },
   );
   const { nodes, pageInfo } = data.issues;
@@ -164,7 +176,52 @@ export const listLinearIssues = async (
   };
 };
 
-/** Issues by id, in pages of the API's maximum size. Unknown or inaccessible ids are omitted. */
+/**
+ * Linear's issue connection has no total count, so the picker counts by paging
+ * through ids. Counting stops here to bound the requests one filter costs.
+ */
+export const LINEAR_ISSUE_COUNT_LIMIT = 1000;
+
+/** How many issues match the filter, up to `limit`. */
+export const countLinearIssues = async (
+  accessToken: string,
+  filter: LinearIssueFilter,
+  limit = LINEAR_ISSUE_COUNT_LIMIT,
+): Promise<LinearIssueCount> => {
+  let count = 0;
+  let after: string | undefined;
+  let hasMore = false;
+  do {
+    const data = await linearGraphql<{ issues: Connection<{ id: string }> }>(
+      accessToken,
+      `query LobeIssueCount($first: Int!, $after: String, $filter: IssueFilter, $includeArchived: Boolean) {
+        issues(first: $first, after: $after, filter: $filter, includeArchived: $includeArchived) {
+          nodes { id }
+          pageInfo { hasNextPage endCursor }
+        }
+      }`,
+      {
+        after,
+        filter: toIssueFilter(filter),
+        first: Math.min(LINEAR_PAGE_SIZE, limit - count),
+        includeArchived: !!filter.includeArchived,
+      },
+    );
+    count += data.issues.nodes.length;
+    hasMore = data.issues.pageInfo.hasNextPage;
+    after = hasMore ? (data.issues.pageInfo.endCursor ?? undefined) : undefined;
+  } while (after && count < limit);
+
+  return { capped: hasMore, count };
+};
+
+/**
+ * Issues by id, in pages of the API's maximum size. Unknown or inaccessible ids
+ * are omitted; archived ones are always returned. An id is asked for because it
+ * was picked (archived issues are listed only when asked for, so one picked was
+ * meant) or because a task is linked to it, and an issue archived after it was
+ * linked must still close its task.
+ */
 export const getLinearIssuesByIds = async (
   accessToken: string,
   ids: string[],
@@ -175,7 +232,7 @@ export const getLinearIssuesByIds = async (
     const data = await linearGraphql<{ issues: Connection<LinearIssue> }>(
       accessToken,
       `query LobeIssuesById($first: Int!, $filter: IssueFilter) {
-        issues(first: $first, filter: $filter) {
+        issues(first: $first, filter: $filter, includeArchived: true) {
           nodes { ${ISSUE_FIELDS} }
           pageInfo { hasNextPage endCursor }
         }

@@ -1,4 +1,5 @@
 import type { InstallMarketplaceAgentSummary } from '@lobechat/builtin-tool-web-onboarding/agentMarketplace';
+import type { DiscoverAssistantDetail } from '@lobechat/types';
 import { customAlphabet } from 'nanoid/non-secure';
 
 import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
@@ -12,11 +13,37 @@ import { useHomeStore } from '@/store/home';
 
 export type { InstallMarketplaceAgentSummary };
 
-const generateMarketIdentifier = () => {
+export const generateMarketIdentifier = () => {
   const alphabet = '0123456789abcdefghijklmnopqrstuvwxyz';
   const generate = customAlphabet(alphabet, 8);
   return generate();
 };
+
+/** Local agent config for the Market agent `sourceId`. */
+export const buildMarketAgentConfig = (detail: DiscoverAssistantDetail, sourceId: string) => ({
+  ...detail.config,
+  avatar: detail.avatar,
+  backgroundColor: detail.backgroundColor,
+  description: detail.description,
+  editorData: detail.editorData,
+  params: {
+    ...detail.config.params,
+    forkedFromIdentifier: sourceId,
+  },
+  tags: detail.tags,
+  title: detail.title,
+});
+
+/** Local agent config for a Market fork of `sourceId`, as every install entry builds it. */
+export const buildForkedAgentConfig = (
+  detail: DiscoverAssistantDetail,
+  fork: { identifier: string; name: string },
+  sourceId: string,
+) => ({
+  ...buildMarketAgentConfig(detail, sourceId),
+  marketIdentifier: fork.identifier,
+  title: fork.name,
+});
 
 const getSourcePath = () => {
   if (typeof location === 'undefined') return 'onboarding/agent-marketplace';
@@ -103,7 +130,7 @@ export const installMarketplaceAgents = async (
 
   // 3. Build batch fork input only for items with valid detail
   type Prepared = {
-    detail: NonNullable<Awaited<ReturnType<typeof discoverService.getAssistantDetail>>>;
+    detail: DiscoverAssistantDetail;
     newIdentifier: string;
     sourceId: string;
   };
@@ -150,20 +177,7 @@ export const installMarketplaceAgents = async (
       }
       const fork = outcome.data;
       const result = await createAgent({
-        config: {
-          ...detail.config,
-          avatar: detail.avatar,
-          backgroundColor: detail.backgroundColor,
-          description: detail.description,
-          editorData: detail.editorData,
-          marketIdentifier: fork.agent.identifier,
-          params: {
-            ...detail.config.params,
-            forkedFromIdentifier: sourceId,
-          },
-          tags: detail.tags,
-          title: fork.agent.name,
-        },
+        config: buildForkedAgentConfig(detail, fork.agent, sourceId),
         visibility,
       });
 

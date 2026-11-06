@@ -183,9 +183,17 @@ describe('getSetupGuide', () => {
       return steps.map((step) => step.key).toSpliced(connectStepIndex(steps), 0, 'connect');
     };
 
-    expect(at('discord')).toEqual(['create', 'credentials', 'bot', 'connect', 'invite']);
+    // Discord's invite needs only the app ID, and a bot in no server fails the connection test.
+    expect(at('discord')).toEqual(['create', 'credentials', 'bot', 'invite', 'connect']);
     expect(at('telegram')).toEqual(['botfather', 'token', 'connect', 'privacy']);
     expect(at('line')).toEqual(['account', 'messagingApi', 'credentials', 'connect', 'webhook']);
     expect(connectStepIndex([{ key: 'only' }])).toBe(1);
+    expect(
+      connectStepIndex([
+        { fields: ['token'], key: 'token' },
+        { beforeConnect: true, key: 'invite' },
+        { key: 'webhook' },
+      ]),
+    ).toBe(2);
   });
 });

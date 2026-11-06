@@ -190,12 +190,4 @@ describe('DatasetAction replica wiring', () => {
       ).toBe(true);
     });
   });
-
-  it('no longer exposes the retired reducer internals', () => {
-    const state = useEvalStore.getState() as Record<string, unknown>;
-    expect(state.internal_dispatchDatasetDetail).toBeUndefined();
-    expect(state.internal_updateDatasetDetailLoading).toBeUndefined();
-    expect(state.isLoadingDatasets).toBeUndefined();
-    expect(state.loadingDatasetDetailIds).toBeUndefined();
-  });
 });

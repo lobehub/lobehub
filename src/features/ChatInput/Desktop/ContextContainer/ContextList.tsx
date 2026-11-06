@@ -1,6 +1,7 @@
 import { createStaticStyles, Flexbox, ScrollShadow } from '@lobehub/ui';
 import { memo } from 'react';
 
+import { useChatInputUploadKey } from '@/features/ChatInput/hooks/useChatInputUpload';
 import { useChatInputStore } from '@/features/ChatInput/store';
 import { fileChatSelectors, useFileStore } from '@/store/file';
 
@@ -17,8 +18,9 @@ const styles = createStaticStyles(({ css }) => ({
 
 const ContextList = memo(() => {
   const contextSelectionKey = useChatInputStore((s) => s.contextSelectionKey);
-  const inputFilesList = useFileStore(fileChatSelectors.chatUploadFileList);
-  const showFileList = useFileStore(fileChatSelectors.chatUploadFileListHasItem);
+  const uploadContextKey = useChatInputUploadKey();
+  const inputFilesList = useFileStore(fileChatSelectors.chatUploadFileList(uploadContextKey));
+  const showFileList = useFileStore(fileChatSelectors.chatUploadFileListHasItem(uploadContextKey));
   const rawSelectionList = useFileStore(
     fileChatSelectors.chatContextSelections(contextSelectionKey),
   );

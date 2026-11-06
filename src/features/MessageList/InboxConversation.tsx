@@ -1,6 +1,6 @@
 'use client';
 
-import { DEFAULT_INBOX_AVATAR } from '@lobechat/const';
+import { DEFAULT_INBOX_AVATAR, DEFAULT_INBOX_TITLE } from '@lobechat/const';
 import { agentDisplayName } from '@lobechat/types';
 import { Avatar } from '@lobehub/ui';
 import { memo } from 'react';
@@ -27,11 +27,12 @@ const InboxConversation = memo<{ activeRouteId?: string; preview?: string }>(
     );
     const prefetchAgent = usePrefetchAgent();
     const url = usePreservedAgentUrl(routeId);
-    const title = agentDisplayName(meta, 'Lobe AI');
+    const title = agentDisplayName(meta, DEFAULT_INBOX_TITLE);
     const active = !!activeRouteId && (activeRouteId === routeId || activeRouteId === inboxAgentId);
 
     return (
       <ConversationRow
+        closeOnReselect
         active={active}
         preview={preview || meta.description || undefined}
         running={running}

@@ -656,7 +656,7 @@ class LobeAgentExecutionRuntime {
       }
 
       return buildError(
-        `Media analysis could not run: it uses the platform model "${provider}/${model}", which is billed to the user's LobeHub credits, and those credits are exhausted (${creditErrorType}). ` +
+        `Media analysis could not run: it uses the platform model "${provider}/${model}", which is billed to the user's LobeHub balance, and that balance is exhausted (${creditErrorType}). ` +
           "The user's own API key for the chat model is not used by this tool, so retrying will not help. " +
           'Tell the user to top up or upgrade their LobeHub plan, or to switch the conversation to a vision-capable model on their own API key.',
         creditErrorType,

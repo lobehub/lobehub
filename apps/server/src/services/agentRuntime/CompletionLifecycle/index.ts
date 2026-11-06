@@ -1,6 +1,7 @@
 import debug from 'debug';
 
 import { releaseAgentRunSlot } from '@/business/server/agent-run/runConcurrency';
+import { settleAgentRunFee } from '@/business/server/agent-run/runFee';
 import {
   AgentOperationModel,
   type RecordOperationStartParams,
@@ -11,6 +12,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import { formatErrorForState } from '@/server/modules/AgentRuntime/formatErrorForState';
 import {
   instantiateVerifyPlanOnStart,
+  releaseUndeliveredRound,
   runVerifyOnCompletion,
   settleFailedRepair,
 } from '@/server/services/verify';
@@ -368,6 +370,19 @@ export class CompletionLifecycle {
       // too; its continuation takes a slot of its own.
       await releaseAgentRunSlot(runOrigin.userId || this.userId, operationId);
 
+      // Charge or give back the per-run fee the run held at admission. A run
+      // parked on a human decision settles here too: its continuation is part
+      // of the same run and holds no fee of its own. A billing failure must
+      // not cost the user their completion hooks.
+      await settleAgentRunFee({
+        durationMs: event.duration,
+        operationId,
+        reason,
+        userId: runOrigin.userId || this.userId,
+      }).catch((error) => {
+        console.error('[CompletionLifecycle] settleAgentRunFee failed', { error, operationId });
+      });
+
       // `lastAssistantContent` comes off the Redis-backed `state.messages`,
       // while the assistant message row is persisted through a separate
       // `messageModel.update` path. When the two diverge (state entry empty
@@ -489,12 +504,12 @@ export class CompletionLifecycle {
 
       if (reason === 'error' || reason === 'interrupted') {
         after(async () => {
-          await settleFailedRepair(
-            this.serverDB,
-            runOrigin.userId || this.userId,
-            operationId,
-            this.workspaceId,
-          );
+          const userId = runOrigin.userId || this.userId;
+          await settleFailedRepair(this.serverDB, userId, operationId, this.workspaceId);
+          // A task run that failed before delivering leaves the round opened at
+          // its start with nothing to verify. When planning is still under way,
+          // `instantiateVerifyPlanOnStart` releases the round once it lands.
+          await releaseUndeliveredRound(this.serverDB, userId, operationId, this.workspaceId);
         });
       }
 

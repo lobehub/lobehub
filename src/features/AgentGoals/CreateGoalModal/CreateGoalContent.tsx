@@ -51,6 +51,7 @@ import { shinyTextStyles } from '@/styles';
 import GoalAgentPill from '../GoalAgentPill';
 import { buildGoalAgents, buildGoalCreateInput, buildReviewedGoalContent } from './goalConfig';
 import { createFallbackGoalCriterion, generateGoalCriteria } from './goalCriteria';
+import { GOAL_INSTRUCTION_EDITOR_PROPS } from './goalEditor';
 import {
   deriveGoalTitle,
   resolveDraftedTitle,
@@ -565,11 +566,11 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
               <GeneratingBorder className={styles.inputShell} generating={step === 'preparing'}>
                 <div className={styles.inputScroller}>
                   <EditorCanvas
+                    {...GOAL_INSTRUCTION_EDITOR_PROPS}
                     disabled={!canCreate || step === 'preparing'}
                     editor={editor}
                     editorData={{ content: plan.instruction }}
                     entityId={'create-goal-description'}
-                    floatingToolbar={false}
                     placeholder={t('createGoal.instructionPlaceholder')}
                     style={{ fontSize: 14, minHeight: 206, padding: 16 }}
                     onContentChange={handleContentChange}
@@ -617,7 +618,12 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
             </>
           )}
         </Flexbox>
-        <ActionIcon className={styles.close} icon={X} onClick={close} />
+        <ActionIcon
+          className={styles.close}
+          icon={X}
+          title={t('close', { ns: 'common' })}
+          onClick={close}
+        />
       </Flexbox>
 
       {step === 'review' && (
@@ -625,11 +631,11 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
           <Flexbox className={styles.reviewSection} gap={10}>
             <Flexbox className={styles.instructionEditor}>
               <EditorCanvas
+                {...GOAL_INSTRUCTION_EDITOR_PROPS}
                 disabled={!canCreate}
                 editor={editor}
                 editorData={{ content: plan.instruction }}
                 entityId={'create-goal-instruction'}
-                floatingToolbar={false}
                 placeholder={t('createGoal.instructionPlaceholder')}
                 style={{ fontSize: 13, minHeight: 32 }}
                 onContentChange={handleContentChange}
@@ -665,6 +671,7 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
                       <ActionIcon
                         icon={Pencil}
                         size={'small'}
+                        title={t('edit', { ns: 'common' })}
                         onClick={(event) => {
                           event.stopPropagation();
                           editCriterion(index);

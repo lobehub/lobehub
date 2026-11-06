@@ -13,6 +13,7 @@ import {
   makeGroupPolicyFields,
   makeServerIdField,
   makeUserIdField,
+  processingMessageField,
   reactionModeField,
   replyPlacementField,
   watchKeywordsField,
@@ -118,6 +119,7 @@ export const schema: FieldSchema[] = [
       },
       replyPlacementField,
       displayToolCallsField,
+      processingMessageField,
       reactionModeField,
       {
         key: 'historyLimit',

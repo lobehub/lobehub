@@ -52,6 +52,7 @@ import {
   fileMatchesAccessScope,
   libraryVisibleFile,
   notAgentShareFile,
+  ownChatAttachment,
 } from '../utils/fileVisibility';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
@@ -167,8 +168,12 @@ export class FileModel {
     return (trx ?? this.db).update(globalFiles).set(data).where(eq(globalFiles.hashId, hashId));
   };
 
-  checkHash = async (hash: string) => {
-    const item = await this.db.query.globalFiles.findFirst({
+  /**
+   * Pass `trx` when calling inside a transaction: reading through `this.db` would check out a
+   * second pool connection while the transaction still holds its locks.
+   */
+  checkHash = async (hash: string, trx?: Transaction) => {
+    const item = await (trx ?? this.db).query.globalFiles.findFirst({
       where: eq(globalFiles.hashId, hash),
     });
     if (!item) return { isExist: false };
@@ -504,7 +509,13 @@ export class FileModel {
       q ? ilike(files.name, `%${q}%`) : undefined,
       this.ownership(callerAgentVisibility),
       visibility ? eq(files.visibility, visibility) : undefined,
-      libraryVisibleFile(files.source, files.metadata),
+      or(
+        libraryVisibleFile(files.source, files.metadata),
+        and(
+          ownChatAttachment(files.source, files.userId, this.userId),
+          notAgentShareFile(files.metadata),
+        ),
+      ),
     );
     if (category && category !== FilesTabs.All && category !== FilesTabs.Home) {
       const categoryFilter = buildFileCategoryFilter(files.fileType, category as FilesTabs);
