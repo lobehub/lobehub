@@ -1,10 +1,10 @@
 import { DEFAULT_SYSTEM_AGENT_CONFIG } from '@lobechat/const';
-import type { SystemAgentItem, UserSystemAgentConfigKey } from '@lobechat/types';
+import type { SystemAgentItem, UserServiceModelConfigKey } from '@lobechat/types';
 
 interface ResolveSystemAgentModelConfigParams {
   override?: Partial<Pick<SystemAgentItem, 'model' | 'provider'>>;
   taskConfig?: Partial<SystemAgentItem>;
-  taskKey: UserSystemAgentConfigKey;
+  taskKey: UserServiceModelConfigKey;
 }
 
 export const resolveSystemAgentModelConfig = async ({
