@@ -303,6 +303,7 @@ describe('MCPService log redaction', () => {
       callTool: vi.fn().mockResolvedValue({
         content: [{ text: 'tool-result-secret', type: 'text' }],
       }),
+      getToolUiMeta: vi.fn().mockResolvedValue(undefined),
       getToolUiResourceUri: vi.fn().mockResolvedValue(undefined),
     };
     vi.spyOn(service as any, 'getClient').mockResolvedValue(mockClient);
@@ -335,6 +336,7 @@ describe('MCPService', () => {
     // 创建 mock 客户端
     mockClient = {
       callTool: vi.fn(),
+      getToolUiMeta: vi.fn().mockResolvedValue(undefined),
       getToolUiResourceUri: vi.fn().mockResolvedValue(undefined),
       isToolCallableByApp: vi.fn().mockResolvedValue(true),
       isToolHiddenFromModel: vi.fn().mockResolvedValue(false),
@@ -529,7 +531,8 @@ describe('MCPService', () => {
       expect(result.state).toEqual(errorResult);
     });
 
-    it('should attach the MCP App resource for tools that declare a ui:// resource', async () => {
+    it('should persist the MCP App resource and display preference', async () => {
+      mockClient.getToolUiMeta.mockResolvedValue({ preferredModelDisplayMode: 'fullscreen' });
       mockClient.getToolUiResourceUri.mockResolvedValue('ui://weather/view.html');
       mockClient.callTool.mockResolvedValue({
         content: [{ type: 'text', text: 'sunny' }],
@@ -547,6 +550,7 @@ describe('MCPService', () => {
       expect(mockClient.getToolUiResourceUri).toHaveBeenCalledWith('weather');
       // With the server it may be read back from
       expect(result.state.mcpApp).toEqual({
+        preferredModelDisplayMode: 'fullscreen',
         resourceUri: 'ui://weather/view.html',
         server: await getMcpServerFingerprint(mockParams),
       });
@@ -651,6 +655,7 @@ describe('MCPService', () => {
       // A session without the MCP Apps capability, and no listTools round trip
       expect(getClientSpy).toHaveBeenCalledWith(mockParams, false, { mcpApps: false });
       expect(mockClient.getToolUiResourceUri).not.toHaveBeenCalled();
+      expect(mockClient.getToolUiMeta).not.toHaveBeenCalled();
       expect(result.state.mcpApp).toBeUndefined();
     });
 

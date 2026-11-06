@@ -308,6 +308,9 @@ export class MCPService {
         };
       }
       const uiResourceUri = mcpApps ? await client.getToolUiResourceUri(toolName) : undefined;
+      const preferredModelDisplayMode = uiResourceUri
+        ? (await client.getToolUiMeta(toolName))?.preferredModelDisplayMode
+        : undefined;
 
       try {
         // Delegate the call to the MCPClient instance
@@ -326,6 +329,7 @@ export class MCPService {
         if (uiResourceUri && !result.isError) {
           processedResult.state.mcpApp = {
             resourceUri: uiResourceUri,
+            ...(preferredModelDisplayMode && { preferredModelDisplayMode }),
             server: await getMcpServerFingerprint(clientParams),
           };
         }

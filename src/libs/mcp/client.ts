@@ -1,7 +1,12 @@
 import { spawn } from 'node:child_process';
 
 import { BRANDING_NAME } from '@lobechat/business-const';
-import { getMcpToolVisibility, isMcpToolVisibleTo } from '@lobechat/const/mcpApp';
+import type { McpUiToolMeta } from '@lobechat/const/mcpApp';
+import {
+  getMcpToolVisibility,
+  isMcpToolVisibleTo,
+  resolveMcpUiToolMeta,
+} from '@lobechat/const/mcpApp';
 import { toRecord } from '@lobechat/utils/object';
 import {
   Client,
@@ -186,6 +191,7 @@ export class MCPClient {
   /** tool name → `ui://` resource URI, filled from the last successful `listTools` */
   private uiResourceUris?: Map<string, string>;
   private readonly mcpApps: boolean;
+  private toolUiMeta?: Map<string, McpUiToolMeta>;
   /**
    * The tools a view may call (`_meta.ui.visibility` with "app", or unset), from
    * the same listing. An allow-list: a name the listing didn't name is refused.
@@ -403,6 +409,9 @@ export class MCPClient {
     try {
       log('Listing tools...');
       const { tools } = await this.mcp.listTools();
+      this.toolUiMeta = this.mcpApps
+        ? new Map(tools.map((tool) => [tool.name, resolveMcpUiToolMeta(tool._meta)]))
+        : undefined;
       this.uiResourceUris = new Map(
         tools.flatMap((tool) => {
           const uri = getToolUiResourceUri(tool, this.mcpApps);
@@ -499,6 +508,12 @@ export class MCPClient {
    * call, then the next call lists again. On the server nothing else refreshes
    * the map: manifests are listed on a separate client without MCP Apps.
    */
+  async getToolUiMeta(toolName: string) {
+    if (!this.mcpApps) return undefined;
+    await this.ensureToolUiListed();
+    return this.toolUiMeta?.get(toolName);
+  }
+
   async getToolUiResourceUri(toolName: string): Promise<string | undefined> {
     await this.ensureToolUiListed();
 
@@ -529,6 +544,7 @@ export class MCPClient {
 
   private forgetToolListing() {
     this.uiResourceUris = undefined;
+    this.toolUiMeta = undefined;
     this.appVisibleTools = undefined;
     this.modelHiddenTools = undefined;
     this.uiResourceListFailedAt = undefined;
