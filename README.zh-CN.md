@@ -483,7 +483,7 @@ This project is [LobeHub Community License](./LICENSE) licensed.
 [github-stars-link]: https://github.com/lobehub/lobehub/stargazers
 [github-stars-shield]: https://img.shields.io/github/stars/lobehub/lobehub?color=ffcb47&labelColor=black&style=flat-square
 [image-banner]: https://hub-apac-1.lobeobjects.space/blog/assets/8beb20539c0fdd1b8fbbc6a07f293a78.webp
-[image-star]: https://github.com/user-attachments/assets/c3b482e7-cef5-4e94-bef9-226900ecfaab
+[image-star]: https://hub-apac-1.lobeobjects.space/blog/assets/893e882a8231960b5a729d691b8a40b3.webp
 [issues-link]: https://img.shields.io/github/issues/lobehub/lobehub.svg?style=flat
 [market-agents]: https://lobehub.com/zh/agent
 [market-icons]: https://lobehub.com/zh/icons
