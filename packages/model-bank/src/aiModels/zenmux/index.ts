@@ -1,4 +1,4 @@
-import type { AIChatModelCard } from '../types/aiModel';
+import type { AIChatModelCard } from '../../types/aiModel';
 
 const zenmuxChatModels: AIChatModelCard[] = [
   {

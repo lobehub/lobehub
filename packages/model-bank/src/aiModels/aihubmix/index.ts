@@ -1,5 +1,5 @@
-import { gptImage2Schema, nanoBanana2LiteParameters } from '../const/imageParameters';
-import type { AIChatModelCard, AIImageModelCard } from '../types/aiModel';
+import { gptImage2Schema, nanoBanana2LiteParameters } from '../../const/imageParameters';
+import type { AIChatModelCard, AIImageModelCard } from '../../types/aiModel';
 
 const aihubmixChatModels: AIChatModelCard[] = [
   {

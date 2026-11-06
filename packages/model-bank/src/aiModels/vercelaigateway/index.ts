@@ -1,4 +1,4 @@
-import type { AIChatModelCard, AIEmbeddingModelCard } from '../types/aiModel';
+import type { AIChatModelCard, AIEmbeddingModelCard } from '../../types/aiModel';
 
 // Model list provided by Vercel AI Gateway, sorted by SOTA, large models, small models
 const vercelAIGatewayChatModels: AIChatModelCard[] = [

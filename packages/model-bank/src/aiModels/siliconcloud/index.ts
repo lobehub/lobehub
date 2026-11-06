@@ -2,7 +2,7 @@ import {
   type AIChatModelCard,
   type AIImageModelCard,
   type AIVideoModelCard,
-} from '../types/aiModel';
+} from '../../types/aiModel';
 
 // https://siliconflow.cn/zh-cn/models
 const siliconcloudChatModels: AIChatModelCard[] = [
