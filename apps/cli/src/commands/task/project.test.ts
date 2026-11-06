@@ -47,6 +47,11 @@ describe('lh task edit --project', () => {
     expect(client.task.update.mutate).toHaveBeenCalledWith({ id: 'T-1', projectId: null });
   });
 
+  it('sends an empty project so the server rejects it instead of silently ignoring it', async () => {
+    await run('edit', 'T-1', '--project', '');
+    expect(client.task.update.mutate).toHaveBeenCalledWith({ id: 'T-1', projectId: '' });
+  });
+
   it('does not send a project when the option is absent', async () => {
     await run('edit', 'T-1', '--name', 'Renamed');
     expect(client.task.update.mutate).toHaveBeenCalledWith({ id: 'T-1', name: 'Renamed' });

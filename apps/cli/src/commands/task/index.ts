@@ -726,7 +726,8 @@ export function registerTaskCommand(program: Command) {
         if (options.agent) input.assigneeAgentId = options.agent;
         if (assigneeUserId) input.assigneeUserId = assigneeUserId;
         if (options.priority) input.priority = Number.parseInt(options.priority, 10);
-        if (options.project) input.projectId = options.project === 'null' ? null : options.project;
+        if (options.project !== undefined)
+          input.projectId = options.project === 'null' ? null : options.project;
         if (options.heartbeatInterval)
           input.heartbeatInterval = Number.parseInt(options.heartbeatInterval, 10);
         if (options.heartbeatTimeout !== undefined) {
