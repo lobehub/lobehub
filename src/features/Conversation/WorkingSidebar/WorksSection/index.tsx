@@ -1,5 +1,7 @@
 import type { WorkListItem } from '@lobechat/types';
 import { ActionIcon, Center, createStaticStyles, Empty, Flexbox, Spin } from '@lobehub/ui';
+import { cssVar as vars } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
 import { ClipboardListIcon, HistoryIcon, ListIcon } from 'lucide-react';
 import { memo, useEffect, useMemo, useRef } from 'react';
@@ -21,7 +23,7 @@ const WORKS_VIEW_MODE_STORAGE_KEY = 'lobechat-working-panel-works-view-mode';
 
 const EMPTY_HISTORY: WorkListItem[] = [];
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
+const styles = createStaticStyles(({ css }) => ({
   container: css`
     min-height: 0;
     padding-block: 8px;
@@ -31,13 +33,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     flex-shrink: 0;
     align-self: flex-end;
   `,
-  workCard: css`
-    overflow: hidden;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 8px;
-    background: ${cssVar.colorFillQuaternary};
-  `,
 }));
+
+const workCardStyles = stylex.create({
+  card: { borderRadius: '8px', backgroundColor: vars.colorFillQuaternary },
+});
 
 const WorksModeToolbar = memo<{
   mode: WorksViewMode;
@@ -184,7 +184,7 @@ const WorksSection = memo<WorksSectionProps>(({ active = true }) => {
 
     return mode === 'summary'
       ? summaryData.map((work) => (
-          <WorkSummaryCard className={styles.workCard} item={work} key={work.id} />
+          <WorkSummaryCard item={work} key={work.id} xstyle={workCardStyles.card} />
         ))
       : historyData.map((work) => <WorkVersionHistoryCard key={work.id} work={work} />);
   })();

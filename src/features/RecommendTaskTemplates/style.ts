@@ -1,8 +1,8 @@
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 
-// `card` and `compactRow` carry `stylex.defaultMarker()`; the dismiss button
-// reveals itself from their hover (and, in the compact row, focus-within) state.
+import { taskTemplateMarker } from './markers.stylex';
+
 export const styles = stylex.create({
   // `!important` dropped: lobe-ui's Block CSS sits in `@layer lobe-ui`.
   card: {
@@ -41,21 +41,24 @@ export const styles = stylex.create({
     minWidth: '0',
   },
   dismissBtn: {
-    pointerEvents: { default: 'none', [stylex.when.ancestor(':hover')]: 'auto' },
+    pointerEvents: {
+      default: 'none',
+      [stylex.when.ancestor(':hover', taskTemplateMarker)]: 'auto',
+    },
     flexShrink: 0,
-    opacity: { default: 0, [stylex.when.ancestor(':hover')]: 1 },
+    opacity: { default: 0, [stylex.when.ancestor(':hover', taskTemplateMarker)]: 1 },
     transition: 'opacity 0.15s',
   },
   dismissBtnCompact: {
     pointerEvents: {
       default: 'none',
-      [stylex.when.ancestor(':hover')]: 'auto',
-      [stylex.when.ancestor(':focus-within')]: 'auto',
+      [stylex.when.ancestor(':hover', taskTemplateMarker)]: 'auto',
+      [stylex.when.ancestor(':focus-within', taskTemplateMarker)]: 'auto',
     },
     opacity: {
       default: 0,
-      [stylex.when.ancestor(':hover')]: 1,
-      [stylex.when.ancestor(':focus-within')]: 1,
+      [stylex.when.ancestor(':hover', taskTemplateMarker)]: 1,
+      [stylex.when.ancestor(':focus-within', taskTemplateMarker)]: 1,
     },
   },
 });

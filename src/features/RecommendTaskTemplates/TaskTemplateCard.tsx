@@ -22,6 +22,7 @@ import { homeType } from '@/features/Home/components/homeType';
 import { RECOMMENDATION_ICON_SIZE } from '@/features/Recommendations/iconSize';
 
 import { ConnectorAuthRow } from './ConnectorAuthRow';
+import { taskTemplateMarker } from './markers.stylex';
 import { resolveTemplateIcon } from './resolveTemplateIcon';
 import { styles } from './style';
 import { INTEREST_ICON_MAP, TemplateBriefIcon } from './TemplateBriefIcon';
@@ -86,7 +87,7 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
         <Flexbox
           horizontal
           align={'center'}
-          className={stylex.props(styles.compactRow, stylex.defaultMarker()).className}
+          className={stylex.props(styles.compactRow, taskTemplateMarker).className}
           gap={4}
         >
           <Button
@@ -131,11 +132,13 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
 
     return (
       <Block
-        className={stylex.props(briefStyles.card, styles.card, briefCardMarker).className}
         gap={12}
         padding={12}
         style={{ borderRadius: cssVar.borderRadiusLG, cursor: 'pointer' }}
         variant={'outlined'}
+        className={
+          stylex.props(briefStyles.card, styles.card, briefCardMarker, taskTemplateMarker).className
+        }
         onClick={handleOpenDetail}
       >
         <Flexbox horizontal align={'center'} gap={16} justify={'space-between'}>
