@@ -154,16 +154,17 @@ describe('flattenTaskListEntries grouped by project', () => {
     expect(items[5]).toMatchObject({ count: 1, meta: { groupBy: 'project', projectId: null } });
   });
 
-  it('puts tasks without a project, or under an unseen project, in "No project"', () => {
+  it('separates tasks under an unseen project from tasks with no project', () => {
     const items = flattenTaskListEntries(
       entries([task('T-1', undefined), task('T-2', 'gone'), task('T-3', null)]),
       { collapsed: new Set(), grouped: true },
     );
 
     expect(items.map((item) => item.key)).toEqual([
+      'group:project:unavailable',
+      'project:unavailable:T-2',
       'group:project:none',
       'project:none:T-1',
-      'project:none:T-2',
       'project:none:T-3',
     ]);
     expect(JSON.stringify(items[0])).not.toContain('gone');

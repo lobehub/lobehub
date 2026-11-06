@@ -12,6 +12,7 @@ import { getTaskStoreState } from '@/store/task';
 import type { TaskListItem } from '@/store/task/slices/list/initialState';
 import {
   TASK_NO_PROJECT_GROUP_KEY,
+  TASK_UNAVAILABLE_PROJECT_GROUP_KEY,
   taskGroupKeyByProject,
 } from '@/store/task/slices/list/projection';
 
@@ -129,6 +130,8 @@ export interface TaskGroupMeta {
   priority?: number;
   /** The project of a project group; null is the "no project" group. */
   projectId?: string | null;
+  /** The group of tasks filed under projects the caller cannot see. */
+  projectUnavailable?: boolean;
   status?: 'backlog' | 'canceled' | 'completed' | 'failed' | 'paused' | 'running' | 'scheduled';
 }
 
@@ -401,8 +404,9 @@ export const getTaskLabelGroupMeta = (
 
 /**
  * Group meta of one project. A name only comes from the cached project list, so
- * a task filed under a project the caller cannot see joins "No project" rather
- * than heading a group with an id or a placeholder.
+ * a task filed under a project the caller cannot see joins "Unavailable project":
+ * it does have a project, so "No project" would misreport it, and heading a group
+ * with the id would expose what the viewer may not read.
  */
 export const getTaskProjectGroupMeta = (projectId: string | null | undefined): TaskGroupMeta => {
   const project = projectListItemSelector(projectId)(useProjectStore.getState());
@@ -412,6 +416,15 @@ export const getTaskProjectGroupMeta = (projectId: string | null | undefined): T
       key: taskGroupKeyByProject(project.id),
       label: project.name,
       projectId: project.id,
+    };
+  }
+  if (projectId) {
+    return {
+      groupBy: 'project',
+      key: TASK_UNAVAILABLE_PROJECT_GROUP_KEY,
+      label: t('taskProject.unavailable', { ns: 'chat' }),
+      projectId: null,
+      projectUnavailable: true,
     };
   }
   return {
@@ -575,9 +588,10 @@ const getGroupRank = (group: TaskGroupMeta, groupBy: TaskGroupBy): number => {
     case 'automationMode': {
       return group.automationMode === 'schedule' ? 0 : 1;
     }
-    // Named projects sort by name; "No project" stays last.
+    // Named projects sort by name, then "Unavailable project"; "No project" stays last.
     case 'project': {
-      return group.projectId ? 0 : 1;
+      if (group.projectId) return 0;
+      return group.projectUnavailable ? 1 : 2;
     }
     case 'priority': {
       if (group.priority === undefined) return Number.MAX_SAFE_INTEGER;

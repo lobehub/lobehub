@@ -231,8 +231,8 @@ const KanbanBoard = memo<KanbanBoardProps>((props) => {
       if (groupBy === 'status' && task.status === patch.status) return;
       if ((groupBy === 'assignee' || groupBy === 'member') && !assigneeUpdate) return;
       if (groupBy === 'priority' && (task.priority ?? 0) === (patch.priority ?? 0)) return;
-      // By column, not id: a task of an unseen project already sits in "No
-      // project", and letting it go back there must not clear its project.
+      // By column, not id: a task of an unseen project already sits in
+      // "Unavailable project", and letting it go back must not clear its project.
       if (
         isProjectBoard &&
         currentTaskGroups
