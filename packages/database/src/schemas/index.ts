@@ -18,6 +18,7 @@ export * from './agentShare';
 export * from './agentSkill';
 export * from './aiInfra';
 export * from './apiKey';
+export * from './artboard';
 export * from './asyncTask';
 export * from './betterAuth';
 export * from './channel';

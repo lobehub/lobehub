@@ -55,6 +55,8 @@ export interface QueryMessagesOptions {
    * timestamp strings compared with a `::timestamptz` cast.
    */
   groupNodeWindow?: MessageGroupNodeWindow;
+  /** Same opt-in as `includeFileWorks`, for `artboard` work summaries. */
+  includeArtboardWorks?: boolean;
   /**
    * Opt-in for `file` work summaries in the payload (see
    * `QueryMessageParams.includeFileWorks`).
@@ -148,6 +150,7 @@ export interface QueryTopicByCursorParams {
   /** Group chat topic: rows carry the group id, same filter as `query`. */
   groupId?: string | null;
   /** See {@link QueryMessageParams.includeFileWorks}. */
+  includeArtboardWorks?: boolean;
   includeFileWorks?: boolean;
   /** How many rounds to load per page (the current round is always whole). */
   roundLimit?: number;

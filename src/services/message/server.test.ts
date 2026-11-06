@@ -34,6 +34,7 @@ describe('MessageService', () => {
       // The service opts in to file-type works; everything else passes through untouched.
       expect(lambdaClient.message.getMessages.query).toHaveBeenCalledWith({
         ...params,
+        includeArtboardWorks: false,
         includeFileWorks: true,
       });
     });

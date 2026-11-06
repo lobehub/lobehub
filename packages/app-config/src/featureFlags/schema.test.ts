@@ -320,6 +320,17 @@ describe('mapFeatureFlagsEnvToState', () => {
     expect(mapFeatureFlagsEnvToState(config, 'user-456').enableMcpApps).toBe(false);
   });
 
+  it('should keep the artboard off outside development and enable it per user or globally', () => {
+    expect(DEFAULT_FEATURE_FLAGS.artboard).toBe(false);
+    expect(mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'user-1').enableArtboard).toBe(false);
+
+    expect(mapFeatureFlagsEnvToState({ artboard: true }).enableArtboard).toBe(true);
+
+    const config = { artboard: ['user-123'] };
+    expect(mapFeatureFlagsEnvToState(config, 'user-123').enableArtboard).toBe(true);
+    expect(mapFeatureFlagsEnvToState(config, 'user-456').enableArtboard).toBe(false);
+  });
+
   it('should keep the rail layout off by default and enable it per user or globally', () => {
     expect(DEFAULT_FEATURE_FLAGS.im_layout).toBe(false);
     expect(mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'user-1').enableImLayout).toBe(false);

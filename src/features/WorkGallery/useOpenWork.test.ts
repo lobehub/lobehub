@@ -4,9 +4,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useOpenWork } from './useOpenWork';
 
-const { createModal, getVersion } = vi.hoisted(() => ({
+const { createModal, getVersion, openArtboardFullscreen } = vi.hoisted(() => ({
   createModal: vi.fn(),
   getVersion: vi.fn(),
+  openArtboardFullscreen: vi.fn(),
 }));
 
 vi.mock('@lobehub/ui', () => ({ createModal }));
@@ -14,12 +15,13 @@ vi.mock('@/services/canvas', () => ({ canvasService: { getVersion } }));
 vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
   useWorkspaceAwareNavigate: () => vi.fn(),
 }));
+vi.mock('@/features/Artboard/Gallery/loader', () => ({ openArtboardFullscreen }));
 vi.mock('@/features/Work/descriptors', () => ({
   getWorkTypeDescriptor: () => ({
-    getOpenTarget: (item: WorkSummaryItem) => ({
-      canvasId: item.resourceId,
-      kind: 'canvas',
-    }),
+    getOpenTarget: (item: WorkSummaryItem) =>
+      item.type === 'artboard'
+        ? { artboardId: item.resourceId, kind: 'artboard' }
+        : { canvasId: item.resourceId, kind: 'canvas' },
   }),
   isSafeExternalUrl: () => true,
 }));
@@ -45,5 +47,16 @@ describe('useOpenWork Canvas entry', () => {
 
     await waitFor(() => expect(createModal).toHaveBeenCalledOnce());
     expect(window.open).not.toHaveBeenCalled();
+  });
+});
+
+describe('useOpenWork Artboard entry', () => {
+  it('opens the board full screen in place', () => {
+    const { result } = renderHook(() => useOpenWork());
+    act(() => {
+      result.current({ resourceId: 'art_1', type: 'artboard' } as WorkSummaryItem);
+    });
+
+    expect(openArtboardFullscreen).toHaveBeenCalledWith('art_1');
   });
 });

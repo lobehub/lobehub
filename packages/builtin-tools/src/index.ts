@@ -15,6 +15,7 @@ import {
   agentSignalReviewManifest,
   agentSignalSkillManagementManifest,
 } from '@lobechat/builtin-tool-agent-signal';
+import { ArtboardManifest } from '@lobechat/builtin-tool-artboard';
 import { AttachmentsManifest } from '@lobechat/builtin-tool-attachments';
 import { AuvManifest } from '@lobechat/builtin-tool-auv';
 import { BriefManifest } from '@lobechat/builtin-tool-brief';
@@ -571,6 +572,15 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
   {
     identifier: CanvasManifest.identifier,
     manifest: CanvasManifest,
+    type: 'builtin',
+  },
+  {
+    // Server tool discovery adds it to project conversations only; it has no
+    // client executor, so it must never be pinned or discovered.
+    discoverable: false,
+    hidden: true,
+    identifier: ArtboardManifest.identifier,
+    manifest: ArtboardManifest,
     type: 'builtin',
   },
   {

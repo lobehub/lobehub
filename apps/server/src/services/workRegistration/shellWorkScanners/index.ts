@@ -1,3 +1,4 @@
+import { artboardShellWorkScanner } from './artboard';
 import { githubShellWorkScanner } from './github';
 import type { ShellWorkScanner } from './types';
 
@@ -9,4 +10,7 @@ export type { ShellWorkScanner } from './types';
  * `@/database/models/work`, define its scanner in a sibling file here, and
  * append it to this list.
  */
-export const SHELL_WORK_SCANNERS: ShellWorkScanner[] = [githubShellWorkScanner];
+export const SHELL_WORK_SCANNERS: ShellWorkScanner[] = [
+  githubShellWorkScanner,
+  artboardShellWorkScanner,
+];

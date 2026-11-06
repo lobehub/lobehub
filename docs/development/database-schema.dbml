@@ -1193,6 +1193,31 @@ table api_keys {
   }
 }
 
+table artboards {
+  id text [pk, not null]
+  task_id text [not null]
+  user_id text [not null]
+  workspace_id text
+  project_id text
+  acceptance_id uuid
+  origin_topic_id text
+  title text [not null]
+  description text
+  phase text [not null, default: 'discuss']
+  content jsonb [not null]
+  revision integer [not null, default: 1]
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    task_id [name: 'artboards_task_id_unique', unique]
+    project_id [name: 'artboards_project_id_idx']
+    user_id [name: 'artboards_user_id_idx']
+    workspace_id [name: 'artboards_workspace_id_idx']
+  }
+}
+
 table async_tasks {
   id uuid [pk, not null, default: `gen_random_uuid()`]
   type text
