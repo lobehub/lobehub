@@ -241,6 +241,7 @@ const AgentEditorCanvas = memo<AgentEditorCanvasProps>(({ agentId }) => {
       if (streamingInProgress) return;
       // Latch edit-intent so the lock driver acquires the lock on the first real
       // edit. Streaming systemRole writes are programmatic and skipped above.
+      lastSyncedRoleRef.current = undefined;
       localEditRef.current = true;
       setHasEdited(true);
       if (sourceEditor) syncSourceMarkdown(sourceEditor);
@@ -269,6 +270,7 @@ const AgentEditorCanvas = memo<AgentEditorCanvasProps>(({ agentId }) => {
       setSourceMarkdown(value);
       if (!editor || !editable || streamingInProgress) return;
 
+      lastSyncedRoleRef.current = undefined;
       localEditRef.current = true;
       setHasEdited(true);
       try {

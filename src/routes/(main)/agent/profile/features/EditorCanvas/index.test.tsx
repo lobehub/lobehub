@@ -525,6 +525,36 @@ describe('Agent profile EditorCanvas', () => {
     expect(handleContentChange).toHaveBeenCalledWith('agent-a', expect.any(Function), editor);
   });
 
+  it('applies an external Markdown restore after local editing', async () => {
+    permissionState.allowed = true;
+    const initialEditorData = { root: { children: ['initial'] } };
+    const initialSystemRole = 'initial prompt';
+    agentStoreState.agentMap = {
+      'agent-a': { editorData: initialEditorData, systemRole: initialSystemRole },
+    };
+
+    render(<EditorCanvas />);
+    act(() => editorProps.last?.onInit());
+    await waitFor(() => expect(editor.setDocument).toHaveBeenCalledWith('json', initialEditorData));
+    await act(() => new Promise((resolve) => setTimeout(resolve, 0)));
+
+    editorDocuments.json = { root: { children: ['local draft'] } };
+    editorDocuments.markdown = 'local draft';
+    act(() => editorProps.last?.onTextChange(editor));
+    editor.setDocument.mockClear();
+
+    act(() => {
+      agentStoreState.agentMap = {
+        'agent-a': { editorData: null, systemRole: initialSystemRole },
+      };
+      agentStoreMock.listeners.forEach((listener) => listener());
+    });
+
+    await waitFor(() =>
+      expect(editor.setDocument).toHaveBeenCalledWith('markdown', initialSystemRole),
+    );
+  });
+
   it('shows failed Prompt save feedback with a local Retry action', () => {
     permissionState.allowed = true;
     profileStoreState.promptSaveStatus = 'failed';
