@@ -37,6 +37,34 @@ import type {
 
 const log = debug('lobe-server:sandbox:service');
 
+const FILE_NOT_FOUND_PATTERN = /not found|no such file|enoent/i;
+
+/**
+ * Where a failed export actually looked, for the model to act on.
+ *
+ * The execution plane's own message names only the candidate paths it tried,
+ * which reads as if `/workspace`, `/root` and `/tmp` were the whole sandbox —
+ * so a model whose file sits under the persistent volume copies it around those
+ * three and fails again. Naming the session the export ran in, and what its
+ * relative paths resolve against, points it at the path `runCommand` sees.
+ */
+const describeExportRoots = (
+  path: string,
+  { sandboxCwd, sandboxMode, sandboxWorkingDir }: SandboxServiceOptions,
+): string => {
+  // Commands run in `sandboxWorkingDir` when an instance has a local checkout;
+  // otherwise in `sandboxCwd` on the volume (see SandboxSessionContext).
+  const root =
+    sandboxWorkingDir ??
+    (sandboxCwd ? `the workspace directory "${sandboxCwd}"` : 'the session working directory');
+  const relative = posixPath.isAbsolute(path) ? '' : ` Relative paths resolve against ${root}.`;
+
+  return (
+    `(Searched the ${sandboxMode ?? 'ephemeral'} sandbox session.${relative}` +
+    ' Run `pwd` and `ls` with runCommand in this session and pass the absolute path they show.)'
+  );
+};
+
 /** `readLocalFile` is the legacy name still used by ComputerRuntime and remote sandboxes. */
 const READ_FILE_TOOL_NAMES = new Set(['readFile', 'readLocalFile']);
 
@@ -327,10 +355,14 @@ export class SandboxMiddlewareService implements SandboxService {
       });
 
       if (!exported.success) {
+        const message = exported.error?.message || 'Failed to export file from sandbox';
+
         return {
           error: {
             ...exported.error,
-            message: exported.error?.message || 'Failed to export file from sandbox',
+            message: FILE_NOT_FOUND_PATTERN.test(message)
+              ? `${message} ${describeExportRoots(path, this.options)}`
+              : message,
           },
           filename,
           success: false,

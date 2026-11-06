@@ -376,12 +376,91 @@ describe('SandboxMiddlewareService', () => {
     const result = await service.exportAndUploadFile('/workspace/missing.txt', 'missing.txt');
 
     expect(result).toMatchObject({
-      error: { message: 'no such file', name: 'not_found' },
+      error: { message: expect.stringMatching(/^no such file /), name: 'not_found' },
       filename: 'missing.txt',
       success: false,
     });
     expect(fileService.getFileMetadata).not.toHaveBeenCalled();
     expect(fileService.createFileRecord).not.toHaveBeenCalled();
+  });
+
+  // Regression: a not-found export only echoed the execution plane's
+  // `[path, /workspace/x, /root/x, /tmp/x]` candidates, so the model copied the
+  // file between those and retried instead of looking where `runCommand` runs.
+  it('names the session and working directory a missing file was looked up in', async () => {
+    const { SandboxMiddlewareService } = await import('../service');
+    const provider = {
+      capabilities: {
+        backgroundCommands: true,
+        exportFile: true,
+        files: true,
+        languages: ['python'],
+        persistentSession: true,
+        shell: true,
+        skillScripts: true,
+      },
+      callTool: vi.fn(),
+      exportFileToUploadUrl: vi.fn(async () => ({
+        error: { message: 'File not found: report.pdf' },
+        success: false,
+      })),
+      kind: 'market',
+    } satisfies SandboxProvider;
+    const fileService = {
+      createPreSignedUpload: vi.fn(async () => ({ url: 'https://uploads.example.com/put' })),
+    } as unknown as FileService;
+
+    const service = new SandboxMiddlewareService(provider, {
+      fileService,
+      marketService: {} as MarketService,
+      sandboxCwd: '报告/2026',
+      sandboxMode: 'drive',
+      topicId: 'topic-1',
+      userId: 'user-1',
+    });
+
+    const result = await service.exportAndUploadFile('report.pdf', 'report.pdf');
+
+    expect(result.error?.message).toBe(
+      'File not found: report.pdf (Searched the drive sandbox session. Relative paths resolve' +
+        ' against the workspace directory "报告/2026". Run `pwd` and `ls` with runCommand in' +
+        ' this session and pass the absolute path they show.)',
+    );
+  });
+
+  it('leaves non-lookup export failures untouched', async () => {
+    const { SandboxMiddlewareService } = await import('../service');
+    const provider = {
+      capabilities: {
+        backgroundCommands: true,
+        exportFile: true,
+        files: true,
+        languages: ['python'],
+        persistentSession: true,
+        shell: true,
+        skillScripts: true,
+      },
+      callTool: vi.fn(),
+      exportFileToUploadUrl: vi.fn(async () => ({
+        error: { message: 'Upload rejected: 403' },
+        success: false,
+      })),
+      kind: 'market',
+    } satisfies SandboxProvider;
+    const fileService = {
+      createPreSignedUpload: vi.fn(async () => ({ url: 'https://uploads.example.com/put' })),
+    } as unknown as FileService;
+
+    const service = new SandboxMiddlewareService(provider, {
+      fileService,
+      marketService: {} as MarketService,
+      topicId: 'topic-1',
+      userId: 'user-1',
+    });
+
+    const result = await service.exportAndUploadFile('/workspace/a.txt', 'a.txt');
+
+    expect(result.error?.message).toBe('Upload rejected: 403');
   });
 });
 
