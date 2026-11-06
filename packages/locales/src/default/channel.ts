@@ -98,6 +98,8 @@ export default {
   'composer': 'Message #{{name}}',
   'directComposer': 'Message {{name}}',
   'threadComposer': 'Reply in thread',
+  'composer.actions': 'More actions',
+  'composer.mention': 'Mention someone',
   'stopReply': 'Stop reply',
   'main': 'Channel conversation',
   'startThread': 'Start thread',

@@ -8,10 +8,10 @@ import {
   ReactMentionPlugin,
 } from '@lobehub/editor';
 import { ChatInput, Editor, SendButton, useEditor } from '@lobehub/editor/react';
-import { ActionIcon, cssVar, Flexbox, Text, Upload } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Text } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
-import { $getSelection, $isRangeSelection } from 'lexical';
-import { CirclePlus, Reply, X } from 'lucide-react';
+import { $getSelection, $isRangeSelection, KEY_DOWN_COMMAND } from 'lexical';
+import { Reply, X } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -31,6 +31,7 @@ import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfi
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
+import { ComposerActions } from './ComposerActions';
 import { MemberAvatar } from './MemberAvatar';
 import { isCurrentUserMember, memberName } from './memberName';
 import { getMentionGroups } from './mentionGroups';
@@ -75,13 +76,8 @@ type ComposerDelivery =
 
 const plugins = [ReactCodePlugin, ReactListPlugin, ReactLinkHighlightPlugin, ReactMentionPlugin];
 
-/** A flat filled bar, like an IM message box, instead of the chat page's raised card. */
-const inputShell = {
-  backgroundColor: cssVar.colorFillTertiary,
-  borderColor: 'transparent',
-  borderRadius: 12,
-  boxShadow: 'none',
-};
+/** Keeps ChatInput's raised card (elevated background, border, soft shadow) from the chat page. */
+const inputShell = { borderRadius: 12 };
 
 export function Composer({
   activity,
@@ -121,7 +117,7 @@ export function Composer({
   const [error, setError] = useState('');
   const requests = useSingleton(createChannelSendRequest);
   const attachments = useAttachments();
-  const { allowed, reason } = usePermission('create_content');
+  const { allowed } = usePermission('create_content');
   const enableUpload = useServerConfigStore((s) => featureFlagsSelectors(s).enableKnowledgeBase);
   const canUpload = allowed && enableUpload;
   const upload = (files: File[]) => {
@@ -135,6 +131,26 @@ export function Composer({
   // Mentioning yourself notifies nobody and picks no reply.
   const mentionable = members.filter((member) => !isCurrentUserMember(member, userId));
   const invites = useMentionInvites(channel, members);
+  const canMention = mentionable.length > 0 || invites.enabled;
+  /** Types an @ at the caret and opens the same mention picker as typing it. */
+  const startMention = () => {
+    const lexical = editor.getLexicalEditor();
+    lexical?.focus(
+      () =>
+        lexical.update(() => {
+          // The picker ignores programmatic text until a keystroke re-arms it; doing both in
+          // one update keeps the intermediate state from closing it again.
+          lexical.dispatchCommand(
+            KEY_DOWN_COMMAND,
+            new KeyboardEvent('keydown', { key: 'Process' }),
+          );
+          if ($insertChannelMentionBoundary(new KeyboardEvent('keydown', { key: '@' }))) return;
+          const selection = $getSelection();
+          if ($isRangeSelection(selection)) selection.insertText('@');
+        }),
+      { defaultSelection: 'rootEnd' },
+    );
+  };
   const send = async () => {
     const value = String(editor.getDocument('markdown') || '').trim();
     const fileIds = attachments.readyFileIds();
@@ -262,21 +278,15 @@ export function Composer({
           }
         >
           <div {...stylex.props(styles.composerRow)}>
-            {enableUpload && (
-              <Upload
-                multiple
-                disabled={busy || !canUpload}
-                onFiles={(files) => void upload(files)}
-              >
-                <ActionIcon
-                  aria-label={t('attachments.upload')}
-                  disabled={busy || !canUpload}
-                  icon={CirclePlus}
-                  size={{ blockSize: 28, size: 20 }}
-                  title={reason || t('attachments.upload')}
-                />
-              </Upload>
-            )}
+            <ComposerActions
+              disabled={busy}
+              upload={
+                enableUpload
+                  ? { blocked: !allowed, onFiles: (files) => void upload(files) }
+                  : undefined
+              }
+              onMention={canMention ? startMention : undefined}
+            />
             <div {...stylex.props(styles.composerEditor)}>
               <Editor
                 autoFocus

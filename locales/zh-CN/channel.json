@@ -31,6 +31,8 @@
   "chooseDirectory": "选择工作目录",
   "closeThread": "关闭线程",
   "composer": "发消息到 #{{name}}",
+  "composer.actions": "更多操作",
+  "composer.mention": "提及成员或 Agent",
   "conversationEmpty": "开始一起讨论吧",
   "copyId": "复制 ID",
   "copyIdSuccess": "已复制频道 ID",

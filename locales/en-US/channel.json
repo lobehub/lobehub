@@ -31,6 +31,8 @@
   "chooseDirectory": "Choose directory",
   "closeThread": "Close thread",
   "composer": "Message #{{name}}",
+  "composer.actions": "More actions",
+  "composer.mention": "Mention someone",
   "conversationEmpty": "Start the conversation",
   "copyId": "Copy ID",
   "copyIdSuccess": "Channel ID copied",
