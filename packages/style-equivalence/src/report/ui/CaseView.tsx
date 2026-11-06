@@ -1,38 +1,14 @@
-import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
-import * as stylex from '@stylexjs/stylex';
+import { Button, Flexbox } from '@lobehub/ui';
+import { ArrowLeft, ArrowRight } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { type CaseReview, fetchCaseReview, type ReviewState, type RunPayload } from '../api';
-import { CATEGORY_LABELS } from '../labels';
 import { hrefOf } from '../route';
 import { CaseDebug } from './CaseDebug';
-import { CATEGORY_TONES, Chip, type ChipTone } from './Chip';
-import { ReviewEvidence } from './ReviewItemView';
-
-const styles = stylex.create({
-  back: { color: cssVar.colorTextSecondary, fontSize: 12.5 },
-  file: { color: cssVar.colorTextTertiary, fontFamily: cssVar.fontFamilyCode, fontSize: 12 },
-  head: {
-    alignItems: 'center',
-    columnGap: 10,
-    display: 'flex',
-    flexWrap: 'wrap',
-    marginBlockEnd: 16,
-    marginBlockStart: 8,
-    rowGap: 6,
-  },
-  link: { fontSize: 13, marginInlineStart: 'auto' },
-  muted: { color: cssVar.colorTextSecondary, fontSize: 13 },
-  rework: {
-    color: cssVar.colorTextSecondary,
-    fontSize: 14,
-    lineHeight: 1.6,
-    marginBlockEnd: 16,
-    maxWidth: 760,
-  },
-  section: { maxWidth: 1400 },
-  title: { fontSize: 20, fontWeight: 600, marginBlock: 0 },
-});
+import { Chip, type ChipTone } from './Chip';
+import { InlineState } from './PageState';
+import { ReviewEvidence } from './ReviewEvidence';
+import { ItemHeader, ReworkNote } from './ReviewItemView';
 
 const STATES: Record<ReviewState, { label: string; tone: ChipTone }> = {
   'changed': { label: '改过了，待重看', tone: 'warn' },
@@ -65,35 +41,43 @@ export const CaseView = ({ caseKey, payload }: { caseKey: string; payload: RunPa
   const file = review?.item.file ?? caseKey.slice(0, caseKey.indexOf('|'));
   const state = review && stateChip(review);
   return (
-    <section {...stylex.props(styles.section)}>
-      <a href={hrefOf({ file, kind: 'file' })} {...stylex.props(styles.back)}>
-        ← {file}
-      </a>
-      {loaded?.error && <div {...stylex.props(styles.muted)}>读取用例失败：{loaded.error}</div>}
-      {!loaded && <div {...stylex.props(styles.muted)}>正在读取用例…</div>}
-      {review && state && (
-        <>
-          <div {...stylex.props(styles.head)}>
-            <h1 {...stylex.props(styles.title)}>{review.item.title}</h1>
-            <Chip tone={CATEGORY_TONES[review.item.category] ?? 'plain'}>
-              {CATEGORY_LABELS[review.item.category] ?? review.item.category}
-            </Chip>
-            {review.item.component && <Chip tone="info">{review.item.component}</Chip>}
-            <Chip tone={state.tone}>{state.label}</Chip>
-            <span {...stylex.props(styles.file)}>{review.item.file}</span>
-            {review.queued && (
-              <a href={hrefOf({ key: caseKey, kind: 'review' })} {...stylex.props(styles.link)}>
-                在审阅里打开 →
-              </a>
-            )}
-          </div>
-          {review.item.rework && (
-            <p {...stylex.props(styles.rework)}>打回原因：{review.item.rework.note}</p>
-          )}
-          <ReviewEvidence conditions={review.conditions} item={review.item} notes="written" />
-        </>
+    <Flexbox gap={24} style={{ maxWidth: 1440 }}>
+      <Flexbox gap={12}>
+        <Flexbox horizontal>
+          <Button href={hrefOf({ file, kind: 'file' })} icon={ArrowLeft} size="small" type="text">
+            {file}
+          </Button>
+        </Flexbox>
+        {!review && (
+          <InlineState
+            error={loaded?.error && `读取用例失败：${loaded.error}`}
+            loading="正在读取用例…"
+          />
+        )}
+        {review && state && (
+          <ItemHeader
+            extra={<Chip tone={state.tone}>{state.label}</Chip>}
+            item={review.item}
+            action={
+              review.queued && (
+                <Button
+                  href={hrefOf({ key: caseKey, kind: 'review' })}
+                  icon={ArrowRight}
+                  iconPosition="end"
+                  size="small"
+                >
+                  在复查里打开
+                </Button>
+              )
+            }
+          />
+        )}
+        {review?.item.rework && <ReworkNote note={review.item.rework.note} />}
+      </Flexbox>
+      {review && (
+        <ReviewEvidence conditions={review.conditions} item={review.item} notes="written" />
       )}
       <CaseDebug caseKey={caseKey} payload={payload} />
-    </section>
+    </Flexbox>
   );
 };

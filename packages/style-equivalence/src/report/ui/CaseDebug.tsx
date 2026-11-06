@@ -1,4 +1,4 @@
-import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import { Accordion, Text } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { useEffect, useState } from 'react';
 
@@ -8,23 +8,15 @@ import { declaredProperties } from '../declared';
 import { flagLabel } from '../labels';
 import { EvidenceChain } from './EvidenceChain';
 import { LiveCompare } from './LiveCompare';
+import { InlineState } from './PageState';
 
 const styles = stylex.create({
   body: {
     columnGap: 24,
     display: 'grid',
     gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',
-    marginBlockStart: 16,
+    paddingBlockStart: 8,
   },
-  details: {
-    borderBlockStartColor: cssVar.colorBorderSecondary,
-    borderBlockStartStyle: 'solid',
-    borderBlockStartWidth: 1,
-    marginBlockStart: 40,
-    paddingBlockStart: 16,
-  },
-  muted: { color: cssVar.colorTextSecondary, fontSize: 13 },
-  summary: { color: cssVar.colorTextSecondary, cursor: 'pointer', fontSize: 13, fontWeight: 600 },
 });
 
 const DebugBody = ({ caseKey, payload }: { caseKey: string; payload: RunPayload }) => {
@@ -40,8 +32,8 @@ const DebugBody = ({ caseKey, payload }: { caseKey: string; payload: RunPayload 
   }, [caseKey]);
   const detail = loaded?.key === caseKey ? loaded.detail : undefined;
   const error = loaded?.key === caseKey ? loaded.error : undefined;
-  if (error) return <div {...stylex.props(styles.muted)}>读取用例失败：{error}</div>;
-  if (!detail) return <div {...stylex.props(styles.muted)}>正在读取用例…</div>;
+  if (!detail)
+    return <InlineState error={error && `读取用例失败：${error}`} loading="正在读取用例…" />;
   const columns = conditionColumns(payload.run.conditions ?? []);
   const record = detail.case;
   const category = record?.category ?? detail.item?.category ?? 'unpaired';
@@ -62,25 +54,25 @@ const DebugBody = ({ caseKey, payload }: { caseKey: string; payload: RunPayload 
           head={payload.run.head}
         />
       ) : (
-        <div {...stylex.props(styles.muted)}>
+        <Text type="secondary">
           {category === 'unpaired'
             ? '这个元素两侧配不上，没有可以对照的渲染。'
             : `这个文件有合成环境比较不了的样式用法：${(detail.item?.flags ?? []).map(flagLabel).join('、')}。`}
-        </div>
+        </Text>
       )}
     </div>
   );
 };
 
-export const CaseDebug = ({ caseKey, payload }: { caseKey: string; payload: RunPayload }) => {
-  const [open, setOpen] = useState(false);
-  return (
-    <details
-      {...stylex.props(styles.details)}
-      onToggle={(event) => setOpen(event.currentTarget.open)}
-    >
-      <summary {...stylex.props(styles.summary)}>调试信息</summary>
-      {open && <DebugBody caseKey={caseKey} payload={payload} />}
-    </details>
-  );
-};
+export const CaseDebug = ({ caseKey, payload }: { caseKey: string; payload: RunPayload }) => (
+  <Accordion
+    variant="outlined"
+    items={[
+      {
+        children: <DebugBody caseKey={caseKey} payload={payload} />,
+        key: 'debug',
+        title: '调试信息',
+      },
+    ]}
+  />
+);

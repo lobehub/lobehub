@@ -1,4 +1,5 @@
 import { conditionColumns } from './data';
+import { stateLabel, THEME_LABELS } from './labels';
 
 export const OPEN_STATES = new Set(['changed', 'todo']);
 
@@ -150,3 +151,38 @@ export const shotNotes = (
 
 export const hasScreenshots = (item: { category: string; key: string }) =>
   item.category !== 'blocking' && !item.key.endsWith('|file');
+
+export const groupDifferences = <T extends { label: string; summary: string[] }>(entries: T[]) => {
+  const groups = new Map<string, { entries: T[]; key: string; label: string; summary: string[] }>();
+  for (const entry of entries) {
+    const key = `${entry.label}\n${entry.summary.join('；')}`;
+    const group = groups.get(key);
+    if (group) group.entries.push(entry);
+    else groups.set(key, { entries: [entry], key, label: entry.label, summary: entry.summary });
+  }
+  return [...groups.values()];
+};
+
+const themeName = (theme: string) => THEME_LABELS[theme] ?? theme;
+
+export const conditionName = (label: string) => {
+  const [column] = conditionColumns([label]);
+  return `${themeName(column.theme)} ${column.width} ${stateLabel(column.state, column.variant)}`;
+};
+
+export const describeConditions = (labels: string[]) => {
+  const columns = conditionColumns(labels);
+  return [...new Set(columns.map((column) => column.theme))].map((theme) => {
+    const own = columns.filter((column) => column.theme === theme);
+    const byStates = new Map<string, number[]>();
+    for (const width of new Set(own.map((column) => column.width))) {
+      const states = own
+        .filter((column) => column.width === width)
+        .map((column) => stateLabel(column.state, column.variant))
+        .join('、');
+      byStates.set(states, [...(byStates.get(states) ?? []), width]);
+    }
+    const parts = [...byStates].map(([states, widths]) => `${widths.join('、')}（${states}）`);
+    return `${themeName(theme)} · ${parts.join('；')}`;
+  });
+};
