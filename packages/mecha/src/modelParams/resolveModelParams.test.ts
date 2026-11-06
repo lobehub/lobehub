@@ -117,6 +117,27 @@ describe('resolveModelParams', () => {
       expect(facts.modelReasoningEffort?.levels).toEqual(['low', 'medium', 'high']);
     });
 
+    it('keeps an effort-only custom model row from inheriting the canonical card extend params', async () => {
+      const facts = await resolveModelParams(
+        request({ model: 'glm-5', provider: 'my-custom' }),
+        providers({
+          getUserModelRow: async () => ({
+            reasoningEffort: { levels: ['low', 'medium', 'high'] },
+          }),
+          listModelCards: () => [
+            {
+              abilities: {},
+              extendParams: ['enableReasoning', 'reasoningBudgetToken32k'],
+              id: 'glm-5',
+              providerId: 'qwen',
+            },
+          ],
+        }),
+      );
+      expect(facts.modelExtendParams).toBeUndefined();
+      expect(facts.modelReasoningEffort?.levels).toEqual(['low', 'medium', 'high']);
+    });
+
     it('applies the effective config to the payload params', async () => {
       const facts = await resolveModelParams(
         request(),

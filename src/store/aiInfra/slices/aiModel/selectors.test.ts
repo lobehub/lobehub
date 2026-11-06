@@ -287,6 +287,33 @@ describe('aiModelSelectors', () => {
     ): AIProviderStoreState => ({ ...mockState, builtinAiModelList, enabledAiModels });
 
     it('takes an undeclared default from the same model under another provider', () => {
+      const state = effortState(
+        [
+          {
+            id: 'gpt-x',
+            providerId: 'aihubmix',
+            settings: { reasoningEffort: { levels: ['low', 'medium', 'high'] } },
+            type: 'chat',
+          },
+        ] as AIProviderStoreState['enabledAiModels'],
+        [
+          {
+            id: 'gpt-x',
+            providerId: 'openai',
+            settings: { reasoningEffort: { default: 'high', levels: ['low', 'medium', 'high'] } },
+            type: 'chat',
+          },
+        ] as AIProviderStoreState['builtinAiModelList'],
+      );
+
+      expect(aiModelSelectors.modelReasoningEffortSettings('gpt-x', 'aihubmix')(state)).toEqual({
+        default: 'high',
+        levels: ['low', 'medium', 'high'],
+      });
+    });
+
+    // The server reads only bundled cards and the current provider's row.
+    it('ignores a default the user set on the same model under another provider', () => {
       const state = effortState([
         {
           id: 'gpt-x',
@@ -296,14 +323,14 @@ describe('aiModelSelectors', () => {
         },
         {
           id: 'gpt-x',
-          providerId: 'openai',
+          providerId: 'custom',
           settings: { reasoningEffort: { default: 'high', levels: ['low', 'medium', 'high'] } },
           type: 'chat',
         },
       ] as AIProviderStoreState['enabledAiModels']);
 
       expect(aiModelSelectors.modelReasoningEffortSettings('gpt-x', 'aihubmix')(state)).toEqual({
-        default: 'high',
+        default: 'medium',
         levels: ['low', 'medium', 'high'],
       });
     });

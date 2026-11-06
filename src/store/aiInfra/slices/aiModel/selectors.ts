@@ -128,8 +128,8 @@ const modelExtendParams = (id: string, provider: string) => (s: AIProviderStoreS
  * The model's reasoning effort control: the selectable levels and the level it
  * runs at when the user picked none. Resolved in the same order as the runtime
  * (`resolveModelExtendParamList`): the enabled row (user settings merged over
- * the card), then the same model under other providers, so the shown level is
- * the sent level.
+ * the card), then the same model's bundled cards under other providers, so the
+ * shown level is the sent level.
  */
 const modelReasoningEffortSettings =
   (id: string, provider: string) => (s: AIProviderStoreState) => {
@@ -137,7 +137,9 @@ const modelReasoningEffortSettings =
     const ownCard = s.builtinAiModelList.find(
       (item) => item.id === id && item.providerId === provider,
     );
-    const sameModel = [...(s.enabledAiModels ?? []), ...s.builtinAiModelList].filter(
+    // Only bundled cards: the server resolves from them and the current provider's row alone, so
+    // another provider's user-edited default would show a level the server never sends.
+    const sameModel = s.builtinAiModelList.filter(
       (item) => item.id === id && item.providerId !== provider,
     );
 
