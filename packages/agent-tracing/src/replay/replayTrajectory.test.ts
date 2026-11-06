@@ -78,25 +78,22 @@ const stubModel = (completions: Array<{ content?: string; toolCalls?: StubToolCa
   vi.stubGlobal('fetch', async (_url: string, init: { body: string }) => {
     sent.push(JSON.parse(init.body));
     const next = completions[Math.min(call++, completions.length - 1)];
-    return {
-      json: async () => ({
-        choices: [
-          {
-            message: {
-              content: next.content ?? '',
-              tool_calls: next.toolCalls?.map((toolCall, index) => {
-                const shaped = typeof toolCall === 'string' ? { name: toolCall } : toolCall;
-                return {
-                  function: { arguments: shaped.arguments ?? '{}', name: shaped.name },
-                  id: `orig_${index}`,
-                };
-              }),
-            },
+    return Response.json({
+      choices: [
+        {
+          message: {
+            content: next.content ?? '',
+            tool_calls: next.toolCalls?.map((toolCall, index) => {
+              const shaped = typeof toolCall === 'string' ? { name: toolCall } : toolCall;
+              return {
+                function: { arguments: shaped.arguments ?? '{}', name: shaped.name },
+                id: `orig_${index}`,
+              };
+            }),
           },
-        ],
-      }),
-      ok: true,
-    };
+        },
+      ],
+    });
   });
 
   return sent;
@@ -159,10 +156,7 @@ describe('replayTrajectory', () => {
     vi.stubGlobal('fetch', async () => {
       // Only the first node fails; the second must still be replayed.
       if (call++ === 0) return { ok: false, status: 500, text: async () => 'boom' };
-      return {
-        json: async () => ({ choices: [{ message: { content: '42' } }] }),
-        ok: true,
-      };
+      return Response.json({ choices: [{ message: { content: '42' } }] });
     });
 
     const result = await replayTrajectory({
@@ -202,10 +196,7 @@ describe('replayTrajectory', () => {
       // The first node resolves last.
       const index = call++;
       await new Promise((resolve) => setTimeout(resolve, index === 0 ? 20 : 0));
-      return {
-        json: async () => ({ choices: [{ message: { content: `answer ${index}` } }] }),
-        ok: true,
-      };
+      return Response.json({ choices: [{ message: { content: `answer ${index}` } }] });
     });
 
     const result = await replayTrajectory({
