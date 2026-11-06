@@ -117,6 +117,16 @@ describe('mergeUnresolvedProjectGroups', () => {
   });
 });
 
+describe('the "Unavailable project" column', () => {
+  it('offers no create entry, since a new task could not land there', () => {
+    const [column] = buildKanbanColumns([group('project:gone', 'gone', ['t1'])], 'project');
+
+    expect(column.key).toBe('project:unavailable');
+    expect(getKanbanColumnCreateDefaults('project', column)).toBeUndefined();
+    expect(getTaskGroupCreateDefaults(column.groupMeta)).toBeUndefined();
+  });
+});
+
 describe('dropping and creating in a project column', () => {
   const columns = () =>
     buildKanbanColumns(

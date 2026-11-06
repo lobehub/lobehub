@@ -271,8 +271,10 @@ export const getTaskGroupCreateDefaults = (
     case 'priority': {
       return { priority: groupMeta.priority ?? 0 };
     }
-    // A new task starts without a project, so "No project" pins nothing.
+    // A new task starts without a project, so "No project" pins nothing, and
+    // "Unavailable project" has no entry: nobody can file a task under it.
     case 'project': {
+      if (groupMeta.projectUnavailable) return undefined;
       return groupMeta.projectId ? { projectId: groupMeta.projectId } : {};
     }
     // The unassigned group has no entry: the modal cannot pin "no agent".
