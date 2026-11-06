@@ -532,6 +532,58 @@ describe('AiModelAction', () => {
       );
     });
 
+    it('disables enabled JZSTOKEN remote models omitted by the fetched catalog and keeps custom rows', async () => {
+      const mockRemoteModels = [
+        { displayName: 'JZS Max 3.0', enabled: true, id: 'jzs-max-3.0', type: 'chat' },
+        { displayName: 'Still Available', enabled: true, id: 'still-in-catalog', type: 'chat' },
+      ];
+
+      act(() => {
+        useStore.setState({
+          activeAiProvider: 'jzstoken',
+          aiModelListMap: {
+            jzstoken: [
+              { enabled: true, id: 'jzs-max-3.0', source: 'builtin', type: 'chat' },
+              { enabled: true, id: 'gpt-5.6-terra', source: 'remote', type: 'chat' },
+              { enabled: true, id: 'fetched-only', source: 'remote', type: 'chat' },
+              { enabled: false, id: 'fetched-disabled', source: 'remote', type: 'chat' },
+              { enabled: true, id: 'still-in-catalog', source: 'remote', type: 'chat' },
+              { enabled: true, id: 'my-custom', source: 'custom', type: 'chat' },
+            ] as AiProviderModelListItem[],
+          },
+        });
+      });
+
+      const { result } = renderHook(() => useStore());
+      vi.spyOn(aiModelService, 'batchUpdateAiModels').mockResolvedValue(undefined as any);
+      const batchToggleSpy = vi
+        .spyOn(aiModelService, 'batchToggleAiModels')
+        .mockResolvedValue(undefined);
+      vi.spyOn(result.current, 'refreshAiModelList').mockResolvedValue(undefined);
+
+      vi.resetModules();
+      vi.doMock('@/services/models', () => ({
+        modelsService: {
+          getModels: vi.fn().mockResolvedValue(mockRemoteModels),
+        },
+      }));
+
+      await act(async () => {
+        await result.current.fetchRemoteModelList('jzstoken');
+      });
+
+      await waitFor(() => {
+        expect(batchToggleSpy).toHaveBeenCalled();
+      });
+
+      expect(batchToggleSpy).toHaveBeenCalledTimes(1);
+      expect(batchToggleSpy).toHaveBeenCalledWith(
+        'jzstoken',
+        ['gpt-5.6-terra', 'fetched-only'],
+        false,
+      );
+    });
+
     it('does not disable models missing from a non-JZSTOKEN catalog', async () => {
       const mockRemoteModels = [{ enabled: true, id: 'remote-1', type: 'chat' }];
 
@@ -541,6 +593,8 @@ describe('AiModelAction', () => {
             'test-provider': [
               { enabled: true, id: 'remote-1', type: 'chat' },
               { enabled: true, id: 'gpt-5.6-terra', type: 'chat' },
+              { enabled: true, id: 'old-remote', source: 'remote', type: 'chat' },
+              { enabled: true, id: 'my-custom', source: 'custom', type: 'chat' },
             ] as AiProviderModelListItem[],
           },
         });
