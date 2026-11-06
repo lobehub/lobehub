@@ -246,9 +246,9 @@ export class MCPService {
       async (client) => {
         const result = await client.readResource(uri);
         // A view's _meta.ui may be declared once, on its resources/list entry
-        if (!lacksUiResourceMeta(result)) return result;
+        if (!lacksUiResourceMeta(result, true)) return result;
 
-        return withListingUiMeta(result, uri, await client.listResources());
+        return withListingUiMeta(result, uri, await client.listResources(), true);
       },
       { mcpApps: true },
     );
@@ -481,12 +481,12 @@ export class MCPService {
     }
 
     const rawTools = await this.listRawTools(mcpParams, { mcpApps });
-    const tools = this.transformMCPToolToLobeAPI(rawTools);
+    const tools = this.transformMCPToolToLobeAPI(rawTools, mcpApps);
 
     return {
       api: tools,
       identifier,
-      ...this.toMcpAppsManifestFields(rawTools),
+      ...this.toMcpAppsManifestFields(rawTools, mcpApps),
       // @ts-ignore
       mcpParams,
       meta: {
@@ -520,7 +520,7 @@ export class MCPService {
     const manifest = await client.listManifests();
 
     const identifier = params.name;
-    const api = manifest.tools ? this.transformMCPToolToLobeAPI(manifest.tools) : [];
+    const api = manifest.tools ? this.transformMCPToolToLobeAPI(manifest.tools, mcpApps) : [];
 
     return {
       api,
@@ -532,7 +532,7 @@ export class MCPService {
         title: metadata?.name || identifier,
       },
       ...manifest,
-      ...this.toMcpAppsManifestFields(manifest.tools ?? []),
+      ...this.toMcpAppsManifestFields(manifest.tools ?? [], mcpApps),
       // @ts-ignore
       mcpParams,
       // TODO: temporary
@@ -608,8 +608,8 @@ export class MCPService {
    * leaves out "model" exist only for their view, which calls them through the
    * MCP session, so they never enter the manifest.
    */
-  private transformMCPToolToLobeAPI = (data: McpTool[]) =>
-    this.toLobeApi(data.filter(isToolVisibleToModel));
+  private transformMCPToolToLobeAPI = (data: McpTool[], enabled = false) =>
+    this.toLobeApi(data.filter((tool) => isToolVisibleToModel(tool, enabled)));
 
   /**
    * MCP Apps: what a plugin's views may call beyond its model-facing `api`,
@@ -618,8 +618,9 @@ export class MCPService {
    */
   private toMcpAppsManifestFields = (
     data: McpTool[],
+    enabled = false,
   ): Pick<ToolManifest, 'mcpAppOnlyApi' | 'mcpModelOnlyTools'> => {
-    const { appOnlyTools, modelOnlyToolNames } = partitionMcpToolsForViews(data);
+    const { appOnlyTools, modelOnlyToolNames } = partitionMcpToolsForViews(data, enabled);
 
     return {
       ...(appOnlyTools.length > 0 && { mcpAppOnlyApi: this.toLobeApi(appOnlyTools) }),

@@ -185,6 +185,7 @@ export class MCPClient {
   private params: MCPClientParams;
   /** tool name → `ui://` resource URI, filled from the last successful `listTools` */
   private uiResourceUris?: Map<string, string>;
+  private readonly mcpApps: boolean;
   /**
    * The tools a view may call (`_meta.ui.visibility` with "app", or unset), from
    * the same listing. An allow-list: a name the listing didn't name is refused.
@@ -196,6 +197,7 @@ export class MCPClient {
   private uiResourceListFailedAt?: number;
 
   constructor(params: MCPClientParams, { mcpApps = false }: MCPClientOptions = {}) {
+    this.mcpApps = mcpApps;
     this.params = params;
     this.mcp = new Client(
       { name: 'lobehub-mcp-client', version: '1.0.0' },
@@ -403,16 +405,18 @@ export class MCPClient {
       const { tools } = await this.mcp.listTools();
       this.uiResourceUris = new Map(
         tools.flatMap((tool) => {
-          const uri = getToolUiResourceUri(tool);
+          const uri = getToolUiResourceUri(tool, this.mcpApps);
           return uri ? [[tool.name, uri] as const] : [];
         }),
       );
       this.appVisibleTools = new Set(
-        tools.filter((tool) => isToolVisibleToApp(tool)).map((tool) => tool.name),
+        tools.filter((tool) => isToolVisibleToApp(tool, this.mcpApps)).map((tool) => tool.name),
       );
       this.modelHiddenTools = new Set(
         tools
-          .filter((tool) => !isMcpToolVisibleTo(getMcpToolVisibility(tool._meta), 'model'))
+          .filter(
+            (tool) => !isMcpToolVisibleTo(getMcpToolVisibility(tool._meta, this.mcpApps), 'model'),
+          )
           .map((tool) => tool.name),
       );
       log('Listed %d MCP tool(s)', tools.length);
