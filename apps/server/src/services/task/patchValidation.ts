@@ -121,17 +121,7 @@ async function assertProjectMoveKeepsLinks(
     });
   }
 
-  const [dependencies, dependents] = await Promise.all([
-    model.getDependencies(task.id),
-    model.getDependents(task.id),
-  ]);
-  const linkedIds = [
-    ...dependencies.map(({ dependsOnId }) => dependsOnId),
-    ...dependents.map(({ taskId }) => taskId),
-  ];
-  if (linkedIds.length === 0) return;
-  const linked = await model.findByIds(linkedIds);
-  if (linked.some((other) => other.projectId !== projectId)) {
+  if (await model.hasDependencyOutsideProject(task.id, projectId)) {
     throw new TRPCError({
       code: 'BAD_REQUEST',
       message: 'Task dependencies cannot cross project boundaries. Remove them first',

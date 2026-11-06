@@ -206,6 +206,33 @@ describe('task.update projectId', () => {
         });
       }
     });
+
+    it('counts a dependency on a private task the mover cannot see', async () => {
+      const owner = new TaskModel(testDB, userId, WORKSPACE);
+      const { data: shared } = await caller.create({
+        instruction: 'Shared',
+        projectId: projectA,
+        visibility: 'public',
+      });
+      const hidden = await owner.create({
+        instruction: 'Hidden',
+        projectId: projectA,
+        visibility: 'private',
+      });
+      await owner.addDependency(shared.id, hidden.id);
+
+      const memberCaller = taskRouter.createCaller({
+        ...createTestContext(memberId),
+        workspaceId: WORKSPACE,
+      });
+      await expect(
+        memberCaller.update({ id: shared.id, projectId: projectB }),
+      ).rejects.toMatchObject({
+        code: 'BAD_REQUEST',
+        message: expect.stringContaining('dependencies cannot cross'),
+      });
+      expect((await owner.findById(shared.id))?.projectId).toBe(projectA);
+    });
   });
 
   it('reports the project in list, group list and detail reads', async () => {
