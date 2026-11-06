@@ -8,7 +8,7 @@ import {
   ReactMentionPlugin,
 } from '@lobehub/editor';
 import { ChatInput, Editor, SendButton, useEditor } from '@lobehub/editor/react';
-import { ActionIcon, cssVar, Flexbox, Text, Upload } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Text, Upload } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { $getSelection, $isRangeSelection } from 'lexical';
 import { CirclePlus, Reply, X } from 'lucide-react';
@@ -75,13 +75,8 @@ type ComposerDelivery =
 
 const plugins = [ReactCodePlugin, ReactListPlugin, ReactLinkHighlightPlugin, ReactMentionPlugin];
 
-/** A flat filled bar, like an IM message box, instead of the chat page's raised card. */
-const inputShell = {
-  backgroundColor: cssVar.colorFillTertiary,
-  borderColor: 'transparent',
-  borderRadius: 12,
-  boxShadow: 'none',
-};
+/** Keeps ChatInput's raised card (elevated background, border, soft shadow) from the chat page. */
+const inputShell = { borderRadius: 12 };
 
 export function Composer({
   activity,
