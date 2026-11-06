@@ -47,6 +47,7 @@
   "deleteThreadSuccess": "Thread moved to trash",
   "deletedMember": "Former member",
   "deviceRequired": "Choose an online device and a working directory for each coding Agent.",
+  "directComposer": "Message {{name}}",
   "directoryRequired": "Choose a working directory for each device.",
   "environment.agentUnavailable": "This Agent is no longer available. Remove it and choose another.",
   "environment.checkingDevice": "Checking status",

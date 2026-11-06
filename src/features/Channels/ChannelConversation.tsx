@@ -109,11 +109,13 @@ const Timeline = ({
     if (!sending.current) reply.select(message);
   };
   const channelArchived = detail?.channel.status === 'archived';
-  // Join lines belong to the main conversation; a thread starts from its root message.
+  const direct = !!detail?.channel.agentId;
+  // Join lines belong to the main conversation; a thread starts from its root message. A direct
+  // conversation reads like a chat with its Agent, so it has no "invited" lines at all.
   const timeline = detail
     ? channelTimeline(
         detail.messages,
-        threadId ? [] : channelJoinEvents(detail.members),
+        threadId || direct ? [] : channelJoinEvents(detail.members),
         !detail.hasMore && before === undefined,
       )
     : [];
@@ -187,10 +189,11 @@ const Timeline = ({
                     }
                   />
                 )}
+                {/* A new direct conversation starts blank, like an IM chat. */}
                 {!timeline.length &&
                   (threadId ? (
                     <p {...stylex.props(styles.muted)}>{t('threadEmpty')}</p>
-                  ) : (
+                  ) : direct ? null : (
                     <Empty icon={MessageSquare} title={t('conversationEmpty')} />
                   ))}
                 {presentChannelTimeline(timeline).map(({ item, date, startsDay, continuation }) => (
@@ -239,7 +242,9 @@ const Timeline = ({
                 replyTarget={reply.target}
                 threadId={threadId}
                 placeholder={
-                  threadId ? t('threadComposer') : t('composer', { name: detail.channel.title })
+                  threadId
+                    ? t('threadComposer')
+                    : t(direct ? 'directComposer' : 'composer', { name: detail.channel.title })
                 }
                 onCancelReply={() => reply.clear()}
                 onSend={async (content, mentions, requestKey, fileIds, replyToId) => {

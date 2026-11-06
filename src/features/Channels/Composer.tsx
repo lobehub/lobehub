@@ -8,10 +8,10 @@ import {
   ReactMentionPlugin,
 } from '@lobehub/editor';
 import { ChatInput, Editor, SendButton, useEditor } from '@lobehub/editor/react';
-import { ActionIcon, Flexbox, Text, Upload } from '@lobehub/ui';
+import { ActionIcon, cssVar, Flexbox, Text, Upload } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { $getSelection, $isRangeSelection } from 'lexical';
-import { Paperclip, Reply, X } from 'lucide-react';
+import { CirclePlus, Reply, X } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -47,6 +47,14 @@ import { useMentionInvites } from './useMentionInvites';
 import type { ChannelReplyTarget } from './useReplyTarget';
 
 const plugins = [ReactCodePlugin, ReactListPlugin, ReactLinkHighlightPlugin, ReactMentionPlugin];
+
+/** A flat filled bar, like an IM message box, instead of the chat page's raised card. */
+const inputShell = {
+  backgroundColor: cssVar.colorFillTertiary,
+  borderColor: 'transparent',
+  borderRadius: 12,
+  boxShadow: 'none',
+};
 
 export function Composer({
   activity,
@@ -176,6 +184,7 @@ export function Composer({
           maxHeight={480}
           minHeight={0}
           resize={false}
+          style={inputShell}
           styles={{ body: { overflow: 'visible', padding: 0 } }}
           header={
             replyTarget || preview ? (
@@ -223,8 +232,8 @@ export function Composer({
                 <ActionIcon
                   aria-label={t('attachments.upload')}
                   disabled={busy || !canUpload}
-                  icon={Paperclip}
-                  size={{ blockSize: 28, size: 16 }}
+                  icon={CirclePlus}
+                  size={{ blockSize: 28, size: 20 }}
                   title={reason || t('attachments.upload')}
                 />
               </Upload>
@@ -321,15 +330,17 @@ export function Composer({
               />
             </div>
             {/* Replies run asynchronously, so Send never turns into Stop; each reply stops from the activity line. */}
-            {/* An empty composer keeps Send as a quiet icon, like an IM; it fills once there is a draft. */}
-            <SendButton
-              aria-label={t('send')}
-              disabled={busy || !hasDraft || attachments.blocked}
-              loading={busy}
-              size={28}
-              type={hasDraft ? 'primary' : 'text'}
-              onSend={() => void send()}
-            />
+            {/* Enter sends; like an IM, the button only appears once there is something to send. */}
+            {(hasDraft || busy) && (
+              <SendButton
+                aria-label={t('send')}
+                disabled={busy || attachments.blocked}
+                loading={busy}
+                size={28}
+                type="primary"
+                onSend={() => void send()}
+              />
+            )}
           </div>
         </ChatInput>
         {(error || invites.error) && (
