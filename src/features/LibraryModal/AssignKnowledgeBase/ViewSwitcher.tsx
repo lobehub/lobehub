@@ -1,4 +1,5 @@
-import { ActionIcon, createStaticStyles, Flexbox } from '@lobehub/ui';
+import { ActionIcon, Flexbox } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { Grid3x3Icon, ListIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -10,17 +11,13 @@ interface ViewSwitcherProps {
   view: ViewMode;
 }
 
-const styles = createStaticStyles(({ css }) => ({
-  container: css`
-    gap: 4px;
-  `,
-}));
+const styles = stylex.create({ container: { gap: '4px' } });
 
 const ViewSwitcher = memo<ViewSwitcherProps>(({ onViewChange, view }) => {
   const { t } = useTranslation('components');
 
   return (
-    <Flexbox horizontal className={styles.container}>
+    <Flexbox horizontal className={stylex.props(styles.container).className}>
       <ActionIcon
         active={view === 'list'}
         icon={ListIcon}

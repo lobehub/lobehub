@@ -1,6 +1,7 @@
 import type { IAsyncTaskError } from '@lobechat/types';
 import type { ItemType } from '@lobehub/ui';
 import { Button, Flexbox, stopPropagation } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { isNull } from 'es-toolkit/compat';
 import { FileBoxIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -94,7 +95,7 @@ const FileListItemActions = ({
           canEditResources &&
           isSupportedForChunking && (
             <div
-              className={isCreatingFileParseTask ? undefined : styles.hover}
+              className={stylex.props(!isCreatingFileParseTask && styles.hover).className}
               title={t('FileManager.actions.chunkingTooltip')}
             >
               <Button

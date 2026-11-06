@@ -1,9 +1,9 @@
-import { createStaticStyles } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 
-export const styles = createStaticStyles(({ css }) => ({
+export const styles = stylex.create({
   // Search bar container
-  searchBarContainer: css`
-    padding-block: 8px;
-    padding-inline: 16px;
-  `,
-}));
+  searchBarContainer: {
+    paddingBlock: '8px',
+    paddingInline: '16px',
+  },
+});

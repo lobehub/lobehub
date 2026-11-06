@@ -1,4 +1,6 @@
-import { ActionIcon, createStaticStyles, Flexbox } from '@lobehub/ui';
+import { ActionIcon, Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
 import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -8,14 +10,14 @@ import RailCard from '@/features/Home/components/RailCard';
 
 import InboxBriefCard from './InboxBriefCard';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  pager: css`
-    padding-inline: 2px;
-    font-size: 12px;
-    font-variant-numeric: tabular-nums;
-    color: ${cssVar.colorTextTertiary};
-  `,
-}));
+const styles = stylex.create({
+  pager: {
+    paddingInline: '2px',
+    fontSize: '12px',
+    fontVariantNumeric: 'tabular-nums',
+    color: cssVar.colorTextTertiary,
+  },
+});
 
 /**
  * In the rail the actionable briefs are stacked, not listed: one at a time with
@@ -46,7 +48,7 @@ const NeedsYouRailCard = memo<{ briefs: BriefItem[]; scopeControl?: ReactNode }>
                     size={'small'}
                     onClick={() => setIndex(current - 1)}
                   />
-                  <span className={styles.pager}>
+                  <span {...stylex.props(styles.pager)}>
                     {current + 1}/{briefs.length}
                   </span>
                   <ActionIcon

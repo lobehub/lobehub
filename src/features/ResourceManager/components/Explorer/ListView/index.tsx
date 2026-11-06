@@ -1,6 +1,7 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { useRef } from 'react';
 import type { VirtuosoHandle } from 'react-virtuoso';
 
@@ -37,7 +38,7 @@ const ListView = ({ isLoading, isValidating, queryParams }: ListViewProps) => {
 
   return (
     <Flexbox height={'100%'}>
-      <div className={styles.scrollContainer}>
+      <div className={stylex.props(styles.scrollContainer).className}>
         <ListViewHeader
           columnWidths={columnWidths}
           data={data}

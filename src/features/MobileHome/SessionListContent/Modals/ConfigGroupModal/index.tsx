@@ -1,4 +1,6 @@
-import { Button, createStaticStyles, Flexbox, Icon, SortableList } from '@lobehub/ui';
+import { Button, Flexbox, Icon, SortableList } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
 import { Plus } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -12,18 +14,16 @@ import { type SessionGroupItemBase } from '@/types/session';
 
 import GroupItem from './GroupItem';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    height: 36px;
-    padding-inline: 8px;
-    border-radius: ${cssVar.borderRadius};
-    transition: background 0.2s ease-in-out;
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-}));
+const styles = stylex.create({
+  container: {
+    height: '36px',
+    paddingInline: '8px',
+    borderRadius: cssVar.borderRadius,
+    transition: 'background 0.2s ease-in-out',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+});
 
 interface ConfigGroupModalProps {
   onCancel?: () => void;
@@ -65,7 +65,7 @@ const ConfigGroupModal = memo<ConfigGroupModalProps>(({ open, onCancel, scope = 
             <SortableList.Item
               horizontal
               align={'center'}
-              className={styles.container}
+              className={stylex.props(styles.container).className}
               gap={4}
               id={item.id}
               justify={'space-between'}

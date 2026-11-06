@@ -1,4 +1,5 @@
 import { Block, Button, cssVar, cx, Divider, Flexbox, Tag, Text, toast } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { memo, type ReactNode, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -53,7 +54,10 @@ export const RecommendationCard = memo<RecommendationCardProps>(
             <Flexbox flex={'none'} paddingBlock={2}>
               {renderIcon(RECOMMENDATION_ICON_SIZE.compact)}
             </Flexbox>
-            <Text className={cx(homeType.itemTitleProse, styles.compactTitle)} style={{ flex: 1 }}>
+            <Text
+              className={cx(stylex.props(homeType.itemTitleProse).className, styles.compactTitle)}
+              style={{ flex: 1 }}
+            >
               {title}
             </Text>
           </Flexbox>

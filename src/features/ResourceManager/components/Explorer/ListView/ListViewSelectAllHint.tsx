@@ -1,4 +1,5 @@
 import { Button, Flexbox } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { useTranslation } from 'react-i18next';
 
 import type { SelectAllState } from '@/features/ResourceManager/store/initialState';
@@ -34,7 +35,7 @@ const ListViewSelectAllHint = ({
     <Flexbox
       horizontal
       align={'center'}
-      className={styles.selectAllHint}
+      className={stylex.props(styles.selectAllHint).className}
       gap={6}
       style={{ minWidth: getListViewMinWidth(showUploader) }}
       wrap={'wrap'}

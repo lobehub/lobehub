@@ -1,4 +1,5 @@
 import type { FlexboxProps } from '@lobehub/ui';
+import type { StyleXStyles } from '@stylexjs/stylex';
 import type { CSSProperties, ReactNode, Ref } from 'react';
 
 export interface ListItemProps extends Omit<FlexboxProps, 'title'> {
@@ -33,4 +34,5 @@ export interface ListItemProps extends Omit<FlexboxProps, 'title'> {
     title?: CSSProperties;
   };
   title: ReactNode;
+  xstyle?: StyleXStyles;
 }

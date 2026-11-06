@@ -1,4 +1,6 @@
-import { createStaticStyles, cx, Flexbox, Skeleton } from '@lobehub/ui';
+import { Flexbox, Skeleton } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router';
@@ -11,28 +13,16 @@ import { useFileStore } from '@/store/file';
 import { knowledgeBaseSelectors, useKnowledgeBaseStore } from '@/store/library';
 import { FilesTabs } from '@/types/files';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  breadcrumb: css`
-    font-size: 14px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  breadcrumbItem: css`
-    cursor: pointer;
-    transition: color ${cssVar.motionDurationSlow};
-
-    &:hover {
-      color: ${cssVar.colorText};
-    }
-  `,
-  currentItem: css`
-    font-weight: 500;
-    color: ${cssVar.colorText};
-  `,
-  separator: css`
-    margin-inline: 8px;
-    color: ${cssVar.colorTextQuaternary};
-  `,
-}));
+const styles = stylex.create({
+  breadcrumb: { fontSize: '14px', color: cssVar.colorTextSecondary },
+  breadcrumbItem: {
+    cursor: 'pointer',
+    transition: `color ${cssVar.motionDurationSlow}`,
+    color: { 'default': null, ':hover': cssVar.colorText },
+  },
+  currentItem: { fontWeight: 500, color: cssVar.colorText },
+  separator: { marginInline: '8px', color: cssVar.colorTextQuaternary },
+});
 
 interface BreadcrumbProps {
   category?: string;
@@ -73,9 +63,14 @@ const Breadcrumb = memo<BreadcrumbProps>(({ category, fileName }) => {
     const categoryLabel = t(`tab.${category as FilesTabs}` as any);
 
     return (
-      <Flexbox horizontal align={'center'} className={styles.breadcrumb} gap={0}>
+      <Flexbox
+        horizontal
+        align={'center'}
+        className={stylex.props(styles.breadcrumb).className}
+        gap={0}
+      >
         <span
-          className={cx(styles.breadcrumbItem, styles.currentItem)}
+          className={stylex.props(styles.breadcrumbItem, styles.currentItem).className}
           style={{ cursor: 'default' }}
         >
           {categoryLabel}
@@ -106,9 +101,14 @@ const Breadcrumb = memo<BreadcrumbProps>(({ category, fileName }) => {
   const isRootClickable = folderChain.length > 0 || fileName;
 
   return (
-    <Flexbox horizontal align={'center'} className={styles.breadcrumb} gap={0}>
+    <Flexbox
+      horizontal
+      align={'center'}
+      className={stylex.props(styles.breadcrumb).className}
+      gap={0}
+    >
       <span
-        className={cx(styles.breadcrumbItem, isAtRoot && styles.currentItem)}
+        className={stylex.props(styles.breadcrumbItem, isAtRoot && styles.currentItem).className}
         style={{ cursor: isRootClickable ? 'pointer' : 'default' }}
         onClick={() => isRootClickable && handleNavigate(null)}
       >
@@ -123,10 +123,12 @@ const Breadcrumb = memo<BreadcrumbProps>(({ category, fileName }) => {
         const isLast = index === folderChain.length - 1 && !fileName;
         return (
           <Flexbox horizontal align={'center'} gap={0} key={folder.id}>
-            <span className={styles.separator}>/</span>
+            <span {...stylex.props(styles.separator)}>/</span>
             <span
-              className={cx(styles.breadcrumbItem, isLast && styles.currentItem)}
               style={{ cursor: isLast ? 'default' : 'pointer' }}
+              className={
+                stylex.props(styles.breadcrumbItem, isLast && styles.currentItem).className
+              }
               onClick={() => !isLast && handleNavigate(folder.id)}
             >
               {folder.name}
@@ -137,9 +139,9 @@ const Breadcrumb = memo<BreadcrumbProps>(({ category, fileName }) => {
 
       {fileName && (
         <Flexbox horizontal align={'center'} gap={0}>
-          <span className={styles.separator}>/</span>
+          <span {...stylex.props(styles.separator)}>/</span>
           <span
-            className={cx(styles.breadcrumbItem, styles.currentItem)}
+            className={stylex.props(styles.breadcrumbItem, styles.currentItem).className}
             style={{ cursor: 'default' }}
           >
             {fileName}

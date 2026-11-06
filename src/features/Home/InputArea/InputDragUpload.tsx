@@ -1,6 +1,8 @@
 'use client';
 
-import { Center, createStaticStyles, cssVar, Flexbox, Icon } from '@lobehub/ui';
+import { Center, Flexbox, Icon } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { FileImage, FileText, FileUpIcon } from 'lucide-react';
 import { type CSSProperties, memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -14,54 +16,44 @@ const ICON_SIZE = { size: 18, strokeWidth: 1.5 };
 const BORDER_INSET = 8;
 const OVERLAY_ICONS = [FileImage, FileUpIcon, FileText];
 
-const styles = createStaticStyles(({ css }) => ({
-  container: css`
-    position: relative;
-  `,
-  desc: css`
-    max-width: 320px;
-
-    font-size: 12px;
-    line-height: 18px;
-    color: ${cssVar.colorTextSecondary};
-    text-align: center;
-  `,
-  icon: css`
-    flex: none;
-    border-radius: ${cssVar.borderRadius};
-
-    /* Flat, solid-fill tiles laid out in a row (not a folded/fanned stack). */
-    color: ${cssVar.colorTextSecondary};
-    background: ${cssVar.colorFillSecondary};
-  `,
-  overlay: css`
-    pointer-events: none;
-
-    position: absolute;
-    z-index: 100;
-    inset: 0;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    /* A solid gray layer laid over the input — it fills the exact input box, so
-       its width/height always match. A thin dashed outline sits inside the edge
-       to signal the drop target. */
-    background: ${cssVar.colorBgElevated};
-
-    &::before {
-      pointer-events: none;
-      content: '';
-
-      position: absolute;
-      inset: ${BORDER_INSET}px;
-
-      border: 1px dashed ${cssVar.colorTextTertiary};
-      border-radius: 12px;
-    }
-  `,
-}));
+const styles = stylex.create({
+  container: { position: 'relative' },
+  desc: {
+    maxWidth: '320px',
+    fontSize: '12px',
+    lineHeight: '18px',
+    color: cssVar.colorTextSecondary,
+    textAlign: 'center',
+  },
+  icon: {
+    flex: 'none',
+    borderRadius: cssVar.borderRadius,
+    color: cssVar.colorTextSecondary,
+    backgroundColor: cssVar.colorFillSecondary,
+    backgroundImage: 'none',
+  },
+  overlay: {
+    'pointerEvents': 'none',
+    'position': 'absolute',
+    'zIndex': 100,
+    'inset': '0',
+    'display': 'flex',
+    'alignItems': 'center',
+    'justifyContent': 'center',
+    'backgroundColor': cssVar.colorBgElevated,
+    'backgroundImage': 'none',
+    '::before': {
+      pointerEvents: 'none',
+      content: "''",
+      position: 'absolute',
+      inset: `${BORDER_INSET}px`,
+      borderWidth: '1px',
+      borderStyle: 'dashed',
+      borderColor: cssVar.colorTextTertiary,
+      borderRadius: '12px',
+    },
+  },
+});
 
 interface InputDragUploadProps {
   children: ReactNode;
@@ -84,19 +76,28 @@ const InputDragUpload = memo<InputDragUploadProps>(
     const { getContainerProps } = useLocalDragUpload({ onUploadFiles });
 
     return (
-      <div className={styles.container} style={style} {...getContainerProps()}>
+      <div
+        className={stylex.props(styles.container).className}
+        style={style}
+        {...getContainerProps()}
+      >
         {children}
         {isDraggingGlobally && (
-          <div className={styles.overlay} style={{ borderRadius: radius }}>
+          <div className={stylex.props(styles.overlay).className} style={{ borderRadius: radius }}>
             <Center gap={10}>
               <Flexbox horizontal gap={8}>
                 {OVERLAY_ICONS.map((IconComp, i) => (
-                  <Center className={styles.icon} height={BLOCK_SIZE} key={i} width={BLOCK_SIZE}>
+                  <Center
+                    className={stylex.props(styles.icon).className}
+                    height={BLOCK_SIZE}
+                    key={i}
+                    width={BLOCK_SIZE}
+                  >
                     <Icon icon={IconComp} size={ICON_SIZE} />
                   </Center>
                 ))}
               </Flexbox>
-              <div className={styles.desc}>{t('DragUpload.dragFileDesc')}</div>
+              <div {...stylex.props(styles.desc)}>{t('DragUpload.dragFileDesc')}</div>
             </Center>
           </div>
         )}

@@ -1,4 +1,5 @@
 import { Flexbox, useTheme } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { Activity, type FC, type ReactNode, useEffect, useMemo, useState } from 'react';
 import { Outlet, useLocation } from 'react-router';
 
@@ -46,13 +47,13 @@ const Layout: FC<LayoutProps> = ({ children }) => {
       {/* `position: absolute; inset: 0` keeps overlaying the outlet when Activity is hidden,
           because Activity preserves state but doesn't visually hide the DOM. Force-hide here. */}
       <Flexbox
-        className={styles.absoluteContainer}
+        className={stylex.props(styles.absoluteContainer).className}
         height={'100%'}
         style={isHomeRoute ? undefined : { display: 'none' }}
         width={'100%'}
       >
         <Flexbox
-          className={isDarkMode ? styles.contentDark : styles.contentLight}
+          className={stylex.props(isDarkMode ? styles.contentDark : styles.contentLight).className}
           flex={1}
           height={'100%'}
           style={cssVariables}

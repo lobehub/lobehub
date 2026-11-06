@@ -1,4 +1,5 @@
 import { Button, Flexbox, Text } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { RefreshCw } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -9,6 +10,7 @@ import {
   useDailyBriefRecommendationsUI,
 } from '@/business/client/useDailyBriefRecommendationsUI';
 import GroupBlock from '@/features/Home/components/GroupBlock';
+import { groupBlockActionStyles } from '@/features/Home/components/GroupBlock/actionStyles';
 import RailCard from '@/features/Home/components/RailCard';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
@@ -83,6 +85,7 @@ const Recommendations = memo<RecommendationsProps>(({ variant = 'default' }) => 
   // started the refresh must not vanish while the refresh it started is running.
   const refresh = showTaskTemplates && (
     <Button
+      className={stylex.props(groupBlockActionStyles.button).className}
       disabled={!canRefresh && !isRefreshing}
       icon={<RefreshCw className={isRefreshing ? styles.refreshSpin : undefined} size={12} />}
       size={'small'}

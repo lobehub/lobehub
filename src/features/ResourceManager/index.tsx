@@ -1,6 +1,8 @@
 'use client';
 
-import { createStaticStyles, Flexbox, useTheme } from '@lobehub/ui';
+import { Flexbox, useTheme } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo, type ReactNode, useCallback, useMemo } from 'react';
 import { useLocation, useSearchParams } from 'react-router';
 
@@ -24,33 +26,24 @@ import { useTopLevelFileUpload } from './hooks/useTopLevelFileUpload';
 
 const ChunkDrawer = dynamic(() => import('./components/ChunkDrawer'), { ssr: false });
 
-const styles = createStaticStyles(({ css, cssVar }) => {
-  return {
-    container: css`
-      position: relative;
-      overflow: hidden;
-    `,
-    editorOverlay: css`
-      position: absolute;
-      z-index: 1;
-      inset: 0;
-
-      width: 100%;
-      height: 100%;
-
-      background-color: var(--editor-overlay-bg, ${cssVar.colorBgContainer});
-    `,
-    pageEditorOverlay: css`
-      position: absolute;
-      z-index: 1;
-      inset: 0;
-
-      width: 100%;
-      height: 100%;
-
-      background-color: ${cssVar.colorBgLayout};
-    `,
-  };
+const styles = stylex.create({
+  container: { position: 'relative', overflow: 'hidden' },
+  editorOverlay: {
+    position: 'absolute',
+    zIndex: 1,
+    inset: '0',
+    width: '100%',
+    height: '100%',
+    backgroundColor: `var(--editor-overlay-bg, ${cssVar.colorBgContainer})`,
+  },
+  pageEditorOverlay: {
+    position: 'absolute',
+    zIndex: 1,
+    inset: '0',
+    width: '100%',
+    height: '100%',
+    backgroundColor: cssVar.colorBgLayout,
+  },
 });
 
 /** A page or file opened over the Docs home by path. */
@@ -164,21 +157,25 @@ const ResourceManager = memo<ResourceManagerProps>(({ content, explorerHero }) =
         style={{ height: '100%' }}
         onUploadFiles={handleUploadFiles}
       >
-        <Flexbox className={styles.container} height={'100%'} style={cssVariables}>
+        <Flexbox
+          className={stylex.props(styles.container).className}
+          height={'100%'}
+          style={cssVariables}
+        >
           {/* Explorer stays mounted to preserve its state, unless the caller
               swaps in its own base content (resource home dashboard) */}
           {content ?? <Explorer hero={explorerHero} />}
 
           {/* Editor overlay */}
           {mode === 'editor' && (
-            <Flexbox className={styles.editorOverlay}>
+            <Flexbox className={stylex.props(styles.editorOverlay).className}>
               <FileEditor onBack={handleBack} />
             </Flexbox>
           )}
 
           {/* PageEditor overlay */}
           {mode === 'page' && (
-            <Flexbox className={styles.pageEditorOverlay}>
+            <Flexbox className={stylex.props(styles.pageEditorOverlay).className}>
               <PageEditor
                 emoji={(currentDocument?.metadata?.emoji as string | undefined) ?? listedEmoji}
                 knowledgeBaseId={libraryId}

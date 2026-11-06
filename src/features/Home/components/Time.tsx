@@ -1,4 +1,5 @@
 import { Text } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 
 import { useActivityTime } from '@/hooks/useActivityTime';
@@ -20,7 +21,7 @@ export const Time = memo<TimeProps>(({ date, minWidth }) => {
   if (!text) return null;
   return (
     <Text
-      className={homeType.meta}
+      className={stylex.props(homeType.meta).className}
       style={{ flex: 'none', minWidth, textAlign: minWidth === undefined ? undefined : 'end' }}
       title={title}
     >

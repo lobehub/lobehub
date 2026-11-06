@@ -1,29 +1,29 @@
 'use client';
 
-import { createStaticStyles } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 
 import type { NameInputHintState } from './useInlineNameEdit';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  hint: css`
-    pointer-events: none;
-
-    position: fixed;
-    z-index: 1100;
-
-    padding-block: 4px;
-    padding-inline: 8px;
-    border: 1px solid ${cssVar.colorErrorBorder};
-    border-radius: 6px;
-
-    font-size: 12px;
-    line-height: 1.5;
-    color: ${cssVar.colorError};
-
-    background: ${cssVar.colorErrorBg};
-    box-shadow: ${cssVar.boxShadowSecondary};
-  `,
-}));
+const styles = stylex.create({
+  hint: {
+    pointerEvents: 'none',
+    position: 'fixed',
+    zIndex: 1100,
+    paddingBlock: '4px',
+    paddingInline: '8px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorErrorBorder,
+    borderRadius: '6px',
+    fontSize: '12px',
+    lineHeight: 1.5,
+    color: cssVar.colorError,
+    backgroundColor: cssVar.colorErrorBg,
+    backgroundImage: 'none',
+    boxShadow: cssVar.boxShadowSecondary,
+  },
+});
 
 /**
  * One-line validation message pinned under the tree's inline name input.
@@ -32,7 +32,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
  */
 const NameInputHint = ({ hint }: { hint: NameInputHintState }) => (
   <div
-    className={styles.hint}
+    className={stylex.props(styles.hint).className}
     role={'alert'}
     style={{ left: hint.left, minWidth: hint.width, top: hint.top + 2 }}
   >

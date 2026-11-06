@@ -5,6 +5,7 @@ import {
   ActionIcon,
   Block,
   Center,
+  // oxlint-disable-next-line stylex-migration/no-emotion-styles -- drop-zone inversion recolors every descendant
   createStaticStyles,
   cx,
   DropdownMenu,
@@ -12,6 +13,8 @@ import {
   stopPropagation,
   Text,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronsUpDownIcon } from 'lucide-react';
 import type { DragEvent } from 'react';
 import { memo, useCallback, useMemo, useState } from 'react';
@@ -28,17 +31,21 @@ import { knowledgeBaseSelectors, useKnowledgeBaseStore } from '@/store/library';
 import type { LibraryMenuEntry } from './libraryMenuItems';
 import { buildLibraryMenuItems } from './libraryMenuItems';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  dropZoneActive: css`
-    color: ${cssVar.colorBgElevated} !important;
-    background-color: ${cssVar.colorText} !important;
+const styles = stylex.create({
+  dropZoneActive: {
+    color: cssVar.colorBgElevated,
+    backgroundColor: cssVar.colorText,
+  },
+  menuIcon: {
+    color: cssVar.colorTextTertiary,
+  },
+});
 
+const fallback = createStaticStyles(({ css, cssVar }) => ({
+  dropZoneActive: css`
     * {
       color: ${cssVar.colorBgElevated} !important;
     }
-  `,
-  menuIcon: css`
-    color: ${cssVar.colorTextTertiary};
   `,
 }));
 
@@ -103,7 +110,11 @@ const Head = memo<{ id: string }>(({ id }) => {
     const entries = libraries.map((library): LibraryMenuEntry => ({
       item: {
         icon: (
-          <Center className={styles.menuIcon} style={{ minWidth: 16 }} width={16}>
+          <Center
+            className={stylex.props(styles.menuIcon).className}
+            style={{ minWidth: 16 }}
+            width={16}
+          >
             <LibraryStatusIcon
               size={14}
               visibility={library.visibility}
@@ -132,7 +143,6 @@ const Head = memo<{ id: string }>(({ id }) => {
       clickable
       horizontal
       align={'center'}
-      className={cx(isDropZoneActive && styles.dropZoneActive)}
       data-drop-target-id="root"
       data-is-folder="true"
       data-root-drop="true"
@@ -140,6 +150,11 @@ const Head = memo<{ id: string }>(({ id }) => {
       padding={2}
       style={{ minWidth: 32, overflow: 'hidden' }}
       variant={'borderless'}
+      className={
+        isDropZoneActive
+          ? cx(stylex.props(styles.dropZoneActive).className, fallback.dropZoneActive)
+          : undefined
+      }
       onClick={handleClick}
       onDragLeave={handleDragLeave}
       onDragOver={handleDragOver}

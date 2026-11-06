@@ -1,20 +1,21 @@
 'use client';
 
-import { createStaticStyles, Flexbox, Skeleton } from '@lobehub/ui';
+import { Flexbox, Skeleton } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    display: flex;
-    gap: 6px;
-    align-items: center;
-
-    height: 32px;
-    padding-block: 4px;
-    padding-inline: 8px;
-    border-radius: ${cssVar.borderRadiusSM};
-  `,
-}));
+const styles = stylex.create({
+  container: {
+    display: 'flex',
+    gap: '6px',
+    alignItems: 'center',
+    height: '32px',
+    paddingBlock: '4px',
+    paddingInline: '8px',
+    borderRadius: cssVar.borderRadiusSM,
+  },
+});
 
 interface TreeSkeletonItemProps {
   opacity?: number;
@@ -22,7 +23,7 @@ interface TreeSkeletonItemProps {
 
 const TreeSkeletonItem = memo<TreeSkeletonItemProps>(({ opacity = 1 }) => {
   return (
-    <Flexbox horizontal className={styles.container} style={{ opacity }}>
+    <Flexbox horizontal className={stylex.props(styles.container).className} style={{ opacity }}>
       <Skeleton
         style={{
           flex: 'none',

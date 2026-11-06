@@ -1,4 +1,5 @@
-import { createStaticStyles } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo, type MouseEvent, type ReactNode } from 'react';
 
 import { useStableNavigate } from '@/hooks/useStableNavigate';
@@ -9,14 +10,15 @@ import { type GreetingLink, type ParsedGreeting } from './welcomeText';
 // "Highlighter underline": a linear gradient paints a thin tinted bar along the
 // bottom of each character box instead of `text-decoration: underline`, which
 // at heading weight would read as a heavy rule.
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  link: css`
-    padding-block-end: 1px;
-    color: ${cssVar.colorText};
-    text-decoration: none;
-    background: linear-gradient(to top, ${cssVar.colorPrimaryBgHover} 30%, transparent 30%);
-  `,
-}));
+const styles = stylex.create({
+  link: {
+    paddingBlockEnd: '1px',
+    color: cssVar.colorText,
+    textDecoration: 'none',
+    backgroundColor: 'transparent',
+    backgroundImage: `linear-gradient(to top, ${cssVar.colorPrimaryBgHover} 30%, transparent 30%)`,
+  },
+});
 
 /** Relative hrefs navigate in-app; external ones open a tab. */
 const BriefLink = memo<{ children: ReactNode; href: string }>(({ href, children }) => {
@@ -27,7 +29,7 @@ const BriefLink = memo<{ children: ReactNode; href: string }>(({ href, children 
 
   if (hrefKind === 'external')
     return (
-      <a className={styles.link} href={href} rel="noopener noreferrer" target="_blank">
+      <a {...stylex.props(styles.link)} href={href} rel="noopener noreferrer" target="_blank">
         {children}
       </a>
     );
@@ -41,7 +43,7 @@ const BriefLink = memo<{ children: ReactNode; href: string }>(({ href, children 
   };
 
   return (
-    <a className={styles.link} href={href} onClick={onClick}>
+    <a {...stylex.props(styles.link)} href={href} onClick={onClick}>
       {children}
     </a>
   );

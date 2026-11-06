@@ -1,49 +1,39 @@
 'use client';
 
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
 
-const styles = createStaticStyles(({ css }) => ({
-  handle: css`
-    cursor: col-resize;
-    user-select: none;
-
-    position: absolute;
-    z-index: 1;
-    inset-block: 0;
-    inset-inline-end: 0;
-    transform: translateX(-4px);
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    width: 16px;
-
-    &::after {
-      content: '';
-
-      width: 1.5px;
-      height: calc(100% - 16px);
-      border-radius: 1px;
-
-      background-color: ${cssVar.colorBorder};
-
-      transition: all 0.2s;
-    }
-
-    &:hover::after {
-      width: 3px;
-      background-color: ${cssVar.colorPrimary};
-    }
-  `,
-  handleDragging: css`
-    &::after {
-      width: 3px !important;
-      background-color: ${cssVar.colorPrimary} !important;
-    }
-  `,
-}));
+const styles = stylex.create({
+  handle: {
+    'cursor': 'col-resize',
+    'userSelect': 'none',
+    'position': 'absolute',
+    'zIndex': 1,
+    'insetBlockStart': 0,
+    'insetBlockEnd': 0,
+    'insetInlineEnd': 0,
+    'transform': 'translateX(-4px)',
+    'display': 'flex',
+    'alignItems': 'center',
+    'justifyContent': 'center',
+    'width': '16px',
+    '::after': {
+      content: "''",
+      width: { 'default': '1.5px', ':hover': '3px' },
+      height: 'calc(100% - 16px)',
+      borderRadius: '1px',
+      backgroundColor: { 'default': cssVar.colorBorder, ':hover': cssVar.colorPrimary },
+      transition: 'all 0.2s',
+    },
+  },
+  dragging: {
+    '::after': {
+      width: '3px',
+      backgroundColor: cssVar.colorPrimary,
+    },
+  },
+});
 
 interface ColumnResizeHandleProps {
   column: 'name' | 'date' | 'size' | 'uploader';
@@ -107,7 +97,7 @@ const ColumnResizeHandle = memo<ColumnResizeHandleProps>(
 
     return (
       <div
-        className={`${styles.handle} ${isDragging ? styles.handleDragging : ''}`}
+        {...stylex.props(styles.handle, isDragging && styles.dragging)}
         onMouseDown={handleMouseDown}
       />
     );

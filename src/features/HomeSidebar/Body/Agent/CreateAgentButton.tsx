@@ -4,8 +4,6 @@ import {
   ActionIcon,
   Block,
   Center,
-  createStaticStyles,
-  cssVar,
   cx,
   DropdownMenu,
   Flexbox,
@@ -13,6 +11,8 @@ import {
   Text,
   Tooltip,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronDownIcon, PlusIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -22,30 +22,22 @@ import { SessionDefaultGroup } from '@/types/session';
 
 import { useCreateMenuItems } from '../../hooks';
 
-const ACTION_CLASS_NAME = 'create-agent-actions';
-
-const styles = createStaticStyles(({ css }) => ({
-  container: css`
-    .${ACTION_CLASS_NAME} {
-      width: 0;
-      margin-inline-end: 2px;
-      opacity: 0;
-      transition: opacity 0.2s ${cssVar.motionEaseOut};
-
-      &:has([data-popup-open]) {
-        width: unset;
-        opacity: 1;
-      }
-    }
-
-    &:hover {
-      .${ACTION_CLASS_NAME} {
-        width: unset;
-        opacity: 1;
-      }
-    }
-  `,
-}));
+const styles = stylex.create({
+  actions: {
+    width: {
+      'default': 0,
+      ':has([data-popup-open])': 'unset',
+      [stylex.when.ancestor(':hover')]: 'unset',
+    },
+    marginInlineEnd: '2px',
+    opacity: {
+      'default': 0,
+      ':has([data-popup-open])': 1,
+      [stylex.when.ancestor(':hover')]: 1,
+    },
+    transition: `opacity 0.2s ${cssVar.motionEaseOut}`,
+  },
+});
 
 interface CreateAgentButtonProps {
   className?: string;
@@ -115,7 +107,7 @@ const CreateAgentButton = memo<CreateAgentButtonProps>(({ groupId, className, vi
     <Block
       horizontal
       align={'center'}
-      className={cx(styles.container, className)}
+      className={cx(stylex.props(stylex.defaultMarker()).className, className)}
       clickable={canCreate}
       gap={8}
       height={36}
@@ -134,7 +126,7 @@ const CreateAgentButton = memo<CreateAgentButtonProps>(({ groupId, className, vi
         <Flexbox
           horizontal
           align={'center'}
-          className={ACTION_CLASS_NAME}
+          className={stylex.props(styles.actions).className}
           flex={'none'}
           justify={'flex-end'}
           onClick={(e) => {

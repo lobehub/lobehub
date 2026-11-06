@@ -1,6 +1,8 @@
 'use client';
 
-import { createStaticStyles, Flexbox, Icon } from '@lobehub/ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { MessageCircleIcon } from 'lucide-react';
 import type { FC } from 'react';
 import { memo, useCallback, useMemo } from 'react';
@@ -21,34 +23,24 @@ const AVATAR_SIZE = 24;
 // Platforms supported by the Messenger feature (see src/features/Messenger/constants.tsx).
 const BANNER_PLATFORM_NAMES = ['Discord', 'Slack', 'Telegram', 'WeChat'] as const;
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  avatar: css`
-    display: flex;
-    flex-shrink: 0;
-    align-items: center;
-    justify-content: center;
-
-    width: ${AVATAR_SIZE}px;
-    height: ${AVATAR_SIZE}px;
-    border-radius: 50%;
-
-    background: ${cssVar.colorBgContainer};
-    box-shadow:
-      0 0 8px -2px rgb(0 0 0 / 5%),
-      0 0 0 1px ${cssVar.colorFillTertiary};
-  `,
-  icon: css`
-    color: ${cssVar.colorTextSecondary};
-  `,
-  iconGroup: css`
-    display: flex;
-    align-items: center;
-  `,
-  text: css`
-    font-size: 13px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-}));
+const styles = stylex.create({
+  avatar: {
+    display: 'flex',
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: `${AVATAR_SIZE}px`,
+    height: `${AVATAR_SIZE}px`,
+    borderRadius: '50%',
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+    boxShadow: `0 0 8px -2px rgb(0 0 0 / 5%),
+      0 0 0 1px ${cssVar.colorFillTertiary}`,
+  },
+  icon: { color: cssVar.colorTextSecondary },
+  iconGroup: { display: 'flex', alignItems: 'center' },
+  text: { fontSize: '13px', color: cssVar.colorTextSecondary },
+});
 
 const MessengerBanner = memo(() => {
   const { t } = useTranslation('common');
@@ -83,14 +75,18 @@ const MessengerBanner = memo(() => {
     >
       <Flexbox horizontal align={'center'} flex={1} gap={8} justify={'space-between'}>
         <Flexbox horizontal align={'center'} gap={8}>
-          <Icon className={styles.icon} icon={MessageCircleIcon} size={18} />
-          <span className={styles.text}>{t('messengerBanner.title')}</span>
+          <Icon
+            className={stylex.props(styles.icon).className}
+            icon={MessageCircleIcon}
+            size={18}
+          />
+          <span {...stylex.props(styles.text)}>{t('messengerBanner.title')}</span>
         </Flexbox>
         {platformIcons.length > 0 && (
-          <div className={styles.iconGroup}>
+          <div {...stylex.props(styles.iconGroup)}>
             {platformIcons.map(({ Icon: PlatformIcon, key }, index) => (
               <div
-                className={styles.avatar}
+                className={stylex.props(styles.avatar).className}
                 key={key}
                 style={{ marginLeft: index === 0 ? 0 : -6, zIndex: index }}
               >

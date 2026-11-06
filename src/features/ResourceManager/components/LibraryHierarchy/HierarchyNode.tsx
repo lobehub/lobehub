@@ -1,7 +1,8 @@
 'use client';
 
 import { DERIVED_DOCUMENT_SOURCE_TYPE } from '@lobechat/const';
-import { Block, cx, Flexbox, Icon, Input, stopPropagation, toast, Tooltip } from '@lobehub/ui';
+import { Block, Flexbox, Icon, Input, stopPropagation, toast, Tooltip } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { FileText, FolderIcon, FolderOpenIcon, LockIcon } from 'lucide-react';
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -291,11 +292,14 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
             height={36}
             paddingInline={4}
             variant={isActive ? 'filled' : 'borderless'}
-            className={cx(
-              styles.treeItem,
-              isOver && styles.fileItemDragOver,
-              isDragging && styles.dragging,
-            )}
+            className={
+              stylex.props(
+                styles.treeItem,
+                stylex.defaultMarker(),
+                isOver && styles.fileItemDragOver,
+                isDragging && styles.dragging,
+              ).className
+            }
             style={{
               paddingInlineStart: level * 12 + 4,
             }}
@@ -378,7 +382,6 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
           clickable
           horizontal
           align={'center'}
-          className={cx(styles.treeItem, isDragging && styles.dragging)}
           data-drop-target-id={item.id}
           data-is-folder={false}
           draggable={!flat}
@@ -386,6 +389,10 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
           height={36}
           paddingInline={4}
           variant={isActive ? 'filled' : 'borderless'}
+          className={
+            stylex.props(styles.treeItem, stylex.defaultMarker(), isDragging && styles.dragging)
+              .className
+          }
           style={{
             paddingInlineStart: level * 12 + 4,
           }}

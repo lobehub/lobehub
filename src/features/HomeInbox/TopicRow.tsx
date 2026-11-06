@@ -1,6 +1,8 @@
 import { AGENT_CHAT_TOPIC_URL, GROUP_CHAT_TOPIC_URL } from '@lobechat/const';
 import { agentDisplayName } from '@lobechat/types';
-import { createStaticStyles, Flexbox, Text } from '@lobehub/ui';
+import { Flexbox, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo, type ReactNode } from 'react';
 
 import AgentAvatar from '@/components/AgentAvatar';
@@ -11,21 +13,17 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import { resolveTopicTriggerTime, RunningElapsedTime } from './RunningElapsedTime';
 import { type InboxTopic } from './useHomeInboxTopics';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  row: css`
-    cursor: pointer;
-
-    padding-block: 8px;
-    padding-inline: 10px;
-    border-radius: ${cssVar.borderRadius};
-
-    transition: background ${cssVar.motionDurationFast};
-
-    &:hover {
-      background: ${cssVar.colorFillQuaternary};
-    }
-  `,
-}));
+const styles = stylex.create({
+  row: {
+    cursor: 'pointer',
+    paddingBlock: '8px',
+    paddingInline: '10px',
+    borderRadius: cssVar.borderRadius,
+    transition: `background ${cssVar.motionDurationFast}`,
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillQuaternary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+});
 
 /**
  * Where a topic opens: its agent's chat, or its group's chat for a group
@@ -58,7 +56,13 @@ const TopicRow = memo<TopicRowProps>(({ action, topic, leading, trailing }) => {
   };
 
   return (
-    <Flexbox horizontal align={'center'} className={styles.row} gap={10} onClick={open}>
+    <Flexbox
+      horizontal
+      align={'center'}
+      className={stylex.props(styles.row).className}
+      gap={10}
+      onClick={open}
+    >
       {leading}
       {agent && (
         <AgentAvatar

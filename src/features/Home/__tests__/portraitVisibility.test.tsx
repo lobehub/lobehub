@@ -294,12 +294,13 @@ describe('Home input banner queue', () => {
         </InputBannerQueue>,
       );
 
+      // jsdom has no StyleX / CSS-module styles, so which banner is shown is checked on the DOM
+      // (the first one in the queue); the hide rule is pinned in scripts/stylexMigration/homeBannerQueue.test.ts.
       expect(container.querySelector('[data-home-input-banner]')).toHaveTextContent('First');
-      expect(screen.getByTestId('first')).toBeVisible();
-      expect(screen.getByTestId('second')).not.toBeVisible();
+      expect(screen.getByTestId('second')).toBeInTheDocument();
       fireEvent.click(within(screen.getByTestId('first')).getByRole('button'));
       expect(container.querySelector('[data-home-input-banner]')).toHaveTextContent('Second');
-      expect(screen.getByTestId('second')).toBeVisible();
+      expect(screen.queryByTestId('first')).not.toBeInTheDocument();
     } finally {
       vi.doUnmock('@lobehub/ui');
       useGlobalStore.setState((state) => ({

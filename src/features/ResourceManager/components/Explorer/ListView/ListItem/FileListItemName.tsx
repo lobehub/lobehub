@@ -1,4 +1,5 @@
 import { Center, Flexbox, Icon, Input, stopPropagation, Tooltip } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { FileText, FolderIcon, LockIcon } from 'lucide-react';
 
 import FileIcon from '@/components/FileIcon';
@@ -48,7 +49,7 @@ const FileListItemName = ({
   privateTooltip,
   renamingValue,
 }: FileListItemNameProps) => (
-  <Flexbox horizontal align={'center'} className={styles.nameContainer}>
+  <Flexbox horizontal align={'center'} className={stylex.props(styles.nameContainer).className}>
     <Flexbox
       align={'center'}
       justify={'center'}
@@ -96,7 +97,10 @@ const FileListItemName = ({
       />
     ) : (
       <>
-        <TruncatedFileName className={styles.name} name={name || fallbackName} />
+        <TruncatedFileName
+          className={stylex.props(styles.name).className}
+          name={name || fallbackName}
+        />
         <LibraryTags knowledgeBaseIds={knowledgeBaseIds} />
       </>
     )}

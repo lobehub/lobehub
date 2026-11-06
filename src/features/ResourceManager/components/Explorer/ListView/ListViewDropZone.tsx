@@ -1,4 +1,5 @@
-import { createStaticStyles, cx } from '@lobehub/ui';
+import { cx } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import type { ReactNode, RefObject } from 'react';
 import type { VirtuosoHandle } from 'react-virtuoso';
 
@@ -11,13 +12,6 @@ interface ListViewDropZoneProps {
   virtuosoRef: RefObject<VirtuosoHandle | null>;
 }
 
-const localStyles = createStaticStyles(({ css }) => ({
-  container: css`
-    position: relative;
-    overflow: hidden;
-  `,
-}));
-
 const ListViewDropZone = ({ children, currentFolderId, virtuosoRef }: ListViewDropZoneProps) => {
   const { containerRef, handleDragLeave, handleDragOver, handleDrop, isDropZoneActive } =
     useExplorerDropZone(virtuosoRef);
@@ -28,10 +22,8 @@ const ListViewDropZone = ({ children, currentFolderId, virtuosoRef }: ListViewDr
       data-is-folder="true"
       ref={containerRef}
       className={cx(
-        localStyles.container,
+        stylex.props(styles.dropZone, isDropZoneActive && styles.dropZoneActive).className,
         'list-view-drop-zone',
-        styles.dropZone,
-        isDropZoneActive && styles.dropZoneActive,
       )}
       onDragLeave={handleDragLeave}
       onDragOver={handleDragOver}

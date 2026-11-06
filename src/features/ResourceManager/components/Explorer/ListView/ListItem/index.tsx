@@ -1,13 +1,6 @@
-import {
-  Center,
-  Checkbox,
-  ContextMenuTrigger,
-  createStaticStyles,
-  cssVar,
-  cx,
-  Flexbox,
-  Tooltip,
-} from '@lobehub/ui';
+import { Center, Checkbox, ContextMenuTrigger, cx, Flexbox, Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { isEqual } from 'es-toolkit';
 import { memo, useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -26,6 +19,7 @@ import { getListViewMinWidth } from './constants';
 import FileListItemActions from './FileListItemActions';
 import FileListItemMenu, { type FileListItemMenuGetter } from './FileListItemMenu';
 import FileListItemName from './FileListItemName';
+import { styles as sharedStyles } from './styles';
 import { useFileListItemDrag } from './useFileListItemDrag';
 import { useFileListItemMeta } from './useFileListItemMeta';
 import { useFileListItemRename } from './useFileListItemRename';
@@ -33,109 +27,59 @@ import { useFileListItemRename } from './useFileListItemRename';
 export const FILE_DATE_WIDTH = 160;
 export const FILE_SIZE_WIDTH = 140;
 
-const styles = createStaticStyles(({ css }) => {
-  return {
-    container: css`
-      cursor: pointer;
-      min-width: 1040px;
-      transition: background ${cssVar.motionDurationMid} ${cssVar.motionEaseInOut};
-
-      &:hover {
-        background: ${cssVar.colorFillTertiary};
-      }
-    `,
-
-    dragOver: css`
-      outline: 1px dashed ${cssVar.colorPrimaryBorder};
-      outline-offset: -2px;
-
-      &,
-      &:hover {
-        background: ${cssVar.colorPrimaryBg};
-      }
-    `,
-
-    dragging: css`
-      will-change: transform;
-      opacity: 0.5;
-    `,
-
-    evenRow: css`
-      background: ${cssVar.colorFillQuaternary};
-
-      /* Hover effect overrides zebra striping on the hovered row only */
-      &:hover {
-        background: ${cssVar.colorFillTertiary};
-      }
-
-      /* Hide zebra striping when any row is hovered */
-      .any-row-hovered & {
-        background: transparent;
-      }
-
-      /* But keep hover effect on the actual hovered row */
-      .any-row-hovered &:hover {
-        background: ${cssVar.colorFillTertiary};
-      }
-    `,
-
-    hover: css`
-      opacity: 0;
-
-      &[data-popup-open],
-      .file-list-item-group:hover & {
-        opacity: 1;
-      }
-    `,
-    item: css`
-      padding-block: 0;
-      padding-inline: 0 24px;
-      color: ${cssVar.colorTextSecondary};
-    `,
-    name: css`
-      overflow: hidden;
-      flex: 1;
-
-      min-width: 0;
-      margin-inline-start: 12px;
-
-      color: ${cssVar.colorText};
-      white-space: nowrap;
-    `,
-    menuPlaceholder: css`
-      cursor: pointer;
-
-      flex-shrink: 0;
-
-      width: 24px;
-      height: 24px;
-      padding: 0;
-      border: none;
-
-      background: transparent;
-    `,
-    nameContainer: css`
-      overflow: hidden;
-      flex: 1;
-      min-width: 0;
-    `,
-    selected: css`
-      background: ${cssVar.colorFillTertiary};
-
-      &:hover {
-        background: ${cssVar.colorFillSecondary};
-      }
-    `,
-    uploaderName: css`
-      overflow: hidden;
-      flex: 1;
-
-      min-width: 0;
-
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    `,
-  };
+const styles = stylex.create({
+  row: {
+    cursor: 'pointer',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+    transition: `background ${cssVar.motionDurationMid} ${cssVar.motionEaseInOut}`,
+  },
+  evenRow: {
+    backgroundColor: { 'default': cssVar.colorFillQuaternary, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: 'none',
+  },
+  selected: {
+    backgroundColor: { 'default': cssVar.colorFillTertiary, ':hover': cssVar.colorFillSecondary },
+    backgroundImage: 'none',
+  },
+  dragging: {
+    willChange: 'transform',
+    opacity: 0.5,
+  },
+  dragOver: {
+    outlineWidth: '1px',
+    outlineStyle: 'dashed',
+    outlineColor: cssVar.colorPrimaryBorder,
+    outlineOffset: '-2px',
+    backgroundColor: cssVar.colorPrimaryBg,
+    backgroundImage: 'none',
+  },
+  item: {
+    paddingBlock: 0,
+    paddingInlineStart: 0,
+    paddingInlineEnd: '24px',
+    color: cssVar.colorTextSecondary,
+  },
+  menuPlaceholder: {
+    cursor: 'pointer',
+    flexShrink: 0,
+    width: '24px',
+    height: '24px',
+    paddingBlock: 0,
+    paddingInline: 0,
+    borderWidth: 0,
+    borderStyle: 'none',
+    borderColor: 'currentcolor',
+    backgroundColor: 'transparent',
+    backgroundImage: 'none',
+  },
+  uploaderName: {
+    overflow: 'hidden',
+    flex: '1',
+    minWidth: 0,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
 });
 
 interface FileListItemProps extends FileListItemType {
@@ -285,7 +229,7 @@ const FileListItem = ({
 
   const rowMenu = menuActivated ? (
     <FileListItemMenu
-      className={styles.hover}
+      className={stylex.props(sharedStyles.hover).className}
       fileId={fileId}
       fileType={fileType}
       filename={name}
@@ -307,7 +251,7 @@ const FileListItem = ({
     <button
       aria-haspopup="menu"
       aria-label={t('more', { ns: 'common' })}
-      className={cx(styles.menuPlaceholder, styles.hover)}
+      {...stylex.props(styles.menuPlaceholder, sharedStyles.hover)}
       type="button"
       onClick={activateMenuFromClick}
       onFocus={activateMenuFromFocus}
@@ -342,12 +286,14 @@ const FileListItem = ({
         height={48}
         paddingInline={8}
         className={cx(
-          styles.container,
+          stylex.props(
+            styles.row,
+            index % 2 === 0 && styles.evenRow,
+            isSelected && styles.selected,
+            isDragging && styles.dragging,
+            isOver && styles.dragOver,
+          ).className,
           'file-list-item-group',
-          index % 2 === 0 && styles.evenRow,
-          isSelected && styles.selected,
-          isDragging && styles.dragging,
-          isOver && styles.dragOver,
         )}
         style={{
           borderBlockEnd: `1px solid ${cssVar.colorBorderSecondary}`,
@@ -376,7 +322,7 @@ const FileListItem = ({
         <Flexbox
           horizontal
           align={'center'}
-          className={styles.item}
+          className={stylex.props(styles.item).className}
           distribution={'space-between'}
           style={{
             flexShrink: 0,
@@ -426,7 +372,7 @@ const FileListItem = ({
             <Flexbox
               horizontal
               align={'center'}
-              className={styles.item}
+              className={stylex.props(styles.item).className}
               gap={8}
               style={{ flexShrink: 0 }}
               width={columnWidths.date}
@@ -437,7 +383,7 @@ const FileListItem = ({
               <Flexbox
                 horizontal
                 align={'center'}
-                className={styles.item}
+                className={stylex.props(styles.item).className}
                 gap={8}
                 style={{ flexShrink: 0 }}
                 width={columnWidths.uploader}
@@ -452,7 +398,7 @@ const FileListItem = ({
                         size={20}
                         style={{ flexShrink: 0 }}
                       />
-                      <span className={styles.uploaderName}>{uploaderName}</span>
+                      <span {...stylex.props(styles.uploaderName)}>{uploaderName}</span>
                     </Flexbox>
                   </Tooltip>
                 ) : (
@@ -460,7 +406,11 @@ const FileListItem = ({
                 )}
               </Flexbox>
             )}
-            <Flexbox className={styles.item} style={{ flexShrink: 0 }} width={columnWidths.size}>
+            <Flexbox
+              className={stylex.props(styles.item).className}
+              style={{ flexShrink: 0 }}
+              width={columnWidths.size}
+            >
               {isFolder || isPage ? '-' : formatSize(size)}
             </Flexbox>
           </>

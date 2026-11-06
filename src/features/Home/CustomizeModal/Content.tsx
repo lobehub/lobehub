@@ -1,14 +1,8 @@
 'use client';
 
-import {
-  ActionIcon,
-  Button,
-  createStaticStyles,
-  Flexbox,
-  Switch,
-  Text,
-  useModalContext,
-} from '@lobehub/ui';
+import { ActionIcon, Button, Flexbox, Switch, Text, useModalContext } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { RotateCcw, XIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -19,23 +13,24 @@ import SettingRow from './components/SettingRow';
 import { HOME_COUNT_MAX, HOME_COUNT_MIN, HOME_WIDGET_GROUPS } from './config';
 import { useHomeCustomization } from './useHomeCustomization';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  body: css`
-    overflow-y: auto;
-    max-block-size: min(70vh, 560px);
-    padding-block: 12px 20px;
-    padding-inline: 20px;
-  `,
-  footer: css`
-    padding-block: 12px;
-    padding-inline: 12px 20px;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  header: css`
-    padding-block: 16px 4px;
-    padding-inline: 20px;
-  `,
-}));
+const styles = stylex.create({
+  body: {
+    overflowY: 'auto',
+    maxBlockSize: 'min(70vh, 560px)',
+    paddingBlockStart: '12px',
+    paddingBlockEnd: '20px',
+    paddingInline: '20px',
+  },
+  footer: {
+    paddingBlock: '12px',
+    paddingInlineStart: '12px',
+    paddingInlineEnd: '20px',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+  },
+  header: { paddingBlockStart: '16px', paddingBlockEnd: '4px', paddingInline: '20px' },
+});
 
 const CustomizeModalContent = memo(() => {
   const { t } = useTranslation('home');
@@ -60,7 +55,7 @@ const CustomizeModalContent = memo(() => {
       <Flexbox
         horizontal
         align={'center'}
-        className={styles.header}
+        className={stylex.props(styles.header).className}
         gap={16}
         justify={'space-between'}
       >
@@ -75,7 +70,7 @@ const CustomizeModalContent = memo(() => {
         />
       </Flexbox>
 
-      <Flexbox className={styles.body} gap={20}>
+      <Flexbox className={stylex.props(styles.body).className} gap={20}>
         <SettingRow title={t('dashboard.customize.preset.label')}>
           <PresetBar value={preset} onChange={applyPreset} />
         </SettingRow>
@@ -149,7 +144,7 @@ const CustomizeModalContent = memo(() => {
         </Flexbox>
       </Flexbox>
 
-      <Flexbox horizontal align={'center'} className={styles.footer}>
+      <Flexbox horizontal align={'center'} className={stylex.props(styles.footer).className}>
         <Button
           htmlType={'button'}
           icon={<RotateCcw size={14} />}

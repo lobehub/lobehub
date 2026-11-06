@@ -2,6 +2,7 @@
 
 import { ActionIcon, Flexbox } from '@lobehub/ui';
 import { ChatHeader } from '@lobehub/ui/mobile';
+import * as stylex from '@stylexjs/stylex';
 import { MessageSquarePlus } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -24,7 +25,12 @@ const Header = memo(() => {
     <ChatHeader
       style={mobileHeaderSticky}
       left={
-        <Flexbox horizontal align={'center'} className={styles.leftContainer} gap={8}>
+        <Flexbox
+          horizontal
+          align={'center'}
+          className={stylex.props(styles.leftContainer).className}
+          gap={8}
+        >
           <UserAvatar size={32} onClick={() => navigate('/me')} />
           <ProductLogo type={'text'} />
         </Flexbox>

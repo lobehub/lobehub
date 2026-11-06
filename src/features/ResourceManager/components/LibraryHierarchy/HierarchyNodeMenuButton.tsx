@@ -2,9 +2,12 @@
 
 import type { ItemType } from '@lobehub/ui';
 import { ActionIcon, DropdownMenu, stopPropagation } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { MoreHorizontalIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { styles } from './styles';
 
 interface HierarchyNodeMenuButtonProps {
   /**
@@ -17,7 +20,7 @@ interface HierarchyNodeMenuButtonProps {
 /**
  * Hover-revealed "..." on a tree row that opens the row's action menu. The
  * menu used to be reachable only through `onContextMenu`, which nobody finds.
- * Shares the `.hierarchy-node-actions` reveal rules with the
+ * Shares the `styles.nodeActions` reveal rules with the
  * folder "+" (see styles.ts): hidden until hover, and kept visible while open.
  */
 const HierarchyNodeMenuButton = memo<HierarchyNodeMenuButtonProps>(({ menuItems }) => {
@@ -26,7 +29,7 @@ const HierarchyNodeMenuButton = memo<HierarchyNodeMenuButtonProps>(({ menuItems 
 
   return (
     <div
-      className={'hierarchy-node-actions'}
+      {...stylex.props(styles.nodeActions)}
       data-open={menuOpen}
       onClick={stopPropagation}
       onPointerDown={stopPropagation}
