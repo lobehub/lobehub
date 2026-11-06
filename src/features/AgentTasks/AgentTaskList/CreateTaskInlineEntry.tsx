@@ -46,7 +46,7 @@ import AssigneeMemberSelector from '../features/AssigneeMemberSelector';
 import AssigneeUserAvatar from '../features/AssigneeUserAvatar';
 import TaskExecutionControls from '../features/TaskExecutionControls';
 import TaskPriorityTag from '../features/TaskPriorityTag';
-import TaskProjectChip from '../features/TaskProjectChip';
+import TaskProjectPickerChip from '../features/TaskProjectPickerChip';
 import TaskVisibilityChipLabel from '../features/TaskVisibilityChipLabel';
 import TaskVisibilityTag from '../features/TaskVisibilityTag';
 import { UnassignedAssigneeIcon } from '../features/UnassignedAssigneeIcon';
@@ -849,7 +849,9 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
               </Block>
             </TaskLabelPicker>
 
-            {!parentTaskId && <TaskProjectChip value={projectChoice} onChange={setProjectChoice} />}
+            {!parentTaskId && (
+              <TaskProjectPickerChip value={projectChoice} onChange={setProjectChoice} />
+            )}
 
             {activeWorkspaceId && (
               <AssigneeMemberSelector

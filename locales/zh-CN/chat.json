@@ -2830,6 +2830,7 @@
   "taskList.groupBy.member": "负责人",
   "taskList.groupBy.none": "不分组",
   "taskList.groupBy.priority": "优先级",
+  "taskList.groupBy.project": "项目",
   "taskList.groupBy.schedule": "定时",
   "taskList.groupBy.status": "状态",
   "taskList.hiddenCompleted.count_one": "{{count}} 个任务",

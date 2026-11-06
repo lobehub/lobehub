@@ -234,7 +234,7 @@ export class TaskListSliceActionImpl {
         ? { groups: DEFAULT_KANBAN_GROUPS }
         : query.groupBy.startsWith('label:')
           ? { groupBy: 'label' as const, labelGroupId: query.groupBy.slice('label:'.length) }
-          : { groupBy: query.groupBy as 'assignee' | 'member' | 'priority' }),
+          : { groupBy: query.groupBy as 'assignee' | 'member' | 'priority' | 'project' }),
       includeArchived: query.includeArchived,
       projectId: query.projectId,
       scope: query.scope,

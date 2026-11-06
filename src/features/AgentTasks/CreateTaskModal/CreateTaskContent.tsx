@@ -42,7 +42,7 @@ import AssigneeMemberSelector from '../features/AssigneeMemberSelector';
 import AssigneeUserAvatar from '../features/AssigneeUserAvatar';
 import TaskExecutionControls from '../features/TaskExecutionControls';
 import TaskPriorityTag from '../features/TaskPriorityTag';
-import TaskProjectChip from '../features/TaskProjectChip';
+import TaskProjectPickerChip from '../features/TaskProjectPickerChip';
 import TaskVisibilityChipLabel from '../features/TaskVisibilityChipLabel';
 import TaskVisibilityTag from '../features/TaskVisibilityTag';
 import { UnassignedAssigneeIcon } from '../features/UnassignedAssigneeIcon';
@@ -432,7 +432,7 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
               </Block>
             </TaskLabelPicker>
 
-            <TaskProjectChip value={projectChoice} onChange={setProjectChoice} />
+            <TaskProjectPickerChip value={projectChoice} onChange={setProjectChoice} />
 
             {activeWorkspaceId && (
               <AssigneeMemberSelector

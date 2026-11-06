@@ -119,6 +119,13 @@ export const taskGroupKeyByStatus: Record<TaskStatus, string> = {
   scheduled: 'running',
 };
 
+/** The "No project" column of a board grouped by project. */
+export const TASK_NO_PROJECT_GROUP_KEY = 'project:none';
+
+/** Kanban column of a task's project when the board groups by project. */
+export const taskGroupKeyByProject = (projectId: string | null | undefined) =>
+  projectId ? `project:${projectId}` : TASK_NO_PROJECT_GROUP_KEY;
+
 /**
  * Whether a patched row left the project a collection is scoped to. A row without
  * the field (a card persisted before it was projected) proves nothing, so it stays.
@@ -153,7 +160,8 @@ export const taskListEntity: ReplicaEntityAdapter<TaskListValue, TaskListItem> =
 
 /**
  * A task inside the board's groups. On a status board a status change moves
- * the card to its new column (appended), keeping each column's `total` right.
+ * the card to its new column (appended), keeping each column's `total` right;
+ * a project change does the same on a project board.
  */
 export const taskGroupListEntity: ReplicaEntityAdapter<TaskGroupListValue, TaskGroupTask> = {
   has: (data, id) => data.groups.some((group) => group.tasks.some((task) => task.id === id)),
@@ -168,8 +176,18 @@ export const taskGroupListEntity: ReplicaEntityAdapter<TaskGroupListValue, TaskG
     if (next && leftProjectScope(data.projectId, next)) next = undefined;
 
     const status = next?.status as TaskStatus | undefined;
-    const moves = data.groupBy === 'status' && next !== undefined && status !== current.status;
-    const targetKey = moves && status ? taskGroupKeyByStatus[status] : undefined;
+    const movesStatus =
+      data.groupBy === 'status' && next !== undefined && status !== current.status;
+    const movesProject =
+      data.groupBy === 'project' &&
+      next !== undefined &&
+      (next.projectId ?? null) !== (current.projectId ?? null);
+    const moves = movesStatus || movesProject;
+    const targetKey = movesProject
+      ? taskGroupKeyByProject(next!.projectId)
+      : movesStatus && status
+        ? taskGroupKeyByStatus[status]
+        : undefined;
     const groups = data.groups.map((group) => {
       const contains = group.tasks.some((task) => task.id === id);
       if (moves) {
@@ -191,6 +209,19 @@ export const taskGroupListEntity: ReplicaEntityAdapter<TaskGroupListValue, TaskG
         total: next === undefined ? group.total - 1 : group.total,
       };
     });
+    // A project board only has columns for projects holding tasks, so the first
+    // task of a project opens its column.
+    if (movesProject && !groups.some((group) => group.key === targetKey)) {
+      groups.push({
+        hasMore: false,
+        key: targetKey!,
+        limit: 50,
+        offset: 0,
+        projectId: next!.projectId ?? null,
+        tasks: [next!],
+        total: 1,
+      });
+    }
     return { ...data, groups };
   },
 };

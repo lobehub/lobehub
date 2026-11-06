@@ -1,45 +1,59 @@
-import { Block } from '@lobehub/ui';
-import { memo } from 'react';
-import { useTranslation } from 'react-i18next';
+import { Text } from '@lobehub/ui';
+import { cssVar as sxVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 
-import ProjectSelector from './ProjectSelector';
-import TaskProjectValue from './TaskProjectValue';
+import ProjectAvatar from '@/features/Projects/ProjectAvatar';
+import { projectListItemSelector, useProjectStore } from '@/store/project';
+import { useUserStore } from '@/store/user';
+import { labPreferSelectors } from '@/store/user/selectors';
 
-interface TaskProjectChipProps {
-  onChange: (projectId: string | null) => void;
-  value: string | null;
-}
-
-const CHIP_TEXT_STYLE = { maxWidth: 160 };
-
-/** The task composers' project chip. */
-const TaskProjectChip = memo<TaskProjectChipProps>(({ onChange, value }) => {
-  const { t } = useTranslation('chat');
-
-  return (
-    <ProjectSelector value={value} onChange={onChange}>
-      <Block
-        clickable
-        horizontal
-        align="center"
-        gap={6}
-        height={24}
-        paddingBlock={3}
-        paddingInline={8}
-        variant={'borderless'}
-      >
-        <TaskProjectValue
-          emptyLabel={t('taskProject.label')}
-          fontSize={12}
-          iconSize={14}
-          projectId={value}
-          textStyle={CHIP_TEXT_STYLE}
-        />
-      </Block>
-    </ProjectSelector>
-  );
+const styles = stylex.create({
+  chip: {
+    display: 'inline-flex',
+    flexGrow: '0',
+    flexShrink: '1',
+    flexBasis: 'auto',
+    gap: 4,
+    alignItems: 'center',
+    minWidth: 0,
+    maxWidth: 140,
+    height: 20,
+    paddingInline: 6,
+    borderWidth: 1,
+    borderStyle: 'solid',
+    borderColor: sxVar.colorBorderSecondary,
+    borderRadius: 6,
+    lineHeight: 1,
+  },
 });
 
-TaskProjectChip.displayName = 'TaskProjectChip';
+interface TaskProjectChipProps {
+  projectId?: string | null;
+}
+
+/**
+ * The project a task belongs to, for list rows, board cards and group headers.
+ *
+ * Reads one row of the cached project list through a narrow selector, so a
+ * thousand rows cost no request and re-render only when their own project
+ * changes; the page that hosts them keeps that list fresh (`useTaskProjectList`).
+ * No project, or one outside the list (deleted, or private to someone else),
+ * renders nothing: never a placeholder or a raw id.
+ */
+const TaskProjectChip = ({ projectId }: TaskProjectChipProps) => {
+  const project = useProjectStore(projectListItemSelector(projectId));
+  const enabled = useUserStore(labPreferSelectors.enableProjects);
+
+  if (!enabled || !project) return null;
+
+  return (
+    <span data-testid={'task-project-chip'} title={project.name} {...stylex.props(styles.chip)}>
+      <ProjectAvatar avatar={project.avatar} name={project.name} size={14} />
+      <Text ellipsis fontSize={12} type={'secondary'}>
+        {project.name}
+      </Text>
+    </span>
+  );
+};
 
 export default TaskProjectChip;

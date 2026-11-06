@@ -260,7 +260,7 @@ export class TaskModel {
   async groupList(
     options: TaskListFilterOptions & {
       excludeStatuses?: string[];
-      groupBy?: 'agent' | 'assignee' | 'label' | 'member' | 'priority';
+      groupBy?: 'agent' | 'assignee' | 'label' | 'member' | 'priority' | 'project';
       groups?: Array<{
         key: string;
         limit?: number;
@@ -279,6 +279,7 @@ export class TaskModel {
       limit: number;
       offset: number;
       priority?: number;
+      projectId?: string | null;
       tasks: TaskItem[];
       total: number;
     }>

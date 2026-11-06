@@ -7,13 +7,25 @@ import {
 import type { TaskStatus } from '@lobechat/types';
 import { t } from 'i18next';
 
+import { projectListItemSelector, useProjectStore } from '@/store/project';
 import { getTaskStoreState } from '@/store/task';
 import type { TaskListItem } from '@/store/task/slices/list/initialState';
+import {
+  TASK_NO_PROJECT_GROUP_KEY,
+  taskGroupKeyByProject,
+} from '@/store/task/slices/list/projection';
 
 /** Grouping by one label group: one group per label of that group, plus "no label". */
 export type TaskLabelGroupBy = `label:${string}`;
 export type TaskGroupBy =
-  'assignee' | 'automationMode' | 'member' | 'none' | 'priority' | 'status' | TaskLabelGroupBy;
+  | 'assignee'
+  | 'automationMode'
+  | 'member'
+  | 'none'
+  | 'priority'
+  | 'project'
+  | 'status'
+  | TaskLabelGroupBy;
 
 const TASK_LABEL_GROUP_BY_PREFIX = 'label:';
 
@@ -115,6 +127,8 @@ export interface TaskGroupMeta {
   /** Registry position of a label group, for ordering. */
   labelRank?: number;
   priority?: number;
+  /** The project of a project group; null is the "no project" group. */
+  projectId?: string | null;
   status?: 'backlog' | 'canceled' | 'completed' | 'failed' | 'paused' | 'running' | 'scheduled';
 }
 
@@ -139,6 +153,7 @@ const TASK_GROUP_BY_SET = new Set<TaskGroupBy>([
   'member',
   'none',
   'priority',
+  'project',
   'status',
 ]);
 const TASK_ORDER_BY_SET = new Set<TaskOrderBy>([
@@ -204,6 +219,26 @@ export const dropMissingLabelGroupings = <
     ...options,
     groupBy: groupByMissing ? DEFAULT_TASK_LIST_VIEW_OPTIONS.groupBy : options.groupBy,
     subGroupBy: subGroupByMissing ? DEFAULT_TASK_LIST_VIEW_OPTIONS.subGroupBy : options.subGroupBy,
+  };
+};
+
+/**
+ * Grouping by project means nothing where every task shares one project (a
+ * project page) or where projects are switched off. View options are shared by
+ * every task page, so the choice is set aside here rather than erased.
+ */
+export const dropProjectGrouping = <T extends Pick<TaskListViewOptions, 'groupBy' | 'subGroupBy'>>(
+  options: T,
+): T => {
+  if (options.groupBy !== 'project' && options.subGroupBy !== 'project') return options;
+  return {
+    ...options,
+    groupBy:
+      options.groupBy === 'project' ? DEFAULT_TASK_LIST_VIEW_OPTIONS.groupBy : options.groupBy,
+    subGroupBy:
+      options.subGroupBy === 'project'
+        ? DEFAULT_TASK_LIST_VIEW_OPTIONS.subGroupBy
+        : options.subGroupBy,
   };
 };
 
@@ -364,6 +399,29 @@ export const getTaskLabelGroupMeta = (
   };
 };
 
+/**
+ * Group meta of one project. A name only comes from the cached project list, so
+ * a task filed under a project the caller cannot see joins "No project" rather
+ * than heading a group with an id or a placeholder.
+ */
+export const getTaskProjectGroupMeta = (projectId: string | null | undefined): TaskGroupMeta => {
+  const project = projectListItemSelector(projectId)(useProjectStore.getState());
+  if (project) {
+    return {
+      groupBy: 'project',
+      key: taskGroupKeyByProject(project.id),
+      label: project.name,
+      projectId: project.id,
+    };
+  }
+  return {
+    groupBy: 'project',
+    key: TASK_NO_PROJECT_GROUP_KEY,
+    label: t('taskProject.none', { ns: 'chat' }),
+    projectId: null,
+  };
+};
+
 const getTaskAssigneeSortValue = (task: TaskListItem) => task.assigneeAgentId ?? '';
 
 export const getTaskPriorityGroupMeta = (
@@ -467,6 +525,9 @@ export const getTaskGroupMeta = (task: TaskListItem, groupBy: TaskGroupBy): Task
     case 'member': {
       return getTaskMemberGroupMeta(task.assigneeUserId);
     }
+    case 'project': {
+      return getTaskProjectGroupMeta(task.projectId);
+    }
     case 'automationMode': {
       // Automated tasks created before automationMode was introduced are schedules.
       const automationMode = task.automationMode === 'heartbeat' ? 'heartbeat' : 'schedule';
@@ -513,6 +574,10 @@ const getGroupRank = (group: TaskGroupMeta, groupBy: TaskGroupBy): number => {
   switch (groupBy) {
     case 'automationMode': {
       return group.automationMode === 'schedule' ? 0 : 1;
+    }
+    // Named projects sort by name; "No project" stays last.
+    case 'project': {
+      return group.projectId ? 0 : 1;
     }
     case 'priority': {
       if (group.priority === undefined) return Number.MAX_SAFE_INTEGER;
