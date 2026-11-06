@@ -49,8 +49,26 @@ const portalCurrentThread = (s: ChatStoreState) => {
   return (s.threadMaps[s.activeTopicId] || []).find((t) => t.id === threadId);
 };
 
+/**
+ * Whether the Portal's thread can stay open once `topicId` becomes the active
+ * topic. It can't without a topic, nor when another topic's loaded list holds
+ * it. A thread no loaded list knows yet (a deep link still fetching) is kept.
+ */
+const isPortalThreadKeptOnTopic =
+  (topicId?: string | null) =>
+  (s: ChatStoreState): boolean => {
+    const threadId = portalThreadId(s);
+    if (!threadId || !topicId) return false;
+
+    return !Object.entries(s.threadMaps).some(
+      ([ownerTopicId, threads]) =>
+        ownerTopicId !== topicId && threads?.some((thread) => thread.id === threadId),
+    );
+  };
+
 export const portalThreadSelectors = {
   currentThreadView,
+  isPortalThreadKeptOnTopic,
   newThreadMode,
   portalCurrentThread,
   portalThreadId,

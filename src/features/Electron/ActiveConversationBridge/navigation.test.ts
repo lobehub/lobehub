@@ -94,4 +94,34 @@ describe('active conversation navigation', () => {
     expect(navigate).toHaveBeenCalledWith('/project/prj_1/topic/tpc_2', { replace: true });
     unsubscribe();
   });
+
+  /** @example T-2769: a topic switch must not carry the old topic's side-panel thread. */
+  it("drops the old topic's portal thread on a topic switch and keeps it on a thread change", () => {
+    useChatStore.setState(
+      {
+        activeThreadId: undefined,
+        portalThreadId: 'thread-p',
+        threadMaps: { 'topic-a': [{ id: 'thread-p' } as any] },
+      },
+      false,
+    );
+    const coordinate = resolveActiveConversationCoordinate({
+      params: { aid: 'agent-a', topicId: 'topic-a' },
+      resolvedAgentId: 'agent-a',
+      url: '/agent/agent-a/topic-a?portalThread=thread-p',
+    });
+    const navigate = vi.fn();
+    projectActiveConversationCoordinate(coordinate);
+    const unsubscribe = subscribeActiveConversationNavigation(() => coordinate, navigate);
+
+    useChatStore.setState({ activeThreadId: 'thread-a' }, false);
+    expect(navigate).toHaveBeenLastCalledWith(
+      '/agent/agent-a/topic-a?portalThread=thread-p&thread=thread-a',
+      { replace: true },
+    );
+
+    useChatStore.setState({ activeThreadId: undefined, activeTopicId: 'topic-b' }, false);
+    expect(navigate).toHaveBeenLastCalledWith('/agent/agent-a/topic-b', { replace: true });
+    unsubscribe();
+  });
 });

@@ -1,5 +1,6 @@
 import { appNavigate } from '@/features/Electron/navigation/appNavigate';
 import { useChatStore } from '@/store/chat';
+import { portalThreadSelectors } from '@/store/chat/selectors';
 
 import { type ActiveConversationCoordinate, buildActiveConversationUrl } from './coordinate';
 
@@ -37,5 +38,13 @@ export const subscribeActiveConversationNavigation = (
     const threadId = state.activeThreadId || null;
     if (topicId === coordinate.topicId && threadId === coordinate.threadId) return;
 
-    navigate(buildActiveConversationUrl(coordinate, topicId, threadId), { replace: true });
+    // A topic switch drops the Portal's thread when it belongs to the old topic;
+    // carried along, it reopens on the new topic as an empty pane.
+    const keepPortalThread =
+      state.activeTopicId === previousState.activeTopicId ||
+      portalThreadSelectors.isPortalThreadKeptOnTopic(topicId)(state);
+
+    navigate(buildActiveConversationUrl(coordinate, topicId, threadId, { keepPortalThread }), {
+      replace: true,
+    });
   });

@@ -7,15 +7,16 @@ import { useTranslation } from 'react-i18next';
 import PortalHeader from '@/features/Portal/components/Header';
 import { useChatStore } from '@/store/chat';
 
+import { useThreadPlacement } from '../useThreadPlacement';
 import Title from './Title';
 
 const Header = memo<{ onClose?: () => void }>(({ onClose }) => {
   const { t } = useTranslation('thread');
-  const [portalThreadId, closeThreadPortal, switchThread] = useChatStore((s) => [
+  const [portalThreadId, closeThreadPortal] = useChatStore((s) => [
     s.portalThreadId,
     s.closeThreadPortal,
-    s.switchThread,
   ]);
+  const { openInMain } = useThreadPlacement();
 
   return (
     <PortalHeader
@@ -27,10 +28,7 @@ const Header = memo<{ onClose?: () => void }>(({ onClose }) => {
             icon={ArrowLeftRight}
             size={DESKTOP_HEADER_ICON_SMALL_SIZE}
             title={t('portal.openInMain')}
-            onClick={() => {
-              switchThread(portalThreadId);
-              closeThreadPortal();
-            }}
+            onClick={() => openInMain(portalThreadId)}
           />
         )
       }

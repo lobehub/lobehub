@@ -286,4 +286,73 @@ describe('ChatHydration', () => {
       expect(navigateMock).toHaveBeenCalledWith('/acme/agent/agt_test', { replace: true });
     });
   });
+
+  describe('portal thread across topic switches', () => {
+    const mountOnTopicA = (search: string) => {
+      useParamsMock.mockReturnValue({ aid: 'agt_test', topicId: 'tpc_a' });
+      useLocationMock.mockReturnValue({ hash: '', pathname: '/agent/agt_test/tpc_a', search });
+      useSearchParamsMock.mockReturnValue([new URLSearchParams(search), setSearchParamsMock]);
+      render(<ChatHydration />);
+      navigateMock.mockClear();
+    };
+
+    /** @example T-2769: switching topics must not carry the old topic's side-panel thread. */
+    it("drops another topic's portal thread from the next topic's URL", async () => {
+      useChatStore.setState(
+        {
+          activeTopicId: 'tpc_a',
+          portalThreadId: 'thd_a',
+          threadMaps: { tpc_a: [{ id: 'thd_a' } as any] },
+        },
+        false,
+      );
+      mountOnTopicA('?portalThread=thd_a&mode=single');
+
+      await act(async () => {
+        useChatStore.setState({ activeTopicId: 'tpc_b' }, false);
+      });
+
+      expect(navigateMock).toHaveBeenCalledWith('/agent/agt_test/tpc_b?mode=single', {
+        replace: true,
+      });
+    });
+
+    it('drops the portal thread when a new topic starts', async () => {
+      useChatStore.setState(
+        {
+          activeTopicId: 'tpc_a',
+          portalThreadId: 'thd_a',
+          threadMaps: { tpc_a: [{ id: 'thd_a' } as any] },
+        },
+        false,
+      );
+      mountOnTopicA('?portalThread=thd_a');
+
+      await act(async () => {
+        useChatStore.setState({ activeTopicId: null as any }, false);
+      });
+
+      expect(navigateMock).toHaveBeenCalledWith('/agent/agt_test', { replace: true });
+    });
+
+    it('keeps a portal thread that belongs to the topic being opened', async () => {
+      useChatStore.setState(
+        {
+          activeTopicId: 'tpc_a',
+          portalThreadId: 'thd_b',
+          threadMaps: { tpc_b: [{ id: 'thd_b' } as any] },
+        },
+        false,
+      );
+      mountOnTopicA('?portalThread=thd_b');
+
+      await act(async () => {
+        useChatStore.setState({ activeTopicId: 'tpc_b' }, false);
+      });
+
+      expect(navigateMock).toHaveBeenCalledWith('/agent/agt_test/tpc_b?portalThread=thd_b', {
+        replace: true,
+      });
+    });
+  });
 });
