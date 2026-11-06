@@ -109,7 +109,7 @@ const TabPane = ({
 
   return (
     <div
-      {...sx([styles.pane], undefined, style)}
+      {...sx(styles.pane, style)}
       data-focused={isActive ? 'true' : undefined}
       data-pane={pane}
       ref={ref}
@@ -275,7 +275,7 @@ const TabHost = ({ createRouter = createTabRouter }: TabHostProps) => {
           aria-valuemin={25}
           aria-valuenow={Math.round(effectiveSplitView.ratio * 100)}
           role="separator"
-          {...sx([styles.divider], undefined, { left: `${effectiveSplitView.ratio * 100}%` })}
+          {...sx(styles.divider, { left: `${effectiveSplitView.ratio * 100}%` })}
           tabIndex={0}
           onDoubleClick={() => setSplitRatio(0.5)}
           onKeyDown={handleDividerKeyDown}

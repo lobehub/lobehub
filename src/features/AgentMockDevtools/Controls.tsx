@@ -193,7 +193,7 @@ export const Controls = memo(() => {
         onPointerDown={handleScrubStart}
       >
         <div {...stylex.props(styles.progressTrack, scrubbing && styles.progressTrackScrubbing)}>
-          <div {...sx([styles.progressFill], undefined, { width: `${pct}%` })} />
+          <div {...sx(styles.progressFill, { width: `${pct}%` })} />
         </div>
       </div>
       <Flexbox

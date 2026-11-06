@@ -6,7 +6,10 @@ import { memo } from 'react';
 import type { ConnectorWithTools } from '@/store/tool/slices/connector';
 
 const styles = stylex.create({
-  active: { backgroundColor: cssVar.colorFillSecondary, backgroundImage: 'none' },
+  active: {
+    backgroundColor: { 'default': cssVar.colorFillSecondary, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: 'none',
+  },
   item: {
     cursor: 'pointer',
     display: 'flex',

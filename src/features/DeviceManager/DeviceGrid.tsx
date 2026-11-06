@@ -33,7 +33,7 @@ interface DeviceGridProps {
  */
 const DeviceGrid = ({ children, className }: DeviceGridProps) => (
   <div {...stylex.props(styles.host)}>
-    <div {...sx([styles.grid], className)}>{children}</div>
+    <div {...sx(styles.grid, className)}>{children}</div>
   </div>
 );
 

@@ -54,7 +54,7 @@ const NodeRow = memo<{
         </span>
         <span style={{ textAlign: 'end' }}>{formatCompactSize(node.sizeBytes)}</span>
         <span {...stylex.props(styles.bar)} title={`${percent.toFixed(1)}% of tracked`}>
-          <span {...sx([styles.barFill], undefined, { width: `${Math.min(100, percent)}%` })} />
+          <span {...sx(styles.barFill, { width: `${Math.min(100, percent)}%` })} />
         </span>
       </div>
       {open &&

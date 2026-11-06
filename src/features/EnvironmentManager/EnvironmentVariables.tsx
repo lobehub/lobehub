@@ -190,13 +190,11 @@ const EnvRow = memo<{
       className={stylex.props(styles.row, stylex.defaultMarker()).className}
       gap={8}
     >
-      <span {...sx([styles.mono], undefined, { flex: 1 })}>{entry[0]}</span>
+      <span {...sx(styles.mono, { flex: 1 })}>{entry[0]}</span>
       {/* Shown, not starred out: the hint above says these are stored in the
           clear and copied into every instance, and a mask would promise a
           secrecy the storage does not keep. */}
-      <span {...sx([styles.mono], undefined, { color: cssVar.colorTextSecondary, flex: 1 })}>
-        {entry[1]}
-      </span>
+      <span {...sx(styles.mono, { color: cssVar.colorTextSecondary, flex: 1 })}>{entry[1]}</span>
       <ActionIcon
         icon={PencilIcon}
         size={'small'}

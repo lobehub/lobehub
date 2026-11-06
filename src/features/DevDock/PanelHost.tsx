@@ -111,7 +111,7 @@ const PanelHost = memo(() => {
   const height = maximized ? `calc(100dvh - ${BAR_HEIGHT}px)` : `${dragHeight ?? panelHeight}px`;
 
   return (
-    <section {...sx([styles.host(`${BAR_OVERLAP}px`)], undefined, { height })}>
+    <section {...sx(styles.host(`${BAR_OVERLAP}px`), { height })}>
       {!maximized && <div {...stylex.props(styles.resizeHandle)} onPointerDown={handleDragStart} />}
       <Flexbox
         horizontal

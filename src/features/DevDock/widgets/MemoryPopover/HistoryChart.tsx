@@ -61,7 +61,7 @@ const HistoryChart = memo<{ history: MemorySample[] }>(({ history }) => {
           />
         ))}
       </svg>
-      <div {...sx([styles.caption], undefined, { display: 'flex', gap: 12 })}>
+      <div {...sx(styles.caption, { display: 'flex', gap: 12 })}>
         {series.map((item) => (
           <span key={item.label} style={{ color: item.color }}>
             ● {item.label} {formatCompactSize(item.values.at(-1) ?? 0)}

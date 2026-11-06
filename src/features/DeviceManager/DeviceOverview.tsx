@@ -286,7 +286,7 @@ const DeviceOverview = ({ canOperate, device }: DeviceOverviewProps) => {
         <DetailCard icon={ActivityIcon} padded={false} title={t('devices.detail.runtime')}>
           <InfoRow icon={PowerIcon} label={t('devices.detail.status')}>
             <span
-              {...sx([styles.statusPill], undefined, {
+              {...sx(styles.statusPill, {
                 background: online ? cssVar.colorSuccessBg : cssVar.colorFillTertiary,
                 color: online ? cssVar.colorSuccess : cssVar.colorTextSecondary,
               })}
