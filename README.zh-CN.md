@@ -99,7 +99,7 @@
 
 ## ✨ 特性一览
 
-LobeHub 让 Super-Agents 加入你的团队。把它们拉进团队已经在用的聊天工具，比如 Slack、Discord、Telegram、WhatsApp、iMessage、飞书或微信。没人指派的需求它们会自己接下，代码交给 Claude Code 或 Codex 写，交付时带着你能核对的证据，你的每一次纠正它们都会记住。
+LobeHub 让 Super-Agents 加入你的团队。把它们拉进团队已经在用的聊天工具，比如 Slack、Discord、Telegram、飞书、LINE 或微信。没人指派的需求它们会自己接下，代码交给 Claude Code 或 Codex 写，交付时带着你能核对的证据，你的每一次纠正它们都会记住。
 
 下面以 Lobe AI 为例，看它从进群第一天到转正都做了些什么。
 

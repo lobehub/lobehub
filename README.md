@@ -102,7 +102,7 @@ Whether for users or professional developers, LobeHub will be your AI Agent play
 
 ## ✨ Features
 
-LobeHub puts super-agents on your team. Add them to the chats your team already uses, such as Slack, Discord, Telegram, WhatsApp, iMessage, Lark or WeChat. They take on requests nobody assigned, hand the coding to Claude Code or Codex, come back with evidence you can check, and learn from every correction.
+LobeHub puts super-agents on your team. Add them to the chats your team already uses, such as Slack, Discord, Telegram, Lark, LINE or WeChat. They take on requests nobody assigned, hand the coding to Claude Code or Codex, come back with evidence you can check, and learn from every correction.
 
 The story below follows one of them, Lobe AI, from its first day on your team until it passes its review.
 
