@@ -142,6 +142,7 @@ import { mergePartialPersistedMessages, resolveSendResponseMessages } from '../p
 import { resolveExistingTopicForRun } from '../resolveExistingTopic';
 import { type ContextCompressionOptions, executeContextCompression } from './compression';
 import { resolveRunCwd, resolveSendProjectRun, type SourceTopicDirectory } from './runCwd';
+import { readSendEditorState, restoreSendEditorState } from './sendEditorState';
 import { showSendErrorInContext } from './sendErrorNotice';
 
 /**
@@ -903,11 +904,7 @@ export class ConversationLifecycleActionImpl {
       });
 
       const op = this.#get().operations[operationId];
-      if (op?.metadata.inputEditorTempState) {
-        targetInputEditor?.setJSONState(op.metadata.inputEditorTempState);
-      } else {
-        targetInputEditor?.setDocument('markdown', message);
-      }
+      restoreSendEditorState(targetInputEditor, op?.metadata.inputEditorTempState, message);
 
       // The editor snapshot covers only text. A send rejected after the composer
       // was cleared (e.g. the server refusing an offline bound device) would
@@ -1357,7 +1354,10 @@ export class ConversationLifecycleActionImpl {
         const sendError = op?.status === 'failed' ? op.metadata.inputSendErrorMsg : undefined;
         if (!hasNotifiedMessageAccepted && (op?.status === 'cancelled' || sendError) && jsonState) {
           const blankContext = { ...operationContext, topicId: null };
-          saveDraft(messageMapKey(blankContext), targetInputEditor?.getJSONState() ?? jsonState);
+          saveDraft(
+            messageMapKey(blankContext),
+            readSendEditorState(targetInputEditor) ?? jsonState,
+          );
           if (sendError) showSendErrorInContext(this.#get(), blankContext, sendError);
         }
         void this.#get().switchTopic(null, { skipRefreshMessage: true });
@@ -1395,7 +1395,7 @@ export class ConversationLifecycleActionImpl {
     // Store editor state in operation metadata for cancel restoration
     const jsonState = preserveComposer
       ? undefined
-      : (inputEditorData ?? targetInputEditor?.getJSONState());
+      : (inputEditorData ?? readSendEditorState(targetInputEditor));
     this.#get().updateOperationMetadata(operationId, {
       inputEditorTempState: jsonState,
       inputSendErrorMsg: undefined,

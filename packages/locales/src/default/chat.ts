@@ -2175,6 +2175,8 @@ export default {
   'taskDetail.find.position': '{{current}}/{{total}}',
   'taskDetail.find.prev': 'Previous match',
   'taskDetail.followUpFailed': 'Couldn’t send the follow-up. Your message is kept — try again.',
+  'taskDetail.gatewayRequired':
+    'Task replies require Agent Gateway. Ask your administrator to configure and enable it. Your message has been kept.',
   'taskDetail.collapseReply': 'Collapse',
   'taskDetail.replyInThread': 'Reply in this thread',
   'taskDetail.replyPlaceholder': 'Reply in this thread...',

@@ -47,42 +47,61 @@ describe('sendMessage refused by the server on a new topic', () => {
   // and the composer returns to the blank conversation, whose key holds neither.
   //
   // Before the fix, the user saw no notice and lost the typed message.
-  it('keeps the notice and the typed message in the blank conversation', async () => {
-    const { result } = renderHook(() => useChatStore());
-    const agentId = TEST_IDS.SESSION_ID;
-    const editor = {
-      clearContent: vi.fn(),
-      getJSONState: vi.fn(() => typedDraft),
-      getMarkdownContent: vi.fn(() => 'hello'),
-      setDocument: vi.fn(),
-      setJSONState: vi.fn(),
-    };
+  it.each(['wrapped', 'native'])(
+    'keeps the notice and the typed message with a %s editor',
+    async (editorKind) => {
+      const { result } = renderHook(() => useChatStore());
+      const agentId = TEST_IDS.SESSION_ID;
+      const editor = {
+        clearContent: vi.fn(),
+        ...(editorKind === 'wrapped'
+          ? { getJSONState: vi.fn(() => typedDraft), setJSONState: vi.fn() }
+          : { getDocument: vi.fn(() => typedDraft) }),
+        getMarkdownContent: vi.fn(() => 'hello'),
+        setDocument: vi.fn(),
+      };
 
-    act(() => {
-      useChatStore.setState({
-        activeAgentId: agentId,
-        activeTopicId: null,
-        executeClientAgent: vi.fn(),
-        executeGatewayAgent: vi.fn().mockRejectedValue(new Error('AgentConcurrencyLimitExceeded')),
-        isGatewayModeEnabled: () => true,
-        mainInputEditor: editor as any,
-        refreshMessages: vi.fn(),
-        refreshTopic: vi.fn(),
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: agentId,
+          activeTopicId: null,
+          executeClientAgent: vi.fn(),
+          executeGatewayAgent: vi
+            .fn()
+            .mockRejectedValue(new Error('AgentConcurrencyLimitExceeded')),
+          isGatewayModeEnabled: () => true,
+          mainInputEditor: editor as any,
+          refreshMessages: vi.fn(),
+          refreshTopic: vi.fn(),
+        });
       });
-    });
 
-    await act(async () => {
-      await result.current.sendMessage({
-        context: { agentId, threadId: null, topicId: null },
-        message: 'hello',
+      await act(async () => {
+        await result.current.sendMessage({
+          context: { agentId, threadId: null, topicId: null },
+          editorData: typedDraft,
+          message: 'hello',
+        });
       });
-    });
 
-    const state = useChatStore.getState();
-    expect(state.activeTopicId).toBeNull();
-    expect(agentRunSelectors.isCurrentSendMessageError(state)).toBe(
-      'AgentConcurrencyLimitExceeded',
-    );
-    expect(getDraft(messageMapKey({ agentId, threadId: null, topicId: null }))).toEqual(typedDraft);
-  });
+      const state = useChatStore.getState();
+      expect(state.activeTopicId).toBeNull();
+      expect(agentRunSelectors.isCurrentSendMessageError(state)).toBe(
+        'AgentConcurrencyLimitExceeded',
+      );
+      expect(getDraft(messageMapKey({ agentId, threadId: null, topicId: null }))).toEqual(
+        typedDraft,
+      );
+      if (editorKind === 'native') {
+        expect(editor.setDocument).toHaveBeenCalledWith('json', JSON.stringify(typedDraft));
+      } else {
+        expect(editor.setJSONState).toHaveBeenCalledWith(typedDraft);
+      }
+      const key = messageMapKey({ agentId, threadId: null, topicId: null });
+      const gatewayContext = vi.mocked(state.executeGatewayAgent).mock.calls[0][0].messageContext;
+      const optimisticKey = messageMapKey(gatewayContext!);
+      expect(optimisticKey).not.toBe(key);
+      expect(state.dbMessagesMap[optimisticKey]).toEqual([]);
+    },
+  );
 });

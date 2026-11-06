@@ -76,6 +76,7 @@ vi.mock('@/features/EditorCanvas', () => ({
 vi.mock('@/features/AttachmentInput', () => ({ AttachmentUploadButton: () => null }));
 vi.mock('@/features/Conversation/ChatInput/OpStatusTray', () => ({ default: () => null }));
 vi.mock('@/features/Conversation/ChatInput/QueueTray', () => ({ default: () => null }));
+vi.mock('@/features/Conversation/ChatInput/SendErrorAlert', () => ({ default: () => null }));
 vi.mock('@/features/Conversation/ChatInput/useConversationChatInputUiState', () => ({
   useConversationChatInputUiState: () => ({
     placeholderVariant: 'default',
@@ -87,10 +88,19 @@ vi.mock('@/features/Conversation/hooks/useConversationResourceAccess', () => ({
   useConversationResourceAccess: () => ({ canUseResource: true }),
 }));
 vi.mock('@/features/Conversation/store', () => ({
+  messageStateSelectors: { sendMessageError: () => undefined },
   useConversationStore: (selector: (s: unknown) => unknown) =>
     selector({ sendMessage: mocks.sendMessage, stopGenerating: vi.fn() }),
+  useConversationStoreApi: () => ({
+    getState: () => ({ context: { agentId: 'agent', topicId: 'topic' }, editor: mocks.editor }),
+  }),
 }));
 vi.mock('@/hooks/useEnterToSend', () => ({ useEnterToSend: () => () => true }));
+vi.mock('@/store/serverConfig', () => ({
+  getServerConfigStoreState: () => ({
+    serverConfig: { agentGatewayUrl: 'https://gateway.example.com', enableGatewayMode: true },
+  }),
+}));
 vi.mock('./useComposerFocus', () => ({
   useComposerFocus: () => ({
     collapse: vi.fn(),
