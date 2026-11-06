@@ -1,3 +1,4 @@
+import type { TaskContext } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 
 import type { AgentModel } from '@/database/models/agent';
@@ -8,6 +9,7 @@ import type { EditLockService } from '@/server/services/editLock';
 import type { TaskService } from '@/server/services/task';
 
 import { assertArchivedTaskStaysIdle } from './archiveGuard';
+import { assertTaskOriginPatchAllowed } from './originValidation';
 import { assertResultingScheduleValid } from './scheduleValidation';
 import { findTaskOrThrow, resolveTaskOrThrow } from './utils';
 
@@ -32,6 +34,7 @@ export interface TaskPatchFields {
   assigneeAgentId?: string | null;
   assigneeUserId?: string | null;
   automationMode?: string | null;
+  context?: Record<string, unknown>;
   editorData?: unknown;
   instruction?: string | null;
   schedulePattern?: string | null;
@@ -121,7 +124,8 @@ export async function resolveTaskPatchInvariants<Data extends TaskPatchFields>(
   ctx: TaskPatchInvariantContext,
   params: { data: Data; id: string; parentTaskId?: string | null },
 ): Promise<{ data: Data & { parentTaskId?: string | null }; resolved: ResolvedTask }> {
-  const { data, id, parentTaskId } = params;
+  const { id, parentTaskId } = params;
+  let { data } = params;
 
   await assertAssigneeAgentBelongsToUser(
     ctx.serverDB,
@@ -132,6 +136,17 @@ export async function resolveTaskPatchInvariants<Data extends TaskPatchFields>(
   const resolved = await resolveTaskOrThrow(ctx.taskModel, id);
   assertResultingScheduleValid(resolved, data);
   assertArchivedTaskStaysIdle(resolved, data);
+  // `context` replaces the whole column, origin included: a changed origin
+  // must point at the caller's own conversation like it must at create time.
+  if (data.context !== undefined) {
+    const origin = await assertTaskOriginPatchAllowed(
+      ctx.serverDB,
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      (resolved.context as TaskContext | null)?.origin,
+      data.context?.origin,
+    );
+    if (origin !== undefined) data = { ...data, context: { ...data.context, origin } };
+  }
 
   // Collaborative edit lock: reject writes to a workspace task another member
   // is actively editing. Inert until a client acquires the lock.
