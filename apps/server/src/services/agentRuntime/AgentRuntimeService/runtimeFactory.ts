@@ -217,6 +217,7 @@ export async function createAgentRuntime(
     botContext: principal?.actor?.bot,
     execSubAgent: deps.delegate.execSubAgent,
     execVirtualSubAgent: deps.delegate.execVirtualSubAgent,
+    cancelVirtualSubAgent: deps.delegate.cancelVirtualSubAgent,
     execGroupMember: deps.delegate.execGroupMember,
     onGroupMemberResult: (params) => deps.completeGroupMemberBarrier(params),
     hookDispatcher,
