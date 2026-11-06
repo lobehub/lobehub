@@ -161,8 +161,8 @@ export const listRules = async (ctx: ExpertiseContext) => {
   };
 
   const owned = bound.flatMap(({ domain }) => {
-    const mounts = bindingsByDomain.get(domain.id);
-    const owner = mounts && ownerOf(mounts);
+    const mounts = bindingsByDomain.get(domain.id) ?? [];
+    const owner = ownerOf(mounts);
     return owner ? [{ domain, mounts, owner }] : [];
   });
   // The reviewer's groups lead in their own order; each agent's follow together, agents in the
