@@ -259,7 +259,9 @@ export class DocumentReviewModel {
    * same session lock. Splitting the two let concurrent analyses interleave —
    * A saved its impacts, B saved its own, B pinned its baseline, then A pinned
    * its baseline — so the panel rendered one run's impacts against another
-   * run's comparison, and the next Analyze silently changed meaning.
+   * run's comparison, and the next Analyze silently changed meaning. Always pass
+   * the baseline the analysis actually compared against; the redundant-write
+   * check happens here, against the locked row, so it cannot go stale.
    */
   replaceImpacts = async (
     sessionId: string,
@@ -275,7 +277,10 @@ export class DocumentReviewModel {
       // would both delete, then both insert, and the list would end up mixing
       // the two analyses instead of showing one of them.
       const [session] = await tx
-        .select({ id: documentReviewSessions.id })
+        .select({
+          baseHistoryId: documentReviewSessions.baseHistoryId,
+          id: documentReviewSessions.id,
+        })
         .from(documentReviewSessions)
         .where(
           and(
@@ -319,7 +324,12 @@ export class DocumentReviewModel {
               )
               .returning();
 
-      if (options?.baseHistoryId !== undefined) {
+      // Compare against the locked row, never the caller's snapshot: an ordinary
+      // Analyze request reads the session, then queues behind a run that pins a
+      // different baseline. By the time it lands, "the session still says X" is
+      // stale, and skipping the write on that comparison is exactly how one
+      // run's items end up stored against another run's baseline.
+      if (options?.baseHistoryId !== undefined && options.baseHistoryId !== session.baseHistoryId) {
         await tx
           .update(documentReviewSessions)
           .set({ baseHistoryId: options.baseHistoryId })

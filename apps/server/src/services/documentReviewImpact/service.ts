@@ -200,15 +200,13 @@ export class DocumentReviewImpactService {
       .slice(0, IMPACT_MAX_ITEMS)
       .map((draft) => toImpactInput(draft, currentText));
 
-    // Pin the baseline in the same write that stores the items. A separate
-    // `setBaseline` call could interleave with a concurrent analysis: A saves
-    // impacts, B saves impacts, B pins its baseline, A pins its own — and the
-    // panel then shows one run's items against another run's comparison.
-    const items = await this.repository.saveImpacts(
-      session.id,
-      inputs,
-      baseHistoryId === session.baseHistoryId ? undefined : { baseHistoryId },
-    );
+    // Always pin the baseline this run compared against, in the same write that
+    // stores the items. Skipping it when it "already matches" the session we
+    // read earlier is unsafe: a concurrent run may have pinned a different
+    // baseline in between, and this write would then leave the items describing
+    // one comparison while the session points at another. `replaceImpacts`
+    // drops the redundant UPDATE against the row it holds locked.
+    const items = await this.repository.saveImpacts(session.id, inputs, { baseHistoryId });
 
     const counts = inputs.reduce(
       (total, input) => {

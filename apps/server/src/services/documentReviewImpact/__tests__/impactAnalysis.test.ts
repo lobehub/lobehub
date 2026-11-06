@@ -203,12 +203,14 @@ describe('DocumentReviewImpactService', () => {
     expect(repository.savedBaseline).toBe('hist_base');
   });
 
-  it('leaves the session baseline alone when the run keeps it', async () => {
+  it('pins the baseline it analysed against even when the session already held it', async () => {
     const { repository, service } = buildService();
 
     await service.analyze({ sessionId: 'drs_session' });
 
-    expect(repository.savedBaseline).toBeUndefined();
+    // Unconditional on purpose: deciding "already matches" from the snapshot
+    // read before the write is what let a concurrent run win the race.
+    expect(repository.savedBaseline).toBe('hist_base');
   });
 
   it('reports no difference between identical versions instead of an empty list', async () => {
