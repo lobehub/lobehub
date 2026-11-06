@@ -180,7 +180,7 @@ const TailMarquee = ({ children, className, style }: TailMarqueeProps) => {
       data-revealing={revealing || undefined}
       ref={containerRef}
       title={overflow > 0 ? fullText : undefined}
-      {...sx([styles.container, overflow > 0 && styles.overflowing], className, {
+      {...sx(styles.container, overflow > 0 && styles.overflowing, className, {
         ...style,
         '--tail-marquee-duration': `${duration}s`,
         '--tail-marquee-offset': `${overflow}px`,

@@ -105,7 +105,7 @@ export const FileView = ({
           );
         })}
         {unpaired.map((item) => (
-          <a href={hrefOf({ kind: 'signoff' })} key={item.key} {...stylex.props(styles.row)}>
+          <a href={hrefOf({ kind: 'review' })} key={item.key} {...stylex.props(styles.row)}>
             <span {...stylex.props(styles.key)}>{shortKey(item.key)}</span>
             <span />
             <span {...stylex.props(styles.chips)}>

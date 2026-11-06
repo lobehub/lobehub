@@ -5,7 +5,7 @@ import type { Browser, Page } from '@playwright/test';
 import type { ConditionConfig, ConditionVariant } from '../config';
 import type { Side } from '../plan/planFile';
 import { caseGapsOf } from './gaps';
-import { inspectRules } from './inspect';
+import { inspectRules, type RuleInspection } from './inspect';
 import { captureInPage, type StyleSnapshot } from './snapshot';
 import { applyState, type CaptureState, planStates } from './states';
 import { planWidths } from './widths';
@@ -34,6 +34,7 @@ export interface RunCapture {
   pageErrors: string[];
   states?: CaptureState[];
   unparsedMedia: number;
+  unparsedSelectors: string[];
   widths: number[];
 }
 
@@ -377,8 +378,36 @@ const captureConditions = async ({
     containerRules: 0,
     pageErrors,
     unparsedMedia: 0,
+    unparsedSelectors: [],
     widths: [...new Set(plan.map((item) => item.width))],
   };
+};
+
+const unmodeledRules = (found: RuleInspection) =>
+  Object.fromEntries(
+    Object.entries(found.unmodeled).map(([section, indices]) => [
+      section,
+      found.sectionRules?.[section] ?? indices.map((index) => found.rules[index]),
+    ]),
+  );
+
+export const inspectCaseGaps = async (
+  browser: Browser,
+  urls: Record<Side, string>,
+  options: PageCondition,
+  pageErrors: string[],
+) => {
+  const [base, head] = await Promise.all(
+    [urls.base, urls.head].map(async (url) => {
+      const page = await openPage(browser, url, { ...options, state: 'default' }, pageErrors);
+      try {
+        return unmodeledRules(await inspectRules(page));
+      } finally {
+        await page.close();
+      }
+    }),
+  );
+  return caseGapsOf(base, head);
 };
 
 export const captureRun = async ({
@@ -395,6 +424,7 @@ export const captureRun = async ({
   const pseudoRules: Partial<Record<Side, Record<string, string[]>>> = {};
   const unmodeled: Partial<Record<Side, Record<string, string[]>>> = {};
   let containerRules = 0;
+  const unparsedSelectors = new Set<string>();
   for (const side of ['base', 'head'] as const) {
     const page = await openPage(
       browser,
@@ -405,13 +435,9 @@ export const captureRun = async ({
     const found = await inspectRules(page);
     media.push(...found.media);
     pseudoRules[side] = found.pseudoRules;
-    unmodeled[side] = Object.fromEntries(
-      Object.entries(found.unmodeled).map(([section, indices]) => [
-        section,
-        indices.map((index) => found.rules[index]),
-      ]),
-    );
+    unmodeled[side] = unmodeledRules(found);
     containerRules += found.containers;
+    for (const selector of found.unparsed) unparsedSelectors.add(selector);
     await page.close();
   }
   const { unparsed, widths } = planWidths(media, conditions.widths);
@@ -443,6 +469,7 @@ export const captureRun = async ({
     pageErrors,
     states: plannedStates,
     unparsedMedia: unparsed,
+    unparsedSelectors: [...unparsedSelectors].sort(),
     widths,
   };
 };

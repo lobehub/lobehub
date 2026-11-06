@@ -78,6 +78,37 @@ describe('resolveScope', () => {
     ]);
   });
 
+  it('pulls in components that import a changed index module through its directory', async () => {
+    const factory = (color: string) =>
+      `export const styles = createStaticStyles(() => ({ a: css\`color: ${color};\` }));\n`;
+    await write('src/features/Panel/styles/index.ts', factory('red'));
+    await write(
+      'src/features/Panel/Panel.tsx',
+      "import { styles } from './styles';\nexport const Panel = () => <div className={styles.a} />;\n",
+    );
+    await write(
+      'src/features/Panel/styles/Inner.tsx',
+      "import { styles } from '.';\nexport const Inner = () => <div className={styles.a} />;\n",
+    );
+    git('add', '.');
+    git('commit', '-qm', 'panel');
+    await write('src/features/Panel/styles/index.ts', factory('blue'));
+    git('commit', '-qam', 'head');
+    const scope = await resolveScope({ base: 'HEAD~1', head: 'HEAD', repo });
+    expect(scope.files).toEqual([
+      {
+        base: 'src/features/Panel/Panel.tsx',
+        head: 'src/features/Panel/Panel.tsx',
+        reason: 'imports-changed-style',
+      },
+      {
+        base: 'src/features/Panel/styles/Inner.tsx',
+        head: 'src/features/Panel/styles/Inner.tsx',
+        reason: 'imports-changed-style',
+      },
+    ]);
+  });
+
   it('pairs a moved component by rename and keeps added and deleted files one-sided', async () => {
     git('mv', 'src/features/Card/Card.tsx', 'src/features/Card/CardView.tsx');
     await write('src/features/New/Fresh.tsx', 'export const Fresh = () => <p />;\n');
