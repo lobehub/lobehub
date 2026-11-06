@@ -48,6 +48,14 @@ vi.mock('@/database/models/verifyRun', () => ({
 }));
 
 describe('acceptanceEvidenceRuntime', () => {
+  const createRuntime = (operationId: string) =>
+    acceptanceEvidenceRuntime.factory({
+      operationId,
+      serverDB: {} as never,
+      toolManifestMap: {},
+      userId: 'user-1',
+    });
+
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.operationFindById.mockResolvedValue({
@@ -77,12 +85,7 @@ describe('acceptanceEvidenceRuntime', () => {
 
   it('records a documents.id reference as first-class evidence', async () => {
     mocks.documentFindByIds.mockResolvedValue([{ id: 'docs_123' }]);
-    const runtime = acceptanceEvidenceRuntime.factory({
-      operationId: 'evidence-op',
-      serverDB: {} as never,
-      toolManifestMap: {},
-      userId: 'user-1',
-    });
+    const runtime = createRuntime('evidence-op');
 
     const result = await runtime.submitEvidence({
       checkItemId: 'criterion-1',
@@ -97,12 +100,7 @@ describe('acceptanceEvidenceRuntime', () => {
 
   it('rejects an agent-document binding id instead of inserting it as a file', async () => {
     mocks.documentFindByIds.mockResolvedValue([]);
-    const runtime = acceptanceEvidenceRuntime.factory({
-      operationId: 'evidence-op',
-      serverDB: {} as never,
-      toolManifestMap: {},
-      userId: 'user-1',
-    });
+    const runtime = createRuntime('evidence-op');
 
     const result = await runtime.submitEvidence({
       checkItemId: 'criterion-1',
@@ -120,12 +118,7 @@ describe('acceptanceEvidenceRuntime', () => {
     // could only ever be evidenced by the text-only post-run turn.
     mocks.operationFindById.mockResolvedValue({ id: 'task-op', parentOperationId: null });
     mocks.fileFindById.mockResolvedValue({ id: 'files_shot' });
-    const runtime = acceptanceEvidenceRuntime.factory({
-      operationId: 'task-op',
-      serverDB: {} as never,
-      toolManifestMap: {},
-      userId: 'user-1',
-    });
+    const runtime = createRuntime('task-op');
 
     const result = await runtime.submitEvidence({
       checkItemId: 'criterion-1',
@@ -147,12 +140,7 @@ describe('acceptanceEvidenceRuntime', () => {
         { id: 'criterion-1', index: 0, required: true, title: 'Document', verifierType: 'llm' },
       ],
     }));
-    const runtime = acceptanceEvidenceRuntime.factory({
-      operationId: 'repair-op',
-      serverDB: {} as never,
-      toolManifestMap: {},
-      userId: 'user-1',
-    });
+    const runtime = createRuntime('repair-op');
     expect(
       (
         await runtime.submitEvidence({
@@ -168,12 +156,7 @@ describe('acceptanceEvidenceRuntime', () => {
   });
 
   it('keeps writing into the parent run from the post-run evidence turn', async () => {
-    const runtime = acceptanceEvidenceRuntime.factory({
-      operationId: 'evidence-op',
-      serverDB: {} as never,
-      toolManifestMap: {},
-      userId: 'user-1',
-    });
+    const runtime = createRuntime('evidence-op');
 
     const result = await runtime.submitEvidence({
       checkItemId: 'criterion-1',
@@ -205,12 +188,7 @@ describe('acceptanceEvidenceRuntime', () => {
       { checkItemId: 'criterion-1' },
     ]);
 
-    const runtime = acceptanceEvidenceRuntime.factory({
-      operationId: 'task-op',
-      serverDB: {} as never,
-      toolManifestMap: {},
-      userId: 'user-1',
-    });
+    const runtime = createRuntime('task-op');
 
     const result = await runtime.listCriteria();
 
@@ -243,12 +221,7 @@ describe('acceptanceEvidenceRuntime', () => {
     // times and every call was rejected as UNKNOWN_FILE, so the acceptance
     // ended with zero evidence. Empty strings are absent, not references.
     mocks.operationFindById.mockResolvedValue({ id: 'task-op', parentOperationId: null });
-    const runtime = acceptanceEvidenceRuntime.factory({
-      operationId: 'task-op',
-      serverDB: {} as never,
-      toolManifestMap: {},
-      userId: 'user-1',
-    });
+    const runtime = createRuntime('task-op');
 
     const result = await runtime.submitEvidence({
       checkItemId: 'criterion-1',
@@ -268,12 +241,7 @@ describe('acceptanceEvidenceRuntime', () => {
     // `{"error":"Tool call failed"}`, which made a live builder abandon the
     // plan-driven path on its first call.
     mocks.operationFindById.mockResolvedValue({ id: 'task-op', parentOperationId: null });
-    const runtime = acceptanceEvidenceRuntime.factory({
-      operationId: 'task-op',
-      serverDB: {} as never,
-      toolManifestMap: {},
-      userId: 'user-1',
-    });
+    const runtime = createRuntime('task-op');
 
     const result = await runtime.listCriteria();
 
@@ -288,12 +256,7 @@ describe('acceptanceEvidenceRuntime', () => {
     // written into the text — the text-only outcome this path exists to prevent.
     mocks.operationFindById.mockResolvedValue({ id: 'task-op', parentOperationId: null });
     mocks.fileFindById.mockResolvedValue({ id: 'files_shot' });
-    const runtime = acceptanceEvidenceRuntime.factory({
-      operationId: 'task-op',
-      serverDB: {} as never,
-      toolManifestMap: {},
-      userId: 'user-1',
-    });
+    const runtime = createRuntime('task-op');
 
     const result = await runtime.submitEvidence({
       checkItemId: 'criterion-1',
@@ -310,12 +273,7 @@ describe('acceptanceEvidenceRuntime', () => {
 
   it('rejects an item that references both a document and a file', async () => {
     mocks.operationFindById.mockResolvedValue({ id: 'task-op', parentOperationId: null });
-    const runtime = acceptanceEvidenceRuntime.factory({
-      operationId: 'task-op',
-      serverDB: {} as never,
-      toolManifestMap: {},
-      userId: 'user-1',
-    });
+    const runtime = createRuntime('task-op');
 
     const result = await runtime.submitEvidence({
       checkItemId: 'criterion-1',
@@ -338,12 +296,7 @@ describe('acceptanceEvidenceRuntime', () => {
         plan: [{ id: 'criterion-1', index: 0, required: true, title: 'Late', verifierType: 'llm' }],
       });
 
-    const runtime = acceptanceEvidenceRuntime.factory({
-      operationId: 'task-op',
-      serverDB: {} as never,
-      toolManifestMap: {},
-      userId: 'user-1',
-    });
+    const runtime = createRuntime('task-op');
 
     const result = await runtime.listCriteria();
 
@@ -357,12 +310,7 @@ describe('acceptanceEvidenceRuntime', () => {
     // screenshot file)' } with no file, which would render on the acceptance
     // as a visual check with nothing to open.
     mocks.operationFindById.mockResolvedValue({ id: 'task-op', parentOperationId: null });
-    const runtime = acceptanceEvidenceRuntime.factory({
-      operationId: 'task-op',
-      serverDB: {} as never,
-      toolManifestMap: {},
-      userId: 'user-1',
-    });
+    const runtime = createRuntime('task-op');
 
     const result = await runtime.submitEvidence({
       checkItemId: 'criterion-1',
@@ -381,12 +329,7 @@ describe('acceptanceEvidenceRuntime', () => {
     // fail the structural gate again, round after round.
     mocks.operationFindById.mockResolvedValue({ id: 'task-op', parentOperationId: null });
     mocks.fileFindById.mockResolvedValue({ id: 'files_gif' });
-    const runtime = acceptanceEvidenceRuntime.factory({
-      operationId: 'task-op',
-      serverDB: {} as never,
-      toolManifestMap: {},
-      userId: 'user-1',
-    });
+    const runtime = createRuntime('task-op');
 
     const result = await runtime.submitEvidence({
       checkItemId: 'criterion-1',
@@ -406,12 +349,7 @@ describe('acceptanceEvidenceRuntime', () => {
   it('stores a GIF cited as a screenshot as a gif', async () => {
     mocks.operationFindById.mockResolvedValue({ id: 'task-op', parentOperationId: null });
     mocks.fileFindById.mockResolvedValue({ fileType: 'image/gif', id: 'files_gif', name: 'a.gif' });
-    const runtime = acceptanceEvidenceRuntime.factory({
-      operationId: 'task-op',
-      serverDB: {} as never,
-      toolManifestMap: {},
-      userId: 'user-1',
-    });
+    const runtime = createRuntime('task-op');
 
     const result = await runtime.submitEvidence({
       checkItemId: 'criterion-1',
@@ -426,12 +364,7 @@ describe('acceptanceEvidenceRuntime', () => {
 
   it('rejects a gif with no artifact behind it', async () => {
     mocks.operationFindById.mockResolvedValue({ id: 'task-op', parentOperationId: null });
-    const runtime = acceptanceEvidenceRuntime.factory({
-      operationId: 'task-op',
-      serverDB: {} as never,
-      toolManifestMap: {},
-      userId: 'user-1',
-    });
+    const runtime = createRuntime('task-op');
 
     const result = await runtime.submitEvidence({
       checkItemId: 'criterion-1',
@@ -445,12 +378,7 @@ describe('acceptanceEvidenceRuntime', () => {
 
   it('rejects an unknown files.id before the evidence foreign key is evaluated', async () => {
     mocks.fileFindById.mockResolvedValue(undefined);
-    const runtime = acceptanceEvidenceRuntime.factory({
-      operationId: 'evidence-op',
-      serverDB: {} as never,
-      toolManifestMap: {},
-      userId: 'user-1',
-    });
+    const runtime = createRuntime('evidence-op');
 
     const result = await runtime.submitEvidence({
       checkItemId: 'criterion-1',
@@ -464,12 +392,7 @@ describe('acceptanceEvidenceRuntime', () => {
   it('echoes received fields when rejecting an empty evidence item', async () => {
     // T-574: a live builder resubmitted {type}-only items six times because the
     // rejection never showed what had arrived. The echo makes the gap visible.
-    const runtime = acceptanceEvidenceRuntime.factory({
-      operationId: 'evidence-op',
-      serverDB: {} as never,
-      toolManifestMap: {},
-      userId: 'user-1',
-    });
+    const runtime = createRuntime('evidence-op');
 
     const result = await runtime.submitEvidence({
       checkItemId: 'criterion-1',
@@ -483,12 +406,7 @@ describe('acceptanceEvidenceRuntime', () => {
   });
 
   it('echoes "no fields" when an item arrives with nothing recognizable', async () => {
-    const runtime = acceptanceEvidenceRuntime.factory({
-      operationId: 'evidence-op',
-      serverDB: {} as never,
-      toolManifestMap: {},
-      userId: 'user-1',
-    });
+    const runtime = createRuntime('evidence-op');
 
     const result = await runtime.submitEvidence({
       checkItemId: 'criterion-1',
@@ -501,12 +419,7 @@ describe('acceptanceEvidenceRuntime', () => {
 
   it('echoes received fields when rejecting an unbacked visual item', async () => {
     mocks.operationFindById.mockResolvedValue({ id: 'task-op', parentOperationId: null });
-    const runtime = acceptanceEvidenceRuntime.factory({
-      operationId: 'task-op',
-      serverDB: {} as never,
-      toolManifestMap: {},
-      userId: 'user-1',
-    });
+    const runtime = createRuntime('task-op');
 
     const result = await runtime.submitEvidence({
       checkItemId: 'criterion-1',
