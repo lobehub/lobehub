@@ -113,6 +113,11 @@ export interface ChannelMemberConfig {
    * creator, so a workspace channel can use another member's device after its owner approves.
    */
   deviceOwnerId?: string;
+  /**
+   * This member's own reply strategy, over the channel's `ChannelConfig.wake`. Parsed by the
+   * shared wake schema; never part of the execution environment.
+   */
+  wake?: Record<string, unknown>;
   /** Set only from a device's canonical-path acknowledgement before claiming work. */
   workingDirectory?: string;
 }
