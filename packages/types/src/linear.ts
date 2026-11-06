@@ -102,8 +102,9 @@ export interface LinearIssueLinkMetadata {
   /**
    * The issue's Linear labels (lowercased names) when they were last applied to
    * the task. A sync applies only what changed in Linear since, so a label removed
-   * from the task in LobeHub stays removed, and one added there stays. Sync
-   * bookkeeping, not display: a display refresh keeps it.
+   * from the task in LobeHub stays removed. One added there stays too, unless a
+   * grouped label Linear adds replaces it as its sibling. Sync bookkeeping, not
+   * display: a display refresh keeps it.
    */
   syncedLabels?: string[];
   teamKey?: string;

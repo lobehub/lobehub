@@ -1326,6 +1326,19 @@ describe('LinearIssueSyncService labels (real PostgreSQL)', () => {
     expect(await taskLabelNames('1')).toEqual(['Backend']);
   });
 
+  it('does not count a task none of whose labels could be attached', async () => {
+    await new TaskLabelModel(db, userId).create({ isGroup: true, name: 'Bug' });
+    serve([issue({ id: '1', ...labels({ name: 'Bug' }) })]);
+
+    const result = await new LinearIssueSyncService(db, userId).syncByFilter(
+      TOKEN,
+      rule,
+      syncLabels,
+    );
+
+    expect(result.labelsSynced).toBeUndefined();
+  });
+
   it('reads the same name when cutting a long one leaves a space at the end', async () => {
     const name = `${'a'.repeat(63)} tail`;
     serve([issue({ id: '1', ...labels({ name }) })]);
