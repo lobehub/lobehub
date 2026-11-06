@@ -15,21 +15,17 @@ export const FOREIGN_TASK_NOT_FOUND = 'TASK_NOT_FOUND';
 export const foreignTaskDetailKey = (workspaceId: string, taskId: string) =>
   ['portal-foreign-task-detail', workspaceId, taskId] as const;
 
+const taskNotFound = () =>
+  Object.assign(new Error('Task not found'), { code: FOREIGN_TASK_NOT_FOUND });
+
 const fetchForeignTaskDetail = async (
   taskId: string,
   workspaceId: string,
 ): Promise<TaskDetailData> => {
   const result = await taskService.getDetailInWorkspace(taskId, workspaceId).catch((error) => {
-    if (!isTrpcErrorCode(error, 'NOT_FOUND')) throw error;
-    const missing = new Error('Task not found') as Error & { code: string };
-    missing.code = FOREIGN_TASK_NOT_FOUND;
-    throw missing;
+    throw isTrpcErrorCode(error, 'NOT_FOUND') ? taskNotFound() : error;
   });
-  if (!result.data?.id) {
-    const missing = new Error('Task not found') as Error & { code: string };
-    missing.code = FOREIGN_TASK_NOT_FOUND;
-    throw missing;
-  }
+  if (!result.data?.id) throw taskNotFound();
   return result.data;
 };
 
