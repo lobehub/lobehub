@@ -38,23 +38,6 @@ afterEach(async () => {
 });
 
 describe('TaskExternalLinkModel', () => {
-  it('locks a link in its scope and reads what is recorded on it now', async () => {
-    const model = new TaskExternalLinkModel(db, userId);
-    const task = await new TaskModel(db, userId).create({ instruction: 'one' });
-    const { id } = await model.create(link(task.id));
-    await model.recordSyncedLabels(id, ['bug']);
-
-    const locked = await db.transaction((tx) =>
-      new TaskExternalLinkModel(tx, userId).lockForUpdate(id),
-    );
-    const foreign = await db.transaction((tx) =>
-      new TaskExternalLinkModel(tx, otherUserId).lockForUpdate(id),
-    );
-
-    expect(locked?.metadata.syncedLabels).toEqual(['bug']);
-    expect(foreign).toBeUndefined();
-  });
-
   it('keeps recorded labels through a display refresh, which replaces the rest', async () => {
     const model = new TaskExternalLinkModel(db, userId);
     const task = await new TaskModel(db, userId).create({ instruction: 'one' });

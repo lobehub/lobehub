@@ -424,6 +424,22 @@ export class TaskLabelModel {
     return labels;
   };
 
+  /**
+   * Hold these labels for the rest of the transaction, as an assignment does, for a
+   * writer that must lock a task before it knows which of them it attaches. Assigning
+   * takes labels before the task, so taking them first keeps that order.
+   */
+  lockForShare = async (labelIds: string[]): Promise<void> => {
+    const ids = labelIds.filter(isUuid);
+    if (ids.length === 0) return;
+    await this.db
+      .select({ id: taskLabels.id })
+      .from(taskLabels)
+      .where(and(inArray(taskLabels.id, ids), this.ownership()))
+      .orderBy(asc(taskLabels.id))
+      .for('share');
+  };
+
   /** Validate a label set for assignment without writing anything. */
   assertAssignable = async (labelIds: string[]): Promise<void> => {
     await this.resolveAssignable(labelIds);

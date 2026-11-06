@@ -41,6 +41,17 @@ const expectCode = async (promise: Promise<unknown>, code: TaskLabelError['code'
 };
 
 describe('TaskLabelModel registry', () => {
+  it('locks labels for sharing inside a transaction, ignoring ids it cannot use', async () => {
+    const label = await workspace.create({ name: 'Bug' });
+
+    await expect(
+      serverDB.transaction((tx) =>
+        new TaskLabelModel(tx, userId, workspaceId).lockForShare([label.id, 'not-a-uuid']),
+      ),
+    ).resolves.toBeUndefined();
+    await expect(workspace.lockForShare([])).resolves.toBeUndefined();
+  });
+
   describe('findOrCreateMany', () => {
     it('creates what is missing and returns existing labels untouched', async () => {
       const existing = await workspace.create({ color: '#EB5757', name: 'Bug' });
