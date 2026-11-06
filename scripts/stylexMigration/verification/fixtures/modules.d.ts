@@ -1,4 +1,5 @@
 declare module 'verification:component' {
+  import type { AskUserQuestionViewProps } from '@lobechat/shared-tool-ui/ask-user';
   import type { WorkSummaryItem } from '@lobechat/types';
   import type { ListProps } from '@lobehub/ui';
   import type { LucideIcon } from 'lucide-react';
@@ -87,6 +88,7 @@ declare module 'verification:component' {
     onLineWrappingChange: () => void;
   }>;
   export const FilePathDisplay: ComponentType<{ filePath: string; isDirectory: boolean }>;
+  export const AskUserQuestionView: ComponentType<AskUserQuestionViewProps>;
   export const OptionCard: ComponentType<{
     description: string;
     disabled: boolean;
