@@ -609,8 +609,8 @@ const InputEditor = memo<{
         onSelect={inputHistory.confirm}
       />
       <Editor
-        autoFocus
         pasteAsPlainText
+        autoFocus={!mobile}
         className={className}
         content={initialContent}
         editable={canCreateContent && canUseResource}
