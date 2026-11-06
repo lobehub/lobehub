@@ -385,7 +385,7 @@ export class ConnectorActionImpl {
   /**
    * Begin the OAuth authorization-code flow for a custom connector and return
    * the authorize URL for the caller to open in a popup. Resolves the client
-   * via pre-registration or DCR on the server.
+   * on the server: pre-registration, a Client ID Metadata Document, or DCR.
    */
   startConnectorOAuth = async (id: string): Promise<string> => {
     const { authorizationUrl } = await lambdaClient.connector.startOAuth.mutate({ id });
