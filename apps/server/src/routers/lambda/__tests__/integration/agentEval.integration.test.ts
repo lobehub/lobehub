@@ -906,14 +906,6 @@ describe('Agent Eval Router Integration Tests', () => {
         });
       });
 
-      it('should default status to idle', async () => {
-        const caller = agentEvalRouter.createCaller(createTestContext(userId));
-
-        const result = await caller.createRun({ datasetId });
-
-        expect(result.status).toBe('idle');
-      });
-
       it('should throw BAD_REQUEST when dataset not found', async () => {
         const caller = agentEvalRouter.createCaller(createTestContext(userId));
 

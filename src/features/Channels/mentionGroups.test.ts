@@ -1,7 +1,7 @@
 import type { ChannelPublicMember } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
-import { getMentionGroups } from './mentionGroups';
+import { getMentionGroups, matchInviteAgents, MENTION_INVITE_LIMIT } from './mentionGroups';
 
 const member = (
   id: string,
@@ -82,5 +82,50 @@ describe('Channel mention groups', () => {
   it('returns no sections for an empty list or no matches', () => {
     expect(getMentionGroups([], '', 'Former member')).toEqual([]);
     expect(getMentionGroups([user, agent], 'zzzzzzz', 'Former member')).toEqual([]);
+  });
+});
+
+describe('Agents an @mention can invite', () => {
+  const outside = [
+    { id: 'agt_writer', name: 'Writer' },
+    { id: 'agt_review', name: 'Code reviewer' },
+    { id: 'agt_lead', name: 'Project writer' },
+    { id: 'agt_joined', name: 'Writer two' },
+  ];
+  const match = (query: string, priorityIds: string[] = []) =>
+    matchInviteAgents(outside, {
+      exclude: ['agt_joined'],
+      nameOf: (agent) => agent.name,
+      priorityIds,
+      query,
+    }).map((agent) => agent.id);
+
+  it('lists nobody until a name is typed', () => {
+    expect(match('')).toEqual([]);
+    expect(match('   ')).toEqual([]);
+  });
+
+  it('matches names case-insensitively and skips Agents already in the Channel', () => {
+    expect(match('WRITER')).toEqual(['agt_writer', 'agt_lead']);
+    expect(match('zzz')).toEqual([]);
+  });
+
+  it("puts the project's own Agents first", () => {
+    expect(match('writer', ['agt_lead'])).toEqual(['agt_lead', 'agt_writer']);
+  });
+
+  it('caps the suggestions', () => {
+    const many = Array.from({ length: MENTION_INVITE_LIMIT + 3 }, (_, index) => ({
+      id: `agt_${index}`,
+      name: `Helper ${index}`,
+    }));
+    expect(
+      matchInviteAgents(many, {
+        exclude: [],
+        nameOf: (a) => a.name,
+        priorityIds: [],
+        query: 'helper',
+      }),
+    ).toHaveLength(MENTION_INVITE_LIMIT);
   });
 });

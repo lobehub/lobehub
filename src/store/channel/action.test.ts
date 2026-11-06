@@ -77,6 +77,23 @@ describe('channelActions after a committed write', () => {
     ).rejects.toThrow('device offline');
   });
 
+  it('returns the member an @mention invite added, even when the detail refresh fails', async () => {
+    vi.mocked(channelService.addUser).mockResolvedValue({ data: { id: 'mem_user' } } as never);
+    vi.mocked(channelService.addAgent).mockResolvedValue({ data: { id: 'mem_agent' } } as never);
+    vi.mocked(channelService.detail).mockRejectedValue(new Error('offline'));
+
+    await expect(channelActions.addMember('chn_000000000001', { userId: 'user_b' })).resolves.toBe(
+      'mem_user',
+    );
+    await expect(
+      channelActions.addMember('chn_000000000001', { agent: { agentId: 'agt_a' } }),
+    ).resolves.toBe('mem_agent');
+    expect(channelService.addUser).toHaveBeenCalledExactlyOnceWith('chn_000000000001', 'user_b');
+    expect(channelService.addAgent).toHaveBeenCalledExactlyOnceWith('chn_000000000001', {
+      agentId: 'agt_a',
+    });
+  });
+
   // One invite adds people and Agents together; people go first so a failing Agent
   // cannot block the people who were already chosen.
   it('adds invited people before Agents and refreshes once', async () => {

@@ -30,10 +30,10 @@ tags:
 
 指的是可以使用 openai SDK 进行请求，并且请求参数和和返回值和 dall-e 以及 gpt-image-x 系列一致。
 
-以智谱的 CogView-4 为例，它是一个兼容 openai 请求格式的模型。你只需要在对应的 ai models 文件 `packages/model-bank/src/aiModels/zhipu.ts` 中，添加模型配置，例如：
+以智谱的 CogView-4 为例，它是一个兼容 openai 请求格式的模型。你只需要在对应的 ai models 文件 `packages/model-bank/src/aiModels/zhipu/nonChat.ts` 中，添加模型配置，例如：
 
 ```ts
-const zhipuImageModels: AIImageModelCard[] = [
+export const zhipuImageModels: AIImageModelCard[] = [
   // 添加模型配置
   // https://bigmodel.cn/dev/howuse/image-generation-model/cogview-4
   {

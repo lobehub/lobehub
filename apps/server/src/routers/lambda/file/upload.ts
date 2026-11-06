@@ -9,6 +9,7 @@ import { businessFileUploadCheck } from '@/business/server/lambda-routers/file';
 import { checkFileStorageUsage } from '@/business/server/trpc-middlewares/lambda';
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { router } from '@/libs/trpc/lambda';
+import type { HeteroOperationCapability } from '@/libs/trpc/utils/internalJwt';
 import type { FileService } from '@/server/services/file';
 import { downloadRemoteImage } from '@/server/services/file/downloadRemoteImage';
 import {
@@ -35,10 +36,14 @@ const isStoredObjectAvailable = async (fileService: FileService, url: string): P
 
 /**
  * A run's operation token reaches `createFile` only to upload evidence into its
- * own acceptance round (see `authorizeHeteroOperationEvidence`). Keep what it
- * creates out of the creator's library: no folder or document parent, no
- * knowledge base, never public, and always filed as acceptance evidence, which
- * the resource listings hide.
+ * own acceptance round, or an image its tools returned (see
+ * `authorizeHeteroOperationEvidence`). Keep what it creates out of the
+ * creator's library: no folder or document parent, no knowledge base, never
+ * public, and always filed under a source the resource listings hide.
+ *
+ * An upload that names no source is evidence when the token may file evidence
+ * (the acceptance CLI sends none), and a tool-result image otherwise (so does
+ * the image uploader of a CLI released before `ToolResult` existed).
  */
 const scopeOperationTokenUpload = <
   T extends {
@@ -49,20 +54,28 @@ const scopeOperationTokenUpload = <
   },
 >(
   input: T,
+  capabilities: HeteroOperationCapability[] = [],
 ): T => {
+  const allowed = [
+    ...(capabilities.includes('acceptance:evidence') ? [FileSource.Acceptance] : []),
+    ...(capabilities.includes('hetero:ingest') ? [FileSource.ToolResult] : []),
+  ];
+  const source = input.source === undefined ? allowed[0] : toFileSource(input.source);
+
   if (
     input.parentId ||
     input.knowledgeBaseId ||
     input.visibility === 'public' ||
-    (input.source !== undefined && input.source !== FileSource.Acceptance)
+    !source ||
+    !allowed.includes(source)
   ) {
     throw new TRPCError({
       code: 'FORBIDDEN',
-      message: "This run's token can only upload acceptance evidence",
+      message: "This run's token can only upload acceptance evidence or tool-result images",
     });
   }
 
-  return { ...input, source: FileSource.Acceptance, visibility: 'private' };
+  return { ...input, source, visibility: 'private' };
 };
 
 export const uploadRouter = router({
@@ -83,13 +96,17 @@ export const uploadRouter = router({
     .use(withScopedPermission('file:upload'))
     .input(
       UploadFileSchema.omit({ url: true }).extend({
+        /** Agent whose conversation this upload is attached to. */
+        conversationAgentId: z.string().optional(),
         parentId: z.string().optional(),
         url: z.string(),
         visibility: z.enum(['private', 'public']).optional(),
       }),
     )
     .mutation(async ({ ctx, input: requested }) => {
-      const input = ctx.heteroOperationScope ? scopeOperationTokenUpload(requested) : requested;
+      const input = ctx.heteroOperationScope
+        ? scopeOperationTokenUpload(requested, ctx.heteroOperationCapabilities)
+        : requested;
       const metadata = stripAgentShareFileProvenance(input.metadata);
       const existingFile = await ctx.fileModel.checkHash(input.hash!);
       const { isExist } = existingFile;
@@ -116,6 +133,21 @@ export const uploadRouter = router({
         knowledgeBaseVisibility = knowledgeBase.visibility;
       }
 
+      // Every member can read a public agent's conversation, so an attachment
+      // defaulted to the uploader's private space would tombstone for them. The
+      // agent is resolved here, never trusted from the client's cached state.
+      const isPublicAgentAttachment =
+        !!ctx.workspaceId &&
+        !!input.conversationAgentId &&
+        !input.knowledgeBaseId &&
+        !input.source &&
+        !input.visibility &&
+        !parentDocument &&
+        (await ctx.agentModel.getAgentVisibility(input.conversationAgentId)) === 'public';
+      const fileSource = isPublicAgentAttachment
+        ? FileSource.ChatAttachment
+        : toFileSource(input.source);
+
       // Visibility precedence (workspace mode only — personal mode ignores the
       // column entirely):
       //   1. A library upload always uses the knowledge base visibility.
@@ -124,13 +156,18 @@ export const uploadRouter = router({
       //      uploaded inside a private folder stays private.
       //   4. Agent-document uploads default to 'public' to match their document's
       //      access contract; their source keeps them out of resource listings.
-      //   5. Otherwise default top-level uploads to 'private' so new content
+      //   5. Attachments in a public agent's conversation default to 'public';
+      //      their source keeps them out of resource listings. Flipping one back
+      //      to private or deleting it still tombstones the card.
+      //   6. Otherwise default top-level uploads to 'private' so new content
       //      starts in the creator's private space (mirrors the Pages spec).
       const resolvedVisibility: 'private' | 'public' | undefined = ctx.workspaceId
         ? (knowledgeBaseVisibility ??
           input.visibility ??
           parentVisibility ??
-          (input.source === FileSource.AgentDocument ? 'public' : 'private'))
+          (input.source === FileSource.AgentDocument || isPublicAgentAttachment
+            ? 'public'
+            : 'private'))
         : undefined;
 
       if (latestUpload?.status === 'settled') {
@@ -147,7 +184,7 @@ export const uploadRouter = router({
           settledFile.name === input.name &&
           settledFile.parentId === (resolvedParentId ?? null) &&
           settledFile.size === input.size &&
-          (settledFile.source ?? undefined) === toFileSource(input.source) &&
+          (settledFile.source ?? undefined) === fileSource &&
           settledFile.url === input.url &&
           (!ctx.workspaceId || settledFile.visibility === resolvedVisibility) &&
           isEqual(settledFile.metadata, metadata ?? null);
@@ -253,7 +290,7 @@ export const uploadRouter = router({
               // wire type is a loose string for older clients, so unknown values
               // are dropped rather than persisted — `source` drives the resource
               // library's origin filter and its hidden-source exclusion.
-              source: toFileSource(input.source),
+              source: fileSource,
               url: input.url,
               ...(resolvedVisibility ? { visibility: resolvedVisibility } : {}),
             },

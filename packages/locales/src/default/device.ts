@@ -100,6 +100,7 @@ export default {
   'workingDirectory.recent': 'Working directory',
   'workingDirectory.refreshGitStatus': 'Refresh branch & PR status',
   'workingDirectory.removeRecent': 'Remove from recent',
+  'workingDirectory.removeRecentFailed': 'Could not remove this folder. Please try again.',
   'workingDirectory.removed': 'Removed “{{name}}”',
   'workingDirectory.renameBranchAction': 'Rename branch',
   'workingDirectory.renameBranchTitle': 'Rename branch',

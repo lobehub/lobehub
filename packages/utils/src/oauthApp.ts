@@ -8,8 +8,12 @@
  * client-side pass.
  */
 
-/** Web apps redirect back to a handful of environments at most (prod + staging + local). */
-export const MAX_OAUTH_REDIRECT_URIS = 5;
+/**
+ * Matching is exact and wildcards are refused, so one app shared by several
+ * deployments (prod, staging, regional or white-label hosts, local) needs one
+ * entry per host. The cap only bounds the row size.
+ */
+export const MAX_OAUTH_REDIRECT_URIS = 20;
 
 export type RedirectUriIssue =
   /** Not parseable as an absolute URL. */

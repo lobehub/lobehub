@@ -747,7 +747,7 @@ describe('driveTaskFromVerify', () => {
     expect(taskUpdateStatus).not.toHaveBeenCalledWith('task-1', 'paused', {
       error: VERIFICATION_ERRORED_ERROR,
     });
-    expect(deliverMock.mock.calls[0][0].errorMessage).toContain('out of credits');
+    expect(deliverMock.mock.calls[0][0].errorMessage).toContain('out of balance');
   });
 
   it('errored: an optional check refused for credits does not hide a retryable required error', async () => {

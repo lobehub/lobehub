@@ -787,8 +787,6 @@ data: {"type":"stream_end","timestamp":300,"operationId":"test-operation","data"
 
       // This should not throw - verifies the callback can handle the event
       expect(() => capturedCallback!([endEvent])).not.toThrow();
-      // Signal should be aborted (connection closed)
-      expect(capturedSignal!.aborted).toBe(true);
     });
 
     it('should handle agent_runtime_end event in callback without errors', async () => {

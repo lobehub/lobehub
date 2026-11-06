@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   retry: vi.fn(),
   wake: vi.fn(),
   notify: vi.fn(),
+  notifyMentions: vi.fn(),
 }));
 vi.mock('@/database/repositories/channel', () => ({
   ChannelRepository: class {
@@ -21,6 +22,7 @@ vi.mock('@/database/models/device', () => ({ DeviceModel: class {} }));
 vi.mock('@/server/services/agent', () => ({ AgentService: class {} }));
 vi.mock('@/server/services/file', () => ({ FileService: class {} }));
 vi.mock('./ChannelCoordinator', () => ({ ChannelCoordinator: class {} }));
+vi.mock('./mention', () => ({ notifyChannelMentions: mocks.notifyMentions }));
 vi.mock('./notify', () => ({ notifyChannel: mocks.notify }));
 vi.mock('./queue', () => ({ wakeChannel: mocks.wake }));
 vi.mock('./routingConfig', () => ({ resolveChannelRoutingConfig: mocks.config }));

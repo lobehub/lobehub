@@ -35,6 +35,12 @@ export type TopicQuerySortBy = 'updatedAt' | 'status';
 
 export interface GroupedTopic {
   children: ChatTopic[];
+  /**
+   * Set on a folder group only when another folder group shows the same path
+   * on a different machine, so the renderer can name the device that tells
+   * them apart.
+   */
+  deviceId?: string;
   id: string;
   title?: string;
 }
@@ -622,7 +628,7 @@ export const chatTopicMetadataUpdateSchema = z.object({
   heteroSessionBindingKeyByWorkingDirectory: z.record(z.string(), z.string()).optional(),
   heteroSessionId: z.string().optional(),
   heteroSessionIdByWorkingDirectory: z.record(z.string(), z.string()).optional(),
-  heteroSpeed: z.enum(['default', 'fast']).optional(),
+  heteroSpeed: z.enum(['default', 'normal', 'fast', 'ultrafast']).optional(),
   model: z.string().optional(),
   onboardingFeedback: z
     .object({

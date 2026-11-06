@@ -1,5 +1,6 @@
 import debug from 'debug';
 
+import { releaseAgentRunSlot } from '@/business/server/agent-run/runConcurrency';
 import {
   AgentOperationModel,
   type RecordOperationStartParams,
@@ -10,6 +11,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import { formatErrorForState } from '@/server/modules/AgentRuntime/formatErrorForState';
 import {
   instantiateVerifyPlanOnStart,
+  releaseUndeliveredRound,
   runVerifyOnCompletion,
   settleFailedRepair,
 } from '@/server/services/verify';
@@ -362,6 +364,11 @@ export class CompletionLifecycle {
 
       if (isAsyncToolPark) return;
 
+      // The run tree no longer works, so its concurrency slot frees now rather
+      // than when the lease lapses. A run parked on a human decision frees it
+      // too; its continuation takes a slot of its own.
+      await releaseAgentRunSlot(runOrigin.userId || this.userId, operationId);
+
       // `lastAssistantContent` comes off the Redis-backed `state.messages`,
       // while the assistant message row is persisted through a separate
       // `messageModel.update` path. When the two diverge (state entry empty
@@ -483,12 +490,12 @@ export class CompletionLifecycle {
 
       if (reason === 'error' || reason === 'interrupted') {
         after(async () => {
-          await settleFailedRepair(
-            this.serverDB,
-            runOrigin.userId || this.userId,
-            operationId,
-            this.workspaceId,
-          );
+          const userId = runOrigin.userId || this.userId;
+          await settleFailedRepair(this.serverDB, userId, operationId, this.workspaceId);
+          // A task run that failed before delivering leaves the round opened at
+          // its start with nothing to verify. When planning is still under way,
+          // `instantiateVerifyPlanOnStart` releases the round once it lands.
+          await releaseUndeliveredRound(this.serverDB, userId, operationId, this.workspaceId);
         });
       }
 

@@ -1,4 +1,3 @@
-import { getCachedTextInputUnitRate, getWriteCacheInputUnitRate } from '@lobechat/utils';
 import { Flexbox, Icon, Tabs, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
@@ -11,12 +10,18 @@ import { ModelIcon } from '@/components/LobeIcons';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 
-import { getPrice } from './pricing';
+import { getPriceLabels } from './pricing';
 
 export const styles = stylex.create({
   container: { fontSize: '12px' },
   desc: { lineHeight: '12px', color: cssVar.colorTextDescription },
-  pricing: { fontSize: '12px', color: cssVar.colorTextSecondary },
+  pricing: {
+    fontSize: '12px',
+    color: cssVar.colorTextSecondary,
+    fontVariantNumeric: 'tabular-nums',
+  },
+  // The rates stay on one line: the popover widens to fit them instead of breaking the row.
+  priceItem: { whiteSpace: 'nowrap' },
 });
 
 interface ModelCardProps extends LobeDefaultAiModelListItem {
@@ -29,7 +34,7 @@ const ModelCard = memo<ModelCardProps>(({ pricing, id, provider, displayName }) 
   const isShowCredit = useGlobalStore(systemStatusSelectors.isShowCredit) && !!pricing;
   const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
 
-  const formatPrice = getPrice(pricing || { units: [] });
+  const prices = getPriceLabels(pricing);
 
   return (
     <Flexbox gap={8}>
@@ -83,44 +88,52 @@ const ModelCard = memo<ModelCardProps>(({ pricing, id, provider, displayName }) 
             gap={8}
           >
             {t('messages.modelCard.creditPricing')}:
-            {getCachedTextInputUnitRate(pricing) && (
+            {prices.cachedInput && (
               <Tooltip
                 title={t('messages.modelCard.pricing.inputCachedTokens', {
-                  amount: formatPrice.cachedInput,
+                  amount: prices.cachedInput.amount,
                 })}
               >
-                <Flexbox horizontal gap={2}>
+                <Flexbox horizontal className={stylex.props(styles.priceItem).className} gap={2}>
                   <Icon icon={CircleFadingArrowUp} />
-                  {formatPrice.cachedInput}
+                  {prices.cachedInput.text}
                 </Flexbox>
               </Tooltip>
             )}
-            {getWriteCacheInputUnitRate(pricing) && (
+            {prices.writeCacheInput && (
               <Tooltip
                 title={t('messages.modelCard.pricing.writeCacheInputTokens', {
-                  amount: formatPrice.writeCacheInput,
+                  amount: prices.writeCacheInput.amount,
                 })}
               >
-                <Flexbox horizontal gap={2}>
+                <Flexbox horizontal className={stylex.props(styles.priceItem).className} gap={2}>
                   <Icon icon={BookUp2Icon} />
-                  {formatPrice.writeCacheInput}
+                  {prices.writeCacheInput.text}
                 </Flexbox>
               </Tooltip>
             )}
             <Tooltip
-              title={t('messages.modelCard.pricing.inputTokens', { amount: formatPrice.input })}
+              title={
+                prices.input.amount === undefined
+                  ? undefined
+                  : t('messages.modelCard.pricing.inputTokens', { amount: prices.input.amount })
+              }
             >
-              <Flexbox horizontal gap={2}>
+              <Flexbox horizontal className={stylex.props(styles.priceItem).className} gap={2}>
                 <Icon icon={ArrowUpFromDot} />
-                {formatPrice.input}
+                {prices.input.text}
               </Flexbox>
             </Tooltip>
             <Tooltip
-              title={t('messages.modelCard.pricing.outputTokens', { amount: formatPrice.output })}
+              title={
+                prices.output.amount === undefined
+                  ? undefined
+                  : t('messages.modelCard.pricing.outputTokens', { amount: prices.output.amount })
+              }
             >
-              <Flexbox horizontal gap={2}>
+              <Flexbox horizontal className={stylex.props(styles.priceItem).className} gap={2}>
                 <Icon icon={ArrowDownToDot} />
-                {formatPrice.output}
+                {prices.output.text}
               </Flexbox>
             </Tooltip>
           </Flexbox>

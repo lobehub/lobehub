@@ -1,5 +1,5 @@
 import { runTimedSinkStage as runTimedStage } from '@lobechat/utils';
-import { and, inArray } from 'drizzle-orm';
+import { and, inArray, isNull } from 'drizzle-orm';
 import pMap from 'p-map';
 
 import { type CreateTopicParams, type ModelTimingContext, TopicModel } from '../../models/topic';
@@ -18,11 +18,18 @@ const reparentMessages = (
   scope: TopicRepositoryScope,
   topicId: string,
   messageIds: string[],
+  { onlyUntopiced = false }: { onlyUntopiced?: boolean } = {},
 ) =>
   db
     .update(messages)
     .set({ topicId })
-    .where(and(messageOwnership(scope), inArray(messages.id, messageIds)));
+    .where(
+      and(
+        messageOwnership(scope),
+        inArray(messages.id, messageIds),
+        onlyUntopiced ? isNull(messages.topicId) : undefined,
+      ),
+    );
 
 /**
  * Creates a topic and, when `messages` is given, re-parents those existing
@@ -52,7 +59,9 @@ export const createTopic = async (
         await runTimedStage(
           timing,
           'db.topic.create.messages.updateTopic',
-          () => reparentMessages(trx, scope, topic.id, messageIds),
+          // A new topic adopts the blank conversation it was started from; a
+          // message already living in another topic is never moved out of it.
+          () => reparentMessages(trx, scope, topic.id, messageIds, { onlyUntopiced: true }),
           { messageCount: messageIds.length },
         );
 

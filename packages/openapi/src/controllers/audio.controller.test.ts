@@ -188,7 +188,7 @@ describe('AudioController.handleSpeech', () => {
 
   it('keeps the status of server-side refusals such as an exhausted budget', async () => {
     synthesizeMock.mockRejectedValue(
-      Object.assign(new Error('Insufficient credits'), {
+      Object.assign(new Error('Insufficient balance'), {
         code: 'PAYMENT_REQUIRED',
         name: 'TRPCError',
       }),
@@ -197,6 +197,6 @@ describe('AudioController.handleSpeech', () => {
     const res = await speech({ input: 'hi', model: 'tts-1' });
 
     expect(res.status).toBe(402);
-    expect((await res.json()).error.message).toBe('Insufficient credits');
+    expect((await res.json()).error.message).toBe('Insufficient balance');
   });
 });

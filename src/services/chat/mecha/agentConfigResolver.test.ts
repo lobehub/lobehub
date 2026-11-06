@@ -364,34 +364,6 @@ describe('resolveAgentConfig', () => {
         expect(result.agentConfig.params.reasoning_effort).toBe('high');
       });
 
-      it('should include reasoning_effort when enableReasoningEffort is true', () => {
-        vi.spyOn(agentSelectors.chatConfigByIdSelectors, 'getChatConfigById').mockReturnValue(
-          () =>
-            ({
-              enableMaxTokens: false,
-              enableReasoningEffort: true,
-            }) as any,
-        );
-
-        const result = resolveAgentConfig({ agentId: 'test-agent' });
-
-        expect(result.agentConfig.params.reasoning_effort).toBe('high');
-      });
-
-      it('should set reasoning_effort to undefined when enableReasoningEffort is false', () => {
-        vi.spyOn(agentSelectors.chatConfigByIdSelectors, 'getChatConfigById').mockReturnValue(
-          () =>
-            ({
-              enableMaxTokens: true,
-              enableReasoningEffort: false,
-            }) as any,
-        );
-
-        const result = resolveAgentConfig({ agentId: 'test-agent' });
-
-        expect(result.agentConfig.params.reasoning_effort).toBeUndefined();
-      });
-
       it('should handle both params being enabled', () => {
         vi.spyOn(agentSelectors.chatConfigByIdSelectors, 'getChatConfigById').mockReturnValue(
           () =>

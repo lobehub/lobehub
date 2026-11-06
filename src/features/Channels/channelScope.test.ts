@@ -3,11 +3,13 @@ import { describe, expect, it } from 'vitest';
 import { channelsInScope } from './channelScope';
 
 const channels = [
-  { id: 'standalone', projectId: null },
-  { id: 'launch', projectId: 'pro_1' },
-  { id: 'other', projectId: 'pro_2' },
+  { agentId: null, id: 'standalone', projectId: null },
+  { agentId: null, id: 'launch', projectId: 'pro_1' },
+  { agentId: null, id: 'other', projectId: 'pro_2' },
   // Cached before the list carried a project.
-  { id: 'legacy', projectId: undefined as unknown as null },
+  { agentId: null, id: 'legacy', projectId: undefined as unknown as null },
+  // A 1:1 conversation with an Agent.
+  { agentId: 'agt_1', id: 'direct', projectId: null },
 ];
 
 describe('channelsInScope', () => {
@@ -17,6 +19,10 @@ describe('channelsInScope', () => {
 
   it('keeps project Channels out of the home list', () => {
     expect(channelsInScope(channels)?.map((c) => c.id)).toEqual(['standalone', 'legacy']);
+  });
+
+  it('leaves direct Agent Channels out of the list', () => {
+    expect(channelsInScope(channels)?.map((c) => c.id)).not.toContain('direct');
   });
 
   it('waits for the list to load', () => {

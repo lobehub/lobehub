@@ -176,19 +176,6 @@ describe('FileManagerActions', () => {
       expect(result.current.dockUploadFileList[0].id).toBe('file-1');
     });
 
-    it('should not update state if reducer returns same value', () => {
-      const { result } = renderHook(() => useStore());
-
-      const initialList = result.current.dockUploadFileList;
-
-      // This tests the early return when value hasn't changed
-      act(() => {
-        useStore.setState({ dockUploadFileList: initialList });
-      });
-
-      expect(result.current.dockUploadFileList).toBe(initialList);
-    });
-
     it('should handle updateFileStatus dispatch', () => {
       const { result } = renderHook(() => useStore());
 

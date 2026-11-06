@@ -221,3 +221,23 @@ export const withHeterogeneousWakeOff = (
 
   return { ...settings, [WAKE_MASTER_KEY]: true };
 };
+
+/** The status-reaction mode setting, offered by the platforms that support reactions. */
+export const REACTION_MODE_KEY = 'reactionMode';
+
+/**
+ * Settings for a bot being created: status reactions start off (`none`), so a new bot does not ping
+ * anyone until its owner turns them on. A saved bot keeps what it stored, and one saved before the
+ * field existed reads as the schema default, as the runtime does. A choice already made is kept.
+ * Mirrors `NEW_BOT_REACTION_MODE` on the server, which applies the same rule to every create.
+ */
+export const withNewBotReactionOff = (
+  schema: FieldSchema[] | undefined,
+  settings: Record<string, unknown>,
+): Record<string, unknown> => {
+  const fields = schema?.find((field) => field.key === 'settings')?.properties ?? [];
+  if (settings[REACTION_MODE_KEY] !== undefined) return settings;
+  if (!fields.some((field) => field.key === REACTION_MODE_KEY)) return settings;
+
+  return { ...settings, [REACTION_MODE_KEY]: 'none' };
+};

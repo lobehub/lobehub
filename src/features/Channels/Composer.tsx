@@ -1,4 +1,4 @@
-import type { ChannelPublicMember } from '@lobechat/types';
+import type { ChannelListItem, ChannelPublicMember } from '@lobechat/types';
 import type { ISlashOption } from '@lobehub/editor';
 import {
   INSERT_MENTION_COMMAND,
@@ -8,10 +8,10 @@ import {
   ReactMentionPlugin,
 } from '@lobehub/editor';
 import { ChatInput, Editor, SendButton, useEditor } from '@lobehub/editor/react';
-import { ActionIcon, Flexbox, Text, Upload } from '@lobehub/ui';
+import { ActionIcon, cssVar, Flexbox, Text, Upload } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { $getSelection, $isRangeSelection } from 'lexical';
-import { Paperclip, Reply, X } from 'lucide-react';
+import { CirclePlus, Reply, X } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -33,17 +33,32 @@ import { userProfileSelectors } from '@/store/user/selectors';
 import { MemberAvatar } from './MemberAvatar';
 import { isCurrentUserMember, memberName } from './memberName';
 import { getMentionGroups } from './mentionGroups';
-import { $insertChannelMentionBoundary, channelMentionIds } from './mentions';
+import type { ChannelMentionInvite } from './mentions';
+import {
+  $insertChannelMentionBoundary,
+  channelMentionIds,
+  channelMentionInvites,
+} from './mentions';
 import { createChannelSendRequest } from './sendRequest';
 import { styles } from './styles';
 import { useAttachments } from './useAttachments';
 import { useComposerDraft } from './useComposerDraft';
+import { useMentionInvites } from './useMentionInvites';
 import type { ChannelReplyTarget } from './useReplyTarget';
 
 const plugins = [ReactCodePlugin, ReactListPlugin, ReactLinkHighlightPlugin, ReactMentionPlugin];
 
+/** A flat filled bar, like an IM message box, instead of the chat page's raised card. */
+const inputShell = {
+  backgroundColor: cssVar.colorFillTertiary,
+  borderColor: 'transparent',
+  borderRadius: 12,
+  boxShadow: 'none',
+};
+
 export function Composer({
   activity,
+  channel,
   draftKey,
   members,
   onSend,
@@ -54,6 +69,8 @@ export function Composer({
 }: {
   /** Who is replying right now; shown on the line above the input. */
   activity?: ReactNode;
+  /** Lets an @mention invite people and Agents from outside the Channel. */
+  channel?: ChannelListItem;
   /** Where unsent input is kept; see {@link useComposerDraft}. */
   draftKey: string;
   members: ChannelPublicMember[];
@@ -98,6 +115,7 @@ export function Composer({
   const memberIds = members.map((member) => member.id);
   // Mentioning yourself notifies nobody and picks no reply.
   const mentionable = members.filter((member) => !isCurrentUserMember(member, userId));
+  const invites = useMentionInvites(channel, members);
   const send = async () => {
     const value = String(editor.getDocument('markdown') || '').trim();
     const fileIds = attachments.readyFileIds();
@@ -105,15 +123,20 @@ export function Composer({
     sending.current = true;
     setBusy(true);
     setError('');
+    invites.clearError();
     const sentRevision = draft.snapshot();
-    const mentions = channelMentionIds(editor.getDocument('json'), memberIds);
-    const requestKey = requests.get(`${cacheScope.get()}:${draftKey}`, {
-      content: value,
-      fileIds,
-      mentions,
-      replyToId: replyTarget?.id,
-    });
+    const document = editor.getDocument('json');
     try {
+      // Mentioned outsiders join first, so the message can address them as members.
+      const invited = await invites.resolve(channelMentionInvites(document));
+      if (!invited) return;
+      const mentions = [...new Set([...channelMentionIds(document, memberIds), ...invited])];
+      const requestKey = requests.get(`${cacheScope.get()}:${draftKey}`, {
+        content: value,
+        fileIds,
+        mentions,
+        replyToId: replyTarget?.id,
+      });
       await onSend(value, mentions, requestKey, fileIds, replyTarget?.id);
       requests.complete(requestKey);
       editor.cleanDocument();
@@ -161,6 +184,7 @@ export function Composer({
           maxHeight={480}
           minHeight={0}
           resize={false}
+          style={inputShell}
           styles={{ body: { overflow: 'visible', padding: 0 } }}
           header={
             replyTarget || preview ? (
@@ -208,8 +232,8 @@ export function Composer({
                 <ActionIcon
                   aria-label={t('attachments.upload')}
                   disabled={busy || !canUpload}
-                  icon={Paperclip}
-                  size={{ blockSize: 28, size: 16 }}
+                  icon={CirclePlus}
+                  size={{ blockSize: 28, size: 20 }}
                   title={reason || t('attachments.upload')}
                 />
               </Upload>
@@ -227,10 +251,12 @@ export function Composer({
                 type="text"
                 variant="chat"
                 mentionOption={{
-                  items: async (search) =>
-                    getMentionGroups(
+                  items: async (search) => {
+                    const query = search?.matchingString || '';
+                    const outsiders = await invites.options(query);
+                    const options = getMentionGroups(
                       mentionable,
-                      search?.matchingString || '',
+                      query,
                       t('deletedMember'),
                       !!workspaceId,
                     ).flatMap<ISlashOption>((group) => {
@@ -250,13 +276,28 @@ export function Composer({
                             },
                           ]
                         : items;
-                    }),
+                    });
+                    return outsiders.length
+                      ? [
+                          ...options,
+                          {
+                            type: 'section' as const,
+                            key: 'invite',
+                            label: t('mentionInvite.section'),
+                            items: outsiders,
+                          },
+                        ]
+                      : options;
+                  },
                   markdownWriter: (node) => `@${node.label}`,
                   onSelect: (instance, option) => {
                     instance.dispatchCommand(INSERT_MENTION_COMMAND, {
                       label: String(option.label),
                       metadata: option.metadata,
                     });
+                    // Choosing someone outside the Channel brings them in right away.
+                    if (option.metadata?.type === 'channel-invite')
+                      invites.invite(option.metadata as ChannelMentionInvite);
                     // Leave the decorator's cursor node before the next @ is typed.
                     instance.getLexicalEditor()?.update(() => {
                       const selection = $getSelection();
@@ -278,7 +319,8 @@ export function Composer({
                   }
                 }}
                 onKeyDown={({ event }) =>
-                  mentionable.length > 0 && $insertChannelMentionBoundary(event)
+                  (mentionable.length > 0 || invites.enabled) &&
+                  $insertChannelMentionBoundary(event)
                 }
                 onPressEnter={({ event }) => {
                   if (event.isComposing || !shouldSendOnEnter(event)) return;
@@ -288,22 +330,25 @@ export function Composer({
               />
             </div>
             {/* Replies run asynchronously, so Send never turns into Stop; each reply stops from the activity line. */}
-            {/* An empty composer keeps Send as a quiet icon, like an IM; it fills once there is a draft. */}
-            <SendButton
-              aria-label={t('send')}
-              disabled={busy || !hasDraft || attachments.blocked}
-              loading={busy}
-              size={28}
-              type={hasDraft ? 'primary' : 'text'}
-              onSend={() => void send()}
-            />
+            {/* Enter sends; like an IM, the button only appears once there is something to send. */}
+            {(hasDraft || busy) && (
+              <SendButton
+                aria-label={t('send')}
+                disabled={busy || attachments.blocked}
+                loading={busy}
+                size={28}
+                type="primary"
+                onSend={() => void send()}
+              />
+            )}
           </div>
         </ChatInput>
-        {error && (
+        {(error || invites.error) && (
           <span {...stylex.props(styles.error)} role="alert">
-            {error}
+            {error || invites.error}
           </span>
         )}
+        {invites.agentDrafts}
       </Flexbox>
     </WideScreenContainer>
   );

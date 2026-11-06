@@ -14,6 +14,7 @@ import { useConversationStore } from '@/features/Conversation/store';
 import { EditorCanvas } from '@/features/EditorCanvas';
 import {
   getAttachmentFileIdsFromEditor,
+  hasIncompleteEditorAttachments,
   insertFilesIntoEditor,
 } from '@/features/EditorCanvas/editorAttachments';
 import { useEnterToSend } from '@/hooks/useEnterToSend';
@@ -43,6 +44,7 @@ const FeedbackInput = memo<FeedbackInputProps>(
     const [submitting, setSubmitting] = useState(false);
     const [hasContent, setHasContent] = useState(false);
     const [hasAttachments, setHasAttachments] = useState(false);
+    const [uploadingAttachments, setUploadingAttachments] = useState(false);
     const { collapse, expand, expanded, handleEditorInit, reveal } = useComposerFocus({
       defaultExpanded,
       editor,
@@ -62,7 +64,10 @@ const FeedbackInput = memo<FeedbackInputProps>(
       reveal,
     });
 
-    const canSubmit = hasContent || hasAttachments;
+    // Hold the send while an inline image is still uploading: its node still
+    // carries the local `blob:` preview URL, and sending would hand the agent
+    // a link it can never open.
+    const canSubmit = (hasContent || hasAttachments) && !uploadingAttachments;
     // The run this drawer shows is a real op in its own conversation context, so
     // the composer reads the same op-derived send area as the main composer:
     // while the agent is working the control is Stop, and a typed follow-up
@@ -80,6 +85,7 @@ const FeedbackInput = memo<FeedbackInputProps>(
         setHasContent(text.length > 0);
       });
       setHasAttachments(getAttachmentFileIdsFromEditor(editor).length > 0);
+      setUploadingAttachments(hasIncompleteEditorAttachments(editor));
     }, [editor]);
 
     const handleAttach = useCallback(
@@ -90,7 +96,7 @@ const FeedbackInput = memo<FeedbackInputProps>(
     );
 
     const handleSubmit = useCallback(async () => {
-      if (submitting) return;
+      if (submitting || hasIncompleteEditorAttachments(editor)) return;
       const editorData = editor?.getDocument?.('json') as Record<string, any> | undefined;
       const markdown = String(editor?.getDocument?.('markdown') ?? '').trim();
       const hasFiles = getAttachmentFileIdsFromEditor(editor).length > 0;

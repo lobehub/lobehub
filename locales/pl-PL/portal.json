@@ -19,7 +19,6 @@
   "artifacts.deploy.outdated": "Starsza wersja na żywo",
   "artifacts.deploy.publish": "Opublikuj",
   "artifacts.deploy.publishNewVersion": "Opublikuj tę wersję",
-  "artifacts.deploy.quotaUnavailable": "Weryfikacja limitu wdrożeń jest tymczasowo niedostępna. Spróbuj ponownie później.",
   "artifacts.deploy.serviceOverloaded": "Hosting artefaktów jest tymczasowo przeciążony. Spróbuj opublikować ponownie za chwilę.",
   "artifacts.deploy.success": "Opublikowano",
   "artifacts.deploy.writeInProgress": "Trwa inna zmiana wdrożenia. Spróbuj ponownie za chwilę.",

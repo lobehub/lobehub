@@ -97,4 +97,20 @@ describe('independent CLI maintenance worker', () => {
       if (old.exitCode === null && old.signalCode === null) old.kill('SIGTERM');
     }
   });
+
+  it('leaves the replacement to systemd when there are no daemon relaunch arguments', async () => {
+    const old = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)']);
+    await once(old, 'spawn');
+    config.parentPid = old.pid!;
+    config.restartArgs = undefined;
+    try {
+      await runMaintenanceWorker(config, () => old.kill('SIGTERM'));
+      await expect(readFile(path.join(directory, 'args.json'))).rejects.toMatchObject({
+        code: 'ENOENT',
+      });
+      expect(JSON.parse(await readFile(config.statePath, 'utf8')).stage).toBe('restarting');
+    } finally {
+      if (old.exitCode === null && old.signalCode === null) old.kill('SIGTERM');
+    }
+  });
 });

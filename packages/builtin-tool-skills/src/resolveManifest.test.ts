@@ -19,37 +19,41 @@ describe('resolveSkillsManifest', () => {
     expect(resolveSkillsManifest({ isSubAgent: true, scope: 'main' })).toBe(SkillsManifest);
   });
 
-  it.each(['local', 'none'] as const)(
-    'returns the static manifest reference for executionEnv %s',
-    (executionEnv) => {
-      expect(resolveSkillsManifest({ executionEnv })).toBe(SkillsManifest);
-    },
-  );
+  it('returns the static manifest reference for executionEnv none', () => {
+    expect(resolveSkillsManifest({ executionEnv: 'none' })).toBe(SkillsManifest);
+  });
 
   // Device runs execute execScript ON the device (serverRuntimes/skills.ts
   // device branch) — the description must say so, and the sandbox-only APIs
   // (runCommand / exportFile) are dropped, restoring the original desktop
-  // manifest shape.
-  it('declares device execution and hides sandbox-only APIs when a device is routed', () => {
-    const result = resolveSkillsManifest({ executionEnv: 'device' })!;
+  // manifest shape. `local` is the same routed device (the user's own desktop,
+  // kept distinct only for local-system image reads): the server runtime still
+  // takes the device branch and refuses sandbox runCommand / exportFile.
+  it.each(['device', 'local'] as const)(
+    'declares device execution and hides sandbox-only APIs for executionEnv %s',
+    (executionEnv) => {
+      const result = resolveSkillsManifest({ executionEnv })!;
 
-    const description = apiByName(result, SkillsApiName.execScript).description;
-    expect(description).toMatch(/^Execution environment: the user's selected device/);
-    expect(description).toContain('NOT injected');
-    // the original mechanics stay after the preamble
-    expect(description).toContain(apiByName(SkillsManifest, SkillsApiName.execScript).description);
+      const description = apiByName(result, SkillsApiName.execScript).description;
+      expect(description).toMatch(/^Execution environment: the user's selected device/);
+      expect(description).toContain('NOT injected');
+      // the original mechanics stay after the preamble
+      expect(description).toContain(
+        apiByName(SkillsManifest, SkillsApiName.execScript).description,
+      );
 
-    const apiNames = result.api.map((a) => a.name);
-    expect(apiNames).not.toContain(SkillsApiName.runCommand);
-    expect(apiNames).not.toContain(SkillsApiName.exportFile);
-    expect(apiNames).toContain(SkillsApiName.activateSkill);
-    expect(apiNames).toContain(SkillsApiName.readReference);
+      const apiNames = result.api.map((a) => a.name);
+      expect(apiNames).not.toContain(SkillsApiName.runCommand);
+      expect(apiNames).not.toContain(SkillsApiName.exportFile);
+      expect(apiNames).toContain(SkillsApiName.activateSkill);
+      expect(apiNames).toContain(SkillsApiName.readReference);
 
-    // cross-tool arbitration rides the tool systemRole, not the descriptions
-    expect(result.systemRole).toContain(systemPrompt);
-    expect(result.systemRole).toContain('`execScript` runs skill scripts on the device');
-    expect(result.systemRole).toContain('`lobe-local-system` runCommand');
-  });
+      // cross-tool arbitration rides the tool systemRole, not the descriptions
+      expect(result.systemRole).toContain(systemPrompt);
+      expect(result.systemRole).toContain('`execScript` runs skill scripts on the device');
+      expect(result.systemRole).toContain('`lobe-local-system` runCommand');
+    },
+  );
 
   it.each(['bound-device-offline', 'no-online-device'] as const)(
     'warns about the offline device when device-unrouted for %s',

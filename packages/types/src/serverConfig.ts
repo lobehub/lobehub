@@ -39,6 +39,17 @@ export type IFeatureFlagsState = {
   enableDashboard: boolean | undefined;
   enableDevDock: boolean | undefined;
   /**
+   * Rail layout trial (`im_layout`): icon rail, IM-style Messages list,
+   * Contacts, Tasks scope list and the agent profile side panel. Off keeps the
+   * current sidebar layout.
+   */
+  enableImLayout: boolean | undefined;
+  /**
+   * New subscription tiers (`new_tier_plans`). Off by default: the plans page keeps
+   * selling the current tiers; listed users see and can buy the new tiers instead.
+   */
+  enableNewTierPlans: boolean | undefined;
+  /**
    * LobeHub Mobile rollout gate for the multiplexed gateway socket and
    * protocol-v2 payloads. Web follows `GlobalServerConfig.agentGatewayProtocol`.
    */
@@ -50,6 +61,17 @@ export type IFeatureFlagsState = {
    * as an executor only when this is on; the server checks it again.
    */
   enableLlmRelay: boolean | undefined;
+  /**
+   * Creating managed cloud devices (`managed_cloud_device`). Off by default: the "Create in
+   * cloud" entry is hidden and the creation APIs answer FORBIDDEN. Existing managed devices keep
+   * working.
+   */
+  enableManagedCloudDevice: boolean | undefined;
+  /**
+   * MCP Apps views in the conversation (`mcp_apps`). Off by default: tool results
+   * that declare a `ui://` view render as plain results.
+   */
+  enableMcpApps: boolean | undefined;
   enableOnboardingV2: boolean | undefined;
   enableRAGEval: boolean | undefined;
   enableSTT: boolean | undefined;

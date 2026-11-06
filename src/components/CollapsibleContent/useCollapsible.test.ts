@@ -111,4 +111,28 @@ describe('useCollapsible', () => {
 
     expect(onOverflowChange).toHaveBeenCalledTimes(1);
   });
+
+  it('expand opens a collapsed preview and never collapses an open one', () => {
+    const onCollapsedChange = vi.fn();
+    const { result } = renderHook(() => useCollapsible(options({ onCollapsedChange })));
+
+    expect(result.current.isCollapsed).toBe(true);
+    act(() => result.current.expand());
+    expect(result.current.isCollapsed).toBe(false);
+    expect(onCollapsedChange).toHaveBeenCalledWith(false);
+
+    act(() => result.current.expand());
+    expect(onCollapsedChange).toHaveBeenCalledTimes(1);
+  });
+
+  it('expand asks a controlled host to open instead of flipping local state', () => {
+    const onCollapsedChange = vi.fn();
+    const { result } = renderHook(() =>
+      useCollapsible(options({ collapsed: true, onCollapsedChange })),
+    );
+
+    act(() => result.current.expand());
+    expect(onCollapsedChange).toHaveBeenCalledWith(false);
+    expect(result.current.isCollapsed).toBe(true);
+  });
 });

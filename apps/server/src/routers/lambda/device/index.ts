@@ -1,3 +1,4 @@
+import { businessDeviceRouter } from '@/business/server/lambda-routers/device';
 import { mergeRouters, router } from '@/libs/trpc/lambda';
 
 import { workspaceDeviceWorkingDirProcedures } from '../deviceWorkspaceWorkingDirs';
@@ -18,4 +19,5 @@ export const deviceRouter = mergeRouters(
   router({
     ...workspaceDeviceWorkingDirProcedures,
   }),
+  businessDeviceRouter,
 );

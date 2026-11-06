@@ -120,6 +120,11 @@ const projectSidebarSections =
   (s: GlobalState): Record<string, boolean> | undefined =>
     projectId ? s.status.expandProjectSidebarSectionsByProject?.[projectId] : undefined;
 
+const projectOnboardingDismissed =
+  (projectId: string | undefined) =>
+  (s: GlobalState): boolean =>
+    Boolean(projectId && s.status.dismissedProjectOnboarding?.[projectId]);
+
 /** Whether the topic list owned by `ownerId` (agent / group / project) shows only my topics. */
 const topicOnlyMine =
   (ownerId: string | undefined) =>
@@ -585,6 +590,7 @@ export const systemStatusSelectors = {
   taskListViewOptions,
   sidebarExpandedKeys,
   agentSidebarSections,
+  projectOnboardingDismissed,
   projectSidebarSections,
   sidebarItems,
   sessionGroupKeys,

@@ -247,8 +247,10 @@ export class FileService {
     },
     trx?: Transaction,
   ): Promise<{ fileId: string; url: string }> {
-    // Check if hash already exists in globalFiles
-    const existingFile = await this.fileModel.checkHash(params.fileHash);
+    // Check if hash already exists in globalFiles. Every query here must go through `trx`:
+    // callers such as `uploadFromBuffer` hold the owner's row lock in that transaction, and
+    // a read on the shared pool would wait for a connection the lock waiters already hold.
+    const existingFile = await this.fileModel.checkHash(params.fileHash, trx);
     const { isExist } = existingFile;
 
     let shouldRefreshGlobalFile = false;
@@ -259,10 +261,14 @@ export class FileService {
     if (shouldRefreshGlobalFile) {
       // Keep global hash dedup usable when the same file is uploaded again to a
       // fresh object key after the previous storage object has been removed.
-      await this.fileModel.updateGlobalFile(params.fileHash, {
-        metadata: params.metadata,
-        url: params.url,
-      });
+      await this.fileModel.updateGlobalFile(
+        params.fileHash,
+        {
+          metadata: params.metadata,
+          url: params.url,
+        },
+        trx,
+      );
     }
 
     // Create database record

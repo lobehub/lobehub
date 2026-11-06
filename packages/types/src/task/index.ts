@@ -3,6 +3,7 @@ import type { ChatFileItem } from '../message/ui/chat';
 
 export * from './archive';
 export * from './execution';
+export * from './label';
 export * from './listFilter';
 
 // ── Task type aliases ──

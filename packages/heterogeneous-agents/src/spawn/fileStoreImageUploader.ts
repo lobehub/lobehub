@@ -24,6 +24,12 @@ export interface FileStoreCreateFileInput {
   };
   name: string;
   size: number;
+  /**
+   * `tool-result`: the image is an attachment of its tool message, not a
+   * library resource, and it is the only kind of file a run's operation token
+   * may create outside a Task run.
+   */
+  source: 'tool-result';
   url: string;
 }
 
@@ -106,6 +112,7 @@ export const createFileStoreImageUploader =
         },
         name: fileName,
         size: buffer.length,
+        source: 'tool-result',
         url: pathname,
       });
 

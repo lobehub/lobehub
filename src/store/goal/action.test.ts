@@ -2,9 +2,12 @@ import { GOAL_ACCEPTANCE_TASK_TITLE } from '@lobechat/const/goal';
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type * as ReplicaModule from '@/libs/replica';
+import { revalidateReplica } from '@/libs/replica';
 import { mutate, useClientDataSWR } from '@/libs/swr';
 import { aiChatService } from '@/services/aiChat';
 import { goalService } from '@/services/goal';
+import { taskGroupListResource, taskListResource } from '@/store/task/slices/list/projection';
 
 import { useGoalStore } from './index';
 import { initialState } from './initialState';
@@ -20,9 +23,15 @@ vi.mock('@/libs/swr/useCacheScope', () => ({
   useCacheScope: () => 'user-1:personal',
 }));
 
+vi.mock('@/libs/replica', async (importOriginal) => {
+  const actual = await importOriginal<typeof ReplicaModule>();
+  return { ...actual, revalidateReplica: vi.fn(actual.revalidateReplica) };
+});
+
 vi.mock('@/services/goal', () => ({
   goalService: {
     advance: vi.fn(),
+    archive: vi.fn(),
     delete: vi.fn(),
     getGraph: vi.fn(),
     list: vi.fn(),
@@ -297,6 +306,16 @@ describe('GoalAction', () => {
       );
     });
 
+    it('asks the server for archived goals only under the Archived tab', () => {
+      renderHook(() => useGoalStore.getState().useFetchGoals('agent-1', undefined, 'archived'));
+
+      expect(syncKeyFor('goalList')?.[4]).toBe('agent-1:goals-page:archived');
+      void syncFetcherFor('goalList')?.();
+      expect(goalService.list).toHaveBeenCalledWith(
+        expect.objectContaining({ agentId: 'agent-1', archived: true }),
+      );
+    });
+
     it('does not fetch without a scope', () => {
       const sync = renderHook(() => useGoalStore.getState().useFetchGoals());
 
@@ -390,6 +409,37 @@ describe('GoalAction', () => {
     const list = useGoalStore.getState().goalListByAgentId['agent-1'];
     expect(list?.goals.map((item) => item.goal.id)).toEqual(['goal-2']);
     expect(list?.total).toBe(1);
+  });
+
+  it('archives a goal and takes it off the ordinary list it was on', async () => {
+    useGoalStore.setState({
+      goalListByAgentId: {
+        'agent-1': {
+          goals: [{ goal: { id: 'goal-1' } }, { goal: { id: 'goal-2' } }] as never,
+          total: 2,
+        },
+      },
+    });
+
+    await useGoalStore.getState().archiveGoal('goal-1', true);
+
+    expect(goalService.archive).toHaveBeenCalledWith('goal-1', true);
+    const list = useGoalStore.getState().goalListByAgentId['agent-1'];
+    expect(list?.goals.map((item) => item.goal.id)).toEqual(['goal-2']);
+    // Its Tasks move with it, so the task lists and boards re-read as well.
+    expect(revalidateReplica).toHaveBeenCalledWith(taskListResource);
+    expect(revalidateReplica).toHaveBeenCalledWith(taskGroupListResource);
+  });
+
+  it('reports an archive that landed as done even when the refresh after it fails', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.mocked(revalidateReplica).mockRejectedValueOnce(new Error('offline'));
+
+    await expect(useGoalStore.getState().archiveGoal('goal-1', true)).resolves.toBeUndefined();
+
+    expect(goalService.archive).toHaveBeenCalledWith('goal-1', true);
+    expect(error).toHaveBeenCalled();
+    error.mockRestore();
   });
 
   it('relays the provider the goal actually plans on when advancing it', async () => {

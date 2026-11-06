@@ -4,7 +4,13 @@ import {
 } from '@lobechat/builtin-tool-web-onboarding';
 import { describe, expect, it } from 'vitest';
 
-import { isImageBearingTool, isImageOutputTool, shouldRenderToolCall } from './toolRenderRules';
+import {
+  isBreakoutTool,
+  isImageBearingTool,
+  isImageOutputTool,
+  isMcpAppTool,
+  shouldRenderToolCall,
+} from './toolRenderRules';
 
 describe('shouldRenderToolCall', () => {
   it('hides the onboarding completion tool call', () => {
@@ -115,5 +121,32 @@ describe('isImageOutputTool', () => {
         result: { content: 'x', id: 'r', state: { generations: [{ asset: null }] } },
       } as any),
     ).toBe(false);
+  });
+});
+
+describe('isMcpAppTool', () => {
+  const mcp = (state?: unknown) =>
+    ({
+      apiName: 'get_weather',
+      id: 't',
+      identifier: 'weather-demo',
+      result: { content: 'x', id: 'r', state },
+    }) as any;
+  const view = { mcpApp: { resourceUri: 'ui://weather/view' }, content: [] };
+
+  it('is true once the result carries an MCP App view, on client and server-runtime shapes', () => {
+    expect(isMcpAppTool(mcp(view))).toBe(true);
+    expect(isMcpAppTool(mcp({ content: 'x', state: view, success: true }))).toBe(true);
+  });
+
+  it('is false while the result is missing or declares no ui:// view', () => {
+    expect(isMcpAppTool(mcp())).toBe(false);
+    expect(isMcpAppTool(mcp({ content: [] }))).toBe(false);
+    expect(isMcpAppTool(mcp({ content: [], mcpApp: { resourceUri: 'https://x' } }))).toBe(false);
+  });
+
+  it('breaks out of collapsed workflow runs', () => {
+    expect(isBreakoutTool(mcp(view))).toBe(true);
+    expect(isBreakoutTool(mcp({ content: [] }))).toBe(false);
   });
 });

@@ -13,7 +13,6 @@ import { createStore, Provider } from '@/features/Conversation/store';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useActiveLocation } from '@/hooks/useActiveLocation';
 import { cacheScope } from '@/libs/replica';
-import { channelService } from '@/services/channel';
 import { channelActions, channelSelectors, useChannelStore } from '@/store/channel';
 
 import { ArchivedNotice } from './ArchivedNotice';
@@ -99,7 +98,7 @@ const Timeline = ({
 
   useEffect(() => {
     if (threadId || sequence === undefined || before !== undefined) return;
-    void channelService
+    void channelActions
       .markRead(channelId, sequence)
       .catch((error: unknown) => console.error('Failed to mark Channel read', error));
   }, [channelId, threadId, sequence, before]);
@@ -110,11 +109,13 @@ const Timeline = ({
     if (!sending.current) reply.select(message);
   };
   const channelArchived = detail?.channel.status === 'archived';
-  // Join lines belong to the main conversation; a thread starts from its root message.
+  const direct = !!detail?.channel.agentId;
+  // Join lines belong to the main conversation; a thread starts from its root message. A direct
+  // conversation reads like a chat with its Agent, so it has no "invited" lines at all.
   const timeline = detail
     ? channelTimeline(
         detail.messages,
-        threadId ? [] : channelJoinEvents(detail.members),
+        threadId || direct ? [] : channelJoinEvents(detail.members),
         !detail.hasMore && before === undefined,
       )
     : [];
@@ -188,10 +189,11 @@ const Timeline = ({
                     }
                   />
                 )}
+                {/* A new direct conversation starts blank, like an IM chat. */}
                 {!timeline.length &&
                   (threadId ? (
                     <p {...stylex.props(styles.muted)}>{t('threadEmpty')}</p>
-                  ) : (
+                  ) : direct ? null : (
                     <Empty icon={MessageSquare} title={t('conversationEmpty')} />
                   ))}
                 {presentChannelTimeline(timeline).map(({ item, date, startsDay, continuation }) => (
@@ -233,13 +235,16 @@ const Timeline = ({
             ) : (
               <Composer
                 activity={<ReplyActivity detail={detail} threadId={threadId} />}
+                channel={detail.channel}
                 draftKey={channelDraftKey(channelId, threadId)}
                 key={channelDraftKey(channelId, threadId)}
                 members={activeMembers}
                 replyTarget={reply.target}
                 threadId={threadId}
                 placeholder={
-                  threadId ? t('threadComposer') : t('composer', { name: detail.channel.title })
+                  threadId
+                    ? t('threadComposer')
+                    : t(direct ? 'directComposer' : 'composer', { name: detail.channel.title })
                 }
                 onCancelReply={() => reply.clear()}
                 onSend={async (content, mentions, requestKey, fileIds, replyToId) => {
