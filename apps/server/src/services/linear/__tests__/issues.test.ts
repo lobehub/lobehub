@@ -105,6 +105,7 @@ describe('archived issues', () => {
     expect(issues).toMatchObject([{ id: 'archived-1' }]);
     const body = requestBody(fetchMock.mock.calls[0]);
     expect(body.query).toContain('includeArchived: true');
+    expect(body.query).toContain('archivedAt');
     expect(body.variables.filter).toEqual({ id: { in: ['archived-1'] } });
   });
 });

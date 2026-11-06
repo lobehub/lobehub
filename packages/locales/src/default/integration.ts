@@ -155,9 +155,9 @@ export default {
   'linear.sync.options.importTitle': 'Import options',
   'linear.sync.options.includeArchived': 'Include archived issues',
   'linear.sync.options.includeArchivedDesc':
-    'Also list and import issues archived in Linear, which are left out otherwise',
+    'Also list and import issues archived in Linear, and archive their tasks here too',
   'linear.sync.options.includeArchivedRuleDesc':
-    'Also sync issues archived in Linear that match this rule',
+    'Also sync issues archived in Linear that match this rule, and archive their tasks',
   'linear.sync.options.syncComments': 'Sync comments',
   'linear.sync.options.syncCommentsDesc':
     "Copy each issue's Linear comments into the task's activity, keeping the author and time",
@@ -172,6 +172,7 @@ export default {
   'linear.sync.project.title': 'Sync from Linear',
   'linear.sync.projectHint':
     'To sync issues into a project, open the project and go to Settings → Advanced.',
+  'linear.sync.result.archived': '{{count}} archived',
   'linear.sync.result.closed': '{{count}} closed',
   'linear.sync.result.commentsImported': '{{count}} comments added',
   'linear.sync.result.created': '{{count}} created',

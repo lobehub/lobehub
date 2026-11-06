@@ -10,9 +10,11 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TaskModel } from '@/database/models/task';
+import { TaskArchiveModel } from '@/database/models/taskArchive';
 import { TaskExternalLinkModel } from '@/database/models/taskExternalLink';
 import { tasks, users } from '@/database/schemas';
 
+import type * as ArchiveGuardModule from '../../task/archiveGuard';
 import { LinearApiError } from '../client';
 import type * as IssuesModule from '../issues';
 import type { LinearIssue, LinearIssueComment } from '../issues';
@@ -27,6 +29,12 @@ const linear = vi.hoisted(() => ({
   getLinearProjectTeamIds: vi.fn(),
   listLinearIssueComments: vi.fn(),
   listLinearIssues: vi.fn(),
+}));
+const openGoals = vi.hoisted(() => ({ taskIds: new Set<string>() }));
+vi.mock('../../task/archiveGuard', async (importOriginal) => ({
+  ...(await importOriginal<typeof ArchiveGuardModule>()),
+  findTasksInOpenGoals: async (_db: unknown, _scope: unknown, items: { id: string }[]) =>
+    new Set(items.map((item) => item.id).filter((id) => openGoals.taskIds.has(id))),
 }));
 vi.mock('../issues', async (importOriginal) => ({
   ...(await importOriginal<typeof IssuesModule>()),
@@ -943,5 +951,172 @@ describe('LinearIssueSyncService archived issues (real PostgreSQL, Linear over f
 
     expect(result.closed).toBe(1);
     expect((await linkedTask('1'))?.status).toBe('completed');
+  });
+
+  describe('archiving tasks like their issues', () => {
+    const ARCHIVED_AT = '2026-09-01T08:00:00.000Z';
+    const rule = {
+      includeArchived: true,
+      stateTypes: ['backlog' as const, 'unstarted' as const, 'completed' as const],
+      teamId: TEAM,
+    };
+    const archivedIssue = (id: string, archivedAt = ARCHIVED_AT) => ({
+      ...issue({ archivedAt, id, state: done }),
+      archived: true,
+    });
+
+    afterEach(() => openGoals.taskIds.clear());
+
+    it('archives the task of a picked archived issue at the time Linear did', async () => {
+      linearIssues = [archivedIssue('1')];
+
+      const result = await new LinearIssueSyncService(db, userId).importIssues(TOKEN, ['1']);
+
+      expect(result).toMatchObject({ archived: 1, created: 1 });
+      const task = await linkedTask('1');
+      expect(task?.status).toBe('completed');
+      expect(task?.archivedAt?.toISOString()).toBe(ARCHIVED_AT);
+    });
+
+    it('leaves the task of an unarchived issue out of the archive', async () => {
+      linearIssues = [issue({ archivedAt: null, id: '1' })];
+
+      const result = await new LinearIssueSyncService(db, userId).syncByFilter(TOKEN, rule);
+
+      expect(result.archived).toBeUndefined();
+      expect((await linkedTask('1'))?.archivedAt).toBeNull();
+    });
+
+    it('archives an already imported task on the next run that reads its archived issue', async () => {
+      const service = new LinearIssueSyncService(db, userId);
+      linearIssues = [issue({ id: '1', state: done })];
+      await service.syncByFilter(TOKEN, rule);
+      expect((await linkedTask('1'))?.archivedAt).toBeNull();
+
+      linearIssues = [archivedIssue('1')];
+      const result = await service.syncByFilter(TOKEN, rule);
+
+      expect(result.archived).toBe(1);
+      expect((await linkedTask('1'))?.archivedAt?.toISOString()).toBe(ARCHIVED_AT);
+    });
+
+    it('archives an open task whose issue a rule no longer lists, closing nothing', async () => {
+      const service = new LinearIssueSyncService(db, userId);
+      linearIssues = [issue({ id: '1' })];
+      await service.syncByFilter(TOKEN, rule);
+
+      linearIssues = [{ ...issue({ archivedAt: ARCHIVED_AT, id: '1' }), archived: true }];
+      const result = await service.syncByFilter(TOKEN, { ...rule, includeArchived: false });
+
+      expect(result).toMatchObject({ archived: 1, closed: 0 });
+      const task = await linkedTask('1');
+      expect(task?.archivedAt?.toISOString()).toBe(ARCHIVED_AT);
+      expect(task?.status).not.toBe('completed');
+    });
+
+    it('does not archive again a task restored in LobeHub', async () => {
+      const service = new LinearIssueSyncService(db, userId);
+      linearIssues = [archivedIssue('1')];
+      await service.syncByFilter(TOKEN, rule);
+      const task = await linkedTask('1');
+      await new TaskArchiveModel(db, userId).unarchive(task!.id);
+
+      const result = await service.syncByFilter(TOKEN, rule);
+
+      expect(result.archived).toBeUndefined();
+      expect(result.unchanged).toBe(1);
+      expect((await linkedTask('1'))?.archivedAt).toBeNull();
+    });
+
+    it('keeps the task archived when Linear restores the issue, and applies a new archive', async () => {
+      const service = new LinearIssueSyncService(db, userId);
+      linearIssues = [archivedIssue('1')];
+      await service.syncByFilter(TOKEN, rule);
+
+      linearIssues = [issue({ archivedAt: null, id: '1', state: done })];
+      const restored = await service.syncByFilter(TOKEN, rule);
+      expect(restored.archived).toBeUndefined();
+      const task = await linkedTask('1');
+      expect(task?.archivedAt?.toISOString()).toBe(ARCHIVED_AT);
+
+      // Restored here as well, then archived in Linear once more.
+      await new TaskArchiveModel(db, userId).unarchive(task!.id);
+      const later = '2026-10-15T08:00:00.000Z';
+      linearIssues = [archivedIssue('1', later)];
+      const again = await service.syncByFilter(TOKEN, rule);
+
+      expect(again.archived).toBe(1);
+      expect((await linkedTask('1'))?.archivedAt?.toISOString()).toBe(later);
+    });
+
+    it('keeps the time of a task archived in LobeHub first, without counting it', async () => {
+      const service = new LinearIssueSyncService(db, userId);
+      linearIssues = [issue({ id: '1', state: done })];
+      await service.syncByFilter(TOKEN, rule);
+      const task = await linkedTask('1');
+      const own = await new TaskArchiveModel(db, userId).archive(task!.id);
+
+      linearIssues = [archivedIssue('1')];
+      const result = await service.syncByFilter(TOKEN, rule);
+
+      expect(result.archived).toBeUndefined();
+      expect((await linkedTask('1'))?.archivedAt).toEqual(own?.archivedAt);
+    });
+
+    it('leaves a running task for a later run, reporting it once', async () => {
+      const service = new LinearIssueSyncService(db, userId);
+      linearIssues = [issue({ id: '1' })];
+      await service.syncByFilter(TOKEN, rule);
+      const task = await linkedTask('1');
+      await db.update(tasks).set({ status: 'running' }).where(eq(tasks.id, task!.id));
+
+      linearIssues = [archivedIssue('1')];
+      const running = await service.syncByFilter(TOKEN, rule);
+
+      expect(running.archived).toBeUndefined();
+      expect(running.skipped).toEqual([{ identifier: 'ENG-1', reason: 'running' }]);
+      expect((await linkedTask('1'))?.archivedAt).toBeNull();
+
+      await db.update(tasks).set({ status: 'paused' }).where(eq(tasks.id, task!.id));
+      const later = await service.syncByFilter(TOKEN, rule);
+
+      expect(later).toMatchObject({ archived: 1, closed: 1 });
+      expect((await linkedTask('1'))?.archivedAt?.toISOString()).toBe(ARCHIVED_AT);
+    });
+
+    it('leaves a task with a live heartbeat for a later run', async () => {
+      const service = new LinearIssueSyncService(db, userId);
+      linearIssues = [issue({ id: '1' })];
+      await service.syncByFilter(TOKEN, rule);
+      const task = await linkedTask('1');
+      await db
+        .update(tasks)
+        .set({ automationMode: 'heartbeat', heartbeatInterval: 60 })
+        .where(eq(tasks.id, task!.id));
+
+      linearIssues = [{ ...issue({ archivedAt: ARCHIVED_AT, id: '1' }), archived: true }];
+      const live = await service.syncByFilter(TOKEN, rule);
+      expect(live.archived).toBeUndefined();
+      expect((await linkedTask('1'))?.archivedAt).toBeNull();
+
+      await db.update(tasks).set({ heartbeatInterval: 0 }).where(eq(tasks.id, task!.id));
+      expect((await service.syncByFilter(TOKEN, rule)).archived).toBe(1);
+    });
+
+    it('leaves an unfinished task of an open goal for a later run', async () => {
+      const service = new LinearIssueSyncService(db, userId);
+      linearIssues = [issue({ id: '1' })];
+      await service.syncByFilter(TOKEN, rule);
+      const task = await linkedTask('1');
+      openGoals.taskIds.add(task!.id);
+
+      linearIssues = [{ ...issue({ archivedAt: ARCHIVED_AT, id: '1' }), archived: true }];
+      const held = await service.syncByFilter(TOKEN, rule);
+      expect(held.archived).toBeUndefined();
+      expect((await linkedTask('1'))?.archivedAt).toBeNull();
+
+      openGoals.taskIds.clear();
+      expect((await service.syncByFilter(TOKEN, rule)).archived).toBe(1);
+    });
   });
 });

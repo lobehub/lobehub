@@ -10,9 +10,11 @@ import type {
 } from '@lobechat/types';
 import { isLinearNoProject } from '@lobechat/types';
 import debug from 'debug';
+import { sql } from 'drizzle-orm';
 import pMap from 'p-map';
 
 import { isTaskIdentifierUniqueViolation, TaskModel } from '@/database/models/task';
+import { TaskArchiveModel } from '@/database/models/taskArchive';
 import {
   TaskExternalLinkModel,
   type TaskExternalLinkWithTask,
@@ -20,6 +22,7 @@ import {
 import type { LobeChatDatabase } from '@/database/type';
 
 import { TaskService } from '../task';
+import { findTasksInOpenGoals } from '../task/archiveGuard';
 import { LinearApiError } from './client';
 import { linearCommentToContent } from './issueComments';
 import {
@@ -64,7 +67,7 @@ interface SyncedFields {
 
 interface SyncOptions {
   /**
-   * Only close tasks whose issue Linear closed; never create or rewrite. Used
+   * Only close or archive tasks like their issue; never create or rewrite. Used
    * for linked issues that a filtered sync no longer matches.
    */
   closeOnly?: boolean;
@@ -110,7 +113,8 @@ const hashTask = (task: TaskItem): string =>
     priority: task.priority ?? 0,
   });
 
-const linkMetadata = (issue: LinearIssue): LinearIssueLinkMetadata => ({
+const linkMetadata = (issue: LinearIssue, appliedArchivedAt?: string): LinearIssueLinkMetadata => ({
+  ...(appliedArchivedAt ? { appliedArchivedAt } : {}),
   assigneeName: issue.assignee?.displayName,
   labels: issue.labels?.nodes.map((label) => label.name),
   projectName: issue.project?.name,
@@ -160,7 +164,9 @@ const parentsFirst = (issues: LinearIssue[]): LinearIssue[] => {
  *   in LobeHub since the last sync, in which case the edit is kept;
  * - a task whose issue Linear completed or canceled is closed the same way,
  *   except a running task, which is never interrupted;
- * - a task is never reopened, deleted or recreated by a sync.
+ * - a task whose issue Linear archived is archived once, unless it is still
+ *   live, which waits for a later run;
+ * - a task is never reopened, restored, deleted or recreated by a sync.
  */
 export class LinearIssueSyncService {
   private readonly db: LobeChatDatabase;
@@ -465,6 +471,10 @@ export class LinearIssueSyncService {
     let current = task;
     if (closed) current = (await this.close(task, issue.state.type)) ?? task;
     result.created += 1;
+    if (issue.archivedAt && (await this.archive(current, issue.archivedAt))) {
+      result.archived = (result.archived ?? 0) + 1;
+      await this.linkModel.update(link.id, { metadata: linkMetadata(issue, issue.archivedAt) });
+    }
     return { link, task: current };
   }
 
@@ -548,29 +558,62 @@ export class LinearIssueSyncService {
       }
     }
 
+    let current = task;
+    let skippedRunning = false;
     if (CLOSED_STATE_TYPES.has(issue.state.type) && !CLOSED_TASK_STATUSES.has(task.status)) {
       // Rechecked under the row lock: the task may have started since the batch was read.
       const closed =
-        task.status !== 'running' && (await this.close(task, issue.state.type)) !== undefined;
-      if (closed) result.closed += 1;
-      else skip(result, issue.identifier, 'running');
+        task.status === 'running' ? undefined : await this.close(task, issue.state.type);
+      if (closed) {
+        current = closed;
+        result.closed += 1;
+      } else {
+        skip(result, issue.identifier, 'running');
+        skippedRunning = true;
+      }
       counted = true;
+    }
+
+    // Applied at most once per Linear archive, so a task restored in LobeHub
+    // stays restored. Nothing here ever restores a task.
+    let appliedArchivedAt =
+      link.metadata?.appliedArchivedAt === issue.archivedAt
+        ? (issue.archivedAt ?? undefined)
+        : undefined;
+    if (issue.archivedAt && !appliedArchivedAt) {
+      if (current.archivedAt) {
+        // Archived in LobeHub first: that stays as it is.
+        appliedArchivedAt = issue.archivedAt;
+      } else if (await this.archive(current, issue.archivedAt)) {
+        appliedArchivedAt = issue.archivedAt;
+        result.archived = (result.archived ?? 0) + 1;
+        counted = true;
+      } else if (current.status === 'running' && !skippedRunning) {
+        skip(result, issue.identifier, 'running');
+        counted = true;
+      } else {
+        log('archive of %s waits: task %s is still live', issue.identifier, task.id);
+      }
     }
 
     if (!counted) result.unchanged += 1;
 
-    // Display facts only. `syncedHash` is written solely by `create` and
-    // `applyLinearFields`, together with the task, so a run working from an
-    // older read can never put a stale hash back.
+    // Display facts and the applied archive. `syncedHash` is written solely by
+    // `create` and `applyLinearFields`, together with the task, so a run working
+    // from an older read can never put a stale hash back.
     const issueUpdatedAt = new Date(issue.updatedAt);
-    if (link.externalUpdatedAt?.getTime() === issueUpdatedAt.getTime()) return;
+    if (
+      link.externalUpdatedAt?.getTime() === issueUpdatedAt.getTime() &&
+      link.metadata?.appliedArchivedAt === appliedArchivedAt
+    )
+      return;
 
     await this.linkModel.update(link.id, {
       externalContainerId: issue.team.id,
       externalIdentifier: issue.identifier,
       externalUpdatedAt: issueUpdatedAt,
       externalUrl: issue.url,
-      metadata: linkMetadata(issue),
+      metadata: linkMetadata(issue, appliedArchivedAt),
     });
   }
 
@@ -614,6 +657,27 @@ export class LinearIssueSyncService {
       { userId: this.userId },
     );
     return skippedRunning ? undefined : updated;
+  }
+
+  /**
+   * Archive the task like its issue, at Linear's time, under the rules of a
+   * manual archive. False when it is still live (running, a schedule or heartbeat
+   * that can fire, or unfinished in an open Goal), which a later run retries.
+   */
+  private async archive(task: TaskItem, archivedAt: string): Promise<boolean> {
+    const inOpenGoal = await findTasksInOpenGoals(
+      this.db,
+      { userId: this.userId, workspaceId: this.workspaceId },
+      [task],
+    );
+    if (inOpenGoal.size > 0) return false;
+
+    const [archived] = await new TaskArchiveModel(
+      this.db,
+      this.userId,
+      this.workspaceId,
+    ).archiveMany([task.id], { at: sql`${archivedAt}::timestamptz` });
+    return !!archived;
   }
 
   /**

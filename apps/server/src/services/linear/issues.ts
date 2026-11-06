@@ -13,6 +13,8 @@ export const LINEAR_PAGE_SIZE = 50;
 
 /** An issue with everything a sync writes into a task. */
 export interface LinearIssue {
+  /** Set while the issue is archived in Linear. Archiving is not a state. */
+  archivedAt?: string | null;
   assignee?: { displayName: string } | null;
   description?: string | null;
   id: string;
@@ -29,7 +31,7 @@ export interface LinearIssue {
 }
 
 const ISSUE_FIELDS = `
-  id identifier title description url priority updatedAt
+  id identifier title description url priority updatedAt archivedAt
   state { name type }
   parent { id }
   assignee { displayName }
