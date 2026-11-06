@@ -140,6 +140,24 @@ describe('createOpenAICompatibleVideo', () => {
       const body = JSON.parse((global.fetch as any).mock.calls[0][1].body);
       expect(body.input_reference).toBe('https://example.com/image.jpg');
     });
+
+    it('should send input_reference as an object for deAPI', async () => {
+      global.fetch = vi.fn().mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ id: 'video-task-deapi-img' }),
+      });
+
+      await createOpenAICompatibleVideo(
+        {
+          model: 'Ltxv_13B_0_9_8_Distilled_FP8',
+          params: { imageUrl: 'https://example.com/image.jpg', prompt: 'Continue this scene' },
+        },
+        { apiKey: 'test-api-key', baseURL: 'https://oai.deapi.ai/v1', provider: 'deapi' },
+      );
+
+      const body = JSON.parse((global.fetch as any).mock.calls[0][1].body);
+      expect(body.input_reference).toEqual({ image_url: 'https://example.com/image.jpg' });
+    });
   });
 
   describe('Error scenarios', () => {

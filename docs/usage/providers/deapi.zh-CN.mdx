@@ -1,0 +1,46 @@
+---
+title: 在 LobeHub 中使用 deAPI
+description: 学习如何在 LobeHub 中配置 deAPI API Key，使用 FLUX、Z-Image、LTX-Video 等开源模型生成图像和视频。
+tags:
+  - deAPI
+  - 图像生成
+  - 视频生成
+  - API Key
+---
+
+# 在 LobeHub 中使用 deAPI
+
+[deAPI](https://deapi.ai) 在分布式 GPU 网络上运行开源图像与视频模型，按次计费且价格低廉。LobeHub 通过其 [OpenAI 兼容接口](https://docs.deapi.ai/openai-compatibility) 支持图像生成、图像编辑和视频生成。deAPI 不提供对话模型。
+
+要在 LobeHub 中配置该服务商，请打开 **应用设置 → AI 服务商**，选择该服务商并打开开关。
+
+<Steps>
+  ### 步骤一：获取 deAPI API Key
+
+  - 在 [deAPI](https://app.deapi.ai) 注册账户；
+  - 打开 [Settings → API Keys](https://app.deapi.ai/settings/api-keys) 并创建新的密钥；
+  - 复制密钥（以 `sk-dp-` 开头）并妥善保存。
+
+  <Callout type={'info'}>
+    设置了 IP 白名单的密钥无法用于 OpenAI 兼容接口，请使用未设置 IP 白名单的密钥。
+  </Callout>
+
+  ### 步骤二：在 LobeHub 中配置 deAPI
+
+  - 进入 LobeHub 的 **设置 → AI 服务商**；
+  - 选择 `deAPI` 并粘贴你的 API Key；
+  - 打开图像或视频创作页面，选择一个 deAPI 模型，例如 `FLUX.1 [schnell]`、`Z-Image Turbo` 或 `LTX-2.3`。
+
+  <Callout type={'warning'}>
+    使用 deAPI 生成图像和视频会产生费用，大量调用前请查阅 [deAPI 价格](https://deapi.ai/pricing)。
+  </Callout>
+</Steps>
+
+## 可用模型
+
+| 类型 | 模型                                                                      |
+| -- | ----------------------------------------------------------------------- |
+| 图像 | Z-Image Turbo、FLUX.2 \[klein] 4B（支持最多三张参考图编辑）、FLUX.1 \[schnell]、Z-Anime |
+| 视频 | LTX-2.5、LTX-2.3、MiniMax H3 Turbo、LTX-Video 13B Distilled（均支持首帧图）        |
+
+每个模型支持各自的尺寸和时长，图像与视频页面会提供对应选项。质量设置会映射为该模型的步数预设。
