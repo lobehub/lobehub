@@ -115,6 +115,8 @@ export function Composer({
   const sending = useRef(false);
   const previousDocument = useRef('');
   const [error, setError] = useState('');
+  /** The card the mention picker docks to, full width above the input like an IM. */
+  const [card, setCard] = useState<HTMLDivElement | null>(null);
   const requests = useSingleton(createChannelSendRequest);
   const attachments = useAttachments();
   const { allowed } = usePermission('create_content');
@@ -248,6 +250,7 @@ export function Composer({
           maxHeight={480}
           minHeight={0}
           resize={false}
+          slashMenuRef={setCard}
           style={inputShell}
           styles={{ body: { overflow: 'visible', padding: 0 } }}
           header={
@@ -294,6 +297,7 @@ export function Composer({
                 content=""
                 editable={!busy}
                 editor={editor}
+                getPopupContainer={() => card}
                 placeholder={placeholder}
                 plugins={plugins}
                 slashPlacement="top"

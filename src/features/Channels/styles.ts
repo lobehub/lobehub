@@ -191,8 +191,9 @@ export const styles = stylex.create({
     display: 'flex',
     alignItems: 'flex-end',
     gap: 8,
+    // 10px around the 28px buttons centers a single line in the 50px card.
     minHeight: 48,
-    paddingBlock: 8,
+    paddingBlock: 10,
     paddingInline: 8,
   },
   composerEditor: {
