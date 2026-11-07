@@ -68,7 +68,45 @@ describe('buildWakeSignal', () => {
     ).toBe(false);
   });
 
-  it('parses mentions on Discord only, so other platforms keep the adapter flag', () => {
+  describe('Feishu/Lark mentions, read from the event payload the adapter strips from the text', () => {
+    const lark = (message: Record<string, unknown>) =>
+      build(message, {
+        applicationId: 'cli_x',
+        platform: 'feishu',
+        platformThreadId: 'feishu:oc_1',
+      }).mentions;
+    const raw = (text: string, ...openIds: string[]) => ({
+      content: JSON.stringify({ text }),
+      mentions: openIds.map((id, i) => ({ id: { open_id: id }, key: `@_user_${i + 1}`, name: id })),
+    });
+
+    it('names the people @-mentioned when the bot is not', () => {
+      expect(
+        lark({ isMention: false, raw: raw('@_user_1 @_user_2 try this', 'ou_a', 'ou_b') }),
+      ).toEqual({
+        botMentioned: false,
+        everyone: false,
+        here: false,
+        otherUserIds: ['ou_a', 'ou_b'],
+        roleIds: [],
+      });
+    });
+
+    it('reads @_all as a broadcast', () => {
+      expect(lark({ isMention: false, raw: raw('@_all meeting') })).toMatchObject({
+        everyone: true,
+        otherUserIds: [],
+      });
+    });
+
+    it('leaves the adapter flag in charge when the bot is mentioned or nobody is', () => {
+      expect(lark({ isMention: true, raw: raw('@_user_1 hi', 'ou_bot') })).toBeUndefined();
+      expect(lark({ isMention: false, raw: raw('hi') })).toBeUndefined();
+      expect(lark({ isMention: false })).toBeUndefined();
+    });
+  });
+
+  it('parses Discord mentions from the text, and leaves other platforms on the adapter flag', () => {
     expect(build({ text: '<@555> hi' }).mentions).toMatchObject({ botMentioned: true });
     expect(
       build({ text: '<@U1> hi' }, { platform: 'slack', platformThreadId: 'slack:c:1' }).mentions,

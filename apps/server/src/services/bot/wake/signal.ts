@@ -1,5 +1,6 @@
 import {
   parseDiscordMentions,
+  parseLarkMentions,
   resolveChannelKeys,
 } from '@/server/services/agentSignal/scenarios/botWake/facts';
 import type { WakeAuthor, WakeSignal } from '@/server/services/agentSignal/scenarios/botWake/types';
@@ -74,12 +75,26 @@ const readReplyTo = (
   return { replyToAuthorId: author.id, ...(name ? { replyToAuthorName: name.trim() } : {}) };
 };
 
+const readMentions = (
+  platform: string,
+  text: string,
+  applicationId: string,
+  message: WakeMessageLike,
+): WakeSignal['mentions'] => {
+  if (platform === 'discord') return parseDiscordMentions(text, applicationId);
+  if (platform === 'feishu' || platform === 'lark') {
+    return parseLarkMentions(message.raw, message.isMention === true);
+  }
+
+  return undefined;
+};
+
 /**
  * Normalizes a chat message into the fact the wake policies judge.
  *
- * Mentions are re-derived from the text on Discord only: that is where the adapter folds
- * broadcast pings into `isMention`. Elsewhere `mentions` stays undefined and the platform's own
- * flag is trusted.
+ * Mentions are re-derived where the adapter's `isMention` alone hides who was addressed: Discord
+ * folds broadcast pings into it, and Feishu/Lark strips the @-placeholders from the text. Elsewhere
+ * `mentions` stays undefined and the platform's own flag is trusted.
  */
 export const buildWakeSignal = ({
   agentId,
@@ -107,7 +122,7 @@ export const buildWakeSignal = ({
     author,
     channelKeys: resolveChannelKeys(platform, applicationId, platformThreadId),
     hasAttachments: (message.attachments?.length ?? 0) > 0,
-    mentions: platform === 'discord' ? parseDiscordMentions(text, applicationId) : undefined,
+    mentions: readMentions(platform, text, applicationId, message),
     message: text,
     platform,
     platformThreadId,

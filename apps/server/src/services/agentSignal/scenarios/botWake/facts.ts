@@ -32,6 +32,44 @@ export const parseDiscordMentions = (text: string, botUserId: string): WakeMenti
   };
 };
 
+interface LarkRawMentions {
+  content?: unknown;
+  mentions?: { id?: { open_id?: unknown } }[];
+}
+
+/**
+ * Reads mentions from a Feishu/Lark message's own event payload.
+ *
+ * The adapter strips the `@_user_N` / `@_all` placeholders from the text before anyone sees it,
+ * so "@Alice try this" reaches the wake policies as "try this". The `mentions[]` array on the
+ * event body is the record of who was @-mentioned.
+ *
+ * Returns:
+ * - `undefined` when the adapter says the bot is mentioned: Lark identifies the bot by an
+ *   open_id this layer does not hold, so the adapter's `isMention` stays the judge
+ * - `undefined` when the payload mentions nobody
+ * - otherwise every mentioned open_id as `otherUserIds`, and `everyone` for `@_all`
+ */
+export const parseLarkMentions = (
+  raw: unknown,
+  adapterIsMention: boolean,
+): WakeMentions | undefined => {
+  if (adapterIsMention || typeof raw !== 'object' || raw === null) return undefined;
+  const { content, mentions } = raw as LarkRawMentions;
+
+  const otherUserIds = [
+    ...new Set(
+      (Array.isArray(mentions) ? mentions : [])
+        .map((mention) => mention?.id?.open_id)
+        .filter((id): id is string => typeof id === 'string' && !!id),
+    ),
+  ];
+  const everyone = typeof content === 'string' && content.includes('@_all');
+  if (otherUserIds.length === 0 && !everyone) return undefined;
+
+  return { botMentioned: false, everyone, here: false, otherUserIds, roleIds: [] };
+};
+
 /**
  * Whether the platform's "mentioned" flag survives the re-judgement.
  *
