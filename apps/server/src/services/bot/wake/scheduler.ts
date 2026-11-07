@@ -3,23 +3,23 @@ import { BOT_STAND_DOWN_MINUTES } from '@lobechat/types';
 import debug from 'debug';
 
 import { appEnv } from '@/envs/app';
-import { parseBotWakeSettings } from '@/server/services/agentSignal/scenarios/botWake/config';
-import { toConversationLine } from '@/server/services/agentSignal/scenarios/botWake/conversation';
-import {
-  hasConversationLog,
-  resolveChannelKeys,
-  resolveConversationLogKeys,
-  wakeStateKeys,
-} from '@/server/services/agentSignal/scenarios/botWake/facts';
-import { isBotWakeEnabled } from '@/server/services/agentSignal/scenarios/botWake/gate';
-import type { SchedulerOptions } from '@/server/services/agentSignal/scenarios/botWake/scheduler';
-import { WakeScheduler } from '@/server/services/agentSignal/scenarios/botWake/scheduler';
+import { parseBotWakeSettings } from '@/server/services/conversationWake/config';
+import { toConversationLine } from '@/server/services/conversationWake/conversation';
+import { wakeStateKeys } from '@/server/services/conversationWake/facts';
+import { isBotWakeEnabled } from '@/server/services/conversationWake/gate';
+import type { SchedulerOptions } from '@/server/services/conversationWake/scheduler';
+import { WakeScheduler } from '@/server/services/conversationWake/scheduler';
 import { QueueService } from '@/server/services/queue';
 import { LocalQueueServiceImpl } from '@/server/services/queue/impls';
 import { redisService } from '@/server/services/redis';
 import { agentSignalScopeFlowControl } from '@/server/workflows/agentSignal';
 
 import { runDeferredReplay } from '../deferredReplay';
+import {
+  hasConversationLog,
+  resolveChannelKeys,
+  resolveConversationLogKeys,
+} from './platformFacts';
 
 const log = debug('lobe-server:bot:wake-scheduler');
 

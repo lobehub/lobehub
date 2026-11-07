@@ -1435,6 +1435,13 @@
       "when": 1793869041794,
       "tag": "0204_workspace_invitation_link",
       "breakpoints": true
+    },
+    {
+      "idx": 205,
+      "version": "7",
+      "when": 1793930690156,
+      "tag": "0205_lobe_bench_environments_and_memory",
+      "breakpoints": true
     }
   ],
   "version": "6"

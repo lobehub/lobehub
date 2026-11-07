@@ -1,7 +1,9 @@
 'use client';
 
 import type { BuiltinRenderProps } from '@lobechat/types';
-import { ActionIcon, Block, createStaticStyles, cssVar, Markdown, Text } from '@lobehub/ui';
+import { ActionIcon, Block, Markdown, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { PanelRight, PanelRightClose } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -13,65 +15,51 @@ import { resolveTaskOpenTarget } from '../../../taskRef';
 import type { CreateTaskParams, CreateTaskState } from '../../../types';
 import { useTaskDetailToggle } from '../shared';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  description: css`
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 3;
-
-    font-size: 12px;
-    line-height: 1.5;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  identifier: css`
-    flex-shrink: 0;
-
-    padding-block: 1px;
-    padding-inline: 6px;
-    border-radius: 4px;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  instruction: css`
-    /* The instruction is model-facing markdown; render it as a faded preview
-       rather than flattening it to plain text. Full content lives in the
-       expanded detail panel. */
-    overflow: hidden;
-    max-height: 132px;
-
-    mask-image: linear-gradient(to bottom, black 78%, transparent);
-  `,
-  row: css`
-    display: flex;
-    gap: 8px;
-    align-items: center;
-  `,
-  taskItem: css`
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-
-    padding-block: 10px;
-    padding-inline: 12px;
-  `,
-  title: css`
-    overflow: hidden;
-    flex: 1;
-
-    min-width: 0;
-
-    font-size: 13px;
-    line-height: 1.4;
-    color: ${cssVar.colorText};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-}));
+const styles = stylex.create({
+  description: {
+    overflow: 'hidden',
+    display: '-webkit-box',
+    WebkitBoxOrient: 'vertical',
+    WebkitLineClamp: '3',
+    fontSize: '12px',
+    lineHeight: 1.5,
+    color: cssVar.colorTextTertiary,
+  },
+  identifier: {
+    flexShrink: 0,
+    paddingBlock: '1px',
+    paddingInline: '6px',
+    borderRadius: '4px',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '12px',
+    color: cssVar.colorTextSecondary,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+  instruction: {
+    overflow: 'hidden',
+    maxHeight: '132px',
+    maskImage: 'linear-gradient(to bottom, black 78%, transparent)',
+  },
+  row: { display: 'flex', gap: '8px', alignItems: 'center' },
+  taskItem: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '6px',
+    paddingBlock: '10px',
+    paddingInline: '12px',
+  },
+  title: {
+    overflow: 'hidden',
+    flex: '1',
+    minWidth: '0',
+    fontSize: '13px',
+    lineHeight: 1.4,
+    color: cssVar.colorText,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+});
 
 export const CreateTaskRender = memo<BuiltinRenderProps<CreateTaskParams, CreateTaskState>>(
   ({ args, pluginState }) => {
@@ -102,10 +90,10 @@ export const CreateTaskRender = memo<BuiltinRenderProps<CreateTaskParams, Create
         width={'100%'}
         onClick={canOpen ? open : undefined}
       >
-        <div className={styles.taskItem}>
-          <div className={styles.row}>
-            {identifier && <span className={styles.identifier}>{identifier}</span>}
-            {name && <Text className={styles.title}>{name}</Text>}
+        <div {...stylex.props(styles.taskItem)}>
+          <div {...stylex.props(styles.row)}>
+            {identifier && <span {...stylex.props(styles.identifier)}>{identifier}</span>}
+            {name && <Text className={stylex.props(styles.title).className}>{name}</Text>}
             {status && <TaskStatusTag disableDropdown size={14} status={status} />}
             {!!priority && <TaskPriorityTag disableDropdown priority={priority} size={14} />}
             {identifier && (
@@ -122,9 +110,9 @@ export const CreateTaskRender = memo<BuiltinRenderProps<CreateTaskParams, Create
             )}
           </div>
           {description ? (
-            <div className={styles.description}>{description}</div>
+            <div {...stylex.props(styles.description)}>{description}</div>
           ) : instruction ? (
-            <div className={styles.instruction}>
+            <div {...stylex.props(styles.instruction)}>
               <Markdown fontSize={12} variant={'chat'}>
                 {instruction}
               </Markdown>

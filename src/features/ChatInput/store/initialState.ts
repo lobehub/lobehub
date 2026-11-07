@@ -105,6 +105,13 @@ export interface PublicState {
    * topic than the surrounding page.
    */
   topicId?: string | null;
+  /**
+   * Key of this composer's upload list in the file store. Defaults to
+   * `contextSelectionKey`; a host whose text draft outlives that key (Home
+   * keeps its text across mode and agent switches) passes a steadier one so
+   * attachments stay alongside the text.
+   */
+  uploadContextKey?: string;
 }
 
 export interface State extends PublicState {

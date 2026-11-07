@@ -1,8 +1,8 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Text } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { Flexbox, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Trash2 } from 'lucide-react';
 import { memo } from 'react';
 
@@ -10,18 +10,10 @@ import type { RemoveIdentityMemoryParams } from '../../types';
 import { getRemoveIdentityViewModel } from './identityMemoryViewModel';
 import { memoryCardStyles as styles } from './MemoryCardParts';
 
-const localStyles = createStaticStyles(({ css, cssVar }) => ({
-  id: css`
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    color: ${cssVar.colorTextQuaternary};
-  `,
-  reason: css`
-    font-size: 13px;
-    line-height: 1.6;
-    color: ${cssVar.colorTextSecondary};
-  `,
-}));
+const localStyles = stylex.create({
+  id: { fontFamily: cssVar.fontFamilyCode, fontSize: '12px', color: cssVar.colorTextQuaternary },
+  reason: { fontSize: '13px', lineHeight: 1.6, color: cssVar.colorTextSecondary },
+});
 
 export interface RemovedIdentityCardProps {
   data?: RemoveIdentityMemoryParams;
@@ -45,12 +37,12 @@ export const RemovedIdentityCard = memo<RemovedIdentityCardProps>(({ data }) => 
             Identity removed
           </Text>
         </Flexbox>
-        {id && <span className={localStyles.id}>{id}</span>}
+        {id && <span {...stylex.props(localStyles.id)}>{id}</span>}
       </Flexbox>
 
       {reason && (
         <Flexbox className={styles.content}>
-          <div className={localStyles.reason}>{reason}</div>
+          <div {...stylex.props(localStyles.reason)}>{reason}</div>
         </Flexbox>
       )}
     </Flexbox>

@@ -88,7 +88,11 @@ html.desktop[data-window-fullscreen] body {
   background-color: var(--lobe-color-bg-layout);
 }
 
-button {
+/* Drag-region hook class from @/styles/electron. Buttons opt out of the drag region only
+   inside one: Chromium applies every app-region box's unclipped border box in layout
+   order, later rect winning, so a page-wide button opt-out punched holes in the titlebar
+   from buttons in the content below that had scrolled up under it. */
+.lobe-drag-region button {
   -webkit-app-region: no-drag;
 }
 

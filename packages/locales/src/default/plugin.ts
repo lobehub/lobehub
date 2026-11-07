@@ -754,7 +754,7 @@ export default {
   'dev.mcp.auth.oauth': 'OAuth',
   'dev.mcp.auth.oauth.authorize': 'Authorize & Connect',
   'dev.mcp.auth.oauth.clientId.desc':
-    'Leave empty to register a client automatically (dynamic client registration)',
+    'Leave empty to identify LobeHub automatically (Client ID Metadata Document or dynamic client registration)',
   'dev.mcp.auth.oauth.clientId.label': 'OAuth Client ID',
   'dev.mcp.auth.oauth.clientId.placeholder': 'Optional',
   'dev.mcp.auth.oauth.clientSecret.desc': 'Only required for confidential OAuth clients',

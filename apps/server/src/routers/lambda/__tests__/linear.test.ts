@@ -224,6 +224,16 @@ describe('linearRouter', () => {
         expect.objectContaining({ connectionId: connection.id, ...filter }),
       );
 
+      await caller({ userId }).countIssues({
+        connectionId: connection.id,
+        ...filter,
+        includeArchived: true,
+      });
+      expect(mocks.countIssues).toHaveBeenLastCalledWith(
+        'token',
+        expect.objectContaining({ includeArchived: true, ...filter }),
+      );
+
       await expect(
         caller({ userId }).countIssues({ connectionId: other.id, ...filter }),
       ).rejects.toMatchObject({ code: 'NOT_FOUND' });
@@ -1044,6 +1054,41 @@ describe('linearRouter', () => {
         'token',
         expect.objectContaining({ teamId: 'team-1' }),
         expect.objectContaining({ syncComments: true }),
+      );
+    });
+
+    it('leaves archived issues out of a rule run unless that run asks for them', async () => {
+      const connection = await connect({ userId });
+      mocks.getToken.mockResolvedValue('token');
+      mocks.runSync.mockResolvedValue({ ok: true });
+      mocks.syncByFilter.mockResolvedValue(syncResult);
+      const rule = await caller({ userId }).createSyncRule({
+        connectionId: connection.id,
+        // @ts-expect-error A rule does not keep this: archived issues are chosen per run.
+        includeArchived: true,
+        projectId,
+        stateTypes: ['completed'],
+        teamId: 'team-1',
+        teamName: 'Engineering',
+      });
+
+      const plain = await caller({ userId }).startRuleSync({ ruleId: rule.id });
+      await new LinearSyncJobService(serverDB, userId).run(plain.id);
+      expect(mocks.syncByFilter).toHaveBeenLastCalledWith(
+        'token',
+        expect.objectContaining({ includeArchived: undefined, teamId: 'team-1' }),
+        expect.anything(),
+      );
+
+      const archived = await caller({ userId }).startRuleSync({
+        includeArchived: true,
+        ruleId: rule.id,
+      });
+      await new LinearSyncJobService(serverDB, userId).run(archived.id);
+      expect(mocks.syncByFilter).toHaveBeenLastCalledWith(
+        'token',
+        expect.objectContaining({ includeArchived: true, teamId: 'team-1' }),
+        expect.anything(),
       );
     });
 

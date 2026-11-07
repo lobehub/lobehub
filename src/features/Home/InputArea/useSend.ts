@@ -24,6 +24,7 @@ import { useTaskStore } from '@/store/task';
 
 import { useResolvedHomeAgentId } from '../AgentSelect/useResolvedHomeAgentId';
 import type { HomeMode } from '../types';
+import { HOME_UPLOAD_CONTEXT_KEY } from './constants';
 import { appendTaskAttachments } from './taskAttachments';
 import { taskNameFromMessage } from './taskName';
 
@@ -158,7 +159,9 @@ export const useSend = (mode: HomeMode = 'chat') => {
       // `onChange`, so a fast type-then-Enter sequence can fire before the
       // cache catches up and the empty-message guard would bail incorrectly.
       const typed = (getMarkdownContent?.() ?? inputMessage ?? '').trim();
-      const fileList = fileChatSelectors.chatUploadFileList(useFileStore.getState());
+      const fileList = fileChatSelectors.chatUploadFileList(HOME_UPLOAD_CONTEXT_KEY)(
+        useFileStore.getState(),
+      );
       const contextList = fileChatSelectors.chatContextSelections(contextSelectionKey)(
         useFileStore.getState(),
       );
@@ -331,7 +334,10 @@ export const useSend = (mode: HomeMode = 'chat') => {
         // Preserve the complete draft when creation or execution fails. The
         // editor, files and context are one unit from the user's perspective.
         if (submitted) {
-          clearChatUploadFileList(mode === 'task' ? fileList.map((file) => file.id) : undefined);
+          clearChatUploadFileList(
+            HOME_UPLOAD_CONTEXT_KEY,
+            mode === 'task' ? fileList.map((file) => file.id) : undefined,
+          );
           clearChatContextSelections(contextSelectionKey);
           mainInputEditor?.clearContent();
         }

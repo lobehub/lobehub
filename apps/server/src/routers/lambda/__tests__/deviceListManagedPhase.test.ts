@@ -69,7 +69,7 @@ const phaseOf = (devices: { deviceId: string; managedPhase?: string }[], deviceI
 describe('device.listDevices managed device phases', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.isAvailable.mockReturnValue(true);
+    mocks.isAvailable.mockResolvedValue(true);
     mocks.queryDeviceList.mockResolvedValue([]);
     mocks.querySharedWorkspaceDevices.mockResolvedValue([]);
     mocks.queryWorkspaceDevices.mockResolvedValue([]);
@@ -120,7 +120,7 @@ describe('device.listDevices managed device phases', () => {
   });
 
   it('still lists managed devices when the provider is unavailable', async () => {
-    mocks.isAvailable.mockReturnValue(false);
+    mocks.isAvailable.mockResolvedValue(false);
     mocks.queryPersonal.mockResolvedValue([row('managed', MANAGED_CLOUD_DEVICE_IDENTITY_SOURCE)]);
 
     const devices = await personalCaller().listDevices();

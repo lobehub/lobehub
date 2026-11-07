@@ -44,6 +44,7 @@ import { useAgentId } from '../hooks/useAgentId';
 import { useChatInputDraft } from '../hooks/useChatInputDraft';
 import { useChatInputHistory } from '../hooks/useChatInputHistory';
 import { useChatInputResourceAccess } from '../hooks/useChatInputResourceAccess';
+import { useChatInputUploadKey } from '../hooks/useChatInputUpload';
 import { useEffectiveModel } from '../hooks/useEffectiveModel';
 import { useLargeFileLocalPath } from '../hooks/useLargeFileLocalPath';
 import { useChatInputStore, useStoreApi } from '../store';
@@ -276,7 +277,13 @@ const InputEditor = memo<{
     isMentionEnabled &&
     !heterogeneousName &&
     categories.some((category) => category.id === 'agent');
-  const { handleUploadFiles } = useUploadFiles({ agentId, model, provider });
+  const uploadContextKey = useChatInputUploadKey();
+  const { handleUploadFiles } = useUploadFiles({
+    agentId,
+    contextKey: uploadContextKey,
+    model,
+    provider,
+  });
   const routeLargeFilesToLocalPaths = useLargeFileLocalPath(agentId, editor);
   const handlePasteFiles = useCallback(
     (files: File[]) => handleUploadFiles(routeLargeFilesToLocalPaths(files)),

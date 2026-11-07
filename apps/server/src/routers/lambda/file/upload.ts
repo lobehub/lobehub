@@ -253,19 +253,20 @@ export const uploadRouter = router({
         });
       }
 
-      const { id } = await ctx.serverDB.transaction(async (trx) => {
-        let shouldRefreshGlobalFile = false;
-        if (isExist && existingFile.url && existingFile.url !== input.url) {
-          shouldRefreshGlobalFile = !(await isStoredObjectAvailable(
-            ctx.fileService,
-            existingFile.url,
-          ));
-        }
+      // Storage I/O must finish before the transaction borrows a pooled connection.
+      const missingHashUrl =
+        isExist &&
+        existingFile.url &&
+        existingFile.url !== input.url &&
+        !(await isStoredObjectAvailable(ctx.fileService, existingFile.url))
+          ? existingFile.url
+          : undefined;
 
-        if (shouldRefreshGlobalFile) {
-          // A user may re-upload the same bytes after the old object key was
-          // removed. Keep the global hash pointer on the newly uploaded object so
-          // future dedup checks do not resolve back to the stale key.
+      const { id } = await ctx.serverDB.transaction(async (trx) => {
+        // Apply a missing-object probe only to the pointer it observed, and decide whether to
+        // insert the global row from the current mapping rather than the pre-transaction read.
+        const currentFile = await ctx.fileModel.checkHash(input.hash!, trx);
+        if (missingHashUrl && currentFile.isExist && currentFile.url === missingHashUrl) {
           await ctx.fileModel.updateGlobalFile(
             input.hash!,
             {
@@ -295,7 +296,7 @@ export const uploadRouter = router({
               ...(resolvedVisibility ? { visibility: resolvedVisibility } : {}),
             },
             // if the file is not exist in global file, create a new one
-            !isExist,
+            !currentFile.isExist,
             trx,
           );
 

@@ -9,13 +9,13 @@ import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import AsyncError from '@/components/AsyncError';
-import { projectIcon } from '@/features/HomeSidebar/Body/Project/ProjectItem';
 import { ListHeader } from '@/features/MessageList';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { NavPanelPortal } from '@/features/NavPanel/NavPanelPortal';
 import { NAV_PANEL_TASKS_KEY } from '@/features/NavPanel/railRouteKey';
 import SideBarLayout from '@/features/NavPanel/SideBarLayout';
+import { projectIcon } from '@/features/Projects/ProjectAvatar';
 import { resolveProjectListState } from '@/features/Projects/projectListState';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';

@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { SWRConfig } from 'swr';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -62,5 +62,19 @@ describe('SyncRules', () => {
     expect(main).not.toHaveAttribute('aria-busy');
     expect(main).toBeEnabled();
     expect(menu).toBeEnabled();
+  });
+
+  it('runs a rule without archived issues unless that is asked for', async () => {
+    linearServiceMocks.startRuleSync.mockResolvedValue({ id: 'job-1' });
+    renderRules([]);
+
+    fireEvent.click(await screen.findByText('linear.sync.rules.run'));
+
+    await waitFor(() =>
+      expect(linearServiceMocks.startRuleSync).toHaveBeenCalledWith('rule-1', {
+        includeArchived: false,
+        syncComments: true,
+      }),
+    );
   });
 });

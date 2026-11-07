@@ -20,7 +20,7 @@ export const NO_STORE = { 'Cache-Control': 'no-store' };
  * not offer managed devices.
  */
 export async function managedDeviceToken(c: Context): Promise<Response> {
-  if (!managedDeviceProvider.isAvailable()) {
+  if (!(await managedDeviceProvider.isAvailable())) {
     return c.json({ error: 'Not found' }, 404, NO_STORE);
   }
 

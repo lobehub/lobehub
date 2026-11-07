@@ -1096,7 +1096,7 @@ export class ConversationLifecycleActionImpl {
         },
         'sendMessage/optimisticCreateTopic',
       );
-      getFileStoreState().moveChatContextSelections(
+      getFileStoreState().moveChatComposerAttachments(
         messageMapKey({ ...operationContext, topicId: null }),
         currentContextKey,
       );
@@ -1345,7 +1345,7 @@ export class ConversationLifecycleActionImpl {
     const rollbackOptimisticTopic = (action: string) => {
       if (!optimisticTopic || !optimisticTopicActive) return;
 
-      getFileStoreState().moveChatContextSelections(
+      getFileStoreState().moveChatComposerAttachments(
         currentContextKey,
         messageMapKey({ ...operationContext, topicId: null }),
       );
@@ -1504,7 +1504,7 @@ export class ConversationLifecycleActionImpl {
       const heteroResponseMeta = heteroData as SendMessageServerResponseMeta;
       const heteroMessageKey = messageMapKey(heteroContext);
       this.#get().moveQueuedMessages(currentContextKey, heteroMessageKey);
-      getFileStoreState().moveChatContextSelections(currentContextKey, heteroMessageKey);
+      getFileStoreState().moveChatComposerAttachments(currentContextKey, heteroMessageKey);
       // Legacy queue location: follow-ups enqueued behind an op still
       // registered under the pre-mint `_new` key.
       if (willCreateNewTopic)
@@ -2055,7 +2055,7 @@ export class ConversationLifecycleActionImpl {
       };
       const finalMessageKey = messageMapKey(finalContext);
       this.#get().moveQueuedMessages(currentContextKey, finalMessageKey);
-      getFileStoreState().moveChatContextSelections(currentContextKey, finalMessageKey);
+      getFileStoreState().moveChatComposerAttachments(currentContextKey, finalMessageKey);
       // Legacy queue location: follow-ups enqueued behind an op still
       // registered under the pre-mint `_new` key.
       if (willCreateNewTopic)

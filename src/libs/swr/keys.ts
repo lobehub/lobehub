@@ -1024,6 +1024,10 @@ export const matchDomain =
 /**
  * Aggregate registry — one entry point for every domain's keys.
  */
+export const taskLabelKeys = {
+  list: def('taskLabel:list', () => ['taskLabel:list'] as const),
+};
+
 export const swrKeys = {
   agent: agentConfigKeys,
   agentDocument: agentDocumentSWRKeys,
@@ -1063,6 +1067,7 @@ export const swrKeys = {
   serverConfig: serverConfigKeys,
   share: shareKeys,
   stats: statsKeys,
+  taskLabel: taskLabelKeys,
   thread: threadKeys,
   tool: toolKeys,
   topic: topicKeys,

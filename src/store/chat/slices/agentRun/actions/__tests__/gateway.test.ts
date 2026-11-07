@@ -54,9 +54,9 @@ vi.mock('@/services/topic', () => ({
   },
 }));
 
-const moveChatContextSelections = vi.hoisted(() => vi.fn());
+const moveChatComposerAttachments = vi.hoisted(() => vi.fn());
 vi.mock('@/store/file/store', () => ({
-  getFileStoreState: () => ({ moveChatContextSelections }),
+  getFileStoreState: () => ({ moveChatComposerAttachments }),
 }));
 
 const mockUserDefaultConfig = vi.hoisted(() => ({
@@ -188,7 +188,7 @@ function createTestAction() {
 
 describe('GatewayActionImpl', () => {
   beforeEach(() => {
-    moveChatContextSelections.mockClear();
+    moveChatComposerAttachments.mockClear();
     vi.mocked(topicService.getTopicDetail).mockResolvedValue(null as never);
     vi.mocked(topicService.settleRunningOperation).mockResolvedValue(undefined as never);
     mockAgentStore.state = { activeAgentId: undefined, agentMap: {} };
@@ -1854,7 +1854,7 @@ describe('GatewayActionImpl', () => {
           title: '666',
         },
       });
-      expect(moveChatContextSelections).toHaveBeenCalledWith(
+      expect(moveChatComposerAttachments).toHaveBeenCalledWith(
         messageMapKey({
           agentId: 'agent-1',
           scope: 'main',
