@@ -127,6 +127,7 @@
   "workingDirectory.refreshFolders": "Làm mới thư mục",
   "workingDirectory.refreshGitStatus": "Làm mới trạng thái nhánh & yêu cầu kéo",
   "workingDirectory.removeRecent": "Xóa khỏi gần đây",
+  "workingDirectory.removeRecentFailed": "Không thể xóa thư mục này. Vui lòng thử lại.",
   "workingDirectory.removeWorktreeAction": "Xóa worktree",
   "workingDirectory.removeWorktreeConfirm": "Xóa worktree “{{name}}”? Thao tác này sẽ xóa thư mục worktree nhưng giữ lại nhánh của nó. Git sẽ từ chối nếu có thay đổi chưa được commit.",
   "workingDirectory.removeWorktreeFailed": "Xóa worktree thất bại",
