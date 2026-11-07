@@ -347,10 +347,47 @@ export const falInputSchemaToVideoParameters = (
   return parameters;
 };
 
+const SIZE_PATTERN = /^(\d+)x(\d+)$/;
+
+/**
+ * `1024x1024` becomes `{ width, height }` where the endpoint takes sizes as objects or presets
+ * (e.g. `openai/gpt-image-2`) instead of listing the string itself.
+ */
+const coerceStringValue = (
+  key: string,
+  value: string,
+  property: FalJsonSchema,
+): [string, unknown][] => {
+  const size = SIZE_PATTERN.exec(value);
+  const takesSizeObject = alternativesOf(property).some(
+    (item) => item.properties?.width && item.properties?.height,
+  );
+  if (!size || !takesSizeObject || stringEnumOf(property)?.includes(value)) return [[key, value]];
+
+  return [[key, { height: Number(size[2]), width: Number(size[1]) }]];
+};
+
 /**
  * Fit request values to the types the endpoint declares: fal takes many numeric options as string
  * enums (`duration: "5"` or `"8s"`), and rejects fields its schema does not define.
  */
+/**
+ * Defaults for fields the card leaves unset, applied only when the endpoint accepts them. GPT
+ * Image endpoints on fal default to `quality: high` and a fixed `landscape_4_3` size, while
+ * OpenAI's own API (and our approximate per-image price) assumes `auto` for both.
+ */
+export const withFalSchemaDefaults = (
+  input: Record<string, unknown>,
+  defaults: Record<string, string>,
+  schema: FalJsonSchema | undefined,
+) => {
+  const properties = schema?.properties ?? {};
+  const accepted = Object.entries(defaults).filter(
+    ([key, value]) => properties[key] && stringEnumOf(properties[key])?.includes(value),
+  );
+  return { ...Object.fromEntries(accepted), ...input };
+};
+
 export const coerceFalInput = (
   input: Record<string, unknown>,
   schema: FalJsonSchema | undefined,
@@ -362,6 +399,7 @@ export const coerceFalInput = (
     Object.entries(input).flatMap(([key, value]) => {
       const property = properties[key];
       if (!property) return [];
+      if (typeof value === 'string') return coerceStringValue(key, value, property);
       if (typeof value !== 'number') return [[key, value]];
 
       const stringValues = stringEnumOf(property);

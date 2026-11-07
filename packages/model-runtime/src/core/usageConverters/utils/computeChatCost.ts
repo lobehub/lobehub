@@ -272,7 +272,12 @@ const creditsToUSD = (credits: number) => credits / CREDITS_PER_DOLLAR;
 /**
  * Returns raw credits, which will be rounded up uniformly at the final aggregation stage.
  */
-const computeFixedCredits = (unit: FixedPricingUnit, quantity: number) => quantity * unit.rate;
+/**
+ * `millionTokens` / `millionCharacters` rates are USD per million, which equals credits per unit.
+ * `unit` rates are USD per provider-reported billable unit, so they scale by CREDITS_PER_DOLLAR.
+ */
+const computeFixedCredits = (unit: FixedPricingUnit, quantity: number) =>
+  unit.unit === 'unit' ? quantity * unit.rate * CREDITS_PER_DOLLAR : quantity * unit.rate;
 
 /**
  * Google provider uses new pricing for entire input and output when exceeding threshold, not tiered calculation
@@ -450,6 +455,13 @@ const resolveQuantity = (
     return unit.name === 'textInput' ? usage.inputCharacters : undefined;
   }
 
+  // Provider-reported billable units (e.g. fal) are priced per unit, not per token.
+  if (unit.unit === 'unit') {
+    if (unit.strategy !== 'fixed')
+      throw new Error(`Unsupported strategy for unit pricing: ${unit.strategy}`);
+    return unit.name === 'providerBillableUnit' ? usage.providerBillableUnits : undefined;
+  }
+
   const resolver = UNIT_QUANTITY_RESOLVERS[unit.name as PricingUnitName];
   const quantity = resolver?.(usage, context);
   return typeof quantity === 'number' ? quantity : undefined;
@@ -501,7 +513,11 @@ export const computeChatCost = (
     if (quantity === undefined) continue;
 
     if (unit.strategy === 'fixed') {
-      if (unit.unit !== 'millionTokens' && unit.unit !== 'millionCharacters')
+      if (
+        unit.unit !== 'millionTokens' &&
+        unit.unit !== 'millionCharacters' &&
+        unit.unit !== 'unit'
+      )
         throw new Error(`Unsupported chat pricing unit: ${unit.unit}`);
 
       const fixedUnit = unit as FixedPricingUnit;

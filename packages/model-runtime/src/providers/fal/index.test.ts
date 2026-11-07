@@ -1,19 +1,22 @@
 // @vitest-environment node
-import { fal } from '@fal-ai/client';
+import { createFalClient, fal } from '@fal-ai/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { CreateImagePayload } from '../../types';
 import { clearFalInputSchemaCache } from './catalog';
 import { LobeFalAI, resolveFalImageSize } from './index';
 
-// Mock the fal client
-vi.mock('@fal-ai/client', () => ({
-  createFalClient: vi.fn(() => ({})),
-  fal: {
-    config: vi.fn(),
-    subscribe: vi.fn(),
-  },
-}));
+// Mock the fal client; scoped clients delegate `subscribe` to the shared mock
+// Pricing lookup only matters for billable-unit cards, covered in billableUnits.test.ts
+vi.mock('../../utils/getModelPricing', () => ({ getModelPricing: vi.fn(async () => undefined) }));
+
+vi.mock('@fal-ai/client', () => {
+  const subscribe = vi.fn();
+  return {
+    createFalClient: vi.fn(() => ({ subscribe: (...args: unknown[]) => subscribe(...args) })),
+    fal: { subscribe },
+  };
+});
 
 // Get the mocked fal instance
 const mockFal = vi.mocked(fal);
@@ -49,9 +52,7 @@ describe('LobeFalAI', () => {
     it('should correctly initialize with an API key', () => {
       const instance = new LobeFalAI({ apiKey: 'test_api_key' });
       expect(instance).toBeInstanceOf(LobeFalAI);
-      expect(mockFal.config).toHaveBeenCalledWith({
-        credentials: 'test_api_key',
-      });
+      expect(createFalClient).toHaveBeenCalledWith({ credentials: 'test_api_key' });
     });
 
     it('should throw InvalidProviderAPIKey if no apiKey is provided', () => {

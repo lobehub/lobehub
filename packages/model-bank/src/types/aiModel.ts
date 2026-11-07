@@ -176,7 +176,13 @@ export type PricingUnitName =
 
   // Video-based pricing units
   | 'videoInput'
-  | 'videoGeneration';
+  | 'videoGeneration'
+
+  /**
+   * Provider-reported billable units (e.g. fal's `x-fal-billable-units` header).
+   * Billed through the `unit` pricing unit type.
+   */
+  | 'providerBillableUnit';
 
 export type PricingUnitType =
   | 'millionTokens' // per 1M tokens
@@ -184,7 +190,8 @@ export type PricingUnitType =
   | 'image' // per image
   | 'video' // per video
   | 'megapixel' // per megapixel
-  | 'second'; // per second
+  | 'second' // per second
+  | 'unit'; // per provider-reported billable unit
 
 export type PricingStrategy = 'fixed' | 'tiered' | 'lookup';
 

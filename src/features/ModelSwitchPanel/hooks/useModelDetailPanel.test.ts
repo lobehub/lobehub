@@ -255,4 +255,20 @@ describe('useModelDetailPanel', () => {
 
     expect(updateExpandedKeysMock).toHaveBeenCalledWith(['abilities']);
   });
+
+  it('shows the per-image estimate instead of a provider billable unit rate', () => {
+    const falUnitPricing = {
+      approximatePricePerImage: 0.06,
+      currency: 'USD',
+      units: [{ name: 'providerBillableUnit', rate: 1.5, strategy: 'fixed', unit: 'unit' }],
+    } as Pricing;
+
+    const { result } = renderModelDetailPanelHook({
+      enabledList: createEnabledList('lobehub', falUnitPricing),
+      pricingMode: 'image',
+    });
+
+    expect(result.current.pricingGroups).toEqual([]);
+    expect(result.current.approximatePriceLabel).toMatch(/credits \/ image$/);
+  });
 });
