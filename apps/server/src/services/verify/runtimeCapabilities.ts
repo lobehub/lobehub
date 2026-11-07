@@ -37,6 +37,12 @@ export const isEnvironmentUnavailableFailure = (text?: string | null): boolean =
  * `auto` mode even alongside a routed device. Unlike that fact, a plain-chat
  * plan (`none`) counts as having none — it gets no execution tools at all.
  *
+ * The answer is over the whole run, not its final step: a `device-unrouted`
+ * run starts on the cloud sandbox and may activate a device mid-run (the
+ * remote-device tool), leaving a device bound at completion although the
+ * sandbox was there earlier. Only a run routed to a device from its start
+ * (`device` plan outside `auto`) never had the sandbox.
+ *
  * Returns undefined when the plan is unknown (old / resumed operations), so the
  * gate stays open rather than blocking on a guess.
  */
@@ -47,7 +53,8 @@ export const resolveRunCapabilities = (
   if (!executionPlan) return undefined;
   if (executionPlan.kind === 'none') return [];
 
-  const sandboxReachable = !activeDeviceId || executionPlan.target === 'auto';
+  const sandboxReachable =
+    executionPlan.kind !== 'device' || !activeDeviceId || executionPlan.target === 'auto';
   return sandboxReachable ? ['cloud_sandbox'] : [];
 };
 

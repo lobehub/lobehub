@@ -57,6 +57,19 @@ describe('resolveRunCapabilities', () => {
     ).toEqual(['cloud_sandbox']);
   });
 
+  /**
+   * Regression: a run that started unrouted used the sandbox, then activated a
+   * device mid-run. The final binding alone read as "never had a sandbox".
+   */
+  it('keeps the cloud sandbox for an unrouted run that activated a device mid-run', () => {
+    expect(
+      resolveRunCapabilities(
+        { kind: 'device-unrouted', reason: 'no-bound-device', target: 'local' },
+        'dev-1',
+      ),
+    ).toEqual(['cloud_sandbox']);
+  });
+
   it('has nothing for a plain-chat run', () => {
     expect(resolveRunCapabilities({ kind: 'none', target: 'none' }, undefined)).toEqual([]);
   });
