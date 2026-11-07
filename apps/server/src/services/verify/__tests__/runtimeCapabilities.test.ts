@@ -51,6 +51,15 @@ describe('resolveRunCapabilities', () => {
     ).toEqual([]);
   });
 
+  it('has no cloud sandbox when bound to a wakeable managed device', () => {
+    expect(
+      resolveRunCapabilities(
+        { deviceId: 'dev-1', kind: 'device-wakeable', target: 'device' },
+        'dev-1',
+      ),
+    ).toEqual([]);
+  });
+
   it('keeps the cloud sandbox alongside a routed device in auto mode', () => {
     expect(
       resolveRunCapabilities({ deviceId: 'dev-1', kind: 'device', target: 'auto' }, 'dev-1'),

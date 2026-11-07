@@ -41,7 +41,7 @@ export const isEnvironmentUnavailableFailure = (text?: string | null): boolean =
  * run starts on the cloud sandbox and may activate a device mid-run (the
  * remote-device tool), leaving a device bound at completion although the
  * sandbox was there earlier. Only a run routed to a device from its start
- * (`device` plan outside `auto`) never had the sandbox.
+ * (a `device` or `device-wakeable` plan outside `auto`) never had the sandbox.
  *
  * Returns undefined when the plan is unknown (old / resumed operations), so the
  * gate stays open rather than blocking on a guess.
@@ -53,8 +53,9 @@ export const resolveRunCapabilities = (
   if (!executionPlan) return undefined;
   if (executionPlan.kind === 'none') return [];
 
-  const sandboxReachable =
-    executionPlan.kind !== 'device' || !activeDeviceId || executionPlan.target === 'auto';
+  const routedFromStart =
+    executionPlan.kind === 'device' || executionPlan.kind === 'device-wakeable';
+  const sandboxReachable = !routedFromStart || !activeDeviceId || executionPlan.target === 'auto';
   return sandboxReachable ? ['cloud_sandbox'] : [];
 };
 
