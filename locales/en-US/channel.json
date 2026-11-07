@@ -3,6 +3,7 @@
   "activity.many": "{{count}} members are replying…",
   "activity.one": "{{name}} · {{status}}",
   "activity.two": "{{names}} are replying…",
+  "activity.typing": "typing…",
   "agents": "Agents",
   "archive": "Archive channel",
   "archiveConfirm": "Archive “{{title}}”? Replies in progress will stop and the channel will take no new messages. Members can still read its history, and an owner or administrator can unarchive it at any time.",

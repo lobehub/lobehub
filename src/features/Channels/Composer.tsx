@@ -92,7 +92,7 @@ export function Composer({
   replyTarget,
   onCancelReply,
 }: {
-  /** Who is replying right now; shown on the line above the input. */
+  /** Who is replying right now; shown on the line above the input. Omit to drop that line. */
   activity?: ReactNode;
   /** Lets an @mention invite people and Agents from outside the Channel. */
   channel?: ChannelListItem;
@@ -243,11 +243,14 @@ export function Composer({
   return (
     <WideScreenContainer fullWidth paddingInline={24}>
       <Flexbox {...stylex.props(styles.composer)} gap={4} {...getContainerProps()}>
-        <div {...stylex.props(styles.composerStatus)}>
-          <Flexbox horizontal align="center" style={{ minWidth: 0 }}>
-            {activity}
-          </Flexbox>
-        </div>
+        {/* Without an activity line the input meets the feed directly, with no empty strip. */}
+        {activity != null && (
+          <div {...stylex.props(styles.composerStatus)}>
+            <Flexbox horizontal align="center" style={{ minWidth: 0 }}>
+              {activity}
+            </Flexbox>
+          </div>
+        )}
         <ChatInput
           maxHeight={480}
           minHeight={0}

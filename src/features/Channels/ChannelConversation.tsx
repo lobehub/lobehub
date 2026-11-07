@@ -258,12 +258,15 @@ const Timeline = ({
               <ArchivedNotice channel={detail.channel} threadId={threadId} />
             ) : (
               <Composer
-                activity={<ReplyActivity detail={detail} threadId={threadId} />}
                 channel={detail.channel}
                 draftKey={channelDraftKey(channelId, threadId)}
                 key={channelDraftKey(channelId, threadId)}
                 members={activeMembers}
                 replyTarget={reply.target}
+                activity={
+                  // A direct conversation shows its Agent's state beside the name in the header.
+                  direct && !threadId ? null : <ReplyActivity detail={detail} threadId={threadId} />
+                }
                 placeholder={
                   threadId
                     ? t('threadComposer')

@@ -148,6 +148,7 @@ export default {
   'activity.many': '{{count}} members are replying…',
   'activity.one': '{{name}} · {{status}}',
   'activity.two': '{{names}} are replying…',
+  'activity.typing': 'typing…',
   'autoTitle.empty': 'My Channel',
   'autoTitle.more': '{{names}} and {{count}} more',
   'autoTitle.separator': ', ',

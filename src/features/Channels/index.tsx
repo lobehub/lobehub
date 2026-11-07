@@ -17,6 +17,7 @@ import { ChannelConversation } from './ChannelConversation';
 import { MemberAvatar } from './MemberAvatar';
 import { MEMBER_FLOAT_BREAKPOINT, MemberPanel } from './MemberPanel';
 import { MemberStatus } from './MemberStatus';
+import { DirectReplyStatus } from './ReplyActivity';
 import { styles } from './styles';
 import { THREAD_FLOAT_BREAKPOINT, ThreadPanel } from './ThreadPanel';
 import { useThreadPanel } from './useThreadPanel';
@@ -55,6 +56,7 @@ function EnabledChannelPage() {
               {detail?.channel.title || t('title')}
             </Text>
             {detail?.channel.status === 'archived' && <Tag size="small">{t('archived')}</Tag>}
+            {directAgent && <DirectReplyStatus detail={detail!} />}
           </Flexbox>
         }
         right={

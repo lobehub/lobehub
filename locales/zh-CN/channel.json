@@ -3,6 +3,7 @@
   "activity.many": "{{count}} 位成员正在回复…",
   "activity.one": "{{name}} · {{status}}",
   "activity.two": "{{names}} 正在回复…",
+  "activity.typing": "正在输入中…",
   "agents": "Agent",
   "archive": "归档频道",
   "archiveConfirm": "归档「{{title}}」？进行中的回复会停止，频道不再接收新消息。成员仍可查看历史消息，所有者或管理员可以随时取消归档。",
