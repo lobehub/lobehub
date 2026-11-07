@@ -1,10 +1,9 @@
 import { Flexbox } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { Globe2Icon, PanelsTopLeftIcon } from 'lucide-react';
-import { Activity, lazy, memo, useEffect, useRef } from 'react';
+import { Activity, lazy, memo, useEffect } from 'react';
 
 import { canvasIdOfTab } from '@/store/global/initialState';
-import { mcpAppActions } from '@/store/mcpApp/action';
 import { useMcpAppStore } from '@/store/mcpApp/store';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 
@@ -107,16 +106,14 @@ const DynamicTabPanes = memo<DynamicTabPanesProps>(
       if (!enabled) return;
       for (const tab of openedTabs) {
         const view = views[tab.slice(8)];
-        if (tab.startsWith('mcp-app:') && view && (view.dismissed || view.mode === 'inline'))
+        if (
+          tab.startsWith('mcp-app:') &&
+          view?.placed &&
+          (view.dismissed || view.mode === 'inline')
+        )
           onCloseTab(tab);
       }
     }, [views, openedTabs, onCloseTab, enabled]);
-    const previous = useRef<string[]>([]);
-    useEffect(() => {
-      for (const tab of previous.current)
-        if (!openedTabs.includes(tab)) mcpAppActions.close(tab.slice(8));
-      previous.current = openedTabs.filter((tab) => tab.startsWith('mcp-app:'));
-    }, [openedTabs]);
     return (
       <>
         {enabled &&

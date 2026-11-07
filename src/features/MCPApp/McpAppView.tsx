@@ -1,6 +1,6 @@
 'use client';
 
-import type { McpAppDisplayMode, McpUiResourceMeta } from '@lobechat/const/mcpApp';
+import type { McpAppDisplayMode } from '@lobechat/const/mcpApp';
 import { Flexbox, Skeleton, Spin, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import { type AppBridge } from '@modelcontextprotocol/ext-apps/app-bridge';
@@ -127,7 +127,7 @@ const McpAppView = memo<McpAppViewProps>(
     const display = presentation && {
       availableDisplayModes: availableDisplayModes({
         hostModes: presentation.hostModes,
-        resourceMeta: resource?.meta as McpUiResourceMeta,
+        resourceMeta: resource?.meta,
         appModes,
       }),
       containerDimensions:
@@ -143,7 +143,7 @@ const McpAppView = memo<McpAppViewProps>(
         const options = {
           appModes,
           hostModes: presentation.hostModes,
-          resourceMeta: resource?.meta as McpUiResourceMeta,
+          resourceMeta: resource?.meta,
           toolPreferred: presentation.preferred,
         };
         presentation.onInitialized(availableDisplayModes(options), resolveDisplayMode(options));
@@ -152,7 +152,7 @@ const McpAppView = memo<McpAppViewProps>(
         const mode = requestedDisplayMode(presentation.mode, requested, {
           appModes,
           hostModes: presentation.hostModes,
-          resourceMeta: resource?.meta as McpUiResourceMeta,
+          resourceMeta: resource?.meta,
         });
         return presentation.onMode(mode);
       },

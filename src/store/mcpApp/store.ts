@@ -12,7 +12,11 @@ export interface McpAppViewState {
   identifier: string;
   messageId?: string;
   mode: 'inline' | 'fullscreen';
+  /** Its location was decided from what the tool and resource declare. */
+  placed?: boolean;
   scope: string;
+  /** The app reported its own modes once; later moves are the app's requests. */
+  settled?: boolean;
   title: string;
 }
 export interface McpAppConversationHost {

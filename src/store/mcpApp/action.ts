@@ -60,14 +60,60 @@ export class McpAppActionImpl {
       'mcpApp/registerView',
     );
   };
-  setAvailableModes = (id: string, availableModes: McpAppViewState['availableModes']) => {
-    const view = useMcpAppStore.getState().views[id];
-    if (enabled() && view)
-      useMcpAppStore.setState(
-        (s) => ({ views: { ...s.views, [id]: { ...view, availableModes } } }),
-        false,
-        'mcpApp/setAvailableModes',
-      );
+  /**
+   * Decide where a view lives from what its tool and resource declare
+   * (`declared`), once. The side panel needs one in the view's conversation;
+   * without it the view stays in its message. Only a call that completed in
+   * this live conversation opens the panel by itself: a view loaded from
+   * history waits there for the user to look.
+   */
+  place = (id: string, declared: 'inline' | 'fullscreen') => {
+    const state = useMcpAppStore.getState();
+    const view = state.views[id];
+    if (!enabled() || !view || view.placed) return;
+    const mode = declared === 'fullscreen' && state.panels[view.scope] ? 'fullscreen' : 'inline';
+    useMcpAppStore.setState(
+      { views: { ...state.views, [id]: { ...view, mode, placed: true } } },
+      false,
+      'mcpApp/place',
+    );
+    if (this.consumeLive(id) && mode === 'fullscreen')
+      useGlobalStore.getState().openWorkingSidebar(mcpAppTabKey(id));
+  };
+  /** Show a view that lives in the side panel; its location doesn't change. */
+  reveal = (id: string) => {
+    const state = useMcpAppStore.getState();
+    const view = state.views[id];
+    if (enabled() && view?.mode === 'fullscreen' && state.panels[view.scope])
+      useGlobalStore.getState().openWorkingSidebar(mcpAppTabKey(id));
+  };
+  /**
+   * The app initialized and declared the modes it supports. The first time,
+   * a location it can't run in gives way to `resolved`; later initializations
+   * (the view remounting) keep where the app asked to be.
+   */
+  settle = (
+    id: string,
+    availableModes: McpAppViewState['availableModes'],
+    resolved: 'inline' | 'fullscreen',
+  ) => {
+    const state = useMcpAppStore.getState();
+    const view = state.views[id];
+    if (!enabled() || !view) return;
+    const move =
+      !view.settled &&
+      resolved !== view.mode &&
+      (resolved === 'inline' || !!state.panels[view.scope]);
+    useMcpAppStore.setState(
+      {
+        views: {
+          ...state.views,
+          [id]: { ...view, availableModes, settled: true, ...(move && { mode: resolved }) },
+        },
+      },
+      false,
+      'mcpApp/settle',
+    );
   };
   markLive = (id: string) => {
     if (enabled() && !useMcpAppStore.getState().liveCalls[id])
@@ -117,21 +163,17 @@ export class McpAppActionImpl {
     if (mode === 'fullscreen') useGlobalStore.getState().openWorkingSidebar(mcpAppTabKey(id));
     return mode;
   };
-  close = (id: string, dismissed?: boolean) => {
+  /** The app asked to go away: it leaves both locations and its unsent context is dropped. */
+  dismiss = (id: string) => {
     const view = useMcpAppStore.getState().views[id];
     if (view)
       useMcpAppStore.setState(
         (s) => ({
-          ...(dismissed && {
-            contexts: Object.fromEntries(Object.entries(s.contexts).filter(([key]) => key !== id)),
-          }),
-          views: {
-            ...s.views,
-            [id]: { ...view, dismissed: dismissed ?? view.dismissed, mode: 'inline' },
-          },
+          contexts: Object.fromEntries(Object.entries(s.contexts).filter(([key]) => key !== id)),
+          views: { ...s.views, [id]: { ...view, dismissed: true } },
         }),
         false,
-        'mcpApp/close',
+        'mcpApp/dismiss',
       );
   };
 }
