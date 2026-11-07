@@ -185,6 +185,7 @@ table agent_accounts {
   credentials text
   credential_hint jsonb
   metadata jsonb [default: `{}`]
+  settings jsonb [not null, default: `{}`]
   revoked_at "timestamp with time zone"
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
@@ -606,6 +607,7 @@ table agent_inbox_messages {
     (account_id, created_at) [name: 'agent_inbox_messages_account_created_at_idx']
     (account_id, sender, created_at) [name: 'agent_inbox_messages_account_sender_created_at_idx']
     (account_id, thread_key) [name: 'agent_inbox_messages_account_thread_idx']
+    topic_id [name: 'agent_inbox_messages_topic_id_idx']
     user_id [name: 'agent_inbox_messages_user_id_idx']
   }
 }
@@ -1325,6 +1327,7 @@ table channel_jobs {
   claimed_at "timestamp with time zone"
   topic_id text
   operation_id text [unique]
+  wake jsonb
   manifest jsonb
   execution_config jsonb
   device_id varchar(64)

@@ -64,6 +64,8 @@ export const styles = stylex.create({
     },
   },
   highlightedMessage: { backgroundColor: cssVar.colorInfoBg },
+  /** A message still on its way shows faded instead of carrying a status line. */
+  pendingMessage: { opacity: 0.6 },
   messageAvatar: {
     position: 'absolute',
     insetBlockStart: 8,
@@ -331,6 +333,14 @@ export const activityStyles = stylex.create({
     height: 24,
     paddingInline: 4,
     color: cssVar.colorTextSecondary,
+  },
+  /** Beside the Agent's name in a direct conversation's header. */
+  header: {
+    color: cssVar.colorTextDescription,
+  },
+  headerButton: {
+    height: 22,
+    paddingInline: 4,
   },
   avatars: {
     display: 'inline-flex',

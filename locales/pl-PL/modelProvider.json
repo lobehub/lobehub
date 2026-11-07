@@ -302,6 +302,7 @@
   "providerModels.item.modelConfig.video.title": "Obsługuje rozpoznawanie wideo",
   "providerModels.item.modelConfig.vision.extra": "To ustawienie włącza możliwość przesyłania obrazów. Obsługa rozpoznawania zależy od modelu – przetestuj samodzielnie.",
   "providerModels.item.modelConfig.vision.title": "Obsługa wizji",
+  "providerModels.item.pricing.audioOutputTokens": "Wyjście audio ${{amount}}/M",
   "providerModels.item.pricing.image": "${{amount}}/obraz",
   "providerModels.item.pricing.inputCharts": "${{amount}}/M znaków",
   "providerModels.item.pricing.inputMinutes": "${{amount}}/minuta",

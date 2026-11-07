@@ -14,7 +14,7 @@ import {
   discoverAuthorizationServerMetadata,
   discoverOAuthProtectedResourceMetadata,
   exchangeAuthorization,
-  extractResourceMetadataUrl,
+  extractWWWAuthenticateParams,
   isHttpsUrl,
   IssuerMismatchError,
   OAuthError,
@@ -99,6 +99,8 @@ export const discoverConnectorAuthorizationServerMetadata = (
 export interface DiscoveredOAuth {
   authorizationServerUrl: string;
   metadata: AuthorizationServerMetadata;
+  /** Resource-required scopes: challenge first, then protected resource metadata. */
+  scopes?: string[];
 }
 
 /**
@@ -115,6 +117,7 @@ export interface DiscoveredOAuth {
  */
 export const discoverConnectorOAuth = async (mcpServerUrl: string): Promise<DiscoveredOAuth> => {
   let resourceMetadataUrl: URL | undefined;
+  let scopes: string[] | undefined;
   try {
     const res = await connectorFetch(mcpServerUrl, {
       headers: { accept: 'application/json, text/event-stream' },
@@ -123,7 +126,11 @@ export const discoverConnectorOAuth = async (mcpServerUrl: string): Promise<Disc
     // Only the status and `WWW-Authenticate` header matter. Release the body: a server
     // may answer this GET with an SSE stream that never ends.
     await res.body?.cancel().catch(() => {});
-    if (res.status === 401) resourceMetadataUrl = extractResourceMetadataUrl(res);
+    if (res.status === 401) {
+      const challenge = extractWWWAuthenticateParams(res);
+      resourceMetadataUrl = challenge.resourceMetadataUrl;
+      scopes = challenge.scope?.split(' ').filter(Boolean);
+    }
   } catch (err) {
     log('probe request failed, falling back to well-known discovery: %O', err);
   }
@@ -136,6 +143,7 @@ export const discoverConnectorOAuth = async (mcpServerUrl: string): Promise<Disc
       connectorFetch,
     );
     authorizationServerUrl = prm?.authorization_servers?.[0]?.toString();
+    if (!scopes?.length) scopes = prm?.scopes_supported;
   } catch (err) {
     log('protected-resource-metadata discovery failed: %O', err);
   }
@@ -159,7 +167,30 @@ export const discoverConnectorOAuth = async (mcpServerUrl: string): Promise<Disc
     throw new Error(`Failed to discover OAuth metadata for ${authorizationServerUrl}`);
   }
 
-  return { authorizationServerUrl, metadata };
+  return { authorizationServerUrl, metadata, ...(scopes?.length ? { scopes } : {}) };
+};
+
+/**
+ * Keep configured scopes unchanged. Otherwise select resource scopes before the
+ * legacy AS fallback and match the SDK's refresh-token scope augmentation.
+ */
+export const resolveConnectorOAuthScopes = (params: {
+  discovery: DiscoveredOAuth;
+  existingScopes?: string[];
+}): string[] | undefined => {
+  if (params.existingScopes?.length) return params.existingScopes;
+  const { metadata, scopes: resourceScopes } = params.discovery;
+  const selected = resourceScopes ?? metadata.scopes_supported;
+  const scopes = selected?.length ? [...new Set(selected)] : undefined;
+  if (
+    scopes?.length &&
+    metadata.scopes_supported?.includes('offline_access') &&
+    buildConnectorClientMetadata().grant_types?.includes('refresh_token') &&
+    !scopes.includes('offline_access')
+  ) {
+    scopes.push('offline_access');
+  }
+  return scopes;
 };
 
 type RegistrationAuthMethod = 'client_secret_basic' | 'client_secret_post' | 'none';

@@ -45,7 +45,6 @@ describe('OIDC Provider - Market Client Integration', () => {
       const { defaultClients } = await import('./config');
       const marketClient = defaultClients.find((c) => c.client_id === MARKET_CLIENT_ID);
 
-      expect(marketClient).toBeDefined();
       expect(marketClient?.client_id).toBe('lobehub-market');
       expect(marketClient?.client_name).toBe('LobeHub Marketplace');
 
@@ -198,7 +197,6 @@ describe('OIDC Provider - Market Client Integration', () => {
       }));
 
       const module = await import('./provider');
-      expect(module.createOIDCProvider).toBeDefined();
       expect(typeof module.createOIDCProvider).toBe('function');
 
       vi.doUnmock('@/envs/app');

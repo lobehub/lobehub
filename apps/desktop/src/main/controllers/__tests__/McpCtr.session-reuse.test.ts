@@ -6,6 +6,16 @@ import type { App } from '@/core/App';
 
 import McpCtr from '../McpCtr';
 
+const createStdioToolInput = (
+  toolName: string,
+  env: Record<string, string> | undefined,
+): Parameters<McpCtr['runStdioMcpTool']>[0] => ({
+  args: '',
+  env,
+  params: { args: ['--stdio'], command: 'ida-mcp', name: 'ida-mcp' },
+  toolName,
+});
+
 const { mcpClientMocks } = vi.hoisted(() => ({
   mcpClientMocks: vi.fn(),
 }));
@@ -189,18 +199,8 @@ describe('McpCtr stdio session reuse (T-801 stateful MCP servers)', () => {
     const instance = makeClientInstance('first');
     mcpClientMocks.mockReturnValue(instance);
 
-    await ctr.runStdioMcpTool({
-      args: '',
-      env: undefined,
-      params: { args: ['--stdio'], command: 'ida-mcp', name: 'ida-mcp' },
-      toolName: 'open_database',
-    } as any);
-    await ctr.runStdioMcpTool({
-      args: '',
-      env: undefined,
-      params: { args: ['--stdio'], command: 'ida-mcp', name: 'ida-mcp' },
-      toolName: 'execute_python',
-    } as any);
+    await ctr.runStdioMcpTool(createStdioToolInput('open_database', undefined) as any);
+    await ctr.runStdioMcpTool(createStdioToolInput('execute_python', undefined) as any);
 
     // Exactly ONE MCPClient was constructed for both calls: the stdio
     // process is NOT respawned per call, so server-side state survives.
@@ -217,12 +217,7 @@ describe('McpCtr stdio session reuse (T-801 stateful MCP servers)', () => {
     const second = makeClientInstance('b');
     mcpClientMocks.mockReturnValueOnce(first).mockReturnValueOnce(second);
 
-    await ctr.runStdioMcpTool({
-      args: '',
-      env: undefined,
-      params: { args: ['--stdio'], command: 'ida-mcp', name: 'ida-mcp' },
-      toolName: 'open_database',
-    } as any);
+    await ctr.runStdioMcpTool(createStdioToolInput('open_database', undefined) as any);
     await ctr.runStdioMcpTool({
       args: '',
       env: { IDB_PATH: '/other' },
@@ -243,12 +238,9 @@ describe('McpCtr stdio session reuse (T-801 stateful MCP servers)', () => {
     const fresh = makeClientInstance('fresh');
     mcpClientMocks.mockReturnValueOnce(stale).mockReturnValueOnce(fresh).mockReturnValue(fresh);
 
-    const result = await ctr.runStdioMcpTool({
-      args: '',
-      env: undefined,
-      params: { args: ['--stdio'], command: 'ida-mcp', name: 'ida-mcp' },
-      toolName: 'execute_python',
-    } as any);
+    const result = await ctr.runStdioMcpTool(
+      createStdioToolInput('execute_python', undefined) as any,
+    );
 
     // The stale session was evicted + disconnected, the retry succeeded.
     expect(stale.disconnect).toHaveBeenCalledTimes(1);
@@ -256,12 +248,7 @@ describe('McpCtr stdio session reuse (T-801 stateful MCP servers)', () => {
     expect(result.success).toBe(true);
 
     // Next call reuses the replacement session (pool stays warm).
-    await ctr.runStdioMcpTool({
-      args: '',
-      env: undefined,
-      params: { args: ['--stdio'], command: 'ida-mcp', name: 'ida-mcp' },
-      toolName: 'execute_python',
-    } as any);
+    await ctr.runStdioMcpTool(createStdioToolInput('execute_python', undefined) as any);
     expect(mcpClientMocks).toHaveBeenCalledTimes(2);
   });
 
@@ -277,12 +264,7 @@ describe('McpCtr stdio session reuse (T-801 stateful MCP servers)', () => {
     });
 
     await expect(
-      ctr.runStdioMcpTool({
-        args: '',
-        env: undefined,
-        params: { args: ['--stdio'], command: 'ida-mcp', name: 'ida-mcp' },
-        toolName: 'execute_python',
-      } as any),
+      ctr.runStdioMcpTool(createStdioToolInput('execute_python', undefined) as any),
     ).rejects.toThrow('Session not found');
   });
 
@@ -294,12 +276,7 @@ describe('McpCtr stdio session reuse (T-801 stateful MCP servers)', () => {
     mcpClientMocks.mockReturnValue(pooled);
 
     await expect(
-      ctr.runStdioMcpTool({
-        args: '',
-        env: undefined,
-        params: { args: ['--stdio'], command: 'ida-mcp', name: 'ida-mcp' },
-        toolName: 'execute_python',
-      } as any),
+      ctr.runStdioMcpTool(createStdioToolInput('execute_python', undefined) as any),
     ).rejects.toThrow('no open database instance');
 
     // App-level failure: no eviction, no disconnect, no second invocation.
@@ -385,12 +362,7 @@ describe('McpCtr stdio session reuse (T-801 stateful MCP servers)', () => {
     mcpClientMocks.mockReturnValue(pooled);
 
     await expect(
-      ctr.runStdioMcpTool({
-        args: '',
-        env: undefined,
-        params: { args: ['--stdio'], command: 'ida-mcp', name: 'ida-mcp' },
-        toolName: 'delete_record',
-      } as any),
+      ctr.runStdioMcpTool(createStdioToolInput('delete_record', undefined) as any),
     ).rejects.toThrow('tool execution failed');
 
     // Exactly one invocation, no eviction, no disconnect.
@@ -416,12 +388,7 @@ describe('McpCtr stdio session reuse (T-801 stateful MCP servers)', () => {
       return instance;
     });
 
-    const params = {
-      args: '',
-      env: undefined,
-      params: { args: ['--stdio'], command: 'ida-mcp', name: 'ida-mcp' },
-      toolName: 'open_database',
-    } as any;
+    const params = createStdioToolInput('open_database', undefined) as any;
 
     const first = ctr.runStdioMcpTool(params);
     // Let the first call reach its pending initialize() before the second.
@@ -455,12 +422,7 @@ describe('McpCtr stdio session reuse (T-801 stateful MCP servers)', () => {
       .mockReturnValue(replacement);
 
     await expect(
-      ctr.runStdioMcpTool({
-        args: '',
-        env: undefined,
-        params: { args: ['--stdio'], command: 'ida-mcp', name: 'ida-mcp' },
-        toolName: 'execute_python',
-      } as any),
+      ctr.runStdioMcpTool(createStdioToolInput('execute_python', undefined) as any),
     ).rejects.toThrow('Session not found');
 
     // Both the stale session and the proven-dead replacement were evicted.
@@ -481,12 +443,7 @@ describe('McpCtr stdio session reuse (T-801 stateful MCP servers)', () => {
       .mockReturnValueOnce(replacement) // single-flight creates ONE replacement
       .mockReturnValue(replacement);
 
-    const params = {
-      args: '',
-      env: undefined,
-      params: { args: ['--stdio'], command: 'ida-mcp', name: 'ida-mcp' },
-      toolName: 'execute_python',
-    } as any;
+    const params = createStdioToolInput('execute_python', undefined) as any;
 
     // Two concurrent calls share the stale session; both fail stale and both
     // enter the retry path.
@@ -599,18 +556,8 @@ describe('McpCtr stdio session reuse (T-801 stateful MCP servers)', () => {
     const b = makeClientInstance('b');
     mcpClientMocks.mockReturnValueOnce(a).mockReturnValueOnce(b);
 
-    await ctr.runStdioMcpTool({
-      args: '',
-      env: undefined,
-      params: { args: ['--stdio'], command: 'ida-mcp', name: 'ida-mcp' },
-      toolName: 't',
-    } as any);
-    await ctr.runStdioMcpTool({
-      args: '',
-      env: { TOKEN: 'x' },
-      params: { args: ['--stdio'], command: 'ida-mcp', name: 'ida-mcp' },
-      toolName: 't',
-    } as any);
+    await ctr.runStdioMcpTool(createStdioToolInput('t', undefined) as any);
+    await ctr.runStdioMcpTool(createStdioToolInput('t', { TOKEN: 'x' }) as any);
 
     await (ctr as any).disposeAllPooledClients();
 
@@ -639,12 +586,7 @@ describe('McpCtr stdio session reuse (T-801 stateful MCP servers)', () => {
         }),
     );
 
-    const params = {
-      args: '',
-      env: undefined,
-      params: { args: ['--stdio'], command: 'ida-mcp', name: 'ida-mcp' },
-      toolName: 't',
-    } as any;
+    const params = createStdioToolInput('t', undefined) as any;
 
     const manifestPromise = ctr.getStdioMcpServerManifest(params);
     await vi.waitFor(() => {
@@ -691,12 +633,7 @@ describe('McpCtr stdio session reuse (T-801 stateful MCP servers)', () => {
           }),
       );
 
-      const params = {
-        args: '',
-        env: undefined,
-        params: { args: ['--stdio'], command: 'ida-mcp', name: 'ida-mcp' },
-        toolName: 't',
-      } as any;
+      const params = createStdioToolInput('t', undefined) as any;
 
       const callPromise = ctr.runStdioMcpTool(params);
       await vi.advanceTimersByTimeAsync(31 * 60 * 1000);
@@ -744,12 +681,7 @@ describe('McpCtr stdio session reuse (T-801 stateful MCP servers)', () => {
     mcpClientMocks.mockReturnValueOnce(dead).mockReturnValue(replacement);
 
     await expect(
-      ctr.runStdioMcpTool({
-        args: '',
-        env: undefined,
-        params: { args: ['--stdio'], command: 'ida-mcp', name: 'ida-mcp' },
-        toolName: 'delete_record',
-      } as any),
+      ctr.runStdioMcpTool(createStdioToolInput('delete_record', undefined) as any),
     ).rejects.toThrow('Connection closed');
 
     // Dead session evicted + disconnected; the failure was still surfaced
@@ -760,12 +692,7 @@ describe('McpCtr stdio session reuse (T-801 stateful MCP servers)', () => {
     expect(mcpClientMocks).toHaveBeenCalledTimes(1);
 
     // The next call builds a FRESH session instead of reusing the corpse.
-    await ctr.runStdioMcpTool({
-      args: '',
-      env: undefined,
-      params: { args: ['--stdio'], command: 'ida-mcp', name: 'ida-mcp' },
-      toolName: 'open_database',
-    } as any);
+    await ctr.runStdioMcpTool(createStdioToolInput('open_database', undefined) as any);
     expect(mcpClientMocks).toHaveBeenCalledTimes(2);
     expect(replacement.callTool).toHaveBeenCalledTimes(1);
   });
@@ -780,14 +707,9 @@ describe('McpCtr stdio session reuse (T-801 stateful MCP servers)', () => {
     );
     mcpClientMocks.mockReturnValue(pooled);
 
-    await expect(
-      ctr.runStdioMcpTool({
-        args: '',
-        env: undefined,
-        params: { args: ['--stdio'], command: 'ida-mcp', name: 'ida-mcp' },
-        toolName: 't',
-      } as any),
-    ).rejects.toThrow('Connection closed by tool sandbox');
+    await expect(ctr.runStdioMcpTool(createStdioToolInput('t', undefined) as any)).rejects.toThrow(
+      'Connection closed by tool sandbox',
+    );
 
     expect(pooled.disconnect).not.toHaveBeenCalled();
     expect(mcpClientMocks).toHaveBeenCalledTimes(1);
@@ -817,12 +739,7 @@ describe('McpCtr stdio session reuse (T-801 stateful MCP servers)', () => {
           }),
       );
 
-      const longParams = {
-        args: '',
-        env: undefined,
-        params: { args: ['--stdio'], command: 'ida-mcp', name: 'ida-mcp' },
-        toolName: 't',
-      } as any;
+      const longParams = createStdioToolInput('t', undefined) as any;
       const callPromise = ctr.runStdioMcpTool(longParams);
       await vi.advanceTimersByTimeAsync(40 * 60 * 1000);
       await callPromise;
@@ -855,18 +772,8 @@ describe('McpCtr stdio session reuse (T-801 stateful MCP servers)', () => {
     });
     mcpClientMocks.mockReturnValueOnce(a).mockReturnValueOnce(b);
 
-    await ctr.runStdioMcpTool({
-      args: '',
-      env: undefined,
-      params: { args: ['--stdio'], command: 'ida-mcp', name: 'ida-mcp' },
-      toolName: 't',
-    } as any);
-    await ctr.runStdioMcpTool({
-      args: '',
-      env: { TOKEN: 'x' },
-      params: { args: ['--stdio'], command: 'ida-mcp', name: 'ida-mcp' },
-      toolName: 't',
-    } as any);
+    await ctr.runStdioMcpTool(createStdioToolInput('t', undefined) as any);
+    await ctr.runStdioMcpTool(createStdioToolInput('t', { TOKEN: 'x' }) as any);
 
     // The disposal promise resolves only after BOTH teardowns settle, and
     // both were initiated up front (b's disconnect is called before a's

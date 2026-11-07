@@ -33,6 +33,7 @@ import {
 } from '../../processors';
 import {
   ActiveTopicDocumentContextInjector,
+  AgentAccountContextInjector,
   AgentBuilderContextInjector,
   AgentDocumentBeforeSystemInjector,
   AgentDocumentContextInjector,
@@ -166,6 +167,7 @@ export class MessagesEngine {
       provider,
       systemRole,
       agentIdentity,
+      agentAccountContext,
       inputTemplate,
       enableAgentMode,
       enableHistoryCount,
@@ -324,6 +326,13 @@ export class MessagesEngine {
       new AgentIdentityInjector({
         enabled: !isGroupContextEnabled,
         identity: agentIdentity,
+      }),
+      // The agent's own accounts + inbox, as first-class state. Injected right
+      // after the person's identity because it refines "who am I" with "and I
+      // can be reached here". Skipped entirely when the agent owns nothing.
+      new AgentAccountContextInjector({
+        context: agentAccountContext,
+        enabled: isAgentMode,
       }),
       // Eval context (appends envPrompt)
       new EvalContextSystemInjector({ enabled: !!evalContext?.envPrompt, evalContext }),

@@ -19,6 +19,7 @@
   "artifacts.deploy.outdated": "Versione precedente attiva",
   "artifacts.deploy.publish": "Pubblica",
   "artifacts.deploy.publishNewVersion": "Pubblica questa versione",
+  "artifacts.deploy.quotaUnavailable": "La verifica del limite di distribuzione è temporaneamente non disponibile. Riprova più tardi.",
   "artifacts.deploy.serviceOverloaded": "L'hosting degli artefatti è temporaneamente sovraccarico. Riprova a pubblicare tra poco.",
   "artifacts.deploy.success": "Pubblicato",
   "artifacts.deploy.writeInProgress": "Un'altra modifica di distribuzione è in corso. Riprova tra poco.",

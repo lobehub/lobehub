@@ -37,6 +37,7 @@ import {
   discoverConnectorOAuth,
   getConnectorRedirectUri,
   resolveConnectorClient,
+  resolveConnectorOAuthScopes,
   toClientInformation,
 } from '@/server/services/connector/oauth';
 import {
@@ -618,21 +619,18 @@ export const connectorRouter = router({
       // Discovery and registration failures below are server-compatibility
       // problems the user must fix in their OAuth setup, not internal errors —
       // surface them as BAD_REQUEST with the reason so the form can show it.
-      const { authorizationServerUrl, metadata } = await discoverConnectorOAuth(
-        connector.mcpServerUrl,
-      ).catch((error: unknown) => {
-        throw new TRPCError({
-          cause: error,
-          code: 'BAD_REQUEST',
-          message: (error as Error)?.message ?? String(error),
-        });
-      });
+      const discovery = await discoverConnectorOAuth(connector.mcpServerUrl).catch(
+        (error: unknown) => {
+          throw new TRPCError({
+            cause: error,
+            code: 'BAD_REQUEST',
+            message: (error as Error)?.message ?? String(error),
+          });
+        },
+      );
 
-      // Default to the scopes advertised by the server when the user did not
-      // specify any — many MCP authorization servers reject (or issue a useless
-      // token for) a scope-less request.
-      const scopes =
-        existing.scopes && existing.scopes.length > 0 ? existing.scopes : metadata.scopes_supported;
+      const { authorizationServerUrl, metadata } = discovery;
+      const scopes = resolveConnectorOAuthScopes({ discovery, existingScopes: existing.scopes });
 
       // 2. Resolve the OAuth client: pre-registration, CIMD, then DCR.
       const { clientId, clientSecret, scheme, tokenEndpointAuthMethod } =

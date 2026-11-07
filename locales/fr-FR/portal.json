@@ -19,6 +19,7 @@
   "artifacts.deploy.outdated": "Version plus ancienne en ligne",
   "artifacts.deploy.publish": "Publier",
   "artifacts.deploy.publishNewVersion": "Publier cette version",
+  "artifacts.deploy.quotaUnavailable": "La vérification de la limite de déploiement est temporairement indisponible. Réessayez plus tard.",
   "artifacts.deploy.serviceOverloaded": "L'hébergement des artefacts est temporairement surchargé. Essayez de publier à nouveau sous peu.",
   "artifacts.deploy.success": "Publié",
   "artifacts.deploy.writeInProgress": "Une autre modification de déploiement est en cours. Réessayez sous peu.",

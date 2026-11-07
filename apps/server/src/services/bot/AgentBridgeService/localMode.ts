@@ -6,11 +6,11 @@ import debug from 'debug';
 import { TopicModel } from '@/database/models/topic';
 import { isAbortError } from '@/server/services/agentRuntime/abort';
 import type { AiAgentService } from '@/server/services/aiAgent';
+import { detectNoReply, extractStandDown } from '@/server/services/conversationWake/noReply';
 import { getMessageGatewayClient } from '@/server/services/gateway/MessageGatewayClient';
 import { SystemAgentService } from '@/server/services/systemAgent';
 
 import { createBotCompletionWebhook } from '../createBotCompletionHook';
-import { detectNoReply, extractStandDown } from '../noReply';
 import { recordNoReplyLabel } from '../noReplyLabel';
 import type { BotReactionMode, BotReplyLocale, PlatformClient } from '../platforms';
 import {

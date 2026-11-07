@@ -8,6 +8,7 @@ import {
   channelMessages,
   channelThreads,
   files as fileTable,
+  topics,
   users,
 } from '../../schemas';
 import type { Transaction } from '../../type';
@@ -59,10 +60,37 @@ const publicMessage = (row: MessageRow, fileIds: string[]) => {
 };
 
 /** Public projection only. Execution settings, drafts and internal messages never leave this boundary. */
+/**
+ * The Agent topic behind each published reply, for replies the viewer ran: the topic belongs to
+ * the requester, so other members never learn its id.
+ */
+const sourceTopicsByMessage = async (
+  tx: Transaction,
+  channelId: string,
+  messageIds: string[],
+  viewerUserId: string | undefined,
+) => {
+  if (!viewerUserId || !messageIds.length) return new Map<string, string>();
+  const rows = await tx
+    .select({ messageId: channelJobs.publishedMessageId, topicId: topics.id })
+    .from(channelJobs)
+    .innerJoin(topics, eq(topics.id, channelJobs.topicId))
+    .where(
+      and(
+        eq(channelJobs.channelId, channelId),
+        inArray(channelJobs.publishedMessageId, messageIds),
+        eq(topics.userId, viewerUserId),
+        notTrashed(topics.isDeleted),
+      ),
+    );
+  return new Map(rows.map((row) => [row.messageId!, row.topicId]));
+};
+
 export const readChannelView = async (
   tx: Transaction,
   channelId: string,
   options: { before?: number; limit?: number; threadId?: string | null } = {},
+  viewerUserId?: string,
 ) => {
   const limit = Math.max(1, Math.min(options.limit ?? 100, 100));
   const [members, reversed, threads, jobs] = await Promise.all([
@@ -181,6 +209,14 @@ export const readChannelView = async (
     ...page.map((message) => message.id),
     ...(rootMessage ? [rootMessage.id] : []),
   ]);
+  const sourceTopics = await sourceTopicsByMessage(
+    tx,
+    channelId,
+    [...page, ...(rootMessage ? [rootMessage] : [])].flatMap((message) =>
+      message.routingStatus === 'reply' ? [message.id] : [],
+    ),
+    viewerUserId,
+  );
   const ids = [...new Set([...files.values()].flat())];
   const attachments = ids.length
     ? await tx
@@ -203,11 +239,13 @@ export const readChannelView = async (
     rootMessage: rootMessage
       ? {
           ...publicMessage(rootMessage, files.get(rootMessage.id) ?? []),
+          sourceTopicId: sourceTopics.get(rootMessage.id) ?? null,
           replyTo: rootMessage.replyToId ? (quotes.get(rootMessage.replyToId) ?? null) : null,
         }
       : null,
     messages: page.map((message) => ({
       ...publicMessage(message, files.get(message.id) ?? []),
+      sourceTopicId: sourceTopics.get(message.id) ?? null,
       replyTo: message.replyToId ? (quotes.get(message.replyToId) ?? null) : null,
     })),
   };

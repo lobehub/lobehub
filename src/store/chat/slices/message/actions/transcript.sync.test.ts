@@ -26,6 +26,48 @@ import { LOCAL_MESSAGE_SCOPE } from '@/store/chat/utils/localMessages';
 
 import { resetTranscripts, rowsOf, seedRows, syncMessages } from './testUtils';
 
+const previousReplyInput = (): UIChatMessage => ({
+  id: 'previous-reply',
+  content: 'Previous reply',
+  role: 'assistant',
+  createdAt: 1000,
+  updatedAt: 1000,
+});
+
+const sentMessage = (): UIChatMessage => ({
+  id: 'tmp_client',
+  content: 'Sent',
+  role: 'user',
+  createdAt: 2000,
+  updatedAt: 2000,
+});
+
+const pendingQuestion = (): UIChatMessage => ({
+  id: 'question',
+  content: '',
+  role: 'tool',
+  tool_call_id: 'call-1',
+  createdAt: 1,
+  updatedAt: 1,
+  pluginIntervention: { status: 'pending' },
+});
+
+const followupMessage = (): UIChatMessage => ({
+  id: 'msg_user',
+  content: 'Follow-up question',
+  role: 'user',
+  createdAt: 2000,
+  updatedAt: 2000,
+});
+
+const assistantPlaceholder = (): UIChatMessage => ({
+  id: 'msg_assistant',
+  content: '...',
+  role: 'assistant',
+  createdAt: 2001,
+  updatedAt: 2001,
+});
+
 vi.mock('@lobechat/conversation-flow', () => ({
   parse: (messages: UIChatMessage[]) => ({
     flatList: [...messages].sort((a, b) => a.createdAt - b.createdAt),
@@ -507,27 +549,9 @@ describe('useFetchMessages', () => {
     });
 
     it('keeps optimistic send rows when a stale fetch resolves before the server run starts', async () => {
-      const previousReply: UIChatMessage = {
-        id: 'previous-reply',
-        content: 'Previous reply',
-        role: 'assistant',
-        createdAt: 1000,
-        updatedAt: 1000,
-      };
-      const optimisticUser: UIChatMessage = {
-        id: 'msg_user',
-        content: 'Follow-up question',
-        role: 'user',
-        createdAt: 2000,
-        updatedAt: 2000,
-      };
-      const optimisticAssistant: UIChatMessage = {
-        id: 'msg_assistant',
-        content: '...',
-        role: 'assistant',
-        createdAt: 2001,
-        updatedAt: 2001,
-      };
+      const previousReply: UIChatMessage = previousReplyInput();
+      const optimisticUser: UIChatMessage = followupMessage();
+      const optimisticAssistant: UIChatMessage = assistantPlaceholder();
       // The fetch was issued before the server persisted the new rows.
       vi.mocked(messageService.getMessages).mockResolvedValue([
         { ...previousReply, content: 'Previous reply (fetched)', updatedAt: 1500 },
@@ -557,27 +581,9 @@ describe('useFetchMessages', () => {
     });
 
     it('keeps optimistic rows that were already present when the read started', async () => {
-      const previousReply: UIChatMessage = {
-        id: 'previous-reply',
-        content: 'Previous reply',
-        role: 'assistant',
-        createdAt: 1000,
-        updatedAt: 1000,
-      };
-      const sentUser: UIChatMessage = {
-        id: 'msg_user',
-        content: 'Follow-up question',
-        role: 'user',
-        createdAt: 2000,
-        updatedAt: 2000,
-      };
-      const sentAssistant: UIChatMessage = {
-        id: 'msg_assistant',
-        content: '...',
-        role: 'assistant',
-        createdAt: 2001,
-        updatedAt: 2001,
-      };
+      const previousReply: UIChatMessage = previousReplyInput();
+      const sentUser: UIChatMessage = followupMessage();
+      const sentAssistant: UIChatMessage = assistantPlaceholder();
 
       // The server has not persisted the optimistic pair when a poll or focus
       // read starts, so its snapshot omits them even though they exist locally.
@@ -658,13 +664,7 @@ describe('useFetchMessages', () => {
     });
 
     it('forgets a temporary id once a server replacement remaps it', () => {
-      const temp: UIChatMessage = {
-        id: 'tmp_client',
-        content: 'Sent',
-        role: 'user',
-        createdAt: 2000,
-        updatedAt: 2000,
-      };
+      const temp: UIChatMessage = sentMessage();
       useChatStore
         .getState()
         .internal_dispatchMessage(
@@ -681,23 +681,9 @@ describe('useFetchMessages', () => {
     });
 
     it('lets the forced reread drop a row confirmed while awaiting the topic decision', async () => {
-      const question: UIChatMessage = {
-        id: 'question',
-        content: '',
-        role: 'tool',
-        tool_call_id: 'call-1',
-        createdAt: 1,
-        updatedAt: 1,
-        pluginIntervention: { status: 'pending' },
-      };
+      const question: UIChatMessage = pendingQuestion();
       const answered: UIChatMessage = { ...question, pluginIntervention: { status: 'approved' } };
-      const temp: UIChatMessage = {
-        id: 'tmp_client',
-        content: 'Sent',
-        role: 'user',
-        createdAt: 2000,
-        updatedAt: 2000,
-      };
+      const temp: UIChatMessage = sentMessage();
       const serverRow: UIChatMessage = { ...temp, id: 'msg_server' };
 
       let calls = 0;
@@ -741,15 +727,7 @@ describe('useFetchMessages', () => {
     });
 
     it('keeps a client row when two fetches share a result across the topic wait', async () => {
-      const question: UIChatMessage = {
-        id: 'question',
-        content: '',
-        role: 'tool',
-        tool_call_id: 'call-1',
-        createdAt: 1,
-        updatedAt: 1,
-        pluginIntervention: { status: 'pending' },
-      };
+      const question: UIChatMessage = pendingQuestion();
       const answered: UIChatMessage = { ...question, pluginIntervention: { status: 'approved' } };
       const sent: UIChatMessage = {
         id: 'msg_user',
@@ -832,20 +810,8 @@ describe('useFetchMessages', () => {
     });
 
     it('keeps a remapped row when a read issued before its temporary id resolves', async () => {
-      const previousReply: UIChatMessage = {
-        id: 'previous-reply',
-        content: 'Previous reply',
-        role: 'assistant',
-        createdAt: 1000,
-        updatedAt: 1000,
-      };
-      const temp: UIChatMessage = {
-        id: 'tmp_client',
-        content: 'Sent',
-        role: 'user',
-        createdAt: 2000,
-        updatedAt: 2000,
-      };
+      const previousReply: UIChatMessage = previousReplyInput();
+      const temp: UIChatMessage = sentMessage();
       const persisted: UIChatMessage = { ...temp, id: 'msg_server' };
 
       // The read starts before the optimistic create.
@@ -882,20 +848,8 @@ describe('useFetchMessages', () => {
     });
 
     it('drops a remapped row omitted by a generation restarted after the remap', async () => {
-      const previousReply: UIChatMessage = {
-        id: 'previous-reply',
-        content: 'Previous reply',
-        role: 'assistant',
-        createdAt: 1000,
-        updatedAt: 1000,
-      };
-      const temp: UIChatMessage = {
-        id: 'tmp_client',
-        content: 'Sent',
-        role: 'user',
-        createdAt: 2000,
-        updatedAt: 2000,
-      };
+      const previousReply: UIChatMessage = previousReplyInput();
+      const temp: UIChatMessage = sentMessage();
       const persisted: UIChatMessage = { ...temp, id: 'msg_server' };
 
       let resolveFirst!: (messages: UIChatMessage[]) => void;
@@ -938,27 +892,9 @@ describe('useFetchMessages', () => {
     });
 
     it('keeps a send whose stale fetch resolves after the send operation handed off', async () => {
-      const previousReply: UIChatMessage = {
-        id: 'previous-reply',
-        content: 'Previous reply',
-        role: 'assistant',
-        createdAt: 1000,
-        updatedAt: 1000,
-      };
-      const sentUser: UIChatMessage = {
-        id: 'msg_user',
-        content: 'Follow-up question',
-        role: 'user',
-        createdAt: 2000,
-        updatedAt: 2000,
-      };
-      const sentAssistant: UIChatMessage = {
-        id: 'msg_assistant',
-        content: '...',
-        role: 'assistant',
-        createdAt: 2001,
-        updatedAt: 2001,
-      };
+      const previousReply: UIChatMessage = previousReplyInput();
+      const sentUser: UIChatMessage = followupMessage();
+      const sentAssistant: UIChatMessage = assistantPlaceholder();
 
       // The topic's read is still in flight from before the send.
       let resolveFetch!: (messages: UIChatMessage[]) => void;
@@ -1102,15 +1038,7 @@ describe('useFetchMessages', () => {
     });
 
     it('keeps a client row created while the fetch waits for the topic decision', async () => {
-      const question: UIChatMessage = {
-        id: 'question',
-        content: '',
-        role: 'tool',
-        tool_call_id: 'call-1',
-        createdAt: 1,
-        updatedAt: 1,
-        pluginIntervention: { status: 'pending' },
-      };
+      const question: UIChatMessage = pendingQuestion();
       const answered: UIChatMessage = {
         ...question,
         pluginIntervention: { status: 'approved' },

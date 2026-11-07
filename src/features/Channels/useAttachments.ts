@@ -7,7 +7,14 @@ import { useTranslation } from 'react-i18next';
 import { FILE_UPLOAD_BLACKLIST } from '@/const/file';
 import { useFileStore } from '@/store/file';
 
-type DraftFile = UploadFileItem & { fileId?: string };
+export type DraftFile = UploadFileItem & { fileId?: string };
+
+/** An image is shown from the local file while it uploads; the URL lives as long as the draft. */
+const localPreview = (file: File) =>
+  file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined;
+const releasePreview = (item: DraftFile) => {
+  if (item.previewUrl?.startsWith('blob:')) URL.revokeObjectURL(item.previewUrl);
+};
 
 /** Each mounted Channel composer owns its uploads; ordinary chat's global draft is untouched. */
 export function useAttachments() {
@@ -24,7 +31,10 @@ export function useAttachments() {
 
   useEffect(
     () => () => {
-      for (const item of current.current) item.abortController?.abort();
+      for (const item of current.current) {
+        item.abortController?.abort();
+        releasePreview(item);
+      }
     },
     [],
   );
@@ -76,19 +86,26 @@ export function useAttachments() {
       const added = accepted.map((file): DraftFile => ({
         file,
         id: crypto.randomUUID(),
+        previewUrl: localPreview(file),
         status: 'pending',
       }));
       update([...current.current, ...added]);
       await Promise.all(added.map(run));
     },
     remove: (id: string) => {
-      current.current.find((item) => item.id === id)?.abortController?.abort();
+      const removed = current.current.find((item) => item.id === id);
+      removed?.abortController?.abort();
+      if (removed) releasePreview(removed);
       update(current.current.filter((item) => item.id !== id));
     },
     retry: (id: string) => {
       const item = current.current.find((item) => item.id === id);
       if (item?.status === 'error') void run(item);
     },
-    clear: () => update([]),
+    // A sent draft's images are shown from their uploaded URLs; the local copies can go.
+    clear: () => {
+      for (const item of current.current) releasePreview(item);
+      update([]);
+    },
   };
 }

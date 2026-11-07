@@ -26,11 +26,15 @@ export const resolveDecisionView = (
   const reviewTotal = checks.length;
   const pendingCount = reviewTotal - acceptedCount - needsFixCount - ignoredCount;
   const decidedCount = acceptedCount + needsFixCount + ignoredCount;
+  // A waived check keeps its stored verdict, but it no longer gates the
+  // delivery: the run counters and the check tally already skip it, so counting
+  // it here would print a failure the acceptance status no longer honours.
+  const countedChecks = checks.filter((check) => !check.waived);
   const countsText = formatAcceptanceCountsText(t, {
-    failed: checks.filter((check) => check.state === 'failed').length,
-    notExecuted: checks.filter((check) => check.state === 'not_executed').length,
-    passed: checks.filter((check) => check.state === 'passed').length,
-    uncertain: checks.filter((check) => check.state === 'uncertain').length,
+    failed: countedChecks.filter((check) => check.state === 'failed').length,
+    notExecuted: countedChecks.filter((check) => check.state === 'not_executed').length,
+    passed: countedChecks.filter((check) => check.state === 'passed').length,
+    uncertain: countedChecks.filter((check) => check.state === 'uncertain').length,
   });
   const barState = LIVE_ACCEPTANCE_STATUSES.has(acceptance.status)
     ? ('live' as const)

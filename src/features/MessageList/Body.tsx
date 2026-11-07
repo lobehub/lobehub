@@ -34,6 +34,7 @@ import {
   buildConversationSections,
   channelActivity,
   type Conversation,
+  type ConversationEntry,
   latestActivity,
   latestTopicOf,
 } from './conversations';
@@ -161,30 +162,37 @@ const Body = memo(() => {
     [items, recents, directChannels, inboxUpdatedAt, inboxTitle, inboxTopic, query, channels],
   );
 
+  // Pinned rows lead the list; they render as one block rather than a card each.
+  const pinnedCount = entries.findIndex((entry) => entry.type !== 'item' || !entry.item.pinned);
+  const pinnedEntries = pinnedCount === -1 ? entries : entries.slice(0, pinnedCount);
+  const otherEntries = pinnedCount === -1 ? [] : entries.slice(pinnedCount);
+
+  const renderEntry = (entry: ConversationEntry) =>
+    entry.type === 'inbox' ? (
+      <InboxConversation activeRouteId={activeRouteId} key={'inbox'} />
+    ) : entry.type === 'channel' ? (
+      <ChannelConversation
+        active={entry.channel.id === activeRouteId}
+        activeAt={entry.activeAt}
+        channel={entry.channel}
+        key={entry.channel.id}
+      />
+    ) : (
+      <ConversationItem activeRouteId={activeRouteId} conversation={entry} key={entry.item.id} />
+    );
+
   // Only the agent rows wait on the agent list: Lobe AI and Channels load on
   // their own, so a slow or failed agent-list request must not hide them.
   const agentsLoading = !isInit && items.length === 0;
 
   return (
     <Flexbox gap={1} paddingBlock={'0 12px'} paddingInline={6}>
-      {entries.map((entry) =>
-        entry.type === 'inbox' ? (
-          <InboxConversation activeRouteId={activeRouteId} key={'inbox'} />
-        ) : entry.type === 'channel' ? (
-          <ChannelConversation
-            active={entry.channel.id === activeRouteId}
-            activeAt={entry.activeAt}
-            channel={entry.channel}
-            key={entry.channel.id}
-          />
-        ) : (
-          <ConversationItem
-            activeRouteId={activeRouteId}
-            conversation={entry}
-            key={entry.item.id}
-          />
-        ),
+      {pinnedEntries.length > 0 && (
+        <div aria-label={t('navPanel.pinned')} role="group" {...stylex.props(styles.pinnedGroup)}>
+          {pinnedEntries.map(renderEntry)}
+        </div>
       )}
+      {otherEntries.map(renderEntry)}
       {agentsLoading ? (
         agentsError ? (
           <AsyncError error={agentsError} variant="inline" onRetry={() => void retryAgents()} />

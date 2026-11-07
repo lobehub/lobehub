@@ -41,6 +41,12 @@ export enum RequestTrigger {
   /** Rolling history summary stored on a topic. */
   HistorySummary = 'history_summary',
   Image = 'image',
+  /**
+   * A message arrived on one of the agent's own accounts (e.g. mail) and
+   * woke it. Mirrors {@link RequestTrigger.Scm}: an external event delivered to
+   * an identity the agent owns, rather than a user turn.
+   */
+  Inbox = 'inbox',
   /** Chat input inline completion suggestions while the user is typing. */
   InputCompletion = 'input_completion',
   Memory = 'memory',
@@ -60,6 +66,12 @@ export enum RequestTrigger {
   SignupEmailLLMReview = 'signup_email_llm_review',
   /** Task runs and their auxiliary calls (briefs, handoff, intent, instructions). */
   Task = 'task',
+  /**
+   * The creator agent woken in its own conversation to pick up finished task
+   * results (`taskResultBridge`). Server-started, but it continues the user's
+   * conversation on the main spine, unlike {@link RequestTrigger.Task} runs.
+   */
+  TaskCallback = 'task_callback',
   /** Thread (sub-topic) title summaries. */
   ThreadTitle = 'thread_title',
   /**

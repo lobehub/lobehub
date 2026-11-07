@@ -89,6 +89,7 @@
   "response.GoogleAIBlockReason.SAFETY": "Der Inhalt wurde aus Sicherheitsgründen blockiert. Bitte passen Sie ihn an und versuchen Sie es erneut.",
   "response.GoogleAIBlockReason.SPII": "Der Inhalt könnte sensible persönliche Informationen (SPII) enthalten. Bitte entfernen Sie sensible Details und versuchen Sie es erneut.",
   "response.GoogleAIBlockReason.default": "Der Inhalt wurde blockiert ({{blockReason}}). Bitte passen Sie ihn an und versuchen Sie es erneut.",
+  "response.InsufficientBudgetForModel": "Ihr verbleibendes Guthaben reicht für dieses Modell nicht aus. Bitte laden Sie Guthaben auf, upgraden Sie Ihren Tarif oder verwenden Sie ein günstigeres Modell.",
   "response.InvalidAccessCode": "Ungültiger oder leerer Zugangscode. Bitte geben Sie den richtigen Code ein.",
   "response.LobeHubModelDeprecated": "Das Modell \"{{model}}\" ist nicht mehr verfügbar. Bitte wählen Sie ein aktuelles Modell aus dem Modellwähler aus.",
   "response.ModelContentModerationCooldown": "Diese Anfrage konnte das ausgewählte Modell oder verwandte Modelle aufgrund einer vorübergehenden Inhaltsicherheitsbeschränkung nicht verwenden. Versuchen Sie es später erneut oder wählen Sie ein anderes Modell.",
@@ -121,6 +122,8 @@
   "response.RemoteServerTimeout": "Die Verbindung zum Server hat eine Zeitüberschreitung verursacht. Dies deutet normalerweise auf ein lokales Netzwerkproblem hin — bitte überprüfen Sie Ihre Netzwerkqualität, Proxy- oder VPN-Einstellungen und versuchen Sie es erneut.",
   "response.RemoteServerUnreachable": "Der Server konnte nicht erreicht werden. Dies deutet normalerweise auf ein lokales Netzwerkproblem hin — bitte überprüfen Sie Ihre Internetverbindung, Proxy- oder VPN-Einstellungen und versuchen Sie es erneut.",
   "response.ServerAgentRuntimeError": "Agent-Dienst derzeit nicht verfügbar. Bitte später erneut versuchen.",
+  "response.SubscriptionPlanLimit": "Sie haben Ihr Abonnement-Nutzungslimit erreicht, daher ist diese Funktion nicht verfügbar. Upgraden Sie Ihren Tarif oder konfigurieren Sie eine benutzerdefinierte Modell-API, um fortzufahren.",
+  "response.SubscriptionPlanLimitUltimate": "Sie haben Ihr Abonnement-Nutzungslimit erreicht, daher ist diese Funktion nicht verfügbar. Laden Sie Guthaben auf oder konfigurieren Sie eine benutzerdefinierte Modell-API, um fortzufahren.",
   "response.SystemTimeNotMatchError": "Ihre Systemzeit stimmt nicht mit dem Server überein. Bitte Zeit prüfen.",
   "response.UnknownChatFetchError": "Unbekannter Fehler bei der Anfrage. Bitte prüfen Sie die Details.",
   "response.UnreadableServerResponse": "Der Server hat eine Antwort zurückgegeben, die die App nicht lesen konnte. Dies ist normalerweise ein vorübergehendes Netzwerk- oder Gateway-Problem – bitte versuchen Sie es in einem Moment erneut.",
@@ -210,9 +213,13 @@
   "workspaceFrozenByAdmin.frozenAt": "Eingefroren am",
   "workspaceFrozenByAdmin.reason": "Grund",
   "workspaceFrozenByAdmin.title": "Arbeitsbereich ist eingefroren",
+  "workspaceFrozenByRiskControl.available": "Verfügbares Guthaben",
+  "workspaceFrozenByRiskControl.bannerDescription": "Laden Sie Guthaben auf, um weiter ausgeben zu können.",
   "workspaceFrozenByRiskControl.bannerHint": "Klicken Sie für Details",
   "workspaceFrozenByRiskControl.bannerTitle": "Arbeitsbereich durch Risikokontrolle eingefroren",
   "workspaceFrozenByRiskControl.contactSupport": "Support kontaktieren",
+  "workspaceFrozenByRiskControl.description": "Dieser Arbeitsbereich wurde automatisch durch die Risikokontrolle eingefroren, nachdem ungewöhnliche Ausgaben festgestellt wurden. Laden Sie Guthaben auf, damit der Arbeitsbereich wieder einsatzbereit ist, und kontaktieren Sie den Support, um ihn zu entsperren.",
   "workspaceFrozenByRiskControl.frozenAt": "Eingefroren am",
-  "workspaceFrozenByRiskControl.title": "Arbeitsbereich automatisch durch Risikokontrolle eingefroren"
+  "workspaceFrozenByRiskControl.title": "Arbeitsbereich automatisch durch Risikokontrolle eingefroren",
+  "workspaceFrozenByRiskControl.topup": "Guthaben aufladen"
 }
