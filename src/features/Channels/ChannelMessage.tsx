@@ -7,6 +7,7 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import CollapsibleContent from '@/components/CollapsibleContent';
+import AgentProfilePopup from '@/features/AgentProfileCard/AgentProfilePopup';
 import { ChatItem } from '@/features/Conversation/ChatItem';
 import Markdown from '@/features/Conversation/Markdown';
 import UserAvatar from '@/features/User/UserAvatar';
@@ -101,6 +102,10 @@ export const ChannelMessage = ({
       attachments: detail.attachments.filter((file) => message.fileIds.includes(file.id)),
     });
   const isRequest = message.author.type === 'user' && !isRoot;
+  const agentAuthorId = message.author.type === 'agent' ? message.author.id : null;
+  const agentMember = agentAuthorId
+    ? detail.members.find((member) => member.agentId === agentAuthorId)
+    : undefined;
   const mentionNames = detail.members
     .filter((member) => message.mentions.includes(member.id))
     .map((member) => memberName(member, ''))
@@ -153,7 +158,24 @@ export const ChannelMessage = ({
         }
         customAvatarRender={(_, avatar) => (
           <Flexbox {...stylex.props(styles.messageAvatar)}>
-            {isOwnMessage ? <UserAvatar size={36} /> : avatar}
+            {isOwnMessage ? (
+              <UserAvatar size={36} />
+            ) : agentAuthorId ? (
+              // Same profile card an Agent shows on hover in goals and tasks.
+              <AgentProfilePopup
+                agentId={agentAuthorId}
+                trigger={'hover'}
+                agent={{
+                  avatar: message.author.avatar,
+                  description: agentMember?.description,
+                  title: message.author.name,
+                }}
+              >
+                <span style={{ cursor: 'pointer', display: 'inline-flex' }}>{avatar}</span>
+              </AgentProfilePopup>
+            ) : (
+              avatar
+            )}
           </Flexbox>
         )}
         message={
