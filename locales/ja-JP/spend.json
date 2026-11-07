@@ -18,7 +18,7 @@
   "table.columns.totalTokens": "トークン使用量",
   "table.columns.trigger.enums.agent_meta": "エージェントプロファイル",
   "table.columns.trigger.enums.agent_share": "エージェント共有",
-  "table.columns.trigger.enums.agent_signal": "エージェント信号",
+  "table.columns.trigger.enums.agent_signal": "Agent Signal",
   "table.columns.trigger.enums.api": "APIコール",
   "table.columns.trigger.enums.asr": "音声文字変換",
   "table.columns.trigger.enums.bot": "ボットメッセージ",

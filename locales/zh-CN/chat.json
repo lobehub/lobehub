@@ -47,7 +47,6 @@
   "agentProfile.skills_one": "{{count}} 项技能",
   "agentProfile.skills_other": "{{count}} 项技能",
   "agentSender.sourceTopic": "源话题",
-  "agentSignal.receipts.agentSignalLabel": "代理信号",
   "agentSignal.receipts.memory.detail": "已保存以供未来回复使用",
   "agentSignal.receipts.memory.openInMemory": "在记忆中打开",
   "agentSignal.receipts.memory.title": "记忆已保存",

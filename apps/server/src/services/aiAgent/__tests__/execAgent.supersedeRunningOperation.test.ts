@@ -330,15 +330,15 @@ describe('AiAgentService.execAgent - supersede running foreground operation', ()
     expect(interruptTask).toHaveBeenCalledWith({ operationId: 'op-live', topicId: 'topic-1' });
   });
 
-  // A task-result wakeup runs on the main spine with `agent_signal`. The client
+  // A task-result wakeup runs on the main spine with `task_callback`. The client
   // never started it, so it cannot queue the send behind it; leaving both live
   // forked the conversation and hid the user's message on the losing branch.
-  it('interrupts a running agent_signal holder on the main spine', async () => {
+  it('interrupts a running task_callback holder on the main spine', async () => {
     mockFindOperationById.mockResolvedValue({
       id: 'op-live',
       status: 'running',
       topicId: 'topic-1',
-      trigger: 'agent_signal',
+      trigger: 'task_callback',
       userId: 'test-user-id',
     });
 

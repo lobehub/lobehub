@@ -47,7 +47,6 @@
   "agentProfile.skills_one": "{{count}} умение",
   "agentProfile.skills_other": "{{count}} умения",
   "agentSender.sourceTopic": "Изходна тема",
-  "agentSignal.receipts.agentSignalLabel": "Сигнал на агент",
   "agentSignal.receipts.memory.detail": "Запазено за бъдещи отговори",
   "agentSignal.receipts.memory.openInMemory": "Отвори в паметта",
   "agentSignal.receipts.memory.title": "Паметта е запазена",
