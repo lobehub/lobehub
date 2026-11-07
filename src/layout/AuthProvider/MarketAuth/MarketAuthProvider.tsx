@@ -392,6 +392,34 @@ export const MarketAuthProvider = ({ children, isDesktop }: MarketAuthProviderPr
   };
 
   /**
+   * Tell the authorization popup which account it just connected. The callback
+   * page only receives `code` + `state`, so the name has to come from here once
+   * the exchange is done. Failures are non-fatal — the popup then falls back to
+   * the plain success state.
+   */
+  const deliverAuthorizedAccount = useCallback(
+    async (username: string) => {
+      if (!oidcClient) return;
+
+      try {
+        const profile = (await lambdaClient.market.user.getUserByUsername.query({
+          username,
+        })) as MarketUserProfile | null;
+
+        oidcClient.deliverAuthorizedAccount({
+          avatarUrl: profile?.avatarUrl ?? undefined,
+          displayName: profile?.displayName || profile?.userName || username,
+          userName: profile?.userName ?? username,
+        });
+      } catch (error) {
+        console.error('[MarketAuth] Failed to load the authorized profile:', error);
+        oidcClient.deliverAuthorizedAccount({ displayName: username, userName: username });
+      }
+    },
+    [oidcClient],
+  );
+
+  /**
    * The actual sign-in method (internal use)
    */
   const handleActualSignIn = async (): Promise<number | null> => {
@@ -432,6 +460,11 @@ export const MarketAuthProvider = ({ children, isDesktop }: MarketAuthProviderPr
 
       setSession(newSession);
       setStatus('authenticated');
+
+      // Name the connected account in the still-open authorization popup
+      if (userInfo?.sub) {
+        void deliverAuthorizedAccount(userInfo.sub);
+      }
 
       // Check if user needs to set up profile (first-time login)
       if (userInfo?.sub) {
