@@ -14,6 +14,7 @@ export const BACKGROUND_OPERATION_TRIGGERS: ReadonlySet<string> = new Set<string
   RequestTrigger.Cron,
   RequestTrigger.Eval,
   RequestTrigger.Goal,
+  RequestTrigger.Inbox,
   RequestTrigger.Notify,
   RequestTrigger.Openapi,
   RequestTrigger.Scheduled,
