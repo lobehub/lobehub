@@ -2,7 +2,11 @@ import type { ChannelPublicMessage } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
 import type { TimelineItem } from './joinEvents';
-import { channelTimeFormatters, presentChannelTimeline } from './messagePresentation';
+import {
+  channelDayLabel,
+  channelTimeFormatters,
+  presentChannelTimeline,
+} from './messagePresentation';
 
 const message = (at: Date, patch: Partial<ChannelPublicMessage> = {}): TimelineItem => ({
   kind: 'message',
@@ -72,5 +76,28 @@ describe('channel timestamps', () => {
     expect(en.date.format(date)).toBe('October 31, 2026');
     expect(en.time.format(date)).toMatch(/03:04\sPM/);
     expect(zh.full.format(date)).toContain('2026年10月31日');
+  });
+});
+
+describe('channelDayLabel', () => {
+  // Sunday 8 November 2026, a little past midnight: the day boundary is what matters.
+  const now = new Date(2026, 10, 8, 0, 18);
+  const label = (date: Date, locale = 'zh-CN') =>
+    channelDayLabel(date, { locale, now, today: '今天', yesterday: '昨天' });
+
+  it('says today and yesterday by calendar day, not by 24 hours', () => {
+    expect(label(new Date(2026, 10, 8, 0, 1))).toBe('今天');
+    // 01:36 yesterday is under 24 hours ago but still yesterday; 23:59 the day before is not.
+    expect(label(new Date(2026, 10, 7, 1, 36))).toBe('昨天');
+    expect(label(new Date(2026, 10, 6, 23, 59))).not.toBe('昨天');
+  });
+
+  it('names the weekday within the past week, then the date', () => {
+    expect(label(new Date(2026, 10, 6, 10, 15))).toBe('星期五');
+    expect(label(new Date(2026, 10, 2, 9, 0))).toBe('星期一');
+    expect(label(new Date(2026, 10, 1, 9, 0))).toBe('11月1日');
+    expect(label(new Date(2025, 10, 7, 9, 0))).toBe('2025年11月7日');
+    expect(label(new Date(2026, 10, 6, 10, 15), 'en-US')).toBe('Friday');
+    expect(label(new Date(2026, 9, 23, 9, 0), 'en-US')).toBe('October 23');
   });
 });
