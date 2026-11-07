@@ -4,6 +4,7 @@ import {
   experimentCaseProgress,
   isExperimentGradingComplete,
   isRunGradingComplete,
+  isWorkspaceEmpty,
   overviewAttention,
   runGradingGap,
 } from './overviewResults';
@@ -108,5 +109,19 @@ describe('overview grading completeness', () => {
       expect(isExperimentGradingComplete([complete, run])).toBe(false);
     }
     expect(isRunGradingComplete({ ...complete, hasUnverifiedAttempts: false })).toBe(true);
+  });
+});
+
+describe('dashboard empty state', () => {
+  it('is empty only when there are no benchmarks, datasets or experiments', () => {
+    expect(isWorkspaceEmpty({ benchmarks: [], datasets: [], experiments: [] })).toBe(true);
+    // An import makes a dataset in no benchmark: the dashboard must still show it.
+    expect(isWorkspaceEmpty({ benchmarks: [], datasets: [{ id: 'ds' }], experiments: [] })).toBe(
+      false,
+    );
+    expect(isWorkspaceEmpty({ benchmarks: [], datasets: [], experiments: [{ id: 'exp' }] })).toBe(
+      false,
+    );
+    expect(isWorkspaceEmpty({ benchmarks: [], datasets: undefined, experiments: [] })).toBe(false);
   });
 });

@@ -69,3 +69,19 @@ export const overviewAttention = (runs: OverviewRun[]) =>
     },
     { errors: 0, external: 0, judgeErrors: 0, unaccounted: 0 },
   );
+
+/**
+ * The dashboard is empty only when the account has nothing at all. An import
+ * makes a dataset in no benchmark, so having no benchmark is not "empty": the
+ * datasets and experiments still need their sections. While datasets load, it
+ * is not known to be empty.
+ */
+export const isWorkspaceEmpty = (state: {
+  benchmarks: readonly unknown[];
+  datasets: readonly unknown[] | undefined;
+  experiments: readonly unknown[];
+}) =>
+  state.benchmarks.length === 0 &&
+  state.datasets !== undefined &&
+  state.datasets.length === 0 &&
+  state.experiments.length === 0;

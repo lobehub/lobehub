@@ -23,6 +23,7 @@ import {
   rankableSetsOf,
   sortBenchmarks,
 } from '@/features/LobeBench/lobeBench';
+import { isWorkspaceEmpty } from '@/features/LobeBench/overviewResults';
 import { useImportLobeBenchDataset } from '@/features/LobeBench/useImportDataset';
 import {
   useLobeBenchBenchmarks,
@@ -136,7 +137,7 @@ const LobeBenchDashboard = memo(() => {
     });
   const newExperiment = () => navigate(`${LOBE_BENCH_PATH}/experiments/new`);
 
-  if (!loadingBenchmarks && benchmarks.length === 0) {
+  if (!loadingBenchmarks && isWorkspaceEmpty({ benchmarks, datasets, experiments })) {
     return (
       <Flexbox className={stylex.props(styles.container).className} flex={1}>
         <Empty description={t('lobeBench.overview.notInstalled')} icon={Database}>
@@ -201,6 +202,11 @@ const LobeBenchDashboard = memo(() => {
         <h2 className={stylex.props(styles.sectionTitle).className}>
           {t('overview.sections.benchmarks.title')}
         </h2>
+        {benchmarks.length === 0 && (
+          <Text fontSize={12} type={'secondary'}>
+            {t('lobeBench.sidebar.benchmarks.empty')}
+          </Text>
+        )}
         <div className={stylex.props(styles.grid).className}>
           {benchmarks.map((benchmark) => {
             const madeOf = benchmarkDatasetsOf(datasets, benchmark);
