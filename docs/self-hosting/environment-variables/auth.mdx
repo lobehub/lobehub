@@ -167,6 +167,24 @@ These settings are required for email verification and password reset features.
 - Default: `-`
 - Example: `xxxxxxxxxxxxxxxxxxxxxxxxxxxxx`
 
+### X (Twitter)
+
+X is link-only: signed-in users can link their X account in profile settings, but X never appears on the login page and cannot be used to sign in or sign up. Add `twitter` to `AUTH_SSO_PROVIDERS` to enable it, and set the OAuth 2.0 callback URL of the X app to `https://<your-domain>/api/auth/callback/twitter`.
+
+#### `AUTH_TWITTER_ID`
+
+- Type: Required
+- Description: OAuth 2.0 Client ID of the X app. Get it from the [X Developer Console](https://developer.x.com/en/portal/dashboard).
+- Default: `-`
+- Example: `xxxxxxxxxxxxxxxxxxxxxxxxx`
+
+#### `AUTH_TWITTER_SECRET`
+
+- Type: Required
+- Description: OAuth 2.0 Client Secret of the X app.
+- Default: `-`
+- Example: `xxxxxxxxxxxxxxxxxxxxxxxxxxxxx`
+
 ### Microsoft
 
 #### `AUTH_MICROSOFT_ID`
