@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 
-import { buildAnchor } from '../text';
+import { buildAnchor, textFromEditorData } from '../text';
 
 const hasLoneSurrogate = (value: string): boolean =>
   /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(value);
@@ -30,5 +30,39 @@ describe('buildAnchor context slices', () => {
     expect(anchor).toMatchObject({ quote: 'QUOTE' });
     expect(anchor!.prefix).toBe('前言 😀');
     expect(anchor!.suffix).toBe('😀 后记');
+  });
+});
+
+describe('textFromEditorData with pending edits', () => {
+  it('projects the accepted view so a pending replacement cannot supply evidence', () => {
+    // `DocumentService.updateDocument` keeps diff nodes, so the raw body carries
+    // both the accepted clause and the proposal. Reading both would let the
+    // checker quote the unaccepted wording.
+    const editorData = {
+      root: {
+        children: [
+          {
+            children: [
+              {
+                children: [{ text: 'Payment is due within 90 days.', type: 'text' }],
+                type: 'paragraph',
+              },
+              {
+                children: [{ text: 'Payment is due within 30 days.', type: 'text' }],
+                type: 'paragraph',
+              },
+            ],
+            diffType: 'modify',
+            type: 'diff',
+          },
+        ],
+        type: 'root',
+      },
+    };
+
+    const text = textFromEditorData(editorData);
+
+    expect(text).toBe('Payment is due within 90 days.');
+    expect(text).not.toContain('30 days');
   });
 });

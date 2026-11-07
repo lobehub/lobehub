@@ -1,6 +1,8 @@
 import type { DocumentReviewTextAnchor } from '@lobechat/types';
 import { truncateSurrogateSafe } from '@lobechat/utils';
 
+import { normalizeEditorDataDiffNodes } from '@/libs/editor/normalizeDiffNodes';
+
 /**
  * Plain-text projection of a document body and text-quote anchoring.
  *
@@ -43,7 +45,13 @@ export const normalizeText = (text: string): string =>
 /** Flatten Lexical `editorData` into the plain text the model reads. */
 export const textFromEditorData = (editorData: unknown): string => {
   if (!isSerializedNode(editorData)) return '';
-  const root = (editorData as { root?: SerializedNode }).root;
+  // Only the accepted view is document text: a pending diff node carries both
+  // the pre- and post-edit wording, so flattening it raw sends the checker two
+  // contradictory clauses and lets an unaccepted edit stand as evidence.
+  // `DocumentService.updateDocument` keeps those nodes until someone accepts or
+  // rejects them, so the normalization has to happen here.
+  const accepted = normalizeEditorDataDiffNodes(editorData as Record<string, unknown>);
+  const root = (accepted as { root?: SerializedNode }).root;
   if (!isSerializedNode(root)) return '';
 
   const parts: string[] = [];
