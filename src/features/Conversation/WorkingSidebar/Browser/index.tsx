@@ -19,6 +19,7 @@ import {
   ExternalLink,
   Globe,
   Import,
+  KeyRound,
   RefreshCw,
   SquareDashedMousePointer,
   XCircle,
@@ -26,7 +27,6 @@ import {
 import { memo, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { BrowserIcon } from '@/components/BrowserIcon';
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { useLocalStorageState } from '@/hooks/useLocalStorageState';
 import { electronBrowserSidebarService } from '@/services/electron/browserSidebar';
@@ -37,6 +37,7 @@ import { useGlobalStore } from '@/store/global';
 
 import type { ComposerTarget } from '../../types';
 import { BROWSER_IMPORT_BANNER_DISMISSED_STORAGE_KEY } from './const';
+import { openImportLoginDataModal } from './ImportLoginDataModal';
 import { useBrowserSidebarState } from './useBrowserSidebarState';
 import {
   buildScreenshotFileName,
@@ -172,7 +173,6 @@ const BrowserPane = memo<BrowserPaneProps>((props) => {
   const state = useBrowserSidebarState(sessionId);
   const [address, setAddress] = useState('');
   const [isEditing, setIsEditing] = useState(false);
-  const [isImporting, setIsImporting] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
   const [isPicking, setIsPicking] = useState(false);
   const [isImportBannerDismissed, setIsImportBannerDismissed] = useLocalStorageState(
@@ -308,26 +308,15 @@ const BrowserPane = memo<BrowserPaneProps>((props) => {
     };
   }, [sessionId]);
 
-  const handleImportChromeLoginData = async () => {
-    setIsImporting(true);
-    try {
-      const result = await electronBrowserSidebarService.importChromeLoginData();
-      if (!result.success) {
-        toast.error(t('workingPanel.browser.import.failed'));
-        return;
-      }
-
-      toast.success(t('workingPanel.browser.import.success', { count: result.importedCount }));
-      setIsImportBannerDismissed(true);
-      if (state.attached) {
-        void runAction(() => electronBrowserSidebarService.reload({ sessionId }));
-      }
-    } catch (error) {
-      console.error('[BrowserSidebar] Failed to import Chrome login information:', error);
-      toast.error(t('workingPanel.browser.import.failed'));
-    } finally {
-      setIsImporting(false);
-    }
+  const openImportDialog = () => {
+    openImportLoginDataModal({
+      onImported: () => {
+        setIsImportBannerDismissed(true);
+        if (state.attached) {
+          void runAction(() => electronBrowserSidebarService.reload({ sessionId }));
+        }
+      },
+    });
   };
 
   // External open requests (web-browsing search results, store action) arrive as
@@ -436,6 +425,12 @@ const BrowserPane = memo<BrowserPaneProps>((props) => {
             }
           />
           <ActionIcon
+            icon={KeyRound}
+            size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+            title={t('workingPanel.browser.import.title')}
+            onClick={openImportDialog}
+          />
+          <ActionIcon
             disabled={!state.attached || !agentId || !composerTarget.writable}
             icon={Camera}
             loading={isCapturing}
@@ -456,7 +451,7 @@ const BrowserPane = memo<BrowserPaneProps>((props) => {
       </Flexbox>
       {!isImportBannerDismissed && (
         <Flexbox horizontal align={'center'} className={styles.importBanner} gap={12}>
-          <BrowserIcon browser={'Chrome'} size={32} />
+          <Icon icon={KeyRound} size={24} />
           <Flexbox className={styles.importCopy} gap={0}>
             <Text strong>{t('workingPanel.browser.import.title')}</Text>
             <Text ellipsis type={'secondary'}>
@@ -464,11 +459,7 @@ const BrowserPane = memo<BrowserPaneProps>((props) => {
             </Text>
           </Flexbox>
           <Flexbox horizontal align={'center'} className={styles.importActions} gap={4}>
-            <Button
-              icon={<Icon icon={Import} />}
-              loading={isImporting}
-              onClick={handleImportChromeLoginData}
-            >
+            <Button icon={<Icon icon={Import} />} onClick={openImportDialog}>
               {t('workingPanel.browser.import.action')}
             </Button>
             <ActionIcon

@@ -3737,13 +3737,48 @@ export default {
   'workingPanel.browser.empty.desc': 'Enter an address or search above to open a page',
   'workingPanel.browser.empty.title': 'Start browsing',
   'workingPanel.browser.import.action': 'Import',
-  'workingPanel.browser.import.desc': 'Let Agents reuse your signed-in browser sessions',
+  'workingPanel.browser.import.desc':
+    'Agents can reuse sites you are already signed in to. Chrome is supported too',
   'workingPanel.browser.import.dismiss': 'Dismiss',
-  'workingPanel.browser.import.failed':
-    'Could not import login information. Make sure Chrome is installed and try again.',
-  'workingPanel.browser.import.success_one': 'Imported login information from Chrome',
-  'workingPanel.browser.import.success_other': 'Imported {{count}} browser sessions from Chrome',
-  'workingPanel.browser.import.title': 'Import login information from Chrome',
+  'workingPanel.browser.import.error.browser_not_installed':
+    '{{browser}} was not found on this device. Install it and sign in to the site first.',
+  'workingPanel.browser.import.error.browser_start_failed':
+    'Could not start {{browser}} to read login information. Try again later.',
+  'workingPanel.browser.import.error.cookie_db_locked':
+    '{{browser}} is running and its cookie file is in use. Fully quit {{browser}} (including background and tray processes), then try again.',
+  'workingPanel.browser.import.error.decrypt_failed':
+    'Could not decrypt {{browser}} login information. Make sure you use {{browser}} under this system account, then try again.',
+  'workingPanel.browser.import.error.profile_not_found':
+    'No {{browser}} profile with saved logins was found. Open {{browser}} and sign in to a site first.',
+  'workingPanel.browser.import.error.unknown': 'Import failed. Try again.',
+  'workingPanel.browser.import.modal.cancel': 'Cancel',
+  'workingPanel.browser.import.modal.contents': 'What is imported',
+  'workingPanel.browser.import.modal.cookies': 'Cookies, which keep you signed in to websites',
+  'workingPanel.browser.import.modal.domainOption': '{{domain}} · {{count}}',
+  'workingPanel.browser.import.modal.domainPlaceholder': 'Search and select sites',
+  'workingPanel.browser.import.modal.done': 'Done',
+  'workingPanel.browser.import.modal.empty': 'No signed-in sites were found in {{browser}}',
+  'workingPanel.browser.import.modal.excluded':
+    'Not imported: saved passwords, localStorage and IndexedDB. Most sites keep sign-in state in cookies; passwords and site storage stay in {{browser}}.',
+  'workingPanel.browser.import.modal.loading': 'Reading {{browser}} profile…',
+  'workingPanel.browser.import.modal.privacy':
+    'Login information is written only to the in-app browser on this device. It is never uploaded and does not appear in chats, tasks or logs.',
+  'workingPanel.browser.import.modal.profile': 'Profile: {{profile}}',
+  'workingPanel.browser.import.modal.retry': 'Retry',
+  'workingPanel.browser.import.modal.scope': 'Sites',
+  'workingPanel.browser.import.modal.scopeAll': 'All sites ({{count}})',
+  'workingPanel.browser.import.modal.scopeSelected': 'Only selected sites',
+  'workingPanel.browser.import.modal.source': 'Import from',
+  'workingPanel.browser.import.modal.submit': 'Import',
+  'workingPanel.browser.import.modal.title': 'Import browser login information',
+  'workingPanel.browser.import.result.failedDomains_one':
+    '1 site could not be imported: {{domains}}',
+  'workingPanel.browser.import.result.failedDomains_other':
+    '{{count}} sites could not be imported: {{domains}}',
+  'workingPanel.browser.import.result.success_one': 'Imported 1 cookie',
+  'workingPanel.browser.import.result.success_other':
+    'Imported {{count}} cookies across {{domains}} sites',
+  'workingPanel.browser.import.title': 'Import login information from Edge',
   'workingPanel.browser.loading': 'Loading page',
   'workingPanel.browser.title': 'Browser',
   'workingPanel.browser.tool.click': 'Clicked element',
