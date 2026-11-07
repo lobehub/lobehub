@@ -45,7 +45,7 @@ jobs:
     runs-on: ubuntu-latest
     name: Test Packages
     env:
-      PACKAGES: '@lobechat/file-loaders @lobechat/prompts @lobechat/model-runtime @lobechat/web-crawler @lobechat/electron-server-ipc @lobechat/utils @lobechat/context-engine @lobechat/agent-runtime @lobechat/conversation-flow @lobechat/ssrf-safe-fetch @lobechat/memory-user-memory @lobechat/types @lobechat/trpc @lobechat/app-config @lobechat/locales @lobechat/env @lobechat/builtin-tool-lobe-agent @lobechat/builtin-tool-message model-bank @lobechat/agent-gateway-client @lobechat/agent-manager-runtime @lobechat/device-gateway-client @lobechat/device-identity @lobechat/eval-dataset-parser @lobechat/eval-rubric @lobechat/fetch-sse @lobechat/heterogeneous-agents @lobechat/openapi'
+      PACKAGES: '@lobechat/file-loaders @lobechat/prompts @lobechat/model-runtime @lobechat/web-crawler @lobechat/electron-server-ipc @lobechat/utils @lobechat/context-engine @lobechat/agent-runtime @lobechat/conversation-flow @lobechat/ssrf-safe-fetch @lobechat/memory-user-memory @lobechat/types @lobechat/trpc @lobechat/app-config @lobechat/locales @lobechat/env model-bank @lobechat/agent-gateway-client @lobechat/agent-manager-runtime @lobechat/device-gateway-client @lobechat/device-identity @lobechat/eval-dataset-parser @lobechat/eval-rubric @lobechat/fetch-sse @lobechat/heterogeneous-agents @lobechat/openapi'
 
     steps:
       - name: Checkout
@@ -96,6 +96,35 @@ jobs:
             bun run --filter $package test:coverage
             echo "::endgroup::"
           done
+
+      # Every builtin-tool package is picked up by glob, so a new package cannot
+      # silently fall out of CI the way hand-listed ones did. The root vitest
+      # config excludes packages/**, so a package with tests but no own config
+      # would never run anywhere: fail on that instead of skipping it.
+      - name: Test builtin-tool packages with coverage
+        run: |
+          failed=()
+          for dir in packages/builtin-tool-*/; do
+            dir="${dir%/}"
+            if ! ls "$dir"/vitest.config.* >/dev/null 2>&1; then
+              if [ -n "$(find "$dir/src" -name '*.test.ts' -o -name '*.test.tsx' 2>/dev/null | head -1)" ]; then
+                echo "::error file=$dir/package.json::$dir has tests but no vitest config, so they never run"
+                failed+=("$dir")
+              fi
+              continue
+            fi
+
+            echo "::group::Testing $dir"
+            if ! (cd "$dir" && bunx vitest run --coverage --coverage.reporter=lcov --coverage.reporter=text-summary --reporter=default --silent='passed-only' --passWithNoTests); then
+              failed+=("$dir")
+            fi
+            echo "::endgroup::"
+          done
+
+          if [ "${#failed[@]}" -gt 0 ]; then
+            echo "::error::builtin-tool packages failed: ${failed[*]}"
+            exit 1
+          fi
 
       - name: Upload coverage to Codecov
         if: ${{ !cancelled() }}
@@ -158,8 +187,16 @@ jobs:
             labels=("${labels[@]:1}")
           }
 
+          coverage_dirs=()
           for package in $PACKAGES; do
-            dir="${package#@lobechat/}"
+            coverage_dirs+=("${package#@lobechat/}")
+          done
+          for dir in packages/builtin-tool-*/; do
+            dir="${dir%/}"
+            coverage_dirs+=("${dir#packages/}")
+          done
+
+          for dir in "${coverage_dirs[@]}"; do
             if [ -f "./packages/$dir/coverage/lcov.info" ]; then
               flag="packages/$dir"
 

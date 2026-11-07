@@ -17,18 +17,13 @@ vi.mock('@/store/agentGroup', () => ({
   },
 }));
 
-// Mock lambdaClient for Task APIs
-const mockExecGroupSubAgentTask = vi.fn();
-const mockGetTaskStatus = vi.fn();
+// Mock the aiAgent service at the boundary the executor imports, so the test
+// does not pull the app's trpc client and store graph into this package.
 const mockInterruptTask = vi.fn();
 
-vi.mock('@/libs/trpc/client', () => ({
-  lambdaClient: {
-    aiAgent: {
-      execGroupSubAgentTask: { mutate: (...args: any[]) => mockExecGroupSubAgentTask(...args) },
-      getGroupSubAgentTaskStatus: { query: (...args: any[]) => mockGetTaskStatus(...args) },
-      interruptTask: { mutate: (...args: any[]) => mockInterruptTask(...args) },
-    },
+vi.mock('@/services/aiAgent', () => ({
+  aiAgentService: {
+    interruptTask: (...args: any[]) => mockInterruptTask(...args),
   },
 }));
 
