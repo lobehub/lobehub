@@ -31,6 +31,7 @@ import {
 import { presentOutgoingMessage, timelineTail } from './outgoing';
 import { OutgoingStatus } from './OutgoingStatus';
 import { ReplyActivity } from './ReplyActivity';
+import type { ReplyTopic } from './ReplyTopicPanel';
 import { styles } from './styles';
 import type { ChannelThreadDraft } from './threadDraft';
 import { useChannelEvents } from './useChannelEvents';
@@ -43,6 +44,7 @@ interface ChannelConversationProps {
   /** Mounted beside a thread panel that covers it, so keep it out of the tab order. */
   inert?: boolean;
   onOpenThread?: (threadId: string, toggle?: boolean) => void;
+  onOpenTopic?: (topic: ReplyTopic) => void;
   onStartThread?: (draft: ChannelThreadDraft) => void;
   threadId?: string | null;
 }
@@ -52,6 +54,7 @@ const Timeline = ({
   inert,
   threadId = null,
   onOpenThread,
+  onOpenTopic,
   onStartThread,
 }: ChannelConversationProps) => {
   const { t, i18n } = useTranslation('channel');
@@ -253,6 +256,7 @@ const Timeline = ({
                         threadId={threadId}
                         onJumpToMessage={jumpToMessage}
                         onOpenThread={onOpenThread}
+                        onOpenTopic={onOpenTopic}
                         onStartThread={channelArchived ? undefined : onStartThread}
                         onReply={
                           channelArchived || thread?.status === 'archived' ? undefined : selectReply
@@ -267,12 +271,15 @@ const Timeline = ({
               <ArchivedNotice channel={detail.channel} threadId={threadId} />
             ) : (
               <Composer
-                activity={<ReplyActivity detail={detail} threadId={threadId} />}
                 channel={detail.channel}
                 draftKey={channelDraftKey(channelId, threadId)}
                 key={channelDraftKey(channelId, threadId)}
                 members={activeMembers}
                 replyTarget={reply.target}
+                activity={
+                  // A direct conversation shows its Agent's state beside the name in the header.
+                  direct && !threadId ? null : <ReplyActivity detail={detail} threadId={threadId} />
+                }
                 placeholder={
                   threadId
                     ? t('threadComposer')
