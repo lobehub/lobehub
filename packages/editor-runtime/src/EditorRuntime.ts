@@ -776,6 +776,10 @@ export class EditorRuntime {
   /**
    * Drop the inline runs a replacement emptied, so a quote that swallowed the
    * whole run does not leave `<b></b>` behind.
+   *
+   * Only runs left with no text at all are removed: a whitespace-only run is
+   * real document text that separates the words around it, so removing it would
+   * silently join unrelated words outside the replacement target.
    */
   private dropEmptiedRuns(content: string): string {
     let current = content;
@@ -801,7 +805,9 @@ export class EditorRuntime {
 
       if (open.closing || open.selfClosing || !EMPTIED_RUN_NAMES.has(open.name)) continue;
       if (!close || !close.closing || close.name !== open.name) continue;
-      if (!/^\s*$/.test(content.slice(open.end, close.start))) continue;
+      // Strictly empty: a run the replacement emptied. Whitespace-only runs are
+      // kept, since they still separate the words around them.
+      if (content.slice(open.end, close.start) !== '') continue;
 
       result += content.slice(cursor, open.start);
       cursor = close.end;

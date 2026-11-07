@@ -739,4 +739,30 @@ describe('EditorRuntime', () => {
       expect(context.xml).toBeDefined();
     });
   });
+
+  describe('cross-run replacement cleanup', () => {
+    const replaceAcrossRuns = (content: string, search: string, replacement: string) =>
+      (
+        runtime as unknown as {
+          replaceAcrossRuns: (
+            content: string,
+            pattern: string,
+            newText: string,
+            replaceAll: boolean,
+          ) => { count: number; newContent: string };
+        }
+      ).replaceAcrossRuns(content, search, replacement, false);
+
+    it('keeps a whitespace-only run that sits outside the replacement', () => {
+      const { newContent } = replaceAcrossRuns('A<b> </b>B old <b>text</b>', 'old text', 'new');
+
+      expect(newContent).toBe('A<b> </b>B new');
+    });
+
+    it('still drops the run the replacement emptied', () => {
+      const { newContent } = replaceAcrossRuns('<b>old text</b> tail', 'old text', '');
+
+      expect(newContent).toBe(' tail');
+    });
+  });
 });
