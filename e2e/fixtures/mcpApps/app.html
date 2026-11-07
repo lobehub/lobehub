@@ -98,6 +98,7 @@
         <p>Marker: <code id="context-marker">MCP_APPS_CONTEXT_ONCE__amber-kite-42</code></p>
         <div class="buttons">
           <button data-testid="set-context" type="button">Add fixture context</button>
+          <button data-testid="replace-context" type="button">Replace with context B</button>
           <button data-testid="remove-context" type="button">Remove fixture context</button>
         </div>
       </section>
@@ -107,7 +108,10 @@
         <p>The host handles the request, asks this view to tear down, then removes it.</p>
         <div class="buttons">
           <button data-testid="request-teardown" type="button">Request teardown</button>
+          <button data-testid="delayed-teardown" type="button">Request teardown in 3 seconds</button>
         </div>
+        <label><input id="pause-teardown" type="checkbox" /> Pause teardown acknowledgement</label>
+        <button data-testid="ack-teardown" type="button" disabled>Acknowledge teardown</button>
       </section>
 
       <section aria-labelledby="status-heading">
@@ -130,6 +134,7 @@
         const pendingRequests = new Map();
         let nextRequestId = 1;
         let hostContext = {};
+        let pendingTeardownId;
 
         const statusNode = document.querySelector('#status');
         const contextNode = document.querySelector('#host-context');
@@ -207,6 +212,12 @@
           }
         };
 
+        const acknowledgeTeardown = (id) => {
+          log('Sending ui/resource-teardown acknowledgement');
+          statusNode.textContent = 'Teardown acknowledged.';
+          window.parent.postMessage({ jsonrpc: '2.0', id, result: {} }, '*');
+        };
+
         window.addEventListener('message', (event) => {
           if (event.source !== window.parent) return;
           const message = event.data;
@@ -214,9 +225,14 @@
 
           if (message.method === 'ui/resource-teardown') {
             log(`Host requested ui/resource-teardown: ${message.params?.reason ?? 'no reason supplied'}`);
-            statusNode.textContent = 'Teardown acknowledged.';
             if (message.id !== undefined) {
-              window.parent.postMessage({ jsonrpc: '2.0', id: message.id, result: {} }, '*');
+              if (document.querySelector('#pause-teardown').checked) {
+                pendingTeardownId = message.id;
+                document.querySelector('[data-testid="ack-teardown"]').disabled = false;
+                statusNode.textContent = 'Host requested teardown; acknowledgement paused.';
+              } else {
+                acknowledgeTeardown(message.id);
+              }
             }
             return;
           }
@@ -258,12 +274,26 @@
         document.querySelector('[data-testid="set-context"]').addEventListener('click', () => {
           void updateModelContext([{ type: 'text', text: marker }], 'Fixture context added.');
         });
+        document.querySelector('[data-testid="replace-context"]').addEventListener('click', () => {
+          void updateModelContext([{ type: 'text', text: 'MCP_APPS_CONTEXT_REPLACED__blue-heron-73' }], 'Fixture context replaced with B.');
+        });
         document.querySelector('[data-testid="remove-context"]').addEventListener('click', () => {
           void updateModelContext([], 'Fixture context removed.');
         });
         document.querySelector('[data-testid="request-teardown"]').addEventListener('click', () => {
           statusNode.textContent = 'Waiting for host teardown acknowledgement…';
           sendNotification('ui/notifications/request-teardown');
+        });
+        document.querySelector('[data-testid="delayed-teardown"]').addEventListener('click', () => {
+          statusNode.textContent = 'Teardown will be requested in 3 seconds…';
+          setTimeout(() => sendNotification('ui/notifications/request-teardown'), 3000);
+        });
+        document.querySelector('[data-testid="ack-teardown"]').addEventListener('click', () => {
+          if (pendingTeardownId === undefined) return;
+          const id = pendingTeardownId;
+          pendingTeardownId = undefined;
+          document.querySelector('[data-testid="ack-teardown"]').disabled = true;
+          acknowledgeTeardown(id);
         });
 
         sendRequest('ui/initialize', {

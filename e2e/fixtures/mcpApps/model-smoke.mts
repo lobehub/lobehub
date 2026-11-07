@@ -69,15 +69,38 @@ for (const name of [`fixture____${apiName}____mcp`, `fixture____MD5HASH_${hash}_
   );
 }
 
+const capsName = 'fixture_app_inline_only_caps';
+const capsStream = await call(
+  [{ role: 'user', content: `Please call ${capsName}` }],
+  [{ type: 'function', function: { name: capsName, parameters: { type: 'object' } } }],
+);
+assert.equal(
+  capsStream.flatMap(({ choices }) => choices[0]?.delta.tool_calls ?? [])[0]?.function?.name,
+  capsName,
+);
+const multi = await call(
+  [{ role: 'user', content: `Call ${apiName}, ${capsName}, ${apiName}, and fixture_not_offered` }],
+  [apiName, capsName].map((name) => ({
+    type: 'function',
+    function: { name, parameters: { type: 'object' } },
+  })),
+);
+const multiCalls = multi.flatMap(({ choices }) => choices[0]?.delta.tool_calls ?? []);
+assert.deepEqual(
+  multiCalls.map((tool) => tool.function?.name),
+  [apiName, capsName],
+);
+assert.equal(new Set(multiCalls.map((tool) => tool.id)).size, 2);
+
 const log = (await readFile(logPath, 'utf8'))
   .trim()
   .split('\n')
   .map((line) => JSON.parse(line));
-assert.equal(log.length, 6);
+assert.equal(log.length, 8);
 assert.ok(
   log[0].request.tools.some((tool: any) => tool.function.name === 'fixture_inline_preference'),
 );
 assert.ok(JSON.stringify(log[1].request.messages).includes(contextMarker));
 console.log(
-  'Local model fixture smoke passed (bare/namespaced/hashed tool names, post-tool stop, context echo, request audit).',
+  'Local model fixture smoke passed (bare/namespaced/hashed names, caps, multiple calls, post-tool stop, context echo, request audit).',
 );
