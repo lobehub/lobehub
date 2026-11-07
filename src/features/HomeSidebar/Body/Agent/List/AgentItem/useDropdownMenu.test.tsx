@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   canManageResource: false,
   canManage: false,
   confirmModal: vi.fn(),
+  confirmRemoveAgent: vi.fn(),
   copyToClipboard: vi.fn(),
   toastError: vi.fn(),
   toastSuccess: vi.fn(),
@@ -95,6 +96,9 @@ vi.mock('@/hooks/useResourceManageable', () => ({
 }));
 
 vi.mock('@/services/agent', () => ({ agentService: {} }));
+vi.mock('@/features/AgentDeleteConfirm', () => ({
+  confirmRemoveAgent: mocks.confirmRemoveAgent,
+}));
 
 vi.mock('@/features/HomeSidebar/Body/Agent/ModalProvider', () => ({
   useOptionalAgentModal: () => null,
@@ -368,9 +372,16 @@ describe('useAgentDropdownMenu', () => {
     if (!deleteItem) throw new Error('Expected delete menu item');
 
     deleteItem.onClick({ domEvent: { stopPropagation: vi.fn() } });
-    const { onOk } = mocks.confirmModal.mock.calls[0][0] as { onOk: () => Promise<void> };
-    await onOk();
+    const { agentId, onConfirm } = mocks.confirmRemoveAgent.mock.calls[0][0] as {
+      agentId: string;
+      onConfirm: (options: { acknowledgeForeignContent: boolean }) => Promise<void>;
+    };
+    expect(agentId).toBe('agent-1');
+    await onConfirm({ acknowledgeForeignContent: true });
 
+    expect(mocks.home.removeAgent).toHaveBeenCalledWith('agent-1', {
+      acknowledgeForeignContent: true,
+    });
     expect(mocks.toastError).toHaveBeenCalledWith('deleteHistoryMigrating');
   });
 
