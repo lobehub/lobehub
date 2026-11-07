@@ -103,6 +103,20 @@ describe('BotMessageRouter bot-wake decision records', () => {
     mockRecordSignalDecision.mockResolvedValue({ persisted: false });
   });
 
+  it('records no decision for a blank message, so no wake policy judges it', async () => {
+    await boot();
+    const blank = message({ isMention: true, text: ' \n ' });
+
+    await mentionHandler()(thread(), blank);
+    await subscribedHandler()(thread(), blank);
+    await catchAllHandler()(thread({ isDM: true }), blank);
+    await flush();
+
+    expect(mockHandleMention).not.toHaveBeenCalled();
+    expect(mockHandleSubscribedMessage).not.toHaveBeenCalled();
+    expect(mockRecordSignalDecision).not.toHaveBeenCalled();
+  });
+
   it('records a wake for an @mention without changing the dispatch to the agent', async () => {
     await boot();
 
