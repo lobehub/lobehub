@@ -12,16 +12,6 @@ type ChatRequest = {
 
 const port = Number(process.env.MCP_APP_MODEL_PORT ?? 39743);
 const logPath = path.resolve(process.env.MCP_APP_MODEL_LOG ?? '/tmp/mcp-apps-model-requests.jsonl');
-const toolNames = [
-  'fixture_inline_preference',
-  'fixture_fullscreen_preference',
-  'fixture_resource_modes_no_tool_preference',
-  'fixture_thread_entrypoint',
-  'fixture_legacy_output_template',
-  'fixture_ui_metadata_conflict',
-  'fixture_app_only_tool',
-  'fixture_disabled_model_tool',
-];
 
 const sendJson = (response: import('node:http').ServerResponse, status: number, value: unknown) => {
   response.writeHead(status, {
@@ -44,22 +34,24 @@ const messageText = (message: ChatMessage) => {
   return JSON.stringify(message.content ?? '');
 };
 
-const selectTool = (body: ChatRequest) => {
+const selectTools = (body: ChatRequest) => {
   const messages = body.messages ?? [];
   const userIndex = messages.findLastIndex(({ role }) => role === 'user');
   const latestUserMessage = messages[userIndex];
-  if (!latestUserMessage) return undefined;
-  if (messages.slice(userIndex + 1).some(({ role }) => role === 'tool')) return undefined;
+  if (!latestUserMessage) return [];
+  if (messages.slice(userIndex + 1).some(({ role }) => role === 'tool')) return [];
   const text = messageText(latestUserMessage);
-  const requested = toolNames.find((name) => text.includes(name));
-  if (!requested) return undefined;
-  const hashed = `MD5HASH_${createHash('md5').update(requested).digest('hex').slice(0, 12)}`;
-  return body.tools
-    ?.map(({ function: fn }) => fn?.name)
-    .find((name) => {
-      const api = name?.split('____')[1];
-      return name === requested || api === requested || api === hashed;
-    });
+  const requested = [...new Set(text.match(/\bfixture_[a-z0-9_]+\b/g) ?? [])];
+  return requested.flatMap((requestedName) => {
+    const hashed = `MD5HASH_${createHash('md5').update(requestedName).digest('hex').slice(0, 12)}`;
+    const offered = body.tools
+      ?.map(({ function: fn }) => fn?.name)
+      .find((name) => {
+        const api = name?.split('____')[1];
+        return name === requestedName || api === requestedName || api === hashed;
+      });
+    return offered ? [offered] : [];
+  });
 };
 
 const contextEcho = (body: ChatRequest) => {
@@ -146,21 +138,19 @@ const server = createServer(async (request, response) => {
 
   const id = `chatcmpl-${trace.id}`;
   const model = body.model ?? 'mcp-apps-fixture';
-  const selectedTool = selectTool(body);
-  if (selectedTool) {
+  const selectedTools = selectTools(body);
+  if (selectedTools.length > 0) {
     sse(response, id, model, [
       { index: 0, delta: { role: 'assistant' }, finish_reason: null },
       {
         index: 0,
         delta: {
-          tool_calls: [
-            {
-              index: 0,
-              id: `call-${trace.id.slice(0, 12)}`,
-              type: 'function',
-              function: { name: selectedTool, arguments: '{}' },
-            },
-          ],
+          tool_calls: selectedTools.map((name, index) => ({
+            index,
+            id: `call-${trace.id.slice(0, 12)}-${index}`,
+            type: 'function',
+            function: { name, arguments: '{}' },
+          })),
         },
         finish_reason: null,
       },
