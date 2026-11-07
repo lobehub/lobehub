@@ -64,6 +64,7 @@
   "sensenova.description": "SenseNova 基于商汤基础设施，提供高效、易用的全栈大模型服务。",
   "siliconcloud.description": "SiliconCloud 是基于强大开源模型构建的高性价比生成式 AI 云服务。",
   "spark.description": "讯飞星火提供强大的多语言 AI 能力，广泛应用于智能硬件、医疗、金融等垂直领域，推动创新发展。",
+  "steadyrouter.description": "一个 Key 用几百个型号，一个来源失败自动换下一个。",
   "stepfun.description": "Stepfun 模型具备领先的多模态与复杂推理能力，支持长文本理解与强大的自主搜索编排。",
   "straico.description": "Straico 致力于简化 AI 集成，通过提供一个整合了顶尖文本、图像和音频生成式 AI 模型的统一工作空间，赋能营销人员、企业家及爱好者等各类用户，实现对多样化 AI 工具的无缝访问。",
   "streamlake.description": "快手万擎是企业级模型服务与AI算力云平台，集成高性能模型推理、低成本模型定制与全托管服务，助力企业专注于AI应用创新，无需担忧底层算力的复杂性与成本。",
