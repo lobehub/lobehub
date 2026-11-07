@@ -171,6 +171,7 @@ export class MessagesEngine {
       enableAgentMode,
       enableHistoryCount,
       enableStaleToolResultTrim,
+      compactChannelTurns,
       historyCount,
       forceFinish,
       historySummary,
@@ -577,7 +578,7 @@ export class MessagesEngine {
       // plugin/pluginState there) and BEFORE ToolCallProcessor.
       // Earlier Channel turns keep only their request: the public context, quote and wake hint
       // injected into each were for that turn, and the history tools re-read them.
-      new ChannelTurnCompactProcessor(),
+      new ChannelTurnCompactProcessor({ enabled: compactChannelTurns === true }),
       new ActivationResultTrimProcessor({
         injectedManifests: injectedToolManifests,
         injectedSkills: injectedActivatedSkills,

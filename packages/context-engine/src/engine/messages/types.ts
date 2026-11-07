@@ -251,6 +251,11 @@ export interface MessagesEngineParams {
   /** Whether to enable history message count limit */
   enableHistoryCount?: boolean;
   /**
+   * The run answers a Channel request (`trigger: channel`), so earlier turns are Channel prompts
+   * whose per-turn context may be compacted. Off for every other run.
+   */
+  compactChannelTurns?: boolean;
+  /**
    * Whether stale tool results are replaced with short placeholders in the
    * model context. Undefined / true → trimming enabled (default).
    */

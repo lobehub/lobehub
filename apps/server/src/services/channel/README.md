@@ -150,8 +150,11 @@ A Channel topic does not rely on the native context compression:
 
 - **Earlier turns keep only their request.** Each run's user message carries one-turn context: the
   unseen public messages, the quote, the gap and the wake hint. The context engine's
-  `ChannelTurnCompactProcessor` reduces every earlier Channel turn to its `channel_request` block,
-  matched by the run's boundary so a person's text is never touched. The latest turn stays whole.
+  `ChannelTurnCompactProcessor` reduces every earlier Channel turn to its `channel_request` block.
+  It runs only for Channel runs (`compactChannelTurns`, set from `trigger: channel`), and only on
+  messages that are whole Channel prompts: the boundary is read from the envelope's closing tag,
+  so a `channel_request` pair a participant wrote inside quoted or recent context is never taken
+  for the request. The latest turn stays whole.
   The rewrite is deterministic and monotone, so the prompt prefix only changes where a new turn
   starts.
 - **Old history reads become pointers.** `StaleToolResultTrim` replaces `lobe-channel` reads outside the

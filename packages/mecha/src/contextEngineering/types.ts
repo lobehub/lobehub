@@ -41,6 +41,8 @@ export type ContextVariables = Record<string, string | (() => string)>;
  * host (`resolveAgentConfig`) and frozen.
  */
 export interface ContextAgentSnapshot {
+  /** The run answers a Channel request; see `MessagesEngineParams.compactChannelTurns`. */
+  compactChannelTurns?: boolean;
   /** Agent documents the agent may consult. */
   documents?: AgentContextDocument[];
   enableHistoryCount?: boolean;
