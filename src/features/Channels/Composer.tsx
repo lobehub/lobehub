@@ -241,7 +241,7 @@ export function Composer({
     </Flexbox>
   );
   return (
-    <WideScreenContainer fullWidth paddingInline={24}>
+    <WideScreenContainer fullWidth paddingInline={16}>
       <Flexbox {...stylex.props(styles.composer)} gap={4} {...getContainerProps()}>
         <div {...stylex.props(styles.composerStatus)}>
           <Flexbox horizontal align="center" style={{ minWidth: 0 }}>

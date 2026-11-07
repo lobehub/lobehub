@@ -163,7 +163,7 @@ const Timeline = ({
               }}
               {...stylex.props(styles.feed)}
             >
-              <WideScreenContainer fullWidth paddingInline={24}>
+              <WideScreenContainer fullWidth paddingInline={16}>
                 {(detail.hasMore || before !== undefined) && (
                   <Flexbox horizontal align="center" gap={8} justify="center" paddingBlock={8}>
                     <Button
