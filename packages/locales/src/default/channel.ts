@@ -118,7 +118,6 @@ export default {
   'mentionInvite.failedReason': "Couldn't add {{name}} to the channel: {{reason}}",
   'mentionInvite.section': 'Not in this channel · mention to add',
   'attachments.upload': 'Attach files',
-  'date.today': 'Today',
   'date.yesterday': 'Yesterday',
   'attachments.failed': 'Upload failed. Try again.',
   'attachments.limit': 'Attach up to {{count}} files.',

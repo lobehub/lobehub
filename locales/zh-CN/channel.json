@@ -42,7 +42,6 @@
   "copyIdSuccess": "已复制频道 ID",
   "create": "创建频道",
   "create.onlyYou": "目前只有你。可以先创建，之后随时邀请成员。",
-  "date.today": "今天",
   "date.yesterday": "昨天",
   "delete": "删除频道",
   "deleteConfirm": "删除「{{title}}」后，所有成员都将无法再访问此频道。运行中的任务将被请求停止，Agent 和本地文件不会被删除。",

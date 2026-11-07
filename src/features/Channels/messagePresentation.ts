@@ -49,29 +49,32 @@ const calendarDaysAgo = (date: Date, now: Date) =>
   );
 
 /**
- * A day divider's label, the way IM apps say it: "Today", "Yesterday", the weekday within the
- * past week, the month and day within this year, and the full date before that.
+ * A day divider's label, the way WeChat stamps a conversation: the time alone today, then
+ * "Yesterday", the weekday within the past week, the month and day within this year, or the full
+ * date before that, each followed by the time of the day's first message.
  */
 export const channelDayLabel = (
   date: Date,
   {
     locale,
     now = new Date(),
-    today,
     yesterday,
   }: {
     locale: string;
     now?: Date;
-    today: string;
     yesterday: string;
   },
 ) => {
+  const time = new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit' }).format(date);
   const days = calendarDaysAgo(date, now);
-  if (days === 0) return today;
-  if (days === 1) return yesterday;
-  if (days > 1 && days < 7)
-    return new Intl.DateTimeFormat(locale, { weekday: 'long' }).format(date);
-  if (date.getFullYear() === now.getFullYear())
-    return new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long' }).format(date);
-  return new Intl.DateTimeFormat(locale, { dateStyle: 'long' }).format(date);
+  if (days === 0) return time;
+  const day =
+    days === 1
+      ? yesterday
+      : days > 1 && days < 7
+        ? new Intl.DateTimeFormat(locale, { weekday: 'long' }).format(date)
+        : date.getFullYear() === now.getFullYear()
+          ? new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long' }).format(date)
+          : new Intl.DateTimeFormat(locale, { dateStyle: 'long' }).format(date);
+  return `${day} ${time}`;
 };

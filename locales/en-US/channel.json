@@ -42,7 +42,6 @@
   "copyIdSuccess": "Channel ID copied",
   "create": "Create channel",
   "create.onlyYou": "Only you for now. Create it and invite members whenever you like.",
-  "date.today": "Today",
   "date.yesterday": "Yesterday",
   "delete": "Delete Channel",
   "deleteConfirm": "Delete “{{title}}”? This channel will disappear for all its members and can no longer be opened. Running tasks will be requested to stop. Agents and local files will not be deleted.",

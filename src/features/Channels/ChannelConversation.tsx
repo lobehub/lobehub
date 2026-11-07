@@ -219,7 +219,6 @@ const Timeline = ({
                         <time dateTime={date.toISOString()} title={timeFormats.date.format(date)}>
                           {channelDayLabel(date, {
                             locale: i18n.language,
-                            today: t('date.today'),
                             yesterday: t('date.yesterday'),
                           })}
                         </time>
