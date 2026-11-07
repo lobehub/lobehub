@@ -341,6 +341,7 @@ const deferredToolMessageId = (result: { state?: unknown }): string | undefined 
 const pauseForTools = async ({
   host,
   instruction,
+  parentMessageId,
   reason,
   state,
   toolMessageIds,
@@ -348,6 +349,8 @@ const pauseForTools = async ({
 }: {
   host: AgentRuntimeHost;
   instruction?: AgentInstruction;
+  /** Message the pending tool rows hang under; see `pendingToolsParentMessageId`. */
+  parentMessageId: string;
   reason: string;
   state: AgentState;
   /**
@@ -379,6 +382,7 @@ const pauseForTools = async ({
     reason,
   };
   newState.pendingToolsCalling = toolsCalling;
+  newState.pendingToolsParentMessageId = parentMessageId;
 
   // Same rule as the human-approval pause: an approve resume seeds an assistant
   // placeholder for its first `call_llm`, but an approved async tool (a group
@@ -491,6 +495,7 @@ export const callTool =
         const paused = await pauseForTools({
           host,
           instruction,
+          parentMessageId: payload.parentMessageId,
           reason: 'client_tool_execution',
           state,
           toolsCalling: [tool],
@@ -535,6 +540,7 @@ export const callTool =
         const deferredId = deferredToolMessageId(execution.result);
         return pauseForTools({
           host,
+          parentMessageId: payload.parentMessageId,
           reason: 'async_tool',
           state,
           toolMessageIds: deferredId ? { [tool.id]: deferredId } : undefined,
@@ -813,6 +819,7 @@ export const callToolsBatch =
 
       const paused = await pauseForTools({
         host,
+        parentMessageId,
         reason: 'client_tool_execution',
         state,
         toolsCalling: clientTools,
@@ -1101,6 +1108,7 @@ export const callToolsBatch =
 
       const paused = await pauseForTools({
         host,
+        parentMessageId,
         reason: pauseReason,
         state: newState,
         toolMessageIds: deferredToolMessageIds,
