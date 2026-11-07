@@ -1,4 +1,4 @@
-import { Button, Flexbox, Text } from '@lobehub/ui';
+import { Button, Flexbox, Skeleton, Text } from '@lobehub/ui';
 import { useTranslation } from 'react-i18next';
 
 import { mcpAppActions } from '@/store/mcpApp/action';
@@ -14,7 +14,11 @@ export interface ManagedMcpAppViewProps extends McpAppViewProps {
   title?: string;
 }
 
-/** Both hosts share ownership; only the selected location mounts an iframe. */
+/**
+ * Both hosts share ownership; only the view's location mounts an iframe. The
+ * location follows what the tool and its resource declare, then the app's own
+ * requests: the host offers no switch between message and side panel.
+ */
 export const ManagedMcpAppView = ({
   location,
   preferred,
@@ -23,29 +27,29 @@ export const ManagedMcpAppView = ({
   icon,
   ...props
 }: ManagedMcpAppViewProps) => {
-  const { enabled, view, panelAvailable, mode, supported, presentation } = useMcpAppPresentation({
-    ...props,
-    location,
-    preferred,
-    scope,
-    title,
-    icon,
-  });
+  const { enabled, view, panelAvailable, placed, mode, supported, presentation } =
+    useMcpAppPresentation({
+      ...props,
+      agentId: props.host.agentId,
+      location,
+      preferred,
+      scope,
+      title,
+      icon,
+    });
   const { t } = useTranslation('plugin');
   if (!enabled || view?.dismissed) return props.fallback;
+  // No frame until the declared location is known, so it never mounts in the wrong one
+  if (!placed) return <Skeleton height={location === 'inline' ? 320 : '100%'} width={'100%'} />;
   if (mode !== location)
     return location === 'inline' ? (
       <Flexbox horizontal align={'center'} gap={8}>
         <Text type={'secondary'}>{t('mcpApp.panel.opened')}</Text>
-        <Button
-          size={'small'}
-          onClick={() => mcpAppActions.setMode(props.toolCallId, 'fullscreen')}
-        >
-          {t('mcpApp.panel.view')}
-        </Button>
-        <Button size={'small'} onClick={() => mcpAppActions.setMode(props.toolCallId, 'inline')}>
-          {t('mcpApp.panel.retract')}
-        </Button>
+        {panelAvailable && (
+          <Button size={'small'} onClick={() => mcpAppActions.reveal(props.toolCallId)}>
+            {t('mcpApp.panel.view')}
+          </Button>
+        )}
       </Flexbox>
     ) : null;
   return (
@@ -53,16 +57,6 @@ export const ManagedMcpAppView = ({
       gap={8}
       style={location === 'fullscreen' ? { height: '100%', minHeight: 0 } : undefined}
     >
-      {location === 'inline' && panelAvailable && view?.availableModes?.includes('fullscreen') && (
-        <Flexbox horizontal justify={'flex-end'}>
-          <Button
-            size={'small'}
-            onClick={() => mcpAppActions.setMode(props.toolCallId, 'fullscreen')}
-          >
-            {t('mcpApp.panel.open')}
-          </Button>
-        </Flexbox>
-      )}
       {supported ? <McpAppView {...props} presentation={presentation} /> : props.fallback}
     </Flexbox>
   );

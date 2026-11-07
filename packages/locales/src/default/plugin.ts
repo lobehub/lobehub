@@ -1,11 +1,9 @@
 export default {
-  'mcpApp.panel.open': 'Open in side panel',
-  'mcpApp.panel.opened': 'Open in side panel',
+  'mcpApp.panel.opened': 'Shown in the side panel',
   'mcpApp.panel.view': 'View',
-  'mcpApp.panel.retract': 'Move back to message',
   'mcpApp.panel.unavailable': 'Open the app from its message to continue.',
   'mcpApp.context.remove': 'Remove app context',
-  'mcpApp.context.label': '{{title}} · NOW',
+  'mcpApp.context.label': '{{title}} context',
   'mcpApp.entrypoints': 'Apps',
   'mcpApp.entrypoint.error': 'The app could not be opened. Try again.',
   'mcpApp.entrypoint.retry': 'Retry',

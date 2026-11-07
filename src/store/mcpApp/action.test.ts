@@ -18,27 +18,83 @@ beforeEach(() => {
   gate.open.mockReset();
 });
 const view = { identifier: 'fixture', messageId: 'message', scope: 'topic-a', title: 'Fixture' };
-describe('MCP App ownership', () => {
-  it('keeps context during migration but removes it immediately on teardown', () => {
+const modeOf = (id: string) => useMcpAppStore.getState().views[id]?.mode;
+
+describe('MCP App placement', () => {
+  it('places a view where its declaration says, once', () => {
+    mcpAppActions.registerPanel('topic-a');
     mcpAppActions.registerView('call', view);
-    useMcpAppStore.setState({
-      contexts: {
-        call: {
-          content: 'pending',
-          identifier: 'fixture',
-          scope: 'topic-a',
-          title: 'Fixture',
-        },
-      },
-    });
-    mcpAppActions.close('call');
-    expect(useMcpAppStore.getState().contexts.call.content).toBe('pending');
-    mcpAppActions.close('call', true);
-    expect(useMcpAppStore.getState().contexts.call).toBeUndefined();
+
+    mcpAppActions.place('call', 'fullscreen');
+    expect(modeOf('call')).toBe('fullscreen');
+    // A later decision (another host mounting) never moves a placed view
+    mcpAppActions.place('call', 'inline');
+    expect(modeOf('call')).toBe('fullscreen');
   });
-  it('moves one view between hosts and respects available modes and topic scope', () => {
+
+  it('keeps a side-panel view in its message where the conversation has no panel', () => {
+    mcpAppActions.registerPanel('topic-b');
     mcpAppActions.registerView('call', view);
-    mcpAppActions.setAvailableModes('call', ['inline', 'fullscreen']);
+
+    mcpAppActions.place('call', 'fullscreen');
+
+    expect(modeOf('call')).toBe('inline');
+  });
+
+  it('opens the panel by itself only for a call completed in the live conversation', () => {
+    mcpAppActions.registerPanel('topic-a');
+    mcpAppActions.registerView('history', view);
+    mcpAppActions.registerView('live', view);
+    mcpAppActions.markLive('live');
+
+    mcpAppActions.place('history', 'fullscreen');
+    expect(modeOf('history')).toBe('fullscreen');
+    expect(gate.open).not.toHaveBeenCalled();
+
+    mcpAppActions.place('live', 'fullscreen');
+    expect(gate.open).toHaveBeenCalledWith('mcp-app:live');
+    expect(mcpAppActions.consumeLive('live')).toBe(false);
+  });
+
+  it('reveals a side-panel view without changing where it lives', () => {
+    mcpAppActions.registerPanel('topic-a');
+    mcpAppActions.registerView('panel', view);
+    mcpAppActions.registerView('inline', view);
+    mcpAppActions.place('panel', 'fullscreen');
+    mcpAppActions.place('inline', 'inline');
+
+    mcpAppActions.reveal('inline');
+    expect(gate.open).not.toHaveBeenCalled();
+    expect(modeOf('inline')).toBe('inline');
+
+    mcpAppActions.reveal('panel');
+    expect(gate.open).toHaveBeenCalledWith('mcp-app:panel');
+    expect(modeOf('panel')).toBe('fullscreen');
+  });
+
+  it("gives way to the app's own modes on its first initialization only", () => {
+    mcpAppActions.registerPanel('topic-a');
+    mcpAppActions.registerView('call', view);
+    mcpAppActions.place('call', 'fullscreen');
+
+    // The app supports inline only: it moves to its message
+    mcpAppActions.settle('call', ['inline'], 'inline');
+    expect(modeOf('call')).toBe('inline');
+    expect(gate.open).not.toHaveBeenCalled();
+
+    // The app later asks for fullscreen; remounting must not undo that
+    useMcpAppStore.setState((s) => ({
+      views: { ...s.views, call: { ...s.views.call, availableModes: ['inline', 'fullscreen'] } },
+    }));
+    expect(mcpAppActions.setMode('call', 'fullscreen')).toBe('fullscreen');
+    mcpAppActions.settle('call', ['inline', 'fullscreen'], 'inline');
+    expect(modeOf('call')).toBe('fullscreen');
+  });
+
+  it("moves between hosts only on the app's request, within its modes and topic", () => {
+    mcpAppActions.registerView('call', view);
+    mcpAppActions.place('call', 'inline');
+    mcpAppActions.settle('call', ['inline', 'fullscreen'], 'inline');
     expect(mcpAppActions.setMode('call', 'fullscreen')).toBe('inline');
     mcpAppActions.registerPanel('topic-b');
     expect(mcpAppActions.setMode('call', 'fullscreen')).toBe('inline');
@@ -47,22 +103,34 @@ describe('MCP App ownership', () => {
     expect(Object.keys(useMcpAppStore.getState().views)).toEqual(['call']);
     expect(gate.open).toHaveBeenCalledWith('mcp-app:call');
     mcpAppActions.setMode('call', 'inline');
-    expect(useMcpAppStore.getState().views.call.mode).toBe('inline');
+    expect(modeOf('call')).toBe('inline');
   });
-  it('only grants automatic opening to observed live calls, once', () => {
-    expect(mcpAppActions.consumeLive('history')).toBe(false);
-    mcpAppActions.markLive('live');
-    expect(mcpAppActions.consumeLive('live')).toBe(true);
-    expect(mcpAppActions.consumeLive('live')).toBe(false);
+
+  it('drops a dismissed view and its unsent context', () => {
+    mcpAppActions.registerView('call', view);
+    useMcpAppStore.setState({
+      contexts: {
+        call: { content: 'pending', identifier: 'fixture', scope: 'topic-a', title: 'Fixture' },
+      },
+    });
+
+    mcpAppActions.dismiss('call');
+
+    expect(useMcpAppStore.getState().views.call.dismissed).toBe(true);
+    expect(useMcpAppStore.getState().contexts.call).toBeUndefined();
   });
+
   it('does nothing when the feature is disabled, including a stale saved view', () => {
     mcpAppActions.registerView('existing', view);
     gate.enabled = false;
     mcpAppActions.registerView('new', view);
     mcpAppActions.registerPanel('topic-a');
     mcpAppActions.markLive('new');
+    mcpAppActions.place('existing', 'fullscreen');
+    mcpAppActions.reveal('existing');
     mcpAppActions.setMode('existing', 'fullscreen');
     expect(Object.keys(useMcpAppStore.getState().views)).toEqual(['existing']);
+    expect(useMcpAppStore.getState().views.existing.placed).toBeUndefined();
     expect(useMcpAppStore.getState().panels).toEqual({});
     expect(useMcpAppStore.getState().liveCalls).toEqual({});
     expect(gate.open).not.toHaveBeenCalled();

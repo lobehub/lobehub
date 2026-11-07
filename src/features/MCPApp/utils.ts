@@ -1,10 +1,7 @@
-import { resolveMcpUiResourceMeta } from '@lobechat/const/mcpApp';
+import { type McpUiResourceMeta, resolveMcpUiResourceMeta } from '@lobechat/const/mcpApp';
 import type { MessageMetadata } from '@lobechat/types';
 import type { CallToolResult, ReadResourceResult } from '@modelcontextprotocol/client';
-import type {
-  McpUiResourceCsp,
-  McpUiResourceMeta,
-} from '@modelcontextprotocol/ext-apps/app-bridge';
+import type { McpUiResourceCsp } from '@modelcontextprotocol/ext-apps/app-bridge';
 
 import type { MCPToolCallResult } from '@/libs/mcp/types';
 

@@ -69,7 +69,6 @@ import { deviceSelectors, useDeviceStore } from '@/store/device';
 import { useElectronStore } from '@/store/electron';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
-import { mcpAppActions } from '@/store/mcpApp/action';
 
 import { type ComposerTarget, createComposerTarget, resolveThreadComposerTarget } from '../types';
 import DeferredSkeleton from './DeferredSkeleton';
@@ -725,8 +724,6 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
       const removableTabs = new Set(tabs.filter((tab) => !pinnedTabsSet.has(tab)));
       if (removableTabs.size === 0) return;
 
-      for (const tab of removableTabs)
-        if (mcpAppsEnabled && tab.startsWith('mcp-app:')) mcpAppActions.close(tab.slice(8));
       const remainingTabs = openedTabs.filter((tab) => !removableTabs.has(tab));
       updateOpenedTabs(() => remainingTabs);
       if (removableTabs.has(activeTab)) {
@@ -742,7 +739,6 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
     },
     [
       activeTab,
-      mcpAppsEnabled,
       openedTabs,
       openTabsContextKey,
       pinnedTabsSet,
