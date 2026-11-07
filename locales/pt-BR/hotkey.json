@@ -27,6 +27,8 @@
   "openChatSettings.title": "Abrir Configurações do Chat",
   "openHotkeyHelper.desc": "Ver instruções para todos os atalhos de teclado",
   "openHotkeyHelper.title": "Ajuda de Atalhos",
+  "openTaskFilter.desc": "Abrir o menu de filtros na página de Tarefas",
+  "openTaskFilter.title": "Filtrar Tarefas",
   "prevTab.desc": "Alternar para a aba anterior no aplicativo Desktop; retorna para a última aba ao chegar ao início",
   "prevTab.title": "Aba Anterior",
   "regenerateMessage.desc": "Regenerar a última mensagem",

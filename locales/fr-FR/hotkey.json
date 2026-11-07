@@ -27,6 +27,8 @@
   "openChatSettings.title": "Ouvrir les paramètres du chat",
   "openHotkeyHelper.desc": "Afficher les instructions pour tous les raccourcis clavier",
   "openHotkeyHelper.title": "Aide des raccourcis clavier",
+  "openTaskFilter.desc": "Ouvrir le menu de filtre sur la page Tâches",
+  "openTaskFilter.title": "Filtrer les tâches",
   "prevTab.desc": "Passer à l'onglet précédent dans l'application de bureau ; revient au dernier onglet au début",
   "prevTab.title": "Onglet précédent",
   "regenerateMessage.desc": "Régénérer le dernier message",
