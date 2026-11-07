@@ -7,7 +7,7 @@ import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AuthIcons from '@/components/AuthIcons';
-import { isBuiltinProvider, normalizeProviderId } from '@/libs/better-auth/utils/client';
+import { normalizeProviderId } from '@/libs/better-auth/utils/client';
 import { useServerConfigStore } from '@/store/serverConfig';
 import { serverConfigSelectors } from '@/store/serverConfig/selectors';
 import { useUserStore } from '@/store/user';
@@ -42,13 +42,13 @@ export const SSOProvidersList = memo(() => {
     );
   }, [oAuthSSOProviders, linkedProviderIds]);
 
-  const handleUnlinkSSO = async (provider: string) => {
+  const handleUnlinkSSO = async (provider: string, accountId?: string) => {
     // Better-auth link/unlink operations are not available on desktop
     if (isDesktop) return;
 
     // The control is disabled when this is the only login method. Keep the
     // guard for callers outside the rendered list and for state races.
-    if (!allowUnlink) return;
+    if (!allowUnlink || !accountId) return;
     confirmModal({
       content: t('profile.sso.unlink.description', { provider }),
       okButtonProps: {
@@ -56,7 +56,7 @@ export const SSOProvidersList = memo(() => {
       },
       onOk: async () => {
         const { unlinkAccount } = await import('@/libs/better-auth/auth-client');
-        await unlinkAccount({ providerId: provider });
+        await unlinkAccount({ accountId });
         refreshAuthProviders();
       },
       title: <span style={providerNameStyle}>{t('profile.sso.unlink.title', { provider })}</span>,
@@ -67,20 +67,11 @@ export const SSOProvidersList = memo(() => {
     if (!enableAuthActions) return;
 
     const normalizedProvider = normalizeProviderId(provider);
-    const { linkSocial, oauth2 } = await import('@/libs/better-auth/auth-client');
+    const { linkSocial } = await import('@/libs/better-auth/auth-client');
 
-    if (isBuiltinProvider(normalizedProvider)) {
-      // Use better-auth native linkSocial API for built-in providers
-      await linkSocial({
-        callbackURL: '/profile',
-        provider: normalizedProvider as any,
-      });
-      return;
-    }
-
-    await oauth2.link({
+    await linkSocial({
       callbackURL: '/profile',
-      providerId: normalizedProvider,
+      provider: normalizedProvider,
     });
   };
 
@@ -115,10 +106,10 @@ export const SSOProvidersList = memo(() => {
             <Tooltip title={!allowUnlink ? t('profile.sso.unlink.forbidden') : undefined}>
               <span>
                 <ActionIcon
-                  disabled={!allowUnlink}
+                  disabled={!allowUnlink || !item.accountId}
                   icon={Unlink}
                   size={'small'}
-                  onClick={() => handleUnlinkSSO(item.provider)}
+                  onClick={() => handleUnlinkSSO(item.provider, item.accountId)}
                 />
               </span>
             </Tooltip>

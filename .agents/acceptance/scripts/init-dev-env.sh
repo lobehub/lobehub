@@ -478,11 +478,11 @@ const client = new pg.Client({ connectionString: databaseUrl });
   await client.query(
     `INSERT INTO accounts (id, user_id, account_id, provider_id, password, created_at, updated_at)
      VALUES ($1, $2, $3, $4, $5, $6, $6)
-     ON CONFLICT DO NOTHING`,
+     ON CONFLICT (id) DO UPDATE SET account_id = EXCLUDED.account_id, password = EXCLUDED.password`,
     [
       'agent_testing_account_001',
       TEST_USER.id,
-      TEST_USER.email,
+      TEST_USER.id,
       'credential',
       passwordHash,
       now,

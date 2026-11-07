@@ -39,6 +39,17 @@ minimumReleaseAgeExclude:
   - '@lobehub/*'
   - virtua@0.53.5
   - local-replica
+  - '@better-auth/core@1.7.16'
+  - '@better-auth/drizzle-adapter@1.7.16'
+  - '@better-auth/expo@1.7.16'
+  - '@better-auth/kysely-adapter@1.7.16'
+  - '@better-auth/memory-adapter@1.7.16'
+  - '@better-auth/mongo-adapter@1.7.16'
+  - '@better-auth/passkey@1.7.16'
+  - '@better-auth/prisma-adapter@1.7.16'
+  - '@better-auth/telemetry@1.7.16'
+  - better-auth@1.7.16
+  - better-call@1.4.5
 
 # Build scripts run one at a time. Several peer-variant copies of
 # @lobehub/editor resolve in this workspace and every copy's postinstall

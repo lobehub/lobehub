@@ -8,7 +8,6 @@ const mockSearchParamsGet = vi.hoisted(() => vi.fn().mockReturnValue(null));
 const mockMessageError = vi.hoisted(() => vi.fn());
 const mockMessageSuccess = vi.hoisted(() => vi.fn());
 const mockSignInSocial = vi.hoisted(() => vi.fn());
-const mockSignInOauth2 = vi.hoisted(() => vi.fn());
 const mockSignInEmail = vi.hoisted(() => vi.fn());
 const mockSignInMagicLink = vi.hoisted(() => vi.fn());
 const mockRequestPasswordReset = vi.hoisted(() => vi.fn());
@@ -43,7 +42,6 @@ vi.mock('@/libs/better-auth/auth-client', () => ({
   signIn: {
     email: mockSignInEmail,
     magicLink: mockSignInMagicLink,
-    oauth2: mockSignInOauth2,
     social: mockSignInSocial,
   },
 }));
@@ -384,8 +382,8 @@ describe('useSignIn', () => {
       expect(mockMessageError).not.toHaveBeenCalled();
     });
 
-    it('should call signIn.oauth2 for custom providers', async () => {
-      mockSignInOauth2.mockResolvedValue({ url: 'https://custom.com/auth' });
+    it('should call signIn.social for custom providers', async () => {
+      mockSignInSocial.mockResolvedValue({ url: 'https://custom.com/auth' });
 
       const { result } = renderHook(() => useSignIn());
 
@@ -393,10 +391,10 @@ describe('useSignIn', () => {
         await result.current.handleSocialSignIn('custom-oidc');
       });
 
-      expect(mockSignInOauth2).toHaveBeenCalledWith(
+      expect(mockSignInSocial).toHaveBeenCalledWith(
         expect.objectContaining({
           newUserCallbackURL: `${originalLocation.origin}/onboarding`,
-          providerId: 'custom-oidc',
+          provider: 'custom-oidc',
         }),
       );
     });

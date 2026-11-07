@@ -1,6 +1,6 @@
 import { authEnv } from '@/envs/auth';
 
-import { buildOidcConfig } from '../helpers';
+import { buildOidcConfig, getStringClaim } from '../helpers';
 import { type GenericProviderDefinition } from '../types';
 
 const provider: GenericProviderDefinition<{
@@ -15,18 +15,23 @@ const provider: GenericProviderDefinition<{
       issuer: env.AUTH_CASDOOR_ISSUER,
       overrides: {
         mapProfileToUser: (profile) => {
-          const composedName = [profile.firstName, profile.lastName]
+          const composedName = [getStringClaim(profile.firstName), getStringClaim(profile.lastName)]
             .filter(Boolean)
             .join(' ')
             .trim();
           const fallbackName = composedName.length > 0 ? composedName : undefined;
 
           return {
-            email: profile.email,
+            email: profile.email ?? undefined,
             emailVerified: Boolean(profile.emailVerified),
-            image: profile.avatar ?? profile.permanentAvatar,
-            name:
-              profile.displayName ?? fallbackName ?? profile.name ?? profile.email ?? profile.id,
+            image: getStringClaim(profile.avatar, profile.permanentAvatar),
+            name: getStringClaim(
+              profile.displayName,
+              fallbackName,
+              profile.name,
+              profile.email,
+              profile.id?.toString(),
+            ),
           };
         },
       },
