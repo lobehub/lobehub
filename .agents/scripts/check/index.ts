@@ -1,7 +1,7 @@
 /// <reference types="node" />
 
 /**
- * Agent-oriented quality check engine: `bun run check [files...] [--lint] [--test] [--type]`.
+ * Agent-oriented quality check engine: `bun run check [files...] [--lint] [--test] [--related] [--type]`.
  *
  * Runs the lint-staged toolchain (with autofix) and/or related tests on the
  * given files, auto-routing each file to the right oxlint/stylelint config
@@ -9,7 +9,7 @@
  * config. Output is compact and colorless so agents burn minimal tokens
  * reading it.
  *
- * `--lint` / `--test` / `--type` are composable selectors; no selector means
+ * `--lint` / `--test` / `--related` / `--type` are composable selectors; no selector means
  * lint + test. File selection: explicit args, else all working-tree changes
  * (staged + unstaged + untracked) from every configured repo; `--staged`
  * narrows the default to staged files only.
@@ -29,23 +29,32 @@ import { collectFromGit, normalizeArgs } from './collect';
 import { assertCheckRoot } from './delegate';
 import { run } from './exec';
 import { checkFileSizes } from './fileSize';
+import { isSourceFile } from './importers';
 import { lintGroup } from './lint';
 import { existsInRepo, rootDir, setConfig } from './paths';
+import { collectImportingTests } from './related';
 import { printReport } from './report';
-import { pipelineFor, relatedTestCandidates, resolveMount, scenarioTestLookup } from './routing';
+import {
+  isTestFile,
+  pipelineFor,
+  relatedTestCandidates,
+  resolveMount,
+  scenarioTestLookup,
+} from './routing';
 import type { CheckConfig, FileDiff, LintProblem, RepoMount, TestOutcome } from './types';
-import { runTestGroups } from './vitest';
+import { runRelatedGroups, runTestGroups } from './vitest';
 
-const USAGE = `Usage: bun run check [files...] [--lint] [--test] [--type] [--alint] [--staged]
+const USAGE = `Usage: bun run check [files...] [--lint] [--test] [--related] [--type] [--alint] [--staged]
   Selectors compose; no selector = --lint --test.
   files     explicit paths; default = all working-tree changes (staged + unstaged + untracked)
   --staged  collect staged files only (pre-commit scope); ignored with explicit files
   --lint    lint pipelines (with autofix)
-  --test    related tests
+  --test    related tests: same-name tests plus tests importing the files (up to 3 hops)
+  --related \`vitest related\` over the full module graph; slow (tens of seconds)
   --type    full type-check; alone, file collection is skipped
   --alint   model-backed rules (packages/alint); opt-in, needs \`bun run alint:setup\``;
 
-const KNOWN_FLAGS = new Set(['--lint', '--test', '--type', '--alint', '--staged']);
+const KNOWN_FLAGS = new Set(['--lint', '--test', '--related', '--type', '--alint', '--staged']);
 
 /** Keep only candidates that exist on disk, preserving order. */
 const filterExisting = async (candidates: string[]): Promise<string[]> => {
@@ -88,11 +97,12 @@ export const runCli = async (config: CheckConfig) => {
 
   const wantLint = rawArgs.includes('--lint');
   const wantTest = rawArgs.includes('--test');
+  const wantRelated = rawArgs.includes('--related');
   const runType = rawArgs.includes('--type');
   const wantAlint = rawArgs.includes('--alint');
-  const noSelector = !wantLint && !wantTest && !runType && !wantAlint;
+  const noSelector = !wantLint && !wantTest && !wantRelated && !runType && !wantAlint;
   const runLint = wantLint || noSelector;
-  const runTest = wantTest || noSelector;
+  const runTest = wantTest || wantRelated || noSelector;
 
   const fileArgs = rawArgs.filter((arg) => !arg.startsWith('--'));
 
@@ -154,21 +164,53 @@ export const runCli = async (config: CheckConfig) => {
   /* ---- Related tests ---- */
   let tests: TestOutcome | null = null;
   let testFiles: string[] = [];
-  if (runTest) {
-    const scenarioTests = await Promise.all(files.map((file) => findScenarioTests(file)));
+  let testFileCount = 0;
+  const testAdvisories: string[] = [];
+  if (wantRelated) {
+    // Changed tests run themselves; `vitest related` covers every test reaching a source file.
+    testFiles = files.filter((file) => isTestFile(file));
+    const sources = files.filter((file) => isSourceFile(file) && !isTestFile(file));
+    const importing = await collectImportingTests(sources);
+    const [direct, related] = await Promise.all([
+      runTestGroups(testFiles),
+      runRelatedGroups(
+        sources,
+        importing.tests,
+        (file) => resolveMount(config.repos, file).mount.dir,
+      ),
+    ]);
+    tests = {
+      failedOutput: [...direct.failedOutput, ...related.outcome.failedOutput],
+      noMatch: direct.noMatch,
+      passed: direct.passed + related.outcome.passed,
+    };
+    testFileCount = testFiles.length + related.fileCount;
+  } else if (runTest) {
+    const [scenarioTests, importing] = await Promise.all([
+      Promise.all(files.map((file) => findScenarioTests(file))),
+      collectImportingTests(files),
+    ]);
     testFiles = await filterExisting([
       ...new Set([
         ...files.flatMap((file) => relatedTestCandidates(file)),
         ...scenarioTests.flat(),
+        ...importing.tests,
       ]),
     ]);
+    if (importing.truncated) {
+      testAdvisories.push(
+        'related tests: the changed files are imported widely, so only the nearest importing tests ran; run `bun run check --related <files>` for the full set.',
+      );
+    }
     tests = await runTestGroups(testFiles);
+    testFileCount = testFiles.length;
   }
 
   const sizeFindings = await checkFileSizes(files);
   const advisories = [
     ...(await findNewComponentTestAdvisories([...new Set([...files, ...testFiles])])),
     ...sizeFindings.advisories,
+    ...testAdvisories,
   ];
 
   /* ---- Type check ---- */
@@ -189,7 +231,7 @@ export const runCli = async (config: CheckConfig) => {
     problems,
     sizeErrors: sizeFindings.errors,
     skipped,
-    testFileCount: testFiles.length,
+    testFileCount,
     tests,
     typeOutput,
   });
