@@ -8,6 +8,7 @@ import {
 } from './ChannelRoutingService';
 
 const mocks = vi.hoisted(() => ({
+  record: vi.fn(),
   classify: vi.fn(),
   countCall: vi.fn(),
   claim: vi.fn(),
@@ -46,6 +47,7 @@ vi.mock('@/server/services/redis', () => ({
   redisService: { botWake: { countClassifierCall: mocks.countCall } },
 }));
 vi.mock('./notify', () => ({ notifyChannel: mocks.notify }));
+vi.mock('./wakeRecords', () => ({ recordChannelWakeDecisions: mocks.record }));
 vi.mock('./queue', () => ({ wakeChannel: mocks.wake }));
 
 const input = {
@@ -285,6 +287,25 @@ describe('routing worker', () => {
         }),
       }),
     );
+  });
+
+  it('records the members’ decisions once the routing result is applied, and only then', async () => {
+    await run();
+    expect(mocks.record).toHaveBeenCalledWith(
+      {},
+      'channel',
+      expect.objectContaining({ messageId: 'message' }),
+      expect.objectContaining({ memberIds: ['coder'], status: 'assigned' }),
+      expect.objectContaining({
+        answers: response(0.95, 0.05).answers,
+        judgements: expect.any(Array),
+      }),
+    );
+
+    mocks.record.mockClear();
+    mocks.resolve.mockResolvedValue(false);
+    await run();
+    expect(mocks.record).not.toHaveBeenCalled();
   });
 
   it('does not call the provider if another worker owns the attempt', async () => {

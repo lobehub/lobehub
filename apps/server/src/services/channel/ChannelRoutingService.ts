@@ -23,6 +23,8 @@ import { wakeChannel } from './queue';
 import { resolveChannelRoutingConfig } from './routingConfig';
 import type { ChannelRoutingInput as RoutingInput, MemberWakeJudgement } from './wake';
 import { judgeMemberWake, toChannelJobWake } from './wake';
+import type { ChannelRoutingTrace } from './wakeRecords';
+import { recordChannelWakeDecisions } from './wakeRecords';
 
 export const CHANNEL_ROUTING_TIMEOUT_MS = 10_000;
 
@@ -120,9 +122,12 @@ export class ChannelRoutingService {
       async ({ id }) => {
         const input = await this.routing.claim(channelId, id);
         if (!input) return;
-        const decision = await this.decide(channelId, input);
-        if (await this.executions.resolveRouting(channelId, id, input.attempt, decision))
+        const trace: ChannelRoutingTrace = {};
+        const decision = await this.decide(channelId, input, trace);
+        if (await this.executions.resolveRouting(channelId, id, input.attempt, decision)) {
           resolved += 1;
+          await recordChannelWakeDecisions(this.db, channelId, input, decision, trace);
+        }
       },
       { concurrency: 3 },
     );
@@ -132,7 +137,11 @@ export class ChannelRoutingService {
     if (resolved) await wakeChannel(channelId);
   };
 
-  private async decide(channelId: string, input: RoutingInput): Promise<ChannelRoutingDecision> {
+  private async decide(
+    channelId: string,
+    input: RoutingInput,
+    trace: ChannelRoutingTrace = {},
+  ): Promise<ChannelRoutingDecision> {
     if (!input.candidates.length) return { reason: 'No Agent can answer here', status: 'skipped' };
     if (input.fallback)
       return {
@@ -153,6 +162,7 @@ export class ChannelRoutingService {
     // Bottom-up first: every member's own rules, the same pipeline an IM bot runs. Each model call
     // in them has its own short deadline, so this settles before the decision model's one starts.
     const judgements = await this.judgeMembers(channelId, input);
+    trace.judgements = judgements;
     try {
       return await withTimeout(async () => {
         const wakes = (members: MemberWakeJudgement[]) =>
@@ -232,6 +242,7 @@ export class ChannelRoutingService {
             user: input.userId,
           },
         );
+        trace.answers = response.answers;
         const quiet = new Set(
           judgements.filter((judgement) => judgement.quiet).map(({ memberId }) => memberId),
         );
