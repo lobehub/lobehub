@@ -1,3 +1,4 @@
+import { AgentRuntimeErrorType } from '@lobechat/types';
 import { isRecord } from '@lobechat/utils';
 
 import type { InputCompletionError } from '../store/initialState';
@@ -49,3 +50,19 @@ export const createInputCompletionError = (error: unknown): InputCompletionError
     message,
   };
 };
+
+const CREDENTIAL_ERROR_TYPES = new Set<string>([
+  AgentRuntimeErrorType.InvalidBedrockCredentials,
+  AgentRuntimeErrorType.InvalidGithubToken,
+  AgentRuntimeErrorType.InvalidProviderAPIKey,
+  AgentRuntimeErrorType.InvalidVertexCredentials,
+  AgentRuntimeErrorType.NoOpenAIAPIKey,
+]);
+
+/**
+ * Whether a failed completion means the chosen provider has no usable
+ * credentials in the current scope (missing or rejected API key), as opposed
+ * to budget, rate-limit or upstream failures.
+ */
+export const isInputCompletionCredentialError = (error: InputCompletionError): boolean =>
+  !!error.errorType && CREDENTIAL_ERROR_TYPES.has(error.errorType);
