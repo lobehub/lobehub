@@ -249,7 +249,9 @@ export class ChannelRoutingRepository {
               message.threadId
                 ? eq(channelJobs.threadId, message.threadId)
                 : isNull(channelJobs.threadId),
-              lastReply ? gt(channelJobs.createdAt, lastReply.at) : undefined,
+              // Settled, not enqueued: a job queued while this member was still answering can
+              // settle as silent after that reply is published, and it still spent the budget.
+              lastReply ? gt(channelJobs.updatedAt, lastReply.at) : undefined,
             ),
           );
         wakeState.set(candidate.memberId, {

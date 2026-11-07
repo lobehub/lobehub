@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
@@ -73,6 +73,57 @@ describe('routing input for the members’ own wake rules', () => {
 
     const next = await send(true);
     const second = (await routing.claim(team.channel.id, next.id))!;
+    expect(second.candidates.find(({ memberId }) => memberId === coder.id)).toMatchObject({
+      silentWakes: 1,
+    });
+  });
+
+  it('counts a silence that settles after the reply it was queued behind', async () => {
+    const team = await fixture.createTeamChannel();
+    const coder = await fixture.addAgent(team.channel.id, 'Coder');
+    let sequence = 0;
+    const send = (routed: boolean) => {
+      const content = `Message ${++sequence}`;
+      return team.asMember.send(team.channel.id, {
+        content,
+        mentions: routed ? undefined : [coder.id],
+        requestKey: content,
+        routing: 'decision',
+      });
+    };
+    const run = async (messageId: string) => {
+      const [job] = await jobsOf(db, messageId);
+      const claimed = (await execution.claim(team.channel.id, job.id, lease))!;
+      await execution.accepted(team.channel.id, claimed.job.id);
+      return claimed.job.id;
+    };
+
+    const asked = await send(false);
+    const answered = await run(asked.id);
+    await execution.saveDraft(team.channel.id, answered, 'Done.');
+    await execution.publish(team.channel.id, answered);
+    await execution.releaseWriter(team.channel.id, answered);
+
+    const followup = await send(true);
+    const first = (await routing.claim(team.channel.id, followup.id))!;
+    await execution.resolveRouting(team.channel.id, followup.id, first.attempt, {
+      memberIds: [coder.id],
+      reason: 'test',
+      status: 'assigned',
+      wakes: { [coder.id]: { kind: 'followup', reason: 'followup-window' } },
+    });
+    const silent = await run(followup.id);
+    // Queued while the member was still answering: enqueued before the reply above, but it can
+    // only settle once that run has finished — so it must still count against the silent budget.
+    await db.execute(
+      sql`update channel_jobs set created_at = now() - interval '30 seconds' where id = ${silent}`,
+    );
+    await execution.silence(team.channel.id, silent, 'not_addressed');
+    await execution.releaseWriter(team.channel.id, silent);
+
+    const next = await send(true);
+    const second = (await routing.claim(team.channel.id, next.id))!;
+
     expect(second.candidates.find(({ memberId }) => memberId === coder.id)).toMatchObject({
       silentWakes: 1,
     });
