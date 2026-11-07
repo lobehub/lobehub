@@ -6,7 +6,7 @@ import {
   CodexAppServerRpcError,
   isCodexAppServerCompatibilityError,
 } from './CodexAppServerClient';
-import { CodexThreadSession } from './CodexThreadSession';
+import { CODEX_TURN_IDLE_TIMEOUT_MS, CodexThreadSession } from './CodexThreadSession';
 
 const turn = (id: string, status: 'completed' | 'inProgress' | 'interrupted') => ({
   completedAt: status === 'inProgress' ? null : 2,
@@ -1005,5 +1005,108 @@ describe('CodexThreadSession', () => {
 
     expect(statuses).toEqual(['starting', 'running', 'error']);
     session.close();
+  });
+
+  describe('idle watchdog', () => {
+    const item = (id: string, type: string) => ({
+      item: { id, type },
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+    });
+
+    const startSilentTurn = async (harness: ClientHarness, run: () => Promise<void>) => {
+      const running = run();
+      // Settle a rejection early so a fake-timer advance cannot surface it as unhandled.
+      const settled = running.then(
+        () => ({ error: undefined }),
+        (error: Error) => ({ error }),
+      );
+      await vi.advanceTimersByTimeAsync(0);
+      expect(harness.requests.some(({ method }) => method === 'turn/start')).toBe(true);
+      await harness.notify('turn/started', {
+        threadId: 'thread-1',
+        turn: turn('turn-1', 'inProgress'),
+      });
+      await harness.notify('item/started', item('user-1', 'userMessage'));
+      await harness.notify('item/completed', item('user-1', 'userMessage'));
+      return { settled };
+    };
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('fails a started turn that produces no model or tool events', async () => {
+      vi.useFakeTimers();
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const harness = createClientHarness({ autoComplete: false });
+      const { run, session, statuses } = createSession(harness);
+
+      const { settled } = await startSilentTurn(harness, () => run('operation-1', 'hang'));
+      await vi.advanceTimersByTimeAsync(CODEX_TURN_IDLE_TIMEOUT_MS);
+      const { error } = await settled;
+      session.close();
+
+      expect(error?.message).toContain('Codex produced no model or tool activity for 10 minutes');
+      expect(harness.requests).toContainEqual({
+        method: 'turn/interrupt',
+        params: { threadId: 'thread-1', turnId: 'turn-1' },
+      });
+      expect(statuses).toEqual(['starting', 'running', 'error', 'closed']);
+      expect(warn).toHaveBeenCalledWith(
+        'Stopping a Codex turn with no native activity:',
+        expect.objectContaining({
+          lastNotificationMethod: 'item/completed',
+          operationId: 'operation-1',
+          threadId: 'thread-1',
+          turnId: 'turn-1',
+        }),
+      );
+      warn.mockRestore();
+    });
+
+    it('restarts the deadline on every native notification', async () => {
+      vi.useFakeTimers();
+      const harness = createClientHarness({ autoComplete: false });
+      const { run, session } = createSession(harness);
+
+      const { settled } = await startSilentTurn(harness, () => run('operation-1', 'slow'));
+      await vi.advanceTimersByTimeAsync(CODEX_TURN_IDLE_TIMEOUT_MS - 1000);
+      await harness.notify('item/reasoning/summaryTextDelta', {
+        delta: 'thinking',
+        itemId: 'reasoning-1',
+        threadId: 'thread-1',
+        turnId: 'turn-1',
+      });
+      await vi.advanceTimersByTimeAsync(CODEX_TURN_IDLE_TIMEOUT_MS - 1000);
+      await harness.notify('turn/completed', {
+        threadId: 'thread-1',
+        turn: turn('turn-1', 'completed'),
+      });
+
+      expect((await settled).error).toBeUndefined();
+      expect(harness.requests.some(({ method }) => method === 'turn/interrupt')).toBe(false);
+      session.close();
+    });
+
+    it.each(['commandExecution', 'sleep'])(
+      'waits on a silent %s item, then resumes the deadline once it completes',
+      async (type) => {
+        vi.useFakeTimers();
+        const harness = createClientHarness({ autoComplete: false });
+        const { run, session } = createSession(harness);
+
+        const { settled } = await startSilentTurn(harness, () => run('operation-1', 'wait'));
+        await harness.notify('item/started', item('wait-1', type));
+        await vi.advanceTimersByTimeAsync(CODEX_TURN_IDLE_TIMEOUT_MS * 3);
+        expect(harness.requests.some(({ method }) => method === 'turn/interrupt')).toBe(false);
+
+        await harness.notify('item/completed', item('wait-1', type));
+        await vi.advanceTimersByTimeAsync(CODEX_TURN_IDLE_TIMEOUT_MS);
+
+        expect((await settled).error?.message).toContain('no model or tool activity');
+        session.close();
+      },
+    );
   });
 });
