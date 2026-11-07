@@ -81,6 +81,38 @@ describe('resolveToolRules', () => {
     }
   });
 
+  it('keeps memory discoverable in agent mode unless pinned, and resident in chat mode', () => {
+    expect(resolveToolRules(request({ memoryEnabled: true })).rules['lobe-user-memory']).toBe(
+      false,
+    );
+    expect(
+      resolveToolRules(
+        request({ agent: { chatConfig: {}, plugins: ['lobe-user-memory'] }, memoryEnabled: true }),
+      ).rules['lobe-user-memory'],
+    ).toBe(true);
+    // A pin cannot override memory being turned off.
+    expect(
+      resolveToolRules(request({ agent: { chatConfig: {}, plugins: ['lobe-user-memory'] } })).rules[
+        'lobe-user-memory'
+      ],
+    ).toBe(false);
+    // Manual skill activation drops the activator, so unpinned memory stays resident.
+    expect(
+      resolveToolRules(
+        request({
+          agent: { chatConfig: { skillActivateMode: 'manual' } },
+          memoryEnabled: true,
+        }),
+      ).rules['lobe-user-memory'],
+    ).toBe(true);
+    // Chat mode has no activator, so memory stays resident there.
+    expect(
+      resolveToolRules(
+        request({ agent: { chatConfig: { enableAgentMode: false } }, memoryEnabled: true }),
+      ).rules['lobe-user-memory'],
+    ).toBe(true);
+  });
+
   it('offers image generation only when pinned on a tool-calling model without native output', () => {
     const pinned = { chatConfig: { enableAgentMode: false }, plugins: ['lobe-image-generation'] };
     expect(resolveToolRules(request({ agent: pinned })).rules['lobe-image-generation']).toBe(true);
@@ -111,8 +143,39 @@ describe('resolveToolRules', () => {
       request({ executionTarget: 'local', localExecutionReady: true }),
     );
     expect(localReady.rules['lobe-local-system']).toBe(true);
-    expect(localReady.rules['lobe-browser']).toBe(true);
+    // The in-app browser is discoverable, not resident: only a pin enables it.
+    expect(localReady.rules['lobe-browser']).toBe(false);
     expect(localReady.rules['lobe-cloud-sandbox']).toBe(false);
+
+    const browserPinned = resolveToolRules(
+      request({
+        agent: { chatConfig: {}, plugins: ['lobe-browser'] },
+        executionTarget: 'local',
+        localExecutionReady: true,
+      }),
+    );
+    expect(browserPinned.rules['lobe-browser']).toBe(true);
+
+    // Manual skill activation drops the activator and the Tools popover hides
+    // runtime-managed tools, so an unpinned browser could never be turned on:
+    // it stays resident instead of disappearing.
+    const browserManualMode = resolveToolRules(
+      request({
+        agent: { chatConfig: { skillActivateMode: 'manual' }, plugins: [] },
+        executionTarget: 'local',
+        localExecutionReady: true,
+      }),
+    );
+    expect(browserManualMode.rules['lobe-browser']).toBe(true);
+    // A local target that cannot reach a machine keeps it off either way.
+    expect(
+      resolveToolRules(
+        request({
+          agent: { chatConfig: { skillActivateMode: 'manual' }, plugins: [] },
+          executionTarget: 'local',
+        }),
+      ).rules['lobe-browser'],
+    ).toBe(false);
 
     const disabledLocal = resolveToolRules(
       request({ disableLocalSystem: true, executionTarget: 'local', localExecutionReady: true }),

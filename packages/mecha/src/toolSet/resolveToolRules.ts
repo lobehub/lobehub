@@ -49,6 +49,13 @@ export const resolveToolRules = (request: ToolRuleRequest): ResolvedToolRules =>
   const { agent, device, deviceAccess, executionTarget, model } = request;
   const pinnedPluginIds = agent.plugins ?? [];
   const toolMode = resolveToolMode(agent.chatConfig);
+  // Manual skill activation drops the activator (`lobe-activator`) from the
+  // default tools, so nothing can turn a merely-discoverable tool on mid-run.
+  // A tool the UI also refuses to pin (`runtimeManagedToolIds` are hidden from
+  // the Tools popover) must therefore stay resident, or the user silently
+  // loses the capability with no way back.
+  const activatorAvailable =
+    toolMode === 'agent' && agent.chatConfig?.skillActivateMode !== 'manual';
   const runtimeMode = executionTargetToRuntimeMode(executionTarget);
   // Device tools only exist for device-capable targets: `none` means no
   // device, and `sandbox` and devices are mutually exclusive.
@@ -101,9 +108,21 @@ export const resolveToolRules = (request: ToolRuleRequest): ResolvedToolRules =>
       runtimeMode === 'cloud' || executionTarget === 'auto' || !!request.pageScope,
     [KnowledgeBaseManifest.identifier]: kbEnabled,
     [LocalSystemManifest.identifier]: localToolsEnabled,
-    // The in-app browser drives the same machine as local-system.
-    [BrowserManifest.identifier]: runtimeMode === 'local' && request.localExecutionReady,
-    [MemoryManifest.identifier]: memoryEnabled,
+    // The in-app browser drives the same machine as local-system, but unlike
+    // local-system it is not resident: unless pinned it stays discoverable and
+    // the activator enables it when a task needs it, so ordinary turns do not
+    // carry its manifest. Without an activator (manual skill activation) there
+    // is nothing to enable it later, so it stays resident there.
+    [BrowserManifest.identifier]:
+      runtimeMode === 'local' &&
+      !!request.localExecutionReady &&
+      (!activatorAvailable || pinnedPluginIds.includes(BrowserManifest.identifier)),
+    // Memory follows the same Pinned/Auto split: `memory.enabled` decides
+    // whether the capability exists at all, the pin decides whether its
+    // (large) manifest rides every turn or waits for the activator. Without
+    // an activator the popover's "Auto" would otherwise mean "never loaded".
+    [MemoryManifest.identifier]:
+      memoryEnabled && (!activatorAvailable || pinnedPluginIds.includes(MemoryManifest.identifier)),
     ...(request.isBotConversation && { [MessageManifest.identifier]: true }),
     ...(request.isGroupSupervisor && enableAll(groupSupervisorToolIds)),
     // The device picker: only for device-capable targets behind a gateway,

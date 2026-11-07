@@ -83,11 +83,17 @@ afterEach(async () => {
   inMemoryStreamEventManager.clear();
 });
 
-const createTestAgent = async (chatConfig: Record<string, any> = {}) => {
+// Memory is discoverable rather than resident unless pinned, so these priority
+// cases pin it to observe the enabled state in the first request's tools.
+const createTestAgent = async (
+  chatConfig: Record<string, any> = {},
+  plugins: string[] = ['lobe-user-memory'],
+) => {
   const [agent] = await serverDB
     .insert(agents)
     .values({
       chatConfig: chatConfig as any,
+      plugins,
       model: 'gpt-5-pro',
       provider: 'openai',
       systemRole: 'test',
@@ -144,5 +150,17 @@ describe('execAgent - memory enabled priority', () => {
 
     const callArgs = mockResponsesCreate.mock.calls[0][0] as { tools?: any[] };
     expect(hasMemoryTools(callArgs.tools ?? [])).toBe(true);
+  });
+
+  it('should keep enabled memory out of the first request unless pinned', async () => {
+    await setUserMemorySettings(true);
+    const agent = await createTestAgent({}, []);
+
+    const caller = aiAgentRouter.createCaller(createTestContext());
+    const result = await caller.execAgent({ agentId: agent.id, prompt: 'Hello' });
+    await waitForOperationComplete(inMemoryAgentStateManager, result.operationId);
+
+    const callArgs = mockResponsesCreate.mock.calls[0][0] as { tools?: any[] };
+    expect(hasMemoryTools(callArgs.tools ?? [])).toBe(false);
   });
 });
