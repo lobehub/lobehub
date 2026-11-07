@@ -165,6 +165,24 @@ describe('AgentInboxModel.claimDigest', () => {
   });
 });
 
+describe('AgentInboxModel.releaseWakes', () => {
+  it('gives every claim back in one go, so the next digest can take the items again', async () => {
+    const items = await Promise.all(['r1', 'r2'].map((id, i) => deliver(id, i + 1)));
+    const since = new Date(Date.now() - 24 * 60 * 60_000);
+    const claimed = await AgentInboxModel.claimDigest(serverDB, { accountId, limit: 10, since });
+    expect(claimed).toHaveLength(2);
+
+    await AgentInboxModel.releaseWakes(serverDB, claimed);
+
+    expect(
+      (await serverDB.select().from(agentInboxMessages)).map((row) => row.wakeClaimedAt),
+    ).toEqual([null, null]);
+    expect(
+      (await AgentInboxModel.claimDigest(serverDB, { accountId, limit: 10, since })).sort(),
+    ).toEqual(items.map((item) => item.id).sort());
+  });
+});
+
 describe('AgentInboxModel.markManyWoken', () => {
   it('marks every item read and remembers the topic, keeping an earlier read time', async () => {
     const earlier = await deliver('earlier', 9);

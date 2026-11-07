@@ -369,6 +369,16 @@ export class AgentInboxModel {
       .orderBy(asc(agentInboxMessages.receivedAt));
   };
 
+  /** {@link releaseWake} for every item of a digest run that did not start, in one statement. */
+  static releaseWakes = async (db: LobeChatDatabase, ids: string[]): Promise<void> => {
+    if (ids.length === 0) return;
+
+    await db
+      .update(agentInboxMessages)
+      .set({ wakeClaimedAt: null })
+      .where(inArray(agentInboxMessages.id, ids));
+  };
+
   /** {@link markWoken} for every item of one digest run, in one statement. */
   static markManyWoken = async (
     db: LobeChatDatabase,

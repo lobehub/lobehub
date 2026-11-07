@@ -160,7 +160,7 @@ export const runDigestFlush = async (
       account.id,
       error,
     );
-    await Promise.all(ids.map((id) => AgentInboxModel.releaseWake(db, id))).catch(() => undefined);
+    await AgentInboxModel.releaseWakes(db, ids).catch(() => undefined);
     // The window after this flush's own, even when QStash delivered it early.
     await holdForDigest(account, config, Math.max(Date.now(), payload.at)).catch((bookError) =>
       console.error('[mailDigest] booking the next flush for %s failed:', account.id, bookError),
