@@ -39,7 +39,12 @@ const ReasoningTokenSlider32k = memo<ReasoningTokenSlider32kProps>(
     });
 
     const options = useMemo(
-      () => MARK_TOKENS.map((token, index) => ({ label: `${token}k`, value: index })),
+      () =>
+        MARK_TOKENS.map((token, index) => ({
+          label: `${token}k`,
+          style: { overflowWrap: 'normal' as const, whiteSpace: 'nowrap' as const },
+          value: index,
+        })),
       [],
     );
 
