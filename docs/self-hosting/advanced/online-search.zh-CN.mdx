@@ -43,6 +43,7 @@ CRAWLER_IMPLS="naive,search1api"
 | `jina`        | 使用 [Jina AI](https://jina.ai/) 的爬虫服务，支持快速提取摘要信息。                                           | `JINA_READER_API_KEY`                                                       |
 | `naive`       | 内置简易通用爬虫，适用于标准网页结构。                                                                        |                                                                             |
 | `search1api`  | 利用 [Search1API](https://www.search1api.com) 提供的页面抓取能力，适合结构化内容提取。                           | `SEARCH1API_API_KEY` `SEARCH1API_CRAWL_API_KEY` `SEARCH1API_SEARCH_API_KEY` |
+| `specstream`  | [SpecStream](https://specstream.ai/extract-api) 提供的网页读取 API，以 Markdown 返回页面正文。        | `SPECSTREAM_API_KEY`                                                        |
 | `tavily`      | 使用 [Tavily](https://www.tavily.com/) 的网页抓取与摘要 API。                                         | `TAVILY_API_KEY`                                                            |
 
 > 💡 设置多个爬虫可提升成功率，系统将根据优先级尝试不同爬虫。
@@ -107,6 +108,7 @@ SEARCH_PROVIDERS="searxng"
 | `kagi`       | [Kagi](https://kagi.com/) 提供的高级搜索 API，需订阅 Key。                                         | `KAGI_API_KEY`                                                              |
 | `search1api` | 使用 [Search1API](https://www.search1api.com) 聚合搜索能力。                                    | `SEARCH1API_API_KEY` `SEARCH1API_CRAWL_API_KEY` `SEARCH1API_SEARCH_API_KEY` |
 | `searxng`    | 使用自托管或公共 [SearXNG](https://searx.space/) 实例。                                           | `SEARXNG_URL`                                                               |
+| `specstream` | [SpecStream](https://specstream.ai/search-api) 提供的搜索 API，返回排序后的结果及每个页面的正文。   | `SPECSTREAM_API_KEY`                                                        |
 | `tavily`     | [Tavily](https://www.tavily.com/)，快速网页摘要与答案返回。                                         | `TAVILY_API_KEY`                                                            |
 
 > ⚠️ 某些搜索提供商需要单独申请 API Key，并在 `.env` 中配置相关凭证。
@@ -168,6 +170,18 @@ DEEPSEEK_SEARCH_API_KEY=sk-xxxxxx
 ```
 
 > 💰 搜索与抓取由 DeepSeek 按成功请求次数单独计费，与模型 token 费用分开。
+
+---
+
+## `SPECSTREAM_API_KEY`
+
+[SpecStream](https://specstream.ai) 搜索（`SEARCH_PROVIDERS=specstream`）与读取（`CRAWLER_IMPLS=specstream`）API 使用的密钥。
+
+```env
+SPECSTREAM_API_KEY=your-specstream-key
+```
+
+> 💰 SpecStream 按次计费搜索，按页计费读取；没有正文的页面不计费。价格见 [Search API](https://specstream.ai/search-api) 与 [Extract API](https://specstream.ai/extract-api) 页面。
 
 ---
 
