@@ -72,6 +72,30 @@ describe('resource manager store actions', () => {
     expect(useResourceManagerStore.getState().listVisibility).toBe('private');
   });
 
+  it('should record which workspace the in-memory space belongs to', () => {
+    expect(useResourceManagerStore.getState().listVisibilityWorkspaceId).toBeUndefined();
+
+    // Hydrating to the value already in memory still marks it as hydrated.
+    useResourceManagerStore.getState().hydrateListVisibility('workspace-1');
+    expect(useResourceManagerStore.getState().listVisibilityWorkspaceId).toBe('workspace-1');
+
+    useResourceManagerStore.getState().setListVisibility('private', 'workspace-2');
+    expect(useResourceManagerStore.getState()).toMatchObject({
+      listVisibility: 'private',
+      listVisibilityWorkspaceId: 'workspace-2',
+    });
+  });
+
+  it('should persist an explicit pick that equals the unhydrated in-memory default', () => {
+    // Fresh load outside /resource: memory holds 'workspace', storage holds 'private'.
+    window.localStorage.setItem('lobehub:resource-mode:workspace-1', 'private');
+
+    useResourceManagerStore.getState().setListVisibility('workspace', 'workspace-1');
+    useResourceManagerStore.getState().hydrateListVisibility('workspace-1');
+
+    expect(useResourceManagerStore.getState().listVisibility).toBe('workspace');
+  });
+
   it('should drop the previous source rows when the source filter changes', () => {
     // Regression: the pick used to update ResourceManager state only, leaving
     // the previous source's rows on screen and interactive until the fetch
