@@ -4,7 +4,8 @@
  * gate, feature gate, parallel reads) do not reach: the disabled-tools short
  * circuit, client function tools, connector permission patching, the
  * ownership note, turn-scoped builtins, device routing and the fixed-device
- * failure, group-supervisor authorization, and the credential snapshot.
+ * failure, group-supervisor authorization, the credential snapshot, and the
+ * oversized-file flag for knowledge files.
  */
 import { LobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
 import { MessageToolIdentifier } from '@lobechat/builtin-tool-message';
@@ -551,5 +552,30 @@ describe('discoverTools — credential snapshot', () => {
 
     expect(result.credentialFactsPromise).toBeUndefined();
     expect(credsList).not.toHaveBeenCalled();
+  });
+});
+
+describe('discoverTools — oversized knowledge files', () => {
+  // The context builder parses an unparsed knowledge file on demand, after discovery, so its
+  // length is unknown here; counting it as possibly oversized keeps the attachments tool
+  // available on the turn whose preview may be cut.
+  const knowledgeFile = (content: string | null) => ({
+    content,
+    enabled: true,
+    fileType: 'application/pdf',
+    id: 'file-1',
+    name: 'spec.pdf',
+  });
+
+  it('counts an enabled knowledge file that is still unparsed as possibly oversized', async () => {
+    await run({ agentConfig: { files: [knowledgeFile(null)] } }).promise;
+
+    expect(lastEngineOptions().hasOversizedFiles).toBe(true);
+  });
+
+  it('does not count a parsed knowledge file under the inline limit', async () => {
+    await run({ agentConfig: { files: [knowledgeFile('short')] } }).promise;
+
+    expect(lastEngineOptions().hasOversizedFiles).toBe(false);
   });
 });
