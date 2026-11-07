@@ -543,7 +543,13 @@ export class LocalSystemExecutionRuntime extends ComputerRuntime {
 
       case 'writeLocalFile': {
         return {
-          result: { bytesWritten: raw.bytesWritten, success: raw.success },
+          // Surface raw.error so a failed write reaches the model as its real
+          // reason ("ENOENT … mkdir 'C:\Users\<other account>'") rather than
+          // "[UNKNOWN_EXEC_ERROR] Tool execution failed", which hid that the
+          // device was now running under a different OS account. Mirrors
+          // editLocalFile below.
+          error: raw.error ? { message: String(raw.error) } : undefined,
+          result: { bytesWritten: raw.bytesWritten, error: raw.error, success: raw.success },
           success: raw.success ?? true,
         };
       }

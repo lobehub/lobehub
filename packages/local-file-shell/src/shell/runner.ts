@@ -5,6 +5,7 @@ import path from 'node:path';
 
 import type { SandboxPolicy } from '@lobechat/device-sandbox';
 
+import { describeDeviceHost } from '../deviceHost';
 import type { RunCommandParams, RunCommandResult } from '../types';
 import type { ShellBackend, ShellOutputFiles } from './backend';
 import { ChildProcessBackend } from './child-process-backend';
@@ -109,8 +110,8 @@ const resolveWorkingDirectory = async (
 
   const reason =
     usable === false
-      ? `Working directory is not a directory on ${os.hostname()}: ${requestedCwd}`
-      : `Working directory does not exist on ${os.hostname()}: ${requestedCwd}`;
+      ? `Working directory is not a directory on ${describeDeviceHost()}: ${requestedCwd}`
+      : `Working directory does not exist on ${describeDeviceHost()}: ${requestedCwd}`;
 
   if (sandboxRequested) {
     return {
