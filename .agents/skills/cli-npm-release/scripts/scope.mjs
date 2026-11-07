@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
 export function collectScope(root, baseline) {
-  if (!/^[\da-f]{40}$/.test(baseline)) throw new Error('Use the verified full baseline SHA');
+  if (!/^[\da-f]{40}$/.test(baseline)) throw new Error('Use the full comparison SHA');
   const git = (...args) =>
     execFileSync('git', args, { cwd: root, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 });
   git('merge-base', '--is-ancestor', baseline, 'HEAD');
@@ -70,6 +70,6 @@ export function collectScope(root, baseline) {
     changed,
     existingChanged: changed.filter((file) => existsSync(path.join(root, file))),
     dirty: git('status', '--short', '--', ...scope).trim(),
-    note: 'Conservative manifest dependency closure across baseline and candidate, not proof of bundled reachability. Review imports, build scripts, deleted files and backend contracts before marking scope PASS.',
+    note: 'Conservative manifest dependency closure across baseline and candidate, not proof of bundled reachability or published-package provenance. Review imports, build scripts, deleted files and backend contracts before marking scope PASS.',
   };
 }
