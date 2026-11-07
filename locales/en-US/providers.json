@@ -69,6 +69,7 @@
   "streamlake.description": "StreamLake is an enterprise-level model service and AI computing cloud platform, integrating high-performance model inference, low-cost model customization, and fully-managed services to help enterprises focus on AI application innovation without worrying about the complexity and cost of underlying computing resources.",
   "supergrok.description": "Access Grok models with your SuperGrok or X Premium subscription, no API key required.",
   "taichu.description": "A next-generation multimodal model from CASIA and the Wuhan Institute of AI, supporting multi-turn QA, writing, image generation, 3D understanding, and signal analysis with stronger cognition and creativity.",
+  "teapot-router.description": "Teapot Router is a dual-protocol API gateway for coding agents: one key serves both the Anthropic protocol (Claude Code) and the OpenAI protocol (/v1).",
   "tencentcloud.description": "LLM Knowledge Engine Atomic Power provides end-to-end knowledge QA for enterprises and developers, with modular services like document parsing, chunking, embeddings, and multi-turn rewriting to assemble custom AI solutions.",
   "togetherai.description": "Together AI delivers leading performance with innovative models, broad customization, rapid scaling, and straightforward deployment for enterprise needs.",
   "typesafe.description": "TypeSafe provides System One models that answer typed questions with calibrated probabilities for reliable application decisions.",
