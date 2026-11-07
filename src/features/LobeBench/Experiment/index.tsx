@@ -75,7 +75,7 @@ import {
   useRunResultsMap,
 } from '@/features/LobeBench/useLobeBench';
 
-import { heatStyle } from './heatStyle';
+import { HeatTable } from './HeatTable';
 import { LaunchPage } from './LaunchPage';
 import { useExperimentViewState } from './useExperimentViewState';
 
@@ -95,7 +95,11 @@ const styles = stylex.create({
     gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
     gap: 12,
   },
-  mono: { fontFamily: cssVar.fontFamilyCode, fontVariantNumeric: 'tabular-nums' },
+  mono: {
+    fontFamily: cssVar.fontFamilyCode,
+    fontVariantNumeric: 'tabular-nums',
+    whiteSpace: 'nowrap',
+  },
   grid: { display: 'grid', columnGap: 8, rowGap: 2, alignItems: 'center' },
   head: {
     paddingBlock: 6,
@@ -104,15 +108,6 @@ const styles = stylex.create({
     color: cssVar.colorTextSecondary,
   },
   cell: { paddingBlock: 8, paddingInline: 8, borderRadius: cssVar.borderRadius },
-  heat: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 36,
-    borderRadius: cssVar.borderRadius,
-    fontFamily: cssVar.fontFamilyCode,
-    fontSize: 12,
-  },
 });
 
 type Tab = 'cases' | 'results' | 'setup';
@@ -717,10 +712,14 @@ const ExperimentDashboard = memo(() => {
                 className={stylex.props(styles.grid).className}
                 style={{
                   minWidth: 640,
-                  gridTemplateColumns: '28px minmax(0, 1fr) 90px 80px 110px 150px',
+                  // Until every attempt is graded there is no rank, so the first
+                  // column says where each contender stands instead.
+                  gridTemplateColumns: `${incomplete ? 'max-content' : '28px'} minmax(0, 1fr) 90px 80px 110px max-content`,
                 }}
               >
-                <span className={stylex.props(styles.head).className}>#</span>
+                <span className={stylex.props(styles.head).className}>
+                  {incomplete ? t('table.columns.status') : '#'}
+                </span>
                 <span className={stylex.props(styles.head).className}>
                   {t('lobeBench.dashboard.col.contender')}
                 </span>
@@ -746,14 +745,32 @@ const ExperimentDashboard = memo(() => {
                   const progress = progressOf(contender);
                   const run = runOf(contender);
                   const hasGap = run?.status !== 'completed' || !progress?.complete;
+                  const running = !!run && isRunActive(run.status);
                   return [
-                    <span
-                      className={stylex.props(styles.cell, styles.mono).className}
-                      key={`${contender.id}-rank`}
-                      style={{ color: cssVar.colorTextQuaternary }}
-                    >
-                      {incomplete ? '—' : index + 1}
-                    </span>,
+                    incomplete ? (
+                      <span
+                        className={stylex.props(styles.cell).className}
+                        key={`${contender.id}-rank`}
+                      >
+                        <Tag color={running ? 'processing' : hasGap ? 'warning' : 'success'}>
+                          {t(
+                            running
+                              ? 'lobeBench.overview.running'
+                              : hasGap
+                                ? 'lobeBench.dashboard.statusIncomplete'
+                                : 'lobeBench.status.done',
+                          )}
+                        </Tag>
+                      </span>
+                    ) : (
+                      <span
+                        className={stylex.props(styles.cell, styles.mono).className}
+                        key={`${contender.id}-rank`}
+                        style={{ color: cssVar.colorTextSecondary }}
+                      >
+                        {index + 1}
+                      </span>
+                    ),
                     <Flexbox
                       className={stylex.props(styles.cell).className}
                       gap={2}
@@ -768,12 +785,6 @@ const ExperimentDashboard = memo(() => {
                           <Tag color={'warning'}>
                             {t('lobeBench.dashboard.col.errors', { count: s.errors })}
                           </Tag>
-                        )}
-                        {hasGap && (
-                          <Tag color={'warning'}>{t('lobeBench.dashboard.statusIncomplete')}</Tag>
-                        )}
-                        {run && isRunActive(run.status) && (
-                          <Tag color={'processing'}>{t('lobeBench.overview.running')}</Tag>
                         )}
                       </Flexbox>
                       <Text fontSize={12} type={'secondary'}>
@@ -822,129 +833,34 @@ const ExperimentDashboard = memo(() => {
           </Block>
 
           {categories.length > 0 && (
-            <Block
-              className={stylex.props(styles.tableScroll).className}
-              padding={12}
-              variant={'outlined'}
-            >
-              <Flexbox gap={8}>
-                <Flexbox gap={2}>
-                  <Text weight={600}>{t('lobeBench.dashboard.byCategory')}</Text>
-                  <Text fontSize={12} type={'secondary'}>
-                    {t('lobeBench.dashboard.byCategory.hint')}
-                  </Text>
-                </Flexbox>
-                <div
-                  className={stylex.props(styles.grid).className}
-                  style={{
-                    gridTemplateColumns: `minmax(140px, 1fr) ${ranked.map(() => 'minmax(90px, 1fr)').join(' ')}`,
-                    minWidth: Math.max(380, 160 + ranked.length * 120),
-                  }}
-                >
-                  <span />
-                  {ranked.map((c) => (
-                    <Text
-                      ellipsis
-                      className={stylex.props(styles.head).className}
-                      key={c.id}
-                      style={{ textAlign: 'center' }}
-                    >
-                      {c.name.split(' · ')[0]}
-                    </Text>
-                  ))}
-                  {categories.map((cat) => [
-                    <Text
-                      ellipsis
-                      className={stylex.props(styles.cell).className}
-                      fontSize={13}
-                      key={`${cat}-label`}
-                    >
-                      {cat}
-                    </Text>,
-                    ...ranked.map((c) => {
-                      const rate = categoryRate(c, cat);
-                      return (
-                        <div
-                          className={stylex.props(styles.heat).className}
-                          key={`${cat}-${c.id}`}
-                          style={{ cursor: 'pointer', ...heatStyle(rate) }}
-                          onClick={() => {
-                            setCategory(cat);
-                            setFilter('all');
-                            setTab('cases');
-                          }}
-                        >
-                          {rate === undefined ? '—' : formatPercent(rate)}
-                        </div>
-                      );
-                    }),
-                  ])}
-                </div>
-              </Flexbox>
-            </Block>
+            <HeatTable
+              contenders={ranked}
+              hint={t('lobeBench.dashboard.byCategory.hint')}
+              label={(cat) => cat}
+              rate={categoryRate}
+              rows={categories}
+              title={t('lobeBench.dashboard.byCategory')}
+              onSelect={(cat) => {
+                setCategory(cat);
+                setFilter('all');
+                setTab('cases');
+              }}
+            />
           )}
-
           {levels.length > 0 && (
-            <Block
-              className={stylex.props(styles.tableScroll).className}
-              padding={12}
-              variant={'outlined'}
-            >
-              <Flexbox gap={8}>
-                <Flexbox gap={2}>
-                  <Text weight={600}>{t('lobeBench.dashboard.byLevel')}</Text>
-                  <Text fontSize={12} type={'secondary'}>
-                    {t('lobeBench.dashboard.byLevel.hint')}
-                  </Text>
-                </Flexbox>
-                <div
-                  className={stylex.props(styles.grid).className}
-                  style={{
-                    gridTemplateColumns: `minmax(140px, 1fr) ${ranked.map(() => 'minmax(90px, 1fr)').join(' ')}`,
-                    minWidth: Math.max(380, 160 + ranked.length * 120),
-                  }}
-                >
-                  <span />
-                  {ranked.map((c) => (
-                    <Text
-                      ellipsis
-                      className={stylex.props(styles.head).className}
-                      key={c.id}
-                      style={{ textAlign: 'center' }}
-                    >
-                      {c.name.split(' · ')[0]}
-                    </Text>
-                  ))}
-                  {levels.map((item) => [
-                    <Text
-                      ellipsis
-                      className={stylex.props(styles.cell).className}
-                      fontSize={13}
-                      key={`${item}-label`}
-                    >
-                      {t(levelLabelKey(item))}
-                    </Text>,
-                    ...ranked.map((c) => {
-                      const rate = levelRate(c, item);
-                      return (
-                        <div
-                          className={stylex.props(styles.heat).className}
-                          key={`${item}-${c.id}`}
-                          style={{ cursor: 'pointer', ...heatStyle(rate) }}
-                          onClick={() => {
-                            setLevel(item);
-                            setFilter('all');
-                            setTab('cases');
-                          }}
-                        >
-                          {rate === undefined ? '—' : formatPercent(rate)}
-                        </div>
-                      );
-                    }),
-                  ])}
-                </div>
-              </Flexbox>
-            </Block>
+            <HeatTable
+              contenders={ranked}
+              hint={t('lobeBench.dashboard.byLevel.hint')}
+              label={(item) => t(levelLabelKey(item))}
+              rate={levelRate}
+              rows={levels}
+              title={t('lobeBench.dashboard.byLevel')}
+              onSelect={(item) => {
+                setLevel(item);
+                setFilter('all');
+                setTab('cases');
+              }}
+            />
           )}
           <RunsSection
             benchmarkId={benchmarkId}

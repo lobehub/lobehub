@@ -6,7 +6,7 @@ import {
   ActionIcon,
   Button,
   confirmModal,
-  copyToClipboard,
+  CopyButton,
   createStaticStyles,
   cssVar,
   Flexbox,
@@ -15,16 +15,7 @@ import {
   Tag,
   toast,
 } from '@lobehub/ui';
-import {
-  ArrowLeft,
-  ChevronDown,
-  ChevronUp,
-  Copy,
-  Pencil,
-  Play,
-  Square,
-  Trash2,
-} from 'lucide-react';
+import { ArrowLeft, ChevronDown, ChevronUp, Pencil, Play, Square, Trash2 } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -141,26 +132,20 @@ const styles = createStaticStyles(({ css }) => ({
 
     &:hover {
       color: ${cssVar.colorPrimary};
+      text-decoration: underline;
     }
   `,
-  headerBand: css`
-    padding: 20px;
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorFillQuaternary};
-  `,
+  // Meta values are plain, selectable text; identifiers carry their own copy button.
   metaItem: css`
     display: inline-flex;
     gap: 6px;
     align-items: center;
 
-    padding-block: 4px;
-    padding-inline: 10px;
-    border-radius: ${cssVar.borderRadiusSM};
+    min-width: 0;
 
     font-size: ${cssVar.fontSize};
     color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillTertiary};
+    white-space: nowrap;
   `,
   metaLabel: css`
     font-size: ${cssVar.fontSizeSM};
@@ -168,6 +153,10 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   metaRow: css`
     flex-wrap: wrap;
+    row-gap: 4px;
+  `,
+  metaSeparator: css`
+    color: ${cssVar.colorTextQuaternary};
   `,
   modelText: css`
     font-family: ${cssVar.fontFamilyCode};
@@ -261,15 +250,6 @@ const RunHeader = memo<RunHeaderProps>(({ run, benchmarkId, hideStart }) => {
       );
     }
   };
-  const handleCopyRunId = async () => {
-    try {
-      await copyToClipboard(run.id);
-      toast.success(t('run.detail.copyRunIdSuccess'));
-    } catch {
-      toast.error(t('run.detail.copyRunIdFailed'));
-    }
-  };
-
   const formatDate = (date?: Date | string) => {
     if (!date) return '';
     const d = date instanceof Date ? date : new Date(date);
@@ -286,75 +266,14 @@ const RunHeader = memo<RunHeaderProps>(({ run, benchmarkId, hideStart }) => {
           : t('run.detail.backToBenchmark')}
       </WorkspaceLink>
 
-      {/* Header band — results-led: run name + status prominent, meta as a quiet stat row */}
-      <Flexbox className={styles.headerBand} gap={16}>
-        {/* Title row */}
-        <Flexbox horizontal align="flex-start" gap={16} justify="space-between">
-          <Flexbox gap={10} style={{ minWidth: 0 }}>
-            <Flexbox horizontal align="center" gap={12}>
-              <h1 className={styles.runName}>{run.name || run.id.slice(0, 8)}</h1>
-              <StatusBadge status={run.status} />
-              <ActionIcon
-                icon={Copy}
-                size="small"
-                title={t('run.detail.copyRunId')}
-                onClick={handleCopyRunId}
-              />
-            </Flexbox>
-            {/* Meta info — quiet stat chips */}
-            <Flexbox horizontal align="center" className={styles.metaRow} gap={8}>
-              {run.dataset && (
-                <WorkspaceLink
-                  className={styles.datasetLink}
-                  target="_blank"
-                  to={`/eval/bench/${benchmarkId}/datasets/${run.dataset.id}`}
-                >
-                  <span className={styles.metaItem}>{run.dataset.name}</span>
-                </WorkspaceLink>
-              )}
-              {run.targetAgentId && (
-                <Flexbox
-                  horizontal
-                  align="center"
-                  className={styles.agentLink}
-                  role={'button'}
-                  tabIndex={0}
-                  onClick={handleOpenAgent}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      handleOpenAgent();
-                    }
-                  }}
-                >
-                  <span className={styles.metaItem}>
-                    <AgentAvatar
-                      agentId={run.targetAgentId}
-                      avatar={agentAvatar}
-                      name={agentTitle}
-                      shape={'circle'}
-                      size={16}
-                    />
-                    {agentTitle}
-                  </span>
-                </Flexbox>
-              )}
-              {agentModel && (
-                <span className={styles.metaItem}>
-                  <span className={styles.modelText}>
-                    {agentProvider ? `${agentProvider} / ` : ''}
-                    {agentModel}
-                  </span>
-                </span>
-              )}
-              {run.createdAt && (
-                <span className={styles.metaItem}>
-                  <span className={styles.metaLabel}>{formatDate(run.createdAt)}</span>
-                </span>
-              )}
-            </Flexbox>
+      {/* Header — results-led: run name + status with the actions on the same row,
+          meta as one quiet line of plain text */}
+      <Flexbox gap={10}>
+        <Flexbox horizontal align="center" gap={16} justify="space-between">
+          <Flexbox horizontal align="center" gap={12} style={{ minWidth: 0 }}>
+            <h1 className={styles.runName}>{run.name || run.id.slice(0, 8)}</h1>
+            <StatusBadge status={run.status} />
           </Flexbox>
-          {/* Actions */}
           <Flexbox horizontal align="center" gap={8} style={{ flexShrink: 0 }}>
             {canStart && !hideStart && (
               <Button
@@ -387,6 +306,80 @@ const RunHeader = memo<RunHeaderProps>(({ run, benchmarkId, hideStart }) => {
               onClick={handleDelete}
             />
           </Flexbox>
+        </Flexbox>
+        <Flexbox horizontal align="center" className={styles.metaRow} gap={8}>
+          {[
+            run.dataset && (
+              <span className={styles.metaItem} key="dataset">
+                <span className={styles.metaLabel}>{t('run.detail.dataset')}</span>
+                <WorkspaceLink
+                  className={styles.datasetLink}
+                  target="_blank"
+                  to={`/eval/bench/${benchmarkId}/datasets/${run.dataset.id}`}
+                >
+                  {run.dataset.name}
+                </WorkspaceLink>
+                <CopyButton
+                  content={run.dataset.name}
+                  size="small"
+                  title={t('run.detail.copyDatasetName')}
+                />
+              </span>
+            ),
+            run.targetAgentId && (
+              <span
+                className={`${styles.metaItem} ${styles.agentLink}`}
+                key="agent"
+                role={'button'}
+                tabIndex={0}
+                onClick={handleOpenAgent}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    handleOpenAgent();
+                  }
+                }}
+              >
+                <AgentAvatar
+                  agentId={run.targetAgentId}
+                  avatar={agentAvatar}
+                  name={agentTitle}
+                  shape={'circle'}
+                  size={16}
+                />
+                {agentTitle}
+              </span>
+            ),
+            agentModel && (
+              <span className={styles.metaItem} key="model">
+                <span className={styles.modelText}>
+                  {agentProvider ? `${agentProvider} / ` : ''}
+                  {agentModel}
+                </span>
+                <CopyButton content={agentModel} size="small" title={t('run.detail.copyModel')} />
+              </span>
+            ),
+            <span className={styles.metaItem} key="id">
+              <span className={styles.modelText}>{run.id}</span>
+              <CopyButton content={run.id} size="small" title={t('run.detail.copyRunId')} />
+            </span>,
+            run.createdAt && (
+              <span className={styles.metaItem} key="date">
+                {formatDate(run.createdAt)}
+              </span>
+            ),
+          ]
+            .filter(Boolean)
+            .flatMap((item, index) =>
+              index === 0
+                ? [item]
+                : [
+                    <span aria-hidden className={styles.metaSeparator} key={`sep-${index}`}>
+                      ·
+                    </span>,
+                    item,
+                  ],
+            )}
         </Flexbox>
 
         {/* Collapsible config */}

@@ -21,16 +21,31 @@ const styles = createStaticStyles(({ css }) => ({
     font-weight: 500;
     color: ${cssVar.colorTextSecondary};
   `,
+  legend: css`
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 12px;
+    justify-content: flex-end;
+  `,
   legendDot: css`
+    flex-shrink: 0;
     width: 8px;
     height: 8px;
     border-radius: 999px;
+  `,
+  // A narrow card moves a whole legend item to the next line; it never breaks a word.
+  legendItem: css`
+    display: inline-flex;
+    gap: 4px;
+    align-items: center;
+    white-space: nowrap;
   `,
   legendText: css`
     font-size: ${cssVar.fontSizeSM};
     color: ${cssVar.colorTextSecondary};
   `,
   totalCount: css`
+    flex-shrink: 0;
     padding-block: 1px;
     padding-inline: 8px;
     border-radius: ${cssVar.borderRadiusXS};
@@ -130,24 +145,28 @@ const BenchmarkCharts = memo<BenchmarkChartsProps>(({ results, benchmarkId, runI
 
       {/* Chart 2: Scatter Plot */}
       <Flexbox className={styles.chartCard} flex={2}>
-        <Flexbox horizontal justify={'space-between'} style={{ marginBlockEnd: 12 }}>
+        <Flexbox
+          horizontal
+          align={'flex-start'}
+          gap={12}
+          justify={'space-between'}
+          style={{ marginBlockEnd: 12 }}
+        >
           <span className={styles.chartTitle} style={{ marginBlockEnd: 0 }}>
             {t('run.chart.latencyTokenDistribution')}
           </span>
-          <Flexbox horizontal gap={12} style={{ fontSize: cssVar.fontSizeSM }}>
-            <Flexbox horizontal align={'center'} gap={4}>
-              <div className={styles.legendDot} style={{ background: theme.colorSuccess }} />
-              <span className={styles.legendText}>{t('run.chart.pass')}</span>
-            </Flexbox>
-            <Flexbox horizontal align={'center'} gap={4}>
-              <div className={styles.legendDot} style={{ background: theme.colorFill }} />
-              <span className={styles.legendText}>{t('run.chart.fail')}</span>
-            </Flexbox>
-            <Flexbox horizontal align={'center'} gap={4}>
-              <div className={styles.legendDot} style={{ background: theme.colorWarning }} />
-              <span className={styles.legendText}>{t('run.chart.error')}</span>
-            </Flexbox>
-          </Flexbox>
+          <div className={styles.legend}>
+            {[
+              { color: theme.colorSuccess, label: t('run.chart.pass') },
+              { color: theme.colorFill, label: t('run.chart.fail') },
+              { color: theme.colorWarning, label: t('run.chart.error') },
+            ].map((item) => (
+              <span className={styles.legendItem} key={item.label}>
+                <span className={styles.legendDot} style={{ background: item.color }} />
+                <span className={styles.legendText}>{item.label}</span>
+              </span>
+            ))}
+          </div>
         </Flexbox>
         <ScatterPlot benchmarkId={benchmarkId} results={results} runId={runId} />
       </Flexbox>

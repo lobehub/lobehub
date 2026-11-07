@@ -37,6 +37,13 @@ export interface AgentEvalDatasetConnectorRequirement {
   services: string[];
 }
 
+/**
+ * Most mock connections one dataset package may provision. A package names one
+ * connection per mock service, so a real benchmark needs a dozen or so; the cap
+ * keeps a malformed or hostile ZIP from creating thousands of stored credentials.
+ */
+export const DATASET_PACKAGE_MAX_CONNECTIONS = 100;
+
 /** Private packages may provision connections; installed IDs and ownership are never imported. */
 export interface AgentEvalDatasetPackage {
   cases: Array<{
@@ -53,6 +60,8 @@ export interface AgentEvalDatasetPackage {
       difficulty?: 'easy' | 'hard' | 'medium';
       index?: number;
       tags?: string[];
+      /** Optional human-readable name for case lists; see `EvalTestCaseMetadata.title`. */
+      title?: string;
     };
     sortOrder?: number;
   }>;

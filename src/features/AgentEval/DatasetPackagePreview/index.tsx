@@ -1,13 +1,14 @@
 'use client';
 
-import type {
-  AgentEvalDatasetPackageBindings,
-  AgentEvalDatasetPackagePreview,
+import {
+  type AgentEvalDatasetPackageBindings,
+  type AgentEvalDatasetPackagePreview,
+  DATASET_PACKAGE_MAX_CONNECTIONS,
 } from '@lobechat/types';
-import { Accordion, Flexbox, Input, Tag, Text } from '@lobehub/ui';
+import { Accordion, Button, Flexbox, Input, Tag, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { useId } from 'react';
+import { useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ConnectorBindings } from '@/features/AgentEval/ConnectorBindings';
@@ -23,7 +24,11 @@ const styles = stylex.create({
     overflowWrap: 'anywhere',
   },
   samples: { maxHeight: 200, overflowY: 'auto' },
+  connections: { maxHeight: 240, overflowY: 'auto' },
 });
+
+/** Connections listed before "Show all"; the rest stay one click away. */
+const CONNECTIONS_PREVIEW = 5;
 
 interface DatasetPackagePreviewProps {
   bindings: AgentEvalDatasetPackageBindings;
@@ -51,6 +56,12 @@ export const DatasetPackagePreview = ({
 }: DatasetPackagePreviewProps) => {
   const { t } = useTranslation('eval');
   const id = useId();
+  const [showAllConnections, setShowAllConnections] = useState(false);
+  const connections = preview.embeddedConnections ?? [];
+  const shownConnections = showAllConnections
+    ? connections
+    : connections.slice(0, CONNECTIONS_PREVIEW);
+  const withCredentials = connections.filter((connection) => connection.authConfigured).length;
 
   return (
     <Flexbox gap={20}>
@@ -76,20 +87,53 @@ export const DatasetPackagePreview = ({
         )}
       </Flexbox>
 
-      {!!preview.embeddedConnections?.length && (
+      {connections.length > 0 && (
         <Flexbox gap={8}>
-          <Text weight={500}>{t('connections.included')}</Text>
+          <Text weight={500}>{t('connections.includedCount', { count: connections.length })}</Text>
           <Text fontSize={13} type="secondary">
-            {t('connections.autoImport')}
+            {t('connections.autoImport')}{' '}
+            {t('connections.includedSummary', {
+              count: connections.length,
+              max: DATASET_PACKAGE_MAX_CONNECTIONS,
+              withCredentials,
+            })}
           </Text>
-          {preview.embeddedConnections.map((connection) => (
-            <Flexbox horizontal gap={8} key={connection.key} wrap="wrap">
-              <Text>{connection.name}</Text>
-              <Tag>
-                {t(connection.authConfigured ? 'connections.authIncluded' : 'connections.noAuth')}
-              </Tag>
-            </Flexbox>
-          ))}
+          {/* However many the ZIP holds, the dialog lists a few and scrolls the rest. */}
+          <Flexbox
+            className={stylex.props(styles.connections).className}
+            gap={6}
+            id={`${id}-connections`}
+          >
+            {shownConnections.map((connection) => (
+              <Flexbox horizontal align="center" gap={8} key={connection.key}>
+                <Text ellipsis style={{ minWidth: 0 }}>
+                  {connection.name}
+                </Text>
+                <Tag style={{ flexShrink: 0 }}>
+                  {t(connection.authConfigured ? 'connections.authIncluded' : 'connections.noAuth')}
+                </Tag>
+              </Flexbox>
+            ))}
+          </Flexbox>
+          {connections.length > CONNECTIONS_PREVIEW && (
+            <Button
+              aria-controls={`${id}-connections`}
+              aria-expanded={showAllConnections}
+              size="small"
+              style={{ alignSelf: 'flex-start', paddingInline: 0 }}
+              type="link"
+              onClick={() => setShowAllConnections((value) => !value)}
+            >
+              {showAllConnections
+                ? t('connections.showFewer')
+                : t('connections.showAll', { count: connections.length })}
+            </Button>
+          )}
+          {!existingDataset && (
+            <Text fontSize={13} type="secondary">
+              {t('connections.undoImport')}
+            </Text>
+          )}
         </Flexbox>
       )}
       {preview.connectionRequirements.some((requirement) =>

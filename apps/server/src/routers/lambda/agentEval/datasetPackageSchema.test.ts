@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { DATASET_PACKAGE_MAX_CONNECTIONS } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
 import { validateDatasetPackage } from './datasetPackageSchema';
@@ -182,6 +183,37 @@ describe('dataset package schema', () => {
       expect(message).not.toContain('synthetic-private-token');
       expect(message).not.toContain(url);
     }
+  });
+
+  it('keeps an optional human-readable case title', () => {
+    const pack = example();
+    const titled = validateDatasetPackage({
+      ...pack,
+      cases: [{ ...pack.cases[0], metadata: { title: '  Greeting  ' } }],
+    });
+    expect(titled.cases[0].metadata?.title).toBe('Greeting');
+    expect(validateDatasetPackage(pack).cases[0].metadata?.title).toBeUndefined();
+  });
+
+  it('names the connection limit when a package provisions too many', () => {
+    const connections = (count: number) =>
+      Object.fromEntries(
+        Array.from({ length: count }, (_, index) => [
+          `mock${index}`,
+          { name: `Mock ${index}`, url: `https://mock.example/${index}/mcp` },
+        ]),
+      );
+    expect(
+      Object.keys(
+        validateDatasetPackage({
+          ...example(),
+          connections: connections(DATASET_PACKAGE_MAX_CONNECTIONS),
+        }).connections ?? {},
+      ),
+    ).toHaveLength(DATASET_PACKAGE_MAX_CONNECTIONS);
+    expect(() => validateDatasetPackage({ ...example(), connections: connections(1001) })).toThrow(
+      `at most ${DATASET_PACKAGE_MAX_CONNECTIONS} connections; this one has 1001`,
+    );
   });
 
   it('refuses a case that binds its own mock connection', () => {

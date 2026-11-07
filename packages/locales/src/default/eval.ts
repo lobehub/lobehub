@@ -431,6 +431,8 @@ export default {
   'run.detail.copyRunId': 'Copy Run ID',
   'run.detail.copyRunIdFailed': 'Failed to copy Run ID',
   'run.detail.copyRunIdSuccess': 'Run ID copied',
+  'run.detail.copyDatasetName': 'Copy dataset name',
+  'run.detail.copyModel': 'Copy model ID',
   'run.detail.dataset': 'Dataset',
   'run.detail.experiment': 'Experiment',
   'run.detail.model': 'Model',
@@ -454,6 +456,8 @@ export default {
   'run.metrics.passRate': 'Pass Rate',
   'run.metrics.passRate.short': 'pass rate',
   'run.metrics.perCase': '/ case',
+  'run.metrics.steps': 'Steps per case',
+  'run.metrics.stepsSplit': '{{llm}} LLM · {{tool}} tool / case',
   'run.metrics.tokens': 'Tokens',
   'run.metrics.totalDuration': 'Cumulative',
 
@@ -478,6 +482,7 @@ export default {
   'run.status.timeout': 'Timeout',
 
   'table.columns.avgCost': 'Avg Cost',
+  'table.columns.case': 'Case',
   'table.columns.category': 'Category',
   'table.columns.cost': 'Cost',
   'table.columns.totalCost': 'Total Cost',
@@ -519,6 +524,8 @@ export default {
   'testCase.create.success': 'Test case added successfully',
   'testCase.create.tags.label': 'Tags',
   'testCase.create.tags.placeholder': 'Comma-separated tags (optional)',
+  'testCase.create.caseTitle.label': 'Title',
+  'testCase.create.caseTitle.placeholder': 'Optional · shown in case lists instead of the input',
   'testCase.create.title': 'Add Test Case',
   'testCase.empty.description': 'Import or manually add test cases to this dataset',
   'testCase.empty.title': 'No test cases yet',
@@ -872,6 +879,7 @@ export default {
   'lobeBench.library.col.case': 'Case',
   'lobeBench.library.col.category': 'Category',
   'lobeBench.library.col.tools': 'Tools',
+  'lobeBench.library.showMore': 'Show {{count}} more ({{rest}} not shown)',
   'lobeBench.dashboard.insight.lowest': 'Lowest pass rate',
   'lobeBench.library.badge.broken': 'Possibly broken',
   'lobeBench.library.badge.easy': 'Low discrimination',
@@ -1152,7 +1160,10 @@ export default {
   'lobeBench.overview.attention.external': '{{count}} cases awaiting external grading',
   'caseDetail.judgeError.regradeHint':
     'The original answer is retained. Return to the experiment to re-grade it without running the model again.',
-  'connections.title': 'Mock MCP connections',
+  'connections.title': 'Mock service connections',
+  'connections.what':
+    'Cases in this dataset call mock versions of {{services}} instead of real accounts. Each service reaches its mock server through one of these connections.',
+  'connections.servicesMore': '{{services}} and {{count}} more',
   'connections.hint':
     'Choose a connection for each service. Each connection manages its own address and authentication. The same connection can serve several services.',
   'connections.environment': 'Environment',
@@ -1167,6 +1178,13 @@ export default {
   'connections.create': 'Create connection',
   'connections.refresh': 'Refresh connections',
   'connections.included': 'Connections included in this ZIP',
+  'connections.includedCount': 'Connections included in this ZIP ({{count}})',
+  'connections.includedSummary':
+    '{{withCredentials}} of {{count}} include access credentials. A package can include up to {{max}} connections.',
+  'connections.showAll': 'Show all {{count}}',
+  'connections.showFewer': 'Show fewer',
+  'connections.undoImport':
+    'Imported the wrong ZIP? Delete the new dataset: its cases and the connections imported with it, credentials included, are deleted with it.',
   'connections.autoImport':
     'These connections will be created and bound automatically when you import. You do not need to enter an address or token.',
   'connections.authIncluded': 'Access credentials included',

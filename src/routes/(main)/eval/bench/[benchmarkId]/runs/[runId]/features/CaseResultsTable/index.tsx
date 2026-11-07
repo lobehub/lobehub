@@ -13,13 +13,14 @@ import {
   Select,
   Table,
   type TableColumn,
-  Tag,
+  Text,
   Tooltip,
 } from '@lobehub/ui';
-import { Footprints, Play, RotateCcw, SearchIcon } from 'lucide-react';
+import { Play, RotateCcw, SearchIcon } from 'lucide-react';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { getCaseLabel } from '@/features/Eval/caseLabel';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import SegmentBar from '@/routes/(main)/eval/features/SegmentBar';
 
@@ -27,6 +28,8 @@ import { getResumeTarget } from '../resumeTarget';
 
 const styles = createStaticStyles(({ css }) => ({
   caseLink: css`
+    display: block;
+    min-width: 0;
     color: inherit;
     text-decoration: none;
 
@@ -38,6 +41,7 @@ const styles = createStaticStyles(({ css }) => ({
     font-family: ${cssVar.fontFamilyCode};
     font-size: ${cssVar.fontSizeSM};
     color: ${cssVar.colorTextTertiary};
+    white-space: nowrap;
   `,
   chip: css`
     cursor: pointer;
@@ -111,7 +115,9 @@ const styles = createStaticStyles(({ css }) => ({
   monoCell: css`
     font-family: ${cssVar.fontFamilyCode};
     font-size: ${cssVar.fontSizeSM};
-    color: ${cssVar.colorTextSecondary};
+    font-variant-numeric: tabular-nums;
+    color: ${cssVar.colorText};
+    white-space: nowrap;
   `,
   threadDot: css`
     display: inline-block;
@@ -134,6 +140,7 @@ interface CaseResultsTableProps {
 const badgeTextStyle = createStaticStyles(({ css, cssVar }) => ({
   text: css`
     color: ${cssVar.colorTextSecondary};
+    white-space: nowrap;
   `,
 }));
 
@@ -153,18 +160,30 @@ const StatusBadge = memo<{ record: any }>(({ record }) => {
   if (status === 'running')
     return <Badge status="processing" text={<BadgeText>{t('run.status.running')}</BadgeText>} />;
 
-  if (status === 'passed') return <Tag color="green">{t('table.filter.passed')}</Tag>;
+  // One shape for every status — a dot in the summary chips' colour and a label —
+  // so a column of mixed outcomes reads as one column.
+  if (status === 'passed')
+    return (
+      <Badge color={cssVar.colorSuccess} text={<BadgeText>{t('table.filter.passed')}</BadgeText>} />
+    );
 
-  if (status === 'failed') return <Tag color="red">{t('table.filter.failed')}</Tag>;
+  if (status === 'failed')
+    return (
+      <Badge color={cssVar.colorError} text={<BadgeText>{t('table.filter.failed')}</BadgeText>} />
+    );
 
   if (status === 'error') {
     const errorMsg = record.evalResult?.error;
-    const badge = <Badge color="orange" text={<BadgeText>{t('table.filter.error')}</BadgeText>} />;
+    const badge = (
+      <Badge color={cssVar.colorWarning} text={<BadgeText>{t('table.filter.error')}</BadgeText>} />
+    );
     return errorMsg ? <Tooltip title={errorMsg}>{badge}</Tooltip> : badge;
   }
 
   if (status === 'timeout')
-    return <Badge color="orange" text={<BadgeText>{t('run.status.timeout')}</BadgeText>} />;
+    return (
+      <Badge color={cssVar.colorWarning} text={<BadgeText>{t('run.status.timeout')}</BadgeText>} />
+    );
 
   if (status === 'external') {
     const badge = <Badge color="purple" text={<BadgeText>{t('run.status.external')}</BadgeText>} />;
@@ -239,12 +258,9 @@ const DurationCell = memo<{ ms: number }>(({ ms }) => {
   const min = Math.floor(sec / 60);
   const remSec = Math.floor(sec % 60);
   return (
-    <Flexbox gap={2}>
-      <span className={styles.monoCell}>
-        {min}m {remSec}s
-      </span>
-      <span className={styles.durationSub}>{sec.toFixed(1)}s</span>
-    </Flexbox>
+    <span className={styles.monoCell} title={`${sec.toFixed(1)}s`}>
+      {min}m {remSec}s
+    </span>
   );
 });
 
@@ -279,8 +295,11 @@ const CaseResultsTable = memo<CaseResultsTableProps>(
     const filteredResults = useMemo(() => {
       let filtered = results;
       if (searchText) {
-        filtered = filtered.filter((r: any) =>
-          r.testCase?.content?.input?.toLowerCase().includes(searchText.toLowerCase()),
+        const query = searchText.toLowerCase();
+        filtered = filtered.filter(
+          (r: any) =>
+            getCaseLabel(r.testCase).toLowerCase().includes(query) ||
+            r.testCase?.content?.input?.toLowerCase().includes(query),
         );
       }
       if (statusFilter !== 'all') {
@@ -356,16 +375,22 @@ const CaseResultsTable = memo<CaseResultsTableProps>(
           width: 48,
         },
         {
-          key: 'input',
-          render: (_: any, record: any) => (
-            <WorkspaceLink
-              className={styles.caseLink}
-              to={`/eval/bench/${benchmarkId}/runs/${runId}/cases/${record.testCaseId}`}
-            >
-              {record.testCase?.content?.input}
-            </WorkspaceLink>
-          ),
-          title: t('table.columns.input'),
+          // The case's declared title, else its input on one line; the full
+          // prompt or JSON payload lives on the case page.
+          ellipsis: true,
+          key: 'case',
+          render: (_: any, record: any) => {
+            const label = getCaseLabel(record.testCase);
+            return (
+              <WorkspaceLink
+                className={styles.caseLink}
+                to={`/eval/bench/${benchmarkId}/runs/${runId}/cases/${record.testCaseId}`}
+              >
+                <Text ellipsis={{ tooltip: label, tooltipWhenOverflow: true }}>{label}</Text>
+              </WorkspaceLink>
+            );
+          },
+          title: t('table.columns.case'),
         },
       ];
 
@@ -391,12 +416,7 @@ const CaseResultsTable = memo<CaseResultsTableProps>(
               if (!hasAtK && !hasAllK) return '-';
               return (
                 <Flexbox gap={2}>
-                  {hasAtK &&
-                    (passAtK ? (
-                      <Tag color="green">{t('table.filter.passed')}</Tag>
-                    ) : (
-                      <Tag color="red">{t('table.filter.failed')}</Tag>
-                    ))}
+                  {hasAtK && <StatusBadge record={{ status: passAtK ? 'passed' : 'failed' }} />}
                   {hasAllK && (
                     <span className={styles.durationSub}>
                       ^{k}: {passAllK ? t('table.filter.passed') : t('table.filter.failed')}
@@ -414,28 +434,12 @@ const CaseResultsTable = memo<CaseResultsTableProps>(
           key: 'status',
           render: (_: any, record: any) => <StatusBadge record={record} />,
           title: t('table.columns.status'),
-          width: 100,
+          width: 120,
         });
       }
 
+      // Steps and cost say what a case took; duration follows them.
       cols.push(
-        {
-          key: 'duration',
-          render: (_: any, record: any) => {
-            const duration = record.evalResult?.duration;
-            if (duration !== undefined && duration !== null) {
-              return <DurationCell ms={duration} />;
-            }
-            if (record.status === 'running' && record.createdAt) {
-              return <RunningTimer startTime={record.createdAt} />;
-            }
-            return '-';
-          },
-          sortDirections: ['descend', 'ascend'],
-          sorter: (a: any, b: any) => (a.evalResult?.duration ?? 0) - (b.evalResult?.duration ?? 0),
-          title: t('table.columns.duration'),
-          width: 100,
-        },
         {
           key: 'steps',
           render: (_: any, record: any) => {
@@ -449,13 +453,10 @@ const CaseResultsTable = memo<CaseResultsTableProps>(
             const hasDetail = llmCalls !== undefined || toolCalls !== undefined;
             return (
               <Flexbox gap={2}>
-                <Flexbox horizontal align="center" gap={4}>
-                  <Icon icon={Footprints} size={12} style={{ opacity: 0.5 }} />
-                  <span className={styles.monoCell}>{steps}</span>
-                </Flexbox>
+                <span className={styles.monoCell}>{steps}</span>
                 {hasDetail && (
                   <span className={styles.durationSub}>
-                    {llmCalls ?? 0} llm / {toolCalls ?? 0} tool
+                    {llmCalls ?? 0} llm · {toolCalls ?? 0} tool
                   </span>
                 )}
               </Flexbox>
@@ -464,7 +465,7 @@ const CaseResultsTable = memo<CaseResultsTableProps>(
           sortDirections: ['descend', 'ascend'],
           sorter: (a: any, b: any) => (a.evalResult?.steps ?? 0) - (b.evalResult?.steps ?? 0),
           title: t('table.columns.steps'),
-          width: 120,
+          width: 130,
         },
         {
           key: 'cost',
@@ -486,6 +487,23 @@ const CaseResultsTable = memo<CaseResultsTableProps>(
           sortDirections: ['descend', 'ascend'],
           sorter: (a: any, b: any) => (a.evalResult?.cost ?? 0) - (b.evalResult?.cost ?? 0),
           title: t('table.columns.cost'),
+          width: 120,
+        },
+        {
+          key: 'duration',
+          render: (_: any, record: any) => {
+            const duration = record.evalResult?.duration;
+            if (duration !== undefined && duration !== null) {
+              return <DurationCell ms={duration} />;
+            }
+            if (record.status === 'running' && record.createdAt) {
+              return <RunningTimer startTime={record.createdAt} />;
+            }
+            return '-';
+          },
+          sortDirections: ['descend', 'ascend'],
+          sorter: (a: any, b: any) => (a.evalResult?.duration ?? 0) - (b.evalResult?.duration ?? 0),
+          title: t('table.columns.duration'),
           width: 120,
         },
       );

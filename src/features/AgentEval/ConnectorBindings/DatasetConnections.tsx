@@ -123,6 +123,10 @@ export const DatasetConnections = ({
   if (!data) return null;
   // An older server may omit the field; treat it as a Dataset with no connector needs.
   const requirements = data.requirements ?? [];
+  // A dataset whose cases call no mock service has nothing to show here.
+  if (requirements.length === 0 && !connectors?.length) return null;
+  const services = [...new Set(requirements.flatMap((requirement) => requirement.services))];
+  const shownServices = services.slice(0, 4).join(', ');
   const missing =
     connectors &&
     requirements.reduce(
@@ -144,8 +148,21 @@ export const DatasetConnections = ({
     <Block padding={16} variant="outlined">
       <Flexbox gap={8}>
         <Flexbox horizontal align="center" gap={12} justify="space-between" wrap="wrap">
-          <Flexbox gap={4}>
+          <Flexbox gap={4} style={{ minWidth: 0 }}>
             <Text weight={600}>{t('connections.title')}</Text>
+            {services.length > 0 && (
+              <Text type="secondary">
+                {t('connections.what', {
+                  services:
+                    services.length > 4
+                      ? t('connections.servicesMore', {
+                          count: services.length - 4,
+                          services: shownServices,
+                        })
+                      : shownServices,
+                })}
+              </Text>
+            )}
             <Text type="secondary">
               {missing === undefined
                 ? t('connections.checking')

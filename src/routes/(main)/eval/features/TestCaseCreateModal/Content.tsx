@@ -68,6 +68,7 @@ const TestCaseCreateContent: FC<TestCaseCreateContentProps> = ({
         metadata: {
           ...(values.difficulty ? { difficulty: values.difficulty } : {}),
           ...(tags ? { tags } : {}),
+          ...(values.title?.trim() ? { title: values.title.trim() } : {}),
         },
       });
 
@@ -91,6 +92,9 @@ const TestCaseCreateContent: FC<TestCaseCreateContentProps> = ({
   return (
     <Form form={form} id={formId} layout="vertical">
       <div className={styles.sectionLabel}>{t('caseDetail.section.testCase')}</div>
+      <Form.Field label={t('testCase.create.caseTitle.label')} name="title">
+        <Input maxLength={200} placeholder={t('testCase.create.caseTitle.placeholder')} />
+      </Form.Field>
       <Form.Field required label={t('testCase.create.input.label')} name="input">
         <TextArea
           autoSize={{ maxRows: 6, minRows: 3 }}

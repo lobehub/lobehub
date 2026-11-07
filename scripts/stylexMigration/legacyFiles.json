@@ -829,7 +829,6 @@
   "src/routes/(main)/eval/bench/[benchmarkId]/runs/[runId]/features/PendingState/index.tsx",
   "src/routes/(main)/eval/bench/[benchmarkId]/runs/[runId]/features/RunHeader/index.tsx",
   "src/routes/(main)/eval/bench/[benchmarkId]/runs/[runId]/features/RunningState/index.tsx",
-  "src/routes/(main)/eval/bench/[benchmarkId]/runs/[runId]/features/StatsCards/index.tsx",
   "src/routes/(main)/eval/bench/[benchmarkId]/runs/[runId]/index.tsx",
   "src/routes/(main)/eval/datasets/[datasetId]/index.tsx",
   "src/routes/(main)/eval/features/BenchmarkCard/index.tsx",
