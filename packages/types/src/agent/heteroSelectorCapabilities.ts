@@ -843,7 +843,8 @@ export const buildHeteroExecArgs = (
     provider.type !== 'opencode' &&
     provider.type !== 'pi' &&
     provider.type !== 'qoder' &&
-    provider.type !== 'trae'
+    provider.type !== 'trae' &&
+    provider.type !== 'deepseek-harness'
   ) {
     return provider.args;
   }
@@ -993,7 +994,11 @@ export const buildHeteroExecArgs = (
     }
   }
 
-  if (provider.type === 'droid' || provider.type === 'trae') {
+  if (
+    provider.type === 'droid' ||
+    provider.type === 'trae' ||
+    provider.type === 'deepseek-harness'
+  ) {
     const model = provider.model?.trim();
     if (model && model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION) {
       selectorArgs.push('--model', model);

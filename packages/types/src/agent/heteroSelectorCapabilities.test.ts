@@ -4,6 +4,7 @@ import type { HeterogeneousProviderConfig } from './agencyConfig';
 import { buildHeteroSpawnArgs } from './agencyConfig';
 import {
   applyHeteroSelection,
+  buildHeteroExecArgs,
   getHeteroSelectorCapability,
   HETEROGENEOUS_AGENT_DEFAULT_SELECTION,
   isCodexServerDefaultCustomModel,
@@ -302,5 +303,25 @@ describe('applyHeteroSelection', () => {
     const patched = { ...stale, ...applyHeteroSelection(stale, { model: 'opus' }) };
 
     expect(buildHeteroSpawnArgs(patched)).toEqual(['--model', 'opus']);
+  });
+});
+
+describe('DeepSeek Harness exec args', () => {
+  it('forwards the persisted tuple to lh hetero exec without native spawn args', () => {
+    const provider: HeterogeneousProviderConfig = {
+      args: ['--config', '/tmp/dsh.yml'],
+      model: '["deepseek-account","deepseek-flash"]',
+      type: 'deepseek-harness',
+    };
+
+    // The runtime selects the model through ACP, so the desktop spawn keeps the
+    // user's own args and passes the tuple as `initialModel` instead.
+    expect(buildHeteroSpawnArgs(provider)).toEqual(['--config', '/tmp/dsh.yml']);
+    expect(buildHeteroExecArgs(provider)).toEqual([
+      '--agent-arg=--config',
+      '--agent-arg=/tmp/dsh.yml',
+      '--model',
+      '["deepseek-account","deepseek-flash"]',
+    ]);
   });
 });
