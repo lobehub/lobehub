@@ -306,6 +306,254 @@ describe('AgentRuntimeService', () => {
         expect(await service.interruptOperation('op-race')).toBe(false);
       });
     });
+
+    describe('waiting_for_async_tool operation whose runtime state is gone', () => {
+      type OperationTreeRow = Awaited<ReturnType<AgentOperationModel['listOperationTree']>>[number];
+
+      let settleStaleParent: MockInstance<AgentOperationModel['settleStaleWaitingForAsyncTool']>;
+      let settleStaleChild: MockInstance<AgentOperationModel['settleStaleRunning']>;
+      let listTree: MockInstance<AgentOperationModel['listOperationTree']>;
+
+      const treeRow = (overrides: Record<string, unknown>): OperationTreeRow =>
+        ({ ...overrides }) as unknown as OperationTreeRow;
+
+      beforeEach(() => {
+        mockCoordinator.loadAgentState.mockResolvedValue(null);
+        settleStaleParent = vi.spyOn(
+          AgentOperationModel.prototype,
+          'settleStaleWaitingForAsyncTool',
+        );
+        settleStaleChild = vi.spyOn(AgentOperationModel.prototype, 'settleStaleRunning');
+        listTree = vi.spyOn(AgentOperationModel.prototype, 'listOperationTree');
+      });
+
+      afterEach(() => {
+        settleStaleParent.mockRestore();
+        settleStaleChild.mockRestore();
+        listTree.mockRestore();
+      });
+
+      it('retires a dead orphaned parent and its stale child so the stop is confirmed', async () => {
+        const updatedAt = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000);
+        const parentRow = treeRow({
+          id: 'op-parent',
+          status: 'waiting_for_async_tool',
+          updatedAt,
+        });
+        const childRow = treeRow({
+          id: 'op-child',
+          provider: null,
+          status: 'running',
+          updatedAt,
+        });
+        findOperation.mockResolvedValue({
+          id: 'op-parent',
+          status: 'waiting_for_async_tool',
+          updatedAt,
+        } as Awaited<ReturnType<AgentOperationModel['findById']>>);
+        listTree.mockImplementation((id: string) =>
+          Promise.resolve(id === 'op-parent' ? [parentRow, childRow] : [childRow]),
+        );
+        settleStaleChild.mockResolvedValue(true);
+        settleStaleParent.mockResolvedValue(true);
+
+        expect(await service.interruptOperation('op-parent')).toBe(true);
+        expect(settleStaleChild).toHaveBeenCalledWith('op-child', expect.any(Date));
+        const childStaleBefore = settleStaleChild.mock.calls[0][1];
+        expect(childStaleBefore.getTime()).toBeGreaterThan(updatedAt.getTime());
+        expect(childStaleBefore.getTime()).toBeLessThan(Date.now() - 5 * 60 * 1000);
+        expect(settleStaleParent).toHaveBeenCalledWith('op-parent', expect.any(Date));
+        const parentStaleBefore = settleStaleParent.mock.calls[0][1];
+        expect(parentStaleBefore.getTime()).toBeGreaterThan(updatedAt.getTime());
+        expect(parentStaleBefore.getTime()).toBeLessThan(Date.now() - 5 * 60 * 1000);
+      });
+
+      it('settles a parent whose child already finished without touching the child', async () => {
+        const parentRow = treeRow({
+          id: 'op-parent',
+          status: 'waiting_for_async_tool',
+          updatedAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000),
+        });
+        const childRow = treeRow({ id: 'op-child', status: 'done' });
+        findOperation.mockResolvedValue({
+          id: 'op-parent',
+          status: 'waiting_for_async_tool',
+          updatedAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000),
+        } as Awaited<ReturnType<AgentOperationModel['findById']>>);
+        listTree.mockResolvedValue([parentRow, childRow]);
+        settleStaleParent.mockResolvedValue(true);
+
+        expect(await service.interruptOperation('op-parent')).toBe(true);
+        expect(settleStaleChild).not.toHaveBeenCalled();
+        expect(settleStaleParent).toHaveBeenCalledWith('op-parent', expect.any(Date));
+      });
+
+      it('keeps refusing while the parent lease is fresh', async () => {
+        findOperation.mockResolvedValue({
+          id: 'op-parent',
+          status: 'waiting_for_async_tool',
+          updatedAt: new Date(Date.now() - 60 * 1000),
+        } as Awaited<ReturnType<AgentOperationModel['findById']>>);
+
+        expect(await service.interruptOperation('op-parent')).toBe(false);
+        expect(listTree).not.toHaveBeenCalled();
+        expect(settleStaleChild).not.toHaveBeenCalled();
+        expect(settleStaleParent).not.toHaveBeenCalled();
+      });
+
+      it('keeps refusing when the child still has live runtime state', async () => {
+        const parentRow = treeRow({
+          id: 'op-parent',
+          status: 'waiting_for_async_tool',
+          updatedAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000),
+        });
+        const childRow = treeRow({
+          id: 'op-child',
+          provider: null,
+          status: 'running',
+          updatedAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000),
+        });
+        findOperation.mockResolvedValue({
+          id: 'op-parent',
+          status: 'waiting_for_async_tool',
+          updatedAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000),
+        } as Awaited<ReturnType<AgentOperationModel['findById']>>);
+        mockCoordinator.loadAgentState.mockImplementation((id: string) =>
+          id === 'op-child'
+            ? Promise.resolve({ operationId: 'op-child', status: 'running', stepCount: 2 })
+            : Promise.resolve(null),
+        );
+        listTree.mockImplementation((id: string) =>
+          Promise.resolve(id === 'op-parent' ? [parentRow, childRow] : [childRow]),
+        );
+
+        expect(await service.interruptOperation('op-parent')).toBe(false);
+        expect(settleStaleChild).not.toHaveBeenCalled();
+        expect(settleStaleParent).not.toHaveBeenCalled();
+      });
+
+      it('keeps refusing for a live heterogeneous child inside its silence window', async () => {
+        const parentRow = treeRow({
+          id: 'op-parent',
+          status: 'waiting_for_async_tool',
+          updatedAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000),
+        });
+        const childRow = treeRow({
+          id: 'op-child',
+          provider: 'claude-code',
+          status: 'running',
+          updatedAt: new Date(Date.now() - 30 * 60 * 1000),
+        });
+        findOperation.mockResolvedValue({
+          id: 'op-parent',
+          status: 'waiting_for_async_tool',
+          updatedAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000),
+        } as Awaited<ReturnType<AgentOperationModel['findById']>>);
+        listTree.mockImplementation((id: string) =>
+          Promise.resolve(id === 'op-parent' ? [parentRow, childRow] : [childRow]),
+        );
+
+        expect(await service.interruptOperation('op-parent')).toBe(false);
+        expect(settleStaleChild).not.toHaveBeenCalled();
+        expect(settleStaleParent).not.toHaveBeenCalled();
+      });
+
+      it('retires a dead heterogeneous child past its silence window', async () => {
+        const updatedAt = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000);
+        const parentRow = treeRow({
+          id: 'op-parent',
+          status: 'waiting_for_async_tool',
+          updatedAt,
+        });
+        const childRow = treeRow({
+          id: 'op-child',
+          provider: 'claude-code',
+          status: 'running',
+          updatedAt,
+        });
+        findOperation.mockResolvedValue({
+          id: 'op-parent',
+          status: 'waiting_for_async_tool',
+          updatedAt,
+        } as Awaited<ReturnType<AgentOperationModel['findById']>>);
+        listTree.mockImplementation((id: string) =>
+          Promise.resolve(id === 'op-parent' ? [parentRow, childRow] : [childRow]),
+        );
+        settleStaleChild.mockResolvedValue(true);
+        settleStaleParent.mockResolvedValue(true);
+
+        expect(await service.interruptOperation('op-parent')).toBe(true);
+        expect(settleStaleChild).toHaveBeenCalledWith('op-child', expect.any(Date));
+        const childStaleBefore = settleStaleChild.mock.calls[0][1];
+        expect(childStaleBefore.getTime()).toBeGreaterThan(updatedAt.getTime());
+        expect(childStaleBefore.getTime()).toBeLessThan(Date.now() - 30 * 60 * 1000);
+        expect(settleStaleParent).toHaveBeenCalledWith('op-parent', expect.any(Date));
+      });
+
+      it('keeps refusing when a heartbeat wins the parent retirement race', async () => {
+        const parentRow = treeRow({
+          id: 'op-parent',
+          status: 'waiting_for_async_tool',
+          updatedAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000),
+        });
+        const childRow = treeRow({ id: 'op-child', status: 'done' });
+        findOperation.mockResolvedValue({
+          id: 'op-parent',
+          status: 'waiting_for_async_tool',
+          updatedAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000),
+        } as Awaited<ReturnType<AgentOperationModel['findById']>>);
+        listTree.mockResolvedValue([parentRow, childRow]);
+        settleStaleParent.mockResolvedValue(false);
+
+        expect(await service.interruptOperation('op-parent')).toBe(false);
+      });
+
+      it('keeps refusing when the child has a live descendant of its own', async () => {
+        const parentRow = treeRow({
+          id: 'op-parent',
+          status: 'waiting_for_async_tool',
+          updatedAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000),
+        });
+        const childRow = treeRow({
+          id: 'op-child',
+          provider: null,
+          status: 'running',
+          updatedAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000),
+        });
+        const grandchildRow = treeRow({ id: 'op-grandchild', status: 'running' });
+        findOperation.mockResolvedValue({
+          id: 'op-parent',
+          status: 'waiting_for_async_tool',
+          updatedAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000),
+        } as Awaited<ReturnType<AgentOperationModel['findById']>>);
+        listTree.mockImplementation((id: string) =>
+          Promise.resolve(id === 'op-parent' ? [parentRow, childRow] : [childRow, grandchildRow]),
+        );
+
+        expect(await service.interruptOperation('op-parent')).toBe(false);
+        expect(settleStaleChild).not.toHaveBeenCalled();
+        expect(settleStaleParent).not.toHaveBeenCalled();
+      });
+
+      it('keeps refusing when the child is parked in another wait state', async () => {
+        const parentRow = treeRow({
+          id: 'op-parent',
+          status: 'waiting_for_async_tool',
+          updatedAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000),
+        });
+        const childRow = treeRow({ id: 'op-child', status: 'waiting_for_human' });
+        findOperation.mockResolvedValue({
+          id: 'op-parent',
+          status: 'waiting_for_async_tool',
+          updatedAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000),
+        } as Awaited<ReturnType<AgentOperationModel['findById']>>);
+        listTree.mockResolvedValue([parentRow, childRow]);
+
+        expect(await service.interruptOperation('op-parent')).toBe(false);
+        expect(settleStaleChild).not.toHaveBeenCalled();
+        expect(settleStaleParent).not.toHaveBeenCalled();
+      });
+    });
   });
 
   // Stream events at step / operation boundaries should carry the canonical

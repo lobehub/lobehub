@@ -323,4 +323,54 @@ describe('AgentOperationModel recovery lookups', () => {
       expect((await model().findById('op-finished'))?.status).toBe('done');
     });
   });
+
+  describe('settleStaleWaitingForAsyncTool', () => {
+    const parkStale = async (operationId: string, staleBefore: Date) => {
+      await park(operationId, 'waiting_for_async_tool');
+      await serverDB
+        .update(agentOperations)
+        .set({ updatedAt: new Date(staleBefore.getTime() - 1000) })
+        .where(eq(agentOperations.id, operationId));
+    };
+
+    it('retires a parked parent whose lease expired', async () => {
+      const staleBefore = new Date(Date.now() - 60_000);
+      await parkStale('op-parked-stale', staleBefore);
+
+      expect(
+        await model(otherUserId).settleStaleWaitingForAsyncTool('op-parked-stale', staleBefore),
+      ).toBe(false);
+      expect(await model().settleStaleWaitingForAsyncTool('op-parked-stale', staleBefore)).toBe(
+        true,
+      );
+      expect(await model().findById('op-parked-stale')).toMatchObject({
+        completionReason: 'lease_expired',
+        status: 'abandoned',
+      });
+    });
+
+    it('leaves a parked parent alone while its lease is fresh', async () => {
+      const staleBefore = new Date(Date.now() - 60_000);
+      await park('op-parked-fresh', 'waiting_for_async_tool');
+
+      expect(await model().settleStaleWaitingForAsyncTool('op-parked-fresh', staleBefore)).toBe(
+        false,
+      );
+      expect((await model().findById('op-parked-fresh'))?.status).toBe('waiting_for_async_tool');
+    });
+
+    it('never rewrites a running row', async () => {
+      const staleBefore = new Date(Date.now() - 60_000);
+      await model().recordStart({ operationId: 'op-parked-running' });
+      await serverDB
+        .update(agentOperations)
+        .set({ updatedAt: new Date(staleBefore.getTime() - 1000) })
+        .where(eq(agentOperations.id, 'op-parked-running'));
+
+      expect(await model().settleStaleWaitingForAsyncTool('op-parked-running', staleBefore)).toBe(
+        false,
+      );
+      expect((await model().findById('op-parked-running'))?.status).toBe('running');
+    });
+  });
 });
