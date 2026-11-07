@@ -69,6 +69,41 @@ export interface AgentAccountCapabilities {
 }
 
 /**
+ * How inbound messages wake the agent.
+ *
+ * - `on` (the default): the wake rules decide. A message they let through — a
+ *   listed sender, a reply in a thread the agent wrote to — wakes the agent at
+ *   once; everything else waits for the digest, one run that goes through all
+ *   of it together.
+ * - `off`: messages are stored in the inbox and never wake the agent.
+ */
+export const AGENT_ACCOUNT_WAKE_MODES = ['on', 'off'] as const;
+export type AgentAccountWakeMode = (typeof AGENT_ACCOUNT_WAKE_MODES)[number];
+
+/** Shortest and longest digest window, in minutes. */
+export const AGENT_ACCOUNT_DIGEST_MINUTES_RANGE = { max: 24 * 60, min: 5 } as const;
+
+/** The owner's wake rules for one account. Every field is optional; defaults apply when read. */
+export interface AgentAccountWakeSettings {
+  /** Minutes the digest collects held messages before one run goes through them. Default 60. */
+  digestMinutes?: number;
+  mode?: AgentAccountWakeMode;
+  /**
+   * Senders whose messages wake the agent at once: full addresses
+   * (`ceo@example.com`) or whole domains (`@example.com`).
+   */
+  wakeSenders?: string[];
+}
+
+/**
+ * The owner's settings for one account. Unlike `metadata`, which a managed
+ * provider owns, these belong to the person and are always patchable.
+ */
+export interface AgentAccountSettings {
+  wake?: AgentAccountWakeSettings;
+}
+
+/**
  * Non-secret facts about the stored credential, safe to return from any read
  * API: enough for a person to recognise *which* secret is installed and when it
  * expires, never enough to use it.
