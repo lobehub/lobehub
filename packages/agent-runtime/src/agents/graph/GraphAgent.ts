@@ -1,9 +1,6 @@
 import { ToolNameResolver } from '@lobechat/context-engine';
 import type { AgentGraph, AgentGraphEdge, AgentGraphNode } from '@lobechat/types';
 import { AGENT_GRAPH_ROOT_NODE_ID } from '@lobechat/types/agent/graph';
-import { toJsonSafe } from '../../utils/json';
-import type { UnknownRecord } from '../../utils/object';
-import { isRecord } from '../../utils/object';
 import Ajv from 'ajv';
 
 import type {
@@ -15,6 +12,9 @@ import type {
   GeneralAgentCallLLMInstructionPayload,
   GeneralAgentConfig,
 } from '../../types';
+import { toJsonSafe } from '../../utils/json';
+import type { UnknownRecord } from '../../utils/object';
+import { isRecord } from '../../utils/object';
 import { selectRunTools, selectToolManifestMap } from '../../utils/operationToolSet';
 import { GeneralChatAgent } from '../GeneralChatAgent';
 import {
@@ -84,6 +84,11 @@ interface GraphRuntimeState {
   graphContext: GraphContext;
   graphState: GraphState;
   instructionCount: number;
+  /**
+   * The graph's terminal node, kept for readers outside the agent that hold
+   * only the state (see `isGraphAgentIntermediateResult`).
+   */
+  terminalNode?: string;
 }
 
 interface ReducerInput {
@@ -136,6 +141,22 @@ interface PromptArray extends Array<PromptValue> {}
 interface PromptObject {
   [key: string]: PromptValue;
 }
+
+/**
+ * Whether a tool-free LLM result of this run belongs to a `GraphAgent` node
+ * before its terminal one: the graph routes it on to the next node, so the run
+ * does not end there. `false` for a run no graph drives, and at the terminal
+ * node, whose result can finish the graph. A state written without the
+ * terminal node counts every graph result as intermediate.
+ */
+export const isGraphAgentIntermediateResult = (state: Readonly<AgentState>): boolean => {
+  const runtime = state.metadata?.[GRAPH_RUNTIME_STATE_KEY] as GraphRuntimeState | undefined;
+  if (!runtime) return false;
+  if (!runtime.terminalNode) return true;
+
+  const { graphState } = runtime;
+  return !('currentNode' in graphState) || graphState.currentNode !== runtime.terminalNode;
+};
 
 /**
  * GraphAgent is a graph-level orchestrator over the normal AgentRuntime loop.
@@ -722,7 +743,10 @@ export class GraphAgent implements Agent {
 
   private updateGraphRuntimeState(state: AgentState, graphRuntimeState: GraphRuntimeState): void {
     state.metadata ??= {};
-    state.metadata[GRAPH_RUNTIME_STATE_KEY] = graphRuntimeState;
+    state.metadata[GRAPH_RUNTIME_STATE_KEY] = {
+      ...graphRuntimeState,
+      terminalNode: this.graph.terminal,
+    };
   }
 
   private updateEdgeTraversalCount(
