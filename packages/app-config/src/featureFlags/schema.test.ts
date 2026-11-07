@@ -270,6 +270,26 @@ describe('mapFeatureFlagsEnvToState', () => {
     expect(mapFeatureFlagsEnvToState(config).enableNewTierPlans).toBe(false);
   });
 
+  it('should keep mobile new-tier sales off by default and enable them for listed users', () => {
+    expect(DEFAULT_FEATURE_FLAGS.mobile_new_tier_sales).toBe(false);
+    expect(
+      mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'user-1').enableMobileNewTierSales,
+    ).toBe(false);
+
+    const config = { mobile_new_tier_sales: ['tester-123'] };
+
+    expect(mapFeatureFlagsEnvToState(config, 'tester-123').enableMobileNewTierSales).toBe(true);
+    expect(mapFeatureFlagsEnvToState(config, 'user-456').enableMobileNewTierSales).toBe(false);
+    expect(mapFeatureFlagsEnvToState(config).enableMobileNewTierSales).toBe(false);
+  });
+
+  it('should not let the web new-tier flag open mobile new-tier sales', () => {
+    const state = mapFeatureFlagsEnvToState({ new_tier_plans: true }, 'user-1');
+
+    expect(state.enableNewTierPlans).toBe(true);
+    expect(state.enableMobileNewTierSales).toBeUndefined();
+  });
+
   it('should keep topic previews off by default and enable them for listed users', () => {
     expect(DEFAULT_FEATURE_FLAGS.topic_preview).toBe(false);
     expect(mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'user-1').enableTopicPreview).toBe(
