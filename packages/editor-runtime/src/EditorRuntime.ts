@@ -627,7 +627,111 @@ export class EditorRuntime {
       return { count: totalCount, newContent: replaced };
     }
 
+    // A quote validated against the document's plain text can span several
+    // runs once inline marks are in play (`Payment within <b>90 days</b>.`).
+    // No single segment holds it, so resolve the range across the runs
+    // instead of leaving the caller with an anchor loss.
+    if (count === 0) {
+      return this.replaceAcrossRuns(content, searchPattern, newText, replaceAll);
+    }
+
     return { count, newContent };
+  }
+
+  /**
+   * Replace text whose match spans inline formatting runs.
+   *
+   * The caller validates quotes against the document's plain text, so a quote
+   * can legitimately straddle tags. Matching segment by segment never finds
+   * it; matching the concatenated text and mapping the hit back onto the
+   * markup does, and the tags inside the replaced range go away with it.
+   */
+  private replaceAcrossRuns(
+    content: string,
+    searchPattern: RegExp | string,
+    newText: string,
+    replaceAll: boolean,
+  ): { count: number; newContent: string } {
+    const { contentIndexOf, plainText } = this.plainTextWithIndex(content);
+    const ranges: Array<{ end: number; start: number }> = [];
+
+    if (typeof searchPattern === 'string') {
+      if (searchPattern.length === 0) return { count: 0, newContent: content };
+
+      let from = 0;
+      while (from <= plainText.length - searchPattern.length) {
+        const at = plainText.indexOf(searchPattern, from);
+        if (at === -1) break;
+
+        ranges.push({ end: at + searchPattern.length, start: at });
+        if (!replaceAll) break;
+
+        from = at + searchPattern.length;
+      }
+    } else {
+      // A fresh instance keeps the caller's `lastIndex` out of this pass.
+      const flags = searchPattern.global ? searchPattern.flags : `${searchPattern.flags}g`;
+      const pattern = new RegExp(searchPattern.source, flags);
+      let match: RegExpExecArray | null;
+
+      while ((match = pattern.exec(plainText)) !== null) {
+        if (match[0].length === 0) {
+          pattern.lastIndex += 1;
+          continue;
+        }
+
+        ranges.push({ end: match.index + match[0].length, start: match.index });
+        if (!replaceAll) break;
+      }
+    }
+
+    if (ranges.length === 0) return { count: 0, newContent: content };
+
+    let newContent = content;
+
+    // Splice back to front so the earlier offsets stay valid.
+    for (let i = ranges.length - 1; i >= 0; i -= 1) {
+      const { end, start } = ranges[i];
+      const contentStart = contentIndexOf[start];
+      const contentEnd = contentIndexOf[end - 1] + 1;
+      newContent = newContent.slice(0, contentStart) + newText + newContent.slice(contentEnd);
+    }
+
+    return { count: ranges.length, newContent };
+  }
+
+  /**
+   * Concatenate the text of a content string and remember where each plain
+   * character sits, so a match found on the plain text maps back to the
+   * markup it spans.
+   */
+  private plainTextWithIndex(content: string): { contentIndexOf: number[]; plainText: string } {
+    const contentIndexOf: number[] = [];
+    const plainChars: string[] = [];
+    const tagRegex = /<[^>]+>/g;
+
+    let cursor = 0;
+    let tag: RegExpExecArray | null;
+
+    const appendText = (text: string, offset: number) => {
+      // LiteXML is pretty-printed: the newline + indent between two runs is
+      // markup layout, not document text, so it must not break a quote in two.
+      if (/^\s*$/.test(text) && text.includes('\n')) return;
+
+      for (let i = 0; i < text.length; i += 1) {
+        plainChars.push(text[i]);
+        contentIndexOf.push(offset + i);
+      }
+    };
+
+    while ((tag = tagRegex.exec(content)) !== null) {
+      if (tag.index > cursor) appendText(content.slice(cursor, tag.index), cursor);
+      cursor = tag.index + tag[0].length;
+    }
+
+    if (cursor < content.length) appendText(content.slice(cursor), cursor);
+
+    return { contentIndexOf, plainText: plainChars.join('') };
   }
 
   /**
@@ -756,11 +860,14 @@ export class EditorRuntime {
 
     // Process each target node
     for (const node of targetNodes) {
-      // Check if the node content contains the search text
+      // Inline marks split a quote into several runs, so the node's plain text
+      // is a valid place for it to live too — `replaceTextInContent` resolves
+      // a hit that spans them.
+      const nodePlainText = this.plainTextWithIndex(node.content).plainText;
       const hasMatch =
         typeof searchPattern === 'string'
-          ? node.content.includes(searchPattern)
-          : searchPattern.test(node.content);
+          ? node.content.includes(searchPattern) || nodePlainText.includes(searchPattern)
+          : searchPattern.test(node.content) || searchPattern.test(nodePlainText);
 
       if (!hasMatch) {
         continue;

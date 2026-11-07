@@ -501,6 +501,26 @@ describe('EditorRuntime', () => {
         expect(result.modifiedNodeIds.length).toBeLessThanOrEqual(1);
       }
     });
+
+    it('should replace a quote that spans inline formatting runs', async () => {
+      await runtime.initPage({ markdown: 'Payment within **90 days**. Thanks.' });
+      await moment();
+
+      // Quotes are validated against the document's plain text, so a quote can
+      // straddle inline marks (`90 days` is bold here) with no single text run
+      // holding it. It still has to be replaceable.
+      const result = await runtime.replaceText({
+        searchText: 'Payment within 90 days. Thanks.',
+        newText: 'Payment within 30 days. Thanks.',
+      });
+      await moment();
+
+      expect(result.replacementCount).toBe(1);
+
+      const markdown = editor.getDocument('markdown') as unknown as string;
+      expect(markdown).toContain('Payment within 30 days. Thanks.');
+      expect(markdown).not.toContain('90 days');
+    });
   });
 
   describe('document ID management', () => {
