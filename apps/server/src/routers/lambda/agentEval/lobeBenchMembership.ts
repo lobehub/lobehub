@@ -17,6 +17,13 @@ interface MembershipContext {
       id: string,
     ) => Promise<{ benchmarkId?: string | null; metadata?: Metadata } | undefined | null>;
   };
+  experimentModel: {
+    delete: (id: string) => Promise<unknown>;
+    findByBenchmarkIds: (benchmarkIds: string[]) => Promise<Array<{ experimentId: string }>>;
+    findById: (
+      id: string,
+    ) => Promise<{ benchmarks: Array<{ id: string }>; runs: unknown[] } | undefined>;
+  };
   runModel: {
     query: (filter: {
       benchmarkId: string;
@@ -64,7 +71,9 @@ export const assertDatasetDeletable = async (ctx: MembershipContext, datasetId: 
 /**
  * Before a Lobe Bench benchmark is deleted: its runs go with it (with their
  * conversations and case Agents), and its datasets are freed rather than
- * deleted. Refused while one of its runs is still going.
+ * deleted. An experiment made on this benchmark alone is left with nothing
+ * once its runs go, so it goes too; one that spans other benchmarks or still
+ * has runs stays. Refused while one of its runs is still going.
  */
 export const prepareBenchmarkDeletion = async (ctx: MembershipContext, benchmarkId: string) => {
   const benchmark = await ctx.benchmarkModel.findById(benchmarkId);
@@ -72,6 +81,14 @@ export const prepareBenchmarkDeletion = async (ctx: MembershipContext, benchmark
   const runs = await ctx.runModel.query({ benchmarkId });
   if (runs.some((run) => run.status === 'pending' || run.status === 'running'))
     throw refuse('Stop the experiments still running on this benchmark before deleting it.');
+  const experiments = await ctx.experimentModel.findByBenchmarkIds([benchmarkId]);
   for (const run of runs) await ctx.runService.deleteRun(run.id);
   await ctx.benchmarkModel.releaseDatasets(benchmarkId);
+  for (const { experimentId } of experiments) {
+    const experiment = await ctx.experimentModel.findById(experimentId);
+    if (!experiment) continue;
+    const onlyThisBenchmark = experiment.benchmarks.every(({ id }) => id === benchmarkId);
+    if (onlyThisBenchmark && experiment.runs.length === 0)
+      await ctx.experimentModel.delete(experimentId);
+  }
 };

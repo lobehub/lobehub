@@ -572,7 +572,7 @@ export default {
   'lobeBench.overview.card.noRun': 'No full run yet',
   'lobeBench.overview.card.noRunHint': 'Run every case of a dataset to rank here',
   'lobeBench.overview.card.noDataset': 'No datasets yet',
-  'lobeBench.overview.card.noDatasetHint': 'Add one of your datasets on the benchmark page',
+  'lobeBench.overview.card.noDatasetHint': 'Datasets are chosen when a benchmark is created',
   'lobeBench.overview.card.openBenchmark': 'Open benchmark',
   'lobeBench.overview.card.runs': 'Runs',
   'lobeBench.overview.card.contenders': 'Contenders',
@@ -821,7 +821,7 @@ export default {
   'lobeBench.benchmark.create.title': 'New benchmark',
   'lobeBench.benchmark.datasets.add': 'Add dataset',
   'lobeBench.benchmark.datasets.empty':
-    'No datasets yet. Add one of your datasets; datasets are made in the Case library.',
+    "No datasets. A benchmark's datasets are chosen when it is created; to use others, create a new benchmark.",
   'lobeBench.benchmark.datasets.remove': 'Remove from this benchmark',
   'lobeBench.benchmark.delete.confirm':
     'Delete {{name}}? Its runs and results are deleted with it. Its datasets are kept, free to make another benchmark of.',

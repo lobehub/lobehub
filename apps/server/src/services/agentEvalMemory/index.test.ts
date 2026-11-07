@@ -760,6 +760,34 @@ describe('AgentEvalMemoryService', () => {
     expect(snapshot.entries.map((e) => e.source)).toContain('agent');
   });
 
+  it('reads a runtime error payload: retries a dropped connection and logs why it cannot embed', async () => {
+    const params = await trial();
+    const service = new AgentEvalMemoryService(db, userId);
+    mocks.embed
+      .mockRejectedValueOnce({
+        error: { message: 'connection error: ECONNRESET' },
+        errorType: 'ProviderBizError',
+      })
+      .mockImplementationOnce(async ({ input }: { input: Array<string | undefined> }) =>
+        input.map((text) => (text ? vectorOf(text) : undefined)),
+      );
+    await service.prepare({ ...params, fixture });
+    expect(mocks.embed).toHaveBeenCalledTimes(2);
+    expect((await service.snapshot(params)).retrieval).toBeUndefined();
+
+    const other = await anotherAttempt(params);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    mocks.embed.mockRejectedValue({
+      error: { message: 'Incorrect API key provided' },
+      errorType: 'InvalidProviderAPIKey',
+    });
+    await service.prepare({ ...other, fixture });
+    const reason = (warn.mock.calls.at(-1)?.[1] as { reason: string }).reason;
+    expect(reason).toContain('InvalidProviderAPIKey');
+    expect(reason).not.toContain('[object Object]');
+    warn.mockRestore();
+  });
+
   it('rejects oversized fixtures, foreign trials and non-eval topics before writing', async () => {
     const params = await trial();
     const service = new AgentEvalMemoryService(db, userId);

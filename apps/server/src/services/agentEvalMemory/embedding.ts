@@ -62,6 +62,20 @@ const isTransientFailure = (message?: string) =>
     message ?? '',
   );
 
+/**
+ * Model runtimes often reject with a plain payload (`{ errorType, error }`),
+ * not an Error; its text must survive into retry decisions and logs.
+ */
+const describeFailure = (error: unknown): string => {
+  if (error instanceof Error) return error.message;
+  if (typeof error === 'string') return error;
+  try {
+    return JSON.stringify(error) ?? String(error);
+  } catch {
+    return String(error);
+  }
+};
+
 /** A dropped connection to the embedding provider must not fail an attempt before the Agent runs. */
 export const embedWithRetry: (
   embed: EvalMemoryEmbedder,
@@ -71,7 +85,7 @@ export const embedWithRetry: (
     try {
       return await embed(texts);
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = describeFailure(error);
       if (attempt >= EMBED_ATTEMPTS || !isTransientFailure(message)) {
         throw new Error(`Eval Memory embedding failed: ${message}`, { cause: error });
       }
@@ -95,7 +109,7 @@ export const embedOrSkip = (embed: EvalMemoryEmbedder): EvalMemoryEmbedder => {
     try {
       return await embedWithRetry(embed, texts);
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = describeFailure(error);
       if (isTransientFailure(message)) throw error;
       unavailable = true;
       console.warn('[eval-memory] no usable embedding model, using simplified Memory search', {
