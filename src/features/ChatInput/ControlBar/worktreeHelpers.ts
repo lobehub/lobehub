@@ -1,4 +1,4 @@
-import type { DeviceGitWorktreeListItem } from '@lobechat/types';
+import type { DeviceGitWorktreeBase, DeviceGitWorktreeListItem } from '@lobechat/types';
 
 export const getPathName = (path: string): string =>
   path.replaceAll('\\', '/').split('/').findLast(Boolean) || path;
@@ -27,3 +27,22 @@ export const findWorktreeForBranch = (
   worktrees.find(
     (worktree) => !worktree.current && !isDisabled(worktree) && worktree.branch === branch,
   );
+
+const getShortSha = (sha: string): string => sha.slice(0, 8);
+
+/** `canary @9a1b3127` for a named base, the bare short SHA for a detached HEAD. */
+export const formatWorktreeBase = (base: DeviceGitWorktreeBase): string => {
+  const sha = getShortSha(base.sha);
+  return base.ref ? `${base.ref} @${sha}` : sha;
+};
+
+/** `canary` at the default branch's tip, otherwise `canary@9a1b3127`; undefined when unknown. */
+export const formatWorktreeForkPoint = (
+  worktree: DeviceGitWorktreeListItem,
+): string | undefined => {
+  const { forkPoint } = worktree;
+  if (!forkPoint) return undefined;
+  return forkPoint.atTip
+    ? forkPoint.defaultBranch
+    : `${forkPoint.defaultBranch}@${getShortSha(forkPoint.sha)}`;
+};
