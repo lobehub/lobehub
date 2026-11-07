@@ -14,4 +14,10 @@ export interface SearchServiceImpl {
    * restrictions or retry by removing them.
    */
   useAutoSearchEngineSelection?: boolean;
+
+  /**
+   * The provider sends none of the search params (categories, engines, time range).
+   * Retrying with fewer params would repeat the same request, so the service asks once.
+   */
+  ignoresSearchParams?: boolean;
 }

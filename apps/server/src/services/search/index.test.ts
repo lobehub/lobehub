@@ -337,6 +337,27 @@ describe('SearchService', () => {
       expect(result).toBe(successResponse);
     });
 
+    it('should ask once when the provider ignores search params', async () => {
+      const emptyResponse = {
+        costTime: 100,
+        query: 'test',
+        resultNumbers: 0,
+        results: [],
+      };
+      (mockSearchImpl as any).ignoresSearchParams = true;
+      mockSearchImpl.query.mockResolvedValue(emptyResponse);
+
+      const result = await searchService.webSearch({
+        query: 'test',
+        searchEngines: ['google'],
+        searchTimeRange: 'week',
+      });
+
+      expect(mockSearchImpl.query).toHaveBeenCalledTimes(1);
+      expect(mockSearchImpl.query).toHaveBeenCalledWith('test', undefined);
+      expect(result).toBe(emptyResponse);
+    });
+
     it('should return the successful empty response after all retries find no results', async () => {
       const emptyResponse = {
         costTime: 100,
