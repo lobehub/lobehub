@@ -619,8 +619,12 @@ export type GoalDecisionStatus = 'pending' | 'resolved' | 'canceled';
  * Coordinator options carry it implicitly through their fixed ids
  * (`retry` / `retire` / `fail`); options the main Agent writes for its own
  * question name it, so its wording never has to match a reserved id.
+ *
+ * `hold` leaves the Task, its node, its dependents and the budget as they are
+ * and pauses the Goal for the person: nothing is dispatched again until they
+ * resume it.
  */
-export type GoalDecisionOptionEffect = 'retry' | 'retire';
+export type GoalDecisionOptionEffect = 'retry' | 'retire' | 'hold';
 
 export interface GoalDecisionOption {
   /**

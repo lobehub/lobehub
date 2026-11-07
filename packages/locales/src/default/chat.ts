@@ -3070,6 +3070,7 @@ export default {
   'goalProcess.decisions.recommended': 'Recommended',
   'goalProcess.decisions.raisedBy': 'Raised by',
   'goalProcess.decisions.effect.fail': 'Fails the goal',
+  'goalProcess.decisions.effect.hold': 'Holds the goal for you',
   'goalProcess.decisions.effect.retire': 'Retires the task',
   'goalProcess.decisions.effect.retry': 'Runs the task again',
   'goalProcess.findings.title': 'Findings',

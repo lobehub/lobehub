@@ -9,6 +9,7 @@ import {
   CircleX,
   GitBranch,
   type LucideIcon,
+  PauseCircle,
   RotateCcw,
   Sparkles,
 } from 'lucide-react';
@@ -137,6 +138,7 @@ const styles = stylex.create({
 
 const EFFECT_ICON: Record<DecisionEffect, LucideIcon> = {
   fail: CircleX,
+  hold: PauseCircle,
   retire: Archive,
   retry: RotateCcw,
 };

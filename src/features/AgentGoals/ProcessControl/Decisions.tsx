@@ -152,6 +152,7 @@ const DecisionRowView = memo<{
           result={{
             effectLabel: {
               fail: t('goalProcess.decisions.effect.fail'),
+              hold: t('goalProcess.decisions.effect.hold'),
               retire: t('goalProcess.decisions.effect.retire'),
               retry: t('goalProcess.decisions.effect.retry'),
             },
