@@ -4,6 +4,7 @@ import {
   type DeleteTaskWorkParams,
   type DeleteWorkParams,
   isWorkSkillProvider,
+  type RegisterArtboardWorkParams,
   type RegisterCanvasWorkParams,
   type RegisterDocumentWorkParams,
   type RegisterExternalWorkParams,
@@ -18,6 +19,8 @@ import {
 } from '@lobechat/types';
 
 import type { LobeChatDatabase } from '../../type';
+import { registerArtboardWork } from './artboard';
+import { registerShellArtboardResult } from './artboardShellResult';
 import {
   findCanvasIdByWorkId,
   findCanvasIdsByDeploymentIds,
@@ -94,6 +97,9 @@ export class WorkModel {
 
   registerFile = (params: RegisterFileWorkParams): Promise<WorkItem> =>
     registerFileWork(this.ctx, params);
+
+  registerArtboard = (params: RegisterArtboardWorkParams): Promise<WorkItem> =>
+    registerArtboardWork(this.ctx, params);
 
   registerCanvas = (params: RegisterCanvasWorkParams): Promise<WorkItem> =>
     registerCanvasWork(this.ctx, params);
@@ -173,6 +179,10 @@ export class WorkModel {
     return this.registerExternal({ ...operation.params, toolIdentifier });
   };
 
+  registerShellArtboardResult = (
+    params: SkillToolResultWorkInput & { toolIdentifier: string },
+  ): Promise<WorkItem | null> => registerShellArtboardResult(this.ctx, params);
+
   deleteDocumentWork = (params: DeleteDocumentWorkParams): Promise<void> =>
     writes.deleteDocumentWork(this.ctx, params);
 
@@ -190,24 +200,28 @@ export class WorkModel {
     writes.setTaskWorksVisibility(this.ctx, taskIds, visibility);
 
   listByRootOperation = (params: {
+    includeArtboardWorks?: boolean;
     includeFileWorks?: boolean;
     limit?: number;
     rootOperationId?: string | null;
   }) => queries.listByRootOperation(this.ctx, params);
 
   listByRootOperations = (params: {
+    includeArtboardWorks?: boolean;
     includeFileWorks?: boolean;
     limit?: number;
     rootOperationIds?: string[] | null;
   }) => queries.listByRootOperations(this.ctx, params);
 
   listSummariesByRootOperations = (params: {
+    includeArtboardWorks?: boolean;
     includeFileWorks?: boolean;
     limit?: number;
     rootOperationIds?: string[] | null;
   }) => queries.listSummariesByRootOperations(this.ctx, params);
 
   listByConversation = (params: {
+    includeArtboardWorks?: boolean;
     includeFileWorks?: boolean;
     limit?: number;
     threadId?: string | null;

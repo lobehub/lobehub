@@ -748,6 +748,7 @@ export const execAgentTurn = async (
       },
       runContext,
       {
+        acceptsArtboardWorks: params.acceptsArtboardWorks,
         acceptsFileWorks: params.acceptsFileWorks,
         acceptsMemberRuntimeEnd: params.acceptsMemberRuntimeEnd,
         approvalClaim,

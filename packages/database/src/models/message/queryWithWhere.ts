@@ -54,6 +54,7 @@ export class MessagePageQueries extends MessageScope {
       where,
       before,
       current = 0,
+      includeArtboardWorks,
       includeFileWorks,
       pageSize = 1000,
       postProcessUrl,
@@ -239,7 +240,7 @@ export class MessagePageQueries extends MessageScope {
         ? ({} as Record<string, WorkSummaryItem[]>)
         : this.relations.queryMessageWorkSummaries(
             result,
-            includeFileWorks,
+            { includeArtboardWorks, includeFileWorks },
             timing,
             workAccessScope,
           ),

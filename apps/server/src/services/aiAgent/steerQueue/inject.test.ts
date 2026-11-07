@@ -64,6 +64,10 @@ describe('canJoinRunningTurn', () => {
     expect(canJoinRunningTurn(followUp('a', 1), state)).toBe(true);
   });
 
+  it('does not join a turn that has a different artboard stream capability', () => {
+    expect(canJoinRunningTurn(followUp('a', 1, { acceptsArtboardWorks: true }), state)).toBe(false);
+  });
+
   it.each([
     ['an attachment', { fileIds: ['f1'] }],
     [

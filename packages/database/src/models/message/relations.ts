@@ -208,7 +208,7 @@ export class MessageRelationQueries extends MessageScope {
    */
   queryMessageWorkSummaries = async (
     rows: { id: unknown; metadata: unknown }[],
-    includeFileWorks?: boolean,
+    optIn: { includeArtboardWorks?: boolean; includeFileWorks?: boolean } = {},
     timing?: ModelTimingContext,
     workAccessScope?: WorkAccessScope,
   ): Promise<Record<string, WorkSummaryItem[]>> => {
@@ -229,7 +229,7 @@ export class MessageRelationQueries extends MessageScope {
           this.workspaceId,
           workAccessScope,
         ).listSummariesByRootOperations({
-          includeFileWorks,
+          ...optIn,
           rootOperationIds: Array.from(anchorByRootId.keys()),
         }),
       { rootOperationCount: anchorByRootId.size },

@@ -10,6 +10,8 @@ export * from './agentQuota';
 export * from './aiChat';
 export * from './aiProvider';
 export * from './apiKey';
+export * from './artboard';
+export * from './artboardReadiness';
 export * from './artifact';
 export * from './asyncTask';
 export * from './auth';

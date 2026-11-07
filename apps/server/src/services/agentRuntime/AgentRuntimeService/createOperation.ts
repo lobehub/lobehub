@@ -26,6 +26,7 @@ const log = debug('lobe-server:agent-runtime-service');
 /** What this module reads off the service. */
 export type CreateOperationDeps = Pick<
   AgentRuntimeServiceContext,
+  | 'acceptsArtboardWorks'
   | 'acceptsFileWorks'
   | 'agentOperationModel'
   | 'baseURL'
@@ -45,6 +46,7 @@ export async function createOperation(
   params: OperationCreationParams,
 ): Promise<OperationCreationResult> {
   const {
+    acceptsArtboardWorks,
     acceptsFileWorks,
     acceptsMemberRuntimeEnd,
     operationId,
@@ -191,7 +193,17 @@ export async function createOperation(
         ? await deps.acceptsFileWorks(parentOperationId)
         : undefined);
 
-    const preInitState = buildPreInitState(params, { fileWorksAccepted, llmExecutor });
+    const artboardWorksAccepted =
+      acceptsArtboardWorks ??
+      (parentOperationId && appContext?.orchestrationRole === 'member'
+        ? await deps.acceptsArtboardWorks(parentOperationId)
+        : undefined);
+
+    const preInitState = buildPreInitState(params, {
+      artboardWorksAccepted,
+      fileWorksAccepted,
+      llmExecutor,
+    });
     const initialState = applyOperationInitSlots(preInitState, pickOperationInitSlots(params));
 
     // Use coordinator to create operation, automatically sends initialization event.

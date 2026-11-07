@@ -12,6 +12,7 @@ const prefixes = {
   briefs: 'brf',
   taskComments: 'cmt',
   tasks: 'task',
+  artboards: 'art',
   agents: 'agt',
   budget: 'bgt',
   channelThreads: 'cht',

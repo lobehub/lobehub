@@ -1,3 +1,4 @@
+import { ArtboardIdentifier } from '@lobechat/builtin-tool-artboard';
 import { GoalIdentifier, hasUnfinishedGoalProposal } from '@lobechat/builtin-tool-goal';
 import { LobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
 import { MessageToolIdentifier } from '@lobechat/builtin-tool-message';
@@ -30,17 +31,25 @@ const log = debug('lobe-server:ai-agent-service');
  * and the goal tool while the conversation's latest goal proposal has not
  * created a goal (rejected with feedback, pending, or failed), so the resumed
  * turn or a plain "try again" can revise and resubmit it without `/goal`.
+ * The artboard tool belongs to project conversations only; this server-side
+ * discovery is its only way in, since it has no client executor.
  */
 export const resolveTurnScopedPluginIds = async (params: {
   attachedFileTypes: string[];
   externalFileTypes?: string[];
   isBotConversation: boolean;
+  isProjectConversation?: boolean;
   isProjectCoordinator?: boolean;
   loadHistoryMessages: ToolDiscoveryInput['loadHistoryMessages'];
   modelMediaCapabilities: Pick<ModelAbilities, 'audio' | 'video' | 'vision'>;
 }): Promise<string[]> => {
-  const { isBotConversation, isProjectCoordinator, loadHistoryMessages, modelMediaCapabilities } =
-    params;
+  const {
+    isBotConversation,
+    isProjectConversation,
+    isProjectCoordinator,
+    loadHistoryMessages,
+    modelMediaCapabilities,
+  } = params;
   const externalFileTypes = params.externalFileTypes ?? [];
   const inputFileTypes = [...externalFileTypes, ...params.attachedFileTypes];
   const inputMediaAvailability = getMediaAvailabilityFromFileTypes(inputFileTypes);
@@ -75,6 +84,7 @@ export const resolveTurnScopedPluginIds = async (params: {
     ...(isBotConversation ? [MessageToolIdentifier] : []),
     ...(continuesGoalProposal ? [GoalIdentifier] : []),
     ...(isProjectCoordinator ? [TaskIdentifier] : []),
+    ...(isProjectConversation ? [ArtboardIdentifier] : []),
     ...(shouldEnableMultimodalUnderstanding ? [LobeAgentManifest.identifier] : []),
   ];
 };

@@ -170,6 +170,7 @@ export const registerWorkFromIntent = async ({
         deleteDocumentWork: (params) => workModel.deleteDocumentWork(params),
         deleteTaskWork: (params) => workModel.deleteTaskWork(params),
         handleSkillToolResult: (params) => workModel.handleSkillToolResult(params),
+        registerArtboard: (params) => workModel.registerArtboard(params),
         registerCanvas: (params) => workModel.registerCanvas(params),
         registerDocument: (params) => workModel.registerDocument(params),
         registerTask: (params) => workModel.registerTask(params),

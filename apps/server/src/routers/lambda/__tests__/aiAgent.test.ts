@@ -232,6 +232,28 @@ describe('AI Agent Router Integration Tests', () => {
 
     // Only a client that declares `file_works` gets file Work cards in the
     // pushed snapshots; a released desktop crashes on that Work type.
+    it.each([
+      [undefined, false],
+      [['file_works'], false],
+      [['artboard_works'], true],
+    ])(
+      'preserves artboard opt-in independently on single and batch runs: %j',
+      async (streamFeatures, accepted) => {
+        const { AgentRuntimeService } = await import('@/server/services/agentRuntime');
+        const caller = aiAgentRouter.createCaller(createTestContext());
+        vi.mocked(AgentRuntimeService).mockClear();
+        await caller.execAgent({ agentId: testAgentId, prompt: 'single', streamFeatures });
+        await caller.execAgents({
+          tasks: [{ agentId: testAgentId, prompt: 'batch', streamFeatures }],
+        });
+        const capabilities = vi
+          .mocked(AgentRuntimeService)
+          .mock.results.flatMap((result) => (result.value as any).createOperation.mock.calls)
+          .map(([params]) => params.acceptsArtboardWorks);
+        expect(capabilities).toEqual([accepted, accepted]);
+      },
+    );
+
     it('forwards a declared file_works stream feature on both routes', async () => {
       const { AgentRuntimeService } = await import('@/server/services/agentRuntime');
       const caller = aiAgentRouter.createCaller(createTestContext());

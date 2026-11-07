@@ -7,6 +7,7 @@ import { CircleDollarSignIcon, CoinsIcon, GitBranchIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { openArtboardFullscreen } from '@/features/Artboard/Gallery/loader';
 import { useChatStore } from '@/store/chat';
 import { getWorkVersionTotalTokens } from '@/utils/workCumulativeUsage';
 import { formatWorkVersionCost } from '@/utils/workVersionCost';
@@ -311,6 +312,10 @@ const WorkSummaryCard = memo<WorkSummaryCardProps>(
       if (!openTarget) return;
 
       switch (openTarget.kind) {
+        case 'artboard': {
+          void openArtboardFullscreen(openTarget.artboardId);
+          return;
+        }
         case 'canvas': {
           openCanvas(openTarget.canvasId, openTarget.version);
           return;
