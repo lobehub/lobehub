@@ -57,6 +57,7 @@ describe('resolveSelectorShape', () => {
   });
 
   it('gives catalog-only providers the bare picker', () => {
+    expect(resolveSelectorShape({ type: 'deepseek-harness' }, true).kind).toBe('catalog');
     expect(resolveSelectorShape({ type: 'kimi-code' }, true).kind).toBe('catalog');
     expect(resolveSelectorShape({ type: 'opencode' }, true).kind).toBe('catalog');
     expect(resolveSelectorShape({ type: 'pi' }, true).kind).toBe('catalog');

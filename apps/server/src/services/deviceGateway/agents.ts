@@ -19,6 +19,7 @@ import type {
   DeviceClient,
   DeviceUnavailableErrorData,
   HeterogeneousAgentModelCatalog,
+  ListHeterogeneousAgentModelsParams,
 } from '@lobechat/types';
 import debug from 'debug';
 
@@ -95,19 +96,7 @@ export async function listHeterogeneousAgentModels(
     deviceId: string;
     env?: Record<string, string>;
     timeout?: number;
-    type:
-      | 'codebuddy'
-      | 'codex'
-      | 'copilot'
-      | 'cursor'
-      | 'devin'
-      | 'droid'
-      | 'grok-build'
-      | 'kimi-code'
-      | 'opencode'
-      | 'pi'
-      | 'qoder'
-      | 'trae';
+    type: ListHeterogeneousAgentModelsParams['type'];
     userId: string;
     workspaceId?: string;
   },
