@@ -65,6 +65,7 @@ export const searchRouter = router({
             'jina',
             'naive',
             'search1api',
+            'specstream',
             'tavily',
           ])
           .array()

@@ -23,6 +23,7 @@ const CHANNEL_DISPLAY_NAME: Record<string, string> = {
   naive: 'Naive',
   search1api: 'Search1API',
   searxng: 'SearXNG',
+  specstream: 'SpecStream',
   tavily: 'Tavily',
 };
 
