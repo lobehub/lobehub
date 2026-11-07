@@ -91,6 +91,8 @@ export default {
     'The provider timed out while downloading an attached image or file. Please try again.',
   ProviderServiceUnavailable:
     'The provider is temporarily overloaded or unavailable. Please try again shortly.',
+  ProviderStreamInterrupted:
+    'The provider closed the connection before finishing the response. This is usually temporary, please try again.',
   QuotaLimitReached:
     "Sorry, the token usage or request count has reached the quota limit for this key. Please increase the key's quota or try again later.",
   RateLimitExceeded:

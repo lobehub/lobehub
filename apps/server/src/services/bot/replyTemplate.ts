@@ -639,6 +639,9 @@ const FRIENDLY_ERROR_BY_TYPE: Record<string, keyof SystemStrings> = {
   // model provider, so it keeps the provider-specific "switch model" copy. Other
   // system codes (state-store reads) hit the provider-neutral `system` fallback.
   ProviderNetworkError: 'errorTransientNetwork',
+  // The provider dropped the stream mid-response: same transient-network
+  // guidance, not the harness "something went wrong on our side" tier.
+  ProviderStreamInterrupted: 'errorTransientNetwork',
   // ── harness watchdog: harness-owned but retry-friendly, so it gets its
   //    own retry-oriented copy rather than the generic internal-error tier ──
   OperationInactivityTimeout: 'errorTimeout',

@@ -42,12 +42,17 @@ describe('AnthropicStream interruptions', () => {
     expect(chunks.slice(-3)).toEqual([
       'id: msg_1\n',
       'event: error\n',
-      expect.stringContaining('"type":"StreamChunkError"'),
+      expect.stringContaining('"type":"ProviderStreamInterrupted"'),
     ]);
     expect(onErrorMock).toHaveBeenCalledWith(
-      expect.objectContaining({ message: 'Stream ended unexpectedly', type: 'StreamChunkError' }),
+      expect.objectContaining({
+        message: 'Stream ended unexpectedly',
+        type: 'ProviderStreamInterrupted',
+      }),
     );
-    expect(onCompletionMock.mock.calls[0]?.[0].error).toMatchObject({ type: 'StreamChunkError' });
+    expect(onCompletionMock.mock.calls[0]?.[0].error).toMatchObject({
+      type: 'ProviderStreamInterrupted',
+    });
   });
   it('should report a dropped connection as a stream error instead of ending normally', async () => {
     // @ts-ignore

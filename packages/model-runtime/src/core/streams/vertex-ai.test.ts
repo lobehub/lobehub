@@ -132,7 +132,7 @@ describe('GoogleGenerativeAIStream (Vertex AI scenarios)', () => {
       // requireTerminalEvent: no finishReason → stream parsing error
       'id: chat_1\n',
       'event: error\n',
-      `data: ${JSON.stringify({ body: { name: 'Stream parsing error', reason: 'unexpected_end' }, message: 'Stream ended unexpectedly', name: 'Stream parsing error', type: 'StreamChunkError' })}\n\n`,
+      `data: ${JSON.stringify({ body: { name: 'Stream parsing error', reason: 'unexpected_end' }, message: 'Stream ended unexpectedly', name: 'Stream parsing error', type: 'ProviderStreamInterrupted' })}\n\n`,
     ]);
 
     expect(onStartMock).toHaveBeenCalledTimes(1);
@@ -403,7 +403,7 @@ describe('GoogleGenerativeAIStream (Vertex AI scenarios)', () => {
         // requireTerminalEvent: no finishReason → stream parsing error
         'id: chat_1',
         'event: error',
-        `data: ${JSON.stringify({ body: { name: 'Stream parsing error', reason: 'unexpected_end' }, message: 'Stream ended unexpectedly', name: 'Stream parsing error', type: 'StreamChunkError' })}\n`,
+        `data: ${JSON.stringify({ body: { name: 'Stream parsing error', reason: 'unexpected_end' }, message: 'Stream ended unexpectedly', name: 'Stream parsing error', type: 'ProviderStreamInterrupted' })}\n`,
       ].map((i) => i + '\n'),
     );
   });
@@ -743,7 +743,7 @@ describe('GoogleGenerativeAIStream (Vertex AI scenarios)', () => {
         // requireTerminalEvent: no finishReason → stream parsing error
         'id: chat_1',
         'event: error',
-        `data: ${JSON.stringify({ body: { name: 'Stream parsing error', reason: 'unexpected_end' }, message: 'Stream ended unexpectedly', name: 'Stream parsing error', type: 'StreamChunkError' })}\n`,
+        `data: ${JSON.stringify({ body: { name: 'Stream parsing error', reason: 'unexpected_end' }, message: 'Stream ended unexpectedly', name: 'Stream parsing error', type: 'ProviderStreamInterrupted' })}\n`,
       ].map((i) => i + '\n'),
     );
   });
