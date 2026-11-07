@@ -99,6 +99,7 @@
     "fts-search:sync": "cross-env MIGRATION_DB=1 bun run scripts/elasticsearchSync/cli.ts",
     "hotfix:branch": "tsx ./scripts/hotfixWorkflow/index.ts",
     "i18n": "npm run workflow:i18n && lobe-i18n && prettier -c --write \"locales/**\"",
+    "i18n:local": "npm run workflow:i18n && lobe-i18n --config scripts/i18nWorkflow/deepseek.config.cjs && prettier -c --write \"locales/**\"",
     "i18n:unused": "tsx ./scripts/i18nWorkflow/analyzeUnusedKeys.ts",
     "i18n:unused-clean": "tsx ./scripts/i18nWorkflow/cleanUnusedKeys.ts",
     "lint": "npm run lint:ts && npm run lint:style && npm run type-check && npm run lint:circular",
