@@ -78,17 +78,13 @@ describe('UserMemoryContextModel', () => {
       ]);
     });
 
-    it('should return contexts for current user only', async () => {
+    it('returns current user contexts newest first', async () => {
       const result = await contextModel.query();
 
       expect(result).toHaveLength(2);
       expect(result.every((c) => c.userId === userId)).toBe(true);
-    });
 
-    it('should order by createdAt desc', async () => {
-      const result = await contextModel.query();
-
-      expect(result[0].id).toBe('context-2'); // Most recent first
+      expect(result[0].id).toBe('context-2');
       expect(result[1].id).toBe('context-1');
     });
 

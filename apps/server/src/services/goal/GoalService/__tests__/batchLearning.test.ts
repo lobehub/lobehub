@@ -14,7 +14,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import { TaskRunnerService } from '../../../taskRunner';
 import { UserSkillService } from '../../../userSkill';
 import { GoalCriteriaGeneratorService } from '../../criteriaGenerator';
-import { registerGoalServiceTestCleanup } from '../../testUtils';
+import { createBatchDecomposition, registerGoalServiceTestCleanup } from '../../testUtils';
 import { GoalService } from '../index';
 
 const serverDB: LobeChatDatabase = await getTestDB();
@@ -24,21 +24,9 @@ registerGoalServiceTestCleanup(serverDB, userId);
 
 describe('GoalService', () => {
   it('re-opens the broken unit as a new task when the canary loop restarts', async () => {
-    vi.spyOn(GoalCriteriaGeneratorService.prototype, 'decompose').mockResolvedValue({
-      problemStatement: '把 50 个同构的 store 迁移到 replica',
-      rollout: {
-        recipeOutline: '把 store 换成 replica 支撑的实现',
-        repeatable: true,
-        unitCount: 50,
-        units: Array.from({ length: 50 }, (_, i) => `Unit ${i + 1}`),
-        variants: [],
-      },
-      tasks: Array.from({ length: 5 }, (_, i) => ({
-        dependsOn: [],
-        instruction: `把 src/store/store${i + 1}.ts 换成 replica 实现`,
-        title: `Unit ${i + 1}`,
-      })),
-    });
+    vi.spyOn(GoalCriteriaGeneratorService.prototype, 'decompose').mockResolvedValue(
+      createBatchDecomposition(),
+    );
     const service = new GoalService(serverDB, userId);
     const graph = await service.create({ title: 'Migrate stores' });
     await service.tick(graph.goal.id);
@@ -151,21 +139,9 @@ describe('GoalService', () => {
   });
 
   it('falls back to copying the revised plan when the skill revision does not land', async () => {
-    vi.spyOn(GoalCriteriaGeneratorService.prototype, 'decompose').mockResolvedValue({
-      problemStatement: '把 50 个同构的 store 迁移到 replica',
-      rollout: {
-        recipeOutline: '把 store 换成 replica 支撑的实现',
-        repeatable: true,
-        unitCount: 50,
-        units: Array.from({ length: 50 }, (_, i) => `Unit ${i + 1}`),
-        variants: [],
-      },
-      tasks: Array.from({ length: 5 }, (_, i) => ({
-        dependsOn: [],
-        instruction: `把 src/store/store${i + 1}.ts 换成 replica 实现`,
-        title: `Unit ${i + 1}`,
-      })),
-    });
+    vi.spyOn(GoalCriteriaGeneratorService.prototype, 'decompose').mockResolvedValue(
+      createBatchDecomposition(),
+    );
     const service = new GoalService(serverDB, userId);
     const graph = await service.create({ title: 'Migrate stores' });
     await service.tick(graph.goal.id);
@@ -199,21 +175,9 @@ describe('GoalService', () => {
   });
 
   it('mounts what a break taught on the agent that runs the units, even in a project', async () => {
-    vi.spyOn(GoalCriteriaGeneratorService.prototype, 'decompose').mockResolvedValue({
-      problemStatement: '把 50 个同构的 store 迁移到 replica',
-      rollout: {
-        recipeOutline: '把 store 换成 replica 支撑的实现',
-        repeatable: true,
-        unitCount: 50,
-        units: Array.from({ length: 50 }, (_, i) => `Unit ${i + 1}`),
-        variants: [],
-      },
-      tasks: Array.from({ length: 5 }, (_, i) => ({
-        dependsOn: [],
-        instruction: `把 src/store/store${i + 1}.ts 换成 replica 实现`,
-        title: `Unit ${i + 1}`,
-      })),
-    });
+    vi.spyOn(GoalCriteriaGeneratorService.prototype, 'decompose').mockResolvedValue(
+      createBatchDecomposition(),
+    );
     await serverDB.insert(agents).values([{ id: 'agt_batch', slug: 'agt-batch', userId }]);
     await serverDB.insert(projects).values({
       coordinatorAgentId: 'agt_batch',
@@ -252,21 +216,9 @@ describe('GoalService', () => {
   });
 
   it('learns into one shared domain per agent, through the executor fallback', async () => {
-    vi.spyOn(GoalCriteriaGeneratorService.prototype, 'decompose').mockResolvedValue({
-      problemStatement: '把 50 个同构的 store 迁移到 replica',
-      rollout: {
-        recipeOutline: '把 store 换成 replica 支撑的实现',
-        repeatable: true,
-        unitCount: 50,
-        units: Array.from({ length: 50 }, (_, i) => `Unit ${i + 1}`),
-        variants: [],
-      },
-      tasks: Array.from({ length: 5 }, (_, i) => ({
-        dependsOn: [],
-        instruction: `把 src/store/store${i + 1}.ts 换成 replica 实现`,
-        title: `Unit ${i + 1}`,
-      })),
-    });
+    vi.spyOn(GoalCriteriaGeneratorService.prototype, 'decompose').mockResolvedValue(
+      createBatchDecomposition(),
+    );
     await serverDB.insert(agents).values([
       { id: 'agt_goal_main', slug: 'agt-goal-main', userId },
       { id: 'agt_gone_exec', slug: 'agt-gone-exec', userId },
@@ -325,21 +277,9 @@ describe('GoalService', () => {
   });
 
   it('creates one batch domain when two goals on an agent learn at the same time', async () => {
-    vi.spyOn(GoalCriteriaGeneratorService.prototype, 'decompose').mockResolvedValue({
-      problemStatement: '把 50 个同构的 store 迁移到 replica',
-      rollout: {
-        recipeOutline: '把 store 换成 replica 支撑的实现',
-        repeatable: true,
-        unitCount: 50,
-        units: Array.from({ length: 50 }, (_, i) => `Unit ${i + 1}`),
-        variants: [],
-      },
-      tasks: Array.from({ length: 5 }, (_, i) => ({
-        dependsOn: [],
-        instruction: `把 src/store/store${i + 1}.ts 换成 replica 实现`,
-        title: `Unit ${i + 1}`,
-      })),
-    });
+    vi.spyOn(GoalCriteriaGeneratorService.prototype, 'decompose').mockResolvedValue(
+      createBatchDecomposition(),
+    );
     await serverDB.insert(agents).values([{ id: 'agt_shared', slug: 'agt-shared', userId }]);
     const service = new GoalService(serverDB, userId);
     const graphModel = new GoalGraphModel(serverDB, userId);
@@ -376,21 +316,9 @@ describe('GoalService', () => {
   });
 
   it('moves a batch from before plan skills into one at its next revision', async () => {
-    vi.spyOn(GoalCriteriaGeneratorService.prototype, 'decompose').mockResolvedValue({
-      problemStatement: '把 50 个同构的 store 迁移到 replica',
-      rollout: {
-        recipeOutline: '把 store 换成 replica 支撑的实现',
-        repeatable: true,
-        unitCount: 50,
-        units: Array.from({ length: 50 }, (_, i) => `Unit ${i + 1}`),
-        variants: [],
-      },
-      tasks: Array.from({ length: 5 }, (_, i) => ({
-        dependsOn: [],
-        instruction: `把 src/store/store${i + 1}.ts 换成 replica 实现`,
-        title: `Unit ${i + 1}`,
-      })),
-    });
+    vi.spyOn(GoalCriteriaGeneratorService.prototype, 'decompose').mockResolvedValue(
+      createBatchDecomposition(),
+    );
     const service = new GoalService(serverDB, userId);
     const graph = await service.create({ title: 'Migrate stores' });
     await service.tick(graph.goal.id);

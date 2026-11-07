@@ -82,17 +82,13 @@ describe('UserMemoryActivityModel', () => {
       ]);
     });
 
-    it('should return activities for current user only', async () => {
+    it('returns current user activities newest first', async () => {
       const result = await activityModel.query();
 
       expect(result).toHaveLength(2);
       expect(result.every((a) => a.userId === userId)).toBe(true);
-    });
 
-    it('should order by createdAt desc', async () => {
-      const result = await activityModel.query();
-
-      expect(result[0].id).toBe('activity-2'); // Most recent first
+      expect(result[0].id).toBe('activity-2');
       expect(result[1].id).toBe('activity-1');
     });
 
@@ -195,22 +191,21 @@ describe('UserMemoryActivityModel', () => {
       ]);
     });
 
-    it('should return paginated list with default parameters', async () => {
+    it('returns the default activity page with associations and owner scope', async () => {
       const result = await activityModel.queryList();
 
       expect(result.items).toHaveLength(3);
       expect(result.page).toBe(1);
       expect(result.pageSize).toBe(20);
       expect(result.total).toBe(3);
-    });
 
-    it('returns the associated names, which pages link activities by', async () => {
-      const result = await activityModel.queryList();
       const item = result.items.find((row) => row.id === 'list-activity-1');
-
       expect(item?.associatedSubjects).toEqual([{ name: '陈老师', type: 'person' }]);
       expect(item?.associatedObjects).toEqual([{ name: 'IELTS' }]);
       expect(item?.associatedLocations).toEqual([{ name: 'Office' }]);
+
+      const otherActivity = result.items.find((a) => a.id === 'other-list-activity');
+      expect(otherActivity).toBeUndefined();
     });
 
     it('should return correct page and pageSize', async () => {
@@ -356,13 +351,6 @@ describe('UserMemoryActivityModel', () => {
       // list-activity-3 has no startsAt (NULL)
       expect(result.items[0].id).toBe('list-activity-1');
       expect(result.items[1].id).toBe('list-activity-2');
-    });
-
-    it('should not return other users activities', async () => {
-      const result = await activityModel.queryList();
-
-      const otherActivity = result.items.find((a) => a.id === 'other-list-activity');
-      expect(otherActivity).toBeUndefined();
     });
 
     it('should return correct fields structure', async () => {

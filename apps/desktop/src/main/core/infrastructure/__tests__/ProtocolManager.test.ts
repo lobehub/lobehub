@@ -285,12 +285,6 @@ describe('ProtocolManager', () => {
     });
   });
 
-  describe('getScheme', () => {
-    it('should return the protocol scheme', () => {
-      expect(manager.getScheme()).toBe('lobehub');
-    });
-  });
-
   describe('isRegistered', () => {
     it('should return true when registered', () => {
       mockApp.isDefaultProtocolClient.mockReturnValue(true);

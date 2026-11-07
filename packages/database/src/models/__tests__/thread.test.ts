@@ -15,6 +15,20 @@ import {
 import type { LobeChatDatabase } from '../../type';
 import { ThreadModel } from '../thread';
 
+const activeStandaloneThread = (): typeof threads.$inferInsert => ({
+  id: 'thread-1',
+  topicId,
+  type: ThreadType.Standalone,
+  status: ThreadStatus.Active,
+  userId,
+});
+
+const customThread = (id: string): Parameters<ThreadModel['create']>[0] => ({
+  id,
+  topicId,
+  type: ThreadType.Standalone,
+});
+
 const userId = 'thread-user-test';
 const otherUserId = 'other-user-test';
 const sessionId = 'thread-session';
@@ -67,32 +81,20 @@ describe('ThreadModel', () => {
 
     it('should honor caller-provided id', async () => {
       const customId = 'thd_custom_abc';
-      const result = await threadModel.create({
-        id: customId,
-        topicId,
-        type: ThreadType.Standalone,
-      });
+      const result = await threadModel.create(customThread(customId));
 
       expect(result.id).toBe(customId);
     });
 
     it('should return undefined when caller-provided id collides (onConflictDoNothing)', async () => {
       const customId = 'thd_collide_xyz';
-      const first = await threadModel.create({
-        id: customId,
-        topicId,
-        type: ThreadType.Standalone,
-      });
+      const first = await threadModel.create(customThread(customId));
       expect(first.id).toBe(customId);
 
       // The router layer translates this undefined into TRPCError(CONFLICT)
       // so callers using client-provided ids see an explicit error instead
       // of writing follow-up rows against a missing thread.
-      const second = await threadModel.create({
-        id: customId,
-        topicId,
-        type: ThreadType.Standalone,
-      });
+      const second = await threadModel.create(customThread(customId));
       expect(second).toBeUndefined();
     });
   });
@@ -131,13 +133,7 @@ describe('ThreadModel', () => {
       await serverDB.transaction(async (tx) => {
         await tx.insert(topics).values({ id: 'other-topic', userId: otherUserId });
         await tx.insert(threads).values([
-          {
-            id: 'thread-1',
-            topicId,
-            type: ThreadType.Standalone,
-            status: ThreadStatus.Active,
-            userId,
-          },
+          activeStandaloneThread(),
           {
             id: 'thread-2',
             topicId: 'other-topic',
@@ -503,13 +499,7 @@ describe('ThreadModel', () => {
 
   describe('delete', () => {
     it('should delete a thread', async () => {
-      await serverDB.insert(threads).values({
-        id: 'thread-1',
-        topicId,
-        type: ThreadType.Standalone,
-        status: ThreadStatus.Active,
-        userId,
-      });
+      await serverDB.insert(threads).values(activeStandaloneThread());
 
       await threadModel.delete('thread-1');
 
@@ -547,13 +537,7 @@ describe('ThreadModel', () => {
       await serverDB.transaction(async (tx) => {
         await tx.insert(topics).values({ id: 'other-topic', userId: otherUserId });
         await tx.insert(threads).values([
-          {
-            id: 'thread-1',
-            topicId,
-            type: ThreadType.Standalone,
-            status: ThreadStatus.Active,
-            userId,
-          },
+          activeStandaloneThread(),
           {
             id: 'thread-2',
             topicId,
