@@ -11,6 +11,19 @@ import {
 } from './heteroSelectorCapabilities';
 
 describe('selector availability', () => {
+  it('offers an ACP model selector for DeepSeek Harness and preserves tuple selections', () => {
+    const value = '["gateway","deepseek-v4-pro"]';
+    const capability = getHeteroSelectorCapability('deepseek-harness');
+
+    expect(isHeteroSelectorAvailable('deepseek-harness')).toBe(true);
+    expect(capability?.model?.source).toBe('catalog');
+    expect(capability?.model?.encodings).toEqual([]);
+    expect(capability?.model?.resolve({ model: value })).toBe(value);
+    expect(applyHeteroSelection({ type: 'deepseek-harness' }, { model: value })).toMatchObject({
+      model: value,
+    });
+  });
+
   it('derives the selectable provider set from any registered dimension', () => {
     expect(isHeteroSelectorAvailable('amp')).toBe(true);
     expect(isHeteroSelectorAvailable('claude-code')).toBe(true);

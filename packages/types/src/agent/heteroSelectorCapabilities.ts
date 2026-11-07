@@ -8,7 +8,11 @@ import {
   stripCliConfigKey,
   stripCliFlags,
 } from './heteroCliArgs';
-import type { HeterogeneousAgentType, LocalHeterogeneousAgentType } from './heterogeneousAgent';
+import type {
+  HeterogeneousAgentType,
+  LocalHeterogeneousAgentType,
+  LocalRuntimeHeterogeneousAgentType,
+} from './heterogeneousAgent';
 
 /**
  * Selector value that means "do not override the underlying CLI".
@@ -426,6 +430,9 @@ export const HETERO_SELECTOR_CAPABILITIES = {
       source: 'catalog',
     },
   },
+  'deepseek-harness': {
+    model: { encodings: [], resolve: resolvePersistedModel, source: 'catalog' },
+  },
   'droid': {
     model: { encodings: [], resolve: resolvePersistedModel, source: 'catalog' },
   },
@@ -473,12 +480,17 @@ export const HETERO_SELECTOR_CAPABILITIES = {
   'trae': {
     model: { encodings: [], resolve: resolvePersistedModel, source: 'catalog' },
   },
-} satisfies Record<LocalHeterogeneousAgentType, HeteroSelectorCapability>;
+} satisfies Record<
+  LocalHeterogeneousAgentType | LocalRuntimeHeterogeneousAgentType,
+  HeteroSelectorCapability
+>;
 
 export const getHeteroSelectorCapability = (
   type: string | undefined,
 ): HeteroSelectorCapability | undefined =>
-  HETERO_SELECTOR_CAPABILITIES[type as LocalHeterogeneousAgentType];
+  HETERO_SELECTOR_CAPABILITIES[
+    type as LocalHeterogeneousAgentType | LocalRuntimeHeterogeneousAgentType
+  ];
 
 export const isHeteroSelectorAvailable = (type: string | undefined): boolean =>
   Object.keys(getHeteroSelectorCapability(type) ?? {}).length > 0;
