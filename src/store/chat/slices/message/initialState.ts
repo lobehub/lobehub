@@ -6,12 +6,20 @@ import { type ConversationMessagePage } from '@/services/message/replica';
 
 import { type TranscriptPaging } from './transcript/lens';
 
+export interface FailedSendDraft {
+  editorData?: Record<string, unknown>;
+  id: string;
+  message: string;
+}
+
 export interface ChatMessageState {
   activeAgentId: string;
   /**
    * Raw messages from database (flat structure)
    */
   dbMessagesMap: Record<string, UIChatMessage[]>;
+  /** Refused sends kept separately from a newer composer draft, scoped by messageMapKey. */
+  failedSendDrafts: Record<string, FailedSendDraft[]>;
   /**
    * Group agents maps by group ID
    */
@@ -45,6 +53,7 @@ export interface ChatMessageState {
 export const initialMessageState: ChatMessageState = {
   activeAgentId: '',
   dbMessagesMap: {},
+  failedSendDrafts: {},
   groupAgentMaps: {},
   isCreatingMessage: false,
   messageEditingIds: [],

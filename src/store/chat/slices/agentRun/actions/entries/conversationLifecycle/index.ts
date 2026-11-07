@@ -142,7 +142,9 @@ import { mergePartialPersistedMessages, resolveSendResponseMessages } from '../p
 import { resolveExistingTopicForRun } from '../resolveExistingTopic';
 import { type ContextCompressionOptions, executeContextCompression } from './compression';
 import { resolveRunCwd, resolveSendProjectRun, type SourceTopicDirectory } from './runCwd';
+import { readSendEditorState } from './sendEditorState';
 import { showSendErrorInContext } from './sendErrorNotice';
+import { recoverFailedSend } from './sendFailureRecovery';
 
 /**
  * Extended params for sendMessage with context
@@ -160,6 +162,9 @@ export interface SendMessageWithContextParams extends SendMessageParams {
    * at all, so a failed send is not written into the global one.
    */
   inputEditor?: ChatInputEditor | null;
+  inputEditorSnapshot?: { json: string | undefined };
+  /** A provider can reuse its editor for another conversation while a send is pending. */
+  isInputEditorCurrent?: () => boolean;
   /** Restore composer-owned context when sending fails before a message owns it. */
   onPreflightFailure?: () => void;
   /**
@@ -276,6 +281,8 @@ export class ConversationLifecycleActionImpl {
     context,
     contextSelections,
     inputEditor,
+    inputEditorSnapshot,
+    isInputEditorCurrent,
     messages: inputMessages,
     optimisticUserMessageId,
     parentId: inputParentId,
@@ -337,12 +344,12 @@ export class ConversationLifecycleActionImpl {
 
     let editorData = inputEditorData;
     const { executeClientAgent, mainInputEditor } = this.#get();
-    // `inputEditor` names the editor that owns this send. An explicit `null`
-    // means "this send has no composer editor": an embedded reply (a task run's
-    // inline follow-up) must not fall back to ChatStore's global editor, which
-    // belongs to a sibling surface and would be refilled with this send's text
-    // when it fails. Only an omitted editor falls back to the global one.
+    // Only an omitted editor falls back to the main composer. Explicit null
+    // keeps headless sends from restoring a sibling surface's editor.
     const targetInputEditor = inputEditor === undefined ? mainInputEditor : inputEditor;
+    const sendEditorSnapshot = inputEditorSnapshot ?? {
+      json: preserveComposer ? undefined : JSON.stringify(readSendEditorState(targetInputEditor)),
+    };
     const ownerAgentId = context.agentId;
     const selectedSkills = parseSelectedSkillsFromEditorData(editorData);
     const selectedTools = parseSelectedToolsFromEditorData(editorData);
@@ -876,44 +883,31 @@ export class ConversationLifecycleActionImpl {
       const ids = options?.preserveOptimisticUser ? [tempAssistantId] : [tempId, tempAssistantId];
       this.#get().internal_dispatchMessage({ ids, type: 'deleteMessages' }, { operationId });
     };
-    /**
-     * Put the typed message back in the composer when a send fails before the
-     * user message was persisted. The composer is cleared the instant Enter is
-     * pressed, so without this the text is gone for good — the run never
-     * happened, and there is no persisted row to recover it from.
-     *
-     * Shared by all three runtime branches. Gateway and hetero previously only
-     * logged and deleted the optimistic pair, so a server-side start refusal
-     * (e.g. the topic-start reservation reporting the topic busy) was
-     * indistinguishable from the message being silently swallowed.
-     */
+    // Refusals must preserve newer input and the editor's conversation ownership.
     const restoreComposerAfterFailedSend = (error: unknown) => {
       if (preserveComposer || hasNotifiedMessageAccepted) return;
-
-      // Cancellation is a deliberate user action with its own restore path
-      // (`inputEditorTempState` is replayed by the cancel flow); re-filling the
-      // composer here would fight it.
-      const isAbort =
-        error instanceof Error &&
-        (error.message.includes('aborted') || error.name === 'AbortError');
-      if (isAbort) return;
-
-      this.#get().updateOperationMetadata(operationId, {
-        inputSendErrorMsg: error instanceof Error ? error.message : 'Unknown error',
+      recoverFailedSend({
+        context,
+        editor: targetInputEditor,
+        error,
+        get: this.#get,
+        isEditorCurrent:
+          isInputEditorCurrent ??
+          (() => {
+            const state = this.#get();
+            const key = messageMapKey({
+              agentId: state.activeAgentId,
+              groupId: state.activeGroupId,
+              threadId: state.activeThreadId,
+              topicId: state.activeTopicId,
+            });
+            return key === contextKey || key === currentContextKey;
+          }),
+        message,
+        onPreflightFailure,
+        operationId,
+        snapshot: sendEditorSnapshot,
       });
-
-      const op = this.#get().operations[operationId];
-      if (op?.metadata.inputEditorTempState) {
-        targetInputEditor?.setJSONState(op.metadata.inputEditorTempState);
-      } else {
-        targetInputEditor?.setDocument('markdown', message);
-      }
-
-      // The editor snapshot covers only text. A send rejected after the composer
-      // was cleared (e.g. the server refusing an offline bound device) would
-      // otherwise still swallow the cleared uploads and context selections —
-      // hand them back to the caller that captured them before clearing.
-      onPreflightFailure?.();
     };
     const restoreUnacceptedVoiceMessageContext = () => {
       if (!optimisticUserMessageId || hasNotifiedMessageAccepted) return;
@@ -1357,7 +1351,10 @@ export class ConversationLifecycleActionImpl {
         const sendError = op?.status === 'failed' ? op.metadata.inputSendErrorMsg : undefined;
         if (!hasNotifiedMessageAccepted && (op?.status === 'cancelled' || sendError) && jsonState) {
           const blankContext = { ...operationContext, topicId: null };
-          saveDraft(messageMapKey(blankContext), targetInputEditor?.getJSONState() ?? jsonState);
+          saveDraft(
+            messageMapKey(blankContext),
+            readSendEditorState(targetInputEditor) ?? jsonState,
+          );
           if (sendError) showSendErrorInContext(this.#get(), blankContext, sendError);
         }
         void this.#get().switchTopic(null, { skipRefreshMessage: true });
@@ -1395,7 +1392,7 @@ export class ConversationLifecycleActionImpl {
     // Store editor state in operation metadata for cancel restoration
     const jsonState = preserveComposer
       ? undefined
-      : (inputEditorData ?? targetInputEditor?.getJSONState());
+      : (inputEditorData ?? readSendEditorState(targetInputEditor));
     this.#get().updateOperationMetadata(operationId, {
       inputEditorTempState: jsonState,
       inputSendErrorMsg: undefined,

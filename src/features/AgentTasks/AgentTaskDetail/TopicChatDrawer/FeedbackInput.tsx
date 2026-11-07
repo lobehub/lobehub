@@ -5,12 +5,15 @@ import { ChevronDownIcon, MessageCirclePlus } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { NoticeAlert } from '@/components/NoticeAlert';
 import { AttachmentUploadButton } from '@/features/AttachmentInput';
+import { FailedSendDrafts } from '@/features/Conversation/ChatInput/FailedSendDrafts';
 import OpStatusTray from '@/features/Conversation/ChatInput/OpStatusTray';
 import QueueTray from '@/features/Conversation/ChatInput/QueueTray';
+import SendErrorAlert from '@/features/Conversation/ChatInput/SendErrorAlert';
 import { useConversationChatInputUiState } from '@/features/Conversation/ChatInput/useConversationChatInputUiState';
 import { useConversationResourceAccess } from '@/features/Conversation/hooks/useConversationResourceAccess';
-import { useConversationStore } from '@/features/Conversation/store';
+import { messageStateSelectors, useConversationStore } from '@/features/Conversation/store';
 import { EditorCanvas } from '@/features/EditorCanvas';
 import {
   getAttachmentFileIdsFromEditor,
@@ -18,9 +21,12 @@ import {
   insertFilesIntoEditor,
 } from '@/features/EditorCanvas/editorAttachments';
 import { useEnterToSend } from '@/hooks/useEnterToSend';
+import { useServerConfigStore } from '@/store/serverConfig';
 
+import { taskGatewayAvailability } from './taskGatewayAvailability';
 import { useComposerFocus } from './useComposerFocus';
 import { useFollowUpQueue } from './useFollowUpQueue';
+import { useTaskFollowUpSubmit } from './useTaskFollowUpSubmit';
 
 interface FeedbackInputProps {
   /** Acceptance's in-flow topic rail starts with the composer visible. The
@@ -39,12 +45,21 @@ const FeedbackInput = memo<FeedbackInputProps>(
   ({ defaultExpanded = false, disableCollapse = false, focusRequest }) => {
     const { t } = useTranslation('chat');
     const editor = useEditor();
-    const sendMessage = useConversationStore((s) => s.sendMessage);
+    const gatewayAvailability = useServerConfigStore(taskGatewayAvailability);
     const stopGenerating = useConversationStore((s) => s.stopGenerating);
-    const [submitting, setSubmitting] = useState(false);
     const [hasContent, setHasContent] = useState(false);
     const [hasAttachments, setHasAttachments] = useState(false);
     const [uploadingAttachments, setUploadingAttachments] = useState(false);
+    const sendMessageError = useConversationStore(messageStateSelectors.sendMessageError);
+    const [dismissedSendError, setDismissedSendError] = useState<string>();
+    const { handleSubmit, submitting } = useTaskFollowUpSubmit({
+      editor,
+      onClear: () => {
+        setHasContent(false);
+        setHasAttachments(false);
+        setDismissedSendError(undefined);
+      },
+    });
     const { collapse, expand, expanded, handleEditorInit, reveal } = useComposerFocus({
       defaultExpanded,
       editor,
@@ -95,38 +110,27 @@ const FeedbackInput = memo<FeedbackInputProps>(
       [editor],
     );
 
-    const handleSubmit = useCallback(async () => {
-      if (submitting || hasIncompleteEditorAttachments(editor)) return;
-      const editorData = editor?.getDocument?.('json') as Record<string, any> | undefined;
-      const markdown = String(editor?.getDocument?.('markdown') ?? '').trim();
-      const hasFiles = getAttachmentFileIdsFromEditor(editor).length > 0;
-      if (!markdown && !hasFiles) return;
-
-      // Clear the editor synchronously BEFORE await so the input feels
-      // responsive — sendMessage's optimistic-update pipeline keeps a copy
-      // of the captured markdown / editorData for rendering. Keep the
-      // ChatInput expanded after send: once the user has opened the reply
-      // composer, treat it as the new resting state for this drawer session.
-      editor?.cleanDocument?.();
-      setHasContent(false);
-      setHasAttachments(false);
-
-      setSubmitting(true);
-      try {
-        // sendMessage is bound to this drawer's ConversationProvider context
-        // (agentId + topicId + isolatedTopic), so the message continues this
-        // topic's conversation. Files attached inline in the editor travel as
-        // part of editorData / markdown — no separate files array needed.
-        // Force the gateway runtime so the follow-up runs on the same
-        // server-side path as the original `runTask` that spawned this topic,
-        // regardless of the user's global local/cloud preference.
-        await sendMessage({ editorData, forceRuntime: 'gateway', message: markdown });
-      } finally {
-        setSubmitting(false);
-      }
-    }, [editor, sendMessage, submitting]);
-
     if (!canUseResource) return <OpStatusTray seamless />;
+    if (gatewayAvailability !== 'available') {
+      return (
+        <Flexbox gap={8}>
+          <FailedSendDrafts />
+          <NoticeAlert
+            description={t(`taskDetail.gateway.${gatewayAvailability}.description`)}
+            title={t(`taskDetail.gateway.${gatewayAvailability}.title`)}
+            type={'secondary'}
+          />
+          <OpStatusTray seamless />
+        </Flexbox>
+      );
+    }
+
+    const sendErrorAlert = sendMessageError && sendMessageError !== dismissedSendError && (
+      <SendErrorAlert
+        errorMessage={sendMessageError}
+        onClose={() => setDismissedSendError(sendMessageError)}
+      />
+    );
 
     // Surface the live running-op status flush above the reply affordance (seamless
     // inline row that renders nothing when idle), so the user can watch the agent
@@ -134,6 +138,8 @@ const FeedbackInput = memo<FeedbackInputProps>(
     if (!composerExpanded) {
       return (
         <Flexbox gap={8}>
+          <FailedSendDrafts />
+          {sendErrorAlert}
           <OpStatusTray seamless />
           <Button block icon={MessageCirclePlus} type={'fill'} onClick={expand}>
             {t('taskDetail.sendFollowUp')}
@@ -144,6 +150,8 @@ const FeedbackInput = memo<FeedbackInputProps>(
 
     return (
       <Flexbox gap={hasQueuedMessages ? 0 : 8}>
+        <FailedSendDrafts />
+        {sendErrorAlert}
         {hasQueuedMessages ? (
           // Same stack as the main composer: the queue and the run status ride
           // flush on the input as attached cards, inset from its edges.

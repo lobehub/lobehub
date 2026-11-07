@@ -40,6 +40,7 @@ import {
   useConversationStoreApi,
 } from '../store';
 import TodoProgress from '../TodoProgress';
+import { FailedSendDrafts } from './FailedSendDrafts';
 import InputCompletionErrorAlert from './InputCompletionErrorAlert';
 import LinkedGoalTray from './LinkedGoalTray';
 import OpStatusTray from './OpStatusTray';
@@ -480,6 +481,7 @@ const ChatInput = memo<ChatInputProps>(
             <SendErrorAlert errorMessage={sendMessageErrorMsg} onClose={clearSendMessageError} />
           )}
           {businessAlerts}
+          <FailedSendDrafts />
           <Flexbox
             paddingInline={12}
             ref={overlayRef}

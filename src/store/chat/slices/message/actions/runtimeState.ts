@@ -4,6 +4,7 @@ import { type Action } from '@/utils/storeDebug';
 
 import { type ChatStoreState } from '../../../initialState';
 import { preventLeavingFn, toggleBooleanList } from '../../../utils';
+import type { FailedSendDraft } from '../initialState';
 
 /**
  * Runtime state management for message-related states
@@ -23,6 +24,24 @@ export class MessageRuntimeStateActionImpl {
     this.#set = set;
     this.#get = get;
   }
+
+  retainFailedSendDraft = (contextKey: string, draft: FailedSendDraft): void => {
+    const drafts = this.#get().failedSendDrafts;
+    this.#set(
+      { failedSendDrafts: { ...drafts, [contextKey]: [...(drafts[contextKey] ?? []), draft] } },
+      false,
+      'message/retainFailedSendDraft',
+    );
+  };
+
+  removeFailedSendDraft = (contextKey: string, id: string): void => {
+    const drafts = this.#get().failedSendDrafts;
+    const remaining = drafts[contextKey]?.filter((draft) => draft.id !== id);
+    const next = { ...drafts };
+    if (remaining?.length) next[contextKey] = remaining;
+    else delete next[contextKey];
+    this.#set({ failedSendDrafts: next }, false, 'message/removeFailedSendDraft');
+  };
 
   internal_toggleLoadingArrays = (
     key: keyof ChatStoreState,
