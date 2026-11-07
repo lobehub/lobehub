@@ -205,6 +205,7 @@
     "@azure/core-auth": "^1.11.0",
     "@better-auth/expo": "1.6.33",
     "@better-auth/passkey": "1.6.33",
+    "@boxd-sh/sdk": "^0.3.0",
     "@cfworker/json-schema": "^4.1.1",
     "@chat-adapter/discord": "~4.38.0",
     "@chat-adapter/slack": "~4.38.0",

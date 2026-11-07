@@ -52,4 +52,26 @@ describe('sandbox service factory', () => {
     expect(service.kind).toBe('onlyboxes');
     expect(service.capabilities.languages).toEqual(['python', 'javascript', 'typescript']);
   });
+
+  it('uses the boxd provider when configured', async () => {
+    vi.doMock('@/envs/sandbox', () => ({
+      sandboxEnv: {
+        BOXD_API_KEY: 'bxd_test',
+        SANDBOX_PROVIDER: 'boxd',
+      },
+    }));
+
+    const { createSandboxService } = await import('../factory');
+    const service = createSandboxService(baseOptions);
+
+    expect(service.kind).toBe('boxd');
+    expect(service.capabilities).toMatchObject({
+      backgroundCommands: true,
+      exportFile: true,
+      files: true,
+      persistentSession: true,
+      shell: true,
+      skillScripts: true,
+    });
+  });
 });

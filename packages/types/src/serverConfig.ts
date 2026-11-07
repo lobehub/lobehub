@@ -199,9 +199,10 @@ export interface GlobalServerConfig {
   oidcIssuer?: string;
   /**
    * The sandbox the page agent edits pages in: Market (needs the user's Market
-   * authorization unless the trusted client is configured), Onlyboxes, or none.
+   * authorization unless the trusted client is configured), Onlyboxes, boxd,
+   * or none.
    */
-  sandbox?: 'market' | 'onlyboxes' | 'unconfigured';
+  sandbox?: 'boxd' | 'market' | 'onlyboxes' | 'unconfigured';
   systemAgent?: PartialDeep<UserServiceModelConfig>;
   telemetry: {
     langfuse?: boolean;
