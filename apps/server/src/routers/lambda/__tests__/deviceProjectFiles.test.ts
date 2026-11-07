@@ -254,4 +254,14 @@ describe('device listClaudeCodeMemory', () => {
       caller().listClaudeCodeMemory({ ...base, deviceId: 'dev-mem-4' }),
     ).resolves.toBeNull();
   });
+
+  it('reports an outdated memory client as an unmet precondition', async () => {
+    const message = 'Unknown device RPC method: listClaudeCodeMemory';
+    mocks.listClaudeCodeMemory.mockRejectedValue(new Error(message));
+
+    await expect(caller().listClaudeCodeMemory(base)).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+      message,
+    });
+  });
 });

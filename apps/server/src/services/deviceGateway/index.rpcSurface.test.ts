@@ -553,6 +553,23 @@ describe('DeviceGateway RPC surface', () => {
     resetGatewayMocks();
   });
 
+  it.each(['reply', 'transport'] as const)(
+    'preserves an unsupported memory RPC from the %s so the UI can request an upgrade',
+    async (failureSource) => {
+      configureGateway();
+      const message = 'Unknown device RPC method: listClaudeCodeMemory';
+      if (failureSource === 'reply') {
+        mockClient.invokeRpc.mockResolvedValue({ error: message, success: false });
+      } else {
+        mockClient.invokeRpc.mockRejectedValue(new Error(message));
+      }
+
+      await expect(
+        new DeviceGateway().listClaudeCodeMemory({ ...base, scope: '/p' }),
+      ).rejects.toThrow(message);
+    },
+  );
+
   it.each(cases)('$name relays its RPC and unwraps the answer', async (c) => {
     configureGateway();
     mockClient.invokeRpc.mockResolvedValue({ data: DATA, success: true });

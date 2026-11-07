@@ -299,13 +299,28 @@ export const projectFilesRouter = router({
   listClaudeCodeMemory: workspaceFileProcedure
     .input(z.object({ agentId: z.string().optional() }))
     .query(async ({ ctx, input }) => {
-      const result = await deviceGateway.listClaudeCodeMemory({
-        deviceId: input.deviceId,
-        env: input.agentId ? await resolveAgentClaudeMemoryEnv(ctx, input.agentId) : undefined,
-        scope: input.workingDirectory,
-        userId: ctx.userId,
-        workspaceId: ctx.workspaceId,
-      });
+      const result = await deviceGateway
+        .listClaudeCodeMemory({
+          deviceId: input.deviceId,
+          env: input.agentId ? await resolveAgentClaudeMemoryEnv(ctx, input.agentId) : undefined,
+          scope: input.workingDirectory,
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        })
+        .catch((error: unknown) => {
+          // The gateway preserves this specific rejection from older device clients.
+          if (
+            error instanceof Error &&
+            error.message.includes('Unknown device RPC method: listClaudeCodeMemory')
+          ) {
+            throw new TRPCError({
+              cause: error,
+              code: 'PRECONDITION_FAILED',
+              message: error.message,
+            });
+          }
+          throw error;
+        });
 
       if (result?.memoryDir && result.files.length > 0) {
         registerDeviceMemoryRoot(input.deviceId, {

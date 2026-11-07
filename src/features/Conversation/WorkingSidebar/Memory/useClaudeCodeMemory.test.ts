@@ -1,4 +1,4 @@
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { createElement, type ReactNode } from 'react';
 import { SWRConfig } from 'swr';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -102,6 +102,7 @@ describe('useClaudeCodeMemory', () => {
     );
 
     await waitFor(() => expect(result.current.error).toBeInstanceOf(Error));
+    expect(result.current.requiresUpgrade).toBe(false);
     expect(result.current.data).toBeUndefined();
     expect(mocks.listMemory).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -110,5 +111,40 @@ describe('useClaudeCodeMemory', () => {
         workingDirectory: '/repo',
       }),
     );
+  });
+
+  it.each([
+    'Unknown device RPC method: listClaudeCodeMemory',
+    "Error invoking remote method 'workspace.listClaudeCodeMemory': Error: No handler registered for 'workspace.listClaudeCodeMemory'",
+  ])('requests an upgrade for a missing memory method: %s', async (message) => {
+    mocks.listMemory.mockRejectedValue(new Error(message));
+    const { result } = renderHook(() => useClaudeCodeMemory({ workingDirectory: '/repo' }), {
+      wrapper,
+    });
+
+    await waitFor(() => expect(result.current.requiresUpgrade).toBe(true));
+    expect(result.current.data).toBeUndefined();
+
+    // Reconnect after upgrading and reload the same panel, without remounting it.
+    mocks.listMemory.mockResolvedValue({ files: [], memoryDir });
+    await act(async () => {
+      await result.current.mutate();
+    });
+    expect(result.current.requiresUpgrade).toBe(false);
+    expect(result.current.data).toEqual({ files: [], memoryDir });
+  });
+
+  it.each([
+    'Device RPC timed out',
+    'EACCES: permission denied',
+    'Unknown device RPC method: listProjectSkills',
+  ])('keeps unrelated failures retryable: %s', async (message) => {
+    mocks.listMemory.mockRejectedValue(new Error(message));
+    const { result } = renderHook(() => useClaudeCodeMemory({ workingDirectory: '/repo' }), {
+      wrapper,
+    });
+
+    await waitFor(() => expect(result.current.error).toBeInstanceOf(Error));
+    expect(result.current.requiresUpgrade).toBe(false);
   });
 });
