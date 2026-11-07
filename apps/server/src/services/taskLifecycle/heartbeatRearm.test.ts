@@ -4,6 +4,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TaskLifecycleService } from './index';
 
+const notifyFailed = vi.hoisted(() => vi.fn());
+
+vi.mock('@/business/server/task/notifyScheduledTaskResult', () => ({
+  notifyScheduledTaskCompleted: vi.fn(),
+  notifyScheduledTaskFailed: notifyFailed,
+}));
+
 const fakeScheduler = {
   cancelScheduled: vi.fn().mockResolvedValue(undefined),
   scheduleNextTopic: vi.fn().mockResolvedValue('msg-new'),
@@ -31,18 +38,22 @@ const baseTask = (overrides: Partial<TaskItem> = {}): TaskItem =>
 describe('TaskLifecycleService.maybeRearmHeartbeat', () => {
   let service: TaskLifecycleService;
   let updateContext: ReturnType<typeof vi.fn>;
+  let updateStatusIfCurrent: ReturnType<typeof vi.fn>;
   let hasUnresolvedUrgent: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     fakeScheduler.scheduleNextTopic.mockClear().mockResolvedValue('msg-new');
     fakeScheduler.cancelScheduled.mockClear().mockResolvedValue(undefined);
+    notifyFailed.mockClear().mockResolvedValue(undefined);
 
     service = new TaskLifecycleService({} as any, 'user-1');
 
     updateContext = vi.fn().mockResolvedValue(null);
+    updateStatusIfCurrent = vi.fn().mockResolvedValue(baseTask({ status: 'paused' }));
     hasUnresolvedUrgent = vi.fn().mockResolvedValue(false);
 
     (service as any).taskModel.updateContext = updateContext;
+    (service as any).taskModel.updateStatusIfCurrent = updateStatusIfCurrent;
     (service as any).briefModel.hasUnresolvedUrgentByTask = hasUnresolvedUrgent;
   });
 
@@ -51,7 +62,7 @@ describe('TaskLifecycleService.maybeRearmHeartbeat', () => {
   });
 
   const rearm = (task: TaskItem, reason: string) =>
-    (service as any).maybeRearmHeartbeat(task, reason);
+    (service as any).maybeRearmHeartbeat(task, reason, 'op-1');
 
   it('schedules next tick and writes scheduler context on done', async () => {
     await rearm(baseTask(), 'done');
@@ -69,6 +80,35 @@ describe('TaskLifecycleService.maybeRearmHeartbeat', () => {
         tickToken: expect.any(String),
       }),
     });
+  });
+
+  it.each([
+    [new Error('queue unavailable'), 3],
+    [Object.assign(new Error('invalid request'), { status: 400 }), 1],
+  ])('bounds retries, persists, pauses, and alerts once', async (error, calls) => {
+    fakeScheduler.scheduleNextTopic.mockRejectedValue(error);
+    await rearm(baseTask({ status: 'scheduled' }), 'done');
+    expect(fakeScheduler.scheduleNextTopic).toHaveBeenCalledTimes(calls);
+    expect(updateContext).toHaveBeenCalledTimes(calls);
+    expect(updateStatusIfCurrent).toHaveBeenCalledOnce();
+    expect(notifyFailed).toHaveBeenCalledOnce();
+  });
+
+  it('retries only context persistence after publishing a tick', async () => {
+    updateContext.mockRejectedValueOnce(new Error('database unavailable'));
+
+    await rearm(baseTask({ status: 'scheduled' }), 'done');
+
+    const publishedWrites = updateContext.mock.calls.filter(
+      ([, patch]) => patch.scheduler.tickMessageId === 'msg-new',
+    );
+    expect(fakeScheduler.scheduleNextTopic).toHaveBeenCalledTimes(1);
+    expect(publishedWrites).toHaveLength(2);
+    expect(publishedWrites[0][1].scheduler.tickToken).toBe(
+      publishedWrites[1][1].scheduler.tickToken,
+    );
+    expect(updateStatusIfCurrent).not.toHaveBeenCalled();
+    expect(notifyFailed).not.toHaveBeenCalled();
   });
 
   it('skips when automationMode is not heartbeat', async () => {
