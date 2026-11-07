@@ -7,6 +7,7 @@ import { promisify } from 'node:util';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
+  collectProjectDirectories,
   defaultGetProjectFileIndex,
   defaultListProjectDirectory,
   defaultSearchProjectFiles,
@@ -381,5 +382,56 @@ describe('defaultSearchProjectFiles', () => {
     expect(relativePaths).toEqual(
       expect.arrayContaining(['.agents/', '.agents/skills/', '.agents/skills/target-skill.md']),
     );
+  });
+});
+
+describe('collectProjectDirectories', () => {
+  const parentRelativePaths = (pathApi: typeof path.win32, root: string, nestedFile: string) =>
+    collectProjectDirectories([pathApi.resolve(root, nestedFile)], root, pathApi)
+      .map((entry) => entry.relativePath)
+      .sort();
+
+  it('emits Windows parent directories when the git root uses forward slashes', () => {
+    const root = 'D:/repo';
+    const entries = collectProjectDirectories(
+      [path.win32.resolve(root, 'src/nested/example.ts')],
+      root,
+      path.win32,
+    );
+
+    expect(entries.map((entry) => entry.relativePath).sort()).toEqual(['src/', 'src/nested/']);
+    expect(entries.every((entry) => entry.isDirectory)).toBe(true);
+    expect(entries.map((entry) => path.win32.resolve(entry.path))).not.toContain(
+      path.win32.resolve(root),
+    );
+    // `path.dirname` keeps the forward slashes of an unresolved Windows path.
+    expect(
+      collectProjectDirectories(['D:/repo/src/nested/example.ts'], root, path.win32)
+        .map((entry) => entry.relativePath)
+        .sort(),
+    ).toEqual(['src/', 'src/nested/']);
+  });
+
+  it('dedupes shared Windows parents and skips a file that sits on the root', () => {
+    const root = 'D:/repo';
+    const entries = collectProjectDirectories(
+      [
+        path.win32.resolve(root, 'src/nested/example.ts'),
+        path.win32.resolve(root, 'src/nested/other.ts'),
+        path.win32.resolve(root, 'README.md'),
+      ],
+      root,
+      path.win32,
+    );
+
+    expect(entries.map((entry) => entry.relativePath).sort()).toEqual(['src/', 'src/nested/']);
+  });
+
+  it('keeps POSIX parent directories and does not emit the root', () => {
+    expect(parentRelativePaths(path.posix, '/repo', 'src/nested/example.ts')).toEqual([
+      'src/',
+      'src/nested/',
+    ]);
+    expect(parentRelativePaths(path.posix, '/repo', 'README.md')).toEqual([]);
   });
 });
