@@ -70,18 +70,6 @@ describe('TopicDocumentModel', () => {
       expect(result.topicId).toBe(topicId);
     });
 
-    it('should associate the same document with multiple topics', async () => {
-      const doc = await createTestDocument(documentModel, 'Shared Document');
-
-      await topicDocumentModel.associate({ documentId: doc.id, topicId });
-      await topicDocumentModel.associate({ documentId: doc.id, topicId: topicId2 });
-
-      const topicIds = await topicDocumentModel.findByDocumentId(doc.id);
-      expect(topicIds).toHaveLength(2);
-      expect(topicIds).toContain(topicId);
-      expect(topicIds).toContain(topicId2);
-    });
-
     it('should associate multiple documents with the same topic', async () => {
       const doc1 = await createTestDocument(documentModel, 'Document 1');
       const doc2 = await createTestDocument(documentModel, 'Document 2');

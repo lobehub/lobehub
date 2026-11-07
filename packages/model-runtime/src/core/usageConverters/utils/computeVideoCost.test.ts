@@ -4,19 +4,35 @@ import { describe, expect, it } from 'vitest';
 import type { VideoGenerationParams } from './computeVideoCost';
 import { computeVideoCost, computeVideoRequestCost } from './computeVideoCost';
 
+const createAudioLookupPricing = (): Pricing => ({
+  units: [
+    {
+      lookup: {
+        pricingParams: ['generateAudio'],
+        prices: { true: 0.42 },
+      },
+      name: 'videoGeneration',
+      strategy: 'lookup',
+      unit: 'millionTokens',
+    },
+  ],
+});
+
+const createFixedTokenPricing = (): Pricing => ({
+  units: [
+    {
+      name: 'videoGeneration',
+      rate: 0.21,
+      strategy: 'fixed',
+      unit: 'millionTokens',
+    },
+  ],
+});
+
 describe('computeVideoCost', () => {
   describe('fixed pricing strategy', () => {
     it('should compute cost with millionTokens unit', () => {
-      const pricing: Pricing = {
-        units: [
-          {
-            name: 'videoGeneration',
-            rate: 0.21,
-            strategy: 'fixed',
-            unit: 'millionTokens',
-          },
-        ],
-      };
+      const pricing: Pricing = createFixedTokenPricing();
 
       const result = computeVideoCost(pricing, 500_000, {});
 
@@ -45,16 +61,7 @@ describe('computeVideoCost', () => {
     });
 
     it('should handle zero tokens', () => {
-      const pricing: Pricing = {
-        units: [
-          {
-            name: 'videoGeneration',
-            rate: 0.21,
-            strategy: 'fixed',
-            unit: 'millionTokens',
-          },
-        ],
-      };
+      const pricing: Pricing = createFixedTokenPricing();
 
       const result = computeVideoCost(pricing, 0, {});
 
@@ -93,19 +100,7 @@ describe('computeVideoCost', () => {
     });
 
     it('should return undefined when lookup param is missing', () => {
-      const pricing: Pricing = {
-        units: [
-          {
-            lookup: {
-              pricingParams: ['generateAudio'],
-              prices: { true: 0.42 },
-            },
-            name: 'videoGeneration',
-            strategy: 'lookup',
-            unit: 'millionTokens',
-          },
-        ],
-      };
+      const pricing: Pricing = createAudioLookupPricing();
 
       // generateAudio is undefined
       const result = computeVideoCost(pricing, 1_000_000, {});
@@ -114,19 +109,7 @@ describe('computeVideoCost', () => {
     });
 
     it('should return undefined when lookup key has no matching price', () => {
-      const pricing: Pricing = {
-        units: [
-          {
-            lookup: {
-              pricingParams: ['generateAudio'],
-              prices: { true: 0.42 },
-            },
-            name: 'videoGeneration',
-            strategy: 'lookup',
-            unit: 'millionTokens',
-          },
-        ],
-      };
+      const pricing: Pricing = createAudioLookupPricing();
 
       const params: VideoGenerationParams = { generateAudio: false };
       const result = computeVideoCost(pricing, 1_000_000, params);
@@ -155,19 +138,7 @@ describe('computeVideoCost', () => {
     });
 
     it('should return undefined when param value is null', () => {
-      const pricing: Pricing = {
-        units: [
-          {
-            lookup: {
-              pricingParams: ['generateAudio'],
-              prices: { true: 0.42 },
-            },
-            name: 'videoGeneration',
-            strategy: 'lookup',
-            unit: 'millionTokens',
-          },
-        ],
-      };
+      const pricing: Pricing = createAudioLookupPricing();
 
       const params: VideoGenerationParams = { generateAudio: null as any };
       const result = computeVideoCost(pricing, 1_000_000, params);
@@ -216,16 +187,7 @@ describe('computeVideoCost', () => {
     });
 
     it('should default to USD when currency is not specified', () => {
-      const pricing: Pricing = {
-        units: [
-          {
-            name: 'videoGeneration',
-            rate: 0.21,
-            strategy: 'fixed',
-            unit: 'millionTokens',
-          },
-        ],
-      };
+      const pricing: Pricing = createFixedTokenPricing();
 
       const result = computeVideoCost(pricing, 1_000_000, {});
 

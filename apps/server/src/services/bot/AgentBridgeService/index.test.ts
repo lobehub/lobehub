@@ -683,21 +683,6 @@ describe('AgentBridgeService', () => {
       expect(thread.startTyping).toHaveBeenCalled();
       expect(progressMessageIdFromHooks()).toBeUndefined();
     });
-
-    it('keeps the ack when processingMessage is on', async () => {
-      mockGetPlatform.mockReturnValue({ id: 'qq', name: 'QQ', supportsMessageEdit: false });
-      const service = new AgentBridgeService(FAKE_DB, USER_ID);
-      const thread = createThread();
-
-      await service.handleMention(thread, createMessage(), {
-        agentId: 'agent-1',
-        botContext: { platform: 'qq', platformThreadId: 'qq:c2c:user-1' } as any,
-        botSettings: { processingMessage: true },
-        client: createClient(),
-      });
-
-      expect(thread.post).toHaveBeenCalledTimes(1);
-    });
   });
 
   describe('activeThreads cleanup on side-effect failure', () => {

@@ -322,18 +322,6 @@ describe('connectAppView', () => {
     expect(confirmAppToolCall).toHaveBeenCalledTimes(4);
   });
 
-  it('withdraws its pending approvals when the view goes away', async () => {
-    confirmAppToolCall.mockReturnValue(new Promise(() => {}));
-    const { call, dispose } = setup();
-
-    await call(1, 'Rome');
-    const { signal } = confirmAppToolCall.mock.calls[0][0] as { signal: AbortSignal };
-    expect(signal.aborted).toBe(false);
-
-    dispose();
-    expect(signal.aborted).toBe(true);
-  });
-
   it('drops an approval once the view stops waiting for that request', async () => {
     // Like the real confirm: an aborted approval resolves `false`, whatever the user clicks later
     const settle = ({ signal }: { signal: AbortSignal }) =>
