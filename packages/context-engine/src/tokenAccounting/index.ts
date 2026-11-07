@@ -4,6 +4,7 @@ import type { AssistantContentBlock, UIChatMessage } from '@lobechat/types';
 import { estimateTokenCount } from 'tokenx';
 
 import { DEFAULT_TEMPLATE, formatTaskMessage } from '../processors/TaskMessage';
+import { DEFAULT_DRIFT_MULTIPLIER } from './constants';
 import type {
   ContextTokenAccounting,
   CountContextTokensParams,
@@ -13,8 +14,8 @@ import type {
 } from './types';
 
 export * from './attachmentTokenBuckets';
-
-export const DEFAULT_DRIFT_MULTIPLIER = 1.25;
+export { DEFAULT_DRIFT_MULTIPLIER } from './constants';
+export * from './requestTokens';
 
 const ZERO_BY_SOURCE = (): Record<TokenSourceType, number> => ({
   content: 0,

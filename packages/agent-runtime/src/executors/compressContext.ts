@@ -141,7 +141,10 @@ export const compressContext =
           (message) =>
             message.role !== 'compressedGroup' &&
             Boolean(message.id) &&
-            !preservedMessageIds.has(message.id),
+            !preservedMessageIds.has(message.id) &&
+            // The seeded assistant placeholder is filled by the LLM turn after
+            // compression; grouping it would hide that reply inside the summary.
+            message.id !== state.pendingAssistantMessageId,
         )
         .map((message) => message.id);
 
@@ -173,7 +176,34 @@ export const compressContext =
       });
       createdGroupId = compressionResult.messageGroupId;
 
+      // Summarize the conversation as the context engine builds it for the
+      // model — the same view the compression budget was checked against — not
+      // the raw history, which can be many times the window (full stale tool
+      // output, history the engine truncates).
+      const conversation = transports.context
+        ? (
+            await transports.context.build({
+              model: compressionModel.model,
+              payload: {
+                // The summary needs what an attachment is, not its full text:
+                // previewing every file keeps token-dense attachments from
+                // expanding the compression prompt past the window.
+                attachmentPreviewFileIds: messagesToCompress.flatMap(
+                  (message) => message.fileList?.map((file: { id: string }) => file.id) ?? [],
+                ),
+                messages: messagesToCompress,
+                model: compressionModel.model,
+                provider: compressionModel.provider,
+                tools: [],
+              },
+              provider: compressionModel.provider,
+              state,
+            })
+          ).messages
+        : undefined;
+
       const compressionPayload = await compression.buildPrompt({
+        conversation,
         existingSummary: persistedExistingSummary || existingSummary,
         messages: compressionResult.messagesToSummarize,
       });

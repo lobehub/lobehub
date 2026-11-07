@@ -45,6 +45,7 @@ export interface AgentRuntimeContext {
     | 'human_approved_tool'
     | 'human_abort'
     | 'compression_result'
+    | 'context_over_budget'
     | 'error';
 
   /** Session info (kept for backward compatibility, will be optional in the future) */
@@ -119,6 +120,11 @@ export interface Agent {
 
 // ── Payloads ──────────────────────────────────────────────
 
+export interface ContextBudget {
+  /** Adjusted input-token estimate above which the context is compressed first */
+  compressionThreshold: number;
+}
+
 export interface CallLLMPayload {
   additionalContexts?: readonly RuntimeAdditionalContextFragment[];
   allowedToolNames?: string[];
@@ -127,6 +133,14 @@ export interface CallLLMPayload {
    * `shouldCompress` so attachment text fits under the compression threshold.
    */
   attachmentPreviewFileIds?: string[];
+  /**
+   * Compression budget checked against the request the context engine builds.
+   * When the engine-built request (messages + tool definitions) exceeds
+   * `compressionThreshold`, `call_llm` returns a `context_over_budget` phase
+   * instead of calling the model. Omitted when compression is disabled or the
+   * context was just compressed.
+   */
+  contextBudget?: ContextBudget;
   isFirstMessage?: boolean;
   messages: any[];
   model: string;

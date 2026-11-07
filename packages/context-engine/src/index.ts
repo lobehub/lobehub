@@ -21,8 +21,10 @@ export * from './providers';
 export type {
   ContextTokenAccounting,
   CountContextTokensParams,
+  EstimateRequestTokensParams,
   InputTokenBuckets,
   MessageTokenBreakdown,
+  RequestTokenEstimate,
   TokenSourceType,
   ToolDefinitionTokenBreakdown,
 } from './tokenAccounting';
@@ -32,6 +34,7 @@ export {
   DEFAULT_DRIFT_MULTIPLIER,
   EMPTY_TOKEN_BUCKETS,
   estimatePendingUploadTokenBuckets,
+  estimateRequestTokens,
   estimateSentMessageAttachmentTokenBuckets,
   isTextLikeUploadFile,
 } from './tokenAccounting';

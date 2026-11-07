@@ -234,6 +234,58 @@ describe('callLlm executor', () => {
     expect(streamStart?.[0].data).not.toHaveProperty('parentMessage');
   });
 
+  describe('compression budget', () => {
+    // Incident: stored history was ~1.6M tokens (over a 1M window) while the
+    // engine-built request was ~86k. The budget must be checked on the latter.
+    const budgetedPayload = (compressionThreshold: number) => ({
+      ...instruction.payload,
+      assistantMessageId: 'msg_seeded_placeholder',
+      contextBudget: { compressionThreshold },
+      messages: [{ content: 'x'.repeat(400_000), role: 'user' }],
+    });
+
+    it('stops before creating the assistant message when the built request is over budget', async () => {
+      const transport = createCallTransport();
+      const messages = createMessageTransport();
+      const stream = createStreamSink();
+      const context = createContextBuilder();
+      vi.mocked(context.build).mockResolvedValue({
+        ...contextOutput,
+        messages: [{ content: 'y'.repeat(20_000), role: 'user' }],
+      });
+      const host = createHost(transport.llm, messages, stream, context);
+      const payload = budgetedPayload(100);
+
+      const result = await callLlm(host)({ payload, type: 'call_llm' }, createState(), {
+        phase: 'user_input',
+      });
+
+      expect(result.nextContext).toMatchObject({
+        payload: { currentTokenCount: expect.any(Number), messages: payload.messages },
+        phase: 'context_over_budget',
+      });
+      expect(result.newState.pendingAssistantMessageId).toBe('msg_seeded_placeholder');
+      expect(messages.createAssistantMessage).not.toHaveBeenCalled();
+      expect(stream.publishEvent).not.toHaveBeenCalled();
+      expect(transport.runAttempt).not.toHaveBeenCalled();
+    });
+
+    it('calls the model when only the stored history, not the built request, is over budget', async () => {
+      const transport = createCallTransport();
+      const host = createHost(transport.llm);
+
+      // Stored payload ≈ 100k tokens; the engine-built request is a few tokens.
+      const result = await callLlm(host)(
+        { payload: budgetedPayload(10_000), type: 'call_llm' },
+        createState(),
+        { phase: 'user_input' },
+      );
+
+      expect(result.nextContext?.phase).not.toBe('context_over_budget');
+      expect(transport.runAttempt).toHaveBeenCalledTimes(1);
+    });
+  });
+
   it('prepares the assistant message and delegates call_llm execution to the LLM transport', async () => {
     const state = createState();
     const transport = createCallTransport();
