@@ -24,18 +24,23 @@ export interface CheckPromptParams {
   documentText: string;
   rules: PromptRule[];
   userContext?: string;
+  /** Set when a long document is checked window by window instead of in one prompt. */
+  window?: { count: number; index: number };
 }
 
 export const chainCheckPrompt = (params: CheckPromptParams): string => {
   const userContext = params.userContext?.trim()
     ? `\n\n【补充说明】（用户提供）\n${params.userContext.trim()}`
     : '';
+  const windowNote = params.window
+    ? `\n\n【分段】第 ${params.window.index + 1}/${params.window.count} 段：本次只给出该分段范围内的判定；该规则的相关条款可能出现在其它分段，本段未见相关条款时输出 uncertain，不要据此判定 passed 或 failed。`
+    : '';
 
   return `【规则】
 ${JSON.stringify(params.rules)}
 
 【文档】
-${params.documentText}${userContext}`;
+${params.documentText}${userContext}${windowNote}`;
 };
 
 export const CHECK_SYSTEM_PROMPT = CHECK_SYSTEM;

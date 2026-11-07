@@ -63,6 +63,60 @@ interface NormalizedOutcome {
   status: CheckStatus;
 }
 
+/**
+ * Splits a plain-text document into windows that each fit the check prompt
+ * budget. A long document is checked window by window instead of being silently
+ * truncated, so a clause near the tail is still seen by the model.
+ */
+export const splitDocumentWindows = (text: string, maxChars: number): string[] => {
+  if (text.length <= maxChars) return [text];
+
+  const windows: string[] = [];
+  let current = '';
+
+  const flush = () => {
+    if (current) windows.push(current);
+    current = '';
+  };
+
+  for (const paragraph of text.split(/\n{2,}/)) {
+    // A single paragraph over budget is hard-split, so no character is dropped.
+    if (paragraph.length > maxChars) {
+      flush();
+      for (let start = 0; start < paragraph.length; start += maxChars) {
+        windows.push(paragraph.slice(start, start + maxChars));
+      }
+      continue;
+    }
+
+    const candidate = current ? `${current}\n\n${paragraph}` : paragraph;
+    if (candidate.length <= maxChars) {
+      current = candidate;
+    } else {
+      flush();
+      current = paragraph;
+    }
+  }
+  flush();
+
+  return windows.length > 0 ? windows : [text];
+};
+
+/**
+ * Merges the per-window verdicts of one rule. A violation found in any window
+ * wins; a pass still needs a located supporting quote; everything else stays
+ * `uncertain` — a window never turns a partial reading into a pass.
+ */
+export const mergeWindowOutcomes = (outcomes: NormalizedOutcome[]): NormalizedOutcome => {
+  const failed = outcomes.find((outcome) => outcome.status === 'failed');
+  if (failed) return failed;
+
+  const passed = outcomes.find((outcome) => outcome.status === 'passed');
+  if (passed) return passed;
+
+  return outcomes[0];
+};
+
 interface RuleWithItem {
   item: DocumentReviewCheckResultItem;
   rule?: DocumentReviewRuleItem;
@@ -338,7 +392,9 @@ export class ReviewPlaybookService {
     if (items.length === 0) return [];
 
     const source = await readDocumentTextSource(this.documentModel, session.documentId);
-    const documentText = documentPlainText(source).slice(0, REVIEW_CHECK_MAX_CHARS);
+    // Checked window by window when the document exceeds the prompt budget: a
+    // truncated prefix must never be presented to the model as the whole document.
+    const windows = splitDocumentWindows(documentPlainText(source), REVIEW_CHECK_MAX_CHARS);
     // Captured before the LLM call: `transitionCheck` re-reads both versions and
     // refuses to commit a verdict computed from content that has since changed.
     const documentRevision = source.updatedAt ?? undefined;
@@ -348,66 +404,80 @@ export class ReviewPlaybookService {
       ruleWithItems.push({ item, rule: await this.reviewModel.findRuleById(item.ruleId) });
     }
 
-    const outcomes = new Map<string, NormalizedOutcome>();
-    for (const batch of chunk(ruleWithItems, REVIEW_CHECK_BATCH_SIZE)) {
-      const promptRules = batch.map(({ item, rule }) => ({
-        instruction: rule?.instruction ?? '（规则已删除，无法检查）',
-        ruleId: item.ruleId,
-        severity: rule?.severity ?? 'medium',
-        title: rule?.title ?? '规则已删除',
-      }));
+    const outcomes = new Map<string, NormalizedOutcome[]>();
+    const record = (id: string, outcome: NormalizedOutcome) => {
+      const collected = outcomes.get(id);
+      if (collected) collected.push(outcome);
+      else outcomes.set(id, [outcome]);
+    };
 
-      let raw: unknown;
-      try {
-        raw = await this.llm.generateObject({
-          promptVersion: REVIEW_CHECK_PROMPT_VERSION,
-          schema: CheckResponseSchema,
-          schemaName: 'ReviewCheckVerdicts',
-          scenario: 'document_review_check',
-          system: CHECK_SYSTEM_PROMPT,
-          user: chainCheckPrompt({ documentText, rules: promptRules, userContext }),
-        });
-      } catch {
-        for (const { item } of batch) {
-          outcomes.set(item.id, {
-            evidence: [],
-            explanation: uncertainExplanation('模型调用失败，未能完成判定。', 'model_error'),
-            status: 'uncertain',
-          });
-        }
-        continue;
-      }
+    for (const [windowIndex, windowText] of windows.entries()) {
+      for (const batch of chunk(ruleWithItems, REVIEW_CHECK_BATCH_SIZE)) {
+        const promptRules = batch.map(({ item, rule }) => ({
+          instruction: rule?.instruction ?? '（规则已删除，无法检查）',
+          ruleId: item.ruleId,
+          severity: rule?.severity ?? 'medium',
+          title: rule?.title ?? '规则已删除',
+        }));
 
-      const parsed = CheckResponseSchema.safeParse(dropNulls(raw, CHECK_NULLABLE_PATHS));
-      if (!parsed.success) {
-        for (const { item } of batch) {
-          outcomes.set(item.id, {
-            evidence: [],
-            explanation: uncertainExplanation('模型输出无法解析，未能完成判定。', 'schema_invalid'),
-            status: 'uncertain',
+        let raw: unknown;
+        try {
+          raw = await this.llm.generateObject({
+            promptVersion: REVIEW_CHECK_PROMPT_VERSION,
+            schema: CheckResponseSchema,
+            schemaName: 'ReviewCheckVerdicts',
+            scenario: 'document_review_check',
+            system: CHECK_SYSTEM_PROMPT,
+            user: chainCheckPrompt({
+              documentText: windowText,
+              rules: promptRules,
+              userContext,
+              window:
+                windows.length > 1 ? { count: windows.length, index: windowIndex } : undefined,
+            }),
           });
-        }
-        continue;
-      }
-
-      const verdictByRule = new Map(parsed.data.results.map((result) => [result.ruleId, result]));
-      for (const { item } of batch) {
-        const verdict = verdictByRule.get(item.ruleId);
-        if (!verdict) {
-          outcomes.set(item.id, {
-            evidence: [],
-            explanation: uncertainExplanation('模型未返回该规则的结论。', 'schema_invalid'),
-            status: 'uncertain',
-          });
+        } catch {
+          for (const { item } of batch) {
+            record(item.id, {
+              evidence: [],
+              explanation: uncertainExplanation('模型调用失败，未能完成判定。', 'model_error'),
+              status: 'uncertain',
+            });
+          }
           continue;
         }
-        outcomes.set(item.id, this.normalizeVerdict(verdict, documentText));
+
+        const parsed = CheckResponseSchema.safeParse(dropNulls(raw, CHECK_NULLABLE_PATHS));
+        if (!parsed.success) {
+          for (const { item } of batch) {
+            record(item.id, {
+              evidence: [],
+              explanation: uncertainExplanation('模型输出无法解析，未能完成判定。', 'schema_invalid'),
+              status: 'uncertain',
+            });
+          }
+          continue;
+        }
+
+        const verdictByRule = new Map(parsed.data.results.map((result) => [result.ruleId, result]));
+        for (const { item } of batch) {
+          const verdict = verdictByRule.get(item.ruleId);
+          if (!verdict) {
+            record(item.id, {
+              evidence: [],
+              explanation: uncertainExplanation('模型未返回该规则的结论。', 'schema_invalid'),
+              status: 'uncertain',
+            });
+            continue;
+          }
+          record(item.id, this.normalizeVerdict(verdict, windowText));
+        }
       }
     }
 
     const updated: DocumentReviewCheckResultItem[] = [];
     for (const { item, rule } of ruleWithItems) {
-      const outcome = outcomes.get(item.id)!;
+      const outcome = mergeWindowOutcomes(outcomes.get(item.id)!);
       const ruleRevision = rule?.updatedAt ?? undefined;
       // The ONLY status write path: a `check` event carrying the normalized
       // outcome. `passed` therefore can never come from applying a fix.
