@@ -228,6 +228,7 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   CometAPIProvider,
   VercelAIGatewayProvider,
   CerebrasProvider,
+  WallyProvider,
   ZenMuxProvider,
   OpenCodeZenProvider,
   OpenCodeCodingPlanProvider,
@@ -236,7 +237,6 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   MagpieProvider,
   StreamLakeProvider,
   AntGroupProvider,
-  WallyProvider,
 ];
 
 export const filterEnabledModels = (provider: ModelProviderCard) => {

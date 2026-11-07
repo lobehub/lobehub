@@ -100,6 +100,44 @@ describe('LobeWallyAI - models', () => {
     });
   });
 
+  it('should use the Wally card, not another provider card, for an id-only entry', async () => {
+    const client = mockClient([{ id: 'minimax-m3' }, { id: 'kimi-k3' }]);
+
+    const models = await params.models({ client: client as any });
+
+    const minimax = models.find((m) => m.id === 'minimax-m3');
+    expect(minimax).toMatchObject({
+      contextWindowTokens: 524_287,
+      maxOutput: 131_072,
+      search: false,
+      video: false,
+      vision: false,
+    });
+    expect(minimax?.pricing?.units).toEqual(
+      expect.arrayContaining([
+        { name: 'textInput', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 1.2, strategy: 'fixed', unit: 'millionTokens' },
+      ]),
+    );
+
+    const kimi = models.find((m) => m.id === 'kimi-k3');
+    expect(kimi).toMatchObject({ maxOutput: 65_536, vision: true });
+  });
+
+  it('should not add video or search to a text-only model', async () => {
+    const client = mockClient([
+      {
+        id: 'glm-5.3-flash',
+        input_modalities: ['text'],
+        supported_features: ['tools', 'reasoning'],
+      },
+    ]);
+
+    const models = await params.models({ client: client as any });
+
+    expect(models[0]).toMatchObject({ search: false, video: false, vision: false });
+  });
+
   it('should return an empty list when the response has no data', async () => {
     const client = { models: { list: vi.fn().mockResolvedValue({}) } };
 

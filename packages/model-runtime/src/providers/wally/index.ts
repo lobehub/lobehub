@@ -1,8 +1,8 @@
-import { ModelProvider } from 'model-bank';
+import { ModelProvider, wally as wallyChatModels } from 'model-bank';
 
 import type { OpenAICompatibleFactoryOptions } from '../../core/openaiCompatibleFactory';
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
-import { processMultiProviderModelList } from '../../utils/modelParse';
+import { processModelList } from '../../utils/modelParse';
 
 export interface WallyModelCard {
   context_length?: number;
@@ -34,23 +34,32 @@ export const params = {
     const modelsPage = (await client.models.list()) as any;
     const modelList: WallyModelCard[] = modelsPage.data ?? [];
 
-    const standardModelList = modelList.map((model) => ({
-      contextWindowTokens: model.context_length,
-      description: model.description,
-      displayName: model.name,
-      functionCall: model.supported_features?.includes('tools'),
-      id: model.id,
-      maxOutput: model.max_output_tokens,
-      pricing: {
+    const standardModelList = modelList.map((model) => {
+      const pricing = {
         cachedInput: toPerMillion(model.pricing?.input_cache_read),
         input: toPerMillion(model.pricing?.prompt),
         output: toPerMillion(model.pricing?.completion),
-      },
-      reasoning: model.supported_features?.includes('reasoning'),
-      vision: model.input_modalities?.includes('image'),
-    }));
+      };
+      const hasRemotePricing = Object.values(pricing).some((rate) => rate !== undefined);
 
-    return processMultiProviderModelList(standardModelList, 'wally');
+      return {
+        contextWindowTokens: model.context_length,
+        description: model.description,
+        displayName: model.name,
+        functionCall: model.supported_features?.includes('tools'),
+        id: model.id,
+        maxOutput: model.max_output_tokens,
+        // The live list carries prices; fall back to the Wally card when it does not
+        pricing: hasRemotePricing
+          ? pricing
+          : wallyChatModels.find((card) => card.id === model.id)?.pricing,
+        reasoning: model.supported_features?.includes('reasoning'),
+        vision: model.input_modalities?.includes('image'),
+      };
+    });
+
+    // Resolve against Wally's own model cards first, not another provider's card for the same id
+    return processModelList(standardModelList, {}, 'wally');
   },
   provider: ModelProvider.Wally,
 } satisfies OpenAICompatibleFactoryOptions;
