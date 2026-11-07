@@ -32,6 +32,24 @@ describe('resolvePayloads', () => {
     expect(payloads[1].messages).toEqual(payloads[0].messages);
   });
 
+  it('resolves pooled output lists, including a run that spans the old format', () => {
+    const hi = { content: 'hi', role: 'user' };
+    const ok = { content: 'ok', role: 'assistant' };
+    const snap = base([
+      { contextEngine: { output: [hi] }, stepIndex: 0, stepType: 'call_llm' },
+      {
+        contextEngine: { outputRef: 'n1', pool: { hi, n1: { refs: ['hi', 'ok'] }, ok } },
+        stepIndex: 1,
+        stepType: 'call_llm',
+      },
+    ]);
+
+    expect(resolvePayloads(snap).payloads.map((payload) => payload.messages)).toEqual([
+      [hi],
+      [hi, ok],
+    ]);
+  });
+
   it('falls back to legacy messages when CE fields are absent', () => {
     const snap = base([
       { messages: [{ content: 'hi', role: 'user' }], stepIndex: 0, stepType: 'call_llm' },

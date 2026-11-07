@@ -1,27 +1,26 @@
 'use client';
 
-import { createStaticStyles } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { Trans } from 'react-i18next';
 
 import { OFFICIAL_SITE } from '@/const/url';
 import { EntityLinkRender, type LobeLinkKind } from '@/features/EntityLink';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  bubble: css`
-    align-self: flex-start;
-
-    padding-block: 10px;
-    padding-inline: 14px;
-    border-radius: 12px;
-
-    font-size: 14px;
-    line-height: 1.8;
-    color: ${cssVar.colorText};
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-}));
+const styles = stylex.create({
+  bubble: {
+    alignSelf: 'flex-start',
+    paddingBlock: '10px',
+    paddingInline: '14px',
+    borderRadius: '12px',
+    fontSize: '14px',
+    lineHeight: 1.8,
+    color: cssVar.colorText,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+});
 
 interface SampleLinkProps {
   domain?: string;
@@ -44,7 +43,7 @@ const SampleLink = memo<SampleLinkProps>(({ kind, href, label, domain }) => (
 ));
 
 const LinkIconPreview = memo(() => (
-  <div className={styles.bubble}>
+  <div {...stylex.props(styles.bubble)}>
     <Trans
       i18nKey="settingChatAppearance.linkIcon.previewMessage"
       ns="setting"

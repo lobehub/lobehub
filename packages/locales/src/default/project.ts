@@ -68,8 +68,16 @@ export default {
   'directories.autoFileTopics': 'All {{count}} existing topics will be linked to this project.',
   'directories.topicsSkipped':
     'Directory linked. {{count}} topics were left out because they run in another directory or on another device, belong to another project, are still running, or no longer exist.',
+  'settings.createdAt': 'Created {{date}}',
+  'settings.creator': 'Creator',
+  'settings.creatorUnknown': 'Former member',
   'settings.general': 'General',
-  'settings.logoHint': 'Click the logo to upload an image or pick an emoji.',
+  'settings.logo': 'Logo',
+  'settings.logoDescription': 'Shown in the project header, sidebar and switcher.',
+  'settings.logoHint':
+    'Click the logo to upload an image or pick an emoji. Changes are saved right away.',
+  'settings.logoUpdated': 'Logo updated',
+  'settings.nameHint': 'Use 255 characters at most.',
   'settings.saveFailed': 'Could not save the change',
   'settings.saved': 'Saved',
   'settings.logoSizeExceeded': 'The logo must be smaller than 2 MB.',
@@ -165,11 +173,10 @@ export default {
   'create.identifierLabel': 'Identifier (optional)',
   'create.identifierPlaceholder': 'ACE',
   'create.mainAgentDedicatedDescription':
-    'Creates an agent named after the project, with its avatar and the Project label. It stays in your agents list. Your choice is reused next time.',
+    'Creates an agent named after the project, with its avatar and the Project label. It stays in your agents list.',
   'create.mainAgentDedicatedPlaceholder': 'Named after the project',
   'create.mainAgentDedicatedTag': 'New',
-  'create.mainAgentDescription':
-    'Manages this project’s conversations, tasks, and goals. Your choice is reused next time.',
+  'create.mainAgentDescription': 'Manages this project’s conversations, tasks, and goals.',
   'create.mainAgentLabel': 'Main agent',
   'create.mainAgentMode.dedicated': 'Create a dedicated agent',
   'create.mainAgentMode.existing': 'Use an existing agent',
@@ -404,9 +411,6 @@ export default {
   'review.sites.detectWaitingDescription':
     "Put the line above in your site's <head> and deploy, then open any page of the site. This notice disappears once the script is detected.",
   'review.sites.detectWaitingTitle': 'Waiting for the script to load for the first time',
-  'settings.logoAndName': 'Logo and name',
-  'settings.revert': 'Revert',
-  'settings.unsavedChanges': 'Unsaved changes: {{count}}',
   'create.moreSettings': 'More settings (identifier, slug)',
   'create.afterCreateHint':
     "After it's created, the project home helps you connect code folders, sites and libraries.",

@@ -4,34 +4,11 @@ import { describe, expect, it, vi } from 'vitest';
 import { sendAppMessage } from './sendAppMessage';
 
 describe('sendAppMessage', () => {
-  it('does not acknowledge a send that finishes without accepting the message', async () => {
+  it('preserves the draft when a send finishes without accepting the message', async () => {
     // Gateway task creation can fail internally without rejecting the outer send.
     const send = vi.fn().mockResolvedValue(undefined);
 
     await expect(sendAppMessage(send, 'Follow up', 'weather')).resolves.toBe(false);
-  });
-
-  it('acknowledges acceptance without waiting for the agent run to finish', async () => {
-    let params!: SendMessageParams;
-    const send = vi.fn((value: SendMessageParams) => {
-      params = value;
-      return new Promise<void>(() => {});
-    });
-    const result = sendAppMessage(send, 'Follow up', 'weather');
-
-    expect(params.message).toBe('Follow up');
-    expect(params.metadata?.mcpAppSource).toEqual({ identifier: 'weather' });
-    expect(params.onMessageAccepted).toBeTypeOf('function');
-    params.onMessageAccepted?.();
-
-    await expect(result).resolves.toBe(true);
-  });
-
-  it('sends as a separate turn that leaves the composer draft alone', async () => {
-    const send = vi.fn().mockResolvedValue(undefined);
-
-    await sendAppMessage(send, 'Follow up', 'weather');
-
     expect(send).toHaveBeenCalledWith(expect.objectContaining({ preserveComposer: true }));
   });
 
@@ -44,7 +21,7 @@ describe('sendAppMessage', () => {
     expect(send).toHaveBeenCalledWith(expect.objectContaining({ signal: view.signal }));
   });
 
-  it('does not acknowledge before the acceptance callback fires', async () => {
+  it('waits for acceptance without waiting for the agent run to finish', async () => {
     let params!: SendMessageParams;
     const send = vi.fn((value: SendMessageParams) => {
       params = value;
@@ -55,6 +32,8 @@ describe('sendAppMessage', () => {
     await Promise.resolve();
     expect(settled).not.toHaveBeenCalled();
 
+    expect(params.message).toBe('Follow up');
+    expect(params.metadata?.mcpAppSource).toEqual({ identifier: 'weather' });
     expect(params.onMessageAccepted).toBeTypeOf('function');
     params.onMessageAccepted?.();
     await result;

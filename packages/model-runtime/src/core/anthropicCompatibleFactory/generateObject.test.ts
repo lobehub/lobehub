@@ -6,6 +6,15 @@ import {
   createAnthropicGenerateObject,
 } from './generateObject';
 
+const createToolPayload = () => ({
+  messages: [{ content: 'Generate data', role: 'user' as const }],
+  model: 'claude-3-5-sonnet-20241022',
+  schema: {
+    name: 'test_tool',
+    schema: { type: 'object' },
+  },
+});
+
 describe('Anthropic generateObject', () => {
   it('should throw error when neither tools nor schema is provided', async () => {
     const mockClient = {
@@ -546,14 +555,7 @@ describe('Anthropic generateObject', () => {
         },
       };
 
-      const payload = {
-        messages: [{ content: 'Generate data', role: 'user' as const }],
-        model: 'claude-3-5-sonnet-20241022',
-        schema: {
-          name: 'test_tool',
-          schema: { type: 'object' },
-        },
-      };
+      const payload = createToolPayload();
 
       const result = await createAnthropicGenerateObject(mockClient as any, payload as any);
 
@@ -830,14 +832,7 @@ describe('Anthropic generateObject', () => {
       },
     };
 
-    const payload = {
-      messages: [{ content: 'Generate data', role: 'user' as const }],
-      model: 'claude-3-5-sonnet-20241022',
-      schema: {
-        name: 'test_tool',
-        schema: { type: 'object' },
-      },
-    };
+    const payload = createToolPayload();
 
     await expect(createAnthropicGenerateObject(mockClient as any, payload as any)).rejects.toThrow(
       'API Error: Model not found',
@@ -854,14 +849,7 @@ describe('Anthropic generateObject', () => {
       },
     };
 
-    const payload = {
-      messages: [{ content: 'Generate data', role: 'user' as const }],
-      model: 'claude-3-5-sonnet-20241022',
-      schema: {
-        name: 'test_tool',
-        schema: { type: 'object' },
-      },
-    };
+    const payload = createToolPayload();
 
     const options = {
       signal: new AbortController().signal,

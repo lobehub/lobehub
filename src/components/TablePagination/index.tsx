@@ -101,7 +101,7 @@ const TablePagination = memo<TablePaginationProps>(
         align={'center'}
         gap={12}
         justify={'space-between'}
-        {...sx([styles.root], className)}
+        {...sx(styles.root, className)}
       >
         <span {...stylex.props(styles.total)}>
           {t('table.pagination.range', {

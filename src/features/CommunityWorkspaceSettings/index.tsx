@@ -4,7 +4,6 @@ import { OFFICIAL_URL } from '@lobechat/const';
 import {
   Button,
   Center,
-  createStaticStyles,
   cssVar,
   Flexbox,
   Icon,
@@ -19,6 +18,8 @@ import {
   Tooltip,
   Upload,
 } from '@lobehub/ui';
+import { cssVar as sxVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import {
   ArrowLeft,
   CircleHelp,
@@ -57,15 +58,9 @@ const DISPLAY_NAME_MAX = 50;
 const ORGANIZATION_URL_PREFIX = `${OFFICIAL_URL.replace(/^https?:\/\//, '')}/community/org/`;
 const NAMESPACE_PATTERN = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  memberNameLink: css`
-    color: inherit;
-
-    &:hover {
-      color: ${cssVar.colorPrimary};
-    }
-  `,
-}));
+const styles = stylex.create({
+  memberNameLink: { color: { 'default': 'inherit', ':hover': sxVar.colorPrimary } },
+});
 
 /**
  * The default Market namespace equals the raw cloud userId (e.g.
@@ -152,7 +147,7 @@ const MembersCard = memo<{ canManage: boolean }>(({ canManage }) => {
               <Flexbox gap={2}>
                 {profileUrl ? (
                   <a
-                    className={styles.memberNameLink}
+                    {...stylex.props(styles.memberNameLink)}
                     href={profileUrl}
                     rel="noopener noreferrer"
                     target="_blank"
@@ -164,7 +159,7 @@ const MembersCard = memo<{ canManage: boolean }>(({ canManage }) => {
                 )}
                 {publicHandle && profileUrl && (
                   <a
-                    className={styles.memberNameLink}
+                    {...stylex.props(styles.memberNameLink)}
                     href={profileUrl}
                     rel="noopener noreferrer"
                     target="_blank"

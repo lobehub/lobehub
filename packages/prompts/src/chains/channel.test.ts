@@ -32,6 +32,29 @@ describe('Channel request prompt', () => {
   const caller = { id: 'caller', name: 'Mia', type: 'user' } as const;
   const coder = { id: 'coder', name: 'Coder', type: 'agent' } as const;
 
+  it('tells a follow-up wake why it woke and that it may stay silent', () => {
+    const request = [message('current', 'Anyone around?', caller)];
+    const wake = {
+      followup: { participants: [{ isBot: false, isOwner: false, name: 'Mia' }], score: 0.8 },
+      kind: 'followup' as const,
+    };
+    const prompt = buildChannelPrompt(manifest, request, { boundary: 'b0', wake });
+
+    expect(prompt).toMatch(
+      /<\/channel_request boundary="b0">\n<channel_wake boundary="b0">\n[\S\s]+\n<\/channel_wake boundary="b0">$/,
+    );
+    expect(prompt).toContain('`NO_REPLY`');
+    expect(prompt).toContain('80% sure the message is meant for you');
+    // Channel prompts have no self-improvement section to point at.
+    expect(prompt).not.toContain('<self_improvement>');
+    expect(CHANNEL_INSTRUCTIONS).toContain('channel_wake');
+
+    for (const owed of [undefined, null, { kind: 'mention' as const }])
+      expect(buildChannelPrompt(manifest, request, { boundary: 'b0', wake: owed })).not.toContain(
+        'channel_wake',
+      );
+  });
+
   it('renders the unseen context and the request as attributed blocks without ids', () => {
     const prompt = buildChannelPrompt(
       manifest,

@@ -89,6 +89,7 @@
   "response.GoogleAIBlockReason.SAFETY": "محتوا به دلایل ایمنی مسدود شده است. لطفاً آن را تنظیم کرده و دوباره تلاش کنید.",
   "response.GoogleAIBlockReason.SPII": "محتوا ممکن است شامل اطلاعات حساس شخصی (SPII) باشد. لطفاً جزئیات حساس را حذف کرده و دوباره تلاش کنید.",
   "response.GoogleAIBlockReason.default": "محتوا مسدود شده است ({{blockReason}}). لطفاً آن را تنظیم کرده و دوباره تلاش کنید.",
+  "response.InsufficientBudgetForModel": "موجودی باقی‌مانده شما برای این مدل کافی نیست. لطفاً موجودی خود را افزایش دهید، طرح خود را ارتقا دهید یا مدل کم‌هزینه‌تری را امتحان کنید.",
   "response.InvalidAccessCode": "کد دسترسی نامعتبر یا خالی است. لطفاً کد صحیح را وارد کرده یا یک کلید API سفارشی اضافه کنید.",
   "response.LobeHubModelDeprecated": "مدل \"{{model}}\" دیگر در دسترس نیست. لطفاً یک مدل فعلی از انتخابگر مدل انتخاب کنید.",
   "response.ModelContentModerationCooldown": "این درخواست نمی‌تواند از مدل انتخاب‌شده یا مدل‌های مرتبط استفاده کند به دلیل محدودیت موقت ایمنی محتوا. بعداً دوباره تلاش کنید یا مدل دیگری را انتخاب کنید.",
@@ -121,6 +122,8 @@
   "response.RemoteServerTimeout": "اتصال به سرور به پایان زمان خود رسید. این معمولاً نشان‌دهنده یک مشکل در شبکه محلی است — لطفاً کیفیت شبکه، پروکسی یا تنظیمات VPN خود را بررسی کرده و دوباره تلاش کنید.",
   "response.RemoteServerUnreachable": "سرور قابل دسترسی نیست. این معمولاً نشان‌دهنده یک مشکل در شبکه محلی است — لطفاً اتصال اینترنت، پروکسی یا تنظیمات VPN خود را بررسی کرده و دوباره تلاش کنید.",
   "response.ServerAgentRuntimeError": "متأسفیم، سرویس Agent در حال حاضر در دسترس نیست. لطفاً بعداً تلاش کنید یا با ما تماس بگیرید.",
+  "response.SubscriptionPlanLimit": "شما به حد مجاز استفاده از اشتراک خود رسیده‌اید، بنابراین این قابلیت در دسترس نیست. برای ادامه، طرح خود را ارتقا دهید یا یک API مدل سفارشی پیکربندی کنید.",
+  "response.SubscriptionPlanLimitUltimate": "شما به حد مجاز استفاده از اشتراک خود رسیده‌اید، بنابراین این قابلیت در دسترس نیست. برای ادامه، موجودی خود را افزایش دهید یا یک API مدل سفارشی پیکربندی کنید.",
   "response.SystemTimeNotMatchError": "متأسفیم، زمان سیستم شما با سرور مطابقت ندارد. لطفاً زمان سیستم را بررسی کرده و دوباره تلاش کنید.",
   "response.UnknownChatFetchError": "متأسفیم، خطای ناشناخته‌ای در درخواست رخ داد. لطفاً اطلاعات زیر را بررسی کرده یا دوباره تلاش کنید.",
   "response.UnreadableServerResponse": "سرور پاسخی بازگرداند که برنامه قادر به خواندن آن نبود. این معمولاً یک مشکل موقتی در شبکه یا دروازه است — لطفاً لحظاتی بعد دوباره تلاش کنید.",
@@ -210,9 +213,13 @@
   "workspaceFrozenByAdmin.frozenAt": "مسدود شده در",
   "workspaceFrozenByAdmin.reason": "دلیل",
   "workspaceFrozenByAdmin.title": "فضای کاری مسدود شده است",
+  "workspaceFrozenByRiskControl.available": "موجودی قابل استفاده",
+  "workspaceFrozenByRiskControl.bannerDescription": "برای ادامه هزینه‌کردن، موجودی خود را افزایش دهید.",
   "workspaceFrozenByRiskControl.bannerHint": "برای جزئیات کلیک کنید",
   "workspaceFrozenByRiskControl.bannerTitle": "فضای کاری توسط کنترل ریسک مسدود شده است",
   "workspaceFrozenByRiskControl.contactSupport": "تماس با پشتیبانی",
+  "workspaceFrozenByRiskControl.description": "این فضای کاری پس از شناسایی هزینه‌کرد غیرعادی، به‌طور خودکار توسط کنترل ریسک مسدود شده است. برای آماده‌شدن فضای کاری جهت ادامه، موجودی خود را افزایش دهید و برای رفع مسدودی با پشتیبانی تماس بگیرید.",
   "workspaceFrozenByRiskControl.frozenAt": "مسدود شده در",
-  "workspaceFrozenByRiskControl.title": "فضای کاری به‌طور خودکار توسط کنترل ریسک مسدود شده است"
+  "workspaceFrozenByRiskControl.title": "فضای کاری به‌طور خودکار توسط کنترل ریسک مسدود شده است",
+  "workspaceFrozenByRiskControl.topup": "افزایش موجودی"
 }

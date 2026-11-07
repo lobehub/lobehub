@@ -75,6 +75,7 @@
   "brief.viewRun": "실행 보기",
   "cardBindingPromoBanner.cta": "지금 신청하기",
   "cardBindingPromoBanner.dismiss": "닫기",
+  "cardBindingPromoBanner.label": "첫 결제 수단을 추가하고 $1을 무료로 받으세요",
   "dashboard.chat.empty": "최근 대화가 없습니다",
   "dashboard.chat.recents": "최근 주제",
   "dashboard.chat.running": "진행 중인 주제",

@@ -127,6 +127,7 @@
   "workingDirectory.refreshFolders": "تحديث المجلدات",
   "workingDirectory.refreshGitStatus": "تحديث حالة الفرع وطلبات السحب",
   "workingDirectory.removeRecent": "إزالة من الحديث",
+  "workingDirectory.removeRecentFailed": "تعذر إزالة هذا المجلد. يرجى المحاولة مرة أخرى.",
   "workingDirectory.removeWorktreeAction": "حذف مساحة العمل",
   "workingDirectory.removeWorktreeConfirm": "هل تريد حذف مساحة العمل “{{name}}”؟ سيؤدي ذلك إلى إزالة دليل مساحة العمل مع الاحتفاظ بالفرع الخاص بها. سيرفض Git إذا كانت هناك تغييرات غير ملتزمة.",
   "workingDirectory.removeWorktreeFailed": "فشل حذف مساحة العمل",

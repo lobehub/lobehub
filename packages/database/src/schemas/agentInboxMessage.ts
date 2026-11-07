@@ -88,6 +88,8 @@ export const agentInboxMessages = pgTable(
     ),
     // Continuing a thread in the topic its first item woke.
     index('agent_inbox_messages_account_thread_idx').on(t.accountId, t.threadKey),
+    // Whether a topic holds mail from outside: the outbound gate holds every send there.
+    index('agent_inbox_messages_topic_id_idx').on(t.topicId),
     index('agent_inbox_messages_user_id_idx').on(t.userId),
   ],
 );

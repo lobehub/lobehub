@@ -271,7 +271,7 @@ export class ChannelRepository {
       async (tx, access) => {
         if (access.channel.isDeleted) throw new ChannelError('NOT_FOUND', 'Channel not found');
         const admin = hasRole(access.member.role, 'admin');
-        const view = await readChannelView(tx, channelId, options);
+        const view = await readChannelView(tx, channelId, options, this.userId);
         return {
           channel: { ...access.channel, canDelete: admin },
           ...view,

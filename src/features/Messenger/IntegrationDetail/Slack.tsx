@@ -59,7 +59,7 @@ const SlackDetail = memo<SlackDetailProps>(({ appId, botUsername, name, onBack }
 
   if (data.error && data.isInitialLoading)
     return <AsyncError error={data.error} variant={'block'} onRetry={data.mutate} />;
-  if (data.isInitialLoading) return <IntegrationDetailSkeleton />;
+  if (data.isInitialLoading) return <IntegrationDetailSkeleton platform={'slack'} />;
 
   const { installations, links, tenantNameByTenantId } = data;
   const hasInstallations = installations.length > 0;

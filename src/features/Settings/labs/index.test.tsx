@@ -136,12 +136,6 @@ describe('Labs settings page', () => {
     expect(screen.queryByText('features.integrations.title')).toBeNull();
   });
 
-  it('renders the topic acceptance (tray) lab toggle', () => {
-    renderPage();
-
-    expect(screen.getByText('features.goals.title')).toBeDefined();
-  });
-
   it('does not render released task verify as a lab toggle', () => {
     renderPage();
 

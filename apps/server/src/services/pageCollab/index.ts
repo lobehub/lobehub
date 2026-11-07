@@ -35,6 +35,11 @@ export const createPageSessions = (db: LobeChatDatabase, writer: PageWriter): Pa
       if ((await resolvePageAccess(db, writer.userId, documentId)) !== 'edit') {
         throw new Error(`No permission to edit page: ${documentId}`);
       }
+      if (!row.workspaceId) {
+        // Only workspace pages get rooms. A client released before that rule may
+        // still hold one open; a write around it would be projected over.
+        return (await room.openLiveSession(documentId)) ?? stored.openSession(documentId, options);
+      }
       return room.openSession(documentId);
     },
   };

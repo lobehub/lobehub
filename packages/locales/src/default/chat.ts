@@ -323,7 +323,6 @@ export default {
   'agentProfile.skills_one': '{{count}} skill',
   'agentProfile.skills_other': '{{count}} skills',
   'agentSender.sourceTopic': 'Source topic',
-  'agentSignal.receipts.agentSignalLabel': 'Agent Signal',
   'agentSignal.receipts.memory.detail': 'Saved this for future replies',
   'agentSignal.receipts.memory.openInMemory': 'Open in Memory',
   'agentSignal.receipts.memory.title': 'Memory saved',
@@ -2183,6 +2182,9 @@ export default {
     'The task moves to the trash with its runs and can be restored within 30 days.',
   'taskDetail.deleteConfirm.ok': 'Delete',
   'taskDetail.deleteConfirm.title': 'Delete this task?',
+  'taskDetail.foreignWorkspace.notice':
+    'This task belongs to {{workspace}}. It is shown read-only here.',
+  'taskDetail.foreignWorkspace.open': 'Open in {{workspace}}',
   'taskDetail.instruction': 'Instruction',
   'taskDetail.modelConfig': 'Model Override',
   'taskDetail.saveModelConfig': 'Save',

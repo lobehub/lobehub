@@ -40,6 +40,7 @@
   "generation.editing.hint": "توضیح دهید که چه چیزی باید تغییر کند؛ بقیه موارد بدون تغییر باقی می‌مانند",
   "generation.editing.modelLocked": "ویرایش‌ها مدل ویدیوی اصلی را حفظ می‌کنند",
   "generation.editing.title": "ویرایش V{{version}}",
+  "generation.freeQuota.exhausted": "🎁 استفاده رایگان به پایان رسیده است. از این پس، ویدیوها از موجودی شما استفاده می‌کنند.",
   "generation.freeQuota.remaining": "🎁 {{remaining}} ویدیوی رایگان باقی‌مانده برای امروز",
   "generation.status.editing": "در حال ایجاد ویرایش...",
   "generation.status.failed": "تولید ناموفق بود",
