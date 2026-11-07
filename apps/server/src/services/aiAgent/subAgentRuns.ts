@@ -244,11 +244,13 @@ const claimSubAgentThread = async (
   return claimed ? { thread, carryOver } : { claimLost: true };
 };
 
-const STEER_REFUSALS: Record<'full' | 'unavailable', (threadId: string) => string> = {
+const STEER_REFUSALS: Record<'full' | 'unavailable' | 'unknown', (threadId: string) => string> = {
   full: (threadId) =>
     `Sub-agent "${threadId}" already has too many instructions waiting. Wait for its result before sending another.`,
   unavailable: (threadId) =>
     `The instruction could not be queued for sub-agent "${threadId}". Wait for its result, then send it again.`,
+  unknown: (threadId) =>
+    `The instruction may or may not have reached sub-agent "${threadId}". Do not send it again yet: wait for its result and check whether it followed the instruction.`,
 };
 
 /**
@@ -295,7 +297,7 @@ const continueSubAgentThread = async (
   }
 
   return {
-    error: `Sub-agent "${threadId}" is busy with another instruction. Wait for its result before sending it another.`,
+    error: `Sub-agent "${threadId}" is finishing its run or busy with another instruction. Wait for its result, then send the instruction again.`,
   };
 };
 
@@ -525,6 +527,19 @@ export const execAgentThreadRun = async (
     // next step. No new run, so the running one keeps reporting its result.
     if ('steered' in claim) {
       log('%s: steered running thread %s', options.logScope, continueThreadId);
+      // The call returned without starting a run; hooks still see it end.
+      if (parentOperationId) {
+        hookDispatcher
+          .dispatch(parentOperationId, 'afterCallAgent', {
+            agentId,
+            operationId: parentOperationId,
+            subOperationId: claim.steered.operationId,
+            success: true,
+            threadId: continueThreadId,
+            userId: deps.userId,
+          })
+          .catch(() => {});
+      }
       return {
         assistantMessageId: '',
         operationId: claim.steered.operationId,
