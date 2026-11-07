@@ -8,6 +8,7 @@ export default {
   'duration.stage.start': 'Start',
   'table.columns.TTFT.tooltip': 'Time To First Token, unit: seconds',
   'table.billableSeconds': '{{count}} s',
+  'table.columns.calls': 'Calls',
   'table.columns.billableDuration': 'Billable duration',
   'table.columns.duration': 'Duration',
   'table.columns.model': 'Model',
@@ -75,6 +76,9 @@ export default {
   'table.group.agentRun': 'Agent run',
   'table.group.calls': '{{count}} calls',
   'table.group.moreModels': '+{{count}}',
+  'table.group.month': 'Monthly summary',
+  'table.group.monthDesc':
+    'Calls older than your retention period are kept as monthly totals by type and model.',
   'table.error.description': 'Check your connection and try again.',
   'table.error.title': "Couldn't load the breakdown",
   'table.filters.allTypes': 'All types',
