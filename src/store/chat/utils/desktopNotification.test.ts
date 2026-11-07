@@ -10,9 +10,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChatStore } from '@/store/chat/store';
 
 import {
+  buildFailureNotificationBody,
+  buildFailureNotificationTitle,
   buildNotificationBody,
   buildNotificationSender,
   notifyDesktopAgentCompleted,
+  notifyDesktopAgentFailed,
   resolveNotificationNavigate,
   resolveNotificationNavigatePath,
   resolveNotificationTitle,
@@ -202,6 +205,10 @@ describe('buildNotificationBody', () => {
     expect(body.endsWith('…')).toBe(true);
   });
 
+  it('treats the loading placeholder as no reply', () => {
+    expect(buildNotificationBody('...', FALLBACK)).toBe(FALLBACK);
+  });
+
   it('returns the fallback for empty / undefined content', () => {
     expect(buildNotificationBody(undefined, FALLBACK)).toBe(FALLBACK);
     expect(buildNotificationBody('   ', FALLBACK)).toBe(FALLBACK);
@@ -243,5 +250,64 @@ describe('buildNotificationSender', () => {
       conversationId: 'agent-named',
       name: 'My Agent',
     });
+  });
+});
+
+describe('failed run notification', () => {
+  beforeEach(() => {
+    showNotification.mockReset().mockResolvedValue({ success: true });
+  });
+
+  const workingDirectoryError = {
+    body: { code: 'working_directory_not_found', workingDirectory: '/Users/me/gone' },
+    message: 'Working directory does not exist: /Users/me/gone',
+    type: 'AgentRuntimeError',
+  };
+
+  it('names the missing working directory in the body', () => {
+    expect(buildFailureNotificationBody(workingDirectoryError)).toBe(
+      'Working directory unavailable: /Users/me/gone',
+    );
+  });
+
+  it('does not pass fallback prose off as a path when the error has none', () => {
+    expect(
+      buildFailureNotificationBody({
+        body: { agentType: 'claude-code', code: 'working_directory_not_found' },
+        message: 'Working directory does not exist: /Users/me/gone',
+        type: 'AgentRuntimeError',
+      }),
+    ).toBe(
+      'Working directory unavailable: the folder saved for this conversation no longer exists',
+    );
+  });
+
+  it('uses the error message, falling back to a generic line', () => {
+    expect(buildFailureNotificationBody({ message: 'Quota exceeded', type: 'x' } as any)).toBe(
+      'Quota exceeded',
+    );
+    expect(buildFailureNotificationBody(undefined)).toBe('Open the conversation for details');
+  });
+
+  it('titles the banner after the agent that hit the problem', () => {
+    expect(buildFailureNotificationTitle({ agentId: 'agent-named' })).toBe(
+      'My Agent ran into a problem',
+    );
+    expect(buildFailureNotificationTitle({})).toBe('Default Agent ran into a problem');
+  });
+
+  it('sends the failure banner deep-linked to the topic', async () => {
+    await notifyDesktopAgentFailed(() => ({}) as ChatStore, {
+      context: { agentId: 'agent-named', topicId: 'topic-1' },
+      error: workingDirectoryError,
+    });
+
+    expect(showNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: 'Working directory unavailable: /Users/me/gone',
+        navigate: { escape: true, path: AGENT_CHAT_TOPIC_URL('agent-named', 'topic-1') },
+        title: 'My Agent ran into a problem',
+      }),
+    );
   });
 });

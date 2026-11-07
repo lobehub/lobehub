@@ -188,6 +188,12 @@ export interface ConversationContext {
    */
   isSupervisor?: boolean;
   /**
+   * `forward` reads the transcript from its first round and appends later
+   * rounds (shared topics read from the start). Omitted means the default
+   * newest-first window with older history paged in above.
+   */
+  messageReadMode?: 'forward';
+  /**
    * Orchestration role of the current agent within a group conversation.
    * Canonical replacement for {@link isSupervisor} — stamped onto the assistant
    * message's `metadata.orchestrationRole` so the role snapshot persists.

@@ -1,7 +1,8 @@
 'use client';
 
 import { type CredType } from '@lobechat/types';
-import { createStaticStyles, Steps, useModalContext } from '@lobehub/ui';
+import { Steps, useModalContext } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { type FC, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -11,20 +12,9 @@ import FileCredForm from './FileCredForm';
 import KVCredForm from './KVCredForm';
 import OAuthCredForm from './OAuthCredForm';
 
-const styles = createStaticStyles(({ css }) => ({
-  steps: css`
-    margin-block-end: 24px;
-  `,
-}));
+const styles = stylex.create({ steps: { marginBlockEnd: '24px' } });
 
 export interface CreateCredModalContentProps {
-  /**
-   * Bound explicitly by the caller (rendered inline, inside CredsApiProvider)
-   * instead of read via useCredsApi() here — this content tree is portaled by
-   * createModal() to a global ModalHost that sits outside CredsApiProvider,
-   * so a local useCredsApi() call would silently fall back to the personal
-   * (market.creds) API even on the workspace creds page.
-   */
   credsApi: CredsApi;
   onSuccess?: () => void;
 }
@@ -78,7 +68,7 @@ const CreateCredModalContent: FC<CreateCredModalContentProps> = ({ credsApi, onS
   return (
     <>
       <Steps
-        className={styles.steps}
+        className={stylex.props(styles.steps).className}
         current={step}
         items={[
           { title: t('creds.createModal.selectType') },

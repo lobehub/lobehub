@@ -2,23 +2,24 @@ import type { WorkListItem } from '@lobechat/types';
 import { ActionIcon, Center, createStaticStyles, Empty, Flexbox, Spin } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { ClipboardListIcon, HistoryIcon, ListIcon } from 'lucide-react';
-import { memo, useEffect, useRef } from 'react';
+import { memo, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { getAllWorkSummaries } from '@/features/Conversation/store/slices/data/workSummaries';
 import WorkSummaryCard from '@/features/Work/WorkSummaryCard';
 import { useLocalStorageState } from '@/hooks/useLocalStorageState';
-import { useClientDataSWR } from '@/libs/swr';
-import { workKeys } from '@/libs/swr/keys';
 import { workService } from '@/services/work';
 import { useChatStore } from '@/store/chat';
 import { dbMessageSelectors, operationSelectors } from '@/store/chat/selectors';
+import { useWorkStore, workActions, workSelectors } from '@/store/work';
 
 import WorkVersionHistoryCard from './WorkVersionHistoryCard';
 
 type WorksViewMode = 'history' | 'summary';
 
 const WORKS_VIEW_MODE_STORAGE_KEY = 'lobechat-working-panel-works-view-mode';
+
+const EMPTY_HISTORY: WorkListItem[] = [];
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
@@ -133,27 +134,30 @@ const WorksSection = memo<WorksSectionProps>(({ active = true }) => {
   }, [summaryData, isRunning, topicId, threadId]);
 
   // History (version timeline) is heavier and genuinely on-demand — keep it on
-  // its own lazy fetch, gated so a collapsed / inactive sidebar never pulls it.
-  const {
-    data: historyData = [],
-    error: historyError,
-    isLoading: isHistoryLoading,
-  } = useClientDataSWR<WorkListItem[]>(
-    mode === 'history' && topicId && active
-      ? workKeys.conversation(topicId, threadId ?? null)
-      : null,
-    () => workService.listByConversation({ threadId, topicId }),
-    {
-      fallbackData: [],
-      revalidateOnFocus: false,
-    },
+  // its own lazy sync, gated so a collapsed / inactive sidebar never pulls it.
+  // It is a replica: a revisit or reload paints the last history first.
+  const historyParams = useMemo(
+    () => (mode === 'history' && topicId && active ? { threadId, topicId } : null),
+    [active, mode, threadId, topicId],
   );
+  const historySync = workActions.useFetchConversationWorks(historyParams, {
+    revalidateOnFocus: false,
+  });
+  const storedHistory = useWorkStore(workSelectors.conversationWorks(historyParams));
+  const historyData = storedHistory ?? EMPTY_HISTORY;
+  const historyPending = !!historyParams && storedHistory === undefined;
 
-  const isLoading = mode === 'history' ? isHistoryLoading : false;
-  const error = mode === 'history' ? historyError : undefined;
+  // Settled history stays on screen when a background refresh fails.
+  const error = historyPending ? historySync.error : undefined;
+  // Before the stored copy is read, paint nothing rather than a spinner the
+  // cached history replaces a frame later.
+  const isHydrating = historyPending && !historySync.isHydrated;
+  const isLoading = historyPending && !error && !isHydrating;
   const data = mode === 'summary' ? summaryData : historyData;
 
   const content = (() => {
+    if (isHydrating) return null;
+
     if (isLoading) {
       return (
         <Center flex={1}>

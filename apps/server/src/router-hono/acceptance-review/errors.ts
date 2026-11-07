@@ -9,8 +9,11 @@ export type ReviewErrorCode =
   | 'INVALID_STATE'
   | 'NOT_FOUND'
   | 'RATE_LIMITED'
+  | 'SITE_ACCESS_REVOKED'
+  | 'SITE_GONE'
   | 'TOO_LARGE'
-  | 'UNAUTHORIZED';
+  | 'UNAUTHORIZED'
+  | 'WRONG_ORIGIN';
 
 export const reviewError = (
   c: Context,

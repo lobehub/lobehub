@@ -17,6 +17,7 @@ import { useTranslation } from 'react-i18next';
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useAuthorInfo } from '@/business/client/hooks/useAuthorInfo';
 import { useDocumentTransferMenuItem } from '@/business/client/hooks/useDocumentTransferMenuItem';
+import { useFavoriteMenuItem } from '@/features/Favorites';
 import { useResourcePermission } from '@/features/ResourcePermission/useResourcePermission';
 import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -29,8 +30,10 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 import { pageActions, pageSelectors, usePageStore } from '@/store/page';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
+import { exportHtmlDocument } from '@/utils/exportTextFile';
 
 import { formatPageEditorInfoTime } from '../formatPageEditorInfoTime';
+import { useIsHtmlPage } from '../HtmlPageBody';
 import { usePageEditorStore, useStoreApi } from '../store';
 
 /**
@@ -50,7 +53,27 @@ export const useMenu = (options: UseMenuOptions = {}): { menuItems: any[] } => {
   const { lg = true } = useResponsive();
   const dateLocale = i18n.resolvedLanguage || i18n.language;
 
-  const documentId = usePageEditorStore((s) => s.documentId);
+  const [documentId, pageTitle, pageEmoji] = usePageEditorStore((s) => [
+    s.documentId,
+    s.title,
+    s.emoji,
+  ]);
+  const favoriteMenuItem = useFavoriteMenuItem(
+    documentId
+      ? {
+          icon: pageEmoji ?? null,
+          // The canonical link: this menu also opens in the document modal,
+          // which leaves the location on whatever page is underneath.
+          path: `/page/${documentId}`,
+          targetId: documentId,
+          snapshotReady: pageTitle !== undefined,
+          title: pageTitle || t('pageEditor.titlePlaceholder'),
+          type: 'page',
+        }
+      : undefined,
+  );
+  // An HTML page has no rich-text body: it exports as HTML and has no editor history.
+  const isHtmlPage = useIsHtmlPage(documentId);
   const { allowed: canCreatePage } = usePermission('create_content');
   const { allowed: canEditPage } = usePermission('edit_own_content');
 
@@ -206,6 +229,19 @@ export const useMenu = (options: UseMenuOptions = {}): { menuItems: any[] } => {
     }
   }, [storeApi, t]);
 
+  const htmlContent = useDocumentStore((s) =>
+    isHtmlPage && documentId ? s.documentDetailMap[documentId]?.document?.content : undefined,
+  );
+  const handleExportHtml = useCallback(async () => {
+    try {
+      const result = await exportHtmlDocument(htmlContent ?? '', storeApi.getState().title);
+      if (result === 'downloaded') toast.success(t('pageEditor.exportSuccess'));
+    } catch (error) {
+      console.error('Failed to export HTML:', error);
+      toast.error(t('pageEditor.exportError'));
+    }
+  }, [htmlContent, storeApi, t]);
+
   const menuItems = useMemo<DropdownItem[]>(() => {
     const items: DropdownItem[] = [
       ...(showViewModeSwitch
@@ -239,6 +275,7 @@ export const useMenu = (options: UseMenuOptions = {}): { menuItems: any[] } => {
             { type: 'divider' as const },
           ]
         : []),
+      ...(favoriteMenuItem ? [favoriteMenuItem] : []),
       {
         disabled: !canCreatePage,
         icon: <Icon icon={CopyPlus} />,
@@ -259,19 +296,23 @@ export const useMenu = (options: UseMenuOptions = {}): { menuItems: any[] } => {
           state.handleCopyLink(t as any);
         },
       },
-      {
-        icon: <Icon icon={Clock3Icon} />,
-        key: 'version-history',
-        label: t('pageEditor.history.title'),
-        onClick: () => {
-          setRightPanelMode('history');
-          if (onOpenHistory) {
-            onOpenHistory();
-          } else {
-            togglePageAgentPanel(true);
-          }
-        },
-      },
+      ...(isHtmlPage
+        ? []
+        : [
+            {
+              icon: <Icon icon={Clock3Icon} />,
+              key: 'version-history',
+              label: t('pageEditor.history.title'),
+              onClick: () => {
+                setRightPanelMode('history');
+                if (onOpenHistory) {
+                  onOpenHistory();
+                } else {
+                  togglePageAgentPanel(true);
+                }
+              },
+            } as DropdownItem,
+          ]),
       {
         danger: true,
         disabled: !canEditPage,
@@ -299,13 +340,22 @@ export const useMenu = (options: UseMenuOptions = {}): { menuItems: any[] } => {
           ]
         : []),
       {
-        children: [
-          {
-            key: 'export-markdown',
-            label: t('pageEditor.menu.export.markdown'),
-            onClick: handleExportMarkdown,
-          },
-        ],
+        // An HTML page has no Markdown to export: it downloads as the page itself.
+        children: isHtmlPage
+          ? [
+              {
+                key: 'export-html',
+                label: t('pageEditor.menu.export.html'),
+                onClick: handleExportHtml,
+              },
+            ]
+          : [
+              {
+                key: 'export-markdown',
+                label: t('pageEditor.menu.export.markdown'),
+                onClick: handleExportMarkdown,
+              },
+            ],
         icon: <Icon icon={Download} />,
         key: 'export',
         label: t('pageEditor.menu.export'),
@@ -339,6 +389,8 @@ export const useMenu = (options: UseMenuOptions = {}): { menuItems: any[] } => {
     }
     return items;
   }, [
+    favoriteMenuItem,
+    isHtmlPage,
     lastUpdatedTime,
     authorName,
     canCreatePage,
@@ -356,6 +408,7 @@ export const useMenu = (options: UseMenuOptions = {}): { menuItems: any[] } => {
     handleDuplicate,
     handleMakePrivate,
     handlePublish,
+    handleExportHtml,
     handleExportMarkdown,
     memberPermissionMenuItem,
     transferMenuItems,

@@ -9,9 +9,13 @@ import { createLocalFileTabId } from '@/store/chat/slices/portal/helpers';
 
 import { useLocalFileActions } from './useLocalFileActions';
 
+const env = vi.hoisted(() => ({ isDesktop: true }));
+
 vi.mock('@lobechat/const', async (importOriginal) => ({
   ...((await importOriginal()) as Record<string, unknown>),
-  isDesktop: true,
+  get isDesktop() {
+    return env.isDesktop;
+  },
 }));
 
 const openLocalFileOrFolder = vi.hoisted(() => vi.fn());
@@ -38,6 +42,7 @@ const setWorkingDirectory = (workingDirectory: string) => {
 
 describe('useLocalFileActions', () => {
   afterEach(() => {
+    env.isDesktop = true;
     useChatStore.setState(useChatStore.getInitialState());
     vi.clearAllMocks();
   });
@@ -107,5 +112,50 @@ describe('useLocalFileActions', () => {
 
     expect(result.current.canPreview).toBe(false);
     expect(result.current.handleClick).toBeUndefined();
+  });
+
+  describe('on the web app', () => {
+    /** @example Web chips offered Open / Show in Folder, which are Electron IPC and did nothing. */
+    it('previews the file in the portal through the bound device and offers no system actions', () => {
+      env.isDesktop = false;
+      const openInPortal = vi.fn();
+
+      const { result } = renderHook(() =>
+        useLocalFileActions({ openInPortal, path: '/Users/me/project/deck.md' }),
+      );
+
+      expect(result.current.canOpenNatively).toBe(false);
+      expect(result.current.canPreview).toBe(true);
+      result.current.handleClick!();
+
+      expect(openInPortal).toHaveBeenCalledTimes(1);
+      expect(openLocalFileOrFolder).not.toHaveBeenCalled();
+    });
+
+    it('leaves the chip inert when no device can serve the file', () => {
+      env.isDesktop = false;
+
+      const { result } = renderHook(() =>
+        useLocalFileActions({ path: '/Users/me/project/deck.md' }),
+      );
+
+      expect(result.current.canPreview).toBe(false);
+      expect(result.current.handleClick).toBeUndefined();
+    });
+
+    it('does not try to open directories in a system file manager', () => {
+      env.isDesktop = false;
+
+      const { result } = renderHook(() =>
+        useLocalFileActions({
+          isDirectory: true,
+          openInPortal: vi.fn(),
+          path: '/Users/me/project/docs',
+        }),
+      );
+
+      expect(result.current.canPreview).toBe(false);
+      expect(result.current.handleClick).toBeUndefined();
+    });
   });
 });

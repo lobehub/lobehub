@@ -153,6 +153,7 @@ export class VoiceMessageActionImpl {
         value: this.#createLocalMessage(transaction),
       },
       { conversationContext: transaction.context },
+      { creationOrigin: 'client' },
     );
   };
 
@@ -398,6 +399,7 @@ export class VoiceMessageActionImpl {
 
         const result = await getFileStoreState().uploadWithProgress({
           abortController: transaction.abortController,
+          conversationAgentId: transaction.context.agentId,
           file: transaction.recording.file,
           fileMetadata: {
             codec: transaction.recording.codec,

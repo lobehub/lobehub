@@ -1,19 +1,30 @@
-import { registerClient } from '@modelcontextprotocol/sdk/client/auth.js';
-import type { AuthorizationServerMetadata } from '@modelcontextprotocol/sdk/shared/auth.js';
+import { BRANDING_NAME } from '@lobechat/business-const';
+import type { AuthorizationServerMetadata } from '@modelcontextprotocol/client';
+import { registerClient, RegistrationRejectedError } from '@modelcontextprotocol/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  buildConnectorClientMetadata,
+  discoverConnectorOAuth,
   exchangeConnectorCode,
   refreshConnectorToken,
   registerDynamicClient,
   registeredAuthMethod,
+  resolveConnectorClient,
   selectRegistrationAuthMethod,
   toClientInformation,
 } from './oauth';
 
-vi.mock('@modelcontextprotocol/sdk/client/auth.js', async (importOriginal) => ({
+const env = vi.hoisted(() => ({ appEnv: { APP_URL: 'https://app.example.com' } }));
+vi.mock('@/envs/app', () => env);
+vi.mock('@modelcontextprotocol/client', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   registerClient: vi.fn(),
+}));
+// These tests stub the global fetch; the SSRF boundary itself is covered by
+// oauth.network.test.ts over real sockets.
+vi.mock('@lobechat/ssrf-safe-fetch', () => ({
+  ssrfSafeFetch: (url: string, init?: RequestInit) => fetch(url, init),
 }));
 
 const metadataWith = (
@@ -86,7 +97,7 @@ describe('registerDynamicClient', () => {
  * was registered with (`client_secret_post`). Records how each request
  * authenticated.
  */
-const stubPostOnlyTokenEndpoint = () => {
+const stubPostOnlyTokenEndpoint = (errorStatus = 401) => {
   const attempts: string[] = [];
   vi.stubGlobal(
     'fetch',
@@ -102,7 +113,7 @@ const stubPostOnlyTokenEndpoint = () => {
       if (method !== 'client_secret_post') {
         return Response.json(
           { error: 'invalid_client', error_description: 'Client authentication failed' },
-          { status: 401 },
+          { status: errorStatus },
         );
       }
       return Response.json({ access_token: 'tok', refresh_token: 'rt', token_type: 'Bearer' });
@@ -120,6 +131,123 @@ const exchange = (oidc: Parameters<typeof toClientInformation>[0], methods?: str
     metadata: metadataWith(methods),
     redirectUri: 'https://app.example.com/oauth/connector/callback',
   });
+
+describe('client ID metadata document', () => {
+  it('uses its own URL as the client_id and the connector callback as redirect URI', () => {
+    expect(buildConnectorClientMetadata()).toEqual({
+      client_id: 'https://app.example.com/oauth/connector/client-metadata.json',
+      client_name: BRANDING_NAME,
+      client_uri: 'https://app.example.com/',
+      grant_types: ['authorization_code', 'refresh_token'],
+      logo_uri: 'https://app.example.com/app-icons/icon-192x192.png',
+      redirect_uris: ['https://app.example.com/oauth/connector/callback'],
+      response_types: ['code'],
+      token_endpoint_auth_method: 'none',
+    });
+  });
+});
+
+describe('resolveConnectorClient', () => {
+  const METADATA_URL = 'https://app.example.com/oauth/connector/client-metadata.json';
+  const cimdMetadata = {
+    ...metadataWith(['none']),
+    client_id_metadata_document_supported: true,
+  } as AuthorizationServerMetadata;
+  const resolve = (
+    existing: Parameters<typeof resolveConnectorClient>[0]['existing'],
+    metadata = cimdMetadata,
+  ) =>
+    resolveConnectorClient({
+      authorizationServerUrl: 'https://auth.example.com',
+      existing,
+      metadata,
+      redirectUri: 'https://app.example.com/oauth/connector/callback',
+    });
+
+  beforeEach(() => {
+    env.appEnv.APP_URL = 'https://app.example.com';
+    vi.mocked(registerClient).mockReset();
+    vi.mocked(registerClient).mockResolvedValue({ client_id: 'issued', redirect_uris: [] });
+  });
+
+  it('reuses a pre-registered client even when the server supports CIMD', async () => {
+    await expect(
+      resolve({ clientId: 'mine', clientSecret: 's', scheme: 'pre_registration' }),
+    ).resolves.toEqual({
+      clientId: 'mine',
+      clientSecret: 's',
+      scheme: 'pre_registration',
+      tokenEndpointAuthMethod: undefined,
+    });
+    expect(registerClient).not.toHaveBeenCalled();
+  });
+
+  it('keeps an earlier dynamic registration labelled as DCR', async () => {
+    await expect(
+      resolve({ clientId: 'issued-before', scheme: 'dcr', tokenEndpointAuthMethod: 'none' }),
+    ).resolves.toMatchObject({ clientId: 'issued-before', scheme: 'dcr' });
+    expect(registerClient).not.toHaveBeenCalled();
+  });
+
+  it('identifies with the metadata document URL as a public client', async () => {
+    await expect(resolve({ scheme: 'dcr' })).resolves.toEqual({
+      clientId: METADATA_URL,
+      scheme: 'client_id_metadata_document',
+      tokenEndpointAuthMethod: 'none',
+    });
+    expect(registerClient).not.toHaveBeenCalled();
+  });
+
+  it('re-derives a stored CIMD client_id from the current APP_URL', async () => {
+    env.appEnv.APP_URL = 'https://lobe.example.org';
+    await expect(
+      resolve({ clientId: METADATA_URL, scheme: 'client_id_metadata_document' }),
+    ).resolves.toMatchObject({
+      clientId: 'https://lobe.example.org/oauth/connector/client-metadata.json',
+    });
+  });
+
+  it('moves a stored CIMD client to DCR once the server stops supporting CIMD', async () => {
+    await expect(
+      resolve({ clientId: METADATA_URL, scheme: 'client_id_metadata_document' }, metadataWith()),
+    ).resolves.toMatchObject({ clientId: 'issued', scheme: 'dcr' });
+  });
+
+  it.each(['http://localhost:3010', 'https://localhost', 'https://10.0.0.8', 'https://lobe.local'])(
+    'falls back to DCR when the server cannot reach %s',
+    async (appUrl) => {
+      env.appEnv.APP_URL = appUrl;
+      await expect(resolve({ scheme: 'dcr' })).resolves.toMatchObject({
+        clientId: 'issued',
+        scheme: 'dcr',
+      });
+    },
+  );
+
+  it('explains a server that supports neither CIMD nor DCR', async () => {
+    const metadata = { ...metadataWith(), registration_endpoint: undefined };
+    await expect(resolve({ scheme: 'dcr' }, metadata)).rejects.toThrow(
+      'This server supports neither Client ID Metadata Documents nor dynamic registration. Provide the OAuth Client ID you registered with this server.',
+    );
+  });
+
+  it('blames the private APP_URL when the server only supports CIMD', async () => {
+    // Regression: a CIMD-only server was reported as supporting "neither"
+    // when LobeHub itself could not offer a reachable metadata document.
+    env.appEnv.APP_URL = 'http://localhost:3010';
+    const metadata = { ...cimdMetadata, registration_endpoint: undefined };
+    await expect(resolve({ scheme: 'dcr' }, metadata)).rejects.toThrow(
+      'This server only accepts Client ID Metadata Documents, which need LobeHub on a public HTTPS APP_URL. Provide the OAuth Client ID you registered with this server.',
+    );
+  });
+
+  it('prefixes a rejected dynamic registration', async () => {
+    vi.mocked(registerClient).mockRejectedValueOnce(new Error('Use a public client'));
+    await expect(resolve({ scheme: 'dcr' }, metadataWith())).rejects.toThrow(
+      'Dynamic client registration failed: Use a public client',
+    );
+  });
+});
 
 describe('token endpoint client authentication', () => {
   afterEach(() => {
@@ -203,5 +331,88 @@ describe('registeredAuthMethod', () => {
     expect(
       registeredAuthMethod({ client_id: 'c', redirect_uris: [] }, metadataWith(['none'])),
     ).toBe('none');
+  });
+});
+
+describe('SDK v2 OAuth regressions', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('retries invalid_client in an HTTP 200 OAuth error response', async () => {
+    const attempts = stubPostOnlyTokenEndpoint(200);
+    const result = await exchange({ clientId: 'cid', clientSecret: 'secret' }, [
+      'client_secret_basic',
+      'client_secret_post',
+    ]);
+    expect(attempts).toEqual(['client_secret_basic', 'client_secret_post']);
+    expect(result.tokens.access_token).toBe('tok');
+  });
+
+  it('passes the authorization response issuer and rejects its absence when required', async () => {
+    stubPostOnlyTokenEndpoint();
+    const params = {
+      authorizationCode: 'code',
+      authorizationServerUrl: 'https://auth.example.com',
+      clientInformation: toClientInformation({
+        clientId: 'cid',
+        clientSecret: 'secret',
+        tokenEndpointAuthMethod: 'client_secret_post',
+      }),
+      codeVerifier: 'verifier',
+      metadata: { ...metadataWith(), authorization_response_iss_parameter_supported: true },
+      redirectUri: 'https://app.example.com/oauth/connector/callback',
+    };
+    await expect(
+      exchangeConnectorCode({ ...params, iss: 'https://auth.example.com' }),
+    ).resolves.toMatchObject({ tokens: { access_token: 'tok' } });
+    await expect(exchangeConnectorCode(params)).rejects.toThrow('Issuer mismatch');
+  });
+
+  it('discovers a root issuer with a trailing slash when PRM is absent', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string | URL) => {
+        if (String(url).includes('oauth-authorization-server'))
+          return Response.json({ ...metadataWith(), issuer: 'https://auth.example.com/' });
+        return new Response(null, { status: 404 });
+      }),
+    );
+    await expect(discoverConnectorOAuth('https://auth.example.com/mcp')).resolves.toMatchObject({
+      authorizationServerUrl: 'https://auth.example.com/',
+      metadata: { issuer: 'https://auth.example.com/' },
+    });
+  });
+
+  it('keeps the authorization server registration error_description', async () => {
+    vi.mocked(registerClient).mockRejectedValueOnce(
+      new RegistrationRejectedError({
+        status: 400,
+        body: '{"error":"invalid_client_metadata","error_description":"Use a public client"}',
+        submittedMetadata: { redirect_uris: [] },
+      }),
+    );
+    await expect(
+      registerDynamicClient({
+        authorizationServerUrl: 'https://auth.example.com',
+        metadata: metadataWith(),
+        redirectUri: 'https://app.example.com/callback',
+      }),
+    ).rejects.toThrow('Use a public client');
+  });
+});
+
+describe('OAuth metadata issuer validation', () => {
+  afterEach(() => vi.unstubAllGlobals());
+  it('explains a mismatched discovery issuer without exposing the received value', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string | URL) => {
+        if (String(url).includes('oauth-authorization-server'))
+          return Response.json({ ...metadataWith(), issuer: 'https://untrusted.example/' });
+        return new Response(null, { status: 404 });
+      }),
+    );
+    await expect(discoverConnectorOAuth('https://auth.example.com/mcp')).rejects.toThrow(
+      'Check the connector authorization server configuration.',
+    );
   });
 });

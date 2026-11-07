@@ -691,10 +691,40 @@ describe('DeviceModel', () => {
     it('should remove the row', async () => {
       await deviceModel.register({ deviceId: 'dev-1', identitySource: 'machine-id' });
 
-      await deviceModel.delete('dev-1');
+      const removed = await deviceModel.delete('dev-1');
 
+      expect(removed).toHaveLength(1);
+      expect(removed[0]).toMatchObject({ deviceId: 'dev-1', identitySource: 'machine-id', userId });
       const row = await deviceModel.findByDeviceId('dev-1');
       expect(row).toBeUndefined();
+    });
+
+    it('should return nothing when no row matches', async () => {
+      await expect(deviceModel.delete('missing-device')).resolves.toEqual([]);
+    });
+
+    it('should keep a workspace device the user enrolled under the same deviceId', async () => {
+      const deleteWsId = 'device-model-ws-delete';
+      await serverDB
+        .insert(workspaces)
+        .values({ id: deleteWsId, name: 'WS', primaryOwnerId: userId, slug: deleteWsId });
+      await deviceModel.register({ deviceId: 'both', identitySource: 'machine-id' });
+      await serverDB.insert(devices).values({
+        deviceId: 'both',
+        identitySource: 'machine-id',
+        userId,
+        workspaceId: deleteWsId,
+      });
+
+      const removed = await deviceModel.delete('both');
+
+      expect(removed).toHaveLength(1);
+      expect(removed[0].workspaceId).toBeNull();
+      const workspaceRows = await serverDB
+        .select()
+        .from(devices)
+        .where(eq(devices.workspaceId, deleteWsId));
+      expect(workspaceRows.map((row) => row.deviceId)).toEqual(['both']);
     });
   });
 

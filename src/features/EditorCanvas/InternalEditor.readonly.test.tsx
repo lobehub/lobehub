@@ -1,7 +1,14 @@
 /**
  * @vitest-environment happy-dom
  */
-import { type IEditor, ReactToolbarPlugin } from '@lobehub/editor';
+import {
+  type IEditor,
+  ReactAlertPlugin,
+  ReactChartPlugin,
+  ReactFootnotePlugin,
+  ReactToolbarPlugin,
+  ReactVideoPlugin,
+} from '@lobehub/editor';
 import { act, render, screen } from '@testing-library/react';
 import { StrictMode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -42,6 +49,9 @@ vi.mock('@lobehub/editor/react', () => ({
 }));
 
 vi.mock('@lobehub/editor', () => ({
+  ReactAlertPlugin: vi.fn(),
+  ReactChartPlugin: vi.fn(),
+  ReactFootnotePlugin: vi.fn(),
   ReactImagePlugin: vi.fn(),
   ReactLinkPlugin: vi.fn(),
   ReactLiteXmlPlugin: vi.fn(),
@@ -49,6 +59,7 @@ vi.mock('@lobehub/editor', () => ({
   ReactMentionPlugin: vi.fn(),
   ReactTablePlugin: vi.fn(),
   ReactToolbarPlugin: vi.fn(),
+  ReactVideoPlugin: vi.fn(),
 }));
 
 vi.mock('@/features/ChatInput/InputEditor/plugins', () => ({
@@ -126,6 +137,19 @@ describe('InternalEditor readonly state', () => {
       overflow: 'hidden',
       width: '100%',
     });
+  });
+
+  it('registers the alert, footnote, chart and video nodes the document service can write', () => {
+    render(<InternalEditor editor={editor} />);
+
+    expect(editorProps.last?.plugins).toEqual(
+      expect.arrayContaining([
+        ReactAlertPlugin,
+        ReactChartPlugin,
+        ReactFootnotePlugin,
+        ReactVideoPlugin,
+      ]),
+    );
   });
 
   it('registers the floating toolbar when editable', () => {

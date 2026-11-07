@@ -36,7 +36,6 @@ import type { EvidenceRef } from '../types';
 import { buildNightlyReviewSourceId, Risk, Scope } from '../types';
 import type { createServerSelfReviewBriefWriter } from './brief';
 import { createBriefSelfReviewService } from './brief';
-import type { SelfReviewBriefTextTranslator } from './briefText';
 import type {
   FeedbackActivityDigest,
   NightlyReviewManagedSkillSummary,
@@ -470,7 +469,6 @@ const updateSelfReviewProposalBrief = async ({
 export interface ReviewRuntimePrimitiveDeps {
   agentId: string;
   briefModel: BriefModel;
-  briefTextTranslator?: SelfReviewBriefTextTranslator;
   db: LobeChatDatabase;
   localDate: string;
   proposalBriefWriter: ReturnType<typeof createServerSelfReviewBriefWriter>;
@@ -499,7 +497,6 @@ export const createReviewRuntimePrimitives = (
   const {
     agentId,
     briefModel,
-    briefTextTranslator,
     db,
     localDate,
     proposalBriefWriter,
@@ -589,7 +586,6 @@ export const createReviewRuntimePrimitives = (
         result: projection.execution,
         reviewWindowEnd,
         reviewWindowStart,
-        t: briefTextTranslator,
         timezone: 'UTC',
         userId,
       });

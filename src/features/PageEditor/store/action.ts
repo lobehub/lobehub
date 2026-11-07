@@ -5,6 +5,7 @@ import { debounce } from 'es-toolkit/compat';
 import { type StateCreator } from 'zustand';
 
 import { type EditLockHealth } from '@/features/EditLock';
+import { focusEditorStartLine } from '@/features/EditorCanvas/focusEditorStartLine';
 import { useDocumentStore } from '@/store/document';
 import { getElectronStoreState } from '@/store/electron';
 import { electronSyncSelectors } from '@/store/electron/selectors';
@@ -19,7 +20,11 @@ export interface Action {
   flushMetaSave: () => void;
   handleCopyLink: (t: (key: string) => string) => void;
   handleDelete: (t: (key: string) => string, onDeleteCallback?: () => void) => Promise<void>;
-  handleTitleSubmit: () => Promise<void>;
+  /**
+   * Enter in the title: save it and continue on the body's first line. `bodyText`
+   * is the part of the title after the caret, which becomes that first line.
+   */
+  handleTitleSubmit: (bodyText?: string) => Promise<void>;
   initMeta: (title?: string, emoji?: string) => void;
   performMetaSave: () => Promise<void>;
   setCommentsPanelOpen: (open: boolean) => void;
@@ -135,12 +140,14 @@ export const store: (initState?: Partial<State>) => StateCreator<Store> =
         });
       },
 
-      handleTitleSubmit: async () => {
+      handleTitleSubmit: async (bodyText) => {
         const { editor, flushMetaSave } = get();
 
-        // Flush pending save and focus editor
+        // Flush the pending title save, then continue on a fresh first line of
+        // the body (AFFiNE's doc title does the same). A bare `editor.focus()`
+        // would restore the body's last caret — often the end of a long page.
         flushMetaSave();
-        editor?.focus();
+        focusEditorStartLine(editor, bodyText);
       },
 
       initMeta: (title, emoji) => {
@@ -182,7 +189,7 @@ export const store: (initState?: Partial<State>) => StateCreator<Store> =
               emoji,
               title,
             },
-            { saveSource: 'autosave' },
+            { metadataOnly: true, saveSource: 'autosave' },
           );
 
           // Notify parent after successful save. The callbacks were captured

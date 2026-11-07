@@ -2,6 +2,7 @@ import { HomeIcon, Image, ImageIcon, Video } from 'lucide-react';
 import { describe, expect, it } from 'vitest';
 
 import { matchRouteMeta } from '@/features/Electron/titlebar/TabBar/resolveRouteMeta';
+import { projectAcceptanceRouteMeta } from '@/features/Projects/routeMeta';
 
 import { mainAreaMetaRoutes } from './desktopRouter.config.desktop';
 
@@ -27,7 +28,7 @@ describe('mainAreaMetaRoutes (Electron adapter)', () => {
   });
 
   it('uses the active resource category for the tab title and icon', () => {
-    const { static: staticMeta } = matchRouteMeta(mainAreaMetaRoutes, '/resource/images');
+    const { static: staticMeta } = matchRouteMeta(mainAreaMetaRoutes, '/resource/drive/images');
 
     expect(staticMeta.titleKey).toBe('navigation.resourceImages');
     expect(staticMeta.icon).toBe(ImageIcon);
@@ -60,7 +61,7 @@ describe('mainAreaMetaRoutes (Electron adapter)', () => {
   });
 
   it('resolves project conversation meta with a dynamic title runner', () => {
-    const matched = matchRouteMeta(mainAreaMetaRoutes, '/project/prj_1/conversation/tpc_1');
+    const matched = matchRouteMeta(mainAreaMetaRoutes, '/project/prj_1/topic/tpc_1');
 
     expect(matched.static.titleKey).toBe('project:topics.title');
     expect(matched.static.icon).toBeDefined();
@@ -71,17 +72,28 @@ describe('mainAreaMetaRoutes (Electron adapter)', () => {
 
   // Regression: the project acceptance section reused `acceptanceRouteMeta`,
   // whose DynamicMeta cannot read an `:acceptanceId` here, so every project
-  // acceptance tab was persisted with the generic fallback title.
-  it('resolves project acceptance meta with its own static title and no runner', () => {
+  // acceptance tab was persisted with the generic fallback title. Its own runner
+  // only adds the project avatar and publishes no title.
+  it('resolves project acceptance meta with its own static title, not the record runner', () => {
     const matched = matchRouteMeta(mainAreaMetaRoutes, '/project/prj_1/acceptance');
+    const record = matchRouteMeta(mainAreaMetaRoutes, '/project/prj_1/acceptance/acc_1');
 
     expect(matched.static.titleKey).toBe('project:sections.acceptance');
     expect(matched.static.icon).toBeDefined();
-    expect(matched.meta?.DynamicMeta).toBeUndefined();
+    expect(matched.meta).toBe(projectAcceptanceRouteMeta);
+    expect(matched.meta?.DynamicMeta).not.toBe(record.meta?.DynamicMeta);
+  });
+
+  it('resolves a project acceptance record with the acceptance title runner', () => {
+    const matched = matchRouteMeta(mainAreaMetaRoutes, '/project/prj_1/acceptance/acc_1');
+
+    expect(matched.static.titleKey).toBe('verify:acceptance.titleFallback');
+    expect(matched.meta?.DynamicMeta).toBeDefined();
+    expect(matched.params.acceptanceId).toBe('acc_1');
   });
 
   it('resolves project meta for workspace-scoped tab urls', () => {
-    const matched = matchRouteMeta(mainAreaMetaRoutes, '/team-x/project/prj_1/conversation/tpc_1');
+    const matched = matchRouteMeta(mainAreaMetaRoutes, '/team-x/project/prj_1/topic/tpc_1');
 
     expect(matched.static.titleKey).toBe('project:topics.title');
     expect(matched.params.projectId).toBe('prj_1');

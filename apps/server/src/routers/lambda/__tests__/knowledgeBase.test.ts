@@ -3,6 +3,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { knowledgeBaseRouter } from '@/server/routers/lambda/knowledgeBase';
 import { TransferErrorCode } from '@/types/transferError';
 
+const publicMemberKnowledgeBase = () => ({
+  id: 'kb-1',
+  userId: 'another-member',
+  visibility: 'public',
+  workspaceId: 'workspace-active',
+});
+
 const routerMocks = vi.hoisted(() => ({
   assertContentsNotInRestrictedKnowledgeBase: vi.fn(),
   assertKnowledgeBaseBrowsable: vi.fn(),
@@ -123,12 +130,7 @@ describe('knowledgeBaseRouter', () => {
 
   describe('updateKnowledgeBase', () => {
     it("lets a member update another member's visible shared library", async () => {
-      mockKnowledgeBaseModelFindById.mockResolvedValue({
-        id: 'kb-1',
-        userId: 'another-member',
-        visibility: 'public',
-        workspaceId: 'workspace-active',
-      });
+      mockKnowledgeBaseModelFindById.mockResolvedValue(publicMemberKnowledgeBase());
 
       await caller.updateKnowledgeBase({ id: 'kb-1', value: { name: 'Updated library' } });
 
@@ -146,12 +148,7 @@ describe('knowledgeBaseRouter', () => {
     // so a member with collaborative `edit` access could reassign the row, move
     // it to another workspace, or take it private through the rename endpoint.
     it('drops identity and scope fields from the update payload', async () => {
-      mockKnowledgeBaseModelFindById.mockResolvedValue({
-        id: 'kb-1',
-        userId: 'another-member',
-        visibility: 'public',
-        workspaceId: 'workspace-active',
-      });
+      mockKnowledgeBaseModelFindById.mockResolvedValue(publicMemberKnowledgeBase());
 
       await caller.updateKnowledgeBase({
         id: 'kb-1',
@@ -168,6 +165,38 @@ describe('knowledgeBaseRouter', () => {
       expect(mockKnowledgeBaseModelUpdate).toHaveBeenCalledWith('kb-1', {
         description: 'New description',
         name: 'Updated library',
+      });
+    });
+
+    it('merges a cover into the stored settings without dropping other settings', async () => {
+      mockKnowledgeBaseModelFindById.mockResolvedValue({
+        id: 'kb-1',
+        settings: { cover: 'preset:old', topK: 5 },
+        userId: 'test-user',
+        visibility: 'public',
+        workspaceId: 'workspace-active',
+      });
+
+      await caller.updateKnowledgeBase({ id: 'kb-1', value: { cover: 'preset:aurora' } });
+
+      expect(mockKnowledgeBaseModelUpdate).toHaveBeenCalledWith('kb-1', {
+        settings: { cover: 'preset:aurora', topK: 5 },
+      });
+    });
+
+    it('clears the cover back to the generated default on null', async () => {
+      mockKnowledgeBaseModelFindById.mockResolvedValue({
+        id: 'kb-1',
+        settings: { cover: 'preset:old', topK: 5 },
+        userId: 'test-user',
+        visibility: 'public',
+        workspaceId: 'workspace-active',
+      });
+
+      await caller.updateKnowledgeBase({ id: 'kb-1', value: { cover: null } });
+
+      expect(mockKnowledgeBaseModelUpdate).toHaveBeenCalledWith('kb-1', {
+        settings: { topK: 5 },
       });
     });
 
@@ -223,12 +252,7 @@ describe('knowledgeBaseRouter', () => {
 
   describe('removeKnowledgeBase', () => {
     it("lets a member delete another creator's visible library", async () => {
-      mockKnowledgeBaseModelFindById.mockResolvedValue({
-        id: 'kb-1',
-        userId: 'another-member',
-        visibility: 'public',
-        workspaceId: 'workspace-active',
-      });
+      mockKnowledgeBaseModelFindById.mockResolvedValue(publicMemberKnowledgeBase());
 
       await caller.removeKnowledgeBase({ id: 'kb-1' });
 

@@ -61,3 +61,16 @@ export const saveClaudeCodeToken = async ({
 
   return { ok: true };
 };
+
+/**
+ * Remove the caller's own Claude Code OAuth token from the personal vault.
+ * Deleting the credential also drops any workspace share of it.
+ */
+export const deleteClaudeCodeToken = async (personalCred: { id: number }): Promise<boolean> => {
+  try {
+    await lambdaClient.market.creds.delete.mutate({ id: personalCred.id });
+    return true;
+  } catch {
+    return false;
+  }
+};

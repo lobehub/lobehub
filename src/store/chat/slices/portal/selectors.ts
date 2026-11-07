@@ -264,6 +264,9 @@ const taskDetailId = (s: ChatStoreState): string | undefined => {
   return view?.taskId;
 };
 
+const taskDetailWorkspace = (s: ChatStoreState) =>
+  getStackViewData(s, PortalViewType.TaskDetail)?.workspace;
+
 const taskResultId = (s: ChatStoreState): string | undefined => {
   const view = getStackViewData(s, PortalViewType.TaskResult);
   return view?.taskId;
@@ -276,6 +279,7 @@ const goalPortalId = (s: ChatStoreState): string | undefined =>
   getViewData(s, PortalViewType.Goal)?.goalId;
 const goalNodeView = (s: ChatStoreState) => getViewData(s, PortalViewType.GoalNode);
 const goalMetricView = (s: ChatStoreState) => getViewData(s, PortalViewType.GoalMetric);
+const goalNorthStarView = (s: ChatStoreState) => getViewData(s, PortalViewType.GoalNorthStar);
 const goalReportView = (s: ChatStoreState) => getViewData(s, PortalViewType.GoalReport);
 const goalReportChapterView = (s: ChatStoreState) =>
   getViewData(s, PortalViewType.GoalReportChapter);
@@ -363,6 +367,7 @@ export const chatPortalSelectors = {
 
   // Goal drill-down data
   goalMetricView,
+  goalNorthStarView,
   dashboardWidgetView,
   goalNodeView,
   goalPortalId,
@@ -389,6 +394,7 @@ export const chatPortalSelectors = {
 
   // Task detail data
   taskDetailId,
+  taskDetailWorkspace,
   taskResultId,
 
   // Topic chat data

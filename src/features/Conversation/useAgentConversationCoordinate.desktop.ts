@@ -11,8 +11,13 @@ export const useAgentConversationCoordinate = () => {
   // owning agent resolves from the project topic — still route-derived per tab,
   // never the global pointer (another tab may own it).
   const projectTopics = useProjectTopics(params.aid ? undefined : params.projectId);
+  // A blank draft a sidebar "+" opened has no topic yet; its owner rides in the
+  // route (`?agent=`) and stays there through the first send's topic switch,
+  // until the project list has the new topic.
   const projectTopicAgentId = params.projectId
-    ? projectTopics.find((topic) => topic.id === params.topicId)?.agentId
+    ? (projectTopics.find((topic) => topic.id === params.topicId)?.agentId ??
+      searchParams.get('agent') ??
+      undefined)
     : undefined;
 
   return [

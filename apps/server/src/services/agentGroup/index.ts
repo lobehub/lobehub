@@ -48,7 +48,7 @@ export class AgentGroupService {
    * Delete a group and the agents that belonged to it.
    *
    * The roster read + cleanup used to live here, which cost it two things the
-   * model-level version has: it ran OUTSIDE the delete's transaction (an error
+   * repository version has: it ran OUTSIDE the delete's transaction (an error
    * between the two steps stranded the agents permanently, invisible because
    * they are `virtual`), and it classified members through a visibility-scoped
    * read, so a member another workspace user had flipped back to `private` was
@@ -58,7 +58,7 @@ export class AgentGroupService {
    * @returns The deleted group and list of deleted group-owned agent IDs
    */
   async deleteGroup(groupId: string) {
-    const { deletedOwnedAgentIds, group } = await this.chatGroupModel.delete(groupId);
+    const { deletedOwnedAgentIds, group } = await this.agentGroupRepo.deleteGroup(groupId);
 
     return {
       deletedVirtualAgentIds: deletedOwnedAgentIds,

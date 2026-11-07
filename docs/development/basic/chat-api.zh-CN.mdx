@@ -310,7 +310,7 @@ Agent Runtime 循环的执行位置取决于场景：
   子 agent 任务、API/Cron 触发。循环在服务端运行，
   通过 SSE 流式推送事件到客户端，
   入口为 `AgentRuntimeService.executeStep()`
-  （`apps/server/src/services/agentRuntime/AgentRuntimeService.ts`），
+  （`apps/server/src/services/agentRuntime/AgentRuntimeService/executeStep/index.ts`），
   tRPC 路由为 `apps/server/src/routers/lambda/aiAgent.ts`
 
 ## Model Runtime

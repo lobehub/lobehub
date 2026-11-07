@@ -37,6 +37,7 @@ Ace Data Cloud is an independent API service. Use an Ace account and API token; 
 
 - **401/403:** recopy the service API token and check permissions, expiry, and balance. Do not use platform administration credentials or a model vendor's key.
 - **404:** restore `https://api.acedata.cloud/v1`. Do not use `/openai/v1` or a full `/chat/completions` URL as the base URL.
+- **429:** the provider reports a rate-limit error. Wait for the service limit to recover before retrying; do not silently switch models or price tiers.
 - **Empty catalog:** inspect the model-fetch error rather than assuming historical model IDs are available.
 - **Tools or vision:** the catalog has no capability or pricing metadata, so this integration does not infer either from vendor model names. Verify the current service contract before editing model settings.
 

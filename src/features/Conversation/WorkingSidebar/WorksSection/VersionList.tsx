@@ -1,12 +1,10 @@
 import type { WorkVersionItem } from '@lobechat/types';
 import { Center, createStaticStyles, Flexbox, Spin, Text } from '@lobehub/ui';
-import { memo } from 'react';
+import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { formatTaskItemDate } from '@/features/AgentTasks/features/formatTaskItemDate';
-import { useClientDataSWR } from '@/libs/swr';
-import { workKeys } from '@/libs/swr/keys';
-import { workService } from '@/services/work';
+import { useWorkStore, workActions, workSelectors } from '@/store/work';
 import { computeWorkVersionCostDeltas, formatWorkVersionCost } from '@/utils/workVersionCost';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -36,22 +34,22 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
+const EMPTY_VERSIONS: WorkVersionItem[] = [];
+
 const VersionList = memo<{ workId: string }>(({ workId }) => {
   const { i18n, t } = useTranslation(['chat', 'common']);
-  const {
-    data = [],
-    error,
-    isLoading,
-  } = useClientDataSWR<WorkVersionItem[]>(
-    workKeys.versions(workId),
-    () => workService.listVersions(workId),
-    {
-      fallbackData: [],
-      revalidateOnFocus: false,
-    },
-  );
+  const params = useMemo(() => ({ workId }), [workId]);
+  const { error, isHydrated } = workActions.useFetchWorkVersions(params, {
+    revalidateOnFocus: false,
+  });
+  // `undefined` while nothing is painted yet; the stored timeline paints first.
+  const stored = useWorkStore(workSelectors.workVersions(workId));
+  const data = stored ?? EMPTY_VERSIONS;
 
-  if (isLoading) {
+  // Before the stored copy is read, paint nothing rather than a spinner.
+  if (stored === undefined && !error && !isHydrated) return null;
+
+  if (stored === undefined && !error) {
     return (
       <Center height={56}>
         <Spin size="small" />
@@ -59,7 +57,8 @@ const VersionList = memo<{ workId: string }>(({ workId }) => {
     );
   }
 
-  if (error) {
+  // A failed refresh keeps the settled timeline on screen.
+  if (stored === undefined && error) {
     return <Text className={styles.error}>{t('workingPanel.works.versionError')}</Text>;
   }
 

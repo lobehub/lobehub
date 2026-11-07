@@ -9,10 +9,13 @@ import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { formatPageEditorInfoTime } from '@/features/PageEditor/formatPageEditorInfoTime';
+import { useIsHtmlPage } from '@/features/PageEditor/HtmlPageBody';
 import { useAppOrigin } from '@/hooks/useAppOrigin';
 import { agentDocumentService } from '@/services/agentDocument';
+import { useDocumentStore } from '@/store/document';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
+import { exportHtmlDocument } from '@/utils/exportTextFile';
 
 interface UseMenuParams {
   agentDocumentId?: string;
@@ -45,6 +48,12 @@ export const useMenu = ({
   const appOrigin = useAppOrigin();
   const activeWorkspaceSlug = useActiveWorkspaceSlug();
   const dateLocale = i18n.resolvedLanguage || i18n.language;
+
+  // An HTML page has no Markdown to export: it downloads as the page itself.
+  const isHtmlPage = useIsHtmlPage(documentId);
+  const htmlContent = useDocumentStore((s) =>
+    isHtmlPage ? s.documentDetailMap[documentId]?.document?.content : undefined,
+  );
 
   const [wideScreen, toggleWideScreen] = useGlobalStore((s) => [
     systemStatusSelectors.wideScreen(s),
@@ -81,6 +90,15 @@ export const useMenu = ({
           URL.revokeObjectURL(url);
           toast.success(t('pageEditor.exportSuccess'));
         }
+      } catch {
+        toast.error(t('pageEditor.exportError'));
+      }
+    };
+
+    const handleExportHtml = async () => {
+      try {
+        const result = await exportHtmlDocument(htmlContent ?? '', title);
+        if (result === 'downloaded') toast.success(t('pageEditor.exportSuccess'));
       } catch {
         toast.error(t('pageEditor.exportError'));
       }
@@ -137,13 +155,21 @@ export const useMenu = ({
         onClick: handleCopyLink,
       },
       {
-        children: [
-          {
-            key: 'export-markdown',
-            label: t('pageEditor.menu.export.markdown'),
-            onClick: handleExportMarkdown,
-          },
-        ],
+        children: isHtmlPage
+          ? [
+              {
+                key: 'export-html',
+                label: t('pageEditor.menu.export.html'),
+                onClick: handleExportHtml,
+              },
+            ]
+          : [
+              {
+                key: 'export-markdown',
+                label: t('pageEditor.menu.export.markdown'),
+                onClick: handleExportMarkdown,
+              },
+            ],
         icon: <Icon icon={Download} />,
         key: 'export',
         label: t('pageEditor.menu.export'),
@@ -186,6 +212,8 @@ export const useMenu = ({
     documentId,
     editor,
     fileBacked,
+    htmlContent,
+    isHtmlPage,
     lg,
     dateLocale,
     onDeleted,

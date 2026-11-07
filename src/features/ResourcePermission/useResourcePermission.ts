@@ -2,15 +2,18 @@ import { toast } from '@lobehub/ui';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useClientDataSWR } from '@/libs/swr';
+import { cacheScope } from '@/libs/replica';
 import type { PermissionResourceType, ResourceAccessLevel } from '@/services/resourcePermission';
-import { resourcePermissionService } from '@/services/resourcePermission';
-
-const FETCH_RESOURCE_PERMISSION_KEY = 'resource-permission';
+import {
+  resourcePermissionActions,
+  resourcePermissionSelectors,
+  useResourcePermissionStore,
+} from '@/store/resourcePermission';
 
 /**
  * State + handlers of the Permission panel: publicity and the workspace
- * General-access level (Notion-style Share).
+ * General-access level (Notion-style Share). Reads the same access replica as
+ * `useResourceAccess`, so a reload paints the last confirmed level at once.
  */
 export const useResourcePermission = (
   resourceType: PermissionResourceType,
@@ -20,54 +23,39 @@ export const useResourcePermission = (
 
   const [updating, setUpdating] = useState(false);
 
-  const { data, error, isLoading, mutate } = useClientDataSWR(
-    resourceId ? [FETCH_RESOURCE_PERMISSION_KEY, resourceType, resourceId] : null,
-    () => resourcePermissionService.getGeneralAccess(resourceType, resourceId!),
+  const ref = resourceId ? { resourceId, resourceType } : null;
+  const scope = cacheScope.use();
+  const { error, revalidate } = resourcePermissionActions.useFetchAccess(ref);
+  const data = useResourcePermissionStore(resourcePermissionSelectors.access(ref));
+  const sessionCheck = useResourcePermissionStore(
+    resourcePermissionSelectors.sessionCheck(ref, scope),
   );
 
-  const run = useCallback(
-    async (
-      action: () => Promise<Awaited<ReturnType<typeof resourcePermissionService.getGeneralAccess>>>,
-      optimisticData: Awaited<ReturnType<typeof resourcePermissionService.getGeneralAccess>>,
-    ) => {
-      const previousData = data;
+  const setAccessLevel = useCallback(
+    async (accessLevel: ResourceAccessLevel) => {
+      if (!data || !resourceId) return;
       setUpdating(true);
-      await mutate(optimisticData, false);
       try {
-        const result = await action();
-        await mutate(result, false);
+        await resourcePermissionActions.setAccessLevel({ resourceId, resourceType }, accessLevel);
       } catch (e) {
-        await mutate(previousData, false);
         console.error('[ResourcePermission]', e);
         toast.error((e as Error)?.message || t('permission.updateError'));
       } finally {
         setUpdating(false);
       }
     },
-    [data, mutate, t],
-  );
-
-  const setAccessLevel = useCallback(
-    (accessLevel: ResourceAccessLevel) => {
-      if (!data) return;
-      return run(
-        () => resourcePermissionService.setAccessLevel(resourceType, resourceId!, accessLevel),
-        {
-          ...data,
-          accessLevel,
-          generalAccess: accessLevel === 'edit' ? 'editor' : 'viewer',
-        },
-      );
-    },
-    [data, run, resourceType, resourceId],
+    [data, resourceId, resourceType, t],
   );
 
   return {
     data,
     error,
-    isLoading,
+    /** The server answered this record during this session (not only a persisted copy). */
+    isConfirmed: !!data && sessionCheck === 'confirmed',
+    /** First load only: a persisted record is not "loading". */
+    isLoading: !!ref && !data && !error,
     /** Re-fetch — used by the Permission page to retry a failed load. */
-    mutate,
+    mutate: revalidate,
     setAccessLevel,
     updating,
   };

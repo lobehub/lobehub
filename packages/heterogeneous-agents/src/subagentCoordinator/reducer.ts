@@ -50,6 +50,7 @@ const copyRun = (run: SubagentRun): SubagentRun => ({
   ...run,
   lifetimeToolCallIds: new Set(run.lifetimeToolCallIds),
   toolState: copyToolState(run.toolState),
+  turnIds: new Set(run.turnIds),
 });
 
 /** Clone the runs map, deep-copying only the run we're about to mutate. */
@@ -69,16 +70,38 @@ const withRun = (
  * `Active`) thread. The remembered set is what makes thread creation idempotent
  * across cold-replica retries / double IPC delivery — keyed by the DB-homed
  * `sourceToolCallId`, independent of whether the live `runs` map still holds it.
+ * The run's tail is kept as a resume anchor in case the subagent wakes up again.
  */
 const markRunFinalized = (
   state: SubagentRunsState,
   parentToolCallId: string,
+  run: SubagentRun,
 ): SubagentRunsState => {
   const runs = new Map(state.runs);
   runs.delete(parentToolCallId);
   const finalizedParents = new Set(state.finalizedParents);
   finalizedParents.add(parentToolCallId);
-  return { ...state, finalizedParents, runs };
+  const finalizedRuns = new Map(state.finalizedRuns);
+  finalizedRuns.set(parentToolCallId, {
+    lastChainParentId: run.lastChainParentId,
+    lifetimeToolCallIds: run.lifetimeToolCallIds,
+    threadId: run.threadId,
+    turnIds: run.turnIds,
+  });
+  return { ...state, finalizedParents, finalizedRuns, runs };
+};
+
+/** Move a resumed parent from the finalized set back into the live runs. */
+const markRunReopened = (
+  state: SubagentRunsState,
+  parentToolCallId: string,
+  run: SubagentRun,
+): SubagentRunsState => {
+  const finalizedParents = new Set(state.finalizedParents);
+  finalizedParents.delete(parentToolCallId);
+  const finalizedRuns = new Map(state.finalizedRuns);
+  finalizedRuns.delete(parentToolCallId);
+  return withRun({ ...state, finalizedParents, finalizedRuns }, parentToolCallId, run);
 };
 
 const SUBAGENT_TITLE_MAX = 80;
@@ -95,9 +118,11 @@ interface ReduceResult {
  * prior-turn flush). The returned `run` is a fresh copy safe to mutate further
  * by the caller before it calls `withRun` to fold it back into state.
  *
- * Returns `run: null` when the parent already FINALIZED (its thread is `Active`,
- * tracked in `finalizedParents`): the event is a stale replay of a completed
- * spawn — re-creating its thread would duplicate it. The caller drops the event.
+ * When the parent already FINALIZED (its thread is `Active`, tracked in
+ * `finalizedParents`), only a turn the thread has never seen resumes it: the
+ * thread reopens and the turn chains onto its tail. Anything else is a stale
+ * replay of a completed spawn — re-creating its thread would duplicate it — so
+ * this returns `run: null` and the caller drops the event.
  */
 const ensureRun = (
   state: SubagentRunsState,
@@ -107,9 +132,46 @@ const ensureRun = (
   const intents: SubagentIntent[] = [];
   const existing = state.runs.get(subCtx.parentToolCallId);
 
-  // ─── Stale replay of an already-finalized spawn → no-op (no duplicate thread) ───
+  // ─── Finalized spawn: resume on a new turn, otherwise a stale replay → no-op ───
   if (!existing && state.finalizedParents.has(subCtx.parentToolCallId)) {
-    return { intents, run: null, state };
+    const anchor = state.finalizedRuns.get(subCtx.parentToolCallId);
+    const turnId = subCtx.subagentMessageId;
+    if (!anchor || !turnId || anchor.turnIds.has(turnId)) {
+      return { intents, run: null, state };
+    }
+
+    const assistantId = ctx.newId('message');
+    intents.push(
+      { kind: 'reopenThread', threadId: anchor.threadId },
+      {
+        agentId: ctx.agentId,
+        content: '',
+        kind: 'createMessage',
+        messageId: assistantId,
+        parentId: anchor.lastChainParentId,
+        role: 'assistant',
+        subagentMessageId: turnId,
+        threadId: anchor.threadId,
+        topicId: ctx.topicId,
+      },
+    );
+
+    const run: SubagentRun = {
+      accContent: '',
+      accReasoning: '',
+      currentAssistantId: assistantId,
+      currentSubagentMessageId: turnId,
+      lastChainParentId: assistantId,
+      lifetimeToolCallIds: new Set(anchor.lifetimeToolCallIds),
+      threadId: anchor.threadId,
+      toolState: emptyToolState(),
+      turnIds: new Set([...anchor.turnIds, turnId]),
+    };
+    return {
+      intents,
+      run,
+      state: markRunReopened(state, subCtx.parentToolCallId, run),
+    };
   }
 
   // ─── First event for this parent → lazy-create Thread + seed + assistant ───
@@ -166,6 +228,7 @@ const ensureRun = (
       lifetimeToolCallIds: new Set(),
       threadId,
       toolState: emptyToolState(),
+      turnIds: new Set(subCtx.subagentMessageId ? [subCtx.subagentMessageId] : []),
     };
     return { intents, run, state: withRun(state, subCtx.parentToolCallId, run) };
   }
@@ -199,6 +262,7 @@ const ensureRun = (
 
     run.currentAssistantId = nextAssistantId;
     run.currentSubagentMessageId = subCtx.subagentMessageId;
+    run.turnIds.add(subCtx.subagentMessageId);
     run.lastChainParentId = nextAssistantId;
     run.toolState = emptyToolState();
     run.accContent = '';
@@ -256,7 +320,7 @@ const finalizeRun = (
 
   intents.push({ kind: 'finalizeThread', threadId: run.threadId });
 
-  return { intents, state: markRunFinalized(state, parentToolCallId) };
+  return { intents, state: markRunFinalized(state, parentToolCallId, run) };
 };
 
 /** Find the run that owns an inner tool_call id (lifetime lookup). */

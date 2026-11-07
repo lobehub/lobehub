@@ -2,6 +2,7 @@ import type { ConversationContext } from '@lobechat/types';
 import type { ReactNode } from 'react';
 import { memo, useEffect, useMemo, useState } from 'react';
 
+import { PinnedTopicContext } from '@/features/ChatInput/InputEditor/ReferTopic/pinnedTopic';
 import { ConversationProvider } from '@/features/Conversation';
 import { useOperationState } from '@/hooks/useOperationState';
 import { useAgentStore } from '@/store/agent';
@@ -14,6 +15,11 @@ interface GoalChatProviderProps {
   goalId: string;
   /** Open a specific conversation when entering the panel (e.g. supervision). */
   initialTopicId?: string;
+  /**
+   * The goal is bound to `initialTopicId`: nothing inside the panel may switch
+   * it to another topic (a topic reference opens in the portal instead).
+   */
+  pinned?: boolean;
 }
 
 /**
@@ -22,7 +28,7 @@ interface GoalChatProviderProps {
  * progress overview into the request (see streamingExecutor).
  */
 export const GoalChatProvider = memo<GoalChatProviderProps>(
-  ({ agentId, children, goalId, initialTopicId }) => {
+  ({ agentId, children, goalId, initialTopicId, pinned }) => {
     const [initialized, setInitialized] = useState(false);
     const setActiveAgentId = useAgentStore((s) => s.setActiveAgentId);
     const activeTopicId = useChatStore((s) => s.activeTopicId);
@@ -64,9 +70,11 @@ export const GoalChatProvider = memo<GoalChatProviderProps>(
     if (!initialized) return null;
 
     return (
-      <ConversationProvider context={context} operationState={operationState}>
-        {children}
-      </ConversationProvider>
+      <PinnedTopicContext value={pinned ? initialTopicId : undefined}>
+        <ConversationProvider context={context} operationState={operationState}>
+          {children}
+        </ConversationProvider>
+      </PinnedTopicContext>
     );
   },
 );

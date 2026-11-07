@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { MarketService } from '@/server/services/market';
 
+import { buildDriveDownloadCommand } from '../driveDownload';
 import { MarketSandboxProvider, redactSandboxParams } from './market';
 
 describe('MarketSandboxProvider', () => {
@@ -203,6 +204,29 @@ describe('MarketSandboxProvider', () => {
       });
     });
 
+    it("redacts the clone credential an environment's initializer exports for git", () => {
+      const params = {
+        command: "export GIT_CONFIG_VALUE_0='Authorization: Basic c2VjcmV0' && git clone x",
+      };
+
+      expect(redactSandboxParams(params).command).not.toContain('c2VjcmV0');
+    });
+
+    it("redacts a drive download's payload, which carries a presigned upload URL", () => {
+      const command = buildDriveDownloadCommand({
+        hidden: [],
+        maxBytes: 1,
+        maxFiles: 1,
+        path: 'project',
+        uploadUrl: 'https://bucket.example.com/key?X-Amz-Signature=secret',
+      });
+      const payload = /LOBE_DRIVE_DOWNLOAD='([^']+)'/.exec(command)![1];
+
+      const redacted = redactSandboxParams({ command }).command as string;
+      expect(redacted).not.toContain(payload);
+      expect(redacted).toContain('LOBE_DRIVE_DOWNLOAD=[redacted] python3 -');
+    });
+
     it('fully redacts a command that writes into ~/.creds/env, regardless of the credential names it carries', () => {
       const params = {
         command:
@@ -239,7 +263,7 @@ describe('MarketSandboxProvider', () => {
  * reach Market in the request body.
  */
 describe('MarketSandboxProvider · persistence fields on the wire', () => {
-  const callWithRealSDK = async () => {
+  const setupRealSDK = async () => {
     const { MarketSDK } = await import('@lobehub/market-sdk');
     const fetchMock = vi.fn(async () => ({
       headers: new Headers({ 'content-type': 'application/json' }),
@@ -252,7 +276,15 @@ describe('MarketSandboxProvider · persistence fields on the wire', () => {
 
     const sdk = new MarketSDK({ baseURL: 'https://market.test' });
     const provider = new MarketSandboxProvider({
-      marketService: { getSDK: () => sdk } as unknown as MarketService,
+      marketService: {
+        // The real MarketService.exportFile is the same thin pass-through;
+        // stubbing it this way keeps the wire assertion on the SDK boundary.
+        exportFile: (
+          params: { path: string; uploadUrl: string },
+          context: Record<string, unknown>,
+        ) => sdk.plugins.runBuildInTool('exportFile', params, context as never),
+        getSDK: () => sdk,
+      } as unknown as MarketService,
       sandboxCwd: 'inst-a',
       sandboxInstanceId: 'env-abc',
       sandboxMode: 'persistent',
@@ -260,13 +292,23 @@ describe('MarketSandboxProvider · persistence fields on the wire', () => {
       userId: 'user_1',
     } as never);
 
+    const requestBody = () => {
+      const call = fetchMock.mock.calls.find(([url]) =>
+        String(url).includes('/v1/plugins/run-buildin-tools'),
+      );
+      return call ? JSON.parse(String((call[1] as RequestInit).body)) : undefined;
+    };
+
+    return { provider, requestBody };
+  };
+
+  const callWithRealSDK = async () => {
+    const { provider, requestBody } = await setupRealSDK();
+
     await provider.callTool('runCommand', { command: 'pwd' }).catch(() => undefined);
     vi.unstubAllGlobals();
 
-    const call = fetchMock.mock.calls.find(([url]) =>
-      String(url).includes('/v1/plugins/run-buildin-tools'),
-    );
-    return call ? JSON.parse(String((call[1] as RequestInit).body)) : undefined;
+    return requestBody();
   };
 
   it('sends sandboxMode, sandboxInstanceId and sandboxCwd in the request body', async () => {
@@ -278,6 +320,28 @@ describe('MarketSandboxProvider · persistence fields on the wire', () => {
       sandboxCwd: 'inst-a',
       sandboxInstanceId: 'env-abc',
       sandboxMode: 'persistent',
+    });
+  });
+
+  // exportFile ran without the session fields, so in persistent topics it
+  // looked for the file in a throwaway sandbox and could never find it.
+  it('sends the same session fields for exportFile', async () => {
+    const { provider, requestBody } = await setupRealSDK();
+
+    await provider
+      .exportFileToUploadUrl({
+        filename: 'a.png',
+        path: '/root/work/a.png',
+        uploadUrl: 'https://uploads.example.com/put',
+      })
+      .catch(() => undefined);
+    vi.unstubAllGlobals();
+
+    expect(requestBody()).toMatchObject({
+      sandboxCwd: 'inst-a',
+      sandboxInstanceId: 'env-abc',
+      sandboxMode: 'persistent',
+      toolName: 'exportFile',
     });
   });
 });

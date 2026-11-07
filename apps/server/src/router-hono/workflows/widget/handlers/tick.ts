@@ -28,8 +28,11 @@ interface TickPayload {
 }
 
 /**
- * Widget scheduler tick. Registered as a QStash Schedule (`lobe-widget-tick`,
- * see `scripts/serverLauncher/startServer.js`). In queue mode each due slot is
+ * Widget scheduler tick. Meant to run as a QStash Schedule (`lobe-widget-tick`).
+ * It is deliberately not created by `scripts/serverLauncher/startServer.js`:
+ * a per-minute schedule alone burns most of a free QStash plan's daily quota
+ * and starves the task/goal schedules, so self-hosted deployments register it
+ * themselves if they want widget scheduling. In queue mode each due slot is
  * published to `run-widget` as `{ widgetId, slot }` (deduplicated per slot) and
  * that handler claims it before running, and each stale reservation (a run
  * whose worker died past its lease) as `{ widgetId, runId, leaseStartedAt }`

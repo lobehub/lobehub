@@ -3,25 +3,42 @@ import { describe, expect, it } from 'vitest';
 import { buildHelperMaps } from '../indexing';
 import type { Message, MessageGroupMetadata } from '../types';
 
+const createMessage = (
+  id: string,
+  role: Message['role'],
+  content: string,
+  createdAt: number,
+  updatedAt: number,
+): Message => ({
+  content,
+  createdAt,
+  id,
+  role,
+  updatedAt,
+});
+
+const createChildMessage = (
+  id: string,
+  parentId: string,
+  role: Message['role'],
+  content: string,
+  createdAt: number,
+  updatedAt: number,
+): Message => ({
+  content,
+  createdAt,
+  id,
+  parentId,
+  role,
+  updatedAt,
+});
+
 describe('buildHelperMaps', () => {
   describe('messageMap', () => {
     it('should build messageMap for O(1) access', () => {
       const messages: Message[] = [
-        {
-          content: 'Hello',
-          createdAt: 1000,
-          id: 'msg-1',
-          role: 'user',
-          updatedAt: 1000,
-        },
-        {
-          content: 'Hi there',
-          createdAt: 2000,
-          id: 'msg-2',
-          parentId: 'msg-1',
-          role: 'assistant',
-          updatedAt: 2000,
-        },
+        createMessage('msg-1', 'user', 'Hello', 1000, 1000),
+        createChildMessage('msg-2', 'msg-1', 'assistant', 'Hi there', 2000, 2000),
       ];
 
       const result = buildHelperMaps(messages);
@@ -38,15 +55,7 @@ describe('buildHelperMaps', () => {
     });
 
     it('should handle single message', () => {
-      const messages: Message[] = [
-        {
-          content: 'Single message',
-          createdAt: 1000,
-          id: 'msg-1',
-          role: 'user',
-          updatedAt: 1000,
-        },
-      ];
+      const messages: Message[] = [createMessage('msg-1', 'user', 'Single message', 1000, 1000)];
 
       const result = buildHelperMaps(messages);
 
@@ -58,29 +67,9 @@ describe('buildHelperMaps', () => {
   describe('childrenMap', () => {
     it('should build childrenMap for parent-child relationships', () => {
       const messages: Message[] = [
-        {
-          content: 'Root',
-          createdAt: 1000,
-          id: 'msg-1',
-          role: 'user',
-          updatedAt: 1000,
-        },
-        {
-          content: 'Child 1',
-          createdAt: 2000,
-          id: 'msg-2',
-          parentId: 'msg-1',
-          role: 'assistant',
-          updatedAt: 2000,
-        },
-        {
-          content: 'Child 2',
-          createdAt: 3000,
-          id: 'msg-3',
-          parentId: 'msg-1',
-          role: 'assistant',
-          updatedAt: 3000,
-        },
+        createMessage('msg-1', 'user', 'Root', 1000, 1000),
+        createChildMessage('msg-2', 'msg-1', 'assistant', 'Child 1', 2000, 2000),
+        createChildMessage('msg-3', 'msg-1', 'assistant', 'Child 2', 3000, 3000),
       ];
 
       const result = buildHelperMaps(messages);
@@ -91,20 +80,8 @@ describe('buildHelperMaps', () => {
 
     it('should handle messages with no parent (root messages)', () => {
       const messages: Message[] = [
-        {
-          content: 'Root 1',
-          createdAt: 1000,
-          id: 'msg-1',
-          role: 'user',
-          updatedAt: 1000,
-        },
-        {
-          content: 'Root 2',
-          createdAt: 2000,
-          id: 'msg-2',
-          role: 'user',
-          updatedAt: 2000,
-        },
+        createMessage('msg-1', 'user', 'Root 1', 1000, 1000),
+        createMessage('msg-2', 'user', 'Root 2', 2000, 2000),
       ];
 
       const result = buildHelperMaps(messages);
@@ -114,37 +91,10 @@ describe('buildHelperMaps', () => {
 
     it('should handle deeply nested parent-child relationships', () => {
       const messages: Message[] = [
-        {
-          content: 'Level 0',
-          createdAt: 1000,
-          id: 'msg-1',
-          role: 'user',
-          updatedAt: 1000,
-        },
-        {
-          content: 'Level 1',
-          createdAt: 2000,
-          id: 'msg-2',
-          parentId: 'msg-1',
-          role: 'assistant',
-          updatedAt: 2000,
-        },
-        {
-          content: 'Level 2',
-          createdAt: 3000,
-          id: 'msg-3',
-          parentId: 'msg-2',
-          role: 'user',
-          updatedAt: 3000,
-        },
-        {
-          content: 'Level 3',
-          createdAt: 4000,
-          id: 'msg-4',
-          parentId: 'msg-3',
-          role: 'assistant',
-          updatedAt: 4000,
-        },
+        createMessage('msg-1', 'user', 'Level 0', 1000, 1000),
+        createChildMessage('msg-2', 'msg-1', 'assistant', 'Level 1', 2000, 2000),
+        createChildMessage('msg-3', 'msg-2', 'user', 'Level 2', 3000, 3000),
+        createChildMessage('msg-4', 'msg-3', 'assistant', 'Level 3', 4000, 4000),
       ];
 
       const result = buildHelperMaps(messages);
@@ -157,45 +107,11 @@ describe('buildHelperMaps', () => {
 
     it('should handle branching conversations', () => {
       const messages: Message[] = [
-        {
-          content: 'Root',
-          createdAt: 1000,
-          id: 'msg-1',
-          role: 'user',
-          updatedAt: 1000,
-        },
-        {
-          content: 'Branch 1',
-          createdAt: 2000,
-          id: 'msg-2',
-          parentId: 'msg-1',
-          role: 'assistant',
-          updatedAt: 2000,
-        },
-        {
-          content: 'Branch 2',
-          createdAt: 3000,
-          id: 'msg-3',
-          parentId: 'msg-1',
-          role: 'assistant',
-          updatedAt: 3000,
-        },
-        {
-          content: 'Sub-branch 1',
-          createdAt: 4000,
-          id: 'msg-4',
-          parentId: 'msg-2',
-          role: 'user',
-          updatedAt: 4000,
-        },
-        {
-          content: 'Sub-branch 2',
-          createdAt: 5000,
-          id: 'msg-5',
-          parentId: 'msg-2',
-          role: 'user',
-          updatedAt: 5000,
-        },
+        createMessage('msg-1', 'user', 'Root', 1000, 1000),
+        createChildMessage('msg-2', 'msg-1', 'assistant', 'Branch 1', 2000, 2000),
+        createChildMessage('msg-3', 'msg-1', 'assistant', 'Branch 2', 3000, 3000),
+        createChildMessage('msg-4', 'msg-2', 'user', 'Sub-branch 1', 4000, 4000),
+        createChildMessage('msg-5', 'msg-2', 'user', 'Sub-branch 2', 5000, 5000),
       ];
 
       const result = buildHelperMaps(messages);
@@ -209,13 +125,7 @@ describe('buildHelperMaps', () => {
   describe('threadMap', () => {
     it('should build threadMap for messages with threadId', () => {
       const messages: Message[] = [
-        {
-          content: 'Main message',
-          createdAt: 1000,
-          id: 'msg-1',
-          role: 'user',
-          updatedAt: 1000,
-        },
+        createMessage('msg-1', 'user', 'Main message', 1000, 1000),
         {
           content: 'Thread message 1',
           createdAt: 2000,
@@ -280,13 +190,7 @@ describe('buildHelperMaps', () => {
 
     it('should not include messages without threadId in threadMap', () => {
       const messages: Message[] = [
-        {
-          content: 'No thread',
-          createdAt: 1000,
-          id: 'msg-1',
-          role: 'user',
-          updatedAt: 1000,
-        },
+        createMessage('msg-1', 'user', 'No thread', 1000, 1000),
         {
           content: 'With thread',
           createdAt: 2000,
@@ -305,20 +209,8 @@ describe('buildHelperMaps', () => {
 
     it('should handle empty threadMap when no messages have threadId', () => {
       const messages: Message[] = [
-        {
-          content: 'Message 1',
-          createdAt: 1000,
-          id: 'msg-1',
-          role: 'user',
-          updatedAt: 1000,
-        },
-        {
-          content: 'Message 2',
-          createdAt: 2000,
-          id: 'msg-2',
-          role: 'assistant',
-          updatedAt: 2000,
-        },
+        createMessage('msg-1', 'user', 'Message 1', 1000, 1000),
+        createMessage('msg-2', 'assistant', 'Message 2', 2000, 2000),
       ];
 
       const result = buildHelperMaps(messages);
@@ -329,15 +221,7 @@ describe('buildHelperMaps', () => {
 
   describe('messageGroupMap', () => {
     it('should build messageGroupMap from provided metadata', () => {
-      const messages: Message[] = [
-        {
-          content: 'Message',
-          createdAt: 1000,
-          id: 'msg-1',
-          role: 'user',
-          updatedAt: 1000,
-        },
-      ];
+      const messages: Message[] = [createMessage('msg-1', 'user', 'Message', 1000, 1000)];
 
       const messageGroups: MessageGroupMetadata[] = [
         {
@@ -358,15 +242,7 @@ describe('buildHelperMaps', () => {
     });
 
     it('should handle empty messageGroupMap when no metadata provided', () => {
-      const messages: Message[] = [
-        {
-          content: 'Message',
-          createdAt: 1000,
-          id: 'msg-1',
-          role: 'user',
-          updatedAt: 1000,
-        },
-      ];
+      const messages: Message[] = [createMessage('msg-1', 'user', 'Message', 1000, 1000)];
 
       const result = buildHelperMaps(messages);
 
@@ -374,15 +250,7 @@ describe('buildHelperMaps', () => {
     });
 
     it('should handle empty messageGroupMap when empty array provided', () => {
-      const messages: Message[] = [
-        {
-          content: 'Message',
-          createdAt: 1000,
-          id: 'msg-1',
-          role: 'user',
-          updatedAt: 1000,
-        },
-      ];
+      const messages: Message[] = [createMessage('msg-1', 'user', 'Message', 1000, 1000)];
 
       const result = buildHelperMaps(messages, []);
 
@@ -436,13 +304,7 @@ describe('buildHelperMaps', () => {
           role: 'compressedGroup',
           updatedAt: 1000,
         } as any,
-        {
-          content: 'User message',
-          createdAt: 2000,
-          id: 'msg-4',
-          role: 'user',
-          updatedAt: 2000,
-        },
+        createMessage('msg-4', 'user', 'User message', 2000, 2000),
         {
           content: 'Response to user',
           createdAt: 3000,
@@ -479,22 +341,8 @@ describe('buildHelperMaps', () => {
           role: 'compressedGroup',
           updatedAt: 2000,
         } as any,
-        {
-          content: 'Child of first group',
-          createdAt: 3000,
-          id: 'msg-new-1',
-          parentId: 'msg-a',
-          role: 'user',
-          updatedAt: 3000,
-        },
-        {
-          content: 'Child of second group',
-          createdAt: 4000,
-          id: 'msg-new-2',
-          parentId: 'msg-b',
-          role: 'assistant',
-          updatedAt: 4000,
-        },
+        createChildMessage('msg-new-1', 'msg-a', 'user', 'Child of first group', 3000, 3000),
+        createChildMessage('msg-new-2', 'msg-b', 'assistant', 'Child of second group', 4000, 4000),
       ];
 
       const result = buildHelperMaps(messages);
@@ -528,14 +376,14 @@ describe('buildHelperMaps', () => {
           role: 'compressedGroup',
           updatedAt: 1000,
         } as any,
-        {
-          content: 'Follow-up after compression',
-          createdAt: 2000,
-          id: 'msg-new',
-          parentId: 'msg-hidden-2',
-          role: 'assistant',
-          updatedAt: 2000,
-        },
+        createChildMessage(
+          'msg-new',
+          'msg-hidden-2',
+          'assistant',
+          'Follow-up after compression',
+          2000,
+          2000,
+        ),
       ];
 
       const result = buildHelperMaps(messages);
@@ -572,14 +420,14 @@ describe('buildHelperMaps', () => {
           role: 'compressedGroup',
           updatedAt: 1000,
         } as any,
-        {
-          content: 'Continue searching',
-          createdAt: 2000,
-          id: 'msg-new',
-          parentId: 'msg-tool-result-1',
-          role: 'assistant',
-          updatedAt: 2000,
-        },
+        createChildMessage(
+          'msg-new',
+          'msg-tool-result-1',
+          'assistant',
+          'Continue searching',
+          2000,
+          2000,
+        ),
       ];
 
       const result = buildHelperMaps(messages);
@@ -592,13 +440,7 @@ describe('buildHelperMaps', () => {
   describe('integration scenarios', () => {
     it('should build all maps correctly in complex conversation', () => {
       const messages: Message[] = [
-        {
-          content: 'Root message',
-          createdAt: 1000,
-          id: 'msg-1',
-          role: 'user',
-          updatedAt: 1000,
-        },
+        createMessage('msg-1', 'user', 'Root message', 1000, 1000),
         {
           content: 'Assistant response',
           createdAt: 2000,
@@ -617,14 +459,7 @@ describe('buildHelperMaps', () => {
           threadId: 'thread-1',
           updatedAt: 3000,
         },
-        {
-          content: 'Branch message',
-          createdAt: 4000,
-          id: 'msg-4',
-          parentId: 'msg-1',
-          role: 'assistant',
-          updatedAt: 4000,
-        },
+        createChildMessage('msg-4', 'msg-1', 'assistant', 'Branch message', 4000, 4000),
       ];
 
       const messageGroups: MessageGroupMetadata[] = [

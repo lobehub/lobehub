@@ -4,6 +4,7 @@ export {
   filterPluginsByShareGate,
   filterSkillsByShareGate,
   getShareGrantActivatedPluginIds,
+  getShareGrantedExtensionIds,
   shareGateGrantsCloudSandbox,
 } from './grants';
 export { applyShareGateToToolSet } from './toolSet';

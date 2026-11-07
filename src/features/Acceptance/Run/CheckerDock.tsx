@@ -214,7 +214,8 @@ const CheckerDock = memo<CheckerDockProps>(({ operationId, embedded }) => {
   const renderCheckRow = (item: VerifyCheckItem) => {
     const result = resultByItem.get(item.id);
     const sIcon = statusIcon(result?.status);
-    const evidence = result?.toulmin?.reasoning || result?.suggestion;
+    // Title only: the chat card is a summary, and the verifier's reasoning
+    // buried the checklist under paragraphs. The row opens the full result.
     return (
       <div
         className={cx(styles.checkRow, styles.clickable)}
@@ -234,12 +235,9 @@ const CheckerDock = memo<CheckerDockProps>(({ operationId, embedded }) => {
         ) : (
           <Icon color={cssVar[sIcon.color]} icon={sIcon.icon} size={16} spin={sIcon.spin} />
         )}
-        <Flexbox style={{ minWidth: 0 }}>
-          <span className={styles.title} style={{ fontWeight: 600 }}>
-            {item.title}
-          </span>
-          {evidence && <span className={styles.desc}>{evidence}</span>}
-        </Flexbox>
+        <span className={styles.title} style={{ fontWeight: 600, minWidth: 0 }}>
+          {item.title}
+        </span>
         <Icon
           className={styles.chevron}
           icon={ChevronRight}

@@ -91,6 +91,30 @@ describe('TopicModel - Update', () => {
       expect(result[0].metadata).toEqual({ workingDirectory: '/path/to/dir' });
     });
 
+    it('should skip the write when onlyIf rejects the current metadata', async () => {
+      const topicId = 'metadata-test-only-if';
+      await serverDB.insert(topics).values({
+        userId,
+        id: topicId,
+        title: 'Test',
+        metadata: { boundDeviceId: 'device-d' },
+      });
+
+      const skipped = await topicModel.updateMetadata(
+        topicId,
+        { boundDeviceId: 'device-a' },
+        { onlyIf: (metadata) => metadata?.boundDeviceId === 'device-b' },
+      );
+      const written = await topicModel.updateMetadata(
+        topicId,
+        { boundDeviceId: 'device-a' },
+        { onlyIf: (metadata) => metadata?.boundDeviceId === 'device-d' },
+      );
+
+      expect(skipped).toEqual([]);
+      expect(written[0].metadata).toEqual({ boundDeviceId: 'device-a' });
+    });
+
     it('should merge metadata with existing metadata', async () => {
       const topicId = 'metadata-test-2';
       await serverDB.insert(topics).values({
@@ -908,6 +932,43 @@ describe('TopicModel - Update', () => {
       expect(topic.totalCost).toBeNull();
       expect(topic.usage).toBeNull();
       expect(topic.cost).toBeNull();
+    });
+  });
+
+  describe('markRead', () => {
+    const statusOf = async (id: string) =>
+      (await serverDB.select().from(topics).where(eq(topics.id, id)))[0]?.status;
+
+    it('flips an unread topic to active and returns the cleared row', async () => {
+      await serverDB.insert(topics).values({ id: 'read-1', sessionId, status: 'unread', userId });
+
+      const cleared = await topicModel.markRead('read-1');
+
+      expect(cleared).toEqual([{ id: 'read-1', status: 'active' }]);
+      expect(await statusOf('read-1')).toBe('active');
+    });
+
+    /** @example A stale "unread" copy must not overwrite a run that started since. */
+    it.each(['running', 'waitingForHuman', 'completed'] as const)(
+      'leaves a %s topic untouched',
+      async (status) => {
+        await serverDB.insert(topics).values({ id: 'read-2', sessionId, status, userId });
+
+        const cleared = await topicModel.markRead('read-2');
+
+        expect(cleared).toEqual([]);
+        expect(await statusOf('read-2')).toBe(status);
+      },
+    );
+
+    it("does not clear another user's topic", async () => {
+      await serverDB.insert(users).values({ id: 'read-other-user' });
+      await serverDB
+        .insert(topics)
+        .values({ id: 'read-3', status: 'unread', userId: 'read-other-user' });
+
+      expect(await topicModel.markRead('read-3')).toEqual([]);
+      expect(await statusOf('read-3')).toBe('unread');
     });
   });
 });

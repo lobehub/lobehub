@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { resolveContextEngineSteps } from '@lobechat/agent-tracing';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { OperationTraceRecorder } from '../OperationTraceRecorder';
@@ -436,222 +437,203 @@ describe('OperationTraceRecorder', () => {
     });
   });
 
-  describe('contextEngine dedup (via appendStep)', () => {
-    let store: ReturnType<typeof buildStore>;
-    let recorder: OperationTraceRecorder;
+  describe('contextEngine recording', () => {
+    type Ce = { input?: unknown; metadata?: unknown; output?: unknown };
 
-    beforeEach(() => {
-      store = buildStore();
-      recorder = new OperationTraceRecorder(store as any);
-    });
-
-    const buildCe = (overrides: { input?: unknown; output?: unknown } = {}) => ({
-      input: { messages: ['hello'] },
-      output: { tokens: 42 },
-      ...overrides,
-    });
-
-    const appendStepWithCe = (
-      ce: { input?: unknown; output?: unknown },
-      prevStepsInStore: any[],
+    /**
+     * Queue-mode shape: every step runs in a fresh invocation that loads the
+     * partial the previous one saved.
+     */
+    const recordAcrossInvocations = async (
+      ces: Array<Ce | undefined>,
+      initialSteps: any[] = [],
     ) => {
-      store.loadPartial.mockResolvedValue({ startedAt: 1, steps: prevStepsInStore });
-      return recorder.appendStep('op-ce', {
-        afterStepSignalEvents: [],
-        agentState: { messages: [] },
-        beforeStepSignalEvents: [],
-        contextEngine: ce,
-        currentContext: { phase: 'user_input' },
-        externalRetryCount: 0,
-        presentation: buildPresentation(),
-        startedAt: 1000,
-        stepIndex: prevStepsInStore.length,
-        stepResult: {
-          events: [],
-          newState: { activatedStepTools: [], messages: [] },
-        },
-      });
+      let stored: any = { startedAt: 1, steps: initialSteps };
+      for (const [offset, ce] of ces.entries()) {
+        const store = buildStore();
+        store.loadPartial.mockResolvedValue(structuredClone(stored));
+        const recorder = new OperationTraceRecorder(store as any);
+        await recorder.appendStep('op-ce', {
+          afterStepSignalEvents: [],
+          agentState: { messages: [] },
+          beforeStepSignalEvents: [],
+          contextEngine: ce,
+          currentContext: { phase: ce ? 'user_input' : 'tool_result' },
+          externalRetryCount: 0,
+          presentation: buildPresentation({ stepType: ce ? 'call_llm' : 'call_tool' }),
+          startedAt: 1000,
+          stepIndex: initialSteps.length + offset,
+          stepResult: { events: [], newState: { activatedStepTools: [], messages: [] } },
+        });
+        await recorder.flushPartial();
+        // Round-trip through JSON like the real store does.
+        // eslint-disable-next-line unicorn/prefer-structured-clone -- the store serializes JSON
+        stored = JSON.parse(JSON.stringify(store.savePartial.mock.calls.at(-1)![1]));
+      }
+      return stored as { steps: any[] };
     };
 
-    const getSavedStep = (newStepIndex: number) => {
-      const saved = store.savePartial.mock.calls[0][1];
-      return saved.steps.find((s: any) => s.stepIndex === newStepIndex);
+    const resolveAll = (steps: any[]) => {
+      const resolved = resolveContextEngineSteps(steps);
+      return steps.map((step) => resolved.get(step));
     };
+
+    const message = (i: number) => ({ content: `message ${i} ${'x'.repeat(200)}`, role: 'user' });
+    const growingRun = (steps: number) =>
+      Array.from({ length: steps }, (_, i) => ({
+        input: {
+          agentDocuments: [{ content: `shared doc ${'d'.repeat(2000)}` }],
+          planTodo: { done: i },
+        },
+        output: Array.from({ length: i + 1 }, (_, j) => message(j)),
+      }));
 
     it('routes CE input/output into contextEngine, never into events', async () => {
-      await appendStepWithCe(buildCe(), []);
+      const { steps } = await recordAcrossInvocations([{ input: { a: 1 }, output: [] }]);
 
-      const step = getSavedStep(0);
-      // CE data lives in contextEngine, not events
-      expect(step.contextEngine).toBeDefined();
-      expect(step.events.some((e: any) => e.type === 'context_engine_result')).toBe(false);
+      expect(steps[0].contextEngine).toBeDefined();
+      expect(steps[0].events.some((e: any) => e.type === 'context_engine_result')).toBe(false);
     });
 
-    it('keeps both input and output on the first step (no previous CE to compare against)', async () => {
-      await appendStepWithCe(buildCe(), []);
-
-      const step = getSavedStep(0);
-      expect(step.contextEngine.input).toEqual({ messages: ['hello'] });
-      expect(step.contextEngine.output).toEqual({ tokens: 42 });
-    });
-
-    it('strips both input and output when both are identical to the previous step', async () => {
-      const prevStep = {
-        contextEngine: { input: { messages: ['hello'] }, output: { tokens: 42 } },
-        stepIndex: 0,
-        stepType: 'call_llm',
-      };
-      await appendStepWithCe(buildCe(), [prevStep]);
-
-      const step = getSavedStep(1);
-      expect(step.contextEngine.input).toBeUndefined();
-      expect(step.contextEngine.output).toBeUndefined();
-    });
-
-    it('strips only input when input matches previous but output differs', async () => {
-      const prevStep = {
-        contextEngine: { input: { messages: ['hello'] }, output: { tokens: 42 } },
-        stepIndex: 0,
-        stepType: 'call_llm',
-      };
-      await appendStepWithCe(buildCe({ input: { messages: ['hello'] }, output: { tokens: 99 } }), [
-        prevStep,
-      ]);
-
-      const step = getSavedStep(1);
-      expect(step.contextEngine.input).toBeUndefined();
-      expect(step.contextEngine.output).toEqual({ tokens: 99 });
-    });
-
-    it('strips only output when output matches previous but input differs', async () => {
-      const prevStep = {
-        contextEngine: { input: { messages: ['hello'] }, output: { tokens: 42 } },
-        stepIndex: 0,
-        stepType: 'call_llm',
-      };
-      await appendStepWithCe(buildCe({ input: { messages: ['world'] }, output: { tokens: 42 } }), [
-        prevStep,
-      ]);
-
-      const step = getSavedStep(1);
-      expect(step.contextEngine.input).toEqual({ messages: ['world'] });
-      expect(step.contextEngine.output).toBeUndefined();
-    });
-
-    it('keeps both when both input and output differ from previous', async () => {
-      const prevStep = {
-        contextEngine: { input: { messages: ['old'] }, output: { tokens: 10 } },
-        stepIndex: 0,
-        stepType: 'call_llm',
-      };
-      await appendStepWithCe(buildCe({ input: { messages: ['new'] }, output: { tokens: 20 } }), [
-        prevStep,
-      ]);
-
-      const step = getSavedStep(1);
-      expect(step.contextEngine.input).toEqual({ messages: ['new'] });
-      expect(step.contextEngine.output).toEqual({ tokens: 20 });
-    });
-
-    it('walks back past intermediate steps without CE to find last stored values', async () => {
-      const prevSteps = [
+    it('resolves every step back to exactly what the context engine produced', async () => {
+      const ces: Array<Ce | undefined> = [
         {
-          contextEngine: { input: { messages: ['hello'] }, output: { tokens: 42 } },
+          input: { systemRole: 'be brief', toolCount: 3 },
+          metadata: { trim: 0 },
+          output: [message(0)],
+        },
+        undefined, // a tool step runs no CE
+        {
+          input: { systemRole: 'be brief', toolCount: 3 },
+          metadata: { trim: 0 },
+          output: [message(0), message(1)],
+        },
+        // Middle message rewritten (stale tool result trim), metadata changed.
+        {
+          input: { systemRole: 'be brief', toolCount: 4 },
+          metadata: { trim: 1 },
+          output: [message(0), { content: '[trimmed]', role: 'tool' }, message(2), message(2)],
+        },
+        // Compression collapses the history; an input key disappears.
+        {
+          input: { systemRole: 'be brief' },
+          metadata: { trim: 1 },
+          output: [{ content: 'summary', role: 'system' }],
+        },
+      ];
+
+      const { steps } = await recordAcrossInvocations(ces);
+
+      expect(resolveAll(steps)).toEqual(
+        ces.map((ce) =>
+          ce ? { input: ce.input, metadata: ce.metadata, output: ce.output } : undefined,
+        ),
+      );
+    });
+
+    it('stores each distinct value once however many steps re-send it', async () => {
+      const { steps } = await recordAcrossInvocations(growingRun(40));
+      const serialized = JSON.stringify(steps);
+
+      expect(serialized.split('message 0 ').length - 1).toBe(1);
+      expect(serialized.split('message 39 ').length - 1).toBe(1);
+      expect(serialized.split('shared doc').length - 1).toBe(1);
+      expect(resolveAll(steps).at(-1)?.output).toHaveLength(40);
+    });
+
+    it('grows linearly with the conversation, not with steps × context', async () => {
+      const size = async (n: number) =>
+        JSON.stringify((await recordAcrossInvocations(growingRun(n))).steps).length;
+
+      const [small, large] = [await size(50), await size(100)];
+
+      // Quadratic storage would quadruple; linear doubles (plus per-step refs).
+      expect(large / small).toBeLessThan(2.6);
+    });
+
+    it('continues a partial recorded in the changed-fields format', async () => {
+      const legacy = [
+        {
+          contextEngine: { input: { toolCount: 3 }, metadata: { trim: 0 }, output: [message(0)] },
           stepIndex: 0,
           stepType: 'call_llm',
         },
-        // step 1 has no contextEngine — dedup must skip it and walk back to step 0
-        { stepIndex: 1, stepType: 'call_tool' },
+        { contextEngine: {}, stepIndex: 1, stepType: 'call_llm' },
       ];
-      await appendStepWithCe(buildCe(), prevSteps);
+      const next = {
+        input: { toolCount: 3 },
+        metadata: { trim: 0 },
+        output: [message(0), message(1)],
+      };
 
-      const step = getSavedStep(2);
-      expect(step.contextEngine.input).toBeUndefined();
-      expect(step.contextEngine.output).toBeUndefined();
+      const { steps } = await recordAcrossInvocations([next], legacy);
+
+      expect(resolveAll(steps)).toEqual([
+        { input: { toolCount: 3 }, metadata: { trim: 0 }, output: [message(0)] },
+        { input: { toolCount: 3 }, metadata: { trim: 0 }, output: [message(0)] },
+        next,
+      ]);
     });
 
-    it('stores CE pipeline metadata and dedupes it independently', async () => {
-      const withMeta = {
-        input: { messages: ['hello'] },
-        metadata: { staleToolResultTrim: { savedChars: 100, trimmedMessages: 2 } },
-        output: { tokens: 42 },
-      };
-      // NB: the recorder caches the partial in memory between appendStep calls,
-      // so each call appends to the same running partial — read the last step.
-      const lastStep = () => {
-        const saved = store.savePartial.mock.calls.at(-1)![1];
-        return saved.steps.at(-1);
-      };
+    it('re-pools a value whose introducing step never reached the store', async () => {
+      const first = await recordAcrossInvocations([{ input: { a: 1 }, output: [message(0)] }]);
+      // The step that pooled message 0 was lost (crash before upload): the
+      // next invocation starts from a partial that lacks it.
+      const lostPredecessor = first.steps.map((step) => ({ ...step, stepIndex: 99 })).slice(0, 0);
 
-      await appendStepWithCe(withMeta, []);
-      expect(lastStep().contextEngine.metadata).toEqual({
-        staleToolResultTrim: { savedChars: 100, trimmedMessages: 2 },
-      });
-
-      // identical metadata on the next step is stripped like input/output
-      await appendStepWithCe(withMeta, []);
-      expect(lastStep().contextEngine.metadata).toBeUndefined();
-
-      // changed metadata is kept while identical input/output are stripped
-      const changedMeta = {
-        ...withMeta,
-        metadata: { staleToolResultTrim: { savedChars: 250, trimmedMessages: 5 } },
-      };
-      await appendStepWithCe(changedMeta, []);
-      const step = lastStep();
-      expect(step.contextEngine.input).toBeUndefined();
-      expect(step.contextEngine.output).toBeUndefined();
-      expect(step.contextEngine.metadata).toEqual({
-        staleToolResultTrim: { savedChars: 250, trimmedMessages: 5 },
-      });
-    });
-
-    it('resolves input and output independently from different previous steps', async () => {
-      // step 0 stored only input (output was stripped vs its own predecessor)
-      // step 1 stored only output (input was stripped vs step 0)
-      // New step 2 has the same input as step 0 and same output as step 1 → both deduped
-      const prevSteps = [
-        { contextEngine: { input: { messages: ['hello'] } }, stepIndex: 0, stepType: 'call_llm' },
-        { contextEngine: { output: { tokens: 42 } }, stepIndex: 1, stepType: 'call_llm' },
-      ];
-      await appendStepWithCe(
-        buildCe({ input: { messages: ['hello'] }, output: { tokens: 42 } }),
-        prevSteps,
+      const { steps } = await recordAcrossInvocations(
+        [{ input: { a: 1 }, output: [message(0), message(1)] }],
+        lostPredecessor,
       );
 
-      const step = getSavedStep(2);
-      expect(step.contextEngine.input).toBeUndefined();
-      expect(step.contextEngine.output).toBeUndefined();
+      expect(resolveAll(steps)[0]?.output).toEqual([message(0), message(1)]);
     });
 
-    it('sets contextEngine to undefined when no CE was recorded for the step', async () => {
-      const prevStep = {
-        contextEngine: { input: { messages: ['hello'] }, output: { tokens: 42 } },
-        stepIndex: 0,
-        stepType: 'call_llm',
-      };
-      store.loadPartial.mockResolvedValue({ startedAt: 1, steps: [prevStep] });
+    it('stores metadata only when it changes', async () => {
+      const { steps } = await recordAcrossInvocations([
+        { input: {}, metadata: { trim: 1 }, output: [] },
+        { input: {}, metadata: { trim: 1 }, output: [] },
+        { input: {}, metadata: { trim: 2 }, output: [] },
+      ]);
+
+      expect(steps.map((step) => step.contextEngine.metadata)).toEqual([
+        { trim: 1 },
+        undefined,
+        { trim: 2 },
+      ]);
+    });
+
+    it('records the values as of the append, not later mutations of the source objects', async () => {
+      const store = buildStore();
+      store.loadPartial.mockResolvedValue({ startedAt: 1, steps: [] });
+      const recorder = new OperationTraceRecorder(store as any);
+      const output = [{ content: 'before', role: 'user', at: new Date(0) }];
 
       await recorder.appendStep('op-ce', {
         afterStepSignalEvents: [],
         agentState: { messages: [] },
         beforeStepSignalEvents: [],
-        currentContext: { phase: 'tool_result' },
+        contextEngine: { input: { toolCount: 1 }, output },
+        currentContext: { phase: 'user_input' },
         externalRetryCount: 0,
-        presentation: buildPresentation({ stepType: 'call_tool' }),
+        presentation: buildPresentation(),
         startedAt: 1000,
-        stepIndex: 1,
-        stepResult: {
-          events: [{ type: 'tool_result', id: 'tc-1' }],
-          newState: { activatedStepTools: [], messages: [] },
-        },
+        stepIndex: 0,
+        stepResult: { events: [], newState: { activatedStepTools: [], messages: [] } },
       });
+      output[0].content = 'after';
+      await recorder.flushPartial();
 
-      const saved = store.savePartial.mock.calls[0][1];
-      const newStep = saved.steps.find((s: any) => s.stepIndex === 1);
-      expect(newStep.contextEngine).toBeUndefined();
-      expect(newStep.events.some((e: any) => e.type === 'context_engine_result')).toBe(false);
-      expect(newStep.events.some((e: any) => e.type === 'tool_result')).toBe(true);
+      const { steps } = store.savePartial.mock.calls.at(-1)![1];
+      expect(resolveAll(steps)[0]?.output).toEqual([
+        { at: '1970-01-01T00:00:00.000Z', content: 'before', role: 'user' },
+      ]);
+    });
+
+    it('sets contextEngine to undefined when no CE was recorded for the step', async () => {
+      const { steps } = await recordAcrossInvocations([{ input: { a: 1 }, output: [] }, undefined]);
+
+      expect(steps[1].contextEngine).toBeUndefined();
     });
   });
 

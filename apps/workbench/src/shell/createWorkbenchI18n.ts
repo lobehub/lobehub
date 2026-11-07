@@ -3,6 +3,7 @@ import resourcesToBackend from 'i18next-resources-to-backend';
 import { initReactI18next } from 'react-i18next';
 
 import { DEFAULT_LANG } from '@/const/locale';
+import { brandPostProcessOptions, withBrandPostProcessor } from '@/locales/brandPostProcessor';
 import { normalizeLocale } from '@/locales/resources';
 import { unwrapESMModule } from '@/utils/esm/unwrapESMModule';
 import { loadI18nNamespaceModule } from '@/utils/i18n/loadI18nNamespaceModule';
@@ -35,8 +36,7 @@ export const createWorkbenchI18n = (lang?: string, bundledResources?: Record<str
   const locale = normalizeLocale(lang);
   const resources = bundledResources ? { [locale]: bundledResources } : undefined;
 
-  const instance = i18next
-    .createInstance()
+  const instance = withBrandPostProcessor(i18next.createInstance())
     .use(initReactI18next)
     .use(resourcesToBackend(loadWorkbenchNamespace));
   let languageRequest = 0;
@@ -69,6 +69,7 @@ export const createWorkbenchI18n = (lang?: string, bundledResources?: Record<str
         },
         resources,
         showSupportNotice: false,
+        ...brandPostProcessOptions,
       }),
     instance,
   };

@@ -1,7 +1,7 @@
 'use client';
 
 import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
-import { Button, createModal, Flexbox } from '@lobehub/ui';
+import { Button, createModal, ModalFooter } from '@lobehub/ui';
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -37,7 +37,7 @@ const ElectronAppStateSync = () => {
       title: tElectron('updater.confirmReloadTitle'),
       content: tElectron('updater.confirmReloadDescription'),
       footer: (
-        <Flexbox horizontal gap={8} justify={'flex-end'}>
+        <ModalFooter>
           <Button
             onClick={() => {
               void resolve(false);
@@ -55,7 +55,7 @@ const ElectronAppStateSync = () => {
           >
             {tElectron('updater.confirmReloadContinue')}
           </Button>
-        </Flexbox>
+        </ModalFooter>
       ),
       onOpenChange: (open) => {
         if (!open) void resolve(false);

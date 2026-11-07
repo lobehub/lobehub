@@ -1,18 +1,14 @@
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { resourcePermissionActions, useResourcePermissionStore } from '@/store/resourcePermission';
+
 import { useResourceCollaborators } from './useResourceCollaborators';
 
 const serviceMocks = vi.hoisted(() => ({
   addCollaborators: vi.fn(),
   listCollaborators: vi.fn(),
   removeCollaborator: vi.fn(),
-}));
-
-const swrState = vi.hoisted(() => ({
-  data: undefined as unknown,
-  keys: [] as unknown[],
-  mutate: vi.fn(),
 }));
 
 vi.mock('@lobehub/ui', async (importOriginal) => ({
@@ -25,28 +21,49 @@ vi.mock('@/services/resourcePermission', () => ({
 }));
 
 vi.mock('@/libs/swr', () => ({
-  useClientDataSWR: (key: unknown) => {
-    swrState.keys.push(key);
-    return { data: swrState.data, error: undefined, isLoading: false, mutate: swrState.mutate };
-  },
+  mutate: vi.fn(async () => undefined),
+  useClientDataSWR: vi.fn(() => ({ isValidating: false, mutate: vi.fn() })),
 }));
+
+/** The replica sync queries registered for the collaborator list. */
+const syncKeys = async () => {
+  const { useClientDataSWR } = await import('@/libs/swr');
+  return vi
+    .mocked(useClientDataSWR)
+    .mock.calls.map(([key]) => key)
+    .filter((key) => Array.isArray(key) && key[1] === 'resourceCollaborators');
+};
+
+const KEY = 'knowledgeBase:kb-1';
+const list = () => useResourcePermissionStore.getState().collaboratorsMap[KEY];
+const seed = (rows: { userId: string }[]) =>
+  useResourcePermissionStore.setState({ collaboratorsMap: { [KEY]: rows as any } });
 
 describe('useResourceCollaborators', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    swrState.data = undefined;
-    swrState.keys = [];
+    resourcePermissionActions.reset();
   });
 
-  it('does not fetch without a resource id or when disabled', () => {
+  it('does not fetch without a resource id or when disabled', async () => {
     renderHook(() => useResourceCollaborators('knowledgeBase', undefined));
     renderHook(() => useResourceCollaborators('knowledgeBase', 'kb-1', { enabled: false }));
 
-    expect(swrState.keys).toEqual([null, null]);
+    expect(await syncKeys()).toHaveLength(0);
   });
 
-  it('adds collaborators then revalidates', async () => {
+  it('paints a list fetched earlier this session without a loading state', () => {
+    seed([{ userId: 'member-1' }]);
+
+    const { result } = renderHook(() => useResourceCollaborators('knowledgeBase', 'kb-1'));
+
+    expect(result.current.collaborators).toEqual([{ userId: 'member-1' }]);
+    expect(result.current.isLoading).toBe(false);
+  });
+
+  it('adds collaborators then re-fetches the list', async () => {
     serviceMocks.addCollaborators.mockResolvedValue(undefined);
+    serviceMocks.listCollaborators.mockResolvedValue([{ userId: 'member-1' }]);
     const { result } = renderHook(() => useResourceCollaborators('knowledgeBase', 'kb-1'));
 
     await act(async () => {
@@ -59,7 +76,8 @@ describe('useResourceCollaborators', () => {
       ['member-1'],
       'edit',
     );
-    expect(swrState.mutate).toHaveBeenCalled();
+    expect(serviceMocks.listCollaborators).toHaveBeenCalledWith('knowledgeBase', 'kb-1');
+    expect(list()).toEqual([{ userId: 'member-1' }]);
   });
 
   it('reports a failed add so the caller can keep the picker open', async () => {
@@ -87,25 +105,39 @@ describe('useResourceCollaborators', () => {
   });
 
   it('removes optimistically: the row is dropped before the request settles', async () => {
-    swrState.data = [{ userId: 'member-1' }, { userId: 'member-2' }];
-    serviceMocks.removeCollaborator.mockResolvedValue(undefined);
+    seed([{ userId: 'member-1' }, { userId: 'member-2' }]);
+    let settle!: () => void;
+    serviceMocks.removeCollaborator.mockReturnValue(
+      new Promise<void>((resolve) => {
+        settle = resolve;
+      }),
+    );
+    serviceMocks.listCollaborators.mockResolvedValue([{ userId: 'member-2' }]);
     const { result } = renderHook(() => useResourceCollaborators('knowledgeBase', 'kb-1'));
 
-    await act(async () => {
-      await result.current.removeCollaborator('member-1');
+    let pending!: Promise<void>;
+    act(() => {
+      pending = result.current.removeCollaborator('member-1');
     });
 
-    expect(swrState.mutate).toHaveBeenNthCalledWith(1, [{ userId: 'member-2' }], false);
+    expect(list()).toEqual([{ userId: 'member-2' }]);
+
+    await act(async () => {
+      settle();
+      await pending;
+    });
+
     expect(serviceMocks.removeCollaborator).toHaveBeenCalledWith(
       'knowledgeBase',
       'kb-1',
       'member-1',
     );
+    expect(list()).toEqual([{ userId: 'member-2' }]);
   });
 
   it('rolls a failed removal back and surfaces it as a toast instead of throwing', async () => {
     const { toast } = await import('@lobehub/ui');
-    swrState.data = [{ userId: 'member-1' }];
+    seed([{ userId: 'member-1' }]);
     serviceMocks.removeCollaborator.mockRejectedValue(new Error('FORBIDDEN'));
     const { result } = renderHook(() => useResourceCollaborators('knowledgeBase', 'kb-1'));
 
@@ -113,9 +145,7 @@ describe('useResourceCollaborators', () => {
       await result.current.removeCollaborator('member-1');
     });
 
-    // optimistic drop, then rollback to the pre-removal list
-    expect(swrState.mutate).toHaveBeenNthCalledWith(1, [], false);
-    expect(swrState.mutate).toHaveBeenLastCalledWith([{ userId: 'member-1' }], false);
+    expect(list()).toEqual([{ userId: 'member-1' }]);
     expect(vi.mocked(toast.error)).toHaveBeenCalled();
     expect(result.current.mutating).toBe(false);
   });

@@ -2,6 +2,7 @@
 
 import { isDesktop } from '@lobechat/const';
 import type { DeviceListItem } from '@lobechat/types';
+import { isManagedCloudDevice } from '@lobechat/types';
 import {
   ActionIcon,
   Button,
@@ -44,6 +45,12 @@ import { refreshDeviceList } from './const';
 import DeviceOverview from './DeviceOverview';
 import FieldLabel from './FieldLabel';
 import { getDeviceIcon } from './getDeviceIcon';
+import ManagedDeviceBadge from './ManagedDeviceBadge';
+import {
+  getManagedDeviceStatus,
+  managedStatusLabelKey,
+  presenceDotColor,
+} from './managedDeviceStatus';
 import { useCanEditDevice, useCanOperateDevice } from './useCanEditDevice';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -101,6 +108,12 @@ const isDetailTab = (value: string | null): value is DetailTab =>
 
 interface DeviceDetailProps {
   device: DeviceListItem;
+  /**
+   * The row was confirmed by the server this session. A row restored from
+   * storage may be stale, and edits merge into it (the full `workingDirs` list,
+   * the drafts below), so it stays read-only until confirmed.
+   */
+  isConfirmed: boolean;
   isCurrent?: boolean;
   onBack: () => void;
 }
@@ -110,10 +123,12 @@ interface DeviceDetailProps {
  * (`/settings/devices/:sub`, `/:slug/settings/devices/:sub`). The list stays a
  * plain card grid and every card opens here.
  */
-const DeviceDetail = memo<DeviceDetailProps>(({ device, isCurrent, onBack }) => {
+const DeviceDetail = memo<DeviceDetailProps>(({ device, isConfirmed, isCurrent, onBack }) => {
   const { t } = useTranslation(['setting', 'device']);
-  const canEdit = useCanEditDevice()(device);
-  const canOperate = useCanOperateDevice()(device);
+  // Permission alone drives the read-only hint; confirmation only defers edits.
+  const isEditableRow = useCanEditDevice()(device);
+  const canEdit = isEditableRow && isConfirmed;
+  const canOperate = useCanOperateDevice()(device) && isConfirmed;
   // Health monitoring and the directory settings are separate jobs; a tab each
   // keeps the charts from pushing the directories below the fold. The active
   // tab lives in `?tab=` so a view can be linked, reloaded and reached with
@@ -158,9 +173,12 @@ const DeviceDetail = memo<DeviceDetailProps>(({ device, isCurrent, onBack }) => 
   // Only the machine you're on can browse its own filesystem natively.
   const canBrowse = !!isCurrent && isDesktop;
 
-  // An empty `device.channels` means offline.
+  // An empty `device.channels` means offline — unless the row is the
+  // persisted copy, whose presence the server has not confirmed yet.
   const channels = device.channels ?? [];
   const online = channels.length > 0;
+  const presenceUnknown = !!device.onlineUnknown;
+  const managedStatus = getManagedDeviceStatus(device);
 
   // Every edit persists immediately — there is no Save button. Name and the
   // default cwd commit on blur; recent-dir add / remove / reorder commit on the
@@ -280,11 +298,15 @@ const DeviceDetail = memo<DeviceDetailProps>(({ device, isCurrent, onBack }) => 
           {getDeviceIcon(device.platform, 26)}
           <span
             className={styles.presence}
-            style={{ background: online ? cssVar.colorSuccess : cssVar.colorTextQuaternary }}
+            style={{ background: presenceDotColor(managedStatus, online) }}
             title={
-              online
-                ? t('devices.status.onlineConnections', { count: channels.length })
-                : t('devices.status.offline')
+              managedStatus
+                ? t(managedStatusLabelKey[managedStatus])
+                : presenceUnknown
+                  ? t('devices.status.checking')
+                  : online
+                    ? t('devices.status.onlineConnections', { count: channels.length })
+                    : t('devices.status.offline')
             }
           />
         </span>
@@ -325,6 +347,7 @@ const DeviceDetail = memo<DeviceDetailProps>(({ device, isCurrent, onBack }) => 
               </span>
               <CopyButton content={device.deviceId} size={'small'} />
             </Flexbox>
+            {isManagedCloudDevice(device) && <ManagedDeviceBadge />}
             {isCurrent && <Tag size={'small'}>{t('devices.currentBadge')}</Tag>}
             {device.scope === 'workspace' && device.visibility === 'private' && (
               <Tag icon={<Icon icon={LockIcon} />} size={'small'}>
@@ -362,7 +385,7 @@ const DeviceDetail = memo<DeviceDetailProps>(({ device, isCurrent, onBack }) => 
             fields below are read-only without the user needing to try and hit a
             403. Only renders for workspace devices that aren't the caller's own
             enrollment (personal scope is always editable). */}
-        {!canEdit && (
+        {!isEditableRow && (
           <Flexbox horizontal align={'center'} gap={8}>
             <Icon icon={LockIcon} size={14} style={{ color: cssVar.colorTextTertiary }} />
             <Text fontSize={12} type={'secondary'}>

@@ -18,6 +18,7 @@ import { FilePreview } from './FilePreview';
 import { Goal } from './Goal';
 import { GoalMetric } from './GoalMetric';
 import { GoalNode } from './GoalNode';
+import { GoalNorthStar } from './GoalNorthStar';
 import { GoalReport, GoalReportChapter } from './GoalReport';
 import { GroupThread } from './GroupThread';
 import { HomeBody, HomeTitle } from './Home';
@@ -52,6 +53,7 @@ const VIEW_COMPONENTS: Record<PortalViewType, PortalImpl> = {
   [PortalViewType.Goal]: Goal,
   [PortalViewType.GoalMetric]: GoalMetric,
   [PortalViewType.GoalNode]: GoalNode,
+  [PortalViewType.GoalNorthStar]: GoalNorthStar,
   [PortalViewType.GoalReport]: GoalReport,
   [PortalViewType.GoalReportChapter]: GoalReportChapter,
   [PortalViewType.LocalFile]: LocalFile,

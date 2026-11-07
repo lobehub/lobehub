@@ -42,21 +42,12 @@ export default {
   'features.inAppBrowser.title': 'In-App Browser',
   'features.groupChat.desc': 'Enable multi-agent group chat coordination.',
   'features.groupChat.title': 'Group Chat (Multi-Agent)',
-  'features.inputMarkdown.desc':
-    'Render Markdown in the input area in real time (bold text, code blocks, tables, etc.).',
-  'features.integrations.desc':
-    'Show the Integrations settings page: connect the GitHub App so merged pull requests accept deliveries and failing checks or reviews reach the agent that opened them. Hidden by default.',
-  'features.integrations.title': 'Integrations',
-  'features.inputMarkdown.title': 'Input Markdown Rendering',
   'features.messageTextSelectionActions.desc':
     'Show a quick action when selecting text in chat messages so the selected text can be added to the next conversation context.',
   'features.messageTextSelectionActions.title': 'Message Text Selection Actions',
   'features.oauthApps.desc':
     'Show OAuth app management in personal and workspace settings. This feature is hidden by default.',
   'features.oauthApps.title': 'OAuth Apps',
-  'features.persistentSandbox.desc':
-    'Keep files the cloud sandbox writes. Its working directory survives session recycling and is shared across your topics, instead of being discarded with the sandbox. Requires a paid plan; large downloads and dependencies still belong in /tmp.',
-  'features.persistentSandbox.title': 'Persistent Sandbox',
   'features.projects.desc':
     'Organize long-running goals into dedicated workspaces with their own agents, knowledge bases, and tasks.',
   'features.projects.title': 'Project Workspaces',
@@ -64,10 +55,16 @@ export default {
     'Add an Acceptance section to the task detail: describe acceptance in one sentence and let AI generate editable verify criteria.',
   'features.taskVerify.title': 'Acceptance',
   'features.selfLearning.desc':
-    'Let every agent learn from your conversations in the background: it remembers facts, refines skills, collects lessons, and reviews its day each night. Rounds you send back become rules. Each nightly review covers at most 50 conversations. See it all under Memory → Self-evolving.',
+    'Agents learn from your conversations in the background and review their day each night. See the results under Memory → Self-evolving.',
+  'features.selfLearning.note':
+    'This runs model calls in the background and uses additional quota. Each nightly review covers up to 50 conversations.',
   'features.selfLearning.title': 'Self-evolving',
+  'features.topicBugReport.desc':
+    'Adds Report Bug to the topic menu. Send the topic’s IDs, your app environment, and optional attachments to the LobeHub support team.',
+  'features.topicBugReport.title': 'Report Bug',
   'group.desktop': 'Desktop',
   'group.general': 'General',
+  'group.workspace': 'Workspace',
   'stage.alpha.desc':
     'Internal testing only. Not recommended for daily use yet — it may change or break at any time.',
   'stage.alpha.label': 'Alpha',

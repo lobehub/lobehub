@@ -3,6 +3,7 @@ import type { LayersEnum, TopicCommentItem } from '@lobechat/types';
 import { projectFileService } from '@/services/projectFile';
 import { type ChatStore } from '@/store/chat/store';
 import { useGlobalStore } from '@/store/global';
+import { canvasTabKey } from '@/store/global/initialState';
 import { getServerConfigStoreState } from '@/store/serverConfig';
 import { type StoreSetter } from '@/store/types';
 import { type PortalArtifact } from '@/types/artifact';
@@ -18,6 +19,7 @@ import {
   type GoalMetricKind,
   type OpenLocalFileParams,
   type PortalFile,
+  type PortalTaskWorkspace,
   type PortalViewData,
 } from './initialState';
 import { PortalViewType } from './initialState';
@@ -703,12 +705,30 @@ export class ChatPortalActionImpl {
     });
   };
 
+  openCanvas = (canvasId: string, version?: number): void => {
+    const { [canvasId]: _previous, ...canvasTabVersions } = this.#get().canvasTabVersions;
+    this.#set(
+      {
+        canvasTabVersions: version
+          ? { ...canvasTabVersions, [canvasId]: version }
+          : canvasTabVersions,
+      },
+      false,
+      'openCanvas',
+    );
+    useGlobalStore.getState().openWorkingSidebar(canvasTabKey(canvasId));
+  };
+
   openNotebook = (): void => {
     this.#get().pushPortalView({ type: PortalViewType.Notebook });
   };
 
-  openTaskDetail = (taskId: string): void => {
-    this.#get().pushPortalView({ taskId, type: PortalViewType.TaskDetail });
+  openTaskDetail = (taskId: string, workspace?: PortalTaskWorkspace): void => {
+    this.#get().pushPortalView({
+      taskId,
+      type: PortalViewType.TaskDetail,
+      ...(workspace ? { workspace } : {}),
+    });
   };
 
   openTaskResult = (taskId: string): void => {

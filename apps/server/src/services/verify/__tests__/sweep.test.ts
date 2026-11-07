@@ -5,6 +5,7 @@ import { VERIFY_ABANDONED_MS, VERIFY_ROLLUP_GRACE_MS } from '../staleness';
 import { sweepStuckVerifyRuns } from '../sweep';
 
 const {
+  releaseUndeliveredRound,
   settleFailedRepair,
   claimVerifying,
   findStuckVerifying,
@@ -14,6 +15,7 @@ const {
   upsertByCheckItem,
   finalizeVerifyRun,
 } = vi.hoisted(() => ({
+  releaseUndeliveredRound: vi.fn(),
   settleFailedRepair: vi.fn(),
   claimVerifying: vi.fn(),
   finalizeVerifyRun: vi.fn(),
@@ -48,6 +50,7 @@ vi.mock('../statusService', () => ({
   }),
 }));
 vi.mock('../repairTerminal', () => ({ settleFailedRepair }));
+vi.mock('../undeliveredRound', () => ({ releaseUndeliveredRound }));
 vi.mock('../settle', () => ({ finalizeVerifyRun }));
 
 const db = {} as any;
@@ -74,6 +77,7 @@ const singlePage = (runs: unknown[]) => {
 describe('sweepStuckVerifyRuns', () => {
   beforeEach(() => {
     [
+      releaseUndeliveredRound,
       settleFailedRepair,
       claimVerifying,
       finalizeVerifyRun,
@@ -300,6 +304,26 @@ describe('sweepStuckVerifyRuns', () => {
     settleFailedRepair.mockResolvedValue(true);
     expect((await sweepStuckVerifyRuns(db, { now: NOW })).abandoned).toEqual(['run-1']);
     expect(settleFailedRepair).toHaveBeenCalledWith(db, 'u1', 'op-1', undefined);
+    expect(releaseUndeliveredRound).not.toHaveBeenCalled();
     expect(finalizeVerifyRun).not.toHaveBeenCalled();
+  });
+
+  it('releases the planned round of a task run that ended without a delivery', async () => {
+    singlePage([stuckRun({ status: 'planned' })]);
+    settleFailedRepair.mockResolvedValue(false);
+    releaseUndeliveredRound.mockResolvedValue(true);
+    const outcome = await sweepStuckVerifyRuns(db, { now: NOW });
+    expect(outcome.released).toEqual(['run-1']);
+    expect(outcome.abandoned).toEqual([]);
+    expect(releaseUndeliveredRound).toHaveBeenCalledWith(db, 'u1', 'op-1', undefined);
+    expect(claimVerifying).not.toHaveBeenCalled();
+    expect(finalizeVerifyRun).not.toHaveBeenCalled();
+  });
+
+  it('skips a planned round neither path can close', async () => {
+    singlePage([stuckRun({ status: 'planned' })]);
+    settleFailedRepair.mockResolvedValue(false);
+    releaseUndeliveredRound.mockResolvedValue(false);
+    expect((await sweepStuckVerifyRuns(db, { now: NOW })).skipped).toBe(1);
   });
 });

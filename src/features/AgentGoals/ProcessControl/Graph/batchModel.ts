@@ -11,6 +11,8 @@ import type {
   GoalRolloutLearning,
   GoalRolloutPhase,
   GoalRolloutPlanSkill,
+  GoalRolloutRetro,
+  GoalRolloutVerifier,
 } from '@lobechat/types';
 import { experimentMembers } from '@lobechat/utils/goalGraph';
 
@@ -52,8 +54,12 @@ export type BatchUnitOrigin =
   | { index: number; kind: 'wave'; wave: number };
 
 export interface BatchProbe {
+  /** Which run of the unit this is, when it was sent back and run again in the round (2, 3…). */
+  attempt?: number;
   from?: BatchUnitOrigin;
   nodeId: string;
+  /** Every run of a unit sent back inside its round, first to latest — this one last. */
+  runs?: { nodeId: string; state: BatchCellState }[];
   state: BatchCellState;
   title: string;
 }
@@ -113,7 +119,11 @@ export interface BatchModel {
   phase?: GoalRolloutPhase;
   /** The execution plan as a skill in the user's library; round N is its version N. */
   planSkill?: GoalRolloutPlanSkill;
+  /** The retro after each execution: index 0 reads the probes, N reads roster wave N. */
+  retros: GoalRolloutRetro[];
   rounds: BatchRound[];
+  /** What every unit is judged on, once a retro produced it. */
+  verifier?: GoalRolloutVerifier;
   /**
    * The round (1-based revision) each wave belongs to. A released wave belongs
    * to the plan it went out under; the waves not yet released belong to the
@@ -140,7 +150,8 @@ export const batchCellState = (
   if (status === 'resolved') return 'done';
   if (status === 'waiting' || view.decision || view.isStale || waitingOn.has(view.node.id))
     return 'human';
-  if (isRunningNode(view)) return 'running';
+  // Held for a usage window to reopen: still in flight, resumes on its own.
+  if (isRunningNode(view) || view.quotaRetryAt) return 'running';
   return 'backlog';
 };
 
@@ -310,16 +321,62 @@ export const buildBatchModel = (graph: GoalGraphView, batchId: string): BatchMod
   });
 
   const rounds: BatchRound[] = probeIdsByRound.map((ids, r) => {
+    // A unit sent back and run again inside its round keeps one place there:
+    // its latest run, numbered, instead of a superseded square beside it.
+    const inRound = new Set(ids);
+    const rerunOf = new Map(
+      graph.edges
+        .filter(
+          (edge) =>
+            edge.kind === 'derived_from' &&
+            inRound.has(edge.sourceNodeId) &&
+            inRound.has(edge.targetNodeId),
+        )
+        .map((edge) => [edge.sourceNodeId, edge.targetNodeId]),
+    );
+    const rerun = new Set(rerunOf.values());
+    const attemptOf = (id: string): number => {
+      const earlier = rerunOf.get(id);
+      return earlier ? attemptOf(earlier) + 1 : 1;
+    };
+    // Where the unit first ran, so a re-run keeps its place among the trials.
+    const firstRunOf = (id: string): string => {
+      const earlier = rerunOf.get(id);
+      return earlier ? firstRunOf(earlier) : id;
+    };
+    // The unit's runs in this round, first to latest.
+    const runsOf = (id: string): string[] => {
+      const earlier = rerunOf.get(id);
+      return earlier ? [...runsOf(earlier), id] : [id];
+    };
     const probes = ids
+      .filter((id) => !rerun.has(id))
       .map((id) => graph.byId[id])
       .filter((view): view is GoalNodeView => !!view)
-      .sort(byCreatedAt)
-      .map((view) => ({
-        from: r > 0 ? originOf(view) : undefined,
-        nodeId: view.node.id,
-        state: cellOf(view.node.id),
-        title: view.node.title,
-      }));
+      .sort(
+        (a, b) =>
+          byCreatedAt(
+            graph.byId[firstRunOf(a.node.id)] ?? a,
+            graph.byId[firstRunOf(b.node.id)] ?? b,
+          ) || byCreatedAt(a, b),
+      )
+      .map((view) => {
+        const attempt = attemptOf(view.node.id);
+        return {
+          ...(attempt > 1 && {
+            attempt,
+            // A superseded run is history here, read as it ended, not as superseded.
+            runs: runsOf(view.node.id).map((id) => ({
+              nodeId: id,
+              state: batchCellState(graph.byId[id], waitingOn),
+            })),
+          }),
+          from: r > 0 ? originOf(view) : undefined,
+          nodeId: view.node.id,
+          state: cellOf(view.node.id),
+          title: view.node.title,
+        };
+      });
     const template = templates[r];
     const assay = assays[r];
     const previousTemplate = templates[r - 1];
@@ -364,6 +421,10 @@ export const buildBatchModel = (graph: GoalGraphView, batchId: string): BatchMod
     { key: 'no_open_decision' },
     { key: 'plan_written' },
     ...(policy?.spec?.variantAxes?.length ? [{ key: 'axes_covered' as const }] : []),
+    // A batch that runs retros opens its gate on them: re-verified, every intervention accounted.
+    ...(state?.retros?.length
+      ? [{ key: 'reverified' as const }, { key: 'interventions_accounted' as const }]
+      : []),
   ];
 
   return {
@@ -373,7 +434,9 @@ export const buildBatchModel = (graph: GoalGraphView, batchId: string): BatchMod
     learnings: state?.learnings ?? [],
     phase: state?.phase,
     planSkill: state?.planSkill,
+    retros: state?.retros ?? [],
     rounds,
+    verifier: state?.verifier,
     waveRounds,
     waves,
     waveSize,
@@ -507,3 +570,11 @@ export const findBatchPlan = (
   const round = model.rounds.find((item) => item.templateId === nodeId);
   return round ? { model, round } : undefined;
 };
+
+/**
+ * The retro a round starts from, drawn at the top of its frame: the cold
+ * start's for the first round, and for a later one the retro of the wave whose
+ * break opened it.
+ */
+export const roundRetro = (model: Pick<BatchModel, 'retros'>, revision: number) =>
+  model.retros.find((retro) => (revision === 1 ? retro.wave === 0 : retro.opens === revision));

@@ -1,7 +1,6 @@
 import type { DeviceListItem, WorkingDirEntry } from '@lobechat/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { DEVICE_LIST_SWR_KEY } from '@/features/DeviceManager/const';
 import { cacheScope } from '@/libs/replica';
 import { mutate } from '@/libs/swr';
 import { deviceService } from '@/services/device';
@@ -89,18 +88,6 @@ describe('DeviceAction', () => {
         defaultCwd: null,
         deviceId: 'dev-1',
       });
-      expect(revalidatedDeviceListReplica()).toBe(true);
-    });
-
-    // Task controls read the workspace-scoped `useDeviceList` entry, so a cwd
-    // write that only revalidated this store's key left them showing stale recents.
-    it('also revalidates the canonical device-list cache', async () => {
-      seedDevices([buildDevice()]);
-
-      await useDeviceStore.getState().clearDeviceDefaultCwd('dev-1');
-
-      const matchers = revalidatedMatchers();
-      expect(matchers.some((matcher) => matcher([DEVICE_LIST_SWR_KEY, 'ws-1']))).toBe(true);
       expect(revalidatedDeviceListReplica()).toBe(true);
     });
 

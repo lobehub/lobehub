@@ -1,7 +1,9 @@
 import { PassThrough } from 'node:stream';
 
+import type { AskUserBridge } from '../askUser';
 import type { AgentPromptInput } from '../protocol';
 import { createEventQueue } from '../spawn/agentEventQueue';
+import { buildCodexLobeHubContextArgs, createCodexJwtFile } from '../spawn/codexShellEnv';
 import { buildAgentInput } from '../spawn/input';
 import type { SpawnAgentHandle } from '../spawn/spawnAgent';
 import {
@@ -11,11 +13,13 @@ import {
 } from './appServerParams';
 import { CodexAppServerClient } from './CodexAppServerClient';
 import { CodexThreadSession } from './CodexThreadSession';
+import { pickCodexRunProvenance } from './environment';
 
 /** Native Codex execution inputs for a single connected-device operation. */
 export interface CodexAgentHandleOptions {
   /** Existing provider arguments; unsupported policies are rejected, never weakened. */
   args: string[];
+  askUserBridge?: AskUserBridge;
   /** Caller version sent in the native initialize handshake. */
   clientVersion: string;
   /** Resolved, validated Codex executable path. */
@@ -86,19 +90,30 @@ export const createCodexAgentHandle = async (
   // The session ends a turn lost to a transport crash with an interrupted runtime end and
   // resolves; without a Stop from this operation that is a truncated run, not a success.
   let nativeTurnInterrupted = false;
-  const provenance = {
-    LOBEHUB_AGENT_ID: options.env.LOBEHUB_AGENT_ID ?? '',
+  const provenance = pickCodexRunProvenance({
+    ...options.env,
     LOBEHUB_OPERATION_ID: options.operationId,
-    LOBEHUB_TOPIC_ID: options.env.LOBEHUB_TOPIC_ID ?? '',
-  };
-  const threadParams = buildCodexAppServerThreadParams(options.args, options.cwd);
+  });
+  // Codex shells get their env from `[shell_environment_policy]`, so a user's
+  // `inherit = "core"` would drop the run context `lh` needs. Forward it as
+  // `set` overrides; the JWT travels as a 0600 file path, never in the config.
+  const jwtFile = options.env.LOBEHUB_JWT
+    ? await createCodexJwtFile(options.env.LOBEHUB_JWT)
+    : undefined;
+  const threadParams = buildCodexAppServerThreadParams(
+    [...buildCodexLobeHubContextArgs(options.env), ...(jwtFile?.args ?? []), ...options.args],
+    options.cwd,
+  );
   // Pin shell identity on native start/resume as well as the operation-owned process.
   // The same per-turn context is consumed by the shared app-server isolation contract.
   threadParams.config = {
     ...threadParams.config,
-    'shell_environment_policy.set.LOBEHUB_AGENT_ID': provenance.LOBEHUB_AGENT_ID,
-    'shell_environment_policy.set.LOBEHUB_OPERATION_ID': provenance.LOBEHUB_OPERATION_ID,
-    'shell_environment_policy.set.LOBEHUB_TOPIC_ID': provenance.LOBEHUB_TOPIC_ID,
+    ...Object.fromEntries(
+      Object.entries(provenance).map(([key, value]) => [
+        `shell_environment_policy.set.${key}`,
+        value ?? '',
+      ]),
+    ),
   };
   const session = new CodexThreadSession({
     client,
@@ -132,6 +147,7 @@ export const createCodexAgentHandle = async (
   };
   options.onStartupControl?.({ cancel });
   const turnOptions = {
+    askUserBridge: options.askUserBridge,
     // Keep the already materialized user input and attachment paths unchanged.
     input: buildCodexAppServerInput(input),
     onRawMessage: (line: string) => options.onRawStdout?.(Buffer.from(line)),
@@ -161,6 +177,7 @@ export const createCodexAgentHandle = async (
       stopStderr();
       events.close();
       stderr.end();
+      void jwtFile?.cleanup();
     });
   return {
     events,

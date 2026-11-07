@@ -1,4 +1,4 @@
-import type { AcceptanceSubjectType, VerifyRubricConfig } from '@lobechat/types';
+import type { CreatableAcceptanceSubjectType, VerifyRubricConfig } from '@lobechat/types';
 import { debounce } from 'es-toolkit/compat';
 import isEqual from 'fast-deep-equal';
 import { type StateCreator } from 'zustand';
@@ -115,7 +115,7 @@ export class ActionImpl {
 
   /** Re-read one subject's acceptance (after it is created or settled). */
   refreshAcceptanceBySubject = async (
-    subjectType: AcceptanceSubjectType,
+    subjectType: CreatableAcceptanceSubjectType,
     subjectId: string,
   ): Promise<void> => {
     await this.#bySubject.revalidate(acceptanceBySubjectKey({ subjectId, subjectType }));
@@ -172,7 +172,7 @@ export class ActionImpl {
    * so the aggregate a later verify run creates is discovered without a reload.
    */
   useFetchAcceptanceBySubject = (
-    subjectType: AcceptanceSubjectType,
+    subjectType: CreatableAcceptanceSubjectType,
     subjectId?: string | null,
     options: { enabled?: boolean; refreshInterval?: number } = {},
   ): ReplicaSyncResult =>

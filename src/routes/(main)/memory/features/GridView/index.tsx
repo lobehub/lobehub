@@ -69,7 +69,8 @@ function GridViewInner<T extends { id: string }>({
       style={{ minHeight: '100%' }}
       components={{
         Footer: footer
-          ? () => (
+          ? // eslint-disable-next-line @eslint-react/no-nested-component-definitions -- reads the latest pagination state on every render
+            () => (
               <LoadMoreFooter
                 loadMoreError={loadMoreError}
                 rows={defaultColumnCount}

@@ -1,22 +1,19 @@
 'use client';
 
-import { Divider, Flexbox, Markdown, Skeleton } from '@lobehub/ui';
+import { Divider, Flexbox } from '@lobehub/ui';
 import { useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useEntityMarkdown } from '@/features/EntityLink';
-import { useClientDataSWR } from '@/libs/swr';
-import { portalKeys } from '@/libs/swr/keys';
-import { documentService } from '@/services/document';
-
+import FinalDocument from './FinalDocument';
 import GoalAcceptanceHierarchy from './GoalAcceptanceHierarchy';
 import { pickFinalDeliverable } from './goalAcceptanceReport';
 import { buildAcceptanceTree } from './goalAcceptanceTree';
 import GoalCriteriaResults from './GoalCriteriaResults';
 import type { GoalGraphView } from './goalGraphViewModel';
+import GoalReportPage from './GoalReportPage';
 import { GoalDecisionsMade, GoalUnfinished, useContinueFromResult } from './GoalResultFollowUps';
 import GoalResultHeader from './GoalResultHeader';
-import { findFinalAcceptanceView } from './goalResultState';
+import { findFinalAcceptanceView, goalReportPageId } from './goalResultState';
 import ResultAnchorRail from './ResultAnchorRail';
 import { anchorProps } from './resultAnchors';
 import ResultDeliverables from './ResultDeliverables';
@@ -27,7 +24,8 @@ import { useGoalResultData } from './useGoalResultData';
  * 结果交付 — what a finished Goal hands over, on its own tab.
  *
  * Layered for a reviewer who reads top-down: the first screen is the Goal's own
- * headline, the document the work wrote leads the page as the delivery itself,
+ * headline and the HTML report the wrap-up wrote (clipped, full screen on
+ * click); the document the work wrote follows as the delivery itself,
  * and the deliverables plus each acceptance criterion (against what the latest
  * acceptance round found) follow as the evidence behind it. Under them the trail
  * of how that result was reached. What the owner shaped along the way and what is
@@ -37,31 +35,6 @@ import { useGoalResultData } from './useGoalResultData';
  * A rail of ticks beside the scrollbar names those sections on hover and jumps
  * to them on click — see `ResultAnchorRail`.
  */
-
-const FinalDocument = ({ documentId }: { documentId: string }) => {
-  // The graph carries only the document id; its content is read for the page.
-  const markdownProps = useEntityMarkdown();
-  const { data: document, isLoading } = useClientDataSWR(
-    portalKeys.documentHeader(documentId),
-    () => documentService.getDocumentById(documentId),
-  );
-
-  if (isLoading)
-    return (
-      <Flexbox gap={10}>
-        <Skeleton height={24} radius={4} width={'40%'} />
-        <Skeleton height={14} radius={4} />
-        <Skeleton height={14} radius={4} />
-        <Skeleton height={14} radius={4} width={'70%'} />
-      </Flexbox>
-    );
-
-  return (
-    <Markdown variant={'chat'} {...markdownProps}>
-      {document?.content ?? ''}
-    </Markdown>
-  );
-};
 
 interface GoalResultProps {
   graph: GoalGraphView;
@@ -76,6 +49,7 @@ const GoalResult = ({ graph, onSelect }: GoalResultProps) => {
   const data = useGoalResultData(graph);
   const continueFromResult = useContinueFromResult(graph, data.outcomes);
   const acceptanceTree = useMemo(() => buildAcceptanceTree(graph), [graph]);
+  const reportPageId = goalReportPageId(graph);
 
   return (
     <div ref={rootRef}>
@@ -84,6 +58,14 @@ const GoalResult = ({ graph, onSelect }: GoalResultProps) => {
         <div {...anchorProps('overview', t('goalProcess.result.nav.overview'))}>
           <GoalResultHeader data={data} graph={graph} />
         </div>
+        {reportPageId && (
+          <div
+            {...anchorProps('report', t('goalProcess.result.nav.report'))}
+            style={{ paddingBlockStart: 16 }}
+          >
+            <GoalReportPage documentId={reportPageId} />
+          </div>
+        )}
         {deliverable && (
           <div
             {...anchorProps('document', t('goalProcess.result.nav.document'))}
@@ -104,6 +86,7 @@ const GoalResult = ({ graph, onSelect }: GoalResultProps) => {
           </div>
           <div {...anchorProps('criteria', t('goalProcess.result.criteria.title'))}>
             <GoalCriteriaResults
+              acceptanceId={data.acceptanceId}
               error={data.error}
               loading={data.isLoading}
               outcomes={data.outcomes}

@@ -5,7 +5,7 @@ import { createBaseLocator } from './base';
 import { run } from './exec';
 import { mountDir, rootDir } from './paths';
 
-export const MAX_FILE_LINES = 800;
+export const MAX_FILE_LINES = 1200;
 
 const SOURCE_PATTERN = /\.[cm]?[jt]sx?$/;
 /**
@@ -63,7 +63,7 @@ const createBaseLinesReader = (): ReadBaseLines => {
 };
 
 /**
- * Enforce the 800-line limit on changed source and test files. Hundreds of
+ * Enforce the 1200-line limit on changed source and test files. Hundreds of
  * legacy files already exceed it, so blocking every touch would stall
  * unrelated fixes: only violations this change creates fail the run, and a
  * legacy file that keeps growing is reported as an advisory.

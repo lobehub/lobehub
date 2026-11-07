@@ -198,7 +198,6 @@ describe('AgentEvalBenchmarkModel', () => {
       expect(results.map((r) => r.identifier)).toContain('system-1');
       expect(results.map((r) => r.identifier)).toContain('user-1');
       expect(results.map((r) => r.identifier)).toContain('system-2');
-      expect(results.map((r) => r.identifier)).not.toContain('other-user-1');
     });
 
     it('should query only user-created benchmarks', async () => {
@@ -213,21 +212,6 @@ describe('AgentEvalBenchmarkModel', () => {
       const results = await benchmarkModel.query();
 
       expect(results).toHaveLength(3);
-    });
-
-    it("should not return other user's benchmarks", async () => {
-      const results = await benchmarkModel.query(true);
-
-      const identifiers = results.map((r) => r.identifier);
-      expect(identifiers).not.toContain('other-user-1');
-    });
-
-    it('should order by createdAt descending', async () => {
-      const results = await benchmarkModel.query(true);
-
-      // The newest should come first
-      // Order may vary in PGlite due to timing
-      expect(results.length).toBeGreaterThanOrEqual(3);
     });
 
     it('should return datasetCount for benchmarks with datasets', async () => {

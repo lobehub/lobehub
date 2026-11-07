@@ -1,54 +1,29 @@
 'use client';
 
-import {
-  createStaticStyles,
-  cssVar,
-  cx,
-  Flexbox,
-  Icon,
-  Image,
-  Markdown,
-  Skeleton,
-  Text,
-} from '@lobehub/ui';
-import {
-  ChevronRight,
-  CircleCheck,
-  CircleDashed,
-  CircleX,
-  FileText,
-  Paperclip,
-} from 'lucide-react';
-import { type ReactNode, useState } from 'react';
+import { createStaticStyles, cssVar, cx, Flexbox, Icon, Skeleton, Text } from '@lobehub/ui';
+import { ChevronRight, CircleCheck, CircleDashed, CircleX } from 'lucide-react';
+import { type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
-import { useEntityMarkdown } from '@/features/EntityLink';
 import { useChatStore } from '@/store/chat';
+import { chatPortalSelectors } from '@/store/chat/selectors';
 
 import { SectionTitle } from './GoalResultFollowUps';
-import type { CriterionOutcome, CriterionOutcomeState, EvidenceLike } from './goalResultState';
+import type { CriterionOutcome, CriterionOutcomeState } from './goalResultState';
 
 /**
  * 验收标准 × 结果 — each criterion the Goal was accepted against, next to what
- * the latest acceptance round found: met or not, and why when it was not. A row
- * opens into its evidence — screenshots, written evidence, the documents it
- * cites — in place, without framing the content in another card. The round's own
- * write-up for a met criterion belongs to the acceptance, not to this summary.
+ * the latest round of the Goal-level acceptance found: met or not, and why when
+ * it was not. Every criterion is one check of that acceptance, so a row opens
+ * that check — its evidence, reasoning and review — in the side Portal, the same
+ * view the acceptance page itself opens, rather than a thinner copy inlined here.
  */
 
 const styles = createStaticStyles(({ css }) => ({
   arrow: css`
     flex: none;
     color: ${cssVar.colorTextQuaternary};
-    transition: transform 0.2s;
-  `,
-  arrowOpen: css`
-    transform: rotate(90deg);
-  `,
-  evidence: css`
-    padding-block: 0 12px;
-    padding-inline: 28px 0;
   `,
   item: css`
     &:not(:last-child) {
@@ -80,19 +55,12 @@ const styles = createStaticStyles(({ css }) => ({
       outline-offset: -2px;
     }
   `,
-  docLink: css`
-    cursor: pointer;
-
-    width: fit-content;
-    padding: 0;
-    border: none;
-
-    color: ${cssVar.colorPrimary};
-
-    background: none;
+  /* The criterion whose check the side Portal is showing. */
+  rowActive: css`
+    background: ${cssVar.colorFillTertiary};
 
     &:hover {
-      text-decoration: underline;
+      background: ${cssVar.colorFillTertiary};
     }
   `,
 }));
@@ -109,86 +77,17 @@ const STATE_COLOR: Record<CriterionOutcomeState, string> = {
   unjudged: cssVar.colorTextQuaternary,
 };
 
-const IMAGE_TYPES = new Set(['screenshot', 'gif']);
+interface CriterionRowProps {
+  active: boolean;
+  index: number;
+  /** Opens the criterion's check in the side Portal; absent when no round judged it. */
+  onOpen?: () => void;
+  outcome: CriterionOutcome;
+}
 
-const EvidenceItem = ({ item }: { item: EvidenceLike }) => {
+const CriterionRow = ({ active, index, onOpen, outcome }: CriterionRowProps) => {
   const { t } = useTranslation('chat');
-  const openDocument = useChatStore((s) => s.openDocument);
-  const markdownProps = useEntityMarkdown();
-  const caption = item.description || item.fileName;
-
-  if (IMAGE_TYPES.has(item.type) && item.fileUrl)
-    return (
-      <Flexbox gap={4}>
-        <Image
-          preview
-          alt={caption ?? item.type}
-          loading={'lazy'}
-          src={item.fileUrl}
-          style={{ maxHeight: 360, objectFit: 'contain', width: '100%' }}
-          variant={'borderless'}
-        />
-        {caption && (
-          <Text fontSize={12} type={'secondary'}>
-            {caption}
-          </Text>
-        )}
-      </Flexbox>
-    );
-
-  if (item.type === 'video' && item.fileUrl)
-    return <video controls src={item.fileUrl} style={{ display: 'block', width: '100%' }} />;
-
-  if (item.content)
-    return (
-      <Flexbox gap={4}>
-        {caption && (
-          <Text fontSize={12} type={'secondary'}>
-            {caption}
-          </Text>
-        )}
-        <Markdown fontSize={13} variant={'chat'} {...markdownProps}>
-          {item.content}
-        </Markdown>
-      </Flexbox>
-    );
-
-  if (item.documentId)
-    return (
-      <Flexbox horizontal align={'center'} gap={6}>
-        <Icon color={cssVar.colorTextTertiary} icon={FileText} size={14} />
-        <button
-          className={styles.docLink}
-          type={'button'}
-          onClick={() => openDocument(item.documentId!)}
-        >
-          {caption || t('goalProcess.result.criteria.document')}
-        </button>
-      </Flexbox>
-    );
-
-  if (item.fileUrl)
-    return (
-      <Flexbox horizontal align={'center'} gap={6}>
-        <Icon color={cssVar.colorTextTertiary} icon={Paperclip} size={14} />
-        <a href={item.fileUrl} rel={'noopener noreferrer'} target={'_blank'}>
-          {caption || item.type}
-        </a>
-      </Flexbox>
-    );
-
-  return caption ? (
-    <Text fontSize={13} type={'secondary'}>
-      {caption}
-    </Text>
-  ) : null;
-};
-
-const CriterionRow = ({ index, outcome }: { index: number; outcome: CriterionOutcome }) => {
-  const { t } = useTranslation('chat');
-  const [open, setOpen] = useState(false);
   const { criterion, evidence, reason, state } = outcome;
-  const openable = evidence.length > 0;
   const color = STATE_COLOR[state];
 
   return (
@@ -196,10 +95,10 @@ const CriterionRow = ({ index, outcome }: { index: number; outcome: CriterionOut
       <Flexbox
         horizontal
         align={'flex-start'}
-        as={openable ? 'button' : 'div'}
-        className={cx(styles.row, openable && styles.rowOpenable)}
+        as={onOpen ? 'button' : 'div'}
+        className={cx(styles.row, onOpen && styles.rowOpenable, active && styles.rowActive)}
         gap={10}
-        {...(openable ? { onClick: () => setOpen(!open), type: 'button' as const } : {})}
+        {...(onOpen ? { onClick: onOpen, type: 'button' as const } : {})}
       >
         <Icon
           color={color}
@@ -227,36 +126,29 @@ const CriterionRow = ({ index, outcome }: { index: number; outcome: CriterionOut
             </Text>
           )}
         </Flexbox>
-        {openable && (
+        {onOpen && (
           <Flexbox
             horizontal
             align={'center'}
             gap={4}
             style={{ flex: 'none', marginBlockStart: 2 }}
           >
-            <Text fontSize={12} type={'secondary'}>
-              {t('goalProcess.result.criteria.evidenceCount', { count: evidence.length })}
-            </Text>
-            <Icon
-              className={cx(styles.arrow, open && styles.arrowOpen)}
-              icon={ChevronRight}
-              size={14}
-            />
+            {evidence.length > 0 && (
+              <Text fontSize={12} type={'secondary'}>
+                {t('goalProcess.result.criteria.evidenceCount', { count: evidence.length })}
+              </Text>
+            )}
+            <Icon className={styles.arrow} icon={ChevronRight} size={14} />
           </Flexbox>
         )}
       </Flexbox>
-      {open && (
-        <Flexbox className={styles.evidence} gap={12}>
-          {evidence.map((item) => (
-            <EvidenceItem item={item} key={item.id} />
-          ))}
-        </Flexbox>
-      )}
     </div>
   );
 };
 
 interface GoalCriteriaResultsProps {
+  /** The Goal-level acceptance the criteria were judged in. */
+  acceptanceId?: string;
   /** The per-task acceptance group, rendered as this section's continuation. */
   children?: ReactNode;
   /** The acceptance or criteria read failed: its outcomes are not a result. */
@@ -267,6 +159,7 @@ interface GoalCriteriaResultsProps {
 }
 
 const GoalCriteriaResults = ({
+  acceptanceId,
   children,
   error,
   loading,
@@ -274,6 +167,12 @@ const GoalCriteriaResults = ({
   outcomes,
 }: GoalCriteriaResultsProps) => {
   const { t } = useTranslation('chat');
+  const openAcceptanceCheck = useChatStore((state) => state.openAcceptanceCheck);
+  const openedCheck = useChatStore((state) =>
+    chatPortalSelectors.showPortal(state)
+      ? chatPortalSelectors.acceptanceCheckPortal(state)
+      : undefined,
+  );
   const met = outcomes.filter((outcome) => outcome.state === 'passed').length;
 
   return (
@@ -304,9 +203,26 @@ const GoalCriteriaResults = ({
         </Text>
       ) : (
         <Flexbox>
-          {outcomes.map((outcome, index) => (
-            <CriterionRow index={index} key={outcome.criterion.id} outcome={outcome} />
-          ))}
+          {outcomes.map((outcome, index) => {
+            const { checkId } = outcome;
+            return (
+              <CriterionRow
+                index={index}
+                key={outcome.criterion.id}
+                outcome={outcome}
+                active={
+                  !!checkId &&
+                  openedCheck?.acceptanceId === acceptanceId &&
+                  openedCheck?.checkId === checkId
+                }
+                onOpen={
+                  acceptanceId && checkId
+                    ? () => openAcceptanceCheck(acceptanceId, checkId)
+                    : undefined
+                }
+              />
+            );
+          })}
         </Flexbox>
       )}
       {children}

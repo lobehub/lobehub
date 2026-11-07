@@ -133,6 +133,7 @@ export const createVerifierAgentRunner = (params: {
             {
               checkItemId: checkItem.id,
               errorMessage: event.errorMessage,
+              errorType: event.errorType,
               parentOperationId: operationId,
               reason: event.reason,
               verifierOperationId: event.operationId,

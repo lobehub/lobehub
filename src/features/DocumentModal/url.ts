@@ -1,3 +1,4 @@
+import { docsPagePath } from '@/features/ResourceHome/paths';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 
 export const buildDocumentModalUrl = (
@@ -5,6 +6,6 @@ export const buildDocumentModalUrl = (
   documentId: string,
   activeWorkspaceSlug?: string | null,
 ) => {
-  const path = buildWorkspaceAwarePath(`/page/${documentId}`, activeWorkspaceSlug);
+  const path = buildWorkspaceAwarePath(docsPagePath(documentId), activeWorkspaceSlug);
   return `${appOrigin}${path}`;
 };

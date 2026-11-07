@@ -7,6 +7,7 @@ const findByNode = vi.hoisted(() => vi.fn());
 const answerReleaseGate = vi.hoisted(() => vi.fn());
 const scheduleGoalAdvance = vi.hoisted(() => vi.fn());
 const listByAcceptance = vi.hoisted(() => vi.fn());
+const advanceGoal = vi.hoisted(() => vi.fn());
 
 vi.mock('@/database/models/goal', () => ({
   GoalModel: class {
@@ -24,6 +25,7 @@ vi.mock('@/server/services/goal', () => ({
   },
 }));
 vi.mock('@/server/services/goal/scheduler', () => ({ scheduleGoalAdvance }));
+vi.mock('@/server/services/goal/advanceGoal', () => ({ advanceGoal }));
 
 const db = {} as never;
 const gate = (id = 'acc_gate') =>
@@ -43,6 +45,7 @@ beforeEach(() => {
   answerReleaseGate.mockReset();
   scheduleGoalAdvance.mockReset();
   listByAcceptance.mockReset();
+  advanceGoal.mockReset();
 });
 
 describe('assertNotHoldingRelease', () => {
@@ -98,10 +101,44 @@ describe('withGoalGateAnswer', () => {
       return 'written';
     });
 
+    await expect(withGoalGateAnswer(db, service(true), gate(), 'release', {}, write)).resolves.toBe(
+      'written',
+    );
+    expect(answerReleaseGate).toHaveBeenCalledWith('node_release', 'release', undefined);
+    expect(scheduleGoalAdvance).toHaveBeenCalledWith(
+      expect.objectContaining({ goalId: 'goal_1', trigger: 'decide' }),
+    );
+    expect(advanceGoal).not.toHaveBeenCalled();
+  });
+
+  // The owner's panel opens on the main Agent's hand-off as the request
+  // returns, so a send-back hands it over in the request, not on the queue.
+  it('hands a sent-back plan to the main Agent before answering', async () => {
+    answerReleaseGate.mockResolvedValue('goal_1');
+    advanceGoal.mockResolvedValue({ goalId: 'goal_1', ticks: 2 });
+    const write = vi.fn(async () => {
+      expect(advanceGoal).not.toHaveBeenCalled();
+      return 'written';
+    });
+
     await expect(
       withGoalGateAnswer(db, service(true), gate(), 'revise', { comment: '补上播种' }, write),
     ).resolves.toBe('written');
     expect(answerReleaseGate).toHaveBeenCalledWith('node_release', 'revise', '补上播种');
+    expect(advanceGoal).toHaveBeenCalledWith(
+      expect.objectContaining({ goalId: 'goal_1', trigger: 'decide' }),
+    );
+    expect(scheduleGoalAdvance).not.toHaveBeenCalled();
+  });
+
+  it('queues the hand-off when the inline advance fails', async () => {
+    answerReleaseGate.mockResolvedValue('goal_1');
+    advanceGoal.mockRejectedValue(new Error('db busy'));
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await expect(
+      withGoalGateAnswer(db, service(true), gate(), 'revise', { comment: '补上播种' }, vi.fn()),
+    ).resolves.toBeUndefined();
     expect(scheduleGoalAdvance).toHaveBeenCalledWith(
       expect.objectContaining({ goalId: 'goal_1', trigger: 'decide' }),
     );

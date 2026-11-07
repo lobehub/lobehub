@@ -2,6 +2,7 @@ import type {
   GoalGraphSnapshot,
   GoalReleaseGateDossier,
   GoalReleaseGateUnit,
+  GoalRolloutState,
   VerifyCheckItem,
 } from '@lobechat/types';
 import debug from 'debug';
@@ -25,6 +26,16 @@ const GATE_CHECKS_ITEM_ID = 'gate-checks';
 const unitItemId = (nodeId: string) => `unit:${nodeId}`;
 
 /**
+ * The units a release review reports on: the probes while the round is on its
+ * canary, the last released wave after that.
+ */
+export const reviewedUnitIds = (state: GoalRolloutState, waveSize: number): string[] => {
+  if (state.waveIndex === 0) return state.probeNodeIds;
+  const lastRelease = state.gateLog?.findLast((entry) => entry.outcome === 'released');
+  return (state.massNodeIds ?? []).slice(-(lastRelease?.releasedCount ?? waveSize));
+};
+
+/**
  * Build the dossier a release gate is decided on, from the fetched graph.
  *
  * Probes on the first move to batch execution; the last released wave when a
@@ -44,11 +55,7 @@ export const buildReleaseGateDossier = (
   const state = graph.goal.config?.rolloutState;
   if (!policy || !state) return;
 
-  const lastRelease = state.gateLog?.findLast((entry) => entry.outcome === 'released');
-  const unitIds =
-    state.waveIndex === 0
-      ? state.probeNodeIds
-      : (state.massNodeIds ?? []).slice(-(lastRelease?.releasedCount ?? input.waveSize));
+  const unitIds = reviewedUnitIds(state, input.waveSize);
   const spendByTask = new Map((graph.spend?.byTask ?? []).map((row) => [row.taskId, row]));
 
   const units: GoalReleaseGateUnit[] = unitIds.flatMap((nodeId) => {

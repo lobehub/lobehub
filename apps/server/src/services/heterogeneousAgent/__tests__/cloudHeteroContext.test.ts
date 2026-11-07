@@ -26,11 +26,22 @@ describe('buildCloudHeteroContext', () => {
     });
 
     expect(context).toContain('Your working directory is `lobehub-main`');
-    expect(context).toContain('persistent workspace');
+    expect(context).toContain('environment directory');
     expect(context).toContain('- `./lobehub`');
     expect(context).not.toContain('/workspace');
     expect(context).not.toContain('ephemeral');
     // Code still has to reach the remote.
     expect(context).toContain('**Always commit and push**');
+  });
+
+  it('describes a drive folder as a folder on the network drive', () => {
+    const context = buildCloudHeteroContext({
+      repos: ['lobehub/lobehub'],
+      sandbox: { cwd: 'reports', mode: 'drive' },
+    });
+
+    expect(context).toContain('`reports`, a folder on the user');
+    expect(context).toContain('installed packages do not carry over');
+    expect(context).not.toContain('/workspace');
   });
 });

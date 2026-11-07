@@ -1,12 +1,15 @@
 'use client';
 
 import type { TaskTemplate } from '@lobechat/const';
-import { cssVar, Flexbox, Icon, Markdown } from '@lobehub/ui';
 import {
   ActionIcon,
   Button,
   createModal,
+  cssVar,
   Divider,
+  Flexbox,
+  Icon,
+  Markdown,
   type ModalInstance,
   Text,
   useModalContext,

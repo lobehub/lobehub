@@ -334,6 +334,7 @@ export default {
   'oauthApp.redirectUris.add': 'Add redirect URI',
   'oauthApp.redirectUris.empty':
     'No redirect URIs yet. Add one so users can sign in with this app.',
+  'oauthApp.redirectUris.limitReached': 'Reached the limit of {{count}} redirect URIs',
   'oauthApp.redirectUris.remove': 'Remove',
   'oauthApp.redirectUris.title': 'Redirect URIs',
   'oauthApp.secret.copy': 'Copy secret',
@@ -353,7 +354,7 @@ export default {
   'oauthApp.secret.usage': 'Send it to the token endpoint as `client_secret` in the request body.',
   'oauthApp.stats.activeUsers': 'Active Users',
   'oauthApp.stats.calls': 'Total Calls',
-  'oauthApp.stats.credits': 'Credits Used',
+  'oauthApp.stats.credits': 'Amount Spent',
   'oauthApp.stats.empty': 'No usage data yet',
   'oauthApp.stats.lastUsed': 'Last Called',
   'oauthApp.stats.neverUsed': 'Never used',

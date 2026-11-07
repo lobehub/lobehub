@@ -217,7 +217,7 @@ describe('DocumentStore - Editor Actions', () => {
 
       // Then call onEditorInit
       act(() => {
-        result.current.onEditorInit(mockEditor);
+        result.current.onEditorInit(mockEditor, 'doc-1');
       });
 
       expect(mockEditor.setDocument).toHaveBeenCalledWith('markdown', '# Hello World');
@@ -245,7 +245,7 @@ name: youtube-comment-retrieval-workflow
       });
 
       act(() => {
-        result.current.onEditorInit(mockEditor);
+        result.current.onEditorInit(mockEditor, 'doc-1');
       });
 
       expect(mockEditor.setDocument).toHaveBeenCalledWith(
@@ -293,7 +293,7 @@ name: skill-name
       });
 
       act(() => {
-        result.current.onEditorInit(mockEditor);
+        result.current.onEditorInit(mockEditor, 'doc-1');
       });
 
       expect(mockEditor.setDocument).toHaveBeenCalledTimes(1);
@@ -334,7 +334,7 @@ name: skill-name
       });
 
       act(() => {
-        result.current.onEditorInit(mockEditor);
+        result.current.onEditorInit(mockEditor, 'doc-1');
       });
 
       expect(consoleWarn).toHaveBeenCalledWith(
@@ -368,7 +368,7 @@ name: skill-name
       });
 
       act(() => {
-        result.current.onEditorInit(mockEditor);
+        result.current.onEditorInit(mockEditor, 'doc-1');
       });
 
       expect(mockEditor.setDocument).toHaveBeenCalledWith('json', JSON.stringify(editorData), {
@@ -390,7 +390,7 @@ name: skill-name
       });
 
       act(() => {
-        result.current.onEditorInit(mockEditor);
+        result.current.onEditorInit(mockEditor, 'doc-previous');
       });
 
       act(() => {
@@ -402,7 +402,7 @@ name: skill-name
       });
 
       act(() => {
-        result.current.onEditorInit(mockEditor);
+        result.current.onEditorInit(mockEditor, 'doc-1');
       });
 
       expect(mockEditor.setDocument).toHaveBeenLastCalledWith(
@@ -437,7 +437,7 @@ name: skill-name
       });
 
       await act(async () => {
-        await result.current.onEditorInit(mockEditor);
+        await result.current.onEditorInit(mockEditor, 'doc-1');
       });
 
       expect(consoleError).toHaveBeenCalledWith(

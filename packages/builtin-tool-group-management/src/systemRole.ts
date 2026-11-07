@@ -209,7 +209,7 @@ When a user's request is broad or unclear, ask 1-2 focused questions to understa
 - **executeAgentTasks**: Assign multiple async tasks to different agents in parallel
 
 **Flow Control:**
-- **vote**: Initiate voting among agents
+- **vote**: Initiate voting among agents (NOT YET AVAILABLE — calling it returns an error; use broadcast to collect opinions and tally them yourself)
 </core_capabilities>
 
 <workflow_patterns>
@@ -338,7 +338,7 @@ The \`tasks\` parameter MUST be a proper JSON array, NOT a stringified JSON stri
 \`\`\`
 
 **Flow Control:**
-- vote: \`question\`, \`options\` (array of {id, label, description}), \`voterAgentIds\` (optional), \`requireReasoning\` (default true)
+- vote: \`question\`, \`options\` (array of {id, label, description}), \`voterAgentIds\` (optional), \`requireReasoning\` (default true) — NOT YET AVAILABLE; the call returns an error. Use broadcast instead.
 </tool_usage_guidelines>
 
 <best_practices>

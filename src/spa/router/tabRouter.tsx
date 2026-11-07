@@ -8,7 +8,7 @@ import TabLocationReporter from '@/features/Electron/TabHost/TabLocationReporter
 import { ErrorBoundary } from '@/utils/router';
 
 import { createMainAreaChildren } from './desktopRouter.config';
-import { withSegmentFallback } from './desktopRouter.shared';
+import { withSegmentFallback } from './withSegmentFallback';
 
 const TabRootLayout = () => (
   <Suspense fallback={<RouteSegmentSkeleton />}>

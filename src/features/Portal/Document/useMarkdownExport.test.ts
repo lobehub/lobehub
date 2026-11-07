@@ -18,13 +18,12 @@ vi.mock('@lobehub/ui', () => ({
   toast: { error: vi.fn(), success: mocks.toastSuccess },
 }));
 
-vi.mock('@/libs/swr', () => ({
-  useClientDataSWR: () => ({ data: mocks.documentMeta }),
-}));
-
 vi.mock('@/store/document', () => ({
   useDocumentStore: (selector: (s: unknown) => unknown) =>
-    selector({ documents: { doc_1: { content: mocks.storeContent } } }),
+    selector({
+      documents: { doc_1: { content: mocks.storeContent } },
+      useFetchDocumentDetail: () => ({ data: mocks.documentMeta }),
+    }),
 }));
 
 describe('useMarkdownExport', () => {
@@ -44,6 +43,13 @@ describe('useMarkdownExport', () => {
   // A file-backed document keeps its data behind `fileId`; its markdown is empty.
   it('is unavailable for a file-backed document', () => {
     mocks.documentMeta = { content: '', fileId: 'file_1', filename: 'source.pdf' };
+    const { result } = renderHook(() => useMarkdownExport('doc_1'));
+
+    expect(result.current).toBeUndefined();
+  });
+
+  it('is unavailable for an HTML page, whose content is not Markdown', () => {
+    mocks.documentMeta = { content: '<html></html>', fileType: 'custom/html', title: 'Report' };
     const { result } = renderHook(() => useMarkdownExport('doc_1'));
 
     expect(result.current).toBeUndefined();

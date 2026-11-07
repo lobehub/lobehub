@@ -1,8 +1,20 @@
 'use client';
 
-import { Button, createStaticStyles, cssVar, cx, Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import type { GoalRolloutPlanSkill, GoalRolloutRetro, GoalRolloutVerifier } from '@lobechat/types';
+import {
+  ActionIcon,
+  Button,
+  createStaticStyles,
+  cssVar,
+  cx,
+  Flexbox,
+  Icon,
+  Tooltip,
+} from '@lobehub/ui';
 import { Handle, type NodeProps, Position } from '@xyflow/react';
 import {
+  ChevronLeft,
+  ChevronRight,
   CircleCheck,
   CircleDashed,
   CircleDot,
@@ -10,18 +22,28 @@ import {
   HandIcon,
   Info,
   type LucideIcon,
+  NotebookPen,
+  ShieldCheck,
   TestTubeDiagonal,
+  TriangleAlert,
   Waves,
 } from 'lucide-react';
-import { memo, type ReactNode } from 'react';
+import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { TASK_STATUS_VISUALS } from '@/components/ExecutionStatus';
 import RunningGlyph from '@/features/Home/components/RunningGlyph';
 
 import type { GoalNodeView } from '../goalGraphViewModel';
-import { KIND_COLOR, KIND_ICON } from '../shared';
-import { BATCH_FRAME_HEAD, BATCH_ROW_LABEL, BATCH_SQUARE, BATCH_SQUARE_GAP } from './batchLayout';
+import { GATE_COLOR, KIND_COLOR, KIND_ICON, SKILL_COLOR, SKILL_ICON } from '../shared';
+import {
+  BATCH_FRAME_HEAD,
+  BATCH_RETRO_MARK,
+  BATCH_RETRO_ROW,
+  BATCH_ROW_LABEL,
+  BATCH_SQUARE,
+  BATCH_SQUARE_GAP,
+} from './batchLayout';
 import {
   type BatchCell,
   type BatchCellState,
@@ -35,7 +57,7 @@ import {
  * The expanded batch, drawn the way it is followed and with no frame of its
  * own: the first round's trials (an experiment probe) as task cards, the roster as waves of squares, and a
  * small re-dispatch group per re-opened round. Squares carry the canonical
- * execution states — grey not run, amber running (breathing square), blue needs a
+ * execution states — grey not run, amber running (glowing square), blue needs a
  * person, green done, faded superseded.
  */
 
@@ -55,19 +77,19 @@ export const CELL_VISUAL: Record<BatchCellState, { color: string; icon: LucideIc
 };
 
 const styles = createStaticStyles(({ css }) => ({
-  breathe: css`
-    animation: goal-batch-breathe 1.6s ease-in-out infinite;
+  glow: css`
+    animation: goal-batch-glow 1.6s ease-in-out infinite;
 
-    @keyframes goal-batch-breathe {
+    @keyframes goal-batch-glow {
       0%,
       100% {
-        transform: scale(1);
-        opacity: 1;
+        box-shadow: 0 0 0 0 color-mix(in srgb, ${cssVar.colorWarning} 0%, transparent);
       }
 
       50% {
-        transform: scale(0.86);
-        opacity: 0.42;
+        box-shadow:
+          0 0 0 2px color-mix(in srgb, ${cssVar.colorWarning} 28%, transparent),
+          0 0 8px 2px color-mix(in srgb, ${cssVar.colorWarning} 55%, transparent);
       }
     }
 
@@ -146,8 +168,13 @@ const styles = createStaticStyles(({ css }) => ({
     background: ${cssVar.colorBgContainer};
   `,
   groupTitle: css`
+    overflow: hidden;
+
+    min-width: 0;
+
     font-size: 13px;
     font-weight: 600;
+    text-overflow: ellipsis;
     white-space: nowrap;
   `,
   /* Trials: one row of two cards, status above each card. */
@@ -218,6 +245,41 @@ const styles = createStaticStyles(({ css }) => ({
   muted: css`
     font-size: 11px;
     color: ${cssVar.colorTextTertiary};
+  `,
+  retroMark: css`
+    display: inline-flex;
+    flex: none;
+    gap: 4px;
+    align-items: center;
+
+    width: ${BATCH_RETRO_MARK}px;
+    margin-inline-start: 4px;
+    padding-inline-start: 8px;
+    border-inline-start: 1px dashed ${cssVar.colorBorder};
+
+    font-size: 10px;
+    line-height: 1;
+    white-space: nowrap;
+  `,
+  retroBody: css`
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+
+    padding-block: 8px 10px;
+    padding-inline: 10px;
+  `,
+  retroLayer: css`
+    /* A short row: the card radius would read as a pill. */
+    border-radius: ${cssVar.borderRadiusSM};
+  `,
+  retroRow: css`
+    cursor: default;
+    height: ${BATCH_RETRO_ROW}px;
+
+    &:hover {
+      border-color: ${cssVar.colorBorderSecondary};
+    }
   `,
   rowLabel: css`
     flex: none;
@@ -342,14 +404,18 @@ const GroupShell = memo<{
   iconColor: string;
   onEnter?: () => void;
   status: GroupStatus;
+  /** Status (and foot) in the head's right corner, with no foot row of its own. */
+  statusInHead?: boolean;
   title: string;
-}>(({ children, foot, hint, icon, iconColor, onEnter, status, title }) => {
+  /** A control that belongs in the head, before the enter button. */
+  toolbar?: ReactNode;
+}>(({ children, foot, hint, icon, iconColor, onEnter, status, statusInHead, title, toolbar }) => {
   const { t } = useTranslation('chat');
   return (
     <div className={styles.group}>
       <GroupHandles />
       <div className={styles.groupHead}>
-        <Flexbox horizontal align={'center'} gap={7} style={{ minWidth: 0 }}>
+        <Flexbox horizontal align={'center'} gap={7} style={{ minWidth: 0, overflow: 'hidden' }}>
           <Icon color={iconColor} icon={icon} size={14} />
           <span className={styles.groupTitle}>{title}</span>
           {hint && (
@@ -360,24 +426,35 @@ const GroupShell = memo<{
             </Tooltip>
           )}
         </Flexbox>
-        {onEnter && (
-          <Button
-            className={'nodrag'}
-            size={'small'}
-            onClick={(event) => {
-              event.stopPropagation();
-              onEnter();
-            }}
-          >
-            {t('goalBatch.enter')}
-          </Button>
-        )}
+        <Flexbox horizontal align={'center'} gap={8} style={{ flex: 'none' }}>
+          {statusInHead && (
+            <>
+              <StatusText {...status} />
+              {foot && <span className={styles.muted}>{foot}</span>}
+            </>
+          )}
+          {toolbar}
+          {onEnter && (
+            <Button
+              className={'nodrag'}
+              size={'small'}
+              onClick={(event) => {
+                event.stopPropagation();
+                onEnter();
+              }}
+            >
+              {t('goalBatch.enter')}
+            </Button>
+          )}
+        </Flexbox>
       </div>
       {children}
-      <div className={styles.foot}>
-        <StatusText {...status} />
-        {foot && <span className={styles.muted}>{foot}</span>}
-      </div>
+      {!statusInHead && (
+        <div className={styles.foot}>
+          <StatusText {...status} />
+          {foot && <span className={styles.muted}>{foot}</span>}
+        </div>
+      )}
     </div>
   );
 });
@@ -400,7 +477,7 @@ export const Square = memo<{
         'nodrag',
         styles.square,
         nodeId && onSelect && styles.squareLink,
-        state === 'running' && styles.breathe,
+        state === 'running' && styles.glow,
       )}
       onClick={(event) => {
         event.stopPropagation();
@@ -472,11 +549,26 @@ export interface BatchExperimentProbeData extends Record<string, unknown> {
   views: Record<string, GoalNodeView>;
 }
 
+/** Heads the unit's own brief in a re-run's description, after the shared plan. */
+const CARRIED_BRIEF_HEADING = 'Unit brief (from its first run):';
+
+/**
+ * A probe's one-line subtitle: its own brief. A re-run's description opens with
+ * the shared plan, so its subtitle is the brief it carried over from its first run.
+ */
+const probeSubtitle = (description?: string | null) => {
+  if (!description) return '';
+  const carried = description.indexOf(CARRIED_BRIEF_HEADING);
+  const own =
+    carried >= 0 ? description.slice(carried + CARRIED_BRIEF_HEADING.length) : description;
+  return own.trim().split('\n')[0] ?? '';
+};
+
 const ProbeCell = memo<{ onSelect: (id: string) => void; probe: BatchProbe; view?: GoalNodeView }>(
   ({ onSelect, probe, view }) => {
     const { t } = useTranslation('chat');
     const visual = CELL_VISUAL[probe.state];
-    const subtitle = view?.node.description?.split('\n')[0] ?? '';
+    const subtitle = probeSubtitle(view?.node.description);
     return (
       <div className={styles.probeCell} data-probe={probe.nodeId} data-state={probe.state}>
         <StatusText
@@ -528,8 +620,20 @@ const ProbeCell = memo<{ onSelect: (id: string) => void; probe: BatchProbe; view
 ProbeCell.displayName = 'GoalBatchProbeCell';
 
 export const BatchExperimentProbeGroup = memo<NodeProps>(({ data }) => {
-  const { onEnter, onSelect, probes, started, views } = data as BatchExperimentProbeData;
+  const { onEnter, onSelect, probes: latest, started, views } = data as BatchExperimentProbeData;
   const { t } = useTranslation('chat');
+  // Trials sent back and run again in the round: one switch in the head picks
+  // which run the cards show, the latest unless the reader goes back.
+  const attempts = Math.max(1, ...latest.map((probe) => probe.attempt ?? 1));
+  const [picked, setPicked] = useState<number>();
+  const attempt = picked && picked <= attempts ? picked : attempts;
+  const probes =
+    attempt === attempts
+      ? latest
+      : latest.map((probe) => {
+          const run = probe.runs?.[attempt - 1];
+          return run ? { ...probe, ...run } : probe;
+        });
   const status = useUnitsStatus()(
     probes,
     {
@@ -546,6 +650,39 @@ export const BatchExperimentProbeGroup = memo<NodeProps>(({ data }) => {
       iconColor={KIND_COLOR.batch.line}
       status={status}
       title={t('goalBatch.probes.title')}
+      toolbar={
+        attempts > 1 && (
+          // A plan can be sent back many times before it passes: step through
+          // the runs one at a time rather than listing every one of them.
+          <Flexbox horizontal align={'center'} className={'nodrag'} gap={2}>
+            <ActionIcon
+              aria-label={t('goalBatch.probes.attemptPrevious')}
+              disabled={attempt <= 1}
+              icon={ChevronLeft}
+              size={'small'}
+              title={t('goalBatch.probes.attemptPrevious')}
+              onClick={(event) => {
+                event.stopPropagation();
+                setPicked(attempt - 1);
+              }}
+            />
+            <span className={styles.muted} style={{ fontVariantNumeric: 'tabular-nums' }}>
+              {t('goalBatch.probes.attemptOf', { current: attempt, total: attempts })}
+            </span>
+            <ActionIcon
+              aria-label={t('goalBatch.probes.attemptNext')}
+              disabled={attempt >= attempts}
+              icon={ChevronRight}
+              size={'small'}
+              title={t('goalBatch.probes.attemptNext')}
+              onClick={(event) => {
+                event.stopPropagation();
+                setPicked(attempt + 1);
+              }}
+            />
+          </Flexbox>
+        )
+      }
       onEnter={onEnter}
     >
       <div className={styles.probeGrid}>
@@ -572,51 +709,90 @@ export interface BatchWaveRow {
   wave: number;
 }
 
-const WaveRows = memo<{ onSelect: (nodeId: string) => void; rows: BatchWaveRow[] }>(
-  ({ onSelect, rows }) => {
-    const { t } = useTranslation('chat');
-    const label = useCellLabel();
-    return (
-      <>
-        {rows.map(({ cells, wave }) => {
-          const hot = cells.some((cell) => cell.state === 'human' || cell.reopenedIn);
-          return (
-            <Flexbox horizontal align={'center'} data-wave={wave} gap={8} key={wave}>
-              <span className={cx(styles.rowLabel, hot && styles.rowLabelHot)}>
-                {t('goalBatch.waves.row', { number: wave + 1 })}
-              </span>
-              <Flexbox horizontal gap={BATCH_SQUARE_GAP}>
-                {cells.map((cell) => (
-                  <Square
-                    key={cell.index}
-                    nodeId={cell.nodeId}
-                    state={cell.state}
-                    tooltip={[
-                      t('goalBatch.cell.tooltip', {
-                        index: cell.index + 1,
-                        state: label(cell.state),
-                        title: cell.title,
-                        wave: wave + 1,
-                      }),
-                      cell.reopenedIn
-                        ? t('goalBatch.cell.reopened', { revision: cell.reopenedIn })
-                        : cell.runIn
-                          ? t('goalBatch.cell.runIn', { revision: cell.runIn })
-                          : undefined,
-                    ]
-                      .filter(Boolean)
-                      .join(' · ')}
-                    onSelect={onSelect}
-                  />
-                ))}
-              </Flexbox>
+/**
+ * The mark after a wave's squares: the retro that read it. Each execution
+ * ends in one — experience into the plan, criteria into the verifier — so a
+ * wave that finished without one says it still owes it.
+ */
+const RetroMark = memo<{ cells: BatchCell[]; retro?: GoalRolloutRetro }>(({ cells, retro }) => {
+  const { t } = useTranslation('chat');
+  const finished = cells.length > 0 && cells.every((cell) => cell.state === 'done');
+  if (!retro && !finished) return <span className={styles.retroMark} />;
+  const status = !retro
+    ? { ...CELL_VISUAL.backlog, text: t('goalBatch.retro.mark.pending') }
+    : retro.status === 'running'
+      ? { ...CELL_VISUAL.running, running: true, text: t('goalBatch.retro.mark.running') }
+      : retro.status === 'blocked'
+        ? { color: cssVar.colorError, icon: TriangleAlert, text: t('goalBatch.retro.mark.blocked') }
+        : {
+            ...CELL_VISUAL.done,
+            text: t('goalBatch.retro.mark.done', {
+              skill: retro.skillVersion,
+              verifier: retro.verifierVersion,
+            }),
+          };
+  return (
+    <Tooltip title={retro ? <RetroSummary retro={retro} /> : t('goalBatch.retro.mark.pendingHint')}>
+      <span className={cx('nodrag', styles.retroMark)} data-retro-mark={retro?.status ?? 'pending'}>
+        <StatusText {...status} />
+      </span>
+    </Tooltip>
+  );
+});
+
+RetroMark.displayName = 'GoalBatchRetroMark';
+
+const WaveRows = memo<{
+  onSelect: (nodeId: string) => void;
+  /** The retro after each roster wave, when the batch runs them. */
+  retros?: GoalRolloutRetro[];
+  rows: BatchWaveRow[];
+}>(({ onSelect, retros, rows }) => {
+  const { t } = useTranslation('chat');
+  const label = useCellLabel();
+  return (
+    <>
+      {rows.map(({ cells, wave }) => {
+        const hot = cells.some((cell) => cell.state === 'human' || cell.reopenedIn);
+        return (
+          <Flexbox horizontal align={'center'} data-wave={wave} gap={8} key={wave}>
+            <span className={cx(styles.rowLabel, hot && styles.rowLabelHot)}>
+              {t('goalBatch.waves.row', { number: wave + 1 })}
+            </span>
+            <Flexbox horizontal gap={BATCH_SQUARE_GAP}>
+              {cells.map((cell) => (
+                <Square
+                  key={cell.index}
+                  nodeId={cell.nodeId}
+                  state={cell.state}
+                  tooltip={[
+                    t('goalBatch.cell.tooltip', {
+                      index: cell.index + 1,
+                      state: label(cell.state),
+                      title: cell.title,
+                      wave: wave + 1,
+                    }),
+                    cell.reopenedIn
+                      ? t('goalBatch.cell.reopened', { revision: cell.reopenedIn })
+                      : cell.runIn
+                        ? t('goalBatch.cell.runIn', { revision: cell.runIn })
+                        : undefined,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
+                  onSelect={onSelect}
+                />
+              ))}
             </Flexbox>
-          );
-        })}
-      </>
-    );
-  },
-);
+            {retros && (
+              <RetroMark cells={cells} retro={retros.find((retro) => retro.wave === wave + 1)} />
+            )}
+          </Flexbox>
+        );
+      })}
+    </>
+  );
+});
 
 WaveRows.displayName = 'GoalBatchWaveRows';
 
@@ -648,6 +824,8 @@ export interface BatchWavesData extends Record<string, unknown> {
   onSelect: (nodeId: string) => void;
   /** The units this round re-opened — its own canary (rounds after the first). */
   probes: BatchProbe[];
+  /** The retro after each roster wave, when the batch runs them. */
+  retros?: GoalRolloutRetro[];
   revision: number;
   /** The roster waves this round released, or still holds as the latest round. */
   rows: BatchWaveRow[];
@@ -657,7 +835,8 @@ export interface BatchWavesData extends Record<string, unknown> {
 
 /** A round's waves: the units it re-opened, then the roster waves it owns. */
 export const BatchWavesGroup = memo<NodeProps>(({ data }) => {
-  const { onEnter, onSelect, probes, revision, rows, started, waveSize } = data as BatchWavesData;
+  const { onEnter, onSelect, probes, retros, revision, rows, started, waveSize } =
+    data as BatchWavesData;
   const { t } = useTranslation('chat');
   const label = useCellLabel();
   const originCopy = useOriginCopy();
@@ -717,13 +896,167 @@ export const BatchWavesGroup = memo<NodeProps>(({ data }) => {
             </Flexbox>
           </Flexbox>
         ))}
-        <WaveRows rows={rows} onSelect={onSelect} />
+        <WaveRows retros={retros} rows={rows} onSelect={onSelect} />
       </div>
     </GroupShell>
   );
 });
 
 BatchWavesGroup.displayName = 'GoalBatchWavesGroup';
+
+// ─── Retro (what an execution taught, before the gate) ──────────────────
+
+/** What one retro produced and what it checked, for a tooltip. */
+const RetroSummary = memo<{ retro: GoalRolloutRetro }>(({ retro }) => {
+  const { t } = useTranslation('chat');
+  return (
+    <Flexbox gap={4}>
+      {retro.skillVersion !== undefined && (
+        <span>
+          {t('goalBatch.retro.summary.skill', {
+            count: retro.skillChanges ?? 0,
+            version: retro.skillVersion,
+          })}
+        </span>
+      )}
+      {retro.verifierVersion !== undefined && (
+        <span>
+          {t('goalBatch.retro.summary.verifier', {
+            added: retro.verifierChanges?.added ?? 0,
+            loosened: retro.verifierChanges?.loosened ?? 0,
+            version: retro.verifierVersion,
+          })}
+        </span>
+      )}
+      {retro.interventions && (
+        <span>{t('goalBatch.retro.summary.interventions', retro.interventions)}</span>
+      )}
+      {retro.reverify && <span>{t('goalBatch.retro.summary.reverify', retro.reverify)}</span>}
+    </Flexbox>
+  );
+});
+
+RetroSummary.displayName = 'GoalBatchRetroSummary';
+
+const RetroLayer = memo<{
+  color: { line: string; soft: string };
+  icon: LucideIcon;
+  onOpen?: () => void;
+  subtitle: string;
+  title: string;
+}>(({ color, icon, onOpen, subtitle, title }) => (
+  <div
+    className={cx('nodrag', styles.card, styles.retroLayer, !onOpen && styles.retroRow)}
+    role={onOpen ? 'button' : undefined}
+    style={{ height: BATCH_RETRO_ROW }}
+    tabIndex={onOpen ? 0 : undefined}
+    onClick={(event) => {
+      event.stopPropagation();
+      onOpen?.();
+    }}
+    onKeyDown={(event) => {
+      if (onOpen && (event.key === 'Enter' || event.key === ' ')) {
+        event.preventDefault();
+        onOpen();
+      }
+    }}
+  >
+    <Flexbox horizontal align={'center'} gap={7}>
+      <span className={styles.glyph} style={{ background: color.soft, color: color.line }}>
+        <Icon icon={icon} size={14} />
+      </span>
+      <Flexbox style={{ flex: 1, minWidth: 0 }}>
+        <span className={styles.cardTitle}>{title}</span>
+        <span className={cx(styles.cardTitle, styles.muted)} style={{ fontWeight: 400 }}>
+          {subtitle}
+        </span>
+      </Flexbox>
+    </Flexbox>
+  </div>
+));
+
+RetroLayer.displayName = 'GoalBatchRetroLayer';
+
+export interface BatchRetroData extends Record<string, unknown> {
+  onSelect: (nodeId: string) => void;
+  planSkill?: GoalRolloutPlanSkill;
+  retro: GoalRolloutRetro;
+  /** The plan node the experience layer opens. */
+  templateId?: string;
+  verifier?: GoalRolloutVerifier;
+}
+
+/**
+ * The retro after the trials, ahead of the gate: two layers distilled from what
+ * the trials ran into — experience into the plan skill every unit loads, and
+ * criteria into the verifier every unit is judged on. The gate opens on it.
+ */
+export const BatchRetroGroup = memo<NodeProps>(({ data }) => {
+  const { onSelect, planSkill, retro, templateId, verifier } = data as BatchRetroData;
+  const { t } = useTranslation('chat');
+  const status: GroupStatus =
+    retro.status === 'running'
+      ? { ...CELL_VISUAL.running, running: true, text: t('goalBatch.retro.status.running') }
+      : retro.status === 'blocked'
+        ? {
+            color: cssVar.colorError,
+            icon: TriangleAlert,
+            text: t('goalBatch.retro.status.blocked'),
+          }
+        : { ...CELL_VISUAL.done, text: t('goalBatch.retro.status.done') };
+  // Re-verifying the units is the gate's check; the retro answers for the interventions.
+  const foot = retro.interventions
+    ? t('goalBatch.retro.interventionsShort', retro.interventions)
+    : undefined;
+  const criteria = verifier?.criteria;
+  return (
+    <GroupShell
+      statusInHead
+      foot={foot}
+      hint={t('goalBatch.retro.hint')}
+      icon={NotebookPen}
+      iconColor={GATE_COLOR.line}
+      status={status}
+      title={
+        retro.wave === 0
+          ? t('goalBatch.retro.title')
+          : t('goalBatch.retro.titleWave', { wave: retro.wave })
+      }
+    >
+      <div className={styles.retroBody}>
+        <RetroLayer
+          color={SKILL_COLOR}
+          icon={SKILL_ICON}
+          title={t('goalBatch.retro.skill', { version: retro.skillVersion ?? 1 })}
+          subtitle={[
+            planSkill && `user-skills:${planSkill.name}`,
+            retro.skillChanges !== undefined &&
+              t('goalBatch.retro.changes', { count: retro.skillChanges }),
+          ]
+            .filter(Boolean)
+            .join(' · ')}
+          onOpen={templateId ? () => onSelect(templateId) : undefined}
+        />
+        <RetroLayer
+          color={{ line: cssVar.colorInfo, soft: cssVar.colorInfoBg }}
+          icon={ShieldCheck}
+          title={t('goalBatch.retro.verifier', { version: retro.verifierVersion ?? 1 })}
+          subtitle={[
+            criteria && t('goalBatch.retro.criteria', criteria),
+            retro.verifierChanges?.added &&
+              t('goalBatch.retro.added', { count: retro.verifierChanges.added }),
+            retro.verifierChanges?.loosened &&
+              t('goalBatch.retro.loosened', { count: retro.verifierChanges.loosened }),
+          ]
+            .filter(Boolean)
+            .join(' · ')}
+        />
+      </div>
+    </GroupShell>
+  );
+});
+
+BatchRetroGroup.displayName = 'GoalBatchRetroGroup';
 
 export interface BatchRoundFrameData extends Record<string, unknown> {
   revision: number;

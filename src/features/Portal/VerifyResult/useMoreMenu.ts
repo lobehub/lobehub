@@ -10,7 +10,7 @@ export const useVerifyResultMoreMenu = (): PortalMoreMenuConfig | undefined => {
   if (!operationId || !checkItemId) return;
 
   return {
-    // The plan item id — the handle `lh verify` commands and evidence take.
+    // The plan item id — the handle `lh acceptance` commands and evidence take.
     copyId: checkItemId,
     // Title reads the plan (state), the badge and body read the results — one replica entry.
     refresh: () => useVerifyStore.getState().refreshVerifyRun(operationId),

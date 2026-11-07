@@ -1,3 +1,5 @@
+import type { DocumentWriteSource } from '@lobechat/types';
+
 import type { LobeChatDatabase, Transaction } from '@/database/type';
 
 export type DocumentHistorySaveSource = 'autosave' | 'manual' | 'restore' | 'system' | 'llm_call';
@@ -18,11 +20,23 @@ export interface DocumentHistoryAccessOptions {
 }
 
 export interface DocumentHistoryListItem {
+  /** Agent that produced an `llm_call` version. */
+  agentId?: string | null;
+  /** Everyone whose edits this version records; absent on versions saved before attribution. */
+  editorIds?: string[] | null;
   id: string;
   isCurrent: boolean;
   savedAt: Date;
   saveSource: DocumentHistorySaveSource;
   userId: string;
+}
+
+/** Who a saved version is attributed to. */
+export interface DocumentHistoryAttribution {
+  agentId?: string;
+  editorIds?: string[];
+  /** Agent run behind an `llm_call` version; a run keeps a single version. */
+  operationId?: string;
 }
 
 export interface DocumentHistoryItemResult {
@@ -61,12 +75,26 @@ export interface UpdateDocumentParams {
   /** See `updateDocumentInputSchema.expectedUpdatedAt` — atomic version predicate. */
   expectedUpdatedAt?: Date;
   fileType?: string;
+  /** Attribution for the history version this save may append. */
+  history?: DocumentHistoryAttribution;
   lockOwnerId?: string;
   metadata?: Record<string, any>;
+  /**
+   * `room-projection`: the page's live collaboration room persisting its state.
+   * The CRDT already merged concurrent edits, so the edit lock does not apply,
+   * and the body is written as is instead of being routed back into the room.
+   */
+  origin?: 'room-projection';
   parentId?: string | null;
   restoreFromHistoryId?: string;
   saveSource?: DocumentHistorySaveSource;
   title?: string;
+  /**
+   * Who asked for the write; decides whether the per-document character limit
+   * applies. Defaults to `user`. Restores, rollbacks and other writes the user
+   * did not type pass `system`.
+   */
+  writeSource?: DocumentWriteSource;
 }
 
 export interface UpdateDocumentResult {

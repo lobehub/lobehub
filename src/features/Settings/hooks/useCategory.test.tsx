@@ -73,10 +73,14 @@ describe('settings useCategory', () => {
       SettingsTabs.Profile,
       SettingsTabs.Appearance,
       SettingsTabs.Hotkey,
+      SettingsTabs.Integrations,
     ]);
+    // Environments is there with no lab switch: a code environment is a
+    // definition, written down whether or not there is a drive to run it on.
     expect(generalGroup?.items.map((item) => item.key)).toEqual([
       SettingsTabs.Stats,
       SettingsTabs.Devices,
+      SettingsTabs.Environments,
     ]);
     expect(
       result.current.find((group) => group.key === SettingsGroupKey.Agent)?.items.map((i) => i.key),
@@ -113,18 +117,16 @@ describe('settings useCategory', () => {
     expect(getItemKeys()).not.toContain(SettingsTabs.OAuthApps);
   });
 
-  it('hides Integrations by default and shows it in the Account group once the Labs flag is on', () => {
-    expect(getItemKeys()).not.toContain(SettingsTabs.Integrations);
-
-    useUserStore.setState({
-      preference: {
-        ...initialUserStoreState.preference,
-        lab: { ...initialUserStoreState.preference.lab, enableIntegrations: true },
-      },
+  // The sandbox drives moved to Docs → Sandbox Storage; settings keep only the
+  // environment definitions.
+  it('keeps Environments in settings without a sandbox storage tab', () => {
+    const { result } = renderHook(() => useCategory(), {
+      wrapper: createWrapper(true, true),
     });
-    const { result } = renderHook(() => useCategory(), { wrapper: createWrapper(true) });
-    const accountGroup = result.current.find((group) => group.key === SettingsGroupKey.Account);
-    expect(accountGroup?.items.map((item) => item.key)).toContain(SettingsTabs.Integrations);
+    const generalGroup = result.current.find((group) => group.key === SettingsGroupKey.General);
+    const keys = generalGroup!.items.map((item) => item.key);
+    expect(keys).toContain(SettingsTabs.Environments);
+    expect(keys).not.toContain('drive');
   });
 
   it('shows OAuth Apps when the Labs preference is enabled', () => {

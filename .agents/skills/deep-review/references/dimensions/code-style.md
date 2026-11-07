@@ -20,7 +20,7 @@ Fragment-level readability and convention adherence. Look at each changed hunk i
 - Nesting ≥ 3 levels that early returns / lookup tables would flatten
 - Redundant or derivable state: a variable/state field that mirrors a prop or is computable from existing state — derive it (selector, `useMemo`, plain expression) instead of storing a second copy that can drift
 - Type looseness: `any`, runtime narrowing that the type signature hides, implicit contracts
-- File ballooning past \~800 lines without splitting
+- File ballooning past \~1200 lines without splitting
 
 ## Rule sources (deep mode: read before reviewing)
 

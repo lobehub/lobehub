@@ -38,10 +38,13 @@ interface RetainedWebview {
   host?: HTMLElement;
   interactionBridge?: HTMLDivElement;
   lastBoundsKey?: string;
+  /** Last panel size sent to the main process, so a fixed viewport refits on resize. */
+  lastPanelSizeKey?: string;
   lastUsedAt: number;
   ready: Promise<BrowserWebviewElement>;
   resizeObserver?: ResizeObserver;
   restoreInteraction?: () => void;
+  sessionId: string;
   syncBounds?: () => void;
   visible: boolean;
   webview: BrowserWebviewElement;
@@ -154,6 +157,7 @@ class BrowserWebviewRegistry {
     const retained: RetainedWebview = {
       lastUsedAt: Date.now(),
       ready,
+      sessionId,
       visible: false,
       webview,
     };
@@ -176,6 +180,17 @@ class BrowserWebviewRegistry {
       webContentsId: webview.getWebContentsId(),
     });
     if (!result.success) throw new Error(result.error || 'Failed to register browser webview');
+  }
+
+  private reportPanelSize(retained: RetainedWebview, bounds: DOMRect): void {
+    const height = Math.round(bounds.height);
+    const width = Math.round(bounds.width);
+    const sizeKey = `${width}x${height}`;
+    if (retained.lastPanelSizeKey === sizeKey) return;
+    retained.lastPanelSizeKey = sizeKey;
+    ensureElectronIpc()
+      .browserControl.reportPanelSize({ height, sessionId: retained.sessionId, width })
+      .catch(() => {});
   }
 
   private scheduleBoundsSync(retained: RetainedWebview): void {
@@ -235,6 +250,7 @@ class BrowserWebviewRegistry {
       top: `${bounds.top}px`,
       width: `${bounds.width}px`,
     });
+    this.reportPanelSize(retained, bounds);
     if (!retained.restoreInteraction) retained.webview.style.pointerEvents = 'auto';
     if (retained.interactionBridge) {
       const isRtl = getComputedStyle(retained.host).direction === 'rtl';
@@ -284,9 +300,9 @@ class BrowserWebviewRegistry {
     // to be replayed onto the panel's own resize handle. The handle drags on
     // pointer events and reads its origin from the first `pointerdown`, so a bare
     // `mousedown` starts nothing -- the whole gesture is forwarded instead.
-    const PointerEventCtor = (typeof PointerEvent === 'undefined'
-      ? MouseEvent
-      : PointerEvent) as typeof MouseEvent;
+    const PointerEventCtor = (
+      typeof PointerEvent === 'undefined' ? MouseEvent : PointerEvent
+    ) as typeof MouseEvent;
 
     // `replay` dispatches a bubbling event on the handle, which reaches this same
     // capture listener on the way back up to `window`. Re-entrancy is cut here:

@@ -129,6 +129,8 @@ const GateDetail = memo<GateDetailProps>(({ decide, graph, model, onOpenNode, ro
       case 'checking': {
         if (isCurrent && model.phase === 'plan_revision')
           return t('goalBatch.gatePanel.next.revising');
+        if (isCurrent && model.phase === 'plan_distill')
+          return t('goalBatch.gatePanel.next.distilling');
         return t('goalBatch.gatePanel.next.checking');
       }
       case 'locked': {

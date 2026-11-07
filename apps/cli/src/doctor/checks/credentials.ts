@@ -1,3 +1,4 @@
+import { agentRunMissingLoginReport, isInsideAgentRun } from '../../auth/refresh';
 import { maskSecret, pickAuthSource } from '../../auth/source';
 import { CLI_API_KEY_ENV } from '../../constants/auth';
 import { CLI_PRIMARY_BIN } from '../../constants/identity';
@@ -24,19 +25,22 @@ const credentialSource: DoctorCheck = {
       tokenType: source.tokenType,
     };
 
-    if (!source.token)
+    if (!source.token) {
+      if (isInsideAgentRun()) return { ...agentRunMissingLoginReport(), evidence, status: 'fail' };
+
       return {
         detail: 'No credential anywhere: no login on disk, no API key in the environment.',
         evidence,
         fix: `Run '${CLI_PRIMARY_BIN} login', or set ${CLI_API_KEY_ENV}.`,
         status: 'fail',
       };
+    }
 
     if (source.kind === 'env-jwt')
       return {
         detail: `Authenticating with the LOBEHUB_JWT in this environment (${maskSecret(source.token)}), not with the stored login.`,
         evidence,
-        fix: 'Expected? This is how server-dispatched runs authenticate. If not, unset LOBEHUB_JWT.',
+        fix: 'Expected? This is how server-dispatched runs authenticate. If not, unset LOBEHUB_JWT and LOBEHUB_JWT_FILE.',
         status: 'warn',
       };
 

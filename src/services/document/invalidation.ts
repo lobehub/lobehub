@@ -1,12 +1,12 @@
 import { revalidateReplica } from '@/libs/replica';
-import { mutate } from '@/libs/swr';
-import { portalKeys } from '@/libs/swr/keys';
 import {
   agentDocumentListResource,
   agentDocumentReaderKey,
   agentDocumentReaderResource,
 } from '@/store/agentDocument/projection';
 import { documentDetailResource } from '@/store/document/slices/document/projection';
+import { fileDocumentResource } from '@/store/file/slices/document/projection';
+import { resourceListResource } from '@/store/file/slices/resource/projection';
 import { notebookDocumentsResource } from '@/store/notebook/projection';
 import { pageDetailResource, pageListResource } from '@/store/page/projection';
 import { agentDocumentSkillsResource } from '@/store/tool/slices/agentDocumentSkills/projection';
@@ -20,13 +20,21 @@ export interface InvalidateDocumentMutationParams {
   documentId?: string;
   refreshDocumentEditor?: boolean;
   refreshPageDocuments?: boolean;
+  refreshResources?: boolean;
   topicId?: string;
 }
 
 export const invalidateDocumentMutation = async (
   params: InvalidateDocumentMutationParams,
 ): Promise<void> => {
-  const { agentId, documentId, refreshDocumentEditor, refreshPageDocuments, topicId } = params;
+  const {
+    agentId,
+    documentId,
+    refreshDocumentEditor,
+    refreshPageDocuments,
+    refreshResources,
+    topicId,
+  } = params;
   const revalidations: Promise<unknown>[] = [];
 
   if (documentId) {
@@ -35,16 +43,20 @@ export const invalidateDocumentMutation = async (
       // keyed by `document:editor`, so revalidate the replica instead.
       revalidations.push(revalidateReplica(documentDetailResource, documentId));
     }
-    // The page domain is a `@lobechat/replica` domain, so its by-id copy and
+    // The page domain is a `local-replica` domain, so its by-id copy and
     // its list sync through `replica:sync` keys rather than the SWR cache:
     // refresh them here or a rename / move would not reach the Pages sidebar or
     // the page header until a remount.
     revalidations.push(revalidateReplica(pageDetailResource, documentId));
-    revalidations.push(mutate(portalKeys.documentHeader(documentId)));
   }
 
   if (documentId || refreshPageDocuments) {
     revalidations.push(revalidateReplica(pageListResource));
+  }
+
+  if (refreshResources) {
+    if (documentId) revalidations.push(revalidateReplica(fileDocumentResource, documentId));
+    revalidations.push(revalidateReplica(resourceListResource));
   }
 
   if (topicId) {

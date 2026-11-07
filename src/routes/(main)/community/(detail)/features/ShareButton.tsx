@@ -4,8 +4,8 @@ import {
   Button,
   Center,
   CopyButton,
+  // oxlint-disable-next-line stylex-migration/no-emotion-styles -- ActionIcon renders its svg without a slot
   createStaticStyles,
-  cssVar,
   Flexbox,
   Icon,
   Input,
@@ -13,6 +13,8 @@ import {
   Tag,
   Text,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { startCase } from 'es-toolkit/compat';
 import { LinkIcon, Share2Icon } from 'lucide-react';
 import { type ComponentProps, type ReactNode } from 'react';
@@ -24,40 +26,21 @@ import { useShare } from '@/hooks/useShare';
 
 import CardBanner from '../../components/CardBanner';
 
-const styles = createStaticStyles(({ css, cssVar }) => {
-  return {
-    banner: css`
-      overflow: hidden;
-
-      border: 1px solid ${cssVar.colorBorderSecondary};
-      border-radius: ${cssVar.borderRadiusLG};
-
-      background: ${cssVar.colorBgContainer};
-      box-shadow: ${cssVar.boxShadowTertiary};
-    `,
-    copy: css`
-      background: ${cssVar.colorPrimary};
-
-      &:hover {
-        background: ${cssVar.colorPrimaryHover};
-      }
-    `,
-    icon: css`
-      border: 1px solid ${cssVar.colorFillSecondary};
-
-      svg {
-        fill: ${cssVar.colorTextSecondary};
-      }
-
-      &:hover {
-        border: 1px solid ${cssVar.colorBorderSecondary};
-
-        svg {
-          fill: ${cssVar.colorText};
-        }
-      }
-    `,
-  };
+const styles = stylex.create({
+  banner: {
+    overflow: 'hidden',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+    boxShadow: cssVar.boxShadowTertiary,
+  },
+  copy: {
+    backgroundColor: { 'default': cssVar.colorPrimary, ':hover': cssVar.colorPrimaryHover },
+    backgroundImage: 'none',
+  },
 });
 
 interface ShareButtonProps extends ComponentProps<typeof Button> {
@@ -70,6 +53,24 @@ interface ShareButtonProps extends ComponentProps<typeof Button> {
     url: string;
   };
 }
+
+const fallback = createStaticStyles(({ css }) => ({
+  icon: css`
+    border: 1px solid var(--lobe-color-fill-secondary);
+
+    svg {
+      fill: var(--lobe-color-text-secondary);
+    }
+
+    &:hover {
+      border: 1px solid var(--lobe-color-border-secondary);
+
+      svg {
+        fill: var(--lobe-color-text);
+      }
+    }
+  `,
+}));
 
 const ShareButton = memo<ShareButtonProps>(({ meta, ...rest }) => {
   const { x, reddit, telegram, whatsapp, mastodon, weibo } = useShare({
@@ -88,7 +89,7 @@ const ShareButton = memo<ShareButtonProps>(({ meta, ...rest }) => {
   if (meta) {
     content = (
       <Center gap={16} style={{ position: 'relative' }} width={'100%'}>
-        <Flexbox align={'center'} className={styles.banner} width={'100%'}>
+        <Flexbox align={'center'} className={stylex.props(styles.banner).className} width={'100%'}>
           <CardBanner avatar={meta.avatar} size={640} style={{ height: 72, marginBottom: -36 }} />
           <Center
             flex={'none'}
@@ -124,7 +125,7 @@ const ShareButton = memo<ShareButtonProps>(({ meta, ...rest }) => {
               item.icon && (
                 <a href={item.link} key={item.title} rel="noreferrer" target="_blank">
                   <ActionIcon
-                    className={styles.icon}
+                    className={fallback.icon}
                     icon={item.icon}
                     size={{ blockSize: 36, borderRadius: 18, size: 16 }}
                     title={item.title}
@@ -136,7 +137,7 @@ const ShareButton = memo<ShareButtonProps>(({ meta, ...rest }) => {
         <Flexbox horizontal align={'center'} gap={8} width={'100%'}>
           <Input value={meta.url} variant={'filled'} />
           <CopyButton
-            className={styles.copy}
+            className={stylex.props(styles.copy).className}
             color={cssVar.colorBgLayout}
             content={meta.url}
             icon={LinkIcon}

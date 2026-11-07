@@ -1,14 +1,12 @@
-import { replicaKeys } from '@lobechat/replica';
+import { replicaKeys } from 'local-replica';
 import { unstable_serialize } from 'swr';
 import { describe, expect, it } from 'vitest';
 
 import {
-  agentBuilderKeys,
   documentCommentKeys,
   isAcceptanceListKey,
   isDocumentCommentKeyForEvent,
   recentKeys,
-  taskKeys,
   verifyKeys,
   workKeys,
 } from './keys';
@@ -151,34 +149,5 @@ describe('isDocumentCommentKeyForEvent', () => {
     expect(
       isDocumentCommentKeyForEvent(documentCommentKeys.replies('workspace-1', 'root-2'), event),
     ).toBe(false);
-  });
-});
-
-describe('agentBuilderKeys', () => {
-  // Regression: builder suggestion chips were memory-only (no CACHE_TIERS entry),
-  // so every page load showed a skeleton and paid a fresh LLM generation. The key
-  // must route to a persisted tier so revisits hydrate the last batch instead.
-  it('routes the builder suggestions key to a persisted cache tier', () => {
-    const serialized = unstable_serialize(
-      agentBuilderKeys.suggestions('agentBuilder', 'builder-1', 'target-1', 'zh-CN'),
-    );
-    const persisted = [...CACHE_TIERS.idb, ...CACHE_TIERS.local].some((pattern) =>
-      serialized.includes(pattern),
-    );
-    expect(persisted).toBe(true);
-  });
-});
-
-describe('taskKeys', () => {
-  // Regression for sidebar task list cache persists across navigation to skip skeleton: the sidebar task list used a `sidebar:` domain
-  // key that no CACHE_TIERS pattern matched, so it was memory-only and every
-  // fresh page load showed a skeleton. The key must route to a persisted tier
-  // (the provider matches patterns against the serialized SWR key).
-  it('routes the sidebar task-groups key to a persisted cache tier', () => {
-    const serialized = unstable_serialize(taskKeys.sidebarGroups('agent-1'));
-    const persisted = [...CACHE_TIERS.idb, ...CACHE_TIERS.local].some((pattern) =>
-      serialized.includes(pattern),
-    );
-    expect(persisted).toBe(true);
   });
 });

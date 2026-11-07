@@ -8,9 +8,9 @@ import {
   useAskUserForm,
 } from '@lobechat/shared-tool-ui/ask-user';
 import type { BuiltinInterventionProps } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
-import { Alert, Button, Spin, Text } from '@lobehub/ui';
-import { memo, useCallback } from 'react';
+import { Flexbox, Icon, Spin, Text } from '@lobehub/ui';
+import { CircleAlert } from 'lucide-react';
+import { memo, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useConversationStore } from '@/features/Conversation/store';
@@ -57,6 +57,13 @@ const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestio
     writeDraft,
   });
 
+  useEffect(() => {
+    if (submissionPhase !== 'uncertain') return;
+    const reconcile = () => void checkQuestionSubmission(messageId, context);
+    window.addEventListener('online', reconcile);
+    return () => window.removeEventListener('online', reconcile);
+  }, [checkQuestionSubmission, context, messageId, submissionPhase]);
+
   // Read-only surfaces (resolved / historical messages) show a compact summary
   // of what was asked instead of the interactive form.
   if (interactionMode !== 'custom') {
@@ -92,17 +99,6 @@ const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestio
     );
   }
 
-  if (submissionPhase === 'uncertain') {
-    return (
-      <Flexbox gap={8} padding={8}>
-        <Text role="status">{t('askUserQuestion.uncertain')}</Text>
-        <Button onClick={() => checkQuestionSubmission(messageId, context)}>
-          {t('askUserQuestion.checkStatus')}
-        </Button>
-      </Flexbox>
-    );
-  }
-
   const labels = {
     customPlaceholder: t('askUserQuestion.customOption.placeholder'),
     escapeBack: t('askUserQuestion.escape.back'),
@@ -121,8 +117,10 @@ const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestio
 
   return (
     <Flexbox gap={8}>
-      {submissionPhase === 'failed' && (
-        <Alert title={t('askUserQuestion.submitFailed')} type="error" />
+      {(submissionPhase === 'failed' || submissionPhase === 'uncertain') && (
+        <Text fontSize={12} role="alert" type="danger">
+          <Icon icon={CircleAlert} size={14} /> {t('askUserQuestion.submitFailed')}
+        </Text>
       )}
       <AskUserQuestionView
         {...form}

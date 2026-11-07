@@ -185,6 +185,20 @@ describe('GatewayClient', () => {
       c.disconnect();
     });
 
+    it('should keep a public path prefix and ignore a trailing slash', () => {
+      const c = new GatewayClient({
+        autoReconnect: false,
+        gatewayUrl: 'https://edge.example.com/device-gateway/',
+        token: 'tok',
+      });
+      c.connect();
+      const ws = new URL((c as any).ws.url);
+      expect(`${ws.protocol}//${ws.host}${ws.pathname}`).toBe(
+        'wss://edge.example.com/device-gateway/ws',
+      );
+      c.disconnect();
+    });
+
     it('should include user agent header when provided', () => {
       const c = new GatewayClient({
         autoReconnect: false,
@@ -623,6 +637,19 @@ describe('GatewayClient', () => {
       await vi.advanceTimersByTimeAsync(30_000 * 5);
 
       expect(closeAll).toHaveBeenCalledWith('DEVICE_DISCONNECTED');
+    });
+
+    it('reports the tunnel host active count, and 0 when serving is off', () => {
+      vi.spyOn((client as any).tunnelHost, 'activeCount', 'get').mockReturnValue(2);
+      expect(client.activeTunnelCount).toBe(2);
+
+      const offClient = new GatewayClient({
+        autoReconnect: false,
+        gatewayUrl: 'https://gateway.test.com',
+        token: 'tok',
+        tunnel: false,
+      });
+      expect(offClient.activeTunnelCount).toBe(0);
     });
 
     it('answers tunnel_open with TUNNEL_DISABLED when serving is off', async () => {

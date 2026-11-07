@@ -15,6 +15,8 @@ import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
 import { isMacOS } from '@/utils/platform';
 
+import { useCloseMobileNavDrawer } from './MobileDrawerContext';
+
 export const TOGGLE_BUTTON_ID = 'toggle_left_panel_button';
 
 // On macOS desktop a persistent toggle lives in the titlebar (NavigationBar),
@@ -47,10 +49,23 @@ const ToggleLeftPanelButton = memo<ToggleLeftPanelButtonProps>(
       s.toggleLeftPanel,
     ]);
     const hotkey = useUserStore(settingsSelectors.getHotkeyById(HotkeyEnum.ToggleLeftPanel));
+    const closeMobileDrawer = useCloseMobileNavDrawer();
 
     const { t } = useTranslation(['chat', 'hotkey']);
 
     if (isMacDesktop && !forceVisible) return null;
+
+    // Inside the mobile nav drawer there is no left panel to toggle: the
+    // sidebar is the drawer, so the collapse button closes it.
+    if (closeMobileDrawer)
+      return (
+        <ActionIcon
+          icon={PanelLeftClose}
+          size={size || DESKTOP_HEADER_ICON_SMALL_SIZE}
+          title={title || t('toggleLeftPanel.title', { ns: 'hotkey' })}
+          onClick={closeMobileDrawer}
+        />
+      );
 
     return (
       <ActionIcon

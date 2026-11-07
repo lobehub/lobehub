@@ -4,8 +4,10 @@ import { BaseController } from '../common/base.controller';
 import { TaskRestService } from '../services/task.service';
 import type {
   CreateTaskRequest,
+  RunTaskRequest,
   TaskIdParam,
   TaskListQuery,
+  TaskRunListQuery,
   UpdateTaskRequest,
   UpdateTaskStatusRequest,
 } from '../types/task.type';
@@ -68,6 +70,30 @@ export class TaskController extends BaseController {
       const body = await this.getBody<UpdateTaskStatusRequest>(c);
       const service = await this.service(c);
       return this.success(c, await service.updateTaskStatus(id, body), 'Task status updated');
+    } catch (error) {
+      return this.handleError(c, error);
+    }
+  }
+
+  /** POST /api/v1/tasks/:id/runs */
+  async runTask(c: Context): Promise<Response> {
+    try {
+      const { id } = this.getParams<TaskIdParam>(c);
+      const body = await this.getBody<RunTaskRequest>(c);
+      const service = await this.service(c);
+      return this.success(c, await service.runTask(id, body ?? {}), 'Task run started', 202);
+    } catch (error) {
+      return this.handleError(c, error);
+    }
+  }
+
+  /** GET /api/v1/tasks/:id/runs */
+  async listRuns(c: Context): Promise<Response> {
+    try {
+      const { id } = this.getParams<TaskIdParam>(c);
+      const query = this.getQuery<TaskRunListQuery>(c);
+      const service = await this.service(c);
+      return this.success(c, await service.listRuns(id, query), 'Task runs retrieved successfully');
     } catch (error) {
       return this.handleError(c, error);
     }

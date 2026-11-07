@@ -37,8 +37,10 @@ import { deviceGateway } from '../deviceGateway';
 import { GoalCriteriaGeneratorService } from './criteriaGenerator';
 import { GoalService } from './index';
 import { decideFailedTurn, GoalManagerService, MAX_FAILED_MANAGER_TURNS } from './manager';
+import { withoutGoalReport } from './report';
 import * as scheduler from './scheduler';
 import { GoalStartService } from './start';
+import { answerDistill, pendingRelease as heldRelease } from './testUtils';
 import { GoalWaitService } from './wait';
 
 vi.mock('@/database/core/db-adaptor', () => ({ getServerDB: () => db }));
@@ -847,6 +849,34 @@ describe('CLI main Agent planning', () => {
 
     expect(vi.mocked(AiAgentService.prototype.execAgent)).toHaveBeenCalledTimes(1);
     expect((await model().findById(id))!.config!.managerState!.turns).toBe(turnsBefore);
+  });
+
+  it('claims the next turn on a Goal that carries a wrap-up report node', async () => {
+    // Regression: the coordinator hands the manager its report-free view, but the
+    // claim re-read the full graph and compared their snapshots. With a report
+    // node they never matched, so every advance answered "Another advance owns
+    // the planning turn" and queued itself again five seconds later, forever.
+    const { id, op } = await start();
+    await ops().recordCompletion(op.id, { status: 'done' });
+    expect((await service().tick(id)).outcome).toBe('advanced');
+    const reportNode = await new GoalGraphModel(db, userId).createNode(id, {
+      kind: 'task',
+      title: 'Write the Goal report',
+    });
+    const row = (await model().findById(id))!;
+    await db
+      .update(goals)
+      .set({ config: { ...row.config, report: { nodeId: reportNode.id } } as GoalConfig })
+      .where(eq(goals.id, id));
+    const turnsBefore = (await model().findById(id))!.config!.managerState!.turns;
+
+    const result = await manager().advance(withoutGoalReport(await service().graph(id)), {
+      mayStartTurn: true,
+    });
+
+    expect(result?.message).toBe('Main Agent dispatched with CLI planning access');
+    expect(vi.mocked(AiAgentService.prototype.execAgent)).toHaveBeenCalledTimes(2);
+    expect((await model().findById(id))!.config!.managerState!.turns).toBe(turnsBefore + 1);
   });
 
   it('opens the next planning turn in the new supervisor history after a handoff', async () => {
@@ -1972,13 +2002,10 @@ describe('a batch the main Agent declares', () => {
     await service().tick(started.id);
     const probes = (await service().graph(started.id)).nodes.filter((n) => n.kind === 'task');
     await settle(probes.map((n) => n.id));
-    await service().tick(started.id);
+    await answerDistill(service(), db, userId, started.id, batchPlan.rollout.recipe);
     return started;
   };
-  const pendingRelease = async (id: string) =>
-    (await service().graph(id)).decisions.find(
-      (d) => d.status === 'pending' && d.options?.some((option) => option.id === 'release'),
-    );
+  const pendingRelease = (id: string) => heldRelease(service(), id);
   const approve = async (id: string) => {
     const pending = await pendingRelease(id);
     expect(pending).toBeDefined();
@@ -1996,12 +2023,12 @@ describe('a batch the main Agent declares', () => {
     return { op: op!, state };
   };
 
-  it('holds the first wave for the owner, without starting a planning turn', async () => {
-    const { id, state } = await probesPassed();
+  it('holds the first wave for the owner once the probes taught the plan', async () => {
+    const { id } = await probesPassed();
 
     expect((await service().graph(id)).nodes.some((n) => n.title === 'Project skills')).toBe(false);
     expect(await pendingRelease(id)).toBeDefined();
-    expect((await model().findById(id))!.config!.managerState!.token).toBe(state.token);
+    expect((await model().findById(id))!.config!.managerState!.problemKind).toBe('rollout_distill');
 
     await approve(id);
 
@@ -2084,7 +2111,7 @@ describe('a batch the main Agent declares', () => {
     return { op: op!, state };
   };
 
-  it('sends a plan the owner sent back to the main Agent, and reviews its rewrite in the same round', async () => {
+  it('sends a plan the owner sent back to the main Agent, and re-runs the experiments on its rewrite in the same round', async () => {
     const { id } = await probesPassed();
     const pending = await pendingRelease(id);
 
@@ -2112,19 +2139,19 @@ describe('a batch the main Agent declares', () => {
     await service().tick(id);
 
     const after = (await model().findById(id))!.config!;
-    // A rewrite revises the plan, not the experiments: still round 1, no new probes.
-    expect(after.rolloutState).toMatchObject({
-      phase: 'release_review',
-      probeNodeIds: held.config!.rolloutState!.probeNodeIds,
-      templateRevision: 1,
-    });
+    // The experiments the correction judged run again on the rewrite, in round 1.
+    const reruns = after.rolloutState!.probeNodeIds;
+    expect(after.rolloutState).toMatchObject({ phase: 'probe', templateRevision: 1 });
+    expect(reruns).toHaveLength(held.config!.rolloutState!.probeNodeIds.length);
+    expect(reruns.some((n) => held.config!.rolloutState!.probeNodeIds.includes(n))).toBe(false);
     expect(after.rolloutState!.pendingRevision).toBeUndefined();
     // The rewrite replaces the plan; the correction is not pasted under it.
     expect(after.rollout!.spec!.recipeOutline).toBe(recipe);
-    // The rewritten plan goes back to the owner for the same release.
-    const again = await pendingRelease(id);
-    expect(again).toBeDefined();
-    expect(again!.nodeId).not.toBe(pending!.nodeId);
+    // Their results, not the old ones, go back to the owner for the release.
+    await settle(reruns);
+    // The re-run units are new probes: they teach the plan again before the review.
+    await answerDistill(service(), db, userId, id, recipe);
+    expect((await pendingRelease(id))!.nodeId).not.toBe(pending!.nodeId);
   });
 
   it('takes only a rewrite on a revise turn, and hands the revision over again when none came', async () => {

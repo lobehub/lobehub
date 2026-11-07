@@ -9,6 +9,18 @@ import { DocumentModel } from '../document';
 import { DocumentHistoryModel } from '../documentHistory';
 import { FileModel } from '../file';
 
+const createTaggedHistory = (
+  documentId: string,
+  tag: number,
+  saveSource: Parameters<DocumentHistoryModel['create']>[0]['saveSource'],
+  savedAt: Date,
+): Parameters<DocumentHistoryModel['create']>[0] => ({
+  documentId,
+  editorData: { tag },
+  saveSource,
+  savedAt,
+});
+
 const serverDB: LobeChatDatabase = await getTestDB();
 
 const userId = 'document-history-model-test-user-id';
@@ -107,24 +119,15 @@ describe('DocumentHistoryModel', () => {
     it('should return document history rows ordered by savedAt descending', async () => {
       const documentId = await createTestDocument(documentModel, fileModel, 'Initial content');
 
-      await historyModel.create({
-        documentId,
-        editorData: { tag: 1 },
-        saveSource: 'autosave',
-        savedAt: new Date('2026-04-11T00:00:01.000Z'),
-      });
-      await historyModel.create({
-        documentId,
-        editorData: { tag: 2 },
-        saveSource: 'manual',
-        savedAt: new Date('2026-04-11T00:00:02.000Z'),
-      });
-      await historyModel.create({
-        documentId,
-        editorData: { tag: 3 },
-        saveSource: 'restore',
-        savedAt: new Date('2026-04-11T00:00:03.000Z'),
-      });
+      await historyModel.create(
+        createTaggedHistory(documentId, 1, 'autosave', new Date('2026-04-11T00:00:01.000Z')),
+      );
+      await historyModel.create(
+        createTaggedHistory(documentId, 2, 'manual', new Date('2026-04-11T00:00:02.000Z')),
+      );
+      await historyModel.create(
+        createTaggedHistory(documentId, 3, 'restore', new Date('2026-04-11T00:00:03.000Z')),
+      );
 
       const rows = await historyModel.list({ documentId });
 
@@ -135,24 +138,15 @@ describe('DocumentHistoryModel', () => {
     it('should support pagination via beforeSavedAt and limit', async () => {
       const documentId = await createTestDocument(documentModel, fileModel, 'Initial content');
 
-      await historyModel.create({
-        documentId,
-        editorData: { tag: 1 },
-        saveSource: 'autosave',
-        savedAt: new Date('2026-04-11T00:00:01.000Z'),
-      });
-      await historyModel.create({
-        documentId,
-        editorData: { tag: 2 },
-        saveSource: 'manual',
-        savedAt: new Date('2026-04-11T00:00:02.000Z'),
-      });
-      await historyModel.create({
-        documentId,
-        editorData: { tag: 3 },
-        saveSource: 'restore',
-        savedAt: new Date('2026-04-11T00:00:03.000Z'),
-      });
+      await historyModel.create(
+        createTaggedHistory(documentId, 1, 'autosave', new Date('2026-04-11T00:00:01.000Z')),
+      );
+      await historyModel.create(
+        createTaggedHistory(documentId, 2, 'manual', new Date('2026-04-11T00:00:02.000Z')),
+      );
+      await historyModel.create(
+        createTaggedHistory(documentId, 3, 'restore', new Date('2026-04-11T00:00:03.000Z')),
+      );
 
       const anchored = await historyModel.list({
         beforeSavedAt: new Date('2026-04-11T00:00:03.000Z'),
@@ -168,18 +162,12 @@ describe('DocumentHistoryModel', () => {
     it('should return the most recent history row by savedAt', async () => {
       const documentId = await createTestDocument(documentModel, fileModel, 'Initial content');
 
-      await historyModel.create({
-        documentId,
-        editorData: { tag: 1 },
-        saveSource: 'manual',
-        savedAt: new Date('2026-04-11T00:00:01.000Z'),
-      });
-      const latest = await historyModel.create({
-        documentId,
-        editorData: { tag: 2 },
-        saveSource: 'manual',
-        savedAt: new Date('2026-04-11T00:00:02.000Z'),
-      });
+      await historyModel.create(
+        createTaggedHistory(documentId, 1, 'manual', new Date('2026-04-11T00:00:01.000Z')),
+      );
+      const latest = await historyModel.create(
+        createTaggedHistory(documentId, 2, 'manual', new Date('2026-04-11T00:00:02.000Z')),
+      );
 
       const row = await historyModel.findLatestByDocumentId(documentId);
       expect(row?.id).toBe(latest.id);
@@ -191,18 +179,12 @@ describe('DocumentHistoryModel', () => {
       const documentId = await createTestDocument(documentModel, fileModel, 'Initial content');
       const otherDocumentId = await createTestDocument(documentModel2, fileModel2, 'Other content');
 
-      const created = await historyModel.create({
-        documentId,
-        editorData: { tag: 1 },
-        saveSource: 'manual',
-        savedAt: new Date('2026-04-11T00:00:01.000Z'),
-      });
-      const otherCreated = await historyModel2.create({
-        documentId: otherDocumentId,
-        editorData: { tag: 1 },
-        saveSource: 'manual',
-        savedAt: new Date('2026-04-11T00:00:01.000Z'),
-      });
+      const created = await historyModel.create(
+        createTaggedHistory(documentId, 1, 'manual', new Date('2026-04-11T00:00:01.000Z')),
+      );
+      const otherCreated = await historyModel2.create(
+        createTaggedHistory(otherDocumentId, 1, 'manual', new Date('2026-04-11T00:00:01.000Z')),
+      );
 
       await historyModel.delete(created.id);
 
@@ -217,24 +199,15 @@ describe('DocumentHistoryModel', () => {
       const documentId = await createTestDocument(documentModel, fileModel, 'Initial content');
       const otherDocumentId = await createTestDocument(documentModel2, fileModel2, 'Other content');
 
-      await historyModel.create({
-        documentId,
-        editorData: { tag: 1 },
-        saveSource: 'manual',
-        savedAt: new Date('2026-04-11T00:00:01.000Z'),
-      });
-      await historyModel.create({
-        documentId,
-        editorData: { tag: 2 },
-        saveSource: 'manual',
-        savedAt: new Date('2026-04-11T00:00:02.000Z'),
-      });
-      await historyModel2.create({
-        documentId: otherDocumentId,
-        editorData: { tag: 1 },
-        saveSource: 'manual',
-        savedAt: new Date('2026-04-11T00:00:01.000Z'),
-      });
+      await historyModel.create(
+        createTaggedHistory(documentId, 1, 'manual', new Date('2026-04-11T00:00:01.000Z')),
+      );
+      await historyModel.create(
+        createTaggedHistory(documentId, 2, 'manual', new Date('2026-04-11T00:00:02.000Z')),
+      );
+      await historyModel2.create(
+        createTaggedHistory(otherDocumentId, 1, 'manual', new Date('2026-04-11T00:00:01.000Z')),
+      );
 
       await historyModel.deleteByDocumentId(documentId);
 
@@ -251,18 +224,12 @@ describe('DocumentHistoryModel', () => {
       const documentId = await createTestDocument(documentModel, fileModel, 'Initial content');
       const otherDocumentId = await createTestDocument(documentModel2, fileModel2, 'Other content');
 
-      const first = await historyModel.create({
-        documentId,
-        editorData: { tag: 1 },
-        saveSource: 'manual',
-        savedAt: new Date('2026-04-11T00:00:01.000Z'),
-      });
-      await historyModel2.create({
-        documentId: otherDocumentId,
-        editorData: { tag: 1 },
-        saveSource: 'manual',
-        savedAt: new Date('2026-04-11T00:00:01.000Z'),
-      });
+      const first = await historyModel.create(
+        createTaggedHistory(documentId, 1, 'manual', new Date('2026-04-11T00:00:01.000Z')),
+      );
+      await historyModel2.create(
+        createTaggedHistory(otherDocumentId, 1, 'manual', new Date('2026-04-11T00:00:01.000Z')),
+      );
 
       const rows = await historyModel.list({ documentId });
       const otherRows = await historyModel2.list({ documentId: otherDocumentId });
@@ -279,18 +246,12 @@ describe('DocumentHistoryModel.deleteAll', () => {
     const documentId = await createTestDocument(documentModel, fileModel, 'Initial content');
     const otherDocumentId = await createTestDocument(documentModel2, fileModel2, 'Other content');
 
-    await historyModel.create({
-      documentId,
-      editorData: { tag: 1 },
-      saveSource: 'manual',
-      savedAt: new Date('2026-04-11T00:00:01.000Z'),
-    });
-    await historyModel2.create({
-      documentId: otherDocumentId,
-      editorData: { tag: 1 },
-      saveSource: 'manual',
-      savedAt: new Date('2026-04-11T00:00:01.000Z'),
-    });
+    await historyModel.create(
+      createTaggedHistory(documentId, 1, 'manual', new Date('2026-04-11T00:00:01.000Z')),
+    );
+    await historyModel2.create(
+      createTaggedHistory(otherDocumentId, 1, 'manual', new Date('2026-04-11T00:00:01.000Z')),
+    );
 
     await historyModel.deleteAll();
 
@@ -303,12 +264,9 @@ describe('DocumentHistoryModel.query', () => {
   it('should mirror list', async () => {
     const documentId = await createTestDocument(documentModel, fileModel, 'Initial content');
 
-    await historyModel.create({
-      documentId,
-      editorData: { tag: 1 },
-      saveSource: 'manual',
-      savedAt: new Date('2026-04-11T00:00:01.000Z'),
-    });
+    await historyModel.create(
+      createTaggedHistory(documentId, 1, 'manual', new Date('2026-04-11T00:00:01.000Z')),
+    );
 
     const rows = await historyModel.query({ documentId });
     expect(rows).toHaveLength(1);

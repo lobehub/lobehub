@@ -1,17 +1,38 @@
 'use client';
 
-import { copyToClipboard, Flexbox } from '@lobehub/ui';
-import { ActionIcon, Text, toast } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { ActionIcon, copyToClipboard, createStaticStyles, Flexbox, Text, toast } from '@lobehub/ui';
 import { LinkIcon } from 'lucide-react';
-import { type CSSProperties, type ReactNode } from 'react';
+import { type ComponentType, type CSSProperties, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { ShareHeaderMenu, ShareLogoLink } from '@/business/client/features/ShareChrome';
+import * as ShareChrome from '@/business/client/features/ShareChrome';
 import { ProductLogo } from '@/components/Branding';
 import Loading from '@/components/Loading/BrandTextLoading';
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
-import ShareErrorView from '@/features/Share/ErrorView';
+import ShareErrorView, { type ShareNotFoundCopy } from '@/features/Share/ErrorView';
+
+type HeaderActionsProps = {
+  actions?: ReactNode;
+  compactActions?: { key: string; label: string; onClick: () => void }[];
+  copyLink?: ReactNode;
+};
+
+// The OSS build can be overlaid with Cloud main before its companion PR lands.
+// Read the optional extension at runtime so that older overlays still build.
+const ShareHeaderActions = (props: HeaderActionsProps) => {
+  const Extension = Reflect.get(ShareChrome, 'ShareHeaderActions') as
+    ComponentType<HeaderActionsProps> | undefined;
+  return Extension ? (
+    <Extension {...props} />
+  ) : (
+    <>
+      {props.actions}
+      {props.copyLink}
+      <ShareChrome.ShareHeaderMenu />
+    </>
+  );
+};
+const ShareLogoLink = ShareChrome.ShareLogoLink;
 
 const HEADER_HEIGHT = 44;
 const GUTTER_MIN_WIDTH = 316;
@@ -106,9 +127,12 @@ export interface ShareLayoutProps {
   actions?: ReactNode;
   aside?: ReactNode;
   children?: ReactNode;
+  compactActions?: { key: string; label: string; onClick: () => void }[];
   contentWidth?: number;
   error?: unknown;
   loading?: boolean;
+  /** Copy for a missing share; the error view defaults to the topic wording. */
+  notFound?: ShareNotFoundCopy;
   title?: string | null;
 }
 
@@ -133,15 +157,17 @@ const CopyLinkAction = () => {
 
 const ShareLayout = ({
   actions,
+  compactActions,
   aside,
   children,
   contentWidth,
   error,
   loading,
+  notFound,
   title,
 }: ShareLayoutProps) => {
   let body = children;
-  if (error) body = <ShareErrorView error={error} />;
+  if (error) body = <ShareErrorView error={error} notFound={notFound} />;
   else if (loading) body = <Loading debugId="share layout" />;
 
   const laneStyle = contentWidth
@@ -174,9 +200,11 @@ const ShareLayout = ({
             )}
           </div>
           <Flexbox horizontal align={'center'} flex={'none'} gap={2}>
-            {!error && !loading && actions}
-            {!error && <CopyLinkAction />}
-            <ShareHeaderMenu />
+            <ShareHeaderActions
+              actions={!error && !loading ? actions : undefined}
+              compactActions={!error && !loading ? compactActions : undefined}
+              copyLink={!error ? <CopyLinkAction /> : undefined}
+            />
           </Flexbox>
         </header>
         <Flexbox className={styles.body} flex={1}>

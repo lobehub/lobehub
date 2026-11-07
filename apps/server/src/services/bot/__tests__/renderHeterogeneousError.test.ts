@@ -46,8 +46,9 @@ describe('heterogeneous IM errors', () => {
         resetsAt: 1789826400,
       },
     );
-    expect(reply).toContain('本周额度已用完');
-    expect(reply).toContain('2026-09-19 14:00');
+    expect(reply).toContain('Weekly allowance exhausted.');
+    expect(reply).toContain('Quota resets at 2026-09-19 14:00 (UTC).');
+    expect(reply).toContain('Error code: `H2001`');
     expect(reply).toContain('UTC');
     expect(reply).not.toContain('E8001');
   });

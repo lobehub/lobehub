@@ -4,8 +4,6 @@ import {
   ActionIcon,
   Button,
   createModal,
-  createStaticStyles,
-  cssVar,
   DropdownMenu,
   Flexbox,
   ModalClose,
@@ -15,6 +13,8 @@ import {
   Text,
   toast,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import type { LucideIcon } from 'lucide-react';
 import {
   ArchiveIcon,
@@ -58,60 +58,38 @@ const Content = dynamic(() => import('./Content'), {
   ssr: false,
 });
 
-const styles = createStaticStyles(({ css }) => ({
-  body: css`
-    overflow: hidden;
-    min-height: 0;
-  `,
-  categoryList: css`
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    flex: 1;
-  `,
-  // Dividers inside this modal use colorFillSecondary, not colorBorderSecondary.
-  // In the dark palette colorBorderSecondary and colorBgElevated are the same
-  // step of the neutral scale, so every border drawn on the modal's own surface
-  // resolves to the surface colour and disappears — the panel reads as one
-  // undifferentiated block. colorFillSecondary is alpha-based, so it lands on
-  // #f0f0f0 over the light surface (identical to what the border token gave)
-  // and stays visible over the dark one.
-  header: css`
-    flex: none;
-    gap: 0;
-    padding: 0;
-    border-block-end: 1px solid ${cssVar.colorFillSecondary};
-  `,
-  headerMain: css`
-    min-width: 0;
-    padding-block: 12px;
-    padding-inline: 16px;
-  `,
-  headerTitle: css`
-    flex: none;
-
-    box-sizing: border-box;
-    width: clamp(160px, 22vw, 220px);
-    padding-inline: 16px;
-
-    white-space: nowrap;
-  `,
-  main: css`
-    overflow: hidden;
-    min-width: 0;
-  `,
-  root: css`
-    overflow: hidden;
-  `,
-  sidebar: css`
-    overflow: hidden;
-    flex: none;
-
-    box-sizing: border-box;
-    width: clamp(160px, 22vw, 220px);
-    padding: 8px;
-    border-inline-end: 1px solid ${cssVar.colorFillSecondary};
-  `,
-}));
+const styles = stylex.create({
+  body: { overflow: 'hidden', minHeight: '0' },
+  categoryList: { overflowY: 'auto', overscrollBehavior: 'contain', flex: '1' },
+  header: {
+    flex: 'none',
+    gap: '0',
+    padding: '0',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorFillSecondary,
+  },
+  headerMain: { minWidth: '0', paddingBlock: '12px', paddingInline: '16px' },
+  headerTitle: {
+    flex: 'none',
+    boxSizing: 'border-box',
+    width: 'clamp(160px, 22vw, 220px)',
+    paddingInline: '16px',
+    whiteSpace: 'nowrap',
+  },
+  main: { overflow: 'hidden', minWidth: '0' },
+  root: { overflow: 'hidden' },
+  sidebar: {
+    overflow: 'hidden',
+    flex: 'none',
+    boxSizing: 'border-box',
+    width: 'clamp(160px, 22vw, 220px)',
+    padding: '8px',
+    borderInlineEndWidth: '1px',
+    borderInlineEndStyle: 'solid',
+    borderInlineEndColor: cssVar.colorFillSecondary,
+  },
+});
 
 interface CategoryCount {
   category: string;
@@ -325,15 +303,15 @@ const InboxModalContent = memo(() => {
   // would visibly do nothing — keep it disabled then.
   const archivableTotalCount = Math.max(0, allTotalCount - liveTransferCount);
   return (
-    <Flexbox className={styles.root} height={'100%'}>
-      <ModalHeader className={styles.header}>
-        <Flexbox className={styles.headerTitle} justify="center">
+    <Flexbox className={stylex.props(styles.root).className} height={'100%'}>
+      <ModalHeader className={stylex.props(styles.header).className}>
+        <Flexbox className={stylex.props(styles.headerTitle).className} justify="center">
           <ModalTitle>{t('inbox.title')}</ModalTitle>
         </Flexbox>
         <Flexbox
           horizontal
           align="center"
-          className={styles.headerMain}
+          className={stylex.props(styles.headerMain).className}
           flex={1}
           justify="space-between"
         >
@@ -393,8 +371,8 @@ const InboxModalContent = memo(() => {
           </Flexbox>
         </Flexbox>
       </ModalHeader>
-      <Flexbox horizontal className={styles.body} flex={1}>
-        <Flexbox className={styles.sidebar} gap={4}>
+      <Flexbox horizontal className={stylex.props(styles.body).className} flex={1}>
+        <Flexbox className={stylex.props(styles.sidebar).className} gap={4}>
           <NavItem
             active={navigationFilter === ALL_FILTER}
             icon={BellIcon}
@@ -408,7 +386,7 @@ const InboxModalContent = memo(() => {
             }
             onClick={() => setNavigationFilter(ALL_FILTER)}
           />
-          <Flexbox className={styles.categoryList} gap={4}>
+          <Flexbox className={stylex.props(styles.categoryList).className} gap={4}>
             {isNavigationCountsLoading ? (
               <SkeletonList rows={4} />
             ) : (
@@ -445,7 +423,7 @@ const InboxModalContent = memo(() => {
             )}
           </Flexbox>
         </Flexbox>
-        <Flexbox className={styles.main} flex={1}>
+        <Flexbox className={stylex.props(styles.main).className} flex={1}>
           <Flexbox flex={1} style={{ minHeight: 0 }}>
             <Content
               category={category}

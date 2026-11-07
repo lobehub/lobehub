@@ -1,5 +1,7 @@
 import { type ChatFileChunk } from '@lobechat/types';
-import { createStaticStyles, cssVar, cx, Flexbox, Icon } from '@lobehub/ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { BookOpenTextIcon, ChevronDown, ChevronRight } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -8,39 +10,23 @@ import { useIsDark } from '@/hooks/useIsDark';
 
 import ChunkItem from './ChunkItem';
 
-const styles = createStaticStyles(({ css }) => ({
-  container: css`
-    cursor: pointer;
-
-    padding-block: 8px;
-    padding-inline: 12px;
-    padding-inline-end: 12px;
-    border-radius: 8px;
-
-    color: ${cssVar.colorText};
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  containerDark: css`
-    &:hover {
-      background: '';
-    }
-  `,
-  containerLight: css`
-    &:hover {
-      background: ${cssVar.colorFillSecondary};
-    }
-  `,
-  title: css`
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 1;
-
-    font-size: 12px;
-    text-overflow: ellipsis;
-  `,
-}));
+const styles = stylex.create({
+  container: {
+    cursor: 'pointer',
+    paddingBlock: '8px',
+    paddingInline: '12px',
+    borderRadius: '8px',
+    color: cssVar.colorText,
+  },
+  containerDark: {
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+  containerLight: {
+    backgroundColor: { 'default': cssVar.colorFillTertiary, ':hover': cssVar.colorFillSecondary },
+    backgroundImage: 'none',
+  },
+});
 
 interface FileChunksProps {
   data: ChatFileChunk[];
@@ -54,9 +40,12 @@ const FileChunks = memo<FileChunksProps>(({ data }) => {
 
   return (
     <Flexbox
-      className={cx(styles.container, isDarkMode ? styles.containerDark : styles.containerLight)}
       gap={16}
       width={'100%'}
+      className={
+        stylex.props(styles.container, isDarkMode ? styles.containerDark : styles.containerLight)
+          .className
+      }
       onClick={() => {
         setShowDetail(!showDetail);
       }}

@@ -3,9 +3,7 @@
 import { Center, Empty, Flexbox, Markdown, Skeleton } from '@lobehub/ui';
 import { memo } from 'react';
 
-import { useClientDataSWR } from '@/libs/swr';
-import { portalKeys } from '@/libs/swr/keys';
-import { documentService } from '@/services/document';
+import { useDocumentStore } from '@/store/document';
 
 interface PagePreviewProps {
   id: string;
@@ -16,10 +14,10 @@ interface PagePreviewProps {
  * file URL, so render the document's Markdown content instead of FileViewer.
  */
 const PagePreview = memo<PagePreviewProps>(({ id }) => {
-  const { data: document, isLoading } = useClientDataSWR(portalKeys.documentHeader(id), () =>
-    documentService.getDocumentById(id),
-  );
+  const useFetchDocumentDetail = useDocumentStore((s) => s.useFetchDocumentDetail);
+  const { data: document, isHydrated, isLoading } = useFetchDocumentDetail(id);
 
+  if (isLoading && !isHydrated) return null;
   if (isLoading)
     return (
       <Flexbox padding={24}>

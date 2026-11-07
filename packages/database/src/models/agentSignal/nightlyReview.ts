@@ -20,6 +20,7 @@ import type { LobeChatDatabase } from '../../type';
 import { normalizeInboxAgentTitle } from '../../utils/inboxAgent';
 import { notShareVisitorMessage } from '../../utils/shareVisitor';
 import { notTrashed } from '../../utils/softDelete';
+import { notChannelTopicRef } from '../../utils/topicVisibility';
 
 /** Restores the cursor timestamp inside PostgreSQL so workflow JSON never truncates its precision. */
 const cursorUsers = alias(users, 'nightly_review_cursor_users');
@@ -334,6 +335,8 @@ export class AgentSignalNightlyReviewModel {
           // Share-visitor traffic bills to the creator but is not the
           // creator's own activity — keep it out of the nightly digest.
           notShareVisitorMessage(),
+          // Channel runs carry other members' Channel content; it stays in the Channel.
+          notChannelTopicRef(messages.topicId),
           agentFilter,
           gte(messages.createdAt, options.windowStart),
           lte(messages.createdAt, options.windowEnd),

@@ -17,7 +17,11 @@ import { useElectronStore } from '@/store/electron';
 
 import { useTopicId } from '../hooks/useTopicId';
 import GitStatus from './GitStatus';
-import { useActiveProjectDirectoryTopicId } from './useProjectTopicDirectory';
+import StagedBranchStatus from './StagedBranchStatus';
+import {
+  useActiveProjectDirectoryTopicId,
+  useStagedProjectDirectoryId,
+} from './useProjectTopicDirectory';
 import { useRepoType } from './useRepoType';
 import WorkingDirectoryPicker from './WorkingDirectoryPicker';
 
@@ -118,11 +122,22 @@ const WorkingDirectorySectionInner = memo<WorkingDirectorySectionProps>(({ agent
 
 WorkingDirectorySectionInner.displayName = 'WorkingDirectorySectionInner';
 
-const WorkingDirectorySection = memo<WorkingDirectorySectionProps>(({ agentId }) => (
-  <SafeBoundary minHeight={22} resetKeys={[agentId]}>
-    <WorkingDirectorySectionInner agentId={agentId} />
-  </SafeBoundary>
-));
+const WorkingDirectorySection = memo<WorkingDirectorySectionProps>(({ agentId }) => {
+  // A blank conversation staged in a project directory runs there, not in the
+  // agent default this section resolves; the device switcher names it, so only
+  // its branch shows here.
+  const stagedDirectoryId = useStagedProjectDirectoryId(agentId);
+
+  return (
+    <SafeBoundary minHeight={22} resetKeys={[agentId, stagedDirectoryId]}>
+      {stagedDirectoryId ? (
+        <StagedBranchStatus agentId={agentId} />
+      ) : (
+        <WorkingDirectorySectionInner agentId={agentId} />
+      )}
+    </SafeBoundary>
+  );
+});
 
 WorkingDirectorySection.displayName = 'WorkingDirectorySection';
 

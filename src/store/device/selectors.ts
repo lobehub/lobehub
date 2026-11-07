@@ -1,9 +1,13 @@
-import type { DeviceListItem } from '@lobechat/types';
+import type { DeviceListItem, DeviceMetricSeries } from '@lobechat/types';
 
 import { getChannelKind } from '@/features/DeviceManager/channelKind';
 
 import type { DeviceState } from './initialState';
-import { DEVICE_LIST_KEY } from './projection';
+import {
+  DEVICE_LIST_KEY,
+  deviceMetricSeriesKey,
+  type DeviceMetricSeriesParams,
+} from './projection';
 
 const EMPTY_DEVICES: DeviceListItem[] = [];
 
@@ -66,11 +70,18 @@ const getDeviceDefaultCwd =
 const getDeviceWorkingDirs = (deviceId: string | undefined) => (s: DeviceState) =>
   getDeviceById(deviceId)(s)?.workingDirs ?? [];
 
+/** A device's health series, or `undefined` until storage or the server answers. */
+const getMetricSeries =
+  (params: DeviceMetricSeriesParams) =>
+  (s: DeviceState): DeviceMetricSeries | undefined =>
+    s.deviceMetricSeriesMap[deviceMetricSeriesKey(params)];
+
 export const deviceSelectors = {
   deviceList,
   getDeviceById,
   getDeviceDefaultCwd,
   getDeviceWorkingDirs,
+  getMetricSeries,
   hasTerminalTarget,
   isDeviceListConfirmed,
   isDeviceListLoaded,

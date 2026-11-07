@@ -280,13 +280,13 @@ describe('toolEngineering', () => {
         provider: 'openai',
       });
 
-    it('never offers lobe-dashboard while the dashboard flag is off, even when pinned', () => {
+    it('never offers builtin-dashboard while the dashboard flag is off, even when pinned', () => {
       mockCurrentAgentPlugins = [DashboardManifest.identifier];
       mockFeatureFlags = { enableDashboard: false };
       expect(generate().enabledToolIds).not.toContain(DashboardManifest.identifier);
     });
 
-    it('offers a pinned lobe-dashboard once the flag is on', () => {
+    it('offers a pinned builtin-dashboard once the flag is on', () => {
       mockCurrentAgentPlugins = [DashboardManifest.identifier];
       mockFeatureFlags = { enableDashboard: true };
       expect(generate().enabledToolIds).toContain(DashboardManifest.identifier);

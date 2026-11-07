@@ -6,6 +6,7 @@ import { VerifyRunModel } from '@/database/models/verifyRun';
 import type { AcceptanceItem } from '@/database/schemas/verify';
 import type { LobeChatDatabase } from '@/database/type';
 import { GoalService } from '@/server/services/goal';
+import { advanceGoal } from '@/server/services/goal/advanceGoal';
 import { scheduleGoalAdvance } from '@/server/services/goal/scheduler';
 import { requireDecidableAcceptance } from '@/server/services/verify/acceptanceDecision';
 import type { AcceptanceService } from '@/server/services/verify/acceptanceService';
@@ -81,13 +82,22 @@ export const withGoalGateAnswer = async <T>(
 ): Promise<T> => {
   const goalId = await answerGoalGate(db, service, acceptance, optionId, answer);
   const written = await write();
-  if (goalId)
-    await scheduleGoalAdvance({
-      goalId,
-      trigger: 'decide',
-      userId: acceptance.userId,
-      workspaceId: acceptance.workspaceId ?? undefined,
+  if (!goalId) return written;
+  const advance = {
+    goalId,
+    trigger: 'decide' as const,
+    userId: acceptance.userId,
+    workspaceId: acceptance.workspaceId ?? undefined,
+  };
+  // A plan sent back is handed to the main Agent within this request, so the
+  // owner's panel opens on that hand-off rather than on an empty conversation
+  // while the queued advance catches up. Should it fail, the queue takes it.
+  if (optionId === 'revise')
+    await advanceGoal(advance).catch(async (error) => {
+      console.error('[goalGateAcceptance] inline advance failed, queueing it:', error);
+      await scheduleGoalAdvance(advance);
     });
+  else await scheduleGoalAdvance(advance);
   return written;
 };
 

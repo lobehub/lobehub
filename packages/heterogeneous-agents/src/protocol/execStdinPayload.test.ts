@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { buildHeteroExecStdinPayload } from './execStdinPayload';
-import { lobeHubCliGuide } from './lobeHubCliGuide';
+import { lobeHubCliGuideBlock } from './lobeHubCliGuide';
 
 describe('buildHeteroExecStdinPayload', () => {
   it('returns a plain JSON string when no systemContext or images', () => {
@@ -47,7 +47,7 @@ describe('buildHeteroExecStdinPayload', () => {
         },
         // The fallback exists because native resume failed: the CLI is about to
         // start a brand-new session that has never been told about `lh`.
-        { text: lobeHubCliGuide, type: 'text' },
+        lobeHubCliGuideBlock,
         { text: 'continue', type: 'text' },
         { source: { id: 'file-1', type: 'url', url: 'https://x/a.png' }, type: 'image' },
       ],
@@ -60,10 +60,7 @@ describe('buildHeteroExecStdinPayload', () => {
   it('introduces the LobeHub CLI when the run opens a new session', () => {
     const payload = buildHeteroExecStdinPayload({ isNewSession: true, prompt: 'hello' });
 
-    expect(JSON.parse(payload)).toEqual([
-      { text: lobeHubCliGuide, type: 'text' },
-      { text: 'hello', type: 'text' },
-    ]);
+    expect(JSON.parse(payload)).toEqual([lobeHubCliGuideBlock, { text: 'hello', type: 'text' }]);
   });
 
   it('leaves the CLI introduction out of a resumed session', () => {

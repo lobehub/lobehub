@@ -67,6 +67,8 @@ export const toGateQuestion = (
   decision: GoalGateDecision,
   copy: {
     basis?: string | null;
+    /** What an option with its own description also does to dependent tasks. */
+    cascade?: (option: GoalDecisionOption) => string | undefined;
     describe: (option: GoalDecisionOption) => string | undefined;
     label: (option: GoalDecisionOption) => string;
     question: string;
@@ -78,7 +80,9 @@ export const toGateQuestion = (
   options: (decision.options ?? [])
     .filter((option) => option.id !== GOAL_CLARIFICATION_OPTION.answer)
     .map((option) => {
-      const description = option.description ?? copy.describe(option);
+      const description = option.description
+        ? [option.description, copy.cascade?.(option)].filter(Boolean).join(' ')
+        : copy.describe(option);
       return {
         ...(description ? { description } : {}),
         id: option.id,

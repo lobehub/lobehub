@@ -6,18 +6,84 @@ import { debounce } from 'es-toolkit/compat';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { mutate } from '@/libs/swr';
-import { portalKeys } from '@/libs/swr/keys';
 import { documentService } from '@/services/document';
 import { invalidateDocumentMutation } from '@/services/document/invalidation';
+import { useDocumentStore } from '@/store/document';
+import {
+  type DocumentCharLimitRefusal,
+  getCharLimitRefusal,
+  notifyCharLimitRefused,
+} from '@/store/document/slices/editor/charLimit';
 
 const isConflictError = (error: unknown) =>
   (error as { data?: { code?: string } })?.data?.code === 'CONFLICT';
 
+/**
+ * Records (or clears) a save refused by the plan's per-document character limit
+ * on the document's store entry, which the portal's limit banner reads.
+ */
+const setCharLimitError = (id: string, charLimitError: DocumentCharLimitRefusal | undefined) => {
+  const { documents, internal_dispatchDocument } = useDocumentStore.getState();
+  if (!documents[id] || documents[id].charLimitError === charLimitError) return;
+  internal_dispatchDocument({ id, type: 'updateDocument', value: { charLimitError } });
+};
+
+/**
+ * Drafts the server refused for exceeding the plan's character limit, by
+ * document. The editor unmounts when the user opens another document or closes
+ * the portal, and would reopen on the persisted body, so the refused text lives
+ * here until it is saved, replaced by a newer remote body, or the page unloads.
+ * The unload is guarded by {@link guardRefusedDraftsOnExit}, not by the editor's own
+ * `beforeunload` listener, which goes away when the editor unmounts.
+ */
+const refusedDrafts = new Map<
+  string,
+  { baseUpdatedAt?: number; content: string; refusal: DocumentCharLimitRefusal }
+>();
+
+let exitGuardInstalled = false;
+
+/**
+ * Warns before the page unloads while any refused draft is still kept. It lives at
+ * module level because the drafts outlive the editor: once the portal closes, the
+ * editor's listener is gone and a reload would drop the refused text silently.
+ */
+const guardRefusedDraftsOnExit = () => {
+  if (exitGuardInstalled || typeof window === 'undefined') return;
+  exitGuardInstalled = true;
+  window.addEventListener('beforeunload', (event) => {
+    if (refusedDrafts.size === 0) return;
+    event.preventDefault();
+    event.returnValue = '';
+  });
+};
+
+/** Test-only: forgets every kept refused draft. */
+export const resetRefusedDraftsForTests = () => refusedDrafts.clear();
+
+/**
+ * The refused draft to reopen with, if it was written against the version the
+ * editor now shows. A draft over an older version is dropped: the remote body
+ * replaced it, the same as when the editor is mounted (see the `updatedAt` effect),
+ * and `null` is returned so its banner is cleared too.
+ */
+const takeRefusedDraft = (documentId: string, updatedAt?: Date) => {
+  const draft = refusedDrafts.get(documentId);
+  if (!draft) return;
+  if (draft.baseUpdatedAt === updatedAt?.getTime()) return draft;
+  refusedDrafts.delete(documentId);
+  return null;
+};
+
 export interface UseHighlightSaveParams {
   content: string;
   documentId: string;
-  onSaved: (content: string, updatedAt?: string) => void;
+  /**
+   * Called when a write starts; returns the commit for its confirmed result.
+   * The caller captures what the write belongs to (e.g. the active identity)
+   * before the request is awaited.
+   */
+  onSaveStart: () => (content: string, updatedAt?: string) => void;
   updatedAt?: Date;
 }
 
@@ -30,30 +96,41 @@ export interface UseHighlightSaveResult {
 export const useHighlightSave = ({
   content,
   documentId,
-  onSaved,
+  onSaveStart,
   updatedAt,
 }: UseHighlightSaveParams): UseHighlightSaveResult => {
   const { t } = useTranslation('portal');
-  const [buffer, setBuffer] = useState<string | undefined>(undefined);
+  const [restored] = useState(() => takeRefusedDraft(documentId, updatedAt));
+  const [buffer, setBuffer] = useState<string | undefined>(restored?.content ?? undefined);
   const editingValue = buffer ?? content;
 
   const bufferRef = useRef(buffer);
   const documentIdRef = useRef(documentId);
-  const onSavedRef = useRef(onSaved);
+  const onSaveStartRef = useRef(onSaveStart);
   const expectedUpdatedAtRef = useRef(updatedAt);
   const baseContentRef = useRef(content);
   const pendingSaveRef = useRef<Promise<void> | undefined>(undefined);
   const tRef = useRef(t);
   bufferRef.current = buffer;
   documentIdRef.current = documentId;
-  onSavedRef.current = onSaved;
+  onSaveStartRef.current = onSaveStart;
   tRef.current = t;
+
+  // Reopening a refused draft shows its banner again (closing the portal drops
+  // the document's store entry), or clears it when the draft was dropped.
+  // Runs once: `restored` never changes, and the caller keys the editor by document.
+  // `undefined` means there was no draft, so the banner is left alone.
+  useEffect(() => {
+    if (restored === undefined) return;
+    setCharLimitError(documentId, restored?.refusal);
+  }, [documentId, restored]);
 
   const saveBuffer = useCallback(async (source: 'manual' | 'autosave') => {
     const toWrite = bufferRef.current;
     if (toWrite === undefined) return;
     const expectedUpdatedAt = expectedUpdatedAtRef.current;
     try {
+      const commitSaved = onSaveStartRef.current();
       const result = await documentService.updateDocument({
         content: toWrite,
         id: documentIdRef.current,
@@ -66,7 +143,9 @@ export const useHighlightSave = ({
         expectedUpdatedAtRef.current = savedAt;
       }
       baseContentRef.current = toWrite;
-      onSavedRef.current(toWrite, result?.updatedAt);
+      refusedDrafts.delete(documentIdRef.current);
+      setCharLimitError(documentIdRef.current, undefined);
+      commitSaved(toWrite, result?.updatedAt);
       if (bufferRef.current === toWrite) {
         bufferRef.current = undefined;
         setBuffer(undefined);
@@ -77,11 +156,27 @@ export const useHighlightSave = ({
         if (expectedUpdatedAtRef.current?.getTime() !== expectedUpdatedAt?.getTime()) return;
         bufferRef.current = undefined;
         setBuffer(undefined);
+        refusedDrafts.delete(documentIdRef.current);
+        setCharLimitError(documentIdRef.current, undefined);
+        // Refreshes the document's replica entry, which the portal body reads.
         await Promise.allSettled([
           invalidateDocumentMutation({ documentId: documentIdRef.current }),
-          mutate(portalKeys.documentHeader(documentIdRef.current)),
         ]);
         toast.error(tRef.current('document.saveConflict'));
+        return;
+      }
+      // Keep the buffer: the banner explains why it is unsaved, and the next
+      // edit schedules the next attempt.
+      const charLimitError = getCharLimitRefusal(error, toWrite.length);
+      if (charLimitError) {
+        refusedDrafts.set(documentIdRef.current, {
+          baseUpdatedAt: expectedUpdatedAt?.getTime(),
+          content: toWrite,
+          refusal: charLimitError,
+        });
+        guardRefusedDraftsOnExit();
+        setCharLimitError(documentIdRef.current, charLimitError);
+        if (source === 'manual') notifyCharLimitRefused(charLimitError);
         return;
       }
       console.error('[HighlightEditor] save failed:', error);
@@ -114,6 +209,9 @@ export const useHighlightSave = ({
       debouncedAutoSave.cancel();
       bufferRef.current = undefined;
       setBuffer(undefined);
+      // The refused buffer is gone, so its refusal no longer applies.
+      refusedDrafts.delete(documentIdRef.current);
+      setCharLimitError(documentIdRef.current, undefined);
     }
     baseContentRef.current = content;
     expectedUpdatedAtRef.current = updatedAt;
@@ -124,8 +222,14 @@ export const useHighlightSave = ({
       const isDirty = next !== baseContentRef.current;
       bufferRef.current = isDirty ? next : undefined;
       setBuffer(bufferRef.current);
-      if (isDirty) debouncedAutoSave();
-      else debouncedAutoSave.cancel();
+      if (isDirty) {
+        debouncedAutoSave();
+        return;
+      }
+      debouncedAutoSave.cancel();
+      // Back to the saved body: nothing refused is left to keep or explain.
+      refusedDrafts.delete(documentIdRef.current);
+      setCharLimitError(documentIdRef.current, undefined);
     },
     [debouncedAutoSave],
   );

@@ -2,9 +2,9 @@ import { toast } from '@lobehub/ui';
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { portalKeys } from '@/libs/swr/keys';
+import { useDocumentStore } from '@/store/document';
 
-import { useHighlightSave } from './useHighlightSave';
+import { resetRefusedDraftsForTests, useHighlightSave } from './useHighlightSave';
 
 vi.mock('@lobehub/ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
@@ -40,7 +40,12 @@ describe('useHighlightSave', () => {
     const onSaved = vi.fn();
 
     const { result } = renderHook(() =>
-      useHighlightSave({ content: 'before', documentId: 'doc-1', onSaved, updatedAt }),
+      useHighlightSave({
+        content: 'before',
+        documentId: 'doc-1',
+        onSaveStart: () => onSaved,
+        updatedAt,
+      }),
     );
 
     act(() => result.current.handleChange('after'));
@@ -55,12 +60,45 @@ describe('useHighlightSave', () => {
     expect(onSaved).toHaveBeenCalledWith('after', '2024-01-02T00:00:00.000Z');
   });
 
+  it('starts the commit before the write is awaited', async () => {
+    let answer: (value: unknown) => void = () => {};
+    mockUpdateDocument.mockImplementation(() => new Promise((resolve) => (answer = resolve)));
+    const onSaved = vi.fn();
+    const onSaveStart = vi.fn(() => onSaved);
+
+    const { result } = renderHook(() =>
+      useHighlightSave({ content: 'before', documentId: 'doc-1', onSaveStart }),
+    );
+
+    act(() => result.current.handleChange('after'));
+    let save: Promise<void> = Promise.resolve();
+    act(() => {
+      save = result.current.handleSave();
+    });
+    await act(async () => {});
+
+    // The caller captures the identity the write runs under before it settles.
+    expect(onSaveStart).toHaveBeenCalledTimes(1);
+    expect(onSaved).not.toHaveBeenCalled();
+
+    await act(async () => {
+      answer({ updatedAt: '2024-01-02T00:00:00.000Z' });
+      await save;
+    });
+    expect(onSaved).toHaveBeenCalledWith('after', '2024-01-02T00:00:00.000Z');
+  });
+
   it('omits expectedUpdatedAt when the row has no known version yet', async () => {
     mockUpdateDocument.mockResolvedValue({ updatedAt: '2024-01-02T00:00:00.000Z' });
     const onSaved = vi.fn();
 
     const { result } = renderHook(() =>
-      useHighlightSave({ content: 'before', documentId: 'doc-1', onSaved, updatedAt: undefined }),
+      useHighlightSave({
+        content: 'before',
+        documentId: 'doc-1',
+        onSaveStart: () => onSaved,
+        updatedAt: undefined,
+      }),
     );
 
     act(() => result.current.handleChange('after'));
@@ -79,7 +117,12 @@ describe('useHighlightSave', () => {
     const onSaved = vi.fn();
 
     const { result } = renderHook(() =>
-      useHighlightSave({ content: 'before', documentId: 'doc-1', onSaved, updatedAt }),
+      useHighlightSave({
+        content: 'before',
+        documentId: 'doc-1',
+        onSaveStart: () => onSaved,
+        updatedAt,
+      }),
     );
 
     act(() => result.current.handleChange('after'));
@@ -101,7 +144,12 @@ describe('useHighlightSave', () => {
 
     const { result, rerender } = renderHook(
       ({ updatedAt }: { updatedAt: Date }) =>
-        useHighlightSave({ content: 'before', documentId: 'doc-1', onSaved, updatedAt }),
+        useHighlightSave({
+          content: 'before',
+          documentId: 'doc-1',
+          onSaveStart: () => onSaved,
+          updatedAt,
+        }),
       { initialProps: { updatedAt: new Date('2024-01-01T00:00:00.000Z') } },
     );
 
@@ -122,14 +170,18 @@ describe('useHighlightSave', () => {
     const onSaved = vi.fn();
 
     const { result } = renderHook(() =>
-      useHighlightSave({ content: 'before', documentId: 'doc-1', onSaved, updatedAt }),
+      useHighlightSave({
+        content: 'before',
+        documentId: 'doc-1',
+        onSaveStart: () => onSaved,
+        updatedAt,
+      }),
     );
 
     act(() => result.current.handleChange('after'));
     await act(() => result.current.handleSave());
 
     expect(mockInvalidateDocumentMutation).toHaveBeenCalledWith({ documentId: 'doc-1' });
-    expect(mockMutate).toHaveBeenCalledWith(portalKeys.documentHeader('doc-1'));
     expect(toast.error).toHaveBeenCalled();
     expect(onSaved).not.toHaveBeenCalled();
     expect(result.current.editingValue).toBe('before');
@@ -137,7 +189,7 @@ describe('useHighlightSave', () => {
   it('adopts a refreshed remote body instead of submitting the old draft with its version', async () => {
     const onSaved = vi.fn();
     const { result, rerender } = renderHook(
-      (props) => useHighlightSave({ ...props, documentId: 'doc-1', onSaved }),
+      (props) => useHighlightSave({ ...props, documentId: 'doc-1', onSaveStart: () => onSaved }),
       { initialProps: { content: 'base', updatedAt: new Date('2024-01-01') } },
     );
     act(() => result.current.handleChange('local draft'));
@@ -149,7 +201,7 @@ describe('useHighlightSave', () => {
 
   it('keeps the draft after a metadata-only remote refresh', async () => {
     const { result, rerender } = renderHook(
-      (props) => useHighlightSave({ ...props, documentId: 'doc-1', onSaved: vi.fn() }),
+      (props) => useHighlightSave({ ...props, documentId: 'doc-1', onSaveStart: () => vi.fn() }),
       { initialProps: { content: 'base', updatedAt: new Date('2024-01-01') } },
     );
     act(() => result.current.handleChange('local draft'));
@@ -176,7 +228,7 @@ describe('useHighlightSave', () => {
       useHighlightSave({
         content: 'base',
         documentId: 'doc-1',
-        onSaved: vi.fn(),
+        onSaveStart: () => vi.fn(),
         updatedAt: new Date('2024-01-01'),
       }),
     );
@@ -222,7 +274,7 @@ describe('useHighlightSave', () => {
       useHighlightSave({
         content: 'base',
         documentId: 'doc-1',
-        onSaved: vi.fn(),
+        onSaveStart: () => vi.fn(),
         updatedAt: new Date('2024-01-01'),
       }),
     );
@@ -259,7 +311,7 @@ describe('useHighlightSave', () => {
         }),
     );
     const { result, rerender } = renderHook(
-      (props) => useHighlightSave({ ...props, documentId: 'doc-1', onSaved: vi.fn() }),
+      (props) => useHighlightSave({ ...props, documentId: 'doc-1', onSaveStart: () => vi.fn() }),
       { initialProps: { content: 'base', updatedAt: new Date('2024-01-01') } },
     );
     act(() => result.current.handleChange('old draft'));
@@ -278,5 +330,192 @@ describe('useHighlightSave', () => {
     });
     expect(result.current.editingValue).toBe('new remote draft');
     expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  describe('plan character limit', () => {
+    const limitError = () =>
+      Object.assign(new Error('Over the limit'), {
+        data: {
+          code: 'BAD_REQUEST',
+          errorData: { actual: 120, code: 'DocumentCharLimitExceeded', limit: 100, plan: 'free' },
+        },
+      });
+
+    const seedStoreDocument = () =>
+      act(() => {
+        useDocumentStore.getState().internal_dispatchDocument({
+          id: 'doc-1',
+          type: 'addDocument',
+          value: { content: 'before', lastSavedContent: 'before', sourceType: 'notebook' },
+        });
+      });
+
+    beforeEach(() => {
+      resetRefusedDraftsForTests();
+      act(() => useDocumentStore.getState().closeDocument('doc-1'));
+    });
+
+    const updatedAt = new Date('2024-01-01T00:00:00.000Z');
+
+    const refuseDraft = async () => {
+      mockUpdateDocument.mockRejectedValueOnce(limitError());
+      const editor = renderHook(() =>
+        useHighlightSave({
+          content: 'before',
+          documentId: 'doc-1',
+          onSaveStart: () => vi.fn(),
+          updatedAt,
+        }),
+      );
+      act(() => editor.result.current.handleChange('after'));
+      await act(() => editor.result.current.handleSave());
+      // The unmount flush retries the same refused draft.
+      mockUpdateDocument.mockRejectedValueOnce(limitError());
+      editor.unmount();
+      await act(async () => {});
+      // Closing the portal drops the document's store entry.
+      act(() => useDocumentStore.getState().closeDocument('doc-1'));
+    };
+
+    it('reopens a refused draft and its banner after the editor unmounts', async () => {
+      await refuseDraft();
+      seedStoreDocument();
+
+      const { result } = renderHook(() =>
+        useHighlightSave({
+          content: 'before',
+          documentId: 'doc-1',
+          onSaveStart: () => vi.fn(),
+          updatedAt,
+        }),
+      );
+
+      expect(result.current.editingValue).toBe('after');
+      expect(useDocumentStore.getState().documents['doc-1'].charLimitError).toMatchObject({
+        limit: 100,
+      });
+    });
+
+    it('keeps warning before the page unloads after the editor unmounts', async () => {
+      await refuseDraft();
+
+      const event = new Event('beforeunload', { cancelable: true });
+      window.dispatchEvent(event);
+
+      expect(event.defaultPrevented).toBe(true);
+    });
+
+    it('stops warning before unload once no refused draft is kept', async () => {
+      await refuseDraft();
+      resetRefusedDraftsForTests();
+
+      const event = new Event('beforeunload', { cancelable: true });
+      window.dispatchEvent(event);
+
+      expect(event.defaultPrevented).toBe(false);
+    });
+
+    it('drops a refused draft once the document has a newer version', async () => {
+      await refuseDraft();
+      seedStoreDocument();
+
+      const { result } = renderHook(() =>
+        useHighlightSave({
+          content: 'remote',
+          documentId: 'doc-1',
+          onSaveStart: () => vi.fn(),
+          updatedAt: new Date('2024-01-03T00:00:00.000Z'),
+        }),
+      );
+
+      expect(result.current.editingValue).toBe('remote');
+      expect(useDocumentStore.getState().documents['doc-1'].charLimitError).toBeUndefined();
+    });
+
+    it('forgets a refused draft edited back to the saved body', async () => {
+      seedStoreDocument();
+      mockUpdateDocument.mockRejectedValueOnce(limitError());
+      const first = renderHook(() =>
+        useHighlightSave({
+          content: 'before',
+          documentId: 'doc-1',
+          onSaveStart: () => vi.fn(),
+          updatedAt,
+        }),
+      );
+      act(() => first.result.current.handleChange('after'));
+      await act(() => first.result.current.handleSave());
+      act(() => first.result.current.handleChange('before'));
+      expect(useDocumentStore.getState().documents['doc-1'].charLimitError).toBeUndefined();
+      first.unmount();
+      await act(async () => {});
+
+      const { result } = renderHook(() =>
+        useHighlightSave({
+          content: 'before',
+          documentId: 'doc-1',
+          onSaveStart: () => vi.fn(),
+          updatedAt,
+        }),
+      );
+      expect(result.current.editingValue).toBe('before');
+    });
+
+    it('records the refusal, keeps the buffer and toasts on a manual save', async () => {
+      seedStoreDocument();
+      mockUpdateDocument.mockRejectedValueOnce(limitError());
+      const { result } = renderHook(() =>
+        useHighlightSave({ content: 'before', documentId: 'doc-1', onSaveStart: () => vi.fn() }),
+      );
+
+      act(() => result.current.handleChange('after'));
+      await act(() => result.current.handleSave());
+
+      expect(result.current.editingValue).toBe('after');
+      expect(useDocumentStore.getState().documents['doc-1'].charLimitError).toEqual({
+        actual: 120,
+        limit: 100,
+        plan: 'free',
+      });
+      expect(toast.error).toHaveBeenCalledTimes(1);
+    });
+
+    it('stays quiet when an autosave is refused', async () => {
+      vi.useFakeTimers();
+      seedStoreDocument();
+      mockUpdateDocument.mockRejectedValueOnce(limitError());
+      const { result } = renderHook(() =>
+        useHighlightSave({ content: 'before', documentId: 'doc-1', onSaveStart: () => vi.fn() }),
+      );
+
+      act(() => result.current.handleChange('after'));
+      await act(async () => {
+        await vi.runAllTimersAsync();
+      });
+      vi.useRealTimers();
+
+      expect(mockUpdateDocument).toHaveBeenCalledWith(
+        expect.objectContaining({ saveSource: 'autosave' }),
+      );
+      expect(useDocumentStore.getState().documents['doc-1'].charLimitError).toBeDefined();
+      expect(toast.error).not.toHaveBeenCalled();
+    });
+
+    it('clears the refusal once a later save succeeds', async () => {
+      seedStoreDocument();
+      mockUpdateDocument
+        .mockRejectedValueOnce(limitError())
+        .mockResolvedValueOnce({ updatedAt: '2024-01-02T00:00:00.000Z' });
+      const { result } = renderHook(() =>
+        useHighlightSave({ content: 'before', documentId: 'doc-1', onSaveStart: () => vi.fn() }),
+      );
+
+      act(() => result.current.handleChange('after'));
+      await act(() => result.current.handleSave());
+      act(() => result.current.handleChange('short'));
+      await act(() => result.current.handleSave());
+
+      expect(useDocumentStore.getState().documents['doc-1'].charLimitError).toBeUndefined();
+    });
   });
 });

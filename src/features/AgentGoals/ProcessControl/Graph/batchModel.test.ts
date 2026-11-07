@@ -150,6 +150,7 @@ const batchSnapshot = ({
       title: 'Batch',
       updatedAt: T0,
       userId: 'user-1',
+      visibility: 'public',
       workspaceId: null,
     },
     nodes,
@@ -226,6 +227,38 @@ describe('buildBatchModel', () => {
 
     expect(model.rounds).toHaveLength(2);
     expect(model.rounds[0].gate).toBe('rejected');
+  });
+
+  // Sending the plan back re-runs the trials inside their round, under the
+  // same gate: the trials stage shows each unit once, as its latest run, in
+  // its original place — not a superseded square next to a second round.
+  it('keeps a trial re-run inside its round as one numbered unit', () => {
+    const graph = buildGoalGraphView(
+      batchSnapshot({
+        decisions: [humanAnswer('r0')],
+        extraEdges: [edge('p1r', 'p1', 'derived_from'), edge('a1', 'p1r', 'depends_on')],
+        extraNodes: [
+          node('r0', 'decision', 10, { status: 'resolved', title: GOAL_BATCH_RELEASE_TITLE }),
+          node('p1r', 'task', 20, { status: 'active', title: 'U1', updatedAt: at(59) }),
+        ],
+        state: { planVersions: { '1': 2 }, probeNodeIds: ['p1r', 'p2'] },
+      }),
+      NOW,
+    );
+    const model = buildBatchModel(graph, 'batch');
+
+    expect(model.rounds).toHaveLength(1);
+    expect(model.rounds[0]).toMatchObject({ planVersion: 2, revision: 1 });
+    expect(model.rounds[0].probes).toEqual([
+      expect.objectContaining({ attempt: 2, nodeId: 'p1r', state: 'running', title: 'U1' }),
+      expect.objectContaining({ nodeId: 'p2', state: 'done', title: 'U2' }),
+    ]);
+    expect(model.rounds[0].probes[1].attempt).toBeUndefined();
+    // Its first run stays readable, as it ended — for the switch back to run 1.
+    expect(model.rounds[0].probes[0].runs).toEqual([
+      { nodeId: 'p1', state: 'done' },
+      { nodeId: 'p1r', state: 'running' },
+    ]);
   });
 
   it('keeps the gate locked until every probe settled', () => {
