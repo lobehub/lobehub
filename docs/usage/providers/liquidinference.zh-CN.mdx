@@ -1,0 +1,37 @@
+---
+title: 在 LobeHub 中使用 Liquid Inference
+description: >-
+  学习如何创建 Liquid Inference API 密钥，并在 LobeHub 中进行设置，在拍卖交易所购买大语言模型推理服务。
+tags:
+  - Liquid Inference
+  - API Key
+  - Web UI
+---
+
+# 在 LobeHub 中使用 Liquid Inference
+
+[Liquid Inference](https://liquidinference.ai) 是大语言模型推理的拍卖交易所。服务商发布长期报价。对于每个请求，交易所按预计费用对合格报价排序，在首个令牌输出前锁定价格上限，并按实际使用的令牌数计费。
+
+本文档将指导你如何在 LobeHub 中使用 Liquid Inference：
+
+<Steps>
+  ### 步骤一：创建 API 密钥
+
+  - 在 [liquidinference.ai](https://liquidinference.ai) 登录，并为工作区充值
+  - 创建 `spend` 级别的买家 API 密钥，并为该密钥设置消费上限
+  - 复制密钥并妥善保存
+
+  ### 步骤二：在 LobeHub 中配置 Liquid Inference
+
+  - 打开 **应用设置 → AI 服务商**，选择 `Liquid Inference`
+  - 打开该服务商并填入 API 密钥
+  - 点击 **检查** 测试连接
+  - 获取模型列表，列表显示服务商当前报价的模型
+  - 启用你需要的模型，然后在助手设置中选择一个模型
+
+  <Callout type={'warning'}>
+    定时运行的助手可能在你不在时发出大量请求。为密钥设置消费上限，可以把费用限制在固定金额内。
+  </Callout>
+</Steps>
+
+至此你已经可以在 LobeHub 中使用 Liquid Inference 提供的模型了。使用 `liquid.auto` 可以让交易所为每个请求选择报价。
