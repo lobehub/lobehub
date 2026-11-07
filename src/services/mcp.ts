@@ -256,7 +256,7 @@ class MCPService {
       signal?: AbortSignal;
       topicId?: string;
     },
-  ) {
+  ): Promise<MCPToolCallResult | undefined> {
     await discoverService.safeInjectMPToken();
 
     const { pluginSelectors } = await import('@/store/tool/selectors');
