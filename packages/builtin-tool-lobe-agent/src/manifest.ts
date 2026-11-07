@@ -279,6 +279,27 @@ export const LobeAgentManifest: BuiltinToolManifest = {
     },
     {
       description:
+        'Cancel a sub-agent that is still running — one started with `runInBackground`, or one whose work is no longer needed or has gone off track. It stops at its next step, no result is delivered for it, and its history is kept: to steer it instead of abandoning it, cancel it, then send a corrected instruction with `callSubAgent` and the same `subAgentId`.',
+      name: LobeAgentApiName.cancelSubAgent,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          subAgentId: {
+            description:
+              'The id from the `<sub_agent id="..." />` tag of the sub-agent to cancel. Never invent an id.',
+            type: 'string',
+          },
+          reason: {
+            description: 'Optional. One short sentence on why it is no longer needed.',
+            type: 'string',
+          },
+        },
+        required: ['subAgentId'],
+        type: 'object',
+      },
+    },
+    {
+      description:
         'Privately report friction in your own working conditions to the platform builders when you are genuinely blocked — a missing tool, a parameter/schema mismatch, conflicting or wrong docs, anomalous platform behavior, or an environment limit causing repeated failure. Not user-facing; it only records the report and does not fix anything. Use sparingly: at most one vent per run, only for the single worst blocker. It never stops a tool loop or ends your turn — to stop, just reply to the user; repeated or empty vents are rejected.',
       name: LobeAgentApiName.vent,
       parameters: {
