@@ -1,9 +1,6 @@
 import { ToolNameResolver } from '@lobechat/context-engine';
 import type { AgentGraph, AgentGraphEdge, AgentGraphNode } from '@lobechat/types';
 import { AGENT_GRAPH_ROOT_NODE_ID } from '@lobechat/types/agent/graph';
-import { toJsonSafe } from '../../utils/json';
-import type { UnknownRecord } from '../../utils/object';
-import { isRecord } from '../../utils/object';
 import Ajv from 'ajv';
 
 import type {
@@ -15,6 +12,9 @@ import type {
   GeneralAgentCallLLMInstructionPayload,
   GeneralAgentConfig,
 } from '../../types';
+import { toJsonSafe } from '../../utils/json';
+import type { UnknownRecord } from '../../utils/object';
+import { isRecord } from '../../utils/object';
 import { selectRunTools, selectToolManifestMap } from '../../utils/operationToolSet';
 import { GeneralChatAgent } from '../GeneralChatAgent';
 import {
@@ -136,6 +136,13 @@ interface PromptArray extends Array<PromptValue> {}
 interface PromptObject {
   [key: string]: PromptValue;
 }
+
+/**
+ * Whether `GraphAgent` drives this run. Its graph routes a tool-free LLM result
+ * on to the next node, so such a result does not mean the run ends.
+ */
+export const isGraphAgentState = (state: Readonly<AgentState>): boolean =>
+  state.metadata?.[GRAPH_RUNTIME_STATE_KEY] !== undefined;
 
 /**
  * GraphAgent is a graph-level orchestrator over the normal AgentRuntime loop.
