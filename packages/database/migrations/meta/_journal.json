@@ -1449,6 +1449,13 @@
       "when": 1793984982722,
       "tag": "0206_channel_job_wake",
       "breakpoints": true
+    },
+    {
+      "idx": 207,
+      "version": "7",
+      "when": 1794065054788,
+      "tag": "0207_agent_account_settings",
+      "breakpoints": true
     }
   ],
   "version": "6"

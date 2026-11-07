@@ -81,6 +81,27 @@ components:
           type:
             - string
             - "null"
+        settings:
+          additionalProperties: true
+          properties:
+            wake:
+              additionalProperties: true
+              properties:
+                digestMinutes:
+                  maximum: 1440
+                  minimum: 5
+                  type: integer
+                mode:
+                  enum:
+                    - on
+                    - off
+                  type: string
+                wakeSenders:
+                  items:
+                    type: string
+                  type: array
+              type: object
+          type: object
         status:
           enum:
             - provisioning

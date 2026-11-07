@@ -225,6 +225,21 @@ describe('AgentAccountModel workspace isolation by agent visibility', () => {
 });
 
 describe('AgentAccountModel scope and writes', () => {
+  it("starts with empty settings and returns the owner's settings once written", async () => {
+    const model = new AgentAccountModel(serverDB, userId);
+    const created = await model.create(mailAccount());
+
+    expect(created.settings).toEqual({});
+    expect((await model.findById(created.id))?.settings).toEqual({});
+
+    const settings = {
+      wake: { digestMinutes: 30, mode: 'on' as const, wakeSenders: ['@lobehub.com'] },
+    };
+    await expect(model.update(created.id, { settings })).resolves.toBe(created.id);
+    expect((await model.findById(created.id))?.settings).toEqual(settings);
+    expect((await model.query({ agentId }))[0]?.settings).toEqual(settings);
+  });
+
   it('does not expose another user account', async () => {
     const model1 = new AgentAccountModel(serverDB, userId);
     const model2 = new AgentAccountModel(serverDB, userId2);
