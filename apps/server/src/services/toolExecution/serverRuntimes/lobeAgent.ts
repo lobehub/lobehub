@@ -339,6 +339,7 @@ class LobeAgentExecutionRuntime {
     let runResult: Awaited<ReturnType<typeof startRun>>;
     if (background) {
       const outcome = await startBackgroundSubAgent({
+        continuesThreadId: subAgentId,
         db: this.db,
         groupId: this.groupId,
         retryHint: 'Call callSubAgent again without runInBackground to wait for the result.',
