@@ -17,6 +17,8 @@ The thread entrypoint is app-only (`ui.visibility: ['app']`), so opening it from
 
 Use **Replace with context B** to test overwrite semantics. To inspect teardown ordering, enable **Pause teardown acknowledgement**, request teardown, then acknowledge from the still-mounted App before the host timeout. **Request teardown in 3 seconds** lets you hide the pane before it notifies the host.
 
+The legacy output-template resource supplies CSP exclusively through `openai/widgetCSP`. Its **Probe blocked connection** button requests a disallowed `.invalid` domain and reports the browser's `securitypolicyviolation` event. Inspect the frame's effective CSP and this event together; a generic failed fetch alone does not prove CSP enforcement. This deliberate probe produces an expected CSP console error.
+
 `smoke.mts` exercises initialize/session negotiation, initialization notification, tool listing and metadata, a tool call, and resource read. It is a fixture protocol smoke only; it does not run the product acceptance cases.
 
 ## Deterministic local model fixture

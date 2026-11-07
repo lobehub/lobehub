@@ -39,6 +39,9 @@
         border: 1px solid color-mix(in srgb, CanvasText 22%, transparent);
         border-radius: 10px;
       }
+      [hidden] {
+        display: none;
+      }
       .buttons {
         display: flex;
         flex-wrap: wrap;
@@ -120,6 +123,13 @@
         <pre id="host-context" data-testid="host-context">No host context received yet.</pre>
       </section>
 
+      <section id="legacy-csp" hidden>
+        <h2>Legacy CSP probe</h2>
+        <p>Inline content must render. Connections outside https://allowed.invalid must be blocked.</p>
+        <button data-testid="probe-csp" type="button">Probe blocked connection</button>
+        <p id="csp-result" role="status">Not requested.</p>
+      </section>
+
       <section aria-labelledby="events-heading">
         <h2 id="events-heading">Protocol events</h2>
         <ol id="events" data-testid="protocol-events"></ol>
@@ -143,12 +153,24 @@
 
         document.querySelector('#fixture-title').textContent = fixture.label;
         document.querySelector('#resource-uri').textContent = fixture.resourceUri;
+        document.querySelector('#legacy-csp').hidden = !fixture.legacyCsp;
 
         const log = (message) => {
           const item = document.createElement('li');
           item.textContent = message;
           eventsNode.prepend(item);
         };
+
+        document.addEventListener('securitypolicyviolation', (event) => {
+          if (event.effectiveDirective !== 'connect-src') return;
+          const message = `CSP blocked ${event.effectiveDirective}: ${event.blockedURI}`;
+          document.querySelector('#csp-result').textContent = message;
+          log(message);
+        });
+        document.querySelector('[data-testid="probe-csp"]').addEventListener('click', () => {
+          document.querySelector('#csp-result').textContent = 'Waiting for a CSP violation event…';
+          void fetch('https://blocked.invalid/mcp-apps-csp-probe').catch(() => {});
+        });
 
         const showHostContext = () => {
           modeNode.textContent = hostContext.displayMode ?? 'unknown';

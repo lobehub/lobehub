@@ -103,6 +103,17 @@ try {
   assert.ok(html.includes('ui/notifications/request-teardown'));
   assert.ok(html.includes('ui/resource-teardown'));
 
+  const legacyResource = await rpc('resources/read', {
+    uri: 'ui://mcp-apps/legacy-output-template',
+  });
+  const legacyMeta = legacyResource.result?.contents?.[0]?._meta;
+  assert.equal(legacyMeta.ui.csp, undefined, 'the CSP fixture must use only the legacy field');
+  assert.deepEqual(resolveMcpUiResourceMeta(legacyMeta).csp, {
+    connectDomains: ['https://allowed.invalid'],
+    resourceDomains: [],
+    frameDomains: [],
+  });
+
   const defaultResource = await rpc('resources/read', {
     uri: 'ui://mcp-apps/resource-modes-no-tool-preference',
   });
