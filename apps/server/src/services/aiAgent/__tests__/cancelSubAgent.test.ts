@@ -30,7 +30,7 @@ describe('cancelSubAgentThreadRun', () => {
         id === 'placeholder-1' ? callSubAgentPlugin : { ...callSubAgentPlugin, state: {} },
       ),
       listBackgroundSubAgentCalls: vi.fn().mockResolvedValue([]),
-      releaseBackgroundSubAgentDelivery: vi.fn().mockResolvedValue(undefined),
+      releaseCancelSuppressedDelivery: vi.fn(async (ids: string[]) => ids),
     };
     deps = {
       agentOperationModel: { findById: vi.fn().mockResolvedValue({ status: 'running' }) } as any,
@@ -77,7 +77,7 @@ describe('cancelSubAgentThreadRun', () => {
 
     const result = await cancelSubAgentThreadRun(deps, params);
 
-    expect(messageModel.releaseBackgroundSubAgentDelivery).toHaveBeenCalledWith(['bg-call-1']);
+    expect(messageModel.releaseCancelSuppressedDelivery).toHaveBeenCalledWith(['bg-call-1']);
     expect(result.status).toBe('not_running');
   });
 
@@ -96,13 +96,14 @@ describe('cancelSubAgentThreadRun', () => {
     expect(messageModel.claimBackgroundSubAgentDelivery).toHaveBeenCalledWith(
       ['bg-call-1'],
       expect.any(String),
+      { suppressedByCancel: true },
     );
     // The claim must land before the stop: the interrupted run's completion
     // delivers whatever is still unclaimed.
     expect(messageModel.claimBackgroundSubAgentDelivery.mock.invocationCallOrder[0]).toBeLessThan(
       vi.mocked(deps.interruptTask).mock.invocationCallOrder[0],
     );
-    expect(messageModel.releaseBackgroundSubAgentDelivery).not.toHaveBeenCalled();
+    expect(messageModel.releaseCancelSuppressedDelivery).not.toHaveBeenCalled();
     expect(result.status).toBe('cancelled');
   });
 
@@ -118,7 +119,33 @@ describe('cancelSubAgentThreadRun', () => {
 
     const result = await cancelSubAgentThreadRun(deps, params);
 
-    expect(messageModel.releaseBackgroundSubAgentDelivery).toHaveBeenCalledWith(['bg-call-1']);
+    expect(messageModel.releaseCancelSuppressedDelivery).toHaveBeenCalledWith(['bg-call-1']);
+    expect(result.status).toBe('not_running');
+  });
+
+  it('reports a run that finished while the stop was waiting as not cancelled', async () => {
+    // The interrupt mark landed after the run's last check, so it still saved a
+    // completed answer while cancel waited for it to leave flight.
+    messageModel.listBackgroundSubAgentCalls.mockResolvedValue([
+      { id: 'bg-call-1', state: { background: true, status: 'pending', threadId: 'thread-1' } },
+    ]);
+    let status = 'pending';
+    messageModel.findMessagePlugin.mockImplementation(async (id: string) =>
+      id === 'placeholder-1'
+        ? callSubAgentPlugin
+        : { ...callSubAgentPlugin, state: { background: true, status } },
+    );
+    vi.mocked(deps.agentOperationModel.findById)
+      .mockResolvedValueOnce({ status: 'running' } as any)
+      .mockImplementation(async () => {
+        status = 'completed';
+        return { status: 'done' } as any;
+      });
+    deps.stopWaitMs = 1000;
+
+    const result = await cancelSubAgentThreadRun(deps, params);
+
+    expect(messageModel.releaseCancelSuppressedDelivery).toHaveBeenCalledWith(['bg-call-1']);
     expect(result.status).toBe('not_running');
   });
 
@@ -130,7 +157,7 @@ describe('cancelSubAgentThreadRun', () => {
 
     const result = await cancelSubAgentThreadRun(deps, params);
 
-    expect(messageModel.releaseBackgroundSubAgentDelivery).toHaveBeenCalledWith(['bg-call-1']);
+    expect(messageModel.releaseCancelSuppressedDelivery).toHaveBeenCalledWith(['bg-call-1']);
     expect(result).toMatchObject({ status: 'failed', threadId: 'thread-1' });
   });
 
@@ -142,7 +169,7 @@ describe('cancelSubAgentThreadRun', () => {
 
     const result = await cancelSubAgentThreadRun(deps, params);
 
-    expect(messageModel.releaseBackgroundSubAgentDelivery).toHaveBeenCalledWith(['bg-call-1']);
+    expect(messageModel.releaseCancelSuppressedDelivery).toHaveBeenCalledWith(['bg-call-1']);
     expect(result).toMatchObject({ error: 'Error: redis down', status: 'failed' });
   });
 

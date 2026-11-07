@@ -291,10 +291,13 @@ export const cancelSubAgentThreadRun = async (
   const suppressed = await deps.messageModel.claimBackgroundSubAgentDelivery(
     backgroundCalls.map((call) => call.id),
     new Date().toISOString(),
+    { suppressedByCancel: true },
   );
+  // Only hands back this cancel's own claims: the run's completion releases
+  // them too when it still records an answer (see `completeSubAgentBridge`).
   const restoreDelivery = (ids: string[]) =>
     deps.messageModel
-      .releaseBackgroundSubAgentDelivery(ids)
+      .releaseCancelSuppressedDelivery(ids)
       .catch((error) => log('cancelSubAgent: failed to restore delivery of %O: %O', ids, error));
 
   let interrupted: { success: boolean };
@@ -328,18 +331,22 @@ export const cancelSubAgentThreadRun = async (
     await restoreDelivery(suppressed);
     return { operationId, status: 'not_running', threadId };
   }
-  const finished: string[] = [];
-  for (const id of suppressed) {
-    const plugin = await deps.messageModel.findMessagePlugin(id).catch((error) => {
-      log('cancelSubAgent: reading placeholder %s failed: %O', id, error);
-      return undefined;
-    });
-    if ((plugin?.state as { status?: string } | undefined)?.status === 'completed') {
-      finished.push(id);
+  const findFinished = async (): Promise<string[]> => {
+    const finished: string[] = [];
+    for (const id of suppressed) {
+      const plugin = await deps.messageModel.findMessagePlugin(id).catch((error) => {
+        log('cancelSubAgent: reading placeholder %s failed: %O', id, error);
+        return undefined;
+      });
+      if ((plugin?.state as { status?: string } | undefined)?.status === 'completed') {
+        finished.push(id);
+      }
     }
-  }
-  if (finished.length > 0) {
-    await restoreDelivery(finished);
+    return finished;
+  };
+  const finishedBeforeStop = await findFinished();
+  if (finishedBeforeStop.length > 0) {
+    await restoreDelivery(finishedBeforeStop);
     return { operationId, status: 'not_running', threadId };
   }
 
@@ -347,6 +354,15 @@ export const cancelSubAgentThreadRun = async (
   // steer the sub-agent right away: a follow-up is refused while it still runs,
   // and nothing would tell the parent when it finally stopped.
   const stopped = await waitForRunToStop(deps, operationId, deps.stopWaitMs ?? STOP_WAIT_MS);
+
+  // The interrupt mark can land after the run's last check but before it saves
+  // its end state, so the run may still finish with an answer. Its completion
+  // hands the claim back; this only reports it when that already happened.
+  const finishedDuringStop = await findFinished();
+  if (finishedDuringStop.length > 0) {
+    await restoreDelivery(finishedDuringStop);
+    return { operationId, status: 'not_running', threadId };
+  }
 
   log('cancelSubAgent: cancelled %s on thread %s (stopped=%s)', operationId, threadId, stopped);
   return { operationId, status: 'cancelled', stopped, threadId };
