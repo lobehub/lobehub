@@ -166,6 +166,7 @@
   "status.paused": "已暂停",
   "status.preparing": "准备中…",
   "status.running": "正在回复…",
+  "status.silent": "选择不发言",
   "status.stopping": "正在停止，等待执行结束",
   "stopReply": "停止回复",
   "submit": "创建",
