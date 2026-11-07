@@ -13,16 +13,21 @@ const spanContext = {
 
 const mocks = vi.hoisted(() => ({
   capturedMiddleware: undefined as any,
+  span: undefined as any,
 }));
 
 vi.mock('@lobechat/observability-otel/api', () => {
   const tracer = {
-    startSpan: vi.fn(() => ({
-      spanContext: () => spanContext,
-      setStatus: vi.fn(),
-      setAttribute: vi.fn(),
-      end: vi.fn(),
-    })),
+    startSpan: vi.fn(() => {
+      mocks.span = {
+        spanContext: () => spanContext,
+        recordException: vi.fn(),
+        setStatus: vi.fn(),
+        setAttribute: vi.fn(),
+        end: vi.fn(),
+      };
+      return mocks.span;
+    }),
   };
 
   return {
@@ -89,5 +94,32 @@ describe('openTelemetry middleware', () => {
       '00-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bbbbbbbbbbbbbbbb-01',
     );
     expect(injectSpanTraceHeaders).toHaveBeenCalled();
+  });
+
+  it('reports the explicit error name even when the class name is mangled', async () => {
+    class MangledError extends Error {
+      constructor(message: string) {
+        super(message);
+        this.name = 'BusinessError';
+      }
+    }
+    // Simulate a minified production bundle renaming the class
+    Object.defineProperty(MangledError, 'name', { value: 'x' });
+
+    const middleware = mocks.capturedMiddleware || openTelemetry;
+    const error = new MangledError('boom');
+
+    await expect(
+      middleware({
+        ctx: { resHeaders: new Headers() } as any,
+        getRawInput: () => undefined,
+        next: vi.fn().mockRejectedValue(error),
+        path: 'foo.bar',
+        type: 'query',
+      }),
+    ).rejects.toBe(error);
+
+    expect(mocks.span.setAttribute).toHaveBeenCalledWith('error.type', 'BusinessError');
+    expect(mocks.span.setAttribute).not.toHaveBeenCalledWith('error.type', 'x');
   });
 });

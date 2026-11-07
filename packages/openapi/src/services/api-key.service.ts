@@ -23,6 +23,8 @@ const projectApiKey = (value: ApiKeyItem): ApiKeyResponse => ({
 });
 
 export class ApiKeyService extends BaseService {
+  protected readonly serviceName = 'ApiKeyService';
+
   private apiKeyModel: ApiKeyModel;
 
   constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {

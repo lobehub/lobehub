@@ -80,6 +80,8 @@ const projectResult = (value: EvalRunTopicResult | null): EvalRunTopicResult | n
 };
 
 export class EvalService extends BaseService {
+  protected readonly serviceName = 'EvalService';
+
   private datasetModel: AgentEvalDatasetModel;
   private runModel: AgentEvalRunModel;
   private runService: AgentEvalRunService;

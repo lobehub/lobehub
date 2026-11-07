@@ -25,6 +25,8 @@ const normalizeModelType = <T>(type: T): T => (type === 'stt' ? ('asr' as T) : t
  * Provides model query and grouping functionality
  */
 export class ModelService extends BaseService {
+  protected readonly serviceName = 'ModelService';
+
   constructor(db: LobeChatDatabase, userId: string | null, workspaceId?: string) {
     super(db, userId, workspaceId);
   }

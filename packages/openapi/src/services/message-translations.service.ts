@@ -16,6 +16,8 @@ import { ChatService } from './chat.service';
 type MessageTranslateItem = typeof messageTranslates.$inferSelect;
 
 export class MessageTranslateService extends BaseService {
+  protected readonly serviceName = 'MessageTranslateService';
+
   constructor(db: LobeChatDatabase, userId: string | null, workspaceId?: string) {
     super(db, userId, workspaceId);
   }
