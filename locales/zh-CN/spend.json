@@ -29,6 +29,7 @@
   "table.columns.trigger.enums.cli": "命令行界面",
   "table.columns.trigger.enums.context_compression": "上下文压缩",
   "table.columns.trigger.enums.cron": "定时任务",
+  "table.columns.trigger.enums.document_review": "文档审阅",
   "table.columns.trigger.enums.eval": "基准评测",
   "table.columns.trigger.enums.expertise": "Agent 自进化",
   "table.columns.trigger.enums.file_embedding": "文件嵌入",
