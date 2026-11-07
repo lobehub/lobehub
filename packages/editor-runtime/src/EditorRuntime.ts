@@ -47,6 +47,32 @@ interface LiteXMLNodeMatch {
 
 export type EditorMutationApiName = 'editTitle' | 'initPage' | 'modifyNodes' | 'replaceText';
 
+/** Inline runs a replacement may leave empty; only these are cleaned up. */
+const EMPTIED_RUN_NAMES: ReadonlySet<string> = new Set([
+  'a',
+  'b',
+  'code',
+  'del',
+  'em',
+  'i',
+  'mark',
+  's',
+  'span',
+  'strong',
+  'sub',
+  'sup',
+  'u',
+]);
+
+/** A tag's offsets in a markup fragment, as scanned by `scanTags`. */
+interface EditorTag {
+  closing: boolean;
+  end: number;
+  name: string;
+  selfClosing: boolean;
+  start: number;
+}
+
 export interface EditorMutationContext {
   apiName: EditorMutationApiName;
 }
@@ -713,7 +739,6 @@ export class EditorRuntime {
    * the characters and keeping the markup cannot unbalance a run.
    */
   private replacePlainRange(content: string, start: number, end: number, newText: string): string {
-    const tagRegex = /<[^>]+>/g;
     let newContent = '';
     let cursor = 0;
     let inserted = false;
@@ -733,12 +758,10 @@ export class EditorRuntime {
       }
     };
 
-    let tag: RegExpExecArray | null;
-
-    while ((tag = tagRegex.exec(content)) !== null) {
-      if (tag.index > cursor) appendText(content.slice(cursor, tag.index), cursor);
-      newContent += tag[0];
-      cursor = tag.index + tag[0].length;
+    for (const tag of this.scanTags(content)) {
+      if (tag.start > cursor) appendText(content.slice(cursor, tag.start), cursor);
+      newContent += content.slice(tag.start, tag.end);
+      cursor = tag.end;
     }
 
     if (cursor < content.length) appendText(content.slice(cursor), cursor);
@@ -755,18 +778,66 @@ export class EditorRuntime {
    * whole run does not leave `<b></b>` behind.
    */
   private dropEmptiedRuns(content: string): string {
-    const emptiedRun =
-      /<(b|strong|i|em|u|s|del|code|mark|span|a|sub|sup)((?:\s[^>]*?)?)>\s*<\/\1>/gi;
-
     let current = content;
     let previous: string;
 
     do {
       previous = current;
-      current = current.replaceAll(emptiedRun, '');
+      current = this.dropEmptiedRunPairs(current);
     } while (current !== previous);
 
     return current;
+  }
+
+  /** One pass over a markup string, removing the inline pairs left with no text. */
+  private dropEmptiedRunPairs(content: string): string {
+    const tags = this.scanTags(content);
+    let result = '';
+    let cursor = 0;
+
+    for (let i = 0; i < tags.length; i += 1) {
+      const open = tags[i];
+      const close = tags[i + 1];
+
+      if (open.closing || open.selfClosing || !EMPTIED_RUN_NAMES.has(open.name)) continue;
+      if (!close || !close.closing || close.name !== open.name) continue;
+      if (!/^\s*$/.test(content.slice(open.end, close.start))) continue;
+
+      result += content.slice(cursor, open.start);
+      cursor = close.end;
+      i += 1;
+    }
+
+    return result + content.slice(cursor);
+  }
+
+  /**
+   * Every tag of a markup fragment, with its offsets.
+   *
+   * Scanned with `indexOf` instead of a tag pattern: the editor hands this
+   * function unbounded document text, and a pattern that has to backtrack over
+   * a long run of `<` is a polynomial-time hazard on exactly that input.
+   */
+  private scanTags(content: string): EditorTag[] {
+    const tags: EditorTag[] = [];
+    let from = 0;
+
+    while (from < content.length) {
+      const start = content.indexOf('<', from);
+      if (start === -1) break;
+
+      const end = content.indexOf('>', start + 1);
+      if (end === -1) break;
+
+      const raw = content.slice(start + 1, end);
+      const closing = raw.startsWith('/');
+      const name = (closing ? raw.slice(1) : raw).trim().split(/[\s/]/)[0].toLowerCase();
+
+      tags.push({ closing, end: end + 1, name, selfClosing: raw.endsWith('/'), start });
+      from = end + 1;
+    }
+
+    return tags;
   }
 
   /**
