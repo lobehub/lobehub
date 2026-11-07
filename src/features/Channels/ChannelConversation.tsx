@@ -212,9 +212,7 @@ const Timeline = ({
                         role="separator"
                         {...stylex.props(styles.dateDivider)}
                       >
-                        <span {...stylex.props(styles.dateLine)} />
                         <time dateTime={date.toISOString()}>{timeFormats.date.format(date)}</time>
-                        <span {...stylex.props(styles.dateLine)} />
                       </div>
                     )}
                     {item.kind === 'event' ? (

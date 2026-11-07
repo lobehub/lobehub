@@ -12,7 +12,6 @@ import { AgentBotProviderModel } from '@/database/models/agentBotProvider';
 import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
 import type { LobeChatDatabase } from '@/database/type';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
-import { flattenBotWakeSettings } from '@/server/services/agentSignal/scenarios/botWake/config';
 import {
   assertBotAccessSettings,
   assertWatchKeywordsWritable,
@@ -38,6 +37,7 @@ import {
   beginFeishuAppRegistration,
   pollFeishuAppRegistration,
 } from '@/server/services/bot/platforms/feishu/registration';
+import { flattenBotWakeSettings } from '@/server/services/conversationWake/config';
 import { GatewayService } from '@/server/services/gateway';
 import { getBotRuntimeStatus } from '@/server/services/gateway/runtimeStatus';
 

@@ -8,10 +8,10 @@ import {
   ReactMentionPlugin,
 } from '@lobehub/editor';
 import { ChatInput, Editor, SendButton, useEditor } from '@lobehub/editor/react';
-import { ActionIcon, cssVar, Flexbox, Text, Upload } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Text } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
-import { $getSelection, $isRangeSelection } from 'lexical';
-import { CirclePlus, Reply, X } from 'lucide-react';
+import { $getSelection, $isRangeSelection, KEY_DOWN_COMMAND } from 'lexical';
+import { Reply, X } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -27,13 +27,16 @@ import { usePermission } from '@/hooks/usePermission';
 import { useSingleton } from '@/hooks/useSingleton';
 import { cacheScope } from '@/libs/replica';
 import type { ChannelQueuedSendInput } from '@/store/channel';
+import { useHomeStore } from '@/store/home';
+import { homeAgentListSelectors } from '@/store/home/selectors';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
+import { ComposerActions } from './ComposerActions';
 import { MemberAvatar } from './MemberAvatar';
 import { isCurrentUserMember, memberName } from './memberName';
-import { getMentionGroups } from './mentionGroups';
+import { getMentionGroups, mentionDescription } from './mentionGroups';
 import type { ChannelMentionInvite } from './mentions';
 import {
   $insertChannelMentionBoundary,
@@ -75,13 +78,8 @@ type ComposerDelivery =
 
 const plugins = [ReactCodePlugin, ReactListPlugin, ReactLinkHighlightPlugin, ReactMentionPlugin];
 
-/** A flat filled bar, like an IM message box, instead of the chat page's raised card. */
-const inputShell = {
-  backgroundColor: cssVar.colorFillTertiary,
-  borderColor: 'transparent',
-  borderRadius: 12,
-  boxShadow: 'none',
-};
+/** Keeps ChatInput's raised card (elevated background, border, soft shadow) from the chat page. */
+const inputShell = { borderRadius: 12 };
 
 export function Composer({
   activity,
@@ -119,9 +117,11 @@ export function Composer({
   const sending = useRef(false);
   const previousDocument = useRef('');
   const [error, setError] = useState('');
+  /** The card the mention picker docks to, full width above the input like an IM. */
+  const [card, setCard] = useState<HTMLDivElement | null>(null);
   const requests = useSingleton(createChannelSendRequest);
   const attachments = useAttachments();
-  const { allowed, reason } = usePermission('create_content');
+  const { allowed } = usePermission('create_content');
   const enableUpload = useServerConfigStore((s) => featureFlagsSelectors(s).enableKnowledgeBase);
   const canUpload = allowed && enableUpload;
   const upload = (files: File[]) => {
@@ -135,6 +135,26 @@ export function Composer({
   // Mentioning yourself notifies nobody and picks no reply.
   const mentionable = members.filter((member) => !isCurrentUserMember(member, userId));
   const invites = useMentionInvites(channel, members);
+  const canMention = mentionable.length > 0 || invites.enabled;
+  /** Types an @ at the caret and opens the same mention picker as typing it. */
+  const startMention = () => {
+    const lexical = editor.getLexicalEditor();
+    lexical?.focus(
+      () =>
+        lexical.update(() => {
+          // The picker ignores programmatic text until a keystroke re-arms it; doing both in
+          // one update keeps the intermediate state from closing it again.
+          lexical.dispatchCommand(
+            KEY_DOWN_COMMAND,
+            new KeyboardEvent('keydown', { key: 'Process' }),
+          );
+          if ($insertChannelMentionBoundary(new KeyboardEvent('keydown', { key: '@' }))) return;
+          const selection = $getSelection();
+          if ($isRangeSelection(selection)) selection.insertText('@');
+        }),
+      { defaultSelection: 'rootEnd' },
+    );
+  };
   const send = async () => {
     const value = String(editor.getDocument('markdown') || '').trim();
     const fileIds = attachments.readyFileIds();
@@ -232,6 +252,7 @@ export function Composer({
           maxHeight={480}
           minHeight={0}
           resize={false}
+          slashMenuRef={setCard}
           style={inputShell}
           styles={{ body: { overflow: 'visible', padding: 0 } }}
           header={
@@ -262,21 +283,15 @@ export function Composer({
           }
         >
           <div {...stylex.props(styles.composerRow)}>
-            {enableUpload && (
-              <Upload
-                multiple
-                disabled={busy || !canUpload}
-                onFiles={(files) => void upload(files)}
-              >
-                <ActionIcon
-                  aria-label={t('attachments.upload')}
-                  disabled={busy || !canUpload}
-                  icon={CirclePlus}
-                  size={{ blockSize: 28, size: 20 }}
-                  title={reason || t('attachments.upload')}
-                />
-              </Upload>
-            )}
+            <ComposerActions
+              disabled={busy}
+              upload={
+                enableUpload
+                  ? { blocked: !allowed, onFiles: (files) => void upload(files) }
+                  : undefined
+              }
+              onMention={canMention ? startMention : undefined}
+            />
             <div {...stylex.props(styles.composerEditor)}>
               <Editor
                 autoFocus
@@ -284,6 +299,7 @@ export function Composer({
                 content=""
                 editable={!busy}
                 editor={editor}
+                getPopupContainer={() => card}
                 placeholder={placeholder}
                 plugins={plugins}
                 slashPlacement="top"
@@ -299,12 +315,25 @@ export function Composer({
                       t('deletedMember'),
                       !!workspaceId,
                     ).flatMap<ISlashOption>((group) => {
-                      const items = group.members.map((member) => ({
-                        icon: <MemberAvatar member={member} size={24} />,
-                        key: member.id,
-                        label: memberName(member, t('deletedMember')),
-                        metadata: { type: 'channel-member', id: member.id },
-                      }));
+                      // Read when the picker opens; subscribing would rerender on every list change.
+                      const agents = homeAgentListSelectors.allAgents(useHomeStore.getState());
+                      const items = group.members.map((member) => {
+                        const label = memberName(member, t('deletedMember'));
+                        const agent = member.agentId
+                          ? agents.find((item) => item.id === member.agentId)
+                          : undefined;
+                        return {
+                          description: mentionDescription(
+                            label,
+                            agent?.title,
+                            agent?.description || member.description,
+                          ),
+                          icon: <MemberAvatar member={member} size={24} />,
+                          key: member.id,
+                          label,
+                          metadata: { type: 'channel-member', id: member.id },
+                        };
+                      });
                       return group.actorType
                         ? [
                             {
@@ -375,6 +404,7 @@ export function Composer({
                 aria-label={t('send')}
                 disabled={busy || attachments.blocked}
                 loading={busy}
+                shape="round"
                 size={28}
                 type="primary"
                 onSend={() => void send()}

@@ -8,8 +8,9 @@
   - `--label`: Tasks carrying any of these labels (repeatable / comma-separated; a label group name matches any label in it)
   - `--tree`: Display as tree structure
 - `lh task view <id>` - View task details (instruction, documents, activities)
-- `lh task create -i <instruction> [-n <name>] [--agent <id>] [--parent <id>] [--priority <0-4>] [--label <name>]` - Create task
+- `lh task create -i <instruction> [-n <name>] [--agent <id>] [--parent <id>] [--priority <0-4>] [--label <name>] [--origin-agent <id> --origin-topic <id>]` - Create task
   - Priority: 0=none, 1=urgent, 2=high, 3=normal, 4=low
+  - `--origin-agent` / `--origin-topic` (optional): the conversation to report back to when the task finishes (a result card is posted there and that agent continues). Pass both together; to be notified in your current conversation, use `$LOBEHUB_AGENT_ID` and `$LOBEHUB_TOPIC_ID`. The topic must be your own conversation.
 - `lh task edit <id> [-n <name>] [-i <instruction>] [--status <status>] [--priority <0-4>] [--agent <id>] [--label <name>] [--remove-label <name>]` - Update task
 - `lh task delete <id> [--yes]` - Delete task
 - `lh task clear [--yes]` - Delete all tasks

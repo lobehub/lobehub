@@ -31,7 +31,7 @@ import { registerMigrateCommand } from './commands/migrate';
 import { registerModelCommand } from './commands/model';
 import { registerNotificationCommand } from './commands/notification';
 import { registerNotifyCommand } from './commands/notify';
-import { registerPluginCommand } from './commands/plugin';
+import { registerLegacyPluginCommand } from './commands/plugin';
 import { registerProjectCommand } from './commands/project';
 import { registerProviderCommand } from './commands/provider';
 import { registerReadCommand } from './commands/read';
@@ -119,7 +119,7 @@ export function createProgram() {
   registerProjectCommand(program);
   registerDashboardCommand(program);
   registerWidgetCommand(program);
-  registerPluginCommand(program);
+  registerLegacyPluginCommand(program);
   registerConnectorCommand(program);
   registerWorkspaceCommand(program);
   registerUserCommand(program);

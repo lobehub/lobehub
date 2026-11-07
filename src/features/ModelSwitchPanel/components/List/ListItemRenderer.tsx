@@ -33,6 +33,8 @@ interface ListItemRendererProps {
   activeKey: string;
   /** Muted text shown after the active model's name, e.g. its reasoning effort */
   activeSecondaryText?: string;
+  /** Badge text of a restricted model */
+  getRestrictedLabel?: (modelId: string, providerId: string) => string;
   isModelRestricted?: (modelId: string, providerId: string) => boolean;
   item: ListItem;
   newLabel: string;
@@ -40,7 +42,6 @@ interface ListItemRendererProps {
   onClose: () => void;
   onModelChange: (modelId: string, providerId: string) => void;
   onRestrictedModelClick?: () => void;
-  proLabel?: string;
   subscribeScroll?: (cb: () => void) => () => void;
 }
 
@@ -48,6 +49,7 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
   ({
     activeKey,
     activeSecondaryText,
+    getRestrictedLabel,
     isModelRestricted,
     item,
     newLabel,
@@ -55,7 +57,6 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
     onModelChange,
     onClose,
     onRestrictedModelClick,
-    proLabel,
     subscribeScroll,
   }) => {
     const { t } = useTranslation('components');
@@ -179,8 +180,10 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
                   isActive={isActive}
                   model={item.model}
                   newLabel={newLabel}
-                  proBadgeLabel={restricted ? proLabel : undefined}
                   provider={item.provider.id}
+                  proBadgeLabel={
+                    restricted ? getRestrictedLabel?.(item.model.id, item.provider.id) : undefined
+                  }
                 />
               </DropdownMenuSubmenuTrigger>
               <DropdownMenuPortal>
@@ -223,8 +226,12 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
                   isActive={isActive}
                   model={item.data.model}
                   newLabel={newLabel}
-                  proBadgeLabel={restricted ? proLabel : undefined}
                   provider={singleProvider.id}
+                  proBadgeLabel={
+                    restricted
+                      ? getRestrictedLabel?.(item.data.model.id, singleProvider.id)
+                      : undefined
+                  }
                 />
               </DropdownMenuSubmenuTrigger>
               <DropdownMenuPortal>
@@ -246,9 +253,9 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
               activeKey={activeKey}
               activeSecondaryText={activeSecondaryText}
               data={item.data}
+              getRestrictedLabel={getRestrictedLabel}
               isModelRestricted={isModelRestricted}
               newLabel={newLabel}
-              proLabel={proLabel}
               onBeforeModelSelect={onBeforeModelSelect}
               onClose={onClose}
               onModelChange={onModelChange}

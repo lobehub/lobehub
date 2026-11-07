@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 import { expect, it } from 'vitest';
 
-it('accepts compiled markers, custom properties, dynamic styles and nested conditions', () => {
+it('accepts compiled markers, custom properties, dynamic styles, nested conditions, class names and inline styles in any order', () => {
   const filename = fileURLToPath(new URL('./sx-arguments.contract.ts', import.meta.url));
   const source = `
     import * as stylex from '@stylexjs/stylex';
@@ -14,11 +14,12 @@ it('accepts compiled markers, custom properties, dynamic styles and nested condi
       dynamic: (color: string) => ({ color, '--operator-color': color }),
     });
     const marker = stylex.defineMarker();
-    sx([styles.root, styles.custom, marker, stylex.defaultMarker()]);
-    sx([styles.dynamic('blue'), [true, false, null, undefined, styles.root]]);
+    sx(styles.root, styles.custom, marker, stylex.defaultMarker());
+    sx(styles.dynamic('blue'), [true, false, null, undefined, styles.root]);
     sx(styles.root, 'caller-class', { margin: 1 });
-    // @ts-expect-error Raw CSS objects are not compiled StyleX arguments.
-    sx({ color: 'red' });
+    sx(styles.root, { color: 'red' }, 'caller-class');
+    // @ts-expect-error A number is neither a style, a class name nor an inline style.
+    sx(styles.root, 1);
   `;
   const options: ts.CompilerOptions = {
     esModuleInterop: true,

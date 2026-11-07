@@ -50,6 +50,12 @@ export type IFeatureFlagsState = {
    */
   enableNewTierPlans: boolean | undefined;
   /**
+   * Rollout gate for buying the new tiers in the mobile app
+   * (`mobile_new_tier_sales`). Separate from `enableNewTierPlans`, which covers
+   * the web plans page.
+   */
+  enableMobileNewTierSales: boolean | undefined;
+  /**
    * LobeHub Mobile rollout gate for the multiplexed gateway socket and
    * protocol-v2 payloads. Web follows `GlobalServerConfig.agentGatewayProtocol`.
    */

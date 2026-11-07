@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   buildCreateProjectRequest,
+  DEFAULT_MAIN_AGENT_MODE,
   getCreateProjectInput,
   getProjectFieldSuggestions,
   isProjectIdentifierValid,
@@ -70,6 +71,15 @@ describe('createProjectForm', () => {
         { avatar: '🚀', mainAgentId: 'inbox', mainAgentMode: 'dedicated' },
       ),
     ).toEqual({ avatar: '🚀', name: 'Launch' });
+  });
+
+  it('creates a dedicated main agent by default', () => {
+    expect(
+      buildCreateProjectRequest(
+        { name: 'Launch' },
+        { mainAgentId: 'inbox', mainAgentMode: DEFAULT_MAIN_AGENT_MODE },
+      ),
+    ).toEqual({ name: 'Launch' });
   });
 
   it('sends the picked agent when the project reuses an existing one', () => {

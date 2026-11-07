@@ -47,7 +47,7 @@ const loadManagedPhases = async (
   scope: { userId: string; workspaceId?: string },
 ): Promise<Record<string, ManagedDevicePhase>> => {
   if (!rows.some(isManagedCloudDevice)) return {};
-  if (!managedDeviceProvider.isAvailable()) return {};
+  if (!(await managedDeviceProvider.isAvailable())) return {};
 
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<Record<string, ManagedDevicePhase>>((resolve) => {

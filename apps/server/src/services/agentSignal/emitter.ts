@@ -12,13 +12,14 @@ import {
 } from '@lobechat/agent-signal/source';
 
 import type { LobeChatDatabase } from '@/database/type';
+import type { BotWakeConfig } from '@/server/services/conversationWake/types';
 
 import {
   executeAgentSignalSourceEvent,
   type GeneratedAgentSignalEmissionResult,
 } from './orchestrator';
 import type { CreateDefaultAgentSignalPoliciesOptions } from './policies';
-import type { BotWakeConfig, CreateBotWakePolicyOptions } from './scenarios/botWake';
+import type { CreateBotWakePolicyOptions } from './scenarios/botWake';
 import { getAgentSignalScenarioMeta, isAgentSignalScenarioEnabled } from './scenarios/meta';
 import type { AgentSignalScenarioId } from './scenarios/types';
 

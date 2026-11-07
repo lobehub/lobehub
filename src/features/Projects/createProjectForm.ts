@@ -49,11 +49,20 @@ export const getCreateProjectInput = (draft: CreateProjectDraft) => {
   return { name, ...(identifier ? { identifier } : {}), ...(slug ? { slug } : {}) };
 };
 
+/** Lead a new project with an agent created for it, or with an existing one. */
+export type MainAgentMode = 'dedicated' | 'existing';
+
+/**
+ * Every new project starts with an agent of its own. Reusing an agent is an
+ * explicit pick in the modal and is not carried over to the next project.
+ */
+export const DEFAULT_MAIN_AGENT_MODE: MainAgentMode = 'dedicated';
+
 export interface CreateProjectExtras {
   avatar?: string;
   /** The picked agent; only sent when the project reuses an existing agent. */
   mainAgentId?: string;
-  mainAgentMode: 'dedicated' | 'existing';
+  mainAgentMode: MainAgentMode;
 }
 
 /**
