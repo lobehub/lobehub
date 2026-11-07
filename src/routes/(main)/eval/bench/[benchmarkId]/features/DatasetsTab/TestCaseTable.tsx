@@ -15,6 +15,8 @@ import { Ellipsis, ExternalLink, FileUp, Pencil, Plus, Search, Trash2 } from 'lu
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { getCaseLabel } from '@/features/Eval/caseLabel';
+
 import SegmentBar from '../../../../features/SegmentBar';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -194,20 +196,15 @@ const TestCaseTable = memo<TestCaseTableProps>(
           width: 48,
         },
         {
-          key: 'input',
-          render: (_: any, record: any) => (
-            <p
-              style={{
-                color: cssVar.colorText,
-                margin: 0,
-                whiteSpace: 'pre-wrap',
-                wordBreak: 'break-word',
-              }}
-            >
-              {record.content?.input}
-            </p>
-          ),
-          title: t('table.columns.input'),
+          // The declared title, else the input on one line; the full prompt or
+          // JSON payload opens with the case.
+          ellipsis: true,
+          key: 'case',
+          render: (_: any, record: any) => {
+            const label = getCaseLabel(record);
+            return <Text ellipsis={{ tooltip: label, tooltipWhenOverflow: true }}>{label}</Text>;
+          },
+          title: t('table.columns.case'),
         },
         {
           ellipsis: true,

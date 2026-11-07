@@ -15,6 +15,7 @@ import { Plus } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { getCaseLabel } from '@/features/Eval/caseLabel';
 import { agentEvalService } from '@/services/agentEval';
 import { testCaseSelectors, useEvalStore } from '@/store/eval';
 
@@ -89,7 +90,13 @@ const DatasetsTab = memo<DatasetsTabProps>(
 
     const filteredCases = testCases.filter((c: any) => {
       if (diffFilter !== 'all' && c.metadata?.difficulty !== diffFilter) return false;
-      if (search && !c.content?.input?.toLowerCase().includes(search.toLowerCase())) return false;
+      if (
+        search &&
+        ![getCaseLabel(c), c.content?.input ?? ''].some((text) =>
+          text.toLowerCase().includes(search.toLowerCase()),
+        )
+      )
+        return false;
       return true;
     });
 

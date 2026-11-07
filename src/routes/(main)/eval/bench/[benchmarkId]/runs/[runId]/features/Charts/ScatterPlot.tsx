@@ -6,6 +6,7 @@ import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
+import { getCaseLabel } from '@/features/Eval/caseLabel';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -67,7 +68,7 @@ const ScatterPlot = memo<ScatterPlotProps>(({ results, benchmarkId, runId }) => 
       const tokens = r.evalResult?.tokens || 0;
       const cost: number | undefined = r.evalResult?.cost;
       const status: string | undefined = r.status;
-      const input: string = r.testCase?.content?.input || '';
+      const input: string = getCaseLabel(r.testCase);
       const expected: string = r.testCase?.content?.expected || '';
       const sortOrder: number | undefined = r.testCase?.sortOrder;
       const testCaseId: string = r.testCaseId || '';

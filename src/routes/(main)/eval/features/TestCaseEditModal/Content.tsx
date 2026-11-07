@@ -43,6 +43,13 @@ const TestCaseEditContent: FC<TestCaseEditContentProps> = ({
   const { t } = useTranslation('eval');
   const { close } = useModalContext();
 
+  const {
+    difficulty: _difficulty,
+    tags: _tags,
+    title: _title,
+    ...otherMetadata
+  } = testCase.metadata ?? {};
+
   const handleFinish = async (values: any) => {
     onLoadingChange?.(true);
     try {
@@ -67,8 +74,11 @@ const TestCaseEditContent: FC<TestCaseEditContentProps> = ({
         evalMode: values.evalMode || null,
         id: testCase.id,
         metadata: {
+          // Keys this form does not edit (an imported case's index or caseId) stay.
+          ...otherMetadata,
           ...(values.difficulty ? { difficulty: values.difficulty } : {}),
           ...(tags ? { tags } : {}),
+          ...(values.title?.trim() ? { title: values.title.trim() } : {}),
         },
       });
 
@@ -91,6 +101,7 @@ const TestCaseEditContent: FC<TestCaseEditContentProps> = ({
       expected: testCase.content?.expected,
       input: testCase.content?.input,
       tags: testCase.metadata?.tags?.join(', '),
+      title: testCase.metadata?.title,
     },
     onSubmit: handleFinish,
   });
@@ -99,6 +110,9 @@ const TestCaseEditContent: FC<TestCaseEditContentProps> = ({
   return (
     <Form form={form} id={formId} layout="vertical">
       <div className={styles.sectionLabel}>{t('caseDetail.section.testCase')}</div>
+      <Form.Field label={t('testCase.create.caseTitle.label')} name="title">
+        <Input maxLength={200} placeholder={t('testCase.create.caseTitle.placeholder')} />
+      </Form.Field>
       <Form.Field required label={t('testCase.create.input.label')} name="input">
         <TextArea
           autoSize={{ maxRows: 6, minRows: 3 }}

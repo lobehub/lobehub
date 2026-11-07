@@ -1,4 +1,4 @@
-import type { AgentEvalDatasetPackage } from '@lobechat/types';
+import { type AgentEvalDatasetPackage, DATASET_PACKAGE_MAX_CONNECTIONS } from '@lobechat/types';
 import { z } from 'zod';
 
 import {
@@ -99,6 +99,8 @@ export const datasetPackageSchema = z
                 difficulty: z.enum(['easy', 'hard', 'medium']).optional(),
                 index: z.number().int().nonnegative().optional(),
                 tags: z.array(z.string()).max(100).optional(),
+                /** Human-readable name shown in case lists instead of the raw input. */
+                title: z.string().trim().max(200).optional(),
               })
               .strict()
               .optional(),
@@ -137,6 +139,16 @@ export const datasetPackageSchema = z
   })
   .strict()
   .superRefine((value, ctx) => {
+    const connectionCount = Object.keys(value.connections ?? {}).length;
+    if (connectionCount > DATASET_PACKAGE_MAX_CONNECTIONS) {
+      // Reported at the root, so the refusal names the limit instead of the
+      // generic connection-configuration message.
+      ctx.addIssue({
+        code: 'custom',
+        message: `A package can include at most ${DATASET_PACKAGE_MAX_CONNECTIONS} connections; this one has ${connectionCount}`,
+        path: [],
+      });
+    }
     const environmentKeys = new Set<string>();
     value.environments.forEach((environment, index) => {
       if (environmentKeys.has(environment.key)) {

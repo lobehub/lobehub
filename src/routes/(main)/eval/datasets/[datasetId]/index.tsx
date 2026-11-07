@@ -17,6 +17,7 @@ import { useParams } from 'react-router';
 import AsyncBoundary from '@/components/AsyncBoundary';
 import { RouteLoading } from '@/components/Skeleton/RouteSegment';
 import { DatasetConnections } from '@/features/AgentEval/ConnectorBindings/DatasetConnections';
+import { getCaseLabel } from '@/features/Eval/caseLabel';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { agentEvalService } from '@/services/agentEval';
@@ -143,7 +144,13 @@ const DatasetDetail = memo(() => {
 
   const filteredCases = testCases.filter((c: any) => {
     if (diffFilter !== 'all' && c.metadata?.difficulty !== diffFilter) return false;
-    if (search && !c.content?.input?.toLowerCase().includes(search.toLowerCase())) return false;
+    if (
+      search &&
+      ![getCaseLabel(c), c.content?.input ?? ''].some((text) =>
+        text.toLowerCase().includes(search.toLowerCase()),
+      )
+    )
+      return false;
     return true;
   });
 

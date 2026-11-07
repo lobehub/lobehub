@@ -2,188 +2,162 @@
 
 import type { EvalRunMetrics } from '@lobechat/types';
 import { formatCost, formatShortenNumber } from '@lobechat/utils';
-import { createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
-import { CheckCircle2, Clock, DollarSign, Hash } from 'lucide-react';
-import { memo } from 'react';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
+import { type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { sx } from '@/styles/sx';
 
 import { formatDuration } from '../../../../../../utils';
 
-const styles = createStaticStyles(({ css }) => ({
-  card: css`
-    padding: 16px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadius};
-  `,
-  grid: css`
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 16px;
-  `,
-  // Pass rate hero — the run's headline outcome, given the most visual weight.
-  hero: css`
-    padding: 20px;
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  heroValue: css`
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: ${cssVar.fontSizeHeading1};
-    font-weight: 600;
-    line-height: 1;
-    color: ${cssVar.colorText};
-  `,
-  iconBox: css`
-    display: flex;
-    flex-shrink: 0;
-    align-items: center;
-    justify-content: center;
-
-    width: 36px;
-    height: 36px;
-    border-radius: ${cssVar.borderRadius};
-  `,
-  label: css`
-    font-size: ${cssVar.fontSizeSM};
-    color: ${cssVar.colorTextTertiary};
-  `,
-  progressFill: css`
-    height: 100%;
-    border-radius: 999px;
-    background: ${cssVar.colorSuccess};
-    transition: width 0.3s ease;
-
-    @media (prefers-reduced-motion: reduce) {
-      transition: none;
-    }
-  `,
-  progressTrack: css`
-    overflow: hidden;
-
-    width: 100%;
-    height: 8px;
-    border-radius: 999px;
-
-    background: ${cssVar.colorFillSecondary};
-  `,
-  subtitle: css`
-    font-size: ${cssVar.fontSize};
-    color: ${cssVar.colorTextSecondary};
-  `,
-  subtitleUnit: css`
-    font-size: ${cssVar.fontSizeSM};
-    color: ${cssVar.colorTextTertiary};
-  `,
-  value: css`
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: ${cssVar.fontSizeHeading3};
-    font-weight: 600;
-    color: ${cssVar.colorText};
-  `,
-}));
+const styles = stylex.create({
+  // One flat strip: the numbers carry the row, so no per-metric card or icon.
+  strip: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+    rowGap: 16,
+  },
+  metric: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 4,
+    minWidth: 0,
+    paddingInline: 20,
+    borderInlineStartWidth: { 'default': 1, ':first-child': 0 },
+    borderInlineStartStyle: 'solid',
+    borderInlineStartColor: cssVar.colorBorderSecondary,
+    paddingInlineStart: { 'default': 20, ':first-child': 0 },
+  },
+  label: {
+    fontSize: cssVar.fontSizeSM,
+    color: cssVar.colorTextSecondary,
+    whiteSpace: 'nowrap',
+  },
+  value: {
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: cssVar.fontSizeHeading3,
+    fontVariantNumeric: 'tabular-nums',
+    fontWeight: 600,
+    lineHeight: 1.2,
+    color: cssVar.colorText,
+    whiteSpace: 'nowrap',
+  },
+  sub: {
+    fontSize: cssVar.fontSizeSM,
+    color: cssVar.colorTextSecondary,
+    whiteSpace: 'nowrap',
+  },
+  progressTrack: {
+    overflow: 'hidden',
+    width: '100%',
+    height: 4,
+    marginBlockStart: 4,
+    borderRadius: 999,
+    backgroundColor: cssVar.colorFillSecondary,
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 999,
+    backgroundColor: cssVar.colorSuccess,
+  },
+});
 
 interface StatsCardsProps {
   metrics?: EvalRunMetrics;
 }
 
-const StatsCards = memo<StatsCardsProps>(({ metrics }) => {
+interface Metric {
+  key: string;
+  label: string;
+  sub?: ReactNode;
+  value: string;
+}
+
+const perCase = (value: string, unit: string) => `~${value} ${unit}`;
+
+/**
+ * The run's headline numbers in reading order: the outcome, then what the
+ * cases took (steps, cost, tokens), then how long they ran.
+ */
+const StatsCards = ({ metrics }: StatsCardsProps) => {
   const { t } = useTranslation('eval');
 
   const passedCount = metrics?.passedCases ?? 0;
   const totalCases = metrics?.totalCases ?? 0;
   const hasPassRate = metrics?.passRate !== undefined;
   const passPct = hasPassRate ? Math.round((metrics?.passRate ?? 0) * 100) : 0;
+  const unit = t('run.metrics.perCase');
 
-  const cards = [
+  const callSplit =
+    metrics?.perCaseLlmCalls !== undefined || metrics?.perCaseToolCalls !== undefined
+      ? t('run.metrics.stepsSplit', {
+          llm: (metrics?.perCaseLlmCalls ?? 0).toFixed(1),
+          tool: (metrics?.perCaseToolCalls ?? 0).toFixed(1),
+        })
+      : undefined;
+
+  const items: Metric[] = [
     {
-      bgColor: cssVar.colorWarningBg,
-      color: cssVar.colorWarning,
-      icon: Clock,
-      label: t('run.metrics.duration'),
-      subtitle:
-        metrics?.totalDuration !== undefined && totalCases > 0 ? (
-          <>
-            ~{formatDuration(metrics.totalDuration / totalCases)}{' '}
-            <span className={styles.subtitleUnit}>{t('run.metrics.perCase')}</span>
-          </>
-        ) : undefined,
-      value: metrics?.duration !== undefined ? formatDuration(metrics.duration) : '-',
+      key: 'steps',
+      label: t('run.metrics.steps'),
+      sub: callSplit,
+      value: metrics?.perCaseSteps !== undefined ? metrics.perCaseSteps.toFixed(1) : '-',
     },
     {
-      bgColor: cssVar.colorPrimaryBg,
-      color: cssVar.colorPrimary,
-      icon: DollarSign,
+      key: 'cost',
       label: t('run.metrics.cost'),
-      subtitle:
-        metrics?.perCaseCost !== undefined ? (
-          <>
-            ~${formatCost(metrics.perCaseCost)}{' '}
-            <span className={styles.subtitleUnit}>{t('run.metrics.perCase')}</span>
-          </>
-        ) : undefined,
+      sub:
+        metrics?.perCaseCost !== undefined
+          ? perCase(`$${formatCost(metrics.perCaseCost)}`, unit)
+          : undefined,
       value: metrics?.totalCost !== undefined ? `$${formatCost(metrics.totalCost)}` : '-',
     },
     {
-      bgColor: cssVar.colorInfoBg,
-      color: cssVar.colorInfo,
-      icon: Hash,
+      key: 'tokens',
       label: t('run.metrics.tokens'),
-      subtitle:
-        metrics?.perCaseTokens !== undefined ? (
-          <>
-            ~{formatShortenNumber(Math.round(metrics.perCaseTokens))}{' '}
-            <span className={styles.subtitleUnit}>{t('run.metrics.perCase')}</span>
-          </>
-        ) : undefined,
+      sub:
+        metrics?.perCaseTokens !== undefined
+          ? perCase(formatShortenNumber(Math.round(metrics.perCaseTokens)), unit)
+          : undefined,
       value: metrics?.totalTokens !== undefined ? formatShortenNumber(metrics.totalTokens) : '-',
+    },
+    {
+      key: 'duration',
+      label: t('run.metrics.duration'),
+      sub:
+        metrics?.totalDuration !== undefined && totalCases > 0
+          ? perCase(formatDuration(metrics.totalDuration / totalCases), unit)
+          : undefined,
+      value: metrics?.duration !== undefined ? formatDuration(metrics.duration) : '-',
     },
   ];
 
   return (
-    <Flexbox gap={16}>
-      {/* Pass rate hero */}
-      <Flexbox className={styles.hero} gap={16}>
-        <Flexbox horizontal align={'flex-end'} gap={16} justify={'space-between'}>
-          <Flexbox gap={6}>
-            <Flexbox horizontal align={'center'} gap={8}>
-              <div className={styles.iconBox} style={{ background: cssVar.colorSuccessBg }}>
-                <Icon icon={CheckCircle2} size={16} style={{ color: cssVar.colorSuccess }} />
-              </div>
-              <span className={styles.label}>{t('run.metrics.passRate')}</span>
-            </Flexbox>
-            <span className={styles.heroValue}>{hasPassRate ? `${passPct}%` : '-'}</span>
-          </Flexbox>
-          {totalCases > 0 && (
-            <Text className={styles.subtitle}>
-              {passedCount}/{totalCases}{' '}
-              <span className={styles.subtitleUnit}>{t('table.filter.passed')}</span>
-            </Text>
-          )}
-        </Flexbox>
+    <div {...stylex.props(styles.strip)}>
+      <div {...stylex.props(styles.metric)}>
+        <span {...stylex.props(styles.label)}>{t('run.metrics.passRate')}</span>
+        <span {...stylex.props(styles.value)}>{hasPassRate ? `${passPct}%` : '-'}</span>
+        {totalCases > 0 && (
+          <span {...stylex.props(styles.sub)}>
+            {passedCount}/{totalCases} {t('table.filter.passed')}
+          </span>
+        )}
         {hasPassRate && totalCases > 0 && (
-          <div className={styles.progressTrack}>
-            <div className={styles.progressFill} style={{ width: `${passPct}%` }} />
+          <div {...stylex.props(styles.progressTrack)}>
+            <div {...sx(styles.progressFill, { width: `${passPct}%` })} />
           </div>
         )}
-      </Flexbox>
-
-      {/* Secondary metrics */}
-      <div className={styles.grid}>
-        {cards.map((card) => (
-          <Flexbox horizontal align={'center'} className={styles.card} gap={12} key={card.label}>
-            <div className={styles.iconBox} style={{ background: card.bgColor }}>
-              <Icon icon={card.icon} size={16} style={{ color: card.color }} />
-            </div>
-            <Flexbox gap={2}>
-              <span className={styles.label}>{card.label}</span>
-              <span className={styles.value}>{card.value}</span>
-              {card.subtitle && <span className={styles.subtitle}>{card.subtitle}</span>}
-            </Flexbox>
-          </Flexbox>
-        ))}
       </div>
-    </Flexbox>
+      {items.map((item) => (
+        <div key={item.key} {...stylex.props(styles.metric)}>
+          <span {...stylex.props(styles.label)}>{item.label}</span>
+          <span {...stylex.props(styles.value)}>{item.value}</span>
+          {item.sub && <span {...stylex.props(styles.sub)}>{item.sub}</span>}
+        </div>
+      ))}
+    </div>
   );
-});
+};
 
 export default StatsCards;

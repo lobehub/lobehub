@@ -36,4 +36,31 @@ describe('TestCaseEditContent', () => {
       tags: ['a', 'b'],
     });
   });
+
+  it('saves the optional title, keeps unedited metadata and drops a cleared title', async () => {
+    mocks.updateTestCase.mockReset().mockResolvedValue(undefined);
+    const { container, getByDisplayValue } = render(
+      <TestCaseEditContent
+        formId="edit"
+        testCase={{
+          content: { expected: 'e', input: '{"query": "air mattress"}' },
+          datasetId: 'd1',
+          id: 'tc1',
+          metadata: { caseId: 'market-1', title: 'Market report' },
+        }}
+      />,
+    );
+
+    fireEvent.submit(container.querySelector('form')!);
+    await waitFor(() => expect(mocks.updateTestCase).toHaveBeenCalledTimes(1));
+    expect(mocks.updateTestCase.mock.calls[0][0].metadata).toEqual({
+      caseId: 'market-1',
+      title: 'Market report',
+    });
+
+    fireEvent.change(getByDisplayValue('Market report'), { target: { value: '  ' } });
+    fireEvent.submit(container.querySelector('form')!);
+    await waitFor(() => expect(mocks.updateTestCase).toHaveBeenCalledTimes(2));
+    expect(mocks.updateTestCase.mock.calls[1][0].metadata).toEqual({ caseId: 'market-1' });
+  });
 });

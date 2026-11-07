@@ -5,6 +5,7 @@ import {
   type EvalRunModelParams,
 } from '@lobechat/types';
 
+import { getCaseLabel } from '@/features/Eval/caseLabel';
 import { LOBE_BENCH_KIND } from '@/store/eval/kinds';
 
 export {
@@ -348,10 +349,8 @@ interface CaseLike {
 }
 
 export const getCaseTitle = (testCase: CaseLike) => {
-  const title = testCase.metadata?.title;
-  if (typeof title === 'string' && title.trim()) return title.trim();
-  const firstLine = (testCase.content?.input ?? '').split('\n')[0].trim();
-  return firstLine.length > 80 ? `${firstLine.slice(0, 79)}…` : firstLine || testCase.id;
+  const label = getCaseLabel(testCase);
+  return label.length > 80 ? `${label.slice(0, 79)}…` : label || testCase.id;
 };
 
 export const getCaseCategory = (testCase: CaseLike, fallback = 'Other') => {

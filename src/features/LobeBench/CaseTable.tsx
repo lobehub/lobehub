@@ -67,6 +67,8 @@ const describeCaseMemory = (environment: EvalCaseEnvironment | undefined, t: TFu
   })} · ${start}`;
 };
 
+const CASE_PAGE_SIZE = 100;
+
 const styles = stylex.create({
   table: {
     display: 'grid',
@@ -174,6 +176,11 @@ const CaseTable = memo<CaseTableProps>(
         ) as Record<(typeof CASE_LEVELS)[number], number>,
       [cases],
     );
+    // A dataset can hold thousands of cases (a package allows 5,000): rows render
+    // a page at a time, and a new search or filter starts from the first page.
+    const filterKey = [query, categoryFilter ?? '', levelFilter ?? ''].join('\u0000');
+    const [shown, setShown] = useState({ count: CASE_PAGE_SIZE, key: filterKey });
+    const shownCount = shown.key === filterKey ? shown.count : CASE_PAGE_SIZE;
     const visibleCases = useMemo(() => {
       const needle = query.trim().toLowerCase();
       return (cases ?? [])
@@ -417,7 +424,7 @@ const CaseTable = memo<CaseTableProps>(
             {!isLoading && (cases?.length ?? 0) === 0 && (
               <Empty description={t('lobeBench.library.empty')} />
             )}
-            {visibleCases.map(({ item, position }) => {
+            {visibleCases.slice(0, shownCount).map(({ item, position }) => {
               const level = getCaseLevel(item);
               const connectors = getCaseConnectors(item);
               // Published sets number their cases; the account's own set counts rows.
@@ -468,6 +475,17 @@ const CaseTable = memo<CaseTableProps>(
                 </div>
               );
             })}
+            {visibleCases.length > shownCount && (
+              <Button
+                style={{ alignSelf: 'center', marginBlockStart: 8 }}
+                onClick={() => setShown({ count: shownCount + CASE_PAGE_SIZE, key: filterKey })}
+              >
+                {t('lobeBench.library.showMore', {
+                  count: Math.min(CASE_PAGE_SIZE, visibleCases.length - shownCount),
+                  rest: (visibleCases.length - shownCount).toLocaleString(),
+                })}
+              </Button>
+            )}
           </Flexbox>
         </Block>
 

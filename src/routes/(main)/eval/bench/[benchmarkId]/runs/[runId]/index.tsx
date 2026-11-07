@@ -37,12 +37,6 @@ const styles = createStaticStyles(({ css }) => ({
     border-radius: ${cssVar.borderRadiusLG};
     background: ${cssVar.colorBgContainer};
   `,
-  panelBody: css`
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-    padding: 20px;
-  `,
   panelHeader: css`
     display: flex;
     gap: 12px;
@@ -57,6 +51,19 @@ const styles = createStaticStyles(({ css }) => ({
     font-size: ${cssVar.fontSizeSM};
     font-weight: 500;
     color: ${cssVar.colorTextSecondary};
+  `,
+  // The finished report sits on the page itself: a heading, the metric strip and
+  // the charts, without a panel around them.
+  summary: css`
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  `,
+  summaryTitle: css`
+    margin: 0;
+    font-size: ${cssVar.fontSizeLG};
+    font-weight: 600;
+    color: ${cssVar.colorText};
   `,
   stateBody: css`
     display: flex;
@@ -129,20 +136,16 @@ const RunDetail = memo(() => {
 
           {/* Report panel (when finished) or state panel (when not finished) */}
           {isFinished ? (
-            <section className={styles.panel}>
-              <header className={styles.panelHeader}>
-                <span className={styles.panelLabel}>{t('run.detail.report')}</span>
-              </header>
-              <div className={styles.panelBody}>
-                <StatsCards metrics={runDetail.metrics ?? undefined} />
-                {hasResults && (
-                  <BenchmarkCharts
-                    benchmarkId={benchmarkId!}
-                    results={runResults.results}
-                    runId={runId!}
-                  />
-                )}
-              </div>
+            <section className={styles.summary}>
+              <h2 className={styles.summaryTitle}>{t('run.detail.report')}</h2>
+              <StatsCards metrics={runDetail.metrics ?? undefined} />
+              {hasResults && (
+                <BenchmarkCharts
+                  benchmarkId={benchmarkId!}
+                  results={runResults.results}
+                  runId={runId!}
+                />
+              )}
             </section>
           ) : (
             <section className={styles.panel}>

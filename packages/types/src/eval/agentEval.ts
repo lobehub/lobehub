@@ -202,6 +202,12 @@ export interface EvalTestCaseMetadata {
   difficulty?: 'easy' | 'hard' | 'medium';
   source?: string;
   tags?: string[];
+  /**
+   * A short human-readable name for case lists and result tables. Optional:
+   * without one, lists show the input on a single line (see `getCaseLabel`),
+   * which reads poorly for long prompts and JSON inputs.
+   */
+  title?: string;
 }
 
 /**
