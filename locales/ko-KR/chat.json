@@ -47,7 +47,6 @@
   "agentProfile.skills_one": "{{count}}개 스킬",
   "agentProfile.skills_other": "{{count}}개 스킬",
   "agentSender.sourceTopic": "소스 주제",
-  "agentSignal.receipts.agentSignalLabel": "Agent Signal",
   "agentSignal.receipts.memory.detail": "미래의 응답을 위해 저장되었습니다",
   "agentSignal.receipts.memory.openInMemory": "메모리에서 열기",
   "agentSignal.receipts.memory.title": "메모리 저장됨",

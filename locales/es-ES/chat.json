@@ -47,7 +47,6 @@
   "agentProfile.skills_one": "{{count}} habilidad",
   "agentProfile.skills_other": "{{count}} habilidades",
   "agentSender.sourceTopic": "Tema de origen",
-  "agentSignal.receipts.agentSignalLabel": "Agent Signal",
   "agentSignal.receipts.memory.detail": "Guardado para respuestas futuras",
   "agentSignal.receipts.memory.openInMemory": "Abrir en Memoria",
   "agentSignal.receipts.memory.title": "Memoria guardada",

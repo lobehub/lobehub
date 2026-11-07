@@ -47,7 +47,6 @@
   "agentProfile.skills_one": "{{count}} навык",
   "agentProfile.skills_other": "{{count}} навыков",
   "agentSender.sourceTopic": "Исходная тема",
-  "agentSignal.receipts.agentSignalLabel": "Agent Signal",
   "agentSignal.receipts.memory.detail": "Сохранено для будущих ответов",
   "agentSignal.receipts.memory.openInMemory": "Открыть в памяти",
   "agentSignal.receipts.memory.title": "Память сохранена",

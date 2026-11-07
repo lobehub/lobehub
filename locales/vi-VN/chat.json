@@ -47,7 +47,6 @@
   "agentProfile.skills_one": "{{count}} kỹ năng",
   "agentProfile.skills_other": "{{count}} kỹ năng",
   "agentSender.sourceTopic": "Chủ đề nguồn",
-  "agentSignal.receipts.agentSignalLabel": "Agent Signal",
   "agentSignal.receipts.memory.detail": "Đã lưu để trả lời trong tương lai",
   "agentSignal.receipts.memory.openInMemory": "Mở trong Bộ nhớ",
   "agentSignal.receipts.memory.title": "Đã lưu ký ức",

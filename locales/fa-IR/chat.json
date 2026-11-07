@@ -47,7 +47,6 @@
   "agentProfile.skills_one": "{{count}} مهارت",
   "agentProfile.skills_other": "{{count}} مهارت",
   "agentSender.sourceTopic": "موضوع منبع",
-  "agentSignal.receipts.agentSignalLabel": "Agent Signal",
   "agentSignal.receipts.memory.detail": "این را برای پاسخ‌های آینده ذخیره کرد",
   "agentSignal.receipts.memory.openInMemory": "باز کردن در حافظه",
   "agentSignal.receipts.memory.title": "حافظه ذخیره شد",
