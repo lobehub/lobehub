@@ -218,6 +218,53 @@ describe('UserMemoryConsolidationModel', () => {
     expect(await model.listPendingLegacyContexts()).toHaveLength(1);
   });
 
+  it('reactivates a closed dossier when fresh evidence extends it', async () => {
+    const daysAgo = (days: number) =>
+      new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
+    const old = await createLegacy('billing migration', daysAgo(400));
+    const first = await model.applyContextPlan('run_closed', {
+      dossiers: [{ memberIds: [old.context.id], now: 'v1', title: 'Billing' }],
+      nextSteps: [],
+      now: 'v1',
+      openQuestions: [],
+      title: 'Billing',
+    });
+    const [closed] = await serverDB
+      .select()
+      .from(userMemoriesDossiers)
+      .where(eq(userMemoriesDossiers.id, first.dossierIds[0]));
+    expect(closed.status).toBe('closed');
+
+    const fresh = await createLegacy('billing migration resumed', daysAgo(1));
+    await model.applyContextPlan('run_resumed', {
+      dossiers: [
+        {
+          existingDossierId: first.dossierIds[0],
+          memberIds: [fresh.context.id],
+          now: 'v2',
+          title: 'Billing',
+        },
+      ],
+      existingContextId: first.contextId,
+      nextSteps: [],
+      now: 'v2',
+      openQuestions: [],
+      title: 'Billing',
+    });
+    const [resumed] = await serverDB
+      .select()
+      .from(userMemoriesDossiers)
+      .where(eq(userMemoriesDossiers.id, first.dossierIds[0]));
+    expect(resumed.status).toBe('active');
+
+    await model.revertRun('run_resumed');
+    const [restored] = await serverDB
+      .select()
+      .from(userMemoriesDossiers)
+      .where(eq(userMemoriesDossiers.id, first.dossierIds[0]));
+    expect(restored.status).toBe('closed');
+  });
+
   it('reverts a run that updated the same context and dossier in several chunks', async () => {
     const a = await createLegacy('scheduler backend', '2026-05-01');
     const first = await model.applyContextPlan('run_5', {
