@@ -1,5 +1,6 @@
-import useSWR from 'swr';
-import { type SWRHook } from 'swr';
+import { useLayoutEffect } from 'react';
+import useSWR, { unstable_serialize } from 'swr';
+import { type Key, type SWRHook } from 'swr';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 
@@ -80,6 +81,33 @@ export const useOnlyFetchOnceSWR: SWRHook = (key, fetch, config) =>
     ...config,
   });
 
+// How many mounted `useActionSWR` hooks hold each key: the sidebar and the hotkey share one. SWR
+// only revalidates a key through a mounted hook, so an unmounted action key needs no entry.
+const mountedActionKeys = new Map<string, number>();
+
+/**
+ * Whether `key` belongs to a mounted `useActionSWR` hook. Revalidating such a key runs its action,
+ * so a broadcast that revalidates every key (`mutate(() => true)`) must filter it out.
+ */
+export const isActionSWRKey = (key: Key) => mountedActionKeys.has(unstable_serialize(key));
+
+const useMountedActionKey = (key: Key) => {
+  const serializedKey = unstable_serialize(key);
+
+  // A layout effect, like the one SWR subscribes the key's revalidator in. A passive effect would
+  // run later and leave a gap in which a broadcast could run the action.
+  useLayoutEffect(() => {
+    mountedActionKeys.set(serializedKey, (mountedActionKeys.get(serializedKey) ?? 0) + 1);
+
+    return () => {
+      const holders = (mountedActionKeys.get(serializedKey) ?? 1) - 1;
+
+      if (holders > 0) mountedActionKeys.set(serializedKey, holders);
+      else mountedActionKeys.delete(serializedKey);
+    };
+  }, [serializedKey]);
+};
+
 /**
  * This type of request method is for action triggers. Must use mutate to trigger the request.
  * Benefits: built-in loading/error states, easy to handle loading/error UI interactions.
@@ -90,8 +118,10 @@ export const useOnlyFetchOnceSWR: SWRHook = (key, fetch, config) =>
  * Combined with revalidateOnMount: false, this prevents auto-fetch on mount.
  */
 // @ts-ignore
-export const useActionSWR: SWRHook = (key, fetch, config) =>
-  useSWR(key, fetch, {
+export const useActionSWR: SWRHook = (key, fetch, config) => {
+  useMountedActionKey(key);
+
+  return useSWR(key, fetch, {
     // Use empty object as fallback to prevent auto-fetch when cache is empty
     // Combined with revalidateOnMount: false, SWR won't call fetcher on mount
     fallbackData: {},
@@ -106,6 +136,7 @@ export const useActionSWR: SWRHook = (key, fetch, config) =>
     revalidateOnReconnect: false,
     ...config,
   });
+};
 
 export interface SWRRefreshParams<T, A = (...args: any[]) => any> {
   action: A;
