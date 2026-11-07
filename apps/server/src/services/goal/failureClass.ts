@@ -56,6 +56,12 @@ const ENVIRONMENT_RULES: Array<{
   problem: (match: RegExpExecArray) => GoalEnvironmentProblem;
 }> = [
   {
+    // Older tasks persisted the previous DEVICE_NOT_FOUND headline without a code.
+    pattern:
+      /The device this agent is bound to is no longer registered with the connection service\./,
+    problem: () => ({ kind: 'device' }),
+  },
+  {
     pattern: /Working directory (?:does not exist|is not a directory)(?: on [^:]+)?: (\S+)/i,
     problem: (match) => ({ kind: 'workingDirectory', path: match[1].replace(/[.,;]+$/, '') }),
   },
