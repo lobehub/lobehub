@@ -81,6 +81,7 @@
     "./straico": "./src/aiModels/straico.ts",
     "./streamlake": "./src/aiModels/streamlake.ts",
     "./superGrok": "./src/aiModels/superGrok.ts",
+    "./synap": "./src/aiModels/synap.ts",
     "./taichu": "./src/aiModels/taichu.ts",
     "./tencentcloud": "./src/aiModels/tencentcloud.ts",
     "./togetherai": "./src/aiModels/togetherai.ts",

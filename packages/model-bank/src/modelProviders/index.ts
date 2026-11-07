@@ -70,6 +70,7 @@ import StepfunProvider from './stepfun';
 import StraicoProvider from './straico';
 import StreamLakeProvider from './streamlake';
 import SuperGrokProvider from './superGrok';
+import SynapProvider from './synap';
 import TaichuProvider from './taichu';
 import TencentcloudProvider from './tencentcloud';
 import TogetherAIProvider from './togetherai';
@@ -235,6 +236,7 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   MagpieProvider,
   StreamLakeProvider,
   AntGroupProvider,
+  SynapProvider,
 ];
 
 export const filterEnabledModels = (provider: ModelProviderCard) => {
@@ -374,6 +376,7 @@ export { default as StepfunProviderCard } from './stepfun';
 export { default as StraicoProviderCard } from './straico';
 export { default as StreamLakeProviderCard } from './streamlake';
 export { default as SuperGrokProviderCard } from './superGrok';
+export { default as SynapProviderCard } from './synap';
 export { default as TaichuProviderCard } from './taichu';
 export { default as TencentCloudProviderCard } from './tencentcloud';
 export { default as TogetherAIProviderCard } from './togetherai';
