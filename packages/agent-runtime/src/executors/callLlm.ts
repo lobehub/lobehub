@@ -1,3 +1,5 @@
+import { estimateRequestTokens } from '@lobechat/context-engine';
+
 import type {
   AgentRuntimeHost,
   ContextBuildOutput,
@@ -12,6 +14,8 @@ import type {
   AgentInstruction,
   AgentState,
   CallLLMPayload,
+  GeneralAgentContextOverBudgetPayload,
+  InstructionExecutionResult,
   InstructionExecutor,
 } from '../types';
 import { withLlmAttemptCount } from '../utils/llmCalls';
@@ -293,6 +297,54 @@ const buildSteerParentSeed = (parent: RuntimeMessageRef | undefined) => {
 };
 
 /**
+ * Compression is decided on the request the context engine actually built,
+ * not on the stored history: the engine trims stale tool output and truncates
+ * history, so stored messages can be far over the window while the real
+ * request is well under it. Returns the `context_over_budget` result when the
+ * built request exceeds the planner's budget, so the planner compresses first.
+ */
+const checkContextBudget = (
+  context: ContextBuildOutput,
+  payload: CallLLMPayload & { assistantMessageId?: string },
+  state: AgentState,
+  operationId: string,
+): InstructionExecutionResult | undefined => {
+  if (!payload.contextBudget) return;
+
+  const { adjustedTotal } = estimateRequestTokens({
+    messages: context.messages,
+    tools: context.resolvedTools?.tools,
+  });
+  if (adjustedTotal <= payload.contextBudget.compressionThreshold) return;
+
+  // Only the placeholder seed changes; a shallow copy avoids cloning the large
+  // history that put this request over budget. The LLM turn after compression
+  // must fill a placeholder created before this step (e.g. by sendMessage)
+  // instead of orphaning it.
+  const newState: AgentState = payload.assistantMessageId
+    ? { ...state, pendingAssistantMessageId: payload.assistantMessageId }
+    : { ...state };
+
+  return {
+    events: [],
+    newState,
+    nextContext: {
+      payload: {
+        currentTokenCount: adjustedTotal,
+        messages: payload.messages,
+      } satisfies GeneralAgentContextOverBudgetPayload,
+      phase: 'context_over_budget',
+      session: {
+        messageCount: newState.messages.length,
+        sessionId: operationId,
+        status: 'running',
+        stepCount: state.stepCount + 1,
+      },
+    },
+  };
+};
+
+/**
  * Package-owned `call_llm` executor entry point.
  *
  * The package prepares and finalizes the turn, including retry, interruption,
@@ -331,6 +383,27 @@ export const callLlm =
         throw error;
       }
     }
+
+    // Build before creating the assistant message: an over-budget request goes
+    // to compression first, and must not leave an empty assistant bubble behind.
+    const context = await contextBuilder
+      .build({
+        model,
+        payload: llmPayload,
+        provider,
+        state,
+      })
+      .catch(async (error) => {
+        await transports.stream.publishError?.({
+          error,
+          phase: 'llm_execution',
+          stepIndex: operation.stepIndex,
+        });
+        throw error;
+      });
+
+    const overBudget = checkContextBudget(context, llmPayload, state, operation.operationId);
+    if (overBudget) return overBudget;
 
     const existingAssistantMessageId = llmPayload.assistantMessageId;
     // Pre-created placeholders (e.g. sendMessage creates the assistant row
@@ -392,22 +465,6 @@ export const callLlm =
       stepIndex: operation.stepIndex,
       type: 'stream_start',
     });
-
-    const context = await contextBuilder
-      .build({
-        model,
-        payload: llmPayload,
-        provider,
-        state,
-      })
-      .catch(async (error) => {
-        await transports.stream.publishError?.({
-          error,
-          phase: 'llm_execution',
-          stepIndex: operation.stepIndex,
-        });
-        throw error;
-      });
 
     try {
       const prepared: PreparedCallLlmInput = {

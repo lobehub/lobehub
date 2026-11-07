@@ -97,6 +97,32 @@ describe('llmCalls metric', () => {
     expect(result.newState.llmCalls).toBe(7);
   });
 
+  it('does not count a call_llm stopped at the compression budget nor consume its placeholder', async () => {
+    const runtime = new AgentRuntime(createAgent());
+    // @ts-expect-error - accessing a private property for testing
+    runtime.executors.call_llm = vi.fn().mockImplementation(async (_instruction, state) => ({
+      events: [],
+      newState: state,
+      nextContext: {
+        payload: { currentTokenCount: 900_000, messages: [] },
+        phase: 'context_over_budget',
+        session: { messageCount: 0, sessionId: 'test-op', status: 'running', stepCount: 1 },
+      },
+    }));
+
+    const state = {
+      ...AgentRuntime.createInitialState({ operationId: 'test-op' }),
+      pendingAssistantMessageId: 'msg_seeded_placeholder',
+    };
+
+    const result = await runtime.step(state, createContext());
+
+    expect(result.newState.llmCalls ?? 0).toBe(0);
+    // The post-compression LLM turn must still fill the seeded placeholder.
+    expect(result.newState.pendingAssistantMessageId).toBe('msg_seeded_placeholder');
+    expect(result.nextContext?.phase).toBe('context_over_budget');
+  });
+
   it('counts every call_llm instruction in one step when the executor leaves usage untouched', async () => {
     // A runner may queue several LLM calls in a single step; the executor here
     // does not mutate `usage`, so the fallback has to count the instructions

@@ -10,7 +10,7 @@ import type {
   CompressionPromptResult,
   CompressionTransport,
 } from '@lobechat/agent-runtime';
-import { chainCompressContext } from '@lobechat/prompts';
+import { chainCompressContext, chainCompressConversation } from '@lobechat/prompts';
 
 import { messageService } from '@/services/message';
 import type { ChatStore } from '@/store/chat/store';
@@ -41,7 +41,9 @@ export class ClientCompressionTransport implements CompressionTransport {
   ) {}
 
   async buildPrompt(input: CompressionPromptInput): Promise<CompressionPromptResult> {
-    const payload = chainCompressContext(input.messages, input.existingSummary);
+    const payload = input.conversation?.length
+      ? chainCompressConversation(input.conversation)
+      : chainCompressContext(input.messages, input.existingSummary);
     return { messages: payload.messages! };
   }
 

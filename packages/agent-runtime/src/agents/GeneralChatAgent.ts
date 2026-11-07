@@ -15,6 +15,7 @@ import {
   type AgentInstructionCompressContext,
   type AgentRuntimeContext,
   type AgentState,
+  type ContextBudget,
   type GeneralAgentCallingToolInstructionPayload,
   type GeneralAgentCallLLMInstructionPayload,
   type GeneralAgentCallLLMResultPayload,
@@ -22,6 +23,7 @@ import {
   type GeneralAgentCallToolsBatchInstructionPayload,
   type GeneralAgentCompressionResultPayload,
   type GeneralAgentConfig,
+  type GeneralAgentContextOverBudgetPayload,
   type HumanAbortPayload,
   type SubAgentResultPayload,
   type SubAgentsBatchResultPayload,
@@ -33,7 +35,7 @@ import {
 } from '../utils/emptyArgumentsCalls';
 import { selectEffectiveToolManifestMap, selectRunTools } from '../utils/operationToolSet';
 import { selectSecurityBlacklist, selectUserInterventionConfig } from '../utils/stateSlots';
-import { shouldCompress } from '../utils/tokenCounter';
+import { getCompressionThreshold, shouldCompress } from '../utils/tokenCounter';
 import {
   findCurrentTurnPendingToolMessages,
   isFoldedAssistantGroup,
@@ -514,10 +516,27 @@ export class GeneralChatAgent implements Agent {
   }
 
   /**
-   * Fit the upcoming request under the compression threshold. Runs whether or
-   * not compression is enabled: the attachment preview plan keeps attachment
-   * text within the room the conversation leaves even when the conversation
-   * itself is never compressed.
+   * Compression budget for the next `call_llm`. The executor compares it with
+   * the request the context engine builds, not with the stored history: the
+   * engine trims stale tool output and truncates history, so stored messages
+   * can be far over the window while the real request is well under it.
+   */
+  private getContextBudget(messages: any[]): ContextBudget | undefined {
+    if (!(this.config.compressionConfig?.enabled ?? true)) return;
+
+    return {
+      compressionThreshold: getCompressionThreshold({
+        maxWindowToken: this.config.compressionConfig?.maxWindowToken,
+        thresholdRatio: this.getCompressionThresholdRatio(messages),
+      }),
+    };
+  }
+
+  /**
+   * Plan attachment previews so attachment text fits the room the conversation
+   * leaves under the compression threshold. Runs whether or not compression is
+   * enabled. Whether to compress is decided by `call_llm` on the engine-built
+   * request (see {@link getContextBudget}).
    */
   private checkContextBudget(messages: any[], tools: any[] | undefined, state: AgentState) {
     // Mirror RuntimeExecutors.callLlm: when state.forceFinish is set, the
@@ -539,7 +558,8 @@ export class GeneralChatAgent implements Agent {
   }
 
   /**
-   * Proceed to the next LLM call, inserting compression first when needed.
+   * Proceed to the next LLM call, carrying the compression budget the executor
+   * checks once the context engine has built the request.
    */
   private toLLMCall(
     payload: GeneralAgentCallLLMInstructionPayload,
@@ -553,29 +573,18 @@ export class GeneralChatAgent implements Agent {
         state.pendingAssistantMessageId && { assistantMessageId: state.pendingAssistantMessageId }),
       ...this.getAllowedToolNamesPayload(),
     };
-    const compressionEnabled = this.config.compressionConfig?.enabled ?? true;
     const messages = payloadWithAllowedToolNames.messages;
-    const compressionCheck = this.checkContextBudget(
+    const { attachmentPreviewFileIds } = this.checkContextBudget(
       messages,
       payloadWithAllowedToolNames.tools,
       state,
     );
-
-    if (compressionEnabled && compressionCheck.needsCompression) {
-      return {
-        payload: {
-          currentTokenCount: compressionCheck.currentTokenCount,
-          existingSummary: this.findExistingSummary(messages),
-          messages,
-        },
-        type: 'compress_context',
-      };
-    }
+    const contextBudget = this.getContextBudget(messages);
 
     return {
       payload: this.withAttachmentPreviews(
-        payloadWithAllowedToolNames,
-        compressionCheck.attachmentPreviewFileIds,
+        { ...payloadWithAllowedToolNames, ...(contextBudget && { contextBudget }) },
+        attachmentPreviewFileIds,
       ),
       type: 'call_llm',
     };
@@ -620,25 +629,12 @@ export class GeneralChatAgent implements Agent {
     switch (context.phase) {
       case 'init':
       case 'user_input': {
-        // Check if context compression is enabled and needed before calling LLM
-        const compressionEnabled = this.config.compressionConfig?.enabled ?? true; // Default to enabled
-        const compressionCheck = this.checkContextBudget(
+        const { attachmentPreviewFileIds } = this.checkContextBudget(
           state.messages,
           this.getTools(state),
           state,
         );
-
-        if (compressionEnabled && compressionCheck.needsCompression) {
-          // Context exceeds threshold, compress ALL messages into a single summary
-          return {
-            payload: {
-              currentTokenCount: compressionCheck.currentTokenCount,
-              existingSummary: this.findExistingSummary(state.messages),
-              messages: state.messages,
-            },
-            type: 'compress_context',
-          } as AgentInstructionCompressContext;
-        }
+        const contextBudget = this.getContextBudget(state.messages);
 
         // User input received, call LLM to generate response
         // At this point, messages may have been preprocessed with RAG/Search
@@ -649,10 +645,11 @@ export class GeneralChatAgent implements Agent {
             {
               ...basePayload,
               ...this.getAllowedToolNamesPayload(),
+              ...(contextBudget && { contextBudget }),
               messages: state.messages,
               tools,
             } as GeneralAgentCallLLMInstructionPayload,
-            compressionCheck.attachmentPreviewFileIds,
+            attachmentPreviewFileIds,
           ),
           type: 'call_llm',
         };
@@ -983,6 +980,22 @@ export class GeneralChatAgent implements Agent {
         );
       }
 
+      case 'context_over_budget': {
+        // call_llm built the request and found it over the compression budget;
+        // compress ALL messages into a single summary, then call the LLM again.
+        const { currentTokenCount, messages } =
+          context.payload as GeneralAgentContextOverBudgetPayload;
+
+        return {
+          payload: {
+            currentTokenCount,
+            existingSummary: this.findExistingSummary(messages),
+            messages,
+          },
+          type: 'compress_context',
+        } as AgentInstructionCompressContext;
+      }
+
       case 'compression_result': {
         // Context compression completed, continue to call LLM
         const compressionPayload = context.payload as GeneralAgentCompressionResultPayload;
@@ -1003,6 +1016,9 @@ export class GeneralChatAgent implements Agent {
         // The kept latest user message can still carry more attachment text than
         // the compressed context has room for.
         const { attachmentPreviewFileIds } = this.checkContextBudget(messages, tools, state);
+        // No `contextBudget`: the context was just compressed, and a request still
+        // over budget (e.g. one huge latest turn) must reach the model instead of
+        // compressing again in a loop.
 
         return {
           payload: this.withAttachmentPreviews(

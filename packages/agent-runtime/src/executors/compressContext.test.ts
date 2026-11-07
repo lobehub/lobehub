@@ -281,6 +281,59 @@ describe('compressContext executor', () => {
     ]);
   });
 
+  it('summarizes the engine-built conversation and leaves the seeded placeholder out of the group', async () => {
+    const latestUser = { content: 'keep going', id: 'msg-user', role: 'user' };
+    const history = [
+      {
+        content: 'old objective',
+        fileList: [{ content: 'long paper', id: 'file-paper' }],
+        id: 'msg-old',
+        role: 'user',
+      },
+      { content: 'huge raw tool output', id: 'msg-tool', role: 'tool' },
+    ];
+    messagesQuery.mockResolvedValue([
+      ...history,
+      latestUser,
+      { content: '', id: 'msg_seeded_placeholder', role: 'assistant' },
+    ]);
+    compressionCreateGroup.mockResolvedValue({
+      messageGroupId: 'group-123',
+      messagesToSummarize: history,
+    });
+    const engineMessages = [
+      { content: 'system prompt', role: 'system' },
+      { content: 'old objective', role: 'user' },
+      { content: '...[trimmed]', role: 'tool', tool_call_id: 'call-1' },
+    ];
+    const contextBuild = vi.fn().mockResolvedValue({ messages: engineMessages });
+    host.transports.context = { build: contextBuild };
+
+    const state = createState({
+      messages: [...history, latestUser],
+      pendingAssistantMessageId: 'msg_seeded_placeholder',
+    });
+    await compressContext(host)(createInstruction(state.messages), state);
+
+    expect(compressionCreateGroup).toHaveBeenCalledWith(
+      expect.objectContaining({ messageIds: ['msg-old', 'msg-tool'] }),
+    );
+    expect(contextBuild).toHaveBeenCalledWith(
+      expect.objectContaining({
+        payload: expect.objectContaining({
+          attachmentPreviewFileIds: ['file-paper'],
+          messages: history,
+          tools: [],
+        }),
+      }),
+    );
+    expect(compressionBuildPrompt).toHaveBeenCalledWith({
+      conversation: engineMessages,
+      existingSummary: undefined,
+      messages: history,
+    });
+  });
+
   it('skips without compression side effects when topic context is missing', async () => {
     const state = createState({
       origin: { agentId: 'agent-123' },

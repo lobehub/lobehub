@@ -17,6 +17,14 @@ export interface CompressionGroupCreateResult {
 }
 
 export interface CompressionPromptInput {
+  /**
+   * The conversation as the context engine builds it for the model
+   * (`ContextBuilder.build` output). When present, transports summarize this
+   * instead of `messages`: the engine has already trimmed stale tool output
+   * and truncated history, so it is what the model actually works with and
+   * stays within the window the compression budget was checked against.
+   */
+  conversation?: unknown[];
   existingSummary?: string;
   messages: UIChatMessage[];
 }
