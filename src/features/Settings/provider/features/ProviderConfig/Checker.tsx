@@ -8,7 +8,7 @@ import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { CircleCheckIcon } from 'lucide-react';
 import { type ReactNode } from 'react';
-import { memo, useEffect, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ModelIcon } from '@/components/LobeIcons';
@@ -107,18 +107,47 @@ const Checker = memo<ConnectionCheckerProps>(
       return sorted.map((m) => m.id);
     }, [aiProviderModelList, model]);
 
+    // A provider's default probe may not be present in a key-scoped catalog,
+    // such as JZSTOKEN's dedicated jzs-max-3.0 keys. Once models are available,
+    // keep the preferred model when usable and otherwise probe the first model
+    // visible to that key instead of reporting a false connection failure.
+    const defaultCheckModel = useMemo(
+      () => (sortedModels.length === 0 || sortedModels.includes(model) ? model : sortedModels[0]),
+      [model, sortedModels],
+    );
+
     const [loading, setLoading] = useState(false);
     const [pass, setPass] = useState(false);
-    const [checkModel, setCheckModel] = useState(model);
+    const [checkModel, setCheckModel] = useState(defaultCheckModel);
 
     const [error, setError] = useState<ChatMessageError | undefined>();
 
-    // Sync checkModel state when model prop changes
+    // Bumped whenever the selected probe changes so an in-flight check cannot
+    // paint Pass or an error onto a model it did not test.
+    const checkRequestIdRef = useRef(0);
+    const checkModelRef = useRef(checkModel);
+    checkModelRef.current = checkModel;
+
+    // Sync checkModel state when the preferred model or key-scoped catalog changes.
+    // An automatic fallback must drop the previous probe: Pass only describes the
+    // model currently selected.
     useEffect(() => {
-      setCheckModel(model);
-    }, [model]);
+      if (checkModelRef.current === defaultCheckModel) return;
+
+      checkRequestIdRef.current += 1;
+      checkModelRef.current = defaultCheckModel;
+      setCheckModel(defaultCheckModel);
+      setPass(false);
+      setError(undefined);
+      setLoading(false);
+    }, [defaultCheckModel]);
 
     const checkConnection = async () => {
+      const requestId = ++checkRequestIdRef.current;
+      const probedModel = checkModel;
+      const isActiveProbe = () =>
+        requestId === checkRequestIdRef.current && probedModel === checkModelRef.current;
+
       // Clear previous check results immediately
       setPass(false);
       setError(undefined);
@@ -127,12 +156,16 @@ const Checker = memo<ConnectionCheckerProps>(
 
       await chatService.fetchPresetTaskResult({
         onError: (_, rawError) => {
+          if (!isActiveProbe()) return;
+
           setError(rawError);
           setPass(false);
           isError = true;
         },
 
         onFinish: async (value) => {
+          if (!isActiveProbe()) return;
+
           // A provider error inside a 200 stream (a relayed device call, or any
           // in-stream error) also finishes the stream: keep that error.
           if (isError) return;
@@ -150,6 +183,8 @@ const Checker = memo<ConnectionCheckerProps>(
           }
         },
         onLoadingChange: (loading) => {
+          if (!isActiveProbe()) return;
+
           setLoading(loading);
         },
         params: {
@@ -159,7 +194,7 @@ const Checker = memo<ConnectionCheckerProps>(
               role: 'user',
             },
           ],
-          model: checkModel,
+          model: probedModel,
           provider,
         },
         trace: {
@@ -205,10 +240,13 @@ const Checker = memo<ConnectionCheckerProps>(
             onSelect={async (value) => {
               if (!canManageProvider) return;
 
-              // Update local state
+              // Drop any probe of the previous model before its callbacks resolve.
+              checkRequestIdRef.current += 1;
+              checkModelRef.current = value;
               setCheckModel(value);
               setPass(false);
               setError(undefined);
+              setLoading(false);
 
               // Persist the selected model to provider config
               // This allows the model to be retained after page refresh

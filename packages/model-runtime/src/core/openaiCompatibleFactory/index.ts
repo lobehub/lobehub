@@ -10,7 +10,6 @@ import type { Stream } from 'openai/streaming';
 import { ErrorClassifier, refineErrorCode } from '../../errors';
 import {
   isGPTProResponsesModel,
-  isResponsesAPIModel,
   supportsGPTResponsesReasoningEffortNone,
 } from '../../providers/openai/modelId';
 import type {
@@ -94,6 +93,7 @@ import {
   recordOpenAIResponsesResponse,
   resolveOpenAIResponseWithMetadata,
 } from './providerDiagnostics';
+import { shouldUseResponsesAPI } from './responseRouting';
 import {
   convertChatCompletionToolToResponseTool,
   stripChatCompletionParameters,
@@ -329,102 +329,6 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
       );
     }
 
-    /**
-     * Determine if should use Responses API based on various configuration options
-     * @param params - Configuration parameters
-     * @returns true if should use Responses API, false otherwise
-     */
-    private shouldUseResponsesAPI(params: {
-      /** Context for logging (e.g., 'chat', 'generateObject', 'tool calling') */
-      context?: string;
-      /** Factory/instance level useResponse flag */
-      flagUseResponse?: boolean;
-      /** Factory/instance level model patterns for Responses API */
-      flagUseResponseModels?: Array<string | RegExp>;
-      /** The model ID to check */
-      model?: string;
-      /** Explicit responseApi flag */
-      responseApi?: boolean;
-      /** User-specified API mode (highest priority) */
-      userApiMode?: string;
-    }): boolean {
-      const {
-        model,
-        userApiMode,
-        responseApi,
-        flagUseResponse,
-        flagUseResponseModels,
-        context = 'operation',
-      } = params;
-
-      const log = debug(`${this.logPrefix}:shouldUseResponsesAPI`);
-
-      // Priority 0: Check built-in Responses API model rules FIRST (highest priority)
-      // These models MUST use Responses API regardless of user settings.
-      if (model && isResponsesAPIModel(model)) {
-        log('using Responses API: model %s matches built-in Responses API model rules', model);
-        return true;
-      }
-
-      // Priority 1: userApiMode is explicitly set to 'chatCompletion' (user disabled the switch)
-      if (userApiMode === 'chatCompletion') {
-        log('using Chat Completions API: userApiMode=%s', userApiMode);
-        return false;
-      }
-
-      // Priority 2: When user enables the switch (userApiMode === 'responses')
-      // Check if useResponseModels is configured - if so, only matching models use Responses API
-      // If useResponseModels is not configured, all models use Responses API
-      if (userApiMode === 'responses') {
-        if (model && flagUseResponseModels?.length) {
-          const matches = flagUseResponseModels.some((m: string | RegExp) =>
-            typeof m === 'string' ? model.includes(m) : (m as RegExp).test(model),
-          );
-          if (matches) {
-            log(
-              'using Responses API: userApiMode=responses and model %s matches useResponseModels',
-              model,
-            );
-            return true;
-          }
-          log(
-            'using Chat Completions API: userApiMode=responses but model %s does not match useResponseModels',
-            model,
-          );
-          return false;
-        }
-        // No useResponseModels configured, use Responses API for all models
-        log('using Responses API: userApiMode=responses (no useResponseModels filter)');
-        return true;
-      }
-
-      // Priority 3: Explicit responseApi flag
-      if (responseApi) {
-        log('using Responses API: explicit responseApi flag for %s', context);
-        return true;
-      }
-
-      // Priority 4: Factory/instance level useResponse flag
-      if (flagUseResponse) {
-        log('using Responses API: flagUseResponse=true for %s', context);
-        return true;
-      }
-
-      // Priority 5: Check if model matches useResponseModels patterns (without user switch)
-      if (model && flagUseResponseModels?.length) {
-        const matches = flagUseResponseModels.some((m: string | RegExp) =>
-          typeof m === 'string' ? model.includes(m) : (m as RegExp).test(model),
-        );
-        if (matches) {
-          log('using Responses API: model %s matches useResponseModels config', model);
-          return true;
-        }
-      }
-
-      log('using Chat Completions API for %s', context);
-      return false;
-    }
-
     private resolvePromptCacheKey(model?: string, user?: string) {
       if (!user) return;
 
@@ -493,13 +397,16 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
           instanceChat.useResponseModels ?? chatCompletion?.useResponseModels;
 
         // Determine if should use Responses API
-        const shouldUseResponses = this.shouldUseResponsesAPI({
-          context: 'chat',
-          flagUseResponse,
-          flagUseResponseModels,
-          model: modelId,
-          userApiMode,
-        });
+        const shouldUseResponses = shouldUseResponsesAPI(
+          {
+            context: 'chat',
+            flagUseResponse,
+            flagUseResponseModels,
+            model: modelId,
+            userApiMode,
+          },
+          this.logPrefix,
+        );
 
         if (shouldUseResponses) {
           processedPayload = { ...payload, apiMode: 'responses' } as any;
@@ -1014,22 +921,29 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
 
         // Factory-level Responses API routing control (supports instance override)
         const instanceGenerateObject = ((this._options as any).generateObject || {}) as {
+          forceChatCompletions?: boolean;
           useResponse?: boolean;
           useResponseModels?: Array<string | RegExp>;
         };
+        const forceChatCompletions =
+          instanceGenerateObject.forceChatCompletions ?? generateObjectConfig?.forceChatCompletions;
         const flagUseResponse =
           instanceGenerateObject.useResponse ??
           (generateObjectConfig ? generateObjectConfig.useResponse : undefined);
         const flagUseResponseModels =
           instanceGenerateObject.useResponseModels ?? generateObjectConfig?.useResponseModels;
 
-        const shouldUseResponses = this.shouldUseResponsesAPI({
-          context: 'generateObject',
-          flagUseResponse,
-          flagUseResponseModels,
-          model,
-          responseApi,
-        });
+        const shouldUseResponses = shouldUseResponsesAPI(
+          {
+            context: 'generateObject',
+            flagUseResponse,
+            flagUseResponseModels,
+            forceChatCompletions,
+            model,
+            responseApi,
+          },
+          this.logPrefix,
+        );
 
         // Apply schema transformation if configured
         const processedSchema = generateObjectConfig?.handleSchema
@@ -1592,22 +1506,29 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
 
       // Factory-level Responses API routing control (supports instance override)
       const instanceGenerateObject = ((this._options as any).generateObject || {}) as {
+        forceChatCompletions?: boolean;
         useResponse?: boolean;
         useResponseModels?: Array<string | RegExp>;
       };
+      const forceChatCompletions =
+        instanceGenerateObject.forceChatCompletions ?? generateObjectConfig?.forceChatCompletions;
       const flagUseResponse =
         instanceGenerateObject.useResponse ??
         (generateObjectConfig ? generateObjectConfig.useResponse : undefined);
       const flagUseResponseModels =
         instanceGenerateObject.useResponseModels ?? generateObjectConfig?.useResponseModels;
 
-      const shouldUseResponses = this.shouldUseResponsesAPI({
-        context: 'tool calling',
-        flagUseResponse,
-        flagUseResponseModels,
-        model,
-        responseApi,
-      });
+      const shouldUseResponses = shouldUseResponsesAPI(
+        {
+          context: 'tool calling',
+          flagUseResponse,
+          flagUseResponseModels,
+          forceChatCompletions,
+          model,
+          responseApi,
+        },
+        this.logPrefix,
+      );
       const requestModel = this.getMappedModelId(payload.model);
 
       if (shouldUseResponses) {

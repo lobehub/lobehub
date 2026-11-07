@@ -10,6 +10,8 @@ import type {
   ToggleAiModelEnableParams,
   UpdateAiModelParams,
 } from 'model-bank';
+import { allModels as jzstokenBuiltinModels } from 'model-bank/jzstoken';
+import { ModelProvider } from 'model-bank/modelProvider';
 
 import {
   createReplicaSlice,
@@ -29,7 +31,11 @@ import {
   aiModelReasoningConfigResource,
 } from './projection';
 import { aiModelSelectors } from './selectors';
-import { deduplicateRemoteModels } from './utils';
+import {
+  deduplicateRemoteModels,
+  enabledBuiltinIdsMissingFromCatalog,
+  enabledRemoteIdsMissingFromCatalog,
+} from './utils';
 
 const MAX_DUPLICATE_MODEL_IDS_IN_WARNING = 3;
 
@@ -182,7 +188,31 @@ export class AiModelActionImpl {
       });
       const { duplicateIds, models, removedCount } = deduplicateRemoteModels(remoteModels);
 
+      // Builtin cards are merged back into the provider list, and this upsert only
+      // writes models the catalog returned. For JZSTOKEN, turn off enabled builtins
+      // and previously fetched remote rows the key did not return, so a smaller
+      // catalog cannot leave them selectable. Custom rows stay as the user added them.
+      const catalogIds = new Set(models.map((model) => model.id));
+      const currentModels = this.#get().aiModelListMap[providerId] ?? [];
+      const isJzstoken = providerId === ModelProvider.JZSTOKEN;
+      const missingBuiltinIds = isJzstoken
+        ? enabledBuiltinIdsMissingFromCatalog(
+            jzstokenBuiltinModels.map((model) => model.id),
+            catalogIds,
+            currentModels,
+          )
+        : [];
+      const missingRemoteIds = isJzstoken
+        ? enabledRemoteIdsMissingFromCatalog(catalogIds, currentModels)
+        : [];
+      const omittedIds = [...new Set([...missingBuiltinIds, ...missingRemoteIds])];
+
       await this.#get().batchUpdateAiModels(models);
+
+      if (omittedIds.length > 0) {
+        await aiModelService.batchToggleAiModels(providerId, omittedIds, false);
+        await this.#get().refreshAiModelList();
+      }
 
       if (removedCount > 0) {
         const visibleDuplicateIds = duplicateIds.slice(0, MAX_DUPLICATE_MODEL_IDS_IN_WARNING);

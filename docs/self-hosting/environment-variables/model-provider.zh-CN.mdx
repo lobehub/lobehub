@@ -869,6 +869,29 @@ LobeHub 在部署时提供了丰富的模型服务商相关的环境变量，你
 - 默认值：`-`
 - 示例：`-all,+claude-opus-4-1-20250805,+claude-opus-4-20250514=claude-opus-4`
 
+## JZSTOKEN
+
+### `JZSTOKEN_API_KEY`
+
+- 类型：必选
+- 描述：在 JZSTOKEN API Keys 页面创建的 API 密钥。
+- 默认值：-
+- 示例：`sk-xxxxxx...xxxxxx`
+
+### `JZSTOKEN_PROXY_URL`
+
+- 类型：可选
+- 描述：JZSTOKEN 的 OpenAI 兼容 API 基础地址。
+- 默认值：`https://jzstoken.com/api/v1`
+- 示例：`https://jzstoken.com/api/v1`
+
+### `JZSTOKEN_MODEL_LIST`
+
+- 类型：可选
+- 描述：控制 JZSTOKEN 模型列表。使用 `+` 增加模型、`-` 隐藏模型，使用 `模型名=展示名` 自定义展示名，多个条目用英文逗号分隔。
+- 默认值：`-`
+- 示例：`-all,+gpt-5.6-terra,+claude-sonnet-5`
+
 ## Straico
 
 ### `STRAICO_API_KEY`
