@@ -7,7 +7,12 @@ import {
   type WorkspaceRole,
   wsCompatProcedure,
 } from '@/business/server/trpc-middlewares/workspaceAuth';
-import { ProjectModel, type ProjectModelOptions } from '@/database/models/project';
+import {
+  ProjectIdentifierTakenError,
+  ProjectModel,
+  type ProjectModelOptions,
+} from '@/database/models/project';
+import { ProjectRepository } from '@/database/repositories/project';
 import { ProjectCoordinatorRepository } from '@/database/repositories/projectCoordinator';
 import type { LobeChatDatabase } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
@@ -43,6 +48,7 @@ const projectProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) 
         options,
       ),
       projectModel: new ProjectModel(ctx.serverDB, ctx.userId, workspaceId, options),
+      projectRepo: new ProjectRepository(ctx.serverDB, ctx.userId, workspaceId),
     },
   });
 });
@@ -106,6 +112,12 @@ const knowledgeBaseBindingPatch = z.object({
 
 function mapProjectError(error: unknown, operation: string): never {
   if (error instanceof TRPCError) throw error;
+  // A duplicate identifier is a field-level problem the client renders next to
+  // the input; `CONFLICT` keeps it distinguishable from a real server fault so
+  // callers stop showing a generic failure toast.
+  if (error instanceof ProjectIdentifierTakenError) {
+    throw new TRPCError({ cause: error, code: 'CONFLICT', message: error.message });
+  }
   const message = error instanceof Error ? error.message : `Failed to ${operation} project`;
   console.error(`[project:${operation}]`, error);
   throw new TRPCError({ cause: error, code: 'BAD_REQUEST', message });
@@ -189,7 +201,7 @@ export const projectRouter = router({
         if (input.coordinatorAgentId) {
           await assertResourceUsable(ctx, 'agent', input.coordinatorAgentId);
         }
-        const project = await withMainAgent(ctx.projectModel, await ctx.projectModel.create(input));
+        const project = await withMainAgent(ctx.projectModel, await ctx.projectRepo.create(input));
         await createDefaultChannel({
           agentId: project.coordinatorAgentId,
           db: ctx.serverDB,

@@ -31,6 +31,39 @@ export const getProjectFieldSuggestions = (name: string): ProjectFieldSuggestion
 export const isProjectIdentifierValid = (identifier: string) =>
   PROJECT_IDENTIFIER_REGEX.test(identifier.trim().toUpperCase());
 
+/**
+ * Whether an already-loaded project in the active scope claims `identifier`.
+ *
+ * Identifiers are unique per scope (`projects_identifier_workspace_id_unique`),
+ * so the form checks this inline and shows the conflict next to the field. The
+ * list is visibility-filtered, so another member's private project can slip
+ * past here — the server re-checks and answers `CONFLICT` for that case.
+ */
+export const isProjectIdentifierTaken = (
+  identifier: string,
+  projects: readonly { identifier?: string | null }[],
+) => {
+  const normalized = identifier.trim().toUpperCase();
+
+  return Boolean(normalized) && projects.some((project) => project.identifier === normalized);
+};
+
+/**
+ * Whether a `CONFLICT` answered for `submittedIdentifier` still describes the
+ * value in the field.
+ *
+ * The identifier input stays editable while the create request is in flight, so
+ * the answer can come back after the user has typed another value. The verdict
+ * belongs to what was submitted; a different value typed meanwhile must not
+ * inherit it. An empty submission carries no identifier (the server leaves the
+ * column null), so it has nothing to attribute the conflict to.
+ */
+export const doesConflictApplyTo = (submittedIdentifier: string, currentIdentifier: string) => {
+  const submitted = submittedIdentifier.trim().toUpperCase();
+
+  return Boolean(submitted) && currentIdentifier.trim().toUpperCase() === submitted;
+};
+
 export const isProjectSlugValid = (slug: string) => {
   const normalizedSlug = slug.trim().toLowerCase();
   return !normalizedSlug || PROJECT_SLUG_REGEX.test(normalizedSlug);

@@ -121,6 +121,17 @@ describe('Project Router Integration', () => {
     );
   });
 
+  it('answers a duplicate identifier as CONFLICT instead of a raw query failure', async () => {
+    await caller.create({ identifier: 'LOBE', name: 'LobeHub' });
+
+    await expect(
+      caller.create({ identifier: 'LOBE', name: 'LobeHub Mobile' }),
+    ).rejects.toMatchObject({
+      code: 'CONFLICT',
+      message: expect.stringContaining('LOBE'),
+    });
+  });
+
   it.each(['team/launch', 'roadmap?draft', '#plan', 'two--hyphens'])(
     'rejects the route-unsafe slug %s when creating a project',
     async (slug) => {

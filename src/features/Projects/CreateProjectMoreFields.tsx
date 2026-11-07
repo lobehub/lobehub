@@ -6,6 +6,8 @@ import { useTranslation } from 'react-i18next';
 interface CreateProjectMoreFieldsProps {
   identifier: string;
   identifierInvalid: boolean;
+  /** The identifier is valid but already claimed in this scope. */
+  identifierTaken: boolean;
   onIdentifierChange: (value: string) => void;
   onSlugChange: (value: string) => void;
   onSubmit: () => void;
@@ -16,6 +18,7 @@ interface CreateProjectMoreFieldsProps {
 const CreateProjectMoreFields = ({
   identifier,
   identifierInvalid,
+  identifierTaken,
   onIdentifierChange,
   onSlugChange,
   onSubmit,
@@ -25,7 +28,8 @@ const CreateProjectMoreFields = ({
   const { t } = useTranslation('project');
   const [expanded, setExpanded] = useState(false);
   // An invalid value stays visible so its error can't hide behind the fold.
-  const open = expanded || identifierInvalid || !slugValid;
+  const identifierError = identifierInvalid || identifierTaken;
+  const open = expanded || identifierError || !slugValid;
 
   return (
     <Flexbox gap={16}>
@@ -48,16 +52,22 @@ const CreateProjectMoreFields = ({
               {t('create.identifierLabel')}
             </Text>
             <Input
-              aria-invalid={identifierInvalid}
+              aria-invalid={identifierError}
               maxLength={6}
               placeholder={t('create.identifierPlaceholder')}
-              style={identifierInvalid ? { borderColor: cssVar.colorError } : undefined}
+              style={identifierError ? { borderColor: cssVar.colorError } : undefined}
               value={identifier}
               onChange={(event) => onIdentifierChange(event.target.value.toUpperCase())}
               onPressEnter={onSubmit}
             />
-            <Text fontSize={12} type={identifierInvalid ? 'danger' : 'secondary'}>
-              {t(identifierInvalid ? 'create.identifierInvalid' : 'create.identifierDescription')}
+            <Text fontSize={12} type={identifierError ? 'danger' : 'secondary'}>
+              {t(
+                identifierInvalid
+                  ? 'create.identifierInvalid'
+                  : identifierTaken
+                    ? 'create.identifierTaken'
+                    : 'create.identifierDescription',
+              )}
             </Text>
           </Flexbox>
           <Flexbox gap={6}>

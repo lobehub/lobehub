@@ -28,6 +28,12 @@ vi.mock('@/database/models/project', () => ({
   }),
 }));
 
+vi.mock('@/database/repositories/project', () => ({
+  ProjectRepository: vi.fn(function () {
+    return { create: mocks.create };
+  }),
+}));
+
 vi.mock('@/database/repositories/projectCoordinator', () => ({
   ProjectCoordinatorRepository: vi.fn(function () {
     return {};
