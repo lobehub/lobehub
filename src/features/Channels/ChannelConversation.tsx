@@ -23,7 +23,11 @@ import { Composer } from './Composer';
 import { JoinEventLine } from './JoinEventLine';
 import { channelJoinEvents, channelTimeline } from './joinEvents';
 import { isCurrentUserMember } from './memberName';
-import { channelTimeFormatters, presentChannelTimeline } from './messagePresentation';
+import {
+  channelDayLabel,
+  channelTimeFormatters,
+  presentChannelTimeline,
+} from './messagePresentation';
 import { presentOutgoingMessage, timelineTail } from './outgoing';
 import { OutgoingStatus } from './OutgoingStatus';
 import { ReplyActivity } from './ReplyActivity';
@@ -212,7 +216,12 @@ const Timeline = ({
                         role="separator"
                         {...stylex.props(styles.dateDivider)}
                       >
-                        <time dateTime={date.toISOString()}>{timeFormats.date.format(date)}</time>
+                        <time dateTime={date.toISOString()} title={timeFormats.date.format(date)}>
+                          {channelDayLabel(date, {
+                            locale: i18n.language,
+                            yesterday: t('date.yesterday'),
+                          })}
+                        </time>
                       </div>
                     )}
                     {item.kind === 'event' ? (
