@@ -285,7 +285,7 @@ describe('feature-enabled MCP App lifecycle', () => {
     expect(response(91)?.result.hostContext).toMatchObject({ theme: 'dark', locale: 'zh-CN' });
   });
   it('does not register new request handlers or advertise context when not enabled', async () => {
-    const { fromView, response } = setup();
+    const { fromView, response, sent } = setup();
     await initialize(fromView, ['inline', 'fullscreen']);
     expect(response(90)?.result.hostCapabilities.updateModelContext).toBeUndefined();
     await fromView({
@@ -294,6 +294,10 @@ describe('feature-enabled MCP App lifecycle', () => {
       params: { structuredContent: { value: 'ignored' } },
     });
     expect(response(1)?.error).toBeDefined();
+    await fromView({ id: 2, method: 'ui/request-display-mode', params: { mode: 'fullscreen' } });
+    expect(response(2)?.result).toEqual({ mode: 'inline' });
+    await fromView({ method: 'ui/notifications/request-teardown' });
+    expect(sent().some((message) => message.method === 'ui/resource-teardown')).toBe(false);
   });
   it('tears the resource down before notifying its host to remove the view', async () => {
     const callbacks = lifecycle();
@@ -306,6 +310,31 @@ describe('feature-enabled MCP App lifecycle', () => {
     await fromView({ id: request.id, result: {} });
     expect(callbacks.onTeardown).toHaveBeenCalledOnce();
     connection.dispose();
+  });
+  it('coalesces repeated app teardown notifications and concurrent host cleanup', async () => {
+    const callbacks = lifecycle();
+    const { connection, fromView, sent } = setup({ lifecycle: callbacks });
+    await initialize(fromView, ['inline']);
+    const close = vi.spyOn(connection.bridge, 'close');
+    await fromView({ method: 'ui/notifications/request-teardown' });
+    await fromView({ method: 'ui/notifications/request-teardown' });
+    const cleanup = connection.teardown(3000);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const requests = sent().filter((message) => message.method === 'ui/resource-teardown');
+    expect(callbacks.onTeardown).not.toHaveBeenCalled();
+    for (const request of requests) await fromView({ id: request.id, result: {} });
+    await cleanup;
+    expect(requests).toHaveLength(1);
+    expect(callbacks.onTeardown).toHaveBeenCalledOnce();
+    expect(close).toHaveBeenCalledOnce();
+
+    // Late acknowledgements and repeated cleanup do not release the view again.
+    await fromView({ id: requests[0].id, result: {} });
+    await fromView({ method: 'ui/notifications/request-teardown' });
+    await connection.teardown(3000);
+    connection.dispose();
+    expect(callbacks.onTeardown).toHaveBeenCalledOnce();
+    expect(close).toHaveBeenCalledOnce();
   });
   it('uses fixed panel dimensions and inline maximum height', () => {
     expect(

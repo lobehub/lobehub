@@ -87,6 +87,7 @@ export const connectMcpAppBridge = (target: Window, host: McpAppBridgeHost) => {
   );
 
   if (host.lifecycle) {
+    let teardownRequested = false;
     bridge.onrequestdisplaymode = async ({ mode }) => {
       const display = host.lifecycle!.getDisplayContext();
       const current = display.displayMode;
@@ -106,6 +107,8 @@ export const connectMcpAppBridge = (target: Window, host: McpAppBridgeHost) => {
       return {};
     };
     bridge.onrequestteardown = () => {
+      if (teardownRequested) return;
+      teardownRequested = true;
       void teardown(3000).then(() => host.lifecycle!.onTeardown());
     };
   }
@@ -146,7 +149,10 @@ export const connectMcpAppBridge = (target: Window, host: McpAppBridgeHost) => {
   bridge.addEventListener('initialized', handleInitialized);
   void bridge.connect(new PostMessageTransport(target, target));
 
+  let disposed = false;
   const dispose = () => {
+    if (disposed) return;
+    disposed = true;
     bridge.removeEventListener('sizechange', handleSizeChange);
     bridge.removeEventListener('initialized', handleInitialized);
     void bridge.close();
@@ -157,16 +163,21 @@ export const connectMcpAppBridge = (target: Window, host: McpAppBridgeHost) => {
    * `timeoutMs` to finish (save pending edits) before the session closes. A
    * view that never initialized has nothing to finish.
    */
-  const teardown = async (timeoutMs: number) => {
-    if (initialized) {
-      let timer: ReturnType<typeof setTimeout> | undefined;
-      await Promise.race([
-        bridge.teardownResource({}).catch(() => {}),
-        new Promise<void>((resolve) => (timer = setTimeout(resolve, timeoutMs))),
-      ]);
-      clearTimeout(timer);
-    }
-    dispose();
+  let teardownPromise: Promise<void> | undefined;
+  const teardown = (timeoutMs: number): Promise<void> => {
+    // A notification and host unmount can race. They share one handshake and close.
+    teardownPromise ??= (async () => {
+      if (initialized && !disposed) {
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        await Promise.race([
+          bridge.teardownResource({}).catch(() => {}),
+          new Promise<void>((resolve) => (timer = setTimeout(resolve, timeoutMs))),
+        ]);
+        clearTimeout(timer);
+      }
+      dispose();
+    })();
+    return teardownPromise;
   };
   return {
     bridge,
