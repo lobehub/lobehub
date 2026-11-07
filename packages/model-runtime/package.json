@@ -58,7 +58,7 @@
     "url-join": "^5.0.0"
   },
   "peerDependencies": {
-    "zod": "^4.4.3"
+    "zod": "^4.6.7"
   },
   "license": "MIT",
   "homepage": "https://github.com/lobehub/lobehub/tree/canary/packages/model-runtime"
