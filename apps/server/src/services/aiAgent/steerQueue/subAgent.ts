@@ -16,9 +16,11 @@ export type SubAgentSteerOutcome =
   /**
    * `ended`: the run finished before the instruction was stored, so the caller
    * continues the thread with a new run instead. `full` / `unavailable`: it
-   * was not stored and nothing will deliver it.
+   * was not stored and nothing will deliver it. `unknown`: the write failed
+   * twice and may still have landed — the run may already be following it, so
+   * sending it again could run it twice.
    */
-  | { queued: false; reason: 'ended' | 'full' | 'unavailable' };
+  | { queued: false; reason: 'ended' | 'full' | 'unavailable' | 'unknown' };
 
 /**
  * Queue a parent agent's new instruction behind its running `callSubAgent`
@@ -51,24 +53,37 @@ export const queueSubAgentSteer = async (
     userId: ctx.userId,
   };
 
-  let length: Awaited<ReturnType<typeof redisService.steerQueue.append>>;
-  try {
-    length = await redisService.steerQueue.append(scope, entry, operationId);
-  } catch (error) {
-    if (!(error instanceof SteerQueueWriteUnknownError)) throw error;
-    log('[%s] Steer for thread %s may not be queued: %O', operationId, threadId, error);
-    return { queued: false, reason: 'unavailable' };
-  }
+  const appendOnce = async () => {
+    try {
+      return await redisService.steerQueue.append(scope, entry, operationId);
+    } catch (error) {
+      if (!(error instanceof SteerQueueWriteUnknownError)) throw error;
+      log('[%s] Steer for thread %s may not be queued: %O', operationId, threadId, error);
+      return 'unknown' as const;
+    }
+  };
+
+  // A timed-out write may still have landed. Retrying with the same entry id
+  // appends at most once, so it settles the outcome without a duplicate.
+  let length = await appendOnce();
+  const uncertain = length === 'unknown';
+  if (uncertain) length = await appendOnce();
+  if (length === 'unknown') return { queued: false, reason: 'unknown' };
+  // A retry that finds the entry already taken: the run read the earlier write.
+  if (length === 'taken') return { queued: true };
   if (length === 'full') return { queued: false, reason: 'full' };
   if (length === undefined || length === 'notStored') {
-    return { queued: false, reason: 'unavailable' };
+    // After an unknown write, no Redis on the retry proves nothing either way.
+    return { queued: false, reason: uncertain && length === undefined ? 'unknown' : 'unavailable' };
   }
 
   // The run may have ended between the caller's check and the append, after
-  // its last chance to read the queue. Take the entry back so the caller can
-  // start a new run with it; losing the take-back means the run already took it.
+  // its last chance to read the queue: it seals itself before its final read
+  // (`steerQueue.seal`), or its row already says it ended. Take the entry back
+  // so the caller can start a new run with it; losing the take-back means the
+  // run already took it.
   if (
-    !(await isRunAlive({ db: ctx.db, workspaceId: ctx.workspaceId }, ctx.userId, operationId)) &&
+    (await isPastLastRead(ctx, operationId)) &&
     (await redisService.steerQueue.remove(scope, entry.id))
   ) {
     return { queued: false, reason: 'ended' };
@@ -76,4 +91,15 @@ export const queueSubAgentSteer = async (
 
   log('[%s] Queued a steer instruction for thread %s', operationId, threadId);
   return { queued: true };
+};
+
+/** A seal that cannot be read counts as set: taking the entry back is the safe side. */
+const isPastLastRead = async (
+  ctx: Pick<ComposerRunContext, 'db' | 'userId' | 'workspaceId'>,
+  operationId: string,
+): Promise<boolean> => {
+  const sealed = await redisService.steerQueue.isSealed(operationId).catch(() => true);
+  if (sealed !== false) return true;
+
+  return !(await isRunAlive({ db: ctx.db, workspaceId: ctx.workspaceId }, ctx.userId, operationId));
 };

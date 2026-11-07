@@ -307,17 +307,40 @@ export async function injectQueuedFollowUp(
   operationId: string,
   stepIndex: number,
   state: AgentState,
+  options?: { lastRead?: boolean },
 ): Promise<{ messageId: string } | undefined> {
   // A sub-agent has no composer of its own; its queue holds the steer
   // instructions its parent sent while it was running.
-  const scope =
-    steerQueueScopeOf(state, deps.userId) ?? subAgentSteerQueueScopeOf(state, deps.userId);
+  const topLevelScope = steerQueueScopeOf(state, deps.userId);
+  const scope = topLevelScope ?? subAgentSteerQueueScopeOf(state, deps.userId);
   if (!scope || !deps.delegate.injectQueuedFollowUp) return;
+
+  // A sub-agent ending after this read has no hand-back to catch a steer its
+  // parent appends meanwhile. Sealed before the read, the run makes that
+  // parent take the steer back (`queueSubAgentSteer`) instead of leaving it
+  // queued behind a run that will not read again.
+  const sealing = !!options?.lastRead && !topLevelScope;
+  if (sealing) {
+    await redisService.steerQueue
+      .seal(operationId)
+      .catch((error) =>
+        log('[%s][%d] Sealing the steer queue failed: %O', operationId, stepIndex, error),
+      );
+  }
 
   try {
     if ((await redisService.steerQueue.length(scope, operationId)) === 0) return;
 
     const injected = await deps.delegate.injectQueuedFollowUp({ operationId, scope, state });
+    // It answers again with the steer in context, so it reads its queue again.
+    // A seal left in place only makes the parent wait for the result instead.
+    if (injected && sealing) {
+      await redisService.steerQueue
+        .unseal(operationId)
+        .catch((error) =>
+          log('[%s][%d] Unsealing the steer queue failed: %O', operationId, stepIndex, error),
+        );
+    }
     if (injected) {
       log(
         '[%s][%d] Joined queued follow-ups into the run as %s',

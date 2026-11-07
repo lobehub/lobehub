@@ -269,14 +269,17 @@ export async function prepareStepInput(
   // anchored on it. Not while a tool of this turn still waits for approval —
   // the agent has to park for that first. A sub-agent also takes its parent's
   // steer instruction at its final answer (see `isSubAgentFinalAnswer`).
+  const subAgentFinalAnswer =
+    !!currentContext && isSubAgentFinalAnswer(currentContext, currentState);
   if (
     currentContext &&
     !forcedFinishState &&
-    (LLM_NEXT_PHASES.has(currentContext.phase) ||
-      isSubAgentFinalAnswer(currentContext, currentState)) &&
+    (LLM_NEXT_PHASES.has(currentContext.phase) || subAgentFinalAnswer) &&
     findCurrentTurnPendingToolMessages(currentState.messages).length === 0
   ) {
-    const injected = await deps.injectQueuedFollowUp(operationId, stepIndex, currentState);
+    const injected = await deps.injectQueuedFollowUp(operationId, stepIndex, currentState, {
+      lastRead: subAgentFinalAnswer,
+    });
     if (injected) {
       currentState = structuredClone(currentState);
       currentState.messages = await deps.refreshMessagesFromDB(currentState);

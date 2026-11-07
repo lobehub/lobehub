@@ -1,6 +1,8 @@
 import { ThreadStatus, ThreadType } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { hookDispatcher } from '@/server/services/agentRuntime/hooks';
+
 import { AiAgentService } from '../index';
 
 // Mock trusted client to avoid server-side env access
@@ -781,6 +783,34 @@ describe('AiAgentService.execSubAgent', () => {
           expect.objectContaining({ operationId: 'op-old' }),
         );
         expect(result).toMatchObject({ steered: true, success: true });
+      });
+
+      it('closes the call-agent hook pair for a steer', async () => {
+        const dispatch = vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
+
+        await service.execVirtualSubAgent(followUp);
+
+        const events = dispatch.mock.calls.map(([, event]) => event);
+        expect(events).toEqual(['beforeCallAgent', 'afterCallAgent']);
+        expect(dispatch).toHaveBeenLastCalledWith(
+          'parent-op-2',
+          'afterCallAgent',
+          expect.objectContaining({
+            subOperationId: 'op-old',
+            success: true,
+            threadId: 'thread-old',
+          }),
+        );
+        dispatch.mockRestore();
+      });
+
+      it('tells the parent not to resend when the steer may already be queued', async () => {
+        mockQueueSubAgentSteer.mockResolvedValue({ queued: false, reason: 'unknown' });
+
+        const result = await service.execVirtualSubAgent(followUp);
+
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('Do not send it again yet');
       });
 
       it('explains a full queue to the parent', async () => {

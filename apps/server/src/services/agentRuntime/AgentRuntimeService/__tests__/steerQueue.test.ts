@@ -8,9 +8,15 @@ import { finishOperation } from '../executeStep/completion';
 import { prepareStepInput } from '../executeStep/prepare';
 import { injectQueuedFollowUp, readQueuedMessagesFlag } from '../operationControl';
 
-const { steerQueueLength } = vi.hoisted(() => ({ steerQueueLength: vi.fn() }));
+const { steerQueueLength, steerQueueSeal, steerQueueUnseal } = vi.hoisted(() => ({
+  steerQueueLength: vi.fn(),
+  steerQueueSeal: vi.fn(),
+  steerQueueUnseal: vi.fn(),
+}));
 vi.mock('@/server/services/redis', () => ({
-  redisService: { steerQueue: { length: steerQueueLength } },
+  redisService: {
+    steerQueue: { length: steerQueueLength, seal: steerQueueSeal, unseal: steerQueueUnseal },
+  },
 }));
 
 const stateOf = (overrides: Partial<AgentState> = {}) =>
@@ -25,6 +31,8 @@ describe('server-side steer queue in the step loop', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     steerQueueLength.mockResolvedValue(0);
+    steerQueueSeal.mockResolvedValue(undefined);
+    steerQueueUnseal.mockResolvedValue(undefined);
   });
 
   describe('readQueuedMessagesFlag', () => {
@@ -116,6 +124,45 @@ describe('server-side steer queue in the step loop', () => {
 
       await expect(injectQueuedFollowUp(deps, 'op-child', 2, child)).resolves.toBeUndefined();
       expect(deps.delegate.injectQueuedFollowUp).not.toHaveBeenCalled();
+    });
+
+    it('seals the sub-agent before its last read, so a later steer is taken back', async () => {
+      const deps = createDeps({ messageId: 'msg-steer' });
+
+      await expect(
+        injectQueuedFollowUp(deps, 'op-child', 2, child, { lastRead: true }),
+      ).resolves.toBeUndefined();
+      expect(steerQueueSeal).toHaveBeenCalledWith('op-child');
+      expect(steerQueueSeal.mock.invocationCallOrder[0]).toBeLessThan(
+        steerQueueLength.mock.invocationCallOrder[0],
+      );
+      expect(steerQueueUnseal).not.toHaveBeenCalled();
+    });
+
+    it('unseals when the last read took a steer in, since the sub-agent answers again', async () => {
+      steerQueueLength.mockResolvedValue(1);
+      const deps = createDeps({ messageId: 'msg-steer' });
+
+      await expect(
+        injectQueuedFollowUp(deps, 'op-child', 2, child, { lastRead: true }),
+      ).resolves.toEqual({ messageId: 'msg-steer' });
+      expect(steerQueueUnseal).toHaveBeenCalledWith('op-child');
+    });
+
+    it('keeps the joined steer when unsealing fails', async () => {
+      steerQueueLength.mockResolvedValue(1);
+      steerQueueUnseal.mockRejectedValue(new Error('redis down'));
+      const deps = createDeps({ messageId: 'msg-steer' });
+
+      await expect(
+        injectQueuedFollowUp(deps, 'op-child', 2, child, { lastRead: true }),
+      ).resolves.toEqual({ messageId: 'msg-steer' });
+    });
+
+    it('does not seal on a read the run makes before another LLM call', async () => {
+      await injectQueuedFollowUp(createDeps(), 'op-child', 2, child);
+
+      expect(steerQueueSeal).not.toHaveBeenCalled();
     });
 
     it('has no queue for a child run outside a thread', async () => {
@@ -238,7 +285,9 @@ describe('server-side steer queue in the step loop', () => {
 
         const { currentContext, currentState } = await prepare(deps, phase);
 
-        expect(deps.injectQueuedFollowUp).toHaveBeenCalledWith('op-1', 2, expect.anything());
+        expect(deps.injectQueuedFollowUp).toHaveBeenCalledWith('op-1', 2, expect.anything(), {
+          lastRead: false,
+        });
         expect(currentContext).toMatchObject({
           payload: { parentMessageId: 'msg-steer' },
           phase: 'user_input',
@@ -292,7 +341,9 @@ describe('server-side steer queue in the step loop', () => {
 
         const { currentContext, currentState } = await prepareChild(deps, 'tool_result', {});
 
-        expect(deps.injectQueuedFollowUp).toHaveBeenCalledWith('op-child', 4, expect.anything());
+        expect(deps.injectQueuedFollowUp).toHaveBeenCalledWith('op-child', 4, expect.anything(), {
+          lastRead: false,
+        });
         // The next LLM call runs on the steer message, read back from the thread.
         expect(currentContext).toMatchObject({
           payload: { parentMessageId: 'msg-steer' },
@@ -309,7 +360,10 @@ describe('server-side steer queue in the step loop', () => {
           result: { content: 'done', tool_calls: [] },
         });
 
-        expect(deps.injectQueuedFollowUp).toHaveBeenCalled();
+        // Its last read before it ends: sealed, so a steer that misses it is taken back.
+        expect(deps.injectQueuedFollowUp).toHaveBeenCalledWith('op-child', 4, expect.anything(), {
+          lastRead: true,
+        });
         expect(currentContext).toMatchObject({ phase: 'user_input' });
       });
 
