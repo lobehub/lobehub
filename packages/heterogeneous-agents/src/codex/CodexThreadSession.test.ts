@@ -924,6 +924,46 @@ describe('CodexThreadSession', () => {
     session.close();
   });
 
+  it('does not dispatch a cancelled prompt while the native thread is starting', async () => {
+    const harness = createClientHarness({ delayThreadStart: true });
+    const { run, session, statuses } = createSession(harness);
+    try {
+      const running = run('operation-1', 'cancel this prompt');
+      await vi.waitFor(() =>
+        expect(harness.requests.some(({ method }) => method === 'thread/start')).toBe(true),
+      );
+      await session.interrupt();
+      harness.resolveThreadStart();
+      await running;
+
+      expect(harness.requests.map(({ method }) => method)).toEqual(['thread/start']);
+      expect(statuses).toEqual(['starting', 'idle']);
+
+      await run('operation-2', 'send this prompt');
+      expect(harness.requests.map(({ method }) => method)).toEqual(['thread/start', 'turn/start']);
+    } finally {
+      session.close();
+    }
+  });
+
+  it('does not fall back to exec when thread startup fails after cancellation', async () => {
+    const harness = createClientHarness({ delayThreadStart: true, malformedThreadStart: true });
+    const { run, session, statuses } = createSession(harness);
+    try {
+      const running = run('operation-1', 'cancel this prompt');
+      await vi.waitFor(() =>
+        expect(harness.requests.some(({ method }) => method === 'thread/start')).toBe(true),
+      );
+      await session.interrupt();
+      harness.resolveThreadStart();
+
+      await expect(running).resolves.toBeUndefined();
+      expect(statuses).toEqual(['starting', 'idle']);
+    } finally {
+      session.close();
+    }
+  });
+
   it('remembers an interrupt requested before turn/start returns its turn id', async () => {
     const harness = createClientHarness({ autoComplete: false, delayTurnStart: true });
     const { run, session } = createSession(harness);
