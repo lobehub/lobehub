@@ -1,0 +1,29 @@
+name = "resource-guard-in-middleware"
+builtInAgent = "basic-structured"
+instruction = """
+You are reviewing one TypeScript file from the LobeHub backend tRPC router layer (`apps/server/src/routers/**`).
+
+Team rule, from the backend owner's review: "resolveAcceptanceForWrite 这个感觉就应该是放在 Middleware 里直接做掉往下提供 ctx".
+
+When two or more procedures in one file open their handler by loading the same addressed resource from the input and authorizing it — the same helper, called with `ctx` (or values taken from `ctx`) and the same input field — that step belongs in a procedure middleware. The middleware declares the shared input, resolves and authorizes the resource once, and hands it (and any service bound to it) down through `ctx`. Handlers then read `ctx.<resource>` instead of repeating the call. Repeating the call per handler means a new procedure can forget it, and the authorization boundary is spread across every handler instead of living in one procedure.
+
+Do not report (return no finding when any of these applies):
+- fewer than TWO procedures in this file call the helper on the same input field (a one-off guard stays inline). Count only calls in procedure handlers (`.query(...)` / `.mutation(...)` / `.subscription(...)` bodies) of this file; calls in plain functions, helpers or other files do not count;
+- the helper is called with different input fields across procedures (`input.id` in one, `input.acceptanceId` in another) — only the procedures sharing one field count toward the two;
+- the guard is conditional (`if (ctx.workspaceId) await assert...(...)`, or only on some branch of the handler) — such a call does not count;
+- the identity is assembled from alternative or composite fields that vary per procedure (`{ agentId, slug, groupId }` where some procedures pass `slug` or `groupId`, others take them from a batch item) — there is no single input field a middleware could declare;
+- a call that resolves more than one resource in the same handler (`sourceId` and `targetId`), or that resolves ids from an array or loop (`for (const id of input.ids)`, `input.ids.map(...)`); these handlers do not count toward the two;
+- a call that is not part of the handler's opening guard — it runs only on a branch, after another write, or with an id computed from an earlier result;
+- the helper does not address a single resource by the input id: content checks over a batch (`assertContentsNotIn...(ids)`), rate limits, feature flags, quota checks, or plain service/model calls (`ctx.xxxModel.findById(input.id)` with no authorization, `service.create(...)`);
+- the file already defines or uses a middleware-backed procedure that performs this resolution, and the remaining calls are the documented exceptions above;
+- the call lives inside the middleware itself (`.use(async (opts) => ...)`), which is exactly the requested shape;
+- test files, fixtures and type-only code.
+
+Report when, after applying the exclusions, at least two procedure handlers in this file each begin by awaiting the same resolve/authorize helper on the same input field (for example `await resolveAcceptanceForWrite(ctx, input.id)`, `await assertDeviceOperable(ctx, input.deviceId, ...)`, `await resolveLinkShareOrThrow(ctx.serverDB, input.shareId, ctx.userId)`). The helper typically throws NOT_FOUND / FORBIDDEN on failure, or returns the resource (and possibly a service bound to it) that the rest of the handler uses. A per-call argument such as an action label does not exempt it — a middleware factory takes it.
+
+Count before reporting, per (helper, input field) pair: list every qualifying handler (procedure name and line). Handlers that pass a different field, or whose call is excluded above, are not on the list. If the list has fewer than two entries, return NO finding for that pair — a single guarded handler is not a repetition. Do not use one helper's finding to talk about a different helper.
+
+Report ONE finding per qualifying (helper, field) pair, anchored on the line of the FIRST qualifying call. The message MUST start with the count and the field, in the form "`<helper>` on `input.<field>` opens N procedures: a (line), b (line), c (line)…", where N is at least 2 and every listed procedure passes exactly that field. In the suggestion, give the shape: a procedure such as `xxxByIdProcedure = baseProcedure.input(z.object({ <field>: ... })).use(async ({ ctx, input, next }) => next({ ctx: { <resource>, ... } }))` whose handlers chain their own `.input(...)` (tRPC merges the objects) and read `ctx.<resource>`; mention that procedures with the excluded shapes keep the explicit call.
+
+If uncertain, use low confidence rather than forcing a finding.
+"""
