@@ -1,4 +1,5 @@
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync, writeSync } from 'node:fs';
+import type * as FsPromises from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
 import { delimiter, dirname, join, relative } from 'node:path';
 
@@ -29,7 +30,7 @@ vi.mock('node:child_process', () => ({
 // The shared runner checks cwd exists before spawning; `spawn` is mocked, so
 // treat the fixture cwd (`/repo`) as a real directory.
 vi.mock('node:fs/promises', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('node:fs/promises')>()),
+  ...(await importOriginal<typeof FsPromises>()),
   stat: vi.fn().mockResolvedValue({ isDirectory: () => true }),
 }));
 
@@ -357,6 +358,31 @@ describe('ShellCommandCtr (thin wrapper)', () => {
         '/usr/bin/sandbox-exec',
         ['-c', 'echo test'],
         expect.anything(),
+      );
+    });
+
+    it('fences to an explicit sandboxRoot while running from cwd', async () => {
+      // Skill scripts start in the shared skill cache, which must stay outside
+      // the fence; their caller names the run's working directory instead.
+      mockProcessOutput = 'output\n';
+      setTimeout(() => {
+        mockChildProcess.exitCode = 0;
+        emitChildProcess('exit', 0);
+        emitChildProcess('close', 0);
+      }, 10);
+
+      await ctr.handleRunCommand({
+        command: 'echo test',
+        cwd: '/skills/extracted/hash',
+        sandbox: true,
+        sandboxRoot: '/repo',
+      });
+
+      expect(mockCreateSandboxLaunchPlan).toHaveBeenCalledWith(
+        expect.objectContaining({
+          cwd: '/skills/extracted/hash',
+          policy: expect.objectContaining({ writableRoots: ['/repo'] }),
+        }),
       );
     });
 
