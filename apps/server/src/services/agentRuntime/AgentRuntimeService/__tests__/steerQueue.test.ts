@@ -363,13 +363,18 @@ describe('server-side steer queue in the step loop', () => {
         expect(currentState.messages).toEqual(refreshed);
       });
 
-      it('does not treat a graph node’s tool-free result as the final answer', async () => {
-        const deps = createDeps(undefined);
-
-        await prepareStepInput(deps, {
+      const prepareGraphChild = (deps: any, currentNode: string, terminalNode?: string) =>
+        prepareStepInput(deps, {
           agentState: stateOf({
             messages: toolMessages,
-            metadata: { __graphRuntimeState: { graphState: { phase: 'node_in' } } },
+            metadata: {
+              __graphRuntimeState: {
+                graphContext: { edgeTraversalCounts: {}, store: {} },
+                graphState: { active: true, currentNode, phase: 'node_in' },
+                instructionCount: 2,
+                terminalNode,
+              },
+            },
             origin: subAgentOrigin,
             status: 'running',
           } as any),
@@ -384,8 +389,26 @@ describe('server-side steer queue in the step loop', () => {
           stepEntryMessages: undefined as any,
         });
 
+      it.each([
+        ['an intermediate node', 'draft', 'review'],
+        ['a state without its terminal node', 'review', undefined],
+      ])('does not treat a graph’s result at %s as the final answer', async (_case, node, end) => {
+        const deps = createDeps(undefined);
+
+        await prepareGraphChild(deps, node, end);
+
         // Not read at all: a graph's llm_result is no decision point, and no seal.
         expect(deps.injectQueuedFollowUp).not.toHaveBeenCalled();
+      });
+
+      it('makes its last read at the graph’s terminal node', async () => {
+        const deps = createDeps(undefined);
+
+        await prepareGraphChild(deps, 'review', 'review');
+
+        expect(deps.injectQueuedFollowUp).toHaveBeenCalledWith('op-child', 4, expect.anything(), {
+          lastRead: true,
+        });
       });
 
       it('takes the steer at its final answer instead of finishing without it', async () => {
