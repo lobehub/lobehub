@@ -5,7 +5,12 @@ import { requireWorkspaceRoleWhenScoped } from '@/business/server/trpc-middlewar
 import { AgentModel } from '@/database/models/agent';
 import type { LobeChatDatabase } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
-import { deviceGateway, isValidDirectoryName } from '@/server/services/deviceGateway';
+import {
+  deviceGateway,
+  isPathWithinRoot,
+  isValidDirectoryName,
+  joinDevicePath,
+} from '@/server/services/deviceGateway';
 
 import {
   assertWorkspaceRootApproved,
@@ -88,6 +93,12 @@ export const projectFilesRouter = router({
   getProjectFileIndex: deviceProcedure
     .input(z.object({ deviceId: z.string(), scope: z.string() }))
     .query(async ({ ctx, input }) => {
+      await assertWorkspaceRootApproved(
+        ctx.deviceModel,
+        input.deviceId,
+        input.scope,
+        ctx.workspaceId,
+      );
       const result = await deviceGateway.getProjectFileIndex({
         deviceId: input.deviceId,
         scope: input.scope,
@@ -104,6 +115,20 @@ export const projectFilesRouter = router({
   listProjectDirectory: deviceProcedure
     .input(z.object({ deviceId: z.string(), relativePath: z.string(), root: z.string() }))
     .query(async ({ ctx, input }) => {
+      await assertWorkspaceRootApproved(
+        ctx.deviceModel,
+        input.deviceId,
+        input.root,
+        ctx.workspaceId,
+      );
+      // `root` being approved is not enough — a relativePath with `..` would
+      // still walk out of it before the device ever sees the join.
+      if (!isPathWithinRoot(input.root, joinDevicePath(input.root, input.relativePath))) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'Path is outside the approved workspace',
+        });
+      }
       const result = await deviceGateway.listProjectDirectory({
         deviceId: input.deviceId,
         relativePath: input.relativePath,
@@ -205,6 +230,12 @@ export const projectFilesRouter = router({
       }),
     )
     .query(async ({ ctx, input }) => {
+      await assertWorkspaceRootApproved(
+        ctx.deviceModel,
+        input.deviceId,
+        input.scope,
+        ctx.workspaceId,
+      );
       const result = await deviceGateway.searchProjectFiles({
         changedOnly: input.changedOnly,
         deviceId: input.deviceId,
@@ -269,6 +300,12 @@ export const projectFilesRouter = router({
   listProjectSkills: deviceProcedure
     .input(z.object({ deviceId: z.string(), scope: z.string() }))
     .query(async ({ ctx, input }) => {
+      await assertWorkspaceRootApproved(
+        ctx.deviceModel,
+        input.deviceId,
+        input.scope,
+        ctx.workspaceId,
+      );
       const result = await deviceGateway.listProjectSkills({
         deviceId: input.deviceId,
         scope: input.scope,
@@ -453,11 +490,14 @@ export const projectFilesRouter = router({
    * Check whether a path exists on a remote device and is a directory, via the
    * device's `statPath` RPC. Lets a web client validate a manually-entered
    * working directory before binding it. Returns `null` when the device is
-   * unreachable (caller treats "can't verify" as non-blocking).
+   * unreachable (caller treats "can't verify" as non-blocking). Probing an
+   * arbitrary path on the device is an operation, not a browse, so it is
+   * gated like {@link browseDirectory} rather than like a file preview.
    */
   statPath: deviceProcedure
     .input(z.object({ deviceId: z.string(), path: z.string() }))
     .query(async ({ ctx, input }) => {
+      await assertDeviceOperable(ctx, input.deviceId, 'inspect paths on');
       const result = await deviceGateway.statPath({
         deviceId: input.deviceId,
         path: input.path,
