@@ -45,6 +45,11 @@ import {
 } from '../utils/fileVisibility';
 import { documentOriginalCharCount } from '../utils/originalCharCount';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
+import {
+  deleteDocumentReviews,
+  hasForeignDocumentReviews,
+  rehomeDocumentReviews,
+} from './documentReview';
 
 export interface QueryDocumentParams {
   /**
@@ -688,6 +693,8 @@ export class DocumentModel {
       .limit(1);
     if (foreignLike) return true;
 
+    if (await hasForeignDocumentReviews(runner, ids, this.userId)) return true;
+
     const [foreignFile] = await runner
       .select({ id: files.id })
       .from(files)
@@ -788,6 +795,8 @@ export class DocumentModel {
           .update(documentLikes)
           .set({ workspaceId: targetWorkspaceId })
           .where(inArray(documentLikes.documentId, ids));
+
+        await rehomeDocumentReviews(trx as LobeChatDatabase, ids, targetWorkspaceId);
       } else {
         // Comments are Workspace assets and cannot follow a document into personal scope.
         // Mention rows are removed by the comment FK cascade.
@@ -799,6 +808,9 @@ export class DocumentModel {
         await (trx as LobeChatDatabase)
           .delete(documentLikes)
           .where(inArray(documentLikes.documentId, ids));
+
+        // Reviews are Workspace-scoped too; children cascade from these roots.
+        await deleteDocumentReviews(trx as LobeChatDatabase, ids);
       }
 
       // Move files anchored to these documents; their visibility mirrors the

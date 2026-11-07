@@ -1,5 +1,12 @@
 // @vitest-environment node
-import { documentHistories, documents, files, users } from '@lobechat/database/schemas';
+import {
+  documentHistories,
+  documentReviewSessions,
+  documents,
+  files,
+  users,
+  workspaces,
+} from '@lobechat/database/schemas';
 import { and, desc, eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -30,9 +37,11 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  await serverDB.delete(documentReviewSessions);
   await serverDB.delete(documentHistories);
   await serverDB.delete(documents);
   await serverDB.delete(files);
+  await serverDB.delete(workspaces);
   await serverDB.delete(users);
 });
 
@@ -503,8 +512,85 @@ describe('DocumentHistoryService', () => {
       expect(rows[0].savedAt).toEqual(minutes(5));
     });
 
-    it('should insert a new row once the save falls into the next window bucket', async () => {
+    it('should freeze an autosave row that a review session uses as its baseline', async () => {
       const doc = await createTestDocument('Hello');
+      const workspaceId = 'document-history-review-baseline-ws';
+
+      await serverDB
+        .insert(workspaces)
+        .values({ id: workspaceId, name: 'Review baseline', primaryOwnerId: userId, slug: workspaceId });
+
+      const baseline = await historyService.createHistory({
+        documentId: doc.id,
+        editorData: { v: 1 },
+        saveSource: 'autosave',
+        savedAt: base,
+      });
+
+      await serverDB
+        .insert(documentReviewSessions)
+        .values({ baseHistoryId: baseline.id, documentId: doc.id, userId, workspaceId });
+
+      await historyService.createHistory({
+        documentId: doc.id,
+        editorData: { v: 2 },
+        saveSource: 'autosave',
+        savedAt: minutes(5),
+      });
+
+      const rows = await listRows(doc.id);
+
+      expect(rows).toHaveLength(2);
+      // The pinned row keeps the body the review was computed from…
+      expect(rows[1].id).toBe(baseline.id);
+      expect(rows[1].editorData).toEqual({ v: 1 });
+      expect(rows[1].savedAt).toEqual(base);
+      // …and the newer autosave opens its own row instead of overwriting it.
+      expect(rows[0].editorData).toEqual({ v: 2 });
+      expect(rows[0].savedAt).toEqual(minutes(5));
+    });
+
+    it('should keep a pinned review baseline when retention trims autosave history', async () => {
+      const doc = await createTestDocument('Hello');
+      const workspaceId = 'document-history-review-baseline-trim-ws';
+
+      await serverDB
+        .insert(workspaces)
+        .values({ id: workspaceId, name: 'Review baseline trim', primaryOwnerId: userId, slug: workspaceId });
+
+      const baseline = await historyService.createHistory({
+        documentId: doc.id,
+        editorData: { v: -1 },
+        saveSource: 'autosave',
+        savedAt: base,
+      });
+
+      await serverDB
+        .insert(documentReviewSessions)
+        .values({ baseHistoryId: baseline.id, documentId: doc.id, userId, workspaceId });
+
+      // Well past the autosave retention limit, all in distinct windows so each
+      // save writes its own row instead of coalescing.
+      for (let i = 0; i < DOCUMENT_HISTORY_SOURCE_LIMITS.autosave + 5; i++) {
+        await historyService.createHistory({
+          documentId: doc.id,
+          editorData: { v: i },
+          saveSource: 'autosave',
+          savedAt: minutes(30 * (i + 1)),
+        });
+      }
+
+      const rows = await listRows(doc.id);
+      const autosaveRows = rows.filter((row) => row.saveSource === 'autosave');
+
+      // The newest `limit` rows plus the pinned baseline survive.
+      expect(autosaveRows).toHaveLength(DOCUMENT_HISTORY_SOURCE_LIMITS.autosave + 1);
+      expect(autosaveRows.some((row) => row.id === baseline.id)).toBe(true);
+      // Trimming still happens: the oldest unpinned rows are gone.
+      expect(autosaveRows.some((row) => row.editorData?.v === 0)).toBe(false);
+    });
+
+    it('should insert a new row once the save falls into the next window bucket', async () => {      const doc = await createTestDocument('Hello');
       const windowMinutes = DOCUMENT_HISTORY_AUTOSAVE_WINDOW_MS / 60_000;
 
       for (const [i, at] of [

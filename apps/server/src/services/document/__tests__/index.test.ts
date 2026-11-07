@@ -5,6 +5,7 @@ import { PgDialect } from 'drizzle-orm/pg-core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DocumentModel } from '@/database/models/document';
+import { DocumentReviewModel } from '@/database/models/documentReview';
 import { FileModel } from '@/database/models/file';
 import { KnowledgeBaseModel } from '@/database/models/knowledgeBase';
 
@@ -16,6 +17,7 @@ import { capParsedFileDocument, DocumentService, PARSED_FILE_CONTENT_MAX_CHARS }
 
 vi.mock('@/server/modules/AgentRuntime/redis', () => ({ getAgentRuntimeRedisClient: () => null }));
 vi.mock('@/database/models/document');
+vi.mock('@/database/models/documentReview');
 vi.mock('@/database/models/file');
 vi.mock('@/database/models/knowledgeBase');
 vi.mock('../../file');
@@ -83,6 +85,7 @@ describe('DocumentService', () => {
   let service: DocumentService;
   let mockDb: LobeChatDatabase;
   let mockDocumentModel: any;
+  let mockDocumentReviewModel: any;
   let mockDocumentHistoryService: any;
   let mockFileModel: any;
   let mockFileService: any;
@@ -114,6 +117,10 @@ describe('DocumentService', () => {
       update: vi.fn(),
     };
 
+    mockDocumentReviewModel = {
+      invalidateDocumentChecks: vi.fn().mockResolvedValue(0),
+    };
+
     mockDocumentHistoryService = {
       compareDocumentHistoryItems: vi.fn(),
       createHistory: vi.fn().mockResolvedValue({ id: 'history-default', savedAt: new Date() }),
@@ -139,6 +146,9 @@ describe('DocumentService', () => {
 
     vi.mocked(DocumentModel).mockImplementation(function () {
       return mockDocumentModel;
+    });
+    vi.mocked(DocumentReviewModel).mockImplementation(function () {
+      return mockDocumentReviewModel;
     });
     vi.mocked(DocumentHistoryService).mockImplementation(function () {
       return mockDocumentHistoryService;
@@ -1206,6 +1216,22 @@ describe('DocumentService', () => {
       await wsService.updateDocument('doc-1', { content: 'x' });
 
       expect(mockDocumentModel.update).toHaveBeenCalled();
+    });
+
+    it('invalidates checked review results on a body save, but not on a metadata save', async () => {
+      const wsService = new DocumentService(mockDb, userId, 'ws-1');
+      mockDocumentModel.update.mockResolvedValue(new Date('2026-04-12T00:00:00.000Z'));
+      mockDocumentModel.findById.mockResolvedValue(
+        createCurrentDocument({ content: 'old body', workspaceId: 'ws-1' }),
+      );
+      vi.spyOn(EditLockService.prototype, 'canWrite').mockResolvedValue(true);
+
+      await wsService.updateDocument('doc-1', { content: 'new body' });
+      expect(mockDocumentReviewModel.invalidateDocumentChecks).toHaveBeenCalledWith('doc-1');
+
+      mockDocumentReviewModel.invalidateDocumentChecks.mockClear();
+      await wsService.updateDocument('doc-1', { title: 'New Title' });
+      expect(mockDocumentReviewModel.invalidateDocumentChecks).not.toHaveBeenCalled();
     });
 
     it('checks workspace body saves against the provided lock owner id', async () => {

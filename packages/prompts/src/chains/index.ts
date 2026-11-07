@@ -7,6 +7,7 @@ export * from './botWakeClassifier';
 export * from './builderSuggestion';
 export * from './channelRouting';
 export * from './compressContext';
+export * from './documentReviewImpact';
 export * from './expertise';
 export * from './followUpAction';
 export * from './generateBrief';
