@@ -87,6 +87,29 @@ interface LastActiveAtTransition {
   userCreatedAt: Date;
 }
 
+/**
+ * `users.created_at` truncated to the millisecond.
+ *
+ * NOTICE: Postgres keeps microseconds, but a pagination cursor travels as a JS `Date`, which keeps
+ * only milliseconds. Comparing the raw column with such a cursor makes `created_at > cursor` true
+ * for the very row the cursor came from (12:00:00.649520 > 12:00:00.649), so the next page returns
+ * the same user again and the hourly memory workflow re-schedules itself without end. Ordering and
+ * comparing on the truncated value keeps the rows and the cursor in one precision.
+ */
+const userCreatedAtMs = sql<Date>`date_trunc('milliseconds', ${users.createdAt})`;
+
+const userCursorCondition = (cursor?: ListUsersForMemoryExtractorCursor) => {
+  if (!cursor) return undefined;
+
+  // The cursor may have crossed a workflow step boundary, where a `Date` arrives as an ISO string.
+  const createdAt = new Date(cursor.createdAt).toISOString();
+
+  return or(
+    sql`${userCreatedAtMs} > ${createdAt}::timestamptz`,
+    and(sql`${userCreatedAtMs} = ${createdAt}::timestamptz`, gt(users.id, cursor.id)),
+  );
+};
+
 export class UserModel {
   private userId: string;
   private db: LobeChatDatabase;
@@ -894,12 +917,7 @@ export class UserModel {
     db: LobeChatDatabase,
     options: ListUsersForMemoryExtractorOptions = {},
   ) => {
-    const cursorCondition = options.cursor
-      ? or(
-          gt(users.createdAt, options.cursor.createdAt),
-          and(eq(users.createdAt, options.cursor.createdAt), gt(users.id, options.cursor.id)),
-        )
-      : undefined;
+    const cursorCondition = userCursorCondition(options.cursor);
 
     const whitelistCondition =
       options.whitelist && options.whitelist.length > 0
@@ -911,7 +929,7 @@ export class UserModel {
     return db.query.users.findMany({
       columns: { createdAt: true, id: true },
       limit: options.limit,
-      orderBy: (fields, { asc }) => [asc(fields.createdAt), asc(fields.id)],
+      orderBy: () => [asc(userCreatedAtMs), asc(users.id)],
       where,
     });
   };
@@ -920,12 +938,7 @@ export class UserModel {
     db: LobeChatDatabase,
     options: ListUsersForHourlyMemoryExtractorOptions = {},
   ) => {
-    const cursorCondition = options.cursor
-      ? or(
-          gt(users.createdAt, options.cursor.createdAt),
-          and(eq(users.createdAt, options.cursor.createdAt), gt(users.id, options.cursor.id)),
-        )
-      : undefined;
+    const cursorCondition = userCursorCondition(options.cursor);
 
     const whitelistCondition =
       options.whitelist && options.whitelist.length > 0
@@ -957,7 +970,7 @@ export class UserModel {
       .where(
         and(cursorCondition, whitelistCondition, memoryEnabledCondition, hasChattedTopicCondition),
       )
-      .orderBy(asc(users.createdAt), asc(users.id));
+      .orderBy(asc(userCreatedAtMs), asc(users.id));
 
     return options.limit !== undefined ? query.limit(options.limit) : query;
   };
