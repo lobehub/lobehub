@@ -5,6 +5,7 @@ import type { SignalDecisionVerdict } from '@lobechat/types';
 import type { ChannelRoutingDecision } from '@/database/repositories/channel';
 import type { LobeChatDatabase } from '@/database/type';
 import { recordSignalDecision } from '@/server/services/agentSignal/persistence/recordDecision';
+import { ROUTING_JUDGE_POLICY_ID } from '@/server/services/conversationWake/judgeScore';
 
 import type { ChannelRoutingInput, MemberWakeJudgement } from './wake';
 import { CHANNEL_WAKE_PLATFORM } from './wake';
@@ -13,7 +14,7 @@ import { CHANNEL_WAKE_PLATFORM } from './wake';
 export const CHANNEL_WAKE_PIPELINE_VERSION = 'channel-wake@1';
 
 /** Policy id the decision model's answer is recorded under, beside the member's own rules. */
-export const CHANNEL_ROUTING_POLICY_ID = 'channel:routing';
+export const CHANNEL_ROUTING_POLICY_ID = ROUTING_JUDGE_POLICY_ID;
 
 /** Every `finalReason` of a wake nobody asked for: the member may have stayed silent. */
 export const CHANNEL_WAKE_FOLLOWUP_REASONS = [
