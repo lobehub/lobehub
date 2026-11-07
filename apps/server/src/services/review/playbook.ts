@@ -60,6 +60,8 @@ type CheckStatus = 'passed' | 'failed' | 'uncertain';
 interface NormalizedOutcome {
   evidence: DocumentReviewTextAnchor[];
   explanation: string;
+  /** The window never produced a verdict: the model call or its output failed. */
+  incomplete?: boolean;
   status: CheckStatus;
 }
 
@@ -106,10 +108,19 @@ export const splitDocumentWindows = (text: string, maxChars: number): string[] =
  * Merges the per-window verdicts of one rule. A violation found in any window
  * wins; a pass still needs a located supporting quote; everything else stays
  * `uncertain` — a window never turns a partial reading into a pass.
+ *
+ * A window that never produced a verdict (model call failed, output was
+ * unparseable, or the rule was missing from the response) blocks a pass as
+ * well: an unevaluated window is not a clean window, so the merged verdict
+ * stays `uncertain` with the failure reason instead of inheriting the pass of
+ * a sibling window.
  */
 export const mergeWindowOutcomes = (outcomes: NormalizedOutcome[]): NormalizedOutcome => {
   const failed = outcomes.find((outcome) => outcome.status === 'failed');
   if (failed) return failed;
+
+  const incomplete = outcomes.find((outcome) => outcome.incomplete);
+  if (incomplete) return incomplete;
 
   const passed = outcomes.find((outcome) => outcome.status === 'passed');
   if (passed) return passed;
@@ -132,6 +143,10 @@ const UNCERTAIN_REASON_LABELS: Record<string, string> = {
 
 const uncertainExplanation = (explanation: string, reason: string): string =>
   `${explanation}\n（无法判断：${UNCERTAIN_REASON_LABELS[reason] ?? reason}）`;
+
+/** Names the window in a failure reason, so a long document says where it stopped. */
+const windowSuffix = (index: number, count: number): string =>
+  count > 1 ? `（第 ${index + 1}/${count} 段）` : '';
 
 const chunk = <T>(items: T[], size: number): T[][] => {
   const chunks: T[][] = [];
@@ -440,7 +455,11 @@ export class ReviewPlaybookService {
           for (const { item } of batch) {
             record(item.id, {
               evidence: [],
-              explanation: uncertainExplanation('模型调用失败，未能完成判定。', 'model_error'),
+              explanation: uncertainExplanation(
+                `模型调用失败，未能完成判定。${windowSuffix(windowIndex, windows.length)}`,
+                'model_error',
+              ),
+              incomplete: true,
               status: 'uncertain',
             });
           }
@@ -452,7 +471,11 @@ export class ReviewPlaybookService {
           for (const { item } of batch) {
             record(item.id, {
               evidence: [],
-              explanation: uncertainExplanation('模型输出无法解析，未能完成判定。', 'schema_invalid'),
+              explanation: uncertainExplanation(
+                `模型输出无法解析，未能完成判定。${windowSuffix(windowIndex, windows.length)}`,
+                'schema_invalid',
+              ),
+              incomplete: true,
               status: 'uncertain',
             });
           }
@@ -465,7 +488,11 @@ export class ReviewPlaybookService {
           if (!verdict) {
             record(item.id, {
               evidence: [],
-              explanation: uncertainExplanation('模型未返回该规则的结论。', 'schema_invalid'),
+              explanation: uncertainExplanation(
+                `模型未返回该规则的结论。${windowSuffix(windowIndex, windows.length)}`,
+                'schema_invalid',
+              ),
+              incomplete: true,
               status: 'uncertain',
             });
             continue;

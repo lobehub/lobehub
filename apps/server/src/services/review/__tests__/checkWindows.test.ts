@@ -76,4 +76,37 @@ describe('mergeWindowOutcomes', () => {
 
     expect(merged).toMatchObject({ explanation: '证据不足', status: 'uncertain' });
   });
+
+  it('keeps an unfinished window from inheriting a sibling pass', () => {
+    const merged = mergeWindowOutcomes([
+      outcome('passed', '前段合规'),
+      {
+        evidence: [],
+        explanation: '模型调用失败，未能完成判定。（第 2/2 段）',
+        incomplete: true,
+        status: 'uncertain',
+      },
+    ]);
+
+    expect(merged).toMatchObject({ status: 'uncertain' });
+    expect(merged.explanation).toContain('第 2/2 段');
+  });
+
+  it('still lets a violation in another window win over an unfinished one', () => {
+    const merged = mergeWindowOutcomes([
+      { evidence: [], explanation: '模型输出无法解析', incomplete: true, status: 'uncertain' },
+      outcome('failed', '后段违反'),
+    ]);
+
+    expect(merged).toMatchObject({ explanation: '后段违反', status: 'failed' });
+  });
+
+  it('stays uncertain when every window failed to produce a verdict', () => {
+    const merged = mergeWindowOutcomes([
+      { evidence: [], explanation: '模型调用失败', incomplete: true, status: 'uncertain' },
+      { evidence: [], explanation: '模型未返回该规则的结论', incomplete: true, status: 'uncertain' },
+    ]);
+
+    expect(merged).toMatchObject({ explanation: '模型调用失败', status: 'uncertain' });
+  });
 });
