@@ -93,7 +93,6 @@ const AgentConversation = memo<AgentConversationProps>(({ active, conversation }
       active={active}
       activeAt={activeAt}
       contextMenuItems={menuItems}
-      pinned={!!pinned}
       preview={preview}
       running={running}
       title={title}

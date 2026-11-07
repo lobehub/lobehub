@@ -1,4 +1,8 @@
-import type { ChannelAuditDetails, ChannelMessageRoutingStatus } from '@lobechat/types';
+import type {
+  ChannelAuditDetails,
+  ChannelJobWake,
+  ChannelMessageRoutingStatus,
+} from '@lobechat/types';
 import { and, eq, sql } from 'drizzle-orm';
 
 import type { ChannelMessageItem } from '../../schemas';
@@ -10,7 +14,13 @@ import { ChannelError } from './error';
 import { audit } from './transaction';
 
 export type ChannelRoutingDecision = (
-  | { memberIds: string[]; reason: string; status: 'assigned' }
+  | {
+      memberIds: string[];
+      reason: string;
+      status: 'assigned';
+      /** Why each chosen member is woken; one without an entry owes an answer. */
+      wakes?: Record<string, ChannelJobWake>;
+    }
   | { reason: string; status: Extract<ChannelMessageRoutingStatus, 'skipped' | 'unassigned'> }
 ) & { details?: ChannelAuditDetails };
 
@@ -59,7 +69,15 @@ export const resolveRouting = async (
           ),
         )
     : [];
-  const delivered = requester ? await deliver(tx, message, chosen, requester.id) : [];
+  const delivered = requester
+    ? await deliver(
+        tx,
+        message,
+        chosen,
+        requester.id,
+        decision.status === 'assigned' ? decision.wakes : undefined,
+      )
+    : [];
   const status =
     decision.status === 'assigned' && !delivered.length ? 'unassigned' : decision.status;
 

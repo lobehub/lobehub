@@ -1,10 +1,10 @@
-import type { AgentMailAddress, AgentMailAttachment } from './agentMail';
+import type { AgentInboxSourceType, AgentMailAddress, AgentMailAttachment } from './agentMail';
 
 /**
  * Agent accounts — the identity assets an agent owns.
  *
- * An agent may hold several accounts: a `mail` address, a `phone` number, a
- * `wallet`, or a third-party `service` login. Each one is its own row, belongs
+ * An agent may hold several accounts: a `mail` address, a `wallet`, or a
+ * third-party `service` login. Each one is its own row, belongs
  * to the agent (not to a workspace integration), and may carry credentials.
  *
  * Kinds and statuses are growing domains, so they are plain unions here and the
@@ -12,9 +12,41 @@ import type { AgentMailAddress, AgentMailAttachment } from './agentMail';
  * change with no migration.
  */
 
-/** The sorts of identity an agent can own. */
-export const AGENT_ACCOUNT_KINDS = ['mail', 'phone', 'wallet', 'service'] as const;
+/** The sorts of identity an agent can own today — what a caller may create. */
+export const AGENT_ACCOUNT_KINDS = ['mail', 'wallet', 'service'] as const;
 export type AgentAccountKind = (typeof AGENT_ACCOUNT_KINDS)[number];
+
+/**
+ * Every kind a persisted row — and therefore a read response — can still carry.
+ *
+ * `kind` is a plain text column, so a kind the product retired outlives the
+ * code that minted it: the agent-owned `phone` (now a messenger channel) keeps
+ * its rows. An unfiltered read deliberately leaves those rows visible so their
+ * owner can still revoke them, which means every read shape has to admit a
+ * value that the validators and the live-runtime filter never accept.
+ */
+export const AGENT_ACCOUNT_PERSISTED_KINDS = [...AGENT_ACCOUNT_KINDS, 'phone'] as const;
+export type AgentAccountPersistedKind = (typeof AGENT_ACCOUNT_PERSISTED_KINDS)[number];
+
+/**
+ * Whether a persisted kind is one the product still opens.
+ *
+ * Reads that must only see live identities use this as a type guard, so the
+ * runtime context cannot claim an account kind it has no provider for.
+ */
+export const isAgentAccountKind = (kind: AgentAccountPersistedKind): kind is AgentAccountKind =>
+  (AGENT_ACCOUNT_KINDS as readonly string[]).includes(kind);
+
+/**
+ * Narrow an account-shaped value to one whose kind is still open.
+ *
+ * Object-level, not kind-level, so it can be handed straight to
+ * `Array.prototype.filter` — a predicate on `.kind` alone leaves the element
+ * type untouched.
+ */
+export const isLiveAgentAccount = <T extends { kind: AgentAccountPersistedKind }>(
+  account: T,
+): account is T & { kind: AgentAccountKind } => isAgentAccountKind(account.kind);
 
 /** Lifecycle of one account. */
 export const AGENT_ACCOUNT_STATUSES = ['provisioning', 'active', 'suspended', 'revoked'] as const;
@@ -22,7 +54,7 @@ export type AgentAccountStatus = (typeof AGENT_ACCOUNT_STATUSES)[number];
 
 /**
  * What the account can do, declared by whoever provisions it rather than
- * inferred from its kind: a `service` account may be login-only, a `phone`
+ * inferred from its kind: a `service` account may be login-only, a `mail`
  * account may be receive-only during warm-up.
  */
 export interface AgentAccountCapabilities {
@@ -108,6 +140,100 @@ export interface AgentAccountInboundMailDetail {
   to: AgentMailAddress[];
 }
 
+/**
+ * A message the agent received on one of its accounts, persisted as the
+ * agent's **own first-class inbox** — not a channel message and not a tool
+ * result.
+ *
+ * This is what makes "the agent has an inbox" a state the runtime and the
+ * model can read without paying an always-on tool slot for it: each inbound
+ * delivery becomes one of these rows, and the runtime hands the unread ones to
+ * the model as context.
+ */
+export interface AgentInboxMessage {
+  /** The account it arrived at, when the channel has one. */
+  accountId: string | null;
+  agentId: string;
+  /** What the sender attached, as the provider holds it (descriptors only). */
+  attachments: AgentMailAttachment[];
+  /** Verification codes pulled out of the body (4–8 digits), for the `wait` primitive. */
+  codes: string[];
+  createdAt: Date;
+  /** Who it is from. */
+  from: string;
+  id: string;
+  /** Short plain-text preview the inbox list shows. */
+  preview: string | null;
+  /** When it was first read; `null` while unread. */
+  readAt: Date | null;
+  receivedAt: Date;
+  /** What the item is (`mail` today). */
+  sourceType: AgentInboxSourceType;
+  /** Its title (a mail's subject). */
+  subject: string | null;
+  text: string;
+  /** Conversation key within the account, when the source supplies one. */
+  threadKey: string | null;
+  /** Where it was delivered — the agent's own address. */
+  to: string;
+}
+
+/** One inbox row as a list shows it: who, what and when, without the content. */
+export type AgentInboxMessageSummary = Pick<
+  AgentInboxMessage,
+  | 'accountId'
+  | 'agentId'
+  | 'createdAt'
+  | 'from'
+  | 'id'
+  | 'preview'
+  | 'readAt'
+  | 'receivedAt'
+  | 'sourceType'
+  | 'subject'
+  | 'threadKey'
+>;
+
+/**
+ * The inbox as one glance: how much is waiting. Injected into the model's
+ * context so it knows it has mail without querying.
+ *
+ * Deliberately carries no message content. Sender, subject and body are
+ * written by whoever emails or texts the agent, so they must never reach the
+ * system prompt — the model reads them on demand through the account tool,
+ * fenced as untrusted input.
+ */
+export interface AgentInboxSummary {
+  unreadCount: number;
+}
+
+/** One account as the runtime context shows it — credential-safe by construction. */
+export interface AgentAccountContextItem {
+  capabilities: AgentAccountCapabilities;
+  displayName?: string | null;
+  /** The handle the outside world reaches the agent at. */
+  identifier: string;
+  kind: AgentAccountKind;
+  provider: string;
+  status: AgentAccountStatus;
+}
+
+/**
+ * The agent's identity as first-class runtime state: which addresses it owns
+ * and what is waiting in its inbox. This is what replaces a resident
+ * `lobe-mailbox` tool slot — the model is *told* who it is instead of having
+ * to ask through a tool every turn.
+ */
+export interface AgentAccountContext {
+  accounts: AgentAccountContextItem[];
+  inbox: AgentInboxSummary;
+  /**
+   * Whether the account tool is in this step's final tool set. Some modes
+   * leave it out; the identity block then must not tell the model to use it.
+   */
+  toolAvailable?: boolean;
+}
+
 /** A message the agent sends from one of its accounts. */
 export interface AgentAccountOutboundMessage {
   attachments?: AgentAccountAttachment[];
@@ -136,9 +262,13 @@ export interface AgentAccountRef {
   /** Decrypted credential, present only on trusted internal paths. */
   credential?: Record<string, string> | null;
   id: string;
-  /** The handle that routes to this account: address, number, login. */
+  /** The handle that routes to this account: address, login. */
   identifier: string;
-  kind: AgentAccountKind;
+  /**
+   * The kind the row was written with. Widened past {@link AgentAccountKind}
+   * because a legacy row is still readable — and must stay releasable.
+   */
+  kind: AgentAccountPersistedKind;
   /** Provider-side non-secret handles (inboxId, chatId, …). */
   metadata: Record<string, unknown>;
   provider: string;
@@ -151,10 +281,19 @@ export interface AgentAccountProvisionInput {
   displayName?: string;
   /**
    * Whether a live account already routes on `identifier` for this provider.
-   * Providers that bind from a finite operator inventory (Linq numbers) use it
-   * to pick a free unit instead of colliding on the routing key.
+   * An idempotent provider (Agent Mail keys inboxes by agent) can be handed back
+   * the resource a committed row already holds after a lost response; this
+   * tells it not to mint a second credential for that resource.
    */
   isIdentifierHeld?: (identifier: string) => Promise<boolean>;
+  /**
+   * Preferred handle the caller asks for, when the provider can honour it —
+   * the local part of a `mail` address, for example. A provider that cannot
+   * honour a preference ignores it and mints its own identifier; a provider
+   * that can either returns the requested prefix or fails, never a silent
+   * substitute.
+   */
+  prefix?: string;
   userId: string;
   workspaceId?: string;
 }
@@ -223,7 +362,7 @@ export interface AgentAccountProvider<K extends AgentAccountKind = AgentAccountK
     ref: AgentAccountRef,
   ) => Promise<AgentAccountInboundMessage | null>;
 
-  /** Stable provider id (`agent-mail`, `linq`, …); the account's `provider` value. */
+  /** Stable provider id (`agent-mail`, …); the account's `provider` value. */
   readonly provider: string;
 
   /** Idempotent open. Runs before the account row exists. */
@@ -231,6 +370,15 @@ export interface AgentAccountProvider<K extends AgentAccountKind = AgentAccountK
 
   /** Idempotent release. Called while revoking, before the row is marked revoked. */
   release: (ref: AgentAccountRef) => Promise<void>;
+
+  /**
+   * Forget the replay claim {@link verifyInbound} took for a delivery, so the
+   * provider's retry of it is processed instead of acknowledged as a
+   * duplicate. Called when handling a verified delivery failed transiently and
+   * the webhook answers with a retryable status. Optional: a provider that
+   * keeps no claim has nothing to release.
+   */
+  releaseInbound?: (eventId: string) => Promise<void>;
 
   /**
    * Extract the routing key (the account `identifier`) from an *untrusted*

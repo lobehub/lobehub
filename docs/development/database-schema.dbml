@@ -1325,6 +1325,7 @@ table channel_jobs {
   claimed_at "timestamp with time zone"
   topic_id text
   operation_id text [unique]
+  wake jsonb
   manifest jsonb
   execution_config jsonb
   device_id varchar(64)

@@ -35,6 +35,7 @@
   "jina.description": "2020 yılında kurulan Jina AI, önde gelen bir arama yapay zekası şirketidir. Vektör modelleri, yeniden sıralayıcılar ve küçük dil modelleri içeren arama yığını ile güvenilir ve yüksek kaliteli üretken ve çok modlu arama uygulamaları geliştirir.",
   "kimicodingplan.description": "Moonshot AI'den Kimi Code, kodlama görevleri için K2.5 dahil olmak üzere Kimi modellerine erişim sağlar.",
   "lmstudio.description": "LM Studio, bilgisayarınızda büyük dil modelleriyle geliştirme ve denemeler yapmanızı sağlayan bir masaüstü uygulamasıdır.",
+  "lobehub.description": "LobeHub Cloud, yapay zeka modellerine erişmek için resmi API'leri kullanır ve kullanımı model token'larına göre ABD doları cinsinden faturalandırır.",
   "longcat.description": "LongCat, Meituan tarafından bağımsız olarak geliştirilen bir dizi üretken yapay zeka büyük modelidir. Verimli bir hesaplama mimarisi ve güçlü çok modlu yetenekler aracılığıyla kurumsal iç verimliliği artırmak ve yenilikçi uygulamaları mümkün kılmak için tasarlanmıştır.",
   "magpie.description": "magpie, bir LLM geçididir: oradaki her model ve abonelik tek bir uç noktada sunulur.",
   "meta.description": "Meta, Llama ve Muse model aileleri dahil olmak üzere, insanların bağlantı kurmasına, yaratıcı olmasına ve işlerini halletmesine yardımcı olan yapay zeka modelleri ve ürünleri geliştirir.",

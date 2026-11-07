@@ -11,17 +11,26 @@ interface TaskDetailPageUrlOptions {
   workspaceSlug?: string | null;
 }
 
-export const getTaskDetailPageUrl = ({
+/** App-relative path of a task's own page, scoped to the given workspace. */
+export const getTaskDetailPagePath = ({
   agentId,
-  appOrigin,
   taskId,
   identifier,
   title,
   workspaceSlug,
-}: TaskDetailPageUrlOptions): string | undefined => {
+}: Omit<TaskDetailPageUrlOptions, 'appOrigin'>): string | undefined => {
   const taskRef = identifier ?? taskId;
-  if (!appOrigin || !taskRef) return;
+  if (!taskRef) return;
 
-  const path = buildWorkspaceAwarePath(taskDetailPath(taskRef, agentId, title), workspaceSlug);
-  return `${appOrigin}${path}`;
+  return buildWorkspaceAwarePath(taskDetailPath(taskRef, agentId, title), workspaceSlug);
+};
+
+export const getTaskDetailPageUrl = ({
+  appOrigin,
+  ...options
+}: TaskDetailPageUrlOptions): string | undefined => {
+  if (!appOrigin) return;
+
+  const path = getTaskDetailPagePath(options);
+  return path && `${appOrigin}${path}`;
 };

@@ -221,6 +221,7 @@ const Timeline = ({
                       <ChannelMessage
                         continuation={continuation}
                         message={item.message}
+                        pending={outgoingById.get(item.message.id)!.status === 'sending'}
                         threadId={threadId}
                         delivery={
                           <OutgoingStatus

@@ -7,6 +7,7 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import CollapsibleContent from '@/components/CollapsibleContent';
+import AgentProfilePopup from '@/features/AgentProfileCard/AgentProfilePopup';
 import { ChatItem } from '@/features/Conversation/ChatItem';
 import Markdown from '@/features/Conversation/Markdown';
 import UserAvatar from '@/features/User/UserAvatar';
@@ -53,6 +54,7 @@ export const ChannelMessage = ({
   onStartThread,
   onReply,
   onJumpToMessage,
+  pending = false,
 }: {
   continuation?: boolean;
   /** For a message the server has not confirmed: its send status, in place of routing. */
@@ -65,6 +67,8 @@ export const ChannelMessage = ({
   onStartThread?: (draft: ChannelThreadDraft) => void;
   onReply?: (message: ChannelPublicMessage) => void;
   onJumpToMessage?: (message: ChannelReplyTarget) => void;
+  /** Sent from this tab and not yet confirmed by the server. */
+  pending?: boolean;
   threadId?: string | null;
 }) => {
   const { t, i18n } = useTranslation('channel');
@@ -98,12 +102,17 @@ export const ChannelMessage = ({
       attachments: detail.attachments.filter((file) => message.fileIds.includes(file.id)),
     });
   const isRequest = message.author.type === 'user' && !isRoot;
+  const agentAuthorId = message.author.type === 'agent' ? message.author.id : null;
+  const agentMember = agentAuthorId
+    ? detail.members.find((member) => member.agentId === agentAuthorId)
+    : undefined;
   const mentionNames = detail.members
     .filter((member) => message.mentions.includes(member.id))
     .map((member) => memberName(member, ''))
     .filter(Boolean);
   return (
     <div
+      aria-busy={pending || undefined}
       aria-label={message.author.name || t('deletedMember')}
       data-continuation={compact || undefined}
       data-message-id={message.id}
@@ -112,6 +121,7 @@ export const ChannelMessage = ({
         styles.messageRow,
         compact && (onReply || canBranch) && styles.continuationWithAction,
         highlighted && styles.highlightedMessage,
+        pending && styles.pendingMessage,
         stylex.defaultMarker(),
       )}
     >
@@ -148,7 +158,24 @@ export const ChannelMessage = ({
         }
         customAvatarRender={(_, avatar) => (
           <Flexbox {...stylex.props(styles.messageAvatar)}>
-            {isOwnMessage ? <UserAvatar size={36} /> : avatar}
+            {isOwnMessage ? (
+              <UserAvatar size={36} />
+            ) : agentAuthorId ? (
+              // Same profile card an Agent shows on hover in goals and tasks.
+              <AgentProfilePopup
+                agentId={agentAuthorId}
+                trigger={'hover'}
+                agent={{
+                  avatar: message.author.avatar,
+                  description: agentMember?.description,
+                  title: message.author.name,
+                }}
+              >
+                <span style={{ cursor: 'pointer', display: 'inline-flex' }}>{avatar}</span>
+              </AgentProfilePopup>
+            ) : (
+              avatar
+            )}
           </Flexbox>
         )}
         message={

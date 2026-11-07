@@ -71,4 +71,11 @@ describe('ConversationRow', () => {
 
     expect(navigate).not.toHaveBeenCalled();
   });
+
+  // A row with no chat yet kept a blank preview line, so its title sat high instead of centered.
+  it('leaves out the preview line when there is no preview', () => {
+    const { row } = renderRow(false);
+
+    expect(row.textContent).toBe('Dario');
+  });
 });

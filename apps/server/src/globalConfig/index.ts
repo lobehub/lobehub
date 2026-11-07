@@ -6,6 +6,7 @@ import urlJoin from 'url-join';
 import { loadModels } from '@/business/client/model-bank/loadModels';
 import { composioEnv } from '@/config/composio';
 import { isDesktop } from '@/const/version';
+import { agentIdentityEnv } from '@/envs/agentIdentity';
 import { appEnv, getAppConfig } from '@/envs/app';
 import { authEnv } from '@/envs/auth';
 import { fileEnv } from '@/envs/file';
@@ -154,6 +155,16 @@ export const getServerGlobalConfig = async () => {
     ENABLE_BUSINESS_FEATURES || (!!appEnv.ENABLE_AGENT_GATEWAY && !!appEnv.AGENT_GATEWAY_URL);
 
   const config: GlobalServerConfig = {
+    agentIdentityProviders:
+      // A key alone cannot receive: the account secret is minted when
+      // provisioning registers a webhook, so without either a public webhook
+      // endpoint or a shared signing secret every inbound delivery is rejected
+      // as unsigned and a fresh mailbox would look active but never fill.
+      // Addresses that already exist stay reachable through the identity tab.
+      agentIdentityEnv.ENABLED_AGENT_MAIL &&
+      !!(agentIdentityEnv.AGENT_MAIL_WEBHOOK_URL || agentIdentityEnv.AGENT_MAIL_WEBHOOK_SECRET)
+        ? ['agent-mail']
+        : [],
     aiProvider: await genServerAiProvidersConfig(getAiProviderSpecificConfig()),
     defaultAgent: {
       config: parseAgentConfig(DEFAULT_AGENT_CONFIG),

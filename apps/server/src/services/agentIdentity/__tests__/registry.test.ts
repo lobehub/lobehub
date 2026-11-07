@@ -37,13 +37,13 @@ describe('AgentAccountProviderRegistry', () => {
       stubProvider({ provider: 'agent-mail' }),
     );
 
-    expect(() => registry.get('linq')).toThrow(
-      /Unknown agent account provider "linq".*agent-mail/s,
+    expect(() => registry.get('not-configured')).toThrow(
+      /Unknown agent account provider "not-configured".*agent-mail/s,
     );
   });
 
   it('says no provider is configured when the registry is empty', () => {
-    expect(() => new AgentAccountProviderRegistry().get('linq')).toThrow(
+    expect(() => new AgentAccountProviderRegistry().get('not-configured')).toThrow(
       /no identity provider is configured/,
     );
   });
@@ -59,10 +59,10 @@ describe('AgentAccountProviderRegistry', () => {
   it('filters providers by the account kind they issue', () => {
     const registry = new AgentAccountProviderRegistry()
       .register(stubProvider({ provider: 'agent-mail', kind: 'mail' }))
-      .register(stubProvider({ provider: 'linq', kind: 'phone' }));
+      .register(stubProvider({ provider: 'example-wallet', kind: 'wallet' }));
 
-    expect(registry.listByKind('phone').map((p) => p.provider)).toEqual(['linq']);
+    expect(registry.listByKind('wallet').map((p) => p.provider)).toEqual(['example-wallet']);
     expect(registry.listByKind('mail').map((p) => p.provider)).toEqual(['agent-mail']);
-    expect(registry.listByKind('wallet')).toEqual([]);
+    expect(registry.listByKind('service')).toEqual([]);
   });
 });
