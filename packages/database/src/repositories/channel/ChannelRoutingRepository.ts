@@ -212,53 +212,52 @@ export class ChannelRoutingRepository {
 
       // What each candidate's own wake rules read: when it last answered here, whom, and how
       // often it has stayed silent since. Scoped like the history: the branch, then the request.
-      const wakeState = new Map(
-        await Promise.all(
-          candidates.map(async (candidate) => {
-            const [lastReply] = await tx
-              .select({
-                at: channelMessages.createdAt,
-                requesterUserId: channelMembers.userId,
-              })
-              .from(channelMessages)
-              .leftJoin(channelJobs, eq(channelJobs.publishedMessageId, channelMessages.id))
-              .leftJoin(channelMembers, eq(channelMembers.id, channelJobs.requesterMemberId))
-              .where(
-                and(
-                  eq(channelMessages.channelId, channelId),
-                  eq(channelMessages.agentId, candidate.agentId),
-                  eq(channelMessages.routingStatus, 'reply'),
-                  lt(channelMessages.sequence, message.sequence),
-                  branch,
-                ),
-              )
-              .orderBy(desc(channelMessages.sequence))
-              .limit(1);
-            const [silent] = await tx
-              .select({ value: count() })
-              .from(channelJobs)
-              .where(
-                and(
-                  eq(channelJobs.channelId, channelId),
-                  eq(channelJobs.memberId, candidate.memberId),
-                  eq(channelJobs.status, 'silent'),
-                  message.threadId
-                    ? eq(channelJobs.threadId, message.threadId)
-                    : isNull(channelJobs.threadId),
-                  lastReply ? gt(channelJobs.createdAt, lastReply.at) : undefined,
-                ),
-              );
-            return [
-              candidate.memberId,
-              {
-                lastReplyAt: lastReply?.at.getTime(),
-                lastReplyToUserId: lastReply?.requesterUserId ?? undefined,
-                silentWakes: silent?.value ?? 0,
-              },
-            ] as const;
-          }),
-        ),
-      );
+      // Fallback routing runs no rules. One transaction connection serializes the reads anyway,
+      // so they run one candidate at a time (at most 21).
+      const wakeState = new Map<
+        string,
+        { lastReplyAt?: number; lastReplyToUserId?: string; silentWakes: number }
+      >();
+      for (const candidate of message.routingSource === 'fallback' ? [] : candidates) {
+        const [lastReply] = await tx
+          .select({
+            at: channelMessages.createdAt,
+            requesterUserId: channelMembers.userId,
+          })
+          .from(channelMessages)
+          .leftJoin(channelJobs, eq(channelJobs.publishedMessageId, channelMessages.id))
+          .leftJoin(channelMembers, eq(channelMembers.id, channelJobs.requesterMemberId))
+          .where(
+            and(
+              eq(channelMessages.channelId, channelId),
+              eq(channelMessages.agentId, candidate.agentId),
+              eq(channelMessages.routingStatus, 'reply'),
+              lt(channelMessages.sequence, message.sequence),
+              branch,
+            ),
+          )
+          .orderBy(desc(channelMessages.sequence))
+          .limit(1);
+        const [silent] = await tx
+          .select({ value: count() })
+          .from(channelJobs)
+          .where(
+            and(
+              eq(channelJobs.channelId, channelId),
+              eq(channelJobs.memberId, candidate.memberId),
+              eq(channelJobs.status, 'silent'),
+              message.threadId
+                ? eq(channelJobs.threadId, message.threadId)
+                : isNull(channelJobs.threadId),
+              lastReply ? gt(channelJobs.createdAt, lastReply.at) : undefined,
+            ),
+          );
+        wakeState.set(candidate.memberId, {
+          lastReplyAt: lastReply?.at.getTime(),
+          lastReplyToUserId: lastReply?.requesterUserId ?? undefined,
+          silentWakes: silent?.value ?? 0,
+        });
+      }
 
       await audit(tx, channelId, 'routing_started', messageId, { attempt });
       return {
@@ -277,7 +276,8 @@ export class ChannelRoutingRepository {
           name: member.name || 'Agent',
           title: member.agentTitle ?? undefined,
           wake: member.config?.wake,
-          ...wakeState.get(member.memberId)!,
+          silentWakes: 0,
+          ...wakeState.get(member.memberId),
         })),
         channelWake: channel.config?.wake,
         hasAttachments: attachments.has(messageId),
