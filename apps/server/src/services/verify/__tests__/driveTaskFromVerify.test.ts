@@ -15,6 +15,8 @@ import { driveTaskFromVerify, finalizeVerifyRun } from '../settle';
 import { attachTaskRunToAcceptance, resolveTaskAcceptance } from '../taskAcceptance';
 
 vi.mock('../goalReview', () => ({ reviewGoalDelivery: vi.fn() }));
+// settle no longer completes a task from a delivered Acceptance. The mock stays
+// so a reintroduced call reports `completed` and the T-11863 regression fails.
 const { completeTaskForDelivery } = vi.hoisted(() => ({ completeTaskForDelivery: vi.fn() }));
 vi.mock('../acceptanceService', () => ({
   AcceptanceService: vi.fn(function () {
@@ -624,7 +626,12 @@ describe('driveTaskFromVerify', () => {
     expect(deliverMock.mock.calls[0][0]).toMatchObject({ reason: 'error', taskId: 'task-1' });
   });
 
-  it('failed with an Acceptance → completes the task, since the Acceptance is now delivered', async () => {
+  /**
+   * Regression (T-11863): a failed round still delivers its Acceptance, and the
+   * task used to complete on that delivery. Completion cascades the downstream
+   * unlock, so dependents started on a delivery the verifier had rejected.
+   */
+  it('failed with a delivered Acceptance → pauses the task and never completes or unlocks downstream', async () => {
     runFindByOperation.mockResolvedValue({
       acceptanceId: 'acceptance-1',
       id: 'run-1',
@@ -632,38 +639,15 @@ describe('driveTaskFromVerify', () => {
       status: 'failed',
     });
     await driveTaskFromVerify(db, 'u1', 'op-1');
-    expect(completeTaskForDelivery).toHaveBeenCalledWith('acceptance-1', 'task-1');
-    expect(taskUpdateStatus).not.toHaveBeenCalled();
-    // The creator still hears the verdict: the round did not pass.
+    expect(completeTaskForDelivery).not.toHaveBeenCalled();
+    // TaskService.updateStatus is the completion path that cascades the unlock.
+    expect(serviceUpdateStatus).not.toHaveBeenCalled();
+    expect(taskUpdateStatus).toHaveBeenCalledWith('task-1', 'paused', {
+      error: 'Delivery did not pass verification.',
+    });
+    expect(taskUpdateStatus).not.toHaveBeenCalledWith('task-1', 'completed', expect.anything());
+    // The creator hears the verdict: the round did not pass.
     expect(deliverMock.mock.calls[0][0]).toMatchObject({ reason: 'error', taskId: 'task-1' });
-  });
-
-  it('failed with an Acceptance → pauses when the task could not be completed', async () => {
-    runFindByOperation.mockResolvedValue({
-      acceptanceId: 'acceptance-1',
-      id: 'run-1',
-      metadata: null,
-      status: 'failed',
-    });
-    completeTaskForDelivery.mockResolvedValue('skipped');
-    await driveTaskFromVerify(db, 'u1', 'op-1');
-    expect(taskUpdateStatus).toHaveBeenCalledWith('task-1', 'paused', {
-      error: 'Delivery did not pass verification.',
-    });
-  });
-
-  it('failed with a rejected Acceptance → keeps the task open (paused)', async () => {
-    runFindByOperation.mockResolvedValue({
-      acceptanceId: 'acceptance-1',
-      id: 'run-1',
-      metadata: null,
-      status: 'failed',
-    });
-    completeTaskForDelivery.mockResolvedValue('rejected');
-    await driveTaskFromVerify(db, 'u1', 'op-1');
-    expect(taskUpdateStatus).toHaveBeenCalledWith('task-1', 'paused', {
-      error: 'Delivery did not pass verification.',
-    });
   });
 
   it('failed Goal task with an Acceptance → still pauses so the coordinator retries', async () => {
