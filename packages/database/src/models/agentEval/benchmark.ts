@@ -1,4 +1,4 @@
-import { and, count, desc, eq, getTableColumns, isNull, or, sql } from 'drizzle-orm';
+import { and, count, desc, eq, exists, getTableColumns, isNull, or, sql } from 'drizzle-orm';
 
 import {
   agentEvalBenchmarks,
@@ -67,6 +67,36 @@ export class AgentEvalBenchmarkModel {
           this.mutableOwnership(),
         ),
       );
+  };
+
+  /**
+   * Frees the datasets a benchmark is made of, before the benchmark is deleted:
+   * they stay, in no benchmark, instead of being deleted with it. Only for a
+   * benchmark this account may delete; returns how many were freed.
+   */
+  releaseDatasets = async (id: string) => {
+    const freed = await this.db
+      .update(agentEvalDatasets)
+      .set({ benchmarkId: null, updatedAt: new Date() })
+      .where(
+        and(
+          eq(agentEvalDatasets.benchmarkId, id),
+          exists(
+            this.db
+              .select({ id: agentEvalBenchmarks.id })
+              .from(agentEvalBenchmarks)
+              .where(
+                and(
+                  eq(agentEvalBenchmarks.id, id),
+                  eq(agentEvalBenchmarks.isSystem, false),
+                  this.mutableOwnership(),
+                ),
+              ),
+          ),
+        ),
+      )
+      .returning({ id: agentEvalDatasets.id });
+    return freed.length;
   };
 
   /**

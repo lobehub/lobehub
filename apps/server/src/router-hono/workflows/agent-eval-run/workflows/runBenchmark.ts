@@ -1,9 +1,14 @@
 import { type WorkflowContext } from '@upstash/workflow';
 import debug from 'debug';
 
-import { AgentEvalRunModel, AgentEvalTestCaseModel } from '@/database/models/agentEval';
+import {
+  AgentEvalRunModel,
+  AgentEvalRunTopicModel,
+  AgentEvalTestCaseModel,
+} from '@/database/models/agentEval';
 import { getServerDB } from '@/database/server';
 import { selectCases } from '@/server/services/agentEvalRun/caseSelection';
+import { runProgressOf } from '@/server/services/agentEvalRun/progress';
 import { AgentEvalRunWorkflow, type RunBenchmarkPayload } from '@/server/workflows/agentEvalRun';
 import { resolveAgentEvalRunWorkspace } from '@/server/workflows/agentEvalRun/utils';
 import { runStep } from '@/server/workflows/step';
@@ -133,12 +138,14 @@ export const runBenchmarkHandler = async (context: WorkflowContext<RunBenchmarkP
 
   // Update run status to 'running'
   await runStep(context, 'agent-eval-run:update-status', async () => {
+    // Cases kept from before (a rerun replaces only the unverified ones) count
+    // from the start, instead of showing 0 done until the next case ends.
+    const kept = await new AgentEvalRunTopicModel(db, userId, wsId).findByRunId(runId);
     await runModel.update(runId, {
       metrics: {
         averageScore: 0,
-        failedCases: 0,
         passRate: 0,
-        passedCases: 0,
+        ...runProgressOf(kept),
         totalCases: allTestCaseIds.length,
       },
       startedAt: new Date(),

@@ -131,6 +131,28 @@ describe('Evaluation workflow checkpoint boundaries', () => {
     );
   });
 
+  it('counts the cases a rerun keeps as soon as the run restarts, not 0 done', async () => {
+    mocks.topics.mockResolvedValue([
+      {
+        evalResult: { completionReason: 'stop', cost: 0.01 },
+        passed: true,
+        runId: 'run',
+        status: 'passed',
+        topicId: 'kept',
+      },
+      { evalResult: null, passed: null, runId: 'run', status: 'pending', topicId: 'rerun' },
+    ]);
+    const { context } = checkpointContext();
+    await runBenchmarkHandler(context);
+    expect(mocks.update).toHaveBeenCalledWith(
+      'run',
+      expect.objectContaining({
+        metrics: expect.objectContaining({ completedCases: 1, passedCases: 1, totalCases: 1 }),
+        status: 'running',
+      }),
+    );
+  });
+
   it('continues replay of an older full run and full case-object checkpoint', async () => {
     const { context } = checkpointContext({
       'agent-eval-run:get-run': bulkyRun(50),
@@ -171,5 +193,30 @@ describe('Evaluation workflow checkpoint boundaries', () => {
       finalized ? { success: true } : { cancelled: true },
     );
     expect(mocks.finalize).not.toHaveBeenCalled();
+  });
+
+  it('finalizes with metrics from the verdicts as they are when it finalizes, not the earlier checkpoint', async () => {
+    const stale = [
+      { passed: false, runId: 'run', score: 0, status: 'failed', topicId: 'a' },
+      { passed: null, runId: 'run', score: null, status: 'running', topicId: 'b' },
+    ];
+    const current = [
+      { passed: false, runId: 'run', score: 0, status: 'failed', topicId: 'a' },
+      { passed: true, runId: 'run', score: 1, status: 'passed', topicId: 'b' },
+    ];
+    const { context } = checkpointContext({ 'agent-eval-run:get-run-topics': stale });
+    mocks.topics.mockResolvedValue(current);
+    mocks.aggregate.mockImplementation(async ({ runTopics }) => ({
+      averageScore: 0.5,
+      passedCases: runTopics.filter((topic: { status: string }) => topic.status === 'passed')
+        .length,
+      totalCases: runTopics.length,
+    }));
+    await finalizeRunHandler(context);
+    expect(mocks.finalize).toHaveBeenCalledWith(
+      'run',
+      { metrics: expect.objectContaining({ passedCases: 1, totalCases: 2 }), status: 'completed' },
+      expect.anything(),
+    );
   });
 });

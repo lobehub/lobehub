@@ -84,7 +84,6 @@ export const importDatasetPackageProcedure = agentEvalProcedureWrite
     z
       .object({
         benchmarkId: z.string().min(1).optional(),
-        benchmarkName: z.string().trim().min(1).max(200).optional(),
         caseBindings: z.record(z.string().min(1), evalConnectorBindingsSchema).optional(),
         datasetId: z.string().min(1).optional(),
         environmentBindings: z.record(z.string().min(1), evalConnectorBindingsSchema).optional(),
@@ -92,7 +91,7 @@ export const importDatasetPackageProcedure = agentEvalProcedureWrite
         name: z.string().trim().min(1).max(200).optional(),
         pathname: z.string().min(1),
       })
-      .refine((value) => !value.datasetId || (!value.benchmarkId && !value.benchmarkName), {
+      .refine((value) => !value.datasetId || !value.benchmarkId, {
         message: 'Choose an existing dataset or a destination benchmark, not both',
       }),
   )
@@ -132,7 +131,6 @@ export const importDatasetPackageProcedure = agentEvalProcedureWrite
       );
       const result = await repo.importPackage({
         benchmarkId: input.benchmarkId,
-        benchmarkName: input.benchmarkName,
         bindings,
         datasetId: input.datasetId,
         name: input.name,

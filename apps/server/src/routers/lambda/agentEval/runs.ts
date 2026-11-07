@@ -20,6 +20,7 @@ import { EvalResumeConflictError } from '@/server/services/agentEvalRun/resumeTa
 import { AgentEvalRunWorkflow } from '@/server/workflows/agentEvalRun';
 
 import { evalRunInputConfigSchema } from '../evalRunConfig.schema';
+import { assertRunFollowsBenchmark } from './benchmarkStandard';
 import { RUN_ENRICHMENT_CONCURRENCY } from './constants';
 import { agentEvalProcedure, agentEvalProcedureWrite } from './procedures';
 
@@ -82,6 +83,11 @@ export const runRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      const dataset = await ctx.datasetModel.findById(input.datasetId);
+      const benchmark = dataset?.benchmarkId
+        ? await ctx.benchmarkModel.findById(dataset.benchmarkId)
+        : undefined;
+      assertRunFollowsBenchmark(input.config, benchmark?.metadata);
       try {
         const result = await ctx.runService.createRun(input);
         if (!result) {

@@ -172,6 +172,15 @@ export const datasetPackageSchema = z
           path: ['cases', index, 'environmentKey'],
         });
       }
+      // Kept in the schema only to explain the refusal: connections belong to Environments.
+      if (Object.keys(testCase.connectionBindings ?? {}).length > 0) {
+        ctx.addIssue({
+          code: 'custom',
+          message:
+            'Mock connections belong to an Environment. A case cannot bind its own; list the services it uses in its Environment instead.',
+          path: ['cases', index, 'connectionBindings'],
+        });
+      }
     });
     for (const item of [...value.environments, ...value.cases]) {
       if (

@@ -8,6 +8,7 @@ import { deleteCaseAgents } from './caseAgent';
 import { assertRunCaseCompatibility } from './caseCompatibility';
 import { assertRunConnectorBindings } from './connectorBindings';
 import { createRunTopics } from './createRun';
+import { runProgressOf } from './progress';
 import { refillQueuedCases } from './queue';
 import type { EvalRunDeps } from './types';
 
@@ -105,8 +106,14 @@ export async function retryErrorCases(
   // 3. Create fresh Topics, histories, and pending RunTopics together.
   await createRunTopics(deps, run, errorTestCases);
 
-  // 4. Set run status to pending
+  // 4. Set run status to pending, with progress from the cases kept
+  const kept = await deps.runTopicModel.findByRunId(runId);
   await deps.runModel.update(runId, {
+    metrics: {
+      ...(run.metrics as EvalRunMetrics),
+      ...runProgressOf(kept),
+      totalCases: run.metrics?.totalCases ?? kept.length,
+    },
     startedAt: new Date(Math.max(Date.now(), (run.startedAt?.getTime() ?? 0) + 1)),
     status: 'pending',
   });
@@ -147,8 +154,14 @@ export async function retrySingleCase(deps: EvalRunDeps, runId: string, testCase
     },
   ]);
 
-  // 5. Set run status to running
+  // 5. Set run status to running, with progress from the cases kept
+  const kept = await deps.runTopicModel.findByRunId(runId);
   await deps.runModel.update(runId, {
+    metrics: {
+      ...(run.metrics as EvalRunMetrics),
+      ...runProgressOf(kept),
+      totalCases: run.metrics?.totalCases ?? kept.length,
+    },
     startedAt: new Date(Math.max(Date.now(), (run.startedAt?.getTime() ?? 0) + 1)),
     status: 'running',
   });
@@ -307,18 +320,16 @@ export async function checkAndHandleRunTimeout(
     const timeoutCases = allTopics.filter((t) => t.status === 'timeout').length;
     const judgeErrorCases = allTopics.filter((t) => t.status === 'judge_error').length;
 
-    await deps.runModel.update(
+    await deps.runModel.updateProgress(
       run.id,
       {
-        metrics: {
-          ...(run.metrics as EvalRunMetrics),
-          completedCases: completedCount,
-          errorCases,
-          failedCases,
-          judgeErrorCases: judgeErrorCases || undefined,
-          passedCases,
-          timeoutCases,
-        },
+        ...(run.metrics as EvalRunMetrics),
+        completedCases: completedCount,
+        errorCases,
+        failedCases,
+        judgeErrorCases: judgeErrorCases || undefined,
+        passedCases,
+        timeoutCases,
       },
       { startedAt: run.startedAt },
     );

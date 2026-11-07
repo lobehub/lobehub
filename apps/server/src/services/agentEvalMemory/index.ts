@@ -22,7 +22,7 @@ import { evalMemoryFixtureSchema } from '@/server/services/agentEvalRun/evalMemo
 import { getEvalAttemptId } from '@/server/services/agentEvalRun/utils';
 import type { ToolExecutionMemoryEmbeddingRuntime } from '@/server/services/toolExecution/types';
 
-import { createEvalMemoryEmbedder, embedWithRetry } from './embedding';
+import { createEvalMemoryEmbedder, embedOrSkip } from './embedding';
 import { fixtureDrafts, semanticText, toEntry } from './entries';
 import { EvalMemoryRuntimeService } from './runtime';
 import { attemptWhere } from './where';
@@ -187,15 +187,14 @@ export class AgentEvalMemoryService {
     // when another workspace editor starts or resumes the attempt.
     const embeddings =
       !existing.fixtureHash && drafts.length > 0
-        ? await embedWithRetry(
+        ? await embedOrSkip(
             createEvalMemoryEmbedder({
               db: this.db,
               source: 'evalMemory:seed',
               userId: ownerId,
               workspaceId: this.workspaceId,
             }),
-            drafts.map(semanticText),
-          )
+          )(drafts.map(semanticText))
         : [];
 
     return this.db.transaction(async (tx) => {
@@ -323,13 +322,15 @@ export class AgentEvalMemoryService {
     const ownerId = await this.resolveOwner(this.db, options.reference);
     return new EvalMemoryRuntimeService({
       db: this.db,
-      embed: createEvalMemoryEmbedder({
-        db: this.db,
-        memoryEmbeddingRuntime: options.memoryEmbeddingRuntime,
-        source: 'evalMemory:tool',
-        userId: ownerId,
-        workspaceId: this.workspaceId,
-      }),
+      embed: embedOrSkip(
+        createEvalMemoryEmbedder({
+          db: this.db,
+          memoryEmbeddingRuntime: options.memoryEmbeddingRuntime,
+          source: 'evalMemory:tool',
+          userId: ownerId,
+          workspaceId: this.workspaceId,
+        }),
+      ),
       memoryEffort: options.memoryEffort,
       reference: options.reference,
       userId: ownerId,
@@ -350,7 +351,15 @@ export class AgentEvalMemoryService {
     // Legacy empty fixtures have no hash. Preserve their actual entries without
     // claiming that the initial fixture was empty or dropping snapshot evidence.
     const fixtureHash = initialized.fixtureHash ?? null;
-    return { attemptId: getEvalAttemptId(trial), entries: rows.map(toEntry), fixtureHash };
+    // An entry that has searchable text but no vector was written without a
+    // usable embedding model: the attempt ran on the simplified Memory search.
+    const simplified = rows.some((row) => !row.embedding && !!semanticText(row));
+    return {
+      attemptId: getEvalAttemptId(trial),
+      entries: rows.map(toEntry),
+      fixtureHash,
+      ...(simplified && { retrieval: 'simplified' as const }),
+    };
   }
 }
 

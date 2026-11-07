@@ -13,6 +13,7 @@ import { ConnectorModel } from '@/database/models/connector';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
 import { AgentEvalDatasetDeletionRepo } from '@/database/repositories/agentEvalDatasetDeletion';
 import { AgentEvalDatasetConnectorRepo } from '@/database/repositories/agentEvalDatasetPackage/datasetConnectorBindings';
+import { AgentEvalEnvironmentConnectionRepo } from '@/database/repositories/agentEvalEnvironmentConnection';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { AgentEvalConnectorService } from '@/server/services/agentEvalConnector';
@@ -55,6 +56,12 @@ export const agentEvalProcedure = wsCompatProcedure.use(serverDatabase).use(asyn
       datasetConnectorRepo: new AgentEvalDatasetConnectorRepo(ctx.serverDB, ctx.userId, wsId),
       datasetDeletionRepo: new AgentEvalDatasetDeletionRepo(ctx.serverDB, ctx.userId, wsId),
       environmentModel: new AgentEvalEnvironmentModel(ctx.serverDB, ctx.userId, wsId),
+      /** Mock connections stored in Environments (`env:` ids). */
+      environmentConnections: new AgentEvalEnvironmentConnectionRepo(
+        ctx.serverDB,
+        ctx.userId,
+        wsId,
+      ),
       experimentModel: new AgentEvalExperimentModel(ctx.serverDB, ctx.userId, wsId),
       runModel: new AgentEvalRunModel(ctx.serverDB, ctx.userId, wsId),
       runService: new AgentEvalRunService(ctx.serverDB, ctx.userId, wsId),

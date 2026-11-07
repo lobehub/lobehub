@@ -154,10 +154,19 @@ export const evalTestCaseMessagesSchema = z
     }
   });
 
+/**
+ * A case's own settings over its Environment. Mock connections belong to the
+ * Environment alone, so a case cannot bind its own; it only narrows the
+ * services it uses (`mock.services`).
+ */
+export const evalCaseOwnEnvironmentSchema = evalCaseEnvironmentSchema.omit({
+  connectorBindings: true,
+});
+
 export const evalTestCaseContentSchema = z.object({
   category: z.string().optional(),
   choices: z.array(z.string()).optional(),
-  environment: evalCaseEnvironmentSchema.optional(),
+  environment: evalCaseOwnEnvironmentSchema.optional(),
   expected: z.string().optional(),
   input: z.string(),
   messages: evalTestCaseMessagesSchema.optional(),

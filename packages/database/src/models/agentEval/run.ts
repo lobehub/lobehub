@@ -1,5 +1,5 @@
 import type { EvalRunConfig } from '@lobechat/types';
-import { and, count, desc, eq, getTableColumns, inArray, ne, sql } from 'drizzle-orm';
+import { and, count, desc, eq, getTableColumns, inArray, ne, notInArray, sql } from 'drizzle-orm';
 
 import {
   agentEvalDatasets,
@@ -191,6 +191,33 @@ export class AgentEvalRunModel {
       .where(
         and(
           eq(agentEvalRuns.id, id),
+          this.ownership(),
+          options
+            ? sql`${agentEvalRuns.startedAt} IS NOT DISTINCT FROM ${options.startedAt ? new Date(options.startedAt).toISOString() : null}::timestamptz`
+            : undefined,
+        ),
+      )
+      .returning();
+    return result;
+  };
+
+  /**
+   * Live progress counts written as cases end. A progress write computed before
+   * the run was finalized must not land after it: once the run is completed,
+   * failed or aborted, only finalization, rejudging or a rerun change its metrics.
+   */
+  updateProgress = async (
+    id: string,
+    metrics: NewAgentEvalRun['metrics'],
+    options?: { startedAt: Date | string | null | undefined },
+  ) => {
+    const [result] = await this.db
+      .update(agentEvalRuns)
+      .set({ metrics, updatedAt: new Date() })
+      .where(
+        and(
+          eq(agentEvalRuns.id, id),
+          notInArray(agentEvalRuns.status, ['aborted', 'completed', 'failed']),
           this.ownership(),
           options
             ? sql`${agentEvalRuns.startedAt} IS NOT DISTINCT FROM ${options.startedAt ? new Date(options.startedAt).toISOString() : null}::timestamptz`

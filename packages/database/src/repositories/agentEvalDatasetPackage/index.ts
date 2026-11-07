@@ -12,7 +12,6 @@ import {
   agentEvalEnvironments,
   agentEvalRuns,
   agentEvalTestCases,
-  userConnectors,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { buildWorkspaceWhere, normalizeWorkspaceId } from '../../utils/workspace';
@@ -37,7 +36,6 @@ export class AgentEvalDatasetPackageRepo {
 
   importPackage = async (params: {
     benchmarkId?: string;
-    benchmarkName?: string;
     bindings?: AgentEvalDatasetPackageBindings;
     datasetId?: string;
     name?: string;
@@ -49,11 +47,15 @@ export class AgentEvalDatasetPackageRepo {
       params.bindings,
       this.credentialEncryptor,
     );
-    const pack = bindDatasetPackage(
-      params.package,
-      params.bindings,
-      new Map(connections.map(({ key, row }) => [key, row.id])),
+    // Environment ids are fixed up front: a connection stored in an Environment
+    // is bound by an id that names that Environment.
+    const assignedEnvironmentIds = new Map(
+      params.package.environments.map((environment) => [environment.key, crypto.randomUUID()]),
     );
+    const pack = bindDatasetPackage(params.package, params.bindings, {
+      connections,
+      environmentIds: assignedEnvironmentIds,
+    });
     return this.db.transaction(async (tx) => {
       const scope = { userId: this.userId, workspaceId: this.workspaceId };
       const ownership = { userId: this.userId, workspaceId: this.workspaceId ?? null };
@@ -125,20 +127,9 @@ export class AgentEvalDatasetPackageRepo {
             );
           }
           benchmarkId = benchmark.id;
-        } else {
-          const [benchmark] = await tx
-            .insert(agentEvalBenchmarks)
-            .values({
-              ...ownership,
-              identifier: `import-${crypto.randomUUID()}`,
-              isSystem: false,
-              metadata: { kind: 'lobe-bench' },
-              name: params.benchmarkName ?? params.name ?? pack.dataset.name,
-              rubrics: [],
-            })
-            .returning({ id: agentEvalBenchmarks.id });
-          benchmarkId = benchmark.id;
         }
+        // Without a target an import only imports: a dataset in no benchmark. A
+        // benchmark is made separately, of datasets, with its judge and run rules.
         const [dataset] = await tx
           .insert(agentEvalDatasets)
           .values({
@@ -155,15 +146,6 @@ export class AgentEvalDatasetPackageRepo {
         datasetId = dataset.id;
       }
 
-      if (connections.length)
-        await tx.insert(userConnectors).values(
-          connections.map(({ row }) => ({
-            ...row,
-            ...ownership,
-            metadata: { agentEval: { datasetId, packageSha256: params.sha256 } },
-          })),
-        );
-
       // Package keys are local references, never existing database IDs or unique identifiers.
       const environments = pack.environments.length
         ? await tx
@@ -172,6 +154,7 @@ export class AgentEvalDatasetPackageRepo {
               pack.environments.map((environment) => ({
                 ...ownership,
                 config: environment.config,
+                id: assignedEnvironmentIds.get(environment.key)!,
                 description: environment.description,
                 metadata: { importedPackage: source, packageKey: environment.key },
                 name: environment.name,

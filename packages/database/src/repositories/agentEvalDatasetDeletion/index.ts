@@ -1,6 +1,11 @@
-import { and, eq, isNotNull, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 
-import { agentEvalDatasets, userConnectors } from '../../schemas';
+import {
+  agentEvalDatasets,
+  agentEvalEnvironments,
+  agentEvalTestCases,
+  userConnectors,
+} from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { buildWorkspaceWhere, normalizeWorkspaceId } from '../../utils/workspace';
 
@@ -43,8 +48,30 @@ export class AgentEvalDatasetDeletionRepo {
             ),
           );
       }
-      return tx
+      const usedEnvironments = dataset
+        ? await tx
+            .selectDistinct({ id: agentEvalTestCases.environmentId })
+            .from(agentEvalTestCases)
+            .where(eq(agentEvalTestCases.datasetId, dataset.id))
+        : [];
+      const result = await tx
         .delete(agentEvalDatasets)
         .where(and(eq(agentEvalDatasets.id, id), this.mutableOwnership()));
+      // Environments holding stored connections (and their encrypted credentials)
+      // go with the last Dataset using them, like the Dataset's connector rows.
+      const environmentIds = usedEnvironments.flatMap(({ id }) => (id ? [id] : []));
+      if (environmentIds.length)
+        await tx
+          .delete(agentEvalEnvironments)
+          .where(
+            and(
+              inArray(agentEvalEnvironments.id, environmentIds),
+              buildWorkspaceWhere(this.scope, agentEvalEnvironments),
+              isNotNull(agentEvalEnvironments.userId),
+              sql`${agentEvalEnvironments.config} ? 'connections'`,
+              sql`NOT EXISTS (SELECT 1 FROM ${agentEvalTestCases} WHERE ${agentEvalTestCases.environmentId} = ${agentEvalEnvironments.id})`,
+            ),
+          );
+      return result;
     });
 }

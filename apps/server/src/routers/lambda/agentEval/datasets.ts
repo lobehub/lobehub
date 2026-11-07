@@ -5,12 +5,12 @@ import { z } from 'zod';
 import { AgentEvalDatasetWriteError } from '@/database/models/agentEval/datasetAccess';
 import { router } from '@/libs/trpc/lambda';
 
-import { validateEvalConnectorBindings } from './connectorBindings';
 import {
   importDatasetPackageProcedure,
   previewDatasetPackage,
   readDatasetPackageUpload,
 } from './datasetPackages';
+import { assertDatasetDeletable, assertDatasetMove } from './lobeBenchMembership';
 import { agentEvalProcedure, agentEvalProcedureWrite } from './procedures';
 import { evalConfigSchema, evalTestCaseContentSchema, rubricTypeSchema } from './schemas';
 
@@ -49,11 +49,6 @@ export const datasetRouter = router({
     .mutation(async ({ input, ctx }) => {
       try {
         const { cases, ...dataset } = input;
-        for (const testCase of cases ?? [])
-          await validateEvalConnectorBindings(
-            ctx.evalConnectorServiceForDataset,
-            testCase.content.environment?.connectorBindings,
-          );
         const result = await ctx.datasetModel.create(dataset, cases);
         if (!result) {
           throw new TRPCError({
@@ -116,6 +111,7 @@ export const datasetRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       const { id, ...data } = input;
+      await assertDatasetMove(ctx, id, data.benchmarkId);
       if (data.benchmarkId && !(await ctx.benchmarkModel.findById(data.benchmarkId))) {
         throw new TRPCError({
           code: 'BAD_REQUEST',
@@ -142,6 +138,7 @@ export const datasetRouter = router({
   deleteDataset: agentEvalProcedureWrite
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input, ctx }) => {
+      await assertDatasetDeletable(ctx, input.id);
       try {
         const result = await ctx.datasetDeletionRepo.deleteDataset(input.id);
         // Check if any rows were affected

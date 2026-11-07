@@ -158,7 +158,14 @@ export class AgentEvalEnvironmentModel {
           throw new AgentEvalEnvironmentBindingError();
         // Dataset connection repair takes the same row lock. Merge only after
         // acquiring it, so an older persona form cannot overwrite repaired bindings.
-        config = { ...config, connectorBindings: current.config.connectorBindings };
+        // Stored connections (with their encrypted credentials) are managed by the
+        // Dataset connection API alone; clients only ever see redacted copies.
+        const { connections: _clientCopy, ...rest } = config;
+        config = {
+          ...rest,
+          connectorBindings: current.config.connectorBindings,
+          ...(current.config.connections && { connections: current.config.connections }),
+        };
       }
       const [result] = await tx
         .update(agentEvalEnvironments)

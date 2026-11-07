@@ -1,8 +1,8 @@
 import type {
   AgentEvalDatasetConnectorRequirement,
   AgentEvalDatasetPackageBindings,
-  EvalCaseEnvironment,
 } from '@lobechat/types';
+import { parseEnvironmentConnectionId } from '@lobechat/types';
 import { and, eq, inArray, isNotNull, isNull, ne, or, sql } from 'drizzle-orm';
 
 import {
@@ -18,11 +18,8 @@ import {
 } from '../../schemas';
 import type { LobeChatDatabase, Transaction } from '../../type';
 import { buildWorkspaceWhere, normalizeWorkspaceId } from '../../utils/workspace';
-import {
-  assertCompleteConnectorBindings,
-  effectiveMockServices,
-  environmentMockServices,
-} from './bindings';
+import { AgentEvalEnvironmentConnectionRepo } from '../agentEvalEnvironmentConnection';
+import { assertCompleteConnectorBindings, environmentMockServices } from './bindings';
 import { AgentEvalDatasetPackageImportError } from './errors';
 
 /** Connection repair changes local bindings only, preserving dataset content and release identity. */
@@ -109,40 +106,19 @@ export class AgentEvalDatasetConnectorRepo {
     return { cases, environments };
   };
 
+  /** Connections are chosen per Environment; a case only picks which of its services it uses. */
   private requirements = (
     rows: Awaited<ReturnType<AgentEvalDatasetConnectorRepo['read']>>,
-  ): AgentEvalDatasetConnectorRequirement[] => {
-    const shared = new Map(
-      rows.environments.map((environment) => [environment.id, environment.config]),
-    );
-    return [
-      ...rows.environments.map((environment) => ({
+  ): AgentEvalDatasetConnectorRequirement[] =>
+    rows.environments
+      .map((environment) => ({
         bindings: environment.config.connectorBindings ?? {},
         key: environment.id,
         name: environment.name,
         scope: 'environment' as const,
         services: environmentMockServices(environment.config),
-      })),
-      ...rows.cases
-        .filter((testCase) => environmentMockServices(testCase.content.environment).length > 0)
-        .map((testCase) => {
-          const parent = testCase.environmentId ? shared.get(testCase.environmentId) : undefined;
-          const own = testCase.content.environment;
-          const services = effectiveMockServices(parent, own);
-          return {
-            bindings: Object.fromEntries(
-              Object.entries(own?.connectorBindings ?? parent?.connectorBindings ?? {}).filter(
-                ([service]) => services.includes(service),
-              ),
-            ),
-            key: testCase.id,
-            name: String(testCase.metadata?.caseId ?? testCase.id),
-            scope: 'case' as const,
-            services,
-          };
-        }),
-    ].filter((requirement) => requirement.services.length > 0);
-  };
+      }))
+      .filter((requirement) => requirement.services.length > 0);
 
   getBindings = async (datasetId: string) => ({
     requirements: this.requirements(await this.read(this.db, datasetId, true)),
@@ -154,10 +130,11 @@ export class AgentEvalDatasetConnectorRepo {
       // Serialize binding with case assignment before checking cross-Dataset references.
       const rows = await this.read(tx, datasetId, false, true);
       const requirements = this.requirements(rows);
-      for (const [scope, selected] of [
-        ['environment', selections.environmentBindings],
-        ['case', selections.caseBindings],
-      ] as const)
+      if (Object.keys(selections.caseBindings ?? {}).length > 0)
+        throw new AgentEvalDatasetPackageImportError(
+          'Mock connections belong to an Environment. Choose them for the Environment, not for a case.',
+        );
+      for (const [scope, selected] of [['environment', selections.environmentBindings]] as const)
         for (const [id, bindings] of Object.entries(selected ?? {})) {
           const requirement = requirements.find((item) => item.scope === scope && item.key === id);
           if (!requirement)
@@ -185,24 +162,36 @@ export class AgentEvalDatasetConnectorRepo {
         }
       const connectionIds = [
         ...new Set(
-          [
-            ...Object.values(selections.environmentBindings ?? {}),
-            ...Object.values(selections.caseBindings ?? {}),
-          ].flatMap((bindings) => Object.values(bindings).map((binding) => binding.connectorId)),
+          Object.values(selections.environmentBindings ?? {}).flatMap((bindings) =>
+            Object.values(bindings).map((binding) => binding.connectorId),
+          ),
         ),
       ];
-      if (connectionIds.length) {
+      // Connections stored in this Dataset's Environments are named by `env:` ids.
+      const storedIds = connectionIds.filter((id) => parseEnvironmentConnectionId(id));
+      const rowIds = connectionIds.filter((id) => !parseEnvironmentConnectionId(id));
+      const stored = new AgentEvalEnvironmentConnectionRepo(
+        this.db,
+        this.scope.userId,
+        this.scope.workspaceId,
+      );
+      for (const id of storedIds)
+        if (!(await stored.find(datasetId, id, tx as unknown as LobeChatDatabase)))
+          throw new AgentEvalDatasetPackageImportError(
+            'A connection is unavailable or belongs to another Dataset',
+          );
+      if (rowIds.length) {
         const connections = await tx
           .select({ id: userConnectors.id })
           .from(userConnectors)
           .where(
             and(
-              inArray(userConnectors.id, connectionIds),
+              inArray(userConnectors.id, rowIds),
               buildWorkspaceWhere(this.scope, userConnectors),
               sql`${userConnectors.metadata} -> 'agentEval' ->> 'datasetId' = ${datasetId}`,
             ),
           );
-        if (connections.length !== connectionIds.length)
+        if (connections.length !== rowIds.length)
           throw new AgentEvalDatasetPackageImportError(
             'A connection is unavailable or belongs to another Dataset',
           );
@@ -217,21 +206,6 @@ export class AgentEvalDatasetConnectorRepo {
             updatedAt: new Date(),
           })
           .where(eq(agentEvalEnvironments.id, environment.id));
-      }
-      for (const testCase of rows.cases) {
-        const bindings = selections.caseBindings?.[testCase.id];
-        if (!bindings) continue;
-        const environment: EvalCaseEnvironment = {
-          ...testCase.content.environment,
-          connectorBindings: bindings,
-        };
-        await tx
-          .update(agentEvalTestCases)
-          .set({
-            content: { ...testCase.content, environment },
-            updatedAt: new Date(),
-          })
-          .where(eq(agentEvalTestCases.id, testCase.id));
       }
       return { success: true as const };
     });

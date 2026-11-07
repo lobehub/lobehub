@@ -6,6 +6,7 @@ export * from './agentEvalRun';
 export * from './benchmark';
 export * from './dataset';
 export * from './datasetPackage';
+export * from './environmentConnection';
 export * from './evalMemory';
 export * from './evaluation';
 export * from './ragas';

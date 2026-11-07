@@ -62,6 +62,12 @@ export interface EvalMemorySnapshot {
   entries: EvalMemoryEntry[];
   /** Null for legacy attempts whose initial fixture provenance was not recorded. */
   fixtureHash: string | null;
+  /**
+   * `simplified` when the account had no usable embedding model: entries were
+   * stored without vectors and searched without semantic ranking. Absent when
+   * the attempt used the account's embedding model.
+   */
+  retrieval?: 'simplified';
 }
 
 /** Stored attempt memory, including the ownership and vector fields omitted from UI snapshots. */

@@ -1,6 +1,9 @@
+import type { EvalRunMetrics } from '@lobechat/types';
+
 import { assertRunCaseCompatibility } from './caseCompatibility';
 import { assertRunConnectorBindings } from './connectorBindings';
 import { createRunTopics } from './createRun';
+import { runProgressOf } from './progress';
 import type { EvalRunDeps } from './types';
 
 /**
@@ -76,7 +79,16 @@ export async function rerunUnverifiedCases(
       sortOrder: target.testCase?.sortOrder ?? null,
     })),
   );
-  await deps.runModel.update(runId, { status: 'pending' });
+  // Progress from the cases kept, so the run never reads 0 done while it waits to restart.
+  const kept = await deps.runTopicModel.findByRunId(runId);
+  await deps.runModel.update(runId, {
+    metrics: {
+      ...(run.metrics as EvalRunMetrics),
+      ...runProgressOf(kept),
+      totalCases: run.metrics?.totalCases ?? kept.length,
+    },
+    status: 'pending',
+  });
 
   return { rerunCount: targets.length };
 }

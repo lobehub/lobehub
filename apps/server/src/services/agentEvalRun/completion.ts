@@ -21,6 +21,7 @@ import {
   judgeFailureMessage,
   readJudgeError,
 } from './judgeError';
+import { runProgressOf } from './progress';
 import { refillQueuedCases } from './queue';
 import { withSubAgentMessages } from './subAgentEvidence';
 import { snapshotTrialMemory } from './trialMemory';
@@ -136,93 +137,13 @@ export async function recordTrajectoryCompletion(
 
   // Aggregate real-time metrics from all RunTopics
   const allTopics = await deps.runTopicModel.findByRunId(runId);
-  const completedCount = allTopics.filter(
-    (t) =>
-      (t.evalResult && 'completionReason' in t.evalResult) ||
-      t.status === 'timeout' ||
-      t.status === 'external',
-  ).length;
-  const passedCases = allTopics.filter((t) => t.status === 'passed').length;
-  const failedCases = allTopics.filter((t) => t.status === 'failed').length;
-  const errorCases = allTopics.filter((t) => t.status === 'error').length;
-  const externalCasesTraj = allTopics.filter((t) => t.status === 'external').length;
-  const timeoutCases = allTopics.filter((t) => t.status === 'timeout').length;
-  const judgeErrorCases = allTopics.filter((t) => t.status === JUDGE_ERROR_STATUS).length;
-
-  let sumCost = 0;
-  let sumTokens = 0;
-  let sumSteps = 0;
-  let sumLlmCalls = 0;
-  let sumToolCalls = 0;
-  let actualTotalCost = 0;
-  let actualTotalTokens = 0;
-  let actualTotalDuration = 0;
-  for (const t of allTopics) {
-    const r = t.evalResult as Record<string, unknown> | null;
-    if (r && ('completionReason' in r || t.status === 'timeout')) {
-      if (typeof r.cost === 'number') sumCost += r.cost;
-      if (typeof r.tokens === 'number') sumTokens += r.tokens;
-      if (typeof r.steps === 'number') sumSteps += r.steps;
-      if (typeof r.llmCalls === 'number') sumLlmCalls += r.llmCalls;
-      if (typeof r.toolCalls === 'number') sumToolCalls += r.toolCalls;
-      const rTotalCost =
-        typeof r.totalCost === 'number' ? r.totalCost : typeof r.cost === 'number' ? r.cost : 0;
-      const rTotalTokens =
-        typeof r.totalTokens === 'number'
-          ? r.totalTokens
-          : typeof r.tokens === 'number'
-            ? r.tokens
-            : 0;
-      const rTotalDuration =
-        typeof r.totalDuration === 'number'
-          ? r.totalDuration
-          : typeof r.duration === 'number'
-            ? r.duration
-            : 0;
-      actualTotalCost += rTotalCost;
-      actualTotalTokens += rTotalTokens;
-      actualTotalDuration += rTotalDuration;
-    }
-  }
+  const progress = runProgressOf(allTopics);
+  const completedCount = progress.completedCases ?? 0;
 
   // Update run metrics with real-time counts
-  await deps.runModel.update(
+  await deps.runModel.updateProgress(
     runId,
-    {
-      metrics: {
-        ...(run.metrics as EvalRunMetrics),
-        completedCases: completedCount,
-        cost: sumCost ? roundCost(sumCost) : undefined,
-        errorCases,
-        externalCases: externalCasesTraj || undefined,
-        failedCases,
-        judgeErrorCases: judgeErrorCases || undefined,
-        llmCalls: sumLlmCalls || undefined,
-        passedCases,
-        perCaseCost: sumCost && completedCount ? roundCost(sumCost / completedCount) : undefined,
-        perCaseLlmCalls:
-          sumLlmCalls && completedCount
-            ? Math.round((sumLlmCalls / completedCount) * 10) / 10
-            : undefined,
-        perCaseSteps:
-          sumSteps && completedCount
-            ? Math.round((sumSteps / completedCount) * 10) / 10
-            : undefined,
-        perCaseTokens:
-          sumTokens && completedCount ? Math.round(sumTokens / completedCount) : undefined,
-        perCaseToolCalls:
-          sumToolCalls && completedCount
-            ? Math.round((sumToolCalls / completedCount) * 10) / 10
-            : undefined,
-        steps: sumSteps || undefined,
-        timeoutCases,
-        tokens: sumTokens || undefined,
-        toolCalls: sumToolCalls || undefined,
-        totalCost: actualTotalCost ? roundCost(actualTotalCost) : undefined,
-        totalDuration: actualTotalDuration || undefined,
-        totalTokens: actualTotalTokens || undefined,
-      },
-    },
+    { ...(run.metrics as EvalRunMetrics), ...progress },
     { startedAt: run.startedAt },
   );
 

@@ -90,6 +90,28 @@ describe('AgentEvalBenchmarkModel', () => {
     });
   });
 
+  describe('releaseDatasets', () => {
+    it('frees the datasets of a benchmark the account may delete, so deleting it keeps them', async () => {
+      const [benchmark] = await serverDB
+        .insert(agentEvalBenchmarks)
+        .values({ identifier: 'release', isSystem: false, name: 'Release', rubrics: [], userId })
+        .returning();
+      const [dataset] = await serverDB
+        .insert(agentEvalDatasets)
+        .values({ benchmarkId: benchmark.id, identifier: 'kept', name: 'Kept', userId })
+        .returning();
+
+      expect(await benchmarkModel2.releaseDatasets(benchmark.id)).toBe(0);
+      expect(await benchmarkModel.releaseDatasets(benchmark.id)).toBe(1);
+      await benchmarkModel.delete(benchmark.id);
+
+      const kept = await serverDB.query.agentEvalDatasets.findFirst({
+        where: eq(agentEvalDatasets.id, dataset.id),
+      });
+      expect(kept?.benchmarkId).toBeNull();
+    });
+  });
+
   describe('delete', () => {
     it('should delete a user-created benchmark', async () => {
       const [benchmark] = await serverDB

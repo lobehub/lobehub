@@ -79,3 +79,29 @@ export const embedWithRetry: (
     }
   }
 };
+
+/**
+ * Embeds with the account's model when it has a usable one, else takes the
+ * simplified path. A dropped connection is retried and then still fails the
+ * call: that is an outage, not a missing model. Any other failure (no key, no
+ * embedding model, a refused request) means the account cannot embed, so the
+ * texts get no vectors, and Memory search ranks an attempt's entries without
+ * them (`searchEvalMemory`). Once refused, the embedder stops asking.
+ */
+export const embedOrSkip = (embed: EvalMemoryEmbedder): EvalMemoryEmbedder => {
+  let unavailable = false;
+  return async (texts) => {
+    if (unavailable) return texts.map(() => undefined);
+    try {
+      return await embedWithRetry(embed, texts);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (isTransientFailure(message)) throw error;
+      unavailable = true;
+      console.warn('[eval-memory] no usable embedding model, using simplified Memory search', {
+        reason: message.slice(0, 200),
+      });
+      return texts.map(() => undefined);
+    }
+  };
+};

@@ -5,7 +5,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getTestDB } from '@/database/core/getTestDB';
 import { ConnectorModel } from '@/database/models/connector';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
-import { agentEvalDatasets, userConnectors, users, workspaces } from '@/database/schemas';
+import {
+  agentEvalDatasets,
+  agentEvalEnvironments,
+  agentEvalTestCases,
+  userConnectors,
+  users,
+  workspaces,
+} from '@/database/schemas';
 import { syncConnectorToolsById } from '@/server/services/connector/sync';
 
 import {
@@ -492,5 +499,99 @@ describe('LobeBench route derivation', () => {
     'file:///mcp/ds/service',
   ])('rejects ambiguous forwarding target %s', (url) => {
     expect(() => getLobeBenchForwardingEndpoint(url)).toThrow();
+  });
+});
+
+describe('connections stored in an Environment', () => {
+  const environmentId = '00000000-0000-4000-8000-0000000000e1';
+  const connectorId = `env:${environmentId}:gmail`;
+  const contract = originals({ gmail: { connectorId } });
+  const binding = { gmail: { connectorId, transport: 'lobe-bench' as const } };
+
+  const environmentConfig = async () =>
+    (await db.select().from(agentEvalEnvironments))[0].config as Record<string, unknown>;
+
+  beforeEach(async () => {
+    await db.insert(agentEvalEnvironments).values({
+      config: {
+        connections: {
+          gmail: {
+            credentials: 'sealed:{"token":"stored-secret","type":"bearer"}',
+            name: 'Gmail mock',
+            url: 'https://mock.test/mcp/dataset/gmail',
+          },
+        },
+        connectorBindings: binding,
+        mock: { services: ['gmail'] },
+        toolManifests: contract,
+      },
+      id: environmentId,
+      name: 'Shared world',
+      userId,
+    } as never);
+    await db
+      .insert(agentEvalTestCases)
+      .values({ content: { input: 'Read my mail' }, datasetId, environmentId, userId });
+  });
+
+  it('resolves from the frozen contract without a connector row or tool discovery', async () => {
+    const { manifests, snapshots } = await service().resolveBindings(binding, undefined, contract);
+    expect(manifests.map((manifest) => manifest.identifier)).toEqual(['gmail']);
+    expect(snapshots.gmail).toMatchObject({ connectorId, datasetId, transport: 'lobe-bench' });
+    expect(JSON.stringify(snapshots)).not.toContain('stored-secret');
+    expect(mocked.listRawTools).not.toHaveBeenCalled();
+    expect(await db.select().from(userConnectors)).toHaveLength(0);
+  });
+
+  it('checks a stored connection without a separately supplied contract', async () => {
+    await service().checkBindingGroups([binding]);
+    const { manifests } = await service().checkBindings(binding);
+    expect(manifests.map((manifest) => manifest.identifier)).toEqual(['gmail']);
+  });
+
+  it("checks a stored connection against the case's own contract when the Environment has none", async () => {
+    // Hard 50: two contract variants of one service live in the cases, not in the shared Environment.
+    await db
+      .update(agentEvalEnvironments)
+      .set({ config: { ...(await environmentConfig()), toolManifests: {} } } as never);
+    await expect(service().checkBindingGroups([binding])).rejects.toThrow(
+      'no original tool contract',
+    );
+    await service().checkBindingGroups([binding], [contract]);
+  });
+
+  it('authenticates the stored connection with its decrypted credentials', async () => {
+    await service().checkBindings(binding, contract);
+    const [url, init] = mocked.fetch.mock.calls[0];
+    expect(String(url)).toMatch(/^https:\/\/mock\.test\/sessions\/eval-connection-check-[\w-]+$/);
+    expect(new Headers(init.headers).get('Authorization')).toBe('Bearer stored-secret');
+  });
+
+  it('forwards a tool call to the mock for this case attempt', async () => {
+    const { snapshots } = await service().resolveBindings(binding, undefined, contract);
+    mocked.fetch.mockResolvedValueOnce(
+      Response.json({ data: { content: 'inbox', success: true }, success: true }),
+    );
+    const result = await service().execute('gmail', snapshots, {
+      apiName: 'read',
+      args: '{}',
+      attemptId: 'attempt-1',
+      caseId: 'case-1',
+    });
+    expect(result).toEqual({ content: 'inbox', success: true });
+    const [url, init] = mocked.fetch.mock.calls.at(-1)!;
+    expect(url).toBe('https://mock.test/tool-exec/dataset/gmail/exec');
+    expect(new Headers(init.headers).get('Authorization')).toBe('Bearer stored-secret');
+    expect(JSON.parse(init.body)).toMatchObject({
+      data: { apiName: 'read', identifier: 'gmail' },
+      metadata: { attemptId: 'attempt-1', caseId: 'case-1' },
+    });
+  });
+
+  it('is unavailable to a Dataset whose cases do not use the Environment', async () => {
+    const other = new AgentEvalConnectorService(db, userId, 'other-dataset');
+    await expect(other.resolveBindings(binding, undefined, contract)).rejects.toBeInstanceOf(
+      EvalConnectorBindingError,
+    );
   });
 });

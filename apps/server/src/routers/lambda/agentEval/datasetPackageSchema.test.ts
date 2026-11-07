@@ -183,4 +183,18 @@ describe('dataset package schema', () => {
       expect(message).not.toContain(url);
     }
   });
+
+  it('refuses a case that binds its own mock connection', () => {
+    const pack = example();
+    const withCaseBinding = {
+      ...pack,
+      cases: pack.cases.map((testCase, index) =>
+        index === 0
+          ? { ...testCase, connectionBindings: { notion: { connectionKey: 'privateMock' } } }
+          : testCase,
+      ),
+      connections: { privateMock: { name: 'Private mock', url: 'https://mock.example/mcp' } },
+    };
+    expect(() => validateDatasetPackage(withCaseBinding)).toThrow('belong to an Environment');
+  });
 });

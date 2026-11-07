@@ -10,8 +10,12 @@ import type { EvalRunDeps } from './types';
  */
 export const mergeCaseEnvironment = (
   shared: EvalCaseEnvironment | null | undefined,
-  own: EvalCaseEnvironment | null | undefined,
+  rawOwn: EvalCaseEnvironment | null | undefined,
 ): EvalCaseEnvironment | undefined => {
+  // Stored connections belong to the shared Environment row alone: a case's own
+  // settings can narrow which services it uses, never bring their own endpoint.
+  const { connections: _ignored, ...ownSettings } = rawOwn ?? {};
+  const own = rawOwn ? ownSettings : rawOwn;
   if (!shared) return own ?? undefined;
   if (!own) return shared;
   return {

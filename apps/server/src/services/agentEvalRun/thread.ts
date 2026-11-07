@@ -467,42 +467,38 @@ export async function recordThreadCompletion(
     }
   }
 
-  await deps.runModel.update(
+  await deps.runModel.updateProgress(
     runId,
     {
-      metrics: {
-        ...(run.metrics as EvalRunMetrics),
-        completedCases: completedCount,
-        cost: sumCost ? roundCost(sumCost) : undefined,
-        errorCases,
-        externalCases: externalCasesRT || undefined,
-        failedCases,
-        judgeErrorCases: judgeErrorCases || undefined,
-        llmCalls: sumLlmCalls || undefined,
-        passedCases,
-        perCaseCost: sumCost && completedCount ? roundCost(sumCost / completedCount) : undefined,
-        perCaseLlmCalls:
-          sumLlmCalls && completedCount
-            ? Math.round((sumLlmCalls / completedCount) * 10) / 10
-            : undefined,
-        perCaseSteps:
-          sumSteps && completedCount
-            ? Math.round((sumSteps / completedCount) * 10) / 10
-            : undefined,
-        perCaseTokens:
-          sumTokens && completedCount ? Math.round(sumTokens / completedCount) : undefined,
-        perCaseToolCalls:
-          sumToolCalls && completedCount
-            ? Math.round((sumToolCalls / completedCount) * 10) / 10
-            : undefined,
-        steps: sumSteps || undefined,
-        timeoutCases,
-        tokens: sumTokens || undefined,
-        toolCalls: sumToolCalls || undefined,
-        totalCost: actualTotalCost ? roundCost(actualTotalCost) : undefined,
-        totalDuration: actualTotalDuration || undefined,
-        totalTokens: actualTotalTokens || undefined,
-      },
+      ...(run.metrics as EvalRunMetrics),
+      completedCases: completedCount,
+      cost: sumCost ? roundCost(sumCost) : undefined,
+      errorCases,
+      externalCases: externalCasesRT || undefined,
+      failedCases,
+      judgeErrorCases: judgeErrorCases || undefined,
+      llmCalls: sumLlmCalls || undefined,
+      passedCases,
+      perCaseCost: sumCost && completedCount ? roundCost(sumCost / completedCount) : undefined,
+      perCaseLlmCalls:
+        sumLlmCalls && completedCount
+          ? Math.round((sumLlmCalls / completedCount) * 10) / 10
+          : undefined,
+      perCaseSteps:
+        sumSteps && completedCount ? Math.round((sumSteps / completedCount) * 10) / 10 : undefined,
+      perCaseTokens:
+        sumTokens && completedCount ? Math.round(sumTokens / completedCount) : undefined,
+      perCaseToolCalls:
+        sumToolCalls && completedCount
+          ? Math.round((sumToolCalls / completedCount) * 10) / 10
+          : undefined,
+      steps: sumSteps || undefined,
+      timeoutCases,
+      tokens: sumTokens || undefined,
+      toolCalls: sumToolCalls || undefined,
+      totalCost: actualTotalCost ? roundCost(actualTotalCost) : undefined,
+      totalDuration: actualTotalDuration || undefined,
+      totalTokens: actualTotalTokens || undefined,
     },
     { startedAt: run.startedAt },
   );

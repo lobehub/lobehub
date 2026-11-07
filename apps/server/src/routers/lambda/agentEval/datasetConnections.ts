@@ -36,10 +36,13 @@ export const datasetConnectionRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      for (const bindings of [
-        ...Object.values(input.environmentBindings ?? {}),
-        ...Object.values(input.caseBindings ?? {}),
-      ])
+      if (Object.keys(input.caseBindings ?? {}).length > 0)
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message:
+            'Mock connections belong to an Environment. Choose them for the Environment, not for a case.',
+        });
+      for (const bindings of Object.values(input.environmentBindings ?? {}))
         await validateEvalConnectorBindings(
           ctx.evalConnectorServiceForDataset,
           bindings,

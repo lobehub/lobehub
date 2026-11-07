@@ -21,6 +21,15 @@ const log = debug('lobe-server:workflows:finalize-run');
  * 3. Aggregate metrics across all RunTopics
  * 4. Update run status to 'completed'
  */
+type RunMetrics = Awaited<ReturnType<AgentEvalRunService['evaluateAndFinalizeRun']>>;
+
+/** external: a topic awaits external scoring; failed: every case errored or timed out. */
+const statusOf = (metrics: RunMetrics) => {
+  const nonSuccessCases = (metrics.errorCases || 0) + (metrics.timeoutCases || 0);
+  if ((metrics.externalCases || 0) > 0) return 'external' as const;
+  return nonSuccessCases >= metrics.totalCases ? ('failed' as const) : ('completed' as const);
+};
+
 export const finalizeRunHandler = async (context: WorkflowContext<FinalizeRunPayload>) => {
   const { runId, userId } = context.requestPayload ?? {};
 
@@ -88,16 +97,31 @@ export const finalizeRunHandler = async (context: WorkflowContext<FinalizeRunPay
   // external: any topic awaits external scoring → whole run waits too
   // failed: all cases are non-success (error/timeout)
   // completed: everything else
-  const nonSuccessCases = (metrics.errorCases || 0) + (metrics.timeoutCases || 0);
-  const externalCount = metrics.externalCases || 0;
-  const runStatus =
-    externalCount > 0 ? 'external' : nonSuccessCases >= metrics.totalCases ? 'failed' : 'completed';
+  const runStatus = statusOf(metrics);
 
   const finalized = await runStep(context, 'agent-eval-run:update-run', async () => {
+    // Steps 2-3 are checkpoints that may predate the last verdicts: finalization
+    // only succeeds once no case is pending or running, so it must write metrics
+    // aggregated from the topics as they are now, in this same step.
+    const runTopicModel = new AgentEvalRunTopicModel(db, userId, wsId);
+    const currentTopics = (await runTopicModel.findByRunId(runId)).map(
+      ({ evalResult, passed, runId, score, status, topicId }) => ({
+        evalResult,
+        passed,
+        runId,
+        score,
+        status,
+        topicId,
+      }),
+    );
+    const current = await new AgentEvalRunService(db, userId, wsId).evaluateAndFinalizeRun({
+      run: { config: run.config, id: runId, metrics: run.metrics, startedAt: run.startedAt },
+      runTopics: currentTopics,
+    });
     const runModel = new AgentEvalRunModel(db, userId, wsId);
     return !!(await runModel.finalize(
       runId,
-      { metrics, status: runStatus },
+      { metrics: current, status: statusOf(current) },
       { startedAt: run.startedAt },
     ));
   });

@@ -1,6 +1,9 @@
-import type { AgentEvalDatasetPackage, AgentEvalDatasetPackageBindings } from '@lobechat/types';
+import type {
+  AgentEvalDatasetPackage,
+  AgentEvalDatasetPackageBindings,
+  EvalEnvironmentConnection,
+} from '@lobechat/types';
 
-import type { NewUserConnector } from '../../schemas';
 import { getReferencedPackageConnections, validatePackageConnectionSelections } from './bindings';
 import { AgentEvalDatasetPackageImportError } from './errors';
 
@@ -8,17 +11,17 @@ export interface EvalPackageCredentialEncryptor {
   encrypt: (plaintext: string) => Promise<string>;
 }
 
-/** Prepare ciphertext before entering the import transaction; no network or plaintext persistence. */
+/**
+ * Encrypts the package connections the import stores in Environments, before
+ * entering the import transaction; no network and no plaintext persistence.
+ */
 export const preparePackageConnections = async (
   pack: AgentEvalDatasetPackage,
   selections: AgentEvalDatasetPackageBindings | undefined,
   encryptor?: EvalPackageCredentialEncryptor,
 ) => {
   validatePackageConnectionSelections(pack, selections);
-  const rows: Array<{
-    key: string;
-    row: Omit<NewUserConnector, 'userId' | 'workspaceId'> & { id: string };
-  }> = [];
+  const connections = new Map<string, EvalEnvironmentConnection>();
   for (const key of getReferencedPackageConnections(pack, selections)) {
     const definition = Object.hasOwn(pack.connections ?? {}, key)
       ? pack.connections?.[key]
@@ -37,21 +40,7 @@ export const preparePackageConnections = async (
         );
       }
     }
-    const id = crypto.randomUUID();
-    rows.push({
-      key,
-      row: {
-        credentials,
-        id,
-        identifier: `eval-mock-${id}`,
-        isEnabled: true,
-        mcpConnectionType: 'http',
-        mcpServerUrl: definition.url,
-        name: definition.name,
-        sourceType: 'custom',
-        status: 'disconnected',
-      },
-    });
+    connections.set(key, { credentials, name: definition.name, url: definition.url });
   }
-  return rows;
+  return connections;
 };

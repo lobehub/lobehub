@@ -57,7 +57,10 @@ export async function snapshotCaseConnectors(
       );
     }
   }
-  await service.checkBindingGroups(casesWithBindings.map(({ bindings }) => bindings));
+  await service.checkBindingGroups(
+    casesWithBindings.map(({ bindings }) => bindings),
+    casesWithBindings.map(({ contracts }) => contracts),
+  );
   const resolved = new Map<string, Promise<{ snapshots: EvalConnectorSnapshots }>>();
   for (const { bindings, contracts, id } of casesWithBindings) {
     const cacheKey = JSON.stringify([
@@ -131,7 +134,10 @@ export async function assertRunConnectorBindings(
     run.datasetId,
     deps.workspaceId,
   );
-  await service.checkBindingGroups(checks.map(({ bindings }) => bindings));
+  await service.checkBindingGroups(
+    checks.map(({ bindings }) => bindings),
+    checks.map(({ environment }) => environment?.toolManifests),
+  );
   // Discovery can change tool schemas. Every original alias and frozen contract
   // must still match after synchronization, even when its probe was shared.
   for (const { environment, expected } of checks) {

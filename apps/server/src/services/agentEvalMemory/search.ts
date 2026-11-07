@@ -322,6 +322,7 @@ export const searchEvalMemory = async (
   const semanticEmbedding = combineEmbeddings(queryEmbeddings);
   const semanticSearch =
     !!semanticEmbedding && shouldRunSemanticSearch(appliedQueries.length, queryEmbeddings.length);
+  const unembedded = appliedQueries.length > 0 && !semanticEmbedding;
   const bm25 = retrievalQuery && lexicalSearch ? await hasPgSearch(db) : false;
   const limits: Record<SearchLayerKey, number> = {
     activities: params.topK?.activities ?? DEFAULT_HYBRID_SEARCH_LIMIT,
@@ -362,19 +363,32 @@ export const searchEvalMemory = async (
     const limit = limits[key] * HYBRID_SEARCH_OVERFETCH_MULTIPLIER;
     const conditions = layerConditions(spec.layer, params);
 
-    const semanticLists: AgentEvalMemoryItem[][] = semanticSearch
+    // Simplified path, when the account has no usable embedding model: an
+    // attempt holds a handful of entries, so instead of the nearest ones every
+    // entry of the layer is a candidate, newest first, and the scorer ranks
+    // them by the query's words and recency.
+    const semanticLists: AgentEvalMemoryItem[][] = unembedded
       ? [
           await db
             .select()
             .from(agentEvalMemories)
             .where(and(own, ...conditions))
-            .orderBy(
-              desc(sql`1 - (${cosineDistance(agentEvalMemories.embedding, semanticEmbedding!)})`),
-              ...(spec.layer === 'context' ? [desc(agentEvalMemories.createdAt)] : []),
-            )
+            .orderBy(desc(agentEvalMemories.capturedAt), desc(agentEvalMemories.createdAt))
             .limit(limit),
         ]
-      : [];
+      : semanticSearch
+        ? [
+            await db
+              .select()
+              .from(agentEvalMemories)
+              .where(and(own, ...conditions))
+              .orderBy(
+                desc(sql`1 - (${cosineDistance(agentEvalMemories.embedding, semanticEmbedding!)})`),
+                ...(spec.layer === 'context' ? [desc(agentEvalMemories.createdAt)] : []),
+              )
+              .limit(limit),
+          ]
+        : [];
 
     const lexicalLists: AgentEvalMemoryItem[][] =
       lexicalSearch && (retrievalQuery || hasSearchFilters(params)) && (!retrievalQuery || bm25)

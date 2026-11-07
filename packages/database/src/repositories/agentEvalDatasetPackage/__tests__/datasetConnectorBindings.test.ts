@@ -25,7 +25,7 @@ const pack = (): AgentEvalDatasetPackage => ({
   cases: [
     { content: { input: 'One' }, environmentKey: 'shared', key: 'one' },
     {
-      content: { environment: { toolForwarding: { calendar: {} } }, input: 'Two' },
+      content: { environment: { mock: { services: ['notion'] } }, input: 'Two' },
       environmentKey: 'shared',
       key: 'two',
     },
@@ -36,7 +36,11 @@ const pack = (): AgentEvalDatasetPackage => ({
     name: 'Connection repair',
   },
   environments: [
-    { config: { memory: {}, mock: { services: ['notion'] } }, key: 'shared', name: 'Shared' },
+    {
+      config: { memory: {}, mock: { services: ['calendar', 'notion'] } },
+      key: 'shared',
+      name: 'Shared',
+    },
   ],
   format: 'lobehub-eval-dataset',
   version: 1,
@@ -76,7 +80,7 @@ describe('installed dataset connector bindings', () => {
     const { requirements } = await repository.getBindings(second.datasetId);
     await expect(
       repository.updateBindings(second.datasetId, {
-        environmentBindings: { [requirements[0].key]: { notion: connector } },
+        environmentBindings: { [requirements[0].key]: { calendar: connector, notion: connector } },
       }),
     ).rejects.toThrow('another Dataset');
     expect((await repository.getBindings(second.datasetId)).requirements[0].bindings).toEqual({});
@@ -103,7 +107,7 @@ describe('installed dataset connector bindings', () => {
     ).toEqual(before.requirements.map((item) => item.services));
     await expect(
       repository.updateBindings(datasetId, {
-        environmentBindings: { [environmentId]: { notion: connector } },
+        environmentBindings: { [environmentId]: { calendar: connector, notion: connector } },
       }),
     ).rejects.toBeInstanceOf(AgentEvalDatasetWriteError);
     await db.update(agentEvalDatasets).set({ userId }).where(eq(agentEvalDatasets.id, datasetId));
@@ -113,30 +117,23 @@ describe('installed dataset connector bindings', () => {
       .where(eq(agentEvalTestCases.datasetId, datasetId));
     await expect(
       repository.updateBindings(datasetId, {
-        environmentBindings: { [environmentId]: { notion: connector } },
+        environmentBindings: { [environmentId]: { calendar: connector, notion: connector } },
       }),
     ).rejects.toThrow('unavailable');
   });
 
-  it('repairs shared and inline bindings together while preserving case content and release identity', async () => {
+  it('repairs Environment bindings while preserving case content and release identity', async () => {
     const { datasetId } = await importPackage();
     const before = await repository.getBindings(datasetId);
-    expect(before.requirements.map((item) => item.services)).toEqual([
-      ['notion'],
-      ['calendar', 'notion'],
+    expect(before.requirements.map((item) => [item.scope, item.services])).toEqual([
+      ['environment', ['calendar', 'notion']],
     ]);
-    const environment = before.requirements.find((item) => item.scope === 'environment')!;
-    const testCase = before.requirements.find((item) => item.scope === 'case')!;
+    const environment = before.requirements[0];
     await repository.updateBindings(datasetId, {
-      caseBindings: { [testCase.key]: { calendar: connector, notion: connector } },
-      environmentBindings: { [environment.key]: { notion: connector } },
+      environmentBindings: { [environment.key]: { calendar: connector, notion: connector } },
     });
     const result = await repository.getBindings(datasetId);
-    expect(
-      result.requirements.every(
-        (item) => Object.keys(item.bindings).length === item.services.length,
-      ),
-    ).toBe(true);
+    expect(result.requirements[0].bindings).toEqual({ calendar: connector, notion: connector });
     const [dataset] = await db
       .select()
       .from(agentEvalDatasets)
@@ -147,12 +144,26 @@ describe('installed dataset connector bindings', () => {
       .from(agentEvalEnvironments)
       .where(eq(agentEvalEnvironments.id, environment.key));
     expect(storedEnvironment.config.memory).toEqual({});
-    const [storedCase] = await db
+    const cases = await db
       .select()
       .from(agentEvalTestCases)
-      .where(eq(agentEvalTestCases.id, testCase.key));
-    expect(storedCase.content.input).toBe('Two');
-    expect(storedCase.content.environment?.toolForwarding).toEqual({ calendar: {} });
+      .where(eq(agentEvalTestCases.datasetId, datasetId));
+    expect(cases.find((item) => item.content.input === 'Two')?.content.environment).toEqual({
+      mock: { services: ['notion'] },
+    });
+  });
+
+  it('refuses a binding chosen for a case: connections belong to the Environment', async () => {
+    const { datasetId } = await importPackage();
+    const [testCase] = await db
+      .select()
+      .from(agentEvalTestCases)
+      .where(eq(agentEvalTestCases.datasetId, datasetId));
+    await expect(
+      repository.updateBindings(datasetId, {
+        caseBindings: { [testCase.id]: { notion: connector } },
+      }),
+    ).rejects.toThrow('belong to an Environment');
   });
 
   it('rejects another account and unknown targets without partially updating valid targets', async () => {
@@ -165,8 +176,10 @@ describe('installed dataset connector bindings', () => {
     const { requirements } = await repository.getBindings(datasetId);
     await expect(
       repository.updateBindings(datasetId, {
-        caseBindings: { unknown: { notion: connector } },
-        environmentBindings: { [requirements[0].key]: { notion: connector } },
+        environmentBindings: {
+          [requirements[0].key]: { calendar: connector, notion: connector },
+          unknown: { notion: connector },
+        },
       }),
     ).rejects.toThrow('unavailable');
     expect((await repository.getBindings(datasetId)).requirements[0].bindings).toEqual({});
@@ -182,7 +195,7 @@ describe('installed dataset connector bindings', () => {
       .where(eq(agentEvalTestCases.datasetId, second.datasetId));
     await expect(
       repository.updateBindings(first.datasetId, {
-        environmentBindings: { [requirements[0].key]: { notion: connector } },
+        environmentBindings: { [requirements[0].key]: { calendar: connector, notion: connector } },
       }),
     ).rejects.toThrow('shared with another dataset');
     expect((await repository.getBindings(first.datasetId)).requirements[0].bindings).toEqual({});
@@ -197,31 +210,35 @@ describe('installed dataset connector bindings', () => {
       .set({ environmentId: requirements[0].key, metadata: { retired: true } })
       .where(eq(agentEvalTestCases.datasetId, second.datasetId));
     await repository.updateBindings(first.datasetId, {
-      environmentBindings: { [requirements[0].key]: { notion: connector } },
+      environmentBindings: { [requirements[0].key]: { calendar: connector, notion: connector } },
     });
     expect((await repository.getBindings(first.datasetId)).requirements[0].bindings).toEqual({
+      calendar: connector,
       notion: connector,
     });
   });
 
-  it('does not present inherited targets as bound when a case explicitly overrides its bindings', async () => {
-    const { datasetId } = await importPackage();
-    const { requirements } = await repository.getBindings(datasetId);
-    const environment = requirements.find((item) => item.scope === 'environment')!;
-    const testCase = requirements.find((item) => item.scope === 'case')!;
-    await repository.updateBindings(datasetId, {
-      environmentBindings: { [environment.key]: { notion: connector } },
+  it('rebinds an Environment to a connection stored in it', async () => {
+    const input = pack();
+    input.connections = {
+      calendar: { name: 'Calendar', url: 'https://mock.test/mcp/a/calendar' },
+      notion: { name: 'Notion', url: 'https://mock.test/mcp/a/notion' },
+    };
+    input.environments[0].connectionBindings = {
+      calendar: { connectionKey: 'calendar', transport: 'lobe-bench' },
+      notion: { connectionKey: 'notion', transport: 'lobe-bench' },
+    };
+    const { datasetId } = await packageRepo.importPackage({
+      package: input,
+      sha256: 'd'.repeat(64),
     });
-    await db
-      .update(agentEvalTestCases)
-      .set({
-        content: {
-          input: 'Two',
-          environment: { connectorBindings: {}, toolForwarding: { calendar: {} } },
-        },
-      })
-      .where(eq(agentEvalTestCases.id, testCase.key));
-    const repaired = await repository.getBindings(datasetId);
-    expect(repaired.requirements.find((item) => item.scope === 'case')?.bindings).toEqual({});
+    const [requirement] = (await repository.getBindings(datasetId)).requirements;
+    expect(requirement.bindings.notion.connectorId).toBe(`env:${requirement.key}:notion`);
+    await repository.updateBindings(datasetId, {
+      environmentBindings: { [requirement.key]: requirement.bindings },
+    });
+    expect((await repository.getBindings(datasetId)).requirements[0].bindings).toEqual(
+      requirement.bindings,
+    );
   });
 });

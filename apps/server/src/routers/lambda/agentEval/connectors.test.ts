@@ -8,6 +8,8 @@ import { evalConnectorRouter } from './connectors';
 
 const mocks = vi.hoisted(() => ({
   create: vi.fn(),
+  findStored: vi.fn(),
+  listStored: vi.fn(),
   findPublicById: vi.fn(),
   modelsForDataset: vi.fn(),
   queryPublic: vi.fn(),
@@ -19,6 +21,7 @@ vi.mock('./procedures', async () => {
   const procedure = publicProcedure.use((opts) =>
     opts.next({
       ctx: {
+        environmentConnections: { find: mocks.findStored, listForDataset: mocks.listStored },
         evalConnectorModelsForDataset: mocks.modelsForDataset,
       },
     }),
@@ -54,6 +57,7 @@ beforeEach(() => {
     metadata: { customHeaders: { Authorization: 'private-header' } },
   });
   mocks.create.mockResolvedValue({ id, credentials: 'encrypted-secret' });
+  mocks.listStored.mockResolvedValue([]);
 });
 
 describe('Dataset connector management', () => {
@@ -159,5 +163,42 @@ describe('Dataset connector management', () => {
     expect(syncConnectorToolsById).toHaveBeenCalledWith(id, models, {
       pruneMissingAutoTools: true,
     });
+  });
+});
+
+describe('connections stored in an Environment', () => {
+  const stored = {
+    connection: {
+      credentials: 'encrypted-stored-secret',
+      name: 'Gmail mock',
+      url: 'https://mock.example/mcp/ds/gmail',
+    },
+    connectorId: 'env:shared-world:gmail',
+    environmentId: 'shared-world',
+    mutable: true,
+    service: 'gmail',
+  };
+
+  it('lists and reads them by their env id without credentials', async () => {
+    mocks.queryPublic.mockResolvedValue([]);
+    mocks.listStored.mockResolvedValue([stored]);
+    mocks.findStored.mockResolvedValue(stored);
+    const listed = await caller.listEvalConnectors({ datasetId: 'dataset-a' });
+    const read = await caller.getEvalConnector({
+      datasetId: 'dataset-a',
+      id: 'env:shared-world:gmail',
+    });
+    expect(listed).toEqual([read]);
+    expect(read).toEqual({
+      hasCredentials: true,
+      id: 'env:shared-world:gmail',
+      isEnabled: true,
+      mcpConnectionType: 'http',
+      mcpServerUrl: 'https://mock.example/mcp/ds/gmail',
+      name: 'Gmail mock',
+      status: 'connected',
+    });
+    expect(JSON.stringify(listed)).not.toContain('encrypted-stored-secret');
+    expect(mocks.findStored).toHaveBeenCalledWith('dataset-a', 'env:shared-world:gmail');
   });
 });

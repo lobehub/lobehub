@@ -24,6 +24,8 @@ export interface AgentEvalRun {
   config?: EvalRunConfig | null;
   createdAt: Date;
   datasetId: string;
+  /** The Lobe Bench or Lab experiment this run belongs to, if any. */
+  experimentId?: string | null;
   /** Derived from saved attempts, including legacy runs with incomplete metrics. */
   hasUnverifiedAttempts?: boolean;
   id: string;

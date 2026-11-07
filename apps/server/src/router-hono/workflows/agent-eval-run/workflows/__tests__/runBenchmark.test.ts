@@ -20,6 +20,10 @@ vi.mock('@/database/models/agentEval', () => ({
     finalize = mocks.finalize;
     update = mocks.update;
   },
+  // A fresh run has no RunTopic yet: nothing is counted before it starts.
+  AgentEvalRunTopicModel: class {
+    findByRunId = async () => [];
+  },
   AgentEvalTestCaseModel: class {
     findByDatasetId = mocks.findByDatasetId;
   },

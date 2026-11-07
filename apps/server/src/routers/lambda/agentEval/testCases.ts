@@ -1,4 +1,5 @@
 import type { EvalCaseEnvironment } from '@lobechat/types';
+import { redactEnvironmentConnections } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -54,7 +55,9 @@ async function attachEnvironments<
       ...item,
       content: {
         ...item.content,
-        environment: mergeCaseEnvironment(shared.config, item.content.environment),
+        environment: redactEnvironmentConnections(
+          mergeCaseEnvironment(shared.config, item.content.environment),
+        ),
       },
       environment: { id: shared.id, name: shared.name },
       environmentOverrides: item.content.environment ?? {},
@@ -80,11 +83,6 @@ export const testCaseRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       try {
-        await validateEvalConnectorBindings(
-          ctx.evalConnectorServiceForDataset,
-          input.content.environment?.connectorBindings,
-          input.datasetId,
-        );
         const result = await ctx.testCaseModel.create(input);
         if (!result) {
           throw new TRPCError({
@@ -156,12 +154,6 @@ export const testCaseRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       try {
-        for (const testCase of input.cases)
-          await validateEvalConnectorBindings(
-            ctx.evalConnectorServiceForDataset,
-            testCase.content.environment?.connectorBindings,
-            input.datasetId,
-          );
         const testCases = input.cases.map((c) => ({
           ...c,
           datasetId: input.datasetId,

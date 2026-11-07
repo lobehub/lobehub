@@ -70,7 +70,7 @@ afterEach(async () => {
 });
 
 describe('dataset package import transaction', () => {
-  it('creates fresh encrypted per-package connections and persists only references in environments', async () => {
+  it('stores an Environment-only connection, encrypted, in that Environment instead of a connector row', async () => {
     const input = params();
     input.package.connections = {
       private: {
@@ -80,40 +80,43 @@ describe('dataset package import transaction', () => {
       },
       unused: { name: 'Unused', url: 'https://unused.example/mcp' },
     };
-    input.package.environments[0].connectionBindings = { notion: { connectionKey: 'private' } };
-    const first = await secureRepo.importPackage(input);
-    const second = await secureRepo.importPackage(input);
-    const connections = await db.select().from(userConnectors);
-    expect(connections).toHaveLength(2);
-    expect(connections[0].id).not.toBe(connections[1].id);
-    for (const connection of connections) {
-      expect(connection.credentials).toBeTruthy();
-      expect(connection.credentials).not.toContain('synthetic-private-token');
-      expect(connection).toMatchObject({
-        isEnabled: true,
-        mcpConnectionType: 'http',
-        status: 'disconnected',
-        userId,
-        workspaceId: null,
-      });
-      expect(connection.metadata?.agentEval).toMatchObject({ packageSha256: input.sha256 });
-      expect([first.datasetId, second.datasetId]).toContain(
-        (connection.metadata?.agentEval as { datasetId: string }).datasetId,
-      );
-    }
+    input.package.environments[0].connectionBindings = {
+      notion: { connectionKey: 'private', transport: 'lobe-bench' },
+    };
+    await secureRepo.importPackage(input);
+    await secureRepo.importPackage(input);
+    expect(await db.select().from(userConnectors)).toHaveLength(0);
     const environments = await db.select().from(agentEvalEnvironments);
     expect(environments).toHaveLength(2);
-    expect(environments[0].config.mock?.services).toEqual(['notion']);
-    expect(connections.map((connection) => connection.id)).toContain(
-      environments[0].config.connectorBindings?.notion.connectorId,
-    );
+    expect(environments[0].id).not.toBe(environments[1].id);
+    for (const environment of environments) {
+      expect(environment.config.mock?.services).toEqual(['notion']);
+      expect(environment.config.connectorBindings?.notion).toEqual({
+        connectorId: `env:${environment.id}:notion`,
+        transport: 'lobe-bench',
+      });
+      const stored = environment.config.connections?.notion;
+      expect(stored).toMatchObject({ name: 'Private mock', url: 'https://private.example/mcp' });
+      expect(stored?.credentials).toBeTruthy();
+      expect(stored?.credentials).not.toContain('synthetic-private-token');
+    }
     const storedContent = JSON.stringify({
       cases: await db.select().from(agentEvalTestCases),
       datasets: await db.select().from(agentEvalDatasets),
       environments,
     });
     expect(storedContent).not.toContain('synthetic-private-token');
-    expect(storedContent).not.toContain('private.example');
+    expect(storedContent).not.toContain('unused.example');
+  });
+
+  it('refuses a package where a case binds its own connection', async () => {
+    const input = params();
+    input.package.connections = {
+      direct: { name: 'Direct mock', url: 'https://direct.example/mcp' },
+    };
+    input.package.cases[0].connectionBindings = { notion: { connectionKey: 'direct' } };
+    await expect(secureRepo.importPackage(input)).rejects.toThrow('belong to an Environment');
+    expect(await db.select().from(agentEvalDatasets)).toHaveLength(0);
   });
 
   it('rolls back provisioned connections together with a failed dataset import', async () => {
@@ -163,18 +166,14 @@ describe('dataset package import transaction', () => {
     expect(cases).toHaveLength(2);
     expect(cases.every((testCase) => testCase.environmentId === environments[0].id)).toBe(true);
   });
-  it('creates a private first benchmark and maps portable keys to fresh environments on every import', async () => {
+  it('imports a dataset of its own, in no benchmark, with fresh environments on every import', async () => {
     const first = await repo.importPackage(params());
     const second = await repo.importPackage(params());
     expect(first.datasetId).not.toBe(second.datasetId);
-    const benchmarks = await db.select().from(agentEvalBenchmarks);
-    expect(benchmarks).toHaveLength(2);
-    expect(benchmarks[0]).toMatchObject({
-      userId,
-      isSystem: false,
-      metadata: { kind: 'lobe-bench' },
-      rubrics: [],
-    });
+    expect(first.benchmarkId).toBeNull();
+    expect(await db.select().from(agentEvalBenchmarks)).toHaveLength(0);
+    const datasets = await db.select().from(agentEvalDatasets);
+    expect(datasets.map((dataset) => dataset.benchmarkId)).toEqual([null, null]);
     const cases = await db.select().from(agentEvalTestCases);
     expect(cases).toHaveLength(2);
     expect(cases[0].environmentId).not.toBe(cases[1].environmentId);

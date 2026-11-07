@@ -1,3 +1,5 @@
+import type { EvalCaseEnvironment } from '@lobechat/types';
+import { redactEnvironmentConnections } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -12,6 +14,20 @@ import { agentEvalProcedure, agentEvalProcedureWrite } from './procedures';
 import { evalCaseEnvironmentSchema } from './schemas';
 
 /**
+ * Stored connections are written only by import and the Dataset connection API.
+ * Clients get redacted copies and may send them back unchanged: drop them here.
+ */
+const environmentConfigInput = z.preprocess((value) => {
+  if (!value || typeof value !== 'object' || !('connections' in value)) return value;
+  const { connections: _redacted, ...config } = value as Record<string, unknown>;
+  return config;
+}, evalCaseEnvironmentSchema);
+
+/** An Environment row as it leaves the server: connection credentials removed. */
+const redacted = <T extends { config: EvalCaseEnvironment } | null | undefined>(row: T): T =>
+  row ? { ...row, config: redactEnvironmentConnections(row.config) } : row;
+
+/**
  * Reusable case environments: the Agent setup, Memory fixture, clock and mock
  * connectors that many cases share. Cases point at one through
  * `environmentId`; deleting an environment leaves its cases without one.
@@ -20,7 +36,7 @@ export const environmentRouter = router({
   createEnvironment: agentEvalProcedureWrite
     .input(
       z.object({
-        config: evalCaseEnvironmentSchema,
+        config: environmentConfigInput,
         description: z.string().optional(),
         identifier: z.string().trim().min(1).max(200).optional(),
         metadata: z.record(z.string(), z.unknown()).optional(),
@@ -33,7 +49,7 @@ export const environmentRouter = router({
           ctx.evalConnectorServiceForDataset,
           input.config.connectorBindings,
         );
-        return await ctx.environmentModel.create(input);
+        return redacted(await ctx.environmentModel.create(input));
       } catch (error: any) {
         const pgError = error?.cause || error;
         if (pgError?.code === '23505') {
@@ -45,19 +61,21 @@ export const environmentRouter = router({
         throw error;
       }
     }),
-  listEnvironments: agentEvalProcedure.query(async ({ ctx }) => ctx.environmentModel.query()),
+  listEnvironments: agentEvalProcedure.query(async ({ ctx }) =>
+    (await ctx.environmentModel.query()).map(redacted),
+  ),
   getEnvironment: agentEvalProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
       const environment = await ctx.environmentModel.findById(input.id);
       if (!environment)
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Environment not found' });
-      return environment;
+      return redacted(environment);
     }),
   updateEnvironment: agentEvalProcedureWrite
     .input(
       z.object({
-        config: evalCaseEnvironmentSchema.optional(),
+        config: environmentConfigInput.optional(),
         description: z.string().nullish(),
         id: z.string(),
         identifier: z.string().trim().min(1).max(200).nullish(),
@@ -89,7 +107,7 @@ export const environmentRouter = router({
         throw error;
       }
       if (!result) throw new TRPCError({ code: 'NOT_FOUND', message: 'Environment not found' });
-      return result;
+      return redacted(result);
     }),
   deleteEnvironment: agentEvalProcedureWrite
     .input(z.object({ id: z.string() }))

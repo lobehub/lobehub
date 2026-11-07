@@ -28,6 +28,20 @@ export interface EvalConnectorBinding {
 
 export type EvalConnectorBindings = Record<string, EvalConnectorBinding>;
 
+/**
+ * A mock connection kept in its Environment instead of a user connector row.
+ * Bindings name it `env:<environmentId>:<service>` (see `environmentConnectionId`).
+ * `credentials` is the server-encrypted credential JSON and never leaves the
+ * server: copies sent to clients drop it and carry `hasCredentials` instead.
+ */
+export interface EvalEnvironmentConnection {
+  credentials?: string | null;
+  /** Set only on redacted copies sent to clients. */
+  hasCredentials?: boolean;
+  name?: string;
+  url: string;
+}
+
 /** Server-captured connection identity and tool contract used by a run. */
 export interface EvalConnectorSnapshot extends EvalConnectorBinding {
   /** Frozen owning Dataset; absent only on legacy runs, which cannot resume. */
@@ -132,6 +146,11 @@ export interface EvalCaseAgentConfig {
 /** Per-test-case runtime configuration used only by eval trajectories. */
 export interface EvalCaseEnvironment {
   agent?: EvalCaseAgentConfig;
+  /**
+   * Mock connections stored in this Environment row, by service. Only a shared
+   * Environment carries them; a case's own overrides never do.
+   */
+  connections?: Record<string, EvalEnvironmentConnection>;
   /** Logical tool identifiers bound to scoped MCP connections in this installation. */
   connectorBindings?: EvalConnectorBindings;
   /** Case-specific system context appended after the dataset eval prompt. */

@@ -189,6 +189,10 @@ export default {
   'dataset.import.package.asNew': 'Import as new dataset',
   'dataset.import.package.benchmark': 'Benchmark',
   'dataset.import.package.benchmarkName': 'New benchmark name',
+  'dataset.import.package.judge': 'Judge model',
+  'dataset.import.package.judge.hint':
+    'Every run on this benchmark is graded by this model, so its scores stay comparable. It cannot be changed later.',
+  'dataset.import.package.judge.placeholder': 'Choose the judge model',
   'dataset.import.package.cases': '{{count}} cases',
   'dataset.import.package.environments': '{{count}} environments',
   'dataset.import.package.hint': 'Dataset ZIP package · up to 10 MiB',
@@ -602,13 +606,13 @@ export default {
   'lobeBench.status.aborted': 'Aborted',
   'lobeBench.new.title': 'New experiment',
   'lobeBench.new.subtitle':
-    'Three steps: cases, contenders, attempts per case. Everything else has a default.',
+    'Two steps: benchmarks and contenders. Each benchmark sets its own judge, attempts per case, step limit and timeout.',
   'lobeBench.new.name': 'Experiment name',
   'lobeBench.new.name.placeholder': 'Optional — named after the contenders if empty',
   'lobeBench.new.question': 'Question you want answered',
   'lobeBench.new.question.placeholder':
     'Optional, e.g. "Does deep thinking help on finance cases?"',
-  'lobeBench.new.step.dataset': '1 · Cases · one or more benchmarks or your datasets',
+  'lobeBench.new.step.dataset': '1 · Benchmarks · choose one or more',
   'lobeBench.new.step.contenders': '2 · Contenders · model + settings',
   'lobeBench.new.step.k': '3 · Attempts per case',
   'lobeBench.new.dataset.cases': '{{count}} cases',
@@ -788,12 +792,26 @@ export default {
   'lobeBench.benchmark.datasets': 'Datasets',
   'lobeBench.benchmark.datasets.hint':
     "The datasets this benchmark is made of. A run counts on the leaderboard when it ran all of a dataset's cases.",
+  'lobeBench.benchmark.standard.title': 'Grading and run rules',
+  'lobeBench.benchmark.standard.hint':
+    'Every run on this benchmark uses this judge model and these rules, so its scores stay comparable. They cannot be changed later or per experiment.',
+  'lobeBench.benchmark.standard.k': 'Attempts per case',
+  'lobeBench.new.standard.missing':
+    '{{name}} has no judge model or run rules, so it cannot be run.',
+  'lobeBench.new.standard.mixed':
+    'The chosen benchmarks use different run rules (attempts, steps or timeout). Start a separate experiment for each.',
+  'lobeBench.new.confirm.standardOf':
+    '{{benchmark}}: judged by {{model}}, {{k}} attempts per case, up to {{maxSteps}} steps, {{timeout}} min per attempt',
+  'lobeBench.benchmark.create.judge': 'Judge model',
+  'lobeBench.benchmark.create.judge.hint':
+    'Every run on this benchmark is graded by this model, so its scores stay comparable. It cannot be changed later.',
+  'lobeBench.benchmark.create.judge.placeholder': 'Choose the judge model',
   'lobeBench.benchmark.create.datasets': 'Datasets',
   'lobeBench.benchmark.create.datasets.empty':
-    "You have no datasets of your own yet. Make one in the Case library first; it can join a benchmark later on the benchmark's page.",
+    'No dataset to build it from yet. Import a dataset ZIP first; it stays on its own until a benchmark is made of it.',
   'lobeBench.benchmark.create.datasets.hint':
-    "A dataset is in one benchmark at a time. You can add or remove datasets later on the benchmark's page.",
-  'lobeBench.benchmark.create.datasets.placeholder': 'Choose your datasets (optional)',
+    'A benchmark runs the datasets it is made of. Choose at least one.',
+  'lobeBench.benchmark.create.datasets.placeholder': 'Choose datasets',
   'lobeBench.benchmark.create.description': 'Description',
   'lobeBench.benchmark.create.description.placeholder': 'Optional: what this benchmark measures',
   'lobeBench.benchmark.create.failed': 'Could not create the benchmark',
@@ -806,7 +824,7 @@ export default {
     'No datasets yet. Add one of your datasets; datasets are made in the Case library.',
   'lobeBench.benchmark.datasets.remove': 'Remove from this benchmark',
   'lobeBench.benchmark.delete.confirm':
-    'Delete {{name}}? Its datasets go back to your datasets. Runs and results stay.',
+    'Delete {{name}}? Its runs and results are deleted with it. Its datasets are kept, free to make another benchmark of.',
   'lobeBench.benchmark.runs': 'Runs',
   'lobeBench.benchmark.runCount_one': '{{count}} evaluation run on this benchmark',
   'lobeBench.benchmark.runCount_other': '{{count}} evaluation runs on this benchmark',
@@ -817,6 +835,8 @@ export default {
   'lobeBench.benchmark.cases': '{{count}} cases',
   'lobeBench.benchmark.best': 'best {{value}} over {{count}} full runs',
   'lobeBench.benchmark.noRuns': 'No full run yet',
+  'lobeBench.dataset.deleteInBenchmark':
+    'This dataset is part of a benchmark. Delete the benchmark first; its datasets are kept.',
   'lobeBench.dataset.noRuns': 'No run on this dataset yet. Run an experiment on it.',
   'lobeBench.dataset.own.subtitle_one':
     '{{count}} case. The cases are fixed; import an updated package as a new dataset.',
@@ -905,7 +925,8 @@ export default {
   'caseDetail.memory.empty': 'No memory entries.',
   'lobeBench.sidebar.settings': 'Settings',
   'lobeBench.settings.title': 'Settings',
-  'lobeBench.settings.subtitle': 'Grading, tool simulation, and what a new experiment starts with.',
+  'lobeBench.settings.subtitle':
+    'Where mock tool connections are managed. Each benchmark fixes its own judge and run rules when it is made.',
   'lobeBench.settings.benchmark': 'Benchmark',
   'lobeBench.settings.judge': 'Judge model',
   'lobeBench.settings.judge.hint':
@@ -953,6 +974,9 @@ export default {
   'lobeBench.settings.notInstalled': 'No Lobe Bench benchmark in this account yet.',
   'lobeBench.new.confirm.judge': 'Judge: {{model}}',
   'lobeBench.new.confirm.judgeDefault': 'Judge: system default (pick one in Settings)',
+  'lobeBench.new.confirm.judgeOf': '{{benchmark}} judged by {{model}}',
+  'lobeBench.new.judge.missing':
+    '{{name}} has no judge model, so it cannot be run. Import it again as a new benchmark and choose a judge.',
   'lobeBench.case.new': 'New case',
   'lobeBench.case.fromConversation': 'From a conversation',
   'lobeBench.case.fromConversation.hint':

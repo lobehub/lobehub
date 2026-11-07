@@ -705,7 +705,7 @@ describe('AgentEvalMemoryService', () => {
     });
   });
 
-  it('retries a seed embedding after a dropped connection, but not other failures', async () => {
+  it('retries a seed embedding after a dropped connection, and fails if it stays down', async () => {
     const params = await trial();
     const service = new AgentEvalMemoryService(db, userId);
     mocks.embed
@@ -715,15 +715,49 @@ describe('AgentEvalMemoryService', () => {
       );
     await service.prepare({ ...params, fixture });
     expect(mocks.embed).toHaveBeenCalledTimes(2);
-    expect((await service.snapshot(params)).entries).toHaveLength(2);
+    const snapshot = await service.snapshot(params);
+    expect(snapshot.entries).toHaveLength(2);
+    expect(snapshot.retrieval).toBeUndefined();
 
     const other = await anotherAttempt(params);
-    mocks.embed.mockRejectedValueOnce(new Error('invalid api key'));
-    await expect(service.prepare({ ...other, fixture })).rejects.toThrow('invalid api key');
+    mocks.embed.mockRejectedValue(new Error('connection error: ECONNRESET'));
+    await expect(service.prepare({ ...other, fixture })).rejects.toThrow('ECONNRESET');
     expect(await service.snapshot(other)).toMatchObject({ entries: [], fixtureHash: null });
-    expect(
-      await db.select().from(agentEvalMemories).where(eq(agentEvalMemories.topicId, other.topicId)),
-    ).toEqual([]);
+  });
+
+  it('takes the simplified path when the account has no usable embedding model', async () => {
+    const params = await trial();
+    const service = new AgentEvalMemoryService(db, userId);
+    mocks.embed.mockRejectedValue(new Error('invalid api key'));
+    const reference = await service.prepare({ ...params, fixture: nativeFixture });
+
+    const runtime = await runtimeFor(reference, params.topicId);
+    const added = await runtime.addPreferenceMemory(preference('Tea', 'Prefers oolong tea.'));
+    expect(added.success).toBe(true);
+
+    // No vectors anywhere, and the model was asked only once per embedder.
+    const rows = await db
+      .select({ embedding: agentEvalMemories.embedding })
+      .from(agentEvalMemories)
+      .where(eq(agentEvalMemories.topicId, params.topicId));
+    expect(rows.length).toBeGreaterThan(1);
+    expect(rows.every((row) => row.embedding === null)).toBe(true);
+
+    // Every entry is still found: words in the query rank, nothing needs a vector.
+    const read = await runtime.searchUserMemory({
+      effort: 'high',
+      queries: ['what do they drink'],
+    });
+    expect(read.success).toBe(true);
+    const state = read.state as SearchState;
+    expect(state.preferences.map((p) => p.conclusionDirectives)).toEqual(
+      expect.arrayContaining(['Prefers oolong tea.', 'Do not recommend shellfish.']),
+    );
+    expect(state.contexts[0]).toMatchObject({ title: 'Wedding menu' });
+
+    const snapshot = await service.snapshot(params);
+    expect(snapshot.retrieval).toBe('simplified');
+    expect(snapshot.entries.map((e) => e.source)).toContain('agent');
   });
 
   it('rejects oversized fixtures, foreign trials and non-eval topics before writing', async () => {
