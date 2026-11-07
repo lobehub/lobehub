@@ -10,6 +10,8 @@ export interface BenchmarkLoCoMoPart {
   speaker?: string;
 }
 
+type StoredBenchmarkLoCoMoPart = BenchmarkLoCoMoPart & { createdAt: Date };
+
 export interface UpsertBenchmarkLoCoMoParams {
   id?: string;
   metadata?: Record<string, unknown>;
@@ -19,7 +21,7 @@ export interface UpsertBenchmarkLoCoMoParams {
 
 export class UserMemorySourceBenchmarkLoCoMoModel {
   private static readonly sources = new Map<string, Map<string, UserMemorySource>>();
-  private static readonly parts = new Map<string, Map<string, BenchmarkLoCoMoPart[]>>();
+  private static readonly parts = new Map<string, Map<string, StoredBenchmarkLoCoMoPart[]>>();
   private readonly userId: string;
 
   constructor(userId: string) {
@@ -68,7 +70,7 @@ export class UserMemorySourceBenchmarkLoCoMoModel {
     store.delete(sourceId);
     if (!parts.length) return;
 
-    const normalized = parts.map((part) => ({
+    const normalized: StoredBenchmarkLoCoMoPart[] = parts.map((part) => ({
       ...part,
       createdAt: part.createdAt ?? new Date(),
     }));
@@ -85,16 +87,7 @@ export class UserMemorySourceBenchmarkLoCoMoModel {
       .sort((a, b) => {
         if (a.partIndex !== b.partIndex) return a.partIndex - b.partIndex;
 
-        return (
-          (a.createdAt?.getTime() ??
-            // v8 ignore start -- unreachable: replaceParts always sets createdAt
-            0) -
-          // v8 ignore stop
-          (b.createdAt?.getTime() ??
-            // v8 ignore start -- unreachable: replaceParts always sets createdAt
-            0)
-          // v8 ignore stop
-        );
+        return a.createdAt.getTime() - b.createdAt.getTime();
       });
   }
 }
