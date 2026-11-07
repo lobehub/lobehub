@@ -9,10 +9,7 @@ import { type FC, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { hasPartialConnectorBindings } from '@/features/AgentEval/ConnectorBindings/bindings';
-import {
-  type DatasetPackageBenchmark,
-  DatasetPackagePreview,
-} from '@/features/AgentEval/DatasetPackagePreview';
+import { DatasetPackagePreview } from '@/features/AgentEval/DatasetPackagePreview';
 import { datasetImportErrorMessage } from '@/features/AgentEval/DatasetPackagePreview/importError';
 import { agentEvalService } from '@/services/agentEval';
 import { uploadService } from '@/services/upload';
@@ -27,8 +24,6 @@ type MappingTarget =
 
 export interface DatasetImportContentProps {
   archiveOnly?: boolean;
-  benchmarkId?: string;
-  benchmarks?: DatasetPackageBenchmark[];
   close: () => void;
   datasetId?: string;
   onImportReady: (api: { canImport: () => boolean; runImport: () => Promise<void> }) => void;
@@ -40,8 +35,6 @@ export interface DatasetImportContentProps {
 
 const DatasetImportContent: FC<DatasetImportContentProps> = ({
   archiveOnly,
-  benchmarkId: initialBenchmarkId,
-  benchmarks = [],
   close,
   datasetId,
   onImportReady,
@@ -68,8 +61,6 @@ const DatasetImportContent: FC<DatasetImportContentProps> = ({
   const [datasetPackage, setDatasetPackage] = useState<AgentEvalDatasetPackagePreview>();
   const [connectionBindings, setConnectionBindings] = useState<AgentEvalDatasetPackageBindings>({});
   const [packageName, setPackageName] = useState('');
-  const [benchmarkId, setBenchmarkId] = useState(initialBenchmarkId);
-  const [benchmarkName, setBenchmarkName] = useState('');
 
   const [mapping, setMapping] = useState<Record<string, MappingTarget>>({});
   const [delimiter, setDelimiter] = useState('');
@@ -81,7 +72,8 @@ const DatasetImportContent: FC<DatasetImportContentProps> = ({
     format === 'zip'
       ? !!datasetPackage &&
         !hasPartialConnectorBindings(datasetPackage.connectionRequirements, connectionBindings) &&
-        (!!datasetId || (!!packageName.trim() && (!!benchmarkId || !!benchmarkName.trim())))
+        // An import only imports: a dataset of its own, in no benchmark.
+        (!!datasetId || !!packageName.trim())
       : !!datasetId && hasInputMapping;
 
   useEffect(() => {
@@ -133,7 +125,6 @@ const DatasetImportContent: FC<DatasetImportContentProps> = ({
           setDatasetPackage(result.datasetPackage);
           setConnectionBindings({});
           setPackageName(result.datasetPackage.name);
-          setBenchmarkName(result.datasetPackage.name);
         } else {
           setDatasetPackage(undefined);
           setMapping(autoInferMapping(result.headers, preset));
@@ -187,8 +178,6 @@ const DatasetImportContent: FC<DatasetImportContentProps> = ({
           ...(datasetId
             ? { datasetId }
             : {
-                benchmarkId,
-                benchmarkName: benchmarkName.trim(),
                 name: packageName.trim(),
               }),
           filename,
@@ -227,8 +216,6 @@ const DatasetImportContent: FC<DatasetImportContentProps> = ({
       setImporting(false);
     }
   }, [
-    benchmarkId,
-    benchmarkName,
     buildFieldMapping,
     canImport,
     close,
@@ -264,9 +251,6 @@ const DatasetImportContent: FC<DatasetImportContentProps> = ({
 
       {step === 1 && datasetPackage && format === 'zip' && (
         <DatasetPackagePreview
-          benchmarkId={benchmarkId}
-          benchmarkName={benchmarkName}
-          benchmarks={benchmarks}
           bindings={connectionBindings}
           datasetId={datasetId}
           disabled={importing}
@@ -274,8 +258,6 @@ const DatasetImportContent: FC<DatasetImportContentProps> = ({
           name={packageName}
           preview={datasetPackage}
           samples={preview}
-          onBenchmarkIdChange={setBenchmarkId}
-          onBenchmarkNameChange={setBenchmarkName}
           onBindingsChange={setConnectionBindings}
           onNameChange={setPackageName}
         />

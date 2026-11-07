@@ -61,7 +61,6 @@ class AgentEvalService {
     metadata?: Record<string, unknown>;
     name: string;
     rubrics?: any[];
-    tags?: string[];
   }) {
     return lambdaClient.agentEval.createBenchmark.mutate(params);
   }
@@ -69,10 +68,8 @@ class AgentEvalService {
   async updateBenchmark(params: {
     description?: string;
     id: string;
-    identifier: string;
     metadata?: Record<string, unknown>;
     name: string;
-    tags?: string[];
   }) {
     return lambdaClient.agentEval.updateBenchmark.mutate(params);
   }
@@ -214,7 +211,6 @@ class AgentEvalService {
   async importDatasetPackage(
     params: AgentEvalDatasetPackageBindings & {
       benchmarkId?: string;
-      benchmarkName?: string;
       datasetId?: string;
       filename?: string;
       name?: string;

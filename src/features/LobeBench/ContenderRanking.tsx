@@ -84,6 +84,8 @@ const ContenderRanking = ({ benchmarkId, runs, sets }: ContenderRankingProps) =>
     (chosen && sets.find((candidate) => candidate.id === chosen)) || pickRankedSet(sets, rankings);
   const ranking = set ? rankings.get(set.id) : undefined;
   const contenders = ranking?.contenders ?? [];
+  // Solid bar: passed all of the benchmark's k attempts; light bar: passed at least one.
+  const rankK = ranking?.k ?? set?.k ?? RANK_ATTEMPTS;
 
   const describe = (entry: RankedContender) =>
     [
@@ -132,7 +134,7 @@ const ContenderRanking = ({ benchmarkId, runs, sets }: ContenderRankingProps) =>
       t('lobeBench.benchmark.rank.outdated', { count: ranking.outdated }),
     ranking &&
       ranking.fewAttempts > 0 &&
-      t('lobeBench.benchmark.rank.fewAttempts', { count: ranking.fewAttempts, k: RANK_ATTEMPTS }),
+      t('lobeBench.benchmark.rank.fewAttempts', { count: ranking.fewAttempts, k: rankK }),
   ].filter(Boolean) as string[];
 
   const startExperiment = () =>
@@ -156,7 +158,7 @@ const ContenderRanking = ({ benchmarkId, runs, sets }: ContenderRankingProps) =>
         <Flexbox gap={2} style={{ minWidth: 0 }}>
           <h2 {...stylex.props(styles.title)}>{t('lobeBench.benchmark.rank.title')}</h2>
           <Text fontSize={12} type={'secondary'}>
-            {t('lobeBench.benchmark.rank.hint', { k: RANK_ATTEMPTS })}
+            {t('lobeBench.benchmark.rank.hint', { k: rankK })}
           </Text>
         </Flexbox>
         {sets.length > 1 && (
@@ -193,8 +195,8 @@ const ContenderRanking = ({ benchmarkId, runs, sets }: ContenderRankingProps) =>
       ) : (
         <>
           <RankingBars
-            legendRate={t('lobeBench.benchmark.rank.legend.rate', { k: RANK_ATTEMPTS })}
-            legendReach={t('lobeBench.benchmark.rank.legend.reach', { k: RANK_ATTEMPTS })}
+            legendRate={t('lobeBench.benchmark.rank.legend.rate', { k: rankK })}
+            legendReach={t('lobeBench.benchmark.rank.legend.reach', { k: rankK })}
             rows={rows}
             onSelect={openRow}
           />

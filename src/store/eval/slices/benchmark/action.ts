@@ -104,7 +104,6 @@ export class BenchmarkActionImpl {
     metadata?: Record<string, unknown>;
     name: string;
     rubrics?: any[];
-    tags?: string[];
   }): Promise<any> => {
     const result = await agentEvalService.createBenchmark({
       description: params.description,
@@ -112,7 +111,6 @@ export class BenchmarkActionImpl {
       metadata: params.metadata,
       name: params.name,
       rubrics: params.rubrics ?? [],
-      tags: params.tags,
     });
     await this.refreshBenchmarks();
     return result;
@@ -131,10 +129,8 @@ export class BenchmarkActionImpl {
   updateBenchmark = async (params: {
     description?: string;
     id: string;
-    identifier: string;
     metadata?: Record<string, unknown>;
     name: string;
-    tags?: string[];
   }): Promise<void> => {
     // Optimistic on every copy; the refetch below reconciles server-owned fields.
     await this.#entity.optimistic(
@@ -144,10 +140,8 @@ export class BenchmarkActionImpl {
         agentEvalService.updateBenchmark({
           description: params.description,
           id: params.id,
-          identifier: params.identifier,
           metadata: params.metadata,
           name: params.name,
-          tags: params.tags,
         }),
     );
     await Promise.all([this.refreshBenchmarks(), this.refreshBenchmarkDetail(params.id)]);

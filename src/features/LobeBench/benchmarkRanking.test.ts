@@ -172,6 +172,31 @@ describe('rankContenders', () => {
     expect(ranking.ranked).toBe(2);
   });
 
+  it('ranks on the benchmark’s own k, whatever it is', () => {
+    const one = run({
+      config: { k: 1 },
+      metrics: { passAllAt: { '1': 0.5 }, passAnyAt: { '1': 0.5 } },
+      name: 'One',
+      passed: 15,
+    });
+    const three = run({
+      metrics: { passAllAt: { '1': 0.8, '3': 20 / 30 }, passAnyAt: { '1': 0.8, '3': 0.9 } },
+      name: 'Three',
+      passed: 20,
+    });
+    // A benchmark of one attempt per case ranks its one-attempt runs, and a run of three on its estimate for one.
+    const onK1 = rankContenders([one, three], { id: 'set-a', k: 1 });
+    expect(onK1.k).toBe(1);
+    expect(onK1.contenders.map((c) => [c.name, c.k])).toEqual([
+      ['Three', 1],
+      ['One', 1],
+    ]);
+    // A benchmark of five attempts ranks neither: both made fewer.
+    const onK5 = rankContenders([one, three], { id: 'set-a', k: 5 });
+    expect(onK5.contenders).toEqual([]);
+    expect(onK5.fewAttempts).toBe(2);
+  });
+
   it('breaks ties by any-attempt passes, then cost per case, then recency', () => {
     const runs = [
       run({ metrics: { perCaseCost: 0.02 }, name: 'pricier', passed: 18 }),

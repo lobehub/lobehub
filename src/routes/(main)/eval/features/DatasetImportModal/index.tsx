@@ -3,15 +3,11 @@
 import { createModal, type ImperativeModalProps, type ModalInstance } from '@lobehub/ui';
 import { t } from 'i18next';
 
-import type { DatasetPackageBenchmark } from '@/features/AgentEval/DatasetPackagePreview';
-
 import DatasetImportContent from './Content';
 import DatasetImportFooter from './Footer';
 
 interface CreateOptions {
   archiveOnly?: boolean;
-  benchmarkId?: string;
-  benchmarks?: DatasetPackageBenchmark[];
   datasetId?: string;
   onSuccess?: (datasetId: string) => void;
   presetId?: string;
@@ -19,8 +15,6 @@ interface CreateOptions {
 
 export const createDatasetImportModal = ({
   archiveOnly,
-  benchmarkId,
-  benchmarks,
   datasetId,
   onSuccess,
   presetId,
@@ -58,8 +52,6 @@ export const createDatasetImportModal = ({
     content: (
       <DatasetImportContent
         archiveOnly={archiveOnly}
-        benchmarkId={benchmarkId}
-        benchmarks={benchmarks}
         close={() => ref.instance?.close()}
         datasetId={datasetId}
         presetId={presetId}

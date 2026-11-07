@@ -4,7 +4,7 @@ import type {
   AgentEvalDatasetPackageBindings,
   AgentEvalDatasetPackagePreview,
 } from '@lobechat/types';
-import { Accordion, Flexbox, Input, Select, Tag, Text } from '@lobehub/ui';
+import { Accordion, Flexbox, Input, Tag, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { useId } from 'react';
@@ -25,22 +25,12 @@ const styles = stylex.create({
   samples: { maxHeight: 200, overflowY: 'auto' },
 });
 
-export interface DatasetPackageBenchmark {
-  id: string;
-  name: string;
-}
-
 interface DatasetPackagePreviewProps {
-  benchmarkId?: string;
-  benchmarkName: string;
-  benchmarks: DatasetPackageBenchmark[];
   bindings: AgentEvalDatasetPackageBindings;
   datasetId?: string;
   disabled?: boolean;
   existingDataset?: boolean;
   name: string;
-  onBenchmarkIdChange: (id: string | undefined) => void;
-  onBenchmarkNameChange: (name: string) => void;
   onBindingsChange: (bindings: AgentEvalDatasetPackageBindings) => void;
   onNameChange: (name: string) => void;
   preview: AgentEvalDatasetPackagePreview;
@@ -51,15 +41,10 @@ interface DatasetPackagePreviewProps {
 export const DatasetPackagePreview = ({
   bindings,
   onBindingsChange,
-  benchmarkId,
-  benchmarkName,
-  benchmarks,
   datasetId,
   disabled,
   existingDataset,
   name,
-  onBenchmarkIdChange,
-  onBenchmarkNameChange,
   onNameChange,
   preview,
   samples,
@@ -151,37 +136,6 @@ export const DatasetPackagePreview = ({
               onChange={(e) => onNameChange(e.target.value)}
             />
           </Flexbox>
-          <Flexbox gap={8}>
-            <label htmlFor={`${id}-benchmark`}>{t('dataset.import.package.benchmark')}</label>
-            <Select
-              disabled={disabled}
-              id={`${id}-benchmark`}
-              value={benchmarkId ?? '__new__'}
-              options={[
-                { label: t('dataset.import.package.newBenchmark'), value: '__new__' },
-                ...benchmarks.map((benchmark) => ({ label: benchmark.name, value: benchmark.id })),
-              ]}
-              onChange={(value) =>
-                onBenchmarkIdChange(
-                  typeof value === 'string' && value !== '__new__' ? value : undefined,
-                )
-              }
-            />
-          </Flexbox>
-          {!benchmarkId && (
-            <Flexbox gap={8}>
-              <label htmlFor={`${id}-benchmark-name`}>
-                {t('dataset.import.package.benchmarkName')}
-              </label>
-              <Input
-                disabled={disabled}
-                id={`${id}-benchmark-name`}
-                maxLength={200}
-                value={benchmarkName}
-                onChange={(e) => onBenchmarkNameChange(e.target.value)}
-              />
-            </Flexbox>
-          )}
         </>
       )}
 

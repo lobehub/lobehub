@@ -11,6 +11,7 @@ import { useTranslation } from 'react-i18next';
 import { rankContenders } from '@/features/LobeBench/benchmarkRanking';
 import { openContenderModal } from '@/features/LobeBench/ContenderForm';
 import {
+  benchmarkProtocolOf,
   describeSettings,
   experimentPartsOf,
   formatPercent,
@@ -102,6 +103,7 @@ const LobeBenchContenders = memo(() => {
       rankContenders(contenderRuns, {
         id: dataset.id,
         caseVersion: evalCaseVersionOf(dataset.metadata),
+        k: benchmarkProtocolOf(benchmarks.find((b) => b.id === dataset.benchmarkId))?.k,
       }).contenders.map((entry) => entry.passRate),
     );
     return rates.length > 0 ? Math.max(...rates) : undefined;

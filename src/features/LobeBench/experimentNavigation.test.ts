@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { experimentContextSuffix, parseExperimentId } from './experimentNavigation';
+import {
+  benchmarkHomePath,
+  benchmarkSidebarBackPath,
+  experimentContextSuffix,
+  parseExperimentId,
+  runBackPath,
+} from './experimentNavigation';
 
 describe('experiment case navigation', () => {
   it('keeps a generated experiment id in the previous/next case context', () => {
@@ -41,5 +47,35 @@ describe('experiment case navigation', () => {
     const id = parseExperimentId(value);
     expect(id).toBeUndefined();
     expect(experimentContextSuffix(id)).toBe('');
+  });
+});
+
+describe('back navigation from the Lab run page', () => {
+  it('returns a Lobe Bench run to the experiment it was started from', () => {
+    expect(runBackPath({ benchmarkId: 'evb_1', experimentId: 'exp_9', lobeBench: true })).toBe(
+      '/eval/lobe-bench/experiments/exp_9',
+    );
+  });
+
+  it('returns a Lobe Bench run without an experiment to its Lobe Bench benchmark', () => {
+    expect(runBackPath({ benchmarkId: 'evb_1', experimentId: null, lobeBench: true })).toBe(
+      '/eval/lobe-bench/benchmarks/evb_1',
+    );
+    expect(runBackPath({ benchmarkId: 'evb_1', experimentId: '../x', lobeBench: true })).toBe(
+      '/eval/lobe-bench/benchmarks/evb_1',
+    );
+  });
+
+  it('keeps an Evaluation Lab run in the Lab, even when it has an experiment', () => {
+    expect(runBackPath({ benchmarkId: 'b1', experimentId: 'exp_9', lobeBench: false })).toBe(
+      '/eval/bench/b1',
+    );
+  });
+
+  it('points the sidebar back arrow and benchmark name at the same side', () => {
+    expect(benchmarkSidebarBackPath('evb_1', true)).toBe('/eval/lobe-bench/benchmarks/evb_1');
+    expect(benchmarkSidebarBackPath('b1', false)).toBe('/eval');
+    expect(benchmarkHomePath('evb_1', true)).toBe('/eval/lobe-bench/benchmarks/evb_1');
+    expect(benchmarkHomePath('b1', false)).toBe('/eval/bench/b1');
   });
 });

@@ -10,6 +10,7 @@ import { isLobeBenchBenchmark, isLobeBenchMeta, unwrapList } from '@/features/Lo
 import { useClientDataSWR } from '@/libs/swr';
 import { agentEvalService } from '@/services/agentEval';
 import { useEvalStore } from '@/store/eval';
+import { isLobeBenchKind } from '@/store/eval/kinds';
 
 interface PollConfig {
   refreshInterval?: number;
@@ -50,14 +51,20 @@ export { pickDefaultDataset } from '@/features/LobeBench/lobeBench';
 /** Case sets of the Lobe Bench benchmarks. */
 export const useLobeBenchDatasets = (benchmarkIds: string[]) =>
   useClientDataSWR<AgentEvalDatasetListItem[]>(
-    benchmarkIds.length > 0 ? ['lobe-bench/datasets', ...benchmarkIds] : null,
+    ['lobe-bench/datasets', ...benchmarkIds],
     async () => {
-      const lists = await Promise.all(benchmarkIds.map((id) => agentEvalService.listDatasets(id)));
-      return lists
-        .flatMap((list) => unwrapList<AgentEvalDatasetListItem>(list))
-        .sort(
-          (a, b) => new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime(),
-        );
+      const [lists, all] = await Promise.all([
+        Promise.all(benchmarkIds.map((id) => agentEvalService.listDatasets(id))),
+        agentEvalService.listAllDatasets(),
+      ]);
+      // An imported dataset belongs to no benchmark until one is made of it.
+      const standalone = unwrapList<AgentEvalDatasetListItem>(all).filter(
+        (dataset) => !dataset.benchmarkId && isLobeBenchKind(dataset),
+      );
+      return [
+        ...lists.flatMap((list) => unwrapList<AgentEvalDatasetListItem>(list)),
+        ...standalone,
+      ].sort((a, b) => new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime());
     },
   );
 

@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
 
+import { benchmarkHomePath } from '@/features/LobeBench/experimentNavigation';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useEvalStore } from '@/store/eval';
 import { isLobeBenchKind } from '@/store/eval/kinds';
@@ -67,17 +68,19 @@ const BenchmarkHead = memo<{ id: string }>(({ id }) => {
   const name = benchmark?.name || benchmarkList.find((b: any) => b.id === id)?.name;
   const Icon = useMemo(() => getSystemIcon(id), [id]);
 
+  const onLobeBench = isLobeBenchKind(benchmarkList.find((b: any) => b.id === id) ?? benchmark);
+
   const handleClick = useCallback(() => {
-    navigate(`/eval/bench/${id}`);
-  }, [id, navigate]);
+    navigate(benchmarkHomePath(id, onLobeBench));
+  }, [id, navigate, onLobeBench]);
 
   const handleBenchmarkSwitch = useCallback(
     (benchmarkId: string) => {
       setTimeout(() => {
-        navigate(`/eval/bench/${benchmarkId}`);
+        navigate(benchmarkHomePath(benchmarkId, onLobeBench));
       }, 0);
     },
-    [navigate],
+    [navigate, onLobeBench],
   );
 
   const menuItems = useMemo<DropdownItem[]>(() => {
@@ -85,7 +88,6 @@ const BenchmarkHead = memo<{ id: string }>(({ id }) => {
 
     // The switcher stays on one side: a Lobe Bench benchmark offers the other
     // Lobe Bench benchmarks, an Evaluation Lab benchmark the Evaluation Lab's.
-    const onLobeBench = isLobeBenchKind(benchmarkList.find((b: any) => b.id === id) ?? benchmark);
     const sameSide = benchmarkList.filter((b: any) => isLobeBenchKind(b) === onLobeBench);
 
     return sameSide.map((b: any) => ({
@@ -102,7 +104,7 @@ const BenchmarkHead = memo<{ id: string }>(({ id }) => {
       onClick: () => handleBenchmarkSwitch(b.id),
       style: b.id === id ? { backgroundColor: cssVar.controlItemBgActive } : {},
     }));
-  }, [benchmark, benchmarkList, handleBenchmarkSwitch, id]);
+  }, [benchmarkList, handleBenchmarkSwitch, id, onLobeBench]);
 
   return (
     <Block

@@ -42,7 +42,6 @@ export const useSavedContenders = () => {
       await updateBenchmark({
         description: benchmark.description ?? undefined,
         id: benchmark.id,
-        identifier: benchmark.identifier,
         metadata: { ...benchmark.metadata, contenders: list },
         name: benchmark.name,
       });

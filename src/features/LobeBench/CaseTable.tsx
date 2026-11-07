@@ -22,7 +22,6 @@ import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import CaseEditor, { type CaseDraft } from '@/features/LobeBench/CaseEditor';
-import { openContenderModal } from '@/features/LobeBench/ContenderForm';
 import { openConversationPicker } from '@/features/LobeBench/ConversationPicker';
 import {
   CASE_LEVELS,
@@ -39,12 +38,7 @@ import {
   nativeCaseId,
 } from '@/features/LobeBench/lobeBench';
 import { openCreateDatasetModal } from '@/features/LobeBench/PicksDatasetModal';
-import { startSingleCaseRun } from '@/features/LobeBench/singleCaseRun';
-import {
-  type LobeBenchCase,
-  useDatasetCases,
-  useLobeBenchBenchmarks,
-} from '@/features/LobeBench/useLobeBench';
+import { type LobeBenchCase, useDatasetCases } from '@/features/LobeBench/useLobeBench';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { agentEvalService } from '@/services/agentEval';
 
@@ -151,8 +145,6 @@ const CaseTable = memo<CaseTableProps>(
     const navigate = useWorkspaceAwareNavigate();
     const datasetId = dataset?.id;
     const benchmarkId = dataset?.benchmarkId ?? benchmarkIds[0];
-    const { benchmarks } = useLobeBenchBenchmarks();
-    const benchmark = benchmarks.find((b) => b.id === benchmarkId);
     const { data: cases, isLoading, mutate: refreshCases } = useDatasetCases(datasetId);
     const picking = !!selectable;
     const [checked, setChecked] = useState<Set<string>>(() => new Set());
@@ -299,25 +291,6 @@ const CaseTable = memo<CaseTableProps>(
         }
         return next;
       });
-
-    // One case, one contender, one attempt — then straight to the trajectory.
-    const testRun = (testCase: LobeBenchCase) =>
-      openContenderModal(
-        async (contender) => {
-          if (!datasetId || !benchmarkId) return;
-          setBusy(true);
-          try {
-            const runId = await startSingleCaseRun({ benchmark, contender, datasetId, testCase });
-            navigate(`/eval/bench/${benchmarkId}/runs/${runId}/cases/${testCase.id}`);
-          } catch (error) {
-            fail(error);
-          } finally {
-            setBusy(false);
-          }
-        },
-        t('lobeBench.case.testRun'),
-        t('lobeBench.case.testRun.go'),
-      );
 
     return (
       <>
@@ -530,15 +503,6 @@ const CaseTable = memo<CaseTableProps>(
                 </Text>
               ) : null}
               <Flexbox horizontal gap={8} wrap={'wrap'}>
-                <Button
-                  loading={busy}
-                  size={'small'}
-                  title={t('lobeBench.case.testRun.hint')}
-                  type={'primary'}
-                  onClick={() => testRun(open)}
-                >
-                  {t('lobeBench.case.testRun')}
-                </Button>
                 {editable ? (
                   <>
                     <Button size={'small'} onClick={() => setEditor({ testCase: open })}>

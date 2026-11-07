@@ -15,8 +15,12 @@ import { t as translate } from 'i18next';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import BenchmarkStandardFields, {
+  type BenchmarkStandard,
+  isCompleteStandard,
+} from '@/features/LobeBench/BenchmarkStandardFields';
 import { moveDatasets } from '@/features/LobeBench/datasetCases';
-import { caseCountOf, LOBE_BENCH_KIND } from '@/features/LobeBench/lobeBench';
+import { caseCountOf, DEFAULT_PROTOCOL, LOBE_BENCH_KIND } from '@/features/LobeBench/lobeBench';
 import { useEvalStore } from '@/store/eval';
 
 interface DatasetOption {
@@ -33,10 +37,9 @@ interface CreateBenchmarkFormProps {
 }
 
 /**
- * Makes a benchmark of the account's own datasets. It has
- * no judge, mock or defaults of its own: its datasets run on the library, under
- * the library benchmark's settings. Datasets are made first, in the Case
- * library; a benchmark only chooses among them.
+ * Makes a benchmark of the account's own datasets, with the judge and run rules
+ * every run on it follows (fixed from then on, so its scores stay comparable).
+ * Datasets are made first, in the Case library; a benchmark only chooses among them.
  */
 const CreateBenchmarkForm = memo<CreateBenchmarkFormProps>(({ datasets, onCreated }) => {
   const { t } = useTranslation('eval');
@@ -45,17 +48,23 @@ const CreateBenchmarkForm = memo<CreateBenchmarkFormProps>(({ datasets, onCreate
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [picked, setPicked] = useState<string[]>([]);
+  const [standard, setStandard] = useState<BenchmarkStandard>({ protocol: DEFAULT_PROTOCOL });
   const [saving, setSaving] = useState(false);
 
   const submit = async () => {
     const trimmed = name.trim();
-    if (!trimmed) return;
+    const { judge, protocol } = standard;
+    if (!trimmed || !judge || !isCompleteStandard(standard) || picked.length === 0) return;
     setSaving(true);
     try {
       const created = (await createBenchmark({
         description: description.trim() || undefined,
         identifier: `lobe-bench-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
-        metadata: { kind: LOBE_BENCH_KIND },
+        metadata: {
+          judge: { model: judge.model, provider: judge.provider },
+          kind: LOBE_BENCH_KIND,
+          protocol,
+        },
         name: trimmed,
       })) as { data?: { id?: string }; id?: string };
       const id = created?.id ?? created?.data?.id;
@@ -96,6 +105,7 @@ const CreateBenchmarkForm = memo<CreateBenchmarkFormProps>(({ datasets, onCreate
           onChange={(e) => setDescription(e.target.value)}
         />
       </Flexbox>
+      <BenchmarkStandardFields value={standard} onChange={setStandard} />
       <Flexbox gap={6}>
         <Text weight={500}>{t('lobeBench.benchmark.create.datasets')}</Text>
         {datasets.length > 0 ? (
@@ -125,7 +135,12 @@ const CreateBenchmarkForm = memo<CreateBenchmarkFormProps>(({ datasets, onCreate
       </Flexbox>
       <Flexbox horizontal gap={8} justify={'flex-end'}>
         <Button onClick={close}>{t('common.cancel')}</Button>
-        <Button disabled={!name.trim()} loading={saving} type={'primary'} onClick={submit}>
+        <Button
+          disabled={!name.trim() || !isCompleteStandard(standard) || picked.length === 0}
+          loading={saving}
+          type={'primary'}
+          onClick={submit}
+        >
           {t('lobeBench.benchmark.create.submit')}
         </Button>
       </Flexbox>

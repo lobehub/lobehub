@@ -1,35 +1,22 @@
 'use client';
 
-import {
-  ActionIcon,
-  Button,
-  type DropdownItem,
-  DropdownMenu,
-  Empty,
-  Flexbox,
-  Text,
-  toast,
-} from '@lobehub/ui';
+import { Button, Empty, Flexbox, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { Database, LibraryBig, Plus, X } from 'lucide-react';
+import { Database, Plus } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 
 import { getBenchmarkIcon } from '@/features/LobeBench/benchmarkIcon';
 import ContenderRanking from '@/features/LobeBench/ContenderRanking';
-import { moveDatasets } from '@/features/LobeBench/datasetCases';
 import {
   benchmarkDatasetsOf,
   caseCountOf,
   getDatasetMeta,
   isCustomBenchmark,
   isRunActive,
-  libraryOf,
   LOBE_BENCH_PATH,
-  looseDatasetsOf,
-  pickPrimaryBenchmark,
   rankableSetsOf,
   sortBenchmarks,
 } from '@/features/LobeBench/lobeBench';
@@ -120,22 +107,13 @@ const LobeBenchBenchmark = memo(() => {
   const { data: allRuns, mutate: refreshRuns } = useLobeBenchRuns(benchmarkIds, {
     refreshInterval: hasActive ? 5000 : undefined,
   });
-  const library = libraryOf(datasets);
-  // Every dataset forwards to the library's mock service: its benchmark says whether it answers.
   const listed = benchmarks.find((b) => b.id === benchmarkId);
-  // One the account made: it adds and removes its own datasets, and can be deleted.
+  // One the account made: its datasets are fixed when it is made, and it can be deleted.
   const custom = isCustomBenchmark(listed);
   const madeOf = useMemo(
     () => (listed ? benchmarkDatasetsOf(datasets, listed) : []),
     [datasets, listed],
   );
-  // The account's datasets in no benchmark of its own: what it can add.
-  const addable = useMemo(
-    () => (custom ? looseDatasetsOf(datasets, benchmarks) : []),
-    [benchmarks, custom, datasets],
-  );
-  // Where a dataset taken out of this benchmark goes back to: the library's benchmark.
-  const homeBenchmarkId = library?.benchmarkId ?? pickPrimaryBenchmark(benchmarks)?.id;
   const deleteBenchmark = useEvalStore((s) => s.deleteBenchmark);
   const sets = useMemo(() => rankableSetsOf(benchmarks, datasets), [benchmarks, datasets]);
   const rankedSets = useMemo(
@@ -149,37 +127,10 @@ const LobeBenchBenchmark = memo(() => {
     [allRuns, madeOf],
   );
 
-  const move = async (moved: typeof madeOf, to?: string) => {
-    if (!to) return;
-    try {
-      await moveDatasets(moved, to);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : t('lobeBench.picks.failed'));
-    }
-  };
-  // Only datasets already made: they are made in the Case library, with their
-  // cases fixed, before a benchmark takes them.
-  const addMenu: DropdownItem[] =
-    addable.length > 0
-      ? addable.map((dataset) => ({
-          icon: <Database size={16} />,
-          key: dataset.id,
-          label: `${dataset.name} · ${t('lobeBench.benchmark.cases', { count: caseCountOf(dataset) })}`,
-          onClick: () => move([dataset], benchmarkId),
-        }))
-      : [
-          {
-            icon: <LibraryBig size={16} />,
-            key: 'library',
-            label: t('lobeBench.benchmark.datasets.noneLoose'),
-            onClick: () => navigate(`${LOBE_BENCH_PATH}/library`),
-          },
-        ];
-  // Deleting one the account made gives its datasets back first: the database would
-  // delete them with it.
+  // Deleting one the account made deletes its runs and keeps its datasets, freed
+  // to make another benchmark of (the server does both).
   const handleDelete = async () => {
-    if (!benchmarkId || !homeBenchmarkId) return;
-    await moveDatasets(madeOf, homeBenchmarkId);
+    if (!benchmarkId) return;
     await deleteBenchmark(benchmarkId);
     navigate(LOBE_BENCH_PATH);
   };
@@ -222,13 +173,6 @@ const LobeBenchBenchmark = memo(() => {
               </h3>
               <Text type={'secondary'}>{t('lobeBench.benchmark.datasets.hint')}</Text>
             </Flexbox>
-            {custom && (
-              <DropdownMenu items={addMenu} placement={'bottomRight'} trigger={['click']}>
-                <Button icon={Plus} size={'small'}>
-                  {t('lobeBench.benchmark.datasets.add')}
-                </Button>
-              </DropdownMenu>
-            )}
           </Flexbox>
           {madeOf.length === 0 && (
             <Flexbox className={stylex.props(styles.filterEmpty).className}>
@@ -258,19 +202,6 @@ const LobeBenchBenchmark = memo(() => {
                         .join(' · ')}
                     </Text>
                   </Flexbox>
-                  {custom && (
-                    <ActionIcon
-                      icon={X}
-                      size={'small'}
-                      title={t('lobeBench.benchmark.datasets.remove')}
-                      onClick={(e) => {
-                        // The card is a link: taking the dataset out must not open it.
-                        e.preventDefault();
-                        e.stopPropagation();
-                        move([dataset], homeBenchmarkId);
-                      }}
-                    />
-                  )}
                 </WorkspaceLink>
               );
             })}

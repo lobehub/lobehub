@@ -97,11 +97,13 @@ export interface LobeBenchBenchmarkMeta {
   contenders?: LobeBenchContender[];
   /** What a new experiment starts with. */
   defaults?: { k?: number; maxSteps?: number; timeoutMinutes?: number };
-  /** The judge every attempt is graded with unless a case set or case names its own. */
+  /** The judge every attempt is graded with; fixed when the benchmark is made. */
   judge?: { model: string; provider: string };
   kind?: string;
   /** Mock-side dataset segment and timeout; the address is server configuration, never stored here. */
   mock?: { dataset?: string; timeoutMs?: number };
+  /** How every case is run (attempts, step limit, timeout); fixed when the benchmark is made. */
+  protocol?: LobeBenchProtocol;
   /**
    * A benchmark made of library cases (Hard 50): the engine view (frozen Pack Release)
    * it was seeded from. Its runs are on the library, so the library's benchmark holds
@@ -109,6 +111,47 @@ export interface LobeBenchBenchmarkMeta {
    */
   view?: { id: string; manifestSha256?: string; version: string };
 }
+
+/** A benchmark's fixed run rules: every case runs `k` attempts under these limits. */
+export interface LobeBenchProtocol {
+  k: number;
+  maxSteps: number;
+  timeoutMinutes: number;
+}
+
+const isProtocol = (value: unknown): value is LobeBenchProtocol => {
+  const v = value as Partial<LobeBenchProtocol> | undefined;
+  return (
+    !!v &&
+    Number.isInteger(v.k) &&
+    Number.isInteger(v.maxSteps) &&
+    Number.isInteger(v.timeoutMinutes) &&
+    v.k! >= 1 &&
+    v.maxSteps! >= 1 &&
+    v.timeoutMinutes! >= 1
+  );
+};
+
+/**
+ * The run rules a benchmark fixes: its `protocol`, or for one made before they
+ * were fixed, its complete `defaults` (the server reads them the same way).
+ */
+export const benchmarkProtocolOf = (
+  benchmark?: { metadata?: Metadata } | null,
+): LobeBenchProtocol | undefined => {
+  const meta = getBenchmarkMeta(benchmark);
+  const value = meta.protocol ?? meta.defaults;
+  return isProtocol(value)
+    ? { k: value.k, maxSteps: value.maxSteps, timeoutMinutes: value.timeoutMinutes }
+    : undefined;
+};
+
+/** The run rules a new benchmark starts the form with. */
+export const DEFAULT_PROTOCOL: LobeBenchProtocol = {
+  k: 3,
+  maxSteps: 30,
+  timeoutMinutes: 20,
+};
 
 export const getBenchmarkMeta = (benchmark?: { metadata?: Metadata } | null) =>
   (benchmark?.metadata ?? {}) as LobeBenchBenchmarkMeta;
@@ -516,21 +559,25 @@ export interface RankableSet {
   caseVersion?: string;
   /** The dataset ranked on. */
   id: string;
+  /** Attempts per case its benchmark runs: the leaderboard ranks on this many. */
+  k?: number;
   /** The benchmark's name, with the dataset's when the benchmark has several. */
   name: string;
 }
 
 /** One leaderboard per dataset a benchmark is made of, in the order the benchmarks are given. */
 export const rankableSetsOf = <T extends DatasetLike>(
-  benchmarks: Array<{ id: string; isSystem?: boolean; name: string }>,
+  benchmarks: Array<{ id: string; isSystem?: boolean; metadata?: Metadata; name: string }>,
   datasets: T[] | undefined,
 ): RankableSet[] =>
   benchmarks.flatMap((benchmark) => {
     const madeOf = benchmarkDatasetsOf(datasets, benchmark);
+    const k = benchmarkProtocolOf(benchmark)?.k;
     return madeOf.map((dataset) => ({
       benchmarkId: benchmark.id,
       caseVersion: evalCaseVersionOf(dataset.metadata),
       id: dataset.id,
+      ...(k && { k }),
       name: madeOf.length > 1 ? `${benchmark.name} · ${dataset.name ?? ''}` : benchmark.name,
     }));
   });
@@ -584,6 +631,33 @@ export const settingsBenchmarkOf = <
     ? benchmark
     : pickPrimaryBenchmark(benchmarks);
 };
+
+/**
+ * An experiment is started on benchmarks, never on a dataset by itself: it runs
+ * every dataset each chosen benchmark is made of. A dataset in no benchmark (one
+ * the account picked, or its draft cases) is never run.
+ */
+export const datasetIdsOfBenchmarks = <T extends DatasetLike>(
+  datasets: T[] | undefined,
+  benchmarks: Array<{ id: string; isSystem?: boolean }>,
+  benchmarkIds: string[],
+): string[] =>
+  benchmarkIds.flatMap((id) => {
+    const benchmark = benchmarks.find((b) => b.id === id);
+    return benchmark ? benchmarkDatasetsOf(datasets, benchmark).map((d) => d.id) : [];
+  });
+
+/** The benchmarks a set of datasets belongs to, in the given benchmark order; a dataset in none counts for nothing. */
+export const benchmarkIdsOfDatasets = <T extends DatasetLike>(
+  datasets: T[] | undefined,
+  benchmarks: Array<{ id: string; isSystem?: boolean }>,
+  datasetIds: string[],
+): string[] =>
+  benchmarks
+    .filter((benchmark) =>
+      benchmarkDatasetsOf(datasets, benchmark).some((d) => datasetIds.includes(d.id)),
+    )
+    .map((benchmark) => benchmark.id);
 
 /** Case sets for a picker: per benchmark (primary first), published sets then the account's own. */
 export const orderDatasetsForPicker = <T extends DatasetLike>(

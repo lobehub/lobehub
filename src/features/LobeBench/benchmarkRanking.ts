@@ -34,6 +34,8 @@ export interface SetRanking {
   contenders: RankedContender[];
   /** Completed runs of fewer attempts per case than a leaderboard ranks on. */
   fewAttempts: number;
+  /** Attempts per case the leaderboard ranks on: the benchmark's k. */
+  k: number;
   /**
    * Runs on the set made on an earlier version of its cases (or before runs recorded
    * one): cases are edited in place, so only runs on the current version rank.
@@ -93,27 +95,31 @@ const setupLabelOf = (run: AgentEvalRunListItem) => {
 };
 
 /**
- * A run's standing on `RANK_ATTEMPTS` attempts per case: cases passing all of
- * them and at least one, from the run's unbiased estimates (`passAllAt`), so a
- * run of 5 attempts ranks beside runs of 3. A run of fewer attempts has none.
+ * A run's standing on `rankK` attempts per case (the benchmark's k): cases
+ * passing all of them (the solid bar) and at least one (the light bar). A run of
+ * more attempts is scored from its unbiased estimates (`passAllAt`); a run of
+ * fewer has none.
  */
-export const rankedStatsOf = (run: AgentEvalRunListItem): RunStats | undefined => {
+export const rankedStatsOf = (
+  run: AgentEvalRunListItem,
+  rankK: number = RANK_ATTEMPTS,
+): RunStats | undefined => {
   const stats = runStats(run);
-  if (stats.k < RANK_ATTEMPTS) return undefined;
+  if (stats.k < rankK) return undefined;
   const metrics = (run.metrics ?? {}) as {
     passAllAt?: Record<string, number>;
     passAnyAt?: Record<string, number>;
   };
-  const all = metrics.passAllAt?.[String(RANK_ATTEMPTS)];
+  const all = metrics.passAllAt?.[String(rankK)];
   // Runs finished before the estimate was recorded: only one of exactly as many attempts says it.
-  if (all === undefined) return stats.k === RANK_ATTEMPTS ? stats : undefined;
-  const any = metrics.passAnyAt?.[String(RANK_ATTEMPTS)];
+  if (all === undefined) return stats.k === rankK ? stats : undefined;
+  const any = metrics.passAnyAt?.[String(rankK)];
   const cases = (share: number) => Math.round(share * stats.total * 10) / 10;
   return {
     ...stats,
     allK: cases(all),
     anyK: any === undefined ? stats.anyK : cases(any),
-    k: RANK_ATTEMPTS,
+    k: rankK,
     passRate: all,
     passed: cases(all),
   };
@@ -145,9 +151,12 @@ export const compareContenders = (a: RankedContender, b: RankedContender) =>
  */
 export const rankContenders = (
   runs: AgentEvalRunListItem[],
-  set: string | Pick<RankableSet, 'caseVersion' | 'id'>,
+  set: string | Pick<RankableSet, 'caseVersion' | 'id' | 'k'>,
 ): SetRanking => {
-  const target = typeof set === 'string' ? { id: set } : set;
+  const target: Pick<RankableSet, 'caseVersion' | 'id' | 'k'> =
+    typeof set === 'string' ? { id: set } : set;
+  // Ranked on the benchmark's own attempts per case, whatever k is.
+  const rankK = target.k ?? RANK_ATTEMPTS;
   const best = new Map<string, RankedContender>();
   let active = 0;
   let broken = 0;
@@ -175,7 +184,7 @@ export const rankContenders = (
       unjudged += 1;
       continue;
     }
-    const onRankAttempts = rankedStatsOf(run);
+    const onRankAttempts = rankedStatsOf(run, rankK);
     if (!onRankAttempts) {
       fewAttempts += 1;
       continue;
@@ -203,6 +212,7 @@ export const rankContenders = (
     broken,
     contenders,
     fewAttempts,
+    k: rankK,
     outdated,
     ranked,
     unjudged,

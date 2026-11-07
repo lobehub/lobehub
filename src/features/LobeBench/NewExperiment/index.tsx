@@ -11,7 +11,6 @@ import {
   Input,
   InputNumber,
   Modal,
-  Segmented,
   Select,
   Tag,
   Text,
@@ -39,22 +38,23 @@ import {
   type LaunchOutcome,
 } from '@/features/LobeBench/experimentLaunch';
 import {
+  benchmarkDatasetsOf,
+  benchmarkIdsOfDatasets,
+  benchmarkProtocolOf,
   caseCountOf,
+  datasetIdsOfBenchmarks,
   DEFAULT_MAX_STEPS,
   DEFAULT_TIMEOUT_MINUTES,
   describeSettings,
   getBenchmarkMeta,
-  isCustomDataset,
   K_OPTIONS,
   LOBE_BENCH_KIND,
   LOBE_BENCH_PATH,
   type LobeBenchContender,
   type LobeBenchExperimentMeta,
   type LobeBenchExperimentPart,
-  orderDatasetsForPicker,
   pickPrimaryBenchmark,
   RANK_ATTEMPTS,
-  rankableSetsOf,
   runStats,
   sameContender,
   settingsBenchmarkOf,
@@ -70,7 +70,6 @@ import {
   useLobeBenchRuns,
 } from '@/features/LobeBench/useLobeBench';
 import { useSavedContenders } from '@/features/LobeBench/useSavedContenders';
-import ModelSelect from '@/features/ModelSelect';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { agentEvalService } from '@/services/agentEval';
 import { useAiInfraStore } from '@/store/aiInfra';
@@ -140,7 +139,6 @@ const NewExperiment = memo(() => {
   const initialDataset =
     datasets?.find((item) => item.id === presetDatasetId) ||
     pickDefaultDataset(datasets, pickPrimaryBenchmark(benchmarks)?.id);
-  const primaryMeta = getBenchmarkMeta(pickPrimaryBenchmark(benchmarks));
   const getInitialDraft = (benchmarkId: string): ExperimentDraft => {
     // Hard 50 runs on the library: it starts from the library benchmark's defaults.
     const benchmark = settingsBenchmarkOf(benchmarks, benchmarkId);
@@ -182,10 +180,23 @@ const NewExperiment = memo(() => {
     workspaceId,
   });
   const currentDraft = draft ?? getInitialDraft(initialDataset?.benchmarkId ?? '');
-  const { contenders, judge, k, maxConcurrency, maxSteps, name, question, timeoutMinutes } =
-    currentDraft;
-  // One or more datasets: experiments and benchmarks are n to n.
-  const datasetIds = draftDatasetIds(currentDraft);
+  const { contenders, maxConcurrency, name, question } = currentDraft;
+  // An experiment is started on one or more benchmarks (experiments and benchmarks
+  // are n to n), never on a dataset by itself: a dataset the draft names stands for
+  // its benchmark, and each chosen benchmark runs every dataset it is made of.
+  const { datasetId: draftDatasetId, datasetIds: draftDatasetList } = currentDraft;
+  const draftIds = draftDatasetIds({ datasetId: draftDatasetId, datasetIds: draftDatasetList });
+  const { chosenBenchmarkIds, datasetIds } = useMemo(() => {
+    const chosen = benchmarkIdsOfDatasets(
+      datasets,
+      benchmarks,
+      draftDatasetIds({ datasetId: draftDatasetId, datasetIds: draftDatasetList }),
+    );
+    return {
+      chosenBenchmarkIds: chosen,
+      datasetIds: datasetIdsOfBenchmarks(datasets, benchmarks, chosen),
+    };
+  }, [benchmarks, datasets, draftDatasetId, draftDatasetList]);
   // A launch in progress: the experiment and run ids were fixed before the
   // first server call, so a failed start resumes against the same ids. While
   // one exists the form is locked, so a resume cannot change what is running.
@@ -206,14 +217,15 @@ const NewExperiment = memo(() => {
   const frozen = starting || !!launch;
   const setContenders = (update: (list: LobeBenchContender[]) => LobeBenchContender[]) =>
     updateDraft((value) => ({ ...value, contenders: update(value.contenders) }));
-  const datasetOptions = useMemo(
-    () => orderDatasetsForPicker(datasets, benchmarks),
-    [benchmarks, datasets],
-  );
-  // A dataset a benchmark is made of is offered as that benchmark (with the dataset's
-  // name when the benchmark has several); the rest are the account's loose datasets.
-  const benchmarkNames = useMemo(
-    () => new Map(rankableSetsOf(sortBenchmarks(benchmarks), datasets).map((s) => [s.id, s.name])),
+  // Only benchmarks are offered, each with the cases of all its datasets.
+  const benchmarkOptions = useMemo(
+    () =>
+      sortBenchmarks(benchmarks).flatMap((benchmark) => {
+        const madeOf = benchmarkDatasetsOf(datasets, benchmark);
+        return madeOf.length > 0
+          ? [{ benchmark, caseCount: madeOf.reduce((sum, d) => sum + caseCountOf(d), 0) }]
+          : [];
+      }),
     [benchmarks, datasets],
   );
 
@@ -237,6 +249,35 @@ const NewExperiment = memo(() => {
     [selected],
   );
   const partsReady = parts.length > 0;
+  // Every run on a benchmark is graded by the judge the benchmark was made with;
+  // an experiment cannot pick its own.
+  const judgeOf = (benchmarkId?: string) =>
+    getBenchmarkMeta(benchmarks.find((b) => b.id === benchmarkId)).judge;
+  const chosenJudges = chosenBenchmarkIds.flatMap((id) => {
+    const benchmark = benchmarks.find((b) => b.id === id);
+    const judge = judgeOf(id);
+    return benchmark ? [{ benchmark, judge }] : [];
+  });
+  // Every run on a benchmark also follows the run rules (attempts per case, step
+  // limit, timeout) the benchmark was made with. One experiment runs one set of
+  // rules: its page, estimate and leaderboard read a single k.
+  const protocolOfBenchmark = (benchmarkId?: string) =>
+    benchmarkProtocolOf(benchmarks.find((b) => b.id === benchmarkId));
+  const protocol = protocolOfBenchmark(chosenBenchmarkIds[0]);
+  const benchmarksWithoutStandard = chosenJudges.filter(
+    ({ benchmark, judge }) => !judge || !protocolOfBenchmark(benchmark.id),
+  );
+  const mixedRules = chosenBenchmarkIds.some((id) => {
+    const rules = protocolOfBenchmark(id);
+    return (
+      !!rules &&
+      !!protocol &&
+      (rules.k !== protocol.k ||
+        rules.maxSteps !== protocol.maxSteps ||
+        rules.timeoutMinutes !== protocol.timeoutMinutes)
+    );
+  });
+  const k = protocol?.k ?? 1;
   const caseCount = parts.reduce((sum, part) => sum + part.caseCount, 0);
   const attempts = caseCount * contenders.length * k;
   const availableModels = useMemo(
@@ -251,7 +292,13 @@ const NewExperiment = memo(() => {
     [enabledModels],
   );
   const invalid = draft && getInvalidDraftSelections(draft, [], availableModels);
-  const missingModels = modelsReady && (!!invalid?.contenders.length || !!invalid?.judge);
+  // A benchmark's judge must be one this account can call; it is never swapped for another.
+  const judgeUnavailable = chosenJudges.some(
+    ({ judge }) =>
+      !!judge &&
+      !availableModels.some((m) => m.model === judge.model && m.provider === judge.provider),
+  );
+  const missingModels = modelsReady && (!!invalid?.contenders.length || judgeUnavailable);
   const canStart =
     draftReady &&
     launchReady &&
@@ -260,7 +307,10 @@ const NewExperiment = memo(() => {
     contenders.length > 0 &&
     caseCount > 0 &&
     modelsReady &&
-    !missingModels;
+    !missingModels &&
+    !!protocol &&
+    !mixedRules &&
+    benchmarksWithoutStandard.length === 0;
   // Estimate from the newest completed run of each contender's model: its
   // per-case cost times the cases and attempts this experiment will make.
   const estimate = useMemo(() => {
@@ -288,18 +338,12 @@ const NewExperiment = memo(() => {
     topP: t('lobeBench.contender.settings.topP'),
   };
 
-  const providersInPlay = useMemo(
-    () =>
-      [
-        ...new Set([
-          ...contenders.map((c) => c.provider),
-          ...((judge ?? primaryMeta.judge)?.provider
-            ? [(judge ?? primaryMeta.judge)!.provider]
-            : []),
-        ]),
-      ].sort(),
-    [contenders, judge, primaryMeta.judge],
-  );
+  const providersInPlay = [
+    ...new Set([
+      ...contenders.map((c) => c.provider),
+      ...chosenJudges.flatMap(({ judge }) => (judge?.provider ? [judge.provider] : [])),
+    ]),
+  ].sort();
   const providersKey = providersInPlay.join(',');
   useEffect(() => {
     setProviderProblems([]);
@@ -344,29 +388,35 @@ const NewExperiment = memo(() => {
       datasetId: first.datasetId,
       ...(all.length > 1 && { parts: all }),
       ...(first.pickedDatasetId && { pickedDatasetId: first.pickedDatasetId }),
-      k,
+      k: protocol!.k,
       kind: LOBE_BENCH_KIND,
-      maxSteps: maxSteps ?? DEFAULT_MAX_STEPS,
+      maxSteps: protocol!.maxSteps,
       ...(question.trim() && { question: question.trim() }),
-      timeout: (timeoutMinutes ?? DEFAULT_TIMEOUT_MINUTES) * 60_000,
+      timeout: protocol!.timeoutMinutes * 60_000,
     };
   };
   const runConfigFor = (key: string, part: LobeBenchExperimentPart) => {
     const contender = contenders.find((c) => c.id === key);
     if (!contender) throw new Error(`Unknown contender ${key}`);
+    // The part's benchmark rules, frozen into the run like every other parameter.
+    const rules = protocolOfBenchmark(part.benchmarkId) ?? protocol!;
     return {
       ...(part.caseIds && {
         caseSelection: { caseIds: part.caseIds, mode: 'include' as const },
       }),
       ...(contender.chatConfig && { chatConfig: contender.chatConfig }),
-      ...(judge && { judgeModel: judge.model, judgeProvider: judge.provider }),
-      k,
+      // The part's benchmark judge, frozen into the run like every other parameter.
+      ...(judgeOf(part.benchmarkId) && {
+        judgeModel: judgeOf(part.benchmarkId)!.model,
+        judgeProvider: judgeOf(part.benchmarkId)!.provider,
+      }),
+      k: rules.k,
       ...(maxConcurrency && { maxConcurrency }),
-      maxSteps: maxSteps ?? DEFAULT_MAX_STEPS,
+      maxSteps: rules.maxSteps,
       model: contender.model,
       ...(contender.params && { params: contender.params }),
       provider: contender.provider,
-      timeout: (timeoutMinutes ?? DEFAULT_TIMEOUT_MINUTES) * 60_000,
+      timeout: rules.timeoutMinutes * 60_000,
     };
   };
 
@@ -551,9 +601,18 @@ const NewExperiment = memo(() => {
                   : t('lobeBench.new.confirm.costUnknown')}
               </Text>
               <Text type={'secondary'}>
-                {(judge ?? primaryMeta.judge)
-                  ? t('lobeBench.new.confirm.judge', { model: (judge ?? primaryMeta.judge)!.model })
-                  : t('lobeBench.new.confirm.judgeDefault')}
+                {chosenJudges
+                  .map(({ benchmark, judge }) => {
+                    const rules = protocolOfBenchmark(benchmark.id);
+                    return t('lobeBench.new.confirm.standardOf', {
+                      benchmark: benchmark.name,
+                      k: rules?.k ?? '—',
+                      maxSteps: rules?.maxSteps ?? '—',
+                      model: judge?.model ?? '—',
+                      timeout: rules?.timeoutMinutes ?? '—',
+                    });
+                  })
+                  .join(' · ')}
               </Text>
               <Text type={'secondary'}>{t('lobeBench.new.confirm.billing')}</Text>
             </Flexbox>
@@ -671,41 +730,21 @@ const NewExperiment = memo(() => {
             disabled={!draftReady || frozen}
             loading={!datasets}
             mode={'multiple'}
-            value={datasetIds}
+            value={chosenBenchmarkIds}
             variant={'filled'}
-            options={[
-              // The benchmarks (the whole library, Hard 50, the account's), then the
-              // account's datasets in no benchmark.
-              {
-                label: t('lobeBench.new.group.benchmarks'),
-                options: datasetOptions.filter(
-                  (d) => benchmarkNames.has(d.id) || !isCustomDataset(d),
-                ),
-              },
-              {
-                label: t('lobeBench.new.group.datasets'),
-                options: datasetOptions.filter(
-                  (d) => !benchmarkNames.has(d.id) && isCustomDataset(d),
-                ),
-              },
-            ]
-              .filter((group) => group.options.length > 0)
-              .map((group) => ({
-                label: group.label,
-                options: group.options.map((d) => ({
-                  label: (
-                    <Flexbox horizontal align={'center'} gap={8}>
-                      <span>{benchmarkNames.get(d.id) ?? d.name}</span>
-                      <span style={{ color: cssVar.colorTextQuaternary, fontSize: 12 }}>
-                        {t('lobeBench.new.dataset.cases', { count: caseCountOf(d) })}
-                      </span>
-                    </Flexbox>
-                  ),
-                  value: d.id,
-                })),
-              }))}
+            options={benchmarkOptions.map(({ benchmark, caseCount: count }) => ({
+              label: (
+                <Flexbox horizontal align={'center'} gap={8}>
+                  <span>{benchmark.name}</span>
+                  <span style={{ color: cssVar.colorTextQuaternary, fontSize: 12 }}>
+                    {t('lobeBench.new.dataset.cases', { count })}
+                  </span>
+                </Flexbox>
+              ),
+              value: benchmark.id,
+            }))}
             onChange={(value) => {
-              const ids = value as string[];
+              const ids = datasetIdsOfBenchmarks(datasets, benchmarks, value as string[]);
               updateDraft((current) => ({
                 ...current,
                 datasetId: ids[0],
@@ -725,7 +764,7 @@ const NewExperiment = memo(() => {
               }
             }}
           />
-          {draftReady && datasets && selected.length < datasetIds.length && (
+          {draftReady && datasets && draftIds.some((id) => !datasets.some((d) => d.id === id)) && (
             <Alert title={t('lobeBench.new.draft.datasetUnavailable')} type={'warning'} />
           )}
         </Flexbox>
@@ -805,27 +844,6 @@ const NewExperiment = memo(() => {
           </Text>
         </Flexbox>
 
-        <Flexbox gap={10}>
-          <span className={stylex.props(styles.step).className}>{t('lobeBench.new.step.k')}</span>
-          <Segmented
-            disabled={!draftReady || frozen}
-            value={String(k)}
-            options={K_OPTIONS.map((option) => ({
-              label:
-                option === 1
-                  ? t('lobeBench.new.k.once')
-                  : option === RANK_ATTEMPTS
-                    ? t('lobeBench.new.k.ranked', { k: option })
-                    : t('lobeBench.new.k.times', { k: option }),
-              value: String(option),
-            }))}
-            onChange={(value) => updateDraft({ k: Number(value) as ExperimentDraft['k'] })}
-          />
-          <Text fontSize={12} type={'secondary'}>
-            {t('lobeBench.new.k.hint', { k: RANK_ATTEMPTS })}
-          </Text>
-        </Flexbox>
-
         <Accordion
           defaultValue={[]}
           indicatorPlacement="inline"
@@ -834,30 +852,6 @@ const NewExperiment = memo(() => {
             {
               children: (
                 <Flexbox gap={16} style={{ paddingTop: 8 }}>
-                  <Flexbox gap={6}>
-                    <Text weight={500}>{t('lobeBench.new.maxSteps')}</Text>
-                    <InputNumber
-                      disabled={!draftReady || frozen}
-                      max={1000}
-                      min={1}
-                      style={{ width: '100%' }}
-                      value={maxSteps}
-                      variant={'filled'}
-                      onChange={(value) => updateDraft({ maxSteps: value as number | null })}
-                    />
-                  </Flexbox>
-                  <Flexbox gap={6}>
-                    <Text weight={500}>{t('lobeBench.new.timeout')}</Text>
-                    <InputNumber
-                      disabled={!draftReady || frozen}
-                      max={240}
-                      min={1}
-                      style={{ width: '100%' }}
-                      value={timeoutMinutes}
-                      variant={'filled'}
-                      onChange={(value) => updateDraft({ timeoutMinutes: value as number | null })}
-                    />
-                  </Flexbox>
                   <Flexbox gap={6}>
                     <Text weight={500}>{t('lobeBench.new.maxConcurrency')}</Text>
                     <Text fontSize={12} type={'secondary'}>
@@ -875,25 +869,6 @@ const NewExperiment = memo(() => {
                       onChange={(value) => updateDraft({ maxConcurrency: value as number | null })}
                     />
                   </Flexbox>
-                  <Flexbox gap={6}>
-                    <Text weight={500}>{t('lobeBench.new.judge')}</Text>
-                    <Text fontSize={12} type={'secondary'}>
-                      {t('lobeBench.new.judge.hint')}
-                    </Text>
-                    <ModelSelect
-                      allowClear
-                      disabled={!draftReady || frozen}
-                      value={judge}
-                      variant={'filled'}
-                      placeholder={
-                        primaryMeta.judge
-                          ? t('lobeBench.new.confirm.judge', { model: primaryMeta.judge.model })
-                          : t('lobeBench.new.confirm.judgeDefault')
-                      }
-                      onChange={(value) => updateDraft({ judge: value })}
-                      onClear={() => updateDraft({ judge: undefined })}
-                    />
-                  </Flexbox>
                 </Flexbox>
               ),
               key: 'advanced',
@@ -905,6 +880,15 @@ const NewExperiment = memo(() => {
         {missingModels && (
           <Alert title={t('lobeBench.new.draft.modelsUnavailable')} type={'warning'} />
         )}
+        {benchmarksWithoutStandard.length > 0 && (
+          <Alert
+            type={'error'}
+            title={t('lobeBench.new.standard.missing', {
+              name: benchmarksWithoutStandard.map(({ benchmark }) => benchmark.name).join(', '),
+            })}
+          />
+        )}
+        {mixedRules && <Alert title={t('lobeBench.new.standard.mixed')} type={'error'} />}
         {providerProblems.length > 0 && (
           <Alert
             title={t('lobeBench.new.providerKeyMissing', { provider: providerProblems.join(', ') })}

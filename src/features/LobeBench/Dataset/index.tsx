@@ -3,7 +3,7 @@
 import { Button, confirmModal, Empty, Flexbox, Tag, Text, toast } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { ImportIcon, Pencil, Play, Trash2 } from 'lucide-react';
+import { ImportIcon, Pencil, Trash2 } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
@@ -159,30 +159,26 @@ const LobeBenchDataset = memo(() => {
         <Flexbox horizontal gap={8} wrap={'wrap'}>
           <Button
             icon={ImportIcon}
-            onClick={() =>
-              importDataset({
-                benchmarkId: dataset.benchmarkId ?? undefined,
-              })
-            }
+            type={count === 0 ? 'primary' : 'default'}
+            onClick={() => importDataset()}
           >
             {t('dataset.import.package.asNew')}
-          </Button>
-          <Button
-            disabled={count === 0}
-            icon={Play}
-            type={'primary'}
-            onClick={() => navigate(`${LOBE_BENCH_PATH}/experiments/new?dataset=${dataset.id}`)}
-          >
-            {t('lobeBench.picks.run')}
           </Button>
           {own && (
             <>
               <Button icon={Pencil} onClick={() => openRenameDatasetModal(dataset)}>
                 {t('lobeBench.picks.rename')}
               </Button>
-              <Button danger icon={Trash2} onClick={remove}>
-                {t('lobeBench.picks.delete')}
-              </Button>
+              {/* One in a benchmark is deleted with the benchmark, which keeps it. */}
+              {dataset.benchmarkId ? (
+                <Button disabled icon={Trash2} title={t('lobeBench.dataset.deleteInBenchmark')}>
+                  {t('lobeBench.picks.delete')}
+                </Button>
+              ) : (
+                <Button danger icon={Trash2} onClick={remove}>
+                  {t('lobeBench.picks.delete')}
+                </Button>
+              )}
             </>
           )}
         </Flexbox>
