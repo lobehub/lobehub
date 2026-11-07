@@ -120,7 +120,18 @@ describe('ClientLLMTransport.stream · conversation affinity', () => {
     expect(chatService.getChatCompletion).toHaveBeenCalledTimes(2);
     for (const [, options] of vi.mocked(chatService.getChatCompletion).mock.calls) {
       expect(options?.topicId).toBe('topic-1');
+      // The summary's usage groups with the run that compressed its context.
+      expect(options?.operationId).toBe('op-1');
     }
+  });
+});
+
+describe('ClientLLMTransport.runAttempt · usage attribution', () => {
+  it('sends the run operation id so the call usage groups with its run', async () => {
+    vi.mocked(chatService.getChatCompletion).mockClear();
+    await createTransport().transport.runAttempt(input);
+
+    expect(vi.mocked(chatService.getChatCompletion).mock.calls[0][1]?.operationId).toBe('op-1');
   });
 });
 

@@ -1,6 +1,7 @@
 import { stripAssistantReasoningForReplay } from '@lobechat/agent-runtime';
 import {
   REQUEST_AGENT_ID_HEADER,
+  REQUEST_OPERATION_ID_HEADER,
   REQUEST_TOPIC_ID_HEADER,
   REQUEST_TRIGGER_HEADER,
 } from '@lobechat/const';
@@ -310,7 +311,7 @@ class ChatService {
   mapChatTrace = (trace?: TracePayload): TracePayload => this.mapTrace(trace, TraceTagMap.Chat);
 
   getChatCompletion = async (params: Partial<ChatStreamPayload>, options?: FetchOptions) => {
-    const { agentId, metadata, signal, responseAnimation, topicId } = options ?? {};
+    const { agentId, metadata, operationId, signal, responseAnimation, topicId } = options ?? {};
     const requestTrigger = metadata?.trigger;
 
     const { provider = ModelProvider.OpenAI, ...res } = params;
@@ -421,6 +422,7 @@ class ChatService {
         ...(agentId && { [REQUEST_AGENT_ID_HEADER]: agentId }),
         ...(requestTrigger && { [REQUEST_TRIGGER_HEADER]: requestTrigger }),
         ...(topicId && { [REQUEST_TOPIC_ID_HEADER]: topicId }),
+        ...(operationId && { [REQUEST_OPERATION_ID_HEADER]: operationId }),
       },
       provider,
     });

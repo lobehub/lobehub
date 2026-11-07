@@ -1,5 +1,5 @@
 import { PROJECT_MEMBER_ROLES, type ProjectMemberRole } from '@lobechat/types';
-import { Flexbox, Select, Text } from '@lobehub/ui';
+import { Flexbox, Select, Tag, Text } from '@lobehub/ui';
 import { useTranslation } from 'react-i18next';
 
 import UserAvatar from '@/components/UserAvatar';
@@ -7,11 +7,13 @@ import type { ProjectMemberItem } from '@/services/projectReview';
 
 interface MemberRowProps {
   busy: boolean;
+  /** Tags the project creator, whose row would otherwise look like any member's. */
+  isCreator?: boolean;
   member: ProjectMemberItem;
   onRoleChange: (role: ProjectMemberRole | null) => void;
 }
 
-export function MemberRow({ busy, member, onRoleChange }: MemberRowProps) {
+export function MemberRow({ busy, isCreator, member, onRoleChange }: MemberRowProps) {
   const { t } = useTranslation('project');
   const name = member.user?.name ?? member.userId;
   return (
@@ -25,6 +27,7 @@ export function MemberRow({ busy, member, onRoleChange }: MemberRowProps) {
           </Text>
         )}
       </Flexbox>
+      {isCreator && <Tag>{t('settings.creator')}</Tag>}
       <Select
         aria-label={t('review.members.roleOf', { name })}
         disabled={busy}

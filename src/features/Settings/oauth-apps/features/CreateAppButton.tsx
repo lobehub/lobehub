@@ -11,7 +11,8 @@ import { useOAuthAppStore } from '@/store/oauthApp';
 import { createOAuthAppModal } from './CreateAppModal';
 import { showClientSecretModal } from './SecretModal';
 
-const CreateAppButton = () => {
+/** `small` sits in the settings navigation header, like the other header actions. */
+const CreateAppButton = ({ size }: { size?: 'small' }) => {
   const { t } = useTranslation('auth');
   const { allowed: hasEditPermission, reason } = usePermission('create_content');
   const activeWorkspaceId = useActiveWorkspaceId();
@@ -42,7 +43,7 @@ const CreateAppButton = () => {
   };
 
   return (
-    <Button disabled={!canEdit} title={reason} type={'primary'} onClick={handleCreate}>
+    <Button disabled={!canEdit} size={size} title={reason} type={'primary'} onClick={handleCreate}>
       {t('oauthApp.list.actions.create')}
     </Button>
   );

@@ -105,6 +105,18 @@ describe('mergeLinearSyncResults', () => {
     expect(merged.skipped).toEqual([skipped('A'), skipped('B')]);
   });
 
+  it('adds up tasks archived across rounds, whichever kind of round it was', () => {
+    for (const resumed of [true, false]) {
+      expect(
+        mergeLinearSyncResults(result({ archived: 2 }), result({ archived: 3 }), { resumed })
+          .archived,
+      ).toBe(5);
+    }
+    expect(
+      mergeLinearSyncResults(result({}), result({}), { resumed: true }).archived,
+    ).toBeUndefined();
+  });
+
   it('takes what a pass from the start saw from it alone', () => {
     expect(
       mergeLinearSyncResults(

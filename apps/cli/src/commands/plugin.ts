@@ -5,8 +5,11 @@ import { getTrpcClient } from '../api/client';
 import { confirm, outputJson, printTable, truncate } from '../utils/format';
 import { log } from '../utils/logger';
 
-export function registerPluginCommand(program: Command) {
-  const plugin = program.command('plugin').description('Manage plugins');
+export function registerLegacyPluginCommand(program: Command) {
+  const plugin = program
+    .command('legacy-plugin')
+    .alias('plugin')
+    .description('Manage legacy 1.0 plugins (user_installed_plugins)');
 
   // ── list ──────────────────────────────────────────────
 
