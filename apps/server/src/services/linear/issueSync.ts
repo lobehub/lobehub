@@ -512,13 +512,19 @@ export class LinearIssueSyncService {
       // Counted before closing: with no link, a retry would be another copy.
       options.duplicates.set(issue.id, duplicate);
       result.created += 1;
+      let copy = duplicate;
       if (closed) {
         try {
-          await this.close(duplicate, issue.state.type);
+          copy = (await this.close(duplicate, issue.state.type)) ?? duplicate;
         } catch (error) {
           log('close duplicate of %s failed: %O', issue.identifier, error);
           skip(result, issue.identifier, 'duplicateNotClosed');
         }
+      }
+      // Like a first import, but with no link to record the archive on: a copy
+      // is never read again, so this one try is all it gets.
+      if (issue.archivedAt && (await this.archiveCopy(copy, issue.archivedAt))) {
+        result.archived = (result.archived ?? 0) + 1;
       }
       return;
     }
@@ -720,6 +726,27 @@ export class LinearIssueSyncService {
       { userId: this.userId },
     );
     return skippedRunning ? undefined : updated;
+  }
+
+  /** Archive an unlinked copy at Linear's time, under the rules of a manual archive. */
+  private async archiveCopy(task: TaskItem, archivedAt: string): Promise<boolean> {
+    try {
+      const inOpenGoal = await findTasksInOpenGoals(
+        this.db,
+        { userId: this.userId, workspaceId: this.workspaceId },
+        [task],
+      );
+      if (inOpenGoal.size > 0) return false;
+      const [archived] = await new TaskArchiveModel(
+        this.db,
+        this.userId,
+        this.workspaceId,
+      ).archiveMany([task.id], { at: sql`${archivedAt}::timestamptz` });
+      return !!archived;
+    } catch (error) {
+      log('archive copy %s failed: %O', task.id, error);
+      return false;
+    }
   }
 
   /**

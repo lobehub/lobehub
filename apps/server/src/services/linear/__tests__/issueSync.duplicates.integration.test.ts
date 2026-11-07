@@ -216,6 +216,20 @@ describe('LinearIssueSyncService.importIssues duplicates (real PostgreSQL)', () 
     expect(copy).toMatchObject({ projectId: project.id, status: 'completed' });
   });
 
+  it('archives the copy of an archived issue at the time Linear did', async () => {
+    const archivedAt = '2026-10-03T00:00:00.000Z';
+    serve([issue({ archivedAt, id: '1', state: { name: 'Done', type: 'completed' } })]);
+    await service().importIssues(TOKEN, ['1']);
+    const [link] = await links();
+
+    const result = await service().importIssues(TOKEN, ['1'], { importDuplicates: true });
+
+    const copy = (await taskRows()).find((row) => row.id !== link.taskId)!;
+    expect(result).toMatchObject({ archived: 1, created: 1 });
+    expect(copy.archivedAt?.toISOString()).toBe(archivedAt);
+    expect(link.metadata?.appliedArchivedAt).toBe(archivedAt);
+  });
+
   it('counts a copy it could not close, so the run does not read as a retry', async () => {
     serve([issue({ id: '1', state: { name: 'Done', type: 'completed' } })]);
     const sync = service();
