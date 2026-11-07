@@ -11,18 +11,21 @@
  * - `provider_managed`: the provider is registered, so its accounts are opened
  *   through `provision`, never mounted from caller-supplied handles.
  * - `provider_owned_field`: the patch names a field the provider owns.
+ * - `invalid_settings`: the patch's settings are not a shape this build accepts.
  * - `reply_target_not_owned`: the message named as a reply target lives in
  *   another account's inbox, so answering it would send as that account.
  */
 export type AgentAccountErrorCode =
   | 'capabilities_required'
   | 'identifier_taken'
+  | 'invalid_settings'
   | 'provider_managed'
   | 'provider_owned_field'
   | 'reply_target_not_owned';
 
 const INVALID_REQUEST_CODES = new Set<AgentAccountErrorCode>([
   'capabilities_required',
+  'invalid_settings',
   'provider_managed',
   'provider_owned_field',
   'reply_target_not_owned',
