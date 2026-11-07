@@ -18,6 +18,7 @@ import { MemberAvatar } from './MemberAvatar';
 import { MEMBER_FLOAT_BREAKPOINT, MemberPanel } from './MemberPanel';
 import { MemberStatus } from './MemberStatus';
 import { DirectReplyStatus } from './ReplyActivity';
+import { type ReplyTopic, ReplyTopicPanel } from './ReplyTopicPanel';
 import { styles } from './styles';
 import { THREAD_FLOAT_BREAKPOINT, ThreadPanel } from './ThreadPanel';
 import { useThreadPanel } from './useThreadPanel';
@@ -39,11 +40,17 @@ function EnabledChannelPage() {
   const directAgent = detail?.channel.agentId
     ? detail.members.find((member) => member.agentId === detail.channel.agentId)
     : undefined;
+  const [topic, setTopic] = useState<(ReplyTopic & { channelId: string }) | null>(null);
   const membersOpen =
     !!detail?.channel.workspaceId &&
     membersChannelId === channelId &&
     !panel.threadId &&
     !panel.draft;
+  // One side panel at a time: a thread or the member list replaces the topic.
+  const openTopic =
+    topic?.channelId === channelId && !panel.threadId && !panel.draft && !membersOpen
+      ? topic
+      : null;
   if (!channelId) return null;
 
   return (
@@ -69,7 +76,10 @@ function EnabledChannelPage() {
                       id: memberPanelId,
                       open: membersOpen,
                       onToggle: () => {
-                        if (!membersOpen) panel.close();
+                        if (!membersOpen) {
+                          panel.close();
+                          setTopic(null);
+                        }
                         setMembersChannelId(membersOpen ? null : channelId);
                       },
                     }
@@ -86,10 +96,22 @@ function EnabledChannelPage() {
           inert={
             (!!(panel.threadId || panel.draft) &&
               (conversationWidth ?? 1000) < THREAD_FLOAT_BREAKPOINT) ||
-            (membersOpen && (conversationWidth ?? 1000) < MEMBER_FLOAT_BREAKPOINT)
+            (membersOpen && (conversationWidth ?? 1000) < MEMBER_FLOAT_BREAKPOINT) ||
+            (!!openTopic && (conversationWidth ?? 1000) < THREAD_FLOAT_BREAKPOINT)
           }
-          onOpenThread={panel.openThread}
-          onStartThread={panel.openDraft}
+          onOpenThread={(threadId, toggle) => {
+            setTopic(null);
+            panel.openThread(threadId, toggle);
+          }}
+          onOpenTopic={(next) => {
+            panel.close();
+            setMembersChannelId(null);
+            setTopic({ ...next, channelId });
+          }}
+          onStartThread={(draft) => {
+            setTopic(null);
+            panel.openDraft(draft);
+          }}
         />
         {detail && membersOpen && (
           <MemberPanel
@@ -99,6 +121,11 @@ function EnabledChannelPage() {
             onClose={() => setMembersChannelId(null)}
           />
         )}
+        <ReplyTopicPanel
+          availableWidth={conversationWidth}
+          topic={openTopic}
+          onClose={() => setTopic(null)}
+        />
         {detail && (
           <ThreadPanel
             availableWidth={conversationWidth}
