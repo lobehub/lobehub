@@ -746,5 +746,49 @@ describe('DocumentReviewModel', () => {
           .where(eq(documentReviewSessions.documentId, documentId)),
       ).toEqual([]);
     });
+
+    it('waits for an uncommitted transfer before creating a rule set', async () => {
+      // `createRuleSet` takes the same parent-document lock before it compares
+      // the workspace. A rule set written from the workspace the document is
+      // leaving would survive the transfer and stay readable there, so the
+      // create has to wait on the locked row and then fail the comparison.
+      // Gated the same way as the session case above, so the overlap cannot be
+      // missed.
+      let releaseTransfer = () => {};
+      const released = new Promise<void>((resolve) => {
+        releaseTransfer = resolve;
+      });
+      let signalLocked = () => {};
+      const locked = new Promise<void>((resolve) => {
+        signalLocked = resolve;
+      });
+
+      const transfer = serverDB.transaction(async (trx) => {
+        await trx
+          .update(documents)
+          .set({ workspaceId: otherWorkspaceId })
+          .where(eq(documents.id, documentId));
+        signalLocked();
+        await released;
+      });
+      await locked;
+
+      const created = model.createRuleSet({ documentId, title: 'x' }).then(
+        () => null,
+        (error: Error) => error,
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      releaseTransfer();
+      await transfer;
+
+      expect((await created)?.message).toBe(DOCUMENT_REVIEW_DOCUMENT_NOT_FOUND);
+      expect(
+        await serverDB
+          .select({ id: documentReviewRuleSets.id })
+          .from(documentReviewRuleSets)
+          .where(eq(documentReviewRuleSets.documentId, documentId)),
+      ).toEqual([]);
+    });
   });
 });
