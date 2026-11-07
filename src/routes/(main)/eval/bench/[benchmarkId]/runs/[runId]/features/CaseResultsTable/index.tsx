@@ -25,6 +25,7 @@ import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import SegmentBar from '@/routes/(main)/eval/features/SegmentBar';
 
 import { getResumeTarget } from '../resumeTarget';
+import { type ThreadVerdict, threadVerdict } from './threadVerdict';
 
 const styles = createStaticStyles(({ css }) => ({
   caseLink: css`
@@ -199,56 +200,47 @@ const StatusBadge = memo<{ record: any }>(({ record }) => {
   return <Badge status="default" text={<BadgeText>{status}</BadgeText>} />;
 });
 
-/**
- * K dots for thread pass/fail: green=passed, red=failed, orange=error, gray=pending
- */
-const ThreadDots = memo<{ threads: EvalThreadResult[] }>(({ threads }) => (
-  <Flexbox horizontal align="center" gap={4}>
-    {threads.map((thread) => {
-      let color: string = cssVar.colorTextTertiary;
+/** One dot per attempt, in the summary chips' colours: passed, failed, error, pending. */
+const THREAD_COLORS: Record<ThreadVerdict, string> = {
+  completed: cssVar.colorInfo,
+  error: cssVar.colorWarning,
+  external: cssVar.colorWarning,
+  failed: cssVar.colorError,
+  passed: cssVar.colorSuccess,
+  pending: cssVar.colorTextQuaternary,
+  running: cssVar.colorPrimary,
+  timeout: cssVar.colorWarning,
+};
 
-      if (thread.status === 'running') {
-        color = cssVar.colorPrimary;
-      } else if (thread.status === 'error') {
-        color = cssVar.colorError;
-      } else if (thread.passed === true) {
-        color = cssVar.colorSuccess;
-      } else if (thread.passed === false) {
-        color = cssVar.colorError;
-      }
+const THREAD_LABEL_KEYS = {
+  completed: 'run.status.completed',
+  error: 'table.filter.error',
+  external: 'run.status.external',
+  failed: 'table.filter.failed',
+  passed: 'table.filter.passed',
+  pending: 'run.status.pending',
+  running: 'run.status.running',
+  timeout: 'run.status.timeout',
+} as const satisfies Record<ThreadVerdict, string>;
 
-      if (thread.status === 'external') {
-        color = cssVar.colorWarning;
-      }
-
-      if (thread.status === 'completed') {
-        color = cssVar.colorPrimary;
-      }
-
-      const label = thread.error
-        ? 'error'
-        : thread.status === 'error'
-          ? 'error'
-          : thread.status === 'running'
-            ? 'running'
-            : thread.passed === true
-              ? 'passed'
-              : thread.passed === false && thread.status !== 'completed'
-                ? 'failed'
-                : thread.status === 'external'
-                  ? 'Awaiting for external evaluation'
-                  : thread.status === 'completed'
-                    ? 'completed'
-                    : 'pending';
-
-      return (
-        <Tooltip key={thread.threadId} title={label}>
-          <span className={styles.threadDot} style={{ backgroundColor: color }} />
-        </Tooltip>
-      );
-    })}
-  </Flexbox>
-));
+const ThreadDots = memo<{ threads: EvalThreadResult[] }>(({ threads }) => {
+  const { t } = useTranslation('eval');
+  return (
+    <Flexbox horizontal align="center" gap={4}>
+      {threads.map((thread) => {
+        const verdict = threadVerdict(thread);
+        return (
+          <Tooltip key={thread.threadId} title={t(THREAD_LABEL_KEYS[verdict])}>
+            <span
+              className={styles.threadDot}
+              style={{ backgroundColor: THREAD_COLORS[verdict] }}
+            />
+          </Tooltip>
+        );
+      })}
+    </Flexbox>
+  );
+});
 
 const DurationCell = memo<{ ms: number }>(({ ms }) => {
   const sec = ms / 1000;
