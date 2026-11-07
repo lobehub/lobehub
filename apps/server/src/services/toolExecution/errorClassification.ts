@@ -184,6 +184,15 @@ const GENERIC_ERROR_CODES = new Set([
 ]);
 
 /**
+ * The marketplace rejects a call made on behalf of an owner account (for
+ * example a workspace) whose member list does not include the caller. Retrying
+ * cannot fix it, but a member resync by the owner's administrator can.
+ */
+const ACT_AS_DENIED_SIGNAL = 'no_permission_to_act_as';
+const ACT_AS_DENIED_HINT =
+  'Do not retry this call or work around it. The signed-in user is not recognised as a member of the workspace that owns this resource in the skill marketplace. Stop the affected operation and tell the user: ask a workspace administrator to resync the workspace members with the marketplace (workspace settings), then run the task again. If the error persists after a resync, contact support with this error.';
+
+/**
  * A transport refusal must explain the next action in the model-visible content.
  * A bare 403 cannot identify whether authorization or request filtering rejected
  * the call, so never infer a content policy or a matched rule from its message.
@@ -210,12 +219,24 @@ export const getToolAccessDeniedError = (error: unknown, fallbackMessage: string
     return;
   }
 
+  const actAsDenied = [
+    message,
+    raw?.error,
+    raw?.code,
+    nested?.error,
+    nested?.code,
+    toRecord(raw?.errorBody)?.error,
+  ].some(
+    (value) => typeof value === 'string' && value.toLowerCase().includes(ACT_AS_DENIED_SIGNAL),
+  );
+
   return {
     code: code && !GENERIC_ERROR_CODES.has(code) ? code : 'FORBIDDEN',
     doc_url: pickString(raw?.doc_url) || pickString(nested?.doc_url),
     hint:
       pickString(raw?.hint) ||
       pickString(nested?.hint) ||
+      (actAsDenied ? ACT_AS_DENIED_HINT : undefined) ||
       'Do not retry this call, switch tools or paths, encode/split its arguments, or run permission/directory probes to work around the refusal. Stop the affected operation and report this error. Ask the user or administrator to check tool permissions and upstream request filtering; do not make diagnostic tool calls unless explicitly asked to investigate. The upstream response did not identify the blocking rule.',
     kind: 'stop' as const,
     message,
