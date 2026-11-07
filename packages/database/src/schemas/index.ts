@@ -28,6 +28,7 @@ export * from './device';
 export * from './documentComment';
 export * from './documentHistory';
 export * from './documentLike';
+export * from './documentReview';
 export * from './documentShare';
 export * from './environment';
 export * from './environmentInstance';

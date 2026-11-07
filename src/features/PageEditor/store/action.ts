@@ -11,7 +11,13 @@ import { getElectronStoreState } from '@/store/electron';
 import { electronSyncSelectors } from '@/store/electron/selectors';
 import { useFileStore } from '@/store/file';
 
-import { type PendingCommentAnchor, type RightPanelMode, type State } from './initialState';
+import {
+  type PendingCommentAnchor,
+  type ReviewCheckFilter,
+  type ReviewTab,
+  type RightPanelMode,
+  type State,
+} from './initialState';
 import { initialState } from './initialState';
 
 const log = debug('page:editor');
@@ -55,6 +61,8 @@ export interface Action {
   ) => void;
   /** Hand a captured body selection to the comment composer, or clear it (`undefined`). */
   setPendingCommentAnchor: (pending: PendingCommentAnchor | undefined) => void;
+  setReviewCheckFilter: (filter: ReviewCheckFilter) => void;
+  setReviewTab: (tab: ReviewTab) => void;
   setRightPanelMode: (mode: RightPanelMode) => void;
   setTitle: (title: string) => void;
   /**
@@ -65,6 +73,8 @@ export interface Action {
    * characters typed since the last save.
    */
   syncMeta: (title?: string, emoji?: string) => void;
+  /** Open/close one rule in the review checklist; the panel keeps this per page. */
+  toggleReviewCheckExpanded: (id: string) => void;
   triggerDebouncedMetaSave: () => void;
 }
 
@@ -237,8 +247,9 @@ export const store: (initState?: Partial<State>) => StateCreator<Store> =
       setDocumentId: (documentId) => {
         if (get().documentId === documentId) return;
         // A restored anchored draft or a fresh pick reopens it for the new
-        // document; nothing here to show it for should not carry over.
-        set({ commentsPanelOpen: false, documentId });
+        // document; nothing here to show it for should not carry over. The same
+        // goes for review rows: a rule id from the previous page means nothing.
+        set({ commentsPanelOpen: false, documentId, reviewExpandedIds: [] });
       },
 
       setEmoji: (emoji: string | undefined) => {
@@ -287,8 +298,25 @@ export const store: (initState?: Partial<State>) => StateCreator<Store> =
         }));
       },
 
+      setReviewCheckFilter: (reviewCheckFilter) => {
+        set({ reviewCheckFilter });
+      },
+
+      setReviewTab: (reviewTab) => {
+        set({ reviewTab });
+      },
+
       setRightPanelMode: (rightPanelMode) => {
         set({ rightPanelMode });
+      },
+
+      toggleReviewCheckExpanded: (id) => {
+        const current = get().reviewExpandedIds;
+        set({
+          reviewExpandedIds: current.includes(id)
+            ? current.filter((item) => item !== id)
+            : [...current, id],
+        });
       },
 
       setTitle: (title: string) => {

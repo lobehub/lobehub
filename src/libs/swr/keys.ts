@@ -215,6 +215,23 @@ export const documentLikeKeys = {
   ]),
 };
 
+export const documentReviewKeys = {
+  /** The document's review sessions; the panel selects the newest by default. */
+  sessions: def('documentReview:sessions', (documentId: string) => [
+    'documentReview:sessions',
+    documentId,
+  ]),
+  /** One session with its impacts, check results and rule set. */
+  sessionDetail: def('documentReview:sessionDetail', (sessionId: string) => [
+    'documentReview:sessionDetail',
+    sessionId,
+  ]),
+  ruleSets: def('documentReview:ruleSets', (documentId: string) => [
+    'documentReview:ruleSets',
+    documentId,
+  ]),
+};
+
 export const isDocumentCommentKeyForEvent = (
   key: unknown,
   event: { documentId: string; rootCommentId?: string; workspaceId: string },
@@ -1075,6 +1092,7 @@ export const swrKeys = {
   acceptanceComment: acceptanceCommentKeys,
   documentComment: documentCommentKeys,
   documentLike: documentLikeKeys,
+  documentReview: documentReviewKeys,
   topicAction: topicActionKeys,
   user: userKeys,
   userMemory: userMemoryKeys,

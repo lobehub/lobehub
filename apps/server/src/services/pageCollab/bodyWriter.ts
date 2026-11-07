@@ -1,6 +1,7 @@
 import {
   alignLiteXMLBlocks,
   diffLiteXMLBlocks,
+  EditorRuntime,
   type ModifyOperation,
 } from '@lobechat/editor-runtime';
 import type { HeadlessEditor, HeadlessLiteXMLOperation } from '@lobehub/editor/headless';
@@ -13,6 +14,7 @@ import {
 } from '@/server/services/agentDocuments/headlessEditor';
 import type { DocumentService } from '@/server/services/document';
 import type { UpdateDocumentParams, UpdateDocumentResult } from '@/server/services/document/types';
+import { countQuoteOccurrences, textFromEditorData } from '@/server/services/review/textExtract';
 
 import { isPageCollabEnabled } from './config';
 import type { SerializedEditor } from './editorData';
@@ -26,6 +28,8 @@ export interface PageBody {
   /** The room carries the title too; one written only to the row would be projected over. */
   title?: string;
 }
+
+type EditorRuntimeEditorParam = Parameters<EditorRuntime['setEditor']>[0];
 
 const toHeadlessOperation = (operation: ModifyOperation): HeadlessLiteXMLOperation => {
   if (operation.action === 'modify') return { action: 'replace', litexml: operation.litexml };
@@ -92,6 +96,86 @@ export const writePageBodyThroughRoom = async (
 
         await session.commit();
         return true;
+      } finally {
+        session.draft.destroy();
+      }
+    }),
+  );
+};
+
+export interface TextReplacementResult {
+  /**
+   * The anchor now matches more than once in the live draft, so nothing was
+   * written: picking the first match could rewrite a passage the caller never
+   * meant to touch.
+   */
+  ambiguous?: boolean;
+  content: string;
+  replacementCount: number;
+}
+
+/**
+ * Runs one text replacement on an editor, through the same runtime path the page
+ * tools use, and exports the body it produced.
+ */
+const replaceTextInDraft = async (
+  editor: HeadlessEditor,
+  documentId: string,
+  { newText, searchText }: { newText: string; searchText: string },
+): Promise<TextReplacementResult> => {
+  // The caller validated the anchor against the stored snapshot, which can lag the
+  // draft by the projection delay. An occurrence typed since then makes the anchor
+  // ambiguous here even though the row still held exactly one, and `replaceText`
+  // with `replaceAll: false` would rewrite the first match — possibly the new one.
+  // Count on the draft itself, the body this write is about to change.
+  const draft = editor.export();
+  if (countQuoteOccurrences(textFromEditorData(draft.editorData), searchText) > 1) {
+    return { ambiguous: true, content: draft.markdown, replacementCount: 0 };
+  }
+
+  const runtime = new EditorRuntime();
+  runtime.setEditor(editor.kernel as unknown as EditorRuntimeEditorParam);
+  runtime.setCurrentDocId(documentId);
+
+  const result = await runtime.replaceText({ newText, replaceAll: false, searchText });
+  const exported = editor.export();
+
+  return { content: exported.markdown, replacementCount: result.replacementCount };
+};
+
+/**
+ * Applies one targeted text replacement to the page's live room draft.
+ *
+ * The draft is the page while somebody has it open: the row lags it by the
+ * projection delay, so a caller that hydrates a stored snapshot, replaces the text
+ * and writes the whole body back would diff the room against that stale snapshot
+ * and revert every edit made in the meantime. Replacing the text on the draft
+ * itself merges with those edits instead of overwriting them.
+ *
+ * Resolves undefined when the page has no live room: the caller edits the row as
+ * before, and a room opened later seeds itself from it.
+ */
+export const replaceTextThroughRoom = async (
+  db: LobeChatDatabase,
+  documentId: string,
+  replacement: { newText: string; searchText: string },
+  writer: PageWriter,
+): Promise<TextReplacementResult | undefined> => {
+  if (!isPageCollabEnabled()) return undefined;
+
+  return runPageExclusive(documentId, () =>
+    withHeadlessEditorLock(async () => {
+      const session = await new RoomPageSessions(db, writer).openLiveSession(documentId);
+      if (!session) return undefined;
+
+      try {
+        const result = await replaceTextInDraft(session.draft.editor, documentId, replacement);
+        // Ambiguous: the caller rejects it against the unchanged page.
+        if (result.ambiguous) return result;
+        // A zero count means the anchor is gone, so there is nothing to merge back;
+        // the caller reports it as ANCHOR_LOST against the unchanged page.
+        if (result.replacementCount > 0) await session.commit();
+        return result;
       } finally {
         session.draft.destroy();
       }
