@@ -53,6 +53,7 @@ export const ChannelMessage = ({
   onStartThread,
   onReply,
   onJumpToMessage,
+  pending = false,
 }: {
   continuation?: boolean;
   /** For a message the server has not confirmed: its send status, in place of routing. */
@@ -65,6 +66,8 @@ export const ChannelMessage = ({
   onStartThread?: (draft: ChannelThreadDraft) => void;
   onReply?: (message: ChannelPublicMessage) => void;
   onJumpToMessage?: (message: ChannelReplyTarget) => void;
+  /** Sent from this tab and not yet confirmed by the server. */
+  pending?: boolean;
   threadId?: string | null;
 }) => {
   const { t, i18n } = useTranslation('channel');
@@ -104,6 +107,7 @@ export const ChannelMessage = ({
     .filter(Boolean);
   return (
     <div
+      aria-busy={pending || undefined}
       aria-label={message.author.name || t('deletedMember')}
       data-continuation={compact || undefined}
       data-message-id={message.id}
@@ -112,6 +116,7 @@ export const ChannelMessage = ({
         styles.messageRow,
         compact && (onReply || canBranch) && styles.continuationWithAction,
         highlighted && styles.highlightedMessage,
+        pending && styles.pendingMessage,
         stylex.defaultMarker(),
       )}
     >
