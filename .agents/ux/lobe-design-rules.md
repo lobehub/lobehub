@@ -137,3 +137,9 @@ Source: the Channel composer audit checked internal asymmetry and button weight 
 Reply is the primary Channel message action. Replying to a person only posts a quoted message in the current feed, with no Agent dispatch or new thread, even if the text mentions Agents. Replying to an Agent on the main feed atomically creates/reuses a thread rooted at that Agent's answer and sends the continuation there. The target Agent and explicitly mentioned Agents participate; unrelated Agents do not join. Inside a thread, keep replies in that thread and retain existing participants. Opening or cancelling reply mode never persists an empty thread.
 
 Source: user correction of the proposed in-channel reply semantics (2026-10-31).
+
+## LOBE-UX-020 — Design a settings panel's groups together, each on its own titled surface
+
+When users cannot tell the parts of a settings panel apart, regroup the whole panel instead of patching the one group they named. Group rows by what they affect (context, chat behavior, model params, a second owner such as sub-agents), give every group the same treatment — a `Block variant="filled"` card whose title is the strongest text inside it — and add a model name or a one-line scope note where two groups share labels. Giving only one group a surface makes the rest read as one lump; reordering under a muted title does not separate identically named rows. Judge it on a full-panel screenshot in light and dark.
+
+Source: user rejections of the Agent params panel — round 1 reordered the sub-agent block under a grey title (“位置没问题了，但是我感觉还是有点难于区分”), round 2 carded only the sub-agent group (“现在感觉还是一坨（除了这个 subagent，它单独有一个背景）整体一起设计掉吧”), 2026-11-03/04.

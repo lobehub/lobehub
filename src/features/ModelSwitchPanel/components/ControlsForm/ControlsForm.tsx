@@ -77,6 +77,11 @@ interface ControlsFormProps {
    * as explicit per-sub-agent overrides.
    */
   hideReasoningParams?: boolean;
+  /**
+   * Class for each field label. The params panel passes its own row-label class
+   * so these fields read like the panel's other settings, below its card titles.
+   */
+  labelClassName?: string;
   model?: string;
   /**
    * Override the write sink. Defaults to updating the agent's chatConfig; the
@@ -112,6 +117,7 @@ const ControlsForm = memo<ControlsFormProps>(
     chatConfig: chatConfigProp,
     disabled,
     hideReasoningParams,
+    labelClassName,
     model: modelProp,
     onChatConfigChange,
     onUpdatingChange,
@@ -656,7 +662,12 @@ const ControlsForm = memo<ControlsFormProps>(
             (modelExtendParams || [])
               .filter((item: any) => !(hideReasoningParams && REASONING_PARAMS_SET.has(item)))
               .map((item: any) => items.find((i) => i.name === item))
-              .filter(Boolean) as FormFieldProps<LobeAgentChatConfig>[]
+              .filter(Boolean)
+              .map((item) =>
+                labelClassName && item
+                  ? { ...item, label: <div className={labelClassName}>{item.label}</div> }
+                  : item,
+              ) as FormFieldProps<LobeAgentChatConfig>[]
           }
         />
       </div>

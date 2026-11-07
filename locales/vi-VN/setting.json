@@ -1518,7 +1518,6 @@
   "settingModel.params.panel.historyLimit": "Giới Hạn Tin Nhắn Lịch Sử",
   "settingModel.params.panel.openness": "Cởi Mở",
   "settingModel.params.panel.responseLength": "Giới Hạn Độ Dài Phản Hồi",
-  "settingModel.params.panel.subAgentModel": "Mô hình phụ tác nhân",
   "settingModel.params.panel.tab": "Tham Số",
   "settingModel.params.panel.title": "Cài Đặt Tham Số Trò Chuyện",
   "settingModel.params.panel.topicDivergence": "Phân Kỳ Chủ Đề",

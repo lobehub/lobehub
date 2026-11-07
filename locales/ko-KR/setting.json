@@ -1518,7 +1518,6 @@
   "settingModel.params.panel.historyLimit": "히스토리 메시지 제한",
   "settingModel.params.panel.openness": "개방성",
   "settingModel.params.panel.responseLength": "응답 길이 제한",
-  "settingModel.params.panel.subAgentModel": "서브 에이전트 모델",
   "settingModel.params.panel.tab": "매개변수",
   "settingModel.params.panel.title": "채팅 매개변수 설정",
   "settingModel.params.panel.topicDivergence": "주제 분기",

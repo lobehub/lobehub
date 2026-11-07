@@ -1518,7 +1518,6 @@
   "settingModel.params.panel.historyLimit": "تحديد رسائل السجل",
   "settingModel.params.panel.openness": "الانفتاح",
   "settingModel.params.panel.responseLength": "تحديد طول الاستجابة",
-  "settingModel.params.panel.subAgentModel": "نموذج الوكيل الفرعي",
   "settingModel.params.panel.tab": "المعلمات",
   "settingModel.params.panel.title": "إعدادات معلمات الدردشة",
   "settingModel.params.panel.topicDivergence": "تباين الموضوع",

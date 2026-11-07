@@ -1518,7 +1518,6 @@
   "settingModel.params.panel.historyLimit": "Geçmiş Mesajları Sınırla",
   "settingModel.params.panel.openness": "Açıklık",
   "settingModel.params.panel.responseLength": "Yanıt Uzunluğunu Sınırla",
-  "settingModel.params.panel.subAgentModel": "Alt-Ajan Modeli",
   "settingModel.params.panel.tab": "Parametreler",
   "settingModel.params.panel.title": "Sohbet Parametre Ayarları",
   "settingModel.params.panel.topicDivergence": "Konu Sapması",
