@@ -1,9 +1,15 @@
 'use client';
 
-import { Button, Flexbox, Input, Text } from '@lobehub/ui';
-import { createModal, type ModalInstance, useModalContext } from '@lobehub/ui/base-ui';
-import { type InputRef } from 'antd';
-import { cssVar } from 'antd-style';
+import {
+  Button,
+  createModal,
+  cssVar,
+  Flexbox,
+  Input,
+  type ModalInstance,
+  Text,
+  useModalContext,
+} from '@lobehub/ui';
 import { t } from 'i18next';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -25,7 +31,7 @@ const RenameSkillContent = memo<RenameSkillContentProps>(({ currentName, onSubmi
   const [value, setValue] = useState(currentName);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>();
-  const inputRef = useRef<InputRef>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     // Focus + select the whole name so the user can immediately retype.

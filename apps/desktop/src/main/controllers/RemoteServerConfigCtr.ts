@@ -1,14 +1,16 @@
 import querystring from 'node:querystring';
 import { URL } from 'node:url';
 
-import type { DataSyncConfig } from '@lobechat/electron-client-ipc';
+import type { DataSyncConfig, DesktopBootstrapIdentity } from '@lobechat/electron-client-ipc';
 import { safeStorage, session as electronSession } from 'electron';
 
 import { OFFICIAL_CLOUD_SERVER } from '@/const/env';
+import { refreshAppSignIn, withdrawAppSignIn } from '@/modules/cliEmbedding/appSignInFile';
 import GatewayConnectionService from '@/services/gatewayConnectionSrv';
 import { appendVercelCookie } from '@/utils/http-headers';
 import { createLogger } from '@/utils/logger';
 import { netFetch } from '@/utils/net-fetch';
+import { setDesktopUserAgentHeader } from '@/utils/user-agent';
 
 import { ControllerModule, IpcMethod } from './index';
 
@@ -51,20 +53,17 @@ export default class RemoteServerConfigCtr extends ControllerModule {
   /**
    * Normalize legacy config that used local storageMode.
    * Local mode has been removed; fall back to cloud.
+   * Persistence belongs to explicit configuration updates, not reads.
    */
   private normalizeConfig = (config: DataSyncConfig): DataSyncConfig => {
     // Use type assertion to handle legacy 'local' value from stored data
     if ((config.storageMode as string) !== 'local') return config;
 
-    const nextConfig: DataSyncConfig = {
+    return {
       ...config,
       remoteServerUrl: config.remoteServerUrl || OFFICIAL_CLOUD_SERVER,
       storageMode: 'cloud',
     };
-
-    this.app.storeManager.set('dataSyncConfig', nextConfig);
-
-    return nextConfig;
   };
 
   /**
@@ -92,6 +91,7 @@ export default class RemoteServerConfigCtr extends ControllerModule {
    * @param config Optional config object, if not provided will fetch current config
    * @returns true if remote server is properly configured
    */
+  @IpcMethod()
   async isRemoteServerConfigured(config?: DataSyncConfig): Promise<boolean> {
     const effectiveConfig = config ?? (await this.getRemoteServerConfig());
     const isActive = Boolean(effectiveConfig.active);
@@ -130,6 +130,17 @@ export default class RemoteServerConfigCtr extends ControllerModule {
     // Save configuration with legacy local storage fallback
     const merged = this.normalizeConfig({ ...prev, ...config });
     storeManager.set('dataSyncConfig', merged);
+
+    // The device gateway connection belongs to the login it was opened for.
+    // Pointing at another server, or deactivating this one, ends that login:
+    // close it and drop whatever was resolved for it before anything reconnects.
+    const [prevServerUrl, nextServerUrl] = await Promise.all([
+      this.getRemoteServerUrl(prev),
+      this.getRemoteServerUrl(merged),
+    ]);
+    if (prevServerUrl !== nextServerUrl || (prev.active && !merged.active)) {
+      await this.app.getService(GatewayConnectionService)?.disconnect();
+    }
 
     this.broadcastRemoteServerConfigUpdated();
 
@@ -180,6 +191,37 @@ export default class RemoteServerConfigCtr extends ControllerModule {
   private lastRefreshAt?: number;
 
   /**
+   * Resolve the cache-partition identity synchronously for the renderer preload.
+   * This deliberately avoids `getUserState()`: the encrypted OIDC token already
+   * contains the stable subject required for local isolation.
+   */
+  getDesktopBootstrapIdentity(): DesktopBootstrapIdentity {
+    if (!this.encryptedAccessToken) this.loadTokensFromStore();
+
+    if (!this.encryptedAccessToken) return { isIdentityResolved: true };
+
+    try {
+      const accessToken = safeStorage.isEncryptionAvailable()
+        ? safeStorage.decryptString(Buffer.from(this.encryptedAccessToken, 'base64'))
+        : this.encryptedAccessToken;
+      const parts = accessToken.split('.');
+      if (parts.length !== 3) return { isIdentityResolved: false };
+
+      const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8')) as {
+        sub?: unknown;
+      };
+      if (typeof payload.sub !== 'string' || payload.sub.length === 0) {
+        return { isIdentityResolved: false };
+      }
+
+      return { isIdentityResolved: true, userId: payload.sub };
+    } catch (error) {
+      logger.warn('Failed to resolve Desktop bootstrap identity from access token:', error);
+      return { isIdentityResolved: false };
+    }
+  }
+
+  /**
    * Promise representing the ongoing token refresh operation.
    * Used to prevent concurrent refreshes and allow callers to wait.
    */
@@ -218,6 +260,7 @@ export default class RemoteServerConfigCtr extends ControllerModule {
         lastRefreshAt: this.lastRefreshAt,
         refreshToken: this.encryptedRefreshToken,
       });
+      this.pushRefreshedAccessToken(accessToken);
       return;
     }
 
@@ -239,6 +282,25 @@ export default class RemoteServerConfigCtr extends ControllerModule {
       lastRefreshAt: this.lastRefreshAt,
       refreshToken: this.encryptedRefreshToken,
     });
+
+    this.pushRefreshedAccessToken(accessToken);
+  }
+
+  /**
+   * Hand a freshly stored access token to everything that holds a copy of it:
+   * the live device-gateway socket, and the sign-in file `lh` reads inside
+   * local agent runs (which would otherwise keep the expired token).
+   *
+   * The gateway client caches the token it was constructed with and replays it
+   * on every backoff / heartbeat reconnect, while the token itself is rotated
+   * here (AuthCtr's auto-refresh timer). Without this push the refresh only
+   * became visible after the connection had already been torn down and rejected
+   * — the socket dropped, the client replayed the stale token, and `auth_failed`
+   * left the device offline.
+   */
+  private pushRefreshedAccessToken(accessToken: string) {
+    this.app.getService(GatewayConnectionService)?.updatePersonalToken(accessToken);
+    void refreshAppSignIn(accessToken);
   }
 
   /**
@@ -320,6 +382,8 @@ export default class RemoteServerConfigCtr extends ControllerModule {
     // Also clear from persistent storage
     logger.debug(`Deleting tokens from store key: ${this.encryptedTokensKey}`);
     this.app.storeManager.delete(this.encryptedTokensKey);
+    // Signed out: agent runs must not keep acting as the previous user.
+    await withdrawAppSignIn();
 
     // Disconnect gateway when tokens are cleared (logout / token refresh failure)
     const gatewaySrv = this.app.getService(GatewayConnectionService);
@@ -441,14 +505,18 @@ export default class RemoteServerConfigCtr extends ControllerModule {
         'Content-Type': 'application/x-www-form-urlencoded',
       };
       appendVercelCookie(headers);
+      setDesktopUserAgentHeader(headers);
       const response = await netFetch(tokenUrl.toString(), { body, headers, method: 'POST' });
 
       if (!response.ok) {
         // Try to parse error response
         const errorData = await response.json().catch(() => ({}));
-        const errorMessage = `Token refresh failed: ${response.status} ${response.statusText} ${
-          errorData.error_description || errorData.error || ''
-        }`.trim();
+        // Keep the OIDC code so AuthCtr can distinguish revoked grants from transient failures.
+        const errorDetail = [errorData.error, errorData.error_description]
+          .filter(Boolean)
+          .join(' ');
+        const errorMessage =
+          `Token refresh failed: ${response.status} ${response.statusText} ${errorDetail}`.trim();
         logger.error(errorMessage, errorData);
         return { error: errorMessage, success: false };
       }
@@ -537,7 +605,7 @@ export default class RemoteServerConfigCtr extends ControllerModule {
     const session = electronSession.fromPartition(partition);
 
     session.webRequest.onBeforeSendHeaders(
-      { urls: [`https://*.lobehub.com/*`] },
+      { urls: [`https://lobehub.com/*`, `https://*.lobehub.com/*`] },
       async (details, callback) => {
         const requestHeaders = { ...details.requestHeaders };
 
@@ -547,6 +615,7 @@ export default class RemoteServerConfigCtr extends ControllerModule {
           requestHeaders['Oidc-Auth'] = token;
           logger.debug(`Injected Oidc-Auth token for: ${details.url}`);
         }
+        setDesktopUserAgentHeader(requestHeaders);
 
         callback({ requestHeaders });
       },

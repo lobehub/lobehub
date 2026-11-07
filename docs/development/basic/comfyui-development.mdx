@@ -52,7 +52,7 @@ packages/model-runtime/src/providers/comfyui/
     ├── workflowError.ts         # Workflow errors
     └── servicesError.ts         # Service errors
 
-src/server/services/comfyui/     # Server-side implementation
+apps/server/src/services/comfyui/ # Server-side implementation
 ├── core/                         # Core server services
 │   ├── comfyUIAuthService.ts    # Authentication service
 │   ├── comfyUIClientService.ts  # Client service
@@ -933,7 +933,7 @@ describe('Model Registry', () => {
 ### Basic Image Generation
 
 ```typescript
-import { LobeComfyUI } from '@/libs/model-runtime/comfyui';
+import { LobeComfyUI } from '@lobechat/model-runtime';
 
 const comfyUI = new LobeComfyUI({
   baseURL: 'http://localhost:8000',

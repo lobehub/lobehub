@@ -208,6 +208,16 @@ describe('AgentSkillModel', () => {
       });
       expect(updated?.name).toBe('Updated Name');
     });
+
+    it('should return undefined when the skill to update does not exist', async () => {
+      // `merge` seeds from the row the scoped lookup returns; a miss must not
+      // fabricate one, so the update has nothing to write and returns undefined.
+      const result = await agentSkillModel.update('00000000-0000-0000-0000-000000000000', {
+        name: 'Ghost',
+      });
+
+      expect(result).toBeUndefined();
+    });
   });
 
   describe('listBySource', () => {
@@ -335,6 +345,22 @@ describe('AgentSkillModel', () => {
 
       const result = await agentSkillModel.findByName('Other Skill');
       expect(result).toBeUndefined();
+    });
+
+    it('matches case-insensitively so model casing drift still resolves', async () => {
+      await serverDB.insert(agentSkills).values({
+        name: 'agent-browser',
+        description: 'browser CLI',
+        identifier: 'lobe-agent-browser',
+        source: 'user',
+        manifest: createManifest(),
+        userId,
+      });
+
+      for (const query of ['agent-browser', 'Agent-Browser', 'AGENT-BROWSER']) {
+        const result = await agentSkillModel.findByName(query);
+        expect(result?.name).toBe('agent-browser');
+      }
     });
   });
 });

@@ -1,17 +1,20 @@
 import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 
+import TaskAcceptance from './TaskAcceptance';
 import TaskActivities from './TaskActivities';
 import TaskArtifacts from './TaskArtifacts';
 import TaskDetailAssignee from './TaskDetailAssignee';
+import { taskDetailLayoutStyles as styles } from './taskDetailLayoutStyles';
 import TaskDetailRunPauseAction from './TaskDetailRunPauseAction';
 import TaskDetailTitleInput from './TaskDetailTitleInput';
+import TaskExecutionConfig from './TaskExecutionConfig';
+import TaskGoalBar from './TaskGoalBar';
 import TaskInstruction from './TaskInstruction';
 import TaskModelConfig from './TaskModelConfig';
 import TaskParentBar from './TaskParentBar';
 import TaskProperties from './TaskProperties';
 import TaskSubtasks from './TaskSubtasks';
-import TaskVerifyConfig from './TaskVerifyConfig';
 
 /**
  * The scrollable body sections of a task detail, shared by the full-page
@@ -21,29 +24,31 @@ import TaskVerifyConfig from './TaskVerifyConfig';
  */
 const TaskDetailSections = memo(() => {
   return (
-    <>
-      <Flexbox gap={4} style={{ paddingBlock: '24px 36px' }}>
-        <TaskDetailTitleInput />
-        <Flexbox horizontal align={'flex-start'} gap={16} justify={'space-between'}>
-          <Flexbox align={'flex-start'} flex={1} gap={16}>
-            <TaskParentBar />
-            <Flexbox horizontal align={'center'} gap={8}>
-              <TaskDetailAssignee />
-              <TaskModelConfig />
-            </Flexbox>
+    <div className={styles.root}>
+      <div className={styles.header}>
+        <Flexbox className={styles.main} gap={12}>
+          <TaskGoalBar />
+          <TaskParentBar />
+          <TaskDetailTitleInput />
+          <Flexbox horizontal align={'center'} gap={8} style={{ maxWidth: '100%' }} wrap={'wrap'}>
             <TaskDetailRunPauseAction />
+            <TaskDetailAssignee />
+            <TaskModelConfig />
+            <TaskExecutionConfig />
           </Flexbox>
-          <TaskProperties />
         </Flexbox>
-      </Flexbox>
+        <div className={styles.side}>
+          <TaskProperties />
+        </div>
+      </div>
       <Flexbox gap={24} style={{ paddingBottom: 120 }}>
         <TaskInstruction />
-        <TaskVerifyConfig />
+        <TaskAcceptance />
         <TaskSubtasks />
         <TaskArtifacts />
         <TaskActivities />
       </Flexbox>
-    </>
+    </div>
   );
 });
 

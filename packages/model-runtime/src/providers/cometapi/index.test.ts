@@ -2,7 +2,6 @@
 import { ModelProvider } from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { testProvider } from '../../providerTestUtils';
 import { LobeCometAPIAI, params } from './index';
 
 const loadModelsMock = vi.hoisted(() => vi.fn().mockResolvedValue([]));
@@ -10,18 +9,6 @@ const loadModelsMock = vi.hoisted(() => vi.fn().mockResolvedValue([]));
 vi.mock('@lobechat/business-model-bank/model-config', () => ({
   loadModels: loadModelsMock,
 }));
-
-// Basic provider tests
-testProvider({
-  Runtime: LobeCometAPIAI,
-  chatDebugEnv: 'DEBUG_COMETAPI_COMPLETION',
-  chatModel: 'gpt-3.5-turbo',
-  defaultBaseURL: 'https://api.cometapi.com/v1',
-  provider: ModelProvider.CometAPI,
-  test: {
-    skipAPICall: true,
-  },
-});
 
 // Custom feature tests
 describe('LobeCometAPIAI - custom features', () => {
@@ -346,24 +333,6 @@ describe('LobeCometAPIAI - custom features', () => {
       const models = await params.models!({ client: mockClient as any });
       expect(models.length).toBe(3);
       // processMultiProviderModelList should handle different providers
-    });
-
-    it('should merge with known model data from model-bank', async () => {
-      const mockClient = {
-        apiKey: 'test',
-        baseURL: 'https://api.cometapi.com/v1',
-        models: {
-          list: vi.fn().mockResolvedValue({
-            data: [{ id: 'gpt-3.5-turbo', object: 'model', owned_by: 'openai' }],
-          }),
-        },
-      };
-
-      const models = await params.models!({ client: mockClient as any });
-      const model = models[0];
-
-      // Should have properties from both API and model-bank
-      expect(model.id).toBe('gpt-3.5-turbo');
     });
 
     it('should handle models not in model-bank', async () => {

@@ -13,16 +13,24 @@ class GatewayConnectionService {
     return ensureElectronIpc().gatewayConnection.getConnectionStatus();
   };
 
+  getKeepAwake = async () => {
+    return ensureElectronIpc().gatewayConnection.getKeepAwake();
+  };
+
+  setKeepAwake = async (enabled: boolean) => {
+    return ensureElectronIpc().gatewayConnection.setKeepAwake({ enabled });
+  };
+
   getDeviceInfo = async () => {
     return ensureElectronIpc().gatewayConnection.getDeviceInfo();
   };
 
-  setDeviceDescription = async (description: string) => {
-    return ensureElectronIpc().gatewayConnection.setDeviceDescription({ description });
+  getStableDeviceId = async () => {
+    return ensureElectronIpc().gatewayConnection.getStableDeviceId();
   };
 
-  setDeviceName = async (name: string) => {
-    return ensureElectronIpc().gatewayConnection.setDeviceName({ name });
+  getWorkspaceDeviceId = async (workspaceId: string) => {
+    return ensureElectronIpc().gatewayConnection.getWorkspaceDeviceId({ workspaceId });
   };
 }
 

@@ -1,11 +1,17 @@
 'use client';
 
-import { groupTopicsByProject, groupTopicsByUpdatedTime } from '@lobechat/utils/client/topic';
-import { Flexbox, Skeleton } from '@lobehub/ui';
+import {
+  getTopicWorkingDirectorySourcePath,
+  groupTopicsByProject,
+  groupTopicsByUpdatedTime,
+} from '@lobechat/utils/client/topic';
+import { Flexbox } from '@lobehub/ui';
 import { memo, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import Loading from '@/components/Loading/BrandTextLoading';
+import AsyncError from '@/components/AsyncError';
+import TopicsSkeleton from '@/components/Skeleton/Topics';
+import { useLocalMachineDeviceIds } from '@/hooks/useLocalMachineDeviceIds';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 import { shinyTextStyles } from '@/styles/loading';
@@ -19,7 +25,9 @@ import Toolbar from './Toolbar';
 import TopicGrid from './TopicGrid';
 import TopicListView from './TopicListView';
 import {
-  getProjectLabel,
+  buildBotChannelOptions,
+  getProjectFilterLabel,
+  matchesBotChannel,
   matchesGroup,
   matchesStatus,
   matchesTimeRange,
@@ -34,6 +42,7 @@ const PAGE_SIZE = 30;
 const AgentTopicManager = memo(() => {
   const { t } = useTranslation('topic');
   const activeAgentId = useChatStore((s) => s.activeAgentId);
+  const localDeviceIds = useLocalMachineDeviceIds();
   // Use the management page's dedicated SWR pipeline so the heavier
   // `withDetails` fetch doesn't share a bucket with the sidebar's cheap
   // fetch (the shared bucket let whichever response landed last clobber the
@@ -47,12 +56,14 @@ const AgentTopicManager = memo(() => {
   const allTopics = useChatStore(topicSelectors.agentTopicsViewTopics);
   const hasMore = useChatStore(topicSelectors.agentTopicsViewHasMore);
   const isLoadingMore = useChatStore(topicSelectors.agentTopicsViewIsLoadingMore);
+  const loadMoreError = useChatStore(topicSelectors.agentTopicsViewLoadMoreError);
 
   const reset = useTopicsViewStore((s) => s.reset);
   const search = useTopicsViewStore((s) => s.search);
   const status = useTopicsViewStore((s) => s.status);
   const groupIds = useTopicsViewStore((s) => s.groupIds);
   const triggers = useTopicsViewStore((s) => s.triggers);
+  const botChannels = useTopicsViewStore((s) => s.botChannels);
   const timeRange = useTopicsViewStore((s) => s.timeRange);
   const sortBy = useTopicsViewStore((s) => s.sortBy);
   const groupBy = useTopicsViewStore((s) => s.groupBy);
@@ -60,6 +71,7 @@ const AgentTopicManager = memo(() => {
   const setStatus = useTopicsViewStore((s) => s.setStatus);
   const setGroupIds = useTopicsViewStore((s) => s.setGroupIds);
   const setTriggers = useTopicsViewStore((s) => s.setTriggers);
+  const setBotChannels = useTopicsViewStore((s) => s.setBotChannels);
   const setTimeRange = useTopicsViewStore((s) => s.setTimeRange);
   const setSearch = useTopicsViewStore((s) => s.setSearch);
 
@@ -73,7 +85,7 @@ const AgentTopicManager = memo(() => {
     reset();
   }, [activeAgentId, reset]);
 
-  const { isLoading } = useFetchAgentTopicsView(true, {
+  const { error, isHydrated, isValidating, revalidate } = useFetchAgentTopicsView(true, {
     agentId: activeAgentId,
     pageSize: PAGE_SIZE,
     // Opt into the heavier card-detail columns (firstUserMessage,
@@ -81,6 +93,9 @@ const AgentTopicManager = memo(() => {
     // omit this so their query stays cheap.
     withDetails: true,
   });
+
+  // Rows come from the store; the hook only reports fetch progress.
+  const isLoading = !isHydrated || isValidating;
 
   const trimmedSearch = search.trim();
   const { data: searchResults } = useSearchTopics(
@@ -102,9 +117,10 @@ const AgentTopicManager = memo(() => {
         (t) =>
           matchesGroup(t, groupIds) &&
           matchesTrigger(t, triggers) &&
-          matchesTimeRange(t, timeRange),
+          matchesTimeRange(t, timeRange) &&
+          matchesBotChannel(t, botChannels),
       ),
-    [baseTopics, groupIds, triggers, timeRange],
+    [baseTopics, groupIds, triggers, timeRange, botChannels],
   );
 
   const filtered = useMemo(() => {
@@ -134,21 +150,23 @@ const AgentTopicManager = memo(() => {
     if (!useGroups) return [{ children: filtered, id: 'all' }];
     if (groupBy === 'byProject') {
       const field: 'createdAt' | 'updatedAt' = sortBy === 'createdAt' ? 'createdAt' : 'updatedAt';
-      return groupTopicsByProject(filtered, field);
+      return groupTopicsByProject(filtered, field, { localDeviceIds });
     }
     return groupTopicsByUpdatedTime(filtered);
-  }, [filtered, useGroups, groupBy, sortBy]);
+  }, [filtered, useGroups, groupBy, sortBy, localDeviceIds]);
 
   const projects = useMemo(() => {
     const map = new Map<string, string>();
     for (const t of baseTopics) {
-      const wd = t.metadata?.workingDirectory;
+      const wd = getTopicWorkingDirectorySourcePath(t);
       if (wd && !map.has(wd)) {
-        map.set(wd, getProjectLabel(t) ?? wd);
+        map.set(wd, getProjectFilterLabel(t) ?? wd);
       }
     }
     return Array.from(map, ([value, label]) => ({ label, value }));
   }, [baseTopics]);
+
+  const botChannelOptions = useMemo(() => buildBotChannelOptions(baseTopics), [baseTopics]);
 
   const totalAfterFilter = filtered.length;
   // 'active' is the default tab, so it doesn't count as a user-applied filter
@@ -156,6 +174,7 @@ const AgentTopicManager = memo(() => {
     (status !== 'active' && status !== 'all') ||
     groupIds.length > 0 ||
     triggers.length > 0 ||
+    botChannels.length > 0 ||
     timeRange !== 'all' ||
     trimmedSearch.length > 0;
 
@@ -166,6 +185,7 @@ const AgentTopicManager = memo(() => {
     setStatus('all');
     setGroupIds([]);
     setTriggers([]);
+    setBotChannels([]);
     setTimeRange('all');
     setSearch('');
   };
@@ -184,7 +204,7 @@ const AgentTopicManager = memo(() => {
     if (!root || !sentinel) return;
     const observer = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting && hasMore && !isLoadingMore) {
+        if (entry.isIntersecting && hasMore && !isLoadingMore && !loadMoreError) {
           void loadMoreAgentTopicsView();
         }
       },
@@ -192,9 +212,9 @@ const AgentTopicManager = memo(() => {
     );
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [hasMore, isLoadingMore, isSearchMode, loadMoreAgentTopicsView]);
+  }, [hasMore, isLoadingMore, isSearchMode, loadMoreAgentTopicsView, loadMoreError]);
 
-  if (!activeAgentId) return <Loading debugId="AgentTopicManager" />;
+  if (!activeAgentId) return <TopicsSkeleton />;
 
   return (
     <Flexbox flex={1} height={'100%'} style={{ overflow: 'hidden' }}>
@@ -218,10 +238,22 @@ const AgentTopicManager = memo(() => {
             width: '100%',
           }}
         >
-          <Toolbar projects={projects} statusCounts={statusCounts} />
-          <BulkActionBar />
-          {isLoading && baseTopics.length === 0 ? (
-            <Skeleton active paragraph={{ rows: 6 }} title={false} />
+          <Toolbar
+            botChannelOptions={botChannelOptions}
+            projects={projects}
+            statusCounts={statusCounts}
+          />
+          <BulkActionBar topics={baseTopics} />
+          {!isSearchMode && error && !isLoading && baseTopics.length === 0 ? (
+            <AsyncError
+              error={error}
+              variant={'block'}
+              onRetry={() => {
+                void revalidate();
+              }}
+            />
+          ) : isLoading && baseTopics.length === 0 ? (
+            <TopicsSkeleton chrome={'body'} />
           ) : totalAfterFilter === 0 ? (
             <EmptyState
               agentId={activeAgentId}
@@ -253,6 +285,17 @@ const AgentTopicManager = memo(() => {
                   <span className={shinyTextStyles.shinyText} style={{ fontSize: 12 }}>
                     {t('management.loadingMore')}
                   </span>
+                </Flexbox>
+              )}
+              {!isSearchMode && loadMoreError && !isLoadingMore && (
+                <Flexbox align={'center'} paddingBlock={12}>
+                  <AsyncError
+                    error={loadMoreError}
+                    variant={'inline'}
+                    onRetry={() => {
+                      void loadMoreAgentTopicsView();
+                    }}
+                  />
                 </Flexbox>
               )}
             </>

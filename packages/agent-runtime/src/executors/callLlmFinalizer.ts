@@ -1,0 +1,461 @@
+import type {
+  ChatToolPayload,
+  MessageMetadata,
+  MessageToolCall,
+  ModelPerformance,
+  ModelReasoning,
+  ModelUsage,
+} from '@lobechat/types';
+import { serializePartsForStorage } from '../utils/multimodalContent';
+import { sanitizeToolCallArguments } from '../utils/sanitizeToolCallArguments';
+
+import { UsageCounter } from '../core/UsageCounter';
+import type { AgentRuntimeHost, LLMAttemptOutput } from '../transport';
+import type {
+  AgentEvent,
+  AgentState,
+  GeneralAgentCallLLMResultPayload,
+  InstructionExecutionResult,
+} from '../types';
+import {
+  hasRepeatedToolCall,
+  TOOL_CALL_REPEAT_LIMIT,
+  updateToolCallRepeatGuard,
+} from '../utils/toolCallRepeatGuard';
+
+export const VISIBLE_OUTPUT_END_PUBLISHED_STEP_INDEX_METADATA_KEY =
+  'visibleOutputEndPublishedStepIndex';
+
+type CallLlmCollectedOutput = Pick<
+  LLMAttemptOutput,
+  | 'content'
+  | 'contentParts'
+  | 'hasContentImages'
+  | 'hasReasoningImages'
+  | 'reasoning'
+  | 'reasoningParts'
+  | 'thinkingContent'
+>;
+
+interface CallLlmMessageMetadata extends MessageMetadata {
+  answerSalvagedFromReasoning?: boolean;
+  interruptedMidStream?: boolean;
+}
+
+interface FinalizeCallLlmTurnInput {
+  assistantMessageId: string;
+  /** Provider attempts spent on this call, including retries. */
+  attempts?: number;
+  events: AgentEvent[];
+  host: AgentRuntimeHost;
+  model: string;
+  output: LLMAttemptOutput;
+  provider: string;
+  recordResult?: (output: LLMAttemptOutput) => Promise<void> | void;
+  shouldReplayAssistantReasoning: boolean;
+  state: AgentState;
+  stepLabel?: string;
+}
+
+interface PersistInterruptedCallLlmResultInput {
+  assistantMessageId: string;
+  host: AgentRuntimeHost;
+  output: LLMAttemptOutput;
+}
+
+const buildMessageMetadata = ({
+  answerSalvagedFromReasoning,
+  currentStepSpeed,
+  currentStepUsage,
+  executionSite,
+  finishType,
+  hasContentImages,
+  interruptedMidStream,
+  usageEstimated,
+}: {
+  answerSalvagedFromReasoning?: boolean;
+  currentStepSpeed?: ModelPerformance;
+  currentStepUsage?: ModelUsage;
+  executionSite?: LLMAttemptOutput['executionSite'];
+  finishType?: string;
+  hasContentImages?: boolean;
+  interruptedMidStream?: boolean;
+  usageEstimated?: boolean;
+}): CallLlmMessageMetadata | undefined => {
+  const metadata: CallLlmMessageMetadata = {
+    ...(currentStepUsage && { ...currentStepUsage, usage: currentStepUsage }),
+    ...(currentStepSpeed && { ...currentStepSpeed, performance: currentStepSpeed }),
+    ...(finishType && { finishType }),
+    ...(hasContentImages && { isMultimodal: true }),
+    ...(answerSalvagedFromReasoning && { answerSalvagedFromReasoning: true }),
+    ...(interruptedMidStream && { interruptedMidStream: true }),
+    ...(executionSite && { executionSite }),
+    ...(usageEstimated && currentStepUsage && { usageEstimated: true }),
+  };
+
+  return Object.keys(metadata).length > 0 ? metadata : undefined;
+};
+
+const buildFinalReasoning = (output: CallLlmCollectedOutput): ModelReasoning | undefined => {
+  if (output.hasReasoningImages) {
+    return {
+      content: serializePartsForStorage(output.reasoningParts),
+      isMultimodal: true,
+    };
+  }
+
+  if (output.reasoning) {
+    return {
+      ...output.reasoning,
+      content: output.thinkingContent || output.reasoning.content,
+    };
+  }
+
+  return output.thinkingContent ? { content: output.thinkingContent } : undefined;
+};
+
+const sanitizePersistedTools = (toolsCalling: ChatToolPayload[]) =>
+  toolsCalling.length > 0
+    ? toolsCalling.map((tool) => ({
+        ...tool,
+        arguments: sanitizeToolCallArguments(tool.arguments),
+      }))
+    : undefined;
+
+const sanitizeStateToolCalls = (toolCalls: MessageToolCall[]) => {
+  const sanitizedToolCalls = toolCalls
+    .filter((toolCall) => !!toolCall.function.name)
+    .map((toolCall) => ({
+      ...toolCall,
+      function: {
+        ...toolCall.function,
+        arguments: sanitizeToolCallArguments(toolCall.function.arguments),
+      },
+    }));
+
+  return sanitizedToolCalls.length > 0 ? sanitizedToolCalls : undefined;
+};
+
+/**
+ * Work display anchor: Work cards render on the FINAL assistant message of a
+ * turn (stable across the two-round tool flow), so stamp `metadata.work` only
+ * when this LLM step ends the turn — i.e. it emits no new tool calls AND at
+ * least one tool ran earlier in this operation (messages after
+ * sourceMessageId, the triggering user message). Without the prior-tool check
+ * every plain answer would get a work anchor; without the slice the scan
+ * would see other turns' tool messages.
+ */
+const buildWorkAnchor = ({
+  operationId,
+  output,
+  state,
+}: {
+  operationId: string;
+  output: LLMAttemptOutput;
+  state: AgentState;
+}): MessageMetadata['work'] => {
+  if (output.toolsCalling.length > 0 || output.toolCalls.length > 0) return undefined;
+
+  const sourceMessageId = state.origin?.sourceMessageId;
+  const sourceMessageIndex =
+    typeof sourceMessageId === 'string'
+      ? state.messages.findIndex((message) => message.id === sourceMessageId)
+      : -1;
+  const currentOperationMessages =
+    sourceMessageIndex >= 0 ? state.messages.slice(sourceMessageIndex + 1) : [];
+  const hasPriorToolInteraction = currentOperationMessages.some(
+    (message) =>
+      message.role === 'tool' ||
+      (Array.isArray(message.tool_calls) && message.tool_calls.length > 0),
+  );
+  if (!hasPriorToolInteraction) return undefined;
+
+  return {
+    rootOperationId: operationId,
+    ...(typeof sourceMessageId === 'string' && { userMessageId: sourceMessageId }),
+  };
+};
+
+const persistFinalMessage = async ({
+  assistantMessageId,
+  host,
+  output,
+  state,
+}: Pick<FinalizeCallLlmTurnInput, 'assistantMessageId' | 'host' | 'output' | 'state'>) => {
+  const finalContent = output.hasContentImages
+    ? serializePartsForStorage(output.contentParts)
+    : output.content;
+  const finalReasoning = buildFinalReasoning(output);
+  const metadata = buildMessageMetadata({
+    answerSalvagedFromReasoning: output.answerSalvagedFromReasoning,
+    currentStepSpeed: output.speed,
+    currentStepUsage: output.usage,
+    executionSite: output.executionSite,
+    finishType: output.finishReason,
+    hasContentImages: output.hasContentImages,
+    usageEstimated: output.usageEstimated,
+  });
+  const workAnchor = buildWorkAnchor({
+    operationId: host.operation.operationId,
+    output,
+    state,
+  });
+
+  try {
+    await host.transports.messages.update(assistantMessageId, {
+      content: finalContent,
+      imageList: output.imageList.length > 0 ? output.imageList : undefined,
+      metadata: workAnchor ? { ...metadata, work: workAnchor } : metadata,
+      observationId: output.observationId,
+      reasoning: finalReasoning,
+      search: output.grounding,
+      tools: sanitizePersistedTools(output.toolsCalling),
+      traceId: output.traceId,
+    });
+  } catch (error) {
+    console.error('[call_llm] Failed to update message:', error);
+  }
+
+  return finalReasoning;
+};
+
+const buildFinalState = ({
+  assistantMessageId,
+  attempts,
+  model,
+  output,
+  provider,
+  shouldReplayAssistantReasoning,
+  state,
+  stepLabel,
+  toolCallRepeatGuard,
+  visibleOutputEndPublishedStepIndex,
+  finalReasoning,
+}: Omit<FinalizeCallLlmTurnInput, 'events' | 'host' | 'recordResult'> & {
+  finalReasoning?: ModelReasoning;
+  toolCallRepeatGuard: NonNullable<AgentState['toolCallRepeatGuard']>;
+  visibleOutputEndPublishedStepIndex?: number;
+}): AgentState => {
+  const newState = structuredClone(state);
+  // Completion must retain the persisted assistant identity even when messages
+  // are rehydrated into display groups before the next runtime step.
+  newState.metadata = { ...newState.metadata, workAssistantMessageId: assistantMessageId };
+  newState.toolCallRepeatGuard = toolCallRepeatGuard;
+  newState.messages.push({
+    content: output.content,
+    id: assistantMessageId,
+    model,
+    provider,
+    reasoning: shouldReplayAssistantReasoning ? finalReasoning : undefined,
+    role: 'assistant',
+    tool_calls: sanitizeStateToolCalls(output.toolCalls),
+  });
+
+  if (output.usage) {
+    const { usage, cost } = UsageCounter.accumulateLLM({
+      apiCallsDelta: attempts ?? 1,
+      cost: newState.cost,
+      model,
+      modelUsage: output.usage,
+      provider,
+      usage: newState.usage,
+    });
+
+    newState.usage = usage;
+    if (cost) newState.cost = cost;
+  } else {
+    // A successful response may omit usage. The provider attempt still
+    // happened, so record it independently of token accumulation instead of
+    // dropping it from the LLM-call metric.
+    newState.usage = UsageCounter.accumulateAttempts(newState.usage, Math.max(attempts ?? 1, 1));
+  }
+
+  if (stepLabel || visibleOutputEndPublishedStepIndex !== undefined) {
+    const stateMetadata = { ...newState.metadata };
+    if (stepLabel) stateMetadata._stepLabel = stepLabel;
+    if (visibleOutputEndPublishedStepIndex !== undefined) {
+      stateMetadata[VISIBLE_OUTPUT_END_PUBLISHED_STEP_INDEX_METADATA_KEY] =
+        visibleOutputEndPublishedStepIndex;
+    }
+    newState.metadata = stateMetadata;
+  }
+
+  return newState;
+};
+
+export const finalizeCallLlmTurn = async ({
+  assistantMessageId,
+  attempts,
+  events,
+  host,
+  model,
+  output,
+  provider,
+  recordResult,
+  shouldReplayAssistantReasoning,
+  state,
+  stepLabel,
+}: FinalizeCallLlmTurnInput): Promise<InstructionExecutionResult> => {
+  const { operation, transports } = host;
+  const repeatCounts = updateToolCallRepeatGuard(state.toolCallRepeatGuard, output.toolsCalling);
+  const stoppedByRepeatLimit = output.finishReason !== 'abort' && hasRepeatedToolCall(repeatCounts);
+  // Carried on the state so the terminal reason can name this stop. Sticky once
+  // set: later turns emit no tool calls, and `updateToolCallRepeatGuard` resets
+  // its counts on those, which would otherwise erase the only trace of why the
+  // run ended.
+  const toolCallRepeatGuard = {
+    ...repeatCounts,
+    ...((stoppedByRepeatLimit || state.toolCallRepeatGuard?.stoppedByRepeatLimit) && {
+      stoppedByRepeatLimit: true,
+    }),
+  };
+  const finalizedOutput = stoppedByRepeatLimit
+    ? {
+        ...output,
+        content: `Stopped after the same tool call was requested ${TOOL_CALL_REPEAT_LIMIT} consecutive times.`,
+        finishReason: 'tool_call_repeat_limit',
+        toolCalls: [],
+        toolsCalling: [],
+      }
+    : output;
+
+  events.push({
+    result: {
+      content: finalizedOutput.content,
+      finishReason: finalizedOutput.finishReason,
+      reasoning: finalizedOutput.thinkingContent,
+      tool_calls: finalizedOutput.toolCalls,
+      usage: finalizedOutput.usage,
+    },
+    type: 'llm_result',
+  });
+
+  await transports.stream.publishEvent({
+    data: {
+      finalContent: finalizedOutput.content,
+      grounding: finalizedOutput.grounding,
+      ...(stepLabel && { stepLabel }),
+      imageList: finalizedOutput.imageList.length > 0 ? finalizedOutput.imageList : undefined,
+      reasoning: finalizedOutput.thinkingContent || undefined,
+      toolsCalling: finalizedOutput.toolsCalling,
+      usage: finalizedOutput.usage,
+    },
+    stepIndex: operation.stepIndex,
+    type: 'stream_end',
+  });
+
+  let visibleOutputEndPublishedStepIndex: number | undefined;
+  const canPublishEarlyFinalAnswerVisibleEnd =
+    operation.allowEarlyFinalAnswerVisibleOutputEnd ?? true;
+  if (
+    canPublishEarlyFinalAnswerVisibleEnd &&
+    finalizedOutput.finishReason !== 'abort' &&
+    finalizedOutput.toolsCalling.length === 0 &&
+    finalizedOutput.toolCalls.length === 0
+  ) {
+    try {
+      await transports.stream.publishEvent({
+        data: { reason: 'final_answer' },
+        stepIndex: operation.stepIndex,
+        type: 'visible_output_end',
+      });
+      visibleOutputEndPublishedStepIndex = operation.stepIndex;
+    } catch (error) {
+      console.error('Failed to publish visible_output_end:', error);
+    }
+  }
+
+  const finalReasoning = await persistFinalMessage({
+    assistantMessageId,
+    host,
+    output: finalizedOutput,
+    state,
+  });
+  const newState = buildFinalState({
+    assistantMessageId,
+    attempts,
+    finalReasoning,
+    model,
+    output: finalizedOutput,
+    provider,
+    shouldReplayAssistantReasoning,
+    state,
+    stepLabel,
+    toolCallRepeatGuard,
+    visibleOutputEndPublishedStepIndex,
+  });
+
+  await recordResult?.(finalizedOutput);
+
+  if (finalizedOutput.finishReason === 'abort') {
+    return {
+      events,
+      newState,
+      nextContext: {
+        payload: {
+          hasToolsCalling: finalizedOutput.toolsCalling.length > 0,
+          parentMessageId: assistantMessageId,
+          reason: 'user_cancelled',
+          result: { content: finalizedOutput.content, tool_calls: finalizedOutput.toolCalls },
+          toolsCalling: finalizedOutput.toolsCalling,
+        },
+        phase: 'human_abort',
+        session: {
+          eventCount: events.length,
+          messageCount: newState.messages.length,
+          sessionId: operation.operationId,
+          status: 'running',
+          stepCount: state.stepCount + 1,
+        },
+        stepUsage: finalizedOutput.usage,
+      },
+    };
+  }
+
+  return {
+    events,
+    newState,
+    nextContext: {
+      payload: {
+        hasToolsCalling: finalizedOutput.toolsCalling.length > 0,
+        parentMessageId: assistantMessageId,
+        result: { content: finalizedOutput.content, tool_calls: finalizedOutput.toolCalls },
+        toolsCalling: finalizedOutput.toolsCalling,
+      } as GeneralAgentCallLLMResultPayload,
+      phase: 'llm_result',
+      session: {
+        eventCount: events.length,
+        messageCount: newState.messages.length,
+        sessionId: operation.operationId,
+        status: 'running',
+        stepCount: state.stepCount + 1,
+      },
+      stepUsage: finalizedOutput.usage,
+    },
+  };
+};
+
+export const persistInterruptedCallLlmResult = async ({
+  assistantMessageId,
+  host,
+  output,
+}: PersistInterruptedCallLlmResultInput): Promise<void> => {
+  if (!output.content && !output.thinkingContent && output.toolsCalling.length === 0) return;
+
+  try {
+    await host.transports.messages.update(assistantMessageId, {
+      content: output.content,
+      metadata: buildMessageMetadata({
+        currentStepSpeed: output.speed,
+        currentStepUsage: output.usage,
+        executionSite: output.executionSite,
+        interruptedMidStream: true,
+        usageEstimated: output.usageEstimated,
+      }),
+      reasoning: output.thinkingContent ? { content: output.thinkingContent } : undefined,
+      tools: sanitizePersistedTools(output.toolsCalling),
+    });
+  } catch (error) {
+    console.error('[call_llm] Failed to persist interrupted output:', error);
+  }
+};

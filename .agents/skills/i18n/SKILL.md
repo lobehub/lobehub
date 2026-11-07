@@ -1,6 +1,6 @@
 ---
 name: i18n
-description: 'LobeHub i18n with react-i18next. Use for user-facing strings, locale keys, namespaces, useTranslation, t(), interpolation, zh-CN/en-US previews, hardcoded UI copy, or pnpm i18n.'
+description: 'Use for user-facing strings and react-i18next locale keys, namespaces, interpolation, translations or bun run i18n.'
 user-invocable: false
 ---
 
@@ -8,8 +8,8 @@ user-invocable: false
 
 - Default language: English (en-US)
 - Framework: react-i18next
-- **Only edit files in `src/locales/default/`** - Never edit JSON files in `locales/`
-- Run `pnpm i18n` to generate translations (or manually translate zh-CN/en-US for dev preview)
+- **Only edit files in `packages/locales/src/default/`** - Never hand-write translations in `locales/` JSON (except en-US/zh-CN previews); generated locales change only through `lobe-i18n`, plus the key deletions described in [Changing an existing key's English text](#changing-an-existing-keys-english-text)
+- Leave generated locales to the daily `auto-i18n.yml` workflow by default; run `bun run i18n` manually only when they are needed immediately
 
 ## Key Naming Convention
 
@@ -51,10 +51,21 @@ export default {
 
 ## Workflow
 
-1. Add keys to `src/locales/default/{namespace}.ts`
-2. Export new namespace in `src/locales/default/index.ts`
+1. Add keys to `packages/locales/src/default/{namespace}.ts`
+2. Export new namespace in `packages/locales/src/default/index.ts`
 3. For dev preview: manually translate `locales/zh-CN/{namespace}.json` and `locales/en-US/{namespace}.json`
-4. Remind the user to run `pnpm i18n` before creating PR — do NOT run it yourself (very slow)
+4. Leave all other locales to `.github/workflows/auto-i18n.yml`, which runs daily and opens an automated translation PR
+5. Run `bun run i18n` manually only when the branch needs those translations immediately; it is slow and requires `OPENAI_API_KEY`
+
+### Changing an existing key's English text
+
+`lobe-i18n` (both the daily workflow and `bun run i18n`) only translates keys that are **missing** from a locale. It never re-translates a key whose English value changed, so editing an existing value leaves every generated locale on the old text indefinitely (e.g. expanded `settingsSearch.tabKeywords.*` stayed stale in 16 locales for weeks).
+
+When a change alters an existing key's meaning or content (not just a typo), do one of:
+
+- Rename the key, so it is missing everywhere and gets translated fresh.
+- Re-translate it in the same PR: delete the key from every generated `locales/*/{namespace}.json` (all except en-US/zh-CN), run `bun run i18n`, and commit **only** those keys — the run also fills unrelated missing keys, which belong to the daily workflow PR.
+- If the stale translation is harmless until the daily run, delete the key from the generated locales so they fall back to English and the workflow re-translates it. Do not do this when the localized text is load-bearing (e.g. search keywords users type in their own language).
 
 ## Usage
 

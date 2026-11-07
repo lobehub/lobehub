@@ -1,9 +1,9 @@
 // @vitest-environment node
-import * as imageToBase64Module from '@lobechat/utils';
 import type OpenAI from 'openai';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { CreateImagePayload } from '../../types/image';
+import * as imageToBase64Module from '../../utils/imageToBase64';
 import * as uriParserModule from '../../utils/uriParser';
 import { createOpenAICompatibleImage } from './createImage';
 
@@ -80,7 +80,7 @@ describe('createOpenAICompatibleImage', () => {
           model: 'gemini-2.0-flash-exp:image',
           params: {
             prompt: 'Edit this image',
-            imageUrl: mockImageUrl,
+            imageUrls: [mockImageUrl],
           },
         };
 
@@ -121,7 +121,7 @@ describe('createOpenAICompatibleImage', () => {
           model: 'test-model:image',
           params: {
             prompt: 'Process this',
-            imageUrl: mockImageUrl,
+            imageUrls: [mockImageUrl],
           },
         };
 
@@ -143,7 +143,7 @@ describe('createOpenAICompatibleImage', () => {
           model: 'test-model:image',
           params: {
             prompt: 'Process this',
-            imageUrl: mockImageUrl,
+            imageUrls: [mockImageUrl],
           },
         };
 
@@ -190,7 +190,7 @@ describe('createOpenAICompatibleImage', () => {
           model: 'vision-model:image',
           params: {
             prompt: 'Convert and process',
-            imageUrl: mockHttpImageUrl,
+            imageUrls: [mockHttpImageUrl],
           },
         };
 
@@ -213,7 +213,7 @@ describe('createOpenAICompatibleImage', () => {
           model: 'test-model:image',
           params: {
             prompt: 'Process this',
-            imageUrl: mockInvalidUrl,
+            imageUrls: [mockInvalidUrl],
           },
         };
 
@@ -474,7 +474,7 @@ describe('createOpenAICompatibleImage', () => {
           model: 'vision-model:image',
           params: {
             prompt: 'Edit this image by adding a sunset',
-            imageUrl: mockImageUrl,
+            imageUrls: [mockImageUrl],
           },
         };
 
@@ -687,6 +687,72 @@ describe('createOpenAICompatibleImage', () => {
     });
   });
 
+  describe('reference images', () => {
+    it('rejects imageUrl and imageUrls together instead of letting one overwrite the other', async () => {
+      await expect(
+        createOpenAICompatibleImage(
+          mockClient,
+          {
+            model: 'gpt-image-2',
+            params: {
+              imageUrl: 'https://example.com/a.jpg',
+              imageUrls: ['https://example.com/b.jpg'],
+              prompt: 'Merge these images',
+            },
+          },
+          'openai',
+        ),
+      ).rejects.toThrow('Pass reference images in either imageUrl or imageUrls, not both.');
+      expect(mockClient.images.edit).not.toHaveBeenCalled();
+      expect(mockClient.images.generate).not.toHaveBeenCalled();
+    });
+
+    it('rejects imageUrl for :image chat models, which declare only imageUrls', async () => {
+      await expect(
+        createOpenAICompatibleImage(
+          mockClient,
+          {
+            model: 'google/gemini-2.5-flash-image:image',
+            params: { imageUrl: 'data:image/png;base64,Zmlyc3Q=', prompt: 'Edit this image' },
+          },
+          'openrouter',
+        ),
+      ).rejects.toThrow('Chat image models take reference images in imageUrls, not imageUrl.');
+      expect(mockClient.chat.completions.create).not.toHaveBeenCalled();
+    });
+
+    it('sends imageUrls references to :image chat models in order', async () => {
+      const first = 'data:image/png;base64,Zmlyc3Q=';
+      const second = 'data:image/jpeg;base64,c2Vjb25k';
+      vi.spyOn(uriParserModule, 'parseDataUri').mockImplementation((url: string) => {
+        const [, mimeType, base64] = url.match(/^data:([^;]+);base64,(.+)$/)!;
+        return { base64, mimeType, type: 'base64' } as any;
+      });
+      vi.mocked(mockClient.chat.completions.create).mockResolvedValue({
+        choices: [
+          { message: { images: [{ image_url: { url: 'data:image/png;base64,chatResult' } }] } },
+        ],
+      } as any);
+
+      const result = await createOpenAICompatibleImage(
+        mockClient,
+        {
+          model: 'google/gemini-2.5-flash-image:image',
+          params: { imageUrls: [first, second], prompt: 'Merge these images' },
+        },
+        'openrouter',
+      );
+
+      expect(result.imageUrl).toBe('data:image/png;base64,chatResult');
+      const request = vi.mocked(mockClient.chat.completions.create).mock.calls[0][0] as any;
+      expect(request.messages[0].content).toEqual([
+        { text: 'Merge these images', type: 'text' },
+        { image_url: { url: first }, type: 'image_url' },
+        { image_url: { url: second }, type: 'image_url' },
+      ]);
+    });
+  });
+
   describe('image mode - response format handling', () => {
     it('should handle URL format response instead of base64', async () => {
       const mockImageUrl = 'https://oaidalleapiprodscus.blob.core.windows.net/generated/image.png';
@@ -773,6 +839,67 @@ describe('createOpenAICompatibleImage', () => {
       await expect(createOpenAICompatibleImage(mockClient, payload, 'openai')).rejects.toThrow(
         'Invalid image response: first data item is null or undefined',
       );
+    });
+  });
+
+  describe('image mode - animated GIF output', () => {
+    it('sends GIF fields in snake_case and returns a GIF data URI', async () => {
+      vi.mocked(mockClient.images.generate).mockResolvedValue({
+        data: [{ b64_json: 'R0lGODlh' }],
+        output_format: 'gif',
+      } as any);
+
+      const result = await createOpenAICompatibleImage(
+        mockClient,
+        {
+          model: 'gpt-image-2.6-flare',
+          params: { frameCount: 12, frameDurationMs: 120, outputFormat: 'gif', prompt: 'a cat' },
+        },
+        'openai',
+      );
+
+      const args = vi.mocked(mockClient.images.generate).mock.calls[0][0] as any;
+      expect(args).toMatchObject({ frame_count: 12, frame_duration_ms: 120, output_format: 'gif' });
+      expect(args).not.toHaveProperty('frameCount');
+      expect(result.imageUrl).toBe('data:image/gif;base64,R0lGODlh');
+    });
+
+    it('drops frame fields for static output', async () => {
+      vi.mocked(mockClient.images.generate).mockResolvedValue({
+        data: [{ b64_json: 'png' }],
+      } as any);
+
+      const result = await createOpenAICompatibleImage(
+        mockClient,
+        {
+          model: 'gpt-image-2.6-flare',
+          params: { frameCount: 9, frameDurationMs: 200, outputFormat: 'png', prompt: 'a cat' },
+        },
+        'openai',
+      );
+
+      const args = vi.mocked(mockClient.images.generate).mock.calls[0][0] as any;
+      expect(args.output_format).toBe('png');
+      expect(args).not.toHaveProperty('frame_count');
+      expect(args).not.toHaveProperty('frame_duration_ms');
+      expect(result.imageUrl).toBe('data:image/png;base64,png');
+    });
+
+    it('rejects GIF output with reference images before downloading them', async () => {
+      global.fetch = vi.fn();
+
+      await expect(
+        createOpenAICompatibleImage(
+          mockClient,
+          {
+            model: 'gpt-image-2.6-flare',
+            params: { imageUrls: ['https://example.com/a.png'], outputFormat: 'gif', prompt: 'p' },
+          },
+          'openai',
+        ),
+      ).rejects.toThrow('Animated GIF output does not support reference images');
+      expect(global.fetch).not.toHaveBeenCalled();
+      expect(mockClient.images.edit).not.toHaveBeenCalled();
     });
   });
 

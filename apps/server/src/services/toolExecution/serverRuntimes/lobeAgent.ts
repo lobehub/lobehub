@@ -1,43 +1,75 @@
 import type {
+  AnalyzeMediaParams,
   CallSubAgentParams,
-  VisualFileItem,
-  VisualSourceMessage,
+  MediaFileItem,
+  MediaSourceMessage,
+  VentParams,
+  VentState,
 } from '@lobechat/builtin-tool-lobe-agent';
 import {
-  buildAnalyzeVisualMediaContent,
-  createUrlVisualFileItems,
-  createVisualFileItems,
-  formatVisualMediaUrlValidationError,
-  hasUserVisualFiles,
+  buildAnalyzeMediaContent,
+  buildBackgroundSubAgentReceipt,
+  createMediaFileItemsFromMessage,
+  createUrlMediaFileItems,
+  formatMediaUrlValidationError,
+  hasAnalyzableMediaFiles,
   LobeAgentIdentifier,
-  normalizeAnalyzeVisualMediaInput,
-  PlanExecutionRuntime,
-  selectVisualFileItems,
-  validateVisualMediaUrls,
+  normalizeAnalyzeMediaInput,
+  selectMediaFileItems,
+  validateMediaUrls,
 } from '@lobechat/builtin-tool-lobe-agent';
+import { PlanExecutionRuntime } from '@lobechat/builtin-tool-lobe-agent/planRuntime';
+import { UserInteractionExecutionRuntime } from '@lobechat/builtin-tool-user-interaction/executionRuntime';
 import type { LobeChatDatabase } from '@lobechat/database';
 import type { ChatStreamPayload } from '@lobechat/model-runtime';
 import { consumeStreamUntilDone } from '@lobechat/model-runtime';
 import type { BuiltinServerRuntimeOutput } from '@lobechat/types';
-import { RequestTrigger } from '@lobechat/types';
+import { ChatErrorType, RequestTrigger } from '@lobechat/types';
+import { nanoid } from '@lobechat/utils';
+import { parseDataUri } from '@lobechat/utils/uriParser';
 
 import { MessageModel } from '@/database/models/message';
 import { toolsEnv } from '@/envs/tools';
+import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { FileService } from '@/server/services/file';
+import {
+  createRedisVentLedger,
+  createVentService,
+  formatVentResultContent,
+  type VentRuntimeService,
+} from '@/server/services/vent';
 
 import type { ToolExecutionContext } from '../types';
+import { startBackgroundSubAgent } from './backgroundSubAgent';
+import { normalizeMultimodalImageItems } from './lobeAgentImage';
 import { createServerPlanRuntimeService } from './lobeAgentPlan';
 import type { ServerRuntimeRegistration } from './types';
 
-interface AnalyzeVisualMediaParams {
-  question: string;
-  refs?: string[];
-  urls?: string[];
-}
+// The durable record of a vent is the persisted vent tool-call message itself.
+// This shared service only validates input, assigns a stable id, and enforces
+// the per-run cap. The cap lives in Redis because consecutive steps of one run
+// may execute on different instances; created lazily so importing this module
+// does not open a connection.
+let sharedVentService: VentRuntimeService | undefined;
+const getVentService = () => {
+  if (!sharedVentService) {
+    const redis = getAgentRuntimeRedisClient();
+    sharedVentService = createVentService({
+      ledger: redis ? createRedisVentLedger(redis) : undefined,
+      nextToolCallId: () => nanoid(),
+    });
+  }
+  return sharedVentService;
+};
 
 interface LobeAgentRuntimeContext {
   agentId?: string | null;
+  /**
+   * Visibility of the executing agent. Forwarded to the plan runtime so plan
+   * documents inherit private-agent visibility.
+   */
+  agentVisibility?: 'private' | 'public' | null;
   groupId?: string | null;
   messageId: string;
   /** The current Agent Run (`agent_operations.id`). */
@@ -55,6 +87,117 @@ const buildError = (content: string, code: string): BuiltinServerRuntimeOutput =
   success: false,
 });
 
+/**
+ * Quota rejections from the configured multimodal provider. analyzeMedia always
+ * runs on the platform-configured model, so a user chatting with their own API
+ * key can still hit the LobeHub credit budget here.
+ */
+const CREDIT_ERROR_TYPES = new Set<string>([
+  ChatErrorType.FreePlanLimit,
+  ChatErrorType.InsufficientBudgetForModel,
+  ChatErrorType.SubscriptionPlanLimit,
+]);
+
+const getCreditErrorType = (error: unknown): string | undefined => {
+  if (!error || typeof error !== 'object') return;
+  const errorType = (error as { errorType?: unknown }).errorType;
+
+  return typeof errorType === 'string' && CREDIT_ERROR_TYPES.has(errorType) ? errorType : undefined;
+};
+
+/**
+ * Structured rejection from the model gateway (e.g. `{ errorType: 403,
+ * message: "Request blocked.", _responseBody: { provider, reason:
+ * "not_onboarded" } }`). The raw message alone gives the agent nothing to act
+ * on — the gateway's `reason` is the only actionable signal, and rethrowing
+ * collapses the whole payload into that bare string before the tool result is
+ * built. Surface it instead of letting the failure degrade to "Request
+ * blocked." with no code, no cause, and no recovery path.
+ */
+const getGatewayRejection = (error: unknown): { content: string; code: string } | undefined => {
+  if (!error || typeof error !== 'object') return;
+
+  const raw = error as {
+    _responseBody?: { provider?: unknown; reason?: unknown };
+    errorType?: unknown;
+    message?: unknown;
+  };
+
+  const errorType = typeof raw.errorType === 'number' ? raw.errorType : undefined;
+  const provider =
+    typeof raw._responseBody?.provider === 'string' ? raw._responseBody.provider : undefined;
+  const reason =
+    typeof raw._responseBody?.reason === 'string' ? raw._responseBody.reason : undefined;
+  const message = typeof raw.message === 'string' ? raw.message : undefined;
+
+  // Numeric error types are part of the generic model-runtime error contract
+  // (429 rate limits, 4xx validation, provider-policy refusals), and
+  // `normalizeChatMessageError` propagates `provider` (and other display
+  // metadata) into every error body — so neither establishes a gateway-level
+  // refusal on its own. `_responseBody.reason` is the gateway-specific marker:
+  // require it before suppressing the throw, and keep ordinary structured
+  // errors (including provider-only response bodies, e.g. a 429 rate limit)
+  // transparent and retryable via the existing rethrow behavior.
+  if (errorType === undefined || !reason) return;
+
+  const parts = [
+    `Media analysis was rejected by the platform model gateway (HTTP ${errorType}${provider ? `, provider: ${provider}` : ''}).`,
+    `Gateway reason: ${reason}.`,
+    message && message !== 'error' ? `Upstream message: ${message}.` : undefined,
+    'This is an account/gateway-level refusal, not a content-policy verdict on the media. Do not retry blindly or treat the media as blocked content.',
+  ].filter(Boolean);
+
+  return {
+    code: `GATEWAY_${reason.toUpperCase().replaceAll(/[^A-Z0-9]+/g, '_')}`,
+    content: parts.join(' '),
+  };
+};
+
+const BASE64_CONTENT_PATTERN = /^[A-Z\d+/]+={0,2}$/i;
+const MAX_INLINE_IMAGE_PIXELS = 25_000_000;
+/**
+ * Decode inline images before the provider boundary. Protocol and header checks
+ * are insufficient because a PNG can retain a valid signature while its pixel
+ * chunks or CRCs are corrupted. Decode sequentially with an explicit pixel
+ * ceiling to cap peak memory for highly compressed and multi-image calls.
+ */
+const findInvalidInlineImageIndexes = async (urls: string[]) => {
+  const invalidIndexes: number[] = [];
+  const hasInlineImages = urls.some((url) => /^data:image\//i.test(url));
+  if (!hasInlineImages) return invalidIndexes;
+
+  // Keep the native image dependency out of server bundles that never validate
+  // inline images; the server runtime registry imports this module eagerly.
+  const { default: sharp } = await import('sharp');
+
+  for (const [index, url] of urls.entries()) {
+    if (!/^data:image\//i.test(url)) continue;
+
+    const { base64, type } = parseDataUri(url);
+    if (
+      type !== 'base64' ||
+      !base64 ||
+      !BASE64_CONTENT_PATTERN.test(base64) ||
+      base64.length % 4 === 1
+    ) {
+      invalidIndexes.push(index + 1);
+      continue;
+    }
+
+    try {
+      const buffer = Buffer.from(base64, 'base64');
+      await sharp(buffer, {
+        failOn: 'error',
+        limitInputPixels: MAX_INLINE_IMAGE_PIXELS,
+      }).stats();
+    } catch {
+      invalidIndexes.push(index + 1);
+    }
+  }
+
+  return invalidIndexes;
+};
+
 const getModelAbilities = async (model: string, provider: string) => {
   const { loadModels } = await import('@/business/client/model-bank/loadModels');
   const builtinModels = await loadModels();
@@ -65,7 +208,7 @@ const getModelAbilities = async (model: string, provider: string) => {
   )?.abilities;
 };
 
-interface ServerVisualSourceMessage extends VisualSourceMessage {
+interface ServerMediaSourceMessage extends MediaSourceMessage {
   agentId?: string | null;
   groupId?: string | null;
   sessionId?: string | null;
@@ -84,6 +227,10 @@ class LobeAgentExecutionRuntime {
   private topicId?: string;
   private planRuntime: PlanExecutionRuntime;
   private workspaceId?: string;
+  // Reused from the standalone user-interaction tool. askUserQuestion is
+  // human-intervention 'always', so the user's UI answer normally becomes the
+  // tool result; this runtime is only the fallback executor.
+  private interactionRuntime = new UserInteractionExecutionRuntime();
 
   constructor(context: LobeAgentRuntimeContext) {
     this.agentId = context.agentId;
@@ -96,26 +243,49 @@ class LobeAgentExecutionRuntime {
     this.userId = context.userId;
     this.workspaceId = context.workspaceId;
     this.planRuntime = new PlanExecutionRuntime(
-      createServerPlanRuntimeService(context.serverDB, context.userId, context.workspaceId),
+      createServerPlanRuntimeService(
+        context.serverDB,
+        context.userId,
+        context.workspaceId,
+        context.agentVisibility,
+      ),
     );
   }
 
+  // ==================== Ask User Question ====================
+
+  askUserQuestion = (params: unknown): Promise<BuiltinServerRuntimeOutput> =>
+    this.interactionRuntime.askUserQuestion(params);
+
   // ==================== Plan / Todo (delegated to PlanExecutionRuntime) ====================
 
-  createPlan = (params: any) =>
-    this.planRuntime.createPlan(params, { messageId: this.messageId, topicId: this.topicId });
+  /**
+   * Todo APIs read their prior state from `ctx.currentTodos` (rebuilt from
+   * message history by the runtime executors). Without it the runtime falls back
+   * to the topic's plan document, which only exists once `createPlan` has run —
+   * so a plain `createTodos` → `updateTodos` sequence would see an empty list,
+   * drop every index-based operation, and answer "No operations applied.".
+   */
+  private planContext = (ctx?: ToolExecutionContext) => ({
+    currentTodos: ctx?.currentTodos,
+    messageId: this.messageId,
+    topicId: this.topicId,
+  });
 
-  updatePlan = (params: any) =>
-    this.planRuntime.updatePlan(params, { messageId: this.messageId, topicId: this.topicId });
+  createPlan = (params: any, ctx?: ToolExecutionContext) =>
+    this.planRuntime.createPlan(params, this.planContext(ctx));
 
-  createTodos = (params: any) =>
-    this.planRuntime.createTodos(params, { messageId: this.messageId, topicId: this.topicId });
+  updatePlan = (params: any, ctx?: ToolExecutionContext) =>
+    this.planRuntime.updatePlan(params, this.planContext(ctx));
 
-  updateTodos = (params: any) =>
-    this.planRuntime.updateTodos(params, { messageId: this.messageId, topicId: this.topicId });
+  createTodos = (params: any, ctx?: ToolExecutionContext) =>
+    this.planRuntime.createTodos(params, this.planContext(ctx));
 
-  clearTodos = (params: any) =>
-    this.planRuntime.clearTodos(params, { messageId: this.messageId, topicId: this.topicId });
+  updateTodos = (params: any, ctx?: ToolExecutionContext) =>
+    this.planRuntime.updateTodos(params, this.planContext(ctx));
+
+  clearTodos = (params: any, ctx?: ToolExecutionContext) =>
+    this.planRuntime.clearTodos(params, this.planContext(ctx));
 
   // ==================== Sub-agent (async suspend/resume) ====================
 
@@ -150,33 +320,122 @@ class LobeAgentExecutionRuntime {
     if (!instruction || typeof instruction !== 'string') {
       return buildError('instruction is required.', 'INVALID_ARGUMENTS');
     }
+    if (params.subAgentId !== undefined && typeof params.subAgentId !== 'string') {
+      return buildError('subAgentId must be a string.', 'INVALID_ARGUMENTS');
+    }
+    // Models trained on strict function schemas (the GPT family) fill every
+    // declared field, so "start a new sub-agent" arrives as `subAgentId: ""`
+    // rather than an omitted key. Blank means new.
+    const subAgentId = params.subAgentId?.trim() || undefined;
+    const background = params.runInBackground === true;
 
-    const { started, threadId, subOperationId } = await ctx.subAgent.run({
-      description,
-      instruction,
-      timeout,
-    });
+    const runner = ctx.subAgent;
+    const startRun = () =>
+      runner.run({ background, description, instruction, subAgentId, timeout });
+
+    let runResult: Awaited<ReturnType<typeof startRun>>;
+    if (background) {
+      const outcome = await startBackgroundSubAgent({
+        db: this.db,
+        groupId: this.groupId,
+        retryHint: 'Call callSubAgent again without runInBackground to wait for the result.',
+        start: startRun,
+        threadId: this.threadId,
+        topicId: this.topicId,
+        userId: this.userId,
+        workspaceId: this.workspaceId,
+      });
+      if ('refusal' in outcome) return buildError(outcome.refusal.message, outcome.refusal.code);
+      runResult = outcome.result;
+    } else {
+      runResult = await startRun();
+    }
+    const { started, error, threadId, subOperationId, toolMessageId } = runResult;
 
     // The child op failed to start — no completion bridge will ever fire to
     // backfill a placeholder, so we must NOT defer/park here. Return a normal
     // (non-deferred) tool error so the parent's LLM sees the failure and the
     // batch continues instead of hanging in `waiting_for_async_tool`.
     if (!started) {
-      return buildError('Sub-agent failed to start.', 'SUB_AGENT_START_FAILED');
+      const action = subAgentId ? 'could not be continued' : 'failed to start';
+      return buildError(
+        error ? `Sub-agent ${action}: ${error}` : `Sub-agent ${action}.`,
+        'SUB_AGENT_START_FAILED',
+      );
+    }
+
+    // Detached: the receipt is the whole tool result and the parent keeps going.
+    // It goes into the placeholder the runner created (it anchors the thread);
+    // the answer reaches the parent later as its own message.
+    if (background) {
+      return {
+        content: buildBackgroundSubAgentReceipt(threadId),
+        success: true,
+        toolMessageId,
+      };
     }
 
     return {
       // No tool_result yet — the bridge fills this in when the sub-op completes.
       content: '',
       deferred: true,
-      state: { status: 'pending', subOperationId, threadId },
+      // `toolMessageId` rides along so the runtime's pause chunk can tell the
+      // client which row to fetch; the client never sees it as tool state.
+      state: { status: 'pending', subOperationId, threadId, toolMessageId },
       success: true,
     };
   };
 
+  // ==================== Vent ====================
+
+  vent = async (
+    params: VentParams,
+    context: { operationId?: string; toolCallId?: string } = {},
+  ): Promise<BuiltinServerRuntimeOutput> => {
+    if (!this.agentId || !this.userId || !this.topicId) {
+      const state: VentState = { recorded: false, reason: 'missing_context' };
+      return { content: formatVentResultContent(state), state, success: false };
+    }
+
+    try {
+      const result = await getVentService().recordVent({
+        agentId: this.agentId,
+        input: params,
+        topicId: this.topicId,
+        userId: this.userId,
+        ...(context.operationId ? { operationId: context.operationId } : {}),
+        ...(context.toolCallId ? { toolCallId: context.toolCallId } : {}),
+      });
+
+      const state: VentState = {
+        category: params.category,
+        reason: result.reason ?? null,
+        recorded: result.recorded,
+        severity: params.severity,
+        ventId: result.ventId ?? null,
+      };
+
+      return { content: formatVentResultContent(state), state, success: true };
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Unknown vent error';
+      const state: VentState = {
+        category: params.category,
+        reason: 'runtime_error',
+        recorded: false,
+        severity: params.severity,
+      };
+      return {
+        content: `vent failed with error detail: ${message}`,
+        error: { message },
+        state,
+        success: false,
+      };
+    }
+  };
+
   private queryScopeMessages = (
     messageModel: MessageModel,
-    sourceMessage: ServerVisualSourceMessage,
+    sourceMessage: ServerMediaSourceMessage,
     postProcessUrl: (
       path: string | null,
       file: { fileType: string; id?: string | null },
@@ -211,16 +470,14 @@ class LobeAgentExecutionRuntime {
     return Promise.resolve([sourceMessage]);
   };
 
-  analyzeVisualMedia = async (
-    params: AnalyzeVisualMediaParams,
-  ): Promise<BuiltinServerRuntimeOutput> => {
-    const provider = toolsEnv.VISUAL_UNDERSTANDING_PROVIDER;
-    const model = toolsEnv.VISUAL_UNDERSTANDING_MODEL;
+  analyzeMedia = async (params: AnalyzeMediaParams): Promise<BuiltinServerRuntimeOutput> => {
+    const provider = toolsEnv.MULTIMODAL_UNDERSTANDING_PROVIDER;
+    const model = toolsEnv.MULTIMODAL_UNDERSTANDING_MODEL;
 
     if (!provider || !model) {
       return buildError(
-        'Visual understanding is not configured. Set VISUAL_UNDERSTANDING_PROVIDER and VISUAL_UNDERSTANDING_MODEL.',
-        'VISUAL_UNDERSTANDING_NOT_CONFIGURED',
+        'Multimodal understanding is not configured. Set MULTIMODAL_UNDERSTANDING_PROVIDER and MULTIMODAL_UNDERSTANDING_MODEL.',
+        'MULTIMODAL_UNDERSTANDING_NOT_CONFIGURED',
       );
     }
 
@@ -228,24 +485,32 @@ class LobeAgentExecutionRuntime {
       return buildError('question is required.', 'INVALID_ARGUMENTS');
     }
 
-    const { requestedRefs, requestedUrls } = normalizeAnalyzeVisualMediaInput(
+    const { requestedRefs, requestedUrls } = normalizeAnalyzeMediaInput(
       params as unknown as Record<PropertyKey, unknown>,
     );
     if (requestedRefs.length === 0 && requestedUrls.length === 0) {
       return buildError(
-        'Either refs or urls is required and must include at least one visual file ref or media URL.',
+        'Either refs or urls is required and must include at least one media file ref or media URL.',
         'INVALID_ARGUMENTS',
       );
     }
 
-    const urlValidation = validateVisualMediaUrls(requestedUrls);
-    const urlValidationError = formatVisualMediaUrlValidationError(urlValidation);
+    const urlValidation = validateMediaUrls(requestedUrls);
+    const urlValidationError = formatMediaUrlValidationError(urlValidation);
     if (urlValidationError) {
-      return buildError(urlValidationError, 'UNSUPPORTED_VISUAL_MEDIA_URLS');
+      return buildError(urlValidationError, 'UNSUPPORTED_MEDIA_URLS');
     }
 
-    const selectedUrlItems = createUrlVisualFileItems(urlValidation.validUrls);
-    let selectedRefItems: VisualFileItem[] = [];
+    const invalidInlineImageIndexes = await findInvalidInlineImageIndexes(urlValidation.validUrls);
+    if (invalidInlineImageIndexes.length > 0) {
+      return buildError(
+        `Invalid inline image data at URL indexes: ${invalidInlineImageIndexes.join(', ')}.`,
+        'INVALID_IMAGE_DATA',
+      );
+    }
+
+    const selectedUrlItems = createUrlMediaFileItems(urlValidation.validUrls);
+    let selectedRefItems: MediaFileItem[] = [];
 
     if (requestedRefs.length > 0) {
       const fileService = new FileService(this.db, this.userId, this.workspaceId);
@@ -258,13 +523,13 @@ class LobeAgentExecutionRuntime {
         postProcessUrl,
       });
 
-      const visualMessages = sourceMessage
+      const mediaMessages = sourceMessage
         ? await this.queryScopeMessages(messageModel, sourceMessage, postProcessUrl)
         : [];
-      const orderedVisualMessages = [
-        ...(sourceMessage && hasUserVisualFiles(sourceMessage) ? [sourceMessage] : []),
-        ...visualMessages.filter(
-          (message) => message.id !== sourceMessage?.id && hasUserVisualFiles(message),
+      const orderedMediaMessages = [
+        ...(sourceMessage && hasAnalyzableMediaFiles(sourceMessage) ? [sourceMessage] : []),
+        ...mediaMessages.filter(
+          (message) => message.id !== sourceMessage?.id && hasAnalyzableMediaFiles(message),
         ),
       ];
 
@@ -275,26 +540,23 @@ class LobeAgentExecutionRuntime {
         );
       }
 
-      const visualItems = orderedVisualMessages.flatMap((message) =>
-        createVisualFileItems(message, message.imageList, message.videoList),
+      const mediaItems = orderedMediaMessages.flatMap((message) =>
+        createMediaFileItemsFromMessage(message),
       );
 
-      if (visualItems.length === 0) {
-        return buildError(
-          'No visual files are attached to the current message.',
-          'NO_VISUAL_FILES',
-        );
+      if (mediaItems.length === 0) {
+        return buildError('No media files are attached to the current message.', 'NO_MEDIA_FILES');
       }
 
-      const { availableRefs, invalidRefs, selected } = selectVisualFileItems(
-        visualItems,
+      const { availableRefs, invalidRefs, selected } = selectMediaFileItems(
+        mediaItems,
         requestedRefs,
       );
 
       if (invalidRefs.length > 0) {
         return buildError(
-          `Unknown visual file refs: ${invalidRefs.join(', ')}. Available refs: ${availableRefs.join(', ')}.`,
-          'UNKNOWN_VISUAL_FILE_REFS',
+          `Unknown media file refs: ${invalidRefs.join(', ')}. Available refs: ${availableRefs.join(', ')}.`,
+          'UNKNOWN_MEDIA_FILE_REFS',
         );
       }
 
@@ -304,25 +566,51 @@ class LobeAgentExecutionRuntime {
     const selectedItems = [...selectedRefItems, ...selectedUrlItems];
 
     if (selectedItems.length === 0) {
-      return buildError('No visual files selected.', 'NO_VISUAL_FILES_SELECTED');
+      return buildError('No media files selected.', 'NO_MEDIA_FILES_SELECTED');
     }
 
     const abilities = await getModelAbilities(model, provider);
+    const hasAudios = selectedItems.some((item) => item.type === 'audio');
     const hasImages = selectedItems.some((item) => item.type === 'image');
     const hasVideos = selectedItems.some((item) => item.type === 'video');
 
+    if (hasAudios && abilities?.audio === false) {
+      return buildError(
+        `Configured multimodal understanding model "${provider}/${model}" does not support audio understanding.`,
+        'MULTIMODAL_MODEL_AUDIO_UNSUPPORTED',
+      );
+    }
+
     if (hasImages && abilities?.vision === false) {
       return buildError(
-        `Configured visual understanding model "${provider}/${model}" does not support image vision.`,
-        'VISUAL_MODEL_IMAGE_UNSUPPORTED',
+        `Configured multimodal understanding model "${provider}/${model}" does not support image vision.`,
+        'MULTIMODAL_MODEL_IMAGE_UNSUPPORTED',
       );
     }
 
     if (hasVideos && abilities?.video === false) {
       return buildError(
-        `Configured visual understanding model "${provider}/${model}" does not support video understanding.`,
-        'VISUAL_MODEL_VIDEO_UNSUPPORTED',
+        `Configured multimodal understanding model "${provider}/${model}" does not support video understanding.`,
+        'MULTIMODAL_MODEL_VIDEO_UNSUPPORTED',
       );
+    }
+
+    let modelItems = selectedItems;
+    if (hasImages) {
+      try {
+        modelItems = await normalizeMultimodalImageItems(
+          selectedItems,
+          toolsEnv.MULTIMODAL_UNDERSTANDING_IMAGE_FORMATS,
+        );
+      } catch (error) {
+        console.error('Failed to prepare images for multimodal understanding:', {
+          name: error instanceof Error ? error.name : 'UnknownError',
+        });
+        return buildError(
+          'Failed to prepare one or more images for the configured multimodal understanding model.',
+          'MULTIMODAL_IMAGE_PREPARATION_FAILED',
+        );
+      }
     }
 
     let content = '';
@@ -331,7 +619,7 @@ class LobeAgentExecutionRuntime {
     const payload = {
       messages: [
         {
-          content: buildAnalyzeVisualMediaContent(selectedItems, params.question),
+          content: buildAnalyzeMediaContent(modelItems, params.question),
           role: 'user' as const,
         },
       ],
@@ -339,24 +627,41 @@ class LobeAgentExecutionRuntime {
       stream: false,
     } satisfies ChatStreamPayload;
 
-    const response = await runtime.chat(payload, {
-      callback: {
-        onCompletion: (data) => {
-          usage = data.usage;
+    try {
+      const response = await runtime.chat(payload, {
+        callback: {
+          onCompletion: (data) => {
+            usage = data.usage;
+          },
+          onContentPart: (part) => {
+            if (part.partType === 'text') content += part.content;
+          },
+          onText: (text) => {
+            content += text;
+          },
         },
-        onContentPart: (part) => {
-          if (part.partType === 'text') content += part.content;
+        metadata: {
+          trigger: RequestTrigger.MultimodalAnalysis,
         },
-        onText: (text) => {
-          content += text;
-        },
-      },
-      metadata: {
-        trigger: RequestTrigger.VisualAnalysis,
-      },
-    });
+      });
 
-    await consumeStreamUntilDone(response);
+      await consumeStreamUntilDone(response);
+    } catch (error) {
+      const creditErrorType = getCreditErrorType(error);
+      if (!creditErrorType) {
+        const rejection = getGatewayRejection(error);
+        if (!rejection) throw error;
+
+        return buildError(rejection.content, rejection.code);
+      }
+
+      return buildError(
+        `Media analysis could not run: it uses the platform model "${provider}/${model}", which is billed to the user's LobeHub balance, and that balance is exhausted (${creditErrorType}). ` +
+          "The user's own API key for the chat model is not used by this tool, so retrying will not help. " +
+          'Tell the user to top up or upgrade their LobeHub plan, or to switch the conversation to a vision-capable model on their own API key.',
+        creditErrorType,
+      );
+    }
 
     return {
       content: content.trim(),
@@ -364,7 +669,7 @@ class LobeAgentExecutionRuntime {
         files: selectedItems.map(({ ref, id, type, name }) => ({ id, name, ref, type })),
         model,
         provider,
-        trigger: RequestTrigger.VisualAnalysis,
+        trigger: RequestTrigger.MultimodalAnalysis,
         usage,
       },
       success: true,
@@ -386,6 +691,7 @@ export const lobeAgentRuntime: ServerRuntimeRegistration = {
 
     return new LobeAgentExecutionRuntime({
       agentId: context.agentId,
+      agentVisibility: context.agentVisibility,
       groupId: context.groupId,
       messageId: context.messageId,
       operationId: context.operationId,

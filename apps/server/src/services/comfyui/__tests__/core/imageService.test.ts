@@ -18,11 +18,13 @@ vi.mock('@/server/services/comfyui/utils/workflowDetector');
 
 // Mock sharp module for image processing
 vi.mock('sharp', () => ({
-  default: vi.fn((buffer) => ({
-    metadata: vi.fn().mockResolvedValue({ height: 1024, width: 1024 }),
-    resize: vi.fn().mockReturnThis(),
-    toBuffer: vi.fn().mockResolvedValue(Buffer.from(buffer)),
-  })),
+  default: vi.fn(function (buffer) {
+    return {
+      metadata: vi.fn().mockResolvedValue({ height: 1024, width: 1024 }),
+      resize: vi.fn().mockReturnThis(),
+      toBuffer: vi.fn().mockResolvedValue(Buffer.from(buffer)),
+    };
+  }),
 }));
 
 describe('ImageService', () => {
@@ -61,12 +63,18 @@ describe('ImageService', () => {
     global.fetch = mockFetch;
 
     // Setup mocks for constructor
-    vi.mocked(ComfyUIClientService, true).mockImplementation(() => mockClientService as any);
-    vi.mocked(ModelResolverService, true).mockImplementation(() => mockModelResolverService as any);
-    vi.mocked(WorkflowBuilderService, true).mockImplementation(
-      () => mockWorkflowBuilderService as any,
-    );
-    vi.mocked(ErrorHandlerService, true).mockImplementation(() => mockErrorHandler as any);
+    vi.mocked(ComfyUIClientService, true).mockImplementation(function () {
+      return mockClientService as any;
+    });
+    vi.mocked(ModelResolverService, true).mockImplementation(function () {
+      return mockModelResolverService as any;
+    });
+    vi.mocked(WorkflowBuilderService, true).mockImplementation(function () {
+      return mockWorkflowBuilderService as any;
+    });
+    vi.mocked(ErrorHandlerService, true).mockImplementation(function () {
+      return mockErrorHandler as any;
+    });
 
     // Create service instance
     imageService = new ImageService(
@@ -139,7 +147,7 @@ describe('ImageService', () => {
         exists: false,
       });
 
-      mockErrorHandler.handleError.mockImplementation((error: any) => {
+      mockErrorHandler.handleError.mockImplementation(function (error: any) {
         throw {
           error: { message: error.message },
           errorType: AgentRuntimeErrorType.ModelNotFound,
@@ -166,7 +174,7 @@ describe('ImageService', () => {
         images: { images: [] },
       });
 
-      mockErrorHandler.handleError.mockImplementation((error: any) => {
+      mockErrorHandler.handleError.mockImplementation(function (error: any) {
         throw {
           error: { message: error.message },
           errorType: AgentRuntimeErrorType.ComfyUIBizError,
@@ -280,7 +288,7 @@ describe('ImageService', () => {
         statusText: 'Not Found',
       });
 
-      mockErrorHandler.handleError.mockImplementation((error: any) => {
+      mockErrorHandler.handleError.mockImplementation(function (error: any) {
         throw error;
       });
 
@@ -353,7 +361,7 @@ describe('ImageService', () => {
         ok: true,
       });
 
-      mockErrorHandler.handleError.mockImplementation((error: any) => {
+      mockErrorHandler.handleError.mockImplementation(function (error: any) {
         throw error;
       });
 
@@ -379,7 +387,7 @@ describe('ImageService', () => {
       // Network error
       mockFetch.mockRejectedValue(new TypeError('Failed to fetch'));
 
-      mockErrorHandler.handleError.mockImplementation((error: any) => {
+      mockErrorHandler.handleError.mockImplementation(function (error: any) {
         throw error;
       });
 
@@ -443,7 +451,7 @@ describe('ImageService', () => {
         isSupported: false,
       });
 
-      mockErrorHandler.handleError.mockImplementation((error: any) => {
+      mockErrorHandler.handleError.mockImplementation(function (error: any) {
         throw {
           error: { message: error.message },
           errorType: AgentRuntimeErrorType.ModelNotFound,
@@ -511,7 +519,7 @@ describe('ImageService', () => {
       const testError = new Error('Test error');
       mockModelResolverService.validateModel.mockRejectedValue(testError);
 
-      mockErrorHandler.handleError.mockImplementation(() => {
+      mockErrorHandler.handleError.mockImplementation(function () {
         throw { original: testError, transformed: true };
       });
 

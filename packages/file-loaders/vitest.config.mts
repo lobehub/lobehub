@@ -14,5 +14,6 @@ export default defineConfig({
       reporter: ['text', 'json', 'lcov', 'text-summary'],
     },
     environment: 'happy-dom',
+    setupFiles: ['./test/setup.ts'],
   },
 });

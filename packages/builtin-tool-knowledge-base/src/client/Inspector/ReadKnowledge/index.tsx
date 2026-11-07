@@ -1,7 +1,9 @@
 'use client';
 
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { createStaticStyles, cx } from 'antd-style';
+import { cx } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -9,12 +11,9 @@ import { highlightTextStyles, inspectorTextStyles, shinyTextStyles } from '@/sty
 
 import type { ReadKnowledgeArgs, ReadKnowledgeState } from '../../..';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  moreFiles: css`
-    margin-inline-start: 4px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-}));
+const styles = stylex.create({
+  moreFiles: { marginInlineStart: '4px', color: cssVar.colorTextTertiary },
+});
 
 export const ReadKnowledgeInspector = memo<
   BuiltinInspectorProps<ReadKnowledgeArgs, ReadKnowledgeState>
@@ -31,14 +30,18 @@ export const ReadKnowledgeInspector = memo<
   if (isArgumentsStreaming) {
     if (fileCount === 0)
       return (
-        <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-          <span>{t('builtins.lobe-knowledge-base.apiName.readKnowledge')}</span>
+        <div className={inspectorTextStyles.root}>
+          <span className={shinyTextStyles.shinyText}>
+            {t('builtins.lobe-knowledge-base.apiName.readKnowledge')}
+          </span>
         </div>
       );
 
     return (
-      <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-        <span>{t('builtins.lobe-knowledge-base.apiName.readKnowledge')}: </span>
+      <div className={inspectorTextStyles.root}>
+        <span className={shinyTextStyles.shinyText}>
+          {t('builtins.lobe-knowledge-base.apiName.readKnowledge')}:{' '}
+        </span>
         <span className={highlightTextStyles.gold}>
           {fileCount} {fileCount === 1 ? 'file' : 'files'}
         </span>
@@ -54,7 +57,7 @@ export const ReadKnowledgeInspector = memo<
         <>
           <span className={highlightTextStyles.gold}>{firstFilename}</span>
           {remainingCount > 0 && (
-            <span className={styles.moreFiles}>
+            <span {...stylex.props(styles.moreFiles)}>
               {t('builtins.lobe-knowledge-base.inspector.andMoreFiles', { count: remainingCount })}
             </span>
           )}
@@ -73,9 +76,11 @@ export const ReadKnowledgeInspector = memo<
   };
 
   return (
-    <div className={cx(inspectorTextStyles.root, isLoading && shinyTextStyles.shinyText)}>
+    <div className={inspectorTextStyles.root}>
       <span style={{ marginInlineStart: 2 }}>
-        <span>{t('builtins.lobe-knowledge-base.apiName.readKnowledge')}: </span>
+        <span className={cx(isLoading && shinyTextStyles.shinyText)}>
+          {t('builtins.lobe-knowledge-base.apiName.readKnowledge')}:{' '}
+        </span>
         {renderFileInfo()}
       </span>
     </div>

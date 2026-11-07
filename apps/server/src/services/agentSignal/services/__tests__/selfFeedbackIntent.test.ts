@@ -3,7 +3,10 @@ import { describe, expect, it, vi } from 'vitest';
 import type { AgentSignalSourceEventInput } from '@/server/services/agentSignal/emitter';
 
 import type { SelfFeedbackIntentAction, SelfFeedbackIntentKind } from '../selfFeedbackIntent';
-import { createSelfFeedbackIntentService } from '../selfFeedbackIntent';
+import {
+  createInMemoryDeclarationLimiter,
+  createSelfFeedbackIntentService,
+} from '../selfFeedbackIntent';
 
 const createStrongIntentInput = () => ({
   action: 'refine' as const,
@@ -341,5 +344,68 @@ describe('selfFeedbackIntent', () => {
       strength: 'strong',
     });
     expect(enqueueSource).not.toHaveBeenCalled();
+  });
+
+  /**
+   * @example
+   * Two service instances (two server processes) sharing one limiter enforce one limit.
+   */
+  it('enforces the declaration limit across service instances that share a limiter', async () => {
+    const enqueueSource = createEnqueueSource();
+    const declarationLimiter = createInMemoryDeclarationLimiter();
+    const processA = createSelfFeedbackIntentService({
+      declarationLimiter,
+      enqueueSource,
+      nextToolCallId: () => 'unused',
+    });
+    const processB = createSelfFeedbackIntentService({
+      declarationLimiter,
+      enqueueSource,
+      nextToolCallId: () => 'unused',
+    });
+    const declare = (service: typeof processA, toolCallId: string) =>
+      service.declareIntent({
+        agentId: 'agent-1',
+        input: createStrongIntentInput(),
+        toolCallId,
+        topicId: 'topic-shared',
+        userId: 'user-1',
+      });
+
+    await declare(processA, 'call-1');
+    await declare(processB, 'call-2');
+    await declare(processA, 'call-3');
+
+    await expect(declare(processB, 'call-4')).resolves.toMatchObject({
+      accepted: false,
+      reason: 'rate_limited',
+    });
+    expect(enqueueSource).toHaveBeenCalledTimes(3);
+  });
+
+  /**
+   * @example
+   * A declaration that failed to enqueue gives its slot back.
+   */
+  it('releases the declaration slot when enqueueing fails', async () => {
+    const enqueueSource = createEnqueueSource();
+    enqueueSource.mockRejectedValueOnce(new Error('queue down'));
+    const service = createSelfFeedbackIntentService({
+      enqueueSource,
+      nextToolCallId: () => 'unused',
+    });
+    const declare = (toolCallId: string) =>
+      service.declareIntent({
+        agentId: 'agent-1',
+        input: createStrongIntentInput(),
+        toolCallId,
+        topicId: 'topic-release',
+        userId: 'user-1',
+      });
+
+    await expect(declare('call-failed')).rejects.toThrow('queue down');
+    for (const toolCallId of ['call-1', 'call-2', 'call-3']) {
+      await expect(declare(toolCallId)).resolves.toMatchObject({ accepted: true });
+    }
   });
 });

@@ -1,3 +1,5 @@
+import { describe, expect, it } from 'vitest';
+
 import { HEADER_ICON_SIZE } from './layoutTokens';
 
 describe('HEADER_ICON_SIZE', () => {
@@ -6,6 +8,6 @@ describe('HEADER_ICON_SIZE', () => {
   });
 
   it('desktop', () => {
-    expect(HEADER_ICON_SIZE(false)).toEqual({ blockSize: 36, size: 22 });
+    expect(HEADER_ICON_SIZE(false)).toEqual({ blockSize: 32, size: 20 });
   });
 });

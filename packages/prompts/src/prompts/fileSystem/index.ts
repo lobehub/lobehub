@@ -10,4 +10,5 @@ export * from './formatKillResult';
 export * from './formatMoveResults';
 export * from './formatMultipleFiles';
 export * from './formatRenameResult';
+export * from './formatSandboxRecreation';
 export * from './formatWriteResult';

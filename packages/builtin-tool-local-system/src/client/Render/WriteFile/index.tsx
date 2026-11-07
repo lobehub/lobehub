@@ -1,7 +1,8 @@
 import type { WriteLocalFileParams } from '@lobechat/electron-client-ipc';
 import type { BuiltinRenderProps } from '@lobechat/types';
 import { Flexbox, Icon, Markdown, PatchDiff, Skeleton } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronRight } from 'lucide-react';
 import path from 'path-browserify-esm';
 import { memo } from 'react';
@@ -9,16 +10,15 @@ import { memo } from 'react';
 import { InlineHtmlPreview, isHtmlFile } from '@/components/HtmlPreview';
 import { LocalFile, LocalFolder } from '@/features/LocalFile';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    padding-block: 4px;
-  `,
-  previewBox: css`
-    overflow: hidden;
-    border-radius: 8px;
-    background: ${cssVar.colorFillTertiary};
-  `,
-}));
+const styles = stylex.create({
+  container: { paddingBlock: '4px' },
+  previewBox: {
+    overflow: 'hidden',
+    borderRadius: '8px',
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+});
 
 const buildNewFilePatch = (filePath: string, content: string) => {
   const hasTrailingNewline = content.endsWith('\n');
@@ -32,12 +32,18 @@ const buildNewFilePatch = (filePath: string, content: string) => {
     : `${header}${body}\n\\ No newline at end of file\n`;
 };
 
-const WriteFile = memo<BuiltinRenderProps<WriteLocalFileParams>>(({ args }) => {
-  if (!args) return <Skeleton active />;
+type WriteFileArgs = WriteLocalFileParams & {
+  file_path?: string;
+  filePath?: string;
+};
 
-  const { base, dir } = path.parse(args.path);
-  const ext = path.extname(args.path).slice(1).toLowerCase();
-  const isHtml = isHtmlFile({ path: args.path });
+const WriteFile = memo<BuiltinRenderProps<WriteFileArgs>>(({ args }) => {
+  if (!args) return <Skeleton.Text rows={4} />;
+
+  const filePath = args.path || args.filePath || args.file_path || '';
+  const { base, dir } = path.parse(filePath);
+  const ext = path.extname(filePath).slice(1).toLowerCase();
+  const isHtml = isHtmlFile({ path: filePath });
   const isMarkdown = ext === 'md' || ext === 'mdx';
 
   // Code-type files render as a "new file" unified diff so the visual is
@@ -48,7 +54,7 @@ const WriteFile = memo<BuiltinRenderProps<WriteLocalFileParams>>(({ args }) => {
       <PatchDiff
         fileName={base}
         language={ext || undefined}
-        patch={buildNewFilePatch(args.path, args.content)}
+        patch={buildNewFilePatch(filePath, args.content)}
         showHeader={false}
         variant={'borderless'}
         viewMode={'unified'}
@@ -57,15 +63,18 @@ const WriteFile = memo<BuiltinRenderProps<WriteLocalFileParams>>(({ args }) => {
   }
 
   return (
-    <Flexbox className={styles.container} gap={12}>
+    <Flexbox className={stylex.props(styles.container).className} gap={12}>
       <Flexbox horizontal align={'center'}>
         <LocalFolder path={dir} />
         <Icon icon={ChevronRight} />
-        <LocalFile name={base} path={args.path} />
+        <LocalFile name={base} path={filePath} />
       </Flexbox>
 
       {args.content && (
-        <Flexbox className={styles.previewBox} style={{ height: isHtml ? 260 : undefined }}>
+        <Flexbox
+          className={stylex.props(styles.previewBox).className}
+          style={{ height: isHtml ? 260 : undefined }}
+        >
           {isHtml ? (
             <InlineHtmlPreview content={args.content} />
           ) : (

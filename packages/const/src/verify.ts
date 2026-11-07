@@ -1,0 +1,680 @@
+/**
+ * Verify vocabulary — the runtime closed sets every layer agrees on (schema,
+ * server, CLI, store, UI), plus the small shapes that travel with them.
+ *
+ * Deliberately kept here rather than in `@lobechat/types`: these are runtime
+ * values, and `@lobechat/types` is replaced by a hand-written stub inside the
+ * isolated desktop workspace (`apps/desktop/stubs/types`), so a value imported
+ * from it is unreachable for members of that workspace — `@lobehub/cli` among
+ * them. This module imports nothing, so it resolves from every workspace.
+ *
+ * `packages/types/src/verify.ts` declares the same unions independently (it must
+ * not depend on `@lobechat/const`) and owns the domain model built on top of them
+ * — plan items, Toulmin narrative, evidence, reports. The two sides are pinned
+ * together by `./verify.test.ts`, which fails the type-check on any drift.
+ */
+
+/**
+ * How a single criterion is judged.
+ * - program: run a deterministic command / script
+ * - agent:   spawn a sub agent_operations to investigate
+ * - llm:     call generateObject and let an LLM judge produce a Toulmin verdict
+ */
+export const verifierTypes = ['program', 'agent', 'llm'] as const;
+export type VerifierType = (typeof verifierTypes)[number];
+
+/** What to do when a check item fails. */
+export const verifyOnFailStrategies = ['manual', 'auto_repair'] as const;
+export type VerifyOnFailStrategy = (typeof verifyOnFailStrategies)[number];
+
+/**
+ * Lifecycle of a single check result.
+ * - errored: the verifier could not run (infra / startup failure) — NOT a
+ *   delivery judgment. Kept distinct from `failed` so a broken verifier never
+ *   reads as a rejected delivery and never seeds an auto-repair round.
+ */
+export const verifyCheckResultStatuses = [
+  'pending',
+  'running',
+  'passed',
+  'failed',
+  'errored',
+  'skipped',
+] as const;
+export type VerifyCheckResultStatus = (typeof verifyCheckResultStatuses)[number];
+
+/** Toulmin Claim — the verifier's judgement. */
+export const verifyVerdicts = ['passed', 'failed', 'uncertain'] as const;
+export type VerifyVerdict = (typeof verifyVerdicts)[number];
+
+/** Human feedback on a result, feeding the data flywheel. */
+export const verifyUserDecisions = ['accepted', 'rejected', 'overridden'] as const;
+export type VerifyUserDecision = (typeof verifyUserDecisions)[number];
+
+/**
+ * Denormalized rollup of a verification session's pipeline state — mirrors the
+ * legacy `agent_operations.verify_status` set so the two stay interchangeable
+ * while results/reports migrate from being operation-anchored to run-anchored.
+ */
+export const verifyRunStatuses = [
+  'unverified',
+  'planned',
+  'collecting_evidence',
+  'verifying',
+  'passed',
+  'failed',
+  // At least one required check errored (verifier couldn't run) and none
+  // genuinely failed — verification is inconclusive, not a rejected delivery.
+  'errored',
+  'repairing',
+  'delivered',
+] as const;
+export type VerifyRunStatus = (typeof verifyRunStatuses)[number];
+
+/**
+ * A draft round only describes what will be verified: nothing has executed and
+ * nobody has decided. Drafts follow the live plan and are reused by the next
+ * plan or ingest instead of consuming another round number.
+ *
+ * A replay is excluded: it is pinned to the source round's frozen definition, so
+ * it must not follow later graph edits or absorb another flow. Only the newest
+ * round can be the open draft — an older one left behind by a replay is an
+ * abandoned ledger position, so callers check the latest round rather than
+ * searching the whole chain.
+ */
+export const isDraftVerifyRun = (run: {
+  metadata?: { replayOfRunId?: string } | null;
+  planConfirmedAt?: Date | string | null;
+  status?: string | null;
+  userDecision?: string | null;
+}): boolean =>
+  run.status === 'planned' &&
+  !run.planConfirmedAt &&
+  !run.userDecision &&
+  !run.metadata?.replayOfRunId;
+
+/**
+ * What produced a verification session.
+ * - agent:         verifying a real Agent Run (`verify_runs.operation_id` set)
+ * - agent-testing: a standalone session ingested from the agent-testing harness
+ *   (no Agent Run — `operation_id` is null)
+ */
+export const verifyRunSources = ['agent', 'agent-testing'] as const;
+export type VerifyRunSource = (typeof verifyRunSources)[number];
+
+/**
+ * The kind of thing a verification session checks. Orthogonal to `source` (which
+ * records what *produced* the run): `scenario` drives how the report renders its
+ * scope header and scenario-specific detail. Open-ended — new scenarios add a
+ * value here plus their own `VerifyRunContext` shape.
+ * - coding:   verifying a software change (branch / commit / surfaces under test).
+ * - writing:  verifying a written deliverable (manuscript / chapters / documents).
+ * - research: verifying a research deliverable (question / sources / claims).
+ * - generic:  any other delivery — no modeled scope; context is an open bag.
+ */
+export const verifyRunScenarios = ['coding', 'writing', 'research', 'generic'] as const;
+export type VerifyRunScenario = (typeof verifyRunScenarios)[number];
+
+/**
+ * The product surface a check was exercised on — *where* it ran, never *what
+ * kind* of test it was. `unit` / `backend` / `type-check` are test kinds and do
+ * not belong here; a backend change verified through the CLI has surface `cli`.
+ *
+ * A closed set on purpose: free-form surfaces drifted into 76 distinct values
+ * (long prose, runtime modes, tool names), which no viewer can render as a
+ * legible badge. Runtime detail ("packaged build", "CDP dev instance") belongs
+ * on the plan item's `method`, not here.
+ */
+export const verifySurfaces = ['web', 'desktop', 'cli', 'mobile', 'bot'] as const;
+export type VerifySurface = (typeof verifySurfaces)[number];
+
+/**
+ * Historical spellings that name a surface in this set. Only unambiguous
+ * synonyms — anything else is a rejected value, not a guess.
+ */
+const VERIFY_SURFACE_ALIASES: Record<string, VerifySurface> = {
+  android: 'mobile',
+  browser: 'web',
+  electron: 'desktop',
+  ios: 'mobile',
+  terminal: 'cli',
+};
+
+/** Canonical surface for a raw value, or null when it names no known surface. */
+export const normalizeVerifySurface = (value: string): VerifySurface | null => {
+  const key = value.trim().toLowerCase();
+  if ((verifySurfaces as readonly string[]).includes(key)) return key as VerifySurface;
+  return VERIFY_SURFACE_ALIASES[key] ?? null;
+};
+
+/**
+ * Names of the repo's own automated test suites and static-analysis gates. A
+ * check built on one of these is a *precondition of shipping*, not something a
+ * human accepts: "138 unit tests pass" tells the reviewer nothing about whether
+ * the delivery is right, and a page full of them buries the two or three checks
+ * that actually needed a person to look.
+ *
+ * ASCII entries match on word boundaries (so `lint` never fires on `client`);
+ * CJK entries match as plain substrings, which is how those words are written.
+ */
+const PROGRAMMATIC_TEST_PATTERNS: RegExp[] = [
+  // test kinds
+  /\bunit[\s-]?tests?\b/i,
+  /\bintegration[\s-]?tests?\b/i,
+  /\bregression[\s-]?tests?\b/i,
+  /\bsnapshot[\s-]?tests?\b/i,
+  /\btest[\s-]?(?:suite|case)s?\b/i,
+  /\bcode coverage\b|\btest coverage\b/i,
+  // "the tests pass" in its ordinary phrasings — the subject is the suite even
+  // when no runner or kind is named ("All tests pass", "tests are green").
+  /\btests?\s+(?:pass(?:es|ed|ing)?|(?:are\s+|is\s+)?green)\b/i,
+  // runners
+  /\b(?:vitest|jest|mocha|pytest|junit|rspec|phpunit|karma|ava)\b/i,
+  /\b(?:npm|pnpm|yarn|bun|bunx|go|cargo|make)\s+(?:run\s+)?tests?\b/i,
+  // this repo's own composite gate ("bun run check", with or without flags)
+  /\b(?:npm|pnpm|yarn|bun|bunx)\s+run\s+check\b/i,
+  // static analysis / build / CI gates
+  /\btype[\s-]?check(?:s|ing)?\b/i,
+  /\b(?:tsc|tsrs|eslint|stylelint|prettier|biome|ruff|mypy|clippy)\b/i,
+  /\blint(?:s|ing)?\b/i,
+  /\bcompiles?\s+(?:cleanly|without errors)\b/i,
+  /\bbuild\s+(?:pass(?:es|ed)?|succeed(?:s|ed)?|(?:is\s+)?(?:green|clean))\b/i,
+  /\bci\s+(?:is\s+)?(?:pass(?:es|ed|ing)?|green)\b/i,
+  /\bformat(?:ting)?\s+(?:is\s+)?(?:clean|correct)\b/i,
+  // Chinese
+  /单元测试|单测|集成测试|回归测试|类型检查|类型校验|测试覆盖率|代码覆盖率|静态检查|测试用例全部通过/,
+];
+
+/**
+ * Stored title of the synthesized holistic fallback check (one broad agent
+ * verify over the whole deliverable, used when a task opted into verify without
+ * decomposing into criteria). The server persists this fixed English string;
+ * clients match against it to render a localized display title instead.
+ */
+export const HOLISTIC_CHECK_TITLE = 'Task delivery acceptance';
+
+/**
+ * Whether a proposed acceptance check is really one of the repo's programmatic
+ * test / static-analysis gates rather than a delivery outcome a person accepts.
+ *
+ * Pass every field that names the check — title, category, and the plan item's
+ * `method` — because the give-away is as often in the how ("run `bun run test`")
+ * as in the what.
+ *
+ * This does NOT mean "the verifier is a program": a CLI behavior check asserted
+ * by a command is a perfectly good acceptance item. It means the *subject* of
+ * the check is the test suite itself.
+ */
+export const isProgrammaticTestCheck = (...fields: (string | null | undefined)[]): boolean => {
+  const text = fields.filter(Boolean).join(' \n ');
+  if (!text.trim()) return false;
+  return PROGRAMMATIC_TEST_PATTERNS.some((pattern) => pattern.test(text));
+};
+
+/** Why a programmatic-test check was dropped — shared by every surface that drops one. */
+export const PROGRAMMATIC_TEST_CHECK_HINT =
+  'Unit / integration tests, type-checks and lint gates are preconditions of shipping, not acceptance items — they are noise on the acceptance page. Report them in the narrative (report.md) instead, and keep the checks for outcomes a person can judge.';
+
+/**
+ * The product object being accepted. Kept polymorphic so the acceptance aggregate
+ * is not coupled to task-only workflows: a future run can accept a topic,
+ * document, artifact, release, etc. without another schema reshape.
+ */
+/**
+ * `goal_gate`: a Goal's decision gate — a human decision a batch is held on
+ * (the release review), reviewed with its evidence like any delivery.
+ */
+export const acceptanceSubjectTypes = [
+  'task',
+  'topic',
+  'document',
+  'standalone',
+  'goal_gate',
+  'site',
+] as const;
+export type AcceptanceSubjectType = (typeof acceptanceSubjectTypes)[number];
+// A site's standing review is created only with the site itself, never through the generic acceptance API.
+export const creatableAcceptanceSubjectTypes = [
+  'task',
+  'topic',
+  'document',
+  'standalone',
+  'goal_gate',
+] as const;
+
+/**
+ * Business-level acceptance state. Check-level and run-level verdicts stay in the
+ * verify vocabulary (`passed` / `failed`); the aggregate exposes the user's
+ * outcome language (`accepted` / `rejected`).
+ */
+/**
+ * Who can see a verify artifact (a run's report page, an acceptance page)
+ * beyond its creator:
+ *
+ * - `public` — anyone holding the link.
+ * - `private` — the creator and members of the row's own workspace. In a
+ *   workspace this is "shared with the team", the default there.
+ * - `owner` — the creator alone, even inside a workspace.
+ *
+ * Personal-scope rows default to `public` (the page is meant to be linked from
+ * PRs / reports); workspace-scope rows default to `private`, so org data reaches
+ * every member without leaking past the workspace.
+ */
+export const verifyVisibilities = ['private', 'public', 'owner'] as const;
+export type VerifyVisibility = (typeof verifyVisibilities)[number];
+
+/** Whether a member of the row's workspace (not its creator) may read it. */
+export const isWorkspaceReadableVisibility = (visibility: VerifyVisibility) =>
+  visibility !== 'owner';
+
+export const acceptanceVisibilities = verifyVisibilities;
+export type AcceptanceVisibility = VerifyVisibility;
+
+export const acceptanceStatuses = [
+  'pending',
+  'planned',
+  'verifying',
+  'repairing',
+  // Verification settled (passed OR failed); waiting for the user's
+  // accept/reject — the human decision closes the lifecycle, the verdict is a
+  // recommendation either way.
+  'delivered',
+  'accepted',
+  'closed',
+  'rejected',
+  'errored',
+] as const;
+export type AcceptanceStatus = (typeof acceptanceStatuses)[number];
+
+/**
+ * The user's per-check verdict on the acceptance union. `accept` and `ignore`
+ * are sticky — both settle the check across later rounds; `reject` binds to
+ * the round it was made on and becomes iteration history once a newer round
+ * lands.
+ */
+export const acceptanceCheckReviewActions = ['accept', 'ignore', 'reject'] as const;
+export type AcceptanceCheckReviewAction = (typeof acceptanceCheckReviewActions)[number];
+
+/**
+ * Why a reviewer rejected a check. The offline baseline found that
+ * three different models converged on the same "wrong" answer for 24 of the
+ * checks a human had rejected — because the reject button is the only outbound
+ * channel on the page, so it carries three unrelated jobs at once. Only `unmet`
+ * is learnable from the check spec; the other two are a different question
+ * entirely, and folding them into one label caps how good any reviewer (human
+ * or model) can look.
+ *
+ * - unmet:       the delivery does not satisfy THIS check
+ * - new-idea:    the check passes, but the reviewer wants something different
+ * - no-evidence: the evidence does not show enough to judge the check at all
+ */
+export const acceptanceRejectIntents = ['unmet', 'new-idea', 'no-evidence'] as const;
+export type AcceptanceRejectIntent = (typeof acceptanceRejectIntents)[number];
+
+/** What an automated reviewer proposes for a check. Deliberately narrower than
+ *  the human's vocabulary: a model never proposes `ignore`, which is a statement
+ *  about the reviewer's priorities rather than about the delivery.
+ *
+ *  `unjudgeable` is NOT a softer `reject`. It means the criterion asks for
+ *  something no reader can confirm — re-running the delivered scripts, building,
+ *  driving a live system — so no capture could ever settle it and another
+ *  delivery attempt is wasted. Thin or missing evidence stays a `reject`,
+ *  because a builder can fix that. The two are separate values because folding
+ *  them together made "the delivery fell short" and "this reviewer cannot decide"
+ *  indistinguishable in the agreement statistics. */
+export const reviewPredictionActions = ['accept', 'reject', 'unjudgeable'] as const;
+export type ReviewPredictionAction = (typeof reviewPredictionActions)[number];
+
+/**
+ * How a review attempt ended. Split from the verdict for the same reason
+ * `verify_check_results` splits `status` from `verdict`: an attempt can finish
+ * without producing a judgement at all, and "no judgement" must be recorded
+ * rather than inferred from a missing row.
+ *
+ * Without this, four different situations collapse into "no row" — the model
+ * passed the check, it had no frame to look at, the call failed, or nobody ever
+ * asked. Only the first is the model's opinion, so miss rate (the metric this
+ * whole feature exists to move) has no denominator. A silent provider outage
+ * also becomes indistinguishable from "the model approved everything".
+ *
+ * - judged:  the model returned a verdict; `action` is set
+ * - skipped: nothing judgeable (no screenshot/GIF evidence); `action` is null
+ * - errored: the call failed or its output did not parse; `action` is null
+ */
+export const reviewPredictionStatuses = ['judged', 'skipped', 'errored'] as const;
+export type ReviewPredictionStatus = (typeof reviewPredictionStatuses)[number];
+
+/**
+ * The reviewer's verdict on a model proposal. Three-way on purpose — a flat
+ * accept/dismiss would merge two opposite training signals: "you saw a problem
+ * that isn't there" (the judgement was wrong) and "there IS a problem but you
+ * circled the wrong thing" (the judgement was RIGHT, the grounding was wrong).
+ *
+ * - confirmed:    the proposal was right; it becomes a real reject
+ * - not-an-issue: no problem here — negative signal on the judgement
+ * - misidentified: a real problem, wrong region or wrong description —
+ *   positive signal on the judgement, negative on the grounding
+ */
+export const reviewAdjudications = ['confirmed', 'not-an-issue', 'misidentified'] as const;
+export type ReviewAdjudication = (typeof reviewAdjudications)[number];
+
+/**
+ * How closely the reviewer's submitted reject matched the proposal it started
+ * from. Derived by diffing the proposal against what was actually submitted, so
+ * it costs the reviewer no extra clicks — they were writing the reject anyway.
+ * Each value isolates which part of the proposal was wrong.
+ */
+export const reviewProposalEdits = [
+  'verbatim',
+  'comment-edited',
+  'region-moved',
+  'rewritten',
+] as const;
+export type ReviewProposalEdit = (typeof reviewProposalEdits)[number];
+
+/** The medium of a captured evidence artifact. */
+export const verifyEvidenceTypes = [
+  'screenshot',
+  'gif',
+  'video',
+  // A delivered or captured sound: TTS output, a recorded voice reply, an
+  // alert tone. Plays inline on the acceptance page — without it, audio
+  // deliverables could only be published as an unplayable "text" blob.
+  'audio',
+  'text',
+  // Prose evidence (root-cause write-ups, structured findings) — rendered as
+  // body markdown instead of the monospace raw-text box `text` gets.
+  'markdown',
+  'dom_snapshot',
+  'transcript',
+  // One command execution: a readable text payload plus structured execution
+  // facts, provenance and stdout / stderr / recording artifacts in metadata.
+  'terminal',
+] as const;
+export type VerifyEvidenceType = (typeof verifyEvidenceTypes)[number];
+
+/** The part of a criterion's `requiredEvidence` entry the coverage gate reads. */
+export interface RequiredEvidenceCoverageSpec {
+  scope?: 'deliverable' | 'run_evidence' | 'task_artifacts';
+  type: VerifyEvidenceType;
+}
+
+/**
+ * Same-medium types that also satisfy a declared requirement. The gate checks
+ * that an artifact of the right medium exists; whether it proves the criterion
+ * is the judge's call. Without this, a recording uploaded as `video` against a
+ * `gif` requirement, or a CLI log uploaded as `text` against `transcript`,
+ * failed every repair round on a label while the judge never saw the artifact.
+ * A GIF is a run of screenshots, and judges receive it as a frame sheet (see
+ * `renderGifFrameSheet`), so it also answers a `screenshot` requirement — a GIF
+ * uploaded as `screenshot` is stored as `gif`, which otherwise failed the gate
+ * on the very artifact it asked for. `dom_snapshot` and `audio` have no
+ * substitute.
+ */
+const EVIDENCE_SATISFIED_BY: Partial<Record<VerifyEvidenceType, VerifyEvidenceType[]>> = {
+  gif: ['video'],
+  markdown: ['text', 'transcript'],
+  screenshot: ['gif'],
+  text: ['markdown', 'transcript'],
+  transcript: ['text', 'markdown'],
+  video: ['gif'],
+};
+
+/**
+ * Read the (optional) evidence requirement a criterion declares on its config.
+ * Evidence-driven criteria list the artifact types they need under
+ * `verifierConfig.requiredEvidence`; everything else returns undefined.
+ */
+export const readRequiredEvidence = <T extends RequiredEvidenceCoverageSpec>(
+  config: Record<string, unknown> | undefined | null,
+): T[] | undefined => {
+  const raw = config?.requiredEvidence;
+  return Array.isArray(raw) ? (raw as T[]) : undefined;
+};
+
+/**
+ * Which required evidence types are still missing for a criterion — pure, so the
+ * structural gate is unit-testable without a database. Returns `[]` when the
+ * item declares no evidence requirement (nothing to gate on).
+ */
+export const coverageGaps = (
+  required: RequiredEvidenceCoverageSpec[] | undefined,
+  evidence: { type: VerifyEvidenceType }[],
+): VerifyEvidenceType[] => {
+  if (!required?.length) return [];
+  const present = new Set(evidence.map((e) => e.type));
+  return [...new Set(required.map((r) => r.type))].filter(
+    (t) => !present.has(t) && !EVIDENCE_SATISFIED_BY[t]?.some((alt) => present.has(alt)),
+  );
+};
+
+/**
+ * Run-evidence types a criterion still misses. `deliverable` / `task_artifacts`
+ * requirements are resolved by the verifier from the operation's documents and
+ * files, so only `run_evidence` must exist as verify_evidence rows. This is the
+ * one coverage rule shared by the builder handoff, the CLI's publish report and
+ * the structural gate: when they disagree, a builder that already evidenced a
+ * criterion is treated as missing evidence.
+ */
+export const runEvidenceGaps = (
+  config: Record<string, unknown> | undefined | null,
+  evidence: { type: VerifyEvidenceType }[],
+): VerifyEvidenceType[] =>
+  coverageGaps(
+    readRequiredEvidence(config)?.filter((spec) => !spec.scope || spec.scope === 'run_evidence'),
+    evidence,
+  );
+/**
+ * Evidence whose payload is text a reader or model can take in directly. A
+ * `terminal` evidence belongs here because its payload is the text fallback of
+ * the execution, written for exactly the readers that have no player.
+ */
+export const verifyTextEvidenceTypes: ReadonlySet<string> = new Set([
+  'dom_snapshot',
+  'markdown',
+  'terminal',
+  'text',
+  'transcript',
+]);
+
+/**
+ * Every stored file an evidence row references: its own payload file, plus —
+ * for a `terminal` evidence — the stdout / stderr / output / recording files its
+ * record names. Anything that follows evidence to its files (library hiding,
+ * permanent purge) must use this, or those artifacts outlive their evidence.
+ * Reads ids leniently; the record itself was validated when it was stored.
+ */
+export const verifyEvidenceFileIds = (evidence: {
+  fileId?: string | null;
+  metadata?: unknown;
+  type: string;
+}): string[] => {
+  const ids = evidence.fileId ? [evidence.fileId] : [];
+  if (evidence.type !== 'terminal') return ids;
+  const artifacts = (evidence.metadata as { terminal?: { artifacts?: unknown } } | null | undefined)
+    ?.terminal?.artifacts;
+  if (!artifacts || typeof artifacts !== 'object') return ids;
+  for (const artifact of Object.values(artifacts as Record<string, unknown>)) {
+    const fileId = (artifact as { fileId?: unknown } | null)?.fileId;
+    if (typeof fileId === 'string' && fileId.length > 0) ids.push(fileId);
+  }
+  return [...new Set(ids)];
+};
+
+/** Who / what captured an evidence artifact (provenance). */
+export const verifyEvidenceCapturedBy = [
+  'agent',
+  'agent-browser',
+  'cdp',
+  'cli',
+  'program',
+  'llm_judge',
+] as const;
+export type VerifyEvidenceCapturedBy = (typeof verifyEvidenceCapturedBy)[number];
+
+/**
+ * How an agent marker on a video reads.
+ *
+ * - step:  an action the agent performed, logged while driving the recording
+ * - check: something the agent verified on this frame — a claim for the reviewer
+ *   to audit, never a pass
+ * - flag:  an anomaly the agent noticed and judged harmless, disclosed so the
+ *   reviewer can disagree
+ */
+export const verifyEvidenceChapterKinds = ['check', 'flag', 'step'] as const;
+export type VerifyEvidenceChapterKind = (typeof verifyEvidenceChapterKinds)[number];
+
+/** An agent-authored marker on a video evidence (`verify_evidence.metadata.chapters`). */
+export interface VerifyEvidenceChapter {
+  kind: VerifyEvidenceChapterKind;
+  /** Short name shown on the timeline; required for `step`. */
+  label?: string;
+  /** What the agent claims or noticed; required for `check` and `flag`. */
+  note?: string;
+  /** Seconds from the start of the video. */
+  t: number;
+}
+
+/** Upper bound on chapters per video — a timeline, not a transcript. */
+export const MAX_VERIFY_EVIDENCE_CHAPTERS = 100;
+
+const trimmedText = (value: unknown, max: number) =>
+  typeof value === 'string' && value.trim() ? value.trim().slice(0, max) : undefined;
+
+/**
+ * Read `chapters` from an evidence metadata bag (or a raw array), dropping
+ * malformed entries instead of failing: chapters guide the reviewer, so one bad
+ * marker must never cost the upload. Returns them sorted by time, or
+ * `undefined` when none survive.
+ */
+export const readEvidenceChapters = (value: unknown): VerifyEvidenceChapter[] | undefined => {
+  let raw: unknown;
+  if (Array.isArray(value)) raw = value;
+  else if (value && typeof value === 'object') raw = (value as { chapters?: unknown }).chapters;
+  if (!Array.isArray(raw)) return undefined;
+
+  const chapters: VerifyEvidenceChapter[] = [];
+  for (const entry of raw) {
+    if (!entry || typeof entry !== 'object') continue;
+    const { kind, label, note, t } = entry as Record<string, unknown>;
+    if (typeof t !== 'number' || !Number.isFinite(t) || t < 0) continue;
+    if (!verifyEvidenceChapterKinds.includes(kind as VerifyEvidenceChapterKind)) continue;
+    const chapter: VerifyEvidenceChapter = { kind: kind as VerifyEvidenceChapterKind, t };
+    const text = { label: trimmedText(label, 80), note: trimmedText(note, 500) };
+    if (chapter.kind === 'step' ? !text.label : !text.note) continue;
+    if (text.label) chapter.label = text.label;
+    if (text.note) chapter.note = text.note;
+    chapters.push(chapter);
+  }
+  if (chapters.length === 0) return undefined;
+  return chapters.sort((a, b) => a.t - b.t).slice(0, MAX_VERIFY_EVIDENCE_CHAPTERS);
+};
+
+/**
+ * Canonicalize the `chapters` key of an evidence metadata bag before it is
+ * stored: malformed markers are dropped, and chapters on anything but a video
+ * are removed (they have no timeline to sit on). Other keys pass through.
+ */
+export const normalizeEvidenceMetadata = (metadata: unknown, type: string): unknown => {
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return metadata;
+  // Only a `terminal` row may carry an execution record — on any other medium
+  // it would claim provenance no reader checks.
+  if (type !== 'terminal' && 'terminal' in metadata) {
+    const { terminal: _terminal, ...rest } = metadata as Record<string, unknown>;
+    return normalizeEvidenceMetadata(Object.keys(rest).length > 0 ? rest : null, type);
+  }
+  if (!('chapters' in metadata)) return metadata;
+  const { chapters: _chapters, ...rest } = metadata as Record<string, unknown>;
+  const chapters = type === 'video' ? readEvidenceChapters(metadata) : undefined;
+  if (chapters) return { ...rest, chapters };
+  return Object.keys(rest).length > 0 ? rest : null;
+};
+
+/**
+ * A video timestamp as `m:ss.cc` — a skeleton flash can last a handful of
+ * frames. Rounds to whole centiseconds first so 59.999s carries into the next
+ * minute (`1:00.00`) instead of reading `0:60.00`.
+ */
+export const formatVideoTimestamp = (seconds: number) => {
+  if (!Number.isFinite(seconds) || seconds < 0) return '0:00.00';
+  const centiseconds = Math.round(seconds * 100);
+  const minutes = Math.floor(centiseconds / 6000);
+  const rest = (centiseconds - minutes * 6000) / 100;
+  return `${minutes}:${rest.toFixed(2).padStart(5, '0')}`;
+};
+
+/**
+ * The whole frame. A reviewer note on a video that marks a moment or a span
+ * without circling an area carries this region.
+ */
+export const FULL_FRAME_RECT = { height: 1, width: 1, x: 0, y: 0 } as const;
+
+export const isFullFrameRect = (rect: { height: number; width: number; x: number; y: number }) =>
+  rect.x === 0 && rect.y === 0 && rect.width === 1 && rect.height === 1;
+
+/** Default cap on automatic repair rounds when a rubric doesn't override it. */
+export const DEFAULT_MAX_REPAIR_ROUNDS = 3;
+
+/**
+ * Round budget applied when the user left a goal's round cap untouched.
+ *
+ * A goal has *two* independent budgets and they must never be written from one
+ * value: this one caps the outer loop (how many task topics the goal may spawn,
+ * `tasks.config.goal.maxIterations`), while {@link DEFAULT_MAX_REPAIR_ROUNDS}
+ * caps the inner auto-repair loop *within* a single round
+ * (`tasks.config.verify.maxIterations`). Their product is the worst-case number
+ * of agent runs a goal can pay for.
+ */
+export const DEFAULT_GOAL_MAX_ROUNDS = 8;
+
+/** Bounds the round budget a goal may be created with. */
+export const GOAL_MAX_ROUNDS_RANGE = { max: 10, min: 2 } as const;
+
+/**
+ * The LobeHub conversation an ingested report was authored in. Lets the report
+ * link back to (and later resume) the agent session that produced it. Lives here
+ * because the CLI authors it (from the child env the runtime echoes in) before
+ * any other layer sees it.
+ */
+export interface VerifyRunOrigin {
+  /** The agent that ran the verification. */
+  agentId?: string;
+  /** The agent operation (one execution) that produced the report. */
+  operationId?: string;
+  /** The topic to reopen to continue from this report. */
+  topicId?: string;
+}
+
+/**
+ * GOMS-KLM interaction cost — the standard model for pricing a verification
+ * round's *user-equivalent* interaction cost.
+ *
+ * The seam is deliberate: a UI driver (the acceptance skill's agent-browser
+ * wrapper) only emits raw **operator counts** per action into a JSONL trace; the
+ * platform turns counts into seconds with the timing model below. Keeping the
+ * timing here rather than in the driver means every report is priced by one
+ * model, and any published `interactionCost` can be recomputed from its trace.
+ */
+export const GOMS_KLM_MODEL = 'goms-klm@lobe-v1';
+
+/** Schema tag every trace atom carries; a foreign tag is not summed. */
+export const GOMS_KLM_TRACE_SCHEMA = 'lobehub.agentBrowserKlmTrace@1';
+
+/**
+ * Conventional trace filename inside a report directory. `acceptance run ingest`
+ * picks it up automatically — absent means the round simply has no interaction
+ * cost (a CLI-only run, or a machine without agent-browser), never an error.
+ */
+export const GOMS_KLM_TRACE_FILE = 'interaction-trace.jsonl';
+
+/**
+ * Seconds per KLM operator (Card, Moran & Newell), tuned for pointer-driven web
+ * UI. `T_char` prices one typed character; `R_ms` is measured wait, not modeled.
+ */
+export const GOMS_KLM_TIMING_SECONDS = {
+  H: 0.4,
+  K: 0.2,
+  M: 1.35,
+  P: 1.1,
+  T_char: 0.2,
+} as const;

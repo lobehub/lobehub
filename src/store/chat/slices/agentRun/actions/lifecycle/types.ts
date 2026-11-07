@@ -1,5 +1,5 @@
 import type { AgentState } from '@lobechat/agent-runtime';
-import type { ConversationContext, UIChatMessage } from '@lobechat/types';
+import type { ChatMessageError, ConversationContext, UIChatMessage } from '@lobechat/types';
 
 import type { AgentRuntimeType } from '@/store/chat/slices/agentRun/actions/dispatch/agentDispatcher';
 import type { OperationStatus } from '@/store/chat/slices/operation/types';
@@ -67,13 +67,14 @@ export interface TerminalPersistedEvent extends RunLifecycleEventBase {
 export interface RunCompleteEvent extends RunLifecycleEventBase {
   assistantMessageId?: string;
   /**
-   * Pre-resolved desktop-notification payload for transports whose final content
-   * lives in executor memory rather than the store (hetero's `accContent`). When
-   * present, {@link AgentRunLifecycle.afterRunComplete} shows it verbatim instead
-   * of deriving the body from `messagesMap`. The client adapter omits it (it reads
-   * the store); gateway/hetero supply it.
+   * Final assistant content (raw markdown) for transports whose reply lives in
+   * executor memory rather than the store (hetero's `accContent`). When present,
+   * {@link AgentRunLifecycle.afterRunComplete} feeds it to the notification body
+   * instead of deriving from `messagesMap`. The client adapter omits it (it reads
+   * the store); hetero supplies it. A `failed` run announces its failure only
+   * when the transport supplies this, with `error` (when known) as the reason.
    */
-  notification?: { body: string; title?: string };
+  notification?: { content?: string; error?: ChatMessageError };
   operationStatus?: OperationStatus;
   /**
    * Raw runtime terminal/parked status (client `AgentState['status']`), used to

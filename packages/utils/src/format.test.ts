@@ -11,9 +11,11 @@ import {
   formatShortenNumber,
   formatSize,
   formatSpeed,
+  formatSpendTime,
   formatTime,
   formatTokenNumber,
   formatUsageValue,
+  formatUsd,
 } from './format';
 
 describe('format', () => {
@@ -99,11 +101,6 @@ describe('format', () => {
       expect(formatTime(7200)).toBe('2.00 h');
     });
 
-    it('should handle edge cases', () => {
-      expect(formatTime(0)).toBe('0.0 s');
-      expect(formatTime(59.99)).toBe('60.0 s');
-      expect(formatTime(3599.99)).toBe('60.0 min');
-    });
     it('should handle edge cases', () => {
       expect(formatTime(0)).toBe('0.0 s');
       expect(formatTime(59.99)).toBe('60.0 s');
@@ -214,6 +211,11 @@ describe('format', () => {
       expect(formatPriceByCurrency(1234.56, 'USD')).toBe('1,234.56');
     });
 
+    it('should preserve meaningful precision for sub-dollar unit prices', () => {
+      expect(formatPriceByCurrency(0.075, 'USD')).toBe('0.075');
+      expect(formatPriceByCurrency(0.25, 'USD')).toBe('0.25');
+    });
+
     it('should use the correct CNY_TO_USD conversion rate', () => {
       const price = 1000;
       const expectedCNY = formatPrice(price / USD_TO_CNY);
@@ -284,6 +286,13 @@ describe('format', () => {
     it('formats million-level token counts with M suffix', () => {
       expect(formatUsageValue(1_000_000)).toBe('1M');
       expect(formatUsageValue(1_500_000)).toBe('1.5M');
+      expect(formatUsageValue(999_900_000)).toBe('999.9M');
+    });
+
+    it('rolls over to B suffix once counts reach a billion (1000M)', () => {
+      expect(formatUsageValue(1_000_000_000)).toBe('1B');
+      expect(formatUsageValue(9_092_900_000)).toBe('9.1B');
+      expect(formatUsageValue(10_285_700_000)).toBe('10.3B');
     });
   });
 
@@ -301,6 +310,50 @@ describe('format', () => {
       const date = new Date('2023-05-15T12:00:00Z');
       const expectedFormat = dayjs(date).format('YYYY-MM-DD');
       expect(formatDate(date)).toBe(expectedFormat);
+    });
+  });
+
+  describe('formatSpendTime', () => {
+    it('should drop the year for entries from the current year', () => {
+      const date = dayjs().month(6).date(12).hour(12).minute(12).second(32);
+      expect(formatSpendTime(date.toDate())).toBe(date.format('MMM D HH:mm:ss'));
+    });
+
+    it('should keep the year for entries from another year', () => {
+      const date = dayjs().subtract(1, 'year').month(6).date(12);
+      expect(formatSpendTime(date.toDate())).toBe(date.format('MMM D, YYYY HH:mm:ss'));
+    });
+
+    it('should accept an ISO string', () => {
+      const iso = dayjs().subtract(2, 'year').startOf('year').toISOString();
+      expect(formatSpendTime(iso)).toBe(dayjs(iso).format('MMM D, YYYY HH:mm:ss'));
+    });
+
+    it('should fall back for empty and unparseable input', () => {
+      expect(formatSpendTime()).toBe('--');
+      expect(formatSpendTime(null)).toBe('--');
+      expect(formatSpendTime('')).toBe('--');
+      expect(formatSpendTime('not a date')).toBe('--');
+    });
+  });
+
+  describe('formatUsd', () => {
+    it('formats dollars with grouping and two decimals', () => {
+      expect(formatUsd(0)).toBe('$0.00');
+      expect(formatUsd(1234.5)).toBe('$1,234.50');
+    });
+
+    it('keeps up to four decimals below one dollar', () => {
+      expect(formatUsd(0.01234)).toBe('$0.0123');
+      expect(formatUsd(0.0001)).toBe('$0.0001');
+    });
+
+    it('shows a floor marker for tiny positive amounts', () => {
+      expect(formatUsd(0.00001)).toBe('<$0.0001');
+    });
+
+    it('returns a placeholder for non-finite values', () => {
+      expect(formatUsd(Number.NaN)).toBe('--');
     });
   });
 });

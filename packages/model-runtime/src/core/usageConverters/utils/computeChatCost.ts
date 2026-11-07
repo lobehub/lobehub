@@ -1,4 +1,3 @@
-import { CREDITS_PER_DOLLAR, USD_TO_CNY } from '@lobechat/const/currency';
 import type { ModelTokensUsage } from '@lobechat/types';
 import debug from 'debug';
 import type {
@@ -9,6 +8,9 @@ import type {
   PricingUnitName,
   TieredPricingUnit,
 } from 'model-bank';
+
+import { CREDITS_PER_DOLLAR, USD_TO_CNY } from '../../../const/currency';
+import { DEFAULT_CACHE_TTL } from '../../anthropicCompatibleFactory/resolveCacheTTL';
 
 const log = debug('lobe-cost:computeChatPricing');
 
@@ -54,6 +56,7 @@ export interface PricingComputationResult {
 
 interface UnitQuantityResolverContext {
   hasDedicatedAudioCacheReadUnit: boolean;
+  hasDedicatedAudioInputUnit: boolean;
   hasDedicatedImageCacheReadUnit: boolean;
   hasDedicatedModalityCacheReadUnit: boolean;
 }
@@ -117,28 +120,80 @@ const sumDefinedTokens = (...values: Array<number | undefined>) => {
   return definedValues.reduce((sum, value) => sum + value, 0);
 };
 
+const hasAudioInputBreakdown = (usage: ModelTokensUsage) =>
+  typeof usage.inputAudioTokens === 'number';
+
+const resolveTextPricedAudioTokens = (
+  usage: ModelTokensUsage,
+  context: UnitQuantityResolverContext,
+) =>
+  sumDefinedTokens(
+    resolveInputTextTokens(usage),
+    context.hasDedicatedAudioInputUnit ? undefined : resolveInputAudioTokens(usage),
+  );
+
+// reasoning tokens cost within output tokens
+const resolveOutputTokens = (usage: ModelTokensUsage) => {
+  const { outputTextTokens, totalOutputTokens, outputReasoningTokens = 0 } = usage;
+  const reasoningTokens = outputReasoningTokens;
+
+  if (typeof outputTextTokens === 'number') {
+    return outputTextTokens + reasoningTokens;
+  }
+
+  if (typeof totalOutputTokens === 'number') {
+    return totalOutputTokens;
+  }
+
+  if (typeof usage.outputReasoningTokens === 'number') {
+    return usage.outputReasoningTokens;
+  }
+
+  return undefined;
+};
+
 const UNIT_QUANTITY_RESOLVERS: Partial<Record<PricingUnitName, UnitQuantityResolver>> = {
-  textInput: (usage) => {
+  textInput: (usage, context) => {
     const toolTokens = usage.inputToolTokens ?? 0;
 
     if (hasCachedModalityBreakdown(usage)) {
-      const textTokens = resolveInputTextTokens(usage);
-      if (textTokens === undefined && toolTokens === 0) return undefined;
+      const textPricedTokens = resolveTextPricedAudioTokens(usage, context);
+      if (textPricedTokens === undefined && toolTokens === 0) return undefined;
 
-      return (textTokens ?? 0) + toolTokens;
+      return (textPricedTokens ?? 0) + toolTokens;
     }
 
     if (usage.inputCacheMissTokens !== undefined) {
       // inputCacheMissTokens only covers non-cached prompt tokens;
       // tool-use tokens (e.g. grounding results) are billed at the same input rate
       // and must be added here because there is no separate toolInput pricing unit.
-      return usage.inputCacheMissTokens + toolTokens;
+      // Provider aggregate miss counts include audio. Subtract it only when a dedicated audio
+      // unit exists; image/video allocation intentionally keeps its pre-audio behavior.
+      const dedicatedAudioTokens = context.hasDedicatedAudioInputUnit
+        ? (usage.inputAudioTokens ?? 0)
+        : 0;
+
+      return Math.max(0, usage.inputCacheMissTokens - dedicatedAudioTokens) + toolTokens;
     }
 
     if (typeof usage.inputCachedTokens === 'number' && typeof usage.totalInputTokens === 'number') {
       throw new Error(
         'Missing inputCacheMissTokens! You can set it by inputCacheMissTokens = totalInputTokens - inputCachedTokens',
       );
+    }
+
+    if (hasAudioInputBreakdown(usage)) {
+      const textPricedTokens = resolveTextPricedAudioTokens(usage, context) ?? 0;
+      const knownPromptTokens =
+        (usage.inputTextTokens ?? 0) +
+        (usage.inputAudioTokens ?? 0) +
+        (usage.inputImageTokens ?? 0) +
+        (usage.inputVideoTokens ?? 0);
+      const promptTokensFromTotal = Math.max(0, (usage.totalInputTokens ?? 0) - toolTokens);
+      // Keep unclassified provider tokens (for example citations) in the text bucket.
+      const unclassifiedTokens = Math.max(0, promptTokensFromTotal - knownPromptTokens);
+
+      return textPricedTokens + unclassifiedTokens + toolTokens;
     }
 
     // When tool tokens are present, totalInputTokens already includes them
@@ -175,31 +230,14 @@ const UNIT_QUANTITY_RESOLVERS: Partial<Record<PricingUnitName, UnitQuantityResol
     return usage.inputCachedTokens;
   },
   textInput_cacheWrite: (usage) => usage.inputWriteCacheTokens,
-  // reasoning tokens cost within output tokens
-  textOutput: (usage) => {
-    const { outputTextTokens, totalOutputTokens, outputReasoningTokens = 0 } = usage;
-    const reasoningTokens = outputReasoningTokens;
-
-    if (typeof outputTextTokens === 'number') {
-      return outputTextTokens + reasoningTokens;
-    }
-
-    if (typeof totalOutputTokens === 'number') {
-      return totalOutputTokens;
-    }
-
-    if (typeof usage.outputReasoningTokens === 'number') {
-      return usage.outputReasoningTokens;
-    }
-
-    return undefined;
-  },
+  textOutput: resolveOutputTokens,
 
   imageInput: resolveInputImageTokens,
   imageInput_cacheRead: (usage) => usage.inputCachedImageTokens,
   imageOutput: (usage) => usage.outputImageTokens,
 
   videoInput: resolveInputVideoTokens,
+  videoGeneration: (usage) => usage.outputVideoTokens,
 
   imageGeneration: () => undefined,
 
@@ -269,35 +307,100 @@ const computeTieredCredits = (
   return { credits, segments };
 };
 
+/**
+ * Lookup params a chat card can key on the request's own usage. Callers never pass these:
+ * the ranges are in million tokens (e.g. `[0.032, 0.128]`) and the thinking flag is
+ * `[true]`/`[false]`, so they are resolved here from the reported token counts.
+ */
+const resolveUsageLookupParam = (
+  param: string,
+  usage: ModelTokensUsage,
+): number | boolean | undefined => {
+  switch (param) {
+    // Providers such as Qwen pick the input tier from the whole prompt, cached part included.
+    case 'textInputRange': {
+      return usage.totalInputTokens ?? usage.inputTextTokens;
+    }
+    case 'textOutputRange': {
+      return resolveOutputTokens(usage);
+    }
+    // Thinking output is only billed at the thinking rate when the model actually reasoned.
+    case 'thinkingMode': {
+      return (usage.outputReasoningTokens ?? 0) > 0;
+    }
+  }
+};
+
+const RANGE_SEGMENT = /^\[\s*([\d.]+)\s*,\s*([\d.]+|infinity)\s*\]$/;
+const LITERAL_SEGMENT = /^\[([^,]*)\]$/;
+
+/**
+ * Matches one `_`-separated lookup key segment against a param value.
+ * Ranges are left-open and right-closed (`(lo, hi]`, with 0 included), matching vendor
+ * wording such as "32K < tokens ≤ 128K".
+ */
+const matchesKeySegment = (segment: string, value: string | number | boolean) => {
+  const range = RANGE_SEGMENT.exec(segment);
+  if (range) {
+    if (typeof value !== 'number') return false;
+    const millions = value / 1_000_000;
+    const lower = Number(range[1]);
+    const upper = range[2] === 'infinity' ? Number.POSITIVE_INFINITY : Number(range[2]);
+
+    return (millions > lower || (lower === 0 && millions === 0)) && millions <= upper;
+  }
+
+  const literal = LITERAL_SEGMENT.exec(segment);
+  if (literal) return literal[1] === String(value);
+
+  return segment === String(value);
+};
+
 const resolveLookupKey = (
   unit: LookupPricingUnit,
+  usage: ModelTokensUsage,
   options: ComputeChatCostOptions | undefined,
 ): { key?: string; missingParams?: string[] } => {
   if (!unit.lookup?.pricingParams?.length) return { key: undefined };
 
   const missingParams: string[] = [];
-  const params = unit.lookup.pricingParams.map((param) => {
-    const source = options?.lookupParams?.[param];
-    if (source === undefined || source === null) {
-      missingParams.push(param);
-      return 'undefined';
-    }
+  const values = unit.lookup.pricingParams.map((param) => {
+    // Paths that never resolve a TTL (e.g. OpenAI-compatible providers falling back to an
+    // Anthropic card) still write to the cache, which the API does for its default 5 minutes.
+    const source =
+      options?.lookupParams?.[param] ??
+      (param === 'ttl' && DEFAULT_CACHE_TTL in unit.lookup.prices
+        ? DEFAULT_CACHE_TTL
+        : resolveUsageLookupParam(param, usage));
+    if (source === undefined || source === null) missingParams.push(param);
 
-    if (typeof source === 'boolean') return String(source);
-    return String(source);
+    return source;
   });
 
   if (missingParams.length > 0) return { key: undefined, missingParams };
 
-  return { key: params.join('_') };
+  const resolvedValues = values as Array<string | number | boolean>;
+  const exactKey = resolvedValues.map(String).join('_');
+  if (exactKey in unit.lookup.prices) return { key: exactKey };
+
+  const matchedKey = Object.keys(unit.lookup.prices).find((key) => {
+    const segments = key.split('_');
+    return (
+      segments.length === resolvedValues.length &&
+      segments.every((segment, index) => matchesKeySegment(segment, resolvedValues[index]))
+    );
+  });
+
+  return { key: matchedKey ?? exactKey };
 };
 
 const computeLookupCredits = (
   unit: LookupPricingUnit,
   quantity: number,
+  usage: ModelTokensUsage,
   options: ComputeChatCostOptions | undefined,
 ): { credits: number; issues?: PricingComputationIssue; key?: string } => {
-  const { key, missingParams } = resolveLookupKey(unit, options);
+  const { key, missingParams } = resolveLookupKey(unit, usage, options);
 
   if (missingParams && missingParams.length > 0) {
     return {
@@ -342,6 +445,11 @@ const resolveQuantity = (
   usage: ModelTokensUsage,
   context: UnitQuantityResolverContext,
 ) => {
+  // Character-billed units (e.g. TTS) count input characters instead of tokens.
+  if (unit.unit === 'millionCharacters') {
+    return unit.name === 'textInput' ? usage.inputCharacters : undefined;
+  }
+
   const resolver = UNIT_QUANTITY_RESOLVERS[unit.name as PricingUnitName];
   const quantity = resolver?.(usage, context);
   return typeof quantity === 'number' ? quantity : undefined;
@@ -364,9 +472,25 @@ export const computeChatCost = (
   const usdToCnyRate = options?.usdToCnyRate ?? USD_TO_CNY;
   const pricingUnitNames = new Set(pricing.units.map((unit) => unit.name));
   const hasDedicatedAudioCacheReadUnit = pricingUnitNames.has('audioInput_cacheRead');
+  const hasDedicatedAudioInputUnit = pricingUnitNames.has('audioInput');
   const hasDedicatedImageCacheReadUnit = pricingUnitNames.has('imageInput_cacheRead');
+
+  if (
+    typeof usage.inputCachedTokens === 'number' &&
+    usage.inputCachedTokens > 0 &&
+    typeof usage.inputAudioTokens === 'number' &&
+    usage.inputAudioTokens > 0 &&
+    typeof usage.inputCachedAudioTokens !== 'number' &&
+    (hasDedicatedAudioInputUnit || hasDedicatedAudioCacheReadUnit)
+  ) {
+    // Aggregate cache usage does not reveal how many audio tokens received cache pricing.
+    // Dedicated audio units make that split material, so returning a cost would require guessing.
+    return undefined;
+  }
+
   const resolverContext: UnitQuantityResolverContext = {
     hasDedicatedAudioCacheReadUnit,
+    hasDedicatedAudioInputUnit,
     hasDedicatedImageCacheReadUnit,
     hasDedicatedModalityCacheReadUnit:
       hasDedicatedAudioCacheReadUnit || hasDedicatedImageCacheReadUnit,
@@ -377,7 +501,7 @@ export const computeChatCost = (
     if (quantity === undefined) continue;
 
     if (unit.strategy === 'fixed') {
-      if (unit.unit !== 'millionTokens')
+      if (unit.unit !== 'millionTokens' && unit.unit !== 'millionCharacters')
         throw new Error(`Unsupported chat pricing unit: ${unit.unit}`);
 
       const fixedUnit = unit as FixedPricingUnit;
@@ -421,7 +545,7 @@ export const computeChatCost = (
         credits: rawCredits,
         key,
         issues: lookupIssue,
-      } = computeLookupCredits(lookupUnit, quantity, options);
+      } = computeLookupCredits(lookupUnit, quantity, usage, options);
 
       if (lookupIssue) issues.push(lookupIssue);
 

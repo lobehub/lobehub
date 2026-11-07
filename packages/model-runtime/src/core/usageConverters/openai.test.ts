@@ -2,9 +2,26 @@ import type { Pricing } from 'model-bank';
 import type OpenAI from 'openai';
 import { describe, expect, it } from 'vitest';
 
-import { convertOpenAIImageUsage, convertOpenAIResponseUsage, convertOpenAIUsage } from './openai';
+import {
+  convertOpenAIImageUsage,
+  convertOpenAIResponseUsage,
+  convertOpenAITranscriptionUsage,
+  convertOpenAIUsage,
+} from './openai';
 
 describe('convertUsage', () => {
+  it('distinguishes an explicit zero cache read from missing cache usage', () => {
+    const usage = { prompt_tokens: 100, completion_tokens: 10, total_tokens: 110 };
+    expect(convertOpenAIUsage(usage).inputCachedTokens).toBeUndefined();
+    expect(
+      convertOpenAIUsage({ ...usage, prompt_tokens_details: { cached_tokens: 0 } })
+        .inputCachedTokens,
+    ).toBe(0);
+    expect(
+      convertOpenAIUsage({ ...usage, prompt_cache_hit_tokens: 0 } as typeof usage)
+        .inputCachedTokens,
+    ).toBe(0);
+  });
   it('should convert basic OpenAI usage data correctly', () => {
     // Arrange
     const openaiUsage: OpenAI.Completions.CompletionUsage = {
@@ -100,6 +117,102 @@ describe('convertUsage', () => {
     });
   });
 
+  it('should map GPT-5.6+ cache_write_tokens and exclude them from uncached miss', () => {
+    // Official Chat Completions shape from OpenAI prompt-caching docs (GPT-5.6+):
+    // cache_write_tokens is a subset of prompt_tokens billed at 1.25× uncached input.
+    const usageWithCacheWrite = {
+      prompt_tokens: 2000,
+      prompt_tokens_details: {
+        cached_tokens: 0,
+        cache_write_tokens: 1500,
+      },
+      completion_tokens: 100,
+      total_tokens: 2100,
+    } as OpenAI.Completions.CompletionUsage;
+
+    const result = convertOpenAIUsage(usageWithCacheWrite);
+
+    expect(result).toEqual({
+      inputTextTokens: 2000,
+      inputWriteCacheTokens: 1500,
+      inputCachedTokens: 0,
+      // uncached 1× bucket must not include writes (2000 - 0 - 1500)
+      inputCacheMissTokens: 500,
+      totalInputTokens: 2000,
+      totalOutputTokens: 100,
+      outputTextTokens: 100,
+      totalTokens: 2100,
+    });
+    expect(result.inputCachedTokens).toBe(0);
+  });
+
+  it('should split miss / read / write when both cache hit and write are present', () => {
+    const usage = {
+      prompt_tokens: 3000,
+      prompt_tokens_details: {
+        cached_tokens: 1000,
+        cache_write_tokens: 800,
+      },
+      completion_tokens: 50,
+      total_tokens: 3050,
+    } as OpenAI.Completions.CompletionUsage;
+
+    const result = convertOpenAIUsage(usage);
+
+    expect(result).toMatchObject({
+      inputCachedTokens: 1000,
+      inputWriteCacheTokens: 800,
+      inputCacheMissTokens: 1200, // 3000 - 1000 - 800
+      totalInputTokens: 3000,
+    });
+  });
+
+  it('should bill textInput_cacheWrite at 1.25x without double-charging textInput', () => {
+    const pricing: Pricing = {
+      units: [
+        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheWrite', rate: 1.25, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    };
+
+    // 1M write-only input + 0 output → cost should be 1.25, not 1 + 1.25
+    const writeOnly = {
+      prompt_tokens: 1_000_000,
+      prompt_tokens_details: {
+        cached_tokens: 0,
+        cache_write_tokens: 1_000_000,
+      },
+      completion_tokens: 0,
+      total_tokens: 1_000_000,
+    } as OpenAI.Completions.CompletionUsage;
+
+    const writeOnlyResult = convertOpenAIUsage(writeOnly, { pricing });
+    expect(writeOnlyResult.inputWriteCacheTokens).toBe(1_000_000);
+    expect(writeOnlyResult.inputCacheMissTokens).toBe(0);
+    expect(writeOnlyResult.cost).toBeCloseTo(1.25, 10);
+
+    // Mixed: 500k miss @1 + 300k read @0.1 + 200k write @1.25 = 0.5 + 0.03 + 0.25 = 0.78
+    const mixed = {
+      prompt_tokens: 1_000_000,
+      prompt_tokens_details: {
+        cached_tokens: 300_000,
+        cache_write_tokens: 200_000,
+      },
+      completion_tokens: 0,
+      total_tokens: 1_000_000,
+    } as OpenAI.Completions.CompletionUsage;
+
+    const mixedResult = convertOpenAIUsage(mixed, { pricing });
+    expect(mixedResult).toMatchObject({
+      inputCacheMissTokens: 500_000,
+      inputCachedTokens: 300_000,
+      inputWriteCacheTokens: 200_000,
+    });
+    expect(mixedResult.cost).toBeCloseTo(0.78, 10);
+  });
+
   it('should preserve zero cache miss tokens for fully cached completion usage', () => {
     const pricing: Pricing = {
       units: [
@@ -148,13 +261,64 @@ describe('convertUsage', () => {
 
     // Assert
     expect(result).toEqual({
-      inputTextTokens: 100,
+      inputTextTokens: 80,
       inputAudioTokens: 20,
       totalInputTokens: 100,
       totalOutputTokens: 50,
       outputTextTokens: 50,
       totalTokens: 150,
     });
+  });
+
+  it('distinguishes omitted provider audio usage from an explicitly reported zero', () => {
+    const omitted = convertOpenAIUsage({
+      completion_tokens: 1,
+      prompt_tokens: 10,
+      total_tokens: 11,
+    } as OpenAI.Completions.CompletionUsage);
+    const reportedZero = convertOpenAIUsage({
+      completion_tokens: 1,
+      prompt_tokens: 10,
+      prompt_tokens_details: { audio_tokens: 0 },
+      total_tokens: 11,
+    } as OpenAI.Completions.CompletionUsage);
+
+    expect(omitted).not.toHaveProperty('inputAudioTokens');
+    expect(reportedZero).toHaveProperty('inputAudioTokens', 0);
+  });
+
+  it('should not double-charge aggregate OpenAI prompt tokens when audio has a dedicated unit', () => {
+    const pricing: Pricing = {
+      units: [
+        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'audioInput', rate: 10, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    };
+    const usageWithAudioInput = {
+      completion_tokens: 50,
+      prompt_tokens: 100,
+      prompt_tokens_details: { audio_tokens: 20 },
+      total_tokens: 150,
+    } as OpenAI.Completions.CompletionUsage;
+
+    const result = convertOpenAIUsage(usageWithAudioInput, { pricing });
+
+    expect(result.inputTextTokens).toBe(80);
+    expect(result.inputAudioTokens).toBe(20);
+    expect(result.cost).toBe(0.000_28);
+  });
+
+  it('does not guess cached audio tokens from OpenAI aggregate cache usage', () => {
+    const result = convertOpenAIUsage({
+      completion_tokens: 10,
+      prompt_tokens: 100,
+      prompt_tokens_details: { audio_tokens: 20, cached_tokens: 40 },
+      total_tokens: 110,
+    } as OpenAI.Completions.CompletionUsage);
+
+    expect(result.inputAudioTokens).toBe(20);
+    expect(result.inputCachedTokens).toBe(40);
+    expect(result).not.toHaveProperty('inputCachedAudioTokens');
   });
 
   it('should handle detailed output tokens correctly', () => {
@@ -235,7 +399,7 @@ describe('convertUsage', () => {
 
     // Assert
     expect(result).toEqual({
-      inputTextTokens: 150,
+      inputTextTokens: 100,
       inputAudioTokens: 50,
       inputCachedTokens: 40,
       inputCacheMissTokens: 140, // 180 - 40 (totalInputTokens - cachedTokens)
@@ -375,6 +539,7 @@ describe('convertUsage', () => {
     const responseUsage = {
       input_tokens: 100,
       input_tokens_details: {
+        cache_write_tokens: 0,
         cached_tokens: 0,
       },
       output_tokens: 200,
@@ -392,6 +557,7 @@ describe('convertUsage', () => {
     expect(result).toEqual({
       inputTextTokens: 100,
       inputCacheMissTokens: 100, // 100 - 0
+      inputCachedTokens: 0,
       totalInputTokens: 100,
       totalOutputTokens: 200,
       outputImageTokens: 60,
@@ -413,9 +579,13 @@ describe('convertUsage', () => {
     const responseUsage = {
       input_tokens: 4198,
       input_tokens_details: {
+        cache_write_tokens: 0,
         cached_tokens: 4198,
       },
       output_tokens: 598,
+      output_tokens_details: {
+        reasoning_tokens: 0,
+      },
       total_tokens: 4796,
     } as OpenAI.Responses.ResponseUsage;
 
@@ -431,6 +601,42 @@ describe('convertUsage', () => {
       totalTokens: 4796,
     });
     expect(result.cost).toBeGreaterThan(0);
+  });
+
+  it('should map GPT-5.6+ cache_write_tokens for ResponseUsage and bill cache write', () => {
+    const pricing: Pricing = {
+      units: [
+        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheWrite', rate: 1.25, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    };
+
+    const responseUsage = {
+      input_tokens: 1_000_000,
+      input_tokens_details: {
+        cached_tokens: 100_000,
+        cache_write_tokens: 400_000,
+      },
+      output_tokens: 0,
+      output_tokens_details: {
+        reasoning_tokens: 0,
+      },
+      total_tokens: 1_000_000,
+    } as OpenAI.Responses.ResponseUsage;
+
+    const result = convertOpenAIResponseUsage(responseUsage, { pricing });
+
+    // miss = 1_000_000 - 100_000 - 400_000 = 500_000
+    // cost = 0.5 + 0.01 + 0.5 = 1.01
+    expect(result).toMatchObject({
+      inputCacheMissTokens: 500_000,
+      inputCachedTokens: 100_000,
+      inputWriteCacheTokens: 400_000,
+      totalInputTokens: 1_000_000,
+    });
+    expect(result.cost).toBeCloseTo(1.01, 10);
   });
 
   it('should enrich completion usage with pricing cost when pricing is provided', () => {
@@ -462,7 +668,14 @@ describe('convertUsage', () => {
 
     const responseUsage = {
       input_tokens: 1_000_000,
+      input_tokens_details: {
+        cache_write_tokens: 0,
+        cached_tokens: 0,
+      },
       output_tokens: 1_000_000,
+      output_tokens_details: {
+        reasoning_tokens: 0,
+      },
       total_tokens: 2_000_000,
     } as OpenAI.Responses.ResponseUsage;
 
@@ -506,5 +719,49 @@ describe('convertOpenAIImageUsage', () => {
       totalTokens: 4174,
       cost: 0.16647, // Based on pricing: 14 * 5/1M + 0 * 10/1M + 4160 * 40/1M = 0.00007 + 0 + 0.1664 = 0.16647
     });
+  });
+});
+
+describe('convertOpenAITranscriptionUsage', () => {
+  const pricing: Pricing = {
+    units: [
+      { name: 'textInput', rate: 2.5, strategy: 'fixed', unit: 'millionTokens' },
+      { name: 'audioInput', rate: 6, strategy: 'fixed', unit: 'millionTokens' },
+      { name: 'textOutput', rate: 10, strategy: 'fixed', unit: 'millionTokens' },
+    ],
+  };
+
+  it('prices audio and text input separately when the modality split is reported', () => {
+    const usage = convertOpenAITranscriptionUsage(
+      {
+        input_token_details: { audio_tokens: 50, text_tokens: 9 },
+        input_tokens: 59,
+        output_tokens: 21,
+        total_tokens: 80,
+        type: 'tokens',
+      },
+      pricing,
+    );
+
+    expect(usage).toMatchObject({ inputAudioTokens: 50, inputTextTokens: 9, outputTextTokens: 21 });
+    // (50 * 6 + 9 * 2.5 + 21 * 10) / 1M = 0.0005325, rounded to 6 decimals by computeChatCost
+    expect(usage?.cost).toBe(0.000_533);
+  });
+
+  it('bills unsplit gateway input as audio', () => {
+    const usage = convertOpenAITranscriptionUsage(
+      { input_tokens: 151, output_tokens: 0, total_tokens: 151 },
+      pricing,
+    );
+
+    expect(usage).toMatchObject({ inputAudioTokens: 151, inputTextTokens: 0 });
+    expect(usage?.cost).toBe(0.000_906);
+  });
+
+  it('returns undefined for duration-billed usage', () => {
+    expect(convertOpenAITranscriptionUsage({ seconds: 6, type: 'duration' }, pricing)).toBe(
+      undefined,
+    );
+    expect(convertOpenAITranscriptionUsage(undefined, pricing)).toBe(undefined);
   });
 });

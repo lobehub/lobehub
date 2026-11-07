@@ -1,25 +1,9 @@
-import { render } from '@testing-library/react';
-import type { ItemType } from 'antd/es/menu/interface';
+import type { ItemType } from '@lobehub/ui';
+import { fireEvent, render, screen } from '@testing-library/react';
 import React from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import FileListItemActions, { appendTransferMenuItemsBeforeDelete } from './FileListItemActions';
-
-const mocks = vi.hoisted(() => ({
-  useFileTransferMenuItem: vi.fn(),
-}));
-
-vi.mock('@/business/client/hooks/useFileTransferMenuItem', () => ({
-  useFileTransferMenuItem: mocks.useFileTransferMenuItem,
-}));
-
-vi.mock('@/hooks/usePermission', () => ({
-  usePermission: () => ({ allowed: true }),
-}));
-
-vi.mock('../../ItemDropdown/DropdownMenu', () => ({
-  default: () => null,
-}));
 
 describe('appendTransferMenuItemsBeforeDelete', () => {
   it('keeps delete as the final menu action', () => {
@@ -45,22 +29,47 @@ describe('appendTransferMenuItemsBeforeDelete', () => {
 });
 
 describe('FileListItemActions', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   const baseProps = {
     id: 'resource-1',
     isCreatingFileParseTask: false,
     isFolder: false,
     isPage: false,
     isSupportedForChunking: false,
-    menuItems: [],
+    menu: null,
     parseFiles: vi.fn(),
     t: (key: string) => key,
   };
 
-  it('passes document entity type for page resources', () => {
-    mocks.useFileTransferMenuItem.mockReturnValue([]);
+  it('renders the menu node it is given', () => {
+    render(
+      React.createElement(FileListItemActions, {
+        ...baseProps,
+        menu: React.createElement('span', { 'data-testid': 'row-menu' }),
+      }),
+    );
 
-    render(React.createElement(FileListItemActions, { ...baseProps, isPage: true }));
+    expect(screen.getByTestId('row-menu')).toBeInTheDocument();
+  });
 
-    expect(mocks.useFileTransferMenuItem).toHaveBeenCalledWith('resource-1', 'document');
+  it('uses fileId for initial chunk parsing when the resource id is a document id', () => {
+    const parseFiles = vi.fn();
+
+    render(
+      React.createElement(FileListItemActions, {
+        ...baseProps,
+        fileId: 'file_1',
+        id: 'docs_1',
+        isSupportedForChunking: true,
+        parseFiles,
+      }),
+    );
+
+    fireEvent.click(screen.getByText('FileManager.actions.chunking'));
+
+    expect(parseFiles).toHaveBeenCalledWith(['file_1']);
   });
 });

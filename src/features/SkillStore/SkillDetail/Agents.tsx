@@ -1,12 +1,12 @@
 'use client';
 
-import { Center, Grid, Icon, Skeleton, Text } from '@lobehub/ui';
-import { cssVar } from 'antd-style';
+import { Center, cssVar, Grid, Icon, Text } from '@lobehub/ui';
 import { InboxIcon, ServerCrash } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { VirtuosoGrid } from 'react-virtuoso';
 
+import { ArticleSkeleton } from '@/components/Skeleton';
 import { useClientDataSWR } from '@/libs/swr';
 import { discoverKeys } from '@/libs/swr/keys';
 import { discoverService } from '@/services/discover';
@@ -18,6 +18,8 @@ import { agentListStyles as styles } from './style';
 import VirtuosoLoading from './VirtuosoLoading';
 
 const PAGE_SIZE = 12;
+
+const FooterSpacer = () => <div style={{ height: 16 }} />;
 
 const Agents = memo(() => {
   const { t } = useTranslation('plugin');
@@ -68,12 +70,7 @@ const Agents = memo(() => {
     return (
       <Grid gap={12} rows={2} width={'100%'}>
         {Array.from({ length: 4 }).map((_, index) => (
-          <Skeleton
-            active
-            avatar={{ shape: 'square', size: 40 }}
-            key={index}
-            paragraph={{ rows: 1 }}
-          />
+          <ArticleSkeleton avatar={40} key={index} rows={1} />
         ))}
       </Grid>
     );
@@ -111,7 +108,7 @@ const Agents = memo(() => {
       overscan={24}
       style={{ height: '50vh', width: '100%' }}
       components={{
-        Footer: isLoading ? VirtuosoLoading : () => <div style={{ height: 16 }} />,
+        Footer: isLoading ? VirtuosoLoading : FooterSpacer,
       }}
     />
   );

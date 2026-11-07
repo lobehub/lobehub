@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   addUsageToOperationMetrics,
   calculateOperationUsageMetrics,
+  EMPTY_OPERATION_USAGE_METRICS,
   hasOperationUsageMetrics,
 } from './operationUsageMetrics';
 
@@ -55,6 +56,120 @@ describe('operationUsageMetrics', () => {
         totalOutputTokens: 0,
         totalTokens: 0,
       });
+    });
+  });
+
+  describe('sub-agent spend', () => {
+    const subAgentTool = (pluginState: any, parentId = 'assistant') => ({
+      id: 'tool-msg',
+      parentId,
+      plugin: { identifier: 'lobe-agent' },
+      pluginState,
+      role: 'tool',
+    });
+
+    // The sub-agent's own assistant turns live in an isolation thread the parent
+    // never loads, so its callSubAgent tool row is the ONLY place its spend can
+    // enter the parent's tray.
+    it("folds a finished sub-agent's spend in via its callSubAgent tool row", () => {
+      const metrics = calculateOperationUsageMetrics(
+        [
+          { id: 'assistant', role: 'assistant', usage: { cost: 0.01, totalTokens: 100 } },
+          subAgentTool({
+            status: 'completed',
+            totalCost: 0.5,
+            totalInputTokens: 4000,
+            totalOutputTokens: 1000,
+            totalTokens: 5000,
+          }),
+        ] as any,
+        new Set(['op-1']),
+        { assistant: ['op-1'] },
+      );
+
+      expect(metrics).toEqual({
+        totalCost: 0.51,
+        totalInputTokens: 4000,
+        totalOutputTokens: 1000,
+        totalTokens: 5100,
+      });
+    });
+
+    // A tool row is never a key in operationsByMessage — only assistant messages
+    // are registered there — so attribution has to go through parentId.
+    it('attributes the tool row through its parent assistant, not its own id', () => {
+      const metrics = calculateOperationUsageMetrics(
+        [subAgentTool({ totalCost: 0.5, totalTokens: 5000 })] as any,
+        new Set(['op-1']),
+        { 'tool-msg': ['op-1'] },
+      );
+
+      expect(metrics).toEqual(EMPTY_OPERATION_USAGE_METRICS);
+    });
+
+    it('ignores a sub-agent belonging to a different operation', () => {
+      const metrics = calculateOperationUsageMetrics(
+        [subAgentTool({ totalCost: 0.5, totalTokens: 5000 })] as any,
+        new Set(['op-1']),
+        { assistant: ['op-2'] },
+      );
+
+      expect(metrics).toEqual(EMPTY_OPERATION_USAGE_METRICS);
+    });
+
+    it('ignores tool rows from other builtins', () => {
+      const metrics = calculateOperationUsageMetrics(
+        [
+          {
+            id: 'tool-msg',
+            parentId: 'assistant',
+            plugin: { identifier: 'lobe-web-browsing' },
+            pluginState: { totalCost: 99, totalTokens: 99_999 },
+            role: 'tool',
+          },
+        ] as any,
+        new Set(['op-1']),
+        { assistant: ['op-1'] },
+      );
+
+      expect(metrics).toEqual(EMPTY_OPERATION_USAGE_METRICS);
+    });
+
+    it('uses the live progress totals while the sub-agent is still running', () => {
+      const metrics = calculateOperationUsageMetrics(
+        [
+          subAgentTool({ progress: { totalCost: 0.2, totalTokens: 2000 }, status: 'pending' }),
+        ] as any,
+        new Set(['op-1']),
+        { assistant: ['op-1'] },
+      );
+
+      expect(metrics).toEqual({
+        totalCost: 0.2,
+        totalInputTokens: 0,
+        totalOutputTokens: 0,
+        totalTokens: 2000,
+      });
+    });
+
+    // Once the bridge backfills the authoritative flat totals, a stale live sample
+    // must not win — otherwise the tray would visibly regress at the end of a run.
+    it('prefers the backfilled totals over a stale live sample', () => {
+      const metrics = calculateOperationUsageMetrics(
+        [
+          subAgentTool({
+            progress: { totalCost: 0.2, totalTokens: 2000 },
+            status: 'completed',
+            totalCost: 0.5,
+            totalTokens: 5000,
+          }),
+        ] as any,
+        new Set(['op-1']),
+        { assistant: ['op-1'] },
+      );
+
+      expect(metrics.totalCost).toBe(0.5);
+      expect(metrics.totalTokens).toBe(5000);
     });
   });
 

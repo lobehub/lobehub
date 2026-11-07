@@ -1,20 +1,20 @@
 'use client';
 
+import { AGENT_CHAT_TOPIC_URL } from '@lobechat/const';
 import { formatPrice, formatTokenNumber } from '@lobechat/utils/format';
-import { Block, Checkbox, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from 'antd-style';
-import { CircleDollarSign, FolderIcon, MessageSquare, Star, Zap } from 'lucide-react';
+import { Block, Checkbox, createStaticStyles, cssVar, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
+import { CircleDollarSign, FolderIcon, GitBranchIcon, MessageSquare, Pin, Zap } from 'lucide-react';
 import { memo, type MouseEvent, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router';
 
-import { SESSION_CHAT_TOPIC_URL } from '@/const/url';
+import { getPlatformIcon } from '@/features/AgentChannel/const';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useActivityTime } from '@/hooks/useActivityTime';
 import type { ChatTopic } from '@/types/topic';
 
 import StatusDot from './StatusDot';
 import { useTopicsViewStore } from './store';
-import { getProjectLabel } from './utils';
+import { getProjectInfo } from './utils';
 
 const styles = createStaticStyles(({ css }) => ({
   card: css`
@@ -65,12 +65,33 @@ const styles = createStaticStyles(({ css }) => ({
     padding-block-start: 10px;
     border-block-start: 1px solid ${cssVar.colorSplit};
   `,
+  projectLabel: css`
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  `,
+  /* Long folder / branch names must truncate inside the card instead of
+     overflowing its border. */
+  projectTag: css`
+    align-self: flex-start;
+    min-width: 0;
+    max-width: 100%;
+
+    > :first-child {
+      flex-shrink: 0;
+    }
+  `,
   title: css`
     overflow: hidden;
     display: -webkit-box;
     flex: 1;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 1;
+  `,
+  /* Reserve space for the absolutely positioned checkbox (18px + gap)
+     so long titles don't run underneath it. */
+  titleRow: css`
+    padding-inline-end: 28px;
   `,
 }));
 
@@ -81,7 +102,7 @@ interface TopicCardProps {
 
 const TopicCard = memo<TopicCardProps>(({ topic, agentId }) => {
   const { t } = useTranslation('topic');
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
 
   const selectMode = useTopicsViewStore((s) => s.selectMode);
   const selected = useTopicsViewStore((s) => s.selectedIds.includes(topic.id));
@@ -95,7 +116,7 @@ const TopicCard = memo<TopicCardProps>(({ topic, agentId }) => {
         toggleSelected(topic.id);
         return;
       }
-      navigate(SESSION_CHAT_TOPIC_URL(agentId, topic.id));
+      navigate(AGENT_CHAT_TOPIC_URL(agentId, topic.id));
     },
     [selectMode, topic.id, agentId, toggleSelected, navigate],
   );
@@ -109,8 +130,11 @@ const TopicCard = memo<TopicCardProps>(({ topic, agentId }) => {
     e.stopPropagation();
   }, []);
 
-  const projectLabel = getProjectLabel(topic);
+  const project = getProjectInfo(topic);
   const status = topic.status ?? 'active';
+  // Bot source platform icon (same identity mark as the sidebar topic item).
+  const botPlatform = topic.metadata?.bot?.platform;
+  const BotPlatformIcon = botPlatform ? getPlatformIcon(botPlatform) : undefined;
   // Preview priority: user-written description → AI history summary → first user
   // message (sliced server-side when neither richer field exists).
   const preview =
@@ -138,9 +162,16 @@ const TopicCard = memo<TopicCardProps>(({ topic, agentId }) => {
         />
       </div>
 
-      <Flexbox horizontal align={'center'} gap={6}>
+      <Flexbox horizontal align={'center'} className={styles.titleRow} gap={6}>
         {topic.favorite && (
-          <Icon icon={Star} size={13} style={{ color: cssVar.colorWarning, flexShrink: 0 }} />
+          <Icon icon={Pin} size={13} style={{ color: cssVar.colorTextTertiary, flexShrink: 0 }} />
+        )}
+        {BotPlatformIcon && (
+          <BotPlatformIcon
+            color={cssVar.colorTextDescription}
+            size={14}
+            style={{ flexShrink: 0 }}
+          />
         )}
         <Text className={styles.title} fontSize={14} weight={600}>
           {topic.title || t('defaultTitle')}
@@ -153,10 +184,27 @@ const TopicCard = memo<TopicCardProps>(({ topic, agentId }) => {
         </Text>
       )}
 
-      {projectLabel && (
-        <Tag bordered={false} icon={<Icon icon={FolderIcon} size={11} />} size={'small'}>
-          {projectLabel}
-        </Tag>
+      {project && (
+        <Flexbox gap={4}>
+          <Tag
+            className={styles.projectTag}
+            icon={<Icon icon={FolderIcon} size={11} />}
+            size={'small'}
+            title={project.path}
+          >
+            <span className={styles.projectLabel}>{project.path}</span>
+          </Tag>
+          {project.branch && (
+            <Tag
+              className={styles.projectTag}
+              icon={<Icon icon={GitBranchIcon} size={11} />}
+              size={'small'}
+              title={project.branch}
+            >
+              <span className={styles.projectLabel}>{project.branch}</span>
+            </Tag>
+          )}
+        </Flexbox>
       )}
 
       <Flexbox horizontal align={'center'} className={styles.footer} justify={'space-between'}>

@@ -1,10 +1,12 @@
 import type { ImporterEntryData, ImportPgDataStructure, ImportResultData } from '@lobechat/types';
 import { and, eq, inArray } from 'drizzle-orm';
 
+import { clampToolIdentifier } from '@/utils/clampToolIdentifier';
 import { uuid } from '@/utils/uuid';
 
 import * as EXPORT_TABLES from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
+import { getUniqueViolation } from '../../utils/uniqueViolation';
 import { buildWorkspaceWhere } from '../../utils/workspace';
 import { DeprecatedDataImporterRepos } from './deprecated';
 
@@ -106,6 +108,10 @@ const IMPORT_TABLE_CONFIG: TableImportConfig[] = [
   {
     relations: [
       {
+        field: 'agentId',
+        sourceTable: 'agents',
+      },
+      {
         field: 'sessionId',
         sourceTable: 'sessions',
       },
@@ -173,6 +179,10 @@ const IMPORT_TABLE_CONFIG: TableImportConfig[] = [
   },
   {
     conflictStrategy: 'skip',
+    fieldProcessors: {
+      apiName: (value) => clampToolIdentifier(value),
+      identifier: (value) => clampToolIdentifier(value),
+    },
     preserveId: true, // Uses message ID as primary key
     relations: [
       {
@@ -331,9 +341,9 @@ export class DataImporterRepos {
    * Extract detailed information from error
    */
   private extractErrorDetails(error: any) {
-    if (error.code === '23505') {
-      // PostgreSQL unique constraint error code
-      const match = error.detail?.match(/Key \((.+?)\)=\((.+?)\) already exists/);
+    const violation = getUniqueViolation(error);
+    if (violation) {
+      const match = violation.detail?.match(/Key \((.+?)\)=\((.+?)\) already exists/);
       if (match) {
         return {
           constraintType: 'unique',
@@ -387,7 +397,11 @@ export class DataImporterRepos {
           const workspaceFilter =
             'workspaceId' in table
               ? buildWorkspaceWhere(
-                  { userId: this.userId, workspaceId: this.workspaceId },
+                  {
+                    includeTrashed: true,
+                    userId: this.userId,
+                    workspaceId: this.workspaceId,
+                  },
                   table as any,
                 )
               : eq(table.userId, this.userId);
@@ -543,7 +557,11 @@ export class DataImporterRepos {
             if ('workspaceId' in table) {
               whereConditions.push(
                 buildWorkspaceWhere(
-                  { userId: this.userId, workspaceId: this.workspaceId },
+                  {
+                    includeTrashed: true,
+                    userId: this.userId,
+                    workspaceId: this.workspaceId,
+                  },
                   table as any,
                 ),
               );
@@ -714,8 +732,9 @@ export class DataImporterRepos {
           console.error(`Error batch inserting ${tableName}:`, error);
 
           // Handle error and record
-          if ((error as any).code === '23505') {
-            const match = (error as any).detail?.match(/Key \((.+?)\)=\((.+?)\) already exists/);
+          const violation = getUniqueViolation(error);
+          if (violation) {
+            const match = violation.detail?.match(/Key \((.+?)\)=\((.+?)\) already exists/);
             if (match) {
               const conflictField = match[1];
 

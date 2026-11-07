@@ -1,0 +1,438 @@
+import { describe, expect, it } from 'vitest';
+
+import {
+  calibrateCapacity,
+  median,
+  theilSenSlope,
+  windowsToCalibrationIntervals,
+} from './calibration';
+import { computeTurnCostUsd, totalTokens } from './cost';
+import { selectAccount } from './loadBalancer';
+import { buildClaudeQuotaWindows, dropRetiredLimits } from './readings';
+import type { QuotaLimitReading } from './types';
+import { CLAUDE_SESSION_WINDOW_SECONDS, windowSecondsForKind } from './types';
+import { findWindowAt, isWindowContaminated, projectWindows } from './windows';
+
+// ── cost ─────────────────────────────────────────────────────────────────────
+describe('computeTurnCostUsd', () => {
+  it('prices input/output at model rate', () => {
+    // opus: $5/MTok in, $25/MTok out
+    const cost = computeTurnCostUsd(
+      { input: 1_000_000, output: 1_000_000 },
+      { input: 5, output: 25 },
+    );
+    expect(cost).toBeCloseTo(30, 6);
+  });
+
+  it('applies default cache multipliers (read 0.1x, 5m 1.25x, 1h 2x of input)', () => {
+    const cost = computeTurnCostUsd(
+      { cacheRead: 1_000_000, cacheWrite1h: 1_000_000, cacheWrite5m: 1_000_000 },
+      { input: 10, output: 50 },
+    );
+    // 10*0.1 + 10*1.25 + 10*2 = 1 + 12.5 + 20 = 33.5
+    expect(cost).toBeCloseTo(33.5, 6);
+  });
+
+  it('honors explicit cache rates over defaults', () => {
+    const cost = computeTurnCostUsd(
+      { cacheRead: 1_000_000 },
+      { cacheRead: 0.3, input: 3, output: 15 },
+    );
+    expect(cost).toBeCloseTo(0.3, 6);
+  });
+
+  it('totalTokens sums all classes', () => {
+    expect(totalTokens({ cacheRead: 3, input: 1, output: 2 })).toBe(6);
+  });
+});
+
+// ── windows ──────────────────────────────────────────────────────────────────
+describe('windowSecondsForKind', () => {
+  it('maps weekly kinds to 7d and everything else to 5h', () => {
+    expect(windowSecondsForKind('session')).toBe(CLAUDE_SESSION_WINDOW_SECONDS);
+    expect(windowSecondsForKind('weekly_all')).toBe(7 * 24 * 60 * 60);
+    expect(windowSecondsForKind('weekly_scoped')).toBe(7 * 24 * 60 * 60);
+  });
+});
+
+describe('projectWindows', () => {
+  const reset = Date.parse('2026-07-12T20:50:00Z');
+  const mk = (over: Partial<QuotaLimitReading>): QuotaLimitReading => ({
+    capturedAt: reset - 3_600_000,
+    limitType: 'session',
+    resetsAt: reset,
+    scopeKey: '',
+    utilization: 10,
+    ...over,
+  });
+
+  it('derives window start from resetsAt - windowSeconds', () => {
+    const [w] = projectWindows([mk({})]);
+    expect(w.windowStartAt).toBe(reset - CLAUDE_SESSION_WINDOW_SECONDS * 1000);
+    expect(w.resetsAt).toBe(reset);
+  });
+
+  it('keeps the peak utilization even when a later sample is lower', () => {
+    const [w] = projectWindows([
+      mk({ capturedAt: reset - 3_000_000, utilization: 30 }),
+      mk({ capturedAt: reset - 2_000_000, utilization: 80 }),
+      mk({ capturedAt: reset - 1_000_000, utilization: 82 }),
+    ]);
+    expect(w.peakUtilization).toBe(82);
+    expect(w.lastUtilization).toBe(82);
+  });
+
+  it('groups by (kind, scope, resetsAt) and records first 429', () => {
+    const windows = projectWindows([
+      mk({ capturedAt: reset - 3_000_000, utilization: 40 }),
+      mk({ capturedAt: reset - 2_000_000, rateLimited: true, utilization: 100 }),
+      mk({ limitType: 'weekly_scoped', scopeKey: 'Fable', utilization: 38 }),
+    ]);
+    expect(windows).toHaveLength(2);
+    const session = windows.find((w) => w.limitType === 'session')!;
+    expect(session.rateLimitedAt).toBe(reset - 2_000_000);
+    const fable = windows.find((w) => w.scopeKey === 'Fable')!;
+    expect(fable.limitType).toBe('weekly_scoped');
+  });
+
+  it('folds sub-second reset jitter around a minute boundary into one window', () => {
+    const windows = projectWindows([
+      mk({ resetsAt: reset - 483, utilization: 20 }),
+      mk({ resetsAt: reset + 43, utilization: 40 }),
+      mk({ resetsAt: reset + 938, utilization: 60 }),
+    ]);
+
+    expect(windows).toHaveLength(1);
+    expect(windows[0]).toMatchObject({ peakUtilization: 60, resetsAt: reset });
+  });
+
+  it('ignores readings without a resetsAt', () => {
+    expect(projectWindows([mk({ resetsAt: null })])).toHaveLength(0);
+  });
+
+  it('findWindowAt locates the containing window', () => {
+    const [w] = projectWindows([mk({})]);
+    expect(findWindowAt([w], reset - 1000)).toBe(w);
+    expect(findWindowAt([w], reset + 1000)).toBeUndefined();
+  });
+});
+
+describe('isWindowContaminated', () => {
+  it('flags a moved meter with no ledger spend', () => {
+    expect(isWindowContaminated(40, 0)).toBe(true);
+    expect(isWindowContaminated(40, 120)).toBe(false); // we spent → clean
+    expect(isWindowContaminated(1, 0)).toBe(false); // barely moved → ignore
+  });
+});
+
+// ── calibration ──────────────────────────────────────────────────────────────
+describe('median & theilSenSlope', () => {
+  it('median handles odd/even', () => {
+    expect(median([3, 1, 2])).toBe(2);
+    expect(median([1, 2, 3, 4])).toBe(2.5);
+    expect(median([])).toBe(0);
+  });
+
+  it('theil-sen recovers a clean slope and resists an outlier', () => {
+    const pts = [
+      { x: 0, y: 0 },
+      { x: 1, y: 5 },
+      { x: 2, y: 10 },
+      { x: 3, y: 15 },
+      { x: 4, y: 20 },
+      { x: 5, y: 500 }, // outlier — minority of pairwise slopes
+    ];
+    expect(theilSenSlope(pts)).toBeCloseTo(5, 6);
+    expect(theilSenSlope([{ x: 1, y: 1 }])).toBeNull();
+  });
+});
+
+describe('calibrateCapacity', () => {
+  it('recovers a known capacity ($500 → $5 per point)', () => {
+    const intervals = [
+      { deltaCostUsd: 50, deltaUtil: 10 },
+      { deltaCostUsd: 40, deltaUtil: 8 },
+      { deltaCostUsd: 30, deltaUtil: 6 },
+      { deltaCostUsd: 100, deltaUtil: 20 },
+    ];
+    const r = calibrateCapacity(intervals)!;
+    expect(r.capacityUsd).toBeCloseTo(500, 6);
+    expect(r.sampleCount).toBe(4);
+    expect(r.confidence).toBeGreaterThan(0.3);
+    expect(r.method).toBe('ratio-median');
+  });
+
+  it('drops sub-threshold intervals (integer-percent quantization guard)', () => {
+    const r = calibrateCapacity([
+      { deltaCostUsd: 5, deltaUtil: 1 }, // dropped
+      { deltaCostUsd: 50, deltaUtil: 10 },
+      { deltaCostUsd: 60, deltaUtil: 12 },
+    ]);
+    expect(r!.sampleCount).toBe(2);
+    expect(r!.capacityUsd).toBeCloseTo(500, 0);
+  });
+
+  it('returns null with no usable samples', () => {
+    expect(calibrateCapacity([{ deltaCostUsd: 1, deltaUtil: 1 }])).toBeNull();
+    expect(calibrateCapacity([])).toBeNull();
+  });
+
+  it('lower dispersion → higher confidence', () => {
+    const tight = calibrateCapacity([
+      { deltaCostUsd: 50, deltaUtil: 10 },
+      { deltaCostUsd: 50, deltaUtil: 10 },
+      { deltaCostUsd: 50, deltaUtil: 10 },
+    ])!;
+    const noisy = calibrateCapacity([
+      { deltaCostUsd: 50, deltaUtil: 10 },
+      { deltaCostUsd: 200, deltaUtil: 10 },
+      { deltaCostUsd: 10, deltaUtil: 10 },
+    ])!;
+    expect(tight.confidence).toBeGreaterThan(noisy.confidence);
+  });
+});
+
+describe('windowsToCalibrationIntervals', () => {
+  it('keeps clean windows, drops contaminated / rate-limited / censored ones', () => {
+    const intervals = windowsToCalibrationIntervals([
+      { observedCostUsd: 142, peakUtilization: 26, rateLimitedAt: null }, // clean ✓
+      { contaminated: true, observedCostUsd: 0, peakUtilization: 40, rateLimitedAt: null }, // external usage ✗
+      { observedCostUsd: 33, peakUtilization: 100, rateLimitedAt: 123 }, // weekly cut it short ✗
+      { observedCostUsd: 0, peakUtilization: 0, rateLimitedAt: null }, // empty ✗
+    ]);
+    expect(intervals).toEqual([{ deltaCostUsd: 142, deltaUtil: 26 }]);
+  });
+
+  it('end-to-end: clean windows calibrate near the real $548 5h capacity', () => {
+    // windows around ~$5.5 per utilization point
+    const windows = [
+      { observedCostUsd: 142, peakUtilization: 26, rateLimitedAt: null },
+      { observedCostUsd: 300, peakUtilization: 55, rateLimitedAt: null },
+      { observedCostUsd: 210, peakUtilization: 38, rateLimitedAt: null },
+      { observedCostUsd: 90, peakUtilization: 16, rateLimitedAt: null },
+    ];
+    const result = calibrateCapacity(windowsToCalibrationIntervals(windows))!;
+    expect(result.capacityUsd).toBeGreaterThan(450);
+    expect(result.capacityUsd).toBeLessThan(650);
+  });
+});
+
+// ── readings → display windows ────────────────────────────────────────────────
+describe('buildClaudeQuotaWindows', () => {
+  const now = Date.parse('2026-07-12T18:00:00Z');
+  const reading = (over: Partial<QuotaLimitReading> = {}): QuotaLimitReading => ({
+    capturedAt: now - 60_000,
+    limitType: 'session',
+    resetsAt: Date.parse('2026-07-12T20:50:00Z'),
+    scopeKey: '',
+    utilization: 26,
+    ...over,
+  });
+
+  it('maps session / weekly / scoped readings to their panel windows', () => {
+    const windows = buildClaudeQuotaWindows(
+      [
+        reading(),
+        reading({
+          limitType: 'weekly_all',
+          resetsAt: Date.parse('2026-07-18T14:00:00Z'),
+          utilization: 29,
+        }),
+        reading({
+          limitType: 'weekly_scoped',
+          resetsAt: Date.parse('2026-07-18T14:00:00Z'),
+          scopeKey: 'Fable',
+          utilization: 38,
+        }),
+      ],
+      now,
+    );
+
+    expect(windows.session).toEqual({
+      resetsAt: Date.parse('2026-07-12T20:50:00Z'),
+      usedPercent: 26,
+      windowMinutes: 300,
+    });
+    expect(windows.weekly).toMatchObject({ usedPercent: 29, windowMinutes: 10_080 });
+    expect(windows.scopedWeekly).toEqual({
+      modelName: 'Fable',
+      window: {
+        resetsAt: Date.parse('2026-07-18T14:00:00Z'),
+        usedPercent: 38,
+        windowMinutes: 10_080,
+      },
+    });
+  });
+
+  it('reports a rolled-over window as refilled instead of dropping the row', () => {
+    // The 5-hour window is the one that goes idle: after five quiet hours the
+    // provider still reports the last session's utilization against a reset
+    // that has passed. Hiding the row reads as "this plan has no session
+    // limit"; replaying 96% paints an exhausted meter over a free window.
+    const windows = buildClaudeQuotaWindows(
+      [reading({ resetsAt: now - 60_000, utilization: 96 })],
+      now,
+    );
+
+    expect(windows.session).toEqual({ resetsAt: null, usedPercent: 0, windowMinutes: 300 });
+  });
+
+  it('keeps a limit reported without a reset time until one full window passes', () => {
+    // An untouched model-scoped weekly arrives as `resets_at: null`; it can
+    // only speak for the window it was captured in.
+    const noReset = reading({ limitType: 'weekly_scoped', resetsAt: null, scopeKey: 'Fable' });
+
+    expect(buildClaudeQuotaWindows([noReset], now).scopedWeekly).toEqual({
+      modelName: 'Fable',
+      window: { resetsAt: null, usedPercent: 26, windowMinutes: 10_080 },
+    });
+    expect(
+      buildClaudeQuotaWindows([noReset], now + 8 * 24 * 60 * 60 * 1000).scopedWeekly,
+    ).toMatchObject({ window: { usedPercent: 0 } });
+  });
+
+  it('keeps the newest reading per bucket and tolerates renamed kinds', () => {
+    const windows = buildClaudeQuotaWindows(
+      [
+        reading({ capturedAt: now - 600_000, limitType: 'five_hour', utilization: 10 }),
+        reading({ capturedAt: now - 1000, utilization: 42 }),
+        reading({ limitType: 'weekly', resetsAt: now + 60_000, utilization: 7 }),
+      ],
+      now,
+    );
+
+    expect(windows.session).toMatchObject({ usedPercent: 42 });
+    // `weekly` (unscoped) still counts as the account-wide weekly window.
+    expect(windows.weekly).toMatchObject({ usedPercent: 7 });
+  });
+
+  it('clamps and rounds utilization the same way the persisted readings do', () => {
+    const windows = buildClaudeQuotaWindows([reading({ utilization: 140 })], now);
+    expect(windows.session?.usedPercent).toBe(100);
+    expect(
+      buildClaudeQuotaWindows([reading({ utilization: 62.5 })], now).session?.usedPercent,
+    ).toBe(63);
+  });
+
+  it('has no window for a limit the account never reported', () => {
+    expect(buildClaudeQuotaWindows([], now)).toEqual({
+      scopedWeekly: null,
+      session: null,
+      weekly: null,
+    });
+  });
+
+  it('drops a session window the plan no longer reports (Max upgraded to Ultra)', () => {
+    // Ultra has no 5-hour limit. The last Max-era session reading stays the
+    // newest one in its bucket, and once its window ended it would render as
+    // a refilled 5-hour meter on a plan that has none.
+    const windows = buildClaudeQuotaWindows(
+      [
+        reading({ capturedAt: now - 8 * 3_600_000, resetsAt: now - 6 * 3_600_000 }),
+        reading({ limitType: 'weekly_all', resetsAt: now + 3_600_000, utilization: 12 }),
+      ],
+      now,
+    );
+
+    expect(windows.session).toBeNull();
+    expect(windows.weekly).toMatchObject({ usedPercent: 12 });
+  });
+});
+
+describe('dropRetiredLimits', () => {
+  const sampledAt = Date.parse('2026-07-12T18:00:00Z');
+  const reading = (over: Partial<QuotaLimitReading> = {}): QuotaLimitReading => ({
+    capturedAt: sampledAt,
+    limitType: 'weekly_all',
+    resetsAt: sampledAt + 3_600_000,
+    scopeKey: '',
+    utilization: 30,
+    ...over,
+  });
+
+  it('keeps every limit of the newest sample, an idle rolled-over window included', () => {
+    const idleSession = reading({ limitType: 'session', resetsAt: sampledAt - 3_600_000 });
+    const readings = [idleSession, reading()];
+
+    expect(dropRetiredLimits(readings)).toEqual(readings);
+  });
+
+  it('keeps an older limit whose window was still live at the newest sample', () => {
+    const session = reading({
+      capturedAt: sampledAt - 3_600_000,
+      limitType: 'session',
+      resetsAt: sampledAt + 3_600_000,
+    });
+
+    expect(dropRetiredLimits([session, reading()])).toContain(session);
+  });
+
+  it('drops an older limit whose window had ended before the newest sample', () => {
+    const retired = reading({
+      capturedAt: sampledAt - 6 * 3_600_000,
+      limitType: 'session',
+      resetsAt: sampledAt - 3_600_000,
+    });
+
+    expect(dropRetiredLimits([retired, reading()])).toEqual([reading()]);
+  });
+});
+
+// ── load balancer ─────────────────────────────────────────────────────────────
+describe('selectAccount', () => {
+  const base = { enabled: true, priority: 0 };
+
+  it('prefers the account with more weekly headroom (the bottleneck)', () => {
+    const pick = selectAccount(
+      [
+        { ...base, accountId: 'a', sessionUtil: 0, weeklyUtil: 72 },
+        { ...base, accountId: 'b', sessionUtil: 90, weeklyUtil: 30 },
+      ],
+      { now: 0 },
+    );
+    // b has less session headroom but more WEEKLY headroom → wins
+    expect(pick?.accountId).toBe('b');
+  });
+
+  it('routes Fable work away from a Fable-exhausted account (screenshot case)', () => {
+    // account A: weekly 43% but Fable 100% (已耗尽); account B: weekly 60%, Fable ok
+    const accounts = [
+      { ...base, accountId: 'A', scopedWeeklyUtil: { Fable: 100 }, weeklyUtil: 57 },
+      { ...base, accountId: 'B', scopedWeeklyUtil: { Fable: 20 }, weeklyUtil: 40 },
+    ];
+    // a Fable task must avoid A even though A's overall weekly is comparable
+    expect(selectAccount(accounts, { modelScope: 'Fable', now: 0 })?.accountId).toBe('B');
+    // a non-Fable task can still use A (more weekly headroom than... here B has more, so B)
+    expect(selectAccount(accounts, { now: 0 })?.accountId).toBe('B');
+  });
+
+  it('skips accounts that are exhausted or cooling down after a 429', () => {
+    expect(
+      selectAccount(
+        [
+          { ...base, accountId: 'x', weeklyUtil: 100 },
+          { ...base, accountId: 'y', rateLimitedUntil: 5000, weeklyUtil: 10 },
+        ],
+        { now: 1000 },
+      ),
+    ).toBeNull();
+    // once y's cooldown passes it becomes eligible
+    expect(
+      selectAccount([{ ...base, accountId: 'y', rateLimitedUntil: 5000, weeklyUtil: 10 }], {
+        now: 6000,
+      })?.accountId,
+    ).toBe('y');
+  });
+
+  it('honors disabled + priority tie-breaker', () => {
+    const pick = selectAccount(
+      [
+        { ...base, accountId: 'disabled', enabled: false, weeklyUtil: 0 },
+        { ...base, accountId: 'p2', priority: 2, weeklyUtil: 50 },
+        { ...base, accountId: 'p1', priority: 1, weeklyUtil: 50 },
+      ],
+      { now: 0 },
+    );
+    expect(pick?.accountId).toBe('p1');
+  });
+});

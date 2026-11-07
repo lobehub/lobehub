@@ -5,11 +5,12 @@ import {
   CUSTOM_FOLDER_FILE_TYPE,
 } from '@lobechat/const';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import type { MouseEvent as ReactMouseEvent, ReactNode } from 'react';
+import type { DragEvent as ReactDragEvent, MouseEvent as ReactMouseEvent, ReactNode } from 'react';
 import { MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ExplorerTreeNode } from '@/features/ExplorerTree';
+import type * as EventPathModule from '@/features/ExplorerTree/view/eventPath';
 
 import DocumentExplorerTree from './DocumentExplorerTree';
 import type { AgentDocumentItem } from './types';
@@ -22,21 +23,44 @@ const modalConfirm = vi.hoisted(() => vi.fn());
 const openDocumentMock = vi.hoisted(() => vi.fn());
 const removeDocumentMock = vi.hoisted(() => vi.fn());
 
-vi.mock('@lobehub/ui', () => ({
-  ActionIcon: ({ onClick, title }: { onClick?: () => void; title?: string }) => (
-    <button aria-label={title} onClick={onClick}>
+vi.mock('@lobehub/ui', async (importOriginal) => ({
+  ...((await importOriginal()) as Record<string, unknown>),
+  ActionIcon: ({
+    icon,
+    onClick,
+    title,
+  }: {
+    icon?: { displayName?: string; name?: string };
+    onClick?: () => void;
+    title?: string;
+  }) => (
+    <button aria-label={title} data-icon={icon?.displayName ?? icon?.name} onClick={onClick}>
       {title}
     </button>
   ),
-  Flexbox: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
-}));
-
-vi.mock('@lobehub/ui/base-ui', () => ({
   confirmModal: modalConfirm,
+  DropdownMenu: ({
+    children,
+    items,
+  }: {
+    children: ReactNode;
+    items: { key?: string; label?: string; onClick?: () => void; type?: string }[];
+  }) => (
+    <div>
+      {children}
+      {items
+        .filter((item) => item.type !== 'divider' && item.key)
+        .map((item) => (
+          <button data-testid={`create-menu-${item.key}`} key={item.key} onClick={item.onClick}>
+            {item.label}
+          </button>
+        ))}
+    </div>
+  ),
 }));
 
-vi.mock('antd', () => ({
+vi.mock('antd', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   App: {
     useApp: () => ({
       message: { error: messageError, success: messageSuccess, warning: messageWarning },
@@ -55,19 +79,19 @@ vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
   useWorkspaceAwareNavigate: () => navigateMock,
 }));
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string) => key,
-  }),
-}));
+vi.mock('@/features/ExplorerTree', async () => {
+  const { isItemToggleEventPath } = await vi.importActual<typeof EventPathModule>(
+    '@/features/ExplorerTree/view/eventPath',
+  );
 
-vi.mock('@/features/ExplorerTree', () => {
   interface MockExplorerTreeProps {
     canDrag?: (node: ExplorerTreeNode<unknown>) => boolean;
+    defaultExpandedIds?: string[];
     getContextMenuItems?: (node: ExplorerTreeNode<unknown>) => unknown[] | undefined;
     header?: ReactNode;
     nodes: ExplorerTreeNode<unknown>[];
     onNodeClick?: (node: ExplorerTreeNode<unknown>, event: ReactMouseEvent<HTMLElement>) => void;
+    onNodeDragStart?: (node: ExplorerTreeNode<unknown>, event: ReactDragEvent<HTMLElement>) => void;
   }
 
   interface MockMenuItem {
@@ -78,10 +102,12 @@ vi.mock('@/features/ExplorerTree', () => {
 
   const ExplorerTree = ({
     canDrag,
+    defaultExpandedIds,
     getContextMenuItems,
     header,
     nodes,
     onNodeClick,
+    onNodeDragStart,
   }: MockExplorerTreeProps) => {
     const renderNodes = (parentId: string | null): ReactNode =>
       nodes
@@ -90,16 +116,29 @@ vi.mock('@/features/ExplorerTree', () => {
           const menuItems = (getContextMenuItems?.(node) ?? []) as MockMenuItem[];
           return (
             <div
+              data-appearance={node.appearance ?? 'default'}
               data-can-drag={String(canDrag?.(node) ?? true)}
               data-folder={String(!!node.isFolder)}
               data-menu-count={String(menuItems.length)}
               data-testid={`tree-node-${node.id}`}
               key={node.id}
+              onDragStart={(event) => {
+                event.stopPropagation();
+                onNodeDragStart?.(node, event);
+              }}
             >
               <button
                 data-testid={`tree-node-button-${node.id}`}
                 onClick={(event) => onNodeClick?.(node, event)}
               >
+                <span
+                  data-item-section="icon"
+                  data-testid={`tree-node-toggle-${node.id}`}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onNodeClick?.(node, event);
+                  }}
+                />
                 {node.name}
               </button>
               {node.isFolder && (
@@ -121,7 +160,10 @@ vi.mock('@/features/ExplorerTree', () => {
         });
 
     return (
-      <div data-testid="explorer-tree">
+      <div
+        data-default-expanded-ids={JSON.stringify(defaultExpandedIds ?? [])}
+        data-testid="explorer-tree"
+      >
         {header}
         {renderNodes(null)}
       </div>
@@ -129,6 +171,19 @@ vi.mock('@/features/ExplorerTree', () => {
   };
 
   return {
+    DISABLE_ROW_TEXT_SELECTION_CSS: '',
+    DOCUMENT_TREE_ROW_CSS: '',
+    DOCUMENT_TREE_ICON_CSS: '',
+    DOCUMENT_TREE_PARENT_DOCUMENT_GLYPH_CSS: '',
+    isItemToggleEventPath,
+    DOCUMENT_TREE_LAYOUT: {
+      fontSize: 14,
+      iconGap: 8,
+      iconSize: 16,
+      iconWidth: 16,
+      itemHeight: 36,
+      levelGap: 8,
+    },
     ExplorerTree,
     FOLDER_ICON_CSS: '',
     HIDE_POINTER_FOCUS_RING_CSS: '',
@@ -185,6 +240,108 @@ describe('DocumentExplorerTree', () => {
     openDocumentMock.mockReset();
     removeDocumentMock.mockReset();
     removeDocumentMock.mockResolvedValue({ deleted: true, id: 'skill-bundle-row' });
+  });
+
+  it('uses one plus menu for creating documents and folders', () => {
+    render(
+      <DocumentExplorerTree agentId="agent-1" data={[createDocument({})]} mutate={vi.fn()} />,
+      { wrapper: MemoryRouter },
+    );
+
+    expect(
+      screen.getByRole('button', { name: 'workingPanel.resources.tree.create' }),
+    ).toHaveAttribute('data-icon', 'Plus');
+    expect(screen.getByTestId('create-menu-new-document')).toHaveTextContent(
+      'workingPanel.resources.tree.newDocument',
+    );
+    expect(screen.getByTestId('create-menu-new-folder')).toHaveTextContent(
+      'workingPanel.resources.tree.newFolder',
+    );
+    expect(screen.getByTestId('create-menu-upload-file')).toHaveTextContent(
+      'workingPanel.resources.tree.uploadFile',
+    );
+  });
+
+  // A workflow document holding its run records must stay expandable in the
+  // tree; before, nested children of a document were dropped from the panel.
+  it('shows the documents nested under a document and still opens the parent', () => {
+    const data = [
+      createDocument({
+        documentId: 'sop-doc',
+        filename: 'Fix-round SOP',
+        id: 'sop-row',
+        title: 'Fix-round SOP',
+      }),
+      createDocument({
+        documentId: 'run-doc',
+        filename: 'Run 1',
+        id: 'run-row',
+        parentId: 'sop-doc',
+        title: 'Run 1',
+      }),
+    ];
+    const onOpenDocument = vi.fn();
+
+    render(
+      <DocumentExplorerTree
+        agentId="agent-1"
+        data={data}
+        mutate={vi.fn()}
+        onOpenDocument={onOpenDocument}
+      />,
+      { wrapper: MemoryRouter },
+    );
+
+    const parent = screen.getByTestId('tree-node-sop-row');
+    expect(parent).toHaveAttribute('data-folder', 'true');
+    expect(parent).toHaveAttribute('data-appearance', 'file');
+    expect(
+      within(screen.getByTestId('tree-node-children-sop-row')).getByTestId('tree-node-run-row'),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId('tree-node-run-row')).toHaveAttribute('data-appearance', 'default');
+
+    // The chevron only expands or collapses; the title opens the document.
+    fireEvent.click(screen.getByTestId('tree-node-toggle-sop-row'));
+    expect(onOpenDocument).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByTestId('tree-node-button-sop-row'));
+    expect(onOpenDocument).toHaveBeenCalledWith('sop-doc', 'sop-row');
+
+    // Still a document: it can be opened as a page and gain more sub-documents,
+    // but does not grow the folder-only entries.
+    expect(screen.getByTestId('tree-menu-sop-row-open-as-page')).toBeInTheDocument();
+    expect(screen.getByTestId('tree-menu-sop-row-new-sub-document')).toBeInTheDocument();
+    expect(screen.queryByTestId('tree-menu-sop-row-new-folder')).not.toBeInTheDocument();
+  });
+
+  it('offers a sub-document entry on a plain document', () => {
+    render(
+      <DocumentExplorerTree agentId="agent-1" data={[createDocument({})]} mutate={vi.fn()} />,
+      { wrapper: MemoryRouter },
+    );
+
+    expect(screen.getByTestId('tree-node-agent-doc-1')).toHaveAttribute('data-folder', 'false');
+    expect(screen.getByTestId('tree-menu-agent-doc-1-new-sub-document')).toBeInTheDocument();
+    // A folder can be nested under a document too, e.g. to group a workflow's runs.
+    expect(screen.getByTestId('tree-menu-agent-doc-1-new-sub-folder')).toBeInTheDocument();
+  });
+
+  it('offers upload on a folder context menu', () => {
+    const data = [
+      createDocument({
+        documentId: 'folder-doc',
+        fileType: CUSTOM_FOLDER_FILE_TYPE,
+        filename: 'Notes',
+        id: 'folder-row',
+        isFolder: true,
+        title: 'Notes',
+      }),
+    ];
+
+    render(<DocumentExplorerTree agentId="agent-1" data={data} mutate={vi.fn()} />, {
+      wrapper: MemoryRouter,
+    });
+
+    expect(screen.getByTestId('tree-menu-folder-row-upload-file')).toBeInTheDocument();
   });
 
   it('renders managed skill bundle as a folder with SKILL.md underneath', () => {
@@ -301,6 +458,67 @@ describe('DocumentExplorerTree', () => {
     expect(navigateMock).not.toHaveBeenCalled();
   });
 
+  it('only drags plain documents out of the tree', () => {
+    const onDocumentDragStart = vi.fn();
+    const data = [
+      createDocument({ documentId: 'doc-plain', id: 'plain-row', title: 'Plain' }),
+      createDocument({ documentId: 'doc-folder', id: 'folder-row', isFolder: true }),
+      createDocument({ documentId: 'doc-pending', id: 'pending:new-row', title: 'Creating' }),
+      createDocument({
+        category: AGENT_DOCUMENT_SKILL_CATEGORY,
+        documentId: 'doc-skill',
+        id: 'skill-row',
+      }),
+    ];
+
+    render(
+      <DocumentExplorerTree
+        agentId="agent-1"
+        data={data}
+        mutate={vi.fn()}
+        onDocumentDragStart={onDocumentDragStart}
+      />,
+      { wrapper: MemoryRouter },
+    );
+
+    fireEvent.dragStart(screen.getByTestId('tree-node-folder-row'));
+    fireEvent.dragStart(screen.getByTestId('tree-node-skill-row'));
+    fireEvent.dragStart(screen.getByTestId('tree-node-pending:new-row'));
+    expect(onDocumentDragStart).not.toHaveBeenCalled();
+
+    fireEvent.dragStart(screen.getByTestId('tree-node-plain-row'));
+    expect(onDocumentDragStart).toHaveBeenCalledTimes(1);
+    expect(onDocumentDragStart.mock.calls[0][0]).toMatchObject({ id: 'plain-row', title: 'Plain' });
+  });
+
+  it('does not default-expand document folders', () => {
+    const data = [
+      createDocument({
+        documentId: 'folder-doc',
+        fileType: CUSTOM_FOLDER_FILE_TYPE,
+        filename: 'Notes',
+        id: 'folder-row',
+        isFolder: true,
+        title: 'Notes',
+      }),
+      createDocument({
+        documentId: 'nested-folder-doc',
+        fileType: CUSTOM_FOLDER_FILE_TYPE,
+        filename: 'Archive',
+        id: 'nested-folder-row',
+        isFolder: true,
+        parentId: 'folder-doc',
+        title: 'Archive',
+      }),
+    ];
+
+    render(<DocumentExplorerTree agentId="agent-1" data={data} mutate={vi.fn()} />, {
+      wrapper: MemoryRouter,
+    });
+
+    expect(screen.getByTestId('explorer-tree')).toHaveAttribute('data-default-expanded-ids', '[]');
+  });
+
   it('shows delete recovery action for a managed skill bundle without SKILL.md', async () => {
     const mutate = vi.fn().mockResolvedValue(undefined);
     const data = [
@@ -345,6 +563,7 @@ describe('DocumentExplorerTree', () => {
         documentId: 'skill-bundle-doc',
         id: 'skill-bundle-row',
         topicId: undefined,
+        withChildren: true,
       });
     });
     expect(messageSuccess).not.toHaveBeenCalled();

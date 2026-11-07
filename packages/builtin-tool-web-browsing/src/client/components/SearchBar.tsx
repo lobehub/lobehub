@@ -1,7 +1,7 @@
 import type { SearchQuery } from '@lobechat/types';
 import {
   Block,
-  Checkbox,
+  CheckboxGroup,
   Flexbox,
   SearchBar as Search,
   Segmented,
@@ -9,7 +9,7 @@ import {
   Text,
   Tooltip,
 } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import * as stylex from '@stylexjs/stylex';
 import type { ReactNode } from 'react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -22,12 +22,7 @@ import { CATEGORY_ICON_MAP, ENGINE_ICON_MAP } from '../../const';
 import { CategoryAvatar } from './CategoryAvatar';
 import { EngineAvatar } from './EngineAvatar';
 
-const styles = createStaticStyles(({ css }) => ({
-  textHeader: css`
-    flex: none;
-    width: 120px;
-  `,
-}));
+const styles = stylex.create({ textHeader: { flex: 'none', width: '120px' } });
 
 interface SearchBarProps {
   aiSummary?: boolean;
@@ -125,10 +120,10 @@ const SearchBar = memo<SearchBarProps>(
             />
           ) : (
             <Flexbox horizontal align={'flex-start'} gap={8}>
-              <Text className={styles.textHeader} type={'secondary'}>
+              <Text className={stylex.props(styles.textHeader).className} type={'secondary'}>
                 {t('search.searchEngine.title')}
               </Text>
-              <Checkbox.Group
+              <CheckboxGroup
                 value={engines}
                 options={Object.keys(ENGINE_ICON_MAP).map((item) => ({
                   label: (
@@ -174,10 +169,10 @@ const SearchBar = memo<SearchBarProps>(
             />
           ) : (
             <Flexbox horizontal align="flex-start" gap={8}>
-              <Text className={styles.textHeader} type={'secondary'}>
+              <Text className={stylex.props(styles.textHeader).className} type={'secondary'}>
                 {t('search.searchCategory.title')}
               </Text>
-              <Checkbox.Group
+              <CheckboxGroup
                 value={categories}
                 options={Object.keys(CATEGORY_ICON_MAP).map((item) => ({
                   label: (
@@ -194,7 +189,7 @@ const SearchBar = memo<SearchBarProps>(
           )}
 
           <Flexbox horizontal align={'center'} gap={16} wrap={'wrap'}>
-            <Text className={styles.textHeader} type={'secondary'}>
+            <Text className={stylex.props(styles.textHeader).className} type={'secondary'}>
               {t('search.searchTimeRange.title')}
             </Text>
             <Segmented

@@ -1,0 +1,548 @@
+// @vitest-environment node
+import { agentShareDocumentAccessScope, agentShareWorkAccessScope } from '@lobechat/types';
+import { eq } from 'drizzle-orm';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
+import { documents, works, workspaces, workVersions } from '../../../schemas';
+import { AgentDocumentModel } from '../../agentDocuments';
+import { DocumentModel } from '../../document';
+import { WorkModel } from '..';
+import {
+  agentId,
+  cleanupWorkTestData,
+  expectDocumentSummaryItem,
+  seedWorkTestData,
+  serverDB,
+  topicId,
+  userId,
+  userId2,
+} from './_fixtures';
+
+beforeEach(seedWorkTestData);
+afterEach(cleanupWorkTestData);
+
+describe('WorkModel · document', () => {
+  it('registers a document work using the backing document id', async () => {
+    const agentDocumentModel = new AgentDocumentModel(serverDB, userId);
+    const workModel = new WorkModel(serverDB, userId);
+    const doc = await agentDocumentModel.create(agentId, 'research.md', 'Research body', {
+      metadata: { description: 'Research notes' },
+      title: 'Research Notes',
+    });
+
+    const work = await workModel.registerDocument({
+      agentDocumentId: doc.id,
+      agentId,
+      documentId: doc.documentId,
+      changeType: 'created',
+      rootOperationId: 'op-doc-create',
+      toolName: 'createDocument',
+      toolCallId: 'tool-call-doc-create',
+      toolIdentifier: 'lobe-agent-documents',
+      topicId,
+    });
+
+    expect(work).toBeDefined();
+    // Work keeps stable resource identity plus the current card projection.
+    expect(work).toMatchObject({
+      description: 'Research notes',
+      resourceId: doc.documentId,
+      resourceType: 'document',
+      toolIdentifier: 'lobe-agent-documents',
+      title: 'Research Notes',
+      type: 'document',
+      visibility: 'public',
+    });
+
+    const versions = await workModel.listVersions(work!.id);
+    expect(versions).toHaveLength(1);
+    expect(versions[0]).toMatchObject({
+      content: null,
+      description: 'Research notes',
+      identifier: 'research.md',
+      metadata: { agentDocumentId: doc.id },
+      rootOperationId: 'op-doc-create',
+      toolCallId: 'tool-call-doc-create',
+      title: 'Research Notes',
+    });
+
+    const byOperation = await workModel.listByRootOperation({ rootOperationId: 'op-doc-create' });
+    expect(byOperation[0]).toMatchObject({
+      description: 'Research notes',
+      id: work?.id,
+      identifier: 'research.md',
+      title: 'Research Notes',
+      type: 'document',
+    });
+
+    const summaries = await workModel.listSummariesByRootOperations({
+      rootOperationIds: ['op-doc-create'],
+    });
+    expect(summaries['op-doc-create']?.[0]).toMatchObject({
+      description: 'Research notes',
+      event: expect.objectContaining({
+        metadata: { agentDocumentId: doc.id },
+      }),
+      id: work?.id,
+      identifier: 'research.md',
+      type: 'document',
+    });
+  });
+
+  it('does not register Agent Share documents in the ordinary Work registry', async () => {
+    const agentDocumentModel = new AgentDocumentModel(
+      serverDB,
+      userId,
+      undefined,
+      agentShareDocumentAccessScope({
+        shareId: 'share-work',
+        topicId,
+        visitorUserId: 'visitor-work',
+      }),
+    );
+    const workModel = new WorkModel(serverDB, userId);
+    const doc = await agentDocumentModel.create(agentId, 'visitor-note.md', 'Visitor draft');
+
+    const work = await workModel.registerDocument({
+      agentDocumentId: doc.id,
+      agentId,
+      changeType: 'created',
+      documentId: doc.documentId,
+      rootOperationId: 'op-share-doc-create',
+      toolCallId: 'tool-call-share-doc-create',
+      toolIdentifier: 'lobe-agent-documents',
+      toolName: 'createDocument',
+      topicId,
+    });
+
+    expect(work).toBeNull();
+    expect(await serverDB.select().from(works).where(eq(works.resourceId, doc.documentId))).toEqual(
+      [],
+    );
+  });
+
+  it('registers an Agent Share document under the matching share scope only', async () => {
+    const provenance = { shareId: 'share-work', topicId, visitorUserId: 'visitor-work' };
+    const agentDocumentModel = new AgentDocumentModel(
+      serverDB,
+      userId,
+      undefined,
+      agentShareDocumentAccessScope(provenance),
+    );
+    const doc = await agentDocumentModel.create(agentId, 'visitor-note.md', 'Visitor draft');
+
+    // The share-scoped registrar (what a visitor's run uses) resolves the share
+    // document and stamps the Work with the same provenance.
+    const shareWorkModel = new WorkModel(
+      serverDB,
+      userId,
+      undefined,
+      agentShareWorkAccessScope(provenance),
+    );
+    const work = await shareWorkModel.registerDocument({
+      agentDocumentId: doc.id,
+      agentId,
+      changeType: 'created',
+      documentId: doc.documentId,
+      rootOperationId: 'op-share-doc-create',
+      toolCallId: 'tool-call-share-doc-create',
+      toolIdentifier: 'lobe-agent-documents',
+      toolName: 'createDocument',
+      topicId,
+    });
+    expect(work).not.toBeNull();
+    const [row] = await serverDB.select().from(works).where(eq(works.id, work!.id));
+    expect(row.metadata).toEqual({ agentShare: provenance });
+
+    // Served back to that visitor topic …
+    const shareSummaries = await shareWorkModel.listSummariesByRootOperations({
+      rootOperationIds: ['op-share-doc-create'],
+    });
+    expect(shareSummaries['op-share-doc-create']).toHaveLength(1);
+    expect(shareSummaries['op-share-doc-create'][0]).toMatchObject({
+      resourceId: doc.documentId,
+      type: 'document',
+    });
+
+    // … but never to the creator's ordinary surfaces, nor to another visitor topic.
+    const ordinary = await new WorkModel(serverDB, userId).listSummariesByRootOperations({
+      rootOperationIds: ['op-share-doc-create'],
+    });
+    expect(ordinary['op-share-doc-create']).toEqual([]);
+    const otherTopic = new WorkModel(
+      serverDB,
+      userId,
+      undefined,
+      agentShareWorkAccessScope({ ...provenance, topicId: 'other-visitor-topic' }),
+    );
+    const otherSummaries = await otherTopic.listSummariesByRootOperations({
+      rootOperationIds: ['op-share-doc-create'],
+    });
+    expect(otherSummaries['op-share-doc-create']).toEqual([]);
+    expect(
+      await otherTopic.listByRootOperation({ rootOperationId: 'op-share-doc-create' }),
+    ).toEqual([]);
+  });
+
+  it('uses the document content prefix when document description is empty', async () => {
+    const agentDocumentModel = new AgentDocumentModel(serverDB, userId);
+    const workModel = new WorkModel(serverDB, userId);
+    const content = [
+      'This document explains how Work cards should display a useful document excerpt.',
+      'It keeps the product panel populated even when document metadata has no description.',
+      'The extra sentence makes the value long enough to verify truncation.',
+    ].join('\n\n');
+    const normalizedContent = content.replaceAll(/\s+/g, ' ').trim();
+    const expectedDescription = `${normalizedContent.slice(0, 120)}...`;
+    const doc = await agentDocumentModel.create(agentId, 'empty-description.md', content, {
+      title: 'No Description',
+    });
+
+    const work = await workModel.registerDocument({
+      agentDocumentId: doc.id,
+      agentId,
+      documentId: doc.documentId,
+      changeType: 'created',
+      rootOperationId: 'op-doc-empty-description',
+      toolName: 'createDocument',
+      toolIdentifier: 'lobe-agent-documents',
+      toolCallId: 'tool-call-doc-empty-description',
+      topicId,
+    });
+
+    expect(work?.description).toBe(expectedDescription);
+
+    const byOperation = await workModel.listByRootOperation({
+      rootOperationId: 'op-doc-empty-description',
+    });
+    expect(byOperation[0]).toMatchObject({ description: expectedDescription });
+
+    const summaries = await workModel.listSummariesByRootOperations({
+      rootOperationIds: ['op-doc-empty-description'],
+    });
+    const documentSummary = expectDocumentSummaryItem(summaries['op-doc-empty-description']?.[0]);
+    expect(documentSummary.description).toBe(expectedDescription);
+
+    const byConversation = await workModel.listByConversation({ topicId });
+    expect(byConversation[0]).toMatchObject({ description: expectedDescription });
+  });
+
+  it('truncates an oversized explicit description before writing the works row', async () => {
+    const agentDocumentModel = new AgentDocumentModel(serverDB, userId);
+    const workModel = new WorkModel(serverDB, userId);
+    // Simulate a multi-KB description that must never be copied verbatim into the
+    // card-preview `description` column.
+    const longDescription = 'A'.repeat(5000);
+    const expectedDescription = `${'A'.repeat(120)}...`;
+    const doc = await agentDocumentModel.create(agentId, 'long-description.md', 'Body', {
+      metadata: { description: 'Persisted description' },
+      title: 'Long Description',
+    });
+
+    const work = await workModel.registerDocument({
+      agentDocumentId: doc.id,
+      agentId,
+      description: longDescription,
+      documentId: doc.documentId,
+      changeType: 'created',
+      rootOperationId: 'op-doc-long-description',
+      toolName: 'createDocument',
+      toolIdentifier: 'lobe-agent-documents',
+      toolCallId: 'tool-call-doc-long-description',
+      topicId,
+    });
+
+    const versions = await workModel.listVersions(work!.id);
+    expect(versions).toHaveLength(1);
+    expect(work?.description).toBe(expectedDescription);
+  });
+
+  it('keeps one document work row and appends versions for document edits', async () => {
+    const agentDocumentModel = new AgentDocumentModel(serverDB, userId);
+    const workModel = new WorkModel(serverDB, userId);
+    const doc = await agentDocumentModel.create(agentId, 'draft.md', 'Draft body', {
+      title: 'Draft',
+    });
+
+    const first = await workModel.registerDocument({
+      agentDocumentId: doc.id,
+      agentId,
+      documentId: doc.documentId,
+      changeType: 'created',
+      rootOperationId: 'op-doc-create',
+      toolName: 'createDocument',
+      toolIdentifier: 'lobe-agent-documents',
+      toolCallId: 'tool-call-doc-create',
+      topicId,
+    });
+
+    await agentDocumentModel.rename(doc.id, 'Renamed Draft');
+
+    const second = await workModel.registerDocument({
+      agentDocumentId: doc.id,
+      agentId,
+      documentId: doc.documentId,
+      changeType: 'updated',
+      rootOperationId: 'op-doc-rename',
+      toolName: 'renameDocument',
+      toolIdentifier: 'lobe-agent-documents',
+      toolCallId: 'tool-call-doc-rename',
+      topicId,
+    });
+
+    const replay = await workModel.registerDocument({
+      agentDocumentId: doc.id,
+      agentId,
+      documentId: doc.documentId,
+      changeType: 'updated',
+      rootOperationId: 'op-doc-rename',
+      toolName: 'renameDocument',
+      toolIdentifier: 'lobe-agent-documents',
+      toolCallId: 'tool-call-doc-rename',
+      topicId,
+    });
+
+    expect(second?.id).toBe(first?.id);
+    expect(replay?.id).toBe(first?.id);
+    expect(replay?.updatedAt).toEqual(second?.updatedAt);
+
+    const workRows = await serverDB
+      .select()
+      .from(works)
+      .where(eq(works.resourceId, doc.documentId));
+    expect(workRows).toHaveLength(1);
+
+    const versions = await workModel.listVersions(first!.id);
+    expect(versions.map((item) => item.version)).toEqual([2, 1]);
+    expect(versions[0].title).toBe('Renamed Draft');
+    expect(versions[1].title).toBe('Draft');
+    // The current title cache follows the selected version.
+    expect(second?.title).toBe('Renamed Draft');
+  });
+
+  it('deletes document work and cascades versions when agent document is removed', async () => {
+    const agentDocumentModel = new AgentDocumentModel(serverDB, userId);
+    const workModel = new WorkModel(serverDB, userId);
+    const doc = await agentDocumentModel.create(agentId, 'delete.md', 'Delete body', {
+      title: 'Delete me',
+    });
+
+    const work = await workModel.registerDocument({
+      agentDocumentId: doc.id,
+      agentId,
+      documentId: doc.documentId,
+      changeType: 'created',
+      toolName: 'createDocument',
+      toolIdentifier: 'lobe-agent-documents',
+      toolCallId: 'tool-call-doc-delete',
+    });
+
+    await agentDocumentModel.delete(doc.id);
+    await workModel.deleteDocumentWork({
+      agentDocumentId: doc.id,
+      agentId,
+      documentId: doc.documentId,
+    });
+
+    const workRows = await serverDB.select().from(works).where(eq(works.id, work!.id));
+    const versionRows = await serverDB
+      .select()
+      .from(workVersions)
+      .where(eq(workVersions.workId, work!.id));
+
+    expect(workRows).toHaveLength(0);
+    expect(versionRows).toHaveLength(0);
+  });
+
+  it('does not let another user register someone else document work', async () => {
+    const agentDocumentModel = new AgentDocumentModel(serverDB, userId);
+    const otherWorkModel = new WorkModel(serverDB, userId2);
+    const doc = await agentDocumentModel.create(agentId, 'private.md', 'Private body');
+
+    const work = await otherWorkModel.registerDocument({
+      agentDocumentId: doc.id,
+      agentId,
+      documentId: doc.documentId,
+      changeType: 'created',
+      toolName: 'createDocument',
+      toolIdentifier: 'lobe-agent-documents',
+      toolCallId: 'tool-call-other-doc-user',
+      topicId,
+    });
+
+    expect(work).toBeNull();
+    const workRows = await serverDB.select().from(works);
+    expect(workRows).toHaveLength(0);
+  });
+});
+
+describe('WorkModel · workspace document visibility', () => {
+  const workspaceId = 'work-test-doc-workspace-id';
+
+  const seedWorkspace = async () => {
+    await serverDB.insert(workspaces).values({
+      id: workspaceId,
+      name: 'Work Test Workspace',
+      primaryOwnerId: userId,
+      slug: workspaceId,
+    });
+  };
+
+  const registerWorkspaceDocument = async (visibility: 'private' | 'public') => {
+    const ownerDocuments = new AgentDocumentModel(serverDB, userId, workspaceId);
+    const ownerWorks = new WorkModel(serverDB, userId, workspaceId);
+
+    const doc = await ownerDocuments.create(agentId, 'shared.md', 'Shared body', {
+      metadata: { description: 'Shared description' },
+      title: 'Shared doc',
+    });
+    // `documents.visibility` is NOT NULL default 'public'; flip it directly to
+    // exercise the private branch of the guard.
+    if (visibility === 'private') {
+      await serverDB
+        .update(documents)
+        .set({ visibility: 'private' })
+        .where(eq(documents.id, doc.documentId));
+    }
+
+    const work = await ownerWorks.registerDocument({
+      agentDocumentId: doc.id,
+      agentId,
+      documentId: doc.documentId,
+      changeType: 'created',
+      rootOperationId: 'op-doc-visibility',
+      toolName: 'createDocument',
+      toolIdentifier: 'lobe-agent-documents',
+      toolCallId: 'tool-call-doc-visibility',
+      topicId,
+    });
+
+    return { doc, work };
+  };
+
+  it('hides another member private-document Work but keeps it for the registrant', async () => {
+    await seedWorkspace();
+    const ownerWorks = new WorkModel(serverDB, userId, workspaceId);
+    const memberWorks = new WorkModel(serverDB, userId2, workspaceId);
+
+    const { work } = await registerWorkspaceDocument('private');
+
+    // The registrant keeps full access on every list path.
+    expect(await ownerWorks.listByConversation({ topicId })).toHaveLength(1);
+
+    // Another workspace member cannot see the private document's Work.
+    expect(await memberWorks.listByConversation({ topicId })).toHaveLength(0);
+    expect((await memberWorks.listByWorkspace({})).items).toHaveLength(0);
+    expect(await memberWorks.listVersions(work!.id)).toHaveLength(0);
+  });
+
+  it('keeps a public-document Work visible to other members', async () => {
+    await seedWorkspace();
+    const ownerDocuments = new DocumentModel(serverDB, userId, workspaceId);
+    const memberWorks = new WorkModel(serverDB, userId2, workspaceId);
+
+    const { doc } = await registerWorkspaceDocument('public');
+
+    const memberView = await memberWorks.listByConversation({ topicId });
+    expect(memberView).toHaveLength(1);
+    expect(memberView[0]).toMatchObject({ title: 'Shared doc', type: 'document' });
+
+    await ownerDocuments.setVisibility(doc.documentId, 'private');
+
+    const [mirrored] = await serverDB
+      .select({ visibility: works.visibility })
+      .from(works)
+      .where(eq(works.resourceId, doc.documentId));
+    expect(mirrored.visibility).toBe('private');
+    expect(await memberWorks.listByConversation({ topicId })).toHaveLength(0);
+  });
+
+  it('keeps an orphaned document Work (backing row deleted) visible to the registrant only', async () => {
+    await seedWorkspace();
+    const ownerWorks = new WorkModel(serverDB, userId, workspaceId);
+    const memberWorks = new WorkModel(serverDB, userId2, workspaceId);
+
+    const { doc } = await registerWorkspaceDocument('public');
+
+    // Hard-delete the backing document outside the tool path: the Work survives
+    // as an orphan. With no backing row the EXISTS guard fails, so only the
+    // registrant keeps the orphan card.
+    await serverDB.delete(documents).where(eq(documents.id, doc.documentId));
+
+    const ownerView = await ownerWorks.listByConversation({ topicId });
+    expect(ownerView).toHaveLength(1);
+    // The orphan surfaces flagged `resourceDeleted` (documents LEFT JOIN miss)
+    // so the UI renders "document deleted" + a remove action instead of a live
+    // card that 404s on open.
+    expect(ownerView[0].resourceDeleted).toBe(true);
+    // The resource-page gallery hides the orphan instead (resourceLiveFilter).
+    const { items } = await ownerWorks.listByWorkspace({});
+    expect(items).toHaveLength(0);
+    expect(await memberWorks.listByConversation({ topicId })).toHaveLength(0);
+  });
+
+  it('reports resourceDeleted=false while the backing document is live', async () => {
+    await seedWorkspace();
+    const ownerWorks = new WorkModel(serverDB, userId, workspaceId);
+    await registerWorkspaceDocument('public');
+
+    const [conversation] = await ownerWorks.listByConversation({ topicId });
+    expect(conversation.resourceDeleted).toBe(false);
+    const { items } = await ownerWorks.listByWorkspace({});
+    expect(items[0].resourceDeleted).toBe(false);
+  });
+
+  describe('deleteWork', () => {
+    it('removes the caller-owned Work and cascades its versions', async () => {
+      await seedWorkspace();
+      const ownerWorks = new WorkModel(serverDB, userId, workspaceId);
+      const { doc } = await registerWorkspaceDocument('public');
+      await serverDB.delete(documents).where(eq(documents.id, doc.documentId));
+
+      const [orphan] = await ownerWorks.listByConversation({ topicId });
+      await ownerWorks.deleteWork({ id: orphan.id });
+
+      expect(await serverDB.select().from(works).where(eq(works.id, orphan.id))).toHaveLength(0);
+      expect(
+        await serverDB.select().from(workVersions).where(eq(workVersions.workId, orphan.id)),
+      ).toHaveLength(0);
+    });
+
+    it('refuses to delete a Work whose backing document is still live', async () => {
+      await seedWorkspace();
+      const ownerWorks = new WorkModel(serverDB, userId, workspaceId);
+      await registerWorkspaceDocument('public');
+
+      const [live] = await ownerWorks.listByConversation({ topicId });
+      expect(live.resourceDeleted).toBe(false);
+      // The UI only offers removal on orphan cards; the model enforces the same
+      // invariant so a hand-crafted request cannot wipe a live Work's history.
+      await ownerWorks.deleteWork({ id: live.id });
+
+      expect(await serverDB.select().from(works).where(eq(works.id, live.id))).toHaveLength(1);
+    });
+
+    it('does not let another member delete a Work they did not register', async () => {
+      await seedWorkspace();
+      const ownerWorks = new WorkModel(serverDB, userId, workspaceId);
+      const memberWorks = new WorkModel(serverDB, userId2, workspaceId);
+      const { doc } = await registerWorkspaceDocument('public');
+      await serverDB.delete(documents).where(eq(documents.id, doc.documentId));
+
+      const [work] = await ownerWorks.listByConversation({ topicId });
+      // Even with the row id in hand, only the registrant may remove an orphan.
+      await memberWorks.deleteWork({ id: work.id });
+
+      expect(await serverDB.select().from(works).where(eq(works.id, work.id))).toHaveLength(1);
+    });
+
+    it('is a no-op for an unknown id', async () => {
+      await seedWorkspace();
+      const ownerWorks = new WorkModel(serverDB, userId, workspaceId);
+      await registerWorkspaceDocument('public');
+
+      await expect(ownerWorks.deleteWork({ id: 'work_missing' })).resolves.toEqual([]);
+      expect(await ownerWorks.listByConversation({ topicId })).toHaveLength(1);
+    });
+  });
+});

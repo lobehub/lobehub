@@ -2,6 +2,11 @@ import type { Command } from 'commander';
 import pc from 'picocolors';
 
 import { getTrpcClient } from '../api/client';
+import { getOpenApi } from '../api/openapi';
+import { resolveWorkspaceScope } from '../api/workspace';
+import { resolveWorkspaceRef } from '../api/workspaceRef';
+import { CLI_PRODUCT_NAME } from '../constants/identity';
+import { isMissingProcedure } from '../utils/error';
 import {
   type BoxTableRow,
   formatCost,
@@ -20,11 +25,38 @@ export function registerConfigCommand(program: Command) {
     .option('--json [fields]', 'Output JSON, optionally specify fields (comma-separated)')
     .action(async (options: { json?: string | boolean }) => {
       const client = await getTrpcClient();
-      const state = await client.user.getUserState.query();
+      // The scope comes from the server: it is the workspace the request
+      // actually ran under (a workspace API key pins its own workspace; a
+      // header naming a workspace the caller is not a member of falls back to
+      // personal), which is what lets a caller — usually an agent editing its
+      // own config — tell a genuine "not found" from "I'm looking in the wrong
+      // workspace".
+      const [state, { scope, source, workspaceId }] = await Promise.all([
+        client.user.getUserState.query(),
+        client.auth.getScope.query().catch((error: unknown) => {
+          if (!isMissingProcedure(error)) throw error;
+          // Self-hosted servers older than this CLI have no `auth.getScope`;
+          // report the scope this CLI sends instead.
+          const local = resolveWorkspaceScope();
+          return {
+            scope: local.workspaceId ? 'workspace' : 'personal',
+            source: local.source,
+            workspaceId: local.workspaceId ?? null,
+          };
+        }),
+      ]);
 
       if (options.json !== undefined) {
         const fields = typeof options.json === 'string' ? options.json : undefined;
-        outputJson(state, fields);
+        outputJson(
+          {
+            ...(state as any),
+            scope,
+            scopeSource: source,
+            workspaceId,
+          },
+          fields,
+        );
         return;
       }
 
@@ -35,162 +67,247 @@ export function registerConfigCommand(program: Command) {
       if (s.email) console.log(`  Email:    ${s.email}`);
       if (s.userId) console.log(`  User ID:  ${s.userId}`);
       if (s.subscriptionPlan) console.log(`  Plan:     ${s.subscriptionPlan}`);
+      console.log(
+        `  Scope:    ${workspaceId ? `workspace ${workspaceId} ${pc.dim(`(from ${source})`)}` : pc.dim('personal (no workspace scope)')}`,
+      );
     });
 
   // ── usage ─────────────────────────────────────────────
 
-  program
+  const usage = program
     .command('usage')
     .description('View usage statistics')
     .option('--month <YYYY-MM>', 'Month to query (default: current)')
+    .option('--agent-id <id>', 'Filter usage to a single agent')
     .option('--daily', 'Group by day')
     .option('--json [fields]', 'Output JSON, optionally specify fields (comma-separated)')
-    .action(async (options: { daily?: boolean; json?: string | boolean; month?: string }) => {
-      const client = await getTrpcClient();
+    .action(
+      async (options: {
+        agentId?: string;
+        daily?: boolean;
+        json?: string | boolean;
+        month?: string;
+      }) => {
+        const client = await getTrpcClient();
 
-      const input: { mo?: string } = {};
-      if (options.month) input.mo = options.month;
+        const input: { agentId?: string; mo?: string } = {};
+        if (options.month) input.mo = options.month;
+        if (options.agentId) input.agentId = options.agentId;
 
-      if (options.json !== undefined) {
-        let jsonResult: any;
-        if (options.daily) {
-          jsonResult = await client.usage.findAndGroupByDay.query(input);
-        } else {
-          jsonResult = await client.usage.findByMonth.query(input);
+        if (options.json !== undefined) {
+          let jsonResult: any;
+          if (options.daily) {
+            jsonResult = await client.usage.findAndGroupByDay.query(input);
+          } else {
+            jsonResult = await client.usage.findByMonth.query(input);
+          }
+          const fields = typeof options.json === 'string' ? options.json : undefined;
+          outputJson(jsonResult, fields);
+          return;
         }
-        const fields = typeof options.json === 'string' ? options.json : undefined;
-        outputJson(jsonResult, fields);
-        return;
-      }
 
-      // Always fetch daily-grouped data for table display
-      const result: any = await client.usage.findAndGroupByDay.query(input);
+        // Always fetch daily-grouped data for table display
+        const result: any = await client.usage.findAndGroupByDay.query(input);
 
-      if (!result) {
-        console.log('No usage data available.');
-        return;
-      }
+        if (!result) {
+          console.log('No usage data available.');
+          return;
+        }
 
-      // Normalize result to an array of daily logs
-      const logs: any[] = Array.isArray(result) ? result : [result];
+        // Normalize result to an array of daily logs
+        const logs: any[] = Array.isArray(result) ? result : [result];
 
-      // Filter out days with zero activity for cleaner output
-      const activeLogs = logs.filter(
-        (l: any) => (l.totalTokens || 0) > 0 || (l.totalRequests || 0) > 0,
+        // Filter out days with zero activity for cleaner output
+        const activeLogs = logs.filter(
+          (l: any) => (l.totalTokens || 0) > 0 || (l.totalRequests || 0) > 0,
+        );
+
+        if (activeLogs.length === 0) {
+          console.log('No usage data available.');
+          return;
+        }
+
+        // Build table columns
+        const columns = [
+          { align: 'left' as const, header: 'Date', key: 'date' },
+          { align: 'left' as const, header: 'Models', key: 'models' },
+          { align: 'right' as const, header: 'Input', key: 'input' },
+          { align: 'right' as const, header: 'Output', key: 'output' },
+          { align: 'right' as const, header: ['Total', 'Tokens'], key: 'total' },
+          { align: 'right' as const, header: 'Requests', key: 'requests' },
+          { align: 'right' as const, header: ['Cost', '(USD)'], key: 'cost' },
+        ];
+
+        // Totals
+        let sumInput = 0;
+        let sumOutput = 0;
+        let sumTotal = 0;
+        let sumRequests = 0;
+        let sumCost = 0;
+
+        const rows: BoxTableRow[] = activeLogs.map((log: any) => {
+          const records: any[] = log.records || [];
+
+          // Aggregate tokens
+          let inputTokens = 0;
+          let outputTokens = 0;
+          for (const r of records) {
+            inputTokens += r.totalInputTokens || 0;
+            outputTokens += r.totalOutputTokens || 0;
+          }
+          const totalTokens = log.totalTokens || inputTokens + outputTokens;
+          const cost = log.totalSpend || 0;
+          const requests = log.totalRequests || 0;
+
+          sumInput += inputTokens;
+          sumOutput += outputTokens;
+          sumTotal += totalTokens;
+          sumRequests += requests;
+          sumCost += cost;
+
+          // Unique models
+          const modelSet = new Set<string>();
+          for (const r of records) {
+            if (r.model) modelSet.add(r.model);
+          }
+          const modelList = [...modelSet].sort().map((m) => `- ${m}`);
+
+          return {
+            cost: formatCost(cost),
+            date: log.day || '',
+            input: formatNumber(inputTokens),
+            models: modelList.length > 0 ? modelList : ['-'],
+            output: formatNumber(outputTokens),
+            requests: formatNumber(requests),
+            total: formatNumber(totalTokens),
+          };
+        });
+
+        // Total row
+        rows.push({
+          cost: pc.bold(formatCost(sumCost)),
+          date: pc.bold('Total'),
+          input: pc.bold(formatNumber(sumInput)),
+          models: '',
+          output: pc.bold(formatNumber(sumOutput)),
+          requests: pc.bold(formatNumber(sumRequests)),
+          total: pc.bold(formatNumber(sumTotal)),
+        });
+
+        const monthLabel = options.month || new Date().toISOString().slice(0, 7);
+        const mode = options.daily ? 'Daily' : 'Monthly';
+        printBoxTable(
+          columns,
+          rows,
+          `${CLI_PRODUCT_NAME} Token Usage Report - ${mode} (${monthLabel})`,
+        );
+
+        // Calendar heatmap - fetch past 12 months
+        const now = new Date();
+        const rangeStart = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate() + 1);
+        let yearLogs: any[];
+
+        try {
+          // Try single-request endpoint first
+          yearLogs = await client.usage.findAndGroupByDateRange.query({
+            agentId: input.agentId,
+            endAt: now.toISOString().slice(0, 10),
+            startAt: rangeStart.toISOString().slice(0, 10),
+          });
+        } catch {
+          // Fallback: fetch each month concurrently
+          const monthKeys: string[] = [];
+          for (let i = 11; i >= 0; i--) {
+            const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+            monthKeys.push(d.toISOString().slice(0, 7));
+          }
+          const results = await Promise.all(
+            monthKeys.map((mo) =>
+              client.usage.findAndGroupByDay.query({ agentId: input.agentId, mo }),
+            ),
+          );
+          yearLogs = results.flat();
+        }
+
+        const calendarData = (Array.isArray(yearLogs) ? yearLogs : [])
+          .filter((log: any) => log.day)
+          .map((log: any) => ({
+            day: log.day,
+            value: log.totalTokens || 0,
+          }));
+
+        const yearTotal = calendarData.reduce((acc: number, d: any) => acc + d.value, 0);
+
+        printCalendarHeatmap(calendarData, {
+          label: `Past 12 months: ${formatNumber(yearTotal)} tokens`,
+          title: 'Activity (past 12 months)',
+        });
+      },
+    );
+
+  // ── usage quota ───────────────────────────────────────
+
+  usage
+    .command('quota')
+    .description("Show how much of this cycle's usage allowance is used and left")
+    .option(
+      '--workspace <id|slug>',
+      'Read the allowance in this workspace (defaults to the active scope)',
+    )
+    .option('--json [fields]', 'Output JSON, optionally specify fields (comma-separated)')
+    .action(async (_options: unknown, command: Command) => {
+      // `usage` declares `--json` too, and Commander hands it a `--json`
+      // written after `quota`; merging the ancestors' options recovers it.
+      const options = command.optsWithGlobals<{ json?: string | boolean; workspace?: string }>();
+      const summary = await getOpenApi<UsageSummary>(
+        '/usage',
+        await resolveWorkspaceRef(options.workspace),
       );
 
-      if (activeLogs.length === 0) {
-        console.log('No usage data available.');
+      if (options.json !== undefined) {
+        outputJson(
+          { quota: summary.quota, scope: summary.scope },
+          typeof options.json === 'string' ? options.json : undefined,
+        );
         return;
       }
 
-      // Build table columns
-      const columns = [
-        { align: 'left' as const, header: 'Date', key: 'date' },
-        { align: 'left' as const, header: 'Models', key: 'models' },
-        { align: 'right' as const, header: 'Input', key: 'input' },
-        { align: 'right' as const, header: 'Output', key: 'output' },
-        { align: 'right' as const, header: ['Total', 'Tokens'], key: 'total' },
-        { align: 'right' as const, header: 'Requests', key: 'requests' },
-        { align: 'right' as const, header: ['Cost', '(USD)'], key: 'cost' },
-      ];
-
-      // Totals
-      let sumInput = 0;
-      let sumOutput = 0;
-      let sumTotal = 0;
-      let sumRequests = 0;
-      let sumCost = 0;
-
-      const rows: BoxTableRow[] = activeLogs.map((log: any) => {
-        const records: any[] = log.records || [];
-
-        // Aggregate tokens
-        let inputTokens = 0;
-        let outputTokens = 0;
-        for (const r of records) {
-          inputTokens += r.totalInputTokens || 0;
-          outputTokens += r.totalOutputTokens || 0;
-        }
-        const totalTokens = log.totalTokens || inputTokens + outputTokens;
-        const cost = log.totalSpend || 0;
-        const requests = log.totalRequests || 0;
-
-        sumInput += inputTokens;
-        sumOutput += outputTokens;
-        sumTotal += totalTokens;
-        sumRequests += requests;
-        sumCost += cost;
-
-        // Unique models
-        const modelSet = new Set<string>();
-        for (const r of records) {
-          if (r.model) modelSet.add(r.model);
-        }
-        const modelList = [...modelSet].sort().map((m) => `- ${m}`);
-
-        return {
-          cost: formatCost(cost),
-          date: log.day || '',
-          input: formatNumber(inputTokens),
-          models: modelList.length > 0 ? modelList : ['-'],
-          output: formatNumber(outputTokens),
-          requests: formatNumber(requests),
-          total: formatNumber(totalTokens),
-        };
-      });
-
-      // Total row
-      rows.push({
-        cost: pc.bold(formatCost(sumCost)),
-        date: pc.bold('Total'),
-        input: pc.bold(formatNumber(sumInput)),
-        models: '',
-        output: pc.bold(formatNumber(sumOutput)),
-        requests: pc.bold(formatNumber(sumRequests)),
-        total: pc.bold(formatNumber(sumTotal)),
-      });
-
-      const monthLabel = options.month || new Date().toISOString().slice(0, 7);
-      const mode = options.daily ? 'Daily' : 'Monthly';
-      printBoxTable(columns, rows, `LobeHub Token Usage Report - ${mode} (${monthLabel})`);
-
-      // Calendar heatmap - fetch past 12 months
-      const now = new Date();
-      const rangeStart = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate() + 1);
-      let yearLogs: any[];
-
-      try {
-        // Try single-request endpoint first
-        yearLogs = await client.usage.findAndGroupByDateRange.query({
-          endAt: now.toISOString().slice(0, 10),
-          startAt: rangeStart.toISOString().slice(0, 10),
-        });
-      } catch {
-        // Fallback: fetch each month concurrently
-        const monthKeys: string[] = [];
-        for (let i = 11; i >= 0; i--) {
-          const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-          monthKeys.push(d.toISOString().slice(0, 7));
-        }
-        const results = await Promise.all(
-          monthKeys.map((mo) => client.usage.findAndGroupByDay.query({ mo })),
-        );
-        yearLogs = results.flat();
+      const { quota } = summary;
+      if (!quota) {
+        console.log('No usage allowance on this server.');
+        return;
       }
 
-      const calendarData = (Array.isArray(yearLogs) ? yearLogs : [])
-        .filter((log: any) => log.day)
-        .map((log: any) => ({
-          day: log.day,
-          value: log.totalTokens || 0,
-        }));
-
-      const yearTotal = calendarData.reduce((acc: number, d: any) => acc + d.value, 0);
-
-      printCalendarHeatmap(calendarData, {
-        label: `Past 12 months: ${formatNumber(yearTotal)} tokens`,
-        title: 'Activity (past 12 months)',
-      });
+      console.log(pc.bold('Usage Allowance'));
+      console.log(`  Source:    ${QUOTA_SOURCE_LABELS[quota.source]}`);
+      if (quota.limit === null) {
+        console.log(`  Used:      ${formatCost(quota.used)} ${pc.dim('(no cap)')}`);
+      } else {
+        const percent = Math.round((quota.usedRatio ?? 0) * 100);
+        console.log(
+          `  Used:      ${percent}% (${formatCost(quota.used)} of ${formatCost(quota.limit)})`,
+        );
+      }
+      if (quota.remaining !== null) console.log(`  Remaining: ${formatCost(quota.remaining)}`);
+      if (quota.resetsAt) console.log(`  Resets:    ${quota.resetsAt.slice(0, 10)}`);
     });
 }
+
+/** The fields of `GET /api/v1/usage` that `lh usage quota` reads. */
+interface UsageSummary {
+  quota: {
+    limit: number | null;
+    remaining: number | null;
+    resetsAt: string | null;
+    source: 'member_budget' | 'personal' | 'workspace_pool';
+    used: number;
+    usedRatio: number | null;
+  } | null;
+  scope: 'personal' | 'workspace';
+}
+
+const QUOTA_SOURCE_LABELS: Record<NonNullable<UsageSummary['quota']>['source'], string> = {
+  member_budget: 'your member limit in this workspace',
+  personal: 'personal usage',
+  workspace_pool: 'workspace usage pool',
+};

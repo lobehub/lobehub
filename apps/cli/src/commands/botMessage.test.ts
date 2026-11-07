@@ -22,11 +22,6 @@ const { getTrpcClient: mockGetTrpcClient } = vi.hoisted(() => ({
 }));
 
 vi.mock('../api/client', () => ({ getTrpcClient: mockGetTrpcClient }));
-vi.mock('../utils/logger', () => ({
-  log: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
-  setVerbose: vi.fn(),
-}));
-
 describe('bot message send --attachment', () => {
   let exitSpy: ReturnType<typeof vi.spyOn>;
   let consoleSpy: ReturnType<typeof vi.spyOn>;
@@ -117,7 +112,7 @@ describe('bot message send --attachment', () => {
     const call = mockTrpcClient.botMessage.sendMessage.mutate.mock.calls[0][0];
     expect(call.attachments).toHaveLength(1);
     expect(call.attachments[0]).toMatchObject({
-      mimeType: 'text/plain',
+      mimeType: 'text/plain; charset=utf-8',
       name: 'tiny.txt',
       type: 'file',
     });

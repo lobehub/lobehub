@@ -1,13 +1,9 @@
 'use client';
 
-import { memo } from 'react';
-
 import Category from './features/Category';
 
-const MeSettingsPage = memo(() => {
+const MeSettingsPage = () => {
   return <Category />;
-});
-
-MeSettingsPage.displayName = 'MeSettingsPage';
+};
 
 export default MeSettingsPage;

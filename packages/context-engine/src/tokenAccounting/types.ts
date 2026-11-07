@@ -4,6 +4,9 @@ import type { UIChatMessage } from '@lobechat/types';
  * Source category each token belongs to.
  *
  * - `content`           — `msg.content` (the text body sent to provider)
+ * - `fileContext`       — the `<files_info>` block MessageContentProcessor appends
+ *                         to user messages: parsed attachment text (or its preview
+ *                         when oversized) plus image/video/audio metadata
  * - `toolCalls`         — assistant's tool call payloads (`msg.tools[]`, equivalent
  *                         to OpenAI `tool_calls` once transformed): `id`, `apiName`,
  *                         `arguments`, `type` are sent to provider
@@ -21,6 +24,7 @@ import type { UIChatMessage } from '@lobechat/types';
  */
 export type TokenSourceType =
   | 'content'
+  | 'fileContext'
   | 'toolCalls'
   | 'thoughtSignature'
   | 'reasoning'
@@ -92,6 +96,11 @@ export interface CountContextTokensParams {
      * @default 1.25
      */
     driftMultiplier?: number;
+    /**
+     * Attachments sent as a preview instead of their full text, as planned by
+     * `planAttachmentPreviews`.
+     */
+    previewFileIds?: ReadonlySet<string>;
   };
   /**
    * Top-level tool definitions sent to the provider in the same request. Pass

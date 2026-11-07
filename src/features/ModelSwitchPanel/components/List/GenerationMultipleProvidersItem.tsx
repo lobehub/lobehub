@@ -1,6 +1,8 @@
 'use client';
 
 import {
+  cssVar,
+  cx,
   DropdownMenuPopup,
   DropdownMenuPortal,
   DropdownMenuPositioner,
@@ -9,7 +11,6 @@ import {
   Flexbox,
   menuSharedStyles,
 } from '@lobehub/ui';
-import { cssVar, cx } from 'antd-style';
 import { Check } from 'lucide-react';
 import type { ComponentType } from 'react';
 import { memo, useState } from 'react';
@@ -57,7 +58,6 @@ const GenerationMultipleProvidersItem = memo<GenerationMultipleProvidersItemProp
             <ModelItemComponent
               {...item.data.model}
               providerId={(activeProvider ?? item.data.providers[0]).id}
-              showBadge={false}
               showPopover={false}
             />
           </DropdownMenuSubmenuTrigger>

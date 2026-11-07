@@ -1,7 +1,6 @@
 'use client';
 
-import { Alert, Button, Flexbox, Icon } from '@lobehub/ui';
-import { Divider } from 'antd';
+import { Alert, Button, Divider, Flexbox, Icon } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { InfoIcon, PlayIcon } from 'lucide-react';
 import React, { memo, useCallback, useEffect, useMemo } from 'react';
@@ -174,7 +173,7 @@ const MemberProfile = memo(() => {
           </Button>
         </Flexbox>
       </Flexbox>
-      <Divider />
+      <Divider style={{ marginBlock: 24 }} />
       {/* Main Content: Prompt Editor */}
       <EditorCanvas
         disabled={!canEdit}

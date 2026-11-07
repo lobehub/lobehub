@@ -1,8 +1,9 @@
 'use client';
 
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { cx, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Check } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -11,12 +12,7 @@ import { inspectorTextStyles, shinyTextStyles } from '@/styles';
 
 import type { UpdatePromptParams, UpdatePromptState } from '../../../types';
 
-const styles = createStaticStyles(({ css }) => ({
-  statusIcon: css`
-    margin-block-end: -2px;
-    margin-inline-start: 4px;
-  `,
-}));
+const styles = stylex.create({ statusIcon: { marginBlockEnd: '-2px', marginInlineStart: '4px' } });
 
 export const UpdatePromptInspector = memo<
   BuiltinInspectorProps<UpdatePromptParams, UpdatePromptState>
@@ -39,8 +35,10 @@ export const UpdatePromptInspector = memo<
   // Initial streaming state
   if (isArgumentsStreaming && !prompt) {
     return (
-      <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-        <span>{t('builtins.lobe-agent-builder.apiName.updatePrompt')}</span>
+      <div className={inspectorTextStyles.root}>
+        <span className={shinyTextStyles.shinyText}>
+          {t('builtins.lobe-agent-builder.apiName.updatePrompt')}
+        </span>
       </div>
     );
   }
@@ -50,13 +48,10 @@ export const UpdatePromptInspector = memo<
   const isSuccess = pluginState?.success;
 
   return (
-    <div
-      className={cx(
-        inspectorTextStyles.root,
-        (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
-      )}
-    >
-      <span>{t('builtins.lobe-agent-builder.apiName.updatePrompt')}</span>
+    <div className={inspectorTextStyles.root}>
+      <span className={cx((isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText)}>
+        {t('builtins.lobe-agent-builder.apiName.updatePrompt')}
+      </span>
       {/* Show length diff when completed */}
       {!isLoading && !isArgumentsStreaming && lengthDiff !== null && (
         <Text
@@ -85,7 +80,11 @@ export const UpdatePromptInspector = memo<
         </Text>
       )}
       {!isLoading && !isArgumentsStreaming && isSuccess && (
-        <Check className={styles.statusIcon} color={cssVar.colorSuccess} size={14} />
+        <Check
+          className={stylex.props(styles.statusIcon).className}
+          color={cssVar.colorSuccess}
+          size={14}
+        />
       )}
     </div>
   );

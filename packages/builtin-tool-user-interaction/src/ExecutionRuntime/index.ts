@@ -9,39 +9,25 @@ import type {
   SubmitUserResponseArgs,
 } from '../types';
 
-const interactionFieldOptionSchema = z.object({
+const optionSchema = z.object({
+  description: z.string(),
   label: z.string(),
-  value: z.string(),
 });
 
-const interactionFieldSchema = z.object({
-  key: z.string(),
-  kind: z.enum(['multiselect', 'select', 'text', 'textarea']),
-  label: z.string(),
-  options: z.array(interactionFieldOptionSchema).optional(),
-  placeholder: z.string().optional(),
-  required: z.boolean().optional(),
-  value: z.union([z.string(), z.array(z.string())]).optional(),
+const questionSchema = z.object({
+  header: z.string(),
+  multiSelect: z.boolean().optional(),
+  options: z.array(optionSchema).min(2).max(4),
+  question: z.string(),
 });
-
-const questionSchema = z
-  .object({
-    description: z.string().optional(),
-    fields: z.array(interactionFieldSchema).optional(),
-    id: z.string(),
-    metadata: z.record(z.unknown()).optional(),
-    mode: z.enum(['form', 'freeform']),
-    prompt: z.string(),
-  })
-  .strict()
-  .refine((q) => q.mode !== 'form' || (q.fields && q.fields.length > 0), {
-    message:
-      'Mode "form" requires a non-empty "fields" array. Use "freeform" mode for open-ended input, or provide "fields" for structured form input.',
-  });
 
 const askUserQuestionArgsSchema = z.object({
-  question: questionSchema,
+  questions: z.array(questionSchema).min(1).max(4),
 });
+
+/** Opaque, process-local id for a pending interaction request. */
+const generateRequestId = (): string =>
+  `ask_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 
 export class UserInteractionExecutionRuntime {
   private interactions: Map<string, InteractionState> = new Map();
@@ -56,11 +42,10 @@ export class UserInteractionExecutionRuntime {
       };
     }
 
-    const { question } = parsed.data;
-    const requestId = question.id;
+    const requestId = generateRequestId();
 
     const state: InteractionState = {
-      question,
+      question: parsed.data,
       requestId,
       status: 'pending',
     };
@@ -68,7 +53,7 @@ export class UserInteractionExecutionRuntime {
     this.interactions.set(requestId, state);
 
     return {
-      content: `Question "${question.prompt}" is now pending user response.`,
+      content: 'Question(s) presented to the user; awaiting response.',
       state,
       success: true,
     };

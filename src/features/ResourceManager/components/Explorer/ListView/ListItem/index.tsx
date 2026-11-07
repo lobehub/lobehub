@@ -1,19 +1,30 @@
-import { Center, Checkbox, ContextMenuTrigger, Flexbox } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import {
+  Center,
+  Checkbox,
+  ContextMenuTrigger,
+  createStaticStyles,
+  cssVar,
+  cx,
+  Flexbox,
+  Tooltip,
+} from '@lobehub/ui';
 import { isEqual } from 'es-toolkit';
-import { memo, useCallback } from 'react';
+import { memo, useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { shallow } from 'zustand/shallow';
 
-import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
-import { isExplorerItemSelected } from '@/routes/(main)/resource/features/store/selectors';
-import { fileManagerSelectors, useFileStore } from '@/store/file';
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import UserAvatar from '@/components/UserAvatar';
+import { useResourceManagerStore } from '@/features/ResourceManager/store';
+import { isExplorerItemSelected } from '@/features/ResourceManager/store/selectors';
+import { fileManagerSelectors, getChunkTargetId, useFileStore } from '@/store/file';
 import type { FileListItem as FileListItemType } from '@/types/files';
 import { formatSize } from '@/utils/format';
 
-import { useFileItemClick } from '../../hooks/useFileItemClick';
-import { useFileItemDropdown } from '../../ItemDropdown/useFileItemDropdown';
+import { useFileItemClick, useFileItemDoubleClick } from '../../hooks/useFileItemClick';
+import { getListViewMinWidth } from './constants';
 import FileListItemActions from './FileListItemActions';
+import FileListItemMenu, { type FileListItemMenuGetter } from './FileListItemMenu';
 import FileListItemName from './FileListItemName';
 import { useFileListItemDrag } from './useFileListItemDrag';
 import { useFileListItemMeta } from './useFileListItemMeta';
@@ -26,7 +37,7 @@ const styles = createStaticStyles(({ css }) => {
   return {
     container: css`
       cursor: pointer;
-      min-width: 800px;
+      min-width: 1040px;
       transition: background ${cssVar.motionDurationMid} ${cssVar.motionEaseInOut};
 
       &:hover {
@@ -91,6 +102,18 @@ const styles = createStaticStyles(({ css }) => {
       color: ${cssVar.colorText};
       white-space: nowrap;
     `,
+    menuPlaceholder: css`
+      cursor: pointer;
+
+      flex-shrink: 0;
+
+      width: 24px;
+      height: 24px;
+      padding: 0;
+      border: none;
+
+      background: transparent;
+    `,
     nameContainer: css`
       overflow: hidden;
       flex: 1;
@@ -103,6 +126,15 @@ const styles = createStaticStyles(({ css }) => {
         background: ${cssVar.colorFillSecondary};
       }
     `,
+    uploaderName: css`
+      overflow: hidden;
+      flex: 1;
+
+      min-width: 0;
+
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    `,
   };
 });
 
@@ -111,10 +143,13 @@ interface FileListItemProps extends FileListItemType {
     date: number;
     name: number;
     size: number;
+    uploader: number;
   };
   index: number;
   onSelectedChange: (id: string, selected: boolean, shiftKey: boolean, index: number) => void;
+  selectable?: boolean;
   selected?: boolean;
+  showUploader?: boolean;
   slug?: string | null;
 }
 
@@ -126,24 +161,32 @@ const FileListItem = ({
   createdAt,
   embeddingError,
   embeddingStatus,
+  fileId,
   fileType,
   finishEmbedding,
   id,
   index,
+  knowledgeBaseIds,
   metadata,
   name,
   onSelectedChange,
+  selectable = true,
   selected,
+  showUploader = true,
   size,
-  slug,
   sourceType,
+  uploader,
   url,
   userId,
+  visibility,
 }: FileListItemProps) => {
-  const { t } = useTranslation(['components', 'file']);
+  const { t } = useTranslation(['components', 'file', 'chat', 'common']);
+  const uploaderName =
+    uploader?.fullName || uploader?.username || (uploader?.id ? uploader.id.slice(0, 8) : '');
+  const chunkTargetId = getChunkTargetId({ fileId, id });
   const fileStoreState = useFileStore(
     (s) => ({
-      isCreatingFileParseTask: fileManagerSelectors.isCreatingFileParseTask(id)(s),
+      isCreatingFileParseTask: fileManagerSelectors.isCreatingFileParseTask(chunkTargetId)(s),
       parseFiles: s.parseFilesToChunks,
       refreshFileList: s.refreshFileList,
       updateResource: s.updateResource,
@@ -172,6 +215,11 @@ const FileListItem = ({
     name,
     sourceType,
   });
+
+  // Personal mode has no second audience, so `visibility` carries no meaning
+  // there and every row would wear a lock for nothing.
+  const activeWorkspaceId = useActiveWorkspaceId();
+  const isPrivate = Boolean(activeWorkspaceId) && visibility === 'private';
   const {
     handleDragEnd,
     handleDragLeave,
@@ -212,24 +260,67 @@ const FileListItem = ({
     isFolder,
     isPage,
     libraryId: resourceManagerState.libraryId,
-    slug,
+    openInPanel: true,
   });
-  const { menuItems } = useFileItemDropdown({
-    fileType,
-    filename: name,
+  const handleItemDoubleClick = useFileItemDoubleClick({
     id,
+    isPage,
     libraryId: resourceManagerState.libraryId,
-    onRenameStart: isFolder ? handleRenameStart : undefined,
-    sourceType,
-    url,
   });
+
+  // The row menu (its hooks plus a Base UI menu tree) mounts on first hover or
+  // focus instead of for every row Virtuoso renders; scrolling a long list used
+  // to mount and tear down dozens of closed menus per frame.
+  const [menuActivation, setMenuActivation] = useState<'click' | 'focus' | 'pointer' | null>(null);
+  const menuActivated = menuActivation !== null;
+  const activateMenu = useCallback(() => setMenuActivation((prev) => prev ?? 'pointer'), []);
+  // Keyboard users reach the placeholder trigger first; hand focus to the real
+  // trigger once it mounts so Tab/Enter keep working.
+  const activateMenuFromFocus = useCallback(() => setMenuActivation((prev) => prev ?? 'focus'), []);
+  // A click on the placeholder (assistive tech, programmatic `click()`) opens
+  // the real menu right away instead of only swapping the trigger in.
+  const activateMenuFromClick = useCallback(() => setMenuActivation((prev) => prev ?? 'click'), []);
+  const menuItemsRef = useRef<FileListItemMenuGetter | null>(null);
+  const getContextMenuItems = useCallback(() => menuItemsRef.current?.() ?? [], []);
+
+  const rowMenu = menuActivated ? (
+    <FileListItemMenu
+      className={styles.hover}
+      fileId={fileId}
+      fileType={fileType}
+      filename={name}
+      focusOnMount={menuActivation === 'focus' || menuActivation === 'click'}
+      id={id}
+      isFolder={isFolder}
+      isPage={isPage}
+      libraryId={resourceManagerState.libraryId}
+      menuItemsRef={menuItemsRef}
+      openOnMount={menuActivation === 'click'}
+      size={size}
+      sourceType={sourceType}
+      url={url}
+      userId={userId}
+      visibility={visibility}
+      onRenameStart={isFolder ? handleRenameStart : undefined}
+    />
+  ) : (
+    <button
+      aria-haspopup="menu"
+      aria-label={t('more', { ns: 'common' })}
+      className={cx(styles.menuPlaceholder, styles.hover)}
+      type="button"
+      onClick={activateMenuFromClick}
+      onFocus={activateMenuFromFocus}
+    />
+  );
 
   const handleCheckboxClick = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
+      if (!selectable) return;
       onSelectedChange(id, !isSelected, e.shiftKey, index);
     },
-    [id, index, isSelected, onSelectedChange],
+    [id, index, isSelected, onSelectedChange, selectable],
   );
 
   const handleCheckboxPointerDown = useCallback((e: React.PointerEvent) => {
@@ -240,7 +331,7 @@ const FileListItem = ({
   }, []);
 
   return (
-    <ContextMenuTrigger items={menuItems}>
+    <ContextMenuTrigger items={menuActivated ? getContextMenuItems : undefined}>
       <Flexbox
         horizontal
         align={'center'}
@@ -260,22 +351,27 @@ const FileListItem = ({
         )}
         style={{
           borderBlockEnd: `1px solid ${cssVar.colorBorderSecondary}`,
+          minWidth: getListViewMinWidth(showUploader),
           userSelect: 'none',
         }}
         onClick={handleItemClick}
+        onDoubleClick={handleItemDoubleClick}
         onDragEnd={handleDragEnd}
         onDragLeave={handleDragLeave}
         onDragOver={handleDragOver}
         onDragStart={handleDragStart}
         onDrop={handleDrop}
+        onFocus={menuActivated ? undefined : activateMenu}
+        onPointerEnter={menuActivated ? undefined : activateMenu}
       >
         <Center
           height={40}
-          style={{ paddingInline: 4 }}
+          style={{ cursor: selectable ? 'pointer' : 'not-allowed', paddingInline: 4 }}
+          title={selectable ? undefined : t('FileManager.selection.onlyOwn')}
           onClick={handleCheckboxClick}
           onPointerDown={handleCheckboxPointerDown}
         >
-          <Checkbox checked={isSelected} />
+          <Checkbox checked={isSelected} disabled={!selectable} />
         </Center>
         <Flexbox
           horizontal
@@ -297,8 +393,11 @@ const FileListItem = ({
             inputRef={inputRef}
             isFolder={isFolder}
             isPage={isPage}
+            isPrivate={isPrivate}
             isRenaming={isRenaming}
+            knowledgeBaseIds={resourceManagerState.libraryId ? undefined : knowledgeBaseIds}
             name={name}
+            privateTooltip={t('resources.visibility.privateTooltip', { ns: 'chat' })}
             renamingValue={renamingValue}
             onRenameCancel={handleRenameCancel}
             onRenameConfirm={handleRenameConfirm}
@@ -310,22 +409,57 @@ const FileListItem = ({
             chunkingStatus={chunkingStatus}
             embeddingError={embeddingError}
             embeddingStatus={embeddingStatus}
+            fileId={fileId}
             finishEmbedding={finishEmbedding}
             id={id}
             isCreatingFileParseTask={fileStoreState.isCreatingFileParseTask}
             isFolder={isFolder}
             isPage={isPage}
             isSupportedForChunking={isSupportedForChunking}
-            menuItems={menuItems}
+            menu={rowMenu}
             parseFiles={fileStoreState.parseFiles}
             t={t}
           />
         </Flexbox>
         {!isDragging && (
           <>
-            <Flexbox className={styles.item} style={{ flexShrink: 0 }} width={columnWidths.date}>
-              {displayTime}
+            <Flexbox
+              horizontal
+              align={'center'}
+              className={styles.item}
+              gap={8}
+              style={{ flexShrink: 0 }}
+              width={columnWidths.date}
+            >
+              <span>{displayTime}</span>
             </Flexbox>
+            {showUploader && (
+              <Flexbox
+                horizontal
+                align={'center'}
+                className={styles.item}
+                gap={8}
+                style={{ flexShrink: 0 }}
+                width={columnWidths.uploader}
+              >
+                {uploaderName ? (
+                  <Tooltip title={t('file:listView.uploadedBy', { name: uploaderName })}>
+                    <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
+                      <UserAvatar
+                        avatar={uploader?.avatar}
+                        name={uploaderName}
+                        shape={'circle'}
+                        size={20}
+                        style={{ flexShrink: 0 }}
+                      />
+                      <span className={styles.uploaderName}>{uploaderName}</span>
+                    </Flexbox>
+                  </Tooltip>
+                ) : (
+                  '-'
+                )}
+              </Flexbox>
+            )}
             <Flexbox className={styles.item} style={{ flexShrink: 0 }} width={columnWidths.size}>
               {isFolder || isPage ? '-' : formatSize(size)}
             </Flexbox>

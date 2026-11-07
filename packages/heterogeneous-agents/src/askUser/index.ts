@@ -13,15 +13,11 @@
  */
 export {
   AskUserBridge,
+  type AskUserBridgeOptions,
   type InterventionAnswer,
   type PendingArgs,
   type PendingOptions,
 } from './AskUserBridge';
-export {
-  AskUserMcpServer,
-  type AskUserMcpServerOptions,
-  type StartedServer,
-} from './AskUserMcpServer';
 export {
   ASK_USER_API_NAME,
   ASK_USER_MCP_SERVER_NAME,

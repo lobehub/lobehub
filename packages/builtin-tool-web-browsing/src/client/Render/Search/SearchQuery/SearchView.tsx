@@ -1,5 +1,6 @@
-import { Block, Flexbox, Icon, Skeleton, Text } from '@lobehub/ui';
-import { createStaticStyles, cx } from 'antd-style';
+import { Block, cx, Flexbox, Icon, Skeleton, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { SearchIcon } from 'lucide-react';
 import { memo } from 'react';
 
@@ -8,14 +9,14 @@ import { shinyTextStyles } from '@/styles';
 
 import { EngineAvatarGroup } from '../../../components/EngineAvatar';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  query: css`
-    padding-block: 4px;
-    padding-inline: 8px;
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-}));
+const styles = stylex.create({
+  query: {
+    paddingBlock: '4px',
+    paddingInline: '8px',
+    fontSize: '12px',
+    color: cssVar.colorTextSecondary,
+  },
+});
 
 interface SearchBarProps {
   defaultEngines: string[];
@@ -40,7 +41,7 @@ const SearchBar = memo<SearchBarProps>(
           clickable
           horizontal
           align={'center'}
-          className={cx(styles.query, searching && shinyTextStyles.shinyText)}
+          className={stylex.props(styles.query).className}
           gap={8}
           variant={'borderless'}
           onClick={() => {
@@ -48,11 +49,11 @@ const SearchBar = memo<SearchBarProps>(
           }}
         >
           <Icon icon={SearchIcon} />
-          {defaultQuery}
+          <span className={cx(searching && shinyTextStyles.shinyText)}>{defaultQuery}</span>
         </Block>
 
         {searching ? (
-          <Skeleton.Block active style={{ height: 20, width: 40 }} />
+          <Skeleton height={20} width={40} />
         ) : (
           <Flexbox horizontal align={'center'} gap={4}>
             <EngineAvatarGroup engines={defaultEngines} />

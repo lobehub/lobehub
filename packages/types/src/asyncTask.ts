@@ -1,7 +1,12 @@
+import type { SpendOrigin } from './agentRuntime';
+
 export enum AsyncTaskType {
   Chunking = 'chunk',
   Embedding = 'embedding',
   ImageGeneration = 'image_generation',
+  /** One-way Linear issue → task sync run in the background (`linear_issue_sync`). */
+  LinearIssueSync = 'linear_issue_sync',
+  UserMemoryExtractionHourly = 'user_memory_extraction:hourly',
   UserMemoryExtractionWithChatTopic = 'user_memory_extraction:chat_topic',
   VideoGeneration = 'video_generation',
 }
@@ -15,6 +20,16 @@ export enum AsyncTaskStatus {
 
 export enum AsyncTaskErrorType {
   EmbeddingError = 'EmbeddingError',
+
+  /**
+   * The plan's vector storage cannot hold this file's vectors; nothing was embedded.
+   */
+  EmbeddingQuotaExceeded = 'EmbeddingQuotaExceeded',
+
+  /**
+   * File exceeds the in-memory parser limit and cannot be chunked.
+   */
+  FileTooLargeToParse = 'FileTooLargeToParse',
 
   /* ↓ cloud slot | free plan limit error type ↓ */
   /**
@@ -90,6 +105,8 @@ export interface AsyncTaskErrorBody {
   persistErrors?: AsyncTaskStructuredErrorItem[];
   progressErrors?: AsyncTaskStructuredErrorItem[];
   retrievalErrors?: AsyncTaskStructuredErrorItem[];
+  /** Earliest retry time for this failure, as an ISO timestamp. */
+  retryAt?: string;
 }
 
 export interface IAsyncTaskError {
@@ -122,30 +139,44 @@ export interface UserMemoryExtractionProgress {
   totalTopics: number | null;
 }
 
+/**
+ * Provider metadata for Upstash workflow-backed async task runs.
+ */
+export interface UpstashWorkflowRunMetadata {
+  /**
+   * Workflow run id of the wrapper run that created this async task.
+   */
+  entryWorkflowRunId?: string;
+  /**
+   * Known workflow run ids associated with this task.
+   */
+  workflowRunIds?: string[];
+}
+
+/**
+ * Shared cancellation metadata for memory extraction async tasks.
+ */
+export interface MemoryExtractionControlMetadata {
+  /**
+   * Who initiated cancellation.
+   */
+  cancelledBy?: 'system' | 'user' | 'webhook';
+  /**
+   * Human-readable reason for cancellation when available.
+   */
+  cancelReason?: string;
+  /**
+   * ISO timestamp indicating when cancellation was requested.
+   */
+  cancelRequestedAt?: string;
+  /**
+   * Provider-specific cancellation metadata.
+   */
+  upstash?: UpstashWorkflowRunMetadata;
+}
+
 export interface UserMemoryExtractionMetadata {
-  control?: {
-    /**
-     * Human-readable reason for cancellation when available.
-     */
-    cancelReason?: string;
-    /**
-     * ISO timestamp indicating when cancellation was requested.
-     */
-    cancelRequestedAt?: string;
-    /**
-     * Who initiated cancellation.
-     */
-    cancelledBy?: 'system' | 'user' | 'webhook';
-    /**
-     * Provider-specific cancellation metadata.
-     */
-    upstash?: {
-      /**
-       * Known workflow run ids associated with this task.
-       */
-      workflowRunIds?: string[];
-    };
-  };
+  control?: MemoryExtractionControlMetadata;
   progress: UserMemoryExtractionProgress;
   range?: {
     from?: string;
@@ -154,7 +185,57 @@ export interface UserMemoryExtractionMetadata {
   source: 'chat_topic';
 }
 
+/**
+ * Progress counters for hourly user memory extraction scheduler runs.
+ */
+export interface HourlyUserMemoryExtractionProgress {
+  processedUsers: number;
+  scheduledBatches: number;
+  scheduledChildRuns: number;
+}
+
+/**
+ * Metadata persisted for hourly user memory extraction async tasks.
+ */
+export interface HourlyUserMemoryExtractionMetadata {
+  control?: MemoryExtractionControlMetadata;
+  cursor?: {
+    createdAt: string;
+    id: string;
+  };
+  progress: HourlyUserMemoryExtractionProgress;
+  source: 'hourly_chat_topic';
+  startedAt: string;
+}
+
+export type VideoGenerationCompletionMode = 'polling' | 'webhook';
+
 export interface VideoGenerationTaskMetadata {
-  precharge?: Record<string, unknown>;
+  completionClaimedAt?: string;
+  completionEventId?: string;
+  completionMode?: VideoGenerationCompletionMode;
+  precharge?: unknown;
+  previousGenerationId?: string;
+  route?: VideoGenerationRoute;
+  /**
+   * Origin of the submitting request, carried across the async boundary so the
+   * completion charge (webhook / polling) can keep the spend attributed.
+   *
+   * Persisted on the async task row under this exact key. It was named
+   * `spendAttribution` before Agent Share v2; no double-read is needed because
+   * the feature had not shipped, so no stored row carries the old key.
+   */
+  spendOrigin?: SpendOrigin;
   webhookToken?: string;
+}
+
+export interface VideoGenerationRoute {
+  apiType: string;
+  /**
+   * Router attempt that created the video, so the completion charge can be attributed to it.
+   * Routing ignores it: only `routerId` and `channelId` pin later polls.
+   */
+  attemptId?: string;
+  channelId?: string;
+  routerId?: string;
 }

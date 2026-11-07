@@ -11,6 +11,7 @@
   "main": "./src/index.ts",
   "dependencies": {
     "@lobechat/builtin-tool-local-system": "workspace:*",
+    "@lobechat/prompts": "workspace:*",
     "@lobechat/shared-tool-ui": "workspace:*",
     "@lobechat/tool-runtime": "workspace:*"
   },
@@ -18,9 +19,7 @@
     "@lobechat/types": "workspace:*"
   },
   "peerDependencies": {
-    "@lobehub/ui": "^5",
-    "antd": "^6",
-    "antd-style": "*",
+    "@lobehub/ui": "^6.0.4",
     "lucide-react": "*",
     "react": "*",
     "react-i18next": "*"

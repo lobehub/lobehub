@@ -1,5 +1,5 @@
 import type { VerifyReport } from '@lobechat/types';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 
 import { verifyReports, verifyRuns } from '../schemas/verify';
 import type { LobeChatDatabase } from '../type';
@@ -85,6 +85,17 @@ export class VerifyReportModel {
   findByRun = async (verifyRunId: string) => {
     return this.db.query.verifyReports.findFirst({
       where: and(eq(verifyReports.verifyRunId, verifyRunId), this.ownership()),
+    });
+  };
+
+  /**
+   * The reports of several verification rounds in one query (at most one per
+   * run) — the acceptance ledger renders a whole round chain at once.
+   */
+  findByRuns = async (verifyRunIds: string[]) => {
+    if (verifyRunIds.length === 0) return [];
+    return this.db.query.verifyReports.findMany({
+      where: and(inArray(verifyReports.verifyRunId, verifyRunIds), this.ownership()),
     });
   };
 

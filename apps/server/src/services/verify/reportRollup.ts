@@ -17,15 +17,14 @@ export interface ReportStats {
 export const rollupVerdict = (results: VerifyCheckResultItem[]): VerifyVerdict => {
   const required = results.filter((r) => r.required);
   const failed = (r: VerifyCheckResultItem) => r.status === 'failed' || r.verdict === 'failed';
-  const unresolved = (r: VerifyCheckResultItem) =>
-    r.verdict === 'uncertain' || (!r.verdict && r.status !== 'skipped');
+  const unresolved = (r: VerifyCheckResultItem) => r.verdict === 'uncertain' || !r.verdict;
 
   if (required.some(failed)) return 'failed';
   if (required.some(unresolved)) return 'uncertain';
   return 'passed';
 };
 
-/** Verdict tallies for the report's statistics snapshot (pending/skipped → total only). */
+/** Verdict tallies for the report's statistics snapshot (unresolved → total only). */
 export const countStats = (results: VerifyCheckResultItem[]): ReportStats => ({
   failed: results.filter((r) => r.verdict === 'failed').length,
   passed: results.filter((r) => r.verdict === 'passed').length,

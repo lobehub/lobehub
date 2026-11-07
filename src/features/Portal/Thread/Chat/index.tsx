@@ -1,5 +1,6 @@
 'use client';
 
+import { type IThreadType, type UIChatMessage } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import { memo, Suspense, useCallback, useMemo } from 'react';
 
@@ -14,15 +15,18 @@ import {
 } from '@/features/Conversation';
 import SkeletonList from '@/features/Conversation/components/SkeletonList';
 import { useChatFollowUp } from '@/features/Conversation/hooks/useChatFollowUp';
+import { type ComposerTarget, resolveThreadComposerTarget } from '@/features/Conversation/types';
 import { mergeConversationHooks } from '@/features/Conversation/utils/mergeConversationHooks';
 import { useOperationState } from '@/hooks/useOperationState';
+import HeterogeneousChatInput from '@/routes/(main)/agent/features/Conversation/HeterogeneousChatInput';
 import { useAgentStore } from '@/store/agent';
-import { chatConfigByIdSelectors } from '@/store/agent/selectors';
+import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { portalThreadSelectors, threadSelectors } from '@/store/chat/selectors';
 import { type MessageMapKeyInput } from '@/store/chat/utils/messageMapKey';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
+import { getThreadInputMode } from './inputMode';
 import ThreadDivider from './ThreadDivider';
 import { useThreadActionsBarConfig } from './useThreadActionsBarConfig';
 
@@ -31,80 +35,103 @@ import { useThreadActionsBarConfig } from './useThreadActionsBarConfig';
  * Must be inside ConversationProvider to access the store
  */
 interface ThreadChatContentProps {
-  isSubagentThread: boolean;
+  composerWritable: boolean;
+  /** The message this thread forked from — its anchor in the main conversation. */
+  forkMessageId?: string;
+  isHeterogeneousAgent: boolean;
+  readOnly: boolean;
+  threadType?: IThreadType;
 }
 
-const ThreadChatContent = memo<ThreadChatContentProps>(({ isSubagentThread }) => {
-  // Get display messages from ConversationStore to determine thread divider position
-  // With the new backend API, parent messages have threadId === null
-  // and thread messages have threadId === context.threadId
-  const displayMessages = useConversationStore(conversationSelectors.displayMessages);
+const ThreadChatContent = memo<ThreadChatContentProps>(
+  ({ composerWritable, forkMessageId, isHeterogeneousAgent, readOnly, threadType }) => {
+    const inputMode = getThreadInputMode({
+      isExternallyOwnedThread: readOnly,
+      isHeterogeneousAgent,
+    });
+    const displayMessages = useConversationStore(conversationSelectors.displayMessages);
 
-  // Find the last parent message (source message) - it's the last message with threadId === null
-  const threadSourceInfo = useMemo(() => {
-    // Find the index of the last parent message (threadId is null or undefined)
-    let sourceMessageIndex = -1;
-    let sourceMessageId: string | undefined;
+    // The portal knows its own fork point (`threadStartMessageId` while the
+    // thread is being created, `thread.sourceMessageId` once it exists), so take
+    // it from there rather than deriving it from the list. Deriving it as "the
+    // last message without a threadId" breaks for the ~2s optimistic window
+    // after send: the just-sent rows have no threadId yet either (the thread row
+    // does not exist), so the scan walked past the fork point onto the assistant
+    // placeholder. Kept as a fallback for callers that have neither.
+    const sourceMessageId = useMemo(
+      () => forkMessageId ?? displayMessages.findLast((msg) => !msg.threadId)?.id,
+      [forkMessageId, displayMessages],
+    );
 
-    for (const [i, msg] of displayMessages.entries()) {
-      // Parent messages don't have threadId
-      if (!msg.threadId) {
-        sourceMessageIndex = i;
-        sourceMessageId = msg.id;
-      }
-    }
+    // Render the fork message and everything after it — the inherited main chat
+    // above it is one click away and re-rendering it here just duplicates it.
+    // The data layer keeps the full history, so AI context inheritance is
+    // unchanged. Cutting by position (rather than by `threadId`) is what keeps
+    // the user's own message visible during the optimistic window.
+    const visibleIds = useMemo(() => {
+      if (!sourceMessageId) return;
+      const forkIndex = displayMessages.findIndex((msg) => msg.id === sourceMessageId);
+      // Anchor not in this list (a bucket swap mid-flight): show everything
+      // rather than blanking the panel.
+      if (forkIndex < 0) return;
+      return new Set(displayMessages.slice(forkIndex).map((msg) => msg.id));
+    }, [displayMessages, sourceMessageId]);
 
-    return { sourceMessageId, sourceMessageIndex };
-  }, [displayMessages]);
+    const filterItem = useCallback(
+      (msg: UIChatMessage) => !visibleIds || visibleIds.has(msg.id),
+      [visibleIds],
+    );
 
-  // Custom item content renderer for thread-specific features
-  const itemContent = useCallback(
-    (index: number, id: string) => {
-      // Check if this message needs ThreadDivider (after thread source message)
-      const enableThreadDivider = threadSourceInfo.sourceMessageId === id;
+    const itemContent = useCallback(
+      (index: number, id: string) => {
+        const isSourceMessage = id === sourceMessageId;
 
-      // Check if this is a parent message (should be read-only)
-      // Parent messages are those with index <= sourceMessageIndex
-      const isParentMessage = index <= threadSourceInfo.sourceMessageIndex;
+        return (
+          <MessageItem
+            inPortalThread
+            disableEditing={readOnly || isSourceMessage}
+            endRender={isSourceMessage ? <ThreadDivider threadType={threadType} /> : undefined}
+            id={id}
+            index={index}
+          />
+        );
+      },
+      [sourceMessageId, readOnly, threadType],
+    );
 
-      return (
-        <MessageItem
-          inPortalThread
-          disableEditing={isSubagentThread || isParentMessage}
-          endRender={enableThreadDivider ? <ThreadDivider /> : undefined}
-          id={id}
-          index={index}
-        />
-      );
-    },
-    [threadSourceInfo.sourceMessageId, threadSourceInfo.sourceMessageIndex, isSubagentThread],
-  );
-
-  return (
-    <>
-      <Suspense
-        fallback={
-          <Flexbox flex={1} height={'100%'}>
-            <SkeletonList />
-          </Flexbox>
-        }
-      >
-        <Flexbox
-          flex={1}
-          width={'100%'}
-          style={{
-            overflowX: 'hidden',
-            overflowY: 'auto',
-            position: 'relative',
-          }}
+    return (
+      <>
+        <Suspense
+          fallback={
+            <Flexbox flex={1} height={'100%'}>
+              <SkeletonList />
+            </Flexbox>
+          }
         >
-          <ChatList itemContent={itemContent} />
-        </Flexbox>
-      </Suspense>
-      {!isSubagentThread && <ChatInput leftActions={['typo']} rightActions={['contextWindow']} />}
-    </>
-  );
-});
+          <Flexbox
+            flex={1}
+            style={{ overflowX: 'hidden', overflowY: 'auto', position: 'relative' }}
+            width={'100%'}
+          >
+            <ChatList filterItem={filterItem} itemContent={itemContent} />
+          </Flexbox>
+        </Suspense>
+        {composerWritable && inputMode === 'heterogeneous' && <HeterogeneousChatInput />}
+        {composerWritable && inputMode === 'default' && (
+          <ChatInput
+            leftActions={['typo', 'voiceDictation']}
+            rightActions={['voiceMessage', 'contextWindow']}
+            // A subtopic runs on the conversation it forked from: mode, device,
+            // working directory and approval all come from there and are not
+            // separately settable here. Rendering the bar anyway put a row of
+            // controls under the panel that only restated the parent's state.
+            showControlBar={false}
+          />
+        )}
+      </>
+    );
+  },
+);
 
 ThreadChatContent.displayName = 'ThreadChatContent';
 
@@ -132,12 +159,18 @@ const ThreadChat = memo(() => {
   // executor on every spawn — unambiguous marker to flip the thread into a
   // read-only record (hides composer, wipes per-message actions, disables
   // double-click editing).
-  const isSubagentThread = useChatStore(
-    (s) => !!portalThreadSelectors.portalCurrentThread(s)?.metadata?.sourceToolCallId,
+  const portalThread = useChatStore(portalThreadSelectors.portalCurrentThread);
+  const threadMetadataResolved = !portalThreadId || !!portalThread;
+  const isSubagentThread = !!portalThread?.metadata?.sourceToolCallId;
+  const threadAgentId = portalThread?.agentId || activeAgentId;
+  const isHeterogeneousAgent = useAgentStore(
+    agentByIdSelectors.isAgentHeterogeneousById(threadAgentId || ''),
   );
 
   // Get thread-specific actionsBar config
-  const actionsBarConfig = useThreadActionsBarConfig({ readonly: isSubagentThread });
+  const actionsBarConfig = useThreadActionsBarConfig({
+    readonly: !threadMetadataResolved || isSubagentThread,
+  });
 
   // Build ConversationContext for thread
   // When creating new thread (!portalThreadId), use isNew + scope: 'thread'
@@ -146,7 +179,7 @@ const ThreadChat = memo(() => {
   // Context for ConversationProvider (includes sourceMessageId/threadType for new thread creation)
   const context: ConversationContext = useMemo(
     () => ({
-      agentId: activeAgentId,
+      agentId: threadAgentId,
       // Use isNew + scope for new thread creation
       isNew: isCreatingNewThread,
       scope: 'thread',
@@ -157,7 +190,7 @@ const ThreadChat = memo(() => {
       topicId: activeTopicId,
     }),
     [
-      activeAgentId,
+      threadAgentId,
       activeTopicId,
       portalThreadId,
       threadStartMessageId,
@@ -169,28 +202,32 @@ const ThreadChat = memo(() => {
   // Context for messageMapKey (only needs fields used in key generation)
   const keyContext = useMemo<MessageMapKeyInput>(
     () => ({
-      agentId: activeAgentId,
+      agentId: threadAgentId,
       isNew: isCreatingNewThread,
       scope: 'thread',
       threadId: portalThreadId,
       topicId: activeTopicId,
     }),
-    [activeAgentId, activeTopicId, portalThreadId, isCreatingNewThread],
+    [threadAgentId, activeTopicId, portalThreadId, isCreatingNewThread],
   );
 
   // Generate messageMapKey for direct subscription to dbMessagesMap
   const chatKey = useMemo(() => messageMapKey(keyContext), [keyContext]);
-
-  // Subscribe directly to dbMessagesMap for reactive updates
-  // This ensures optimistic updates work (read/write use same key)
-  const replaceMessages = useChatStore((s) => s.replaceMessages);
-  const messages = useChatStore((s) => s.dbMessagesMap[chatKey]);
+  const composerTarget = useMemo<ComposerTarget>(
+    () =>
+      resolveThreadComposerTarget({
+        contextKey: chatKey,
+        metadataResolved: threadMetadataResolved,
+        sourceToolCallId: portalThread?.metadata?.sourceToolCallId,
+      }),
+    [chatKey, portalThread?.metadata?.sourceToolCallId, threadMetadataResolved],
+  );
 
   // Get operation state for reactive updates
   const operationState = useOperationState(context);
 
   const agentChatConfig = useAgentStore(
-    chatConfigByIdSelectors.getChatConfigById(activeAgentId || ''),
+    chatConfigByIdSelectors.getChatConfigById(threadAgentId || ''),
   );
   const chatFollowUpHooks = useChatFollowUp({
     agentChatConfig,
@@ -232,17 +269,19 @@ const ThreadChat = memo(() => {
   return (
     <ConversationProvider
       actionsBar={actionsBarConfig}
+      composerTarget={composerTarget}
       context={context}
-      hasInitMessages={!!messages}
       hooks={hooks}
-      messages={messages}
       operationState={operationState}
       skipFetch={isCreatingNewThread}
-      onMessagesChange={(msgs, ctx) => {
-        replaceMessages(msgs, { context: ctx });
-      }}
     >
-      <ThreadChatContent isSubagentThread={isSubagentThread} />
+      <ThreadChatContent
+        composerWritable={composerTarget.writable}
+        forkMessageId={threadStartMessageId ?? portalThread?.sourceMessageId ?? undefined}
+        isHeterogeneousAgent={isHeterogeneousAgent}
+        readOnly={!composerTarget.writable}
+        threadType={isCreatingNewThread ? newThreadMode : portalThread?.type}
+      />
     </ConversationProvider>
   );
 });

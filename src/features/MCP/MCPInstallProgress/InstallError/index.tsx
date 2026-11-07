@@ -25,9 +25,8 @@ const InstallError = memo<InstallErrorProps>(({ errorInfo, identifier }) => {
         action={
           <Flexbox>
             <Button
-              color={'default'}
               size={'small'}
-              variant={'filled'}
+              type={'fill'}
               onClick={() => {
                 cancelInstallMCPPlugin(identifier);
               }}

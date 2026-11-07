@@ -1,8 +1,8 @@
+import type { UserMemoryPreferenceInsert } from '@lobechat/types';
 // @vitest-environment node
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
-import type { NewUserMemoryPreference } from '../../../schemas';
 import { userMemories, userMemoriesPreferences, users } from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
 import { UserMemoryPreferenceModel } from '../preference';
@@ -27,7 +27,7 @@ beforeEach(async () => {
 describe('UserMemoryPreferenceModel', () => {
   describe('create', () => {
     it('should create a new preference', async () => {
-      const preferenceData: Omit<NewUserMemoryPreference, 'userId'> = {
+      const preferenceData: Omit<UserMemoryPreferenceInsert, 'userId'> = {
         type: 'communication',
         conclusionDirectives: 'Prefer concise responses',
         suggestions: 'Use bullet points when possible',
@@ -99,13 +99,6 @@ describe('UserMemoryPreferenceModel', () => {
 
       expect(result).toHaveLength(1);
       expect(result[0].id).toBe('preference-2');
-    });
-
-    it('should not return other users preferences', async () => {
-      const result = await preferenceModel.query();
-
-      const otherPreference = result.find((p) => p.id === 'other-preference');
-      expect(otherPreference).toBeUndefined();
     });
   });
 

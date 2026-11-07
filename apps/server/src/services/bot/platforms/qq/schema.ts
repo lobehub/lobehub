@@ -6,8 +6,11 @@ import {
   makeDmPolicyField,
   makeGroupPolicyFields,
   makeUserIdField,
+  processingMessageField,
   watchKeywordsField,
 } from '../const';
+import { deviceAccessFields } from '../deviceAccess';
+import { replyStyleFields } from '../replyStyle';
 import type { FieldSchema } from '../types';
 import { DEFAULT_QQ_CONNECTION_MODE } from './const';
 
@@ -38,6 +41,7 @@ export const schema: FieldSchema[] = [
     label: 'channel.settings',
     properties: [
       makeUserIdField('qq'),
+      ...deviceAccessFields,
       {
         key: 'connectionMode',
         default: DEFAULT_QQ_CONNECTION_MODE,
@@ -64,9 +68,17 @@ export const schema: FieldSchema[] = [
         key: 'concurrency',
         default: 'queue',
         description: 'channel.concurrencyHint',
-        enum: ['queue', 'debounce'],
-        enumDescriptions: ['channel.concurrencyQueueHint', 'channel.concurrencyDebounceHint'],
-        enumLabels: ['channel.concurrencyQueue', 'channel.concurrencyDebounce'],
+        enum: ['queue', 'burst', 'debounce'],
+        enumDescriptions: [
+          'channel.concurrencyQueueHint',
+          'channel.concurrencyBurstHint',
+          'channel.concurrencyDebounceHint',
+        ],
+        enumLabels: [
+          'channel.concurrencyQueue',
+          'channel.concurrencyBurst',
+          'channel.concurrencyDebounce',
+        ],
         label: 'channel.concurrency',
         type: 'string',
       },
@@ -78,7 +90,7 @@ export const schema: FieldSchema[] = [
         maximum: MAX_BOT_DEBOUNCE_MS,
         minimum: 100,
         type: 'number',
-        visibleWhen: { field: 'concurrency', value: 'debounce' },
+        visibleWhen: { field: 'concurrency', value: ['burst', 'debounce'] },
       },
       {
         key: 'showUsageStats',
@@ -88,10 +100,12 @@ export const schema: FieldSchema[] = [
         type: 'boolean',
       },
       displayToolCallsField,
+      processingMessageField,
       makeDmPolicyField({ policy: 'open' }),
       ...makeGroupPolicyFields({ policy: 'open' }),
       allowFromField,
       watchKeywordsField,
+      ...replyStyleFields,
     ],
     type: 'object',
   },

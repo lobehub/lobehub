@@ -1,7 +1,9 @@
 'use client';
 
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { cx } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Check } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -10,12 +12,7 @@ import { highlightTextStyles, inspectorTextStyles, shinyTextStyles } from '@/sty
 
 import type { UpdateGroupParams, UpdateGroupState } from '../../../types';
 
-const styles = createStaticStyles(({ css }) => ({
-  statusIcon: css`
-    margin-block-end: -2px;
-    margin-inline-start: 4px;
-  `,
-}));
+const styles = stylex.create({ statusIcon: { marginBlockEnd: '-2px', marginInlineStart: '4px' } });
 
 export const UpdateGroupInspector = memo<
   BuiltinInspectorProps<UpdateGroupParams, UpdateGroupState>
@@ -54,8 +51,10 @@ export const UpdateGroupInspector = memo<
   // Initial streaming state
   if (isArgumentsStreaming && !displayText) {
     return (
-      <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-        <span>{t('builtins.lobe-group-agent-builder.apiName.updateGroup')}</span>
+      <div className={inspectorTextStyles.root}>
+        <span className={shinyTextStyles.shinyText}>
+          {t('builtins.lobe-group-agent-builder.apiName.updateGroup')}
+        </span>
       </div>
     );
   }
@@ -63,20 +62,21 @@ export const UpdateGroupInspector = memo<
   const isSuccess = pluginState?.success;
 
   return (
-    <div
-      className={cx(
-        inspectorTextStyles.root,
-        (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
-      )}
-    >
-      <span>{t('builtins.lobe-group-agent-builder.apiName.updateGroup')}</span>
+    <div className={inspectorTextStyles.root}>
+      <span className={cx((isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText)}>
+        {t('builtins.lobe-group-agent-builder.apiName.updateGroup')}
+      </span>
       {displayText && (
         <>
           :<span className={highlightTextStyles.primary}>{displayText}</span>
         </>
       )}
       {!isLoading && isSuccess && (
-        <Check className={styles.statusIcon} color={cssVar.colorSuccess} size={14} />
+        <Check
+          className={stylex.props(styles.statusIcon).className}
+          color={cssVar.colorSuccess}
+          size={14}
+        />
       )}
     </div>
   );

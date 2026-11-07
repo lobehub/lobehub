@@ -1,3 +1,5 @@
+import { MirroredTerminalEchoGuard } from './mirroredTerminalEcho';
+import { isSessionTerminalEvent } from './terminalEvent';
 import type {
   AgentStreamClientEvents,
   AgentStreamClientOptions,
@@ -78,19 +80,24 @@ export class AgentStreamClient extends TypedEmitter {
   private resumeMode = false;
   private resumeFlushTimer: ReturnType<typeof setTimeout> | null = null;
 
+  private readonly clientId?: string;
   private readonly gatewayUrl: string;
   private readonly operationId: string;
   private readonly autoReconnect: boolean;
   private readonly resumeOnConnect: boolean;
   private token: string;
+  private readonly terminalEchoGuard: MirroredTerminalEchoGuard;
 
   constructor(options: AgentStreamClientOptions) {
     super();
+    this.clientId = options.clientId;
     this.gatewayUrl = options.gatewayUrl;
     this.operationId = options.operationId;
     this.token = options.token;
     this.autoReconnect = options.autoReconnect ?? true;
     this.resumeOnConnect = options.resumeOnConnect ?? false;
+    this.lastEventId = options.lastEventId ?? '';
+    this.terminalEchoGuard = new MirroredTerminalEchoGuard(options.operationId);
   }
 
   // ─── Public API ───
@@ -137,13 +144,6 @@ export class AgentStreamClient extends TypedEmitter {
     this.cleanup();
     this.setStatus('disconnected');
     this.emit('disconnected');
-  }
-
-  /**
-   * Send an interrupt command to stop the running agent.
-   */
-  sendInterrupt(): void {
-    this.sendMessage({ type: 'interrupt' });
   }
 
   /**
@@ -219,7 +219,11 @@ export class AgentStreamClient extends TypedEmitter {
   private handleOpen = (): void => {
     this.reconnectDelay = INITIAL_RECONNECT_DELAY;
     this.setStatus('authenticating');
-    this.sendMessage({ token: this.token, type: 'auth' });
+    this.sendMessage({
+      ...(this.clientId && { clientId: this.clientId }),
+      token: this.token,
+      type: 'auth',
+    });
   };
 
   private handleMessage = (event: MessageEvent): void => {
@@ -256,6 +260,7 @@ export class AgentStreamClient extends TypedEmitter {
           // gateway will hand back the real session status. Legacy gateways
           // ignore the flag and just replay — we then rely on live events, never
           // guessing completion from silence.
+          this.terminalEchoGuard.beginReplay();
           this.sendMessage({ lastEventId: this.lastEventId, type: 'resume', wantStatus: true });
           this.emit('connected');
           break;
@@ -282,14 +287,26 @@ export class AgentStreamClient extends TypedEmitter {
         case 'agent_event': {
           const agentEvent: AgentStreamEvent = message.event;
           if (message.id) this.lastEventId = message.id;
+          this.terminalEchoGuard.observe(agentEvent);
+
+          // A single WebSocket is multiplexed: alongside this op's events it may
+          // carry forwarded events from other operations (e.g. broadcast council
+          // members mirrored onto the supervisor's channel). A terminal event
+          // ends the SESSION only when it belongs to THIS op — a member
+          // finishing must not disconnect the supervisor's socket and stop
+          // sibling/supervisor streaming. Events with no operationId (legacy
+          // gateway) are treated as this op's, preserving old behavior.
+          const isOwnTerminal =
+            isSessionTerminalEvent(agentEvent) &&
+            (!agentEvent.operationId || agentEvent.operationId === this.operationId);
 
           if (this.resumeMode) {
             // Buffer events during resume — will be deduplicated and emitted after replay
             this.resumeBuffer.push({ event: agentEvent, id: message.id });
             this.scheduleResumeFlush();
 
-            // Terminal events still end the session even in resume mode
-            if (agentEvent.type === 'agent_runtime_end' || agentEvent.type === 'error') {
+            // Only this op's terminal ends the session (even in resume mode).
+            if (isOwnTerminal) {
               this.sessionEnded = true;
               this.flushResumeBuffer();
               this.disconnect();
@@ -299,8 +316,10 @@ export class AgentStreamClient extends TypedEmitter {
 
           this.emit('agent_event', agentEvent);
 
-          // Terminal events — session is done, no need to reconnect
-          if (agentEvent.type === 'agent_runtime_end' || agentEvent.type === 'error') {
+          // This op's terminal — session is done, no need to reconnect. A
+          // forwarded member terminal is still emitted above (so its handler can
+          // finalize that member) but must NOT tear down this connection.
+          if (isOwnTerminal) {
             this.sessionEnded = true;
             this.disconnect();
           }
@@ -322,13 +341,18 @@ export class AgentStreamClient extends TypedEmitter {
           }
 
           const terminal =
-            message.status === 'completed' ||
-            message.status === 'error' ||
-            message.status === 'interrupted';
+            (message.status === 'completed' ||
+              message.status === 'error' ||
+              message.status === 'interrupted') &&
+            // A status left by a mirrored member's terminal, not this op's end.
+            !this.terminalEchoGuard.isStaleResumeStatus(message.status);
 
           if (terminal) {
             this.sessionEnded = true;
-            this.emit('session_complete');
+            this.emit('session_complete', {
+              source: 'resume_status',
+              status: message.status,
+            });
             this.disconnect();
           }
           // Non-terminal (running / waiting_input / waiting_confirmation): the
@@ -339,12 +363,15 @@ export class AgentStreamClient extends TypedEmitter {
         }
 
         case 'session_complete': {
+          // A member's mirrored terminal, echoed back as the end of THIS
+          // session by gateways that end on any `agent_runtime_end`.
+          if (this.terminalEchoGuard.consumeEcho('session_complete')) break;
           this.sessionEnded = true;
           // Flush any buffered resume events before disconnecting
           if (this.resumeMode) {
             this.flushResumeBuffer();
           }
-          this.emit('session_complete');
+          this.emit('session_complete', { source: 'raw_session_complete' });
           this.disconnect();
           break;
         }

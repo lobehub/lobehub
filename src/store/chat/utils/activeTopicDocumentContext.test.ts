@@ -10,12 +10,14 @@ import {
 vi.mock('@/services/agentDocument', () => ({
   agentDocumentService: {
     listDocuments: vi.fn(),
+    readDocument: vi.fn(),
   },
 }));
 
 describe('activeTopicDocumentContext', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(agentDocumentService.readDocument).mockResolvedValue(undefined);
   });
 
   it('resolves active topic document context from current topic documents', async () => {
@@ -60,6 +62,43 @@ describe('activeTopicDocumentContext', () => {
     expect(context?.initialContext?.activeTopicDocument).toEqual({
       agentDocumentId: 'agd_caller',
       documentId: 'docs_1',
+    });
+  });
+
+  it('hydrates a send-time snapshot when the caller supplies agentDocumentId', async () => {
+    vi.mocked(agentDocumentService.readDocument).mockResolvedValue({
+      content: '# Plan\n\nCurrent body',
+      contentCharCount: 20,
+      litexml: '<doc><heading id="h1">Plan</heading></doc>',
+      title: 'Plan',
+    } as any);
+
+    const context = await resolveActiveTopicDocumentInitialContext({
+      agentDocumentId: 'agd_caller',
+      agentId: 'agt_1',
+      documentId: 'docs_1',
+      scope: 'main',
+      topicId: 'tpc_1',
+    });
+
+    expect(agentDocumentService.readDocument).toHaveBeenCalledWith({
+      agentId: 'agt_1',
+      format: 'both',
+      id: 'agd_caller',
+    });
+    expect(context?.initialContext?.activeTopicDocument).toEqual({
+      agentDocumentId: 'agd_caller',
+      documentId: 'docs_1',
+      snapshot: {
+        markdown: '# Plan\n\nCurrent body',
+        metadata: {
+          charCount: 20,
+          lineCount: 3,
+          title: 'Plan',
+        },
+        xml: '<doc><heading id="h1">Plan</heading></doc>',
+      },
+      title: 'Plan',
     });
   });
 

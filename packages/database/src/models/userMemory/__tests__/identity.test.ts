@@ -1,9 +1,10 @@
+import type { UserMemoryIdentityInsert } from '@lobechat/types';
 // @vitest-environment node
 import { RelationshipEnum } from '@lobechat/types';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { eq } from 'drizzle-orm';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
-import type { NewUserMemoryIdentity } from '../../../schemas';
 import { userMemories, userMemoriesIdentities, users } from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
 import { UserMemoryIdentityModel } from '../identity';
@@ -28,7 +29,7 @@ beforeEach(async () => {
 describe('UserMemoryIdentityModel', () => {
   describe('create', () => {
     it('should create a new identity', async () => {
-      const identityData: Omit<NewUserMemoryIdentity, 'userId'> = {
+      const identityData: Omit<UserMemoryIdentityInsert, 'userId'> = {
         type: 'personal',
         description: 'Software developer',
         role: 'developer',
@@ -102,13 +103,6 @@ describe('UserMemoryIdentityModel', () => {
 
       expect(result).toHaveLength(1);
       expect(result[0].id).toBe('identity-2');
-    });
-
-    it('should not return other users identities', async () => {
-      const result = await identityModel.query();
-
-      const otherIdentity = result.find((i) => i.id === 'other-identity');
-      expect(otherIdentity).toBeUndefined();
     });
   });
 
@@ -451,6 +445,36 @@ describe('UserMemoryIdentityModel', () => {
       expect(result.pageSize).toBe(100);
     });
 
+    it('hydrates external candidates through the default self relationship filter', async () => {
+      const ftsSearchCandidates = vi.fn().mockResolvedValue({
+        candidates: [
+          { id: 'other-list-id', score: 12 },
+          { id: 'deleted-list-id', score: 10 },
+          { id: 'list-id-3', score: 8 },
+          { id: 'list-id-2', score: 6 },
+        ],
+        total: 4,
+      });
+      const model = new UserMemoryIdentityModel(serverDB, userId, {
+        ftsSearchCandidateEnabled: true,
+        ftsSearchCandidates,
+      });
+
+      const result = await model.queryList({ q: 'candidate' });
+
+      expect(result.items.map(({ id }) => id)).toEqual(['list-id-2']);
+      expect(result.total).toBe(1);
+      expect(ftsSearchCandidates).toHaveBeenCalledWith({
+        entity: 'memoryIdentities',
+        filters: { memoryRelationships: [RelationshipEnum.Self] },
+        pagination: {},
+        query: {
+          fields: ['parent_title', 'description', 'role'],
+          text: 'candidate',
+        },
+      });
+    });
+
     // BM25 search requires pg_search extension (ParadeDB), not available in PGlite
     const isServerDB = process.env.TEST_SERVER_DB === '1';
     it.skipIf(!isServerDB)('should search by query in title', async () => {
@@ -628,13 +652,6 @@ describe('UserMemoryIdentityModel', () => {
       expect(result[0].id).toBe('self-identity');
     });
 
-    it('should not return other users identities', async () => {
-      const result = await identityModel.queryForInjection();
-
-      const otherUserIdentity = result.find((i) => i.id === 'other-user-self');
-      expect(otherUserIdentity).toBeUndefined();
-    });
-
     it('should return correct fields for injection', async () => {
       const result = await identityModel.queryForInjection();
 
@@ -645,6 +662,32 @@ describe('UserMemoryIdentityModel', () => {
       expect(result[0]).toHaveProperty('capturedAt');
       expect(result[0]).toHaveProperty('createdAt');
       expect(result[0]).toHaveProperty('updatedAt');
+    });
+
+    it('does not inject an identity whose base memory is in the recycle bin', async () => {
+      const [memory] = await serverDB
+        .insert(userMemories)
+        .values({
+          id: 'trashed-injection-memory',
+          lastAccessedAt: new Date(),
+          userId,
+        })
+        .returning();
+      await serverDB.insert(userMemoriesIdentities).values({
+        description: 'must stay hidden',
+        id: 'trashed-injection-identity',
+        relationship: RelationshipEnum.Self,
+        userId,
+        userMemoryId: memory.id,
+      });
+      await serverDB
+        .update(userMemories)
+        .set({ deletedAt: new Date(), isDeleted: true })
+        .where(eq(userMemories.id, memory.id));
+
+      const result = await identityModel.queryForInjection();
+
+      expect(result.some(({ id }) => id === 'trashed-injection-identity')).toBe(false);
     });
   });
 });

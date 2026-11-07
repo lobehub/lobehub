@@ -2,7 +2,6 @@
  * @vitest-environment happy-dom
  */
 import { act, render, screen } from '@testing-library/react';
-import type { ReactNode } from 'react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -25,23 +24,6 @@ vi.hoisted(() => {
   });
 });
 
-vi.mock('@lobehub/ui', () => ({
-  Flexbox: ({
-    children,
-    horizontal,
-    ...props
-  }: {
-    children?: ReactNode;
-    horizontal?: boolean;
-    [key: string]: unknown;
-  }) => (
-    <div data-horizontal={horizontal ? 'true' : undefined} {...props}>
-      {children}
-    </div>
-  ),
-  ShikiLobeTheme: {},
-}));
-
 vi.mock('@/features/TopicPopupGuard', () => ({
   default: () => <div data-testid="topic-popup-guard" />,
 }));
@@ -62,7 +44,7 @@ vi.mock('./features/Conversation', () => ({
   default: () => <div data-testid="conversation" />,
 }));
 
-vi.mock('./features/Conversation/WorkingSidebar', () => ({
+vi.mock('@/features/Conversation/WorkingSidebar', () => ({
   default: () => <div data-testid="working-sidebar" />,
 }));
 

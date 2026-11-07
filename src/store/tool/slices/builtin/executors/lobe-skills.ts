@@ -39,8 +39,10 @@ const runtime = new SkillsExecutionRuntime({
 
         if (!result.success) {
           return {
+            executionEnv: 'sandbox' as const,
             exitCode: 1,
             output: '',
+            ...(result.sessionExpiredAndRecreated && { sessionExpiredAndRecreated: true }),
             stderr: result.error?.message || 'Command execution failed',
             success: false,
           };
@@ -49,8 +51,14 @@ const runtime = new SkillsExecutionRuntime({
         const sandboxResult = result.result || {};
 
         return {
+          // Web-client commands execute in the cloud sandbox — stamp the
+          // execution env so the file-edit scanner excludes these rows
+          // (sandbox delivery goes through exportFile, not the card), matching
+          // the server runtime's stamping.
+          executionEnv: 'sandbox' as const,
           exitCode: sandboxResult.exitCode ?? (result.success ? 0 : 1),
           output: sandboxResult.stdout || sandboxResult.output || '',
+          ...(result.sessionExpiredAndRecreated && { sessionExpiredAndRecreated: true }),
           stderr: sandboxResult.stderr || '',
           success:
             result.success &&
@@ -58,6 +66,7 @@ const runtime = new SkillsExecutionRuntime({
         };
       } catch (error) {
         return {
+          executionEnv: 'sandbox' as const,
           exitCode: 1,
           output: '',
           stderr: (error as Error).message || 'Command execution failed',
@@ -114,8 +123,10 @@ const runtime = new SkillsExecutionRuntime({
 
         if (!result.success) {
           return {
+            executionEnv: 'sandbox' as const,
             exitCode: 1,
             output: '',
+            ...(result.sessionExpiredAndRecreated && { sessionExpiredAndRecreated: true }),
             stderr: result.error?.message || 'Command execution failed',
             success: false,
           };
@@ -125,8 +136,10 @@ const runtime = new SkillsExecutionRuntime({
         const sandboxResult = result.result || {};
 
         return {
+          executionEnv: 'sandbox' as const,
           exitCode: sandboxResult.exitCode ?? (result.success ? 0 : 1),
           output: sandboxResult.stdout || sandboxResult.output || '',
+          ...(result.sessionExpiredAndRecreated && { sessionExpiredAndRecreated: true }),
           stderr: sandboxResult.stderr || '',
           success:
             result.success &&
@@ -134,6 +147,7 @@ const runtime = new SkillsExecutionRuntime({
         };
       } catch (error) {
         return {
+          executionEnv: 'sandbox' as const,
           exitCode: 1,
           output: '',
           stderr: (error as Error).message || 'Command execution failed',

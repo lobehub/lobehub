@@ -12,6 +12,7 @@
  *   {type: 'assistant', message: {id, content: [{type: 'tool_use', id, name, input}], ...}}
  *   {type: 'user', message: {content: [{type: 'tool_result', tool_use_id, content}]}}
  *   {type: 'assistant', message: {id: <NEW>, content: [{type: 'text', text}], ...}}
+ *   {type: 'system', subtype: 'api_retry', api_error_status, attempt, max_attempts, ...}
  *   {type: 'result', is_error, result, ...}
  *   {type: 'rate_limit_event', ...}
  *
@@ -35,18 +36,29 @@
  * - `tool_result` blocks are in `type: 'user'` events, not assistant events
  */
 
+import { getHeterogeneousAgentConfigOrThrow } from '../config';
+import {
+  classifyCliQuotaMessage,
+  CLI_SERVER_THROTTLE_PATTERNS,
+  CLI_USER_RATE_LIMIT_PATTERNS,
+} from '../errors/cliQuota';
+import type { HeteroErrorKind } from '../errors/specs';
+import { imagePlaceholder } from '../imageEcho';
 import type {
   AgentEventAdapter,
   ExternalSignalContext,
   HeterogeneousAgentEvent,
   HeterogeneousRateLimitInfo,
   HeterogeneousTerminalErrorData,
+  HeterogeneousToolResultImage,
   StreamChunkData,
   SubagentEventContext,
+  SubagentSpawnMetadata,
   ToolCallPayload,
   ToolResultData,
   UsageData,
 } from '../types';
+import { ClaudeCodeTaskSignals } from './claudeCodeTaskSignals';
 
 /**
  * The CC tool_use `name` we synthesize `pluginState.todos` for. Inlined here
@@ -77,6 +89,20 @@ const CC_TODO_WRITE_TOOL_NAME = 'TodoWrite';
 const CC_TASK_CREATE_TOOL_NAME = 'TaskCreate';
 const CC_TASK_UPDATE_TOOL_NAME = 'TaskUpdate';
 const CC_TASK_LIST_TOOL_NAME = 'TaskList';
+const CC_WEB_SEARCH_TOOL_NAME = 'WebSearch';
+
+/**
+ * Qoder includes the structured WebSearch response beside the model-facing
+ * text block. Keep the persisted state bounded: the raw provider payload can
+ * contain extra fields (for example host logos) and is not safe to store as-is.
+ */
+const WEB_SEARCH_MAX_RESULTS = 8;
+const WEB_SEARCH_MAX_RESULT_CANDIDATES = 32;
+const WEB_SEARCH_MAX_QUERY_LENGTH = 512;
+const WEB_SEARCH_MAX_TITLE_LENGTH = 512;
+const WEB_SEARCH_MAX_LINK_LENGTH = 2048;
+const WEB_SEARCH_MAX_SNIPPET_LENGTH = 2048;
+const WEB_SEARCH_MAX_HOSTNAME_LENGTH = 255;
 
 /**
  * tool_result confirmation emitted by CC for a successful `TaskCreate`.
@@ -103,6 +129,21 @@ const TASK_UPDATE_RESULT_PATTERN = /^Updated task #\d+/;
  * back to the subject text, same as TodoWrite's content-fallback.
  */
 const TASK_LIST_LINE_PATTERN = /^#(\d+) \[(pending|in_progress|completed)\] (.+)$/;
+
+/**
+ * `system init` tags the model id with a beta marker (`claude-opus-4-8[1m]`)
+ * that no other event — and no model-bank entry — uses. Strip it so the id the
+ * run opens with is the same canonical one `turn_metadata` later confirms;
+ * otherwise the assistant renders the tagged id until the first turn ends.
+ *
+ * Sliced rather than matched: an unanchored `/\[[^\]]*\]$/` rescans from every
+ * start offset, which is quadratic on a `[[[[…` input (CodeQL flags it).
+ */
+const stripModelBetaMarker = (model?: string) => {
+  if (!model?.endsWith(']')) return model;
+  const markerStart = model.lastIndexOf('[');
+  return markerStart === -1 ? model : model.slice(0, markerStart);
+};
 
 /**
  * Tool name CC sees for the LobeHub-hosted MCP `ask_user_question` server.
@@ -172,50 +213,173 @@ interface ClaudeCodeTaskEntry {
   subject: string;
 }
 
-const CLAUDE_CODE_CLI_INSTALL_DOCS_URL = 'https://docs.anthropic.com/en/docs/claude-code/setup';
+interface SynthesizedWebSearchResult {
+  hostname: string;
+  link: string;
+  snippet?: string;
+  title?: string;
+}
+
+interface SynthesizedWebSearchPluginState {
+  durationSeconds?: number;
+  query?: string;
+  results?: SynthesizedWebSearchResult[];
+}
+
+const CLAUDE_CODE_CLI_INSTALL_DOCS_URL =
+  getHeterogeneousAgentConfigOrThrow('claude-code').auth.docsUrl;
 
 const CLI_AUTH_REQUIRED_PATTERNS = [
   /failed to authenticate/i,
   /invalid authentication credentials/i,
   /authentication[_ ]error/i,
   /not authenticated/i,
+  // CC's phrasing when the resolved profile (e.g. an isolated CLAUDE_CONFIG_DIR)
+  // simply has no login at all, as opposed to a rejected credential.
+  /not logged in/i,
+  /please run \/login/i,
   /\bunauthorized\b/i,
   /\b401\b/,
 ] as const;
 
-/**
- * Genuinely user-side limit wording. Used only as the text fallback for
- * batch CLI / sandbox runs that don't emit a structured `rate_limit_event`
- * (so {@link isUserQuotaRateLimit} can't fire). The ambiguous bare
- * `rate limit` / `rate limited` substring is deliberately NOT here — it also
- * appears in Anthropic's transient server throttle, so leaning on it would
- * reintroduce the very misclassification this set exists to avoid.
- */
-const CLI_USER_RATE_LIMIT_PATTERNS = [
-  /you'?ve hit your limit/i,
-  /usage limit reached/i,
-  /\blimit reached\b/i,
-] as const;
+export interface ClaudeCompatibleAdapterProfile {
+  agentType: 'claude-code' | 'codebuddy';
+  /**
+   * Claude reuses one message.id across every content block in an LLM turn, so
+   * an id change is a turn boundary. CodeBuddy instead assigns independent
+   * ids to its reasoning item and assistant text item; those ids must stay in
+   * the model-response turn opened by stream_event:message_start (or, in batch
+   * mode, until a tool_result asks the model to continue).
+   */
+  assistantMessageIdsDefineTurns: boolean;
+  authMessage: string;
+  authRequiredPatterns: readonly RegExp[];
+  docsUrl: string;
+  enableClaudeErrorClassifiers: boolean;
+  enableClaudeTaskState: boolean;
+  errorSubtypeMessages: Record<string, string>;
+  ignoreDuplicateInit: boolean;
+}
 
 /**
- * Anthropic's server-side transient throttle. CC surfaces this as a 429 with
- * a message that explicitly disclaims the user's plan limit ("not your usage
- * limit") — e.g. `API Error: Server is temporarily limiting requests (not your
- * usage limit) · Rate limited`. It clears on its own in moments, so it must be
- * classified as `overloaded` (retry UX), NOT `rate_limit` (which renders a
- * misleading "usage limit reached" reset-time guide).
+ * Transport-level failures: the connection dropped, stalled, or timed out
+ * before the run could finish. CC reports these as an `API Error:` line with
+ * no `api_error_status` at all, so neither the 429/529 check nor the
+ * overloaded wording claimed them and they fell through to the opaque generic
+ * card — with no retry affordance, even though retrying is exactly the right
+ * move. They share the transient/retry UX with a server overload, so they are
+ * classified as `overloaded` rather than earning a code the UI can't render.
  */
-const CLI_SERVER_THROTTLE_PATTERNS = [
-  /not your usage limit/i,
-  /server is temporarily limiting requests/i,
+const CLI_NETWORK_ERROR_PATTERNS = [
+  /unable to connect to api/i,
+  /\beconnreset\b/i,
+  /\beconnrefused\b/i,
+  /\bconnectionrefused\b/i,
+  /\betimedout\b/i,
+  /\benotfound\b/i,
+  /connection closed mid-response/i,
+  /socket connection was closed/i,
+  /socket hang up/i,
+  /stream idle timeout/i,
+  /response stalled mid-stream/i,
+  /request timed out/i,
 ] as const;
 
 const CLI_OVERLOADED_PATTERNS = [
   /overloaded_error/i,
   /\boverloaded\b/i,
-  /api error:\s*529\b/i,
+  // Any 5xx is a server-side condition with the same retry UX — the old
+  // 529-only pattern let `API Error: 500 Internal server error` (and the
+  // localized `API Error: 503 · [该模型当前访问量过大，请您稍后再试]`) fall
+  // through to the generic card.
+  /api error:\s*5\d\d\b/i,
   ...CLI_SERVER_THROTTLE_PATTERNS,
+  ...CLI_NETWORK_ERROR_PATTERNS,
 ] as const;
+
+/**
+ * CC's internal end-of-run diagnostic, e.g.
+ * `[ede_diagnostic] result_type=user last_content_type=n/a stop_reason=tool_use`.
+ * It rides in the result event's `errors` array on aborted runs. It is
+ * engineer-facing jargon, never a user-facing reason, so it must not become
+ * the error card's message — it belongs in the details pane.
+ */
+const CC_INTERNAL_DIAGNOSTIC_PATTERN = /^\[ede_diagnostic\]/i;
+
+/**
+ * Terminal reasons CC reports when a run was stopped rather than failed —
+ * a user pressing stop closes the SDK session / SIGINTs the tree, and CC
+ * winds down and exits **0**. The result event is still flagged `is_error`
+ * with no `result` text, so these used to surface the raw `[ede_diagnostic]`
+ * line as the failure message. They are by far the most common "error" in
+ * real traces, and none of them is a fault worth a red card's usual wording.
+ */
+const CLI_ABORTED_TERMINAL_REASONS = new Set(['aborted_streaming', 'aborted_tools']);
+
+/**
+ * The remaining long tail, each taken from real recorded traces. None of these
+ * has a dedicated status guide, so they ride the generic card — but they still
+ * earn a taxonomy `kind` so the failure is named in telemetry rather than
+ * pooled into the `agent_failed` catch-all.
+ */
+const CLI_TAIL_CLASSIFIERS: { kind: HeteroErrorKind; patterns: readonly RegExp[] }[] = [
+  {
+    // `No conversation found with session ID: <uuid>` — a stale `--resume` id.
+    // Arrives via the result event's `errors` array with turns=0 and no result
+    // text; the spawn layer recovers it, but the run still terminates here.
+    kind: 'resume_thread_not_found',
+    patterns: [/no conversation found with session id/i],
+  },
+  {
+    // `Claude Fable 5 is currently unavailable. Learn more: …` /
+    // `There's an issue with the selected model (claude-fable-5).`
+    kind: 'model_unavailable',
+    patterns: [/is currently unavailable/i, /issue with the selected model/i],
+  },
+  {
+    // `Failed to decode image: The image format Gif is not supported`
+    kind: 'unsupported_attachment',
+    patterns: [/failed to decode image/i, /image format \w+ is not supported/i],
+  },
+  {
+    // `API Error: 400 messages.6.content.2.server_tool_use.id: String should
+    // match pattern …` — a malformed request; retrying reproduces it exactly.
+    kind: 'invalid_request',
+    patterns: [/api error:\s*400\b/i, /string should match pattern/i],
+  },
+];
+
+/**
+ * CC streams a synthetic assistant text turn when the underlying API call
+ * fails mid-run — e.g. `API Error: Connection closed mid-response. The
+ * response above may be incomplete.`. The paired terminal `result` event
+ * usually carries NO `result` text for these failures (`subtype:
+ * 'error_during_execution'` and nothing else), so that streamed line is the
+ * only human-readable reason available to the terminal error card.
+ */
+const CC_SYNTHETIC_API_ERROR_PATTERN = /^API Error\b/;
+
+/**
+ * Human-readable fallbacks for CC's terminal error subtypes, used when
+ * neither the result event nor the stream carried any message text.
+ */
+const CLI_ERROR_SUBTYPE_MESSAGES: Record<string, string> = {
+  error_during_execution: 'Claude Code hit an error mid-run and exited without reporting a reason.',
+  error_max_turns: 'Claude Code stopped after reaching its maximum number of turns for this run.',
+};
+
+const CLAUDE_CODE_ADAPTER_PROFILE: ClaudeCompatibleAdapterProfile = {
+  agentType: 'claude-code',
+  assistantMessageIdsDefineTurns: true,
+  authMessage:
+    'Claude Code could not authenticate. Sign in again or refresh its credentials, then retry.',
+  authRequiredPatterns: CLI_AUTH_REQUIRED_PATTERNS,
+  docsUrl: CLAUDE_CODE_CLI_INSTALL_DOCS_URL,
+  enableClaudeErrorClassifiers: true,
+  enableClaudeTaskState: true,
+  errorSubtypeMessages: CLI_ERROR_SUBTYPE_MESSAGES,
+  ignoreDuplicateInit: false,
+};
 
 /**
  * Discriminates a user-side plan/quota limit from everything else.
@@ -258,23 +422,377 @@ const getCliResultMessage = (result: unknown): string | undefined => {
   }
 };
 
+/**
+ * CC reports the reason for a failed run in the result event's `errors` array
+ * — a stale `--resume` id, for instance, yields `subtype:
+ * 'error_during_execution'` with an EMPTY `result` but `errors: ['No
+ * conversation found with session ID: …']`. Reading only `result` therefore
+ * threw away the one line that says what actually happened, leaving the error
+ * card to claim CC "exited without reporting a reason".
+ */
+const getCliResultErrors = (raw: any): string | undefined => {
+  if (!Array.isArray(raw?.errors)) return undefined;
+
+  const text = raw.errors
+    .map((entry: unknown) => getCliResultMessage(entry))
+    .filter((entry?: string): entry is string => !!entry?.trim())
+    // Drop CC's internal end-of-run diagnostic: it is the ONLY `errors` entry
+    // on an aborted run, so letting it through made the error card read
+    // `[ede_diagnostic] result_type=user last_content_type=n/a …`.
+    .filter((entry: string) => !CC_INTERNAL_DIAGNOSTIC_PATTERN.test(entry.trim()))
+    .join('\n');
+
+  return text || undefined;
+};
+
+const asRecord = (value: unknown): Record<string, unknown> | undefined =>
+  value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+
+const normalizeBoundedString = (value: unknown, maxLength: number): string | undefined => {
+  if (typeof value !== 'string') return;
+
+  const trimmed = value.trim();
+  if (!trimmed) return;
+
+  let normalized = trimmed.slice(0, maxLength);
+  const finalCodeUnit = normalized.charCodeAt(normalized.length - 1);
+  if (finalCodeUnit >= 0xd800 && finalCodeUnit <= 0xdbff) normalized = normalized.slice(0, -1);
+
+  return normalized || undefined;
+};
+
+const normalizeWebSearchLink = (
+  value: unknown,
+): Pick<SynthesizedWebSearchResult, 'hostname' | 'link'> | undefined => {
+  if (typeof value !== 'string') return;
+
+  const link = value.trim();
+  if (!link || link.length > WEB_SEARCH_MAX_LINK_LENGTH) return;
+
+  try {
+    const url = new URL(link);
+    if (
+      (url.protocol !== 'http:' && url.protocol !== 'https:') ||
+      !url.hostname ||
+      url.hostname.length > WEB_SEARCH_MAX_HOSTNAME_LENGTH
+    ) {
+      return;
+    }
+
+    return { hostname: url.hostname, link };
+  } catch {
+    return;
+  }
+};
+
+/**
+ * Normalize Qoder's top-level `tool_use_result` into the bounded plugin state
+ * consumed by the WebSearch card. This intentionally accepts only the known
+ * source fields instead of persisting the provider payload wholesale.
+ */
+const synthesizeWebSearchPluginState = (
+  toolUseResult: unknown,
+): SynthesizedWebSearchPluginState | undefined => {
+  const raw = asRecord(toolUseResult);
+  if (!raw) return;
+
+  const query = normalizeBoundedString(raw.query, WEB_SEARCH_MAX_QUERY_LENGTH);
+  const durationSeconds =
+    typeof raw.durationSeconds === 'number' &&
+    Number.isFinite(raw.durationSeconds) &&
+    raw.durationSeconds >= 0
+      ? raw.durationSeconds
+      : undefined;
+
+  const rawResults = Array.isArray(raw.results) ? raw.results : undefined;
+  const hasResults = rawResults !== undefined;
+  const results: SynthesizedWebSearchResult[] = [];
+  if (rawResults) {
+    for (const value of rawResults.slice(0, WEB_SEARCH_MAX_RESULT_CANDIDATES)) {
+      if (results.length >= WEB_SEARCH_MAX_RESULTS) break;
+
+      const result = asRecord(value);
+      if (!result) continue;
+
+      const normalizedLink = normalizeWebSearchLink(result.link);
+      if (!normalizedLink) continue;
+
+      const title = normalizeBoundedString(result.title, WEB_SEARCH_MAX_TITLE_LENGTH);
+      const snippet = normalizeBoundedString(result.snippet, WEB_SEARCH_MAX_SNIPPET_LENGTH);
+
+      results.push({
+        ...normalizedLink,
+        ...(snippet ? { snippet } : {}),
+        ...(title ? { title } : {}),
+      });
+    }
+  }
+
+  if (!query && durationSeconds === undefined && !hasResults) return;
+
+  return {
+    ...(durationSeconds === undefined ? {} : { durationSeconds }),
+    ...(query ? { query } : {}),
+    ...(hasResults ? { results } : {}),
+  };
+};
+
+const getPathValue = (raw: Record<string, unknown>, path: string[]): unknown => {
+  let current: unknown = raw;
+  for (const key of path) {
+    const record = asRecord(current);
+    if (!record || !(key in record)) return undefined;
+    current = record[key];
+  }
+  return current;
+};
+
+const toFiniteNumber = (value: unknown): number | undefined => {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+};
+
+const pickNumber = (raw: Record<string, unknown>, paths: string[][]): number | undefined => {
+  for (const path of paths) {
+    const value = toFiniteNumber(getPathValue(raw, path));
+    if (value !== undefined) return value;
+  }
+};
+
+const pickString = (raw: Record<string, unknown>, paths: string[][]): string | undefined => {
+  for (const path of paths) {
+    const value = getPathValue(raw, path);
+    if (typeof value === 'string' && value.trim()) return value;
+  }
+};
+
+const getApiRetryError = (
+  raw: Record<string, unknown>,
+  errorStatus?: number,
+): string | undefined => {
+  const errorType = pickString(raw, [
+    ['error', 'error', 'type'],
+    ['error', 'type'],
+    ['error_type'],
+    ['errorType'],
+    ['kind'],
+    ['code'],
+  ]);
+  const message = pickString(raw, [
+    ['error', 'error', 'message'],
+    ['error', 'message'],
+    ['message'],
+    ['result'],
+  ]);
+  const errorText = errorType || message;
+
+  if (
+    errorStatus === 529 ||
+    (!!errorText && CLI_OVERLOADED_PATTERNS.some((pattern) => pattern.test(errorText)))
+  ) {
+    return 'overloaded';
+  }
+
+  return errorText;
+};
+
+const getApiRetryData = (
+  rawValue: unknown,
+  agentType: ClaudeCompatibleAdapterProfile['agentType'],
+) => {
+  const raw = asRecord(rawValue);
+  if (!raw) {
+    return { agentType };
+  }
+
+  const errorStatus = pickNumber(raw, [
+    ['api_error_status'],
+    ['apiErrorStatus'],
+    ['status'],
+    ['status_code'],
+    ['statusCode'],
+    ['error', 'status'],
+    ['error', 'status_code'],
+    ['error', 'statusCode'],
+    ['error', 'code'],
+    ['error', 'error', 'status'],
+    ['error', 'error', 'status_code'],
+    ['error', 'error', 'statusCode'],
+    ['error', 'error', 'code'],
+  ]);
+
+  return {
+    agentType,
+    attempt: pickNumber(raw, [
+      ['attempt'],
+      ['retry_attempt'],
+      ['retryAttempt'],
+      ['retry', 'attempt'],
+    ]),
+    delayMs: pickNumber(raw, [
+      ['delay_ms'],
+      ['delayMs'],
+      ['retry_delay_ms'],
+      ['retryDelayMs'],
+      ['retry_after_ms'],
+      ['retryAfterMs'],
+      ['retry', 'delay_ms'],
+      ['retry', 'delayMs'],
+    ]),
+    error: getApiRetryError(raw, errorStatus),
+    errorStatus,
+    maxAttempts: pickNumber(raw, [
+      ['max_attempts'],
+      ['maxAttempts'],
+      ['retry', 'max_attempts'],
+      ['retry', 'maxAttempts'],
+    ]),
+    provider: typeof raw.provider === 'string' ? raw.provider : agentType,
+  };
+};
+
 const getAuthRequiredTerminalError = (
   result: unknown,
+  profile: ClaudeCompatibleAdapterProfile,
 ): HeterogeneousTerminalErrorData | undefined => {
   const rawMessage = getCliResultMessage(result);
-  if (!rawMessage || !CLI_AUTH_REQUIRED_PATTERNS.some((pattern) => pattern.test(rawMessage))) {
+  if (!rawMessage || !profile.authRequiredPatterns.some((pattern) => pattern.test(rawMessage))) {
     return;
   }
 
   return {
-    agentType: 'claude-code',
+    agentType: profile.agentType,
     clearEchoedContent: true,
     code: 'auth_required',
-    docsUrl: CLAUDE_CODE_CLI_INSTALL_DOCS_URL,
+    details: { kind: 'auth_required' satisfies HeteroErrorKind },
+    docsUrl: profile.docsUrl,
     error: rawMessage,
-    message:
-      'Claude Code could not authenticate. Sign in again or refresh its credentials, then retry.',
+    message: profile.authMessage,
     stderr: rawMessage,
+  };
+};
+
+/**
+ * A run that was **stopped**, not one that failed — the single most common
+ * `is_error` result in real traces.
+ *
+ * CC flags a user stop `is_error` with `terminal_reason: 'aborted_streaming' |
+ * 'aborted_tools'`, an empty `result`, and only its internal `[ede_diagnostic]`
+ * line in `errors` — while exiting **0**. It is an outcome, not a fault, so it
+ * must not terminate as an `error`: that persists a red card, writes topic
+ * status `failed`, and frames the user's own stop as a crash.
+ *
+ * Instead it terminates as `agent_runtime_end` with `reason: 'interrupted'` —
+ * the reason the runtime already uses for a mid-stream cancel
+ * (`NON_COMPLETION_RUNTIME_END_REASONS`), which routes to a neutral `active`
+ * topic status with no unread badge and no completion notification, while
+ * still flushing whatever content the run produced before it was stopped.
+ *
+ * A stop that DID report a reason (a rate limit landing while winding down)
+ * is not this case — it belongs to the classifier that owns that reason.
+ */
+const isAbortedResult = (raw: any): boolean =>
+  CLI_ABORTED_TERMINAL_REASONS.has(raw?.terminal_reason) &&
+  !getCliResultMessage(raw?.result) &&
+  !getCliResultErrors(raw);
+
+/**
+ * A `result` that closes CC's own task-notification pass without running a
+ * single turn. A notification pass that DID run a turn (`num_turns > 0`) carries
+ * real output and stays a normal result.
+ */
+const isEmptyTaskNotificationResult = (raw: any): boolean =>
+  raw?.origin?.kind === 'task-notification' &&
+  raw.num_turns === 0 &&
+  !raw.is_error &&
+  !getCliResultMessage(raw.result);
+
+const buildAbortedRuntimeEndData = (raw: any): Record<string, unknown> => ({
+  kind: 'aborted' satisfies HeteroErrorKind,
+  reason: 'interrupted',
+  ...(typeof raw.num_turns === 'number' ? { numTurns: raw.num_turns } : {}),
+  ...(typeof raw.subtype === 'string' ? { subtype: raw.subtype } : {}),
+  terminalReason: raw.terminal_reason,
+});
+
+/**
+ * Classify the long tail that has no dedicated guide card. The message is
+ * already self-explanatory, so it is surfaced verbatim; the value added here
+ * is the taxonomy `kind`, which keeps these out of the `agent_failed`
+ * catch-all whose volume drives what we carve out next.
+ */
+const getTailTerminalError = (
+  result: unknown,
+  agentType: ClaudeCompatibleAdapterProfile['agentType'],
+): HeterogeneousTerminalErrorData | undefined => {
+  const rawMessage = getCliResultMessage(result);
+  if (!rawMessage) return;
+
+  const entry = CLI_TAIL_CLASSIFIERS.find(({ patterns }) =>
+    patterns.some((pattern) => pattern.test(rawMessage)),
+  );
+  if (!entry) return;
+
+  return {
+    agentType,
+    code: entry.kind,
+    details: { kind: entry.kind },
+    error: rawMessage,
+    message: rawMessage,
+  };
+};
+
+/**
+ * Last-resort terminal error for `is_error` results that no structured
+ * classifier (rate-limit / overloaded / auth) claimed. CC's error results
+ * frequently carry NO `result` text at all — a mid-response network drop
+ * yields `{subtype: 'error_during_execution', is_error: true}` and nothing
+ * else — which used to surface as an opaque `Agent execution failed`.
+ * Prefer, in order: the CLI's own result text, its `errors` array, the
+ * synthetic `API Error:` line captured off the stream, then a subtype-specific
+ * description — and attach the result event's diagnostic fields so the error
+ * card's details pane says what actually happened.
+ */
+const buildFallbackTerminalError = (
+  raw: any,
+  profile: ClaudeCompatibleAdapterProfile,
+  streamedApiError?: string,
+): HeterogeneousTerminalErrorData => {
+  const subtype =
+    typeof raw.subtype === 'string' && raw.subtype !== 'success' ? raw.subtype : undefined;
+  const message =
+    getCliResultMessage(raw.result) ||
+    getCliResultErrors(raw) ||
+    streamedApiError ||
+    (subtype && profile.errorSubtypeMessages[subtype]) ||
+    'Agent execution failed';
+
+  // `error_max_turns` is a named lifecycle outcome, not an unclassified
+  // failure; everything else that reaches here is the catch-all whose volume
+  // tells us which kind to carve out next.
+  const kind: HeteroErrorKind = subtype === 'error_max_turns' ? 'max_turns' : 'agent_failed';
+
+  const details: Record<string, unknown> = {
+    kind,
+    ...(raw.api_error_status == null ? {} : { apiErrorStatus: raw.api_error_status }),
+    ...(typeof raw.duration_ms === 'number' ? { durationMs: raw.duration_ms } : {}),
+    ...(streamedApiError && streamedApiError !== message ? { lastApiError: streamedApiError } : {}),
+    ...(typeof raw.num_turns === 'number' ? { numTurns: raw.num_turns } : {}),
+    ...(typeof raw.session_id === 'string' ? { sessionId: raw.session_id } : {}),
+    ...(subtype ? { subtype } : {}),
+  };
+
+  return {
+    agentType: profile.agentType,
+    ...(subtype ? { code: subtype } : {}),
+    ...(Object.keys(details).length > 0 ? { details } : {}),
+    error: message,
+    message,
   };
 };
 
@@ -296,6 +814,7 @@ const toRateLimitInfo = (value: unknown): HeterogeneousRateLimitInfo | undefined
 
 const getOverloadedTerminalError = (
   result: unknown,
+  profile: ClaudeCompatibleAdapterProfile,
   apiErrorStatus?: unknown,
   rateLimitInfo?: HeterogeneousRateLimitInfo,
 ): HeterogeneousTerminalErrorData | undefined => {
@@ -303,20 +822,39 @@ const getOverloadedTerminalError = (
   // A real user-quota limit is the rate-limit classifier's job — never steal
   // it here, even if it happened to ride in on a 429/529.
   if (isUserQuotaRateLimit(rateLimitInfo)) return;
+  // Nor an authentication failure that merely *mentions* a transport symptom,
+  // e.g. `Failed to authenticate. API Error: 401 The socket connection was
+  // closed unexpectedly.` — retrying that forever never signs the user in.
+  if (apiErrorStatus === 401 || apiErrorStatus === 403) return;
+  if (rawMessage && profile.authRequiredPatterns.some((pattern) => pattern.test(rawMessage)))
+    return;
 
   const looksOverloaded =
-    // Both 529 (upstream overloaded) and a 429 with no quota signal (transient
-    // server throttle) are momentary server-side conditions — same retry UX.
-    apiErrorStatus === 529 ||
+    // Any 5xx (upstream overloaded / internal error) and a 429 with no quota
+    // signal (transient server throttle) are momentary server-side conditions
+    // — same retry UX.
+    (typeof apiErrorStatus === 'number' && apiErrorStatus >= 500 && apiErrorStatus < 600) ||
     apiErrorStatus === 429 ||
     (!!rawMessage && CLI_OVERLOADED_PATTERNS.some((pattern) => pattern.test(rawMessage)));
 
   if (!looksOverloaded || !rawMessage) return;
 
+  // Same `overloaded` guide code (and therefore the same auto-retry contract),
+  // but recorded as three distinct taxonomy kinds so telemetry can tell a bad
+  // local network apart from a genuinely busy provider.
+  const kind: HeteroErrorKind = CLI_NETWORK_ERROR_PATTERNS.some((pattern) =>
+    pattern.test(rawMessage),
+  )
+    ? 'network_drop'
+    : CLI_SERVER_THROTTLE_PATTERNS.some((pattern) => pattern.test(rawMessage))
+      ? 'server_throttle'
+      : 'server_overloaded';
+
   return {
-    agentType: 'claude-code',
+    agentType: profile.agentType,
     clearEchoedContent: true,
     code: 'overloaded',
+    details: { kind },
     error: rawMessage,
     message: rawMessage,
     stderr: rawMessage,
@@ -325,6 +863,7 @@ const getOverloadedTerminalError = (
 
 const getRateLimitTerminalError = (
   result: unknown,
+  agentType: ClaudeCompatibleAdapterProfile['agentType'],
   rateLimitInfo?: HeterogeneousRateLimitInfo,
 ): HeterogeneousTerminalErrorData | undefined => {
   const rawMessage = getCliResultMessage(result);
@@ -345,10 +884,17 @@ const getRateLimitTerminalError = (
 
   if (!looksLikeUserLimit || !rawMessage) return;
 
+  // A credit/balance limit shares the `rate_limit` guide but not its remedy:
+  // waiting for a reset never clears it, so it is a distinct taxonomy kind.
+  // A `rate_limit_info`-only rejection (no quota wording in the text) is a
+  // plan window by definition — that structured event only ever reports one.
+  const kind: HeteroErrorKind = classifyCliQuotaMessage(rawMessage)?.kind ?? 'usage_limit';
+
   return {
-    agentType: 'claude-code',
+    agentType,
     clearEchoedContent: true,
     code: 'rate_limit',
+    details: { kind },
     error: rawMessage,
     message: rawMessage,
     rateLimitInfo,
@@ -456,9 +1002,38 @@ const toUsageData = (
 
 // ─── Adapter ───
 
-export class ClaudeCodeAdapter implements AgentEventAdapter {
+export interface ClaudeCodeAdapterOptions {
+  /**
+   * CLI print-mode treats `result` as the end of the whole process. The Agent
+   * SDK streaming transport can emit multiple `result` messages from one Query,
+   * so runtime completion must be emitted by the transport when the Query closes.
+   */
+  runtimeEndStrategy?: 'on-result' | 'on-transport-close';
+  /**
+   * Background Bash tasks may have no intermediate callback turns: the first
+   * model turn starts the task, and the next model turn is triggered only after
+   * `task_notification`. Treat that final turn as a task-completion signal.
+   */
+  signalBackgroundTaskCompletion?: boolean;
+}
+
+const DEFAULT_ADAPTER_OPTIONS: Required<ClaudeCodeAdapterOptions> = {
+  runtimeEndStrategy: 'on-result',
+  signalBackgroundTaskCompletion: false,
+};
+
+export class ClaudeCompatibleStreamAdapter implements AgentEventAdapter {
+  private readonly options: Required<ClaudeCodeAdapterOptions>;
+  private readonly profile: ClaudeCompatibleAdapterProfile;
   sessionId?: string;
   private pendingRateLimitInfo?: HeterogeneousRateLimitInfo;
+  /**
+   * What the resumed session had already spent before this run (from its
+   * transcript's last `cost-state`). CC restores that tally on `--resume`, so
+   * its `result.total_cost_usd` is session-cumulative; subtracting this makes
+   * the emitted `costUsd` this run's own spend.
+   */
+  private sessionCostBaseline?: number;
 
   /** Pending tool_use ids awaiting their tool_result */
   private pendingToolCalls = new Set<string>();
@@ -466,10 +1041,9 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
   private stepIndex = 0;
   /**
    * True once any `stream_event` wrapper is seen — i.e. CC was spawned with
-   * `--include-partial-messages` (desktop driver). The `lh hetero exec` CLI
-   * used by device + sandbox runs spawns in BATCH mode (no partial flag), so
-   * this stays false and `handleAssistant` owns per-turn usage instead of
-   * `message_delta`.
+   * `--include-partial-messages` (desktop driver and current `lh hetero exec`).
+   * Older producers and explicit batch-mode callers still leave this false,
+   * so `handleAssistant` owns per-turn usage instead of `message_delta`.
    */
   private sawStreamEvent = false;
   /** Track current message.id to detect step boundaries */
@@ -493,6 +1067,13 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
    * authoritative usage on `message_delta`.
    */
   private currentStreamEventModel: string | undefined;
+  /**
+   * Latest synthetic `API Error: …` assistant text seen on the main stream
+   * (see {@link CC_SYNTHETIC_API_ERROR_PATTERN}). Feeds the terminal error
+   * classifiers / fallback in `handleResult` when the error result event
+   * itself carries no text; cleared at end of run.
+   */
+  private lastApiErrorText?: string;
   /** Cumulative text streamed via partial-message deltas, keyed by message.id. */
   private streamedTextByMessageId = new Map<string, string>();
   /** Cumulative thinking streamed via partial-message deltas, keyed by message.id. */
@@ -555,13 +1136,41 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
    */
   private mainToolInputsById = new Map<string, Record<string, any>>();
   /**
+   * `tool_use.id → ToolCallPayload`, so `tool_end` can re-attach the same
+   * `{ toolCalling }` payload the server ships — aligning the hetero event
+   * stream with the gateway/server one so renderer `onAfterCall` hooks fire
+   * identically regardless of runtime.
+   */
+  private toolPayloadById = new Map<string, ToolCallPayload>();
+  /**
    * Set of parent tool_use ids whose spawn metadata has already been
    * announced on a subagent event. Guarantees `spawnMetadata` appears
-   * exactly once per subagent run — on the first subagent chunk for that
+   * exactly once per subagent run — on the first subagent event for that
    * parent — so the executor's lazy-create logic isn't tempted to
    * recreate the Thread on every chunk.
    */
   private announcedSpawns = new Set<string>();
+
+  /**
+   * Build the spawn metadata (`description` / `prompt` / `subagent_type`) for a
+   * subagent's parent tool_use from the cached Task/Agent input. Pure: it neither
+   * reads nor mutates {@link announcedSpawns} — the caller gates "exactly once"
+   * and only marks the parent announced when the metadata is actually attached to
+   * an EMITTED chunk (see `handleSubagentAssistant`). Returns undefined when the
+   * parent's args were never cached.
+   */
+  private buildSpawnMetadata(parentToolCallId: string): SubagentSpawnMetadata | undefined {
+    const args = this.mainToolInputsById.get(parentToolCallId);
+    if (!args) return undefined;
+    // CC's subagent-spawn tools (Task, Agent, ...) share the same input shape
+    // (`description`, `prompt`, `subagent_type`). Pull the fields defensively —
+    // any unknown spawn-tool variant matching this shape benefits automatically.
+    return {
+      description: typeof args.description === 'string' ? args.description : undefined,
+      prompt: typeof args.prompt === 'string' ? args.prompt : undefined,
+      subagentType: typeof args.subagent_type === 'string' ? args.subagent_type : undefined,
+    };
+  }
   /**
    * Tool name keyed by main-agent `tool_use.id`. Used to label the
    * resulting {@link ExternalSignalContext} when a Monitor-style task
@@ -572,20 +1181,8 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
    * not the main-agent signal detector.
    */
   private mainToolNamesById = new Map<string, string>();
-  /**
-   * Active CC tasks (long-running tools registered via `system task_started`).
-   * Keyed by `task_id`, carries the originating `tool_use_id`, the resolved
-   * tool name, and a counter incremented for each signal callback turn
-   * the adapter attributes to this task.
-   *
-   * A task lives from `task_started` until `task_notification` /
-   * `task_completed`. While alive, any `message_start` that opens a turn
-   * WITHOUT a preceding `user` event is a signal callback and gets tagged.
-   */
-  private activeTasks = new Map<
-    string,
-    { callbackCount: number; sourceToolName: string; toolUseId: string }
-  >();
+  /** CC's long-running task lifecycle and the signal lineage it stamps on turns. */
+  private readonly taskSignals: ClaudeCodeTaskSignals;
   /**
    * True after a `user` event has been seen but the next turn hasn't yet
    * opened (`message_start` not yet fired). Carries the "this next turn
@@ -594,8 +1191,8 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
    * resulting assistant turn.
    *
    * Reset to `false` once a `message_start` consumes it. After that, any
-   * further `message_start` that opens while {@link activeTasks} is
-   * non-empty is treated as a signal callback (CC re-invoked the LLM
+   * further `message_start` is asked of {@link taskSignals} — a turn opened
+   * while a task is alive is a signal callback (CC re-invoked the LLM
    * because a long-running tool pushed an update).
    */
   private hasUnhandledUserInput = false;
@@ -603,32 +1200,58 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
    * {@link ExternalSignalContext} to attach to the NEXT `stream_start(newStep)`.
    *
    * Armed by `message_start` when {@link hasUnhandledUserInput} is false
-   * AND {@link activeTasks} is non-empty — i.e. CC opened a new turn
-   * without fresh user input while a long-running tool is alive. Cleared
-   * on the next `tool_use` (LLM is back on the main chain).
+   * and {@link taskSignals} attributes the turn to a task — i.e. CC opened a
+   * new turn without fresh user input. Cleared on the next `tool_use` (LLM is
+   * back on the main chain).
    */
   private pendingExternalSignal: ExternalSignalContext | undefined;
+
   /**
-   * Source-tool lineage of the most recently completed long-running task,
-   * waiting to be stamped on the post-task summary turn with
-   * `type: 'task-completion'`.
-   *
-   * Armed when `system task_notification` ends an active task; consumed
-   * by the NEXT `message_start` that takes the natural-turn branch
-   * (no other active task triggering a callback). Cleared on `result`
-   * so it never leaks across LLM runs.
-   *
-   * Lets the renderer keep the summary inside the same AssistantGroup as
-   * the preceding callbacks instead of letting it spawn a separate group.
+   * Map a raw per-turn usage object (from `message_delta.usage` in partial
+   * mode, or `assistant.message.usage` in batch mode) into the normalized
+   * `UsageData` shape. Subclasses override to surface provider-specific
+   * consumption signals the token-only base mapping drops — e.g. Qoder zeroes
+   * the token fields and bills in `credits`, so the base mapping alone would
+   * return undefined and emit no usage event at all.
    */
-  private pendingTaskCompletion: { sourceToolCallId: string; sourceToolName: string } | undefined;
+  protected extractUsage(
+    raw:
+      | {
+          cache_creation_input_tokens?: number;
+          cache_read_input_tokens?: number;
+          input_tokens?: number;
+          output_tokens?: number;
+        }
+      | null
+      | undefined,
+  ): UsageData | undefined {
+    return toUsageData(raw);
+  }
+
+  /**
+   * Map the terminal `result` event into its session-total `UsageData`.
+   * Takes the whole raw event because session-level consumption is not
+   * always nested under `usage` (Qoder puts credits on `total_credits`).
+   */
+  protected extractResultUsage(raw: any): UsageData | undefined {
+    return toUsageData(raw?.usage);
+  }
+
+  constructor(
+    options: ClaudeCodeAdapterOptions = {},
+    profile: ClaudeCompatibleAdapterProfile = CLAUDE_CODE_ADAPTER_PROFILE,
+  ) {
+    this.options = { ...DEFAULT_ADAPTER_OPTIONS, ...options };
+    this.profile = profile;
+    this.taskSignals = new ClaudeCodeTaskSignals(this.options.signalBackgroundTaskCompletion);
+  }
 
   adapt(raw: any): HeterogeneousAgentEvent[] {
     if (!raw || typeof raw !== 'object') return [];
 
     switch (raw.type) {
       case 'rate_limit_event': {
-        return this.handleRateLimitEvent(raw);
+        return this.profile.enableClaudeErrorClassifiers ? this.handleRateLimitEvent(raw) : [];
       }
       case 'system': {
         return this.handleSystem(raw);
@@ -645,6 +1268,12 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
       case 'result': {
         return this.handleResult(raw);
       }
+      case 'session_configured': {
+        if (typeof raw.initialSessionCostUsd === 'number') {
+          this.sessionCostBaseline = raw.initialSessionCostUsd;
+        }
+        return [];
+      }
       default: {
         return [];
       }
@@ -652,9 +1281,12 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
   }
 
   flush(): HeterogeneousAgentEvent[] {
-    // Close any still-open tools (shouldn't happen in normal flow, but be safe)
+    // A still-pending tool never produced a result (the CLI ended / was cancelled
+    // mid-tool), so mark it UNSUCCESSFUL — mirrors Codex's drain and stops a
+    // side-effect hook (e.g. worktree detection) from treating an unfinished
+    // `git worktree add` as a success.
     const events = [...this.pendingToolCalls].map((id) =>
-      this.makeEvent('tool_end', { isSuccess: true, toolCallId: id }),
+      this.makeEvent('tool_end', this.buildToolEndData(id, false)),
     );
     this.pendingToolCalls.clear();
     return events;
@@ -663,45 +1295,23 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
   // ─── Private handlers ───
 
   private handleSystem(raw: any): HeterogeneousAgentEvent[] {
-    // CC's long-running task lifecycle (Monitor, etc., ).
-    // `task_started` registers a task that may fire callback turns;
-    // `task_notification` (terminal) drops it. While a task is alive,
-    // any new turn without preceding user input is treated as a signal
-    // callback in `openMainMessage`.
+    if (raw.subtype === 'api_retry') {
+      return [this.makeEvent('stream_retry', getApiRetryData(raw, this.profile.agentType))];
+    }
+
+    // CC's long-running task lifecycle (Monitor, etc.) — see ClaudeCodeTaskSignals.
     if (raw.subtype === 'task_started' && raw.task_id && raw.tool_use_id) {
       const toolUseId: string = raw.tool_use_id;
-      this.activeTasks.set(raw.task_id, {
-        callbackCount: 0,
-        sourceToolName: this.mainToolNamesById.get(toolUseId) ?? 'unknown',
+      this.taskSignals.start(
+        raw.task_id,
         toolUseId,
-      });
+        this.mainToolNamesById.get(toolUseId) ?? 'unknown',
+        this.mainToolInputsById.get(toolUseId),
+      );
       return [];
     }
     if (raw.subtype === 'task_notification' && raw.task_id) {
-      // Capture lineage BEFORE deleting so the next natural turn (the
-      // post-task summary, after CC re-invokes the LLM with a synthesized
-      // task-ended notification) can be tagged with `task-completion`.
-      // Last-task-wins if multiple tasks end before a summary fires — in
-      // practice CC summarizes once per LLM call.
-      //
-      // Gate on `callbackCount > 0`: only a task that actually fired out-of-band
-      // callback turns while alive is a genuine long-running task whose ending
-      // produces a post-task summary (the summary "keeps it inside the same
-      // AssistantGroup as the preceding callbacks" — so there must BE preceding
-      // callbacks). A task that fires `task_started` and `task_notification`
-      // back-to-back with no intervening callback turn was an inline synchronous
-      // tool that CC merely tracked as a task (e.g. a slow `git commit` running a
-      // lint-staged hook); its `tool_result` is consumed by the next turn in the
-      // normal main chain. Tagging that turn `task-completion` mis-anchors it and
-      // drops it from the rendered chain — so leave it untagged.
-      const ending = this.activeTasks.get(raw.task_id);
-      if (ending && ending.callbackCount > 0) {
-        this.pendingTaskCompletion = {
-          sourceToolCallId: ending.toolUseId,
-          sourceToolName: ending.sourceToolName,
-        };
-      }
-      this.activeTasks.delete(raw.task_id);
+      this.taskSignals.end(raw.task_id);
       return [];
     }
     // `task_updated` is a status patch (status: 'completed' fires
@@ -711,11 +1321,15 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
 
     if (raw.subtype !== 'init') return [];
     this.sessionId = raw.session_id;
+    if (this.profile.ignoreDuplicateInit && this.started) return [];
     this.started = true;
     return [
       this.makeEvent('stream_start', {
-        model: raw.model,
-        provider: 'claude-code',
+        model: stripModelBetaMarker(raw.model),
+        provider: this.profile.agentType,
+        // The CC session id every message this run produces belongs to. A
+        // change in this value across a topic means CC forked a new session.
+        sessionId: this.sessionId,
       }),
     ];
   }
@@ -740,7 +1354,8 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
     if (parentToolUseId) return this.handleSubagentAssistant(raw, parentToolUseId);
 
     const events: HeterogeneousAgentEvent[] = [];
-    const messageId = raw.message?.id;
+    const rawMessageId: string | undefined = raw.message?.id;
+    const messageId = this.resolveMainTurnMessageId(rawMessageId);
 
     // Detect a post-tool answer that REUSES the tool turn's message.id: a
     // text-only continuation (no tool_use of its own) on the in-flight id that
@@ -751,6 +1366,7 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
     const hasTextBlock = content.some((b: any) => b?.type === 'text' && b.text);
     const hasToolUseBlock = content.some((b: any) => b?.type === 'tool_use');
     const isPostToolTextReusingId =
+      this.profile.assistantMessageIdsDefineTurns &&
       hasTextBlock &&
       !hasToolUseBlock &&
       messageId !== undefined &&
@@ -776,7 +1392,11 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
     for (const block of content) {
       switch (block.type) {
         case 'text': {
-          if (block.text) textParts.push(block.text);
+          if (block.text) {
+            textParts.push(block.text);
+            const trimmed = block.text.trim();
+            if (CC_SYNTHETIC_API_ERROR_PATTERN.test(trimmed)) this.lastApiErrorText = trimmed;
+          }
           break;
         }
         case 'thinking': {
@@ -789,14 +1409,19 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
           // domain-named) instead of the wire-prefixed MCP form. Identifier
           // stays `claude-code` because this remains a CC-side tool.
           const apiName = block.name === ASK_USER_MCP_TOOL_NAME ? ASK_USER_API_NAME : block.name;
-          newToolCalls.push({
+          const toolPayload: ToolCallPayload = {
             apiName,
             arguments: JSON.stringify(block.input || {}),
             id: block.id,
-            identifier: 'claude-code',
+            identifier: this.profile.agentType,
             type: 'default',
-          });
+          };
+          newToolCalls.push(toolPayload);
           this.pendingToolCalls.add(block.id);
+          // Cache the payload by id so `tool_end` can carry the same
+          // `{ toolCalling }` the server emits — keeps the event stream aligned
+          // so renderer `onAfterCall` hooks fire identically across runtimes.
+          this.toolPayloadById.set(block.id, toolPayload);
           // Cache EVERY main-agent tool_use input so the subagent-spawn
           // handler (`emitToolChunk`) can look up the parent's args on
           // first subagent event regardless of which spawn-tool name CC
@@ -808,20 +1433,32 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
           // ExternalSignalContext with the actual tool — Monitor shows
           // up as `Monitor`, not the apiName remap.
           if (block.name) this.mainToolNamesById.set(block.id, block.name);
-          if (block.name === CC_TODO_WRITE_TOOL_NAME && block.input) {
+          if (
+            this.profile.enableClaudeTaskState &&
+            block.name === CC_TODO_WRITE_TOOL_NAME &&
+            block.input
+          ) {
             this.todoWriteInputs.set(block.id, block.input as TodoWriteArgs);
           }
           // Task* tool inputs cached for the tool_result-time reducer.
           // Only TaskCreate / TaskUpdate carry payloads worth caching;
           // TaskList carries no input but we still need to remember the
           // tool_use.id so the result-side dispatcher can recognize it.
-          if (block.name === CC_TASK_CREATE_TOOL_NAME && block.input) {
+          if (
+            this.profile.enableClaudeTaskState &&
+            block.name === CC_TASK_CREATE_TOOL_NAME &&
+            block.input
+          ) {
             this.taskCreateInputs.set(block.id, block.input as CachedTaskCreateInput);
           }
-          if (block.name === CC_TASK_UPDATE_TOOL_NAME && block.input) {
+          if (
+            this.profile.enableClaudeTaskState &&
+            block.name === CC_TASK_UPDATE_TOOL_NAME &&
+            block.input
+          ) {
             this.taskUpdateInputs.set(block.id, block.input as CachedTaskUpdateInput);
           }
-          if (block.name === CC_TASK_LIST_TOOL_NAME) {
+          if (this.profile.enableClaudeTaskState && block.name === CC_TASK_LIST_TOOL_NAME) {
             this.pendingTaskListCalls.add(block.id);
           }
           break;
@@ -876,8 +1513,8 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
     }
     events.push(...this.emitToolChunk(newToolCalls, messageId));
 
-    // BATCH mode (no `--include-partial-messages`, e.g. the `lh hetero exec`
-    // CLI used by device + sandbox runs): there is no `message_delta` to carry
+    // BATCH mode (no `--include-partial-messages`, e.g. older producers or
+    // explicit low-volume callers): there is no `message_delta` to carry
     // per-turn usage, and the `assistant` event's usage is NOT a stale
     // message_start echo — it's the real per-message total. Emit it as
     // turn_metadata so usage (token counts) AND the canonical model id (the
@@ -886,13 +1523,13 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
     // partial mode (`sawStreamEvent`) `message_delta` owns this — skip here to
     // avoid double-counting the stale snapshot.
     if (!this.sawStreamEvent) {
-      const usage = toUsageData(raw.message?.usage);
+      const usage = this.extractUsage(raw.message?.usage);
       if (usage) {
         events.push(
           this.makeEvent('step_complete', {
             model: raw.message?.model,
             phase: 'turn_metadata',
-            provider: 'claude-code',
+            provider: this.profile.agentType,
             usage,
           }),
         );
@@ -900,6 +1537,22 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
     }
 
     return events;
+  }
+
+  /**
+   * Resolve a provider assistant item to the id that owns the current main
+   * turn. Claude's assistant ids are turn ids. CodeBuddy's are content-item
+   * ids (reasoning, text, and tool calls each get a different one), so partial
+   * mode keeps the response id established by message_start. In batch mode,
+   * all content items stay together until a main-agent tool_result signals
+   * that the next assistant item belongs to a new model invocation.
+   */
+  private resolveMainTurnMessageId(rawMessageId: string | undefined): string | undefined {
+    if (this.profile.assistantMessageIdsDefineTurns) return rawMessageId;
+
+    if (this.sawStreamEvent && this.currentMessageId) return this.currentMessageId;
+    if (this.currentMessageId === undefined || this.hasUnhandledUserInput) return rawMessageId;
+    return this.currentMessageId;
   }
 
   private handleRateLimitEvent(raw: any): HeterogeneousAgentEvent[] {
@@ -943,9 +1596,32 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
     if (!Array.isArray(content)) return [];
 
     const messageId: string | undefined = raw.message?.id;
-    const subagentCtx = {
+    const baseCtx: SubagentEventContext = {
       parentToolCallId: parentToolUseId,
       subagentMessageId: messageId ?? '',
+    };
+
+    // Build spawn metadata once per parent and hand it to the FIRST chunk this
+    // event emits (reasoning, text, OR tool). The executor lazy-creates +
+    // titles the Thread off whichever subagent event it sees first, so a
+    // reasoning/text-first subagent must carry the metadata too — not just the
+    // tool path — or the Thread is born with the generic "Subagent" title.
+    //
+    // `announcedSpawns` is marked only when the metadata is ACTUALLY attached to
+    // an emitted chunk (inside `nextSubagentCtx`), not merely built here. A first
+    // event that emits nothing the reducer consumes (empty text/thinking block,
+    // an unsupported block, or a usage-only `content: []`) must NOT burn the
+    // one-shot — otherwise the next real chunk would create the Thread with the
+    // fallback title, the exact bug this guards against.
+    let pendingSpawnMetadata = this.announcedSpawns.has(parentToolUseId)
+      ? undefined
+      : this.buildSpawnMetadata(parentToolUseId);
+    const nextSubagentCtx = (): SubagentEventContext => {
+      if (!pendingSpawnMetadata) return baseCtx;
+      const ctx: SubagentEventContext = { ...baseCtx, spawnMetadata: pendingSpawnMetadata };
+      pendingSpawnMetadata = undefined;
+      this.announcedSpawns.add(parentToolUseId);
+      return ctx;
     };
 
     const textParts: string[] = [];
@@ -954,7 +1630,11 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
     for (const block of content) {
       switch (block.type) {
         case 'text': {
-          if (block.text) textParts.push(block.text);
+          if (block.text) {
+            textParts.push(block.text);
+            const trimmed = block.text.trim();
+            if (CC_SYNTHETIC_API_ERROR_PATTERN.test(trimmed)) this.lastApiErrorText = trimmed;
+          }
           break;
         }
         case 'thinking': {
@@ -967,15 +1647,24 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
           // domain-named) instead of the wire-prefixed MCP form. Identifier
           // stays `claude-code` because this remains a CC-side tool.
           const apiName = block.name === ASK_USER_MCP_TOOL_NAME ? ASK_USER_API_NAME : block.name;
-          newToolCalls.push({
+          const toolPayload: ToolCallPayload = {
             apiName,
             arguments: JSON.stringify(block.input || {}),
             id: block.id,
-            identifier: 'claude-code',
+            identifier: this.profile.agentType,
             type: 'default',
-          });
+          };
+          newToolCalls.push(toolPayload);
           this.pendingToolCalls.add(block.id);
-          if (block.name === CC_TODO_WRITE_TOOL_NAME && block.input) {
+          // Cache the payload by id so `tool_end` can carry the same
+          // `{ toolCalling }` the server emits — keeps the event stream aligned
+          // so renderer `onAfterCall` hooks fire identically across runtimes.
+          this.toolPayloadById.set(block.id, toolPayload);
+          if (
+            this.profile.enableClaudeTaskState &&
+            block.name === CC_TODO_WRITE_TOOL_NAME &&
+            block.input
+          ) {
             this.todoWriteInputs.set(block.id, block.input as TodoWriteArgs);
           }
           break;
@@ -995,7 +1684,7 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
         this.makeChunkEvent({
           chunkType: 'reasoning',
           reasoning: reasoningParts.join(''),
-          subagent: subagentCtx,
+          subagent: nextSubagentCtx(),
         }),
       );
     }
@@ -1004,20 +1693,28 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
         this.makeChunkEvent({
           chunkType: 'text',
           content: textParts.join(''),
-          subagent: subagentCtx,
+          subagent: nextSubagentCtx(),
         }),
       );
     }
-    events.push(...this.emitToolChunk(newToolCalls, messageId, subagentCtx));
+    // Only consume the pending spawn metadata for the tool chunk when this
+    // event actually carries tools (else it would be lost on the no-op chunk).
+    events.push(
+      ...this.emitToolChunk(
+        newToolCalls,
+        messageId,
+        newToolCalls.length > 0 ? nextSubagentCtx() : baseCtx,
+      ),
+    );
 
-    const usage = toUsageData(raw.message?.usage);
+    const usage = this.extractUsage(raw.message?.usage);
     if (usage) {
       events.push(
         this.makeEvent('step_complete', {
           model: raw.message?.model,
           phase: 'turn_metadata',
-          provider: 'claude-code',
-          subagent: subagentCtx,
+          provider: this.profile.agentType,
+          subagent: baseCtx,
           usage,
         }),
       );
@@ -1038,15 +1735,14 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
    * so an echoed tool_use does not re-open a closed lifecycle.
    *
    * When `subagentCtx` is provided, the chunk + each tool_start event
-   * gets the context stamped as a peer field. The FIRST chunk for a new
-   * parent (tracked via `announcedSpawns`) also carries `spawnMetadata`
-   * built from the cached Task args, so the executor can lazy-create
-   * the Thread without knowing about CC-specific argument shapes.
+   * gets the context stamped as a peer field — including any `spawnMetadata`
+   * the caller already attached (`handleSubagentAssistant` builds it once per
+   * parent and hands it to the first emitted chunk, tool or otherwise).
    */
   private emitToolChunk(
     newToolCalls: ToolCallPayload[],
     messageId: string | undefined,
-    subagentCtx?: { parentToolCallId: string; subagentMessageId: string },
+    subagentCtx?: SubagentEventContext,
   ): HeterogeneousAgentEvent[] {
     if (newToolCalls.length === 0) return [];
 
@@ -1057,30 +1753,10 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
     const cumulative = [...existing, ...freshTools];
     this.toolCallsByMessageId.set(msgKey, cumulative);
 
-    // Build the `subagent` peer field — stamped on the chunk + each
-    // tool_start. Only the first emission for a new parent carries
-    // spawnMetadata; subsequent ones carry just the lineage ids.
-    const subagent: SubagentEventContext | undefined = subagentCtx
-      ? {
-          parentToolCallId: subagentCtx.parentToolCallId,
-          subagentMessageId: subagentCtx.subagentMessageId,
-        }
-      : undefined;
-    if (subagent && !this.announcedSpawns.has(subagent.parentToolCallId)) {
-      const args = this.mainToolInputsById.get(subagent.parentToolCallId);
-      if (args) {
-        // CC's subagent-spawn tools (Task, Agent, ...) share the same
-        // input shape (`description`, `prompt`, `subagent_type`). We pull
-        // the fields defensively — any unknown spawn-tool variant that
-        // happens to match this shape benefits automatically.
-        subagent.spawnMetadata = {
-          description: typeof args.description === 'string' ? args.description : undefined,
-          prompt: typeof args.prompt === 'string' ? args.prompt : undefined,
-          subagentType: typeof args.subagent_type === 'string' ? args.subagent_type : undefined,
-        };
-      }
-      this.announcedSpawns.add(subagent.parentToolCallId);
-    }
+    // The `subagent` peer field — stamped on the chunk + each tool_start —
+    // is passed through verbatim (carrying `spawnMetadata` when the caller
+    // designated this the first emission for the parent).
+    const subagent: SubagentEventContext | undefined = subagentCtx;
 
     const chunkData: StreamChunkData = {
       chunkType: 'tools_calling',
@@ -1098,6 +1774,33 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
   }
 
   /**
+   * Build `tool_end` event data aligned with the server/gateway shape: alongside
+   * `{ isSuccess, toolCallId }`, re-attach the tool's `{ toolCalling }` payload
+   * (from `toolPayloadById`) and a `result` mirroring a `BuiltinToolResult`. This
+   * is what lets the renderer's `onAfterCall` dispatch resolve the executor (by
+   * `identifier`) and observe the result — otherwise hetero tool_end carried no
+   * payload/result and `onAfterCall` was a silent no-op for CLI runs.
+   */
+  private buildToolEndData(
+    toolCallId: string,
+    isSuccess: boolean,
+    opts?: { content?: string; state?: unknown; subagent?: SubagentEventContext },
+  ): Record<string, any> {
+    const data: Record<string, any> = { isSuccess, toolCallId };
+    if (opts?.subagent) data.subagent = opts.subagent;
+
+    const toolCalling = this.toolPayloadById.get(toolCallId);
+    if (toolCalling) data.payload = { toolCalling };
+
+    data.result = {
+      content: opts?.content ?? '',
+      success: isSuccess,
+      ...(opts?.state ? { state: opts.state } : {}),
+    };
+    return data;
+  }
+
+  /**
    * Handle user events — these contain tool_result blocks.
    * NOTE: In Claude Code, tool results are emitted as `type: 'user'` events
    * (representing the synthetic user turn that feeds results back to the LLM).
@@ -1109,8 +1812,23 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
    * not main-agent-scoped).
    */
   private handleUser(raw: any): HeterogeneousAgentEvent[] {
+    // A replayed user message (`--replay-user-messages`) is input the host
+    // delivered into a live session: the turn it opens answers the user, not a
+    // background task — even if a task notification lands before it opens.
+    if (raw.isReplay && !raw.parent_tool_use_id) {
+      this.hasUnhandledUserInput = true;
+      return [];
+    }
+
     const content = raw.message?.content;
     if (!Array.isArray(content)) return [];
+
+    // `tool_use_result` is event-level and carries no tool id. Associate it
+    // only when the event has exactly one tool_result block; otherwise it is
+    // impossible to attach the provider metadata without risking cross-tool
+    // state corruption.
+    const toolResultCount = content.filter((block) => block?.type === 'tool_result').length;
+    const structuredToolUseResult = toolResultCount === 1 ? raw.tool_use_result : undefined;
 
     const subagentCtx: SubagentEventContext | undefined = raw.parent_tool_use_id
       ? { parentToolCallId: raw.parent_tool_use_id }
@@ -1130,8 +1848,14 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
       // signal pipeline.
       if (!subagentCtx) {
         this.hasUnhandledUserInput = true;
+        this.taskSignals.noteToolResult(toolCallId);
       }
 
+      // `Read` on images yields `{type: 'image', source: {...}}` blocks. We
+      // gather their base64 bodies here (in the SAME pass that builds the
+      // human-readable content) so the runtime pipeline can upload them and the
+      // UI can echo a thumbnail — see `pluginState.images` below.
+      const images: HeterogeneousToolResultImage[] = [];
       const resultContent =
         typeof block.content === 'string'
           ? block.content
@@ -1145,12 +1869,15 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
                   // the UI's StatusIndicator stuck on the spinner ().
                   if (c?.type === 'tool_reference' && c.tool_name) return c.tool_name;
                   // `Read` on images yields `{type: 'image', source: {...}}` blocks
-                  // with no text. Drop a minimal placeholder so the tool message
-                  // has non-empty content (); richer image echo is a
-                  // follow-up that needs structured ToolResultData.
+                  // with no text. Keep the `[Image: …]` placeholder as the
+                  // content fallback () and preserve the base64 body on
+                  // `pluginState.images` for rich echo ().
                   if (c?.type === 'image') {
                     const mediaType = c.source?.media_type || 'image';
-                    return `[Image: ${mediaType}]`;
+                    if (c.source?.type === 'base64' && typeof c.source.data === 'string') {
+                      images.push({ data: c.source.data, mediaType });
+                    }
+                    return imagePlaceholder(mediaType);
                   }
                   return c.text || c.content || '';
                 })
@@ -1183,11 +1910,27 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
           : undefined;
 
       const taskPluginState =
-        subagentCtx === undefined
+        this.profile.enableClaudeTaskState && subagentCtx === undefined
           ? this.applyTaskToolResult(toolCallId, !!block.is_error, resultContent)
           : undefined;
 
-      const pluginState = todoWritePluginState ?? taskPluginState;
+      const webSearchPluginState =
+        !block.is_error && this.toolPayloadById.get(toolCallId)?.apiName === CC_WEB_SEARCH_TOOL_NAME
+          ? synthesizeWebSearchPluginState(structuredToolUseResult)
+          : undefined;
+
+      // These result types are mutually exclusive in practice, but merge
+      // defensively so a future producer carrying multiple structured fields
+      // cannot clobber an existing state fragment. Image `data` is still raw
+      // base64 here; the runtime pipeline uploads and rewrites it before
+      // persistence.
+      let pluginState: Record<string, any> | undefined;
+      for (const state of [todoWritePluginState, taskPluginState, webSearchPluginState]) {
+        if (state) pluginState = { ...pluginState, ...state };
+      }
+      if (images.length > 0) {
+        pluginState = { ...pluginState, images };
+      }
 
       // Emit tool_result for executor to persist content to tool message
       events.push(
@@ -1204,11 +1947,14 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
       if (this.pendingToolCalls.has(toolCallId)) {
         this.pendingToolCalls.delete(toolCallId);
         events.push(
-          this.makeEvent('tool_end', {
-            isSuccess: !block.is_error,
-            subagent: subagentCtx,
-            toolCallId,
-          }),
+          this.makeEvent(
+            'tool_end',
+            this.buildToolEndData(toolCallId, !block.is_error, {
+              content: resultContent,
+              state: pluginState,
+              subagent: subagentCtx,
+            }),
+          ),
         );
       }
     }
@@ -1308,50 +2054,104 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
     return synthesizeTaskPluginState(this.claudeCodeTasks);
   }
 
+  /**
+   * This run's spend out of CC's session-cumulative `total_cost_usd`. A total
+   * below the baseline means CC did not restore the tally (the transcript's
+   * cost-state was not the one it resumed from), so the total stands alone.
+   */
+  private toRunCost(sessionTotal: unknown): number | undefined {
+    if (typeof sessionTotal !== 'number') return undefined;
+    const baseline = this.sessionCostBaseline;
+    return baseline !== undefined && baseline <= sessionTotal
+      ? sessionTotal - baseline
+      : sessionTotal;
+  }
+
   private handleResult(raw: any): HeterogeneousAgentEvent[] {
+    // Resuming a session whose previous run left background tasks behind makes
+    // CC first report them as orphaned (`task_notification` ×N), then close that
+    // bookkeeping pass with an empty zero-turn `result` BEFORE the user's turn
+    // even starts. Treating it as terminal ends the operation with no content
+    // and drops the real turn that follows — the reply stays a `...` shell.
+    if (isEmptyTaskNotificationResult(raw)) return [];
+
     // Emit authoritative grand-total usage from CC's result event. The
     // executor currently ignores this phase (it persists per-turn via
     // turn_metadata), but we still emit it so other consumers — cost
     // displays, logs — can read the normalized total.
     const events: HeterogeneousAgentEvent[] = [];
-    const usage = toUsageData(raw.usage);
+    const usage = this.extractResultUsage(raw);
     if (usage) {
       events.push(
         this.makeEvent('step_complete', {
-          costUsd: raw.total_cost_usd,
+          costUsd: this.toRunCost(raw.total_cost_usd),
           phase: 'result_usage',
           usage,
         }),
       );
     }
 
-    const resultMessage = getCliResultMessage(raw.result) || 'Agent execution failed';
-    const rateLimitError = getRateLimitTerminalError(raw.result, this.pendingRateLimitInfo);
-    const finalEvent: HeterogeneousAgentEvent = raw.is_error
-      ? this.makeEvent(
-          'error',
-          rateLimitError ||
-            getOverloadedTerminalError(
-              raw.result,
-              raw.api_error_status,
-              this.pendingRateLimitInfo,
-            ) ||
-            getAuthRequiredTerminalError(raw.result) || {
-              error: resultMessage,
-              message: resultMessage,
-            },
+    // Classifiers read the result text; a mid-run API failure often ships an
+    // EMPTY result (`subtype: 'error_during_execution'` and nothing else), so
+    // fall back to CC's own `errors` array and then to the synthetic `API
+    // Error:` line captured off the stream — an auth / overload failure that
+    // died mid-response still classifies to its dedicated guide instead of the
+    // generic fallback.
+    const classifiableResult =
+      getCliResultMessage(raw.result) || getCliResultErrors(raw) || this.lastApiErrorText;
+    const rateLimitError = this.profile.enableClaudeErrorClassifiers
+      ? getRateLimitTerminalError(
+          classifiableResult,
+          this.profile.agentType,
+          this.pendingRateLimitInfo,
         )
-      : this.makeEvent('agent_runtime_end', {});
+      : undefined;
+    // A stop is resolved before any classifier: it reports no reason of its
+    // own, so every one of them would either miss it or mislabel it. It then
+    // follows the SAME runtime-end strategy as a clean finish, because it is
+    // now a non-error terminal like one.
+    const aborted = isAbortedResult(raw);
+    const finalEvent: HeterogeneousAgentEvent | undefined =
+      raw.is_error && !aborted
+        ? this.makeEvent(
+            'error',
+            rateLimitError ||
+              (this.profile.enableClaudeErrorClassifiers
+                ? getOverloadedTerminalError(
+                    classifiableResult,
+                    this.profile,
+                    raw.api_error_status,
+                    this.pendingRateLimitInfo,
+                  )
+                : undefined) ||
+              getAuthRequiredTerminalError(classifiableResult, this.profile) ||
+              (this.profile.enableClaudeErrorClassifiers
+                ? getTailTerminalError(classifiableResult, this.profile.agentType)
+                : undefined) ||
+              buildFallbackTerminalError(raw, this.profile, this.lastApiErrorText),
+          )
+        : this.options.runtimeEndStrategy === 'on-result'
+          ? this.makeEvent('agent_runtime_end', aborted ? buildAbortedRuntimeEndData(raw) : {})
+          : undefined;
 
     this.pendingRateLimitInfo = undefined;
+    this.lastApiErrorText = undefined;
     this.streamedTextByMessageId.clear();
     this.streamedThinkingByMessageId.clear();
-    // Drop any unconsumed task-completion lineage so the next LLM run
-    // doesn't inherit it (e.g. a follow-up user turn would otherwise
-    // wrongly inherit the previous run's task-completion tag).
-    this.pendingTaskCompletion = undefined;
+    // Drop any unconsumed task-completion lineage so the next LLM run doesn't
+    // inherit it; the next turn follows no tool_result of this one either.
+    this.taskSignals.clearPendingCompletion();
+    this.hasUnhandledUserInput = false;
 
-    return [...events, this.makeEvent('stream_end', {}), finalEvent];
+    const shouldEmitVisibleOutputEnd =
+      this.options.runtimeEndStrategy === 'on-result' || !this.taskSignals.hasActiveTasks;
+
+    return [
+      ...events,
+      this.makeEvent('stream_end', {}),
+      ...(shouldEmitVisibleOutputEnd ? [this.makeEvent('visible_output_end', {})] : []),
+      ...(finalEvent ? [finalEvent] : []),
+    ];
   }
 
   /**
@@ -1410,13 +2210,13 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
         // every `assistant` event, so `handleAssistant` deliberately skips the
         // emission and lets this branch own it. `message_delta.usage` carries
         // the full final usage (input + cache + final output_tokens).
-        const usage = toUsageData(event.usage);
+        const usage = this.extractUsage(event.usage);
         if (!usage) return [];
         return [
           this.makeEvent('step_complete', {
             model: this.currentStreamEventModel,
             phase: 'turn_metadata',
-            provider: 'claude-code',
+            provider: this.profile.agentType,
             usage,
           }),
         ];
@@ -1451,7 +2251,13 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
       this.started = true;
       this.currentMessageId = messageId;
       this.currentTurnHadToolUse = false;
-      return [this.makeEvent('stream_start', { model, provider: 'claude-code' })];
+      return [
+        this.makeEvent('stream_start', {
+          model,
+          provider: this.profile.agentType,
+          sessionId: this.sessionId,
+        }),
+      ];
     }
 
     if (messageId === this.currentMessageId) {
@@ -1471,7 +2277,7 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
       // turn opened while a task is active) would see a stale `true` and skip
       // its external-signal tag.
       this.hasUnhandledUserInput = false;
-      this.pendingExternalSignal = undefined;
+      this.pendingExternalSignal = this.taskSignals.openTurn(true);
       // Reusing the tool turn's message.id as the newStep id would make the
       // reducer treat this as a REPLAY and drop it (it ignores a `newStep` whose
       // id === currentMainMessageId). For any tool turn opened by a prior
@@ -1486,57 +2292,39 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
           messageId: `${messageId}:s${this.stepIndex}`,
           model,
           newStep: true,
-          provider: 'claude-code',
+          provider: this.profile.agentType,
+          sessionId: this.sessionId,
         }),
       ];
     }
 
     if (this.currentMessageId === undefined) {
       // First assistant/delta after system init — record without step boundary.
+      // Emit a non-newStep stream_start carrying this turn's CC message.id so
+      // the reducer records `currentMainMessageId` for the SEEDED assistant.
+      // system:init opened the seed with no id, so without this the first turn's
+      // rows (assistant / tools / usage) would carry no `heteroMessageId` — the
+      // exact first turn of a resumed/forked operation this provenance targets.
       this.currentMessageId = messageId;
       this.currentTurnHadToolUse = false;
-      return [];
+      return [
+        this.makeEvent('stream_start', {
+          messageId,
+          model,
+          provider: this.profile.agentType,
+          sessionId: this.sessionId,
+        }),
+      ];
     }
 
     this.currentMessageId = messageId;
     this.currentTurnHadToolUse = false;
     this.stepIndex++;
-    // Signal-callback detection (): if this turn opened
-    // WITHOUT a preceding `user` event AND a long-running task is
-    // still active, the LLM was re-invoked by the task pushing an
-    // update — tag the resulting assistant turn accordingly. Otherwise
-    // it's a natural continuation (tool_result follow-up or
-    // user-initiated turn).
-    if (!this.hasUnhandledUserInput && this.activeTasks.size > 0) {
-      // Pick the most recently registered active task. Multi-task
-      // concurrency isn't expected in real Monitor flows but the Map
-      // preserves insertion order so this still gives deterministic
-      // behavior if it ever happens.
-      const lastTaskKey = [...this.activeTasks.keys()].at(-1)!;
-      const task = this.activeTasks.get(lastTaskKey)!;
-      task.callbackCount += 1;
-      this.pendingExternalSignal = {
-        sequence: task.callbackCount,
-        sourceToolCallId: task.toolUseId,
-        sourceToolName: task.sourceToolName,
-        type: 'tool-stdout',
-      };
-    } else if (this.pendingTaskCompletion) {
-      // Natural turn that follows a `task_notification` — this is the
-      // post-task summary. Tag it with the source-tool lineage so the
-      // collector keeps it inside the same AssistantGroup as the
-      // preceding callbacks (rendered after the SignalCallbacks block).
-      this.pendingExternalSignal = {
-        sourceToolCallId: this.pendingTaskCompletion.sourceToolCallId,
-        sourceToolName: this.pendingTaskCompletion.sourceToolName,
-        type: 'task-completion',
-      };
-      this.pendingTaskCompletion = undefined;
-    } else {
-      // Natural turn boundary — clear any stale signal so the new
-      // assistant joins the main chain.
-      this.pendingExternalSignal = undefined;
-    }
+    // Signal-callback detection: a turn opened WITHOUT a preceding `user` event
+    // was re-invoked by a long-running task — tag it with that task's lineage.
+    // Otherwise it's a natural continuation (tool_result follow-up or
+    // user-initiated turn) and joins the main chain.
+    this.pendingExternalSignal = this.taskSignals.openTurn(this.hasUnhandledUserInput);
     this.hasUnhandledUserInput = false;
 
     return [
@@ -1550,7 +2338,8 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
         messageId,
         model,
         newStep: true,
-        provider: 'claude-code',
+        provider: this.profile.agentType,
+        sessionId: this.sessionId,
       }),
     ];
   }
@@ -1591,3 +2380,5 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
     return { data, stepIndex: this.stepIndex, timestamp: Date.now(), type: 'stream_chunk' };
   }
 }
+
+export class ClaudeCodeAdapter extends ClaudeCompatibleStreamAdapter {}

@@ -1,0 +1,971 @@
+import {
+  GOAL_ACCEPTANCE_TASK_TITLE,
+  GOAL_CLARIFICATION_TITLE,
+  GOAL_MACHINE_GATE_TITLE,
+} from '@lobechat/const/goal';
+import type {
+  GoalGraphDecision,
+  GoalGraphEdge,
+  GoalGraphEvent,
+  GoalGraphNode,
+  GoalGraphSnapshot,
+  GoalItem,
+} from '@lobechat/types';
+import { describe, expect, it } from 'vitest';
+
+import { experimentRelations, graphNodeKind, isExperiment } from '../Experiments/model';
+import {
+  buildGoalGraphView,
+  hasReviewableResult,
+  isRunningNode,
+  isTroubledTaskNode,
+  scopeGraphView,
+} from './goalGraphViewModel';
+
+const T0 = new Date('2026-08-01T00:00:00Z');
+const at = (minutes: number) => new Date(T0.getTime() + minutes * 60_000);
+const NOW = at(120).getTime();
+
+const goal = (overrides: Partial<GoalItem> = {}): GoalItem => ({
+  agentId: 'agt',
+  completedAt: null,
+  config: { recovery: { operationLeaseTimeoutMs: 15 * 60_000 } },
+  createdAt: T0,
+  id: 'goal-1',
+  maxRounds: null,
+  maxTotalCost: null,
+  projectId: null,
+  requirement: 'ship it',
+  startedAt: T0,
+  status: 'running',
+  subjectId: null,
+  subjectType: 'standalone',
+  title: 'Goal',
+  updatedAt: T0,
+  userId: 'user-1',
+  visibility: 'public',
+  workspaceId: null,
+  ...overrides,
+});
+
+const node = (id: string, overrides: Partial<GoalGraphNode> = {}): GoalGraphNode => ({
+  confidence: null,
+  createdAt: at(1),
+  createdByAgentId: null,
+  createdByUserId: null,
+  description: null,
+  goalId: 'goal-1',
+  id,
+  kind: 'task',
+  priority: 0,
+  resolvedAt: null,
+  status: 'proposed',
+  taskId: null,
+  title: id,
+  updatedAt: at(1),
+  ...overrides,
+});
+
+const edge = (source: string, target: string, kind: GoalGraphEdge['kind']): GoalGraphEdge => ({
+  createdAt: at(1),
+  goalId: 'goal-1',
+  id: `${source}-${target}-${kind}`,
+  kind,
+  sourceNodeId: source,
+  targetNodeId: target,
+});
+
+const event = (
+  entityId: string,
+  eventType: GoalGraphEvent['eventType'],
+  minutes: number,
+  reason?: string,
+): GoalGraphEvent => ({
+  actorId: 'user-1',
+  actorType: 'agent',
+  createdAt: at(minutes),
+  entityId,
+  entityType: 'node',
+  eventType,
+  goalId: 'goal-1',
+  id: `${entityId}-${eventType}-${minutes}`,
+  operationId: null,
+  reason: reason ?? null,
+  taskId: null,
+});
+
+const snapshot = (partial: Partial<GoalGraphSnapshot>): GoalGraphSnapshot => ({
+  decisions: [],
+  edges: [],
+  events: [],
+  goal: goal(),
+  nodes: [],
+  workVersions: [],
+  ...partial,
+});
+
+describe('buildGoalGraphView', () => {
+  it('mirrors the coordinator frontier: unblocked tasks are ready, blocked tasks fold', () => {
+    const view = buildGoalGraphView(
+      snapshot({
+        edges: [edge('w2', 'w1', 'depends_on')],
+        nodes: [node('w1'), node('w2')],
+      }),
+      NOW,
+    );
+
+    expect(view.frontier.map((item) => [item.view.node.id, item.kind])).toEqual([['w1', 'ready']]);
+    expect(view.blocked.map((item) => item.node.id)).toEqual(['w2']);
+  });
+
+  it('numbers task nodes by graph creation order so dependency refs stay stable', () => {
+    const view = buildGoalGraphView(
+      snapshot({ nodes: [node('w1'), node('p1', { kind: 'problem' }), node('w2')] }),
+      NOW,
+    );
+
+    expect(view.byId.w1.seq).toBe(1);
+    expect(view.byId.w2.seq).toBe(2);
+    expect(view.byId.p1.seq).toBeUndefined();
+  });
+
+  /**
+   * Regression: a task retired before any attempt started had no attempt to
+   * carry the reason, so the result page listed it as dropped with no why.
+   */
+  it('records why a node was given up, even without an attempt', () => {
+    const view = buildGoalGraphView(
+      snapshot({
+        events: [
+          event('w1', 'updated', 5, 'Store API rate-limited twice'),
+          event('w1', 'retired', 10, 'Switched to public reviews'),
+          event('w2', 'updated', 5, 'Discount data has no public source'),
+          event('w2', 'rejected', 10),
+        ],
+        nodes: [
+          node('w1', { status: 'retired', updatedAt: at(10) }),
+          node('w2', { status: 'rejected', updatedAt: at(10) }),
+          node('w3', { status: 'resolved', updatedAt: at(10) }),
+        ],
+      }),
+      NOW,
+    );
+
+    expect(view.byId.w1.closedReason).toBe('Switched to public reviews');
+    expect(view.byId.w2.closedReason).toBe('Discount data has no public source');
+    expect(view.byId.w3.closedReason).toBeUndefined();
+  });
+
+  it('builds the attempt ledger from the event trail', () => {
+    const view = buildGoalGraphView(
+      snapshot({
+        events: [
+          event('w1', 'activated', 5),
+          event('w1', 'updated', 20, 'Task attempt budget was exhausted'),
+          event('w1', 'activated', 25, 'retry with the missing directory created first'),
+          event('w1', 'resolved', 40, 'Responsible task completed'),
+        ],
+        nodes: [node('w1', { resolvedAt: at(40), status: 'resolved', updatedAt: at(40) })],
+      }),
+      NOW,
+    );
+
+    expect(view.byId.w1.attempts).toMatchObject([
+      { index: 1, outcome: 'failed', reason: 'Task attempt budget was exhausted' },
+      { index: 2, outcome: 'passed', reason: 'Responsible task completed' },
+    ]);
+  });
+
+  it('does not let a bookkeeping `updated` event close a live attempt', () => {
+    // The graph model writes `updated` for housekeeping too ("Attached Work
+    // version …"). Treating it as an outcome ended the running attempt one
+    // event early, which dropped the frontier row's live clock.
+    const view = buildGoalGraphView(
+      snapshot({
+        events: [
+          event('w1', 'activated', 115),
+          event('w1', 'updated', 115, 'Attached Work version 704ace21'),
+        ],
+        nodes: [node('w1', { status: 'active', taskId: 'task-1', updatedAt: at(115) })],
+      }),
+      NOW,
+    );
+
+    expect(view.byId.w1.attempts).toMatchObject([{ index: 1, outcome: 'running' }]);
+    expect(view.byId.w1.startedAt).toEqual(at(115));
+    expect(view.frontier[0]).toMatchObject({ kind: 'running' });
+  });
+
+  it('marks an active task stale once it outlives the operation lease', () => {
+    const view = buildGoalGraphView(
+      snapshot({
+        events: [event('w1', 'activated', 30)],
+        nodes: [node('w1', { status: 'active', taskId: 'task-1', updatedAt: at(30) })],
+      }),
+      NOW,
+    );
+
+    expect(view.byId.w1.isStale).toBe(true);
+    expect(view.frontier[0]).toMatchObject({ kind: 'stale', rank: 0 });
+    // It leads the list, but the coordinator restarts it on its own.
+    expect(view.needsYou).toBe(0);
+  });
+
+  it('reads a task held for a usage window as waiting for quota, not stalled', () => {
+    // The coordinator holds a refused Task until the reset and wakes itself up
+    // then. Its run has ended, so the heartbeat outlives the lease — read as a
+    // stall, the page put a failure badge and "needs you" on a Task that
+    // resumes by itself.
+    const view = buildGoalGraphView(
+      snapshot({
+        events: [event('w1', 'activated', 30)],
+        nodes: [node('w1', { status: 'active', taskId: 'task-1', updatedAt: at(30) })],
+        quotaRetryAt: { w1: at(180) },
+      }),
+      NOW,
+    );
+
+    expect(view.byId.w1).toMatchObject({ isStale: false, quotaRetryAt: at(180) });
+    expect(isRunningNode(view.byId.w1)).toBe(false);
+    expect(view.frontier[0]).toMatchObject({ kind: 'quota', rank: 1 });
+    expect(view.needsYou).toBe(0);
+  });
+
+  it('reads a delivered task as verifying, not lost, while the judgment settles', () => {
+    // A verify-bound task keeps its node `active` with an already-`completed`
+    // topic, so it contributes no heartbeat and the node row goes quiet. The
+    // coordinator deliberately leaves it alone for a full hour; the UI used to
+    // spend that hour showing a failure-coloured "lost" badge over the most
+    // informative moment of the run.
+    const view = buildGoalGraphView(
+      snapshot({
+        deliveredAt: { w1: at(90) },
+        events: [event('w1', 'activated', 30)],
+        nodes: [node('w1', { status: 'active', taskId: 'task-1', updatedAt: at(30) })],
+      }),
+      NOW,
+    );
+
+    expect(view.byId.w1).toMatchObject({ isStale: false, isVerifying: true });
+    // In flight, not something the reader has to deal with.
+    expect(view.frontier[0]).toMatchObject({ kind: 'verifying', rank: 1 });
+    expect(view.needsYou).toBe(0);
+  });
+
+  it('carries the assigned agent onto the task view, and nothing for an unassigned one', () => {
+    const view = buildGoalGraphView(
+      snapshot({
+        assignees: { w1: 'agt_exec' },
+        nodes: [node('w1', { taskId: 'task-1' }), node('w2')],
+      }),
+      NOW,
+    );
+
+    expect(view.byId.w1.assigneeAgentId).toBe('agt_exec');
+    expect(view.byId.w2).not.toHaveProperty('assigneeAgentId');
+  });
+
+  it('never calls a node lost while its own acceptance says it is being judged', () => {
+    // The settle window and the acceptance row are two views of one fact. Read
+    // separately, an aged delivery timestamp put a red "lost" badge on the same
+    // row as a "verifying" chip — a contradiction the reader has no way to
+    // resolve.
+    const view = buildGoalGraphView(
+      snapshot({
+        acceptances: { w1: { id: 'acc-1', status: 'verifying' } },
+        deliveredAt: { w1: at(30) },
+        events: [event('w1', 'activated', 30)],
+        nodes: [node('w1', { status: 'active', taskId: 'task-1', updatedAt: at(30) })],
+      }),
+      NOW,
+    );
+
+    expect(view.byId.w1).toMatchObject({ isStale: false, isVerifying: true });
+  });
+
+  it('stops asking for a sign-off on a retired node', () => {
+    // The node's delivery is discarded; a `delivered` acceptance beside the
+    // "retired" tag asked the owner to confirm work the Goal had dropped.
+    const view = buildGoalGraphView(
+      snapshot({
+        acceptances: {
+          w1: { id: 'acc-1', status: 'delivered' },
+          w2: { id: 'acc-2', status: 'errored' },
+          w3: { id: 'acc-3', status: 'delivered' },
+          w4: { id: 'acc-4', status: 'pending' },
+          w5: { id: 'acc-5', status: 'rejected' },
+          w6: { id: 'acc-6', status: 'verifying' },
+        },
+        events: [
+          event('w1', 'retired', 30),
+          event('w2', 'retired', 30),
+          event('w4', 'retired', 30),
+          event('w5', 'retired', 30),
+          event('w6', 'retired', 30),
+        ],
+        nodes: [
+          node('w1', { status: 'retired', taskId: 'task-1' }),
+          node('w2', { status: 'retired', taskId: 'task-2' }),
+          node('w3', { status: 'active', taskId: 'task-3' }),
+          node('w4', { status: 'retired', taskId: 'task-4' }),
+          node('w5', { status: 'retired', taskId: 'task-5' }),
+          node('w6', { status: 'retired', taskId: 'task-6' }),
+        ],
+      }),
+      NOW,
+    );
+
+    expect(view.byId.w1.acceptance).toEqual({ id: 'acc-1', status: 'closed' });
+    expect(view.byId.w2.acceptance).toEqual({ id: 'acc-2', status: 'closed' });
+    expect(view.byId.w3.acceptance).toEqual({ id: 'acc-3', status: 'delivered' });
+    // Retired before its first round, or after a reject: nothing is coming.
+    expect(view.byId.w4.acceptance).toEqual({ id: 'acc-4', status: 'closed' });
+    expect(view.byId.w5.acceptance).toEqual({ id: 'acc-5', status: 'closed' });
+    // A round still being judged lands first; the server closes it on settle.
+    expect(view.byId.w6.acceptance).toEqual({ id: 'acc-6', status: 'verifying' });
+  });
+
+  it('gives up on a delivery the coordinator itself would no longer wait for', () => {
+    // Past the coordinator's settle grace the verify run really is stuck, and
+    // the honest reading flips back to lost.
+    const view = buildGoalGraphView(
+      snapshot({
+        deliveredAt: { w1: at(30) },
+        events: [event('w1', 'activated', 30)],
+        nodes: [node('w1', { status: 'active', taskId: 'task-1', updatedAt: at(30) })],
+      }),
+      NOW,
+    );
+
+    expect(view.byId.w1).toMatchObject({ isStale: true, isVerifying: false });
+  });
+
+  it('keeps a task running when the run operation heartbeat is fresh despite a quiet node row', () => {
+    // The node row only moves on observations / status changes; a long tool
+    // call or the verify stage keeps the operation lease fresh while the row
+    // goes quiet. That must not read as "lost".
+    const view = buildGoalGraphView(
+      snapshot({
+        events: [event('w1', 'activated', 30)],
+        nodes: [node('w1', { status: 'active', taskId: 'task-1', updatedAt: at(30) })],
+        runHeartbeats: { w1: at(119) },
+      }),
+      NOW,
+    );
+
+    expect(view.byId.w1.isStale).toBe(false);
+    expect(view.byId.w1.heartbeatAt).toEqual(at(119));
+    expect(view.frontier[0]).toMatchObject({ kind: 'running' });
+  });
+
+  it('keeps a fresh active task running, with the current attempt start for the clock', () => {
+    const view = buildGoalGraphView(
+      snapshot({
+        events: [event('w1', 'activated', 115)],
+        nodes: [node('w1', { status: 'active', taskId: 'task-1', updatedAt: at(115) })],
+      }),
+      NOW,
+    );
+
+    expect(view.frontier[0]).toMatchObject({ kind: 'running', rank: 1 });
+    expect(view.byId.w1.startedAt).toEqual(at(115));
+  });
+
+  it.each(['canceled', 'achieved', 'failed'] as const)(
+    'stops calling a task running once its goal is %s',
+    (status) => {
+      const view = buildGoalGraphView(
+        snapshot({
+          events: [event('w1', 'activated', 115)],
+          goal: goal({ status, updatedAt: at(118) }),
+          nodes: [node('w1', { status: 'active', taskId: 'task-1', updatedAt: at(115) })],
+        }),
+        NOW,
+      );
+
+      expect(view.frontier).toHaveLength(0);
+      expect(isRunningNode(view.byId.w1)).toBe(false);
+      expect(view.byId.w1.startedAt).toBeUndefined();
+      expect(view.byId.w1.attempts.at(-1)).toMatchObject({ endedAt: at(118), outcome: 'retired' });
+    },
+  );
+
+  it('closes the parked attempt of a Task waiting at a gate', () => {
+    // The gate is written as an `updated` event, which is not an attempt
+    // boundary — without the node-state fallback the parked Task kept
+    // reporting a running attempt, and the gate case read as still executing.
+    const view = buildGoalGraphView(
+      snapshot({
+        events: [
+          event('w1', 'activated', 5),
+          event('w1', 'updated', 40, 'Task attempt budget was exhausted'),
+        ],
+        nodes: [node('w1', { status: 'waiting', taskId: 'task-1', updatedAt: at(40) })],
+      }),
+      NOW,
+    );
+
+    expect(view.byId.w1.attempts).toMatchObject([
+      { endedAt: at(40), index: 1, outcome: 'failed', reason: 'Task attempt budget was exhausted' },
+    ]);
+    expect(view.byId.w1.startedAt).toBeUndefined();
+  });
+
+  it('tells machine gates apart from judgment and clarification gates by their title', () => {
+    const view = buildGoalGraphView(
+      snapshot({
+        nodes: [
+          node('m', { kind: 'decision', status: 'waiting', title: GOAL_MACHINE_GATE_TITLE }),
+          node('c', { kind: 'decision', status: 'waiting', title: GOAL_CLARIFICATION_TITLE }),
+          node('j', {
+            kind: 'decision',
+            status: 'waiting',
+            title: 'Choose how to recover failed task',
+          }),
+          node('t'),
+        ],
+      }),
+      NOW,
+    );
+    expect(view.byId.m.decisionCategory).toBe('machine');
+    expect(view.byId.c.decisionCategory).toBe('clarification');
+    expect(view.byId.j.decisionCategory).toBe('judgment');
+    expect(view.byId.t.decisionCategory).toBeUndefined();
+  });
+
+  it('surfaces a pending gate and hides the waiting task it was opened for', () => {
+    const decision: GoalGraphDecision = {
+      authority: 'user',
+      canceledAt: null,
+      createdAt: at(50),
+      id: 'dec-1',
+      nodeId: 'd1',
+      options: [
+        { id: 'retry', label: 'Retry task' },
+        { id: 'retire', label: 'Retire task' },
+      ],
+      question: 'Retry or retire?',
+      recommendedOptionId: 'retry',
+      requestedProjectRole: null,
+      requestedUserId: 'user-1',
+      resolution: null,
+      resolvedAt: null,
+      resolvedByAgentId: null,
+      resolvedByUserId: null,
+      resolvedOptionId: null,
+      status: 'pending',
+      updatedAt: at(50),
+    };
+    const view = buildGoalGraphView(
+      snapshot({
+        decisions: [decision],
+        edges: [edge('w1', 'd1', 'leads_to')],
+        nodes: [
+          node('w1', { status: 'waiting' }),
+          node('d1', { kind: 'decision', status: 'waiting' }),
+        ],
+      }),
+      NOW,
+    );
+
+    expect(view.frontier.map((item) => [item.view.node.id, item.kind])).toEqual([['d1', 'gate']]);
+    expect(view.byId.d1.decision?.id).toBe('dec-1');
+    // The gate's case is the failed Task's ledger, not the decision node's own.
+    expect(view.byId.d1.gateSubjectId).toBe('w1');
+  });
+
+  it.each(['canceled', 'achieved'] as const)(
+    'offers no gate to answer once the goal is %s',
+    (status) => {
+      // The server refuses every answer on an ended goal until it is reopened.
+      const view = buildGoalGraphView(
+        snapshot({
+          decisions: [
+            {
+              authority: 'user',
+              canceledAt: null,
+              createdAt: at(50),
+              id: 'dec-1',
+              nodeId: 'd1',
+              options: [{ id: 'retry', label: 'Retry task' }],
+              question: 'Retry?',
+              recommendedOptionId: 'retry',
+              requestedProjectRole: null,
+              requestedUserId: 'user-1',
+              resolution: null,
+              resolvedAt: null,
+              resolvedByAgentId: null,
+              resolvedByUserId: null,
+              resolvedOptionId: null,
+              status: 'pending',
+              updatedAt: at(50),
+            },
+          ],
+          edges: [edge('w1', 'd1', 'leads_to')],
+          goal: goal({ status }),
+          nodes: [
+            node('w1', { status: 'waiting' }),
+            node('d1', { kind: 'decision', status: 'waiting' }),
+          ],
+        }),
+        NOW,
+      );
+
+      expect(view.frontier).toHaveLength(0);
+      expect(view.needsYou).toBe(0);
+    },
+  );
+
+  it('links a finding to the task that produced it and the problem it answers', () => {
+    const view = buildGoalGraphView(
+      snapshot({
+        edges: [edge('w1', 'f1', 'produces'), edge('f1', 'p1', 'supports')],
+        nodes: [
+          node('p1', { kind: 'problem' }),
+          node('w1', { resolvedAt: at(40), status: 'resolved' }),
+          node('f1', { kind: 'finding', status: 'resolved' }),
+        ],
+      }),
+      NOW,
+    );
+
+    expect(view.byId.f1.producedBy?.id).toBe('w1');
+    expect(view.byId.f1.answers.map((n) => n.id)).toEqual(['p1']);
+    expect(view.byId.w1.findings.map((n) => n.id)).toEqual(['f1']);
+  });
+
+  it('keeps only the most recent finished tasks, shown in task numbering ahead of live rows', () => {
+    // w2 finished AFTER w3: recency picks which rows stay (w1 drops), but the
+    // list still reads #2 then #3 — not "most recently finished first".
+    const view = buildGoalGraphView(
+      snapshot({
+        nodes: [
+          node('w1', { resolvedAt: at(10), status: 'resolved' }),
+          node('w2', { resolvedAt: at(30), status: 'resolved' }),
+          node('w3', { resolvedAt: at(20), status: 'resolved' }),
+          node('w4'),
+        ],
+      }),
+      NOW,
+    );
+
+    expect(view.frontier.map((item) => item.view.node.id)).toEqual(['w2', 'w3', 'w4']);
+    expect(view.advanceable).toBe(1);
+  });
+
+  it("names a node's deliverables newest first, and rolls them up for the goal", () => {
+    const view = buildGoalGraphView(
+      snapshot({
+        nodes: [node('w1')],
+        workVersions: [
+          {
+            createdAt: at(5),
+            id: 'l1',
+            nodeId: 'w1',
+            relation: 'produced',
+            work: {
+              agentDocumentId: 'docs_1',
+              identifier: null,
+              resourceId: null,
+              status: null,
+              title: 'Report',
+              type: 'document',
+              url: null,
+              workId: 'wk1',
+            },
+            workVersionId: 'v1',
+          },
+          {
+            createdAt: at(9),
+            id: 'l2',
+            nodeId: 'w1',
+            relation: 'produced',
+            work: {
+              identifier: 'ENG-1',
+              resourceId: 'lobehub/lobehub#1',
+              status: 'open',
+              title: 'Issue',
+              type: 'external',
+              url: 'https://example.com/1',
+              workId: 'wk2',
+            },
+            workVersionId: 'v2',
+          },
+        ],
+      }),
+      NOW,
+    );
+
+    expect(view.byId.w1.artifacts.map((a) => a.title)).toEqual(['Issue', 'Report']);
+    expect(view.artifacts.map((a) => a.workId)).toEqual(['wk2', 'wk1']);
+  });
+
+  it('addresses a document deliverable by its document id, not the binding id', () => {
+    // The document route resolves the DOCUMENT id. Carrying only
+    // `agentDocumentId` — the agent-document binding row — sent the user to the
+    // documents index instead of the document they asked for.
+    const view = buildGoalGraphView(
+      snapshot({
+        nodes: [node('w1')],
+        workVersions: [
+          {
+            createdAt: at(5),
+            id: 'l1',
+            nodeId: 'w1',
+            relation: 'produced',
+            work: {
+              agentDocumentId: 'a719df25-40c8-4b1c-a24d-6d38cedef82b',
+              identifier: null,
+              resourceId: 'docs_NRoMGzwytmhHCLSt',
+              status: null,
+              title: 'Issue pain-point analysis report',
+              type: 'document',
+              url: null,
+              workId: 'wk1',
+            },
+            workVersionId: 'v1',
+          },
+        ],
+      }),
+      NOW,
+    );
+
+    expect(view.artifacts[0]).toMatchObject({
+      agentDocumentId: 'a719df25-40c8-4b1c-a24d-6d38cedef82b',
+      resourceId: 'docs_NRoMGzwytmhHCLSt',
+    });
+  });
+
+  /**
+   * Regression: the wrap-up report is registered as a `goal_report` Work
+   * produced by the wrap-up node, and surfaced as one more deliverable — in the
+   * 交付物 list and as a step of the derived 探索过程. It describes the result;
+   * the page reads it from `report`.
+   */
+  it('keeps the goal report out of the deliverables', () => {
+    const work = (type: 'document' | 'goal_report', id: string) => ({
+      identifier: null,
+      resourceId: type === 'document' ? 'docs_1' : null,
+      status: null,
+      title: id,
+      type,
+      url: null,
+      workId: `wk-${id}`,
+    });
+    const view = buildGoalGraphView(
+      snapshot({
+        nodes: [node('w1'), node('wrap')],
+        workVersions: [
+          {
+            createdAt: at(5),
+            id: 'l1',
+            nodeId: 'w1',
+            relation: 'produced',
+            work: work('document', 'deliverable'),
+            workVersionId: 'v1',
+          },
+          {
+            createdAt: at(6),
+            id: 'l2',
+            nodeId: 'wrap',
+            relation: 'produced',
+            work: work('goal_report', 'report'),
+            workVersionId: 'v2',
+          },
+        ],
+      }),
+      NOW,
+    );
+
+    expect(view.artifacts.map((artifact) => artifact.workVersionId)).toEqual(['v1']);
+    expect(view.byId.wrap.artifacts).toEqual([]);
+  });
+
+  it('narrows a view to a set of nodes with only the edges inside it', () => {
+    const view = buildGoalGraphView(
+      snapshot({
+        edges: [edge('w2', 'w1', 'depends_on'), edge('w3', 'w2', 'depends_on')],
+        nodes: [node('w1'), node('w2'), node('w3')],
+      }),
+      NOW,
+    );
+    const scoped = scopeGraphView(view, new Set(['w1', 'w2']));
+
+    expect(scoped.nodes.map((item) => item.node.id)).toEqual(['w1', 'w2']);
+    expect(scoped.edges.map((item) => item.id)).toEqual(['w2-w1-depends_on']);
+    expect(scoped.frontier.every((item) => item.view.node.id !== 'w3')).toBe(true);
+  });
+
+  it('opens a generated file at the url its version metadata carries', () => {
+    const view = buildGoalGraphView(
+      snapshot({
+        nodes: [node('w1')],
+        workVersions: [
+          {
+            createdAt: at(5),
+            id: 'l1',
+            nodeId: 'w1',
+            relation: 'produced',
+            // A file Work keeps its target in the version metadata, so the
+            // `url` column is null and the row would otherwise not open.
+            work: {
+              fileUrl: 'https://cdn.example.com/deck.pptx',
+              identifier: null,
+              resourceId: null,
+              status: null,
+              title: 'deck.pptx',
+              type: 'file',
+              url: null,
+              workId: 'wk1',
+            },
+            workVersionId: 'v1',
+          },
+        ],
+      }),
+      NOW,
+    );
+
+    expect(view.artifacts).toMatchObject([
+      { title: 'deck.pptx', type: 'file', url: 'https://cdn.example.com/deck.pptx' },
+    ]);
+  });
+
+  it('leaves the responsible task Work and unresolvable links out of the deliverables', () => {
+    const view = buildGoalGraphView(
+      snapshot({
+        nodes: [node('w1')],
+        workVersions: [
+          {
+            createdAt: at(5),
+            id: 'l1',
+            nodeId: 'w1',
+            relation: 'produced',
+            // The execution container the coordinator links on dispatch — it
+            // would otherwise head every task's list with the task itself.
+            work: {
+              identifier: 'T-1',
+              resourceId: 'task_1',
+              status: 'completed',
+              title: 'Build the thing',
+              type: 'task',
+              url: null,
+              workId: 'wk1',
+            },
+            workVersionId: 'v1',
+          },
+          // Nothing to name the link with — the version row is gone, or the
+          // Work belongs to another member and the read-time ownership guard
+          // refused to hydrate it. Either way the link still counts.
+          { createdAt: at(9), id: 'l2', nodeId: 'w1', relation: 'produced', workVersionId: 'v2' },
+        ],
+      }),
+      NOW,
+    );
+
+    expect(view.byId.w1.artifacts).toEqual([]);
+    expect(view.artifacts).toEqual([]);
+  });
+});
+
+describe('isTroubledTaskNode', () => {
+  // A healthy Task opens on its result surface; a broken one has no result
+  // worth reviewing, so the drill-down goes to the original Task instead.
+  it('flags a task that lost its heartbeat', () => {
+    const view = buildGoalGraphView(
+      snapshot({ nodes: [node('w1', { status: 'active', updatedAt: at(0) })] }),
+      NOW,
+    );
+
+    expect(view.byId.w1.isStale).toBe(true);
+    expect(isTroubledTaskNode(view.byId.w1)).toBe(true);
+  });
+
+  it('flags a task whose latest attempt failed', () => {
+    const view = buildGoalGraphView(
+      snapshot({
+        events: [event('w1', 'activated', 100), event('w1', 'rejected', 110)],
+        nodes: [node('w1', { status: 'rejected', updatedAt: at(110) })],
+      }),
+      NOW,
+    );
+
+    expect(isTroubledTaskNode(view.byId.w1)).toBe(true);
+  });
+
+  it('leaves a healthy running task alone', () => {
+    const view = buildGoalGraphView(
+      snapshot({
+        events: [event('w1', 'activated', 110)],
+        nodes: [node('w1', { status: 'active', updatedAt: at(115) })],
+      }),
+      NOW,
+    );
+
+    expect(view.byId.w1.isStale).toBe(false);
+    expect(isTroubledTaskNode(view.byId.w1)).toBe(false);
+  });
+
+  it('leaves a finished task alone — its result is the thing to read', () => {
+    const view = buildGoalGraphView(
+      snapshot({
+        events: [event('w1', 'activated', 100), event('w1', 'resolved', 110)],
+        nodes: [node('w1', { resolvedAt: at(110), status: 'resolved', updatedAt: at(110) })],
+      }),
+      NOW,
+    );
+
+    expect(isTroubledTaskNode(view.byId.w1)).toBe(false);
+  });
+
+  it('is not a judgement about non-task nodes', () => {
+    const view = buildGoalGraphView(
+      snapshot({ nodes: [node('p1', { kind: 'problem', status: 'active', updatedAt: at(0) })] }),
+      NOW,
+    );
+
+    expect(isTroubledTaskNode(view.byId.p1)).toBe(false);
+  });
+});
+
+describe('isRunningNode', () => {
+  it('reads an active task as running', () => {
+    const view = buildGoalGraphView(
+      snapshot({
+        events: [event('w1', 'activated', 110)],
+        nodes: [node('w1', { status: 'active', updatedAt: at(115) })],
+      }),
+      NOW,
+    );
+
+    expect(isRunningNode(view.byId.w1)).toBe(true);
+  });
+
+  // An open question is not work in flight — the card already says it is
+  // unanswered, and a running chip there promises activity nobody is doing.
+  it('never reads a question as running', () => {
+    const view = buildGoalGraphView(
+      snapshot({ nodes: [node('p1', { kind: 'problem', status: 'active', updatedAt: at(115) })] }),
+      NOW,
+    );
+
+    expect(isRunningNode(view.byId.p1)).toBe(false);
+  });
+
+  it('does not read a stale task as running', () => {
+    const view = buildGoalGraphView(
+      snapshot({ nodes: [node('w1', { status: 'active', updatedAt: at(0) })] }),
+      NOW,
+    );
+
+    expect(isRunningNode(view.byId.w1)).toBe(false);
+  });
+});
+
+describe('hasReviewableResult', () => {
+  // The graph drill-down routes on this: only a Task with a delivery to read
+  // opens the result surface; everything else opens the original Task detail.
+  it('keeps a healthy running task on the detail surface — its result panel would be empty', () => {
+    const view = buildGoalGraphView(
+      snapshot({
+        events: [event('w1', 'activated', 110)],
+        nodes: [node('w1', { status: 'active', taskId: 'task-1', updatedAt: at(115) })],
+      }),
+      NOW,
+    );
+
+    expect(view.byId.w1.isStale).toBe(false);
+    expect(hasReviewableResult(view.byId.w1)).toBe(false);
+  });
+
+  it('keeps an undispatched task on the detail surface', () => {
+    const view = buildGoalGraphView(
+      snapshot({ nodes: [node('w1', { status: 'proposed', taskId: 'task-1' })] }),
+      NOW,
+    );
+
+    expect(hasReviewableResult(view.byId.w1)).toBe(false);
+  });
+
+  it('opens the result surface once the task settled', () => {
+    const view = buildGoalGraphView(
+      snapshot({
+        events: [event('w1', 'activated', 100), event('w1', 'resolved', 110)],
+        nodes: [
+          node('w1', {
+            resolvedAt: at(110),
+            status: 'resolved',
+            taskId: 'task-1',
+            updatedAt: at(110),
+          }),
+        ],
+      }),
+      NOW,
+    );
+
+    expect(hasReviewableResult(view.byId.w1)).toBe(true);
+  });
+
+  it('opens the result surface while a delivery is being judged — the acceptance lives there', () => {
+    const view = buildGoalGraphView(
+      snapshot({
+        acceptances: { w1: { id: 'acc-1', status: 'verifying' } },
+        deliveredAt: { w1: at(30) },
+        events: [event('w1', 'activated', 30)],
+        nodes: [node('w1', { status: 'active', taskId: 'task-1', updatedAt: at(30) })],
+      }),
+      NOW,
+    );
+
+    expect(view.byId.w1.isVerifying).toBe(true);
+    expect(hasReviewableResult(view.byId.w1)).toBe(true);
+  });
+
+  it('never opens the result surface on a troubled task, even a stale delivered one', () => {
+    const view = buildGoalGraphView(
+      snapshot({
+        events: [event('w1', 'activated', 30)],
+        nodes: [node('w1', { status: 'active', taskId: 'task-1', updatedAt: at(0) })],
+      }),
+      NOW,
+    );
+
+    expect(view.byId.w1.isStale).toBe(true);
+    expect(hasReviewableResult(view.byId.w1)).toBe(false);
+  });
+});
+
+describe('experiment navigation', () => {
+  it('keeps historical branching separate from dependencies and excludes terminal acceptance', () => {
+    const view = buildGoalGraphView(
+      snapshot({
+        goal: goal({ config: { exploration: { instruction: 'Compare', maxExperiments: 3 } } }),
+        nodes: [
+          node('first', { kind: 'experiment' }),
+          node('second', { kind: 'experiment' }),
+          node('third', { kind: 'experiment' }),
+          node('acceptance', { title: GOAL_ACCEPTANCE_TASK_TITLE }),
+        ],
+        edges: [
+          edge('second', 'first', 'derived_from'),
+          edge('third', 'first', 'derived_from'),
+          edge('third', 'second', 'depends_on'),
+        ],
+      }),
+      NOW,
+    );
+    expect(experimentRelations(view, 'third').parents.map((v) => v.node.id)).toEqual(['first']);
+    expect(experimentRelations(view, 'first').children.map((v) => v.node.id)).toEqual([
+      'second',
+      'third',
+    ]);
+    expect(graphNodeKind(view, view.byId.first)).toBe('experiment');
+    expect(graphNodeKind(view, view.byId.acceptance)).toBe('task');
+    expect(isExperiment(view, view.byId.acceptance)).toBe(false);
+    expect(view.nodes.filter((v) => isExperiment(view, v))).toHaveLength(3);
+  });
+  it('does not reclassify ordinary Goal tasks as experiments', () => {
+    const view = buildGoalGraphView(snapshot({ nodes: [node('task')] }), NOW);
+    expect(graphNodeKind(view, view.byId.task)).toBe('task');
+    expect(isExperiment(view, view.byId.task)).toBe(false);
+  });
+});

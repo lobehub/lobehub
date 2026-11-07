@@ -1,42 +1,27 @@
 import { encode } from 'gpt-tokenizer';
 
 import type { ExecutionSnapshot, SnapshotSummary, StepSnapshot } from '../types';
+import { resolveContextEngineSteps } from '../utils/contextEngine';
 import { reconstructMessages } from '../utils/reconstruct';
 
 export { analyzeAgentSignal, renderAgentSignal } from './agentSignal';
 
 /**
- * Resolve the Context Engine snapshot for a step, reconstructing missing `input`/`output`
- * fields by walking back through previous steps (delta format).
- * Returns undefined if CE did not run for this step.
+ * Resolve the Context Engine snapshot for a step: pooled refs are looked up and fields
+ * omitted by the changed-fields format are taken from earlier steps. Pass `allSteps` for
+ * anything but a self-contained step. Returns undefined if CE did not run for this step.
  *
- * Supports both the new `contextEngine` field format and the legacy `context_engine_result`
- * event format for backward compatibility with older snapshots.
+ * Supports both the `contextEngine` field and the legacy `context_engine_result` event
+ * format of older snapshots.
  */
 export function resolveCeSnapshot(
   step: StepSnapshot,
   allSteps?: StepSnapshot[],
 ): Record<string, unknown> | undefined {
-  // New format: contextEngine typed field
   if (step.contextEngine !== undefined) {
-    let resolvedInput = step.contextEngine.input;
-    let resolvedOutput = step.contextEngine.output;
-
-    if (allSteps && (resolvedInput === undefined || resolvedOutput === undefined)) {
-      for (let i = step.stepIndex - 1; i >= 0; i--) {
-        const prevStep = allSteps.find((s) => s.stepIndex === i);
-        if (!prevStep?.contextEngine) continue;
-        if (resolvedInput === undefined && prevStep.contextEngine.input !== undefined) {
-          resolvedInput = prevStep.contextEngine.input;
-        }
-        if (resolvedOutput === undefined && prevStep.contextEngine.output !== undefined) {
-          resolvedOutput = prevStep.contextEngine.output;
-        }
-        if (resolvedInput !== undefined && resolvedOutput !== undefined) break;
-      }
-    }
-
-    return { input: resolvedInput, output: resolvedOutput };
+    const steps = allSteps?.includes(step) ? allSteps : [...(allSteps ?? []), step];
+    const { input, metadata, output } = resolveContextEngineSteps(steps).get(step) ?? {};
+    return { input, metadata, output };
   }
 
   // Legacy format: context_engine_result stored in events array
@@ -358,6 +343,26 @@ function renderMessageList(lines: string[], messages: any[], maxContentLen: numb
   }
 }
 
+/**
+ * `total (device Xms + transport Yms)` for a device-dispatched call.
+ *
+ * The split is the whole point of recording both clocks: it says how much of a
+ * device tool call was actual work and how much was getting there and back.
+ * Falls back to the total alone when the device reported nothing.
+ */
+function renderToolTiming(tool: NonNullable<StepSnapshot['toolsResult']>[number]): string {
+  const { deviceExecutionTimeMs, executionTimeMs } = tool;
+  if (executionTimeMs === undefined) return '';
+  if (deviceExecutionTimeMs === undefined) return dim(`  ${formatMs(executionTimeMs)}`);
+
+  const transport = Math.max(0, executionTimeMs - deviceExecutionTimeMs);
+
+  return dim(
+    `  ${formatMs(executionTimeMs)}` +
+      ` (device ${formatMs(deviceExecutionTimeMs)} + transport ${formatMs(transport)})`,
+  );
+}
+
 function renderToolStep(lines: string[], step: StepSnapshot, prefix: string): void {
   if (step.toolsResult) {
     for (let i = 0; i < step.toolsResult.length; i++) {
@@ -366,7 +371,7 @@ function renderToolStep(lines: string[], step: StepSnapshot, prefix: string): vo
       const connector = isLast ? '└─' : '├─';
       const status = tool.isSuccess === false ? red('✗') : green('✓');
       const name = tool.identifier || tool.apiName;
-      lines.push(`${prefix}${dim(connector)} Tool  ${name}  ${status}`);
+      lines.push(`${prefix}${dim(connector)} Tool  ${name}  ${status}${renderToolTiming(tool)}`);
     }
   }
 }

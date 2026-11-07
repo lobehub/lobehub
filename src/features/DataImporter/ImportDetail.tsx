@@ -1,12 +1,19 @@
 'use client';
 
-import { Button, Flexbox, Modal, Text } from '@lobehub/ui';
-import { Table } from 'antd';
-import { createStaticStyles } from 'antd-style';
+import {
+  Button,
+  createStaticStyles,
+  Flexbox,
+  ModalFooter,
+  Table,
+  type TableColumn,
+  Text,
+} from '@lobehub/ui';
 import { Info } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import ImperativeModal from '@/components/ImperativeModal';
 import { type ImportPgDataStructure } from '@/types/export';
 
 const getNonEmptyTables = (data: ImportPgDataStructure) => {
@@ -101,7 +108,7 @@ const ImportPreviewModal = ({
   const totalRecords = getTotalRecords(tables);
 
   // Table column definitions
-  const columns = [
+  const columns: TableColumn<{ count: number; name: string }>[] = [
     {
       dataIndex: 'name',
       key: 'name',
@@ -121,24 +128,25 @@ const ImportPreviewModal = ({
   };
 
   return (
-    <Modal
+    <ImperativeModal
       open={open}
       title={t('importPreview.title')}
       width={700}
-      footer={[
-        <Button
-          key="cancel"
-          onClick={() => {
-            onOpenChange(false);
-            onCancel();
-          }}
-        >
-          {t('cancel')}
-        </Button>,
-        <Button key="confirm" type="primary" onClick={handleConfirm}>
-          {t('importPreview.confirmImport')}
-        </Button>,
-      ]}
+      footer={
+        <ModalFooter>
+          <Button
+            onClick={() => {
+              onOpenChange(false);
+              onCancel();
+            }}
+          >
+            {t('cancel')}
+          </Button>
+          <Button type="primary" onClick={handleConfirm}>
+            {t('importPreview.confirmImport')}
+          </Button>
+        </ModalFooter>
+      }
       onCancel={() => onOpenChange(false)}
     >
       <div className={styles.modalContent}>
@@ -172,7 +180,7 @@ const ImportPreviewModal = ({
           </div>
         </Flexbox>
       </div>
-    </Modal>
+    </ImperativeModal>
   );
 };
 

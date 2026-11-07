@@ -1,0 +1,200 @@
+import { cleanup, render, screen, within } from '@testing-library/react';
+import { type ReactNode } from 'react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import { initServerConfigStore, Provider } from '@/store/serverConfig/store';
+import { useUserStore } from '@/store/user';
+
+import { LAB_FEATURES } from './features';
+import Page from './index';
+
+vi.hoisted(() => {
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: {
+      getItem: vi.fn(() => null),
+      removeItem: vi.fn(),
+      setItem: vi.fn(),
+    },
+  });
+});
+
+vi.mock('@lobechat/const', async (importOriginal) => ({
+  ...(await importOriginal()),
+  isDesktop: true,
+}));
+
+vi.mock('@lobehub/ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  Tooltip: ({ children, title }: { children: ReactNode; title: string }) => (
+    <span title={title}>{children}</span>
+  ),
+}));
+
+vi.mock('@/features/Settings/features/SettingHeader', () => ({
+  default: ({ description, title }: { description?: string; title: string }) => (
+    <header>
+      <h1>{title}</h1>
+      {description}
+    </header>
+  ),
+}));
+
+const createWrapper = (enableWorkspace = false) => {
+  const Wrapper = ({ children }: { children: ReactNode }) => (
+    <Provider
+      createStore={() =>
+        initServerConfigStore(
+          enableWorkspace
+            ? {
+                featureFlags: { enableWorkspace: true } as any,
+                serverConfig: { enableBusinessFeatures: true } as any,
+              }
+            : {},
+        )
+      }
+    >
+      {children}
+    </Provider>
+  );
+
+  return Wrapper;
+};
+
+const initialUserStoreState = useUserStore.getState();
+
+const renderPage = (options: { enableWorkspace?: boolean } = {}) => {
+  useUserStore.setState({
+    isUserStateInit: true,
+    updateLab: vi.fn(),
+  });
+
+  return render(<Page />, { wrapper: createWrapper(options.enableWorkspace) });
+};
+
+afterEach(() => {
+  cleanup();
+  useUserStore.setState(initialUserStoreState, true);
+});
+
+describe('Labs settings page', () => {
+  it('explains that Labs features are experimental in a banner, not the header subtitle', () => {
+    renderPage();
+
+    // The page title comes from the settings shell header (like Plans / Storage),
+    // so the experimental notice has to carry itself as a standalone banner.
+    expect(screen.getByRole('alert').textContent).toBe('description');
+  });
+
+  it('hides its own setting header when the shell renders a compact one', () => {
+    useUserStore.setState({ isUserStateInit: true, updateLab: vi.fn() });
+    render(<Page showSettingHeader={false} />, { wrapper: createWrapper() });
+
+    expect(screen.queryByRole('heading', { level: 1 })).toBeNull();
+    expect(screen.getByRole('alert').textContent).toBe('description');
+  });
+
+  it('splits experiments into General and Desktop groups', () => {
+    renderPage();
+
+    expect(screen.getByText('group.general')).toBeDefined();
+    // Desktop group only renders in the Electron shell (isDesktop mocked true).
+    expect(screen.getByText('group.desktop')).toBeDefined();
+  });
+
+  it('renders the message text selection actions lab toggle', () => {
+    renderPage();
+
+    expect(screen.getByText('features.messageTextSelectionActions.title')).toBeDefined();
+  });
+
+  it('renders the desktop split view as an alpha lab toggle', () => {
+    renderPage();
+
+    const splitView = screen.getByText('features.desktopSplitView.title');
+    expect(within(splitView).getByText('stage.alpha.label')).toBeDefined();
+  });
+
+  it('puts the self-evolving usage note on its own line below the description', () => {
+    renderPage();
+
+    const desc = screen.getByText('features.selfLearning.desc');
+    const note = screen.getByText('features.selfLearning.note');
+    expect(note).not.toBe(desc);
+    expect(desc.nextElementSibling).toBe(note);
+  });
+
+  it('renders the OAuth Apps lab toggle', () => {
+    renderPage();
+
+    expect(screen.getByText('features.oauthApps.title')).toBeDefined();
+  });
+
+  it('does not render released Integrations as a lab toggle', () => {
+    renderPage();
+
+    expect(screen.queryByText('features.integrations.title')).toBeNull();
+  });
+
+  it('renders the topic acceptance (tray) lab toggle', () => {
+    renderPage();
+
+    expect(screen.getByText('features.goals.title')).toBeDefined();
+  });
+
+  it('does not render released task verify as a lab toggle', () => {
+    renderPage();
+
+    expect(screen.queryByText('features.taskVerify.title')).toBeNull();
+  });
+
+  it('does not render the released in-app browser as a lab toggle', () => {
+    renderPage();
+
+    expect(screen.queryByText('features.inAppBrowser.title')).toBeNull();
+  });
+
+  it('does not render the released agent provider binding as a lab toggle', () => {
+    renderPage();
+
+    expect(screen.queryByText('features.agentProviderBinding.title')).toBeNull();
+  });
+
+  it('labels every experiment with a maturity stage tag', () => {
+    renderPage();
+
+    const alphaTags = screen.getAllByText('stage.alpha.label');
+    const betaTags = screen.getAllByText('stage.beta.label');
+    // Every toggle carries exactly one stage tag — counted against the registry
+    // rather than a literal, so adding an experiment does not fail this test for
+    // the wrong reason.
+    expect(alphaTags.length + betaTags.length).toBe(
+      LAB_FEATURES.filter((feature) => !feature.workspaceOnly).length,
+    );
+  });
+
+  it('does not render an empty workspace group', () => {
+    renderPage({ enableWorkspace: true });
+    expect(screen.queryByText('group.workspace')).toBeNull();
+  });
+
+  it('marks internal-testing experiments as alpha and usable ones as beta', () => {
+    renderPage();
+
+    const claudeCodeSdk = screen.getByText('features.claudeCodeSdk.title');
+    expect(within(claudeCodeSdk).getByText('stage.alpha.label')).toBeDefined();
+
+    const goals = screen.getByText('features.goals.title');
+    expect(within(goals).getByText('stage.beta.label')).toBeDefined();
+  });
+
+  it('explains what each stage means via the tag tooltip', () => {
+    renderPage();
+
+    const alphaTag = screen.getAllByText('stage.alpha.label')[0];
+    expect(alphaTag.closest('[title="stage.alpha.desc"]')).not.toBeNull();
+
+    const betaTag = screen.getAllByText('stage.beta.label')[0];
+    expect(betaTag.closest('[title="stage.beta.desc"]')).not.toBeNull();
+  });
+});

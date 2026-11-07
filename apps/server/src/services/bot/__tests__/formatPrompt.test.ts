@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import { formatPrompt, formatReferencedMessage } from '../formatPrompt';
+import { buildBotSender, formatPrompt, formatReferencedMessage } from '../formatPrompt';
+import { SOURCE_MESSAGES_FIELD } from '../mergeMessages';
 
 describe('formatReferencedMessage', () => {
   it('should return undefined when raw is undefined', () => {
@@ -79,6 +80,33 @@ describe('formatPrompt', () => {
 
   const discordSanitize = (text: string) => text.replaceAll(/<@!?bot123>\s*/g, '').trim();
 
+  it('includes a quote carried by an earlier source of a merged turn', () => {
+    const quotedEarlier = {
+      ...baseMessage,
+      raw: { referenced_message: { author: { username: 'Alice' }, content: 'q.pdf' } },
+      text: 'see this',
+    };
+    const last = { ...baseMessage, raw: {}, text: '@bot file it' };
+    const merged = {
+      ...last,
+      [SOURCE_MESSAGES_FIELD]: [quotedEarlier, last],
+      text: 'see this\n@bot file it',
+    };
+
+    expect(formatPrompt(merged)).toContain(
+      '<referenced_message sender="Alice">q.pdf</referenced_message>',
+    );
+  });
+
+  it('lists a quote shared by several merged sources only once', () => {
+    const raw = { referenced_message: { author: { username: 'Alice' }, content: 'same' } };
+    const first = { ...baseMessage, raw, text: 'a' };
+    const second = { ...baseMessage, raw, text: 'b' };
+    const merged = { ...second, [SOURCE_MESSAGES_FIELD]: [first, second], text: 'a\nb' };
+
+    expect(formatPrompt(merged).match(/<referenced_message/g)).toHaveLength(1);
+  });
+
   it('should format basic message with speaker tag', () => {
     const result = formatPrompt(baseMessage);
 
@@ -102,6 +130,39 @@ describe('formatPrompt', () => {
 
     expect(result).toContain('hello world');
     expect(result).not.toContain('<@!bot123>');
+  });
+
+  it('should pass the message to sanitizeUserInput so platforms can resolve mentions', () => {
+    const msg = { ...baseMessage, raw: { mentions: [] }, text: '<@bot123> hi <@other>' };
+    const sanitize = vi.fn((text: string) => text.replace('<@other>', '@Other'));
+    const result = formatPrompt(msg, { sanitizeUserInput: sanitize });
+
+    expect(sanitize).toHaveBeenCalledWith('<@bot123> hi <@other>', msg);
+    expect(result).toContain('hi @Other');
+  });
+
+  it('should resolve mentions inside the referenced message without stripping them', () => {
+    const msg = {
+      ...baseMessage,
+      raw: {
+        referenced_message: {
+          author: { global_name: 'Bob', username: 'bob' },
+          content: '<@bot123> can <@other> do this?',
+        },
+      },
+      text: '<@bot123> yes',
+    };
+    const resolveMentions = vi.fn((text: string) =>
+      text.replace('<@bot123>', '@Bot').replace('<@other>', '@Other'),
+    );
+    const result = formatPrompt(msg, { resolveMentions, sanitizeUserInput: discordSanitize });
+
+    expect(resolveMentions).toHaveBeenCalledWith('<@bot123> can <@other> do this?', msg);
+    expect(result).toContain(
+      '<referenced_message sender="Bob">@Bot can @Other do this?</referenced_message>',
+    );
+    expect(result).toContain('yes');
+    expect(result).not.toContain('<@bot123> yes');
   });
 
   it('should not strip mentions when no sanitizeUserInput provided', () => {
@@ -180,5 +241,100 @@ describe('formatPrompt', () => {
     const result = formatPrompt(baseMessage);
 
     expect(result).toContain('nickname="Test User"');
+  });
+
+  it('should prepend Telegram reply_to_message as referenced_message', () => {
+    const msg = {
+      ...baseMessage,
+      raw: {
+        reply_to_message: {
+          from: { first_name: 'Dana', username: 'dana' },
+          text: 'please translate this',
+        },
+      },
+      text: '@bot 翻译',
+    };
+    const result = formatPrompt(msg);
+
+    expect(result).toContain(
+      '<referenced_message sender="Dana">please translate this</referenced_message>',
+    );
+    expect(result).toContain('@bot 翻译');
+  });
+
+  it('should use Telegram reply_to_message caption when text is empty', () => {
+    expect(
+      formatReferencedMessage({
+        reply_to_message: { caption: 'photo caption', from: { username: 'eve' } },
+      }),
+    ).toBe('<referenced_message sender="eve">photo caption</referenced_message>');
+  });
+
+  it('should include both the full Telegram reply and the selected quote', () => {
+    expect(
+      formatReferencedMessage({
+        quote: { text: 'selected fragment' },
+        reply_to_message: {
+          from: { first_name: 'Dana' },
+          text: 'full original message',
+        },
+      }),
+    ).toBe(
+      '<referenced_message sender="Dana"><full_message>full original message</full_message>\n<selected_quote>selected fragment</selected_quote></referenced_message>',
+    );
+  });
+
+  it('should preserve a selected Telegram quote when reply_to_message is omitted', () => {
+    expect(formatReferencedMessage({ quote: { text: 'selected fragment' } })).toBe(
+      '<referenced_message sender="unknown"><selected_quote>selected fragment</selected_quote></referenced_message>',
+    );
+  });
+});
+
+describe('buildBotSender', () => {
+  it('keeps a Feishu sender as name only, dropping the duplicated username', () => {
+    expect(
+      buildBotSender(
+        { author: { fullName: '文彬', userId: 'ou_1', userName: '文彬' }, raw: {} },
+        'feishu',
+      ),
+    ).toEqual({
+      avatar: undefined,
+      fullName: '文彬',
+      id: 'ou_1',
+      platform: 'feishu',
+      username: undefined,
+    });
+  });
+
+  it('resolves a Discord avatar hash and prefers global_name', () => {
+    expect(
+      buildBotSender(
+        {
+          author: { fullName: 'john', userId: '123', userName: 'john' },
+          raw: { author: { avatar: 'a_hash', global_name: 'John Doe' } },
+        },
+        'discord',
+      ),
+    ).toEqual({
+      avatar: 'https://cdn.discordapp.com/avatars/123/a_hash.gif',
+      fullName: 'John Doe',
+      id: '123',
+      platform: 'discord',
+      username: 'john',
+    });
+  });
+
+  it('passes an absolute avatar url through and drops an opaque one', () => {
+    expect(
+      buildBotSender(
+        { author: { userId: 'u1' }, raw: { author: { avatar: 'https://x/a.png' } } },
+        'slack',
+      ).avatar,
+    ).toBe('https://x/a.png');
+    expect(
+      buildBotSender({ author: { userId: 'u1' }, raw: { author: { avatar: 'hash' } } }, 'slack')
+        .avatar,
+    ).toBeUndefined();
   });
 });

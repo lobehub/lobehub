@@ -1,5 +1,4 @@
-import { Flexbox, Tag, Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar, Flexbox, Tag, Text } from '@lobehub/ui';
 import { memo, type ReactNode } from 'react';
 
 const styles = createStaticStyles(({ css }) => ({

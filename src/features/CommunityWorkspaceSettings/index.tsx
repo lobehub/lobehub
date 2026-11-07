@@ -2,22 +2,24 @@
 
 import { OFFICIAL_URL } from '@lobechat/const';
 import {
-  Avatar,
-  Block,
   Button,
   Center,
+  cssVar,
   Flexbox,
   Icon,
   Input,
+  Table,
+  type TableColumn,
   Tabs,
   Tag,
   Text,
   TextArea,
+  toast,
   Tooltip,
+  Upload,
 } from '@lobehub/ui';
-import type { TableColumnsType, UploadProps } from 'antd';
-import { App, Input as AntInput, Table, Upload } from 'antd';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { cssVar as sxVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import {
   ArrowLeft,
   CircleHelp,
@@ -28,15 +30,7 @@ import {
   Trash2,
   Users,
 } from 'lucide-react';
-import {
-  memo,
-  type PropsWithChildren,
-  type ReactNode,
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-} from 'react';
+import { memo, type PropsWithChildren, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -50,6 +44,8 @@ import {
   updateCommunityWorkspaceProfile,
 } from '@/business/client/services/communityWorkspaceProfile';
 import EmojiPicker from '@/components/EmojiPicker';
+import SettingCard from '@/components/SettingCard';
+import UserAvatar from '@/components/UserAvatar';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
 import { useFileStore } from '@/store/file';
@@ -62,52 +58,21 @@ const DISPLAY_NAME_MAX = 50;
 const ORGANIZATION_URL_PREFIX = `${OFFICIAL_URL.replace(/^https?:\/\//, '')}/community/org/`;
 const NAMESPACE_PATTERN = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  footer: css`
-    padding-block: 12px;
-    padding-inline: 20px;
-    border-block-start: 1px solid ${cssVar.colorFillTertiary};
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  hint: css`
-    font-size: 13px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-}));
+const styles = stylex.create({
+  memberNameLink: { color: { 'default': 'inherit', ':hover': sxVar.colorPrimary } },
+});
 
-interface SettingCardProps {
-  action?: ReactNode;
-  children?: ReactNode;
-  description?: ReactNode;
-  hint?: ReactNode;
-  title: ReactNode;
-}
-
-const SettingCard = memo<SettingCardProps>(({ title, description, children, hint, action }) => (
-  <Block variant="outlined">
-    <Flexbox gap={12} padding={20}>
-      <Flexbox gap={4}>
-        <Text strong as="h3" style={{ fontSize: 16, margin: 0 }}>
-          {title}
-        </Text>
-        {description && (
-          <Text style={{ fontSize: 13 }} type="secondary">
-            {description}
-          </Text>
-        )}
-      </Flexbox>
-      {children}
-    </Flexbox>
-    {(hint || action) && (
-      <Flexbox horizontal align="center" className={styles.footer} gap={12} justify="space-between">
-        <span className={styles.hint}>{hint ?? ''}</span>
-        {action}
-      </Flexbox>
-    )}
-  </Block>
-));
-
-SettingCard.displayName = 'CommunityWorkspaceSettingCard';
+/**
+ * The default Market namespace equals the raw cloud userId (e.g.
+ * `user_2gmZCHLaTfh1X48VhuK9OKlNeF1`) — Market's trusted-client user creation
+ * writes `authUserId` straight into `accounts.namespace`, so it always
+ * contains uppercase letters. A user-chosen handle must match Market's org
+ * namespace regex `/^[\da-z][\d_a-z-]*$/`, i.e. lowercase only. Presence of
+ * an uppercase letter is therefore a reliable "this is the auto-assigned
+ * placeholder handle, don't surface it" signal.
+ */
+const isDefaultMarketNamespace = (namespace: string | null): boolean =>
+  !!namespace && /[A-Z]/.test(namespace);
 
 const PageContainer = memo<PropsWithChildren>(({ children }) => (
   <Flexbox height="100%" style={{ overflowX: 'hidden', overflowY: 'auto' }} width="100%">
@@ -125,7 +90,7 @@ PageContainer.displayName = 'CommunityWorkspaceSettingsPageContainer';
 
 const MembersCard = memo<{ canManage: boolean }>(({ canManage }) => {
   const { t } = useTranslation('discover');
-  const { message } = App.useApp();
+
   const { canSync, isLoading, members, refresh } = useCommunityWorkspaceMembers();
   const [syncing, setSyncing] = useState(false);
 
@@ -136,34 +101,73 @@ const MembersCard = memo<{ canManage: boolean }>(({ canManage }) => {
     try {
       await syncCommunityWorkspaceMembers();
       await refresh();
-      message.success(t('user.workspaceProfile.settings.members.syncSuccess'));
+      toast.success(t('user.workspaceProfile.settings.members.syncSuccess'));
     } catch (error) {
-      message.error(
+      toast.error(
         (error as Error).message || t('user.workspaceProfile.settings.members.syncFailed'),
       );
     } finally {
       setSyncing(false);
     }
-  }, [message, refresh, t]);
+  }, [refresh, t]);
 
-  const columns = useMemo<TableColumnsType<CommunityWorkspaceMember>>(
+  const columns = useMemo<TableColumn<CommunityWorkspaceMember>[]>(
     () => [
       {
         dataIndex: 'displayName',
         render: (_, member) => {
           const name =
             member.displayName || member.userName || member.namespace || `#${member.accountId}`;
+          // Prefer `userName` — it's Market's URL-safe public handle
+          // (`/community/user/:slug`) and lines up with what shows on the
+          // user's own profile page. Fall back to `namespace` only when
+          // there's no userName AND the namespace is a user-chosen handle;
+          // the auto-assigned `user_<mixedCaseId>` placeholder is filtered
+          // out (see isDefaultMarketNamespace).
+          const publicHandle =
+            member.userName ||
+            (member.namespace && !isDefaultMarketNamespace(member.namespace)
+              ? member.namespace
+              : null);
+          // The `/community/user/:slug` page accepts either handle as a slug,
+          // so we keep the row clickable even when we hide the literal handle
+          // — the display name still links out to the user's profile.
+          const profileSlug = publicHandle || member.namespace;
+          const profileUrl = profileSlug ? `/community/user/${profileSlug}` : undefined;
+
+          const nameNode = (
+            <Text strong style={{ fontSize: 14 }}>
+              {name}
+            </Text>
+          );
+
           return (
             <Flexbox horizontal align="center" gap={12}>
-              <Avatar avatar={member.avatarUrl || undefined} size={36} title={name} />
+              <UserAvatar avatar={member.avatarUrl} name={name} size={36} />
               <Flexbox gap={2}>
-                <Text strong style={{ fontSize: 14 }}>
-                  {name}
-                </Text>
-                {member.namespace && (
-                  <Text style={{ fontSize: 12 }} type="secondary">
-                    @{member.namespace}
-                  </Text>
+                {profileUrl ? (
+                  <a
+                    {...stylex.props(styles.memberNameLink)}
+                    href={profileUrl}
+                    rel="noopener noreferrer"
+                    target="_blank"
+                  >
+                    {nameNode}
+                  </a>
+                ) : (
+                  nameNode
+                )}
+                {publicHandle && profileUrl && (
+                  <a
+                    {...stylex.props(styles.memberNameLink)}
+                    href={profileUrl}
+                    rel="noopener noreferrer"
+                    target="_blank"
+                  >
+                    <Text style={{ fontSize: 12 }} type="secondary">
+                      @{publicHandle}
+                    </Text>
+                  </a>
                 )}
               </Flexbox>
             </Flexbox>
@@ -172,8 +176,9 @@ const MembersCard = memo<{ canManage: boolean }>(({ canManage }) => {
         title: t('user.workspaceProfile.settings.members.column.member'),
       },
       {
-        align: 'right',
+        align: 'left',
         dataIndex: 'role',
+        onCell: () => ({ style: { verticalAlign: 'middle' } }),
         render: (role: CommunityWorkspaceMember['role']) => (
           <Tag>
             {role === 'admin'
@@ -237,7 +242,7 @@ const isValidUrl = (value: string) => {
 
 const CommunityWorkspaceSettings = memo(() => {
   const { t } = useTranslation('discover');
-  const { message } = App.useApp();
+
   const navigate = useWorkspaceAwareNavigate();
   const { allowed: canManageSettings, reason: permissionReason } = usePermission('manage_settings');
   const uploadWithProgress = useFileStore((s) => s.uploadWithProgress);
@@ -314,20 +319,18 @@ const CommunityWorkspaceSettings = memo(() => {
       try {
         await updateCommunityWorkspaceProfile(input);
         await refresh();
-        message.success(t('user.workspaceProfile.settings.updateSuccess'));
+        toast.success(t('user.workspaceProfile.settings.updateSuccess'));
       } catch (error) {
         if (field === 'namespace' && isCommunityWorkspaceNamespaceTakenError(error)) {
           setNamespaceError(t('user.workspaceProfile.settings.namespaceTaken'));
         } else {
-          message.error(
-            (error as Error).message || t('user.workspaceProfile.settings.updateFailed'),
-          );
+          toast.error((error as Error).message || t('user.workspaceProfile.settings.updateFailed'));
         }
       } finally {
         setSavingField(null);
       }
     },
-    [canEdit, message, refresh, t],
+    [canEdit, refresh, t],
   );
 
   const buildSaveButton = (field: string, disabled: boolean, onClick: () => void) => {
@@ -363,7 +366,7 @@ const CommunityWorkspaceSettings = memo(() => {
   const handleAvatarUpload = useCallback(
     async (file: File) => {
       if (file.size > MAX_FILE_SIZE) {
-        message.error(t('user.workspaceProfile.errors.fileTooLarge'));
+        toast.error(t('user.workspaceProfile.errors.fileTooLarge'));
         return;
       }
 
@@ -371,7 +374,7 @@ const CommunityWorkspaceSettings = memo(() => {
       try {
         const result = await uploadWithProgress({ file });
         if (!result?.url) {
-          message.error(t('user.workspaceProfile.errors.uploadFailed'));
+          toast.error(t('user.workspaceProfile.errors.uploadFailed'));
           return;
         }
         setAvatarUrl(
@@ -379,21 +382,18 @@ const CommunityWorkspaceSettings = memo(() => {
         );
       } catch (error) {
         console.error('[CommunityWorkspaceSettings] Avatar upload failed:', error);
-        message.error(t('user.workspaceProfile.errors.uploadFailed'));
+        toast.error(t('user.workspaceProfile.errors.uploadFailed'));
       } finally {
         setAvatarUploading(false);
       }
     },
-    [message, t, uploadWithProgress],
+    [t, uploadWithProgress],
   );
 
-  const handleBannerUpload: UploadProps['customRequest'] = useCallback(
-    async (options: Parameters<NonNullable<UploadProps['customRequest']>>[0]) => {
-      const file = options.file as File;
-
+  const handleBannerUpload = useCallback(
+    async (file: File) => {
       if (file.size > MAX_FILE_SIZE) {
-        message.error(t('user.workspaceProfile.errors.fileTooLarge'));
-        options.onError?.(new Error('File too large'));
+        toast.error(t('user.workspaceProfile.errors.fileTooLarge'));
         return;
       }
 
@@ -401,24 +401,21 @@ const CommunityWorkspaceSettings = memo(() => {
       try {
         const result = await uploadWithProgress({ file });
         if (!result?.url) {
-          message.error(t('user.workspaceProfile.errors.uploadFailed'));
-          options.onError?.(new Error('Upload failed'));
+          toast.error(t('user.workspaceProfile.errors.uploadFailed'));
           return;
         }
         const url = result.url.startsWith('/')
           ? `${window.location.origin}${result.url}`
           : result.url;
         setBannerUrl(url);
-        options.onSuccess?.(result);
       } catch (error) {
         console.error('[CommunityWorkspaceSettings] Banner upload failed:', error);
-        message.error(t('user.workspaceProfile.errors.uploadFailed'));
-        options.onError?.(error as Error);
+        toast.error(t('user.workspaceProfile.errors.uploadFailed'));
       } finally {
         setBannerUploading(false);
       }
     },
-    [message, t, uploadWithProgress],
+    [t, uploadWithProgress],
   );
 
   if (!profile) {
@@ -466,10 +463,10 @@ const CommunityWorkspaceSettings = memo(() => {
             )}
           >
             <Input
-              showCount
               disabled={!canEdit}
               maxLength={DISPLAY_NAME_MAX}
               style={{ maxWidth: 420 }}
+              suffix={`${displayName.length} / ${DISPLAY_NAME_MAX}`}
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
             />
@@ -488,13 +485,14 @@ const CommunityWorkspaceSettings = memo(() => {
               })
             }
           >
-            <AntInput
-              showCount
-              addonBefore={ORGANIZATION_URL_PREFIX}
+            <Input
+              aria-invalid={!!namespaceValidation}
+              data-invalid={namespaceValidation ? '' : undefined}
               disabled={!canEdit}
               maxLength={NAMESPACE_MAX}
-              status={namespaceValidation ? 'error' : undefined}
+              prefix={ORGANIZATION_URL_PREFIX}
               style={{ maxWidth: 560 }}
+              suffix={`${namespace.length} / ${NAMESPACE_MAX}`}
               value={namespace}
               onChange={(e) => {
                 setNamespace(e.target.value);
@@ -531,8 +529,9 @@ const CommunityWorkspaceSettings = memo(() => {
             )}
           >
             <Input
+              aria-invalid={!!websiteError}
+              data-invalid={websiteError ? '' : undefined}
               disabled={!canEdit}
-              status={websiteError ? 'error' : undefined}
               style={{ maxWidth: 560 }}
               value={websiteUrl}
               prefix={
@@ -593,11 +592,10 @@ const CommunityWorkspaceSettings = memo(() => {
             <Flexbox gap={8} width="100%">
               <Upload
                 accept="image/*"
-                customRequest={handleBannerUpload}
                 disabled={!canEdit}
                 maxCount={1}
-                showUploadList={false}
                 style={{ display: 'block', width: '100%' }}
+                onFiles={([file]) => handleBannerUpload(file)}
               >
                 <div
                   style={{

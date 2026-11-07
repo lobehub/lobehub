@@ -1,0 +1,500 @@
+import { type ChildProcess } from 'node:child_process';
+
+import type {
+  Options as ClaudeAgentSdkOptions,
+  Query as ClaudeAgentSdkQuery,
+  SDKMessage,
+  SDKUserMessage,
+  SpawnedProcess as SdkSpawnedProcess,
+  SpawnOptions as SdkSpawnOptions,
+} from '@anthropic-ai/claude-agent-sdk';
+import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
+import { spawnManaged } from '@lobechat/utils/managedProcess';
+
+import { AgentStreamPipeline, type UploadHeterogeneousImage } from './agentStreamPipeline';
+import { readClaudeCodeSessionCost } from './claudeCodeSessionCost';
+import { resolveCliSpawnPlan } from './cliSpawn';
+
+const CLAUDE_SDK_DISALLOWED_TOOLS = ['AskUserQuestion', 'Monitor', 'ScheduleWakeup'] as const;
+const DEFAULT_INACTIVITY_TIMEOUT_MS = 5 * 60 * 1000;
+const INPUT_CLOSE_POLL_MS = 1000;
+
+const readTimeoutMs = (name: string, fallback: number) => {
+  const raw = process.env[name];
+  if (!raw) return fallback;
+
+  const value = Number(raw);
+  return Number.isFinite(value) && value > 0 ? value : fallback;
+};
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+const isObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null;
+
+export const resolveClaudeSdkExecutablePath = async (
+  commandPath: string,
+  env: NodeJS.ProcessEnv,
+  platform: NodeJS.Platform = process.platform,
+): Promise<string> => {
+  if (platform !== 'win32' || !/\.(?:bat|cmd)$/i.test(commandPath)) return commandPath;
+
+  // The Agent SDK spawns native paths directly and runs JavaScript paths with
+  // Node. Reuse the CLI launcher's shell-free shim parser so a detected npm
+  // wrapper becomes its real `cli.js`, which packaged builds can still access.
+  const spawnPlan = await resolveCliSpawnPlan(commandPath, [], env);
+  if (spawnPlan.command === commandPath) {
+    throw new Error(`Unable to resolve the Claude Code Windows shim: ${commandPath}`);
+  }
+
+  return spawnPlan.args[0] ?? spawnPlan.command;
+};
+
+const hasContentMessage = (value: unknown): value is SDKUserMessage => {
+  if (!isObject(value)) return false;
+  if (value.type !== 'user') return false;
+  return isObject(value.message);
+};
+
+export const buildClaudeSdkUserMessageFromStreamJson = (stdinPayload: string): SDKUserMessage => {
+  const line = stdinPayload
+    .split(/\r?\n/)
+    .map((value) => value.trim())
+    .find(Boolean);
+
+  if (!line) throw new Error('Claude SDK input payload is empty');
+
+  const parsed = JSON.parse(line) as unknown;
+  if (!hasContentMessage(parsed)) {
+    throw new Error('Claude SDK input payload is not a user message');
+  }
+
+  return {
+    ...parsed,
+    parent_tool_use_id: parsed.parent_tool_use_id ?? null,
+  };
+};
+
+const parseClaudeSdkExtraArgs = (
+  args: string[],
+): Pick<ClaudeAgentSdkOptions, 'effort' | 'extraArgs' | 'model' | 'plugins'> => {
+  const extraArgs: Record<string, string | null> = {};
+  // `--plugin-dir` repeats, which `extraArgs` (one value per flag) cannot carry.
+  const plugins: NonNullable<ClaudeAgentSdkOptions['plugins']> = [];
+  let model: string | undefined;
+  let effort: ClaudeAgentSdkOptions['effort'];
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (!arg.startsWith('--')) continue;
+
+    const key = arg.slice(2);
+    const next = args[index + 1];
+    const hasValue = next !== undefined && !next.startsWith('-');
+
+    if (key === 'model' && hasValue) {
+      model = next;
+      index += 1;
+      continue;
+    }
+
+    if (key === 'effort' && hasValue) {
+      effort = next as ClaudeAgentSdkOptions['effort'];
+      index += 1;
+      continue;
+    }
+
+    if (key === 'plugin-dir' && hasValue) {
+      plugins.push({ path: next, type: 'local' });
+      index += 1;
+      continue;
+    }
+
+    extraArgs[key] = hasValue ? next : null;
+    if (hasValue) index += 1;
+  }
+
+  return {
+    ...(effort ? { effort } : {}),
+    extraArgs: Object.keys(extraArgs).length > 0 ? extraArgs : undefined,
+    ...(model ? { model } : {}),
+    ...(plugins.length > 0 ? { plugins } : {}),
+  };
+};
+
+interface TrackedTask {
+  description?: string;
+  lastEventAt: number;
+  startedAt: number;
+  taskId: string;
+  toolUseId?: string;
+  type?: string;
+}
+
+export type HeterogeneousAgentRuntimeState =
+  'starting' | 'running' | 'monitoring' | 'idle' | 'stale' | 'closing' | 'closed' | 'error';
+
+export interface HeterogeneousAgentRuntimeTask {
+  description?: string;
+  lastEventAt: number;
+  startedAt: number;
+  taskId: string;
+  toolUseId?: string;
+  type?: string;
+}
+
+export interface HeterogeneousAgentRuntimeStatus {
+  activeTasks: HeterogeneousAgentRuntimeTask[];
+  idleDeadlineAt?: number;
+  lastEventAt: number;
+  operationId?: string;
+  sessionId: string;
+  staleDeadlineAt?: number;
+  state: HeterogeneousAgentRuntimeState;
+  transport:
+    | 'acp-stdio'
+    | 'claude-sdk'
+    | 'cli-spawn'
+    | 'codex-app-server'
+    | 'copilot-acp'
+    | 'cursor-acp'
+    | 'droid-acp'
+    | 'devin-acp'
+    | 'pi-rpc'
+    | 'trae-acp';
+}
+
+export interface ClaudeAgentSdkSessionOptions {
+  args: string[];
+  commandPath: string;
+  /** Claude profile root the transcript lives under; defaults to `env.CLAUDE_CONFIG_DIR`. */
+  configDir?: string;
+  cwd: string;
+  env: NodeJS.ProcessEnv;
+  onEvents: (events: AgentStreamEvent[]) => Promise<void> | void;
+  /**
+   * The CLI child this session spawned. The SDK runs an actual Claude
+   * executable, so a host crash can leave that process orphaned — the host
+   * needs its identity to reap it on the next launch.
+   */
+  onProcessSpawn?: (process: { args: string[]; command: string; pid?: number }) => void;
+  onRawMessage: (line: string) => Promise<void> | void;
+  onRuntimeStatus: (status: HeterogeneousAgentRuntimeStatus) => void;
+  onSessionId: (sessionId: string) => void;
+  onStderr: (data: string) => Promise<void> | void;
+  operationId: string;
+  resumeSessionId?: string;
+  sessionId: string;
+  stdinPayload: string;
+  /** Uploader for base64 tool_result images; see `AgentStreamPipelineOptions`. */
+  uploadImage?: UploadHeterogeneousImage;
+}
+
+/**
+ * Spawn the CLI the SDK would otherwise own privately.
+ *
+ * Two reasons to take it over: the pid has to reach the host's recovery ledger
+ * (an SDK run orphaned by a main-process crash is a real Claude process, still
+ * writing the transcript a replay is about to read), and the child belongs in
+ * its own Unix process group like every other CLI run here, so reaping it takes
+ * its tool children with it. `signal` is the SDK's forwarded one — it fires
+ * only after the graceful stdin-EOF window.
+ */
+export const spawnClaudeCodeCliProcess = (
+  options: SdkSpawnOptions,
+  hooks: {
+    onProcessSpawn?: (process: { args: string[]; command: string; pid?: number }) => void;
+    onStderr: (data: string) => void;
+  },
+  platform: NodeJS.Platform = process.platform,
+): SdkSpawnedProcess => {
+  const child: ChildProcess = spawnManaged(options.command, options.args, {
+    cwd: options.cwd,
+    detached: platform !== 'win32',
+    // The SDK types env as a plain string map; this repo augments ProcessEnv
+    // with required keys, which no spawn caller carries.
+    env: options.env as NodeJS.ProcessEnv,
+    signal: options.signal,
+    stdio: ['pipe', 'pipe', 'pipe'],
+    windowsHide: true,
+  });
+
+  // The SDK only wires its own `stderr` option on the spawn it owns, so this
+  // pipe has nobody reading it — and a full stderr pipe blocks the CLI.
+  child.stderr?.on('data', (chunk: Buffer | string) => hooks.onStderr(chunk.toString()));
+
+  hooks.onProcessSpawn?.({
+    args: [options.command, ...options.args],
+    command: options.command,
+    pid: child.pid,
+  });
+
+  return child as unknown as SdkSpawnedProcess;
+};
+
+export class ClaudeAgentSdkSession {
+  private readonly abortController = new AbortController();
+  private activeTasks = new Map<string, TrackedTask>();
+  private closeInput = false;
+  private closeReason: Error | undefined;
+  private closedByHost = false;
+  private inactivityTimer: NodeJS.Timeout | undefined;
+  private lastEventAt = Date.now();
+  private pipeline: AgentStreamPipeline;
+  private queryHandle: ClaudeAgentSdkQuery | undefined;
+  private sawErrorEvent = false;
+  private taskNotificationPending = false;
+
+  constructor(private readonly options: ClaudeAgentSdkSessionOptions) {
+    this.pipeline = new AgentStreamPipeline({
+      agentType: 'claude-code-sdk',
+      cwd: options.cwd,
+      operationId: options.operationId,
+      uploadImage: options.uploadImage,
+    });
+  }
+
+  async run(): Promise<void> {
+    this.emitStatus('starting');
+    this.armInactivityTimer();
+
+    try {
+      if (this.options.resumeSessionId) {
+        this.pipeline.configureSession({
+          initialSessionCostUsd: await readClaudeCodeSessionCost({
+            configDir: this.options.configDir ?? this.options.env.CLAUDE_CONFIG_DIR,
+            cwd: this.options.cwd,
+            home: this.options.env.HOME,
+            sessionId: this.options.resumeSessionId,
+          }),
+        });
+      }
+
+      const { query } = await import('@anthropic-ai/claude-agent-sdk');
+      const userMessage = buildClaudeSdkUserMessageFromStreamJson(this.options.stdinPayload);
+
+      this.queryHandle = query({
+        options: await this.buildQueryOptions(),
+        prompt: this.createInputStream(userMessage),
+      });
+
+      this.emitStatus('running');
+
+      for await (const message of this.queryHandle) {
+        await this.consumeSdkMessage(message);
+      }
+
+      await this.flushPipeline();
+
+      if (this.closeReason) throw this.closeReason;
+      if (!this.sawErrorEvent) {
+        await this.options.onEvents(
+          this.pipeline.completeRuntime({
+            reason: 'complete',
+            transport: 'claude-sdk',
+          }),
+        );
+      }
+
+      this.emitStatus('closed');
+    } catch (error) {
+      if (this.closedByHost) {
+        this.emitStatus('closed');
+        return;
+      }
+
+      const normalizedError = this.closeReason ?? error;
+      this.emitStatus('error');
+      throw normalizedError;
+    } finally {
+      this.clearInactivityTimer();
+      this.closeInput = true;
+      this.queryHandle = undefined;
+    }
+  }
+
+  close(): void {
+    this.closedByHost = true;
+    this.closeInput = true;
+    this.emitStatus('closing');
+    this.abortController.abort();
+    this.queryHandle?.close();
+  }
+
+  private async buildQueryOptions(): Promise<ClaudeAgentSdkOptions> {
+    const argOptions = parseClaudeSdkExtraArgs(this.options.args);
+    const executablePath = await resolveClaudeSdkExecutablePath(
+      this.options.commandPath,
+      this.options.env,
+    );
+
+    return {
+      allowDangerouslySkipPermissions: true,
+      abortController: this.abortController,
+      cwd: this.options.cwd,
+      disallowedTools: [...CLAUDE_SDK_DISALLOWED_TOOLS],
+      env: this.options.env,
+      includePartialMessages: true,
+      pathToClaudeCodeExecutable: executablePath,
+      permissionMode: 'bypassPermissions',
+      spawnClaudeCodeProcess: (spawnOptions) =>
+        spawnClaudeCodeCliProcess(spawnOptions, {
+          onProcessSpawn: this.options.onProcessSpawn,
+          onStderr: (data) => void this.options.onStderr(data),
+        }),
+      ...(this.options.resumeSessionId ? { resume: this.options.resumeSessionId } : {}),
+      ...argOptions,
+      stderr: (data) => {
+        void this.options.onStderr(data);
+      },
+    };
+  }
+
+  private async *createInputStream(message: SDKUserMessage): AsyncIterable<SDKUserMessage> {
+    yield message;
+
+    while (!this.closeInput && !this.abortController.signal.aborted) {
+      await sleep(INPUT_CLOSE_POLL_MS);
+    }
+  }
+
+  private async consumeSdkMessage(message: SDKMessage): Promise<void> {
+    this.lastEventAt = Date.now();
+    this.armInactivityTimer();
+    this.updateTaskState(message);
+
+    const line = `${JSON.stringify(message)}\n`;
+    await this.options.onRawMessage(line);
+
+    const events = await this.pipeline.push(line);
+    this.sawErrorEvent ||= events.some((event) => event.type === 'error');
+    await this.options.onEvents(events);
+
+    if (this.pipeline.sessionId) this.options.onSessionId(this.pipeline.sessionId);
+    this.maybeCloseInputAfterResult(message);
+    this.emitStatus(this.resolveRuntimeState());
+  }
+
+  private async flushPipeline(): Promise<void> {
+    const events = await this.pipeline.flush();
+    this.sawErrorEvent ||= events.some((event) => event.type === 'error');
+    await this.options.onEvents(events);
+    if (this.pipeline.sessionId) this.options.onSessionId(this.pipeline.sessionId);
+  }
+
+  private updateTaskState(message: SDKMessage): void {
+    if (message.type !== 'system') return;
+
+    if (message.subtype === 'task_started') {
+      this.activeTasks.set(message.task_id, {
+        description: message.description,
+        lastEventAt: this.lastEventAt,
+        startedAt: this.lastEventAt,
+        taskId: message.task_id,
+        toolUseId: message.tool_use_id,
+        type: message.task_type,
+      });
+      return;
+    }
+
+    if (message.subtype === 'task_updated') {
+      const task = this.activeTasks.get(message.task_id);
+      if (!task) return;
+
+      task.lastEventAt = this.lastEventAt;
+      if (message.patch.description) task.description = message.patch.description;
+      if (
+        message.patch.status &&
+        ['completed', 'failed', 'killed'].includes(message.patch.status)
+      ) {
+        this.activeTasks.delete(message.task_id);
+      }
+      return;
+    }
+
+    if (message.subtype === 'task_progress') {
+      const task = this.activeTasks.get(message.task_id);
+      if (!task) return;
+
+      task.lastEventAt = this.lastEventAt;
+      task.description = message.summary || message.description || task.description;
+      return;
+    }
+
+    if (message.subtype === 'task_notification') {
+      this.taskNotificationPending = true;
+      this.activeTasks.delete(message.task_id);
+    }
+  }
+
+  private maybeCloseInputAfterResult(message: SDKMessage): void {
+    if (message.type !== 'result') return;
+
+    if (message.origin?.kind === 'task-notification') {
+      this.taskNotificationPending = false;
+      this.closeInput = true;
+      return;
+    }
+
+    if (this.activeTasks.size === 0 && !this.taskNotificationPending) {
+      this.closeInput = true;
+    }
+  }
+
+  private resolveRuntimeState(): HeterogeneousAgentRuntimeState {
+    if (this.closeInput && this.activeTasks.size === 0) return 'idle';
+    if (this.activeTasks.size > 0 || this.taskNotificationPending) return 'monitoring';
+    return 'running';
+  }
+
+  private emitStatus(state: HeterogeneousAgentRuntimeState): void {
+    const now = Date.now();
+    const timeoutMs = this.inactivityTimeoutMs;
+    const tasks: HeterogeneousAgentRuntimeTask[] = [...this.activeTasks.values()].map((task) => ({
+      description: task.description,
+      lastEventAt: task.lastEventAt,
+      startedAt: task.startedAt,
+      taskId: task.taskId,
+      toolUseId: task.toolUseId,
+      type: task.type,
+    }));
+
+    this.options.onRuntimeStatus({
+      activeTasks: tasks,
+      idleDeadlineAt: state === 'idle' ? now + timeoutMs : undefined,
+      lastEventAt: this.lastEventAt,
+      operationId: this.options.operationId,
+      sessionId: this.options.sessionId,
+      staleDeadlineAt:
+        state === 'running' || state === 'monitoring' ? this.lastEventAt + timeoutMs : undefined,
+      state,
+      transport: 'claude-sdk',
+    });
+  }
+
+  private get inactivityTimeoutMs(): number {
+    return readTimeoutMs(
+      'LOBE_CLAUDE_CODE_SDK_INACTIVITY_TIMEOUT_MS',
+      DEFAULT_INACTIVITY_TIMEOUT_MS,
+    );
+  }
+
+  private armInactivityTimer(): void {
+    this.clearInactivityTimer();
+    this.inactivityTimer = setTimeout(() => {
+      this.closeReason = new Error(
+        `Claude SDK session produced no messages for ${this.inactivityTimeoutMs}ms`,
+      );
+      this.emitStatus('stale');
+      this.close();
+    }, this.inactivityTimeoutMs);
+    this.inactivityTimer.unref?.();
+  }
+
+  private clearInactivityTimer(): void {
+    if (!this.inactivityTimer) return;
+
+    clearTimeout(this.inactivityTimer);
+    this.inactivityTimer = undefined;
+  }
+}

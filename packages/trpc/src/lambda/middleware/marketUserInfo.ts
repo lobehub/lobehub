@@ -12,28 +12,21 @@ interface ContextWithServerDB {
   workspaceId?: string | null;
 }
 
-/**
- * Middleware that fetches user info for Market trusted client authentication
- * This requires serverDatabase middleware to be applied first
- */
-export const marketUserInfo = trpc.middleware(async (opts) => {
-  const ctx = opts.ctx as ContextWithServerDB;
+interface MarketUserContext {
+  marketAccessToken?: string;
+  marketUserInfo?: TrustedClientUserInfo;
+}
 
+export const resolveMarketUserContext = async (
+  ctx: ContextWithServerDB,
+): Promise<MarketUserContext> => {
   // If userId or serverDB is not available, skip fetching user info
-  if (!ctx.userId || !ctx.serverDB) {
-    return opts.next({
-      ctx: { marketUserInfo: undefined },
-    });
-  }
+  if (!ctx.userId || !ctx.serverDB) return { marketUserInfo: undefined };
 
   try {
     const user = await UserModel.findById(ctx.serverDB, ctx.userId);
 
-    if (!user || !user.email) {
-      return opts.next({
-        ctx: { marketUserInfo: undefined },
-      });
-    }
+    if (!user || !user.email) return { marketUserInfo: undefined };
 
     const marketUserInfo: TrustedClientUserInfo = {
       email: user.email,
@@ -49,19 +42,24 @@ export const marketUserInfo = trpc.middleware(async (opts) => {
     const userSettings = await userModel.getUserSettings();
     const marketTokenFromDB = (userSettings?.market as any)?.accessToken;
 
-    // Prioritize database token over cookie token
-    const marketAccessToken = marketTokenFromDB || ctx.marketAccessToken;
-
-    return opts.next({
-      ctx: {
-        marketAccessToken,
-        marketUserInfo,
-      },
-    });
+    return {
+      // Prioritize database token over cookie token
+      marketAccessToken: marketTokenFromDB || ctx.marketAccessToken,
+      marketUserInfo,
+    };
   } catch {
     // If fetching user info fails, continue without it
-    return opts.next({
-      ctx: { marketUserInfo: undefined },
-    });
+    return { marketUserInfo: undefined };
   }
+};
+
+/**
+ * Middleware that fetches user info for Market trusted client authentication
+ * This requires serverDatabase middleware to be applied first
+ */
+export const marketUserInfo = trpc.middleware(async (opts) => {
+  const ctx = opts.ctx as ContextWithServerDB;
+  const marketContext = await resolveMarketUserContext(ctx);
+
+  return opts.next({ ctx: marketContext });
 });

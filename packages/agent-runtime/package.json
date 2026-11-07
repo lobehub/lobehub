@@ -9,11 +9,16 @@
     "test:coverage": "vitest --coverage --silent='passed-only'"
   },
   "dependencies": {
-    "p-map": "^7.0.4"
-  },
-  "devDependencies": {
     "@lobechat/context-engine": "workspace:*",
     "@lobechat/types": "workspace:*",
-    "openai": "^6.42.0"
-  }
+    "ajv": "^8.20.0",
+    "es-toolkit": "^1.50.0",
+    "p-map": "^7.0.5",
+    "partial-json": "^0.1.7"
+  },
+  "devDependencies": {
+    "openai": "^6.45.0"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/lobehub/lobehub/tree/canary/packages/agent-runtime"
 }

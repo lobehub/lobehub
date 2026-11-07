@@ -39,6 +39,14 @@ class AgentSkillService {
     return lambdaClient.agentSkills.importFromMarket.mutate({ identifier });
   }
 
+  /**
+   * Make sure the Market skills an agent references are installed in the active
+   * scope. Per-identifier outcomes; a failed one never throws.
+   */
+  async ensureFromMarket(identifiers: string[]) {
+    return lambdaClient.agentSkills.ensureFromMarket.mutate({ identifiers });
+  }
+
   // ===== Query =====
 
   async getById(id: string): Promise<SkillItem | undefined> {
@@ -87,9 +95,14 @@ class AgentSkillService {
 
   // ===== Delete =====
 
-  async deleteSkill(id: string): Promise<{ success: boolean }> {
+  // Server keeps delete idempotent: a missing row resolves to undefined.
+  async deleteSkill(id: string): Promise<{ success: boolean } | undefined> {
     return lambdaClient.agentSkills.delete.mutate({ id });
   }
 }
+
+export type EnsureMarketSkillResult = Awaited<
+  ReturnType<AgentSkillService['ensureFromMarket']>
+>[number];
 
 export const agentSkillService = new AgentSkillService();

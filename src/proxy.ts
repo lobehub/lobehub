@@ -5,15 +5,32 @@ const { middleware } = defineConfig();
 // required to be literal
 export const config = {
   matcher: [
-    // include any files in the api or trpc folders that might have an extension
-    '/(api|trpc|webapi)(.*)',
+    // NOTE: `/api`, `/trpc`, `/webapi` are intentionally NOT matched. The
+    // middleware is a no-op for them — `defaultMiddleware` short-circuits the
+    // rewrite half via `backendApiEndpoints`, and they're all public routes, so
+    // the better-auth session lookup is skipped. Auth lives in the route
+    // handlers (`checkAuth`, trpc `protectedProcedure`), which return JSON 401s
+    // rather than the HTML redirect-to-signin. Skipping the matcher avoids a
+    // needless middleware invocation on the hottest backend traffic. (/oidc and
+    // /oauth stay matched below — their middleware pass is still load-bearing.)
     // include the /
     '/',
+    '/acceptance',
+    '/acceptance(.*)',
+    '/apps',
+    '/apps(.*)',
     '/community',
     '/community(.*)',
+    '/channels',
+    '/channels/(.*)',
+    '/dashboard',
+    '/dashboard(.*)',
     '/labs',
     '/eval',
     '/eval(.*)',
+    /** Shared-agent pages need the same SPA rewrite as the other client routes. */
+    '/a',
+    '/a/(.*)',
     '/agent',
     '/agent(.*)',
     '/group',
@@ -25,12 +42,20 @@ export const config = {
     '/resource',
     '/resource(.*)',
     '/profile(.*)',
+    '/invite/(.*)',
+    '/projects',
+    '/project',
+    '/project/(.*)',
     '/page',
     '/page(.*)',
     '/tasks',
     '/tasks(.*)',
     '/task',
     '/task(.*)',
+    '/goals',
+    '/goals(.*)',
+    '/goal',
+    '/goal(.*)',
     '/me',
     '/me(.*)',
     '/share(.*)',
@@ -42,6 +67,8 @@ export const config = {
     '/signin(.*)',
     '/verify-email(.*)',
     '/verify-im(.*)',
+    // Retired report links: the Workbench redirects them into Acceptance.
+    '/verify',
     '/verify/(.*)',
     '/reset-password(.*)',
     '/auth-error(.*)',

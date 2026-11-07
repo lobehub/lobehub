@@ -10,7 +10,7 @@ const manifest = async (): Promise<MetadataRoute.Manifest> => {
       icons: [
         {
           sizes: '192x192',
-          src: '/icons/icon-192x192.png',
+          src: '/app-icons/icon-192x192.png',
           type: 'image/png',
         },
       ],
@@ -25,7 +25,7 @@ const manifest = async (): Promise<MetadataRoute.Manifest> => {
     await Promise.all([
       import('@lobechat/business-const'),
       import('es-toolkit/compat'),
-      import('@/server/manifest'),
+      import('@/libs/metadata/manifest'),
     ]);
 
   // @ts-expect-error - manifestModule.generate returns extended manifest with custom properties
@@ -35,22 +35,22 @@ const manifest = async (): Promise<MetadataRoute.Manifest> => {
       {
         purpose: 'any',
         sizes: '192x192',
-        url: '/icons/icon-192x192.png',
+        url: '/app-icons/icon-192x192.png',
       },
       {
         purpose: 'maskable',
         sizes: '192x192',
-        url: '/icons/icon-192x192.maskable.png',
+        url: '/app-icons/icon-192x192.maskable.png',
       },
       {
         purpose: 'any',
         sizes: '512x512',
-        url: '/icons/icon-512x512.png',
+        url: '/app-icons/icon-512x512.png',
       },
       {
         purpose: 'maskable',
         sizes: '512x512',
-        url: '/icons/icon-512x512.maskable.png',
+        url: '/app-icons/icon-512x512.maskable.png',
       },
     ],
     id: kebabCase(BRANDING_NAME),

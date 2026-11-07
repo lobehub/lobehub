@@ -1,14 +1,15 @@
 'use client';
 
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
-import { createStaticStyles, cx } from 'antd-style';
+import { Flexbox, Tooltip } from '@lobehub/ui';
+import { Avatar } from '@lobehub/ui';
+import { createStaticStyles, cx } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { highlightTextStyles, shinyTextStyles } from '@/styles';
 
-import type { GetAgentDetailParams } from '../../../types';
+import type { GetAgentDetailParams, GetAgentDetailState } from '../../../types';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   root: css`
@@ -24,35 +25,52 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
-export const GetAgentDetailInspector = memo<BuiltinInspectorProps<GetAgentDetailParams>>(
-  ({ args, partialArgs, isArgumentsStreaming }) => {
-    const { t } = useTranslation('plugin');
+export const GetAgentDetailInspector = memo<
+  BuiltinInspectorProps<GetAgentDetailParams, GetAgentDetailState>
+>(({ args, partialArgs, isArgumentsStreaming, pluginState }) => {
+  const { t } = useTranslation('plugin');
 
-    const agentId = args?.agentId || partialArgs?.agentId;
+  const agentId = args?.agentId || partialArgs?.agentId;
+  // Once the result lands, show the resolved agent name instead of the opaque
+  // `agt_xxx` id; keep the id reachable via tooltip.
+  const meta = pluginState?.meta;
+  const title = meta?.title;
 
-    if (isArgumentsStreaming && !agentId) {
-      return (
-        <div className={cx(styles.root, shinyTextStyles.shinyText)}>
-          <span>{t('builtins.lobe-agent-management.apiName.getAgentDetail')}</span>
-        </div>
-      );
-    }
-
+  if (isArgumentsStreaming && !agentId) {
     return (
-      <Flexbox
-        horizontal
-        align={'center'}
-        className={cx(styles.root, isArgumentsStreaming && shinyTextStyles.shinyText)}
-        gap={8}
-      >
-        <span className={styles.title}>
-          {t('builtins.lobe-agent-management.inspector.getAgentDetail.title')}
+      <div className={styles.root}>
+        <span className={shinyTextStyles.shinyText}>
+          {t('builtins.lobe-agent-management.apiName.getAgentDetail')}
         </span>
-        {agentId && <span className={highlightTextStyles.primary}>{agentId}</span>}
-      </Flexbox>
+      </div>
     );
-  },
-);
+  }
+
+  return (
+    <Flexbox horizontal align={'center'} className={styles.root} gap={8}>
+      <span className={cx(styles.title, isArgumentsStreaming && shinyTextStyles.shinyText)}>
+        {t('builtins.lobe-agent-management.inspector.getAgentDetail.title')}
+      </span>
+      {title ? (
+        <Tooltip title={agentId}>
+          <Flexbox horizontal align={'center'} gap={6}>
+            {meta?.avatar && (
+              <Avatar
+                avatar={meta.avatar}
+                background={meta.backgroundColor}
+                shape={'square'}
+                size={16}
+              />
+            )}
+            <span className={highlightTextStyles.primary}>{title}</span>
+          </Flexbox>
+        </Tooltip>
+      ) : (
+        agentId && <span className={highlightTextStyles.primary}>{agentId}</span>
+      )}
+    </Flexbox>
+  );
+});
 
 GetAgentDetailInspector.displayName = 'GetAgentDetailInspector';
 

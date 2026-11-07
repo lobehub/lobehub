@@ -6,6 +6,7 @@ import pMap from 'p-map';
 import { z } from 'zod';
 
 import { checkEmbeddingUsage } from '@/business/server/trpc-middlewares/async';
+import { FILE_PARSE_SIZE_LIMIT_ERROR_MESSAGE, MAX_FILE_PARSE_SIZE } from '@/const/file';
 import { DEFAULT_FILE_EMBEDDING_MODEL_ITEM } from '@/const/settings/knowledge';
 import { AsyncTaskModel } from '@/database/models/asyncTask';
 import { ChunkModel } from '@/database/models/chunk';
@@ -24,6 +25,12 @@ import { type IAsyncTaskError } from '@/types/asyncTask';
 import { AsyncTaskError, AsyncTaskErrorType, AsyncTaskStatus } from '@/types/asyncTask';
 import { safeParseJSON } from '@/utils/safeParseJSON';
 import { sanitizeUTF8 } from '@/utils/sanitizeUTF8';
+
+/**
+ * How long a failed embedding task waits for its in-flight batches before it is marked
+ * failed. Keep it below the margin any quota reservation tied to the `processing` state allows.
+ */
+const IN_FLIGHT_BATCH_GRACE_MS = 30_000;
 
 const fileProcedure = asyncAuthedProcedure.use(async (opts) => {
   const { ctx } = opts;
@@ -91,9 +98,19 @@ export const fileRouter = router({
 
       if (!asyncTask) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Async Task not found' });
 
+      // `Promise.race` and `pMap` only stop waiting: without these, batches already running
+      // keep calling the provider and writing vectors after the task is reported failed, which
+      // is also when the vector quota stops reserving room for this task.
+      let stopped = false;
+      const inFlightBatches = new Set<Promise<void>>();
+      const assertWritable = () => {
+        if (stopped) throw new Error('embedding task already stopped');
+      };
+
       try {
         const timeoutPromise = new Promise((_, reject) => {
           setTimeout(() => {
+            stopped = true;
             reject(
               new AsyncTaskError(
                 AsyncTaskErrorType.Timeout,
@@ -120,32 +137,47 @@ export const fileRouter = router({
             await pMap(
               requestArray,
               async (chunks) => {
-                // Read user's provider config from database
-                const modelRuntime = await initModelRuntimeFromDB(
-                  ctx.serverDB,
-                  ctx.userId,
-                  provider,
-                  workspaceId,
-                );
+                const batch = (async () => {
+                  assertWritable();
+                  // Read user's provider config from database
+                  const modelRuntime = await initModelRuntimeFromDB(
+                    ctx.serverDB,
+                    ctx.userId,
+                    provider,
+                    workspaceId,
+                  );
 
-                const embeddings = await modelRuntime.embeddings(
-                  {
-                    dimensions: 1024,
-                    input: chunks.map((c) => c.text),
-                    model,
-                  },
-                  { metadata: { trigger: RequestTrigger.FileEmbedding }, user: ctx.userId },
-                );
+                  const embeddings = await modelRuntime.embeddings(
+                    {
+                      dimensions: 1024,
+                      input: chunks.map((c) => c.text),
+                      model,
+                    },
+                    { metadata: { trigger: RequestTrigger.FileEmbedding }, user: ctx.userId },
+                  );
 
-                const items: NewEmbeddingsItem[] =
-                  embeddings?.map((e, idx) => ({
-                    chunkId: chunks[idx].id,
-                    embeddings: e,
-                    fileId: input.fileId,
-                    model,
-                  })) || [];
+                  const items: NewEmbeddingsItem[] =
+                    embeddings?.map((e, idx) => ({
+                      chunkId: chunks[idx].id,
+                      embeddings: e,
+                      fileId: input.fileId,
+                      model,
+                    })) || [];
 
-                await embeddingModel.bulkCreate(items);
+                  assertWritable();
+                  await embeddingModel.bulkCreate(items);
+                })();
+
+                inFlightBatches.add(batch);
+                try {
+                  await batch;
+                } catch (e) {
+                  // One failed batch fails the task: stop its siblings from writing more.
+                  stopped = true;
+                  throw e;
+                } finally {
+                  inFlightBatches.delete(batch);
+                }
               },
               { concurrency: CONCURRENCY },
             );
@@ -170,6 +202,15 @@ export const fileRouter = router({
         return await Promise.race([embeddingPromise(), timeoutPromise]);
       } catch (e) {
         console.error('embeddingChunks error', e);
+
+        // Keep the task processing, which holds its vector reservation, until the batches
+        // already writing settle. Bounded so a hung provider call cannot pin the task; once
+        // `stopped` is set such a batch can no longer write anyway.
+        stopped = true;
+        await Promise.race([
+          Promise.allSettled(inFlightBatches),
+          new Promise((resolve) => setTimeout(resolve, IN_FLIGHT_BATCH_GRACE_MS)),
+        ]);
 
         await asyncTaskModel.update(input.taskId, {
           error: new AsyncTaskError((e as Error).name, (e as Error).message),
@@ -207,6 +248,21 @@ export const fileRouter = router({
       const file = await fileModel.findById(input.fileId);
       if (!file) {
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'File not found' });
+      }
+
+      if (file.size > MAX_FILE_PARSE_SIZE) {
+        await asyncTaskModel.update(input.taskId, {
+          error: new AsyncTaskError(
+            AsyncTaskErrorType.FileTooLargeToParse,
+            FILE_PARSE_SIZE_LIMIT_ERROR_MESSAGE,
+          ),
+          status: AsyncTaskStatus.Error,
+        });
+
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: FILE_PARSE_SIZE_LIMIT_ERROR_MESSAGE,
+        });
       }
 
       // Inline documents (custom/document) keep a mirror file row whose url is the
@@ -304,14 +360,12 @@ export const fileRouter = router({
           });
 
           // after finish partition, we need to filter out some elements
-          const chunks = chunkResult.chunks.map(
-            ({ text, ...item }): NewChunkItem => ({
-              ...item,
-              text: text ? sanitizeUTF8(text) : '',
-              userId: ctx.userId,
-              workspaceId,
-            }),
-          );
+          const chunks = chunkResult.chunks.map(({ text, ...item }): NewChunkItem => ({
+            ...item,
+            text: text ? sanitizeUTF8(text) : '',
+            userId: ctx.userId,
+            workspaceId,
+          }));
 
           const duration = Date.now() - startAt;
 
@@ -327,14 +381,12 @@ export const fileRouter = router({
           await chunkModel.bulkCreate(chunks, input.fileId);
 
           if (chunkResult.unstructuredChunks) {
-            const unstructuredChunks = chunkResult.unstructuredChunks.map(
-              (item): NewChunkItem => ({
-                ...item,
-                fileId: input.fileId,
-                userId: ctx.userId,
-                workspaceId,
-              }),
-            );
+            const unstructuredChunks = chunkResult.unstructuredChunks.map((item): NewChunkItem => ({
+              ...item,
+              fileId: input.fileId,
+              userId: ctx.userId,
+              workspaceId,
+            }));
             await chunkModel.bulkCreateUnstructuredChunks(unstructuredChunks);
           }
 

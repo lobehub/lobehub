@@ -5,30 +5,36 @@ import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { AttachmentUploadButton } from '@/features/AttachmentInput';
+import { mentionPlainClassName } from '@/features/ChatInput/InputEditor/mentionStyle';
 import { EditorCanvas } from '@/features/EditorCanvas';
 import {
   getAttachmentFileIdsFromEditor,
+  hasIncompleteEditorAttachments,
   insertFilesIntoEditor,
 } from '@/features/EditorCanvas/editorAttachments';
+import { useWorkspaceCommentMentionOption } from '@/features/Portal/TopicComments/useWorkspaceCommentMentionOption';
 import { useEnterToSend } from '@/hooks/useEnterToSend';
 import { usePermission } from '@/hooks/usePermission';
 import { useUserAvatar } from '@/hooks/useUserAvatar';
-import { useTaskStore } from '@/store/task';
 
 import { styles } from '../shared/style';
+import { useCommentSubmit } from './useCommentSubmit';
 
 const CommentInput = memo<{ taskId: string }>(({ taskId }) => {
   const { t } = useTranslation('chat');
   const { allowed: canEditTask } = usePermission('create_content');
   const editor = useEditor();
-  const addComment = useTaskStore((s) => s.addComment);
   const userAvatar = useUserAvatar();
-  const [submitting, setSubmitting] = useState(false);
   const [hasContent, setHasContent] = useState(false);
   const [hasAttachments, setHasAttachments] = useState(false);
+  const [uploadingAttachments, setUploadingAttachments] = useState(false);
   const shouldSendOnEnter = useEnterToSend();
+  // Same member source as document / topic comments, so `@` produces the
+  // identical mention node the server resolves for notifications.
+  const mentionOption = useWorkspaceCommentMentionOption();
 
-  const canSubmit = hasContent || hasAttachments;
+  // A still-uploading image would be sent as its local `blob:` preview URL.
+  const canSubmit = (hasContent || hasAttachments) && !uploadingAttachments;
 
   const handleContentChange = useCallback(() => {
     const lexicalEditor = editor?.getLexicalEditor?.();
@@ -38,6 +44,7 @@ const CommentInput = memo<{ taskId: string }>(({ taskId }) => {
       setHasContent(text.length > 0);
     });
     setHasAttachments(getAttachmentFileIdsFromEditor(editor).length > 0);
+    setUploadingAttachments(hasIncompleteEditorAttachments(editor));
   }, [editor]);
 
   const handleAttach = useCallback(
@@ -47,34 +54,43 @@ const CommentInput = memo<{ taskId: string }>(({ taskId }) => {
     [editor],
   );
 
-  const handleSubmit = useCallback(async () => {
-    if (!canEditTask || submitting) return;
-    const json = editor?.getDocument?.('json') as unknown;
-    const markdown = String(editor?.getDocument?.('markdown') ?? '').trim();
-    const hasFiles = getAttachmentFileIdsFromEditor(editor).length > 0;
-    if (!markdown && !hasFiles) return;
+  const handleContentReset = useCallback(
+    (state: { hasAttachments: boolean; hasContent: boolean }) => {
+      setHasContent(state.hasContent);
+      setHasAttachments(state.hasAttachments);
+      setUploadingAttachments(hasIncompleteEditorAttachments(editor));
+    },
+    [editor],
+  );
 
-    setSubmitting(true);
-    try {
-      await addComment(taskId, markdown, { editorData: json });
-      editor?.cleanDocument?.();
-      setHasContent(false);
-      setHasAttachments(false);
-    } finally {
-      setSubmitting(false);
-    }
-  }, [canEditTask, taskId, editor, addComment, submitting]);
+  const { submit: handleSubmit, submitting } = useCommentSubmit({
+    canComment: canEditTask,
+    editor,
+    onContentReset: handleContentReset,
+    taskId,
+  });
 
   return (
     <Flexbox className={styles.commentInputCard} gap={6}>
-      <Flexbox horizontal align={'center'} gap={8}>
+      <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0, width: '100%' }}>
         <Avatar avatar={userAvatar} size={24} style={{ flexShrink: 0 }} />
-        <div style={{ flex: 1, minWidth: 0 }}>
+        <div
+          className={mentionPlainClassName}
+          style={{ flex: '1 1 0', minWidth: 0, overflow: 'hidden' }}
+        >
           <EditorCanvas
             editor={editor}
             floatingToolbar={false}
+            mentionOption={mentionOption}
             placeholder={t('taskDetail.commentPlaceholder')}
-            style={{ fontSize: 14, minHeight: 24, paddingBlock: 0 }}
+            style={{
+              fontSize: 14,
+              maxWidth: '100%',
+              minHeight: 24,
+              overflow: 'hidden',
+              paddingBlock: 0,
+              whiteSpace: 'normal',
+            }}
             onContentChange={handleContentChange}
             onPressEnter={({ event }) => {
               if (!canEditTask) return true;

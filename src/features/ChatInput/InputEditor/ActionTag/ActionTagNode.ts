@@ -130,6 +130,7 @@ export class ActionTagNode extends DecoratorNode<any> implements HeadlessRendera
       category: this.__actionCategory as ActionTagCategory,
       key,
       label: this.__actionLabel,
+      type: this.__actionType,
     });
   }
 }

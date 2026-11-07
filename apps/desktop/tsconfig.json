@@ -2,6 +2,7 @@
   "compilerOptions": {
     "allowJs": true,
     "skipLibCheck": true,
+    "strict": false,
     "forceConsistentCasingInFileNames": true,
     "noEmit": false,
     "target": "ESNext",
@@ -21,6 +22,7 @@
     }
   },
   "include": [
+    "../../src/libs/mcp/__tests__/fixtures/negotiationServers.ts",
     "src/main/**/*",
     "src/main/global.d.ts",
     "src/preload/**/*",

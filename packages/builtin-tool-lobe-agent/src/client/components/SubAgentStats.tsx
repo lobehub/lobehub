@@ -1,22 +1,22 @@
 'use client';
 
-import { createStaticStyles } from 'antd-style';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { SubAgentRunStats } from '../../types';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  root: css`
-    overflow: hidden;
-    flex-shrink: 0;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-}));
+const styles = stylex.create({
+  root: {
+    overflow: 'hidden',
+    flexShrink: 0,
+    fontSize: '12px',
+    color: cssVar.colorTextTertiary,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+});
 
 const formatTokens = (n: number): string => {
   if (n < 1000) return String(n);
@@ -26,8 +26,8 @@ const formatTokens = (n: number): string => {
 
 /**
  * Compact one-line sub-agent run stats: tool count · model · token count.
- * Renders nothing when no stat is available (e.g. while the run is still in
- * flight, before the tool result state is persisted).
+ * Fed live during the run (streamed totals) and by the persisted state after it,
+ * so the same row serves both. Renders nothing until the first stat arrives.
  */
 export const SubAgentStats = memo<SubAgentRunStats>(({ model, totalToolCalls, totalTokens }) => {
   const { t } = useTranslation('plugin');
@@ -44,7 +44,7 @@ export const SubAgentStats = memo<SubAgentRunStats>(({ model, totalToolCalls, to
 
   if (items.length === 0) return null;
 
-  return <span className={styles.root}>{items.join(' · ')}</span>;
+  return <span {...stylex.props(styles.root)}>{items.join(' · ')}</span>;
 });
 
 SubAgentStats.displayName = 'SubAgentStats';

@@ -5,15 +5,19 @@ import {
   ActionIcon,
   Avatar,
   Button,
+  createStaticStyles,
+  cssVar,
   Flexbox,
   Icon,
   stopPropagation,
   Tag,
   Text,
+  toast,
   Tooltip,
+  useResponsive,
 } from '@lobehub/ui';
-import { App } from 'antd';
-import { createStaticStyles, cssVar, useResponsive } from 'antd-style';
+import { cssVar as vars } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import {
   BookmarkIcon,
   BookmarkMinusIcon,
@@ -41,14 +45,14 @@ import InstallationIcon from '../../components/MCPDepsIcon';
 import PublishedTime from '../../components/PublishedTime';
 import { useDetailContext } from './DetailProvider';
 
+const timeStyles = stylex.create({
+  time: { fontSize: '12px', color: vars.colorTextDescription },
+});
+
 const styles = createStaticStyles(({ css }) => {
   return {
     desc: css`
       color: ${cssVar.colorTextSecondary};
-    `,
-    time: css`
-      font-size: 12px;
-      color: ${cssVar.colorTextDescription};
     `,
     version: css`
       font-family: ${cssVar.fontFamilyCode};
@@ -59,7 +63,7 @@ const styles = createStaticStyles(({ css }) => {
 
 const Header = memo<{ inModal?: boolean; mobile?: boolean }>(({ mobile: isMobile, inModal }) => {
   const { t } = useTranslation('discover');
-  const { message } = App.useApp();
+
   const {
     name,
     author,
@@ -110,15 +114,15 @@ const Header = memo<{ inModal?: boolean; mobile?: boolean }>(({ mobile: isMobile
     try {
       if (isFavorited) {
         await socialService.removeFavorite('plugin', identifier);
-        message.success(t('assistant.unfavoriteSuccess'));
+        toast.success(t('assistant.unfavoriteSuccess'));
       } else {
         await socialService.addFavorite('plugin', identifier);
-        message.success(t('assistant.favoriteSuccess'));
+        toast.success(t('assistant.favoriteSuccess'));
       }
       await mutateFavorite();
     } catch (error) {
       console.error('Favorite action failed:', error);
-      message.error(t('assistant.favoriteFailed'));
+      toast.error(t('assistant.favoriteFailed'));
     } finally {
       setFavoriteLoading(false);
     }
@@ -149,7 +153,7 @@ const Header = memo<{ inModal?: boolean; mobile?: boolean }>(({ mobile: isMobile
         url: '/community/mcp',
       })}
     >
-      <Button icon={cate?.icon} size={'middle'} variant={'outlined'}>
+      <Button icon={cate?.icon} size={'middle'}>
         {cate?.label}
       </Button>
     </Link>
@@ -232,7 +236,7 @@ const Header = memo<{ inModal?: boolean; mobile?: boolean }>(({ mobile: isMobile
             )}
             {isClaimed && <Tag size={'small'}>{t('isClaimed')}</Tag>}
             <Icon icon={DotIcon} />
-            <PublishedTime className={styles.time} date={(updatedAt || createdAt) as string} />
+            <PublishedTime date={(updatedAt || createdAt) as string} xstyle={timeStyles.time} />
           </Flexbox>
         </Flexbox>
       </Flexbox>

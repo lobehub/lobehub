@@ -1,5 +1,9 @@
 import { isDesktop as defaultIsDesktop } from '@lobechat/const';
-import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
+import {
+  HETEROGENEOUS_PROVIDER_BINDING_LOCAL_ONLY_ERROR,
+  HETEROGENEOUS_PROVIDER_BINDING_PERSONAL_ONLY_ERROR,
+  isRemoteHeterogeneousType,
+} from '@lobechat/heterogeneous-agents';
 import { type DeviceExecutionTarget, type HeterogeneousProviderConfig } from '@lobechat/types';
 
 import { resolveExecutionTarget } from '@/helpers/executionTarget';
@@ -67,6 +71,13 @@ export interface RuntimeSelectionContext {
   /** Result of `chatStore.isGatewayModeEnabled()`. */
   isGatewayMode: boolean;
   /**
+   * The agent is workspace-scoped (`agent.workspaceId` set), regardless of
+   * authorship or per-member overrides. Unlike `workspaceScoped`, this stays
+   * true for the agent's author and for members with an explicit local
+   * override — the cases that CAN spawn a workspace agent in-process.
+   */
+  isWorkspaceAgent?: boolean;
+  /**
    * Explicit override that wins over automatic selection.
    *
    * Used by sub-agent dispatches (`directMentionRoute`, `callAgent`) so child
@@ -75,6 +86,14 @@ export interface RuntimeSelectionContext {
    * stay on Gateway, even if its own agent config would say otherwise.
    */
   parentRuntime?: AgentRuntimeType;
+  /**
+   * The shared-row safety coercion still applies: a member without an explicit
+   * `executionTarget` override never executes the shared config on their own
+   * client (see `resolveWorkspaceScoped` / `resolveExecutionTarget`). False
+   * for the author or an explicitly overriding member even when
+   * `isWorkspaceAgent` is true.
+   */
+  workspaceScoped?: boolean;
 }
 
 interface SelectRuntimeTypeOptions {
@@ -90,28 +109,80 @@ interface SelectRuntimeTypeOptions {
  * not require re-deriving the routing rules.
  *
  * Priority: `parentRuntime` > `hetero` (desktop only) > `gateway` > `client`.
+ *
+ * The agent's model provider is intentionally not an input. A provider only
+ * this device can reach (local Ollama / LM Studio, a private base URL) still
+ * runs on `gateway`: the server drives the loop and relays each LLM attempt
+ * to the client that started the run (`agent_llm_relay`, see
+ * `services/llmRelay`); tools, persistence and the loop stay on the server
+ * rather than falling back to the client runtime.
  */
 export const selectRuntimeType = (
   ctx: RuntimeSelectionContext,
   { isDesktop = defaultIsDesktop }: SelectRuntimeTypeOptions = {},
 ): AgentRuntimeType => {
+  if (ctx.heterogeneousProvider?.authMode === 'api') {
+    // Personal-scope invariant: Desktop main resolves the binding's providerId
+    // with NO workspace header (see `providerBindingPort`), while a workspace
+    // agent's binding was configured against workspace-scoped providers. The
+    // author (or an explicitly overriding member) CAN spawn a workspace agent
+    // in-process — `workspaceScoped` alone does not block them — so a colliding
+    // personal provider id (e.g. builtin `anthropic`) would silently supply
+    // different credentials. Reject before any IPC.
+    // The deployment-default API source uses deployment-owned credentials
+    // rather than a user provider id, so this guard stays on user-provider
+    // bindings only.
+    if (
+      ctx.heterogeneousProvider.apiConfig &&
+      ctx.heterogeneousProvider.apiConfig?.source !== 'server-default' &&
+      ctx.isWorkspaceAgent
+    ) {
+      throw new Error(HETEROGENEOUS_PROVIDER_BINDING_PERSONAL_ONLY_ERROR);
+    }
+    const target = resolveExecutionTarget(
+      {
+        boundDeviceId: ctx.boundDeviceId,
+        executionTarget: ctx.executionTarget,
+        heterogeneousProvider: ctx.heterogeneousProvider,
+      },
+      {
+        isHetero: true,
+        clientExecutionAvailable: isDesktop,
+        workspaceScoped: ctx.workspaceScoped,
+      },
+    );
+    if (target !== 'local' || (ctx.parentRuntime && ctx.parentRuntime !== 'hetero')) {
+      throw new Error(HETEROGENEOUS_PROVIDER_BINDING_LOCAL_ONLY_ERROR);
+    }
+  }
+
   if (ctx.parentRuntime) return ctx.parentRuntime;
-  // Remote device agents (openclaw / hermes) always use the gateway path regardless of
-  // desktop/web — they communicate via a device connected with `lh connect`, not via
-  // local desktop IPC. No special desktop handling needed.
+  // Notify-based platform agents (openclaw / hermes) use the gateway transport for both
+  // targets: `local` presets this desktop's personal device ID on the request, while
+  // `device` dispatches to the configured remote device. They do not implement the
+  // JSONL/session protocol consumed by the in-process `hetero` transport.
   if (ctx.heterogeneousProvider && isRemoteHeterogeneousType(ctx.heterogeneousProvider.type)) {
     return 'gateway';
   }
-  // Local CLI hetero (claude-code / codex) — route by the resolved execution
+  // Local CLI hetero (Amp / Claude Code / Codex) — route by the resolved execution
   // target (shared resolution with the server / the device switcher UI):
   // `device` / `sandbox` need server-side dispatch; `local` runs in-process on
-  // the desktop. On web, unbound `local` resolves to sandbox, while a desktop
-  // `local` selection synced with boundDeviceId resolves to device dispatch.
+  // the desktop. On web, unbound `local` resolves to sandbox when supported
+  // (otherwise the pending `none` state), while a desktop `local` selection
+  // synced with boundDeviceId resolves to device dispatch.
   if (ctx.heterogeneousProvider) {
     const target = resolveExecutionTarget(
-      { boundDeviceId: ctx.boundDeviceId, executionTarget: ctx.executionTarget },
+      {
+        boundDeviceId: ctx.boundDeviceId,
+        executionTarget: ctx.executionTarget,
+        heterogeneousProvider: ctx.heterogeneousProvider,
+      },
       // on the client the desktop build IS where local execution is available
-      { isHetero: true, clientExecutionAvailable: isDesktop },
+      {
+        isHetero: true,
+        clientExecutionAvailable: isDesktop,
+        workspaceScoped: ctx.workspaceScoped,
+      },
     );
     return target === 'local' ? 'hetero' : 'gateway';
   }

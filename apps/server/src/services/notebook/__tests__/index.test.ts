@@ -3,12 +3,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DocumentModel } from '@/database/models/document';
 import { TopicDocumentModel } from '@/database/models/topicDocument';
 import { DocumentService } from '@/server/services/document';
+import { assertDocumentWriteWithinLimit } from '@/server/services/document/writeLimit';
 
 import { NotebookRuntimeService } from '../index';
 
 vi.mock('@/database/models/document');
 vi.mock('@/database/models/topicDocument');
 vi.mock('@/server/services/document');
+vi.mock('@/server/services/document/writeLimit', () => ({
+  assertDocumentWriteWithinLimit: vi.fn(),
+}));
 
 describe('NotebookRuntimeService', () => {
   let service: NotebookRuntimeService;
@@ -38,9 +42,15 @@ describe('NotebookRuntimeService', () => {
       findByTopicId: vi.fn(),
     };
 
-    vi.mocked(DocumentModel).mockImplementation(() => mockDocumentModel);
-    vi.mocked(DocumentService).mockImplementation(() => mockDocumentService);
-    vi.mocked(TopicDocumentModel).mockImplementation(() => mockTopicDocumentModel);
+    vi.mocked(DocumentModel).mockImplementation(function () {
+      return mockDocumentModel;
+    });
+    vi.mocked(DocumentService).mockImplementation(function () {
+      return mockDocumentService;
+    });
+    vi.mocked(TopicDocumentModel).mockImplementation(function () {
+      return mockTopicDocumentModel;
+    });
 
     service = new NotebookRuntimeService({ serverDB: mockDb, userId: mockUserId });
   });
@@ -88,6 +98,52 @@ describe('NotebookRuntimeService', () => {
         totalCharCount: 7,
         updatedAt: mockDocument.updatedAt,
       });
+    });
+
+    it('checks an agent write and stores the character count, not the word count', async () => {
+      mockDocumentModel.create.mockResolvedValue(mockDocument);
+      const wordy = new NotebookRuntimeService({
+        serverDB: mockDb,
+        userId: mockUserId,
+        workspaceId: 'ws-1',
+      });
+
+      await wordy.createDocument({
+        content: 'two words',
+        fileType: 'markdown',
+        source: 's',
+        sourceType: 'api',
+        title: 't',
+        totalCharCount: 2,
+        totalLineCount: 1,
+      });
+
+      expect(assertDocumentWriteWithinLimit).toHaveBeenCalledWith({
+        charCount: 9,
+        source: 'agent',
+        userId: mockUserId,
+        workspaceId: 'ws-1',
+      });
+      expect(mockDocumentModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({ totalCharCount: 9 }),
+      );
+    });
+
+    it('creates nothing when the limit refuses the write', async () => {
+      vi.mocked(assertDocumentWriteWithinLimit).mockRejectedValueOnce(new Error('too long'));
+
+      await expect(
+        service.createDocument({
+          content: 'x',
+          fileType: 'markdown',
+          source: 's',
+          sourceType: 'api',
+          title: 't',
+          totalCharCount: 1,
+          totalLineCount: 1,
+        }),
+      ).rejects.toThrow('too long');
+      expect(mockDocumentModel.create).not.toHaveBeenCalled();
     });
 
     it('should convert topic sourceType to api', async () => {
@@ -151,6 +207,31 @@ describe('NotebookRuntimeService', () => {
       expect(result.content).toBe(newContent);
     });
 
+    it('checks an agent update against the previous length before writing', async () => {
+      mockDocumentModel.findById.mockResolvedValue({ ...mockDocument, content: 'abc' });
+      mockDocumentModel.update.mockResolvedValue(undefined);
+
+      await service.updateDocument('doc-1', { content: 'abcdef' });
+
+      expect(assertDocumentWriteWithinLimit).toHaveBeenCalledWith({
+        charCount: 6,
+        previousCharCount: 3,
+        source: 'agent',
+        userId: mockUserId,
+        workspaceId: undefined,
+      });
+    });
+
+    it('does not update when the limit refuses the write', async () => {
+      mockDocumentModel.findById.mockResolvedValue({ ...mockDocument, content: 'abc' });
+      vi.mocked(assertDocumentWriteWithinLimit).mockRejectedValueOnce(new Error('too long'));
+
+      await expect(service.updateDocument('doc-1', { content: 'abcdef' })).rejects.toThrow(
+        'too long',
+      );
+      expect(mockDocumentModel.update).not.toHaveBeenCalled();
+    });
+
     it('should update title only', async () => {
       mockDocumentModel.update.mockResolvedValue(undefined);
       mockDocumentModel.findById.mockResolvedValue({
@@ -182,7 +263,7 @@ describe('NotebookRuntimeService', () => {
       await service.deleteDocument('doc-1');
 
       expect(mockTopicDocumentModel.deleteByDocumentId).toHaveBeenCalledWith('doc-1');
-      expect(mockDocumentService.deleteDocument).toHaveBeenCalledWith('doc-1');
+      expect(mockDocumentService.deleteDocument).toHaveBeenCalledWith('doc-1', undefined);
     });
   });
 

@@ -1,9 +1,9 @@
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
 import type { ConnectorCredentials } from '../../schemas';
-import { userConnectors, users, workspaces } from '../../schemas';
+import { agents, userConnectors, users, workspaces } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { ConnectorModel } from '../connector';
 
@@ -196,6 +196,44 @@ describe('ConnectorModel', () => {
     });
   });
 
+  describe('public metadata reads', () => {
+    it('does not select or decrypt credential and private config fields', async () => {
+      const model = new ConnectorModel(serverDB, userId, undefined, gateKeeper);
+      const created = await model.create({
+        credentials: JSON.stringify(apikeyCredentials),
+        identifier: 'public-mcp',
+        mcpConnectionType: 'http',
+        mcpServerUrl: 'https://mcp.example.com',
+        metadata: {
+          customHeaders: { 'X-Private': 'secret' },
+          description: 'Public description',
+        },
+        name: 'Public MCP',
+        oidcConfig: { clientSecret: 'secret', scheme: 'pre_registration' },
+        sourceType: 'custom',
+        status: 'connected',
+      });
+      gateKeeper.decrypt.mockClear();
+
+      const [listed, found] = await Promise.all([
+        model.queryPublic(),
+        model.findPublicById(created.id),
+      ]);
+
+      expect(listed).toHaveLength(1);
+      expect(found).toEqual(listed[0]);
+      expect(found).toMatchObject({
+        description: 'Public description',
+        hasCredentials: true,
+        id: created.id,
+      });
+      expect(found).not.toHaveProperty('credentials');
+      expect(found).not.toHaveProperty('metadata');
+      expect(found).not.toHaveProperty('oidcConfig');
+      expect(gateKeeper.decrypt).not.toHaveBeenCalled();
+    });
+  });
+
   describe('queryByIdentifiers', () => {
     it('returns an empty array for an empty identifier list', async () => {
       const model = new ConnectorModel(serverDB, userId);
@@ -226,6 +264,218 @@ describe('ConnectorModel', () => {
       const rows = await model.queryByIdentifiers(['linear', 'slack']);
 
       expect(rows.map((r) => r.identifier).sort()).toEqual(['linear', 'slack']);
+    });
+  });
+
+  describe('stable identifier order', () => {
+    const createConnectors = async (model: ConnectorModel, identifiers: string[]) => {
+      for (const identifier of identifiers) {
+        await model.create({
+          identifier,
+          name: identifier,
+          sourceType: 'builtin',
+          status: 'connected',
+        });
+      }
+    };
+
+    // The identifier indexes make small test tables come back sorted by accident;
+    // disable plain index scans so rows come back in physical (heap) order, as
+    // they do in production when the planner picks a seq or bitmap heap scan.
+    beforeEach(async () => {
+      await serverDB.execute(sql`SET enable_indexscan = off`);
+      await serverDB.execute(sql`SET enable_indexonlyscan = off`);
+    });
+
+    afterEach(async () => {
+      await serverDB.execute(sql`RESET enable_indexscan`);
+      await serverDB.execute(sql`RESET enable_indexonlyscan`);
+    });
+
+    it('returns connectors sorted by identifier regardless of insert, update or input order', async () => {
+      const model = new ConnectorModel(serverDB, userId);
+      // insert in reverse order so the physical row order differs from the sorted order
+      await createConnectors(model, ['slack', 'linear', 'github']);
+      const expected = ['github', 'linear', 'slack'];
+
+      const queried = await model.queryByIdentifiers(['linear', 'slack', 'github']);
+      const resolved = await model.resolveByIdentifiers(['slack', 'github', 'linear']);
+      expect(queried.map((r) => r.identifier)).toEqual(expected);
+      expect(resolved.map((r) => r.identifier)).toEqual(expected);
+      expect((await model.resolveAll()).map((r) => r.identifier)).toEqual(expected);
+
+      // an update rewrites the row and moves it in physical order
+      const github = queried.find((r) => r.identifier === 'github')!;
+      await model.update(github.id, { name: 'GitHub (renamed)' });
+
+      expect(
+        (await model.queryByIdentifiers(['github', 'linear', 'slack'])).map((r) => r.id),
+      ).toEqual(queried.map((r) => r.id));
+      expect(
+        (await model.resolveByIdentifiers(['linear', 'github', 'slack'])).map((r) => r.id),
+      ).toEqual(resolved.map((r) => r.id));
+      expect((await model.resolveAll()).map((r) => r.identifier)).toEqual(expected);
+    });
+
+    it('omits unknown identifiers and does not duplicate repeated ones', async () => {
+      const model = new ConnectorModel(serverDB, userId);
+      await createConnectors(model, ['slack', 'github']);
+
+      const identifiers = ['slack', 'missing', 'github', 'slack'];
+      expect((await model.queryByIdentifiers(identifiers)).map((r) => r.identifier)).toEqual([
+        'github',
+        'slack',
+      ]);
+      expect((await model.resolveByIdentifiers(identifiers)).map((r) => r.identifier)).toEqual([
+        'github',
+        'slack',
+      ]);
+    });
+  });
+
+  describe('queryReferencesByIdentifiers', () => {
+    it('returns scoped safe references without decrypting credentials', async () => {
+      const model = new ConnectorModel(serverDB, userId, undefined, gateKeeper);
+      const created = await model.create({
+        credentials: JSON.stringify(apikeyCredentials),
+        identifier: 'github',
+        isEnabled: true,
+        name: 'GitHub',
+        sourceType: 'builtin',
+        status: 'connected',
+      });
+      await new ConnectorModel(serverDB, otherUserId).create({
+        identifier: 'github',
+        name: 'Other GitHub',
+        sourceType: 'builtin',
+        status: 'connected',
+      });
+      await serverDB.insert(agents).values({ id: 'github-agent', userId });
+      await model.create({
+        agentId: 'github-agent',
+        identifier: 'github',
+        name: 'Agent GitHub',
+        sourceType: 'builtin',
+        status: 'connected',
+      });
+      gateKeeper.decrypt.mockClear();
+
+      const rows = await model.queryReferencesByIdentifiers(['github']);
+
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toEqual({
+        id: created.id,
+        isEnabled: true,
+        status: 'connected',
+      });
+      expect(rows[0]).not.toHaveProperty('credentials');
+      expect(gateKeeper.decrypt).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Composio references', () => {
+    it('returns only scoped non-credential Composio fields without decrypting', async () => {
+      const model = new ConnectorModel(serverDB, userId, workspaceId, gateKeeper);
+      const created = await model.create({
+        credentials: JSON.stringify(apikeyCredentials),
+        identifier: 'gmail',
+        isEnabled: true,
+        metadata: {
+          composio: {
+            appSlug: 'gmail',
+            authConfigId: 'secret-auth-config',
+            connectedAccountId: 'ca-current',
+            linkedByUserId: 'gmail-linker',
+            redirectUrl: 'https://secret.example/callback',
+            status: 'ACTIVE',
+          },
+        },
+        name: 'Gmail',
+        sourceType: 'builtin',
+        status: 'connected',
+      });
+      const legacy = await new ConnectorModel(serverDB, otherUserId, workspaceId).create({
+        identifier: 'gmail-legacy',
+        isEnabled: true,
+        metadata: {
+          composio: {
+            appSlug: 'gmail',
+            authConfigId: 'legacy-auth-config',
+            connectedAccountId: 'ca-legacy',
+            status: 'ACTIVE',
+          },
+        },
+        name: 'Legacy Gmail',
+        sourceType: 'builtin',
+        status: 'connected',
+      });
+      await new ConnectorModel(serverDB, otherUserId).create({
+        identifier: 'gmail',
+        isEnabled: true,
+        metadata: {
+          composio: {
+            appSlug: 'gmail',
+            authConfigId: 'other-auth-config',
+            connectedAccountId: 'ca-other',
+            status: 'ACTIVE',
+          },
+        },
+        name: 'Other Gmail',
+        sourceType: 'builtin',
+        status: 'connected',
+      });
+      await serverDB.insert(agents).values({ id: 'gmail-agent', userId, workspaceId });
+      await model.create({
+        agentId: 'gmail-agent',
+        identifier: 'gmail',
+        isEnabled: true,
+        metadata: {
+          composio: {
+            appSlug: 'gmail',
+            authConfigId: 'agent-auth-config',
+            connectedAccountId: 'ca-agent',
+            status: 'ACTIVE',
+          },
+        },
+        name: 'Agent Gmail',
+        sourceType: 'builtin',
+        status: 'connected',
+      });
+      gateKeeper.decrypt.mockClear();
+
+      const rows = await model.queryComposioReferencesByIdentifiers(['gmail', 'gmail-legacy']);
+
+      expect(rows).toHaveLength(2);
+      expect(rows).toEqual(
+        expect.arrayContaining([
+          {
+            composio: {
+              appSlug: 'gmail',
+              connectedAccountId: 'ca-current',
+              ownerUserId: 'gmail-linker',
+              status: 'ACTIVE',
+            },
+            id: created.id,
+            isEnabled: true,
+            status: 'connected',
+          },
+          {
+            composio: {
+              appSlug: 'gmail',
+              connectedAccountId: 'ca-legacy',
+              ownerUserId: otherUserId,
+              status: 'ACTIVE',
+            },
+            id: legacy.id,
+            isEnabled: true,
+            status: 'connected',
+          },
+        ]),
+      );
+      expect(JSON.stringify(rows)).not.toMatch(
+        /credentials|secret-auth-config|redirectUrl|ca-other/,
+      );
+      expect(gateKeeper.decrypt).not.toHaveBeenCalled();
     });
   });
 
@@ -336,6 +586,86 @@ describe('ConnectorModel', () => {
 
       const found = await model.findById(created.id);
       expect(found?.status).toBe('error');
+    });
+  });
+
+  describe('markComposioConnectionUnavailable', () => {
+    /**
+     * @example
+     * A provider boundary confirms a deleted Composio account and transitions the connector
+     * from ACTIVE/connected to FAILED/error without disabling the user's toggle.
+     */
+    it('marks a Composio connector unavailable when the remote account no longer exists', async () => {
+      const model = new ConnectorModel(serverDB, userId);
+      const created = await model.create({
+        identifier: 'gmail',
+        isEnabled: true,
+        metadata: {
+          composio: {
+            appSlug: 'gmail',
+            authConfigId: 'auth-config',
+            connectedAccountId: 'ca-deleted',
+            linkedByUserId: userId,
+            status: 'ACTIVE',
+          },
+          description: 'preserved metadata',
+        },
+        name: 'Gmail',
+        sourceType: 'marketplace',
+        status: 'connected',
+      });
+      const handled = await model.markComposioConnectionUnavailable(created.id, 'ca-deleted');
+
+      const found = await model.findById(created.id);
+      /** @example A scoped state transition returns true once it is persisted. */
+      expect(handled).toBe(true);
+      /** @example The connector is excluded from active source resolution. */
+      expect(found?.status).toBe('error');
+      /** @example Remote health does not overwrite the user's enabled preference. */
+      expect(found?.isEnabled).toBe(true);
+      /** @example Composio-specific health is projected into metadata for runtime readers. */
+      expect(found?.metadata?.composio?.status).toBe('FAILED');
+      /** @example Unrelated metadata survives the health transition. */
+      expect(found?.metadata?.description).toBe('preserved metadata');
+    });
+
+    /**
+     * @example
+     * A request for the replaced account cannot mark the newly connected account unavailable.
+     */
+    it('does not mark a replacement Composio account from a stale failure', async () => {
+      // ROOT CAUSE:
+      //
+      // Reconnect updates the existing connector row with a new connectedAccountId.
+      // An in-flight failure for the previous account used to update that row by ID alone.
+      //
+      // Before: the replacement account became FAILED/error.
+      // We fixed this by matching the failed connectedAccountId in the health UPDATE.
+      const model = new ConnectorModel(serverDB, userId);
+      const created = await model.create({
+        identifier: 'gmail',
+        isEnabled: true,
+        metadata: {
+          composio: {
+            appSlug: 'gmail',
+            authConfigId: 'auth-config',
+            connectedAccountId: 'ca-current',
+            linkedByUserId: userId,
+            status: 'ACTIVE',
+          },
+        },
+        name: 'Gmail',
+        sourceType: 'marketplace',
+        status: 'connected',
+      });
+
+      const handled = await model.markComposioConnectionUnavailable(created.id, 'ca-previous');
+      const found = await model.findById(created.id);
+
+      expect(handled).toBe(false);
+      expect(found?.status).toBe('connected');
+      expect(found?.metadata?.composio?.connectedAccountId).toBe('ca-current');
+      expect(found?.metadata?.composio?.status).toBe('ACTIVE');
     });
   });
 

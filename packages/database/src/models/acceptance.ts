@@ -1,0 +1,704 @@
+import type {
+  AcceptanceCheckGroup,
+  AcceptanceMetadata,
+  AcceptanceRepairRequest,
+  AcceptanceStatus,
+  AcceptanceSubjectType,
+} from '@lobechat/types';
+import { isClosedByRetirement } from '@lobechat/utils/verify/acceptanceStatus';
+import type { SQL } from 'drizzle-orm';
+import { and, desc, eq, exists, inArray, isNull, lt, ne, not, or, sql } from 'drizzle-orm';
+
+import { acceptanceComments } from '../schemas/acceptanceComment';
+import { goalNodes } from '../schemas/goalGraph';
+import type { AcceptanceItem, NewAcceptance } from '../schemas/verify';
+import { acceptances } from '../schemas/verify';
+import { workspaceMembers } from '../schemas/workspace';
+import type { LobeChatDatabase } from '../type';
+import { isUuid } from '../utils/uuid';
+import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
+
+/**
+ * Whose acceptances the list shows.
+ *
+ * `all` / `created` stay inside the active scope (personal or workspace);
+ * `participated` follows the caller across scopes — taking part in a review
+ * is about the person, not the workspace they happen to have open.
+ */
+export type AcceptanceListScope = 'all' | 'created' | 'participated';
+
+/**
+ * Where an acceptance came from. `goal` is a task acceptance whose task is a
+ * step of a goal graph; `standalone` also covers the rare document subject.
+ */
+export type AcceptanceListSource = 'all' | 'goal' | 'standalone' | 'task' | 'topic';
+
+/** `null` = only acceptances filed under no project. */
+export type AcceptanceListProject = string | null;
+
+export interface AcceptanceListQuery {
+  projectId?: AcceptanceListProject;
+  scope?: AcceptanceListScope;
+  source?: AcceptanceListSource;
+  statuses?: AcceptanceStatus[];
+}
+
+/** Statuses a user's decision produced — sticky until explicitly re-opened. */
+const TERMINAL_ACCEPTANCE_STATUSES = new Set<AcceptanceStatus>(['accepted', 'closed', 'rejected']);
+
+/**
+ * Opaque list cursor = `${createdAt ISO}__${id}`. Both parts are metacharacter-
+ * free (ISO timestamp + uuid), so a plain `__` delimiter round-trips safely.
+ * Mirrors `VerifyRunModel.queryPage`, whose page the reports panel reads.
+ */
+const encodeCursor = (createdAt: Date, id: string): string => `${createdAt.toISOString()}__${id}`;
+
+const decodeCursor = (cursor?: string): { createdAt: Date; id: string } | null => {
+  if (!cursor) return null;
+  const idx = cursor.lastIndexOf('__');
+  if (idx <= 0) return null;
+  const createdAt = new Date(cursor.slice(0, idx));
+  const id = cursor.slice(idx + 2);
+  // The id half is compared against a uuid column, so a malformed one would be
+  // parsed by Postgres and raise 22P02 — a client's bad cursor turning into a
+  // 500. An unreadable cursor is simply the start of the feed.
+  if (Number.isNaN(createdAt.getTime()) || !isUuid(id)) return null;
+  return { createdAt, id };
+};
+
+/**
+ * Owns the business-level acceptance aggregate (`acceptances`): one row per
+ * subject (task / topic / document / standalone delivery) carrying the
+ * user-facing lifecycle state.
+ * The verify rounds chain onto it through `verify_runs.acceptance_id` +
+ * `round_index`; this model deliberately holds no round pointers — root /
+ * current / latest-report are all derived from that chain at read time.
+ */
+export class AcceptanceModel {
+  private readonly db: LobeChatDatabase;
+  private readonly userId: string;
+  private readonly workspaceId?: string;
+
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
+    this.db = db;
+    this.userId = userId;
+    this.workspaceId = workspaceId;
+  }
+
+  private ownership = () =>
+    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, acceptances);
+
+  /**
+   * What the list reads in the active scope. Wider than {@link ownership} in a
+   * workspace: a `private` workspace acceptance is member-gated, not
+   * creator-only — every member can open it (`resolveAcceptanceCommentAccess`),
+   * so the list must show it too. Only an `owner` row stays its creator's.
+   * Writes keep using `ownership`.
+   */
+  private listScope = (): SQL => {
+    const scope = buildWorkspaceWhere(
+      { userId: this.userId, workspaceId: this.workspaceId },
+      { userId: acceptances.userId, workspaceId: acceptances.workspaceId },
+    );
+    if (!this.workspaceId) return scope;
+    return and(scope, or(eq(acceptances.userId, this.userId), this.workspaceReadable()))!;
+  };
+
+  /** Rows a member of their workspace may read; mirrors `isWorkspaceReadableVisibility`. */
+  private workspaceReadable = (): SQL => ne(acceptances.visibility, 'owner');
+
+  /**
+   * Acceptances the caller has spoken on — a remark or an approval, replies
+   * included; a bare emoji reaction is not taking part. Rows the caller can no
+   * longer read (made private, or they left its workspace) drop out: the link
+   * would 404 and the title is no longer theirs to see. Mirrors the read rule
+   * of `resolveAcceptanceCommentAccess`.
+   */
+  private participation = (): SQL =>
+    and(
+      exists(
+        this.db
+          .select({ one: sql`1` })
+          .from(acceptanceComments)
+          .where(
+            and(
+              eq(acceptanceComments.acceptanceId, acceptances.id),
+              eq(acceptanceComments.authorUserId, this.userId),
+              inArray(acceptanceComments.kind, ['comment', 'approval']),
+              isNull(acceptanceComments.deletedAt),
+            ),
+          ),
+      ),
+      or(
+        eq(acceptances.userId, this.userId),
+        eq(acceptances.visibility, 'public'),
+        and(
+          this.workspaceReadable(),
+          exists(
+            this.db
+              .select({ one: sql`1` })
+              .from(workspaceMembers)
+              .where(
+                and(
+                  eq(workspaceMembers.workspaceId, acceptances.workspaceId),
+                  eq(workspaceMembers.userId, this.userId),
+                  isNull(workspaceMembers.deletedAt),
+                ),
+              ),
+          ),
+        ),
+      ),
+    )!;
+
+  private sourceCondition = (source: AcceptanceListSource): SQL | undefined => {
+    const goalStep = exists(
+      this.db
+        .select({ one: sql`1` })
+        .from(goalNodes)
+        .where(eq(goalNodes.taskId, acceptances.subjectId)),
+    );
+    switch (source) {
+      case 'topic': {
+        return eq(acceptances.subjectType, 'topic');
+      }
+      case 'task': {
+        return and(eq(acceptances.subjectType, 'task'), not(goalStep));
+      }
+      case 'goal': {
+        // A Goal's step deliveries, and the release reviews its batches are held on.
+        return or(
+          and(eq(acceptances.subjectType, 'task'), goalStep),
+          eq(acceptances.subjectType, 'goal_gate'),
+        );
+      }
+      case 'standalone': {
+        return inArray(acceptances.subjectType, ['standalone', 'document']);
+      }
+      default: {
+        return undefined;
+      }
+    }
+  };
+
+  /** The shared WHERE of {@link query} and {@link queryPage}. */
+  private listConditions = ({
+    projectId,
+    scope = 'all',
+    source = 'all',
+    statuses,
+  }: AcceptanceListQuery) => {
+    const conditions: SQL[] = [];
+    if (scope === 'participated') conditions.push(this.participation());
+    else {
+      conditions.push(this.listScope());
+      if (scope === 'created') conditions.push(eq(acceptances.userId, this.userId));
+    }
+    if (projectId === null) conditions.push(isNull(acceptances.projectId));
+    else if (projectId) conditions.push(eq(acceptances.projectId, projectId));
+    if (statuses && statuses.length > 0) conditions.push(inArray(acceptances.status, statuses));
+    const sourceCondition = this.sourceCondition(source);
+    if (sourceCondition) conditions.push(sourceCondition);
+    return conditions;
+  };
+
+  /** Presentation-only write: never starts a round or rewrites evidence-bearing snapshots. */
+  setCheckGroups = async (id: string, groups: AcceptanceCheckGroup[], expectedVersion: number) => {
+    return this.db.transaction(async (tx) => {
+      const [row] = await tx
+        .select()
+        .from(acceptances)
+        .where(and(eq(acceptances.id, id), this.ownership()))
+        .for('update');
+      if (!row) throw new Error('Acceptance not found');
+      const version = row.metadata?.checkGrouping?.version ?? 0;
+      if (version !== expectedVersion)
+        throw new Error('Check grouping changed; reload before editing');
+      const checkGrouping = { groups, version: version + 1 };
+      await tx
+        .update(acceptances)
+        .set({ metadata: { ...row.metadata, checkGrouping } })
+        .where(eq(acceptances.id, id));
+      return checkGrouping;
+    });
+  };
+
+  /**
+   * Scope-dependent visibility default: personal aggregates are link-shareable
+   * (`public`), workspace aggregates stay member-gated (`private`). An explicit
+   * caller value always wins.
+   */
+  private defaultVisibility = () => (this.workspaceId ? ('private' as const) : ('public' as const));
+
+  create = async (
+    params: Omit<NewAcceptance, 'userId' | 'workspaceId'>,
+  ): Promise<AcceptanceItem> => {
+    const [row] = await this.db
+      .insert(acceptances)
+      .values(
+        buildWorkspacePayload(
+          { userId: this.userId, workspaceId: this.workspaceId },
+          { visibility: this.defaultVisibility(), ...params },
+        ),
+      )
+      .returning();
+    return row;
+  };
+
+  findById = async (id: string) => {
+    // A malformed id (e.g. an autolinker glued trailing punctuation onto a
+    // shared link) would abort the query with 22P02 — read it as "not found".
+    if (!isUuid(id)) return undefined;
+    return this.db.query.acceptances.findFirst({
+      where: and(eq(acceptances.id, id), this.ownership()),
+    });
+  };
+
+  /** The (unique per scope) acceptance for a subject, or undefined when none yet. */
+  findBySubject = async (subjectType: AcceptanceSubjectType, subjectId: string) => {
+    return this.db.query.acceptances.findFirst({
+      where: and(
+        eq(acceptances.subjectType, subjectType),
+        eq(acceptances.subjectId, subjectId),
+        this.ownership(),
+      ),
+    });
+  };
+
+  /**
+   * The acceptances for many subjects of one type, for surfaces that show a
+   * verification state per row. Batched because the caller (the Goal graph
+   * read) polls every few seconds and would otherwise issue one query per task.
+   */
+  findBySubjects = async (subjectType: AcceptanceSubjectType, subjectIds: string[]) => {
+    if (subjectIds.length === 0) return [];
+    return this.db
+      .select()
+      .from(acceptances)
+      .where(
+        and(
+          eq(acceptances.subjectType, subjectType),
+          inArray(acceptances.subjectId, subjectIds),
+          this.ownership(),
+        ),
+      );
+  };
+
+  /**
+   * Resolve an execution policy for a subject. Unlike report-facing reads,
+   * workspace policy lookup is shared by every workspace member: a private
+   * Acceptance controls the shared Task even when another member executes it.
+   * Personal scope remains owner-isolated.
+   */
+  findPolicyBySubject = async (subjectType: AcceptanceSubjectType, subjectId: string) => {
+    const policyScope = buildWorkspaceWhere(
+      { userId: this.userId, workspaceId: this.workspaceId },
+      { userId: acceptances.userId, workspaceId: acceptances.workspaceId },
+    );
+
+    return this.db.query.acceptances.findFirst({
+      where: and(
+        eq(acceptances.subjectType, subjectType),
+        eq(acceptances.subjectId, subjectId),
+        policyScope,
+      ),
+    });
+  };
+
+  /** Internal execution-policy lookup by id, independent of report visibility. */
+  findPolicyById = async (id: string) => {
+    if (!isUuid(id)) return undefined;
+    const policyScope = buildWorkspaceWhere(
+      { userId: this.userId, workspaceId: this.workspaceId },
+      { userId: acceptances.userId, workspaceId: acceptances.workspaceId },
+    );
+    return this.db.query.acceptances.findFirst({
+      where: and(eq(acceptances.id, id), policyScope),
+    });
+  };
+
+  /**
+   * Settle a task acceptance's rollup status, closing it instead when the task
+   * is a retired step of a goal graph (the Goal discards a retired node's
+   * outcome, so nothing is left to sign off). Returns the status now stored.
+   *
+   * The acceptance row is locked before the goal node is read, and node
+   * retirement locks the same row (GoalGraphModel.updateNodeStatus), so the two
+   * cannot interleave: whichever commits second sees the other's write. A
+   * user's `accepted` / `closed` that landed meanwhile is kept.
+   */
+  settleTaskPolicyStatus = async (
+    id: string,
+    status: AcceptanceStatus,
+  ): Promise<AcceptanceStatus | undefined> => {
+    const policyScope = buildWorkspaceWhere(
+      { userId: this.userId, workspaceId: this.workspaceId },
+      { userId: acceptances.userId, workspaceId: acceptances.workspaceId },
+    );
+    return this.db.transaction(async (tx) => {
+      const [row] = await tx
+        .select({ status: acceptances.status, subjectId: acceptances.subjectId })
+        .from(acceptances)
+        .where(and(eq(acceptances.id, id), policyScope))
+        .for('update');
+      if (!row) return undefined;
+      const current = row.status as AcceptanceStatus;
+      if (current === 'accepted' || current === 'closed') return current;
+
+      let next = status;
+      if (isClosedByRetirement(status)) {
+        const [retired] = await tx
+          .select({ id: goalNodes.id })
+          .from(goalNodes)
+          .where(and(eq(goalNodes.taskId, row.subjectId), eq(goalNodes.status, 'retired')))
+          .limit(1);
+        if (retired) next = 'closed';
+      }
+      if (next !== current)
+        await tx
+          .update(acceptances)
+          .set({
+            completedAt: TERMINAL_ACCEPTANCE_STATUSES.has(next) ? new Date() : null,
+            status: next,
+          })
+          .where(eq(acceptances.id, id));
+      return next;
+    });
+  };
+
+  /**
+   * The status of many subjects' acceptances in one read — for list surfaces
+   * that must know each row's state without a request per row. Exact where the
+   * recency-capped `query()` is not: it answers about the subjects asked for,
+   * however old they are, and one acceptance per subject is a scope invariant.
+   */
+  listStatusesBySubjects = async (
+    subjectType: AcceptanceSubjectType,
+    subjectIds: string[],
+  ): Promise<Array<{ status: string; subjectId: string }>> => {
+    if (subjectIds.length === 0) return [];
+
+    return this.db
+      .select({ status: acceptances.status, subjectId: acceptances.subjectId })
+      .from(acceptances)
+      .where(
+        and(
+          eq(acceptances.subjectType, subjectType),
+          inArray(acceptances.subjectId, subjectIds),
+          this.ownership(),
+        ),
+      );
+  };
+
+  /**
+   * Get (or lazily create) the acceptance aggregate for a subject. Upserts on
+   * the per-scope subject unique index so concurrent callers converge on one
+   * row; `defaults` only apply on first creation and never overwrite an
+   * existing aggregate.
+   */
+  ensureForSubject = async (
+    subjectType: AcceptanceSubjectType,
+    subjectId: string,
+    defaults?: Partial<
+      Pick<NewAcceptance, 'config' | 'metadata' | 'projectId' | 'requirement' | 'visibility'>
+    >,
+  ): Promise<AcceptanceItem> => {
+    const existing = await this.findBySubject(subjectType, subjectId);
+    if (existing) {
+      // A recorded requirement is never overwritten — but an aggregate created
+      // WITHOUT one (a first ingest that omitted it) accepts the first
+      // non-empty statement a later round supplies, instead of staying blank
+      // forever ("尚未记录该对象的验收目标").
+      const nextRequirement = !existing.requirement ? defaults?.requirement : undefined;
+      const nextProjectId = !existing.projectId ? defaults?.projectId : undefined;
+      const nextTitle =
+        !existing.metadata?.title && typeof defaults?.metadata?.title === 'string'
+          ? defaults.metadata.title
+          : undefined;
+      if (nextProjectId || nextRequirement || nextTitle) {
+        const metadata = nextTitle ? { ...existing.metadata, title: nextTitle } : existing.metadata;
+        await this.db
+          .update(acceptances)
+          .set({
+            // Only the title key: `existing` was read without a lock.
+            ...(nextTitle
+              ? {
+                  metadata: sql`COALESCE(${acceptances.metadata}, '{}'::jsonb) || ${JSON.stringify({ title: nextTitle })}::jsonb`,
+                }
+              : {}),
+            projectId: nextProjectId ?? existing.projectId,
+            requirement: nextRequirement ?? existing.requirement,
+          })
+          .where(eq(acceptances.id, existing.id));
+        return {
+          ...existing,
+          metadata,
+          projectId: nextProjectId ?? existing.projectId,
+          requirement: nextRequirement ?? existing.requirement,
+        };
+      }
+      return existing;
+    }
+
+    await this.db
+      .insert(acceptances)
+      .values(
+        buildWorkspacePayload(
+          { userId: this.userId, workspaceId: this.workspaceId },
+          { subjectId, subjectType, visibility: this.defaultVisibility(), ...defaults },
+        ),
+      )
+      // Conflict = another caller won the per-scope subject unique index race.
+      .onConflictDoNothing();
+
+    // Re-read so concurrent winners and this caller both return the canonical row.
+    return (await this.findBySubject(subjectType, subjectId))!;
+  };
+
+  /** Acceptances for the current user/workspace, newest first. */
+  query = async (
+    options: AcceptanceListQuery & {
+      limit?: number;
+      unbounded?: boolean;
+    } = {},
+  ) => {
+    const { unbounded, ...filters } = options;
+    const limit = unbounded ? undefined : (options.limit ?? 50);
+    const conditions = this.listConditions(filters);
+
+    return this.db.query.acceptances.findMany({
+      limit,
+      orderBy: [desc(acceptances.createdAt)],
+      where: and(...conditions),
+    });
+  };
+
+  /**
+   * Keyset page of the same feed, newest first — what the list panel scrolls.
+   *
+   * Takes the same `statuses` split as {@link query} so both entry points speak
+   * one vocabulary: a page of "in progress" is thirty in-progress rows, not
+   * thirty rows of which some happen to be in progress.
+   */
+  queryPage = async ({
+    cursor,
+    limit = 30,
+    ...filters
+  }: AcceptanceListQuery & {
+    cursor?: string;
+    limit?: number;
+  } = {}): Promise<{
+    items: AcceptanceItem[];
+    nextCursor: string | null;
+  }> => {
+    const conditions = this.listConditions(filters);
+
+    // Millisecond-truncated createdAt — the precision the cursor round-trips
+    // at. Comparing the raw timestamptz (microseconds) against a cursor read
+    // back as a JS Date would let a row satisfy its own bound and repeat.
+    const createdAtMs = sql`date_trunc('milliseconds', ${acceptances.createdAt})`;
+
+    const decoded = decodeCursor(cursor);
+    if (decoded) {
+      // (createdAt, id) < (cursor.createdAt, cursor.id) in descending order.
+      conditions.push(
+        or(
+          lt(createdAtMs, decoded.createdAt),
+          and(eq(createdAtMs, decoded.createdAt), lt(acceptances.id, decoded.id)),
+        )!,
+      );
+    }
+
+    const rows = await this.db.query.acceptances.findMany({
+      limit: limit + 1,
+      orderBy: [desc(createdAtMs), desc(acceptances.id)],
+      where: and(...conditions),
+    });
+
+    const hasMore = rows.length > limit;
+    const items = hasMore ? rows.slice(0, limit) : rows;
+    const last = items.at(-1);
+
+    return {
+      items,
+      nextCursor: hasMore && last ? encodeCursor(last.createdAt, last.id) : null,
+    };
+  };
+
+  /**
+   * File an ungrouped acceptance under a project. Never moves one already
+   * grouped: the `project_id IS NULL` guard lets a filing that landed in the
+   * meantime — by hand, or by another round — win. Resolves whether it wrote.
+   */
+  fillProject = async (id: string, projectId: string): Promise<boolean> => {
+    const rows = await this.db
+      .update(acceptances)
+      .set({ projectId })
+      .where(and(eq(acceptances.id, id), isNull(acceptances.projectId), this.ownership()))
+      .returning({ id: acceptances.id });
+    return rows.length > 0;
+  };
+
+  update = async (
+    id: string,
+    value: Partial<
+      Pick<
+        NewAcceptance,
+        'config' | 'metadata' | 'projectId' | 'requirement' | 'visibility' | 'visualRender'
+      >
+    >,
+  ): Promise<AcceptanceItem | undefined> => {
+    const [row] = await this.db
+      .update(acceptances)
+      .set(value)
+      .where(and(eq(acceptances.id, id), this.ownership()))
+      .returning();
+    return row;
+  };
+
+  /**
+   * Set some metadata keys atomically, leaving every other key as stored.
+   * Metadata holds independent slots (title, check grouping, linked pull
+   * requests) written by different paths; spreading a previously read
+   * snapshot back would drop or revert whatever another writer committed in
+   * between.
+   */
+  patchMetadata = async (
+    id: string,
+    patch: Partial<AcceptanceMetadata>,
+  ): Promise<AcceptanceItem | undefined> => {
+    const [row] = await this.db
+      .update(acceptances)
+      .set({
+        metadata: sql`COALESCE(${acceptances.metadata}, '{}'::jsonb) || ${JSON.stringify(patch)}::jsonb`,
+      })
+      .where(and(eq(acceptances.id, id), this.ownership()))
+      .returning();
+    return row;
+  };
+
+  /** Claim before any external side effect: concurrent submissions share one handoff. */
+  claimRepair = async (id: string, request: AcceptanceRepairRequest) =>
+    this.db.transaction(async (tx) => {
+      const [row] = await tx
+        .select()
+        .from(acceptances)
+        .where(and(eq(acceptances.id, id), this.ownership()))
+        .for('update');
+      if (!row) throw new Error('Acceptance not found');
+      const previous = row.metadata?.repair;
+      if (previous?.state === 'starting' || previous?.state === 'running') {
+        return { claimed: false, request: previous };
+      }
+      const next =
+        previous?.state === 'failed'
+          ? {
+              ...previous,
+              error: undefined,
+              operationId: undefined,
+              topicId: undefined,
+              state: 'starting' as const,
+            }
+          : request;
+      await tx
+        .update(acceptances)
+        .set({
+          metadata: { ...row.metadata, repair: next },
+        })
+        .where(eq(acceptances.id, id));
+      return { claimed: true, request: next };
+    });
+
+  /** Late dispatch callbacks cannot overwrite a newer handoff or unrelated metadata. */
+  patchRepair = async (id: string, requestId: string, patch: Partial<AcceptanceRepairRequest>) => {
+    const [row] = await this.db
+      .update(acceptances)
+      .set({
+        metadata: sql`jsonb_set(${acceptances.metadata}, '{repair}', (${acceptances.metadata}->'repair') || ${JSON.stringify(patch)}::jsonb)`,
+      })
+      .where(
+        and(
+          eq(acceptances.id, id),
+          this.ownership(),
+          sql`${acceptances.metadata}->'repair'->>'id' = ${requestId}`,
+        ),
+      )
+      .returning();
+    return row;
+  };
+
+  /** Internal policy write counterpart to `findPolicyBySubject`. */
+  updatePolicy = async (
+    id: string,
+    value: Partial<Pick<NewAcceptance, 'config' | 'requirement'>>,
+  ): Promise<AcceptanceItem | undefined> => {
+    const policyScope = buildWorkspaceWhere(
+      { userId: this.userId, workspaceId: this.workspaceId },
+      { userId: acceptances.userId, workspaceId: acceptances.workspaceId },
+    );
+    const [row] = await this.db
+      .update(acceptances)
+      .set(value)
+      .where(and(eq(acceptances.id, id), policyScope))
+      .returning();
+    return row;
+  };
+
+  /** Internal lifecycle transition counterpart to `updateStatus`. */
+  updatePolicyStatus = async (id: string, status: AcceptanceStatus): Promise<void> => {
+    const policyScope = buildWorkspaceWhere(
+      { userId: this.userId, workspaceId: this.workspaceId },
+      { userId: acceptances.userId, workspaceId: acceptances.workspaceId },
+    );
+    await this.db
+      .update(acceptances)
+      .set({
+        completedAt: TERMINAL_ACCEPTANCE_STATUSES.has(status) ? new Date() : null,
+        status,
+      })
+      .where(and(eq(acceptances.id, id), policyScope));
+  };
+
+  /**
+   * Move the user-facing lifecycle state. `completedAt` is stamped when the
+   * user's decision closes the loop (accepted / closed / rejected) and cleared when a
+   * new round re-opens it.
+   */
+  updateStatus = async (id: string, status: AcceptanceStatus): Promise<void> => {
+    await this.db
+      .update(acceptances)
+      .set({
+        completedAt: TERMINAL_ACCEPTANCE_STATUSES.has(status) ? new Date() : null,
+        status,
+      })
+      .where(and(eq(acceptances.id, id), this.ownership()));
+  };
+
+  delete = async (id: string) => {
+    return this.db.delete(acceptances).where(and(eq(acceptances.id, id), this.ownership()));
+  };
+
+  /**
+   * Delete every acceptance attached to the given subjects in the caller's
+   * user/workspace scope. Used when the subjects themselves are deleted (see
+   * `TaskSubtreeRepository.deleteSubtree`).
+   */
+  deleteBySubjects = async (
+    subjectType: AcceptanceSubjectType,
+    subjectIds: string[],
+  ): Promise<void> => {
+    if (subjectIds.length === 0) return;
+
+    await this.db
+      .delete(acceptances)
+      .where(
+        and(
+          eq(acceptances.subjectType, subjectType),
+          inArray(acceptances.subjectId, subjectIds),
+          buildWorkspaceWhere(
+            { userId: this.userId, workspaceId: this.workspaceId },
+            { userId: acceptances.userId, workspaceId: acceptances.workspaceId },
+          ),
+        ),
+      );
+  };
+}

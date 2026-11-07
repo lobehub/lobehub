@@ -1,4 +1,4 @@
-import { and, eq, inArray, ne, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, ne, notInArray, sql } from 'drizzle-orm';
 
 import type {
   ConnectorToolPermission,
@@ -17,6 +17,8 @@ export interface SyncToolInput {
   description?: string;
   displayName?: string;
   inputSchema?: Record<string, unknown>;
+  /** Manifest-derived metadata, e.g. the MCP Apps `visibility` of the tool. */
+  metadata?: Record<string, unknown> | null;
   outputSchema?: Record<string, unknown>;
   renderConfig?: Record<string, unknown>;
   toolName: string;
@@ -37,10 +39,30 @@ export class ConnectorToolModel {
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, userConnectorTools);
 
   /**
+   * Deterministic tool order: grouped by connector, sorted by toolName within it.
+   * Tool lists feed the model's tool schema array, so they must not follow the
+   * physical row order, which changes whenever `upsertMany` rewrites a row.
+   * Unstable tool order invalidates provider prompt caches between runs.
+   */
+  private toolOrder = () => [
+    asc(userConnectorTools.userConnectorId),
+    asc(userConnectorTools.toolName),
+  ];
+
+  findById = async (toolId: string): Promise<UserConnectorToolItem | undefined> => {
+    const [row] = await this.db
+      .select()
+      .from(userConnectorTools)
+      .where(and(eq(userConnectorTools.id, toolId), this.ownership()));
+
+    return row;
+  };
+
+  /**
    * Batch-upsert tools from a manifest sync.
    *
    * Manifest-derived fields are always overwritten (toolName, displayName,
-   * description, inputSchema, outputSchema, crudType, renderConfig).
+   * description, inputSchema, outputSchema, crudType, renderConfig, metadata).
    * User-controlled fields (permission, isWorkArtifact, workArtifactConfig,
    * limitConfig) are preserved on conflict.
    */
@@ -56,6 +78,7 @@ export class ConnectorToolModel {
           displayName: t.displayName ?? null,
           inputSchema: t.inputSchema ?? null,
           isWorkArtifact: false,
+          metadata: t.metadata ?? null,
           outputSchema: t.outputSchema ?? null,
           permission: t.defaultPermission ?? Permission.auto,
           renderConfig: t.renderConfig ?? null,
@@ -78,12 +101,28 @@ export class ConnectorToolModel {
           description: sql`excluded.description`,
           displayName: sql`excluded.display_name`,
           inputSchema: sql`excluded.input_schema`,
+          metadata: sql`excluded.metadata`,
           outputSchema: sql`excluded.output_schema`,
           renderConfig: sql`excluded.render_config`,
           updatedAt: new Date(),
           // permission / isWorkArtifact / workArtifactConfig / limitConfig NOT updated
         },
       });
+  };
+
+  /**
+   * Prune a connector's tools down to `keepToolNames` — deletes any row whose
+   * toolName is not in the list. Used to give a manifest refresh replace (not
+   * merge) semantics, so tools removed upstream (e.g. a Composio account that
+   * now exposes fewer tools) stop being advertised to the model. An empty
+   * `keepToolNames` deletes every tool for the connector.
+   */
+  deleteToolsNotIn = async (userConnectorId: string, keepToolNames: string[]): Promise<void> => {
+    const conditions = [eq(userConnectorTools.userConnectorId, userConnectorId), this.ownership()];
+    if (keepToolNames.length > 0) {
+      conditions.push(notInArray(userConnectorTools.toolName, keepToolNames));
+    }
+    await this.db.delete(userConnectorTools).where(and(...conditions));
   };
 
   updatePermission = async (toolId: string, permission: ConnectorToolPermission): Promise<void> => {
@@ -97,7 +136,8 @@ export class ConnectorToolModel {
     return this.db
       .select()
       .from(userConnectorTools)
-      .where(and(eq(userConnectorTools.userConnectorId, userConnectorId), this.ownership()));
+      .where(and(eq(userConnectorTools.userConnectorId, userConnectorId), this.ownership()))
+      .orderBy(...this.toolOrder());
   };
 
   /**
@@ -116,7 +156,8 @@ export class ConnectorToolModel {
           inArray(userConnectorTools.userConnectorId, connectorIds),
           ne(userConnectorTools.permission, Permission.disabled),
         ),
-      );
+      )
+      .orderBy(...this.toolOrder());
   };
 
   /**
@@ -129,7 +170,8 @@ export class ConnectorToolModel {
     return this.db
       .select()
       .from(userConnectorTools)
-      .where(and(this.ownership(), inArray(userConnectorTools.userConnectorId, connectorIds)));
+      .where(and(this.ownership(), inArray(userConnectorTools.userConnectorId, connectorIds)))
+      .orderBy(...this.toolOrder());
   };
 
   /**

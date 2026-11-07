@@ -20,4 +20,9 @@ export interface CommandHandlerContext {
 
 export type CommandHandler = (ctx: CommandHandlerContext) => CommandSendOverrides | void;
 
-export type CommandRegistry = Record<CommandType, CommandHandler>;
+/**
+ * Partial on purpose: not every command tag is intercepted here. `goal` has no
+ * client handler — it serializes back into the prompt as `/goal ` and is read by
+ * the runtime (see `writeActionTagMarkdown` / `isGoalPrompt`).
+ */
+export type CommandRegistry = Partial<Record<CommandType, CommandHandler>>;

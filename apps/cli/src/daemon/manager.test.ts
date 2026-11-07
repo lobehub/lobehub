@@ -3,7 +3,25 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
+import { xSync } from 'tinyexec';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import {
+  appendLog,
+  getLogPath,
+  getRunningDaemonPid,
+  isDaemonProcess,
+  isProcessAlive,
+  readPid,
+  readStatus,
+  removePid,
+  removeStatus,
+  rotateLogIfNeeded,
+  stopDaemon,
+  stopDaemonAndWait,
+  writePid,
+  writeStatus,
+} from './manager';
 
 const tmpDir = path.join(os.tmpdir(), 'daemon-test-' + process.pid);
 const mockDir = path.join(tmpDir, '.lobehub');
@@ -19,32 +37,12 @@ vi.mock('node:os', async (importOriginal) => {
   };
 });
 
-// Mock only `execFileSync` (used by isDaemonProcess to read a process command
-// line); keep the real `spawn` so nothing else changes.
-vi.mock('node:child_process', async (importOriginal) => {
+// Mock only `xSync` (used by isDaemonProcess to read a process command line);
+// keep the real async executor so daemon integration tests still spawn children.
+vi.mock('tinyexec', async (importOriginal) => {
   const actual = await importOriginal<Record<string, any>>();
-  return { ...actual, execFileSync: vi.fn() };
+  return { ...actual, xSync: vi.fn() };
 });
-
-// eslint-disable-next-line import-x/first
-import { execFileSync } from 'node:child_process';
-
-// eslint-disable-next-line import-x/first
-import {
-  appendLog,
-  getLogPath,
-  getRunningDaemonPid,
-  isDaemonProcess,
-  isProcessAlive,
-  readPid,
-  readStatus,
-  removePid,
-  removeStatus,
-  rotateLogIfNeeded,
-  stopDaemon,
-  writePid,
-  writeStatus,
-} from './manager';
 
 // A command line that matches the daemon signature (`connect … --daemon-child`).
 const DAEMON_COMMAND = '/usr/local/bin/node /path/to/cli.js connect --daemon-child';
@@ -54,7 +52,7 @@ describe('daemon manager', () => {
     await mkdir(mockDir, { recursive: true });
     // Default: any inspected PID looks like our daemon. Tests that need a
     // reused / unrelated PID override this per-case.
-    vi.mocked(execFileSync).mockReturnValue(DAEMON_COMMAND as any);
+    vi.mocked(xSync).mockReturnValue({ stdout: DAEMON_COMMAND } as any);
   });
 
   afterEach(() => {
@@ -78,12 +76,12 @@ describe('daemon manager', () => {
 
     it('should remove PID file', () => {
       writePid(12345);
-      removePid();
+      removePid(12345);
       expect(readPid()).toBeNull();
     });
 
     it('should not throw when removing non-existent PID file', () => {
-      expect(() => removePid()).not.toThrow();
+      expect(() => removePid(12345)).not.toThrow();
     });
   });
 
@@ -99,9 +97,9 @@ describe('daemon manager', () => {
 
   describe('isDaemonProcess', () => {
     it('should return true when the command line matches the daemon signature', () => {
-      vi.mocked(execFileSync).mockReturnValue(DAEMON_COMMAND as any);
+      vi.mocked(xSync).mockReturnValue({ stdout: DAEMON_COMMAND } as any);
       expect(isDaemonProcess(12345)).toBe(true);
-      expect(execFileSync).toHaveBeenCalledWith(
+      expect(xSync).toHaveBeenCalledWith(
         'ps',
         ['-ww', '-p', '12345', '-o', 'command='],
         expect.any(Object),
@@ -109,18 +107,18 @@ describe('daemon manager', () => {
     });
 
     it('should return false for an unrelated process command line', () => {
-      vi.mocked(execFileSync).mockReturnValue('/usr/bin/vim notes.txt' as any);
+      vi.mocked(xSync).mockReturnValue({ stdout: '/usr/bin/vim notes.txt' } as any);
       expect(isDaemonProcess(12345)).toBe(false);
     });
 
     it('should return false when the signature is only partially present', () => {
       // `connect` without the internal `--daemon-child` flag is not our daemon.
-      vi.mocked(execFileSync).mockReturnValue('/usr/bin/node /path/cli connect' as any);
+      vi.mocked(xSync).mockReturnValue({ stdout: '/usr/bin/node /path/cli connect' } as any);
       expect(isDaemonProcess(12345)).toBe(false);
     });
 
     it('should return false when ps is unavailable / throws', () => {
-      vi.mocked(execFileSync).mockImplementation(() => {
+      vi.mocked(xSync).mockImplementation(() => {
         throw new Error('ps: command not found');
       });
       expect(isDaemonProcess(12345)).toBe(false);
@@ -158,6 +156,25 @@ describe('daemon manager', () => {
       expect(readStatus()).toBeNull();
     });
 
+    it('preserves a service status when cleaning up an unrelated stale daemon pid', () => {
+      writePid(999999);
+      const serviceStatus = {
+        cliVersion: '0.0.71',
+        connectionStatus: 'connected',
+        gatewayUrl: 'https://test.com',
+        pid: process.pid,
+        startedAt: new Date().toISOString(),
+      };
+      writeStatus(serviceStatus);
+      vi.mocked(xSync).mockReturnValue({
+        stdout: '/usr/bin/node cli.js connect --service-child',
+      } as any);
+
+      expect(getRunningDaemonPid()).toBeNull();
+      expect(readPid()).toBeNull();
+      expect(readStatus()).toEqual(serviceStatus);
+    });
+
     it('should treat a live but reused (non-daemon) PID as stale and clean up', () => {
       // process.pid is alive, but the inspected command line is not our daemon —
       // simulates the OS reusing a dead daemon's PID for an unrelated process.
@@ -168,7 +185,7 @@ describe('daemon manager', () => {
         pid: process.pid,
         startedAt: new Date().toISOString(),
       });
-      vi.mocked(execFileSync).mockReturnValue('/usr/bin/some-other-process' as any);
+      vi.mocked(xSync).mockReturnValue({ stdout: '/usr/bin/some-other-process' } as any);
 
       expect(getRunningDaemonPid()).toBeNull();
       expect(readPid()).toBeNull();
@@ -199,12 +216,224 @@ describe('daemon manager', () => {
         pid: 1,
         startedAt: '',
       });
-      removeStatus();
+      removeStatus(1);
       expect(readStatus()).toBeNull();
     });
 
     it('should not throw when removing non-existent status file', () => {
-      expect(() => removeStatus()).not.toThrow();
+      expect(() => removeStatus(1)).not.toThrow();
+    });
+  });
+
+  describe('restart ownership and recovery', () => {
+    const statusFor = (pid: number) => ({
+      connectionStatus: 'connected',
+      gatewayUrl: 'https://gateway.test',
+      pid,
+      startedAt: '',
+    });
+
+    it('does not let late cleanup from a predecessor delete a replacement', () => {
+      writePid(101);
+      writeStatus(statusFor(101));
+      writePid(202);
+      writeStatus(statusFor(202));
+
+      removePid(101);
+      removeStatus(101);
+
+      expect(readPid()).toBe(202);
+      expect(readStatus()?.pid).toBe(202);
+      removePid(202);
+      removeStatus(202);
+      expect(readPid()).toBeNull();
+      expect(readStatus()).toBeNull();
+    });
+
+    it('recovers a live daemon from its status without restarting it', () => {
+      writeStatus(statusFor(process.pid));
+      const kill = vi.spyOn(process, 'kill').mockImplementation(() => true);
+      try {
+        expect(getRunningDaemonPid()).toBe(process.pid);
+        expect(readPid()).toBe(process.pid);
+        expect(kill.mock.calls.every(([, signal]) => signal === 0)).toBe(true);
+      } finally {
+        kill.mockRestore();
+      }
+    });
+
+    it('recovers the replacement after cleaning up a different stale pid', () => {
+      writePid(999999);
+      writeStatus(statusFor(process.pid));
+      expect(getRunningDaemonPid()).toBe(process.pid);
+      expect(readPid()).toBe(process.pid);
+      expect(readStatus()?.pid).toBe(process.pid);
+    });
+
+    it.each([
+      '/usr/bin/node cli.js connect --service-child',
+      '/usr/bin/node cli.js connect',
+      '/usr/bin/vim notes.txt',
+      '/usr/bin/node cli.js disconnect --daemon-child',
+      '/usr/bin/node cli.js connect --daemon-child-extra',
+    ])('does not recover a service, foreground, or unrelated process: %s', (command) => {
+      writeStatus(statusFor(process.pid));
+      vi.mocked(xSync).mockReturnValue({ stdout: command } as any);
+      expect(getRunningDaemonPid()).toBeNull();
+      expect(readPid()).toBeNull();
+      expect(readStatus()?.pid).toBe(process.pid);
+    });
+
+    it('does not overwrite a concurrent launcher while recovering a missing pid', () => {
+      writeStatus(statusFor(42));
+      const originalWrite = fs.writeFileSync;
+      const write = vi.spyOn(fs, 'writeFileSync').mockImplementationOnce((file, data, options) => {
+        originalWrite(file, '84', { mode: 0o600 });
+        originalWrite(file, data, options);
+      });
+      const kill = vi.spyOn(process, 'kill').mockImplementation(() => true);
+      try {
+        expect(getRunningDaemonPid()).toBe(84);
+        expect(readPid()).toBe(84);
+      } finally {
+        write.mockRestore();
+        kill.mockRestore();
+      }
+    });
+
+    it.each([0, -1, 1.5, '42', null])('does not trust an invalid status pid: %s', async (pid) => {
+      await writeFile(
+        path.join(mockDir, 'daemon.status.json'),
+        JSON.stringify({ ...statusFor(42), pid }),
+      );
+      const kill = vi.spyOn(process, 'kill').mockImplementation(() => true);
+      try {
+        expect(getRunningDaemonPid()).toBeNull();
+        expect(kill).not.toHaveBeenCalled();
+      } finally {
+        kill.mockRestore();
+      }
+    });
+
+    it('does not recover a dead daemon or signal it', () => {
+      writeStatus(statusFor(999999));
+      expect(getRunningDaemonPid()).toBeNull();
+      expect(readPid()).toBeNull();
+    });
+
+    it('does not recover when process identity cannot be read', () => {
+      writeStatus(statusFor(process.pid));
+      vi.mocked(xSync).mockImplementation(() => {
+        throw new Error('ps unavailable');
+      });
+      expect(getRunningDaemonPid()).toBeNull();
+      expect(readPid()).toBeNull();
+    });
+
+    it.skipIf(process.platform === 'win32')(
+      'refuses a restart from a daemon-owned shell before signaling',
+      async () => {
+        writePid(process.ppid);
+        writeStatus(statusFor(process.ppid));
+        const kill = vi.spyOn(process, 'kill').mockImplementation(() => true);
+        try {
+          await expect(stopDaemonAndWait(0)).rejects.toThrow('terminal or shell');
+          expect(kill.mock.calls.every(([, signal]) => signal === 0)).toBe(true);
+          expect(readPid()).toBe(process.ppid);
+          expect(readStatus()?.pid).toBe(process.ppid);
+        } finally {
+          kill.mockRestore();
+        }
+      },
+    );
+
+    it('retains metadata and refuses replacement if shutdown times out', async () => {
+      writePid(999999);
+      writeStatus(statusFor(999999));
+      const kill = vi.spyOn(process, 'kill').mockImplementation(() => true);
+      try {
+        await expect(stopDaemonAndWait(0)).rejects.toThrow('No replacement was started');
+        expect(readPid()).toBe(999999);
+        expect(readStatus()?.pid).toBe(999999);
+      } finally {
+        kill.mockRestore();
+      }
+    });
+
+    it('does not mistake an argv inspection failure for a completed shutdown', async () => {
+      writePid(999999);
+      writeStatus(statusFor(999999));
+      vi.mocked(xSync).mockReturnValueOnce({ stdout: DAEMON_COMMAND } as any);
+      vi.mocked(xSync).mockReturnValueOnce({ stdout: DAEMON_COMMAND } as any);
+      vi.mocked(xSync).mockImplementation(() => {
+        throw new Error('ps unavailable');
+      });
+      const kill = vi.spyOn(process, 'kill').mockImplementation(() => true);
+      try {
+        await expect(stopDaemonAndWait(0)).rejects.toThrow('No replacement was started');
+        expect(readPid()).toBe(999999);
+      } finally {
+        kill.mockRestore();
+      }
+    });
+
+    it('does not signal a PID whose identity changed during ancestry inspection', async () => {
+      writePid(999999);
+      writeStatus(statusFor(999999));
+      vi.mocked(xSync)
+        .mockReturnValueOnce({ stdout: DAEMON_COMMAND } as any)
+        .mockReturnValueOnce({ stdout: '/usr/bin/unrelated-process' } as any);
+      const kill = vi.spyOn(process, 'kill').mockImplementation(() => true);
+      try {
+        await expect(stopDaemonAndWait()).rejects.toThrow('Daemon identity changed');
+        expect(kill.mock.calls.every(([, signal]) => signal === 0)).toBe(true);
+        expect(readPid()).toBe(999999);
+      } finally {
+        kill.mockRestore();
+      }
+    });
+
+    it('retains metadata if signaling the daemon is denied', async () => {
+      writePid(999999);
+      writeStatus(statusFor(999999));
+      const kill = vi.spyOn(process, 'kill').mockImplementation((_pid, signal) => {
+        if (signal === 'SIGTERM') throw Object.assign(new Error('denied'), { code: 'EPERM' });
+        return true;
+      });
+      try {
+        await expect(stopDaemonAndWait()).rejects.toThrow('denied');
+        expect(readPid()).toBe(999999);
+        expect(readStatus()?.pid).toBe(999999);
+      } finally {
+        kill.mockRestore();
+      }
+    });
+
+    it.each(['0', '-1', '123garbage', '1.5'])(
+      'rejects unsafe pid file contents: %s',
+      async (value) => {
+        await writeFile(path.join(mockDir, 'daemon.pid'), value);
+        expect(readPid()).toBeNull();
+      },
+    );
+
+    it('does not delete a replacement that appears while stop is signaling its predecessor', () => {
+      writePid(process.pid);
+      writeStatus(statusFor(process.pid));
+      const kill = vi.spyOn(process, 'kill').mockImplementation((_pid, signal) => {
+        if (signal === 'SIGTERM') {
+          writePid(202);
+          writeStatus(statusFor(202));
+        }
+        return true;
+      });
+      try {
+        expect(stopDaemon()).toBe(true);
+        expect(readPid()).toBe(202);
+        expect(readStatus()?.pid).toBe(202);
+      } finally {
+        kill.mockRestore();
+      }
     });
   });
 
@@ -288,7 +517,7 @@ describe('daemon manager', () => {
       const killSpy = vi.spyOn(process, 'kill').mockImplementation((() => {
         callCount++;
         if (callCount === 1) return true; // isProcessAlive check (signal 0)
-        throw new Error('no such process'); // actual SIGTERM
+        throw Object.assign(new Error('no such process'), { code: 'ESRCH' });
       }) as any);
 
       const result = stopDaemon();
@@ -300,7 +529,7 @@ describe('daemon manager', () => {
     it('should NOT SIGTERM a live PID that is not our daemon', () => {
       // Stale daemon.pid whose PID was reused by an unrelated, living process.
       writePid(process.pid);
-      vi.mocked(execFileSync).mockReturnValue('/usr/bin/some-other-process' as any);
+      vi.mocked(xSync).mockReturnValue({ stdout: '/usr/bin/some-other-process' } as any);
 
       const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
 

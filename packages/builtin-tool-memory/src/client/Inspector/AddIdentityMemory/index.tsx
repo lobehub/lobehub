@@ -1,7 +1,9 @@
 'use client';
 
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { cx } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Check } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -10,12 +12,7 @@ import { highlightTextStyles, inspectorTextStyles, shinyTextStyles } from '@/sty
 
 import type { AddIdentityMemoryParams, AddIdentityMemoryState } from '../../../types';
 
-const styles = createStaticStyles(({ css }) => ({
-  statusIcon: css`
-    margin-block-end: -2px;
-    margin-inline-start: 4px;
-  `,
-}));
+const styles = stylex.create({ statusIcon: { marginBlockEnd: '-2px', marginInlineStart: '4px' } });
 
 export const AddIdentityMemoryInspector = memo<
   BuiltinInspectorProps<AddIdentityMemoryParams, AddIdentityMemoryState>
@@ -27,8 +24,10 @@ export const AddIdentityMemoryInspector = memo<
   // Initial streaming state
   if (isArgumentsStreaming && !title) {
     return (
-      <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-        <span>{t('builtins.lobe-user-memory.apiName.addIdentityMemory')}</span>
+      <div className={inspectorTextStyles.root}>
+        <span className={shinyTextStyles.shinyText}>
+          {t('builtins.lobe-user-memory.apiName.addIdentityMemory')}
+        </span>
       </div>
     );
   }
@@ -36,20 +35,21 @@ export const AddIdentityMemoryInspector = memo<
   const isSuccess = pluginState?.memoryId;
 
   return (
-    <div
-      className={cx(
-        inspectorTextStyles.root,
-        (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
-      )}
-    >
-      <span>{t('builtins.lobe-user-memory.apiName.addIdentityMemory')}</span>
+    <div className={inspectorTextStyles.root}>
+      <span className={cx((isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText)}>
+        {t('builtins.lobe-user-memory.apiName.addIdentityMemory')}
+      </span>
       {title && (
         <>
           :<span className={highlightTextStyles.primary}>{title}</span>
         </>
       )}
       {!isLoading && isSuccess && (
-        <Check className={styles.statusIcon} color={cssVar.colorSuccess} size={14} />
+        <Check
+          className={stylex.props(styles.statusIcon).className}
+          color={cssVar.colorSuccess}
+          size={14}
+        />
       )}
     </div>
   );

@@ -12,14 +12,14 @@
     "@lobechat/agent-manager-runtime": "workspace:*",
     "@lobechat/const": "workspace:*",
     "@lobechat/prompts": "workspace:*",
-    "type-fest": "^4.18.3"
+    "@lobechat/utils": "workspace:*",
+    "type-fest": "^4.41.0"
   },
   "devDependencies": {
     "@lobechat/types": "workspace:*"
   },
   "peerDependencies": {
-    "@lobehub/ui": "^5",
-    "antd": "^6",
+    "@lobehub/ui": "^6.0.4",
     "lucide-react": "*",
     "next": "*",
     "react": "*",

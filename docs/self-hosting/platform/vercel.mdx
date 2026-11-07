@@ -257,6 +257,95 @@ After completing the steps above, the configuration of the server-side database 
   <Image alt={'Login successful state'} src={'/blog/assets28616219/9cb5150d-6e1e-4c59-9a18-4e418dce1a5d.webp'} />
 </Steps>
 
+## Optional: Prebuild with GitHub Actions
+
+If a Vercel build fails because it runs out of memory or exceeds the build time limit, you can run `vercel build` in GitHub Actions and then deploy the generated `.vercel/output` with `vercel deploy --prebuilt`. This follows Vercel's official [GitHub Actions deployment workflow](https://vercel.com/guides/how-can-i-use-github-actions-with-vercel).
+
+<Callout type={'info'}>
+  This approach only moves the build stage to GitHub Actions. Vercel's function runtime, traffic, and plan quotas still apply after deployment. If Vercel's native Git deployment completes successfully, you do not need this workflow.
+</Callout>
+
+<Steps>
+  ### Prepare Vercel credentials
+
+  Prepare these three values:
+
+  - `VERCEL_TOKEN`: Create one on the Vercel [Tokens](https://vercel.com/account/settings/tokens) page.
+  - `VERCEL_ORG_ID` and `VERCEL_PROJECT_ID`: Run `vercel link` in the repository root, then copy them from the generated `.vercel/project.json` file.
+
+  In your fork, open **Settings → Secrets and variables → Actions** and create a Repository secret for each value using the same name. Do not write these values directly into the workflow file.
+
+  ### Add the GitHub Actions workflow
+
+  Create `.github/workflows/vercel-prebuilt-deploy.yml` in your fork with the following content:
+
+  ```yaml
+  name: Vercel Prebuilt Deploy
+
+  on:
+    push:
+      branches:
+        - main
+    workflow_dispatch:
+
+  permissions:
+    contents: read
+
+  concurrency:
+    group: vercel-production
+    cancel-in-progress: true
+
+  env:
+    VERCEL: '1'
+    VERCEL_ENV: production
+    NEXT_PUBLIC_VERCEL_ENV: production
+    VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+    VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+  jobs:
+    deploy:
+      runs-on: ubuntu-latest
+      timeout-minutes: 90
+
+      steps:
+        - name: Checkout repository
+          uses: actions/checkout@v6
+
+        - name: Setup environment
+          uses: ./.github/actions/setup-env
+
+        - name: Install Vercel CLI
+          run: npm install --global vercel@latest
+
+        - name: Pull Vercel project settings
+          env:
+            VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+
+        - name: Build Vercel output
+          env:
+            VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          run: vercel build --prod --token="$VERCEL_TOKEN"
+
+        - name: Deploy prebuilt output
+          env:
+            VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          run: vercel deploy --prebuilt --prod --archive=tgz --token="$VERCEL_TOKEN"
+  ```
+
+  The workflow builds and deploys whenever you push to `main`. You can also trigger it manually from **Actions → Vercel Prebuilt Deploy → Run workflow**.
+
+  The repository's built-in **Upstream Sync** workflow pushes with `GITHUB_TOKEN`, which [does not start another workflow run](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow#triggering-a-workflow-from-a-workflow). After Upstream Sync updates your fork, run **Vercel Prebuilt Deploy** manually to deploy the new version.
+
+  ### Disable Vercel's native Git deployment
+
+  After confirming that the workflow deploys successfully, open **Settings → Git → Connected Git Repository** in your Vercel project and disconnect the Git repository. This prevents the same push from triggering both a native Vercel build and a GitHub Actions build. Disconnecting the repository does not affect prebuilt deployments made with the Vercel CLI.
+
+  ### Verify the deployment
+
+  Open the GitHub Actions run details. The `Deploy prebuilt output` step prints the production deployment URL. Visit it and verify the login flow described in the previous section.
+</Steps>
+
 ## Platform Limitations
 
 <Callout type={'warning'}>

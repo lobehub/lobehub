@@ -1,14 +1,22 @@
 // @vitest-environment node
-import type { GenerateContentResponse } from '@google/genai';
+import type { Content, GenerateContentResponse } from '@google/genai';
 import OpenAI from 'openai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LOBE_ERROR_KEY } from '../../core/streams';
 import { AgentRuntimeErrorType } from '../../types/error';
+import type { ModelRuntimeDiagnostics } from '../../types/providerDiagnostics';
 import * as debugStreamModule from '../../utils/debugStream';
+import {
+  createSignatureChannelId,
+  createSignatureScope,
+  serializeScopedSignature,
+} from '../../utils/signatureScope';
+import { createVideoWithCompletionMode } from '../../utils/videoCompletionMode';
 import { LobeGoogleAI } from './index';
 
 const provider = 'google';
+const defaultBaseURL = 'https://generativelanguage.googleapis.com';
 const bizErrorType = 'ProviderBizError';
 const invalidErrorType = 'InvalidProviderAPIKey';
 const getModelPricingMock = vi.hoisted(() => vi.fn());
@@ -20,6 +28,26 @@ vi.mock('../../utils/getModelPricing', () => ({
 async function* createEmptyAsyncGenerator<T>(): AsyncGenerator<T> {
   yield* [] as unknown as T[];
 }
+
+const createGoogleThoughtSignatureScope = async ({
+  apiKey = 'test',
+  baseURL = defaultBaseURL,
+  model = 'gemini-upstream',
+}: {
+  apiKey?: string;
+  baseURL?: string;
+  model?: string;
+} = {}) =>
+  createSignatureScope({
+    kind: 'thought_signature',
+    model,
+    protocol: 'google_generate_content',
+    source: {
+      apiType: 'google',
+      channelId: await createSignatureChannelId(baseURL, apiKey),
+      provider: 'google',
+    },
+  });
 
 // Mock the console.error to avoid polluting test output
 vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -50,6 +78,94 @@ describe('LobeGoogleAI', () => {
     });
   });
 
+  describe('createVideo', () => {
+    it('should reject Gemini Omni Flash on Vertex AI', async () => {
+      const vertexInstance = new LobeGoogleAI({ apiKey: 'test', isVertexAi: true });
+
+      await expect(
+        vertexInstance.createVideo({
+          model: 'gemini-omni-1.1-flash',
+          params: { prompt: 'A cinematic sunrise' },
+        }),
+      ).rejects.toMatchObject({
+        errorType: AgentRuntimeErrorType.ProviderBizError,
+        provider: 'vertexai',
+      });
+    });
+
+    it('should default Gemini Omni Flash to polling and omit its webhook config', async () => {
+      const createInteraction = vi
+        .spyOn(instance['client'].interactions, 'create')
+        .mockResolvedValue({ id: 'interactions/omni-polling' } as any);
+
+      await expect(
+        createVideoWithCompletionMode(instance, {
+          callbackUrl: 'https://example.com/webhook',
+          model: 'gemini-omni-1.1-flash',
+          params: { prompt: 'A cinematic sunrise' },
+        }),
+      ).resolves.toEqual({
+        completionMode: 'polling',
+        inferenceId: 'interactions/omni-polling',
+      });
+      expect(createInteraction).toHaveBeenCalledWith(
+        expect.not.objectContaining({ webhook_config: expect.anything() }),
+      );
+    });
+
+    it('should use a dynamic webhook for Gemini Omni Flash when webhook mode is preferred', async () => {
+      const createInteraction = vi
+        .spyOn(instance['client'].interactions, 'create')
+        .mockResolvedValue({ id: 'interactions/omni-webhook' } as any);
+
+      await expect(
+        createVideoWithCompletionMode(
+          instance,
+          {
+            callbackUrl: 'https://example.com/webhook',
+            model: 'gemini-omni-1.1-flash',
+            params: { prompt: 'A cinematic sunrise' },
+          },
+          { preferredCompletionMode: 'webhook' },
+        ),
+      ).resolves.toEqual({
+        completionMode: 'webhook',
+        inferenceId: 'interactions/omni-webhook',
+      });
+      expect(createInteraction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          webhook_config: {
+            uris: ['https://example.com/webhook'],
+          },
+        }),
+      );
+    });
+
+    it('should keep Veo on polling when webhook mode is preferred', async () => {
+      const generateVideos = vi
+        .spyOn(instance['client'].models, 'generateVideos')
+        .mockResolvedValue({ name: 'operations/veo-1' } as any);
+
+      await expect(
+        createVideoWithCompletionMode(
+          instance,
+          {
+            callbackUrl: 'https://example.com/webhook',
+            model: 'veo-3.1-generate-preview',
+            params: { prompt: 'A cinematic sunrise' },
+          },
+          { preferredCompletionMode: 'webhook' },
+        ),
+      ).resolves.toEqual({
+        completionMode: 'polling',
+        inferenceId: 'operations/veo-1',
+      });
+      expect(generateVideos).toHaveBeenCalledWith(
+        expect.not.objectContaining({ callbackUrl: expect.anything() }),
+      );
+    });
+  });
+
   describe('chat', () => {
     it('should return a StreamingTextResponse on successful API call', async () => {
       const result = await instance.chat({
@@ -62,6 +178,43 @@ describe('LobeGoogleAI', () => {
       expect(result).toBeInstanceOf(Response);
     });
 
+    it('captures provider-native responses before Google protocol transformation', async () => {
+      const providerChunk = {
+        candidates: [{ content: { parts: [{ text: '' }] }, finishReason: 'STOP' }],
+        modelVersion: 'gemini-3.8-flash',
+        responseId: 'response-1',
+        usageMetadata: { candidatesTokenCount: 147 },
+      } as unknown as GenerateContentResponse;
+      vi.spyOn(instance['client'].models, 'generateContentStream').mockResolvedValue(
+        (async function* () {
+          yield providerChunk;
+        })(),
+      );
+      const diagnostics: ModelRuntimeDiagnostics = {};
+
+      const response = await instance.chat(
+        {
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'gemini-3.8-flash',
+        },
+        { diagnostics },
+      );
+      await response.text();
+
+      expect(diagnostics.providerResponse).toMatchObject({
+        apiMode: 'google_generate_content',
+        eventCount: 1,
+        hasNonWhitespaceText: false,
+        model: 'gemini-3.8-flash',
+        rawEvents: [providerChunk],
+        requestId: 'response-1',
+        stopReason: 'STOP',
+        terminalEventReceived: true,
+        textChars: 0,
+        usage: { candidatesTokenCount: 147 },
+      });
+    });
+
     it('should use mapped model id for upstream chat requests while keeping pricing on logical model', async () => {
       const mappedInstance = new LobeGoogleAI({
         apiKey: 'test',
@@ -72,22 +225,208 @@ describe('LobeGoogleAI', () => {
         mockStreamData,
       );
 
+      const thoughtSignatureScope = await createGoogleThoughtSignatureScope();
       await mappedInstance.chat({
-        messages: [{ content: 'Hello', role: 'user' }],
+        messages: [
+          {
+            content: '',
+            role: 'assistant',
+            tool_calls: [
+              {
+                function: { arguments: '{}', name: 'search' },
+                id: 'call-1',
+                thoughtSignature: serializeScopedSignature(
+                  'upstream-signature',
+                  thoughtSignatureScope,
+                  'thought_signature',
+                ),
+                type: 'function',
+              },
+            ],
+          },
+          { content: '{}', role: 'tool', tool_call_id: 'call-1' },
+          { content: 'Hello', role: 'user' },
+        ],
         model: 'gemini-logical',
         temperature: 0,
       });
 
       const callArgs = (mappedInstance['client'].models.generateContentStream as any).mock.calls[0];
       expect(callArgs[0].model).toBe('gemini-upstream');
-      expect(getModelPricingMock).toHaveBeenCalledWith('gemini-logical', provider);
+      expect(callArgs[0].contents[0].parts[0].thoughtSignature).toBe('upstream-signature');
+      expect(getModelPricingMock).toHaveBeenCalledWith('gemini-logical', provider, undefined);
+    });
+
+    it.each([
+      { apiKey: 'another-key', baseURL: defaultBaseURL, label: 'credential' },
+      { apiKey: 'test', baseURL: 'https://another.example.com', label: 'endpoint' },
+    ])('should reject a thought signature from another direct $label', async (source) => {
+      const directInstance = new LobeGoogleAI({ apiKey: 'test' });
+      const generateContentStream = vi
+        .spyOn(directInstance['client'].models, 'generateContentStream')
+        .mockResolvedValue(createEmptyAsyncGenerator<GenerateContentResponse>());
+      const sourceScope = await createGoogleThoughtSignatureScope(source);
+
+      await directInstance.chat({
+        messages: [
+          {
+            content: '',
+            role: 'assistant',
+            tool_calls: [
+              {
+                function: { arguments: '{}', name: 'search' },
+                id: 'call-1',
+                thoughtSignature: serializeScopedSignature(
+                  'foreign-signature',
+                  sourceScope,
+                  'thought_signature',
+                ),
+                type: 'function',
+              },
+            ],
+          },
+        ],
+        model: 'gemini-upstream',
+        temperature: 0,
+      });
+
+      const contents = generateContentStream.mock.calls[0][0].contents as Content[];
+      expect(contents[0]?.parts?.[0]?.thoughtSignature).not.toBe('foreign-signature');
+    });
+
+    it('should fail closed for a direct Vertex client without a stable channel identity', async () => {
+      const generateContentStream = vi
+        .fn()
+        .mockResolvedValue(createEmptyAsyncGenerator<GenerateContentResponse>());
+      const vertexInstance = new LobeGoogleAI({
+        apiKey: 'avoid-error',
+        client: { models: { generateContentStream } } as any,
+        isVertexAi: true,
+      });
+      const sourceScope = await createSignatureScope({
+        kind: 'thought_signature',
+        model: 'gemini-upstream',
+        protocol: 'google_generate_content',
+        source: {
+          apiType: 'vertexai',
+          channelId: 'configured-vertex-channel',
+          provider: 'vertexai',
+        },
+      });
+
+      await vertexInstance.chat({
+        messages: [
+          {
+            content: '',
+            role: 'assistant',
+            tool_calls: [
+              {
+                function: { arguments: '{}', name: 'search' },
+                id: 'call-1',
+                thoughtSignature: serializeScopedSignature(
+                  'vertex-signature',
+                  sourceScope,
+                  'thought_signature',
+                ),
+                type: 'function',
+              },
+            ],
+          },
+        ],
+        model: 'gemini-upstream',
+        temperature: 0,
+      });
+
+      const contents = generateContentStream.mock.calls[0][0].contents as Content[];
+      expect(contents[0]?.parts?.[0]?.thoughtSignature).not.toBe('vertex-signature');
+    });
+
+    it('should apply upstream model compatibility after model mapping', async () => {
+      const mappedInstance = new LobeGoogleAI({
+        apiKey: 'test',
+        modelIdMapping: { 'gemini-logical': 'gemini-3.6-flash' },
+      });
+      const mockStreamData = createEmptyAsyncGenerator<GenerateContentResponse>();
+      vi.spyOn(mappedInstance['client'].models, 'generateContentStream').mockResolvedValue(
+        mockStreamData,
+      );
+
+      await mappedInstance.chat({
+        messages: [
+          { content: 'Hello', role: 'user' },
+          {
+            content: '',
+            role: 'assistant',
+            tool_calls: [
+              {
+                function: { arguments: '{"location":"London"}', name: 'get_weather' },
+                id: 'call_weather_1',
+                type: 'function',
+              },
+            ],
+          },
+          {
+            content: '{"temperature":14}',
+            role: 'tool',
+            tool_call_id: 'call_weather_1',
+          },
+          { content: 'Prefilled answer', role: 'assistant' },
+        ],
+        model: 'gemini-logical',
+        temperature: 0.7,
+        thinkingBudget: 2048,
+        thinkingLevel: 'medium',
+        top_p: 0.9,
+      });
+
+      const callArgs = (mappedInstance['client'].models.generateContentStream as any).mock.calls[0];
+      const request = callArgs[0];
+
+      expect(request.model).toBe('gemini-3.6-flash');
+      expect(request.config).toMatchObject({
+        thinkingConfig: { thinkingBudget: undefined, thinkingLevel: 'medium' },
+      });
+      expect(request.config).not.toHaveProperty('temperature');
+      expect(request.config).not.toHaveProperty('topP');
+      expect(request.contents).toMatchObject([
+        { parts: [{ text: 'Hello' }], role: 'user' },
+        {
+          parts: [
+            {
+              functionCall: {
+                args: { location: 'London' },
+                id: 'call_weather_1',
+                name: 'get_weather',
+              },
+            },
+          ],
+          role: 'model',
+        },
+        {
+          parts: [
+            {
+              functionResponse: {
+                id: 'call_weather_1',
+                name: 'get_weather',
+                response: { result: '{"temperature":14}' },
+              },
+            },
+          ],
+          role: 'user',
+        },
+      ]);
+      expect(getModelPricingMock).toHaveBeenCalledWith('gemini-logical', provider, undefined);
     });
 
     it('should handle text messages correctly', async () => {
-      // Mock Google AI SDK's generateContentStream method to return a successful response stream
       const mockStream = new ReadableStream({
         start(controller) {
-          controller.enqueue('Hello, world!');
+          controller.enqueue({
+            candidates: [
+              { content: { parts: [{ text: 'Hello, world!' }], role: 'model' }, index: 0 },
+            ],
+            text: 'Hello, world!',
+          });
           controller.close();
         },
       });
@@ -102,7 +441,95 @@ describe('LobeGoogleAI', () => {
       });
 
       expect(result).toBeInstanceOf(Response);
-      // Additional assertions can be added, such as verifying the returned stream content
+
+      const reader = result.body!.getReader();
+      let sse = '';
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        sse += new TextDecoder().decode(value as Uint8Array);
+      }
+
+      expect(sse).toContain('event: text');
+      expect(sse).toContain('"Hello, world!"');
+    });
+
+    it.each([
+      ['gemini-3.6-flash', 'medium'],
+      ['gemini-3.7-flash', 'medium'],
+      ['gemini-3.5-flash-lite', 'minimal'],
+    ] as const)('should omit deprecated generation config for %s', async (model, thinkingLevel) => {
+      await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model,
+        temperature: 0.7,
+        thinkingBudget: 2048,
+        thinkingLevel,
+        top_p: 0.9,
+      });
+
+      const callArgs = (instance['client'].models.generateContentStream as any).mock.calls[0];
+      const config = callArgs[0].config;
+
+      expect(config.temperature).toBeUndefined();
+      expect(config.topP).toBeUndefined();
+      expect(config.thinkingConfig).toMatchObject({
+        thinkingBudget: undefined,
+        thinkingLevel,
+      });
+    });
+
+    it.each(['gemini-3.6-flash', 'gemini-3.7-flash', 'gemini-3.5-flash-lite'])(
+      'should drop assistant prefill turns for %s',
+      async (model) => {
+        await instance.chat({
+          messages: [
+            { content: 'Hello', role: 'user' },
+            { content: 'Prefilled answer', role: 'assistant' },
+          ],
+          model,
+        });
+
+        const callArgs = (instance['client'].models.generateContentStream as any).mock.calls[0];
+
+        expect(callArgs[0].contents).toHaveLength(1);
+        expect(callArgs[0].contents[0]).toMatchObject({
+          parts: [{ text: 'Hello' }],
+          role: 'user',
+        });
+      },
+    );
+
+    it('should retain assistant prefill turns for earlier Gemini models', async () => {
+      await instance.chat({
+        messages: [
+          { content: 'Hello', role: 'user' },
+          { content: 'Prefilled answer', role: 'assistant' },
+        ],
+        model: 'gemini-3.5-flash',
+      });
+
+      const callArgs = (instance['client'].models.generateContentStream as any).mock.calls[0];
+
+      expect(callArgs[0].contents.at(-1)).toMatchObject({
+        parts: [{ text: 'Prefilled answer' }],
+        role: 'model',
+      });
+    });
+
+    it('should keep sampling config for earlier Gemini models', async () => {
+      await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'gemini-3.5-flash',
+        temperature: 0.7,
+        top_p: 0.9,
+      });
+
+      const callArgs = (instance['client'].models.generateContentStream as any).mock.calls[0];
+      const config = callArgs[0].config;
+
+      expect(config.temperature).toBe(0.7);
+      expect(config.topP).toBe(0.9);
     });
 
     it('should handle grounding metadata in response', async () => {
@@ -656,6 +1083,43 @@ describe('thinkingConfig includeThoughts logic', () => {
   });
 });
 
+describe('sampling params compatibility', () => {
+  it.each([
+    'gemini-3.6-flash',
+    'gemini-3.7-flash',
+    'gemini-3.8-flash',
+    'gemini-3.5-flash-lite',
+    'gemini-flash-latest',
+    'gemini-flash-lite-latest',
+  ])('omits temperature and topP for %s', async (model) => {
+    await instance.chat({
+      messages: [{ content: 'Hello', role: 'user' }],
+      model,
+      temperature: 0.7,
+      top_p: 0.8,
+    });
+
+    const callArgs = (instance['client'].models.generateContentStream as any).mock.calls[0];
+    const config = callArgs[0].config;
+    expect(config).not.toHaveProperty('temperature');
+    expect(config).not.toHaveProperty('topP');
+  });
+
+  it('keeps sampling params for models without the restriction', async () => {
+    await instance.chat({
+      messages: [{ content: 'Hello', role: 'user' }],
+      model: 'gemini-3.5-pro',
+      temperature: 0.7,
+      top_p: 0.8,
+    });
+
+    const callArgs = (instance['client'].models.generateContentStream as any).mock.calls[0];
+    const config = callArgs[0].config;
+    expect(config.temperature).toBe(0.7);
+    expect(config.topP).toBe(0.8);
+  });
+});
+
 describe('buildGoogleToolsWithSearch', () => {
   it('should include imageSearch searchTypes for models in modelsWithImageSearch when search is enabled', async () => {
     const mockStream = new ReadableStream({
@@ -987,6 +1451,153 @@ describe('buildGoogleToolsWithSearch', () => {
     expect(config.toolConfig).toBeUndefined();
   });
 
+  it('should request image output and image search for Nano Banana 2.1', async () => {
+    const mockStream = new ReadableStream({
+      start(controller) {
+        controller.enqueue({
+          candidates: [
+            {
+              content: { parts: [{ text: 'test' }], role: 'model' },
+              finishReason: 'STOP',
+              index: 0,
+            },
+          ],
+          usageMetadata: { promptTokenCount: 1, totalTokenCount: 2 },
+          modelVersion: 'gemini-nano-banana-2.1',
+        });
+        controller.close();
+      },
+    });
+    vi.spyOn(instance['client'].models, 'generateContentStream').mockResolvedValue(
+      mockStream as any,
+    );
+
+    await instance.chat({
+      enabledSearch: true,
+      imageResolution: '2K',
+      messages: [{ content: 'Draw an apple', role: 'user' }],
+      model: 'gemini-nano-banana-2.1',
+      temperature: 1,
+      top_p: 0.9,
+    });
+
+    const config = (instance['client'].models.generateContentStream as any).mock.calls[0][0].config;
+    // Without the Image modality, Vertex AI answers with IMAGE_RECITATION and no image.
+    expect(config.responseModalities).toEqual(['Text', 'Image']);
+    expect(config.imageConfig).toEqual({ imageSize: '2K' });
+    expect(config.tools).toEqual([
+      { googleSearch: { searchTypes: { imageSearch: {}, webSearch: {} } } },
+    ]);
+    // Nano Banana 2.1 rejects sampling params with an API error.
+    expect(config).not.toHaveProperty('temperature');
+    expect(config).not.toHaveProperty('topP');
+  });
+
+  it('should keep image resolution in imageConfig when aspect ratio is auto', async () => {
+    const mockStream = new ReadableStream({
+      start(controller) {
+        controller.enqueue({
+          text: 'test',
+          candidates: [
+            {
+              content: { parts: [{ text: 'test' }], role: 'model' },
+              finishReason: 'STOP',
+              index: 0,
+            },
+          ],
+          usageMetadata: { promptTokenCount: 1, totalTokenCount: 2 },
+          modelVersion: 'gemini-3.5-pro-image-preview',
+        });
+        controller.close();
+      },
+    });
+    vi.spyOn(instance['client'].models, 'generateContentStream').mockResolvedValue(
+      mockStream as any,
+    );
+
+    await instance.chat({
+      imageAspectRatio: 'auto',
+      imageResolution: '4K',
+      messages: [{ content: 'Hello', role: 'user' }],
+      model: 'gemini-3.5-pro-image-preview',
+      temperature: 1,
+    });
+
+    const callArgs = (instance['client'].models.generateContentStream as any).mock.calls[0];
+    const config = callArgs[0].config as any;
+    expect(config.imageConfig).toEqual({ imageSize: '4K' });
+  });
+
+  it('should omit imageConfig when aspect ratio is auto and no resolution is set', async () => {
+    const mockStream = new ReadableStream({
+      start(controller) {
+        controller.enqueue({
+          text: 'test',
+          candidates: [
+            {
+              content: { parts: [{ text: 'test' }], role: 'model' },
+              finishReason: 'STOP',
+              index: 0,
+            },
+          ],
+          usageMetadata: { promptTokenCount: 1, totalTokenCount: 2 },
+          modelVersion: 'gemini-3.5-pro-image-preview',
+        });
+        controller.close();
+      },
+    });
+    vi.spyOn(instance['client'].models, 'generateContentStream').mockResolvedValue(
+      mockStream as any,
+    );
+
+    await instance.chat({
+      imageAspectRatio: 'auto',
+      messages: [{ content: 'Hello', role: 'user' }],
+      model: 'gemini-3.5-pro-image-preview',
+      temperature: 1,
+    });
+
+    const callArgs = (instance['client'].models.generateContentStream as any).mock.calls[0];
+    const config = callArgs[0].config as any;
+    expect(config.imageConfig).toBeUndefined();
+  });
+
+  it('should not build imageConfig for non-image-response models', async () => {
+    const mockStream = new ReadableStream({
+      start(controller) {
+        controller.enqueue({
+          text: 'test',
+          candidates: [
+            {
+              content: { parts: [{ text: 'test' }], role: 'model' },
+              finishReason: 'STOP',
+              index: 0,
+            },
+          ],
+          usageMetadata: { promptTokenCount: 1, totalTokenCount: 2 },
+          modelVersion: 'gemini-2.0-flash',
+        });
+        controller.close();
+      },
+    });
+    vi.spyOn(instance['client'].models, 'generateContentStream').mockResolvedValue(
+      mockStream as any,
+    );
+
+    await instance.chat({
+      imageAspectRatio: '16:9',
+      imageResolution: '2K',
+      messages: [{ content: 'Hello', role: 'user' }],
+      model: 'gemini-2.0-flash',
+      temperature: 1,
+    });
+
+    const callArgs = (instance['client'].models.generateContentStream as any).mock.calls[0];
+    const config = callArgs[0].config as any;
+    expect(config.imageConfig).toBeUndefined();
+    expect(config.responseModalities).toBeUndefined();
+  });
+
   it('should not set includeServerSideToolInvocations for Vertex AI', async () => {
     const vertexInstance = new LobeGoogleAI({ apiKey: 'test', isVertexAi: true });
     const mockStream = new ReadableStream({
@@ -1127,7 +1738,7 @@ describe('modelIdMapping', () => {
 
     expect(result.imageUrl).toBe('data:image/png;base64,image-base64');
     expect(generateContentMock.mock.calls[0][0].model).toBe('gemini-upstream-image');
-    expect(getModelPricingMock).toHaveBeenCalledWith('gemini-logical:image', provider);
+    expect(getModelPricingMock).toHaveBeenCalledWith('gemini-logical:image', provider, undefined);
   });
 
   it('should use mapped model id for upstream generateObject requests while keeping pricing on logical model', async () => {
@@ -1157,7 +1768,7 @@ describe('modelIdMapping', () => {
 
     expect(result).toEqual({ ok: true });
     expect(generateContentMock.mock.calls[0][0].model).toBe('gemini-upstream');
-    expect(getModelPricingMock).toHaveBeenCalledWith('gemini-logical', provider);
+    expect(getModelPricingMock).toHaveBeenCalledWith('gemini-logical', provider, undefined);
   });
 });
 
@@ -1201,6 +1812,54 @@ describe('models', () => {
       expect(parts[0].inlineData.mimeType).toBe('audio/mp4');
       expect(typeof parts[0].inlineData.data).toBe('string');
       expect(parts[1].text).toBeTruthy();
+    });
+
+    it('should report Gemini usage metadata of transcriptions', async () => {
+      vi.spyOn(instance['client'].models, 'generateContent').mockResolvedValue({
+        candidates: [{ content: { parts: [{ text: 'hi' }] }, finishReason: 'STOP' }],
+        text: 'hi',
+        usageMetadata: {
+          candidatesTokenCount: 5,
+          promptTokenCount: 160,
+          promptTokensDetails: [
+            { modality: 'AUDIO', tokenCount: 150 },
+            { modality: 'TEXT', tokenCount: 10 },
+          ],
+          totalTokenCount: 165,
+        },
+      } as any);
+      const onUsage = vi.fn();
+
+      const file = new File([new Uint8Array([1, 2, 3])], 'speech.m4a', { type: 'audio/mp4' });
+      const result = await instance.transcribe!(
+        { file, model: 'gemini-3.5-transcribe' },
+        { onUsage },
+      );
+
+      expect(result).toEqual({ text: 'hi' });
+      expect(onUsage).toHaveBeenCalledWith(
+        expect.objectContaining({ inputAudioTokens: 150, totalOutputTokens: 5 }),
+      );
+    });
+
+    it('should read the transcript from audioTranscription parts of dedicated ASR models', async () => {
+      vi.spyOn(instance['client'].models, 'generateContent').mockResolvedValue({
+        candidates: [
+          {
+            content: {
+              parts: [{ audioTranscription: { text: ' 帮我把登录页的按钮颜色改成蓝色。 ' } }],
+            },
+            finishReason: 'STOP',
+          },
+        ],
+        text: undefined,
+      } as any);
+
+      const file = new File([new Uint8Array([1, 2, 3])], 'speech.m4a', { type: 'audio/mp4' });
+
+      const result = await instance.transcribe!({ file, model: 'gemini-3.5-transcribe' });
+
+      expect(result).toEqual({ text: '帮我把登录页的按钮颜色改成蓝色。' });
     });
 
     it('should include the language hint when provided', async () => {

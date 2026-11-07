@@ -7,6 +7,9 @@ export const TaskApiName = {
   /** Create a new task, optionally as a subtask of another task */
   createTask: 'createTask',
 
+  /** Confirm and start a goal-driven task with automatic delivery acceptance */
+  createGoal: 'createGoal',
+
   /** Create multiple tasks in a single call (batched) */
   createTasks: 'createTasks',
 
@@ -22,6 +25,9 @@ export const TaskApiName = {
   /** List tasks with optional filters */
   listTasks: 'listTasks',
 
+  /** List workspace members that can be assigned tasks (resolves names → user ids) */
+  listWorkspaceMembers: 'listWorkspaceMembers',
+
   /** Trigger an async run of a single task (real execution, not just status) */
   runTask: 'runTask',
 
@@ -30,6 +36,9 @@ export const TaskApiName = {
 
   /** Configure (or clear) the recurring schedule of a task */
   setTaskSchedule: 'setTaskSchedule',
+
+  /** Configure (or clear) the delivery-acceptance (verify) gate of a task */
+  setTaskVerify: 'setTaskVerify',
 
   /** Update a task comment */
   updateTaskComment: 'updateTaskComment',
@@ -47,16 +56,67 @@ export type TaskApiNameType = (typeof TaskApiName)[keyof typeof TaskApiName];
 
 export interface CreateTaskParams {
   assigneeAgentId?: string;
+  /** Workspace member (user id) who owns the task outcome; coexists with `assigneeAgentId` (the executing agent). */
+  assigneeUserId?: string;
   instruction: string;
+  /** Existing task label names to attach; unknown names fail, nothing is created. */
+  labels?: string[];
+  /** Model the task runs with; omitted pins the assignee agent's current model. */
+  model?: string;
   name: string;
   parentIdentifier?: string;
   priority?: number;
+  /** Provider for `model`; omitted is resolved from the assignee agent. */
+  provider?: string;
   sortOrder?: number;
 }
 
 export interface CreateTaskState {
+  /** Short human-facing description, when the task has one. */
+  description?: string | null;
   identifier?: string;
+  /** Display name of the created task. */
+  name?: string | null;
+  /** Parent task identifier when created as a subtask. */
+  parentIdentifier?: string;
+  /** Priority level (0 = none … 4 = low). */
+  priority?: number | null;
+  /** Lifecycle status the task was created in (usually `backlog`). */
+  status?: TaskStatus;
   success: boolean;
+  taskId?: string;
+}
+
+// ==================== createGoal ====================
+
+export interface GoalCriterionDraft {
+  description?: string;
+  instruction?: string;
+  onFail?: 'auto_repair' | 'manual';
+  required?: boolean;
+  title: string;
+  verifierConfig?: Record<string, unknown>;
+  verifierType?: 'agent' | 'llm' | 'program';
+}
+
+export interface CreateGoalParams {
+  criteria: GoalCriterionDraft[];
+  /** ISO-8601 calendar-time budget; past it the coordinator stops dispatching. */
+  deadline?: string | null;
+  instruction: string;
+  maxIterations?: number | null;
+  maxTotalCost?: number | null;
+  name: string;
+}
+
+export interface CreateGoalState {
+  /** The `goals` row the Goal Graph was created as — what the card opens. */
+  goalId?: string;
+  name?: string;
+  startedAt?: string;
+  success: boolean;
+  /** The responsible task the first coordinator tick dispatched, when it got that far. */
+  taskId?: string;
 }
 
 // ==================== createTasks (batch) ====================
@@ -71,6 +131,7 @@ export interface CreateTasksItemResult {
   identifier?: string;
   name: string;
   success: boolean;
+  taskId?: string;
 }
 
 export interface CreateTasksState {
@@ -85,6 +146,8 @@ export interface CreateTasksState {
 
 export interface ListTasksParams {
   assigneeAgentId?: string;
+  /** Label or label group names; matches tasks carrying any of them. */
+  labels?: string[];
   limit?: number;
   offset?: number;
   parentIdentifier?: string;
@@ -98,6 +161,24 @@ export interface ListTasksState {
   total?: number;
 }
 
+// ==================== listWorkspaceMembers ====================
+
+export interface ListWorkspaceMembersParams {
+  /** Cap on the members returned (default 50, max 100). */
+  limit?: number;
+  /** Case-insensitive match on name, @handle, email, linked IM identity, or an exact user id. */
+  query?: string;
+}
+
+export interface ListWorkspaceMembersState {
+  /** Members actually returned (after `query` and `limit`). */
+  count: number;
+  query?: string;
+  success: boolean;
+  /** Members matching `query` before the `limit` cap. */
+  total: number;
+}
+
 // ==================== viewTask ====================
 
 export interface ViewTaskParams {
@@ -107,6 +188,7 @@ export interface ViewTaskParams {
 export interface ViewTaskState {
   identifier?: string;
   success: boolean;
+  taskId?: string;
 }
 
 // ==================== task comments ====================
@@ -120,6 +202,7 @@ export interface AddTaskCommentState {
   commentId?: string;
   identifier: string;
   success: boolean;
+  taskId?: string;
 }
 
 export interface UpdateTaskCommentParams {
@@ -145,19 +228,29 @@ export interface DeleteTaskCommentState {
 
 export interface EditTaskParams {
   addDependencies?: string[];
+  /** Existing label names to add; a grouped label replaces its sibling. */
+  addLabels?: string[];
   assigneeAgentId?: string | null;
+  /** Workspace member (user id) to assign the task to; `null` clears the human assignee. */
+  assigneeUserId?: string | null;
   description?: string;
   identifier: string;
   instruction?: string;
+  /** Task model override; `null` clears it so the task follows the assignee agent again. */
+  model?: string | null;
   name?: string;
   parentIdentifier?: string | null;
   priority?: number;
+  /** Provider for the task model; `null` clears it. */
+  provider?: string | null;
   removeDependencies?: string[];
+  removeLabels?: string[];
 }
 
 export interface EditTaskState {
   identifier: string;
   success: boolean;
+  taskId?: string;
 }
 
 // ==================== runTask / runTasks ====================
@@ -166,27 +259,38 @@ export interface RunTaskParams {
   /** Optional existing topic to continue (rather than creating a new topic). */
   continueTopicId?: string;
   identifier: string;
+  /** Replaces the task's pinned model, for this run and later ones. */
+  model?: string;
   /** Optional extra prompt prepended to the task instruction for this run. */
   prompt?: string;
+  /** Provider for `model`. Omit to resolve it from the assignee agent. */
+  provider?: string;
 }
 
 export interface RunTaskState {
   identifier: string;
   operationId?: string;
   success: boolean;
+  taskId?: string;
   topicId?: string;
 }
 
 export interface RunTasksParams {
   /** Identifiers of tasks to run, in execution order. */
   identifiers: string[];
+  /** Replaces the pinned model of every task in the batch, for this run and later ones. */
+  model?: string;
+  /** Provider for `model`. Omit to resolve it from the assignee agent. */
+  provider?: string;
 }
 
 export interface RunTasksItemResult {
   error?: string;
   identifier: string;
   operationId?: string;
+  refs?: string[];
   success: boolean;
+  taskId?: string;
   topicId?: string;
 }
 
@@ -216,6 +320,32 @@ export interface SetTaskScheduleState {
   automationMode?: TaskAutomationMode | null;
   identifier: string;
   success: boolean;
+  taskId?: string;
+}
+
+// ==================== setTaskVerify ====================
+
+export interface SetTaskVerifyParams {
+  /** Turn the verify gate on/off. Pass null to clear the flag. */
+  enabled?: boolean | null;
+  identifier: string;
+  /** Cap on verify repair / re-run iterations (1-10). Pass null to clear. */
+  maxIterations?: number | null;
+  /** One-sentence acceptance requirement; the source criteria are synthesized from. Pass null to clear. */
+  requirement?: string | null;
+  /** Agent that executes the verify run. Pass null to fall back to the built-in verify agent. */
+  verifierAgentId?: string | null;
+  /** Ad-hoc acceptance criteria ids (references verify_criteria.id). Pass null to clear. */
+  verifyCriteriaIds?: string[] | null;
+  /** Reuse a rubric template (references verify_rubrics.id). Pass null to clear. */
+  verifyRubricId?: string | null;
+}
+
+export interface SetTaskVerifyState {
+  enabled?: boolean | null;
+  identifier: string;
+  success: boolean;
+  taskId?: string;
 }
 
 // ==================== updateTaskStatus ====================
@@ -227,8 +357,10 @@ export interface UpdateTaskStatusParams {
 }
 
 export interface UpdateTaskStatusState {
+  identifier?: string;
   status: TaskStatus;
   success: boolean;
+  taskId?: string;
 }
 
 // ==================== deleteTask ====================
@@ -240,4 +372,5 @@ export interface DeleteTaskParams {
 export interface DeleteTaskState {
   identifier: string;
   success: boolean;
+  taskId?: string;
 }

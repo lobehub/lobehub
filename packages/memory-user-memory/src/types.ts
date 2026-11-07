@@ -51,6 +51,10 @@ export interface ExtractorOptions extends ExtractorTemplateProps {
    */
   parentMemoryTraceKey?: string;
   sourceId?: string;
+  /** Stable ID shared by calls in an extraction task without a chat topic. */
+  taskId?: string;
+  /** Topic identity for extraction scoped to one chat topic. Leave unset for cross-topic sources. */
+  topicId?: string;
   userId?: string;
 }
 
@@ -70,7 +74,10 @@ export interface GatekeeperTemplateProps extends ExtractorTemplateProps {
   gateKeeperLanguage?: string;
 }
 
-export type GatekeeperOptions = Pick<ExtractorOptions, 'retrievedContexts' | 'topK'> & {
+export type GatekeeperOptions = Pick<
+  ExtractorOptions,
+  'retrievedContexts' | 'taskId' | 'topicId' | 'topK'
+> & {
   additionalMessages?: OpenAIChatMessage[];
   callbacks?: ExtractorOptions['callbacks'];
   gateKeeperLanguage?: string;

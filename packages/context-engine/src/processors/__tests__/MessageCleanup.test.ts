@@ -18,18 +18,6 @@ describe('MessageCleanupProcessor', () => {
     },
   });
 
-  describe('constructor', () => {
-    it('should initialize with default options', () => {
-      const processor = new MessageCleanupProcessor();
-      expect(processor.name).toBe('MessageCleanupProcessor');
-    });
-
-    it('should initialize with custom options', () => {
-      const processor = new MessageCleanupProcessor({ debug: true });
-      expect(processor.name).toBe('MessageCleanupProcessor');
-    });
-  });
-
   describe('process', () => {
     it('should clean system messages', async () => {
       const processor = new MessageCleanupProcessor();
@@ -155,6 +143,27 @@ describe('MessageCleanupProcessor', () => {
       expect(result.messages[0]).toEqual({
         content: 'Here is the answer',
         reasoning,
+        role: 'assistant',
+      });
+    });
+
+    it('should preserve source model and provider in assistant messages', async () => {
+      const processor = new MessageCleanupProcessor();
+      const context = createContext([
+        {
+          content: 'Here is the answer',
+          model: 'gpt-5.5',
+          provider: 'chatgpt',
+          role: 'assistant',
+        },
+      ]);
+
+      const result = await processor.process(context);
+
+      expect(result.messages[0]).toEqual({
+        content: 'Here is the answer',
+        model: 'gpt-5.5',
+        provider: 'chatgpt',
         role: 'assistant',
       });
     });

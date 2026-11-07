@@ -22,11 +22,10 @@ vi.mock('@/store/aiInfra', () => ({
 
 vi.mock('@/store/aiInfra/selectors', () => ({
   aiProviderSelectors: {
-    isProviderHasBuiltinSearch: vi.fn(),
+    providerConfigById: vi.fn(),
   },
   aiModelSelectors: {
-    isModelHasBuiltinSearch: vi.fn(),
-    isModelBuiltinSearchInternal: vi.fn(),
+    modelBuiltinSearchImpl: vi.fn(),
   },
 }));
 
@@ -36,6 +35,12 @@ describe('getSearchConfig', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(aiInfraSelectors.aiProviderSelectors.providerConfigById).mockReturnValue(
+      () => undefined,
+    );
+    vi.mocked(aiInfraSelectors.aiModelSelectors.modelBuiltinSearchImpl).mockReturnValue(
+      () => undefined,
+    );
   });
 
   it('should return correct config when search is enabled and no builtin search', () => {
@@ -45,16 +50,6 @@ describe('getSearchConfig', () => {
           searchMode: 'on',
           useModelBuiltinSearch: false,
         }) as any,
-    );
-
-    vi.mocked(aiInfraSelectors.aiProviderSelectors.isProviderHasBuiltinSearch).mockReturnValue(
-      () => false,
-    );
-    vi.mocked(aiInfraSelectors.aiModelSelectors.isModelHasBuiltinSearch).mockReturnValue(
-      () => false,
-    );
-    vi.mocked(aiInfraSelectors.aiModelSelectors.isModelBuiltinSearchInternal).mockReturnValue(
-      () => false,
     );
 
     const result = getSearchConfig(model, provider);
@@ -93,14 +88,8 @@ describe('getSearchConfig', () => {
         }) as any,
     );
 
-    vi.mocked(aiInfraSelectors.aiProviderSelectors.isProviderHasBuiltinSearch).mockReturnValue(
-      () => true,
-    );
-    vi.mocked(aiInfraSelectors.aiModelSelectors.isModelHasBuiltinSearch).mockReturnValue(
-      () => false,
-    );
-    vi.mocked(aiInfraSelectors.aiModelSelectors.isModelBuiltinSearchInternal).mockReturnValue(
-      () => false,
+    vi.mocked(aiInfraSelectors.aiProviderSelectors.providerConfigById).mockReturnValue(
+      () => ({ settings: { searchMode: 'params' } }) as any,
     );
 
     const result = getSearchConfig(model, provider);
@@ -123,14 +112,8 @@ describe('getSearchConfig', () => {
         }) as any,
     );
 
-    vi.mocked(aiInfraSelectors.aiProviderSelectors.isProviderHasBuiltinSearch).mockReturnValue(
-      () => false,
-    );
-    vi.mocked(aiInfraSelectors.aiModelSelectors.isModelHasBuiltinSearch).mockReturnValue(
-      () => true,
-    );
-    vi.mocked(aiInfraSelectors.aiModelSelectors.isModelBuiltinSearchInternal).mockReturnValue(
-      () => false,
+    vi.mocked(aiInfraSelectors.aiModelSelectors.modelBuiltinSearchImpl).mockReturnValue(
+      () => 'params',
     );
 
     const result = getSearchConfig(model, provider);
@@ -153,14 +136,8 @@ describe('getSearchConfig', () => {
         }) as any,
     );
 
-    vi.mocked(aiInfraSelectors.aiProviderSelectors.isProviderHasBuiltinSearch).mockReturnValue(
-      () => false,
-    );
-    vi.mocked(aiInfraSelectors.aiModelSelectors.isModelHasBuiltinSearch).mockReturnValue(
-      () => true,
-    );
-    vi.mocked(aiInfraSelectors.aiModelSelectors.isModelBuiltinSearchInternal).mockReturnValue(
-      () => false,
+    vi.mocked(aiInfraSelectors.aiModelSelectors.modelBuiltinSearchImpl).mockReturnValue(
+      () => 'params',
     );
 
     const result = getSearchConfig(model, provider);
@@ -183,14 +160,8 @@ describe('getSearchConfig', () => {
         }) as any,
     );
 
-    vi.mocked(aiInfraSelectors.aiProviderSelectors.isProviderHasBuiltinSearch).mockReturnValue(
-      () => false,
-    );
-    vi.mocked(aiInfraSelectors.aiModelSelectors.isModelHasBuiltinSearch).mockReturnValue(
-      () => true,
-    );
-    vi.mocked(aiInfraSelectors.aiModelSelectors.isModelBuiltinSearchInternal).mockReturnValue(
-      () => true,
+    vi.mocked(aiInfraSelectors.aiModelSelectors.modelBuiltinSearchImpl).mockReturnValue(
+      () => 'internal',
     );
 
     const result = getSearchConfig(model, provider);

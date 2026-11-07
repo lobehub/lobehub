@@ -1,0 +1,175 @@
+import { type ResourceManagerMode } from '@/features/ResourceManager';
+import { createReplicaState, type ReplicaState } from '@/libs/replica';
+import { FilesTabs, type ResourceSourceFilter, SortType } from '@/types/files';
+
+import { type ExplorerSearchValue, type HierarchySearchValue } from './projection';
+
+export type ViewMode = 'list' | 'masonry';
+export type SelectAllState = 'all' | 'loaded' | 'none';
+
+/**
+ * Resources Sidebar mode — the "space" the user is currently in inside a
+ * team workspace:
+ *
+ * - `'private'` — my drawer: list only shows the caller's own private rows;
+ *   new uploads land as `visibility: 'private'`.
+ * - `'workspace'` — team share: list only shows public rows; new uploads
+ *   land as `visibility: 'public'`.
+ *
+ * Personal mode (no workspaceId) ignores this — the toggle isn't rendered
+ * and uploads carry no visibility hint (the server treats them as owner-only
+ * anyway).
+ */
+export type ResourceListVisibilityFilter = 'private' | 'workspace';
+
+/**
+ * Workspace mode opens on the team share, matching the task list's default:
+ * workspace resources are team work by default, and the private drawer stays
+ * one click away in the header scope dropdown.
+ */
+export const DEFAULT_WORKSPACE_LIST_VISIBILITY: ResourceListVisibilityFilter = 'workspace';
+
+/**
+ * The ResourceManager's two search surfaces as `local-replica` views.
+ *
+ * Both were bare `useClientDataSWR` entries before: the rows only lived in the
+ * SWR cache, so re-opening a search (or coming back to the surface) had to wait
+ * for a network round-trip before anything was on screen. The replica paints the
+ * persisted head page first and lets the network confirm it.
+ */
+export interface ResourceSearchState {
+  /**
+   * Replica views of the explorer's search overlay (`SearchResultsOverlay`),
+   * one entry per query so revisiting a keyword restores its own rows.
+   */
+  explorerSearchEntries: Record<string, ExplorerSearchValue>;
+  /** Replica bookkeeping of `explorerSearchEntries`. */
+  explorerSearchReplica: ReplicaState<ExplorerSearchValue>;
+  /**
+   * Replica views of the library sidebar's flat search list, one entry per
+   * (library, keyword).
+   */
+  hierarchySearchEntries: Record<string, HierarchySearchValue>;
+  /** Replica bookkeeping of `hierarchySearchEntries`. */
+  hierarchySearchReplica: ReplicaState<HierarchySearchValue>;
+}
+
+export interface State extends ResourceSearchState {
+  /**
+   * Current file category filter
+   */
+  category: FilesTabs;
+  /**
+   * Current view item ID (document ID or file ID)
+   */
+  currentViewItemId?: string;
+  /**
+   * Resource shown in the explorer's inline right detail panel (list click).
+   * Kept apart from `currentViewItemId`/`mode`: the panel is an in-context
+   * preview dock, not a view mode, so opening it must not kick the user out
+   * of the list or fight the `?file=` deep-link restoration.
+   */
+  detailPanelId?: string;
+  /**
+   * Whether the detail panel item is a page (文稿). Pages have no file URL, so
+   * the panel previews their document content instead of the file viewer.
+   */
+  detailPanelIsPage: boolean;
+  /**
+   * Current library ID
+   */
+  libraryId?: string;
+  /**
+   * Sidebar (library hierarchy) search query. Kept apart from `searchQuery`
+   * because the two inputs live on different surfaces: the Explorer overlay
+   * is hidden while a page is open, and letting both inputs drive one value
+   * makes them fight over it.
+   */
+  librarySearchQuery: string;
+  /**
+   * Workspace mode visibility filter for the top-level resource list.
+   * Only surfaces the filter chip in Explorer's header when a workspace is
+   * active and the user has not drilled into a library or folder.
+   */
+  listVisibility: ResourceListVisibilityFilter;
+  /**
+   * View mode for displaying resources
+   */
+  mode: ResourceManagerMode;
+  /**
+   * ID of item currently being renamed (for inline editing)
+   */
+  pendingRenameItemId: string | null;
+  /**
+   * ID of a tree node that should enter inline rename once it mounts in the
+   * sidebar hierarchy. Kept apart from `pendingRenameItemId` (consumed by the
+   * Explorer list) so a folder created from the tree's per-folder "+" renames
+   * in the tree, not in a list the user may not even be looking at.
+   */
+  pendingTreeRenameItemId: string | null;
+  /**
+   * Search query for filtering files
+   */
+  searchQuery: string | null;
+  /**
+   * Current select-all mode shared across explorer views
+   */
+  selectAllState: SelectAllState;
+  /**
+   * Selected file IDs in the file explorer.
+   * When selectAllState === 'all', this stores excluded IDs instead.
+   */
+  selectedFileIds: string[];
+  /**
+   * Total rows in the role-scoped select-all query. In a workspace this is
+   * caller-owned rows for members and the full visible result set for owners.
+   */
+  selectionTotal?: number;
+  /**
+   * Field to sort files by
+   */
+  sorter: 'name' | 'createdAt' | 'size';
+  /**
+   * Sort direction (ascending or descending)
+   */
+  sortType: SortType;
+  /**
+   * Explicit origin narrowing picked by the user. `undefined` means "not
+   * chosen here", which resolves to the category's own default (see
+   * `getResourceSourceFilter`) — Images opens on AI-generated, everything else
+   * on All. Cleared whenever the category changes so each category comes back
+   * to its own default rather than inheriting the previous one's choice.
+   */
+  sourceFilter?: ResourceSourceFilter;
+  /**
+   * File explorer view mode (list or masonry)
+   */
+  viewMode: ViewMode;
+}
+
+export const initialState: State = {
+  category: FilesTabs.All,
+  currentViewItemId: undefined,
+  detailPanelId: undefined,
+  detailPanelIsPage: false,
+  explorerSearchEntries: {},
+  explorerSearchReplica: createReplicaState(),
+  hierarchySearchEntries: {},
+  hierarchySearchReplica: createReplicaState(),
+  libraryId: undefined,
+  librarySearchQuery: '',
+  // Personal mode keeps the historical neutral value; workspace mode hydrates
+  // to DEFAULT_WORKSPACE_LIST_VISIBILITY when no saved preference exists.
+  listVisibility: 'workspace',
+  mode: 'explorer',
+  pendingRenameItemId: null,
+  pendingTreeRenameItemId: null,
+  searchQuery: null,
+  selectAllState: 'none',
+  selectionTotal: undefined,
+  selectedFileIds: [],
+  sortType: SortType.Desc,
+  sorter: 'createdAt',
+  sourceFilter: undefined,
+  viewMode: 'list',
+};

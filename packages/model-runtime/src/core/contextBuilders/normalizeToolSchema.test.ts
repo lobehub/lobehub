@@ -15,7 +15,7 @@ describe('normalizeToolJsonSchema', () => {
     expect(normalizeToolJsonSchema('foo')).toBe('foo');
   });
 
-  // LOBE-10066: deepseek variant — array property with `items: true`
+  // DeepSeek variant — array property with `items: true`
   it('rewrites `items: true` to an empty object schema', () => {
     const result = normalizeToolJsonSchema({
       properties: {
@@ -28,7 +28,7 @@ describe('normalizeToolJsonSchema', () => {
     expect(result.properties.sourceIds.type).toBe('array');
   });
 
-  // LOBE-10066: gemini variant — array property carrying `items` but missing `type`
+  // Gemini variant — array property carrying `items` but missing `type`
   it('backfills `type: array` on a node that carries `items` without a type', () => {
     const result = normalizeToolJsonSchema({
       properties: {
@@ -91,6 +91,38 @@ describe('normalizeToolJsonSchema', () => {
 
     expect(result.prefixItems[0].items).toEqual({});
     expect(result.additionalProperties.items).toEqual({});
+  });
+
+  // xAI/grok variant — property carrying an empty enum
+  it('drops an empty enum constraint', () => {
+    const result = normalizeToolJsonSchema({
+      properties: {
+        sort: { enum: [], type: 'string' },
+      },
+      type: 'object',
+    });
+
+    expect('enum' in result.properties.sort).toBe(false);
+    expect(result.properties.sort.type).toBe('string');
+  });
+
+  it('keeps a non-empty enum untouched', () => {
+    const result = normalizeToolJsonSchema({
+      enum: ['asc', 'desc'],
+      type: 'string',
+    });
+
+    expect(result.enum).toEqual(['asc', 'desc']);
+  });
+
+  it('drops empty enums nested inside combinators and items', () => {
+    const result = normalizeToolJsonSchema({
+      anyOf: [{ enum: [], type: 'string' }],
+      items: { enum: [] },
+    });
+
+    expect('enum' in result.anyOf[0]).toBe(false);
+    expect('enum' in result.items).toBe(false);
   });
 
   it('keeps boolean additionalProperties untouched (a valid, accepted form)', () => {

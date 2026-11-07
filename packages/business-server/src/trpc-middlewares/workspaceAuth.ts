@@ -3,9 +3,15 @@ import { TRPCError } from '@trpc/server';
 import { authedProcedure } from '@/libs/trpc/lambda';
 import { trpc } from '@/libs/trpc/lambda/init';
 
-export type WorkspaceRole = 'member' | 'owner' | 'viewer';
+export type WorkspaceRole = 'admin' | 'member' | 'owner' | 'viewer';
 
-export const cloudWorkspaceAuth = trpc.middleware(async (opts) => opts.next());
+export const cloudWorkspaceAuth = trpc.middleware(async (opts) =>
+  opts.next({
+    ctx: {
+      workspaceSlug: undefined as string | undefined,
+    },
+  }),
+);
 
 export const lobeWorkspaceAuth = trpc.middleware(async (opts) => opts.next());
 
@@ -15,10 +21,6 @@ export const requireWorkspaceRole = (_minRole: WorkspaceRole) =>
 export const requireWorkspaceRoleWhenScoped = (_minRole: WorkspaceRole) =>
   trpc.middleware(async (opts) => opts.next());
 
-export const wsProcedure = authedProcedure;
-
-export const wsMemberProcedure = authedProcedure;
-
 const requireWorkspaceId = trpc.middleware(async ({ ctx, next }) => {
   if (!ctx.workspaceId) {
     throw new TRPCError({ code: 'BAD_REQUEST', message: 'workspaceId is required' });
@@ -26,6 +28,11 @@ const requireWorkspaceId = trpc.middleware(async ({ ctx, next }) => {
   return next({ ctx: { workspaceId: ctx.workspaceId } });
 });
 
-export const wsOwnerProcedure = authedProcedure.use(requireWorkspaceId);
+export const wsProcedure = authedProcedure.use(requireWorkspaceId);
 
-export const wsCompatProcedure = authedProcedure;
+export const wsMemberProcedure = authedProcedure;
+
+export const wsOwnerProcedure = authedProcedure.use(requireWorkspaceId);
+export const wsAdminProcedure = authedProcedure.use(requireWorkspaceId);
+
+export const wsCompatProcedure = authedProcedure.use(cloudWorkspaceAuth);

@@ -49,6 +49,7 @@ describe('taskDetailSelectors', () => {
     const state = createState({
       activeTaskId: 'T-1',
       taskDetailMap: { 'T-1': mockDetail },
+      taskInstructionRevisionMap: { 'T-1': 3 },
     });
 
     it('should return activeTaskName', () => {
@@ -69,6 +70,11 @@ describe('taskDetailSelectors', () => {
 
     it('should return activeTaskInstruction', () => {
       expect(taskDetailSelectors.activeTaskInstruction(state)).toBe('Do something');
+    });
+
+    it('should return the active task instruction revision', () => {
+      expect(taskDetailSelectors.activeTaskInstructionRevision(state)).toBe(3);
+      expect(taskDetailSelectors.activeTaskInstructionRevision(createState())).toBe(0);
     });
 
     it('should return activeTaskAgentId', () => {
@@ -248,5 +254,75 @@ describe('taskDetailSelectors', () => {
       const state = createState({ taskDetailMap: {} });
       expect(taskDetailSelectors.taskDetailById('T-999')(state)).toBeUndefined();
     });
+  });
+});
+
+describe('activeTaskRuntimeConfig', () => {
+  it('exposes values and sources without depending on task lifecycle status', () => {
+    for (const status of ['backlog', 'running', 'paused'] as const) {
+      const state = createState({
+        activeTaskId: 'T-1',
+        taskDetailMap: {
+          'T-1': { ...mockDetail, config: { model: 'gpt-5.4' }, status },
+        },
+      });
+      expect(
+        taskDetailSelectors.activeTaskRuntimeConfig({
+          type: 'codex',
+          model: 'gpt-5.5',
+          effort: 'high',
+          speed: 'fast',
+        })(state),
+      ).toEqual([
+        { key: 'runtime', source: 'agent', value: 'codex' },
+        { key: 'model', source: 'task', value: 'gpt-5.4' },
+        { key: 'effort', source: 'agent', value: 'high' },
+        { key: 'speed', source: 'agent', value: 'fast' },
+      ]);
+    }
+  });
+
+  /** @example Runtime snapshots do not replace a user-provider API binding in Task previews. */
+  it('keeps runtime identity snapshots out of API-auth Task model overrides', () => {
+    // ROOT CAUSE:
+    //
+    // API pins accept provider IDs, so codex/openai from a Task snapshot previously
+    // became a native model in the inspector while server dispatch ignored it.
+    // Filter routing identities when converting Task config into a runtime pin.
+    const state = createState({
+      activeTaskId: 'T-1',
+      taskDetailMap: {
+        'T-1': { ...mockDetail, config: { model: 'codex', provider: 'openai' } },
+      },
+    });
+    const provider = {
+      apiConfig: { model: 'deepseek-v4-pro', providerId: 'deepseek' },
+      authMode: 'api' as const,
+      type: 'codex' as const,
+    };
+    /** @example codex/openai is a routing identity; the native API model stays inherited. */
+    expect(taskDetailSelectors.activeTaskRuntimeConfig(provider)(state)?.[1]).toEqual({
+      key: 'model',
+      source: 'agent',
+      value: 'deepseek-v4-pro',
+    });
+    state.taskDetailMap['T-1'].config = { model: 'deepseek-v4-flash', provider: 'deepseek' };
+    /** @example Explicit native Task models continue to override the Agent's API model. */
+    expect(taskDetailSelectors.activeTaskRuntimeConfig(provider)(state)?.[1]).toEqual({
+      key: 'model',
+      source: 'task',
+      value: 'deepseek-v4-flash',
+    });
+  });
+
+  it('restores Agent values when the Task pin is cleared', () => {
+    const state = createState({
+      activeTaskId: 'T-1',
+      taskDetailMap: { 'T-1': { ...mockDetail, config: {} } },
+    });
+    expect(
+      taskDetailSelectors.activeTaskRuntimeConfig({ type: 'codex', model: 'gpt-5.5' })(state)?.[1],
+    ).toEqual({ key: 'model', source: 'agent', value: 'gpt-5.5' });
+    expect(taskDetailSelectors.activeTaskRuntimeConfig(undefined)(state)).toBeUndefined();
   });
 });

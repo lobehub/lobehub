@@ -17,6 +17,7 @@ vi.mock('@/libs/trpc/client', () => ({
       clearAll: { mutate: vi.fn() },
       create: { mutate: vi.fn() },
       delete: { mutate: vi.fn() },
+      deleteGoal: { mutate: vi.fn() },
       deleteComment: { mutate: vi.fn() },
       deleteTopic: { mutate: vi.fn() },
       detail: { query: vi.fn() },
@@ -68,6 +69,12 @@ describe('TaskService', () => {
       const params = { assigneeAgentId: 'agt_1', limit: 50, offset: 0 };
       await taskService.list(params);
       expect(lambdaClient.task.list.query).toHaveBeenCalledWith(params);
+    });
+
+    it('uses the agent-only API contract for the Agent board', async () => {
+      await taskService.groupList({ groupBy: 'assignee' });
+
+      expect(lambdaClient.task.groupList.query).toHaveBeenCalledWith({ groupBy: 'agent' });
     });
 
     it('getSubtasks should call task.getSubtasks.query', async () => {

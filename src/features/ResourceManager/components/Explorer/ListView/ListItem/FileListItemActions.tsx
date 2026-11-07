@@ -1,14 +1,13 @@
 import type { IAsyncTaskError } from '@lobechat/types';
+import type { ItemType } from '@lobehub/ui';
 import { Button, Flexbox, stopPropagation } from '@lobehub/ui';
-import type { ItemType } from 'antd/es/menu/interface';
 import { isNull } from 'es-toolkit/compat';
 import { FileBoxIcon } from 'lucide-react';
-import { useMemo } from 'react';
+import type { ReactNode } from 'react';
 
-import { useFileTransferMenuItem } from '@/business/client/hooks/useFileTransferMenuItem';
 import { usePermission } from '@/hooks/usePermission';
+import { getChunkTargetId } from '@/store/file';
 
-import DropdownMenu from '../../ItemDropdown/DropdownMenu';
 import ChunksBadge from './ChunkTag';
 import { styles } from './styles';
 
@@ -18,13 +17,15 @@ interface FileListItemActionsProps {
   chunkingStatus?: unknown;
   embeddingError?: IAsyncTaskError | null;
   embeddingStatus?: unknown;
+  fileId?: string | null;
   finishEmbedding?: boolean;
   id: string;
   isCreatingFileParseTask: boolean;
   isFolder: boolean;
   isPage: boolean;
   isSupportedForChunking: boolean;
-  menuItems: ItemType[] | (() => ItemType[]);
+  /** The row's "…" menu, or a same-sized placeholder until the row is activated. */
+  menu: ReactNode;
   parseFiles: (ids: string[]) => void;
   t: any;
 }
@@ -62,26 +63,19 @@ const FileListItemActions = ({
   chunkingStatus,
   embeddingError,
   embeddingStatus,
+  fileId,
   finishEmbedding,
   id,
   isCreatingFileParseTask,
   isFolder,
   isPage,
   isSupportedForChunking,
-  menuItems,
+  menu,
   parseFiles,
   t,
 }: FileListItemActionsProps) => {
   const { allowed: canEditResources } = usePermission('edit_own_content');
-  const transferMenuItems = useFileTransferMenuItem(
-    id,
-    isPage ? 'document' : isFolder ? 'folder' : 'file',
-  );
-
-  const mergedMenuItems = useMemo(() => {
-    const baseItems = typeof menuItems === 'function' ? menuItems() : menuItems;
-    return appendTransferMenuItemsBeforeDelete(baseItems, transferMenuItems);
-  }, [menuItems, transferMenuItems]);
+  const chunkTargetId = getChunkTargetId({ fileId, id });
 
   return (
     <Flexbox
@@ -95,23 +89,21 @@ const FileListItemActions = ({
       {!isFolder &&
         !isPage &&
         (isCreatingFileParseTask || isNull(chunkingStatus) || !chunkingStatus ? (
-          canEditResources && (
+          // Unsupported file types simply hide the entry instead of surfacing a
+          // permanently disabled button.
+          canEditResources &&
+          isSupportedForChunking && (
             <div
               className={isCreatingFileParseTask ? undefined : styles.hover}
-              title={t(
-                isSupportedForChunking
-                  ? 'FileManager.actions.chunkingTooltip'
-                  : 'FileManager.actions.chunkingUnsupported',
-              )}
+              title={t('FileManager.actions.chunkingTooltip')}
             >
               <Button
-                disabled={!isSupportedForChunking}
                 icon={FileBoxIcon}
                 loading={isCreatingFileParseTask}
                 size={'small'}
                 type={'text'}
                 onClick={() => {
-                  parseFiles([id]);
+                  parseFiles([chunkTargetId]);
                 }}
               >
                 {t(
@@ -131,11 +123,11 @@ const FileListItemActions = ({
               embeddingError={embeddingError}
               embeddingStatus={embeddingStatus as any}
               finishEmbedding={finishEmbedding}
-              id={id}
+              id={chunkTargetId}
             />
           </div>
         ))}
-      <DropdownMenu className={styles.hover} items={mergedMenuItems} />
+      {menu}
     </Flexbox>
   );
 };

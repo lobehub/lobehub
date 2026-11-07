@@ -49,11 +49,85 @@ const statusIcon = (s: string): string => {
 };
 
 export interface TaskSummary {
+  id?: string;
   identifier: string;
+  labels?: { name: string }[] | null;
   name?: string | null;
   priority?: number | null;
   status: string;
 }
+
+/**
+ * Deep-link to a task's detail page, so the agent can present task identifiers
+ * as clickable references — mirroring how Linear surfaces an issue's `url`.
+ *
+ * Pass `baseUrl` (e.g. `appEnv.APP_URL`) for an ABSOLUTE link. This is required
+ * whenever the message can leave the app — IM/bot channels (Slack, Telegram,
+ * WeChat…), push notifications, mobile — where there is no app origin to
+ * resolve a relative path against. Omit it only for in-app (SPA) rendering,
+ * where a relative path resolves against the current origin and is more durable.
+ */
+/**
+ * One rule for naming an assignment participant, so every task-detail surface
+ * tells the same story about who acted.
+ *
+ * The three states are deliberately distinct: no author means the system acted
+ * (the runner assigning its fallback agent); a recorded id with no live row is
+ * deleted or invisible to this reader; a resolved row with an empty display
+ * name is still a real participant.
+ */
+export const assignmentParticipantLabel = (
+  party?: { id: string; name?: string | null; unresolved?: boolean } | null,
+  absentLabel = 'unassigned',
+): string => {
+  if (!party) return absentLabel;
+  // A recorded participant whose row is gone keeps its id when one survived;
+  // a deleted actor leaves no id at all and must still read as a person.
+  return party.name || party.id || (party.unresolved ? 'a deleted participant' : 'unnamed');
+};
+
+/** Render one side of a property change for a text surface. */
+export const formatPropertyValue = (field: string | undefined, value: unknown): string => {
+  if (value === null || value === undefined) return field === 'automation' ? 'off' : 'none';
+  if (field === 'priority') return priorityLabel(value as number);
+  if (typeof value === 'object') {
+    const v = value as {
+      heartbeatInterval?: number | null;
+      maxExecutions?: number | null;
+      mode?: string | null;
+      schedulePattern?: string | null;
+      scheduleTimezone?: string | null;
+    };
+    if (v.mode === 'schedule') {
+      // Every part a user can edit shows, or a timezone-only or cap-only
+      // change reads as "from X to X".
+      const parts = [v.schedulePattern ?? '?'];
+      if (v.scheduleTimezone) parts.push(v.scheduleTimezone);
+      if (typeof v.maxExecutions === 'number') parts.push(`max ${v.maxExecutions}`);
+      return `schedule(${parts.join(', ')})`;
+    }
+    if (v.mode === 'heartbeat') return `heartbeat(${v.heartbeatInterval ?? '?'}s)`;
+    return JSON.stringify(value);
+  }
+  return String(value);
+};
+
+export const taskDetailHref = (taskRef: string, baseUrl?: string): string => {
+  const path = `/task/${taskRef}`;
+  return baseUrl ? `${baseUrl.replace(/\/$/, '')}${path}` : path;
+};
+
+/** Public links use the display alias; stable identity stays in explicit metadata. */
+export const taskRef = (
+  task: string | { id?: string; identifier: string },
+  baseUrl?: string,
+): string => {
+  const { id, identifier } = typeof task === 'string' ? { id: undefined, identifier: task } : task;
+  return `[${identifier}](${taskDetailHref(identifier, baseUrl)})${id ? ` (id: ${id})` : ''}`;
+};
+
+export const taskIdentity = (task: { id?: string | null; identifier: string }) =>
+  `${task.identifier}${task.id ? ` (id: ${task.id})` : ''}`;
 
 // Re-export shared types from @lobechat/types for backward compatibility
 export type {
@@ -66,23 +140,75 @@ export type {
 /**
  * Format a single task as a one-line summary
  */
+const formatLabelSuffix = (labels: TaskSummary['labels']): string =>
+  labels?.length ? `  labels: ${labels.map((label) => label.name).join(', ')}` : '';
+
 export const formatTaskLine = (t: TaskSummary): string =>
-  `${t.identifier} ${statusIcon(t.status)} ${t.status}  ${t.name || '(unnamed)'}  [${priorityLabel(t.priority)}]`;
+  `${taskIdentity(t)} ${statusIcon(t.status)} ${t.status}  ${t.name || '(unnamed)'}  [${priorityLabel(t.priority)}]${formatLabelSuffix(t.labels)}`;
 
 /**
  * Format createTask response
  */
 export const formatTaskCreated = (
-  t: TaskSummary & { instruction: string; parentLabel?: string },
+  t: TaskSummary & {
+    /** Human owner label (e.g. "Alice (usr_1)") when the task was assigned to a workspace member. */
+    assigneeLabel?: string;
+    baseUrl?: string;
+    instruction: string;
+    parentLabel?: string;
+    parentTaskId?: string;
+  },
 ): string => {
   const lines = [
-    `Task created: ${t.identifier} "${t.name}"`,
+    `Task created: ${taskRef(t, t.baseUrl)} "${t.name}"`,
     `  Status: ${statusIcon(t.status)} ${t.status}`,
     `  Priority: ${priorityLabel(t.priority)}`,
   ];
-  if (t.parentLabel) lines.push(`  Parent: ${t.parentLabel}`);
+  if (t.labels?.length) lines.push(`  Labels: ${t.labels.map((label) => label.name).join(', ')}`);
+  if (t.assigneeLabel) lines.push(`  Assignee: ${t.assigneeLabel}`);
+  if (t.parentLabel)
+    lines.push(
+      `  Parent: ${taskRef({ id: t.parentTaskId, identifier: t.parentLabel }, t.baseUrl)}`,
+    );
   lines.push(`  Instruction: ${t.instruction}`);
   return lines.join('\n');
+};
+
+export interface TaskCreatedItem {
+  error?: string;
+  identifier?: string;
+  name: string;
+  success: boolean;
+  taskId?: string;
+}
+
+/**
+ * Format the createTasks (batch) response: a header plus one line per task,
+ * with successful identifiers rendered as links (absolute when `baseUrl` is
+ * given — required for IM / mobile, see {@link taskDetailHref}).
+ *
+ * Single source of truth shared by the client executor and the server runtime
+ * so the two stay identical.
+ */
+export const formatTasksCreated = (results: TaskCreatedItem[], baseUrl?: string): string => {
+  const lines = results.map((r, index) => {
+    if (r.success) {
+      const ref = r.identifier
+        ? taskRef({ id: r.taskId, identifier: r.identifier }, baseUrl)
+        : '(unknown id)';
+      return `${index + 1}. ${ref} "${r.name}" — created`;
+    }
+    return `${index + 1}. "${r.name}" — failed: ${r.error ?? 'Unknown error'}`;
+  });
+
+  const succeeded = results.filter((r) => r.success).length;
+  const failed = results.length - succeeded;
+  const header =
+    failed === 0
+      ? `Created ${succeeded} task${succeeded === 1 ? '' : 's'}:`
+      : `Created ${succeeded}/${results.length} tasks (${failed} failed):`;
+
+  return [header, ...lines].join('\n');
 };
 
 export interface TaskListFilters {
@@ -90,6 +216,7 @@ export interface TaskListFilters {
   isDefaultScope?: boolean;
   isForAllAgents?: boolean;
   isForCurrentAgent?: boolean;
+  labels?: string[];
   parentIdentifier?: string;
   priorities?: number[];
   statuses?: TaskStatus[];
@@ -109,6 +236,7 @@ const buildTaskListLabel = (filters: TaskListFilters): string => {
     parts.push(`priority=[${filters.priorities.map((p) => priorityLabel(p)).join(',')}]`);
   }
   if (filters.assigneeAgentId) parts.push(`agent=${filters.assigneeAgentId}`);
+  if (filters.labels?.length) parts.push(`label=[${filters.labels.join(',')}]`);
 
   if (filters.parentIdentifier) {
     return parts.length > 0
@@ -136,19 +264,22 @@ export const formatTaskList = (tasks: TaskSummary[], filters: TaskListFilters): 
  */
 export const formatTaskDetail = (t: TaskDetailData): string => {
   const lines = [
-    `${t.identifier} ${t.name || '(unnamed)'}`,
+    `${taskIdentity(t)} ${t.name || '(unnamed)'}`,
     `Status: ${statusIcon(t.status)} ${t.status}     Priority: ${priorityLabel(t.priority)}`,
     `Instruction: ${t.instruction}`,
   ];
 
   if (t.agentId) lines.push(`Agent: ${t.agentId}`);
-  if (t.parent) lines.push(`Parent: ${t.parent.identifier}`);
+  // `userId` on the detail payload is the human assignee (workspace member).
+  if (t.userId) lines.push(`Assignee (member): ${t.userId}`);
+  if (t.parent) lines.push(`Parent: ${taskIdentity(t.parent)}`);
+  if (t.labels?.length) lines.push(`Labels: ${t.labels.map((label) => label.name).join(', ')}`);
   if (t.topicCount) lines.push(`Topics: ${t.topicCount}`);
   if (t.createdAt) lines.push(`Created: ${t.createdAt}`);
 
   if (t.dependencies && t.dependencies.length > 0) {
     lines.push(
-      `Dependencies: ${t.dependencies.map((d) => `${d.type}: ${d.dependsOn}`).join(', ')}`,
+      `Dependencies: ${t.dependencies.map((d) => `${d.type}: ${taskIdentity({ id: d.dependsOnId, identifier: d.dependsOn })}`).join(', ')}`,
     );
   }
 
@@ -158,9 +289,11 @@ export const formatTaskDetail = (t: TaskDetailData): string => {
     lines.push('Subtasks:');
     const renderSubtasks = (nodes: NonNullable<typeof t.subtasks>, indent: string) => {
       for (const s of nodes) {
-        const dep = s.blockedBy ? ` ← blocks: ${s.blockedBy}` : '';
+        const dep = s.blockedBy
+          ? ` ← blocks: ${taskIdentity({ id: s.blockedById, identifier: s.blockedBy })}`
+          : '';
         lines.push(
-          `${indent}${s.identifier} ${statusIcon(s.status)} ${s.status} ${s.name || '(unnamed)'}${dep}`,
+          `${indent}${taskIdentity(s)} ${statusIcon(s.status)} ${s.status} ${s.name || '(unnamed)'}${dep}`,
         );
         if (s.children && s.children.length > 0) {
           renderSubtasks(s.children, indent + '  ');
@@ -234,11 +367,91 @@ export const formatTaskDetail = (t: TaskDetailData): string => {
         const content = act.content || '';
         const truncated = content.length > 80 ? content.slice(0, 80) + '...' : content;
         lines.push(`  💭 ${act.time || ''} ${author} ${truncated}${idSuffix}`);
+      } else if (act.type === 'property') {
+        const actor = assignmentParticipantLabel(act.author, 'system');
+        const change = act.propertyChange;
+        lines.push(
+          `  🔁 ${act.time || ''} ${actor} changed ${change?.field}: ${formatPropertyValue(change?.field, change?.from)} → ${formatPropertyValue(change?.field, change?.to)}${idSuffix}`,
+        );
+      } else if (act.type === 'assignment') {
+        // Who owns the task changed hands; a formatter that drops the event
+        // shows a reader an assignee they cannot account for.
+        const slot = act.assignment?.kind === 'agent' ? 'agent' : 'member';
+        const actor = assignmentParticipantLabel(act.author, 'system');
+        lines.push(
+          `  👥 ${act.time || ''} ${actor} set ${slot} assignee: ${assignmentParticipantLabel(act.assignment?.from)} → ${assignmentParticipantLabel(act.assignment?.to)}${idSuffix}`,
+        );
       }
     }
   }
 
   return lines.join('\n');
+};
+
+// ── Workspace members (task assignee candidates) ──
+
+export interface TaskAssignableMember {
+  /** Workspace email — an exact handle for matching a person named by address. */
+  email?: string | null;
+  /** User id — the value to pass as `assigneeUserId`. */
+  id: string;
+  /**
+   * Linked IM identities, formatted `platform:@username(platformUserId)` (or
+   * `platform:platformUserId` without a username). Lets a person named by a
+   * Discord/Slack/Telegram handle or a raw `<@platformUserId>` mention be
+   * resolved deterministically instead of by name similarity.
+   */
+  imAccounts?: string[];
+  /** The signed-in user who invoked the tool. */
+  isSelf?: boolean;
+  name?: string | null;
+  role?: string | null;
+  username?: string | null;
+}
+
+/**
+ * Format the listWorkspaceMembers response: one line per member with the id
+ * the model must pass back as `assigneeUserId`. Shared by the client executor
+ * and the server runtime so both surfaces read identically.
+ */
+export const formatWorkspaceMembers = (
+  members: TaskAssignableMember[],
+  options: { inWorkspace: boolean; query?: string; total?: number } = { inWorkspace: true },
+): string => {
+  const { inWorkspace, query } = options;
+  if (members.length === 0) {
+    if (query)
+      return `No workspace members match "${query}". Try a different name, @handle, email or platform id.`;
+    return inWorkspace
+      ? 'No workspace members can be assigned tasks.'
+      : 'Not in a workspace: tasks can only be assigned to agents here.';
+  }
+
+  // "(3)" when the whole directory fits; "(50 of 213 — pass query to narrow)"
+  // when the cap cut it, so the model refines instead of assuming it saw all.
+  const total = options.total ?? members.length;
+  const count =
+    total > members.length
+      ? `${members.length} of ${total} — pass query to narrow`
+      : `${members.length}`;
+  const scope = query ? ` matching "${query}"` : '';
+  const header = inWorkspace
+    ? `Workspace members that can be assigned tasks${scope} (${count}). Use the id as assigneeUserId:`
+    : 'Not in a workspace — the only person a task can be assigned to is you:';
+
+  const lines = members.map((m) => {
+    const name = m.name?.trim() || m.username?.trim() || '(unnamed)';
+    const parts = [`- ${name}`];
+    if (m.username && m.username !== name) parts.push(`@${m.username}`);
+    if (m.email) parts.push(m.email);
+    if (m.role) parts.push(`role=${m.role}`);
+    if (m.imAccounts && m.imAccounts.length > 0) parts.push(`im=${m.imAccounts.join(',')}`);
+    if (m.isSelf) parts.push('(you)');
+    parts.push(`id=${m.id}`);
+    return parts.join('  ');
+  });
+
+  return [header, ...lines].join('\n');
 };
 
 /**
@@ -344,6 +557,30 @@ export interface TaskRunPromptWorkspaceNode {
   title?: string;
 }
 
+/**
+ * Goal-loop context for a round spawned by the outer verify-driven loop: what
+ * the previous round left unresolved, so the new (fresh-context) topic can pick
+ * up without re-discovering everything.
+ */
+export interface TaskRunPromptGoalLoop {
+  /**
+   * Questions earlier rounds put to the owner, with what came back — their
+   * answer, or the notice that none arrived. Each round starts in a fresh
+   * conversation, so without this a round re-asked what the last one asked.
+   */
+  askedQuestions?: Array<{ answer?: string; questions: string[] }>;
+  /** Feedback from the automatic Acceptance review of the previous delivery. */
+  automaticReviewFeedback?: string;
+  /** Checks that did not pass in the previous round, with the verifier's why/suggestion. */
+  failedChecks?: Array<{ title: string; why?: string }>;
+  /** Round budget. Null/undefined = uncapped. */
+  maxRounds?: number | null;
+  /** The user's reject comment on the previous delivery — highest-priority input. */
+  rejectComment?: string;
+  /** 1-based index of the round this prompt is for. */
+  round?: number;
+}
+
 export interface TaskRunPromptInput {
   /** Activity data (all optional) */
   activities?: {
@@ -354,34 +591,53 @@ export interface TaskRunPromptInput {
   };
   /** --prompt flag content */
   extraPrompt?: string;
+  /** Present only for rounds spawned by the goal outer loop. */
+  goalLoop?: TaskRunPromptGoalLoop;
   /** Parent task context (when current task is a subtask) */
   parentTask?: {
+    id?: string;
     identifier: string;
     instruction: string;
     name?: string | null;
-    subtasks?: Array<TaskSummary & { blockedBy?: string }>;
+    subtasks?: Array<TaskSummary & { blockedBy?: string; blockedById?: string }>;
   };
   /** Task data */
   task: {
     assigneeAgentId?: string | null;
-    dependencies?: Array<{ dependsOn: string; type: string }>;
+    automationMode?: 'heartbeat' | 'schedule' | null;
+    dependencies?: Array<{ dependsOn: string; dependsOnId?: string; type: string }>;
     description?: string | null;
     /** Lightweight metadata of files attached to the task instruction. Actual
      * content is forwarded to the agent runtime via `fileIds` on execAgent. */
     files?: TaskRunPromptAttachment[];
+    heartbeatInterval?: number | null;
     id: string;
     identifier: string;
     instruction: string;
     name?: string | null;
     parentIdentifier?: string | null;
+    parentTaskId?: string | null;
     priority?: number | null;
     review?: {
       enabled?: boolean;
       maxIterations?: number;
       rubrics?: Array<{ name: string; threshold?: number; type: string }>;
     } | null;
+    schedulePattern?: string | null;
+    scheduleTimezone?: string | null;
     status: string;
-    subtasks?: Array<TaskSummary & { blockedBy?: string }>;
+    subtasks?: Array<TaskSummary & { blockedBy?: string; blockedById?: string }>;
+    /** Delivery-acceptance criteria the builder must self-evidence while working. */
+    verify?: {
+      criteria?: Array<{
+        required?: boolean;
+        requiredEvidence?: Array<{ hint?: string; type: string }>;
+        title: string;
+      }>;
+      enabled?: boolean;
+      maxIterations?: number;
+      requirement?: string;
+    } | null;
   };
   /** Pinned documents (workspace) */
   workspace?: TaskRunPromptWorkspaceNode[];
@@ -400,6 +656,14 @@ const timeAgo = (dateStr: string, now?: Date): string => {
   if (diffHr < 24) return `${diffHr}h ago`;
   const diffDay = Math.floor(diffHr / 24);
   return `${diffDay}d ago`;
+};
+
+// ── Heartbeat interval helper ──
+
+const formatInterval = (seconds: number): string => {
+  if (seconds % 3600 === 0) return `${seconds / 3600}h`;
+  if (seconds % 60 === 0) return `${seconds / 60}m`;
+  return `${seconds}s`;
 };
 
 // ── Brief icon ──
@@ -434,7 +698,7 @@ const briefIcon = (type: string): string => {
  * 4. Original Task (instruction + description) — the base requirement
  */
 export const buildTaskRunPrompt = (input: TaskRunPromptInput, now?: Date): string => {
-  const { task, activities, extraPrompt, workspace, parentTask } = input;
+  const { task, activities, extraPrompt, goalLoop, workspace, parentTask } = input;
   const sections: string[] = [];
 
   // ── 1. High Priority Instruction ──
@@ -462,10 +726,21 @@ export const buildTaskRunPrompt = (input: TaskRunPromptInput, now?: Date): strin
   const taskLines = [
     `<task>`,
     `<hint>This tag contains the complete task context. Do NOT call viewTask to re-fetch it.</hint>`,
-    `${task.identifier} ${task.name || task.identifier}`,
+    `${taskIdentity(task)} ${task.name || task.identifier}`,
     `Status: ${statusIcon(task.status)} ${task.status}     Priority: ${priorityLabel(task.priority)}`,
-    `Instruction: ${task.instruction}`,
   ];
+  if (task.automationMode) {
+    const cadence =
+      task.automationMode === 'heartbeat' && task.heartbeatInterval
+        ? `heartbeat, every ${formatInterval(task.heartbeatInterval)}`
+        : task.automationMode === 'schedule' && task.schedulePattern
+          ? `cron "${task.schedulePattern}" (${task.scheduleTimezone || 'UTC'})`
+          : task.automationMode;
+    taskLines.push(
+      `Automation: ${cadence} — this task is a recurring loop and this run is one tick of it. When the run ends, the next tick is armed automatically; a tick with nothing to do, or whose condition is not met yet, is still a successful run — NEVER end the loop for that, and never set it to canceled or failed. The only exception: when the Instruction defines an end condition (e.g. "until X", "stop once Y", "after Z is done") and this tick has verified that it is now met, mark this task completed as your final step — that retires the loop once this run finishes. Do not ask the user to stop it instead.`,
+    );
+  }
+  taskLines.push(`Instruction: ${task.instruction}`);
   if (task.description) taskLines.push(`Description: ${task.description}`);
   if (task.files && task.files.length > 0) {
     taskLines.push('Attachments (contents provided separately as multimodal inputs):');
@@ -474,14 +749,17 @@ export const buildTaskRunPrompt = (input: TaskRunPromptInput, now?: Date): strin
     }
   }
   if (task.assigneeAgentId) taskLines.push(`Agent: ${task.assigneeAgentId}`);
-  if (task.parentIdentifier) taskLines.push(`Parent: ${task.parentIdentifier}`);
+  if (task.parentIdentifier)
+    taskLines.push(
+      `Parent: ${taskIdentity({ id: task.parentTaskId, identifier: task.parentIdentifier })}`,
+    );
 
   const topicCount = activities?.topics?.length ?? 0;
   if (topicCount > 0) taskLines.push(`Topics: ${topicCount}`);
 
   if (task.dependencies && task.dependencies.length > 0) {
     taskLines.push(
-      `Dependencies: ${task.dependencies.map((d) => `${d.type}: ${d.dependsOn}`).join(', ')}`,
+      `Dependencies: ${task.dependencies.map((d) => `${d.type}: ${taskIdentity({ id: d.dependsOnId, identifier: d.dependsOn })}`).join(', ')}`,
     );
   }
 
@@ -490,9 +768,11 @@ export const buildTaskRunPrompt = (input: TaskRunPromptInput, now?: Date): strin
     taskLines.push('');
     taskLines.push('Subtasks:');
     for (const s of task.subtasks) {
-      const dep = s.blockedBy ? ` ← blocks: ${s.blockedBy}` : '';
+      const dep = s.blockedBy
+        ? ` ← blocks: ${taskIdentity({ id: s.blockedById, identifier: s.blockedBy })}`
+        : '';
       taskLines.push(
-        `  ${s.identifier} ${statusIcon(s.status)} ${s.status} ${s.name || '(unnamed)'}${dep}`,
+        `  ${taskIdentity(s)} ${statusIcon(s.status)} ${s.status} ${s.name || '(unnamed)'}${dep}`,
       );
     }
   }
@@ -508,6 +788,111 @@ export const buildTaskRunPrompt = (input: TaskRunPromptInput, now?: Date): strin
     }
   } else {
     taskLines.push('Review: (not configured)');
+  }
+
+  // Verify — delivery acceptance (builder self-evidence)
+  //
+  // Gated on `enabled` alone: every Task that carries an Acceptance runs it
+  // in-Task. A criteria-less Acceptance still materializes a plan at run start,
+  // and the builder reads those criterion ids at runtime — so having nothing to
+  // print here is not a reason to withhold the instruction.
+  if (task.verify?.enabled) {
+    taskLines.push('');
+    taskLines.push(
+      `Verify — delivery acceptance (maxIterations: ${task.verify.maxIterations || 3}):`,
+    );
+    if (task.verify.requirement) {
+      taskLines.push(`  Requirement: ${task.verify.requirement}`);
+    }
+    if (task.verify.criteria && task.verify.criteria.length > 0) {
+      taskLines.push('  Criteria — capture the listed evidence while you work:');
+      for (const c of task.verify.criteria) {
+        const flag = c.required === false ? '' : ' (required)';
+        taskLines.push(`    - ${c.title}${flag}`);
+        for (const e of c.requiredEvidence ?? []) {
+          taskLines.push(`        · evidence: ${e.type}${e.hint ? ` — ${e.hint}` : ''}`);
+        }
+      }
+    }
+    taskLines.push(
+      '  Run the Acceptance inside this Task, not after it: drive the real product surface, capture each artifact as soon as the criterion it proves is provable, and publish before you finish.',
+    );
+    taskLines.push(
+      '  Criterion ids are minted when this run starts, so they are not listed above. Read them at runtime with `listCriteria`, or `lh acceptance plan state "$LOBEHUB_OPERATION_ID" --json` if you have a shell.',
+    );
+    // Two builder shapes, two toolchains. The portable `acceptance` skill is
+    // pulled to disk by CLI builders and absent from `builtinSkills`, so only a
+    // shell builder is pointed at it — and given no inline commands, which let
+    // builders skip the skill's capture (chapters) and publishing rules.
+    taskLines.push(
+      "  With a shell: load the `acceptance` skill (`lh acceptance install` if it is not available) and follow its plan path for operation `$LOBEHUB_OPERATION_ID`. It owns reading the criteria, capturing evidence — chapters on every recording included — writing the round report, and publishing it into this run's round.",
+    );
+    taskLines.push(
+      '  Without a shell: drive the product with your own tools and cite artifacts by id through `submitEvidence`.',
+    );
+    taskLines.push(
+      '  A criterion with a visible surface is proved by a screenshot or recording, and `screenshot`/`video` evidence must reference a real artifact by fileId. Never label prose as a visual artifact: if you could not capture one, say what you observed as `text` and name the blocker.',
+    );
+    taskLines.push(
+      '  Caption each artifact in the language this Task is written in, in 1–3 short sentences saying what it shows for that criterion. Never paste your final report into a criterion: it already reaches the verifier as the deliverable.',
+    );
+    taskLines.push(
+      '  Produce concrete evidence while you work, and include artifact paths, commands, and observed results in your final response.',
+    );
+    taskLines.push(
+      '  Do not judge the Acceptance — submit evidence only; an independent verifier decides whether this Task is complete.',
+    );
+  }
+
+  // Goal loop — context handed over from the previous round of the outer loop
+  if (goalLoop) {
+    taskLines.push('');
+    const budget = typeof goalLoop.maxRounds === 'number' ? ` of ${goalLoop.maxRounds}` : '';
+    taskLines.push(
+      `Goal loop${goalLoop.round ? ` — round ${goalLoop.round}${budget}` : ''}: earlier rounds did not fully meet the acceptance criteria. Focus on closing the gaps below instead of redoing finished work.`,
+    );
+    taskLines.push(
+      '  This round is verified on its own: evidence from earlier rounds does not carry over. Submit evidence to this run for every required criterion, not only the unresolved ones; re-upload an earlier artifact when it still shows the current behavior.',
+    );
+    taskLines.push(
+      '  Your final response is read as the deliverable. Describe the complete delivery as it now stands, not only what changed in this round — "no code changed this round" without that context reads as missing work.',
+    );
+    const reviewFeedback = [
+      goalLoop.rejectComment,
+      goalLoop.automaticReviewFeedback &&
+        `Automatic Acceptance review:\n${goalLoop.automaticReviewFeedback}`,
+    ]
+      .filter(Boolean)
+      .join('\n\n');
+    if (reviewFeedback) {
+      taskLines.push('  Review feedback on the last delivery (address this first):');
+      taskLines.push(`    "${reviewFeedback}"`);
+    }
+    if (goalLoop.failedChecks && goalLoop.failedChecks.length > 0) {
+      taskLines.push('  Unresolved checks from the last round:');
+      for (const [i, check] of goalLoop.failedChecks.entries()) {
+        taskLines.push(`    ${i + 1}. ${check.title}${check.why ? ` — ${check.why}` : ''}`);
+      }
+    }
+    if (goalLoop.askedQuestions && goalLoop.askedQuestions.length > 0) {
+      taskLines.push('  Questions earlier rounds already asked the owner, and what came back:');
+      for (const [i, asked] of goalLoop.askedQuestions.entries()) {
+        taskLines.push(`    ${i + 1}. ${asked.questions.join(' / ')}`);
+        const answer = asked.answer?.replaceAll(/\s+/g, ' ').trim();
+        taskLines.push(`       → ${answer || '(nothing came back)'}`);
+      }
+    }
+    // Each round is a fresh conversation, and a run waits on nobody: a round
+    // that asked, timed out and delivered "awaiting your confirmation" failed
+    // Acceptance, and the next round asked the same thing again.
+    taskLines.push(
+      "  Do not ask the owner again about anything an earlier round already asked or that the owner's feedback answers: treat those answers as final. If an earlier question got no answer, do not ask it again or wait for one — go with the option you would recommend, state it in your delivery as an assumption the owner can overturn, and finish the work.",
+    );
+    taskLines.push(
+      '  To read a previous round in full, run: `lh task topic view ' +
+        task.identifier +
+        ' <seq>` (seq from the Activities list below).',
+    );
   }
 
   // Workspace
@@ -544,13 +929,31 @@ export const buildTaskRunPrompt = (input: TaskRunPromptInput, now?: Date): strin
   const timelineEntries: { text: string; time: number }[] = [];
 
   if (activities?.topics) {
+    // Older rounds stay title-only to bound prompt size; the most recent ones
+    // carry their full handoff so the next round starts from real context
+    // instead of a bare title.
+    const detailedSeqs = new Set(
+      [...activities.topics]
+        .map((t) => t.seq ?? 0)
+        .sort((a, b) => b - a)
+        .slice(0, 2),
+    );
     for (const t of activities.topics) {
       const ago = timeAgo(t.createdAt, now);
       const status = t.status || 'completed';
       const title = t.title || t.handoff?.title || 'Untitled';
       const idSuffix = t.id ? `  ${t.id}` : '';
+      const lines = [
+        `  💬 ${ago} Topic #${t.seq || '?'} ${title} ${statusIcon(status)} ${status}${idSuffix}`,
+      ];
+      if (t.handoff && detailedSeqs.has(t.seq ?? 0)) {
+        if (t.handoff.summary) lines.push(`      ↳ summary: ${t.handoff.summary}`);
+        if (t.handoff.keyFindings && t.handoff.keyFindings.length > 0)
+          lines.push(`      ↳ findings: ${t.handoff.keyFindings.join('; ')}`);
+        if (t.handoff.nextAction) lines.push(`      ↳ next: ${t.handoff.nextAction}`);
+      }
       timelineEntries.push({
-        text: `  💬 ${ago} Topic #${t.seq || '?'} ${title} ${statusIcon(status)} ${status}${idSuffix}`,
+        text: lines.join('\n'),
         time: new Date(t.createdAt).getTime(),
       });
     }
@@ -595,16 +998,20 @@ export const buildTaskRunPrompt = (input: TaskRunPromptInput, now?: Date): strin
   if (parentTask) {
     taskLines.push('');
     taskLines.push(
-      `<parentTask identifier="${parentTask.identifier}" name="${parentTask.name || parentTask.identifier}">`,
+      `<parentTask${parentTask.id ? ` id="${parentTask.id}"` : ''} identifier="${parentTask.identifier}" name="${parentTask.name || parentTask.identifier}">`,
     );
     taskLines.push(`  Instruction: ${parentTask.instruction}`);
     if (parentTask.subtasks && parentTask.subtasks.length > 0) {
       taskLines.push(`  Subtasks (${parentTask.subtasks.length}):`);
       for (const s of parentTask.subtasks) {
-        const dep = s.blockedBy ? ` ← blocks: ${s.blockedBy}` : '';
-        const marker = s.identifier === task.identifier ? ' ◀ current' : '';
+        const dep = s.blockedBy
+          ? ` ← blocks: ${taskIdentity({ id: s.blockedById, identifier: s.blockedBy })}`
+          : '';
+        const marker = (s.id ? s.id === task.id : s.identifier === task.identifier)
+          ? ' ◀ current'
+          : '';
         taskLines.push(
-          `    ${s.identifier} ${statusIcon(s.status)} ${s.status} ${s.name || '(unnamed)'}${dep}${marker}`,
+          `    ${taskIdentity(s)} ${statusIcon(s.status)} ${s.status} ${s.name || '(unnamed)'}${dep}${marker}`,
         );
       }
     }

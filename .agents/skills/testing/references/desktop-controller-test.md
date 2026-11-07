@@ -2,16 +2,14 @@
 
 ## Testing Framework & Directory Structure
 
-LobeHub Desktop uses Vitest as the test framework. Controller unit tests should be placed in the `__tests__` directory adjacent to the controller file, named with the original controller filename plus `.test.ts`.
+LobeHub Desktop uses Vitest as the test framework. A new controller unit test sits beside the controller, named with the controller filename plus `.test.ts` (`source-layout` §2). Existing tests in `controllers/__tests__/` move beside their controller when that test file is split or rewritten.
 
 ```plaintext
 apps/desktop/src/main/controllers/
-├── __tests__/
-│   ├── index.test.ts
-│   ├── MenuCtr.test.ts
-│   └── ...
 ├── McpCtr.ts
+├── McpCtr.test.ts
 ├── MenuCtr.ts
+├── MenuCtr.test.ts
 └── ...
 ```
 
@@ -22,7 +20,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { App } from '@/core/App';
 
-import YourController from '../YourControllerName';
+import YourController from './YourControllerName';
 
 // Mock dependencies
 vi.mock('dependency-module', () => ({

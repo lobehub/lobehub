@@ -1,13 +1,12 @@
 'use client';
 
-import { useCallback } from 'react';
+import { DEFAULT_HOTKEY_CONFIG } from '@lobechat/const';
 import { useHotkeys } from 'react-hotkeys-hook';
 
-import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useElectronStore } from '@/store/electron';
 
 /**
- * Mod+1–9: jump to the Nth tab.
+ * Ctrl+1–9: jump to the Nth tab.
  * Ctrl+Tab: cycle to the next tab, wrapping around.
  * Ctrl+Shift+Tab: cycle to the previous tab, wrapping around.
  *
@@ -15,31 +14,20 @@ import { useElectronStore } from '@/store/electron';
  * (e.g. TabBar) — no `isDesktop` guard needed.
  */
 export const useRegisterDesktopTabHotkeys = () => {
-  const navigate = useWorkspaceAwareNavigate();
-
-  const switchToTabByIndex = useCallback(
-    (index: number) => {
-      const { tabs, activateTab } = useElectronStore.getState();
-      if (index < 0 || index >= tabs.length) return;
-
-      const target = tabs[index];
-      activateTab(target.id);
-      navigate(target.url);
-    },
-    [navigate],
-  );
-
-  // Mod+1 through Mod+9
+  // The settings page displays a range; react-hotkeys-hook needs individual keys.
   useHotkeys(
-    'mod+1,mod+2,mod+3,mod+4,mod+5,mod+6,mod+7,mod+8,mod+9',
+    Array.from({ length: 9 }, (_, i) =>
+      DEFAULT_HOTKEY_CONFIG.switchTab.replace('1-9', String(i + 1)),
+    ),
     (e) => {
-      e.preventDefault();
-      const digit = Number(e.key);
-      if (digit >= 1 && digit <= 9) {
-        switchToTabByIndex(digit - 1);
-      }
+      // Use the physical number key, including keyboard layouts such as AZERTY.
+      const digit = Number(e.code.replace(/^(Digit|Numpad)/, ''));
+      const { tabs, switchTab } = useElectronStore.getState();
+      const target = tabs[digit - 1];
+      if (target) switchTab(target.id);
     },
     {
+      enableOnContentEditable: true,
       enableOnFormTags: true,
       preventDefault: true,
     },
@@ -47,20 +35,20 @@ export const useRegisterDesktopTabHotkeys = () => {
 
   // Ctrl+Tab: next tab (wrap around)
   useHotkeys(
-    'ctrl+tab',
+    DEFAULT_HOTKEY_CONFIG.nextTab,
     (e) => {
       e.preventDefault();
-      const { tabs, activeTabId, activateTab } = useElectronStore.getState();
+      const { tabs, activeTabId, switchTab } = useElectronStore.getState();
       if (tabs.length === 0) return;
 
       const currentIndex = tabs.findIndex((t) => t.id === activeTabId);
       const nextIndex = (currentIndex + 1) % tabs.length;
       const target = tabs[nextIndex];
 
-      activateTab(target.id);
-      navigate(target.url);
+      switchTab(target.id);
     },
     {
+      enableOnContentEditable: true,
       enableOnFormTags: true,
       preventDefault: true,
     },
@@ -68,20 +56,20 @@ export const useRegisterDesktopTabHotkeys = () => {
 
   // Ctrl+Shift+Tab: previous tab (wrap around)
   useHotkeys(
-    'ctrl+shift+tab',
+    DEFAULT_HOTKEY_CONFIG.prevTab,
     (e) => {
       e.preventDefault();
-      const { tabs, activeTabId, activateTab } = useElectronStore.getState();
+      const { tabs, activeTabId, switchTab } = useElectronStore.getState();
       if (tabs.length === 0) return;
 
       const currentIndex = tabs.findIndex((t) => t.id === activeTabId);
       const prevIndex = (currentIndex - 1 + tabs.length) % tabs.length;
       const target = tabs[prevIndex];
 
-      activateTab(target.id);
-      navigate(target.url);
+      switchTab(target.id);
     },
     {
+      enableOnContentEditable: true,
       enableOnFormTags: true,
       preventDefault: true,
     },

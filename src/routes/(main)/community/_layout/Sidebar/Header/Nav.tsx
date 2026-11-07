@@ -6,11 +6,11 @@ import { Bot, Brain, ShapesIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { type NavItemProps } from '@/features/NavPanel/components/NavItem';
 import NavItem from '@/features/NavPanel/components/NavItem';
+import { type NavItemProps } from '@/features/NavPanel/components/NavItem';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
-import { usePathname } from '@/libs/router/navigation';
+import { useActiveLocation } from '@/hooks/useActiveLocation';
 import { DiscoverTab } from '@/types/discover';
 import { isModifierClick } from '@/utils/navigation';
 
@@ -23,7 +23,7 @@ interface Item {
 }
 
 const useActiveTabKey = () => {
-  const pathname = usePathname();
+  const { pathname } = useActiveLocation();
   if (pathname.endsWith('/community')) return DiscoverTab.Home;
   return (pathname.split('/community/').at(1) as DiscoverTab) || DiscoverTab.Home;
 };

@@ -1,6 +1,8 @@
+import type { MessengerOversizeImageStrategy } from '@lobechat/const';
+
 import { lambdaClient } from '@/libs/trpc/client';
 
-type MessengerPlatform = 'telegram' | 'slack' | 'discord';
+type MessengerPlatform = 'telegram' | 'slack' | 'discord' | 'wechat' | 'linq';
 
 class MessengerService {
   availablePlatforms = async () => {
@@ -49,6 +51,48 @@ class MessengerService {
 
   uninstallInstallation = async (params: { installationId: string }) => {
     return lambdaClient.messenger.uninstallInstallation.mutate(params);
+  };
+
+  createWechatQrSession = async () => {
+    return lambdaClient.messenger.createWechatQrSession.mutate();
+  };
+
+  pollWechatQrSession = async (sessionId: string) => {
+    return lambdaClient.messenger.pollWechatQrSession.mutate({ sessionId });
+  };
+
+  createLinqLink = async () => {
+    return lambdaClient.messenger.createLinqLink.mutate();
+  };
+
+  pollLinqLink = async (pollId: string) => {
+    return lambdaClient.messenger.pollLinqLink.query({ pollId });
+  };
+
+  getMessengerPushWindow = async (platform: MessengerPlatform, tenantId?: string) => {
+    return lambdaClient.messenger.getMessengerPushWindow.query({ platform, tenantId });
+  };
+
+  sendMessengerPush = async (params: {
+    /**
+     * Referenced by id only — the server resolves each file to a stable access
+     * URL from the owned row. Deliberately no caller-supplied URL: the platform
+     * senders fetch it server-side.
+     */
+    attachments?: {
+      fileId: string;
+      type: 'image' | 'file' | 'video' | 'audio';
+    }[];
+    content?: string;
+    /**
+     * What to do with an image the platform will not take at full size:
+     * recompress it (default) or send the original as a download link.
+     */
+    oversizeImageStrategy?: MessengerOversizeImageStrategy;
+    platform: MessengerPlatform;
+    tenantId?: string;
+  }) => {
+    return lambdaClient.messenger.sendMessengerPush.mutate(params);
   };
 }
 

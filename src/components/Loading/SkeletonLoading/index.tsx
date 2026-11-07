@@ -1,31 +1,18 @@
 'use client';
 
-import { Skeleton } from '@lobehub/ui';
-import { type SkeletonProps } from 'antd';
-import { createStaticStyles, cx, responsive } from 'antd-style';
+import { media } from '@lobehub/ui/stylex/media.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 
-const styles = createStaticStyles(
-  ({ css }) => css`
-    ${responsive.sm} {
-      padding: 16px;
-    }
-  `,
-);
+import { ArticleSkeleton } from '@/components/Skeleton';
+import { sx } from '@/styles/sx';
 
-const SkeletonLoading = memo<SkeletonProps>(
-  ({ className, classNames, styles: customStyles, ...rest }) => {
-    return (
-      <Skeleton
-        active
-        className={cx(styles, className)}
-        classNames={classNames as any}
-        paragraph={{ rows: 8 }}
-        styles={customStyles as any}
-        {...rest}
-      />
-    );
-  },
-);
+const styles = stylex.create({
+  root: { padding: { default: null, [media.sm]: '16px' } },
+});
+
+const SkeletonLoading = memo<{ className?: string }>(({ className }) => (
+  <ArticleSkeleton className={sx(styles.root, className).className} rows={8} />
+));
 
 export default SkeletonLoading;

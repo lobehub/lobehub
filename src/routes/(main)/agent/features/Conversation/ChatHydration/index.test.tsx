@@ -14,6 +14,7 @@ const setSearchParamsMock = vi.hoisted(() => vi.fn());
 const useLocationMock = vi.hoisted(() => vi.fn());
 const useParamsMock = vi.hoisted(() => vi.fn());
 const useSearchParamsMock = vi.hoisted(() => vi.fn());
+const workspaceMock = vi.hoisted(() => ({ activeSlug: null as string | null }));
 
 vi.hoisted(() => {
   const storage = {
@@ -42,6 +43,11 @@ vi.mock('react-router', async () => {
   };
 });
 
+vi.mock('@/business/client/hooks/useActiveWorkspaceSlug', () => ({
+  getActiveWorkspaceSlug: () => workspaceMock.activeSlug,
+  useActiveWorkspaceSlug: () => workspaceMock.activeSlug,
+}));
+
 describe('ChatHydration', () => {
   beforeEach(() => {
     navigateMock.mockReset();
@@ -49,6 +55,7 @@ describe('ChatHydration', () => {
     useLocationMock.mockReset();
     useParamsMock.mockReset();
     useSearchParamsMock.mockReset();
+    workspaceMock.activeSlug = null;
 
     useChatStore.setState(
       {
@@ -153,6 +160,130 @@ describe('ChatHydration', () => {
       expect(navigateMock).toHaveBeenCalledWith('/agent/agt_test/tpc_789?thread=thd_456', {
         replace: true,
       });
+    });
+  });
+
+  /** @example ⌘K Ask AI: reloading the topic it created sent the question a second time. */
+  it('drops a consumed message param when the send moves to its new topic', async () => {
+    useParamsMock.mockReturnValue({ aid: 'agt_test' });
+    useLocationMock.mockReturnValue({
+      hash: '',
+      pathname: '/agent/agt_test',
+      search: '?message=hello&thread=thd_456',
+    });
+    useSearchParamsMock.mockReturnValue([
+      new URLSearchParams('message=hello&thread=thd_456'),
+      setSearchParamsMock,
+    ]);
+
+    render(<ChatHydration />);
+    navigateMock.mockClear();
+
+    await act(async () => {
+      useChatStore.setState({ activeTopicId: 'tpc_new' }, false);
+    });
+
+    await waitFor(() => {
+      expect(navigateMock).toHaveBeenCalledWith('/agent/agt_test/tpc_new?thread=thd_456', {
+        replace: true,
+      });
+    });
+  });
+
+  /** @example Edit changes topic and clears an already-absent thread without reverting the URL. */
+  it('does not rewrite the old URL when an edited topic clears an absent thread', async () => {
+    // ROOT CAUSE:
+    // switchTopic changes activeThreadId from null to undefined alongside the topic.
+    // An unconditional setThread(null) navigated against the old pathname after the topic navigation.
+    useParamsMock.mockReturnValue({ aid: 'agt_test', topicId: 'source' });
+    useLocationMock.mockReturnValue({ hash: '', pathname: '/agent/agt_test/source', search: '' });
+    useSearchParamsMock.mockReturnValue([new URLSearchParams(), setSearchParamsMock]);
+    render(<ChatHydration />);
+    navigateMock.mockClear();
+    setSearchParamsMock.mockClear();
+    await act(async () => {
+      await useChatStore.getState().switchTopic('edited', { skipRefreshMessage: true });
+    });
+    /** @example The new Topic URL is the only navigation; refresh will reopen the edited topic. */
+    expect(navigateMock).toHaveBeenCalledWith('/agent/agt_test/edited', { replace: true });
+    /** @example No redundant query-string navigation can put the source pathname back. */
+    expect(setSearchParamsMock).not.toHaveBeenCalled();
+  });
+
+  it('keeps topic navigation inside a project conversation route', async () => {
+    useParamsMock.mockReturnValue({ projectId: 'prj_1' });
+    useLocationMock.mockReturnValue({
+      hash: '',
+      pathname: '/project/prj_1/topic',
+      search: '',
+    });
+    useSearchParamsMock.mockReturnValue([new URLSearchParams(''), setSearchParamsMock]);
+
+    render(
+      <ChatHydration
+        getConversationPath={() => '/project/prj_1/topic'}
+        getTopicPath={(_agentId, topicId) => `/project/prj_1/topic/${topicId}`}
+      />,
+    );
+
+    await act(async () => {
+      useChatStore.setState({ activeTopicId: 'tpc_project' }, false);
+    });
+
+    await waitFor(() => {
+      expect(navigateMock).toHaveBeenCalledWith('/project/prj_1/topic/tpc_project', {
+        replace: true,
+      });
+    });
+  });
+
+  it('preserves the routed topic when the workspace activates after mount', async () => {
+    useParamsMock.mockReturnValue({ aid: 'agt_test', topicId: 'tpc_previous' });
+    useLocationMock.mockReturnValue({
+      hash: '',
+      pathname: '/acme/agent/agt_test/tpc_previous',
+      search: '',
+    });
+    useSearchParamsMock.mockReturnValue([new URLSearchParams(''), setSearchParamsMock]);
+    useChatStore.setState({ activeTopicId: 'tpc_previous' }, false);
+
+    render(<ChatHydration />);
+    navigateMock.mockClear();
+
+    // Workspace URL sync updates the Zustand store before React can rerender
+    // consumers of the active slug. Resetting workspace-scoped chat state in
+    // that same call stack must rehydrate the routed topic without navigating.
+    workspaceMock.activeSlug = 'acme';
+    await act(async () => {
+      useChatStore.setState({ activeTopicId: undefined }, false);
+    });
+
+    await waitFor(() => {
+      expect(useChatStore.getState().activeTopicId).toBe('tpc_previous');
+      expect(navigateMock).not.toHaveBeenCalled();
+    });
+  });
+
+  it('still clears the routed topic after an explicit topic switch', async () => {
+    workspaceMock.activeSlug = 'acme';
+    useParamsMock.mockReturnValue({ aid: 'agt_test', topicId: 'tpc_previous' });
+    useLocationMock.mockReturnValue({
+      hash: '',
+      pathname: '/acme/agent/agt_test/tpc_previous',
+      search: '',
+    });
+    useSearchParamsMock.mockReturnValue([new URLSearchParams(''), setSearchParamsMock]);
+    useChatStore.setState({ activeTopicId: 'tpc_previous' }, false);
+
+    render(<ChatHydration />);
+    navigateMock.mockClear();
+
+    await act(async () => {
+      await useChatStore.getState().switchTopic(null, { skipRefreshMessage: true });
+    });
+
+    await waitFor(() => {
+      expect(navigateMock).toHaveBeenCalledWith('/acme/agent/agt_test', { replace: true });
     });
   });
 });

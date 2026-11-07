@@ -2,38 +2,56 @@
 
 import { type BuiltinRenderProps } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import type { ListOnlineDevicesState } from '../../../types';
 import DeviceCard from '../DeviceCard';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  empty: css`
-    padding-block: 12px;
-    padding-inline: 12px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 10px;
-
-    font-size: 13px;
-    color: ${cssVar.colorTextDescription};
-
-    background: ${cssVar.colorBgContainer};
-  `,
-}));
+const styles = stylex.create({
+  card: {
+    overflow: 'hidden',
+    width: '100%',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadius,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  empty: {
+    paddingBlock: '12px',
+    paddingInline: '12px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadius,
+    fontSize: cssVar.fontSize,
+    color: cssVar.colorTextDescription,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+});
 
 const ListDevices = memo<BuiltinRenderProps<undefined, ListOnlineDevicesState>>(
   ({ pluginState }) => {
+    const { t } = useTranslation('plugin');
     const devices = pluginState?.devices ?? [];
 
     if (devices.length === 0) {
-      return <div className={styles.empty}>No online devices found.</div>;
+      return (
+        <div {...stylex.props(styles.empty)}>
+          {t('builtins.lobe-remote-device.render.noOnlineDevices')}
+        </div>
+      );
     }
 
     return (
-      <Flexbox gap={8} width={'100%'}>
+      <Flexbox className={stylex.props(styles.card).className} role={'list'}>
         {devices.map((device) => (
-          <DeviceCard device={device} key={device.deviceId} />
+          <DeviceCard device={device} key={device.deviceId} variant={'listItem'} />
         ))}
       </Flexbox>
     );

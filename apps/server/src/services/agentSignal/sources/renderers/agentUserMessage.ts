@@ -9,6 +9,10 @@ export const agentUserMessageRenderer = {
       ...createBaseSource(input),
       payload: {
         agentId: typeof input.payload.agentId === 'string' ? input.payload.agentId : undefined,
+        anchorMessageId:
+          typeof input.payload.anchorMessageId === 'string'
+            ? input.payload.anchorMessageId
+            : undefined,
         documentPayload:
           input.payload.documentPayload && typeof input.payload.documentPayload === 'object'
             ? (input.payload.documentPayload as Record<string, unknown>)
@@ -23,6 +27,9 @@ export const agentUserMessageRenderer = {
                 intent === 'skill',
             )
           : undefined,
+        // Lets the feedback classifier skip a topic's first message; dropping it here
+        // made the conversation-root pre-filter a no-op on every path.
+        ...(input.payload.isConversationRoot === true ? { isConversationRoot: true } : {}),
         memoryPayload:
           input.payload.memoryPayload && typeof input.payload.memoryPayload === 'object'
             ? (input.payload.memoryPayload as Record<string, unknown>)
@@ -46,6 +53,10 @@ export const agentUserMessageRenderer = {
         threadId: typeof input.payload.threadId === 'string' ? input.payload.threadId : undefined,
         topicId: typeof input.payload.topicId === 'string' ? input.payload.topicId : undefined,
         trigger: typeof input.payload.trigger === 'string' ? input.payload.trigger : undefined,
+        triggerMessageId:
+          typeof input.payload.triggerMessageId === 'string'
+            ? input.payload.triggerMessageId
+            : undefined,
       },
       sourceType: AGENT_SIGNAL_SOURCE_TYPES.agentUserMessage,
     };

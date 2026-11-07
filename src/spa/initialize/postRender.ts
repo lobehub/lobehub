@@ -1,6 +1,7 @@
-import { registerBuiltinToolExecutors } from '@/store/tool/slices/builtin/executors';
-
+import { setPostRenderReady } from '../atoms/app';
 import { startConnectorInitialization } from './connectors';
+import { shouldSkipRoutePreload, startRoutePreload } from './routePreload';
+import { ensureBuiltinToolSurfaces } from './toolSurfaces';
 
 type RequestIdleCallback = (callback: () => void, options?: { timeout?: number }) => number;
 
@@ -40,11 +41,24 @@ export const startPostRenderInitialization = () => {
   postRenderStarted = true;
 
   scheduleAfterFirstPaint(() => {
+    setPostRenderReady(true);
+
+    if (typeof window !== 'undefined' && !shouldSkipRoutePreload(window)) {
+      void ensureBuiltinToolSurfaces().catch((error) => {
+        console.error('[SPA Initialize] builtin tool surface preload failed', error);
+      });
+    }
+
     try {
-      registerBuiltinToolExecutors();
       startConnectorInitialization();
     } catch (error) {
       console.error('[SPA Initialize] post-render initialization failed', error);
+    }
+
+    try {
+      startRoutePreload();
+    } catch (error) {
+      console.error('[SPA Initialize] route preload initialization failed', error);
     }
   });
 };

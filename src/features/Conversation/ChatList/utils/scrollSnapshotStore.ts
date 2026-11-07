@@ -1,8 +1,18 @@
 export const SCROLL_SNAPSHOT_KEY_PREFIX = 'LOBEHUB_SCROLL';
 export const SCROLL_SNAPSHOT_MAX_ENTRIES = 500;
-export const SCROLL_SNAPSHOT_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+// A scroll snapshot is only meant to survive a quick back-and-forth between
+// topics. Beyond this window we intentionally drop it so revisiting a topic
+// (e.g. the next day) lands at the bottom on the latest messages instead of
+// restoring a stale reading position. Because both `loadScrollSnapshot` (read
+// time) and `pruneScrollSnapshots` (mount time) evict entries past this age,
+// the short TTL also keeps the localStorage key count tiny.
+export const SCROLL_SNAPSHOT_MAX_AGE_MS = 5 * 60 * 1000;
 
+// A paged topic reopens with only its newest rows, so a pixel offset from the
+// top points at different content on the next visit; the anchor row does not.
 export interface ScrollSnapshot {
+  anchorId?: string;
+  anchorOffset?: number;
   atBottom: boolean;
   offset: number;
   savedAt: number;
@@ -27,7 +37,10 @@ const isValidSnapshot = (value: unknown): value is ScrollSnapshot => {
     Number.isFinite(v.offset) &&
     typeof v.atBottom === 'boolean' &&
     typeof v.savedAt === 'number' &&
-    Number.isFinite(v.savedAt)
+    Number.isFinite(v.savedAt) &&
+    (v.anchorId === undefined || (typeof v.anchorId === 'string' && v.anchorId.length > 0)) &&
+    (v.anchorOffset === undefined ||
+      (typeof v.anchorOffset === 'number' && Number.isFinite(v.anchorOffset)))
   );
 };
 
@@ -122,6 +135,11 @@ export const loadScrollSnapshot = (contextKey: string): ScrollSnapshot | null =>
   } catch {
     return null;
   }
+};
+
+export const hasReadingPositionSnapshot = (contextKey: string): boolean => {
+  const snapshot = loadScrollSnapshot(contextKey);
+  return !!snapshot && !snapshot.atBottom && !!snapshot.anchorId;
 };
 
 export const saveScrollSnapshot = (contextKey: string, snapshot: ScrollSnapshot): void => {

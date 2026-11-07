@@ -1,9 +1,11 @@
+import { type SpendOrigin, type VideoGenerationRoute } from '@lobechat/types';
+
 interface ChargeParams {
-  computePriceParams?: { generateAudio?: boolean; resolution?: string };
+  computePriceParams?: { duration?: number; generateAudio?: boolean; resolution?: string };
   isError?: boolean;
   /** Total time from task submission to webhook callback (ms) */
   latency?: number;
-  metadata: {
+  metadata: SpendOrigin & {
     asyncTaskId: string;
     generationBatchId: string;
     modelId: string;
@@ -12,10 +14,11 @@ interface ChargeParams {
   model: string;
   prechargeResult?: Record<string, unknown>;
   provider: string;
+  /** Route that created the video; attributes the completion charge to its channel. */
+  route?: VideoGenerationRoute;
   usage?: { completionTokens: number; totalTokens: number };
   userId: string;
   workspaceId?: string;
 }
 
-// eslint-disable-next-line unused-imports/no-unused-vars
-export async function chargeAfterGenerate(params: ChargeParams): Promise<void> {}
+export async function chargeAfterGenerate(_params: ChargeParams): Promise<void> {}

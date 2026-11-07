@@ -4,6 +4,7 @@ import type { AgentDocumentSourceType } from '@/database/models/agentDocuments/t
 import { DocumentModel } from '@/database/models/document';
 import { TopicDocumentModel } from '@/database/models/topicDocument';
 import { DocumentService } from '@/server/services/document';
+import { assertDocumentWriteWithinLimit } from '@/server/services/document/writeLimit';
 
 interface DocumentServiceResult {
   content: string | null;
@@ -19,6 +20,12 @@ interface DocumentServiceResult {
 }
 
 export interface NotebookRuntimeServiceOptions {
+  /**
+   * Visibility of the agent that triggered this notebook side-effect. When
+   * set, newly-created documents inherit it so private-agent output lands in
+   * the caller's private Pages bucket rather than the workspace bucket.
+   */
+  callerAgentVisibility?: 'private' | 'public' | null;
   serverDB: LobeChatDatabase;
   userId: string;
   workspaceId?: string;
@@ -52,14 +59,26 @@ export class NotebookRuntimeService {
   private documentService: DocumentService;
   private documentModel: DocumentModel;
   private topicDocumentModel: TopicDocumentModel;
+  private callerAgentVisibility?: 'private' | 'public' | null;
+  private userId: string;
+  private workspaceId?: string;
 
   constructor(options: NotebookRuntimeServiceOptions) {
+    this.userId = options.userId;
+    this.workspaceId = options.workspaceId;
+    this.callerAgentVisibility = options.callerAgentVisibility;
     this.documentService = new DocumentService(
       options.serverDB,
       options.userId,
       options.workspaceId,
+      options.callerAgentVisibility,
     );
-    this.documentModel = new DocumentModel(options.serverDB, options.userId, options.workspaceId);
+    this.documentModel = new DocumentModel(
+      options.serverDB,
+      options.userId,
+      options.workspaceId,
+      options.callerAgentVisibility,
+    );
     this.topicDocumentModel = new TopicDocumentModel(
       options.serverDB,
       options.userId,
@@ -80,13 +99,27 @@ export class NotebookRuntimeService {
     totalCharCount: number;
     totalLineCount: number;
   }): Promise<DocumentServiceResult> => {
-    const doc = await this.documentModel.create(params);
+    await assertDocumentWriteWithinLimit({
+      charCount: params.content.length,
+      source: 'agent',
+      userId: this.userId,
+      workspaceId: this.workspaceId,
+    });
+
+    const doc = await this.documentModel.create({
+      ...params,
+      // Characters, not words: callers have passed a word count here.
+      totalCharCount: params.content.length,
+      ...(this.callerAgentVisibility === 'private' || this.callerAgentVisibility === 'public'
+        ? { visibility: this.callerAgentVisibility }
+        : {}),
+    });
     return toServiceResult(doc);
   };
 
-  deleteDocument = async (id: string): Promise<void> => {
+  deleteDocument = async (id: string, options?: { restrictToCreator?: boolean }): Promise<void> => {
     await this.topicDocumentModel.deleteByDocumentId(id);
-    await this.documentService.deleteDocument(id);
+    await this.documentService.deleteDocument(id, options);
   };
 
   getDocument = async (id: string): Promise<DocumentServiceResult | undefined> => {
@@ -107,6 +140,17 @@ export class NotebookRuntimeService {
     id: string,
     params: { content?: string; title?: string },
   ): Promise<DocumentServiceResult> => {
+    if (params.content !== undefined) {
+      const existing = await this.documentModel.findById(id);
+      await assertDocumentWriteWithinLimit({
+        charCount: params.content.length,
+        previousCharCount: existing?.content?.length ?? 0,
+        source: 'agent',
+        userId: this.userId,
+        workspaceId: this.workspaceId,
+      });
+    }
+
     await this.documentModel.update(id, {
       ...(params.content !== undefined && {
         content: params.content,

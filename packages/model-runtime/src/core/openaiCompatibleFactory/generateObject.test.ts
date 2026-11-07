@@ -1,4 +1,6 @@
 // @vitest-environment node
+import { AgentRuntimeErrorType } from '@lobechat/types';
+import OpenAI from 'openai';
 import type { Mock } from 'vitest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -51,6 +53,17 @@ const toolCallResponse = {
 const responseFormatUnsupportedError = Object.assign(
   new Error('400 Error from provider (DeepSeek): This response_format type is unavailable now'),
   { status: 400 },
+);
+
+const providerContentFilterError = new OpenAI.BadRequestError(
+  400,
+  {
+    code: 'content_filter',
+    message: 'The provider blocked this prompt.',
+    type: 'content_filter',
+  },
+  'content filter',
+  new Headers(),
 );
 
 describe('isResponseFormatUnsupportedError', () => {
@@ -142,5 +155,156 @@ describe('generateObject tool-calling fallback', () => {
     ).rejects.toMatchObject({ message: expect.stringContaining('Insufficient Balance') });
 
     expect(getCreateMock(instance)).toHaveBeenCalledTimes(1);
+  });
+
+  it('should classify content_filter error codes as provider content policy violations', async () => {
+    const instance = createInstance();
+    vi.spyOn((instance as any).client.chat.completions, 'create').mockRejectedValue(
+      providerContentFilterError,
+    );
+
+    await expect(
+      instance.generateObject({
+        ...generateObjectPayload,
+        model: 'gpt-4o',
+        responseApi: false,
+      }),
+    ).rejects.toMatchObject({
+      error: {
+        code: 'content_filter',
+        type: 'content_filter',
+      },
+      errorType: AgentRuntimeErrorType.ProviderContentPolicyViolation,
+    });
+
+    expect(getCreateMock(instance)).toHaveBeenCalledTimes(1);
+  });
+
+  it('should classify nested content_filter payloads as provider content policy violations', async () => {
+    const instance = createInstance();
+    vi.spyOn((instance as any).client.chat.completions, 'create').mockRejectedValue(
+      new OpenAI.APIError(
+        400,
+        {
+          error: {
+            code: 'content_filter',
+            message: 'The provider blocked this prompt.',
+            type: 'content_filter',
+          },
+          status: 400,
+        },
+        'content filter',
+        new Headers(),
+      ),
+    );
+
+    await expect(
+      instance.generateObject({
+        ...generateObjectPayload,
+        model: 'gpt-4o',
+        responseApi: false,
+      }),
+    ).rejects.toMatchObject({
+      error: {
+        error: expect.objectContaining({
+          code: 'content_filter',
+          type: 'content_filter',
+        }),
+      },
+      errorType: AgentRuntimeErrorType.ProviderContentPolicyViolation,
+    });
+
+    expect(getCreateMock(instance)).toHaveBeenCalledTimes(1);
+  });
+
+  it('should classify content policy finish reasons as provider content policy violations', async () => {
+    const instance = createInstance();
+    vi.spyOn((instance as any).client.chat.completions, 'create').mockRejectedValue(
+      new OpenAI.APIError(
+        400,
+        {
+          choices: [{ finish_reason: 'content_policy_violation' }],
+          message: 'The provider blocked this prompt.',
+          status: 400,
+        },
+        'content filter',
+        new Headers(),
+      ),
+    );
+
+    await expect(
+      instance.generateObject({
+        ...generateObjectPayload,
+        model: 'gpt-4o',
+        responseApi: false,
+      }),
+    ).rejects.toMatchObject({
+      error: {
+        choices: [expect.objectContaining({ finish_reason: 'content_policy_violation' })],
+      },
+      errorType: AgentRuntimeErrorType.ProviderContentPolicyViolation,
+    });
+
+    expect(getCreateMock(instance)).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('generateObject via Responses API', () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  const createInstance = () => new TestRuntime({ apiKey: 'test' });
+
+  const multimodalPayload = {
+    ...generateObjectPayload,
+    messages: [
+      { content: 'You distil standards.', role: 'system' as const },
+      {
+        content: [
+          { text: 'What is wrong in this frame?', type: 'text' as const },
+          {
+            image_url: { detail: 'high' as const, url: 'data:image/png;base64,AAAA' },
+            type: 'image_url' as const,
+          },
+        ],
+        role: 'user' as const,
+      },
+    ],
+    responseApi: true,
+  };
+
+  it('should convert content parts to Responses input parts', async () => {
+    const instance = createInstance();
+    const createMock = vi
+      .spyOn((instance as any).client.responses, 'create')
+      .mockResolvedValue({ output_text: '{"summary":"s","title":"t"}' } as any);
+
+    const result = await instance.generateObject(multimodalPayload as any);
+
+    const requestPayload = createMock.mock.calls[0][0] as any;
+    expect(requestPayload.input).toEqual([
+      { content: 'You distil standards.', role: 'developer' },
+      {
+        content: [
+          { text: 'What is wrong in this frame?', type: 'input_text' },
+          { detail: 'high', image_url: 'data:image/png;base64,AAAA', type: 'input_image' },
+        ],
+        role: 'user',
+      },
+    ]);
+    expect(result).toEqual({ summary: 's', title: 't' });
+  });
+
+  it('should leave string content untouched', async () => {
+    const instance = createInstance();
+    const createMock = vi
+      .spyOn((instance as any).client.responses, 'create')
+      .mockResolvedValue({ output_text: '{"summary":"s","title":"t"}' } as any);
+
+    await instance.generateObject({ ...generateObjectPayload, responseApi: true } as any);
+
+    const requestPayload = createMock.mock.calls[0][0] as any;
+    expect(requestPayload.input).toEqual([{ content: 'Generate a handoff', role: 'user' }]);
   });
 });

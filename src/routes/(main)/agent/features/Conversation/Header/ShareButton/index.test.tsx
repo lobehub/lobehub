@@ -1,8 +1,9 @@
 /**
  * @vitest-environment happy-dom
  */
+import type * as BaseUI from '@lobehub/ui';
 import { render } from '@testing-library/react';
-import type { ComponentType, ReactNode } from 'react';
+import type { ComponentProps, ComponentType, ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import ShareButton from './index';
@@ -14,35 +15,30 @@ const mocks = vi.hoisted(() => ({
     allowed: true,
     reason: 'requires member',
   },
+  workspaceId: null as string | null,
 }));
 
-vi.mock('@lobehub/ui', () => ({
-  ActionIcon: ({
-    disabled,
-    onClick,
-    title,
-  }: {
-    disabled?: boolean;
-    onClick?: () => void;
-    title?: string;
-  }) => (
-    <button data-testid="share-button" disabled={disabled} title={title} onClick={onClick}>
-      {title}
-    </button>
+const actionIconPropsSpy = vi.hoisted(() => vi.fn());
+
+vi.mock('@lobehub/ui', async (importOriginal) => {
+  const actual = await importOriginal<typeof BaseUI>();
+  return {
+    ...actual,
+    ActionIcon: (props: ComponentProps<typeof actual.ActionIcon>) => {
+      actionIconPropsSpy(props);
+      return <actual.ActionIcon {...props} />;
+    },
+  };
+});
+
+vi.mock('@/features/SharePopover/lazy', () => ({
+  LazySharePopover: ({ children }: { children?: ReactNode }) => (
+    <div data-testid="share-popover">{children}</div>
   ),
 }));
 
-vi.mock('next/dynamic', () => ({
-  default: () =>
-    function DynamicComponent({ children }: { children?: ReactNode }) {
-      return <div data-testid="share-popover">{children}</div>;
-    },
-}));
-
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string) => key,
-  }),
+vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
+  useActiveWorkspaceId: () => mocks.workspaceId,
 }));
 
 vi.mock('@/components/withSuspense', () => ({
@@ -55,13 +51,12 @@ vi.mock('@/features/ShareModal', () => ({
   }),
 }));
 
-vi.mock('@/hooks/usePermission', () => ({
-  usePermission: () => ({ allowed: mocks.permission.allowed, reason: mocks.permission.reason }),
+vi.mock('@/features/Conversation/useAgentContext', () => ({
+  useAgentContext: () => ({ topicId: mocks.activeTopicId }),
 }));
 
-vi.mock('@/store/chat', () => ({
-  useChatStore: (selector: (state: { activeTopicId?: string }) => unknown) =>
-    selector({ activeTopicId: mocks.activeTopicId }),
+vi.mock('@/hooks/usePermission', () => ({
+  usePermission: () => ({ allowed: mocks.permission.allowed, reason: mocks.permission.reason }),
 }));
 
 vi.mock('@/store/serverConfig', () => ({
@@ -82,15 +77,47 @@ describe('Conversation ShareButton', () => {
     mocks.activeTopicId = 'topic-1';
     mocks.enableBusinessFeatures = true;
     mocks.permission.allowed = true;
+    mocks.workspaceId = null;
+    actionIconPropsSpy.mockClear();
+  });
+
+  it('renders the share entry in personal scope', () => {
+    const { getByTestId } = render(<ShareButton />);
+
+    expect(getByTestId('share-popover')).toBeInTheDocument();
+    expect(actionIconPropsSpy).toHaveBeenCalledWith(expect.objectContaining({ disabled: false }));
+  });
+
+  it('keeps the mobile share entry inside a workspace, where no header menu hosts it', () => {
+    mocks.workspaceId = 'ws-1';
+
+    const { getByTestId } = render(<ShareButton mobile />);
+
+    expect(getByTestId('share-popover')).toBeInTheDocument();
+    expect(actionIconPropsSpy).toHaveBeenCalledWith(expect.objectContaining({ disabled: false }));
+  });
+
+  it('hides the share entry inside a workspace, where comments take the slot', () => {
+    mocks.workspaceId = 'ws-1';
+
+    const { container } = render(<ShareButton />);
+
+    expect(actionIconPropsSpy).not.toHaveBeenCalled();
+    expect(container).toBeEmptyDOMElement();
   });
 
   it('does not open share popover for workspace viewers', () => {
     mocks.permission.allowed = false;
 
-    const { queryByTestId, getByTestId } = render(<ShareButton />);
+    const { queryByTestId } = render(<ShareButton />);
 
-    expect(getByTestId('share-button')).toBeDisabled();
-    expect(getByTestId('share-button')).toHaveAttribute('title', 'requires member');
+    expect(actionIconPropsSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        disabled: true,
+        onClick: undefined,
+        title: 'requires member',
+      }),
+    );
     expect(queryByTestId('share-popover')).toBeNull();
   });
 });

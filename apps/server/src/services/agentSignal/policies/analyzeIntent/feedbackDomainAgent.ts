@@ -1,6 +1,10 @@
-import { DEFAULT_MINI_SYSTEM_AGENT_ITEM } from '@lobechat/const';
-import type { GenerateObjectPayload, GenerateObjectSchema } from '@lobechat/model-runtime';
-import { chainAgentSignalAnalyzeIntentRoute } from '@lobechat/prompts';
+import { DEFAULT_MINI_SYSTEM_AGENT_ITEM, TRACING_SCENARIOS } from '@lobechat/const';
+import type { TracingOptions } from '@lobechat/llm-generation-tracing';
+import {
+  AGENT_SIGNAL_FEEDBACK_DOMAIN_JSON_SCHEMA,
+  AGENT_SIGNAL_FEEDBACK_DOMAIN_PROMPT_VERSION,
+  chainAgentSignalAnalyzeIntentRoute,
+} from '@lobechat/prompts';
 import { RequestTrigger } from '@lobechat/types';
 import debug from 'debug';
 import { z } from 'zod';
@@ -35,91 +39,6 @@ const FeedbackDomainJudgeAgentResultSchema = z.object({
 });
 
 export type FeedbackDomainJudgeAgentResult = z.infer<typeof FeedbackDomainJudgeAgentResultSchema>;
-
-const FeedbackDomainGenerateObjectSchema = {
-  name: 'agent_signal_feedback_domain_route',
-  schema: {
-    additionalProperties: false,
-    properties: {
-      targets: {
-        items: {
-          additionalProperties: false,
-          properties: {
-            confidence: { maximum: 1, minimum: 0, type: 'number' },
-            evidence: {
-              items: {
-                additionalProperties: false,
-                properties: {
-                  cue: { type: 'string' },
-                  excerpt: { type: 'string' },
-                },
-                required: ['cue', 'excerpt'],
-                type: 'object',
-              },
-              type: 'array',
-            },
-            reason: { type: 'string' },
-            target: { enum: ['memory', 'none', 'prompt', 'skill'], type: 'string' },
-          },
-          required: ['confidence', 'evidence', 'reason', 'target'],
-          type: 'object',
-        },
-        maxItems: 4,
-        minItems: 1,
-        type: 'array',
-      },
-    },
-    required: ['targets'],
-    type: 'object',
-  },
-  strict: true,
-} satisfies GenerateObjectSchema;
-
-const generateObjectRoles = ['assistant', 'system', 'user'] as const;
-
-const isGenerateObjectRole = (
-  role: string,
-): role is GenerateObjectPayload['messages'][number]['role'] => {
-  return generateObjectRoles.includes(role as (typeof generateObjectRoles)[number]);
-};
-
-/**
- * Normalizes prompt-chain messages for generateObject.
- *
- * Before:
- * - `{ role: "system", content: "Route feedback" }`
- * - `{ role: "tool", content: "Unsupported role" }`
- *
- * After:
- * - `{ role: "system", content: "Route feedback" }`
- * - Throws `TypeError` for roles or content shapes generateObject cannot consume
- */
-const normalizeGenerateObjectMessages = (
-  messages: NonNullable<ReturnType<typeof chainAgentSignalAnalyzeIntentRoute>['messages']>,
-): GenerateObjectPayload['messages'] => {
-  return messages.map((message) => {
-    if (!isGenerateObjectRole(message.role)) {
-      throw new TypeError(`Unsupported feedback domain message role: ${message.role}`);
-    }
-
-    if (typeof message.content !== 'string') {
-      throw new TypeError('Feedback domain message content must be a string.');
-    }
-
-    if (message.name) {
-      return {
-        content: message.content,
-        name: message.name,
-        role: message.role,
-      };
-    }
-
-    return {
-      content: message.content,
-      role: message.role,
-    };
-  });
-};
 
 export interface FeedbackDomainJudgeAgentModelConfig {
   model: string;
@@ -200,11 +119,18 @@ export class FeedbackDomainJudgeAgentService {
 
     const result = await modelRuntime.generateObject(
       {
-        messages: normalizeGenerateObjectMessages(payload.messages ?? []),
+        messages: payload.messages,
         model: this.modelConfig.model,
-        schema: FeedbackDomainGenerateObjectSchema,
+        schema: AGENT_SIGNAL_FEEDBACK_DOMAIN_JSON_SCHEMA,
       },
-      { metadata: { trigger: RequestTrigger.AgentSignal } },
+      {
+        metadata: { trigger: RequestTrigger.AgentSignal },
+        tracing: {
+          promptVersion: AGENT_SIGNAL_FEEDBACK_DOMAIN_PROMPT_VERSION,
+          scenario: TRACING_SCENARIOS.SignalFeedbackDomain,
+          schemaName: AGENT_SIGNAL_FEEDBACK_DOMAIN_JSON_SCHEMA.name,
+        } satisfies TracingOptions,
+      },
     );
 
     return FeedbackDomainJudgeAgentResultSchema.parse({

@@ -108,7 +108,7 @@ export type InputItem = z.infer<typeof InputItemSchema>;
 export const FunctionToolSchema = z.object({
   description: z.string().optional(),
   name: z.string(),
-  parameters: z.record(z.any()).optional(),
+  parameters: z.record(z.string(), z.any()).optional(),
   strict: z.boolean().optional(),
   type: z.literal('function'),
 });
@@ -139,11 +139,7 @@ export interface ResponseUsage {
 // ==================== Error Types ====================
 
 export type ResponseErrorCode =
-  | 'server_error'
-  | 'invalid_request_error'
-  | 'not_found'
-  | 'model_error'
-  | 'rate_limit_error';
+  'server_error' | 'invalid_request_error' | 'not_found' | 'model_error' | 'rate_limit_error';
 
 export interface ResponseError {
   code: ResponseErrorCode;
@@ -175,12 +171,14 @@ export const CreateResponseRequestSchema = z
     input: z.union([z.string(), z.array(InputItemSchema)]),
     instructions: z.string().nullish(),
     max_output_tokens: z.number().int().positive().nullish(),
-    metadata: z.record(z.string()).nullish(),
+    metadata: z.record(z.string(), z.string()).nullish(),
     model: z.string(),
     parallel_tool_calls: z.boolean().nullish(),
     previous_response_id: z.string().nullish(),
     reasoning: ReasoningConfigSchema.nullish(),
     stream: z.boolean().nullish(),
+    // Reject stale tool results instead of interpreting them as a new user turn.
+    strict_tool_resume: z.boolean().optional(),
     temperature: z.number().min(0).max(2).nullish(),
     tool_choice: z
       .union([
@@ -189,6 +187,8 @@ export const CreateResponseRequestSchema = z
       ])
       .nullish(),
     tools: z.array(ToolSchema).nullish(),
+    // Exclusive mode also restricts tools discoverable later in the operation.
+    tools_mode: z.enum(['additional', 'exclusive']).optional(),
     top_p: z.number().min(0).max(1).nullish(),
     truncation: TruncationSchema.nullish(),
     user: z.string().nullish(),
@@ -251,6 +251,8 @@ export type ResponseStreamEventType =
   // Function call events
   | 'response.function_call_arguments.delta'
   | 'response.function_call_arguments.done'
+  | 'response.custom_tool_call_input.delta'
+  | 'response.custom_tool_call_input.done'
   // Reasoning events
   | 'response.reasoning_summary_text.delta'
   | 'response.reasoning_summary_text.done';

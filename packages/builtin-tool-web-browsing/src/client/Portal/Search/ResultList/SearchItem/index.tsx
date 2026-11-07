@@ -1,54 +1,45 @@
+import { isDesktop } from '@lobechat/const';
+import { RENDERER_HANDLED_LINK_ATTR } from '@lobechat/desktop-bridge';
 import type { UniformSearchResult } from '@lobechat/types';
 import { Flexbox, Text } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
+import type { MouseEvent } from 'react';
 import { memo } from 'react';
 
 import WebFavicon from '@/components/WebFavicon';
+import { useGlobalStore } from '@/store/global';
 
 import TitleExtra from './TitleExtra';
 import Video from './Video';
 
-const styles = createStaticStyles(({ css, cssVar }) => {
-  return {
-    container: css`
-      display: flex;
-      flex: 1;
-
-      padding: 8px;
-      border-radius: 8px;
-
-      color: initial;
-
-      &:hover {
-        background: ${cssVar.colorFillTertiary};
-      }
-    `,
-    desc: css`
-      overflow: hidden;
-      display: -webkit-box;
-      -webkit-box-orient: vertical;
-      -webkit-line-clamp: 2;
-
-      color: ${cssVar.colorTextTertiary};
-      text-overflow: ellipsis;
-    `,
-    displayLink: css`
-      color: ${cssVar.colorTextQuaternary};
-    `,
-    title: css`
-      font-size: 16px;
-      color: ${cssVar.colorLink};
-    `,
-    url: css`
-      overflow: hidden;
-      display: -webkit-box;
-      -webkit-box-orient: vertical;
-      -webkit-line-clamp: 1;
-
-      color: ${cssVar.colorTextDescription};
-      text-overflow: ellipsis;
-    `,
-  };
+const styles = stylex.create({
+  container: {
+    display: 'flex',
+    flex: '1',
+    padding: '8px',
+    borderRadius: '8px',
+    color: 'initial',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  desc: {
+    overflow: 'hidden',
+    display: '-webkit-box',
+    WebkitBoxOrient: 'vertical',
+    WebkitLineClamp: '2',
+    color: cssVar.colorTextTertiary,
+    textOverflow: 'ellipsis',
+  },
+  title: { fontSize: '16px', color: cssVar.colorLink },
+  url: {
+    overflow: 'hidden',
+    display: '-webkit-box',
+    WebkitBoxOrient: 'vertical',
+    WebkitLineClamp: '1',
+    color: cssVar.colorTextDescription,
+    textOverflow: 'ellipsis',
+  },
 });
 
 interface SearchResultProps extends UniformSearchResult {
@@ -57,17 +48,37 @@ interface SearchResultProps extends UniformSearchResult {
 
 const SearchItem = memo<SearchResultProps>((props) => {
   const { content, url, score, engines, title, category } = props;
+  const openInBrowserTab = useGlobalStore((s) => s.openInBrowserTab);
+
+  // Only claim the click when this onClick will actually handle it. Otherwise the
+  // anchor's default behavior — and the desktop preload's external-link branch —
+  // opens the system browser.
+  const handlesClick = isDesktop && !!url;
+
+  const handleClick = (event: MouseEvent<HTMLAnchorElement>) => {
+    if (!handlesClick) return;
+
+    event.preventDefault();
+    openInBrowserTab(url!);
+  };
 
   if (category === 'videos') return <Video {...props} />;
 
   return (
-    <a className={styles.container} href={url!} rel="noreferrer" target={'_blank'}>
+    <a
+      {...(handlesClick ? { [RENDERER_HANDLED_LINK_ATTR]: 'true' } : {})}
+      {...stylex.props(styles.container)}
+      href={url!}
+      rel="noreferrer"
+      target={'_blank'}
+      onClick={handleClick}
+    >
       <Flexbox distribution={'space-between'} flex={1} gap={8} padding={12}>
         <Flexbox gap={8}>
           <Flexbox horizontal align={'center'} distribution={'space-between'}>
             <Flexbox horizontal align={'center'} gap={8}>
               <WebFavicon title={title} url={url} />
-              <Flexbox className={styles.title}>{title}</Flexbox>
+              <Flexbox className={stylex.props(styles.title).className}>{title}</Flexbox>
             </Flexbox>
             <TitleExtra
               category={category}
@@ -76,10 +87,10 @@ const SearchItem = memo<SearchResultProps>((props) => {
               score={score}
             />
           </Flexbox>
-          <Text className={styles.url} type={'secondary'}>
+          <Text className={stylex.props(styles.url).className} type={'secondary'}>
             {url}
           </Text>
-          <Flexbox className={styles.desc}>{content}</Flexbox>
+          <Flexbox className={stylex.props(styles.desc).className}>{content}</Flexbox>
         </Flexbox>
       </Flexbox>
     </a>

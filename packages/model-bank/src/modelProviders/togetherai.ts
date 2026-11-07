@@ -1,4 +1,4 @@
-import type { ModelProviderCard } from '@/types/llm';
+import type { ModelProviderCard } from '../types';
 
 // ref: https://docs.together.ai/docs/chat-models
 // ref: https://www.together.ai/pricing

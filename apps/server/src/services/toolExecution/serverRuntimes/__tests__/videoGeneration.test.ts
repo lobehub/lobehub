@@ -1,0 +1,308 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { videoGenerationRuntime } from '../videoGeneration';
+
+// Narrow shape of the `callerContext` the runtime passes to every
+// `*Router.createCaller`, just enough to type-check the spend-attribution
+// assertions below without pulling in the full tRPC caller context type.
+interface VideoCallerContext {
+  spendOrigin?: {
+    agentShare: { agentId: string; shareId: string; visitorUserId: string };
+    trigger: string;
+  };
+}
+
+const callerMocks = vi.hoisted(() => ({
+  aiModel: vi.fn(() => ({})),
+  aiProvider: vi.fn(() => ({})),
+  generation: vi.fn(() => ({})),
+  generationTopic: vi.fn(() => ({})),
+  video: vi.fn((_ctx: VideoCallerContext) => ({})),
+}));
+
+vi.mock('@/server/routers/lambda/aiModel', () => ({
+  aiModelRouter: { createCaller: callerMocks.aiModel },
+}));
+vi.mock('@/server/routers/lambda/aiProvider', () => ({
+  aiProviderRouter: { createCaller: callerMocks.aiProvider },
+}));
+vi.mock('@/server/routers/lambda/generation', () => ({
+  generationRouter: { createCaller: callerMocks.generation },
+}));
+vi.mock('@/server/routers/lambda/generationTopic', () => ({
+  generationTopicRouter: { createCaller: callerMocks.generationTopic },
+}));
+vi.mock('@/server/routers/lambda/video', () => ({
+  videoRouter: { createCaller: callerMocks.video },
+}));
+
+const scheduledWork = vi.hoisted(() => ({ inScope: false }));
+vi.mock('@/server/utils/scheduleAfterResponse', () => ({
+  runWithScheduledWorkScope: vi.fn(async (fn: () => Promise<unknown>) => {
+    scheduledWork.inScope = true;
+    try {
+      return await fn();
+    } finally {
+      scheduledWork.inScope = false;
+    }
+  }),
+}));
+
+describe('videoGenerationRuntime', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    callerMocks.aiModel.mockReturnValue({});
+    callerMocks.aiProvider.mockReturnValue({});
+    callerMocks.generation.mockReturnValue({});
+    callerMocks.generationTopic.mockReturnValue({});
+    callerMocks.video.mockReturnValue({
+      getModelLatencies: vi.fn().mockResolvedValue([]),
+    });
+  });
+
+  it('passes the request and workspace scope to every router caller', () => {
+    videoGenerationRuntime.factory({
+      clientIp: '203.0.113.7',
+      toolManifestMap: {},
+      userId: 'user-1',
+      workspaceId: 'workspace-1',
+    });
+
+    const callerContext = {
+      clientIp: '203.0.113.7',
+      userId: 'user-1',
+      workspaceId: 'workspace-1',
+    };
+    expect(callerMocks.aiModel).toHaveBeenCalledWith(callerContext);
+    expect(callerMocks.aiProvider).toHaveBeenCalledWith(callerContext);
+    expect(callerMocks.generation).toHaveBeenCalledWith(callerContext);
+    expect(callerMocks.generationTopic).toHaveBeenCalledWith(callerContext);
+    expect(callerMocks.video).toHaveBeenCalledWith(callerContext);
+  });
+
+  it('projects share attribution onto the video caller so visitor spend stays attributed', () => {
+    videoGenerationRuntime.factory({
+      agentShareVisitor: {
+        agentId: 'agent-1',
+        allowReadMemory: true,
+        toolGrants: [{ identifier: 'lobe-video-generation' }],
+        shareId: 'share-1',
+        visitorUserId: 'visitor-1',
+      },
+      toolManifestMap: {},
+      userId: 'creator-1',
+    });
+
+    const [callerContext] = callerMocks.video.mock.calls.at(-1)!;
+    expect(callerContext.spendOrigin).toEqual({
+      agentShare: { agentId: 'agent-1', shareId: 'share-1', visitorUserId: 'visitor-1' },
+      trigger: 'agent_share',
+    });
+    // Permission fields of the runtime object must never leak into billing metadata.
+    expect(callerContext.spendOrigin!.agentShare).not.toHaveProperty('allowReadMemory');
+    expect(callerContext.spendOrigin!.agentShare).not.toHaveProperty('toolGrants');
+  });
+
+  it('omits spend attribution for a non-share run', () => {
+    videoGenerationRuntime.factory({ toolManifestMap: {}, userId: 'user-1' });
+
+    const [callerContext] = callerMocks.video.mock.calls.at(-1)!;
+    expect(callerContext.spendOrigin).toBeUndefined();
+  });
+
+  it('preserves public agent visibility for generated video topics', async () => {
+    const createTopic = vi.fn().mockResolvedValue('topic-1');
+    callerMocks.generationTopic.mockReturnValue({ createTopic });
+    callerMocks.aiProvider.mockReturnValue({
+      getAiProviderRuntimeState: vi.fn().mockResolvedValue({
+        enabledVideoAiProviders: [{ id: 'provider-1', name: 'Provider 1' }],
+      }),
+    });
+    callerMocks.aiModel.mockReturnValue({
+      getAiProviderModelList: vi.fn().mockResolvedValue([{ id: 'video-model-1' }]),
+    });
+    callerMocks.video.mockReturnValue({
+      createVideo: vi.fn().mockResolvedValue({
+        data: {
+          batch: { id: 'batch-1' },
+          generations: [{ asyncTaskId: 'task-1', id: 'generation-1' }],
+        },
+        success: true,
+      }),
+      getModelLatencies: vi.fn().mockResolvedValue([
+        {
+          avgLatencyMs: 76_000,
+          model: 'video-model-1',
+          provider: 'provider-1',
+        },
+      ]),
+    });
+
+    const runtime = videoGenerationRuntime.factory({
+      agentVisibility: 'public',
+      toolManifestMap: {},
+      userId: 'user-1',
+      workspaceId: 'workspace-1',
+    });
+
+    const result = await runtime.generateVideo({
+      prompt: 'A shared workspace product animation',
+      waitUntilComplete: false,
+    });
+
+    expect(result.success).toBe(true);
+    expect(createTopic).toHaveBeenCalledWith({
+      title: 'A shared workspace product animation',
+      type: 'video',
+      visibility: 'public',
+    });
+  });
+
+  it.each([true, false])(
+    'creates the video inside a scheduled-work scope when waitUntilComplete is %s',
+    async (waitUntilComplete) => {
+      let createdInScope = false;
+      const createVideo = vi.fn(async () => {
+        createdInScope = scheduledWork.inScope;
+        return {
+          data: {
+            batch: { id: 'batch-1' },
+            generations: [{ asyncTaskId: 'task-1', id: 'generation-1' }],
+          },
+          success: true,
+        };
+      });
+      callerMocks.generationTopic.mockReturnValue({
+        createTopic: vi.fn().mockResolvedValue('topic-1'),
+      });
+      callerMocks.aiProvider.mockReturnValue({
+        getAiProviderRuntimeState: vi.fn().mockResolvedValue({
+          enabledVideoAiProviders: [{ id: 'provider-1', name: 'Provider 1' }],
+        }),
+      });
+      callerMocks.aiModel.mockReturnValue({
+        getAiProviderModelList: vi.fn().mockResolvedValue([{ id: 'video-model-1' }]),
+      });
+      callerMocks.generation.mockReturnValue({
+        getGenerationStatus: vi.fn().mockResolvedValue({
+          generation: { asset: { url: 'https://cdn.example.com/video.mp4' } },
+          status: 'success',
+        }),
+      });
+      callerMocks.video.mockReturnValue({
+        createVideo,
+        getModelLatencies: vi.fn().mockResolvedValue([]),
+      });
+
+      const runtime = videoGenerationRuntime.factory({
+        toolManifestMap: {},
+        userId: 'user-1',
+      });
+
+      const result = await runtime.generateVideo({
+        prompt: 'A product animation',
+        waitUntilComplete,
+      });
+
+      expect(result.success).toBe(true);
+      expect(createVideo).toHaveBeenCalledOnce();
+      expect(createdInScope).toBe(true);
+    },
+  );
+
+  it('preserves model descriptions and complete parameter schemas', async () => {
+    callerMocks.aiProvider.mockReturnValue({
+      getAiProviderRuntimeState: vi.fn().mockResolvedValue({
+        enabledVideoAiProviders: [{ id: 'provider-1', name: 'Provider 1' }],
+      }),
+    });
+    callerMocks.aiModel.mockReturnValue({
+      getAiProviderModelList: vi.fn().mockResolvedValue([
+        {
+          description: 'A cinematic text-to-video model.',
+          displayName: 'Video Model 1',
+          enabled: true,
+          id: 'video-model-1',
+          parameters: {
+            duration: {
+              default: 5,
+              enum: [5, 10],
+            },
+            prompt: { default: '' },
+          },
+          pricing: {
+            approximatePricePerVideo: 0.45,
+            currency: 'USD',
+            units: [],
+          },
+          type: 'video',
+        },
+      ]),
+    });
+    const getModelLatencies = vi.fn().mockResolvedValue([
+      {
+        avgLatencyMs: 76_000,
+        model: 'video-model-1',
+        provider: 'provider-1',
+      },
+    ]);
+    callerMocks.video.mockReturnValue({ getModelLatencies });
+
+    const runtime = videoGenerationRuntime.factory({
+      toolManifestMap: {},
+      userId: 'user-1',
+      workspaceId: 'workspace-1',
+    });
+
+    const result = await runtime.listVideoModels({ provider: 'provider-1' });
+
+    expect(result.success).toBe(true);
+    expect(result.content).toContain('Description: A cinematic text-to-video model.');
+    expect(result.content).toContain('avgLatencyMs: 76000');
+    expect(result.content).toContain('"approximatePricePerVideo":0.45');
+    expect(getModelLatencies).toHaveBeenCalledWith({
+      models: [{ model: 'video-model-1', provider: 'provider-1' }],
+    });
+    expect(result.state).toMatchObject({
+      providers: [
+        {
+          models: [
+            {
+              avgLatencyMs: 76_000,
+              description: 'A cinematic text-to-video model.',
+              parameters: {
+                duration: {
+                  enum: [5, 10],
+                },
+              },
+            },
+          ],
+        },
+      ],
+    });
+  });
+
+  it('does not list models from a disabled provider', async () => {
+    const getAiProviderModelList = vi.fn();
+    callerMocks.aiModel.mockReturnValue({ getAiProviderModelList });
+    callerMocks.aiProvider.mockReturnValue({
+      getAiProviderRuntimeState: vi.fn().mockResolvedValue({
+        enabledVideoAiProviders: [{ id: 'provider-1', name: 'Provider 1' }],
+      }),
+    });
+
+    const runtime = videoGenerationRuntime.factory({
+      toolManifestMap: {},
+      userId: 'user-1',
+      workspaceId: 'workspace-1',
+    });
+
+    const result = await runtime.listVideoModels({ provider: 'provider-2' });
+
+    expect(result).toMatchObject({
+      state: { providers: [], totalModels: 0 },
+      success: true,
+    });
+    expect(getAiProviderModelList).not.toHaveBeenCalled();
+  });
+});

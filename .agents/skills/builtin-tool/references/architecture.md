@@ -65,7 +65,7 @@ The split exists so:
 
 ## Why ExecutionRuntime is the Default Home for Logic
 
-**Old pattern (grandfathered):** business logic in `src/executor/` directly. Examples: `builtin-tool-task`, older tools. Works, but the executor mixes runtime logic with frontend service plumbing — hard to reuse on the server.
+**Old pattern (grandfathered):** business logic in `src/executor/` directly. Examples: `builtin-tool-calculator`, older tools. Works, but the executor mixes runtime logic with frontend service plumbing — hard to reuse on the server.
 
 **New pattern (preferred):** business logic in `src/ExecutionRuntime/`, frontend wiring in `src/client/executor/`. Examples: `builtin-tool-local-system`, `builtin-tool-web-browsing`, `builtin-tool-calculator`.
 
@@ -108,7 +108,7 @@ The `client/executor` instantiates it once with the real service:
 
 ```ts
 import { localFileService } from '@/services/electron/localFileService';
-import { LocalSystemExecutionRuntime } from '../../ExecutionRuntime';
+import { LocalSystemExecutionRuntime } from '@lobechat/tool-runtime';
 
 class LocalSystemExecutor extends BaseExecutor<typeof LocalSystemApiEnum> {
   private runtime = new LocalSystemExecutionRuntime(localFileService);
@@ -223,7 +223,7 @@ The runtime hands every executor method an optional `BuiltinToolContext` as the 
 
 ## i18n Integration
 
-Source of truth: `src/locales/default/plugin.ts`. Keys follow `builtins.<identifier>.<topic>.<…>`:
+Source of truth: `packages/locales/src/default/plugin.ts`. Keys follow `builtins.<identifier>.<topic>.<…>`:
 
 | Key                                   | Use                                                          |
 | ------------------------------------- | ------------------------------------------------------------ |
@@ -232,7 +232,7 @@ Source of truth: `src/locales/default/plugin.ts`. Keys follow `builtins.<identif
 | `builtins.<identifier>.inspector.<…>` | Extra Inspector strings ("no results", chips, counters)      |
 | `builtins.<identifier>.<feature>.<…>` | Render / Intervention strings, free-form per tool            |
 
-For dev preview, also seed `locales/zh-CN/plugin.json` and `locales/en-US/plugin.json`. Run `pnpm i18n` before opening a PR — it's slow, so do it once at the end. (See the **i18n** skill for the full workflow.)
+For dev preview, also seed `locales/zh-CN/plugin.json` and `locales/en-US/plugin.json`. Run `bun run i18n` before opening a PR — it's slow, so do it once at the end. (See the **i18n** skill for the full workflow.)
 
 ---
 

@@ -22,9 +22,13 @@ vi.mock('@/store/chat/slices/agentRun/actions/dispatch/agentDispatcher', () => (
   selectRuntimeType: () => 'hetero',
 }));
 
-vi.mock('@/store/chat/slices/agentRun/actions/transports/hetero/heteroResume', () => ({
-  resolveHeteroResume: () => ({ cwdChanged: false, resumeSessionId: 'sess-1' }),
-}));
+vi.mock(
+  '@/store/chat/slices/agentRun/actions/transports/hetero/heteroResume',
+  async (importOriginal) => ({
+    ...(await importOriginal<object>()),
+    resolveHeteroResume: () => ({ cwdChanged: false, resumeSessionId: 'sess-1' }),
+  }),
+);
 
 vi.mock('@/store/chat/utils/activeTopicDocumentContext', () => ({
   mergeAgentRuntimeInitialContexts: () => undefined,
@@ -32,50 +36,60 @@ vi.mock('@/store/chat/utils/activeTopicDocumentContext', () => ({
 }));
 
 vi.mock('@/store/chat/slices/operation/selectors', () => ({
-  operationSelectors: { isMessageProcessing: () => () => false },
+  operationSelectors: {
+    getOperationById: () => () => undefined,
+    isMessageProcessing: () => () => false,
+    isMessageRegenerating: () => () => false,
+  },
 }));
 
 vi.mock('@/services/message', () => ({
   messageService: { createMessage: vi.fn(async () => ({ id: 'assistant-new' })) },
 }));
 
-vi.mock('@/store/agent', () => ({ getAgentStoreState: () => ({}) }));
+vi.mock('@/store/agent', () => ({
+  getAgentStoreState: () => ({ localAgentWorkingDirectoryMap: {} }),
+}));
 
 vi.mock('@/store/agent/selectors', () => ({
-  agentByIdSelectors: { getAgentWorkingDirectoryById: () => () => '/work/dir' },
+  agentByIdSelectors: {
+    getAgentById: () => () => undefined,
+    isWorkspaceAgentById: () => () => false,
+  },
   agentSelectors: {
     getAgentConfigById: () => () => ({
       agencyConfig: {
         executionTarget: 'local',
         heterogeneousProvider: { type: 'claude-code' },
+        workingDirByDevice: { 'device-1': '/work/dir' },
       },
     }),
   },
 }));
 
 vi.mock('@/store/chat/selectors', () => ({
-  topicSelectors: { getTopicById: () => () => undefined },
+  topicSelectors: {
+    getTopicById: () => () => undefined,
+    getTopicHeteroPinById: () => () => undefined,
+    getTopicModelById: () => () => undefined,
+  },
 }));
 
 vi.mock('@/store/electron', () => ({
   getElectronStoreState: () => ({ gatewayDeviceInfo: { deviceId: 'device-1' } }),
 }));
 
-vi.mock('@/components/AntdStaticMethods', () => ({
-  message: { info: vi.fn() },
-}));
-
 const noop = vi.fn();
 vi.mock('@/store/chat', () => ({
   useChatStore: {
     getState: vi.fn(() => ({
+      dbMessagesMap: {},
       operations: {},
       operationsByMessage: {},
 
       associateMessageWithOperation: noop,
       completeOperation: noop,
       failOperation: noop,
-      internal_updateTopicLoading: noop,
       isGatewayModeEnabled: () => false,
       refreshMessages: vi.fn(async () => {}),
       startOperation: vi.fn(() => ({ operationId: 'hetero-op-id' })),

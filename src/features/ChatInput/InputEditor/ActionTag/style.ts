@@ -1,4 +1,4 @@
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles } from '@lobehub/ui';
 
 import { TAG_MARGIN_INLINE_END } from '../constants';
 
@@ -19,16 +19,30 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
 
     display: inline-flex;
     gap: 4px;
-    align-items: center;
+    /* The label sets the tag's baseline, so it sits on the surrounding text's
+       baseline; an icon-first inline-flex would take the SVG's bottom edge. */
+    align-items: baseline;
 
     margin-inline-end: ${TAG_MARGIN_INLINE_END}px;
     padding-inline: 2px;
+  `,
+  actionTagIcon: css`
+    align-self: center;
   `,
   actionTagLabel: css`
     font-weight: 500;
   `,
   agentSkillTag: css`
     ${colored(cssVar.colorSuccess, cssVar.borderRadius)}
+  `,
+  clickable: css`
+    cursor: pointer;
+    border-radius: ${cssVar.borderRadius};
+    transition: background 0.2s;
+
+    &:hover {
+      background: ${cssVar.colorFillTertiary};
+    }
   `,
   commandTag: css`
     ${colored(cssVar.purple, cssVar.borderRadius)}

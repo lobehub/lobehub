@@ -27,11 +27,13 @@ export interface AgentPickerEntry {
 /**
  * Which tap-action a picker's buttons emit. `switch` re-targets the active
  * agent (`/agents`); `scope` re-targets the active workspace scope
- * (`/switch`). The keyword becomes the middle segment of the button id —
- * `messenger:switch:<agentId>` vs `messenger:scope:<scopeId>` — so the
- * router's callback dispatch can tell the two pickers apart.
+ * (`/switch`); `mode` re-targets the conversation execution mode (`/mode`).
+ * The keyword becomes the middle segment of the button id —
+ * `messenger:switch:<agentId>` / `messenger:scope:<scopeId>` /
+ * `messenger:mode:<agent|chat>` — so the router's callback dispatch can tell
+ * the pickers apart.
  */
-export type MessengerPickerAction = 'switch' | 'scope';
+export type MessengerPickerAction = 'switch' | 'scope' | 'mode';
 
 /** Raw inbound platform update used for actions chat-sdk doesn't surface. */
 export interface InboundCallbackAction {
@@ -120,6 +122,9 @@ export interface MessengerPlatformBinder {
   /** Called when an inbound message arrives from a sender that hasn't bound any account yet. */
   handleUnlinkedMessage: (ctx: UnlinkedMessageContext) => Promise<void>;
 
+  /** Whether this inbound message accepts exactly one platform-specific reply. */
+  isOneShotMessage?: (message: Message) => boolean;
+
   /**
    * Best-effort confirmation back to the IM thread once verify-im writes the
    * link row. `activeAgentName` is included when the verify-im flow set an
@@ -160,15 +165,18 @@ export interface MessengerPlatformBinder {
    *
    * Defining this also opts the platform into native slash command wiring
    * — the router registers every name from its shared command registry so
-   * the slash menu stays symmetric across platforms. Telegram leaves this
-   * unset because `/cmd` arrives as plain message text and is dispatched
-   * by `parseCommand` instead.
+   * the slash menu stays symmetric across platforms. The Telegram binder
+   * leaves this unset; the router registers Telegram explicitly and sends
+   * command replies through its DM helpers instead.
    */
   replyPrivately?: (
     channel: SlashCommandEvent['channel'],
     user: SlashCommandEvent['user'],
     text: string,
   ) => Promise<void>;
+
+  /** Reply through the one-shot mechanism identified by `isOneShotMessage`. */
+  replyToMessage?: (message: Message, text: string) => Promise<void>;
 
   /**
    * Send an interactive agent picker so the user can switch the active agent

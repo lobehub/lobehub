@@ -1,0 +1,365 @@
+import { isDesktop, LOBEHUB_SKILL_PROVIDERS } from '@lobechat/const';
+import type { IconProps } from '@lobehub/ui';
+import { DEFAULT_MODEL_PROVIDER_LIST } from 'model-bank/modelProviders';
+import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import { SUPPORTED_MESSENGER_PLATFORMS } from '@/features/Messenger/constants';
+import { SettingsTabs } from '@/store/global/initialState';
+import {
+  featureFlagsSelectors,
+  serverConfigSelectors,
+  useServerConfigStore,
+} from '@/store/serverConfig';
+import { useUserStore } from '@/store/user';
+import { authSelectors, userProfileSelectors } from '@/store/user/selectors';
+import { getPlatform } from '@/utils/platform';
+
+import {
+  SETTINGS_SEARCH_ITEMS,
+  type SettingsSearchContext,
+  type SettingsSearchTab,
+  TAB_SEARCH_EN_KEYWORDS,
+  TAB_SEARCH_KEYWORDS_KEYS,
+} from './items';
+import { createSettingsSearchFuse, searchSettingsIndex } from './matcher';
+import { containsHan, loadPinyinTexts, type PinyinTexts } from './pinyin';
+
+export interface SettingsSearchResult {
+  /** Present on item-level results; used as the URL hash for scroll targeting */
+  anchor?: string;
+  /** Where the result lives, e.g. `General › Appearance` */
+  breadcrumb: string;
+  icon?: IconProps['icon'];
+  key: string;
+  label: string;
+  tab: SettingsSearchTab;
+  url: string;
+}
+
+export interface SettingsSearchCategoryGroup {
+  items: {
+    /** Navigation URL; derived from `key` via `getTabUrl` when omitted */
+    href?: string;
+    icon?: IconProps['icon'];
+    /** Search tab key: matches `SETTINGS_SEARCH_ITEMS[].tab` and the keyword tables */
+    key: SettingsSearchTab;
+    label: string;
+  }[];
+  key: string;
+  title: string;
+}
+
+/**
+ * Which settings surface the search runs on. The personal sidebar indexes
+ * everything its pages render; the workspace sidebar narrows item-level
+ * entries to tabs whose pages are the personal ones (same anchors).
+ */
+export interface SettingsSearchScope {
+  /** Visible sidebar groups — tab entries and tab visibility come from here */
+  categoryGroups: SettingsSearchCategoryGroup[];
+  /**
+   * Tabs that also get item-level and catalog entries (provider names, IM
+   * channels, …). Defaults to every visible tab.
+   */
+  itemTabs?: ReadonlySet<SettingsSearchTab>;
+  /**
+   * Tabs that own their keywords in this scope: other tab and item entries drop
+   * those keywords, so a setting that moved to its own tab here is not also
+   * found on the page that no longer renders it.
+   */
+  keywordOwnerTabs?: readonly SettingsSearchTab[];
+  /** Builtin provider detail URL; defaults to the personal provider page */
+  providerUrl?: (providerId: string) => string;
+}
+
+interface IndexedEntry extends SettingsSearchResult {
+  /** Lowercased searchable texts (label / desc / keywords / …) */
+  haystack: string[];
+  /**
+   * Label/keyword texts that get pinyin variants appended once the dict loads.
+   * Descriptions are excluded — their pinyin strings are long and only add
+   * fuzzy-match noise.
+   */
+  pinyinBase: string[];
+}
+
+export const getTabUrl = (tab: SettingsSearchTab) =>
+  tab === SettingsTabs.Provider ? '/settings/provider/all' : `/settings/${tab}`;
+
+const getPersonalProviderUrl = (providerId: string) => `/settings/provider/${providerId}`;
+
+/** Split a localized comma-separated keyword string (supports CJK commas) */
+const splitKeywords = (text: string) =>
+  text
+    .split(/[,、]/)
+    .map((keyword) => keyword.trim().toLowerCase())
+    .filter(Boolean);
+
+/**
+ * Search visible settings by the current-locale label text plus registered
+ * keywords, fuzzy-matched via Fuse and pinyin-augmented for Han labels. Tab
+ * entries derive from the scope's sidebar groups (inheriting their
+ * feature-flag / permission gating and `href` overrides); item-level entries
+ * come from `SETTINGS_SEARCH_ITEMS` and are dropped when their tab is not
+ * visible or not in `scope.itemTabs`.
+ */
+export const useSettingsSearch = (
+  query: string,
+  scope: SettingsSearchScope,
+): {
+  /**
+   * True while the pinyin dict chunk is still loading for a Han-text index —
+   * a zero-result answer is not authoritative yet (pinyin queries like `zhuti`
+   * can only match after the dict arrives). Settles to false on load success,
+   * failure (graceful non-pinyin degradation), or when no Han text is indexed.
+   */
+  isIndexing: boolean;
+  results: SettingsSearchResult[];
+} => {
+  const { t } = useTranslation(['setting', 'labs', 'electron', 'subscription', 'spend', 'auth']);
+  const {
+    categoryGroups,
+    itemTabs,
+    keywordOwnerTabs,
+    providerUrl = getPersonalProviderUrl,
+  } = scope;
+  const { hideDocs, showAiImage } = useServerConfigStore(featureFlagsSelectors);
+  const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
+  const enableChannels = useServerConfigStore(serverConfigSelectors.enableChannels);
+  const enableGatewayMode = useServerConfigStore(serverConfigSelectors.enableGatewayMode);
+  const enableComposio = useServerConfigStore(serverConfigSelectors.enableComposio);
+  const enableWorkspace = useServerConfigStore(serverConfigSelectors.enableWorkspace);
+  const disableEmailPassword = useServerConfigStore(serverConfigSelectors.disableEmailPassword);
+  const isLogin = useUserStore(authSelectors.isLogin);
+  const hasEmail = useUserStore((s) => !!userProfileSelectors.userProfile(s)?.email);
+  const [pinyin, setPinyin] = useState<{ settled: boolean; texts: PinyinTexts | null }>({
+    settled: false,
+    texts: null,
+  });
+
+  // The translated index only depends on locale / visibility inputs — build it
+  // once, not on every keystroke.
+  const baseIndex = useMemo(() => {
+    const ctx: SettingsSearchContext = {
+      disableEmailPassword: !!disableEmailPassword,
+      enableBusinessFeatures: !!enableBusinessFeatures,
+      enableChannels,
+      enableComposio: !!enableComposio,
+      enableGatewayMode: !!enableGatewayMode,
+      enableWorkspace: !!enableWorkspace,
+      hasEmail,
+      hideDocs: !!hideDocs,
+      isDesktop,
+      isLogin: !!isLogin,
+      isWindows: getPlatform() === 'Windows',
+      showAiImage: !!showAiImage,
+    };
+
+    // Tab-level entries first so they rank above item-level matches.
+    const entries: IndexedEntry[] = [];
+    const visibleTabs = new Map<
+      SettingsSearchTab,
+      { groupTitle: string; icon?: IconProps['icon']; label: string; url: string }
+    >();
+    // Tab info for item-level / catalog entries, honoring `itemTabs`
+    const getItemTab = (tab: SettingsSearchTab) =>
+      !itemTabs || itemTabs.has(tab) ? visibleTabs.get(tab) : undefined;
+
+    // English floor + localized enrichment (deduped: on en-US they overlap)
+    const getTabKeywords = (tab: SettingsSearchTab) => {
+      const keywordsKey = TAB_SEARCH_KEYWORDS_KEYS[tab];
+      return [
+        ...(TAB_SEARCH_EN_KEYWORDS[tab] ?? []),
+        ...(keywordsKey ? splitKeywords(t(keywordsKey as never) as string) : []),
+      ];
+    };
+    const ownerTabs = new Set(keywordOwnerTabs);
+    const ownedKeywords = new Set(keywordOwnerTabs?.flatMap(getTabKeywords));
+    const withoutOwnedKeywords = (tab: SettingsSearchTab, keywords: string[]) =>
+      ownerTabs.has(tab) ? keywords : keywords.filter((keyword) => !ownedKeywords.has(keyword));
+
+    for (const group of categoryGroups) {
+      for (const item of group.items) {
+        // The same tab may appear in multiple groups (e.g. APIKey in Agent and
+        // System when dev mode is on); index only the first occurrence,
+        // matching the sidebar's top-to-bottom order — otherwise one query
+        // shows duplicate results pointing at the same page.
+        if (visibleTabs.has(item.key)) continue;
+
+        const url = item.href ?? getTabUrl(item.key);
+        visibleTabs.set(item.key, {
+          groupTitle: group.title,
+          icon: item.icon,
+          label: item.label,
+          url,
+        });
+
+        const texts = Array.from(
+          new Set([
+            item.label.toLowerCase(),
+            ...withoutOwnedKeywords(item.key, getTabKeywords(item.key)),
+          ]),
+        );
+
+        entries.push({
+          breadcrumb: group.title,
+          haystack: texts,
+          icon: item.icon,
+          key: `tab-${group.key}-${item.key}`,
+          label: item.label,
+          pinyinBase: texts,
+          tab: item.key,
+          url,
+        });
+      }
+    }
+
+    for (const def of SETTINGS_SEARCH_ITEMS) {
+      const tabInfo = getItemTab(def.tab);
+      if (!tabInfo) continue;
+      if (def.visible && !def.visible(ctx)) continue;
+
+      const ns = def.ns ?? 'setting';
+      const label = t(def.labelKey as never, { ns }) as string;
+      const desc = def.descKey ? (t(def.descKey as never, { ns }) as string) : undefined;
+      const keywordTexts = withoutOwnedKeywords(
+        def.tab,
+        (def.keywords ?? []).map((text) => text.toLowerCase()),
+      );
+
+      entries.push({
+        anchor: def.anchor,
+        breadcrumb: `${tabInfo.groupTitle} › ${tabInfo.label}`,
+        haystack: [label.toLowerCase(), ...(desc ? [desc.toLowerCase()] : []), ...keywordTexts],
+        icon: tabInfo.icon,
+        key: `item-${def.anchor}`,
+        label,
+        pinyinBase: [label.toLowerCase(), ...keywordTexts],
+        tab: def.tab,
+        url: `${tabInfo.url}#${def.anchor}`,
+      });
+    }
+
+    // IM notification channels (Telegram / Slack / …) live on the notification
+    // page with per-platform anchors. Index them from the same catalog the page
+    // renders so a search for the platform name deep-links to that row.
+    // Those rows come from the business notification section, so they only
+    // exist with business features on.
+    const notificationTab = getItemTab(SettingsTabs.Notification);
+    if (notificationTab && enableBusinessFeatures)
+      for (const platform of SUPPORTED_MESSENGER_PLATFORMS) {
+        entries.push({
+          anchor: `notification-${platform.id}`,
+          breadcrumb: `${notificationTab.groupTitle} › ${notificationTab.label}`,
+          haystack: [platform.name.toLowerCase(), platform.id.toLowerCase(), 'messenger', 'im'],
+          icon: notificationTab.icon,
+          key: `item-notification-${platform.id}`,
+          label: platform.name,
+          pinyinBase: [platform.name.toLowerCase()],
+          tab: SettingsTabs.Notification,
+          url: `${notificationTab.url}#notification-${platform.id}`,
+        });
+      }
+
+    // Builtin OAuth connectors (Notion, GitHub, …): searching a connector name
+    // should land on the connector page. The page has no per-connector deep
+    // link, so these navigate to the tab itself. Availability ultimately
+    // depends on the Market API, but this static catalog is what the page
+    // renders from.
+    const connectorTab = getItemTab(SettingsTabs.Connector);
+    if (connectorTab)
+      for (const connector of LOBEHUB_SKILL_PROVIDERS) {
+        entries.push({
+          breadcrumb: `${connectorTab.groupTitle} › ${connectorTab.label}`,
+          haystack: [connector.label.toLowerCase(), connector.id.toLowerCase()],
+          icon: connectorTab.icon,
+          key: `connector-${connector.id}`,
+          label: connector.label,
+          pinyinBase: [],
+          tab: SettingsTabs.Connector,
+          url: connectorTab.url,
+        });
+      }
+
+    // Model providers rank last: builtin names/ids (e.g. "OpenAI") link straight
+    // to the provider detail page. Custom providers need an async store fetch and
+    // are intentionally not indexed.
+    const providerTab = getItemTab(SettingsTabs.Provider);
+    if (providerTab)
+      for (const provider of DEFAULT_MODEL_PROVIDER_LIST) {
+        entries.push({
+          breadcrumb: `${providerTab.groupTitle} › ${providerTab.label}`,
+          haystack: [provider.name.toLowerCase(), provider.id.toLowerCase()],
+          icon: providerTab.icon,
+          key: `provider-${provider.id}`,
+          label: provider.name,
+          pinyinBase: [],
+          tab: SettingsTabs.Provider,
+          url: providerUrl(provider.id),
+        });
+      }
+
+    return entries;
+  }, [
+    categoryGroups,
+    itemTabs,
+    keywordOwnerTabs,
+    providerUrl,
+    t,
+    disableEmailPassword,
+    enableBusinessFeatures,
+    enableChannels,
+    enableComposio,
+    enableGatewayMode,
+    enableWorkspace,
+    hasEmail,
+    hideDocs,
+    isLogin,
+    showAiImage,
+  ]);
+
+  // Load the pinyin dict only when the index actually contains Han text, so
+  // non-CJK locales never download it.
+  const needsPinyin = useMemo(
+    () => baseIndex.some((entry) => entry.pinyinBase.some((text) => containsHan(text))),
+    [baseIndex],
+  );
+
+  useEffect(() => {
+    if (!needsPinyin || pinyin.settled) return;
+
+    let active = true;
+    // Settle even on load failure (texts stays null) so isIndexing can't stick.
+    loadPinyinTexts().then((fn) => {
+      if (active) setPinyin({ settled: true, texts: fn });
+    });
+    return () => {
+      active = false;
+    };
+  }, [needsPinyin, pinyin.settled]);
+
+  const fuse = useMemo(() => {
+    const pinyinTexts = pinyin.texts;
+    const index = pinyinTexts
+      ? baseIndex.map((entry) =>
+          entry.pinyinBase.some((text) => containsHan(text))
+            ? { ...entry, haystack: [...entry.haystack, ...entry.pinyinBase.flatMap(pinyinTexts)] }
+            : entry,
+        )
+      : baseIndex;
+
+    return createSettingsSearchFuse(index);
+  }, [baseIndex, pinyin.texts]);
+
+  const results = useMemo(() => {
+    const q = query.trim();
+    if (!q) return [];
+
+    return searchSettingsIndex(fuse, q).map(
+      ({ haystack: _h, pinyinBase: _p, ...result }) => result,
+    );
+  }, [query, fuse]);
+
+  return { isIndexing: needsPinyin && !pinyin.settled, results };
+};

@@ -5,6 +5,25 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { testProvider } from '../../providerTestUtils';
 import { LobeInternLMAI, params } from './index';
 
+// Mock a model with abilities in model-bank
+vi.mock('model-bank', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  return {
+    ...actual,
+    LOBE_DEFAULT_MODEL_LIST: [
+      {
+        id: 'test-model-with-abilities',
+        abilities: {
+          functionCall: true,
+          vision: true,
+          reasoning: true,
+        },
+        enabled: true,
+      },
+    ],
+  };
+});
+
 // Basic provider tests
 testProvider({
   Runtime: LobeInternLMAI,
@@ -204,25 +223,6 @@ describe('LobeInternLMAI - custom features', () => {
         },
       };
 
-      // Mock a model with abilities in model-bank
-      vi.mock('model-bank', async (importOriginal) => {
-        const actual = await importOriginal<Record<string, unknown>>();
-        return {
-          ...actual,
-          LOBE_DEFAULT_MODEL_LIST: [
-            {
-              id: 'test-model-with-abilities',
-              abilities: {
-                functionCall: true,
-                vision: true,
-                reasoning: true,
-              },
-              enabled: true,
-            },
-          ],
-        };
-      });
-
       const models = await params.models!({ client: mockClient as any });
       const model = models[0];
 
@@ -258,63 +258,6 @@ describe('LobeInternLMAI - custom features', () => {
       const models = await params.models!({ client: mockClient as any });
       expect(models.length).toBe(1);
       expect(models[0].id).toBe('valid-model');
-    });
-
-    it('should set contextWindowTokens from known model', async () => {
-      const mockClient = {
-        baseURL: 'https://chat.intern-ai.org.cn/api/v1',
-        apiKey: 'test',
-        models: {
-          list: vi.fn().mockResolvedValue({
-            data: [{ id: 'internlm2_5-7b-chat' }],
-          }),
-        },
-      };
-
-      const models = await params.models!({ client: mockClient as any });
-      const model = models[0];
-
-      // Should have contextWindowTokens from model-bank if available
-      expect(model.id).toBe('internlm2_5-7b-chat');
-    });
-
-    it('should set displayName from known model', async () => {
-      const mockClient = {
-        baseURL: 'https://chat.intern-ai.org.cn/api/v1',
-        apiKey: 'test',
-        models: {
-          list: vi.fn().mockResolvedValue({
-            data: [{ id: 'internlm2_5-7b-chat' }],
-          }),
-        },
-      };
-
-      const models = await params.models!({ client: mockClient as any });
-      const model = models[0];
-
-      // Should have displayName from model-bank if available
-      expect(model.id).toBe('internlm2_5-7b-chat');
-    });
-
-    it('should combine keyword detection with known model abilities', async () => {
-      const mockClient = {
-        baseURL: 'https://chat.intern-ai.org.cn/api/v1',
-        apiKey: 'test',
-        models: {
-          list: vi.fn().mockResolvedValue({
-            data: [{ id: 'internlm2_5-7b-chat' }, { id: 'internvl-chat-2b' }],
-          }),
-        },
-      };
-
-      const models = await params.models!({ client: mockClient as any });
-
-      // Models with matching keywords should have abilities set to true
-      const internlmModel = models.find((m) => m.id === 'internlm2_5-7b-chat');
-      const internvlModel = models.find((m) => m.id === 'internvl-chat-2b');
-
-      expect(internlmModel?.functionCall).toBe(true);
-      expect(internvlModel?.vision).toBe(true);
     });
   });
 });

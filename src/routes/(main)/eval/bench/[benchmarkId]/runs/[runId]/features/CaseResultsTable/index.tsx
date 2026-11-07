@@ -2,49 +2,122 @@
 
 import type { EvalThreadResult } from '@lobechat/types';
 import { formatCost, formatShortenNumber } from '@lobechat/utils';
-import { ActionIcon, Flexbox, Icon, Tag } from '@lobehub/ui';
-import { Select } from '@lobehub/ui/base-ui';
-import { Badge, Input, Table, Tooltip } from 'antd';
-import type { ColumnsType } from 'antd/es/table';
-import { createStaticStyles, cssVar } from 'antd-style';
-import { Footprints, Play, RotateCcw } from 'lucide-react';
+import {
+  ActionIcon,
+  Badge,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Icon,
+  Input,
+  Select,
+  Table,
+  type TableColumn,
+  Tag,
+  Tooltip,
+} from '@lobehub/ui';
+import { Footprints, Play, RotateCcw, SearchIcon } from 'lucide-react';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
+import SegmentBar from '@/routes/(main)/eval/features/SegmentBar';
 
 import { getResumeTarget } from '../resumeTarget';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
+const styles = createStaticStyles(({ css }) => ({
   caseLink: css`
     color: inherit;
     text-decoration: none;
+
+    &:hover {
+      color: ${cssVar.colorPrimary};
+    }
   `,
   durationSub: css`
-    font-family: monospace;
-    font-size: 10px;
+    font-family: ${cssVar.fontFamilyCode};
+    font-size: ${cssVar.fontSizeSM};
     color: ${cssVar.colorTextTertiary};
+  `,
+  chip: css`
+    cursor: pointer;
+
+    display: inline-flex;
+    gap: 6px;
+    align-items: center;
+
+    padding-block: 4px;
+    padding-inline: 10px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: 999px;
+
+    font-size: ${cssVar.fontSizeSM};
+    color: ${cssVar.colorTextSecondary};
+
+    background: ${cssVar.colorBgContainer};
+
+    transition:
+      border-color 0.15s ease,
+      background 0.15s ease;
+
+    &:hover {
+      background: ${cssVar.colorFillTertiary};
+    }
+
+    &:focus-visible {
+      outline: 2px solid ${cssVar.colorPrimary};
+      outline-offset: 1px;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      transition: none;
+    }
+  `,
+  chipActive: css`
+    border-color: ${cssVar.colorText};
+    color: ${cssVar.colorText};
+    background: ${cssVar.colorFillSecondary};
+  `,
+  chipCount: css`
+    font-family: ${cssVar.fontFamilyCode};
+    font-weight: 600;
+  `,
+  chipDot: css`
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
   `,
   filterBar: css`
     padding-block: 12px;
     padding-inline: 20px;
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
+  summaryBar: css`
+    padding-block: 16px;
+    padding-inline: 20px;
+    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
+  `,
+  summaryLabel: css`
+    font-size: ${cssVar.fontSizeSM};
+    font-weight: 500;
+    color: ${cssVar.colorTextSecondary};
+  `,
   indexCell: css`
-    font-family: monospace;
-    font-size: 12px;
+    font-family: ${cssVar.fontFamilyCode};
+    font-size: ${cssVar.fontSizeSM};
     color: ${cssVar.colorTextTertiary};
   `,
   monoCell: css`
-    font-family: monospace;
-    font-size: 12px;
+    font-family: ${cssVar.fontFamilyCode};
+    font-size: ${cssVar.fontSizeSM};
     color: ${cssVar.colorTextSecondary};
   `,
   threadDot: css`
     display: inline-block;
     width: 8px;
     height: 8px;
-    border-radius: 50%;
+    border-radius: 999px;
   `,
 }));
 
@@ -222,8 +295,58 @@ const CaseResultsTable = memo<CaseResultsTableProps>(
       return filtered;
     }, [results, searchText, statusFilter]);
 
-    const columns: ColumnsType<any> = useMemo(() => {
-      const cols: ColumnsType<any> = [
+    // Status distribution across all results — drives the summary SegmentBar + filter chips.
+    const distribution = useMemo(() => {
+      let passed = 0;
+      let failed = 0;
+      let error = 0;
+      let pending = 0;
+      for (const r of results) {
+        const status: string | undefined = r.status;
+        if (status === 'passed') passed++;
+        else if (status === 'failed') failed++;
+        else if (status === 'error' || status === 'timeout') error++;
+        else if (!status || status === 'pending' || status === 'running') pending++;
+      }
+      return { error, failed, passed, pending };
+    }, [results]);
+
+    const statusChips = [
+      {
+        color: cssVar.colorSuccess,
+        count: distribution.passed,
+        label: t('table.filter.passed'),
+        value: 'passed',
+      },
+      {
+        color: cssVar.colorError,
+        count: distribution.failed,
+        label: t('table.filter.failed'),
+        value: 'failed',
+      },
+      {
+        color: cssVar.colorWarning,
+        count: distribution.error,
+        label: t('table.filter.error'),
+        value: 'error',
+      },
+      {
+        color: cssVar.colorTextQuaternary,
+        count: distribution.pending,
+        label: t('run.status.pending'),
+        value: 'pending',
+      },
+    ];
+
+    const segments = [
+      { color: cssVar.colorSuccess, value: distribution.passed },
+      { color: cssVar.colorError, value: distribution.failed },
+      { color: cssVar.colorWarning, value: distribution.error },
+      { color: cssVar.colorTextQuaternary, value: distribution.pending },
+    ];
+
+    const columns: TableColumn<any>[] = useMemo(() => {
+      const cols: TableColumn<any>[] = [
         {
           key: 'index',
           render: (_: any, record: any, index: number) => (
@@ -233,14 +356,13 @@ const CaseResultsTable = memo<CaseResultsTableProps>(
           width: 48,
         },
         {
-          dataIndex: ['testCase', 'content', 'input'],
           key: 'input',
-          render: (text: string, record: any) => (
+          render: (_: any, record: any) => (
             <WorkspaceLink
               className={styles.caseLink}
               to={`/eval/bench/${benchmarkId}/runs/${runId}/cases/${record.testCaseId}`}
             >
-              {text}
+              {record.testCase?.content?.input}
             </WorkspaceLink>
           ),
           title: t('table.columns.input'),
@@ -309,7 +431,7 @@ const CaseResultsTable = memo<CaseResultsTableProps>(
             }
             return '-';
           },
-          sortDirections: ['descend', 'ascend'] as const,
+          sortDirections: ['descend', 'ascend'],
           sorter: (a: any, b: any) => (a.evalResult?.duration ?? 0) - (b.evalResult?.duration ?? 0),
           title: t('table.columns.duration'),
           width: 100,
@@ -339,7 +461,7 @@ const CaseResultsTable = memo<CaseResultsTableProps>(
               </Flexbox>
             );
           },
-          sortDirections: ['descend', 'ascend'] as const,
+          sortDirections: ['descend', 'ascend'],
           sorter: (a: any, b: any) => (a.evalResult?.steps ?? 0) - (b.evalResult?.steps ?? 0),
           title: t('table.columns.steps'),
           width: 120,
@@ -361,7 +483,7 @@ const CaseResultsTable = memo<CaseResultsTableProps>(
               </Flexbox>
             );
           },
-          sortDirections: ['descend', 'ascend'] as const,
+          sortDirections: ['descend', 'ascend'],
           sorter: (a: any, b: any) => (a.evalResult?.cost ?? 0) - (b.evalResult?.cost ?? 0),
           title: t('table.columns.cost'),
           width: 120,
@@ -387,7 +509,7 @@ const CaseResultsTable = memo<CaseResultsTableProps>(
               </Flexbox>
             );
           },
-          sortDirections: ['descend', 'ascend'] as const,
+          sortDirections: ['descend', 'ascend'],
           sorter: (a: any, b: any) =>
             (a.evalResult?.totalCost ?? 0) - (b.evalResult?.totalCost ?? 0),
           title: t('table.columns.totalCost'),
@@ -466,11 +588,42 @@ const CaseResultsTable = memo<CaseResultsTableProps>(
 
     return (
       <Flexbox gap={0}>
+        {/* Status distribution summary — outcome at a glance + quick filter chips */}
+        <Flexbox className={styles.summaryBar} gap={12}>
+          <span className={styles.summaryLabel}>{t('table.columns.status')}</span>
+          <SegmentBar segments={segments} />
+          <Flexbox horizontal gap={8} wrap="wrap">
+            {statusChips.map((chip) => {
+              const isActive = statusFilter === chip.value;
+              return (
+                <span
+                  className={`${styles.chip}${isActive ? ` ${styles.chipActive}` : ''}`}
+                  key={chip.value}
+                  role={'button'}
+                  tabIndex={0}
+                  onClick={() => setStatusFilter(isActive ? 'all' : chip.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setStatusFilter(isActive ? 'all' : chip.value);
+                    }
+                  }}
+                >
+                  <span className={styles.chipDot} style={{ backgroundColor: chip.color }} />
+                  {chip.label}
+                  <span className={styles.chipCount}>{chip.count}</span>
+                </span>
+              );
+            })}
+          </Flexbox>
+        </Flexbox>
+
         {/* Filters */}
         <Flexbox horizontal align="center" className={styles.filterBar} gap={8}>
-          <Input.Search
+          <Input
             allowClear
             placeholder={t('table.search.placeholder')}
+            prefix={<Icon icon={SearchIcon} size={14} />}
             style={{ width: 240 }}
             onChange={(e) => setSearchText(e.target.value)}
           />
@@ -501,7 +654,6 @@ const CaseResultsTable = memo<CaseResultsTableProps>(
           pagination={{
             pageSize,
             showSizeChanger: true,
-            size: 'small',
             onShowSizeChange: (_, size) => setPageSize(size),
           }}
         />

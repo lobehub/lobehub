@@ -3,9 +3,13 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import NotFound from '@/components/404';
-import Loading from '@/components/Loading/BrandTextLoading';
-import { TaskDetailSections, TopicChatDrawer, useActiveTaskDetail } from '@/features/AgentTasks';
-import DocumentPreviewModal from '@/features/DocumentModal/Preview';
+import AsyncError from '@/components/AsyncError';
+import {
+  TaskDetailSections,
+  TaskDetailSkeleton,
+  TopicChatDrawer,
+  useActiveTaskDetail,
+} from '@/features/AgentTasks';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 
@@ -14,9 +18,19 @@ const Body = memo(() => {
   const taskId = useChatStore(chatPortalSelectors.taskDetailId);
   // Same data wiring as the full /task/[tid] page — owns activeTaskId + polling
   // fetch so the shared section components resolve to this task.
-  const { isInitialLoading, isNotFound } = useActiveTaskDetail(taskId);
+  const { isInitialLoading, isNotFound, error, onRetry } = useActiveTaskDetail(taskId);
 
   if (!taskId) return null;
+
+  // A transient fetch failure keeps the URL and offers Reload — distinct from a
+  // resolved not-found (deleted task), which is a terminal 404.
+  if (error) {
+    return (
+      <Flexbox flex={1} height={'100%'} style={{ minHeight: 0, overflowY: 'auto' }}>
+        <AsyncError error={error} variant={'page'} onRetry={onRetry} />
+      </Flexbox>
+    );
+  }
 
   if (isNotFound) {
     return (
@@ -33,9 +47,8 @@ const Body = memo(() => {
       paddingInline={16}
       style={{ minHeight: 0, overflowY: 'auto' }}
     >
-      {isInitialLoading ? <Loading debugId="PortalTaskDetail" /> : <TaskDetailSections />}
+      {isInitialLoading ? <TaskDetailSkeleton chrome={'body'} /> : <TaskDetailSections />}
       <TopicChatDrawer />
-      <DocumentPreviewModal />
     </Flexbox>
   );
 });

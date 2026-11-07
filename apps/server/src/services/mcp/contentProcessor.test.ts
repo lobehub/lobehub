@@ -1,8 +1,14 @@
+import { inspect } from 'node:util';
+
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type ToolCallContent } from '@/libs/mcp';
 
 import { contentBlocksToString, processContentBlocks } from './contentProcessor';
+
+const debugLog = vi.hoisted(() => vi.fn());
+
+vi.mock('debug', () => ({ default: () => debugLog }));
 
 describe('contentProcessor', () => {
   describe('contentBlocksToString', () => {
@@ -33,8 +39,6 @@ describe('contentProcessor', () => {
       ];
       const result = contentBlocksToString(blocks);
       expect(result).toBe('![](https://example.com/f/abc-123)');
-      // Ensure no double URL prefix
-      expect(result).not.toContain('https://example.com/https://example.com');
     });
 
     it('should convert audio content with full URL without double prefix', () => {
@@ -47,7 +51,6 @@ describe('contentProcessor', () => {
       ];
       const result = contentBlocksToString(blocks);
       expect(result).toBe('<resource type="audio" url="https://example.com/f/audio-123" />');
-      expect(result).not.toContain('https://example.com/https://example.com');
     });
 
     it('should join multiple content blocks with double newlines', () => {
@@ -68,7 +71,9 @@ describe('contentProcessor', () => {
         } as ToolCallContent,
       ];
       const result = contentBlocksToString(blocks);
-      expect(result).toContain('<resource type="resource">');
+      expect(result).toBe(
+        '<resource type="resource">{"uri":"file:///test.txt","text":"content","mimeType":"text/plain"}</resource>',
+      );
     });
 
     it('should skip unknown content types', () => {
@@ -108,6 +113,7 @@ describe('contentProcessor', () => {
       expect(mockFileService.uploadBase64).toHaveBeenCalledWith(
         'iVBORw0KGgoAAAANSUhEUg==',
         expect.stringContaining('mcp/images/'),
+        { fileType: 'image/png' },
       );
     });
 
@@ -130,6 +136,151 @@ describe('contentProcessor', () => {
 
       expect(result[0].type).toBe('audio');
       expect((result[0] as any).data).toBe('https://example.com/f/uploaded-audio');
+      expect(mockFileService.uploadBase64).toHaveBeenCalledWith(
+        'base64audiodata==',
+        expect.stringContaining('mcp/audio/'),
+        { fileType: 'audio/mp3' },
+      );
+    });
+
+    it('should convert resource image blobs to uploaded image content', async () => {
+      mockFileService.uploadBase64.mockResolvedValue({
+        url: 'https://example.com/f/resource-image',
+        fileId: 'file-3',
+        key: 'mcp/images/2025-01-01/abc.png',
+      });
+
+      const blocks: ToolCallContent[] = [
+        {
+          type: 'resource',
+          resource: {
+            blob: 'resourceImageBase64==',
+            mimeType: 'image/png',
+            uri: 'file:///screenshot.png',
+          },
+        },
+      ];
+
+      const result = await processContentBlocks(blocks, mockFileService);
+
+      expect(result[0]).toEqual({
+        data: 'https://example.com/f/resource-image',
+        mimeType: 'image/png',
+        type: 'image',
+      });
+      expect(mockFileService.uploadBase64).toHaveBeenCalledWith(
+        'resourceImageBase64==',
+        expect.stringMatching(/mcp\/images\/.*\.png$/),
+        { fileType: 'image/png' },
+      );
+    });
+
+    it('should not log resource or uploaded URL credentials', async () => {
+      mockFileService.uploadBase64.mockResolvedValue({
+        url: 'https://storage.example/proxy-path-secret?signature=proxy-query-secret',
+        fileId: 'file-secret-log-test',
+        key: 'mcp/images/2025-01-01/secret.png',
+      });
+
+      const blocks: ToolCallContent[] = [
+        {
+          type: 'resource',
+          resource: {
+            blob: 'resourceImageBase64==',
+            mimeType: 'image/png',
+            uri: 'https://remote.example/resource-path-secret?token=resource-query-secret',
+          },
+        },
+      ];
+
+      await processContentBlocks(blocks, mockFileService);
+
+      const logOutput = inspect(debugLog.mock.calls, { depth: null });
+      expect(logOutput).toContain("mediaType: 'image'");
+      expect(logOutput).not.toContain('resource-path-secret');
+      expect(logOutput).not.toContain('resource-query-secret');
+      expect(logOutput).not.toContain('proxy-path-secret');
+      expect(logOutput).not.toContain('proxy-query-secret');
+    });
+
+    it('should convert resource audio blobs to uploaded audio content', async () => {
+      mockFileService.uploadBase64.mockResolvedValue({
+        url: 'https://example.com/f/resource-audio',
+        fileId: 'file-4',
+        key: 'mcp/audio/2025-01-01/abc.mp3',
+      });
+
+      const blocks: ToolCallContent[] = [
+        {
+          type: 'resource',
+          resource: {
+            blob: 'resourceAudioBase64==',
+            mimeType: 'audio/mpeg',
+            uri: 'file:///voice.mp3',
+          },
+        },
+      ];
+
+      const result = await processContentBlocks(blocks, mockFileService);
+
+      expect(result[0]).toEqual({
+        data: 'https://example.com/f/resource-audio',
+        mimeType: 'audio/mpeg',
+        type: 'audio',
+      });
+      expect(mockFileService.uploadBase64).toHaveBeenCalledWith(
+        'resourceAudioBase64==',
+        expect.stringMatching(/mcp\/audio\/.*\.mp3$/),
+        { fileType: 'audio/mpeg' },
+      );
+    });
+
+    it('should use safe file extensions for structured MIME types', async () => {
+      mockFileService.uploadBase64.mockResolvedValue({
+        url: 'https://example.com/f/resource-svg',
+        fileId: 'file-5',
+        key: 'mcp/images/2025-01-01/abc.svg',
+      });
+
+      const blocks: ToolCallContent[] = [
+        {
+          type: 'resource',
+          resource: {
+            blob: 'resourceSvgBase64==',
+            mimeType: 'image/svg+xml',
+            uri: 'file:///diagram.svg',
+          },
+        },
+      ];
+
+      await processContentBlocks(blocks, mockFileService);
+
+      expect(mockFileService.uploadBase64).toHaveBeenCalledWith(
+        'resourceSvgBase64==',
+        expect.stringMatching(/mcp\/images\/.*\.svg$/),
+        { fileType: 'image/svg+xml' },
+      );
+    });
+
+    it('should pass through non-media resource content unchanged', async () => {
+      const block = {
+        type: 'resource',
+        resource: { uri: 'file:///test.txt', text: 'content', mimeType: 'text/plain' },
+      } as ToolCallContent;
+
+      const result = await processContentBlocks([block], mockFileService);
+
+      expect(result[0]).toBe(block);
+      expect(mockFileService.uploadBase64).not.toHaveBeenCalled();
+    });
+
+    it('should pass through malformed resource content unchanged', async () => {
+      const block = { type: 'resource' } as ToolCallContent;
+
+      const result = await processContentBlocks([block], mockFileService);
+
+      expect(result[0]).toBe(block);
+      expect(mockFileService.uploadBase64).not.toHaveBeenCalled();
     });
 
     it('should pass through text content unchanged', async () => {
@@ -154,8 +305,6 @@ describe('contentProcessor', () => {
       const str = contentBlocksToString(processed);
 
       expect(str).toBe('Here is the screenshot:\n\n![](https://myapp.com/f/img-uuid)');
-      // The critical assertion: no double URL prefix
-      expect(str).not.toContain('https://myapp.com/https://myapp.com');
     });
   });
 });

@@ -3,6 +3,8 @@ import pc from 'picocolors';
 
 import { getToolsTrpcClient, getTrpcClient } from '../api/client';
 import { outputJson, printTable, truncate } from '../utils/format';
+import { log } from '../utils/logger';
+import { resolveUrlBuilder, searchResultPath, withUrl, withUrls } from './resourceUrl';
 
 const SEARCH_TYPES = [
   'agent',
@@ -16,6 +18,8 @@ const SEARCH_TYPES = [
   'plugin',
   'communityAgent',
   'knowledgeBase',
+  'task',
+  'goal',
 ] as const;
 
 type SearchType = (typeof SEARCH_TYPES)[number];
@@ -50,7 +54,7 @@ export function registerSearchCommand(program: Command) {
     )
     .option(
       '-T, --time-range <range>',
-      'Time range filter (e.g. day, week, month, year, requires --web)',
+      'Time range filter (e.g. day, week, month, year, requires --web; for local history use `recall --since`)',
     )
     .option('--json [fields]', 'Output JSON, optionally specify fields (comma-separated)')
     .action(
@@ -84,7 +88,7 @@ export function registerSearchCommand(program: Command) {
     .option('--json [fields]', 'Output JSON, optionally specify fields (comma-separated)')
     .option(
       '-i, --impl <impls>',
-      'Crawler implementations for web URLs (comma-separated: browserless, exa, firecrawl, jina, naive, search1api, tavily)',
+      'Crawler implementations for web URLs (comma-separated: browserless, deepseek, exa, firecrawl, jina, naive, search1api, tavily)',
     )
     .action(
       async (
@@ -117,15 +121,30 @@ async function localSearch(
 
   const client = await getTrpcClient();
 
-  const input: { limitPerType?: number; query: string; type?: SearchType } = { query };
+  const input: { includeGoals?: boolean; limitPerType?: number; query: string; type?: SearchType } =
+    { query };
   if (options.type) input.type = options.type as SearchType;
+  // Goals are opt-in on untyped searches (the web command menu cannot render them yet).
+  else input.includeGoals = true;
   if (options.limit) input.limitPerType = Number.parseInt(options.limit, 10);
 
   const result = await client.search.query.query(input);
 
   if (options.json !== undefined) {
     const fields = typeof options.json === 'string' ? options.json : undefined;
-    outputJson(result, fields);
+    const toUrl = await resolveUrlBuilder(client);
+    const link = (items: any[]) => withUrls(items, toUrl, searchResultPath);
+    outputJson(
+      Array.isArray(result)
+        ? link(result)
+        : Object.fromEntries(
+            Object.entries(result as Record<string, unknown>).map(([type, items]) => [
+              type,
+              Array.isArray(items) ? link(items) : items,
+            ]),
+          ),
+      fields,
+    );
     return;
   }
 
@@ -184,14 +203,20 @@ async function webSearch(
   if (options.timeRange) input.searchTimeRange = options.timeRange;
 
   const result = await toolsClient.search.webSearch.query(input);
+  const res = result as any;
 
   if (options.json !== undefined) {
     const fields = typeof options.json === 'string' ? options.json : undefined;
     outputJson(result, fields);
+    if (res.errorDetail) process.exit(1);
     return;
   }
 
-  const res = result as any;
+  if (res.errorDetail) {
+    log.error(String(res.errorDetail));
+    process.exit(1);
+    return;
+  }
 
   console.log(
     pc.dim(
@@ -220,7 +245,9 @@ async function crawlView(url: string, options: { impl?: string; json?: string | 
   const toolsClient = await getToolsTrpcClient();
 
   const input: {
-    impls?: ('browserless' | 'exa' | 'firecrawl' | 'jina' | 'naive' | 'search1api' | 'tavily')[];
+    impls?: (
+      'browserless' | 'deepseek' | 'exa' | 'firecrawl' | 'jina' | 'naive' | 'search1api' | 'tavily'
+    )[];
     urls: string[];
   } = { urls: [url] };
 
@@ -299,7 +326,10 @@ async function localView(target: string, options: { json?: string | boolean }) {
 
   if (options.json !== undefined) {
     const fields = typeof options.json === 'string' ? options.json : undefined;
-    outputJson(result, fields);
+    outputJson(
+      withUrl(result, await resolveUrlBuilder(client), searchResultPath({ ...result, id, type })),
+      fields,
+    );
     return;
   }
 

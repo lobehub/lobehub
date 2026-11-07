@@ -1,13 +1,16 @@
+import { SHARE_VISITOR_MAX_FILE_SIZE } from '@lobechat/const';
 import { type ChatContextContent } from '@lobechat/types';
 import { COMPRESSIBLE_IMAGE_TYPES, compressImageFile } from '@lobechat/utils/compressImage';
-import { toast } from '@lobehub/ui/base-ui';
+import { toast } from '@lobehub/ui';
 import { Buffer } from 'buffer.js';
 import { t } from 'i18next';
 
-import { notification } from '@/components/AntdStaticMethods';
+import { withResponseDetail } from '@/components/Error/unreadableResponseMessage';
 import { FILE_UPLOAD_BLACKLIST } from '@/const/file';
+import { findUnreadableServerResponseError } from '@/libs/trpc/client/unreadableServerResponse';
 import { fileService } from '@/services/file';
 import { ragService } from '@/services/rag';
+import { shareChatService } from '@/services/shareChat';
 import { UPLOAD_NETWORK_ERROR } from '@/services/upload';
 import { getAgentStoreState } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
@@ -21,6 +24,11 @@ import { sleep } from '@/utils/sleep';
 import { setNamespace } from '@/utils/storeDebug';
 
 import { type FileStore } from '../../store';
+import {
+  isShareFileTooLarge,
+  isShareStorageBlockError,
+  uploadShareVisitorFile,
+} from './shareVisitorUpload';
 import { filterSupportedChatUploadFiles } from './uploadGuard';
 
 const n = setNamespace('chat');
@@ -48,11 +56,35 @@ const getErrorMessage = (error: unknown): string => {
   return String(error);
 };
 
+export interface ChatUploadOptions {
+  /**
+   * Upload as an agent-share VISITOR: files go through the share-scoped
+   * endpoints onto the CREATOR's account and storage quota (see
+   * `uploadShareVisitorFile`) instead of the caller's own file API.
+   */
+  shareId?: string;
+}
+
+const formatShareUploadLimit = () => `${Math.round(SHARE_VISITOR_MAX_FILE_SIZE / 1024 / 1024)} MB`;
+
 const getUploadErrorDescription = (error: unknown): string => {
   if (error === UPLOAD_NETWORK_ERROR) return t('upload.networkError', { ns: 'error' });
 
+  // A share upload is admitted by the CREATOR's storage quota, so the block
+  // is theirs to lift — never route the visitor to their own plan/usage page.
+  if (isShareStorageBlockError(error)) {
+    return t('share.visitor.upload.creatorStorageBlocked', { ns: 'agent' });
+  }
+
   if (getTrpcErrorCode(error) === 'FORBIDDEN') {
     return t('upload.permissionDenied', { ns: 'error' });
+  }
+
+  // A gateway error page answered instead of the upload API. Its parse error
+  // means nothing to the user; the status and request id let support trace it.
+  const unreadable = findUnreadableServerResponseError(error);
+  if (unreadable) {
+    return withResponseDetail(t('upload.serviceUnavailable', { ns: 'error' }), unreadable);
   }
 
   return typeof error === 'string'
@@ -60,9 +92,18 @@ const getUploadErrorDescription = (error: unknown): string => {
     : t('upload.unknownError', { ns: 'error', reason: getErrorMessage(error) });
 };
 
+const EMPTY_CHAT_UPLOAD_FILE_LIST: UploadFileItem[] = [];
+
 export class FileActionImpl {
   readonly #get: () => FileStore;
   readonly #set: Setter;
+  /**
+   * The key each in-flight upload's chip currently lives under. A move
+   * (`moveChatUploadFileList`) updates it, so an upload keeps reporting to its
+   * own chip instead of resolving by id — a pending id is only the file name,
+   * and a same-named upload may appear under the old key later.
+   */
+  readonly #inFlightUploads = new Set<{ contextKey: string }>();
 
   constructor(set: Setter, get: () => FileStore, _api?: unknown) {
     void _api;
@@ -70,38 +111,205 @@ export class FileActionImpl {
     this.#get = get;
   }
 
-  addChatContextSelection = (context: ChatContextContent): void => {
-    const current = this.#get().chatContextSelections;
-    const next = [context, ...current.filter((item) => item.id !== context.id)];
+  #getChatUploadFileList = (contextKey: string): UploadFileItem[] =>
+    this.#get().chatUploadFileListByContext[contextKey] ?? EMPTY_CHAT_UPLOAD_FILE_LIST;
 
-    this.#set({ chatContextSelections: next }, false, n('addChatContextSelection'));
+  #setChatUploadFileList = (contextKey: string, list: UploadFileItem[], action: string): void => {
+    const currentMap = this.#get().chatUploadFileListByContext;
+
+    // Drop emptied buckets so conversations visited once don't pile up keys.
+    if (list.length === 0) {
+      if (!(contextKey in currentMap)) return;
+      const { [contextKey]: _removed, ...nextMap } = currentMap;
+      this.#set({ chatUploadFileListByContext: nextMap }, false, action);
+      return;
+    }
+
+    this.#set(
+      { chatUploadFileListByContext: { ...currentMap, [contextKey]: list } },
+      false,
+      action,
+    );
   };
 
-  clearChatContextSelections = (): void => {
-    this.#set({ chatContextSelections: [] }, false, n('clearChatContextSelections'));
+  addChatContextSelection = ({
+    contextKey,
+    selection,
+  }: {
+    contextKey: string;
+    selection: ChatContextContent;
+  }): void => {
+    const currentMap = this.#get().chatContextSelectionsByContext;
+    const current = currentMap[contextKey] ?? [];
+    const next = [selection, ...current.filter((item) => item.id !== selection.id)];
+
+    this.#set(
+      { chatContextSelectionsByContext: { ...currentMap, [contextKey]: next } },
+      false,
+      n('addChatContextSelection'),
+    );
   };
 
-  clearChatUploadFileList = (): void => {
-    this.#set({ chatUploadFileList: [] }, false, n('clearChatUploadFileList'));
+  clearChatContextSelections = (contextKey: string): void => {
+    const currentMap = this.#get().chatContextSelectionsByContext;
+    if (!(contextKey in currentMap)) return;
+
+    const { [contextKey]: _removed, ...nextMap } = currentMap;
+    this.#set({ chatContextSelectionsByContext: nextMap }, false, n('clearChatContextSelections'));
   };
 
-  dispatchChatUploadFileList = (payload: UploadFileListDispatch): void => {
-    const nextValue = uploadFileListReducer(this.#get().chatUploadFileList, payload);
-    if (nextValue === this.#get().chatUploadFileList) return;
-
-    this.#set({ chatUploadFileList: nextValue }, false, `dispatchChatFileList/${payload.type}`);
+  clearChatUploadFileList = (contextKey: string, submittedIds?: string[]): void => {
+    const next = submittedIds
+      ? this.#getChatUploadFileList(contextKey).filter((file) => !submittedIds.includes(file.id))
+      : [];
+    this.#setChatUploadFileList(contextKey, next, n('clearChatUploadFileList'));
   };
 
-  removeChatContextSelection = (id: string): void => {
-    const next = this.#get().chatContextSelections.filter((item) => item.id !== id);
-    this.#set({ chatContextSelections: next }, false, n('removeChatContextSelection'));
+  /**
+   * Put captured upload items back into the composer list after a send was
+   * rejected before any message owned them (e.g. the server refused the turn
+   * up front). Items already in the list are skipped by id so a concurrent
+   * draft does not end up with duplicates.
+   */
+  restoreChatUploadFileList = (contextKey: string, files: UploadFileItem[]): void => {
+    if (files.length === 0) return;
+
+    const currentIds = new Set(this.#getChatUploadFileList(contextKey).map((file) => file.id));
+    const restored = files.filter((file) => !currentIds.has(file.id));
+    if (restored.length === 0) return;
+
+    this.#get().dispatchChatUploadFileList(contextKey, { files: restored, type: 'addFiles' });
   };
 
-  removeChatUploadFile = async (id: string): Promise<void> => {
-    const { dispatchChatUploadFileList } = this.#get();
+  dispatchChatUploadFileList = (contextKey: string, payload: UploadFileListDispatch): void => {
+    const current = this.#getChatUploadFileList(contextKey);
+    const nextValue = uploadFileListReducer(current, payload);
+    if (nextValue === current) return;
 
-    dispatchChatUploadFileList({ id, type: 'removeFile' });
+    this.#setChatUploadFileList(contextKey, nextValue, `dispatchChatFileList/${payload.type}`);
+  };
+
+  /** Upload half of `moveChatComposerAttachments`. */
+  moveChatUploadFileList = (fromContextKey: string, toContextKey: string): void => {
+    if (fromContextKey === toContextKey) return;
+
+    // Uploads still being prepared follow the composer even before their chip exists.
+    for (const upload of this.#inFlightUploads) {
+      if (upload.contextKey === fromContextKey) upload.contextKey = toContextKey;
+    }
+
+    const source = this.#getChatUploadFileList(fromContextKey);
+    if (source.length === 0) return;
+
+    const sourceIds = new Set(source.map((file) => file.id));
+    const target = this.#getChatUploadFileList(toContextKey).filter(
+      (file) => !sourceIds.has(file.id),
+    );
+    const { [fromContextKey]: _removed, ...nextMap } = this.#get().chatUploadFileListByContext;
+
+    this.#set(
+      { chatUploadFileListByContext: { ...nextMap, [toContextKey]: [...target, ...source] } },
+      false,
+      n('moveChatUploadFileList'),
+    );
+  };
+
+  /**
+   * Carry everything a composer has staged — context selections and uploads —
+   * to another key, e.g. when a blank conversation becomes a real topic
+   * mid-send, so the composer at the new key still shows them.
+   */
+  moveChatComposerAttachments = (fromContextKey: string, toContextKey: string): void => {
+    this.moveChatContextSelections(fromContextKey, toContextKey);
+    this.moveChatUploadFileList(fromContextKey, toContextKey);
+  };
+
+  moveChatContextSelections = (fromContextKey: string, toContextKey: string): void => {
+    if (fromContextKey === toContextKey) return;
+
+    const currentMap = this.#get().chatContextSelectionsByContext;
+    const source = currentMap[fromContextKey];
+    if (!source || source.length === 0) return;
+
+    const sourceIds = new Set(source.map((item) => item.id));
+    const target = currentMap[toContextKey] ?? [];
+    const nextTarget = [...source, ...target.filter((item) => !sourceIds.has(item.id))];
+    const { [fromContextKey]: _removed, ...nextMap } = currentMap;
+
+    this.#set(
+      { chatContextSelectionsByContext: { ...nextMap, [toContextKey]: nextTarget } },
+      false,
+      n('moveChatContextSelections'),
+    );
+  };
+
+  removeChatContextSelection = ({ contextKey, id }: { contextKey: string; id: string }): void => {
+    const currentMap = this.#get().chatContextSelectionsByContext;
+    const current = currentMap[contextKey];
+    if (!current) return;
+
+    const next = current.filter((item) => item.id !== id);
+    if (next.length === 0) {
+      const { [contextKey]: _removed, ...nextMap } = currentMap;
+      this.#set(
+        { chatContextSelectionsByContext: nextMap },
+        false,
+        n('removeChatContextSelection'),
+      );
+      return;
+    }
+
+    this.#set(
+      { chatContextSelectionsByContext: { ...currentMap, [contextKey]: next } },
+      false,
+      n('removeChatContextSelection'),
+    );
+  };
+
+  restoreChatContextSelections = (contextKey: string, selections: ChatContextContent[]): void => {
+    if (selections.length === 0) return;
+
+    const currentMap = this.#get().chatContextSelectionsByContext;
+    const restoredIds = new Set(selections.map((item) => item.id));
+    const current = currentMap[contextKey] ?? [];
+    const next = [...selections, ...current.filter((item) => !restoredIds.has(item.id))];
+
+    this.#set(
+      { chatContextSelectionsByContext: { ...currentMap, [contextKey]: next } },
+      false,
+      n('restoreChatContextSelections'),
+    );
+  };
+
+  removeChatUploadFile = async (contextKey: string, id: string): Promise<void> => {
+    // Restored entries reference an already-persisted file that still backs the
+    // original message — only drop the draft item, never delete the file itself.
+    const item = this.#getChatUploadFileList(contextKey).find((entry) => entry.id === id);
+
+    this.#get().dispatchChatUploadFileList(contextKey, { id, type: 'removeFile' });
+
+    if (item?.skipRemoveFile) return;
+
+    // Share uploads are creator-owned rows the visitor's own file API cannot
+    // see; the share endpoint deletes them only while still unsent.
+    if (item?.shareId) {
+      // Only a settled upload has a server row to drop; a pending or failed
+      // draft is client-side only (its id is still the file name) and the
+      // share endpoint would just reject it.
+      if (item.status !== 'success') return;
+      await shareChatService.removeFile(item.shareId, id);
+      return;
+    }
+
     await fileService.removeFile(id);
+  };
+
+  retryChatUploadFile = async (contextKey: string, id: string): Promise<void> => {
+    const item = this.#getChatUploadFileList(contextKey).find((file) => file.id === id);
+    if (!item?.agentId) return;
+
+    this.#get().dispatchChatUploadFileList(contextKey, { id, type: 'removeFile' });
+    await this.uploadChatFiles(contextKey, [item.file], item.agentId, { shareId: item.shareId });
   };
 
   startAsyncTask = async (
@@ -142,8 +350,31 @@ export class FileActionImpl {
     }
   };
 
-  uploadChatFiles = async (rawFiles: File[], agentId: string): Promise<void> => {
-    const { dispatchChatUploadFileList } = this.#get();
+  uploadChatFiles = async (
+    contextKey: string,
+    rawFiles: File[],
+    agentId: string,
+    options: ChatUploadOptions = {},
+  ): Promise<void> => {
+    const { shareId } = options;
+    const upload = { contextKey };
+    this.#inFlightUploads.add(upload);
+    try {
+      await this.#uploadChatFilesTo(upload, rawFiles, agentId, shareId);
+    } finally {
+      this.#inFlightUploads.delete(upload);
+    }
+  };
+
+  #uploadChatFilesTo = async (
+    upload: { contextKey: string },
+    rawFiles: File[],
+    agentId: string,
+    shareId: string | undefined,
+  ): Promise<void> => {
+    // The chip may be handed to another key mid-upload; dispatch to wherever it is now.
+    const dispatchChatUploadFileList = (payload: UploadFileListDispatch) =>
+      this.#get().dispatchChatUploadFileList(upload.contextKey, payload);
     // 0. skip file in blacklist
     const filteredFiles = rawFiles.filter((file) => !FILE_UPLOAD_BLACKLIST.includes(file.name));
 
@@ -153,10 +384,16 @@ export class FileActionImpl {
     // whitelist must not apply there. We key off the conversation's own agent id rather
     // than the global current agent, because the chat input can be scoped to a different
     // agent than activeAgentId (e.g. another desktop tab). See lobehub/lobehub#15770.
+    //
+    // A share VISITOR never has the creator's agent in their agent store, so
+    // the selectors below would always say "plain chat" by accident. Make it
+    // explicit: share uploads are parsed on the creator's account, so only the
+    // parseable whitelist is ever accepted there.
     const agentState = getAgentStoreState();
     const enforceFileTypeWhitelist =
-      !agentByIdSelectors.getAgentEnableModeById(agentId)(agentState) &&
-      !agentByIdSelectors.isAgentHeterogeneousById(agentId)(agentState);
+      !!shareId ||
+      (!agentByIdSelectors.getAgentEnableModeById(agentId)(agentState) &&
+        !agentByIdSelectors.isAgentHeterogeneousById(agentId)(agentState));
 
     const { supportedFiles, unsupportedFiles } = enforceFileTypeWhitelist
       ? filterSupportedChatUploadFiles(filteredFiles)
@@ -171,11 +408,27 @@ export class FileActionImpl {
       );
     }
 
-    if (supportedFiles.length === 0) return;
+    // Share uploads land on the creator's storage: bounded per file, and
+    // rejected here rather than after the bytes were already pushed.
+    const tooLarge = shareId ? supportedFiles.filter((file) => isShareFileTooLarge(file)) : [];
+    if (tooLarge.length > 0) {
+      toast.error(
+        t('share.visitor.upload.fileTooLarge', {
+          max: formatShareUploadLimit(),
+          ns: 'agent',
+        }),
+      );
+    }
+    const admittedFiles =
+      tooLarge.length > 0
+        ? supportedFiles.filter((file) => !tooLarge.includes(file))
+        : supportedFiles;
+
+    if (admittedFiles.length === 0) return;
 
     // 1. compress images and add files with base64
     const files = await Promise.all(
-      supportedFiles.map((file) =>
+      admittedFiles.map((file) =>
         COMPRESSIBLE_IMAGE_TYPES.has(file.type) ? compressImageFile(file) : file,
       ),
     );
@@ -195,7 +448,15 @@ export class FileActionImpl {
           base64Url = `data:${file.type};base64,${base64}`;
         }
 
-        return { base64Url, file, id: file.name, previewUrl, status: 'pending' } as UploadFileItem;
+        return {
+          agentId,
+          base64Url,
+          file,
+          id: file.name,
+          previewUrl,
+          shareId,
+          status: 'pending',
+        } as UploadFileItem;
       }),
     );
 
@@ -206,25 +467,41 @@ export class FileActionImpl {
       let fileResult: { id: string; url: string } | undefined;
 
       try {
-        fileResult = await this.#get().uploadWithProgress({
-          file,
-          onStatusUpdate: dispatchChatUploadFileList,
-        });
+        fileResult = shareId
+          ? await uploadShareVisitorFile({
+              file,
+              onStatusUpdate: dispatchChatUploadFileList,
+              shareId,
+            })
+          : await this.#get().uploadWithProgress({
+              conversationAgentId: agentId,
+              file,
+              onStatusUpdate: dispatchChatUploadFileList,
+            });
       } catch (error) {
-        // skip `UNAUTHORIZED` error
-        if (getErrorMessage(error) !== 'UNAUTHORIZED')
-          notification.error({
-            description: getUploadErrorDescription(error),
-            message: t('upload.uploadFailed', { ns: 'error' }),
+        if (getErrorMessage(error) === 'UNAUTHORIZED') {
+          dispatchChatUploadFileList({ id: file.name, type: 'removeFile' });
+        } else {
+          dispatchChatUploadFileList({
+            id: file.name,
+            type: 'updateFile',
+            value: {
+              error: getUploadErrorDescription(error),
+              status: 'error',
+              uploadState: undefined,
+            },
           });
-
-        dispatchChatUploadFileList({ id: file.name, type: 'removeFile' });
+        }
       }
 
       if (!fileResult) return;
 
       // image don't need to be chunked and embedding
       if (isChunkingUnsupported(file.type)) return;
+
+      // A share file is creator-owned, so the visitor cannot pre-parse it; the
+      // run parses it on the creator's account when the turn is set up.
+      if (shareId) return;
 
       await ragService.parseFileContent(fileResult.id);
     });

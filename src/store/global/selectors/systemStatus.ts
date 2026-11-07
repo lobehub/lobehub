@@ -1,9 +1,72 @@
-import type { GlobalState, ModelDetailPanelExpandedKey } from '../initialState';
-import {
-  DEFAULT_HOME_SIDEBAR_EXPANDED_KEYS,
-  DEFAULT_MODEL_DETAIL_PANEL_EXPANDED_KEYS,
-  INITIAL_STATUS,
+import { type TopicGroupMode } from '@/types/topic';
+
+import type {
+  AgentDocumentSort,
+  DocsPageSectionKey,
+  DocsPageSectionView,
+  GlobalState,
+  ModelDetailPanelExpandedKey,
+  ProjectListSortBy,
+  ProjectTopicSubGroupMode,
+  SystemStatus,
+  WorkspaceOverridableField,
 } from '../initialState';
+import {
+  DEFAULT_DOCS_PAGE_SECTION_VIEW,
+  DEFAULT_HOME_SIDEBAR_EXPANDED_KEYS,
+  INITIAL_STATUS,
+  MODEL_DETAIL_PANEL_EXPANDABLE_KEYS,
+  WORKSPACE_OVERRIDABLE_FIELDS,
+} from '../initialState';
+
+/**
+ * Read a workspace-overridable field from SystemStatus.
+ * When `workspaceId` is non-null and the overlay carries the field, returns the overlay
+ * value; otherwise falls back to the top-level (personal mode) value.
+ */
+export const readOverridableField = <K extends WorkspaceOverridableField>(
+  status: SystemStatus,
+  field: K,
+  workspaceId: string | null,
+): SystemStatus[K] => {
+  if (workspaceId) {
+    const overlay = status.workspace?.[field];
+    if (overlay !== undefined) return overlay as SystemStatus[K];
+  }
+  return status[field];
+};
+
+const OVERRIDABLE_SET = new Set<string>(WORKSPACE_OVERRIDABLE_FIELDS);
+
+/**
+ * Reshape an `updateSystemStatus` patch when the user is inside a workspace:
+ * whitelisted fields land in `workspace.*` so they do not bleed into personal
+ * mode. Non-whitelisted fields stay at the top level. An explicit `workspace`
+ * key in the patch is preserved and merged with the routed overlay.
+ *
+ * Pass `workspaceId = null` to bypass routing (init path, personal mode).
+ */
+export const routeOverlayWrites = (
+  patch: Partial<SystemStatus>,
+  workspaceId: string | null,
+): Partial<SystemStatus> => {
+  if (!workspaceId) return patch;
+
+  const { workspace: explicitOverlay, ...rest } = patch;
+  const overlayUpdates: Partial<Pick<SystemStatus, WorkspaceOverridableField>> = {};
+  const topLevel: Partial<SystemStatus> = {};
+
+  for (const key of Object.keys(rest)) {
+    if (OVERRIDABLE_SET.has(key)) {
+      (overlayUpdates as any)[key] = (rest as any)[key];
+    } else {
+      (topLevel as any)[key] = (rest as any)[key];
+    }
+  }
+
+  const overlay = { ...explicitOverlay, ...overlayUpdates };
+  return Object.keys(overlay).length > 0 ? { ...topLevel, workspace: overlay } : topLevel;
+};
 
 export const systemStatus = (s: GlobalState) => s.status;
 
@@ -21,19 +84,67 @@ const normalizeNavPanelWidth = (width: number | string | undefined): number => {
 
 const agentBuilderPanelWidth = (s: GlobalState) => s.status.agentBuilderPanelWidth || 360;
 
-const sessionGroupKeys = (s: GlobalState): string[] =>
-  s.status.expandSessionGroupKeys || INITIAL_STATUS.expandSessionGroupKeys;
+const sessionGroupKeys =
+  (workspaceId: string | null) =>
+  (s: GlobalState): string[] => {
+    const value = readOverridableField(s.status, 'expandSessionGroupKeys', workspaceId);
+    return value || INITIAL_STATUS.expandSessionGroupKeys;
+  };
 
-const topicGroupKeys = (s: GlobalState): string[] | undefined => s.status.expandTopicGroupKeys;
+const collapsedTopicGroupKeys =
+  (mode: TopicGroupMode) =>
+  (s: GlobalState): string[] | undefined =>
+    s.status.collapsedTopicGroupKeysByMode?.[mode];
+
+const docsPageSectionView =
+  (section: DocsPageSectionKey) =>
+  (s: GlobalState): DocsPageSectionView => {
+    const stored = s.status.docsPageSectionViews?.[section];
+    return stored
+      ? { ...DEFAULT_DOCS_PAGE_SECTION_VIEW, ...stored }
+      : DEFAULT_DOCS_PAGE_SECTION_VIEW;
+  };
+
+const projectTopicSubGroupMode =
+  (groupId: string) =>
+  (s: GlobalState): ProjectTopicSubGroupMode =>
+    s.status.projectTopicSubGroupModeByGroup?.[groupId] ?? 'none';
 
 const agentSidebarSections =
   (agentId: string | undefined) =>
   (s: GlobalState): Record<string, boolean> | undefined =>
     agentId ? s.status.expandAgentSidebarSectionsByAgent?.[agentId] : undefined;
 
-const topicPageSize = (s: GlobalState): number => s.status.topicPageSize || 20;
+const projectSidebarSections =
+  (projectId: string | undefined) =>
+  (s: GlobalState): Record<string, boolean> | undefined =>
+    projectId ? s.status.expandProjectSidebarSectionsByProject?.[projectId] : undefined;
+
+const projectOnboardingDismissed =
+  (projectId: string | undefined) =>
+  (s: GlobalState): boolean =>
+    Boolean(projectId && s.status.dismissedProjectOnboarding?.[projectId]);
+
+/** Whether the topic list owned by `ownerId` (agent / group / project) shows only my topics. */
+const topicOnlyMine =
+  (ownerId: string | undefined) =>
+  (s: GlobalState): boolean =>
+    !!ownerId && !!s.status.topicOnlyMineByAgent?.[ownerId];
+
+/** Upper bound of `topic.getTopics`'s `pageSize` input on the server. */
+export const MAX_TOPIC_PAGE_SIZE = 100;
+
+/**
+ * Clamped to the server's cap: the project sidebar's "load more" used to grow
+ * the persisted value past 100, after which every topic list request failed
+ * validation. Clamping on read recovers users who already persisted it.
+ */
+const topicPageSize = (s: GlobalState): number =>
+  Math.min(s.status.topicPageSize || 20, MAX_TOPIC_PAGE_SIZE);
 
 const agentPageSize = (s: GlobalState): number => s.status.agentPageSize || 5;
+
+const privateAgentPageSize = (s: GlobalState): number => s.status.privateAgentPageSize || 5;
 
 const recentPageSize = (s: GlobalState): number => s.status.recentPageSize || 5;
 
@@ -41,15 +152,28 @@ const pagePageSize = (s: GlobalState): number => s.status.pagePageSize || 20;
 const taskListViewOptions = (s: GlobalState) =>
   s.status.taskListViewOptions || {
     groupBy: 'status',
-    hideCompleted: true,
+    nestedSubTasks: true,
     orderBy: 'updatedAt',
     orderCompletedByRecency: true,
     orderDirection: 'asc',
+    showSubTasks: false,
     subGroupBy: 'none',
   };
 
+const EMPTY_TASK_LIST_FILTERS: NonNullable<GlobalState['status']['taskListFilters']> = [];
+
+const taskListFilters = (s: GlobalState) => s.status.taskListFilters ?? EMPTY_TASK_LIST_FILTERS;
+
+const taskListFilter = (scope: string) => (s: GlobalState) =>
+  taskListFilters(s).find((entry) => entry.scope === scope)?.filter;
+
+const taskListViewMode = (s: GlobalState) => s.status.taskListViewMode ?? 'list';
+
+// Default the inline composer to collapsed so a populated task list keeps the
+// records at the top of the fold; the empty-state hero still shows the full
+// composer, and the header "+" expands it inline on demand.
 const taskCreateInlineCollapsed = (s: GlobalState): boolean =>
-  s.status.taskCreateInlineCollapsed ?? false;
+  s.status.taskCreateInlineCollapsed ?? true;
 
 export const DEFAULT_KANBAN_HIDDEN_COLUMNS: string[] = ['done', 'canceled'];
 
@@ -61,11 +185,43 @@ const taskKanbanHiddenPanelCollapsed = (s: GlobalState): boolean =>
 
 export const DEFAULT_HIDDEN_SECTIONS: string[] = [];
 
-const hiddenSidebarSections = (s: GlobalState): string[] =>
-  s.status.hiddenSidebarSections ?? DEFAULT_HIDDEN_SECTIONS;
+/** Sections hidden by default in workspace mode until the user customizes
+ * sidebar visibility. `recents` lives in personal mode where the catch-all
+ * stream is useful, but in a workspace the agent/project lists are the
+ * primary entry points — surfacing recents on top adds noise. */
+export const WORKSPACE_DEFAULT_HIDDEN_SECTIONS: string[] = ['recents'];
 
-const sidebarExpandedKeys = (s: GlobalState): string[] =>
-  s.status.sidebarExpandedKeys ?? DEFAULT_HOME_SIDEBAR_EXPANDED_KEYS;
+/** Sections hidden by default for the given mode. The customize-sidebar
+ * "Reset to default" path uses this so resetting in a workspace restores
+ * the workspace defaults, not the empty personal-mode defaults. */
+export const getDefaultHiddenSections = (isWorkspaceMode: boolean): string[] =>
+  isWorkspaceMode ? [...WORKSPACE_DEFAULT_HIDDEN_SECTIONS] : DEFAULT_HIDDEN_SECTIONS;
+
+const hiddenSidebarSections =
+  (workspaceId: string | null) =>
+  (s: GlobalState): string[] => {
+    if (workspaceId) {
+      const overlay = s.status.workspace?.hiddenSidebarSections;
+      // Once the user touches sidebar visibility in this workspace the overlay
+      // owns the list — including an explicit empty array meaning "show all".
+      if (overlay !== undefined) return overlay;
+      // Untouched workspace: inherit any personal-mode hides and layer the
+      // workspace defaults on top so `recents` starts collapsed.
+      const personal = s.status.hiddenSidebarSections ?? DEFAULT_HIDDEN_SECTIONS;
+      const merged = [...personal];
+      for (const k of WORKSPACE_DEFAULT_HIDDEN_SECTIONS) {
+        if (!merged.includes(k)) merged.push(k);
+      }
+      return merged;
+    }
+    return s.status.hiddenSidebarSections ?? DEFAULT_HIDDEN_SECTIONS;
+  };
+
+const sidebarExpandedKeys =
+  (workspaceId: string | null) =>
+  (s: GlobalState): string[] =>
+    readOverridableField(s.status, 'sidebarExpandedKeys', workspaceId) ??
+    DEFAULT_HOME_SIDEBAR_EXPANDED_KEYS;
 
 /** Sentinel id representing the flex spacer slot. Its position in `sidebarItems`
  * determines where the sidebar pushes items to the bottom. */
@@ -73,18 +229,24 @@ export const SIDEBAR_SPACER_ID = '__spacer__';
 
 export const DEFAULT_SIDEBAR_ITEMS: string[] = [
   'tasks',
-  'pages',
+  'goals',
+  'project',
+  'dashboard',
+  'resource',
+  'favorites',
   'recents',
+  'private',
   'agent',
   SIDEBAR_SPACER_ID,
   'image',
   'community',
-  'resource',
   'memory',
 ];
 
-/** Items that must stay contiguous in the sidebar list (accordion block). */
-export const SIDEBAR_ACCORDION_KEYS = new Set(['recents', 'agent']);
+/** Items that must stay contiguous in the sidebar list (accordion block).
+ * `private` sits above `agent` so workspace users see their personal items
+ * first, with the workspace-shared agents right below. */
+export const SIDEBAR_ACCORDION_KEYS = new Set(['favorites', 'recents', 'private', 'agent']);
 
 const DEFAULT_BOTTOM_KEYS = new Set(
   DEFAULT_SIDEBAR_ITEMS.slice(DEFAULT_SIDEBAR_ITEMS.indexOf(SIDEBAR_SPACER_ID) + 1),
@@ -119,13 +281,44 @@ const normalizeSpacerPosition = (order: string[]): string[] => {
   return [...withoutSpacer.slice(0, insertAt), SIDEBAR_SPACER_ID, ...withoutSpacer.slice(insertAt)];
 };
 
+// Projects used to be an accordion listing every project; it is now a single
+// link to the project list. Saved orders still hold `project` inside the
+// accordion block, where a link would split the block in two, so move it up to
+// sit after Goals (or Tasks) like the other top links, or just above the block
+// when neither is up there. A spot the user picked outside the block is kept.
+const liftProjectOutOfAccordion = (order: string[]): string[] => {
+  const projectIndex = order.indexOf('project');
+  if (projectIndex === -1) return order;
+
+  const firstAccordionIndex = order.findIndex((k) => SIDEBAR_ACCORDION_KEYS.has(k));
+  if (firstAccordionIndex === -1 || projectIndex < firstAccordionIndex) return order;
+  // The block runs up to the spacer, or to its last section in orders saved
+  // without one.
+  const spacerIndex = order.indexOf(SIDEBAR_SPACER_ID);
+  const blockEnd =
+    spacerIndex === -1
+      ? order.findLastIndex((k) => SIDEBAR_ACCORDION_KEYS.has(k)) + 1
+      : spacerIndex;
+  if (projectIndex > blockEnd) return order;
+
+  const without = order.filter((k) => k !== 'project');
+  const blockStart = without.findIndex((k) => SIDEBAR_ACCORDION_KEYS.has(k));
+  // Goals, else Tasks, may have been dragged below the spacer; then stay above the block.
+  const anchor = ['goals', 'tasks']
+    .map((k) => without.indexOf(k))
+    .find((i) => i !== -1 && i < blockStart);
+  const insertAt = anchor === undefined ? blockStart : anchor + 1;
+  return [...without.slice(0, insertAt), 'project', ...without.slice(insertAt)];
+};
+
 // Backfill missing default keys into their canonical group — top-group defaults
 // slot in just before the accordion (keeping accordion flush with the spacer),
 // bottom-group defaults go after the spacer. Without this split a new top-group
 // default added in a future version would silently appear in the bottom group
 // for existing users.
 const withAllKnownKeys = (order: string[]): string[] => {
-  const present = new Set(order);
+  const nextOrder = liftProjectOutOfAccordion(order);
+  const present = new Set(nextOrder);
   const missingTop: string[] = [];
   const missingBottom: string[] = [];
   for (const k of DEFAULT_SIDEBAR_ITEMS) {
@@ -133,7 +326,7 @@ const withAllKnownKeys = (order: string[]): string[] => {
     (DEFAULT_BOTTOM_KEYS.has(k) ? missingBottom : missingTop).push(k);
   }
 
-  const withSpacer = normalizeSpacerPosition(order);
+  const withSpacer = normalizeSpacerPosition(nextOrder);
   if (missingTop.length === 0 && missingBottom.length === 0) return withSpacer;
 
   const spacerIdx = withSpacer.indexOf(SIDEBAR_SPACER_ID);
@@ -225,68 +418,102 @@ export const reorderSidebarItems = (items: string[], from: number, to: number): 
   return arraysEqual(normalized, items) ? items : normalized;
 };
 
-const sidebarItems = (s: GlobalState): string[] => {
-  const items = s.status.sidebarItems;
-  if (items && items.length > 0) return withAllKnownKeys(items);
+const sidebarItems =
+  (workspaceId: string | null) =>
+  (s: GlobalState): string[] => {
+    const items = readOverridableField(s.status, 'sidebarItems', workspaceId);
+    if (items && items.length > 0) return withAllKnownKeys(items);
 
-  // Migrate from the legacy `sidebarSectionOrder` (canary) which only stored the
-  // accordion order (e.g. ['agent', 'recents']). Apply that order to the accordion
-  // slot inside the default list so users keep their custom accordion arrangement.
-  const legacy = s.status.sidebarSectionOrder;
-  if (legacy && legacy.length > 0) {
-    const legacyAcc = legacy.filter((k) => SIDEBAR_ACCORDION_KEYS.has(k));
-    if (legacyAcc.length > 0) {
-      const seen = new Set<string>();
-      const merged: string[] = [];
-      for (const k of DEFAULT_SIDEBAR_ITEMS) {
-        if (SIDEBAR_ACCORDION_KEYS.has(k)) {
-          for (const lk of legacyAcc) {
-            if (!seen.has(lk)) {
-              merged.push(lk);
-              seen.add(lk);
+    // Migrate from the legacy `sidebarSectionOrder` (canary) which only stored the
+    // accordion order (e.g. ['agent', 'recents']). Apply that order to the accordion
+    // slot inside the default list so users keep their custom accordion arrangement.
+    const legacy = s.status.sidebarSectionOrder;
+    if (legacy && legacy.length > 0) {
+      const legacyAcc = legacy.filter((k) => SIDEBAR_ACCORDION_KEYS.has(k));
+      if (legacyAcc.length > 0) {
+        const seen = new Set<string>();
+        const merged: string[] = [];
+        for (const k of DEFAULT_SIDEBAR_ITEMS) {
+          if (SIDEBAR_ACCORDION_KEYS.has(k)) {
+            for (const lk of legacyAcc) {
+              if (!seen.has(lk)) {
+                merged.push(lk);
+                seen.add(lk);
+              }
             }
+          } else if (!seen.has(k)) {
+            merged.push(k);
+            seen.add(k);
           }
-        } else if (!seen.has(k)) {
-          merged.push(k);
-          seen.add(k);
         }
+        return withAllKnownKeys(merged);
       }
-      return withAllKnownKeys(merged);
     }
-  }
 
-  return DEFAULT_SIDEBAR_ITEMS;
-};
+    return DEFAULT_SIDEBAR_ITEMS;
+  };
 const showSystemRole = (s: GlobalState) => s.status.showSystemRole;
 const mobileShowTopic = (s: GlobalState) => s.status.mobileShowTopic;
 const mobileShowPortal = (s: GlobalState) => s.status.mobileShowPortal;
 const showAgentBuilderPanel = (s: GlobalState) => s.status.showAgentBuilderPanel;
+const showHomeRail = (s: GlobalState) => s.status.showHomeRail ?? false;
+const showHomePortrait = (s: GlobalState) => s.status.showHomePortrait ?? true;
+const hiddenHomeWidgets = (s: GlobalState): string[] => s.status.hiddenHomeWidgets ?? [];
+const homeGoalsCollapsed = (s: GlobalState): boolean => s.status.homeGoalsCollapsed ?? false;
+const homeRecentsCount = (s: GlobalState): number => s.status.homeRecentsCount ?? 8;
+const homeTaskCount = (s: GlobalState): number => s.status.homeTaskCount ?? 8;
 const showRightPanel = (s: GlobalState) => s.status.showRightPanel;
+const showWorkingOverview = (s: GlobalState) =>
+  s.status.showWorkingOverview ?? !s.status.showRightPanel;
 const showLeftPanel = (s: GlobalState) => s.status.showLeftPanel;
 const showPageAgentPanel = (s: GlobalState) => s.status.showPageAgentPanel;
 const showTaskAgentPanel = (s: GlobalState) => s.status.showTaskAgentPanel;
+const showTerminalPanel = (s: GlobalState) => s.status.showTerminalPanel;
+const terminalPanelHeight = (s: GlobalState) => s.status.terminalPanelHeight || 320;
 const showFilePanel = (s: GlobalState) => s.status.showFilePanel;
+const showVerifyReportPanel = (s: GlobalState) => s.status.showVerifyReportPanel ?? true;
 const showImagePanel = (s: GlobalState) => s.status.showImagePanel;
 const showImageTopicPanel = (s: GlobalState) => s.status.showImageTopicPanel;
 const hidePWAInstaller = (s: GlobalState) => s.status.hidePWAInstaller;
 const isShowCredit = (s: GlobalState) => s.status.isShowCredit;
 const language = (s: GlobalState) => s.status.language || 'auto';
-const modelDetailPanelExpandedKeys = (s: GlobalState): ModelDetailPanelExpandedKey[] =>
-  s.status.modelDetailPanelExpandedKeys ?? [...DEFAULT_MODEL_DETAIL_PANEL_EXPANDED_KEYS];
-const modelSwitchPanelGroupMode = (s: GlobalState) =>
-  s.status.modelSwitchPanelGroupMode || 'byProvider';
+const modelDetailPanelExpandedKeys = (s: GlobalState): ModelDetailPanelExpandedKey[] => {
+  const collapsedKeys = s.status.modelDetailPanelCollapsedKeys ?? [];
+
+  return MODEL_DETAIL_PANEL_EXPANDABLE_KEYS.filter((key) => !collapsedKeys.includes(key));
+};
+// Reads only the user-written key; the legacy `modelSwitchPanelGroupMode`
+// was seeded into persisted status and must not influence the default.
+const modelSwitchPanelGroupMode = (s: GlobalState) => s.status.modelSwitchPanelGroupBy || 'byModel';
 const modelSwitchPanelWidth = (s: GlobalState) => s.status.modelSwitchPanelWidth || 460;
 const pageAgentPanelWidth = (s: GlobalState) => s.status.pageAgentPanelWidth || 360;
+const workingSidebarWidth = (s: GlobalState) => s.status.workingSidebarWidth || 360;
 
 const leftPanelWidth = (s: GlobalState): number => {
   return normalizeNavPanelWidth(s.status.leftPanelWidth);
 };
 const portalWidth = (s: GlobalState) => s.status.portalWidth || 400;
+const portalWidths = (s: GlobalState) => s.status.portalWidths;
 const filePanelWidth = (s: GlobalState) => s.status.filePanelWidth;
 const groupAgentBuilderPanelWidth = (s: GlobalState) => s.status.groupAgentBuilderPanelWidth || 360;
 const imagePanelWidth = (s: GlobalState) => s.status.imagePanelWidth;
+const agentListViewMode = (s: GlobalState) => s.status.agentListViewMode || 'card';
+const DEFAULT_AGENT_DOCUMENT_SORT: AgentDocumentSort = {
+  by: 'name',
+  foldersFirst: true,
+  order: 'asc',
+};
+const projectListSortBy = (s: GlobalState): ProjectListSortBy =>
+  s.status.projectListSortBy ?? 'manual';
+const agentDocumentSort = (s: GlobalState): AgentDocumentSort =>
+  s.status.agentDocumentSort ?? DEFAULT_AGENT_DOCUMENT_SORT;
+const agentListViewOptions = (s: GlobalState) => s.status.agentListViewOptions;
+const agentListExpandedGroupKeys = (s: GlobalState) => s.status.agentListExpandedGroupKeys ?? [];
+const agentListSidebarSectionCollapsed = (s: GlobalState) =>
+  s.status.agentListSidebarSectionCollapsed ?? false;
 const imageTopicViewMode = (s: GlobalState) => s.status.imageTopicViewMode || 'grid';
 const imageTopicPanelWidth = (s: GlobalState) => s.status.imageTopicPanelWidth;
+const verifyReportPanelWidth = (s: GlobalState) => s.status.verifyReportPanelWidth || 300;
 const videoPanelWidth = (s: GlobalState) => s.status.videoPanelWidth;
 const videoTopicViewMode = (s: GlobalState) => s.status.videoTopicViewMode || 'grid';
 const videoTopicPanelWidth = (s: GlobalState) => s.status.videoTopicPanelWidth;
@@ -328,17 +555,28 @@ const homeSelectedAgentId = (s: GlobalState) => s.status.homeSelectedAgentId;
 
 export const systemStatusSelectors = {
   agentBuilderPanelWidth,
+  agentDocumentSort,
+  projectListSortBy,
+  agentListExpandedGroupKeys,
+  agentListSidebarSectionCollapsed,
+  agentListViewMode,
+  agentListViewOptions,
   agentPageSize,
   chatInputHeight,
   disabledModelProvidersSortType,
   disabledModelsSortType,
   expandInputActionbar,
+  docsPageSectionView,
   filePanelWidth,
   getAgentSystemRoleExpanded,
   groupAgentBuilderPanelWidth,
+  hiddenHomeWidgets,
   hiddenSidebarSections,
   hidePWAInstaller,
+  homeGoalsCollapsed,
+  homeRecentsCount,
   homeSelectedAgentId,
+  homeTaskCount,
   imagePanelWidth,
   imageTopicViewMode,
   imageTopicPanelWidth,
@@ -356,17 +594,26 @@ export const systemStatusSelectors = {
   pageAgentPanelWidth,
   pagePageSize,
   portalWidth,
+  portalWidths,
+  privateAgentPageSize,
   recentPageSize,
   taskCreateInlineCollapsed,
   taskKanbanHiddenColumns,
   taskKanbanHiddenPanelCollapsed,
+  taskListViewMode,
+  taskListFilter,
+  taskListFilters,
   taskListViewOptions,
   sidebarExpandedKeys,
   agentSidebarSections,
+  projectOnboardingDismissed,
+  projectSidebarSections,
   sidebarItems,
   sessionGroupKeys,
   showAgentBuilderPanel,
   showFilePanel,
+  showHomePortrait,
+  showHomeRail,
   showImagePanel,
   showImageTopicPanel,
   showLeftPanel,
@@ -374,14 +621,22 @@ export const systemStatusSelectors = {
   showRightPanel,
   showSystemRole,
   showTaskAgentPanel,
+  showWorkingOverview,
+  showTerminalPanel,
+  showVerifyReportPanel,
   showVideoPanel,
   showVideoTopicPanel,
   systemStatus,
+  terminalPanelHeight,
+  verifyReportPanelWidth,
   tokenDisplayFormatShort,
-  topicGroupKeys,
+  collapsedTopicGroupKeys,
+  projectTopicSubGroupMode,
+  topicOnlyMine,
   topicPageSize,
   videoPanelWidth,
   videoTopicViewMode,
   videoTopicPanelWidth,
   wideScreen,
+  workingSidebarWidth,
 };

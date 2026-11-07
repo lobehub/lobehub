@@ -1,34 +1,21 @@
+import { toast } from '@lobehub/ui';
 import { act, renderHook } from '@testing-library/react';
-import type * as AntdModule from 'antd';
-import { App } from 'antd';
 import { type Mock } from 'vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { useVisualMediaUploadAbility } from '@/hooks/useVisualMediaUploadAbility';
+import { useMediaUploadAbility } from '@/hooks/useMediaUploadAbility';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 
 import { getContainer, useDragUpload } from './useDragUpload';
 
 // Mock the hooks and components
-vi.mock('@/hooks/useVisualMediaUploadAbility');
+vi.mock('@/hooks/useMediaUploadAbility');
 vi.mock('@/store/agent');
-vi.mock('antd', async () => {
-  const actual = await vi.importActual<typeof AntdModule>('antd');
-  const mockWarning = vi.fn();
-
-  return {
-    ...actual,
-    App: {
-      ...actual.App,
-      useApp: () => ({
-        message: {
-          warning: mockWarning,
-        },
-      }),
-    },
-  };
-});
+vi.mock('@lobehub/ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  ...(await import('~base-ui-stubs')).baseUiStubs,
+}));
 
 describe('useDragUpload', () => {
   let mockOnUploadFiles: Mock;
@@ -39,7 +26,7 @@ describe('useDragUpload', () => {
     document.body.innerHTML = '';
 
     // Mock the hooks
-    (useVisualMediaUploadAbility as Mock).mockReturnValue({
+    (useMediaUploadAbility as Mock).mockReturnValue({
       canUploadImage: false,
       canUploadVideo: false,
     });
@@ -207,7 +194,7 @@ describe('useDragUpload', () => {
   });
 
   it('should allow image files when vision is supported', async () => {
-    (useVisualMediaUploadAbility as Mock).mockReturnValue({
+    (useMediaUploadAbility as Mock).mockReturnValue({
       canUploadImage: true,
       canUploadVideo: false,
     });
@@ -237,11 +224,11 @@ describe('useDragUpload', () => {
     });
 
     expect(mockOnUploadFiles).toHaveBeenCalledWith([mockImageFile]);
-    expect(App.useApp().message.warning).not.toHaveBeenCalled();
+    expect(toast.warning).not.toHaveBeenCalled();
   });
 
   it('should allow image files when visual understanding fallback is enabled', async () => {
-    (useVisualMediaUploadAbility as Mock).mockReturnValue({
+    (useMediaUploadAbility as Mock).mockReturnValue({
       canUploadImage: true,
       canUploadVideo: true,
     });
@@ -267,7 +254,7 @@ describe('useDragUpload', () => {
     });
 
     expect(mockOnUploadFiles).toHaveBeenCalledWith([mockImageFile]);
-    expect(App.useApp().message.warning).not.toHaveBeenCalled();
+    expect(toast.warning).not.toHaveBeenCalled();
   });
 });
 

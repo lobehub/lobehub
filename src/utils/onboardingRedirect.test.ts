@@ -6,7 +6,9 @@ import {
   consumeOnboardingCallbackUrl,
   isSafeRedirectPath,
   peekOnboardingCallbackUrl,
+  resolvePostOnboardingTargetUrl,
   stashOnboardingCallbackUrl,
+  toAbsoluteAuthCallbackUrl,
 } from './onboardingRedirect';
 
 beforeEach(() => {
@@ -29,6 +31,26 @@ describe('isSafeRedirectPath', () => {
     expect(isSafeRedirectPath('/\\evil.com')).toBe(false);
     expect(isSafeRedirectPath('/\\/evil.com')).toBe(false);
     expect(isSafeRedirectPath('/foo\\bar')).toBe(false);
+  });
+});
+
+describe('toAbsoluteAuthCallbackUrl', () => {
+  const authOrigin = 'https://auth.example.com';
+
+  it('should bind safe relative paths to the current auth origin', () => {
+    expect(toAbsoluteAuthCallbackUrl('/', authOrigin)).toBe(`${authOrigin}/`);
+    expect(toAbsoluteAuthCallbackUrl('/workspace?tab=members', authOrigin)).toBe(
+      `${authOrigin}/workspace?tab=members`,
+    );
+  });
+
+  it.each([
+    'https://app.example.com/workspace',
+    'com.lobehub.app:///auth/callback',
+    '//evil.com/callback',
+    '/\\evil.com',
+  ])('should preserve non-relative callback %s', (callbackUrl) => {
+    expect(toAbsoluteAuthCallbackUrl(callbackUrl, authOrigin)).toBe(callbackUrl);
   });
 });
 
@@ -95,6 +117,26 @@ describe('stash/peek/consumeOnboardingCallbackUrl', () => {
     stashOnboardingCallbackUrl('?entry=skip');
 
     expect(peekOnboardingCallbackUrl()).toBe('/discover');
+  });
+});
+
+describe('resolvePostOnboardingTargetUrl', () => {
+  it('should preserve an explicit task-mode callback', () => {
+    stashOnboardingCallbackUrl('?callbackUrl=%2F%3Fonboarding%3Dtask');
+
+    expect(resolvePostOnboardingTargetUrl()).toBe('/?onboarding=task');
+    expect(peekOnboardingCallbackUrl()).toBeUndefined();
+  });
+
+  it('should use the stashed callbackUrl when one exists', () => {
+    stashOnboardingCallbackUrl('?callbackUrl=%2Fagent%2Fabc%3Fmessage%3Dhi');
+
+    expect(resolvePostOnboardingTargetUrl()).toBe('/agent/abc?message=hi');
+    expect(peekOnboardingCallbackUrl()).toBeUndefined();
+  });
+
+  it('should return the default home without opting into task mode when no callbackUrl exists', () => {
+    expect(resolvePostOnboardingTargetUrl()).toBe('/');
   });
 });
 

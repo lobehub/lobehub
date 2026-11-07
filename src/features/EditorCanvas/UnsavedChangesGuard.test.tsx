@@ -11,22 +11,9 @@ const messageLoadingMock = vi.hoisted(() => vi.fn());
 const messageDestroyMock = vi.hoisted(() => vi.fn());
 const messageErrorMock = vi.hoisted(() => vi.fn());
 
-vi.mock('antd', () => ({
-  App: {
-    useApp: () => ({
-      message: {
-        destroy: messageDestroyMock,
-        error: messageErrorMock,
-        loading: messageLoadingMock,
-      },
-    }),
-  },
-}));
-
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string) => key,
-  }),
+vi.mock('@lobehub/ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  toast: { error: messageErrorMock, loading: messageLoadingMock },
 }));
 
 vi.mock('react-router', async () => {
@@ -68,6 +55,7 @@ describe('UnsavedChangesGuard', () => {
     messageLoadingMock.mockReset();
     messageDestroyMock.mockReset();
     messageErrorMock.mockReset();
+    messageLoadingMock.mockReturnValue({ close: messageDestroyMock });
     useBlockerMock.mockReturnValue(createMockBlocker('unblocked'));
   });
 
@@ -82,9 +70,7 @@ describe('UnsavedChangesGuard', () => {
 
     await waitFor(() => {
       expect(onAutoSave).toHaveBeenCalledTimes(1);
-      expect(messageLoadingMock).toHaveBeenCalledWith(
-        expect.objectContaining({ content: 'pageEditor.saving', duration: 0 }),
-      );
+      expect(messageLoadingMock).toHaveBeenCalledWith('pageEditor.saving');
       expect(messageDestroyMock).toHaveBeenCalled();
       expect(blocker.proceed).toHaveBeenCalledTimes(1);
       expect(blocker.reset).not.toHaveBeenCalled();
@@ -101,7 +87,7 @@ describe('UnsavedChangesGuard', () => {
     await waitFor(() => {
       expect(onAutoSave).toHaveBeenCalledTimes(1);
       expect(messageErrorMock).toHaveBeenCalledWith(
-        expect.objectContaining({ content: 'networkError' }),
+        expect.objectContaining({ description: 'pageEditor.saveFailed' }),
       );
       expect(blocker.reset).toHaveBeenCalledTimes(1);
       expect(blocker.proceed).not.toHaveBeenCalled();
@@ -117,7 +103,7 @@ describe('UnsavedChangesGuard', () => {
 
     await waitFor(() => {
       expect(messageErrorMock).toHaveBeenCalledWith(
-        expect.objectContaining({ content: 'save failed' }),
+        expect.objectContaining({ description: 'save failed' }),
       );
       expect(blocker.reset).toHaveBeenCalledTimes(1);
       expect(blocker.proceed).not.toHaveBeenCalled();

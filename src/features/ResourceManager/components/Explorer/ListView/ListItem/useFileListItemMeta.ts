@@ -3,7 +3,7 @@ import dayjs from 'dayjs';
 import { useMemo } from 'react';
 
 import { PAGE_FILE_TYPE } from '@/features/ResourceManager/constants';
-import { isChunkingUnsupported } from '@/utils/isChunkingUnsupported';
+import { isChunkingSupported } from '@/libs/document-loaders/loaderType';
 
 interface UseFileListItemMetaOptions {
   createdAt: Date;
@@ -49,6 +49,6 @@ export const useFileListItemMeta = ({
         !isPDF &&
         !isOfficeFile &&
         (sourceType === DERIVED_DOCUMENT_SOURCE_TYPE || fileType === PAGE_FILE_TYPE),
-      isSupportedForChunking: !isChunkingUnsupported(fileType),
+      isSupportedForChunking: isChunkingSupported({ fileType, name }),
     };
   }, [createdAt, fileType, metadata?.emoji, name, sourceType]);

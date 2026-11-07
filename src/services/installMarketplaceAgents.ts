@@ -1,19 +1,49 @@
 import type { InstallMarketplaceAgentSummary } from '@lobechat/builtin-tool-web-onboarding/agentMarketplace';
+import type { DiscoverAssistantDetail } from '@lobechat/types';
 import { customAlphabet } from 'nanoid/non-secure';
 
+import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import { lambdaClient } from '@/libs/trpc/client';
 import { agentService } from '@/services/agent';
 import { discoverService } from '@/services/discover';
+import { ensureAgentMarketSkillsAndWarn } from '@/services/ensureAgentMarketSkills';
 import { marketApiService } from '@/services/marketApi';
 import { useAgentStore } from '@/store/agent';
 import { useHomeStore } from '@/store/home';
 
 export type { InstallMarketplaceAgentSummary };
 
-const generateMarketIdentifier = () => {
+export const generateMarketIdentifier = () => {
   const alphabet = '0123456789abcdefghijklmnopqrstuvwxyz';
   const generate = customAlphabet(alphabet, 8);
   return generate();
 };
+
+/** Local agent config for the Market agent `sourceId`. */
+export const buildMarketAgentConfig = (detail: DiscoverAssistantDetail, sourceId: string) => ({
+  ...detail.config,
+  avatar: detail.avatar,
+  backgroundColor: detail.backgroundColor,
+  description: detail.description,
+  editorData: detail.editorData,
+  params: {
+    ...detail.config.params,
+    forkedFromIdentifier: sourceId,
+  },
+  tags: detail.tags,
+  title: detail.title,
+});
+
+/** Local agent config for a Market fork of `sourceId`, as every install entry builds it. */
+export const buildForkedAgentConfig = (
+  detail: DiscoverAssistantDetail,
+  fork: { identifier: string; name: string },
+  sourceId: string,
+) => ({
+  ...buildMarketAgentConfig(detail, sourceId),
+  marketIdentifier: fork.identifier,
+  title: fork.name,
+});
 
 const getSourcePath = () => {
   if (typeof location === 'undefined') return 'onboarding/agent-marketplace';
@@ -22,13 +52,32 @@ const getSourcePath = () => {
 };
 
 export interface InstallMarketplaceAgentsResult {
+  /**
+   * True only when this call freshly auto-provisioned the workspace's Market
+   * Community profile (owner-only path). Lets the caller surface a "we set up
+   * a community handle for you — customize it later" nudge once, instead of
+   * silently mutating the workspace's public identity.
+   */
+  createdMarketProfile?: boolean;
   installedAgentIds: string[];
   skippedAgentIds: string[];
   summaries: InstallMarketplaceAgentSummary[];
 }
 
+export interface InstallMarketplaceAgentsOptions {
+  /**
+   * Override the visibility used when inserting into a workspace. Defaults to
+   * `'public'` (shared with the workspace) — callers can opt into `'private'`
+   * when the user explicitly wants the agent kept to themselves.
+   *
+   * Ignored in personal mode (the column is meaningless without a workspace).
+   */
+  visibility?: 'private' | 'public';
+}
+
 export const installMarketplaceAgents = async (
   sourceAgentIds: string[],
+  options?: InstallMarketplaceAgentsOptions,
 ): Promise<InstallMarketplaceAgentsResult> => {
   if (sourceAgentIds.length === 0) {
     return { installedAgentIds: [], skippedAgentIds: [], summaries: [] };
@@ -36,6 +85,30 @@ export const installMarketplaceAgents = async (
 
   const createAgent = useAgentStore.getState().createAgent;
   const refreshAgentList = useHomeStore.getState().refreshAgentList;
+
+  const workspaceId = getActiveWorkspaceId();
+  const visibility = workspaceId ? (options?.visibility ?? 'public') : undefined;
+
+  // Workspace-mode forks must be attributed to the workspace's Market org via
+  // `actAs` — the per-user trust token already carries workspaceId, so Market
+  // rejects forks without `x-lobe-owner-account-id` (403). Mirrors the lookup
+  // ForkAndChat does for the single-fork community flow.
+  //
+  // `autoProvision` lets owners install agents on a brand-new workspace before
+  // they've explicitly set a Community handle — server derives one from the
+  // workspace name. Non-owners fall through to the strict path and get
+  // PRECONDITION_FAILED, which the caller (e.g. onboarding) surfaces as a
+  // soft toast.
+  let actAs: number | undefined;
+  let createdMarketProfile = false;
+  if (workspaceId) {
+    const { marketAccountId, created } =
+      await lambdaClient.workspace.ensureMarketOrganization.mutate({
+        autoProvision: true,
+      });
+    actAs = marketAccountId;
+    createdMarketProfile = created;
+  }
 
   // 1. Parallel dedupe — find which source ids are already forked
   const existing = await Promise.all(
@@ -57,7 +130,7 @@ export const installMarketplaceAgents = async (
 
   // 3. Build batch fork input only for items with valid detail
   type Prepared = {
-    detail: NonNullable<Awaited<ReturnType<typeof discoverService.getAssistantDetail>>>;
+    detail: DiscoverAssistantDetail;
     newIdentifier: string;
     sourceId: string;
   };
@@ -86,6 +159,7 @@ export const installMarketplaceAgents = async (
       ? []
       : await marketApiService.forkAgent(
           prepared.map((p) => ({
+            actAs,
             identifier: p.newIdentifier,
             name: p.detail.title,
             sourceIdentifier: p.sourceId,
@@ -103,20 +177,8 @@ export const installMarketplaceAgents = async (
       }
       const fork = outcome.data;
       const result = await createAgent({
-        config: {
-          ...detail.config,
-          avatar: detail.avatar,
-          backgroundColor: detail.backgroundColor,
-          description: detail.description,
-          editorData: detail.editorData,
-          marketIdentifier: fork.agent.identifier,
-          params: {
-            ...detail.config.params,
-            forkedFromIdentifier: sourceId,
-          },
-          tags: detail.tags,
-          title: fork.agent.name,
-        },
+        config: buildForkedAgentConfig(detail, fork.agent, sourceId),
+        visibility,
       });
 
       discoverService.reportAgentEvent({
@@ -161,8 +223,16 @@ export const installMarketplaceAgents = async (
   const installedAgentIds = Array.from(installedBySource.values());
 
   if (installedAgentIds.length > 0) {
+    // Once every createAgent has settled, install the Market skills the created
+    // agents reference in one pass. Already non-throwing, and the agents exist
+    // either way, so nothing here may change the result below.
+    await ensureAgentMarketSkillsAndWarn(
+      prepared
+        .filter((p) => installedBySource.has(p.sourceId))
+        .map((p) => p.detail.config.plugins ?? []),
+    );
     await refreshAgentList();
   }
 
-  return { installedAgentIds, skippedAgentIds, summaries };
+  return { createdMarketProfile, installedAgentIds, skippedAgentIds, summaries };
 };

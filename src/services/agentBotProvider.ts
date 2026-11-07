@@ -1,3 +1,5 @@
+import type { BotWakeDecisionPage, BotWakeSummary, BotWakeUserMark } from '@lobechat/types';
+
 import { lambdaClient } from '@/libs/trpc/client';
 
 import type { BotRuntimeStatusSnapshot } from '../types/botRuntimeStatus';
@@ -9,6 +11,15 @@ class AgentBotProviderService {
 
   getByAgentId = async (agentId: string) => {
     return lambdaClient.agentBotProvider.getByAgentId.query({ agentId });
+  };
+
+  /**
+   * Credentials in the clear, for writing an importable export file. Separate
+   * from `getByAgentId` on purpose: that one masks, and the export is the only
+   * place allowed to ask for the real values.
+   */
+  exportByAgentId = async (agentId: string) => {
+    return lambdaClient.agentBotProvider.exportByAgentId.query({ agentId });
   };
 
   getRuntimeStatus = async (params: {
@@ -68,8 +79,33 @@ class AgentBotProviderService {
     return lambdaClient.agentBotProvider.testConnection.mutate(params);
   };
 
+  /** One bot's wake decisions, newest first; pass the previous page's `nextCursor` for more. */
+  listWakeDecisions = async (
+    params: Parameters<typeof lambdaClient.agentBotWake.listWakeDecisions.query>[0],
+  ): Promise<BotWakeDecisionPage> => {
+    return lambdaClient.agentBotWake.listWakeDecisions.query(params);
+  };
+
+  getWakeSummary = async (botId: string): Promise<BotWakeSummary> => {
+    return lambdaClient.agentBotWake.getWakeSummary.query({ botId });
+  };
+
+  labelWakeDecision = async (
+    params: Parameters<typeof lambdaClient.agentBotWake.labelWakeDecision.mutate>[0],
+  ): Promise<BotWakeUserMark> => {
+    return lambdaClient.agentBotWake.labelWakeDecision.mutate(params);
+  };
+
   lineFetchBotInfo = async (channelAccessToken: string) => {
     return lambdaClient.agentBotProvider.lineFetchBotInfo.mutate({ channelAccessToken });
+  };
+
+  feishuFetchOwnerId = async (params: {
+    appId: string;
+    appSecret: string;
+    platform: 'feishu' | 'lark';
+  }) => {
+    return lambdaClient.agentBotProvider.feishuFetchOwnerId.mutate(params);
   };
 
   wechatGetQrCode = async () => {
@@ -78,6 +114,18 @@ class AgentBotProviderService {
 
   wechatPollQrStatus = async (qrcode: string) => {
     return lambdaClient.agentBotProvider.wechatPollQrStatus.query({ qrcode });
+  };
+
+  feishuRegisterBegin = async (
+    params: Parameters<typeof lambdaClient.agentBotProvider.feishuRegisterBegin.mutate>[0],
+  ) => {
+    return lambdaClient.agentBotProvider.feishuRegisterBegin.mutate(params);
+  };
+
+  feishuRegisterPoll = async (
+    params: Parameters<typeof lambdaClient.agentBotProvider.feishuRegisterPoll.query>[0],
+  ) => {
+    return lambdaClient.agentBotProvider.feishuRegisterPoll.query(params);
   };
 }
 

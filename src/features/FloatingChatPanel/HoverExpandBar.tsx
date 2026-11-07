@@ -1,7 +1,6 @@
 'use client';
 
-import { Icon } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles, Icon } from '@lobehub/ui';
 import { ChevronUp } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -69,11 +68,12 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 export interface HoverExpandBarProps {
+  bottomOffset?: number;
   onExpand: () => void;
   visible: boolean;
 }
 
-const HoverExpandBar = memo<HoverExpandBarProps>(({ visible, onExpand }) => {
+const HoverExpandBar = memo<HoverExpandBarProps>(({ bottomOffset = 0, visible, onExpand }) => {
   const { t } = useTranslation('chat');
   const s = styles;
 
@@ -82,6 +82,7 @@ const HoverExpandBar = memo<HoverExpandBarProps>(({ visible, onExpand }) => {
       aria-hidden={!visible}
       className={`${s.bar} ${visible ? s.visible : s.hidden}`}
       data-testid="floating-chat-panel-hover-bar"
+      style={bottomOffset > 0 ? { insetBlockEnd: `calc(100% + ${bottomOffset}px)` } : undefined}
     >
       <button
         className={s.trigger}

@@ -1,8 +1,9 @@
 'use client';
 
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { Avatar, Flexbox } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { Flexbox } from '@lobehub/ui';
+import { Avatar } from '@lobehub/ui';
+import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
 import { Check } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -41,8 +42,10 @@ export const RemoveAgentInspector = memo<
   // Initial streaming state
   if (isArgumentsStreaming && !agentId) {
     return (
-      <div className={cx(styles.root, shinyTextStyles.shinyText)}>
-        <span>{t('builtins.lobe-group-agent-builder.apiName.removeAgent')}</span>
+      <div className={styles.root}>
+        <span className={shinyTextStyles.shinyText}>
+          {t('builtins.lobe-group-agent-builder.apiName.removeAgent')}
+        </span>
       </div>
     );
   }
@@ -50,13 +53,13 @@ export const RemoveAgentInspector = memo<
   const isSuccess = pluginState?.success;
 
   return (
-    <Flexbox
-      horizontal
-      align={'center'}
-      className={cx(styles.root, (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText)}
-      gap={8}
-    >
-      <span className={styles.title}>
+    <Flexbox horizontal align={'center'} className={styles.root} gap={8}>
+      <span
+        className={cx(
+          styles.title,
+          (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
+        )}
+      >
         {t('builtins.lobe-group-agent-builder.apiName.removeAgent')}:
       </span>
       {avatar && (

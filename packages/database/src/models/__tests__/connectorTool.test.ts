@@ -177,6 +177,21 @@ describe('ConnectorToolModel', () => {
       expect(row.isWorkArtifact).toBe(true);
     });
 
+    it('stores the synced metadata and replaces it on every re-sync', async () => {
+      const model = new ConnectorToolModel(serverDB, userId);
+
+      await model.upsertMany(connectorId, [
+        tool({ metadata: { visibility: ['app'] }, toolName: 'load_page' }),
+      ]);
+      expect((await model.queryByConnector(connectorId))[0].metadata).toEqual({
+        visibility: ['app'],
+      });
+
+      // The server dropped its visibility: the tool is visible to the model again
+      await model.upsertMany(connectorId, [tool({ toolName: 'load_page' })]);
+      expect((await model.queryByConnector(connectorId))[0].metadata).toBeNull();
+    });
+
     it('writes workspaceId when the model is workspace-scoped', async () => {
       const model = new ConnectorToolModel(serverDB, userId, workspaceId);
 
@@ -307,6 +322,56 @@ describe('ConnectorToolModel', () => {
     });
   });
 
+  describe('stable tool order', () => {
+    const toolKeys = (rows: { toolName: string; userConnectorId: string }[]) =>
+      rows.map((r) => `${r.userConnectorId}:${r.toolName}`);
+
+    it('groups tools by connector and sorts by toolName, unchanged after an upsert rewrites rows', async () => {
+      const secondConnectorId = await insertConnector({ identifier: 'notion' });
+      const model = new ConnectorToolModel(serverDB, userId);
+      // insert in reverse order so the physical row order differs from the sorted order
+      await model.upsertMany(secondConnectorId, [tool({ toolName: 'zeta' })]);
+      await model.upsertMany(connectorId, [tool({ toolName: 'zeta' }), tool({ toolName: 'beta' })]);
+      await model.upsertMany(secondConnectorId, [tool({ toolName: 'alpha' })]);
+      await model.upsertMany(connectorId, [tool({ toolName: 'alpha' })]);
+
+      const ids = [connectorId, secondConnectorId];
+      const expected = [
+        ...['alpha', 'beta', 'zeta'].map((name) => `${connectorId}:${name}`),
+        ...['alpha', 'zeta'].map((name) => `${secondConnectorId}:${name}`),
+      ].sort((a, b) => {
+        const [connA, nameA] = a.split(':');
+        const [connB, nameB] = b.split(':');
+        if (connA !== connB) return connA < connB ? -1 : 1;
+        return nameA < nameB ? -1 : nameA > nameB ? 1 : 0;
+      });
+
+      const firstAll = toolKeys(await model.queryAllByConnectorIds(ids));
+      const firstEnabled = toolKeys(await model.queryByConnectorIds(ids));
+      const firstSingle = (await model.queryByConnector(connectorId)).map((r) => r.toolName);
+      expect(firstAll).toEqual(expected);
+      expect(firstEnabled).toEqual(expected);
+      expect(firstSingle).toEqual(['alpha', 'beta', 'zeta']);
+
+      // a background refresh re-upserts existing rows (ON CONFLICT DO UPDATE writes new tuples)
+      await model.upsertMany(connectorId, [
+        tool({ description: 'refreshed', toolName: 'alpha' }),
+        tool({ description: 'refreshed', toolName: 'zeta' }),
+      ]);
+      await model.upsertMany(secondConnectorId, [
+        tool({ description: 'refreshed', toolName: 'alpha' }),
+      ]);
+
+      expect(toolKeys(await model.queryAllByConnectorIds(ids))).toEqual(firstAll);
+      expect(toolKeys(await model.queryByConnectorIds([secondConnectorId, connectorId]))).toEqual(
+        firstEnabled,
+      );
+      expect((await model.queryByConnector(connectorId)).map((r) => r.toolName)).toEqual(
+        firstSingle,
+      );
+    });
+  });
+
   describe('findByToolName', () => {
     it('returns the tool matching the name for the current user', async () => {
       const model = new ConnectorToolModel(serverDB, userId);
@@ -336,6 +401,45 @@ describe('ConnectorToolModel', () => {
     });
   });
 
+  describe('deleteToolsNotIn', () => {
+    it('deletes rows whose toolName is not in the keep list', async () => {
+      const model = new ConnectorToolModel(serverDB, userId);
+      await model.upsertMany(connectorId, [
+        tool({ toolName: 'keep_a' }),
+        tool({ toolName: 'keep_b' }),
+        tool({ toolName: 'stale' }),
+      ]);
+
+      await model.deleteToolsNotIn(connectorId, ['keep_a', 'keep_b']);
+
+      const rows = await model.queryAllByConnectorIds([connectorId]);
+      expect(rows.map((r) => r.toolName).sort()).toEqual(['keep_a', 'keep_b']);
+    });
+
+    it('deletes all tools for the connector when the keep list is empty', async () => {
+      const model = new ConnectorToolModel(serverDB, userId);
+      await model.upsertMany(connectorId, [tool({ toolName: 'a' }), tool({ toolName: 'b' })]);
+
+      await model.deleteToolsNotIn(connectorId, []);
+
+      expect(await model.queryAllByConnectorIds([connectorId])).toHaveLength(0);
+    });
+
+    it("does not touch another user's tools with the same name", async () => {
+      const model = new ConnectorToolModel(serverDB, userId);
+      await model.upsertMany(connectorId, [tool({ toolName: 'shared' })]);
+
+      const otherModel = new ConnectorToolModel(serverDB, otherUserId);
+      await otherModel.upsertMany(otherConnectorId, [tool({ toolName: 'shared' })]);
+
+      // Pruning to empty for our connector must not affect the other user's row.
+      await model.deleteToolsNotIn(connectorId, []);
+
+      const theirs = await otherModel.queryAllByConnectorIds([otherConnectorId]);
+      expect(theirs.map((r) => r.toolName)).toEqual(['shared']);
+    });
+  });
+
   describe('ownership in workspace mode', () => {
     it('isolates personal-mode tools from workspace-scoped queries', async () => {
       // personal tool (workspaceId IS NULL)
@@ -354,6 +458,32 @@ describe('ConnectorToolModel', () => {
         workspaceConnectorId,
       ]);
       expect(personalRows.map((r) => r.toolName)).toEqual(['personal']);
+    });
+  });
+
+  describe('findById', () => {
+    it('resolves a tool by id inside the owner scope', async () => {
+      const model = new ConnectorToolModel(serverDB, userId);
+      await model.upsertMany(connectorId, [
+        tool({ description: 'Create an issue', toolName: 'create_issue' }),
+      ]);
+
+      const [stored] = await model.queryByConnector(connectorId);
+      const found = await model.findById(stored.id);
+
+      expect(found?.id).toBe(stored.id);
+      expect(found?.toolName).toBe('create_issue');
+    });
+
+    it('returns undefined for an unknown id and for another user tool', async () => {
+      const model = new ConnectorToolModel(serverDB, userId);
+      await model.upsertMany(connectorId, [tool({ toolName: 'secret' })]);
+      const [stored] = await model.queryByConnector(connectorId);
+
+      expect(await model.findById('00000000-0000-0000-0000-000000000000')).toBeUndefined();
+
+      const otherModel = new ConnectorToolModel(serverDB, otherUserId);
+      expect(await otherModel.findById(stored.id)).toBeUndefined();
     });
   });
 });

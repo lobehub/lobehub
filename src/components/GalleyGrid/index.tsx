@@ -1,5 +1,4 @@
-import { Flexbox } from '@lobehub/ui';
-import { useResponsive } from 'antd-style';
+import { Flexbox, useResponsive } from '@lobehub/ui';
 import { type ReactNode } from 'react';
 import { memo, useMemo } from 'react';
 

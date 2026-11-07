@@ -10,7 +10,13 @@ const wrapper: React.JSXElementConstructor<{ children: React.ReactNode }> = ({ c
   <ServerConfigStoreProvider>{children}</ServerConfigStoreProvider>
 );
 
+const { mockNavigate } = vi.hoisted(() => ({ mockNavigate: vi.fn() }));
+
 // Mock dependencies
+vi.mock('react-router', () => ({
+  useNavigate: () => mockNavigate,
+}));
+
 vi.mock('next/link', () => ({
   default: vi.fn(({ children }) => <div>{children}</div>),
 }));
@@ -60,6 +66,7 @@ describe('useMenu', () => {
       expect(mainItems?.some((item) => item?.key === 'memory')).toBe(false);
       // 'logout' is shown when isLoginWithAuth is true
       expect(logoutItems.some((item) => item?.key === 'logout')).toBe(true);
+      expect(logoutItems.at(-1)).not.toMatchObject({ type: 'divider' });
     });
   });
 
@@ -98,5 +105,22 @@ describe('useMenu', () => {
         expect(isDivider(prev) && isDivider(curr)).toBe(false);
       }
     });
+  });
+
+  it('navigates from the whole row so clicks outside the label text still work', () => {
+    act(() => {
+      useUserStore.setState({ isSignedIn: true });
+    });
+    mockNavigate.mockClear();
+
+    const { result } = renderHook(() => useMenu(), { wrapper });
+    const findItem = (key: string) =>
+      result.current.mainItems?.find((item: any) => item?.key === key) as any;
+
+    findItem('setting').onClick();
+    expect(mockNavigate).toHaveBeenLastCalledWith('/settings');
+
+    findItem('get-app').onClick();
+    expect(mockNavigate).toHaveBeenLastCalledWith('/apps');
   });
 });

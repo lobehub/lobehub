@@ -1,3 +1,7 @@
+import { BRANDING_NAME, COPYRIGHT_FULL } from '@lobechat/business-const';
+
+import { getEmailSupportHtml, getEmailSupportText } from '@/libs/email/support';
+
 /**
  * Email OTP verification template for mobile
  * Sent to users when they need to verify their email using OTP code
@@ -33,7 +37,7 @@ export const getVerificationOTPEmailTemplate = (params: {
     <div style="text-align: center; margin-bottom: 32px;">
       <div style="display: inline-flex; align-items: center; justify-content: center; background-color: #ffffff; border-radius: 12px; padding: 8px 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.04);">
         <span style="font-size: 24px; line-height: 1; margin-right: 10px;">🤯</span>
-        <span style="font-size: 18px; font-weight: 700; color: #000000; letter-spacing: -0.5px;">LobeHub</span>
+        <span style="font-size: 18px; font-weight: 700; color: #000000; letter-spacing: -0.5px;">${BRANDING_NAME}</span>
       </div>
     </div>
 
@@ -55,7 +59,7 @@ export const getVerificationOTPEmailTemplate = (params: {
         ${userName ? `<p style="margin: 0 0 16px 0;">Hi <strong>${userName}</strong>,</p>` : ''}
 
         <p style="margin: 0 0 24px 0;">
-          Thanks for creating an account with LobeHub. To verify your email address, please use the verification code below:
+          Thanks for creating an account with ${BRANDING_NAME}. To verify your email address, please use the verification code below:
         </p>
 
         <!-- OTP Code Box -->
@@ -92,15 +96,18 @@ export const getVerificationOTPEmailTemplate = (params: {
 
     <!-- Footer -->
     <div style="text-align: center; margin-top: 32px;">
+      <p style="font-size: 13px; margin: 0 0 8px 0;">
+        ${getEmailSupportHtml()}
+      </p>
       <p style="color: #a1a1aa; font-size: 13px; margin: 0;">
-        © 2026 LobeHub. All rights reserved.
+        ${COPYRIGHT_FULL}
       </p>
     </div>
   </div>
 </body>
 </html>
     `,
-    subject: 'Verify Your Email - LobeHub',
-    text: `Your verification code is: ${otp}\n\nThis code will expire in ${expirationText}.\n\nIf you didn't request this code, you can safely ignore this email.`,
+    subject: `Verify Your Email - ${BRANDING_NAME}`,
+    text: `Your verification code is: ${otp}\n\nThis code will expire in ${expirationText}.\n\nIf you didn't request this code, you can safely ignore this email.\n\n${getEmailSupportText()}`,
   };
 };

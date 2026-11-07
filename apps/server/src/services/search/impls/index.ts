@@ -1,6 +1,7 @@
 import { AnspireImpl } from './anspire';
 import { BochaImpl } from './bocha';
 import { BraveImpl } from './brave';
+import { DeepSeekImpl } from './deepseek';
 import { ExaImpl } from './exa';
 import { FirecrawlImpl } from './firecrawl';
 import { GoogleImpl } from './google';
@@ -19,6 +20,7 @@ export enum SearchImplType {
   Anspire = 'anspire',
   Bocha = 'bocha',
   Brave = 'brave',
+  DeepSeek = 'deepseek',
   Exa = 'exa',
   Firecrawl = 'firecrawl',
   Google = 'google',
@@ -47,6 +49,10 @@ export const createSearchServiceImpl = (
 
     case SearchImplType.Brave: {
       return new BraveImpl();
+    }
+
+    case SearchImplType.DeepSeek: {
+      return new DeepSeekImpl();
     }
 
     case SearchImplType.Exa: {

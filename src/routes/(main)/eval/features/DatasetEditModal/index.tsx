@@ -1,6 +1,6 @@
 'use client';
 
-import { type ModalInstance } from '@lobehub/ui/base-ui';
+import { type ModalInstance } from '@lobehub/ui';
 import { t } from 'i18next';
 
 import { createFormModal } from '@/utils/createFormModal';
@@ -17,5 +17,5 @@ export const createDatasetEditModal = (props: Props): ModalInstance =>
     ),
     renderFooter: ({ formId, loading }) => <DatasetEditFooter formId={formId} loading={loading} />,
     title: t('dataset.edit.title', { ns: 'eval' }),
-    width: 480,
+    width: 600,
   });

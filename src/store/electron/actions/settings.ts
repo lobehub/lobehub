@@ -1,10 +1,11 @@
+import { isDesktop } from '@lobechat/const';
 import {
   type NetworkProxySettings,
   type ShortcutUpdateResult,
 } from '@lobechat/electron-client-ipc';
 import isEqual from 'fast-deep-equal';
-import { type SWRResponse } from 'swr';
 import useSWR from 'swr';
+import { type SWRResponse } from 'swr';
 
 import { mutate } from '@/libs/swr';
 import { electronKeys } from '@/libs/swr/keys';
@@ -76,7 +77,8 @@ export class ElectronSettingsActionImpl {
 
   useFetchDesktopHotkeys = (): SWRResponse => {
     return useSWR<Record<string, string>>(
-      electronKeys.desktopHotkeys(),
+      // Desktop-only IPC: on web there is no electronAPI, so never fetch off-desktop.
+      isDesktop ? electronKeys.desktopHotkeys() : null,
       async () => desktopSettingsService.getDesktopHotkeys(),
       {
         onSuccess: (data) => {
@@ -90,7 +92,7 @@ export class ElectronSettingsActionImpl {
 
   useGetAppTrayVisible = (enabled = true): SWRResponse => {
     return useSWR<boolean>(
-      enabled ? electronKeys.appTrayVisible() : null,
+      enabled && isDesktop ? electronKeys.appTrayVisible() : null,
       async () => desktopSettingsService.getAppTrayVisible(),
       {
         onSuccess: (data) => {
@@ -104,7 +106,7 @@ export class ElectronSettingsActionImpl {
 
   useGetProxySettings = (): SWRResponse => {
     return useSWR<NetworkProxySettings>(
-      electronKeys.proxySettings(),
+      isDesktop ? electronKeys.proxySettings() : null,
       async () => desktopSettingsService.getProxySettings(),
       {
         onSuccess: (data) => {

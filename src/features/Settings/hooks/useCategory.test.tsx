@@ -1,0 +1,149 @@
+import { cleanup, renderHook } from '@testing-library/react';
+import { type ReactNode } from 'react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import { mapFeatureFlagsEnvToState } from '@/config/featureFlags';
+import { SettingsTabs } from '@/store/global/initialState';
+import { initServerConfigStore, Provider } from '@/store/serverConfig/store';
+import { useUserStore } from '@/store/user';
+
+import { SettingsGroupKey, useCategory } from './useCategory';
+
+vi.hoisted(() => {
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: {
+      getItem: vi.fn(() => null),
+      removeItem: vi.fn(),
+      setItem: vi.fn(),
+    },
+  });
+});
+
+const createWrapper = (showProvider: boolean, enableBusinessFeatures = false) => {
+  const Wrapper = ({ children }: { children: ReactNode }) => (
+    <Provider
+      createStore={() =>
+        initServerConfigStore({
+          serverConfig: { aiProvider: {}, enableBusinessFeatures, telemetry: {} },
+          featureFlags: {
+            ...mapFeatureFlagsEnvToState({
+              provider_settings: true,
+            }),
+            showProvider,
+          },
+        })
+      }
+    >
+      {children}
+    </Provider>
+  );
+
+  return Wrapper;
+};
+
+const getItemKeys = () => {
+  const { result } = renderHook(() => useCategory(), {
+    wrapper: createWrapper(true),
+  });
+
+  return result.current.flatMap((group) => group.items.map((item) => item.key));
+};
+
+const initialUserStoreState = useUserStore.getState();
+
+afterEach(() => {
+  cleanup();
+  useUserStore.setState(initialUserStoreState, true);
+});
+
+describe('settings useCategory', () => {
+  // Account-level settings (profile / appearance / hotkeys) form their own
+  // group so the workspace sidebar can mirror exactly this set; the General
+  // group keeps the personal-scoped data pages.
+  it('splits account-level tabs into a leading Account group', () => {
+    const { result } = renderHook(() => useCategory(), {
+      wrapper: createWrapper(true),
+    });
+    const accountGroup = result.current.find((group) => group.key === SettingsGroupKey.Account);
+    const generalGroup = result.current.find((group) => group.key === SettingsGroupKey.General);
+
+    expect(result.current[0]?.key).toBe(SettingsGroupKey.Account);
+    expect(accountGroup?.items.map((item) => item.key)).toEqual([
+      SettingsTabs.Profile,
+      SettingsTabs.Appearance,
+      SettingsTabs.Hotkey,
+      SettingsTabs.Integrations,
+    ]);
+    // Environments is there with no lab switch: a code environment is a
+    // definition, written down whether or not there is a drive to run it on.
+    expect(generalGroup?.items.map((item) => item.key)).toEqual([
+      SettingsTabs.Stats,
+      SettingsTabs.Devices,
+      SettingsTabs.Environments,
+    ]);
+    expect(
+      result.current.find((group) => group.key === SettingsGroupKey.Agent)?.items.map((i) => i.key),
+    ).not.toContain(SettingsTabs.Messenger);
+  });
+
+  // Messenger bots are LobeHub-operated and only configurable from the cloud
+  // admin, so the tab is a dead end on self-hosted deployments.
+  it('shows Messenger in the Account group only with business features on', () => {
+    expect(getItemKeys()).not.toContain(SettingsTabs.Messenger);
+
+    const { result } = renderHook(() => useCategory(), {
+      wrapper: createWrapper(true, true),
+    });
+    const accountGroup = result.current.find((group) => group.key === SettingsGroupKey.Account);
+    expect(accountGroup?.items.map((item) => item.key)).toContain(SettingsTabs.Messenger);
+  });
+
+  it('keeps Provider visible when provider settings are enabled', () => {
+    expect(getItemKeys()).toContain(SettingsTabs.Provider);
+  });
+
+  it('hides Provider when provider settings are disabled', () => {
+    const { result } = renderHook(() => useCategory(), {
+      wrapper: createWrapper(false),
+    });
+
+    const keys = result.current.flatMap((group) => group.items.map((item) => item.key));
+
+    expect(keys).not.toContain(SettingsTabs.Provider);
+  });
+
+  it('hides OAuth Apps by default', () => {
+    expect(getItemKeys()).not.toContain(SettingsTabs.OAuthApps);
+  });
+
+  // The sandbox drives moved to Docs → Sandbox Storage; settings keep only the
+  // environment definitions.
+  it('keeps Environments in settings without a sandbox storage tab', () => {
+    const { result } = renderHook(() => useCategory(), {
+      wrapper: createWrapper(true, true),
+    });
+    const generalGroup = result.current.find((group) => group.key === SettingsGroupKey.General);
+    const keys = generalGroup!.items.map((item) => item.key);
+    expect(keys).toContain(SettingsTabs.Environments);
+    expect(keys).not.toContain('drive');
+  });
+
+  it('shows OAuth Apps when the Labs preference is enabled', () => {
+    useUserStore.setState({
+      preference: {
+        ...initialUserStoreState.preference,
+        lab: { ...initialUserStoreState.preference.lab, enableOAuthApps: true },
+      },
+    });
+
+    const { result } = renderHook(() => useCategory(), {
+      wrapper: createWrapper(true),
+    });
+    const developerGroup = result.current.find((group) => group.key === SettingsGroupKey.Developer);
+    const systemGroup = result.current.find((group) => group.key === SettingsGroupKey.System);
+
+    expect(developerGroup?.items.map((item) => item.key)).toContain(SettingsTabs.OAuthApps);
+    expect(systemGroup?.items.map((item) => item.key)).not.toContain(SettingsTabs.OAuthApps);
+  });
+});

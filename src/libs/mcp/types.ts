@@ -1,3 +1,5 @@
+import type { MCPErrorType } from '@lobechat/types';
+
 interface InputSchema {
   [k: string]: unknown;
 
@@ -6,6 +8,8 @@ interface InputSchema {
 }
 
 export interface McpTool {
+  /** Server metadata, e.g. MCP Apps `ui.resourceUri` / `ui.visibility` */
+  _meta?: Record<string, unknown>;
   description: string;
   inputSchema: InputSchema;
   name: string;
@@ -82,11 +86,7 @@ export interface ResourceLinkContent {
 }
 
 export type ToolCallContent =
-  | TextContent
-  | ImageContent
-  | AudioContent
-  | ResourceContent
-  | ResourceLinkContent;
+  TextContent | ImageContent | AudioContent | ResourceContent | ResourceLinkContent;
 
 export interface ToolCallResult {
   content: ToolCallContent[];
@@ -133,7 +133,7 @@ export interface AuthConfig {
   type: 'none' | 'bearer' | 'oauth2'; // Expiration timestamp of accessToken
 }
 
-interface HttpMCPClientParams {
+export interface HttpMCPClientParams {
   auth?: AuthConfig;
   headers?: Record<string, string>;
   name: string;
@@ -159,13 +159,8 @@ export interface CloudMCPParams {
 
 export type MCPClientParams = HttpMCPClientParams | StdioMCPParams;
 
-export type MCPErrorType =
-  | 'CONNECTION_FAILED'
-  | 'PROCESS_SPAWN_ERROR'
-  | 'INITIALIZATION_TIMEOUT'
-  | 'VALIDATION_ERROR'
-  | 'UNKNOWN_ERROR'
-  | 'AUTHORIZATION_ERROR';
+// canonical definition lives with the shared MCP plugin types
+export type { MCPErrorType };
 export interface MCPErrorData {
   message: string;
   /**

@@ -1,8 +1,8 @@
 import { Given, When } from '@cucumber/cucumber';
-import { expect } from '@playwright/test';
+import { expect, request } from '@playwright/test';
 
-import { TEST_USER, createTestSession } from '../../support/seedTestUser';
-import { CustomWorld } from '../../support/world';
+import { TEST_USER } from '../../support/seedTestUser';
+import type { CustomWorld } from '../../support/world';
 
 /**
  * Login via UI - fills in the login form and submits
@@ -30,30 +30,31 @@ Given('I am logged in as the test user', async function (this: CustomWorld) {
 });
 
 /**
- * Login via session injection - faster, bypasses UI
- * Creates a session directly in the database and sets the cookie
+ * Login via the auth API - faster than UI and uses real better-auth cookies.
  */
 Given('I am logged in with a session', async function (this: CustomWorld) {
-  const sessionToken = await createTestSession();
+  const PORT = process.env.PORT ? Number(process.env.PORT) : 3006;
+  const baseURL = process.env.BASE_URL || `http://localhost:${PORT}`;
+  const api = await request.newContext({ baseURL });
 
-  if (!sessionToken) {
-    throw new Error('Failed to create test session');
+  try {
+    const response = await api.post('/api/auth/sign-in/email', {
+      data: {
+        email: TEST_USER.email,
+        password: TEST_USER.password,
+      },
+    });
+
+    if (!response.ok()) {
+      throw new Error(`Auth API sign-in failed: ${response.status()} ${await response.text()}`);
+    }
+
+    await this.browserContext.addCookies((await api.storageState()).cookies);
+  } finally {
+    await api.dispose();
   }
 
-  // Set the session cookie (Better Auth uses 'better-auth.session_token' by default)
-  await this.browserContext.addCookies([
-    {
-      domain: 'localhost',
-      httpOnly: true,
-      name: 'better-auth.session_token',
-      path: '/',
-      sameSite: 'Lax',
-      secure: false,
-      value: sessionToken,
-    },
-  ]);
-
-  console.log('✅ Session cookie set for test user');
+  console.log('✅ Session cookies set for test user');
 });
 
 /**
@@ -61,7 +62,7 @@ Given('I am logged in with a session', async function (this: CustomWorld) {
  */
 When('I navigate to the signin page', async function (this: CustomWorld) {
   await this.page.goto('/signin');
-  await this.page.waitForLoadState('networkidle');
+  await this.page.waitForLoadState('domcontentloaded');
 });
 
 /**

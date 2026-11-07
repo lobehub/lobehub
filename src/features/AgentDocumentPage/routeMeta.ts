@@ -1,23 +1,33 @@
 import { FileTextIcon } from 'lucide-react';
 
-import { useClientDataSWR } from '@/libs/swr';
-import { portalKeys } from '@/libs/swr/keys';
-import { documentService } from '@/services/document';
-import { type DynamicRouteMeta, routeMeta } from '@/spa/router/routeMeta';
+import { createSurfaceSkeleton } from '@/components/Skeleton/Surface';
+import { usePublishDynamicRouteMeta } from '@/features/RouteMeta/usePublishDynamicRouteMeta';
+import { matchesRouteWorkspace, useRouteWorkspaceId } from '@/features/RouteMeta/workspaceScope';
+import type { DynamicRouteMetaProps } from '@/spa/router/routeMeta';
+import { routeMeta } from '@/spa/router/routeMeta';
+import { useDocumentStore } from '@/store/document';
 import { getIdFromIdentifier } from '@/utils/identifier';
 
-export const agentDocumentRouteMeta = routeMeta({
-  icon: FileTextIcon,
-  titleKey: 'navigation.document',
-  useDynamicMeta: (params): DynamicRouteMeta => {
-    const documentId = params.docId ? getIdFromIdentifier(params.docId, 'docs') : '';
-    // Deduped against the Document Header's SWR fetch (same key), so this adds
-    // no extra request — it just surfaces the title into the breadcrumb.
-    const { data } = useClientDataSWR(
-      documentId ? portalKeys.documentHeader(documentId) : null,
-      () => documentService.getDocumentById(documentId),
-    );
+const AgentDocumentDynamicMeta = ({ onResolve, params }: DynamicRouteMetaProps) => {
+  const routeWorkspaceId = useRouteWorkspaceId(params);
+  const documentId = params.docId ? getIdFromIdentifier(params.docId, 'docs') : '';
+  // Shares the document's replica entry with the page and portal views, so this
+  // adds no extra request and a reload paints the persisted title right away.
+  const useFetchDocumentDetail = useDocumentStore((s) => s.useFetchDocumentDetail);
+  const { data } = useFetchDocumentDetail(documentId || undefined);
+  const document = matchesRouteWorkspace(data?.workspaceId, routeWorkspaceId) ? data : undefined;
 
-    return { title: data?.filename || data?.title || undefined };
-  },
+  usePublishDynamicRouteMeta(
+    { title: document?.filename || document?.title || undefined },
+    onResolve,
+  );
+
+  return null;
+};
+
+export const agentDocumentRouteMeta = routeMeta({
+  DynamicMeta: AgentDocumentDynamicMeta,
+  icon: FileTextIcon,
+  Skeleton: createSurfaceSkeleton('editor'),
+  titleKey: 'navigation.document',
 });

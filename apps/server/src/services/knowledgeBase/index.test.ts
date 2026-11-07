@@ -4,9 +4,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChunkModel } from '@/database/models/chunk';
 import { DocumentModel } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
-import { SearchRepo } from '@/database/repositories/search';
+import { knowledgeBaseFiles } from '@/database/schemas';
+import { buildWorkspaceWhere } from '@/database/utils/workspace';
 import { getServerDefaultFilesConfig } from '@/server/globalConfig';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
+import { createFtsSearchRepo } from '@/server/services/ftsSearch';
 
 import { DocumentService } from '../document';
 import { KnowledgeBaseSearchService } from './index';
@@ -14,10 +16,15 @@ import { KnowledgeBaseSearchService } from './index';
 vi.mock('@/database/models/chunk', () => ({ ChunkModel: vi.fn() }));
 vi.mock('@/database/models/document', () => ({ DocumentModel: vi.fn() }));
 vi.mock('@/database/models/file', () => ({ FileModel: vi.fn() }));
-vi.mock('@/database/repositories/search', () => ({ SearchRepo: vi.fn() }));
+vi.mock('@/server/services/ftsSearch', () => ({ createFtsSearchRepo: vi.fn() }));
 vi.mock('../document', () => ({ DocumentService: vi.fn() }));
 vi.mock('@/server/globalConfig', () => ({ getServerDefaultFilesConfig: vi.fn() }));
 vi.mock('@/server/modules/ModelRuntime', () => ({ initModelRuntimeFromDB: vi.fn() }));
+vi.mock('@/database/utils/workspace', () => ({
+  buildWorkspaceWhere: vi.fn(function () {
+    return 'WORKSPACE_SCOPE';
+  }),
+}));
 
 describe('KnowledgeBaseSearchService', () => {
   const userId = 'user_test';
@@ -43,11 +50,19 @@ describe('KnowledgeBaseSearchService', () => {
       },
     };
 
-    vi.mocked(ChunkModel).mockImplementation(() => chunkModelMock);
-    vi.mocked(DocumentModel).mockImplementation(() => documentModelMock);
-    vi.mocked(FileModel).mockImplementation(() => fileModelMock);
-    vi.mocked(SearchRepo).mockImplementation(() => searchRepoMock);
-    vi.mocked(DocumentService).mockImplementation(() => documentServiceMock);
+    vi.mocked(ChunkModel).mockImplementation(function () {
+      return chunkModelMock;
+    });
+    vi.mocked(DocumentModel).mockImplementation(function () {
+      return documentModelMock;
+    });
+    vi.mocked(FileModel).mockImplementation(function () {
+      return fileModelMock;
+    });
+    vi.mocked(createFtsSearchRepo).mockResolvedValue(searchRepoMock);
+    vi.mocked(DocumentService).mockImplementation(function () {
+      return documentServiceMock;
+    });
 
     service = new KnowledgeBaseSearchService(serverDB, userId);
   });
@@ -73,6 +88,77 @@ describe('KnowledgeBaseSearchService', () => {
         metadata: { tag: 'note' },
       });
       expect(result[0].error).toBeUndefined();
+    });
+
+    describe('file-backed agent documents (uploaded into the Documents panel)', () => {
+      // `AgentDocumentsService.importFile` stores the bytes in `files` and writes an empty
+      // `documents` row pointing at them; only the original file holds the text.
+      const placeholder = {
+        content: '',
+        fileId: 'file_RievR3MzZrMG',
+        fileType: 'text/markdown',
+        filename: 'product-spec.md',
+        id: 'docs_sq6UdPi9clb74C4e',
+        metadata: null,
+        sourceType: 'file',
+        title: 'product-spec.md',
+        totalCharCount: 0,
+      };
+
+      it('reads docs_* through the underlying file instead of the empty placeholder', async () => {
+        documentModelMock.findById.mockResolvedValue(placeholder);
+        fileModelMock.findById.mockResolvedValue({
+          id: 'file_RievR3MzZrMG',
+          name: 'product-spec.md',
+        });
+        documentModelMock.findByFileId.mockResolvedValue(undefined);
+        documentServiceMock.parseFile.mockResolvedValue({
+          content: '# Product Spec\n\nShip the uploader.',
+          metadata: null,
+        });
+
+        const result = await service.getFileContents(['docs_sq6UdPi9clb74C4e']);
+
+        expect(fileModelMock.findById).toHaveBeenCalledWith('file_RievR3MzZrMG');
+        expect(documentServiceMock.parseFile).toHaveBeenCalledWith('file_RievR3MzZrMG');
+        expect(result[0]).toMatchObject({
+          content: '# Product Spec\n\nShip the uploader.',
+          fileId: 'docs_sq6UdPi9clb74C4e',
+          filename: 'product-spec.md',
+          totalCharCount: 34,
+        });
+        expect(result[0].error).toBeUndefined();
+      });
+
+      it('reuses an existing parse cache for the placeholder file', async () => {
+        documentModelMock.findById.mockResolvedValue(placeholder);
+        fileModelMock.findById.mockResolvedValue({
+          id: 'file_RievR3MzZrMG',
+          name: 'product-spec.md',
+        });
+        documentModelMock.findByFileId.mockResolvedValue({
+          content: 'cached parse',
+          metadata: null,
+        });
+
+        const result = await service.getFileContents(['docs_sq6UdPi9clb74C4e']);
+
+        expect(documentServiceMock.parseFile).not.toHaveBeenCalled();
+        expect(result[0]).toMatchObject({ content: 'cached parse', totalCharCount: 12 });
+      });
+
+      it('keeps reading an edited docs_* row that happens to reference a file', async () => {
+        documentModelMock.findById.mockResolvedValue({
+          ...placeholder,
+          content: 'hand-written notes',
+          fileType: 'custom/document',
+        });
+
+        const result = await service.getFileContents(['docs_sq6UdPi9clb74C4e']);
+
+        expect(fileModelMock.findById).not.toHaveBeenCalled();
+        expect(result[0].content).toBe('hand-written notes');
+      });
     });
 
     it('returns "Document not found" when docs_* id is missing', async () => {
@@ -184,6 +270,27 @@ describe('KnowledgeBaseSearchService', () => {
       } as any);
     });
 
+    it('forwards the caller agent visibility to the selected BM25 backend', async () => {
+      chunkModelMock.semanticSearchForChat.mockResolvedValue([]);
+      searchRepoMock.searchKnowledgeBaseDocuments.mockResolvedValue([]);
+      const scopedService = new KnowledgeBaseSearchService(
+        serverDB,
+        userId,
+        'workspace-1',
+        'public',
+      );
+
+      await scopedService.semanticSearchForChat({ knowledgeIds: ['kb_1'], query: 'hello' });
+
+      expect(createFtsSearchRepo).toHaveBeenCalledWith({
+        callerAgentVisibility: 'public',
+        db: serverDB,
+        usage: 'knowledge_base',
+        userId,
+        workspaceId: 'workspace-1',
+      });
+    });
+
     it('groups chunks by file and ranks them by average top-3 similarity', async () => {
       chunkModelMock.semanticSearchForChat.mockResolvedValue([
         { id: 'c1', fileId: 'f1', fileName: 'a.pdf', similarity: 0.9, text: 'aaa' },
@@ -238,6 +345,26 @@ describe('KnowledgeBaseSearchService', () => {
           fileIds: ['file_1', 'file_2', 'file_extra'],
         }),
       );
+    });
+
+    it('scopes the knowledgeBaseFiles lookup to the caller (no cross-user KB resolution)', async () => {
+      serverDB.query.knowledgeBaseFiles.findMany.mockResolvedValue([{ fileId: 'file_1' }]);
+      chunkModelMock.semanticSearchForChat.mockResolvedValue([]);
+      searchRepoMock.searchKnowledgeBaseDocuments.mockResolvedValue([]);
+
+      await service.semanticSearchForChat({
+        knowledgeIds: ['kb_victim'],
+        query: 'hi',
+      });
+
+      // ownership predicate must be built for the caller's userId + table
+      expect(buildWorkspaceWhere).toHaveBeenCalledWith(
+        { userId, workspaceId: undefined },
+        knowledgeBaseFiles,
+      );
+      // and it must be combined into the actual findMany WHERE clause
+      const { where } = serverDB.query.knowledgeBaseFiles.findMany.mock.calls[0][0];
+      expect(where).toBeDefined();
     });
 
     it('captures vector path failure in errors + rejections, keeps BM25 documents', async () => {

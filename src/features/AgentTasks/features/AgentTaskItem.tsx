@@ -1,24 +1,35 @@
 import type { TaskStatus } from '@lobechat/types';
-import { Block, ContextMenuTrigger, Flexbox, Text } from '@lobehub/ui';
+import { Block, ContextMenuTrigger, cssVar, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
+import { ArchiveIcon, LockIcon } from 'lucide-react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import TaskLabelChips from '@/features/TaskLabels/TaskLabelChips';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useTaskStore } from '@/store/task';
 import type { TaskListItem } from '@/store/task/slices/list/initialState';
 
+import { shouldShowMemberAssignee } from '../shared/memberAssigneeMode';
 import { taskDetailPath } from '../shared/taskDetailPath';
 import AssigneeAgentSelector from './AssigneeAgentSelector';
 import AssigneeAvatar from './AssigneeAvatar';
+import AssigneeMemberSelector from './AssigneeMemberSelector';
+import AssigneeUserAvatar from './AssigneeUserAvatar';
 import { formatTaskItemDate } from './formatTaskItemDate';
-import TaskLatestActivity from './TaskLatestActivity';
 import TaskPriorityTag from './TaskPriorityTag';
 import TaskStatusTag from './TaskStatusTag';
 import TaskSubtaskProgressTag from './TaskSubtaskProgressTag';
 import TaskTriggerTag from './TaskTriggerTag';
+import { UnassignedAssigneeIcon } from './UnassignedAssigneeIcon';
 import { useTaskItemContextMenu } from './useTaskItemContextMenu';
 
+export type TaskItemRouteScope = 'agent' | 'global';
+
 interface TaskItemProps {
+  /** Extra class on the row's surface, e.g. to hand its hover fill to a wrapper. */
+  className?: string;
+  routeScope?: TaskItemRouteScope;
   task: TaskListItem;
   variant?: 'compact' | 'default';
 }
@@ -38,16 +49,18 @@ const TASK_STATUS_SET = new Set<TaskStatus>([
 const toTaskStatus = (status: string): TaskStatus =>
   TASK_STATUS_SET.has(status as TaskStatus) ? (status as TaskStatus) : 'backlog';
 
-const AgentTaskItem = memo<TaskItemProps>(({ task, variant = 'default' }) => {
+const AgentTaskItem = memo<TaskItemProps>((props) => {
+  const { className, task, routeScope = 'agent', variant = 'default' } = props;
   const { t, i18n } = useTranslation('common');
   const { t: tChat } = useTranslation('chat');
-  const useFetchTaskDetail = useTaskStore((s) => s.useFetchTaskDetail);
-  useFetchTaskDetail(task.identifier);
-
-  const taskDetail = useTaskStore((s) => s.taskDetailMap[task.identifier]);
-  const { items: contextMenuItems, onContextMenu: handleContextMenuOpen } =
-    useTaskItemContextMenu(task);
+  const fetchTaskDetail = useTaskStore((s) => s.fetchTaskDetail);
+  const taskDetail = useTaskStore((s) => s.taskDetailMap[task.id]);
+  const { items: contextMenuItems, onContextMenu: handleContextMenuOpen } = useTaskItemContextMenu(
+    task,
+    routeScope,
+  );
   const navigate = useWorkspaceAwareNavigate();
+  const activeWorkspaceId = useActiveWorkspaceId();
 
   const time = formatTaskItemDate(task.updatedAt || task.createdAt, {
     formatOtherYear: t('time.formatOtherYear'),
@@ -58,14 +71,27 @@ const AgentTaskItem = memo<TaskItemProps>(({ task, variant = 'default' }) => {
   const hasName = Boolean(task.name?.trim());
 
   const handleClick = useCallback(() => {
-    navigate(taskDetailPath(task.identifier, task.assigneeAgentId ?? undefined));
-  }, [navigate, task.assigneeAgentId, task.identifier]);
+    navigate(
+      taskDetailPath(
+        task.identifier,
+        routeScope === 'agent' ? (task.assigneeAgentId ?? undefined) : undefined,
+        task.name,
+      ),
+    );
+  }, [navigate, routeScope, task.assigneeAgentId, task.identifier, task.name]);
+
+  const handleRequestSubtasks = useCallback(async () => {
+    const detail = await fetchTaskDetail(task.id);
+    return detail.subtasks ?? [];
+  }, [fetchTaskDetail, task.id]);
 
   const handleSubtaskClick = useCallback(
-    (identifier: string, assigneeAgentId?: string) => {
-      navigate(taskDetailPath(identifier, assigneeAgentId));
+    (identifier: string, assigneeAgentId?: string, name?: string) => {
+      navigate(
+        taskDetailPath(identifier, routeScope === 'agent' ? assigneeAgentId : undefined, name),
+      );
     },
-    [navigate],
+    [navigate, routeScope],
   );
 
   const scheduledBadge =
@@ -85,10 +111,25 @@ const AgentTaskItem = memo<TaskItemProps>(({ task, variant = 'default' }) => {
       </Block>
     ) : null;
 
+  const privacyBadge =
+    task.visibility === 'private' ? (
+      <Tooltip title={tChat('createTask.visibility.helperPrivate', { defaultValue: 'Private' })}>
+        <Icon color={cssVar.colorTextDescription} icon={LockIcon} size={14} />
+      </Tooltip>
+    ) : null;
+
+  const archivedBadge = task.archivedAt ? (
+    <Tooltip title={tChat('taskList.archived')}>
+      <Icon color={cssVar.colorTextDescription} icon={ArchiveIcon} size={14} />
+    </Tooltip>
+  ) : null;
+
   const titleRow = (
     <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
-      <TaskPriorityTag priority={task.priority} taskIdentifier={task.identifier} />
-      <TaskStatusTag status={status} taskIdentifier={task.identifier} />
+      <TaskPriorityTag priority={task.priority} taskIdentifier={task.id} />
+      <TaskStatusTag status={status} taskIdentifier={task.id} />
+      {privacyBadge}
+      {archivedBadge}
       {hasName ? (
         <>
           <Text style={{ flex: 'none' }} type={'secondary'}>
@@ -106,26 +147,55 @@ const AgentTaskItem = memo<TaskItemProps>(({ task, variant = 'default' }) => {
       {scheduledBadge}
       <TaskSubtaskProgressTag
         currentIdentifier={task.identifier}
+        progress={task.subtaskProgress}
         subtasks={taskDetail?.subtasks}
+        onRequestSubtasks={handleRequestSubtasks}
         onSubtaskClick={handleSubtaskClick}
       />
+      <TaskLabelChips labels={task.labels} />
     </Flexbox>
   );
 
   const assigneeNode = (
-    <AssigneeAgentSelector
-      currentAgentId={task.assigneeAgentId}
-      disabled={status === 'running'}
-      taskIdentifier={task.identifier}
-    >
-      <AssigneeAvatar agentId={task.assigneeAgentId} />
-    </AssigneeAgentSelector>
+    <Flexbox horizontal align={'center'} flex={'none'} gap={4}>
+      {shouldShowMemberAssignee(activeWorkspaceId, task.assigneeUserId) && (
+        <AssigneeMemberSelector
+          currentUserId={task.assigneeUserId}
+          taskCreatorId={task.createdByUserId}
+          taskIdentifier={task.id}
+          taskVisibility={task.visibility}
+        >
+          {task.assigneeUserId ? (
+            <AssigneeUserAvatar tooltip userId={task.assigneeUserId} />
+          ) : (
+            <Tooltip title={tChat('taskList.assignTo')}>
+              <UnassignedAssigneeIcon kind={'human'} />
+            </Tooltip>
+          )}
+        </AssigneeMemberSelector>
+      )}
+      <AssigneeAgentSelector
+        currentAgentId={task.assigneeAgentId}
+        disabled={status === 'running'}
+        taskCreatorId={task.createdByUserId}
+        taskIdentifier={task.id}
+        taskVisibility={task.visibility}
+      >
+        {task.assigneeAgentId ? (
+          <AssigneeAvatar agentId={task.assigneeAgentId} tooltip={status !== 'running'} />
+        ) : (
+          <Tooltip title={status === 'running' ? undefined : tChat('taskList.assignTo')}>
+            <AssigneeAvatar agentId={task.assigneeAgentId} />
+          </Tooltip>
+        )}
+      </AssigneeAgentSelector>
+    </Flexbox>
   );
 
   const scheduleNode = task.automationMode ? (
     <TaskTriggerTag
       automationMode={task.automationMode}
-      heartbeatInterval={taskDetail?.heartbeat?.interval}
+      heartbeatInterval={task.heartbeatInterval}
       schedulePattern={task.schedulePattern}
       scheduleTimezone={task.scheduleTimezone}
     />
@@ -145,28 +215,40 @@ const AgentTaskItem = memo<TaskItemProps>(({ task, variant = 'default' }) => {
   if (variant === 'compact') {
     return (
       <ContextMenuTrigger items={contextMenuItems} onContextMenu={handleContextMenuOpen}>
-        <Block clickable gap={8} padding={12} variant={'borderless'} onClick={handleClick}>
+        <Block
+          clickable
+          className={className}
+          gap={8}
+          padding={12}
+          variant={'borderless'}
+          onClick={handleClick}
+        >
           <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
-            <Text fontSize={12} style={{ flex: 'none' }} type={'secondary'}>
-              {task.identifier}
-            </Text>
+            <Flexbox horizontal align={'center'} flex={'none'} gap={6}>
+              <Text fontSize={12} type={'secondary'}>
+                {task.identifier}
+              </Text>
+              {archivedBadge}
+            </Flexbox>
             {assigneeNode}
           </Flexbox>
           <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
-            <TaskStatusTag status={status} taskIdentifier={task.identifier} />
+            <TaskStatusTag status={status} taskIdentifier={task.id} />
             <Text ellipsis style={{ minWidth: 0 }} weight={500}>
               {hasName ? task.name : task.identifier}
             </Text>
             {scheduledBadge}
             <TaskSubtaskProgressTag
               currentIdentifier={task.identifier}
+              progress={task.subtaskProgress}
               subtasks={taskDetail?.subtasks}
+              onRequestSubtasks={handleRequestSubtasks}
               onSubtaskClick={handleSubtaskClick}
             />
           </Flexbox>
-          <TaskLatestActivity activities={taskDetail?.activities} />
           <Flexbox horizontal align={'center'} gap={8} style={FLEX_MIN_WIDTH_0}>
-            <TaskPriorityTag priority={task.priority} taskIdentifier={task.identifier} />
+            <TaskPriorityTag priority={task.priority} taskIdentifier={task.id} />
+            <TaskLabelChips labels={task.labels} max={2} />
             {scheduleNode}
             {timeNode}
           </Flexbox>
@@ -177,7 +259,14 @@ const AgentTaskItem = memo<TaskItemProps>(({ task, variant = 'default' }) => {
 
   return (
     <ContextMenuTrigger items={contextMenuItems} onContextMenu={handleContextMenuOpen}>
-      <Block clickable gap={4} padding={12} variant={'borderless'} onClick={handleClick}>
+      <Block
+        clickable
+        className={className}
+        gap={4}
+        padding={12}
+        variant={'borderless'}
+        onClick={handleClick}
+      >
         <Flexbox horizontal align={'center'} gap={4} justify={'space-between'}>
           {titleRow}
           <Flexbox horizontal align={'center'} flex={'none'} gap={8}>
@@ -186,7 +275,6 @@ const AgentTaskItem = memo<TaskItemProps>(({ task, variant = 'default' }) => {
             {timeNode}
           </Flexbox>
         </Flexbox>
-        <TaskLatestActivity activities={taskDetail?.activities} />
       </Block>
     </ContextMenuTrigger>
   );

@@ -5,6 +5,8 @@ import useSWR from 'swr';
 import { agentSignalKeys } from '@/libs/swr/keys';
 import { agentSignalService } from '@/services/agentSignal';
 
+import { collectSteerChains } from '../../store/slices/data/steerChains';
+
 /** Poll cadence for the active conversation's Agent Signal receipt surface. */
 const AGENT_SIGNAL_RECEIPT_INITIAL_REFRESH_INTERVAL_MS = 3000;
 
@@ -139,13 +141,19 @@ const resolveDisplayedAnchorMessageId = (
   anchorMessageId: string,
   displayMessages: UIChatMessage[],
 ) => {
-  if (displayMessages.some((message) => message.id === anchorMessageId)) return anchorMessageId;
+  const { hostOf } = collectSteerChains(displayMessages);
 
-  return displayMessages.find(
+  if (displayMessages.some((message) => message.id === anchorMessageId)) {
+    return hostOf.get(anchorMessageId) ?? anchorMessageId;
+  }
+
+  const assistantGroupId = displayMessages.find(
     (message) =>
       message.role === 'assistantGroup' &&
       message.children?.some((block) => block.id === anchorMessageId),
   )?.id;
+
+  return assistantGroupId ? (hostOf.get(assistantGroupId) ?? assistantGroupId) : undefined;
 };
 
 const resolveEffectiveAnchorMessageId = (
@@ -161,15 +169,12 @@ const resolveEffectiveAnchorMessageId = (
     receipt.triggerMessageId,
     displayMessages,
   );
-  if (assistantReplyId) return assistantReplyId;
+  if (assistantReplyId) return resolveDisplayedAnchorMessageId(assistantReplyId, displayMessages);
 
-  // WORKAROUND:
-  // Start-triggered Agent Signal receipts can arrive before the assistant row is available, so
-  // falling back to the trigger keeps them visible and prevents latest-message drift.
-  //
-  // TODO:
-  // Remove or simplify this fallback when all user-triggered paths provide anchorMessageId or
-  // stable assistant child resolution.
+  // Display fallback belongs here, not in the persisted receipt. A trigger-only
+  // receipt tells us why the signal fired; the UI can attach it to the assistant
+  // reply when that row exists, or keep it visible on the triggering user message
+  // while the assistant row is still unavailable.
   return receipt.triggerMessageId;
 };
 
@@ -198,9 +203,11 @@ const mergeReceiptRefresh = (
 ) => {
   if (newReceipts.length === 0) return currentReceipts;
 
-  const existingIds = new Set(currentReceipts.map((receipt) => receipt.id));
+  const mergedById = new Map(currentReceipts.map((receipt) => [receipt.id, receipt]));
 
-  return [...newReceipts.filter((receipt) => !existingIds.has(receipt.id)), ...currentReceipts]
-    .sort((a, b) => b.createdAt - a.createdAt)
-    .slice(0, 20);
+  for (const receipt of newReceipts) {
+    mergedById.set(receipt.id, receipt);
+  }
+
+  return [...mergedById.values()].sort((a, b) => b.createdAt - a.createdAt).slice(0, 20);
 };

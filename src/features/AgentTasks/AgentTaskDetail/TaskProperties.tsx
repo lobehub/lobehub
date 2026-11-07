@@ -1,15 +1,27 @@
 import type { TaskPriority, TaskStatus } from '@lobechat/types';
-import { Block, Text } from '@lobehub/ui';
+import { Block, cssVar, Icon, Text } from '@lobehub/ui';
+import { ArchiveIcon, Stamp, TagIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import TaskLabelChips from '@/features/TaskLabels/TaskLabelChips';
+import TaskLabelPicker from '@/features/TaskLabels/TaskLabelPicker';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
+import AssigneeMemberSelector from '../features/AssigneeMemberSelector';
+import AssigneeUserAvatar from '../features/AssigneeUserAvatar';
 import TaskPriorityTag from '../features/TaskPriorityTag';
 import TaskStatusTag from '../features/TaskStatusTag';
 import TaskTriggerTag from '../features/TaskTriggerTag';
+import { UnassignedAssigneeIcon } from '../features/UnassignedAssigneeIcon';
+import { shouldShowMemberAssignee } from '../shared/memberAssigneeMode';
+import { useUserDisplayMeta } from '../shared/useUserDisplayMeta';
+import TaskAcceptanceStateRow from './TaskAcceptanceStateRow';
+import { taskDetailLayoutStyles as styles } from './taskDetailLayoutStyles';
 import TaskScheduleConfig from './TaskScheduleConfig';
+import { useTaskAcceptanceWait } from './useTaskAcceptanceWait';
 
 interface StatusMeta {
   labelKey: string;
@@ -42,11 +54,21 @@ const TaskProperties = memo(() => {
 
   const taskId = useTaskStore(taskDetailSelectors.activeTaskId);
   const status = useTaskStore(taskDetailSelectors.activeTaskStatus) as TaskStatus | undefined;
+  const isArchived = !!useTaskStore(taskDetailSelectors.activeTaskArchivedAt);
   const priority = useTaskStore(taskDetailSelectors.activeTaskPriority);
+  const assigneeUserId = useTaskStore(taskDetailSelectors.activeTaskAssigneeUserId);
+  const createdByUserId = useTaskStore(taskDetailSelectors.activeTaskCreatedByUserId);
+  const visibility = useTaskStore(taskDetailSelectors.activeTaskVisibility);
   const heartbeatInterval = useTaskStore(taskDetailSelectors.activeTaskPeriodicInterval);
   const automationMode = useTaskStore(taskDetailSelectors.activeTaskAutomationMode);
   const schedulePattern = useTaskStore(taskDetailSelectors.activeTaskSchedulePattern);
   const scheduleTimezone = useTaskStore(taskDetailSelectors.activeTaskScheduleTimezone);
+  const memberMeta = useUserDisplayMeta(assigneeUserId);
+  const activeWorkspaceId = useActiveWorkspaceId();
+  const acceptanceWait = useTaskAcceptanceWait();
+  const taskDatabaseId = useTaskStore(taskDetailSelectors.activeTaskDatabaseId);
+  const labels = useTaskStore(taskDetailSelectors.activeTaskLabels);
+  const setTaskLabels = useTaskStore((s) => s.setTaskLabels);
 
   if (!taskId) return null;
 
@@ -54,30 +76,60 @@ const TaskProperties = memo(() => {
   const priorityMeta = PRIORITY_META[priority as TaskPriority] ?? PRIORITY_META[0];
 
   return (
-    <Block gap={4} padding={4} variant={'outlined'} width={200}>
+    <div className={styles.properties}>
       <TaskStatusTag status={status} taskIdentifier={taskId}>
         <Block
           clickable
           horizontal
           align="center"
-          gap={10}
-          paddingBlock={4}
-          paddingInline={8}
+          className={styles.propertyItem}
+          gap={8}
           variant={'borderless'}
         >
-          <TaskStatusTag disableDropdown size={16} status={status} taskIdentifier={taskId} />
-          <Text weight={500}>{t(`taskDetail.${statusMeta.labelKey}` as never)}</Text>
+          {/* `running` covers both an executing agent and a stopped one whose
+              acceptance round has yet to settle; only the first is "in progress". */}
+          {acceptanceWait ? (
+            <Icon color={cssVar.colorWarning} icon={Stamp} size={16} />
+          ) : (
+            <TaskStatusTag disableDropdown size={16} status={status} taskIdentifier={taskId} />
+          )}
+          <Text weight={500}>
+            {acceptanceWait
+              ? t('taskDetail.status.awaitingAcceptance')
+              : t(`taskDetail.${statusMeta.labelKey}` as never)}
+          </Text>
         </Block>
       </TaskStatusTag>
+
+      {/* Archived is the user's close-out on top of the status, not a status
+          itself — shown read-only; the header menu restores it. */}
+      {isArchived && (
+        <Block
+          horizontal
+          align="center"
+          className={styles.propertyItem}
+          gap={8}
+          variant={'borderless'}
+        >
+          <Icon color={cssVar.colorTextDescription} icon={ArchiveIcon} size={16} />
+          <Text style={{ color: cssVar.colorTextDescription }} weight={500}>
+            {t('taskList.archived')}
+          </Text>
+        </Block>
+      )}
+
+      {/* The human layer: whether the delivery is accepted. Read-only here —
+          the decision itself is made on the acceptance page this links to.
+          Recurring tasks have no delivery acceptance, so no state to show. */}
+      {!automationMode && <TaskAcceptanceStateRow />}
 
       <TaskPriorityTag priority={priority} taskIdentifier={taskId}>
         <Block
           clickable
           horizontal
           align="center"
-          gap={10}
-          paddingBlock={4}
-          paddingInline={8}
+          className={styles.propertyItem}
+          gap={8}
           variant={'borderless'}
         >
           <TaskPriorityTag disableDropdown priority={priority} size={16} taskIdentifier={taskId} />
@@ -85,14 +137,82 @@ const TaskProperties = memo(() => {
         </Block>
       </TaskPriorityTag>
 
+      {shouldShowMemberAssignee(activeWorkspaceId, assigneeUserId) && (
+        <AssigneeMemberSelector
+          currentUserId={assigneeUserId}
+          taskCreatorId={createdByUserId}
+          taskIdentifier={taskId}
+          taskVisibility={visibility}
+        >
+          <Block
+            clickable
+            horizontal
+            align="center"
+            className={styles.propertyItem}
+            gap={8}
+            variant={'borderless'}
+          >
+            {assigneeUserId ? (
+              <>
+                <AssigneeUserAvatar size={16} userId={assigneeUserId} />
+                <Text ellipsis style={{ minWidth: 0 }} weight={500}>
+                  {memberMeta?.title}
+                </Text>
+              </>
+            ) : (
+              <>
+                <UnassignedAssigneeIcon kind={'human'} size={16} />
+                <Text style={{ color: cssVar.colorTextDescription }} weight={500}>
+                  {t('taskDetail.assignee')}
+                </Text>
+              </>
+            )}
+          </Block>
+        </AssigneeMemberSelector>
+      )}
+
+      <TaskLabelPicker
+        disabled={!taskDatabaseId}
+        value={labels}
+        onChange={(next) => {
+          if (taskDatabaseId) void setTaskLabels(taskDatabaseId, labels, next);
+        }}
+      >
+        <Block
+          clickable
+          horizontal
+          align="center"
+          className={styles.propertyItem}
+          gap={8}
+          // Property rows have a fixed height; this one grows with wrapped chips
+          // so a second line never overlaps the row below.
+          style={{ flexWrap: 'wrap', height: 'auto', minHeight: 30, paddingBlock: 4 }}
+          variant={'borderless'}
+        >
+          {labels.length > 0 ? (
+            <TaskLabelChips wrap labels={labels} max={6} />
+          ) : (
+            <>
+              <Icon color={cssVar.colorTextDescription} icon={TagIcon} size={16} />
+              <Text style={{ color: cssVar.colorTextDescription }} weight={500}>
+                {t('taskLabel.add')}
+              </Text>
+            </>
+          )}
+        </Block>
+      </TaskLabelPicker>
+
+      {/* Where the runs go lives in the detail header's main column, next to the
+          assignee it inherits from — not in this rail. See
+          `TaskExecutionConfig`. */}
+
       <TaskScheduleConfig>
         <Block
           clickable
           horizontal
           align="center"
-          gap={10}
-          paddingBlock={4}
-          paddingInline={8}
+          className={styles.propertyItem}
+          gap={8}
           variant={'borderless'}
         >
           <TaskTriggerTag
@@ -104,7 +224,7 @@ const TaskProperties = memo(() => {
           />
         </Block>
       </TaskScheduleConfig>
-    </Block>
+    </div>
   );
 });
 

@@ -1,0 +1,175 @@
+'use client';
+
+import { Flexbox, Text, TextArea } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
+import { memo } from 'react';
+
+import { OptionCard } from '../components';
+import type { AskUserQuestionItem } from './types';
+
+const styles = stylex.create({
+  customRow: { marginBlockStart: '2px', paddingInlineStart: '12px' },
+  index: {
+    flexShrink: 0,
+    boxSizing: 'border-box',
+    width: '22px',
+    height: '22px',
+    borderRadius: '6px',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '12px',
+    fontWeight: 600,
+    lineHeight: '22px',
+    color: cssVar.colorTextSecondary,
+    textAlign: 'center',
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+});
+
+interface QuestionPanelProps {
+  /** The picked option id(s), falling back to labels for legacy options. */
+  answer: string | string[] | undefined;
+  /** Placeholder for the trailing "write your own" free-text row. */
+  customPlaceholder: string;
+  /** The free-text "write your own" value for this question. */
+  customValue: string;
+  disabled: boolean;
+  /** 0-based keyboard cursor over the option rows (↑/↓ navigation), if any. */
+  highlightedIndex?: number;
+  /** Tag shown next to the header when the question is multi-select. */
+  multiSelectTag: string;
+  onCustomChange: (q: AskUserQuestionItem, value: string) => void;
+  /**
+   * Arrow-key hand-off from the free-text row back into the option list:
+   * `prev` fires on ↑ at the very start of the text, `next` on ↓ with the box
+   * empty — anywhere else the arrows keep their native caret behavior.
+   */
+  onCustomNavigate?: (direction: 'next' | 'prev') => void;
+  /**
+   * Submit the whole form from the free-text box on Enter (Shift+Enter still
+   * inserts a newline). Pass `undefined` while submit is unavailable so Enter
+   * falls back to the default newline behavior.
+   */
+  onPressEnter?: () => void;
+  onToggle: (q: AskUserQuestionItem, value: string) => void;
+  question: AskUserQuestionItem;
+  /** Badge text for options carrying the "(Recommended)" label marker. */
+  recommendedTag: string;
+}
+
+/**
+ * A single question: its header/title, the numbered options, and a trailing
+ * free-text box so the user can answer in their own words instead of picking.
+ *
+ * Presentational and i18n-free — the visible strings come in as props so the
+ * panel stays app-decoupled and reusable across surfaces.
+ */
+export const QuestionPanel = memo<QuestionPanelProps>(
+  ({
+    question,
+    answer,
+    customValue,
+    customPlaceholder,
+    disabled,
+    highlightedIndex,
+    multiSelectTag,
+    onToggle,
+    onCustomChange,
+    onCustomNavigate,
+    onPressEnter,
+    recommendedTag,
+  }) => {
+    const isOptionSelected = (value: string): boolean =>
+      question.multiSelect ? Array.isArray(answer) && answer.includes(value) : answer === value;
+
+    return (
+      <Flexbox gap={10}>
+        <Flexbox horizontal align="center" gap={8}>
+          {question.header && <Text type="secondary">{question.header}</Text>}
+          {question.multiSelect && (
+            <Text fontSize={12} type="secondary">
+              {multiSelectTag}
+            </Text>
+          )}
+        </Flexbox>
+        <Flexbox gap={2}>
+          <Text strong>{question.question}</Text>
+          {question.description && (
+            <Text fontSize={12} type="secondary">
+              {question.description}
+            </Text>
+          )}
+        </Flexbox>
+
+        <Flexbox gap={4} role="listbox">
+          {question.options.map((opt, optIdx) => {
+            const value = opt.id ?? opt.label;
+            return (
+              <OptionCard
+                description={opt.description}
+                disabled={disabled}
+                highlighted={highlightedIndex === optIdx}
+                index={optIdx + 1}
+                key={value}
+                label={opt.label}
+                recommendedText={opt.recommended ? recommendedTag : undefined}
+                selected={isOptionSelected(value)}
+                onToggle={() => onToggle(question, value)}
+              />
+            );
+          })}
+          {/* Last item: let the user write their own answer for this question.
+              Numbered as the next option so it reads as one more choice. */}
+          <Flexbox
+            horizontal
+            align="center"
+            className={stylex.props(styles.customRow).className}
+            gap={12}
+          >
+            <span {...stylex.props(styles.index)}>{question.options.length + 1}</span>
+            <TextArea
+              autoSize={{ maxRows: 4, minRows: 1 }}
+              disabled={disabled}
+              placeholder={customPlaceholder}
+              style={{ flex: 1 }}
+              value={customValue}
+              variant="filled"
+              onChange={(e) => onCustomChange(question, e.target.value)}
+              onKeyDown={(e) => {
+                // The IME guard keeps CJK composition confirms from acting.
+                if (e.nativeEvent.isComposing) return;
+                if (e.metaKey || e.ctrlKey || e.altKey) return;
+                const el = e.currentTarget;
+                if (e.key === 'ArrowUp' && onCustomNavigate) {
+                  if (el.selectionStart === 0 && el.selectionEnd === 0) {
+                    e.preventDefault();
+                    el.blur();
+                    onCustomNavigate('prev');
+                  }
+                  return;
+                }
+                if (e.key === 'ArrowDown' && onCustomNavigate) {
+                  if (!el.value) {
+                    e.preventDefault();
+                    el.blur();
+                    onCustomNavigate('next');
+                  }
+                  return;
+                }
+                if (e.key !== 'Enter' || e.shiftKey) return;
+                if (!onPressEnter) return;
+                e.preventDefault();
+                onPressEnter();
+              }}
+            />
+          </Flexbox>
+        </Flexbox>
+      </Flexbox>
+    );
+  },
+);
+
+QuestionPanel.displayName = 'AskUserQuestionPanel';
+
+export default QuestionPanel;

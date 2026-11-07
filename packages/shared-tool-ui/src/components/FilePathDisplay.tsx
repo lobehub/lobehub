@@ -1,56 +1,78 @@
 'use client';
 
-import { MaterialFileTypeIcon, Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { Icon, MaterialFileTypeIcon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
+import { ImageIcon } from 'lucide-react';
 import path from 'path-browserify-esm';
 import { memo, useMemo } from 'react';
 
-const styles = createStaticStyles(({ css }) => ({
-  icon: css`
-    flex-shrink: 0;
-    margin-inline-end: 4px;
-  `,
-  text: css`
-    overflow: hidden;
-    color: ${cssVar.colorText};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-}));
+const IMAGE_EXTENSIONS = new Set([
+  '.apng',
+  '.avif',
+  '.bmp',
+  '.gif',
+  '.heic',
+  '.heif',
+  '.ico',
+  '.jpeg',
+  '.jpg',
+  '.png',
+  '.svg',
+  '.tif',
+  '.tiff',
+  '.webp',
+]);
+
+const styles = stylex.create({
+  icon: { flexShrink: 0, marginInlineEnd: '4px' },
+  text: { paddingBlock: '1px', color: cssVar.colorText },
+});
 
 interface FilePathDisplayProps {
   filePath: string;
   isDirectory?: boolean;
 }
 
+export const getFilePathDisplayInfo = (filePath: string) => {
+  if (!filePath) return { displayPath: '', isImage: false, name: '' };
+
+  const { base, dir, ext } = path.parse(filePath);
+  const parentDir = path.basename(dir);
+
+  return {
+    displayPath: parentDir ? `${parentDir}/${base}` : base,
+    isImage: IMAGE_EXTENSIONS.has(ext.toLowerCase()),
+    name: base,
+  };
+};
+
 export const FilePathDisplay = memo<FilePathDisplayProps>(({ filePath, isDirectory }) => {
-  const { displayPath, name } = useMemo(() => {
-    if (!filePath) return { displayPath: '', name: '' };
-    const { base, dir } = path.parse(filePath);
-    const parentDir = path.basename(dir);
-    return {
-      displayPath: parentDir ? `${parentDir}/${base}` : base,
-      name: base,
-    };
-  }, [filePath]);
+  const { displayPath, isImage, name } = useMemo(
+    () => getFilePathDisplayInfo(filePath),
+    [filePath],
+  );
 
   if (!filePath) return null;
 
   return (
     <>
-      {name && (
-        <MaterialFileTypeIcon
-          className={styles.icon}
-          fallbackUnknownType={false}
-          filename={name}
-          size={16}
-          type={isDirectory ? 'folder' : 'file'}
-          variant={'raw'}
-        />
-      )}
+      {name &&
+        (isImage && !isDirectory ? (
+          <Icon className={stylex.props(styles.icon).className} icon={ImageIcon} size={16} />
+        ) : (
+          <MaterialFileTypeIcon
+            className={stylex.props(styles.icon).className}
+            fallbackUnknownType={false}
+            filename={name}
+            size={16}
+            type={isDirectory ? 'folder' : 'file'}
+            variant={'raw'}
+          />
+        ))}
       {displayPath && (
         <Text
-          className={styles.text}
+          className={stylex.props(styles.text).className}
           ellipsis={{
             tooltipWhenOverflow: true,
           }}

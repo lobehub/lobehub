@@ -1,8 +1,6 @@
 import { Button, Icon, InputPassword, Text } from '@lobehub/ui';
-import { type FormInstance, type InputRef } from 'antd';
-import { Form } from 'antd';
-import { cssVar } from 'antd-style';
-import { ChevronLeft, ChevronRight, Lock } from 'lucide-react';
+import { Form, type FormInstance } from '@lobehub/ui/form';
+import { Lock } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -10,23 +8,23 @@ import AuthCard from '@/features/AuthCard';
 
 export interface SignInPasswordStepProps {
   email: string;
+  forgotLoading: boolean;
   form: FormInstance<{ password: string }>;
   loading: boolean;
   onBackToEmail: () => void;
   onForgotPassword: () => Promise<void>;
-  onSubmit: (values: { password: string }) => Promise<void>;
 }
 
 export const SignInPasswordStep = ({
   email,
   form,
+  forgotLoading,
   loading,
   onBackToEmail,
   onForgotPassword,
-  onSubmit,
 }: SignInPasswordStepProps) => {
   const { t } = useTranslation('auth');
-  const passwordInputRef = useRef<InputRef>(null);
+  const passwordInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     passwordInputRef.current?.focus();
@@ -34,69 +32,71 @@ export const SignInPasswordStep = ({
 
   return (
     <AuthCard
-      subtitle={t('betterAuth.signin.passwordStep.subtitle')}
-      title={'Agent teammates that grow with you'}
+      subtitle={email}
+      title={t('betterAuth.signin.passwordStep.title')}
       footer={
-        <>
-          <Text fontSize={13} type={'secondary'}>
-            <a
-              style={{ color: 'inherit', cursor: 'pointer', textDecoration: 'underline' }}
-              onClick={onForgotPassword}
-            >
-              {t('betterAuth.signin.forgotPassword')}
-            </a>
-          </Text>
-          <Button
-            icon={ChevronLeft}
-            size={'large'}
-            style={{ marginTop: 16 }}
+        <Text align={'center'} fontSize={13} style={{ marginTop: 8 }} type={'secondary'}>
+          <a
+            role="button"
+            style={{ color: 'inherit', cursor: 'pointer', textDecoration: 'underline' }}
+            tabIndex={0}
             onClick={onBackToEmail}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onBackToEmail();
+              }
+            }}
           >
             {t('betterAuth.signin.backToEmail')}
-          </Button>
-        </>
+          </a>
+        </Text>
       }
     >
-      <Text fontSize={20}>{email}</Text>
-      <Form
-        form={form}
-        layout="vertical"
-        style={{ marginTop: 12 }}
-        onFinish={(values) => onSubmit(values as { password: string })}
-      >
-        <Form.Item
+      <Form form={form} gap={0} layout="vertical">
+        <Form.Field
           name="password"
-          rules={[{ message: t('betterAuth.errors.passwordRequired'), required: true }]}
-          style={{ marginBottom: 0 }}
+          style={{ gap: 0, paddingBlock: '0 24px' }}
+          validate={(value: string) =>
+            value ? undefined : t('betterAuth.errors.passwordRequired')
+          }
         >
           <InputPassword
+            autoComplete="current-password"
             placeholder={t('betterAuth.signin.passwordPlaceholder')}
+            prefix={<Icon icon={Lock} style={{ marginInline: 6 }} />}
             ref={passwordInputRef}
             size="large"
-            prefix={
-              <Icon
-                icon={Lock}
-                style={{
-                  marginInline: 6,
-                }}
-              />
-            }
-            style={{
-              padding: 6,
-            }}
-            suffix={
-              <Button
-                icon={ChevronRight}
-                loading={loading}
-                style={{ color: cssVar.colorPrimary }}
-                title={t('betterAuth.signin.submit')}
-                variant={'filled'}
-                onClick={() => form.submit()}
-              />
-            }
+            style={{ padding: 6 }}
           />
-        </Form.Item>
+        </Form.Field>
+        <Button block htmlType="submit" loading={loading} size="large" type="primary">
+          {t('betterAuth.signin.submit')}
+        </Button>
       </Form>
+      <Text align={'center'} fontSize={13} style={{ marginTop: 16 }} type={'secondary'}>
+        <a
+          aria-disabled={forgotLoading}
+          role="button"
+          tabIndex={0}
+          style={{
+            color: 'inherit',
+            cursor: forgotLoading ? 'default' : 'pointer',
+            opacity: forgotLoading ? 0.5 : 1,
+            pointerEvents: forgotLoading ? 'none' : undefined,
+            textDecoration: 'underline',
+          }}
+          onClick={onForgotPassword}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              void onForgotPassword();
+            }
+          }}
+        >
+          {t('betterAuth.signin.forgotPassword')}
+        </a>
+      </Text>
     </AuthCard>
   );
 };

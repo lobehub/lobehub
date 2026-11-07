@@ -35,6 +35,13 @@ LobeHub 支持多模态的 AI 会话，包括将图片、文件等非结构化�
 - 默认值：-
 - 示例：`https://cos.ap-chengdu.myqcloud.com`
 
+### `S3_INTERNAL_ENDPOINT`
+
+- 类型：可选
+- 描述：LobeHub 服务端自身发起 S3 请求（上传、元数据校验、读取、创建存储桶）时使用的端点。当 `S3_ENDPOINT` 只能被浏览器访问时配置，例如 Docker Compose 服务名。预签名 URL 仍使用 `S3_ENDPOINT`。
+- 默认值：`-`（使用 `S3_ENDPOINT`）
+- 示例：`http://rustfs:9000`
+
 ### `S3_BUCKET`
 
 - 类型：必填
@@ -53,8 +60,8 @@ LobeHub 支持多模态的 AI 会话，包括将图片、文件等非结构化�
 
 - 类型：可选
 - 描述：是否在上传文件时设置 ACL 为 `public-read`
-- 默认值：`1`
-- 示例：`0`
+- 默认值：`-`（默认关闭，仅显式设置为 `1` 时才会设置 public-read ACL）
+- 示例：`1`
 
 ### `S3_ENABLE_PATH_STYLE`
 
@@ -92,4 +99,4 @@ Route: [xai] ProviderBizError: Fetching images over plain http:// is not support
 - 默认值：undefined
 - 示例：`1`
 
-当设置为 `1` 时，LobeChat 会将视频转换为 base64 编码后上传到 LLM 模型中。
+当设置为 `1` 时，LobeHub 会将视频转换为 base64 编码后上传到 LLM 模型中。

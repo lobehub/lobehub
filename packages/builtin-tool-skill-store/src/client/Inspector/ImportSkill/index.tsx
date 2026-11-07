@@ -1,7 +1,9 @@
 'use client';
 
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { cx } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Check, X } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -10,12 +12,7 @@ import { highlightTextStyles, inspectorTextStyles, shinyTextStyles } from '@/sty
 
 import type { ImportSkillParams, ImportSkillState } from '../../../types';
 
-const styles = createStaticStyles(({ css }) => ({
-  statusIcon: css`
-    margin-block-end: -2px;
-    margin-inline-start: 4px;
-  `,
-}));
+const styles = stylex.create({ statusIcon: { marginBlockEnd: '-2px', marginInlineStart: '4px' } });
 
 export const ImportSkillInspector = memo<
   BuiltinInspectorProps<ImportSkillParams, ImportSkillState>
@@ -27,8 +24,10 @@ export const ImportSkillInspector = memo<
 
   if (isArgumentsStreaming && !url) {
     return (
-      <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-        <span>{t('builtins.lobe-skill-store.apiName.importSkill')}</span>
+      <div className={inspectorTextStyles.root}>
+        <span className={shinyTextStyles.shinyText}>
+          {t('builtins.lobe-skill-store.apiName.importSkill')}
+        </span>
       </div>
     );
   }
@@ -37,20 +36,25 @@ export const ImportSkillInspector = memo<
   const hasResult = pluginState?.success !== undefined;
 
   return (
-    <div
-      className={cx(
-        inspectorTextStyles.root,
-        (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
-      )}
-    >
-      <span>{t('builtins.lobe-skill-store.apiName.importSkill')}: </span>
+    <div className={inspectorTextStyles.root}>
+      <span className={cx((isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText)}>
+        {t('builtins.lobe-skill-store.apiName.importSkill')}:{' '}
+      </span>
       {displayName && <span className={highlightTextStyles.primary}>{displayName}</span>}
       {!isLoading &&
         hasResult &&
         (isSuccess ? (
-          <Check className={styles.statusIcon} color={cssVar.colorSuccess} size={14} />
+          <Check
+            className={stylex.props(styles.statusIcon).className}
+            color={cssVar.colorSuccess}
+            size={14}
+          />
         ) : (
-          <X className={styles.statusIcon} color={cssVar.colorError} size={14} />
+          <X
+            className={stylex.props(styles.statusIcon).className}
+            color={cssVar.colorError}
+            size={14}
+          />
         ))}
     </div>
   );

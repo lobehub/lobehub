@@ -11,8 +11,8 @@ describe('parseAgentConfig', () => {
     });
 
     it('parses nested fields correctly', () => {
-      const envStr = 'tts.sttLocale=en-US';
-      const expected = { tts: { sttLocale: 'en-US' } };
+      const envStr = 'tts.ttsService=openai';
+      const expected = { tts: { ttsService: 'openai' } };
       expect(parseAgentConfig(envStr)).toEqual(expected);
     });
 
@@ -68,14 +68,6 @@ describe('parseAgentConfig', () => {
       };
 
       // Assuming parseAgentConfig function has been implemented to understand and correctly parse the cascading keys format for fewShots
-      expect(parseAgentConfig(envStr)).toEqual(expected);
-    });
-
-    it('parses tts voice configuration correctly', () => {
-      const envStr = 'tts.voice.openai=english-voice;tts.voice.microsoft=spanish-voice';
-      const expected = {
-        tts: { voice: { openai: 'english-voice', microsoft: 'spanish-voice' } },
-      };
       expect(parseAgentConfig(envStr)).toEqual(expected);
     });
 

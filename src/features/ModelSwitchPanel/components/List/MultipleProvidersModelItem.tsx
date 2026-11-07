@@ -1,4 +1,5 @@
 import {
+  cx,
   DropdownMenuGroup,
   DropdownMenuGroupLabel,
   DropdownMenuItem,
@@ -13,42 +14,46 @@ import {
   menuSharedStyles,
   Tag,
 } from '@lobehub/ui';
-import { cx } from 'antd-style';
 import { Check } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { ModelItemRender, ProviderItemRender } from '@/components/ModelSelect';
+import { ProviderItemRender } from '@/components/ModelSelect';
 
 import { styles } from '../../styles';
 import { type ModelWithProviders } from '../../types';
 import { menuKey } from '../../utils';
 import ModelDetailPanel from '../ModelDetailPanel';
+import { ModelRowRender } from './ModelRowRender';
 
 interface MultipleProvidersModelItemProps {
   activeKey: string;
+  /** Muted text shown after the name when this model is the active one */
+  activeSecondaryText?: string;
   data: ModelWithProviders;
   defaultProviderId?: string;
+  /** Badge text of a restricted model */
+  getRestrictedLabel?: (modelId: string, providerId: string) => string;
   isModelRestricted?: (modelId: string, providerId: string) => boolean;
   newLabel: string;
+  onBeforeModelSelect?: (modelId: string, providerId: string) => boolean | Promise<boolean>;
   onClose: () => void;
   onModelChange: (modelId: string, providerId: string) => void;
   onRestrictedModelClick?: () => void;
-  proLabel?: string;
-  showInfoTag?: boolean;
 }
 
 export const MultipleProvidersModelItem = memo<MultipleProvidersModelItemProps>(
   ({
     activeKey,
+    activeSecondaryText,
     data,
+    getRestrictedLabel,
     isModelRestricted,
     newLabel,
+    onBeforeModelSelect,
     onModelChange,
     onClose,
     onRestrictedModelClick,
-    proLabel,
-    showInfoTag,
   }) => {
     const { t } = useTranslation('components');
     const [submenuOpen, setSubmenuOpen] = useState(false);
@@ -64,6 +69,14 @@ export const MultipleProvidersModelItem = memo<MultipleProvidersModelItemProps>(
       isModelRestricted &&
       data.providers.length > 0 &&
       data.providers.every((p) => isModelRestricted(data.model.id, p.id));
+
+    const selectModel = async (providerId: string) => {
+      setSubmenuOpen(false);
+      onClose();
+      if ((await onBeforeModelSelect?.(data.model.id, providerId)) === false) return;
+
+      onModelChange(data.model.id, providerId);
+    };
 
     return (
       <DropdownMenuSubmenuRoot
@@ -86,17 +99,20 @@ export const MultipleProvidersModelItem = memo<MultipleProvidersModelItemProps>(
               onClose();
               return;
             }
-            setSubmenuOpen(false);
-            onModelChange(data.model.id, defaultProvider.id);
-            onClose();
+            void selectModel(defaultProvider.id);
           }}
         >
-          <ModelItemRender
-            {...data.model}
-            {...data.model.abilities}
-            newBadgeLabel={newLabel}
-            proBadgeLabel={defaultProviderRestricted ? proLabel : undefined}
-            showInfoTag={showInfoTag}
+          <ModelRowRender
+            activeEffortLabel={activeSecondaryText}
+            isActive={isActive}
+            model={data.model}
+            newLabel={newLabel}
+            provider={(activeProvider ?? defaultProvider)?.id ?? ''}
+            proBadgeLabel={
+              defaultProviderRestricted && defaultProvider
+                ? getRestrictedLabel?.(data.model.id, defaultProvider.id)
+                : undefined
+            }
           />
         </DropdownMenuSubmenuTrigger>
         <DropdownMenuPortal>
@@ -124,9 +140,7 @@ export const MultipleProvidersModelItem = memo<MultipleProvidersModelItemProps>(
                           onClose();
                           return;
                         }
-                        setSubmenuOpen(false);
-                        onClose();
-                        onModelChange(data.model.id, p.id);
+                        void selectModel(p.id);
                       }}
                     >
                       <DropdownMenuItemIcon>
@@ -144,9 +158,9 @@ export const MultipleProvidersModelItem = memo<MultipleProvidersModelItemProps>(
                               type={'avatar'}
                             />
                           </Flexbox>
-                          {providerRestricted && proLabel && (
+                          {providerRestricted && getRestrictedLabel && (
                             <Tag color="gold" size="small">
-                              {proLabel}
+                              {getRestrictedLabel(data.model.id, p.id)}
                             </Tag>
                           )}
                         </Flexbox>

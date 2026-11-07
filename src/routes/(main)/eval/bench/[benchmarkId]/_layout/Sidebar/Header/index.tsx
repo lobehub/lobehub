@@ -2,19 +2,19 @@
 
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useParams } from 'react-router';
 
 import SideBarHeaderLayout from '@/features/NavPanel/SideBarHeaderLayout';
 
+import { useActiveBenchmarkId } from '../useActiveBenchmarkId';
 import BenchmarkHead from './BenchmarkHead';
 
 const Header = memo(() => {
-  const { benchmarkId } = useParams<{ benchmarkId: string }>();
+  const benchmarkId = useActiveBenchmarkId();
   const { t } = useTranslation('common');
   return (
     <SideBarHeaderLayout
       backTo="/eval"
-      left={<BenchmarkHead id={benchmarkId || ''} />}
+      left={<BenchmarkHead id={benchmarkId} />}
       breadcrumb={[
         {
           href: `/eval/bench/${benchmarkId}`,

@@ -1,8 +1,8 @@
-import { zValidator } from '@hono/zod-validator';
 import { Hono } from 'hono';
 
 import { getAllScopePermissions } from '@/utils/rbac';
 
+import { zValidator } from '../common/validator';
 import { ProviderController } from '../controllers/provider.controller';
 import { requireAuth } from '../middleware/auth';
 import { requireAnyPermission } from '../middleware/permission-check';
@@ -18,7 +18,10 @@ const ProviderRoutes = new Hono();
 ProviderRoutes.get(
   '/',
   requireAuth,
-  requireAnyPermission(getAllScopePermissions('AI_PROVIDER_READ'), 'You do not have permission to view provider list'),
+  requireAnyPermission(
+    getAllScopePermissions('AI_PROVIDER_READ'),
+    'You do not have permission to view provider list',
+  ),
   zValidator('query', ProviderListQuerySchema),
   (c) => {
     const controller = new ProviderController();
@@ -29,7 +32,10 @@ ProviderRoutes.get(
 ProviderRoutes.get(
   '/:id',
   requireAuth,
-  requireAnyPermission(getAllScopePermissions('AI_PROVIDER_READ'), 'You do not have permission to view provider details'),
+  requireAnyPermission(
+    getAllScopePermissions('AI_PROVIDER_READ'),
+    'You do not have permission to view provider details',
+  ),
   zValidator('param', ProviderIdParamSchema),
   (c) => {
     const controller = new ProviderController();
@@ -40,7 +46,10 @@ ProviderRoutes.get(
 ProviderRoutes.post(
   '/',
   requireAuth,
-  requireAnyPermission(getAllScopePermissions('AI_PROVIDER_CREATE'), 'You do not have permission to create a provider'),
+  requireAnyPermission(
+    getAllScopePermissions('AI_PROVIDER_CREATE'),
+    'You do not have permission to create a provider',
+  ),
   zValidator('json', CreateProviderRequestSchema),
   (c) => {
     const controller = new ProviderController();
@@ -51,7 +60,10 @@ ProviderRoutes.post(
 ProviderRoutes.patch(
   '/:id',
   requireAuth,
-  requireAnyPermission(getAllScopePermissions('AI_PROVIDER_UPDATE'), 'You do not have permission to update a provider'),
+  requireAnyPermission(
+    getAllScopePermissions('AI_PROVIDER_UPDATE'),
+    'You do not have permission to update a provider',
+  ),
   zValidator('param', ProviderIdParamSchema),
   zValidator('json', UpdateProviderRequestSchema),
   (c) => {
@@ -63,7 +75,10 @@ ProviderRoutes.patch(
 ProviderRoutes.delete(
   '/:id',
   requireAuth,
-  requireAnyPermission(getAllScopePermissions('AI_PROVIDER_DELETE'), 'You do not have permission to delete a provider'),
+  requireAnyPermission(
+    getAllScopePermissions('AI_PROVIDER_DELETE'),
+    'You do not have permission to delete a provider',
+  ),
   zValidator('param', ProviderIdParamSchema),
   (c) => {
     const controller = new ProviderController();

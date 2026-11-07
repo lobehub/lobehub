@@ -6,6 +6,8 @@ import { ConnectorSourceType } from '@/database/schemas';
 import DevModal from '@/features/PluginDevModal';
 import { useToolStore } from '@/store/tool';
 import { connectorSelectors } from '@/store/tool/slices/connector';
+import { waitForConnectorOAuth } from '@/utils/connectorOAuth';
+import { executeOAuthCreate } from '@/utils/connectorOAuthCreate';
 
 import { executeLegacyMigrationSave } from './legacyPluginMigration';
 
@@ -27,49 +29,6 @@ interface CustomConnectorModalProps {
   open: boolean;
 }
 
-interface OAuthPopupResult {
-  error?: string;
-  status: 'success' | 'error' | 'dismissed';
-  synced?: boolean;
-}
-
-/**
- * Wait for an already-opened popup to report the OAuth result. The popup MUST be
- * opened synchronously from the user's click (see DevModal) and then navigated
- * to the authorize URL. The callback page posts a message before attempting
- * `window.close()`, so the message signal is reliable even when the browser
- * refuses to close a cross-origin-navigated popup.
- */
-const waitForOAuthPopup = (popup: Window, connectorId: string): Promise<OAuthPopupResult> =>
-  new Promise((resolve) => {
-    const cleanup = () => {
-      window.removeEventListener('message', onMessage);
-      clearInterval(timer);
-    };
-
-    const onMessage = (event: MessageEvent) => {
-      if (event.origin !== window.location.origin) return;
-      const data = event.data;
-      if (!data || data.type !== 'lobe-connector-oauth') return;
-      if (data.connectorId && data.connectorId !== connectorId) return;
-      cleanup();
-      resolve(
-        data.success
-          ? { status: 'success', synced: data.synced }
-          : { error: data.error, status: 'error' },
-      );
-    };
-
-    window.addEventListener('message', onMessage);
-
-    const timer = setInterval(() => {
-      if (popup.closed) {
-        cleanup();
-        resolve({ status: 'dismissed' });
-      }
-    }, 800);
-  });
-
 /** Drop empty key/value pairs a user may have left behind in an editor. */
 const cleanRecord = (record?: Record<string, string>): Record<string, string> | undefined => {
   if (!record) return undefined;
@@ -78,6 +37,17 @@ const cleanRecord = (record?: Record<string, string>): Record<string, string> | 
   );
   return Object.keys(cleaned).length > 0 ? cleaned : undefined;
 };
+
+/**
+ * The stdio launch config (including the `env` secrets an MCP stdio process is
+ * started with). Shipped at runtime by the list and edit reads, but not part of
+ * `ConnectorWithTools`.
+ */
+interface StdioConfig {
+  args?: string[];
+  command?: string;
+  env?: Record<string, string>;
+}
 
 /**
  * "Add / Edit custom connector" entry. Reuses the rich PluginDevModal MCP form,
@@ -97,6 +67,7 @@ const cleanRecord = (record?: Record<string, string>): Record<string, string> | 
 const CustomConnectorModal = memo<CustomConnectorModalProps>(
   ({ open, onClose, connectorId, legacyPlugin, onEditSuccess }) => {
     const createConnector = useToolStore((s) => s.createConnector);
+    const deleteConnector = useToolStore((s) => s.deleteConnector);
     const updateConnector = useToolStore((s) => s.updateConnector);
     const getConnectorForEdit = useToolStore((s) => s.getConnectorForEdit);
     const startConnectorOAuth = useToolStore((s) => s.startConnectorOAuth);
@@ -113,8 +84,16 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
 
     // Full connector data (with decrypted credentials) fetched for the edit form.
     // null = not yet loaded; object = loaded (credentials may still be null if none set).
+    //
+    // `metadata` and `mcpStdioConfig` come from this protected read, NOT from the
+    // list row: the list projection strips both secrets before it is persisted
+    // (see `withoutConnectorSecrets`), so a row hydrated from IndexedDB would
+    // seed the form with empty values and saving the untouched form would wipe
+    // the live env / custom headers.
     type EditFetchedData = {
       credentials: Exclude<ConnectorCredentials, { type: 'oauth2' }> | null;
+      mcpStdioConfig: StdioConfig | null | undefined;
+      metadata: Record<string, unknown> | null | undefined;
       oidcConfig: Omit<OIDCConfig, 'clientSecret'> | null | undefined;
     };
     const [editFetchedData, setEditFetchedData] = useState<EditFetchedData | null>(null);
@@ -135,6 +114,11 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
         if (controller.signal.aborted) return;
         setEditFetchedData({
           credentials: (data?.credentials ?? null) as EditFetchedData['credentials'],
+          // Keep `undefined` (the read did not ship the field) distinct from
+          // `null` (the server confirmed there is none): only the former may
+          // fall back to the list row.
+          mcpStdioConfig: data?.mcpStdioConfig,
+          metadata: data?.metadata,
           oidcConfig: (data?.oidcConfig ?? null) as EditFetchedData['oidcConfig'],
         });
       });
@@ -142,7 +126,7 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
       return () => {
         controller.abort();
       };
-    }, [open, connectorId]);
+    }, [open, connectorId, getConnectorForEdit]);
 
     // Build the pre-fill value for edit mode once the credentials fetch completes.
     // Returns undefined while loading so DevModal defers seeding the form.
@@ -154,9 +138,21 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
       if (!isEditMode || !connector || editFetchedData === null) return undefined;
 
       const c = connector as typeof connector & {
-        mcpStdioConfig?: { args?: string[]; command?: string; env?: Record<string, string> };
+        mcpStdioConfig?: StdioConfig;
       };
-      const mcpStdioConfig = c.mcpStdioConfig;
+      // Both of these are stripped from the persisted list projection, so the
+      // protected edit read is authoritative. `undefined` means the read did not
+      // ship the field at all (older server), which is the only case where the
+      // list row may be used; `null` means the server confirmed there is none,
+      // and a row cached by this browser must not resurrect it — that is how a
+      // connector re-created or cleared in another session would come back with
+      // stale secrets written from the editor.
+      const mcpStdioConfig =
+        editFetchedData.mcpStdioConfig === undefined
+          ? c.mcpStdioConfig
+          : (editFetchedData.mcpStdioConfig ?? undefined);
+      const metadata =
+        editFetchedData.metadata === undefined ? connector.metadata : editFetchedData.metadata;
 
       const { credentials, oidcConfig } = editFetchedData;
 
@@ -168,22 +164,32 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
             ? 'header'
             : 'none';
 
+      // Custom headers now live in metadata; older rows stored them as a
+      // 'header'-type credential. Read metadata first, fall back to the legacy
+      // credential so existing connectors still pre-fill their headers — and do
+      // so regardless of the auth radio (headers can coexist with bearer auth).
+      const customHeaders =
+        (metadata?.customHeaders as Record<string, string> | undefined) ??
+        (credentials?.type === 'header'
+          ? (credentials as { headers: Record<string, string> }).headers
+          : undefined);
+
       return {
         customParams: {
-          description: connector.metadata?.description as string | undefined,
+          description: metadata?.description as string | undefined,
           mcp: {
             args: mcpStdioConfig?.args,
             auth: {
-              clientId: oidcConfig?.clientId,
+              // Only a hand-registered client is the user's to edit. A client the
+              // server resolved (CIMD URL, DCR-issued id) stays out of the field;
+              // saving it back would relabel it as pre-registration.
+              clientId: oidcConfig?.scheme === 'pre_registration' ? oidcConfig.clientId : undefined,
               token: authType === 'bearer' ? (credentials as { token: string })?.token : undefined,
               type: authType === 'header' ? 'none' : authType,
             },
             command: mcpStdioConfig?.command,
             env: mcpStdioConfig?.env,
-            headers:
-              authType === 'header'
-                ? (credentials as { headers: Record<string, string> })?.headers
-                : undefined,
+            headers: customHeaders,
             type: (connector.mcpConnectionType ?? 'http') as 'http' | 'stdio',
             url: connector.mcpServerUrl ?? undefined,
           },
@@ -193,7 +199,10 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
       };
     }, [isEditMode, isMigrationMode, legacyPlugin, connector, editFetchedData]);
 
-    const handleSave = async (value: LobeToolCustomPlugin, ctx?: { oauthPopup?: Window | null }) => {
+    const handleSave = async (
+      value: LobeToolCustomPlugin,
+      ctx?: { oauthPopup?: Window | null },
+    ) => {
       // ── Migration mode ────────────────────────────────────────────────────
       // Promote a legacy `user_installed_plugins.type='customPlugin'` row into
       // a `user_connectors` row. Server `connector.create` is idempotent on
@@ -211,7 +220,14 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
         // `legacyPlugin` via `editValue`, so anything the user edited (or left
         // alone) is already inside `value`. Hand it to the orchestrator.
         const result = await executeLegacyMigrationSave(legacyPlugin, value, {
-          createConnector,
+          // The migration orchestrator predates the server-reported `isNew`
+          // and still keys its rollback on `hasExistingConnector` below.
+          createConnector: async (payload) => (await createConnector(payload)).id,
+          deleteConnector,
+          // Read fresh so the rollback only deletes a connector this migration
+          // created, never one the idempotent upsert merely updated.
+          hasExistingConnector: (id) =>
+            Boolean(connectorSelectors.connectorByIdentifier(id)(useToolStore.getState())),
           syncConnectorTools,
           uninstallCustomPlugin,
         });
@@ -250,21 +266,33 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
 
         if (newUrl !== undefined) patch.mcpServerUrl = newUrl;
 
+        // Custom headers live in metadata (independent of the auth credential and
+        // of the server URL), so always re-sync them from the form. Merge into the
+        // existing metadata — a jsonb update replaces the whole column, so other
+        // keys (e.g. description) must be carried over. Also migrates legacy rows
+        // that stored headers as a 'header' credential (cleared below).
+        //
+        // Guard on `connector`: only rewrite metadata once the connector record is
+        // loaded, so we never overwrite a populated column with `{}` (which would
+        // drop sibling keys like description). In practice the form can't be
+        // submitted before `connector` resolves, but this keeps it safe.
+        const headers = cleanRecord(mcp.headers);
+        if (connector) {
+          const nextMetadata: Record<string, unknown> = { ...connector.metadata };
+          if (headers) nextMetadata.customHeaders = headers;
+          else delete nextMetadata.customHeaders;
+          patch.metadata = nextMetadata;
+        }
+
         if (urlChanged) {
-          // Clear stale credentials whenever the server URL changes.
+          // Clear stale auth credentials whenever the server URL changes.
           patch.credentials = null;
         } else if (authType === 'bearer' && mcp.auth?.token?.trim()) {
           patch.credentials = { token: mcp.auth.token.trim(), type: 'bearer' as const };
         } else if (authType !== 'oauth2') {
-          // Auth radio 'none' covers both "no auth" and "header auth" (headers live in
-          // the Advanced section, not the auth radio). Mirror the create-mode logic:
-          // any filled headers → header credentials; empty → clear credentials.
-          const headers = cleanRecord(mcp.headers);
-          if (headers) {
-            patch.credentials = { headers, type: 'header' as const };
-          } else {
-            patch.credentials = null;
-          }
+          // 'none' / header-only auth: no separate auth credential — custom headers
+          // are persisted via metadata above, so clear the credentials column.
+          patch.credentials = null;
         }
 
         if (authType === 'oauth2') {
@@ -279,19 +307,13 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
         await updateConnector(connectorId, patch);
 
         if (authType === 'oauth2' && isHttp) {
-          const popup = ctx?.oauthPopup ?? null;
-          if (!popup) throw new Error('OAuth popup was blocked');
+          const popup = ctx?.oauthPopup;
           try {
             const authorizationUrl = await startConnectorOAuth(connectorId);
-            popup.location.href = authorizationUrl;
-            const result = await waitForOAuthPopup(popup, connectorId);
+            await waitForConnectorOAuth(popup, connectorId, authorizationUrl);
+          } finally {
+            popup?.close();
             await fetchConnectors();
-            if (result.status !== 'success') {
-              throw new Error(result.error || 'Authorization was not completed');
-            }
-          } catch (e) {
-            if (!popup.closed) popup.close();
-            throw e;
           }
         }
 
@@ -306,56 +328,84 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
         mcpServerUrl: isHttp ? mcp.url?.trim() : undefined,
         mcpStdioConfig: isHttp
           ? undefined
-          : { args: mcp.args ?? [], command: (mcp.command ?? '').trim(), env: cleanRecord(mcp.env) },
+          : {
+              args: mcp.args ?? [],
+              command: (mcp.command ?? '').trim(),
+              env: cleanRecord(mcp.env),
+            },
         name: identifier,
         sourceType: ConnectorSourceType.custom,
       };
 
       // OAuth: create with the OIDC config, then drive the authorize popup that
-      // DevModal already opened synchronously for us.
+      // DevModal opened for web, or the native desktop authorization window.
       if (isHttp && authType === 'oauth2') {
-        const popup = ctx?.oauthPopup ?? null;
-        if (!popup) throw new Error('OAuth popup was blocked');
+        const popup = ctx?.oauthPopup;
 
         const clientId = mcp.auth?.clientId?.trim();
         try {
-          const newConnectorId = await createConnector({
-            ...base,
-            oidcConfig: {
-              clientId: clientId || undefined,
-              clientSecret: mcp.auth?.clientSecret?.trim() || undefined,
-              // client_id present → pre-registration; absent → dynamic registration.
-              scheme: clientId ? 'pre_registration' : 'dcr',
+          await executeOAuthCreate(
+            {
+              ...base,
+              oidcConfig: {
+                clientId: clientId || undefined,
+                clientSecret: mcp.auth?.clientSecret?.trim() || undefined,
+                // client_id present → pre-registration; absent → dynamic registration.
+                scheme: clientId ? 'pre_registration' : 'dcr',
+              },
             },
-          });
-
-          const authorizationUrl = await startConnectorOAuth(newConnectorId);
-          popup.location.href = authorizationUrl;
-          const result = await waitForOAuthPopup(popup, newConnectorId);
-          await fetchConnectors();
-          if (result.status !== 'success') {
-            throw new Error(result.error || 'Authorization was not completed');
-          }
-        } catch (e) {
+            popup,
+            {
+              createConnector,
+              deleteConnector,
+              isConnectorConnected: async (id) => {
+                await fetchConnectors();
+                const latest = connectorSelectors.connectorById(id)(useToolStore.getState());
+                return latest?.status === 'connected';
+              },
+              startConnectorOAuth,
+              waitForConnectorOAuth,
+            },
+          );
+        } finally {
           // Close the blank/in-flight popup we opened so it isn't left dangling.
-          // On success the OAuth callback page closes it itself.
-          if (!popup.closed) popup.close();
-          throw e;
+          popup?.close();
+          await fetchConnectors();
         }
         return;
       }
 
-      // None / bearer / custom headers: store credentials and sync the tool list.
+      // The auth credential (bearer token) and custom headers are stored
+      // separately: the credential goes in the encrypted single-kind
+      // `credentials` column, while custom headers live in
+      // `metadata.customHeaders` so they can coexist with no-auth OR bearer
+      // (the credentials column can only hold one credential kind at a time).
       const credentials =
         authType === 'bearer' && mcp.auth?.token?.trim()
           ? ({ token: mcp.auth.token.trim(), type: 'bearer' } as const)
-          : (() => {
-              const headers = cleanRecord(mcp.headers);
-              return headers ? ({ headers, type: 'header' } as const) : undefined;
-            })();
+          : undefined;
+      const headers = cleanRecord(mcp.headers);
 
-      const newConnectorId = await createConnector({ ...base, credentials });
-      await syncConnectorTools(newConnectorId);
+      // `connector.create` is an idempotent upsert on (user, identifier);
+      // `isNew` is the server's verdict on whether this row was freshly
+      // created. A client-cache lookup is NOT a safe substitute: before
+      // `fetchConnectors` completes it reports "absent" for a connector the
+      // server already has, and the rollback below must never delete a
+      // connector the user already had.
+      const { id: newConnectorId, isNew } = await createConnector({
+        ...base,
+        credentials,
+        metadata: headers ? { customHeaders: headers } : undefined,
+      });
+      try {
+        await syncConnectorTools(newConnectorId);
+      } catch (e) {
+        // Tool sync failed (MCP server unreachable, bad command, …): roll the
+        // freshly created row back so the user isn't left with an "installed"
+        // connector that has 0 tools and an empty permissions page (#16533).
+        if (isNew) await deleteConnector(newConnectorId);
+        throw e;
+      }
     };
 
     // In migration mode the Delete button must actually uninstall the legacy

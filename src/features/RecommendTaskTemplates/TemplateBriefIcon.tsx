@@ -1,9 +1,9 @@
-import { Block, Icon, Image } from '@lobehub/ui';
-import { cssVar } from 'antd-style';
+import { Block, cssVar, Icon, Image } from '@lobehub/ui';
 import type { LucideIcon } from 'lucide-react';
 import { memo } from 'react';
 
-import { INTEREST_AREAS } from '@/routes/onboarding/config';
+import { INTEREST_AREAS } from '@/features/Onboarding/config';
+import { RECOMMENDATION_ICON_SIZE } from '@/features/Recommendations/iconSize';
 
 import type { TemplateIconSpec } from './resolveTemplateIcon';
 
@@ -17,34 +17,36 @@ interface TemplateBriefIconProps {
 }
 
 /** Square tile with secondary fill — used by the recommend card (28) and detail modal (36). */
-export const TemplateBriefIcon = memo<TemplateBriefIconProps>(({ spec, tileSize = 28 }) => {
-  const glyphSize = Math.round(tileSize * 0.6);
-  return (
-    <Block
-      align={'center'}
-      height={tileSize}
-      justify={'center'}
-      style={{ background: cssVar.colorFillSecondary, flexShrink: 0 }}
-      width={tileSize}
-    >
-      {spec.kind === 'url' ? (
-        <Image
-          alt={''}
-          height={glyphSize}
-          src={spec.src}
-          style={{ flex: 'none' }}
-          width={glyphSize}
-        />
-      ) : (
-        <Icon
-          color={cssVar.colorTextSecondary}
-          fill={cssVar.colorTextSecondary}
-          icon={spec.Comp}
-          size={glyphSize}
-        />
-      )}
-    </Block>
-  );
-});
+export const TemplateBriefIcon = memo<TemplateBriefIconProps>(
+  ({ spec, tileSize = RECOMMENDATION_ICON_SIZE.regular }) => {
+    const glyphSize = Math.round(tileSize * 0.6);
+    return (
+      <Block
+        align={'center'}
+        height={tileSize}
+        justify={'center'}
+        style={{ background: cssVar.colorFillSecondary, flexShrink: 0 }}
+        width={tileSize}
+      >
+        {spec.kind === 'url' ? (
+          <Image
+            alt={''}
+            height={glyphSize}
+            src={spec.src}
+            style={{ flex: 'none' }}
+            width={glyphSize}
+          />
+        ) : (
+          <Icon
+            color={cssVar.colorTextSecondary}
+            fill={cssVar.colorTextSecondary}
+            icon={spec.Comp}
+            size={glyphSize}
+          />
+        )}
+      </Block>
+    );
+  },
+);
 
 TemplateBriefIcon.displayName = 'TemplateBriefIcon';

@@ -2,8 +2,9 @@
 
 import type { EditFileState } from '@lobechat/tool-runtime';
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { Icon, Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { cx, Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Minus, Plus } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { memo } from 'react';
@@ -12,12 +13,9 @@ import { useTranslation } from 'react-i18next';
 import { FilePathDisplay } from '../../components/FilePathDisplay';
 import { inspectorTextStyles, shinyTextStyles } from '../../styles';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  separator: css`
-    margin-inline: 2px;
-    color: ${cssVar.colorTextQuaternary};
-  `,
-}));
+const styles = stylex.create({
+  separator: { marginInline: '2px', color: cssVar.colorTextQuaternary },
+});
 
 interface EditFileArgs {
   all?: boolean;
@@ -44,14 +42,16 @@ export const EditLocalFileInspector = memo<EditLocalFileInspectorProps>(
     if (isArgumentsStreaming) {
       if (!filePath)
         return (
-          <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-            <span>{t(translationKey as any)}</span>
+          <div className={inspectorTextStyles.root}>
+            <span className={shinyTextStyles.shinyText}>{t(translationKey as any)}</span>
           </div>
         );
 
       return (
-        <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-          <span style={{ marginInlineEnd: 6 }}>{t(translationKey as any)}:</span>
+        <div className={inspectorTextStyles.root}>
+          <span className={shinyTextStyles.shinyText} style={{ marginInlineEnd: 6 }}>
+            {t(translationKey as any)}:
+          </span>
           <FilePathDisplay filePath={filePath} />
         </div>
       );
@@ -79,15 +79,17 @@ export const EditLocalFileInspector = memo<EditLocalFileInspectorProps>(
     }
 
     return (
-      <div className={cx(inspectorTextStyles.root, isLoading && shinyTextStyles.shinyText)}>
-        <span style={{ marginInlineEnd: 6 }}>{t(translationKey as any)}:</span>
+      <div className={inspectorTextStyles.root}>
+        <span className={cx(isLoading && shinyTextStyles.shinyText)} style={{ marginInlineEnd: 6 }}>
+          {t(translationKey as any)}:
+        </span>
         <FilePathDisplay filePath={filePath} />
         {!isLoading && statsParts.length > 0 && (
           <>
             {' '}
             {statsParts.map((part, index) => (
               <span key={index}>
-                {index > 0 && <span className={styles.separator}> / </span>}
+                {index > 0 && <span {...stylex.props(styles.separator)}> / </span>}
                 {part}
               </span>
             ))}

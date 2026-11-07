@@ -465,6 +465,87 @@ describe('nonStreamToStream', () => {
       ]);
     });
 
+    it('should preserve function calls in a non-streaming response', async () => {
+      const functionCall = {
+        arguments: '{"description":"Check menus"}',
+        call_id: 'call_001',
+        id: 'fc_001',
+        name: 'lobe-agent____callSubAgent',
+        status: 'completed',
+        type: 'function_call',
+      };
+      const mockResponse = {
+        id: 'resp_tool_only',
+        output: [{ id: 'rs_001', summary: [], type: 'reasoning' }, functionCall],
+        status: 'completed',
+      } as unknown as OpenAI.Responses.Response;
+
+      const stream = transformResponseAPIToStream(mockResponse);
+      const reader = stream.getReader();
+      const events: OpenAI.Responses.ResponseStreamEvent[] = [];
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        events.push(value);
+      }
+
+      expect(events).toEqual([
+        {
+          item: functionCall,
+          output_index: 1,
+          sequence_number: 1,
+          type: 'response.output_item.added',
+        },
+        {
+          response: mockResponse,
+          sequence_number: 999,
+          type: 'response.completed',
+        },
+      ]);
+    });
+
+    it('should preserve encrypted reasoning in a non-streaming response', async () => {
+      const reasoning = {
+        encrypted_content: 'encrypted-signature',
+        id: 'reasoning_001',
+        summary: [],
+        type: 'reasoning',
+      };
+      const mockResponse = {
+        created_at: 1677652288,
+        id: 'resp_reasoning',
+        model: 'gpt-5.6-sol',
+        object: 'response',
+        output: [reasoning],
+        status: 'completed',
+      } as unknown as OpenAI.Responses.Response;
+
+      const stream = transformResponseAPIToStream(mockResponse);
+      const events = [];
+      const reader = stream.getReader();
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        events.push(value);
+      }
+
+      expect(events).toEqual([
+        {
+          item: reasoning,
+          output_index: 0,
+          sequence_number: 0,
+          type: 'response.output_item.done',
+        },
+        {
+          response: mockResponse,
+          sequence_number: 999,
+          type: 'response.completed',
+        },
+      ]);
+    });
+
     it('should handle Response API with message but no text content', async () => {
       const mockResponse: OpenAI.Responses.Response = {
         id: 'resp_no_text',

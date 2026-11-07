@@ -1,16 +1,11 @@
 'use client';
 
-import { Avatar, Block, Flexbox, Icon, Text } from '@lobehub/ui';
-import { type ItemType } from 'antd/es/menu/interface';
-import { useTheme } from 'antd-style';
-import { MessageSquareHeartIcon } from 'lucide-react';
-import { memo, useMemo, useState } from 'react';
+import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 
-import Menu from '@/components/Menu';
 import { DEFAULT_AVATAR } from '@/const/meta';
-import { AgentSettings as Settings } from '@/features/AgentSetting';
+import { AgentSettings as Settings, SettingsModalLayout } from '@/features/AgentSetting';
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
@@ -18,17 +13,14 @@ import { ChatSettingsTabs } from '@/store/global/initialState';
 
 const Content = memo(() => {
   const { t } = useTranslation('setting');
-  const theme = useTheme();
   const { allowed: canEdit } = usePermission('edit_own_content');
   const { gid } = useParams<{ gid: string }>();
   const groupId = useAgentGroupStore(agentGroupSelectors.activeGroupId);
   const currentGroup = useAgentGroupStore((s) => agentGroupSelectors.getGroupById(gid ?? '')(s));
-  const [tab] = useState(ChatSettingsTabs.Opening);
 
   const updateGroupConfig = async (config: any) => {
     if (!canEdit) return;
     if (!groupId) return;
-    // Only update openingMessage and openingQuestions
     const groupConfig = {
       openingMessage: config.openingMessage,
       openingQuestions: config.openingQuestions,
@@ -42,7 +34,6 @@ const Content = memo(() => {
     await useAgentGroupStore.getState().updateGroup(groupId, meta);
   };
 
-  // Convert group config to agent config format for AgentSettings component
   const agentConfig = useMemo(
     () =>
       ({
@@ -68,79 +59,25 @@ const Content = memo(() => {
     [currentGroup],
   );
 
-  const menuItems: ItemType[] = useMemo(
-    () => [
-      {
-        icon: <Icon icon={MessageSquareHeartIcon} />,
-        key: ChatSettingsTabs.Opening,
-        label: t('agentTab.opening'),
-      },
-    ],
-    [t],
-  );
-
   const displayTitle = currentGroup?.title || t('defaultSession', { ns: 'common' });
 
   return (
-    <Flexbox
-      direction="horizontal"
-      height="100%"
-      style={{
-        padding: 0,
-        position: 'relative',
-      }}
+    <SettingsModalLayout
+      avatar={currentGroup?.avatar || DEFAULT_AVATAR}
+      background={currentGroup?.backgroundColor || undefined}
+      title={displayTitle}
     >
-      <Flexbox
-        height={'100%'}
-        paddingBlock={24}
-        paddingInline={8}
-        width={200}
-        style={{
-          background: theme.colorBgLayout,
-          borderRight: `1px solid ${theme.colorBorderSecondary}`,
-        }}
-      >
-        <Block
-          horizontal
-          align={'center'}
-          gap={8}
-          paddingBlock={'14px 16px'}
-          paddingInline={4}
-          variant={'borderless'}
-          style={{
-            overflow: 'hidden',
-          }}
-        >
-          <Avatar
-            avatar={currentGroup?.avatar || DEFAULT_AVATAR}
-            background={currentGroup?.backgroundColor || undefined}
-            shape={'square'}
-            size={28}
-          />
-          <Text ellipsis weight={500}>
-            {displayTitle}
-          </Text>
-        </Block>
-        <Menu selectable items={menuItems} selectedKeys={[tab]} style={{ width: '100%' }} />
-      </Flexbox>
-      <Flexbox
-        flex={1}
-        paddingBlock={24}
-        paddingInline={64}
-        style={{ overflow: 'scroll', width: '100%' }}
-      >
-        <Settings
-          config={agentConfig}
-          disabled={!canEdit}
-          id={groupId}
-          loading={false}
-          meta={agentMeta}
-          tab={tab}
-          onConfigChange={updateGroupConfig}
-          onMetaChange={updateGroupMeta}
-        />
-      </Flexbox>
-    </Flexbox>
+      <Settings
+        config={agentConfig}
+        disabled={!canEdit}
+        id={groupId}
+        loading={false}
+        meta={agentMeta}
+        tab={ChatSettingsTabs.Opening}
+        onConfigChange={updateGroupConfig}
+        onMetaChange={updateGroupMeta}
+      />
+    </SettingsModalLayout>
   );
 });
 

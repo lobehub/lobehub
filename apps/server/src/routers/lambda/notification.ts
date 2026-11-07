@@ -5,13 +5,22 @@ import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceA
 import { NotificationModel } from '@/database/models/notification';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import {
+  resolveNavigationCounts,
+  resolveUnreadCount,
+} from '@/server/services/notification/inboxCounts';
 
 const notificationProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
 
   return opts.next({
     ctx: {
-      notificationModel: new NotificationModel(ctx.serverDB, ctx.userId),
+      // Scope the inbox to the request context: workspace mode only sees that
+      // workspace's notifications, personal mode only sees personal ones
+      // (`workspace_id IS NULL`) — the two contexts never leak into each other.
+      notificationModel: new NotificationModel(ctx.serverDB, ctx.userId, {
+        workspaceId: ctx.workspaceId ?? null,
+      }),
     },
   });
 });
@@ -30,11 +39,16 @@ export const notificationRouter = router({
     return ctx.notificationModel.archiveAll();
   }),
 
+  navigationCounts: notificationProcedure.query(async ({ ctx }) => {
+    return resolveNavigationCounts(ctx);
+  }),
+
   list: notificationProcedure
     .input(
       z.object({
         category: z.string().optional(),
         cursor: z.string().optional(),
+        isRead: z.boolean().optional(),
         limit: z.number().min(1).max(50).default(20),
         unreadOnly: z.boolean().optional(),
       }),
@@ -54,7 +68,7 @@ export const notificationRouter = router({
     }),
 
   unreadCount: notificationProcedure.query(async ({ ctx }) => {
-    return ctx.notificationModel.getUnreadCount();
+    return resolveUnreadCount(ctx);
   }),
 });
 
