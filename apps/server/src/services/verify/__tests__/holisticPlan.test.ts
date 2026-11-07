@@ -190,6 +190,38 @@ describe('verify plan generation model', () => {
     );
   });
 
+  /**
+   * Regression: the Task verification UI saves generated drafts through the
+   * public `createCriteria` schema, which keeps `verifierConfig` but strips
+   * unknown top-level fields — a top-level capability was lost on save and the
+   * criterion was judged on a device-routed run anyway.
+   */
+  it('keeps a generated capability through the draft save round trip', async () => {
+    generateObjectMock.mockResolvedValue({
+      criteria: [
+        {
+          requiredCapabilities: ['cloud_sandbox'],
+          title: 'Injected credentials are readable in the sandbox',
+          verifierType: 'agent',
+        },
+      ],
+    });
+    const service = new VerifyPlanGeneratorService(db, 'user-1');
+
+    const [draft] = await service.generateCriteria({ goal: 'Inject credentials' });
+    // What the UI sends back: the `createCriteria` input fields only.
+    const { description, documentId, instruction, onFail, required, title, verifierConfig } = draft;
+    await service.createCriteriaFromDrafts([
+      { description, documentId, instruction, onFail, required, title, verifierConfig },
+    ]);
+
+    expect(createCriterionMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        verifierConfig: expect.objectContaining({ requiredCapabilities: ['cloud_sandbox'] }),
+      }),
+    );
+  });
+
   it('splits an undecomposed requirement on the pinned model without a caller model', async () => {
     generateObjectMock.mockResolvedValue({ criteria: [] });
 

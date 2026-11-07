@@ -1,7 +1,7 @@
-import type { VerifyCheckItem, VerifyEvidenceType } from '@lobechat/types';
+import type { VerifyCheckItem, VerifyEvidenceType, VerifyRuntimeCapability } from '@lobechat/types';
 
 /** Bump when the plan-gen prompt meaningfully changes (tracing partition key). */
-export const VERIFY_PLAN_PROMPT_VERSION = 'v4';
+export const VERIFY_PLAN_PROMPT_VERSION = 'v5';
 /** Bump when the judge prompt meaningfully changes. */
 export const VERIFY_JUDGE_PROMPT_VERSION = 'v3';
 /** Bump when the report prompt meaningfully changes. */
@@ -35,6 +35,9 @@ export const VERIFY_EVIDENCE_MODALITIES = [
   'video',
 ] as const;
 export const VERIFY_EVIDENCE_SCOPES = ['deliverable', 'run_evidence', 'task_artifacts'] as const;
+export const VERIFY_RUNTIME_CAPABILITIES = [
+  'cloud_sandbox',
+] as const satisfies readonly VerifyRuntimeCapability[];
 export const VERIFY_VERDICTS = ['passed', 'failed', 'uncertain'] as const;
 /**
  * `unjudgeable` is not a softer reject: it means no capture could ever settle
@@ -71,6 +74,10 @@ export const GENERATED_CRITERIA_JSON_SCHEMA = {
               type: 'array',
             },
             required: { type: 'boolean' },
+            requiredCapabilities: {
+              items: { enum: [...VERIFY_RUNTIME_CAPABILITIES], type: 'string' },
+              type: 'array',
+            },
             title: { maxLength: 80, minLength: 1, type: 'string' },
             verifierType: { enum: [...VERIFY_VERIFIER_TYPES], type: 'string' },
           },
@@ -82,6 +89,7 @@ export const GENERATED_CRITERIA_JSON_SCHEMA = {
             'required',
             'onFail',
             'requiredEvidence',
+            'requiredCapabilities',
           ],
           type: 'object',
         },
@@ -234,6 +242,7 @@ export const chainVerifyPlan = ({
     '- First enumerate every deliverable and artifact needed to prove the criterion. Put each one in requiredEvidence with its type, semantic modality, source scope, and a concrete capture hint. Use [] only when the final text answer alone is sufficient.',
     '- requiredEvidence types: screenshot / gif / video for what the user sees, audio for a delivered sound (TTS output, a voice reply, an alert tone), text / markdown / dom_snapshot / transcript otherwise. A deliverable the user listens to needs audio evidence — describing it in prose does not prove it.',
     '- Choose verifierType: "llm" only when all required evidence is inline text, or a single image modality that a multimodal judge can directly inspect. Choose "agent" whenever evidence spans multiple modalities/files, requires opening a document or attachment, exceeds a normal prompt, or needs active investigation. Choose "program" only for strictly deterministic command checks.',
+    '- requiredCapabilities: list an execution-environment capability only when the criterion cannot be exercised without it. Use "cloud_sandbox" only when the criterion is about the LobeHub cloud sandbox itself — credentials injected into the sandbox, the sandbox session or its filesystem — so no other machine could produce the evidence. Ordinary shell commands, tests, builds or git operations do not need it: a routed device runs them too. Use [] otherwise — almost every criterion needs none.',
     '- Set required=true when failing the criterion must block delivery; false for nice-to-have improvements.',
     '- Set onFail="auto_repair" when a failure can be fixed by re-running the agent with guidance; otherwise "manual".',
     '- description: a one-sentence summary of what this criterion verifies.',

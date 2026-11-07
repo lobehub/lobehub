@@ -1,4 +1,7 @@
-import { VERIFICATION_OUT_OF_CREDITS_ERROR } from '@lobechat/const/goal';
+import {
+  VERIFICATION_ENVIRONMENT_UNAVAILABLE_ERROR,
+  VERIFICATION_OUT_OF_CREDITS_ERROR,
+} from '@lobechat/const/goal';
 import { describe, expect, it } from 'vitest';
 
 import { classifyGoalFailure, parseQuotaResetAt } from './failureClass';
@@ -56,6 +59,8 @@ describe('classifyGoalFailure', () => {
     ['InvalidProviderAPIKey', 'credentials'],
     // The verifier's credit refusal has no retry branch; the setup gate owns it.
     [VERIFICATION_OUT_OF_CREDITS_ERROR, 'credentials'],
+    // Another builder attempt routed the same way meets the same unsatisfiable criterion.
+    [VERIFICATION_ENVIRONMENT_UNAVAILABLE_ERROR, 'executionEnvironment'],
   ])('reads %s as a setup problem (%s)', (error, kind) => {
     expect(classifyGoalFailure(error)).toMatchObject({ class: 'environment', problem: { kind } });
   });

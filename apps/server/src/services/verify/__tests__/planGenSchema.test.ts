@@ -34,4 +34,22 @@ describe('RawGeneratedCriteriaSchema', () => {
 
     expect(parsed.criteria.some((c) => c.title === 'Unknown verifier')).toBe(false);
   });
+
+  it('keeps known runtime capabilities and drops unknown ones without dropping the criterion', () => {
+    const parsed = RawGeneratedCriteriaSchema.parse({
+      criteria: [
+        {
+          requiredCapabilities: ['cloud_sandbox', 'gpu', 'cloud_sandbox'],
+          title: 'Injected credentials are readable',
+          verifierType: 'agent',
+        },
+        { requiredCapabilities: ['gpu'], title: 'Report renders', verifierType: 'llm' },
+      ],
+    });
+
+    expect(parsed.criteria.map((c) => c.requiredCapabilities)).toEqual([
+      ['cloud_sandbox'],
+      undefined,
+    ]);
+  });
 });

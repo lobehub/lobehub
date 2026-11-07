@@ -62,6 +62,7 @@ export {
   shouldSurfaceProposal,
   VerifyReviewPredictorService,
 } from './reviewPredictor';
+export { resolveRunCapabilities } from './runtimeCapabilities';
 export { driveTaskFromVerify, finalizeVerifyRun } from './settle';
 export { VERIFY_ABANDONED_MS, VERIFY_ROLLUP_GRACE_MS } from './staleness';
 export { VerifyStatusService } from './statusService';
