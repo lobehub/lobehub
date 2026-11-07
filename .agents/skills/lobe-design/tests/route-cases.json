@@ -13,7 +13,7 @@
   { "kind": "fine", "instruction": "这个卡片的间距不对", "granularity": "fine", "stages": ["00-brief", "50-visual", "@selfcheck"] },
   { "kind": "medium", "fix": "5.4.0 文案拆出 75-copy：确认框（40 定确认强度）+ 文案（75 定措辞）", "instruction": "优化一下删除确认框的文案", "granularity": "medium", "stages": ["00-brief", "40-flow", "75-copy"] },
   { "kind": "fine", "instruction": "修一下 K-07 的问题", "granularity": "fine", "stages": ["00-brief", "70-detail", "@selfcheck"] },
-  { "kind": "fine", "instruction": "图表颜色违反了 E-02", "granularity": "fine", "stages": ["00-brief", "50-visual", "@selfcheck"] },
+  { "kind": "fine", "instruction": "图表颜色违反了 E-09", "granularity": "fine", "stages": ["00-brief", "50-visual", "@selfcheck"] },
   { "kind": "fine", "instruction": "按钮在暗色下看不清", "granularity": "fine", "stages": ["00-brief", "50-visual", "@selfcheck"] },
   { "kind": "fine", "instruction": "这里用哪个组件比较好", "granularity": "fine", "stages": ["00-brief", "30-structure", "@selfcheck"] },
 
