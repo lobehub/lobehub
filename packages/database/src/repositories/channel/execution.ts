@@ -3,7 +3,7 @@ import type {
   ChannelContextMessage,
   ChannelJobStatus,
 } from '@lobechat/types';
-import { and, asc, desc, eq, gt, isNotNull, isNull, ne, or } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, isNotNull, isNull, ne, or, sql } from 'drizzle-orm';
 
 import type { ChannelJobItem } from '../../schemas';
 import {
@@ -18,7 +18,7 @@ import type { ChannelClaim, ChannelClaimOptions } from './claim';
 import { claimJob } from './claim';
 import { appendMessage } from './delivery';
 import { ChannelError } from './error';
-import { readManifestMessages } from './manifest';
+import { countManifestMessages, readManifestMessages } from './manifest';
 import type { ChannelRoutingDecision } from './routing';
 import { resolveRouting } from './routing';
 import type { ChannelStopScope } from './stop';
@@ -262,9 +262,13 @@ export class ChannelExecutionRepository {
    * Public messages before the request that this run's topic has not seen, oldest first and
    * at most {@link RECENT_CONTEXT_LIMIT}: everything after the last request the topic accepted,
    * except the reply it published. A new topic has seen nothing, so it gets the latest
-   * messages. Anything older stays behind the history tools.
+   * messages. Anything older stays behind the history tools; `omitted` counts the unseen
+   * messages left out, so the prompt can say there is more to read.
    */
-  recentContext = async (channelId: string, jobId: string): Promise<ChannelContextMessage[]> => {
+  recentContext = async (
+    channelId: string,
+    jobId: string,
+  ): Promise<{ messages: ChannelContextMessage[]; omitted: number }> => {
     const [job] = await this.db
       .select({ manifest: channelJobs.manifest, topicId: channelJobs.topicId })
       .from(channelJobs)
@@ -277,6 +281,8 @@ export class ChannelExecutionRepository {
       );
     if (!job?.manifest) throw new ChannelError('NOT_FOUND', 'Claimed job not found');
 
+    // The request the topic accepted last is the one with the latest cutoff. Claim order can
+    // differ from it (a delayed routing decision), and the cutoff is what the topic saw.
     const [seen] = job.topicId
       ? await this.db
           .select({
@@ -293,19 +299,28 @@ export class ChannelExecutionRepository {
               isNotNull(channelJobs.manifest),
             ),
           )
-          .orderBy(desc(channelJobs.claimedAt), desc(channelJobs.id))
+          .orderBy(
+            desc(sql`(${channelJobs.manifest}->>'cutoffSequence')::int`),
+            desc(channelJobs.id),
+          )
           .limit(1)
       : [];
     const seenThrough = seen?.manifest?.cutoffSequence ?? 0;
     // One extra row absorbs the topic's own published reply.
-    const messages = await readManifestMessages(this.db, channelId, job.manifest, {
+    const recent = await readManifestMessages(this.db, channelId, job.manifest, {
       beforeSequence: job.manifest.cutoffSequence,
       limit: RECENT_CONTEXT_LIMIT + 1,
     });
-
-    return messages
+    const messages = recent
       .filter(({ id, sequence }) => sequence > seenThrough && id !== seen?.publishedMessageId)
       .slice(-RECENT_CONTEXT_LIMIT);
+    const unseen = await countManifestMessages(this.db, channelId, job.manifest, {
+      afterSequence: seenThrough,
+      beforeSequence: job.manifest.cutoffSequence,
+      excludeId: seen?.publishedMessageId,
+    });
+
+    return { messages, omitted: Math.max(0, unseen - messages.length) };
   };
 
   /** The runtime took the input; only now may the job publish. */

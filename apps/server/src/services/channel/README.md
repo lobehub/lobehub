@@ -131,3 +131,33 @@ references and continuation cursors but omits per-message sequence/thread IDs an
 The API and builtin `state` retain the original history for UI/debugging; authorization and
 pagination still use the frozen manifest. Native Channel runs also skip unsolicited
 `available_agents` inventory, without disabling self-management or explicit discovery tools.
+
+When more unseen messages exist than the five sent, a `channel_gap` block before them says how many
+were left out, so the model reads the history instead of guessing. A context message the member
+published itself is marked `self="true"`.
+
+### Conversation identity
+
+A responder keeps one topic per requester and branch (the main timeline, or a Thread). The
+requester is the run's execution identity: their credentials, devices and tool results end up in
+that topic, so a topic is never shared with another requester's runs. What the member did for
+other people reaches it only as public replies, which the prompt marks `self` so the member
+recognises its own earlier work instead of treating it as someone else's.
+
+### Why the Channel instructions stay in the system role
+
+`CHANNEL_INSTRUCTIONS` is constant text appended to the native run's system role, so it is already
+stable and prompt-cacheable; everything that changes per run (recent context, the gap, the wake)
+is in the request prompt. Moving it into a context-engine provider like the bot platform context
+would mean threading a Channel flag through the server context snapshot, `@lobechat/mecha` and the
+messages engine for no change in what the model sees. External runtimes keep getting it in
+their system context from `heteroDispatch/prepare.ts`.
+
+### Why history reads stay on `lobe-channel`
+
+`lobe-message.readMessages` reads a bot platform by model-supplied `platform` / `channelId`
+arguments, authorised by the bot's platform credentials. `lobe-channel` takes no ids from the
+model: every read is scoped and re-authorised by the run's frozen manifest (branch, cutoff,
+membership, live operation). Folding Channel into `lobe-message` would either weaken that to
+model-chosen ids or add a second authorisation mode to a tool built around the first, so the two
+stay separate and share only the model-facing projection.
