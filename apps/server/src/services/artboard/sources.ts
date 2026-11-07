@@ -5,6 +5,7 @@ import type {
   ArtboardOp,
   ResolvedArtboardOp,
 } from '@lobechat/types';
+import pMap from 'p-map';
 
 import { FileModel } from '@/database/models/file';
 import { MessageModel } from '@/database/models/message';
@@ -13,6 +14,8 @@ import type { LobeChatDatabase } from '@/database/type';
 import { FileService } from '@/server/services/file';
 
 import { ArtboardServiceError } from './errors';
+
+export const ARTBOARD_SOURCE_CONCURRENCY = 5;
 
 export interface ArtboardCanvasInfo {
   title: string;
@@ -127,8 +130,9 @@ export const resolveOpSources = (
   ops: ArtboardOp[],
   sources: ArtboardSourceResolver,
 ): Promise<ResolvedArtboardOp[]> =>
-  Promise.all(
-    ops.map(async (op, index): Promise<ResolvedArtboardOp> => {
+  pMap(
+    ops,
+    async (op, index): Promise<ResolvedArtboardOp> => {
       if (op.type === 'addFrame')
         return {
           ...op,
@@ -140,5 +144,6 @@ export const resolveOpSources = (
           patch: { ...op.patch, source: await resolveSource(op.patch.source, sources, index) },
         };
       return op as ResolvedArtboardOp;
-    }),
+    },
+    { concurrency: ARTBOARD_SOURCE_CONCURRENCY },
   );

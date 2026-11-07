@@ -8,6 +8,7 @@ import type {
   ResolvedArtboardOp,
 } from '@lobechat/types';
 import { EMPTY_ARTBOARD_CONTENT } from '@lobechat/types';
+import pMap from 'p-map';
 
 import { AcceptanceModel } from '@/database/models/acceptance';
 import { AcceptanceFlowModel } from '@/database/models/acceptanceFlow';
@@ -23,6 +24,7 @@ import { applyArtboardOps, applyArtboardUserOps, ArtboardOpError } from './conte
 import { buildJourneyFlow, checkFinalizeReadiness } from './content/finalize';
 import { ArtboardServiceError } from './errors';
 import {
+  ARTBOARD_SOURCE_CONCURRENCY,
   type ArtboardSourceResolver,
   createArtboardSourceResolver,
   resolveOpSources,
@@ -271,7 +273,9 @@ export class ArtboardService {
         row.content.frames.flatMap((f) => (f.source.kind === 'canvas' ? [f.source.canvasId] : [])),
       ),
     ];
-    const infos = await Promise.all(canvasIds.map((canvasId) => this.sources.canvas(canvasId)));
+    const infos = await pMap(canvasIds, (canvasId) => this.sources.canvas(canvasId), {
+      concurrency: ARTBOARD_SOURCE_CONCURRENCY,
+    });
     const canvases = Object.fromEntries(
       canvasIds.map((canvasId, index) => {
         const info = infos[index];
@@ -295,7 +299,9 @@ export class ArtboardService {
         row.content.frames.flatMap((f) => (f.source.kind === 'image' ? [f.source.fileId] : [])),
       ),
     ];
-    const urls = await Promise.all(fileIds.map((fileId) => this.sources.imageUrl(fileId)));
+    const urls = await pMap(fileIds, (fileId) => this.sources.imageUrl(fileId), {
+      concurrency: ARTBOARD_SOURCE_CONCURRENCY,
+    });
     const imageUrls = Object.fromEntries(
       fileIds.flatMap((fileId, index) => (urls[index] ? [[fileId, urls[index]!]] : [])),
     );

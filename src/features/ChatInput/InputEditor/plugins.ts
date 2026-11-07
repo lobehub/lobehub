@@ -12,8 +12,8 @@ import { type Editor } from '@lobehub/editor/react';
 
 import { ReactActionTagPlugin } from './ActionTag';
 import { ReactLocalFileTagPlugin } from './LocalFileTag';
-import { ReactReferDocumentPlugin } from './ReferDocument';
 import { ReactReferArtboardPlugin } from './ReferArtboard';
+import { ReactReferDocumentPlugin } from './ReferDocument';
 import { ReactReferTopicPlugin } from './ReferTopic';
 
 type EditorPlugins = NonNullable<Parameters<typeof Editor>[0]['plugins']>;

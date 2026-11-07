@@ -34,7 +34,9 @@ const {
 // pipeline/__tests__/toolDiscovery.featureGate.test.ts.
 vi.mock('@/server/featureFlags', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  getServerFeatureFlagsStateFromRuntimeConfig: vi.fn().mockResolvedValue({ enableDashboard: true }),
+  getServerFeatureFlagsStateFromRuntimeConfig: vi
+    .fn()
+    .mockResolvedValue({ enableArtboard: true, enableDashboard: true }),
 }));
 
 vi.mock('@/libs/trusted-client', () => ({
