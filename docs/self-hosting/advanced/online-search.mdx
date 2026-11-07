@@ -48,6 +48,7 @@ Supported crawler types are listed below:
 | `jina`        | Crawler service from [Jina AI](https://jina.ai/), supports fast content summarization.                              | `JINA_READER_API_KEY`                                                       |
 | `naive`       | Built-in general-purpose crawler for standard web structures.                                                       |                                                                             |
 | `search1api`  | Page crawling capabilities from [Search1API](https://www.search1api.com), great for structured content extraction.  | `SEARCH1API_API_KEY` `SEARCH1API_CRAWL_API_KEY` `SEARCH1API_SEARCH_API_KEY` |
+| `specstream`  | Page reading API from [SpecStream](https://specstream.ai/extract-api), returns page text as Markdown.               | `SPECSTREAM_API_KEY`                                                        |
 | `tavily`      | Web scraping and summarization API from [Tavily](https://www.tavily.com/).                                          | `TAVILY_API_KEY`                                                            |
 
 > 💡 Setting multiple crawlers increases success rate; the system will try different ones based on priority.
@@ -112,6 +113,7 @@ Supported search engines include:
 | `kagi`       | Premium search API by [Kagi](https://kagi.com/), requires a subscription key.                                           | `KAGI_API_KEY`                                                              |
 | `search1api` | Aggregated search capabilities from [Search1API](https://www.search1api.com).                                           | `SEARCH1API_API_KEY` `SEARCH1API_CRAWL_API_KEY` `SEARCH1API_SEARCH_API_KEY` |
 | `searxng`    | Use a self-hosted or public [SearXNG](https://searx.space/) instance.                                                   | `SEARXNG_URL`                                                               |
+| `specstream` | Search API from [SpecStream](https://specstream.ai/search-api), returns ranked results with page text for each.         | `SPECSTREAM_API_KEY`                                                        |
 | `tavily`     | [Tavily](https://www.tavily.com/), offers fast web summaries and answers.                                               | `TAVILY_API_KEY`                                                            |
 
 > ⚠️ Some search providers require you to apply for an API Key and configure it in your `.env` file.
@@ -173,6 +175,18 @@ DEEPSEEK_SEARCH_API_KEY=sk-xxxxxx
 ```
 
 > 💰 Search and fetch are billed per successful request by DeepSeek, separately from model tokens.
+
+---
+
+## `SPECSTREAM_API_KEY`
+
+API key for the [SpecStream](https://specstream.ai) Search API (`SEARCH_PROVIDERS=specstream`) and Extract API (`CRAWLER_IMPLS=specstream`).
+
+```env
+SPECSTREAM_API_KEY=your-specstream-key
+```
+
+> 💰 Search is billed per call and page reads per page by SpecStream. A page with no text is not charged. Prices are on the [Search API](https://specstream.ai/search-api) and [Extract API](https://specstream.ai/extract-api) pages.
 
 ---
 
