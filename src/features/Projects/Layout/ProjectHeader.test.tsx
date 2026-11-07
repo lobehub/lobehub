@@ -23,7 +23,15 @@ vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
   useWorkspaceAwareNavigate: () => vi.fn(),
 }));
 vi.mock('@/features/NavPanel/SideBarHeaderLayout', () => ({
-  default: ({ left }: { left: ReactNode }) => <div>{left}</div>,
+  default: ({ left, right }: { left: ReactNode; right?: ReactNode }) => (
+    <div>
+      {left}
+      {right}
+    </div>
+  ),
+}));
+vi.mock('@/features/Favorites', () => ({
+  FavoriteButton: () => null,
 }));
 vi.mock('@/features/NavPanel/SidebarHeaderSelect', () => ({
   SidebarHeaderSelectPopover: ({

@@ -181,10 +181,7 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
               author
             )}
             <Icon icon={DotIcon} />
-            <PublishedTime
-              className={stylex.props(styles.time).className}
-              date={createdAt as string}
-            />
+            <PublishedTime date={createdAt as string} xstyle={styles.time} />
             <AgentForkTag />
             {!!forkCount && forkCount > 0 && (
               <Tag color="default" icon={<Icon icon={GitBranchIcon} />}>

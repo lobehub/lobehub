@@ -90,3 +90,11 @@ describe('resolveRequestLocale', () => {
     expect(resolveRequestLocale(request({ language: '' }))).toBe('en-US');
   });
 });
+
+describe('shared vocabulary', () => {
+  it('falls back to the default the gateway and the KV config use', async () => {
+    const { DEFAULT_APP_LOCALE } = await import('@lobehub/edge-contract/request-locale');
+    const { DEFAULT_LANG } = await import('@/const/locale');
+    expect(DEFAULT_LANG).toBe(DEFAULT_APP_LOCALE);
+  });
+});

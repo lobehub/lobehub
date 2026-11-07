@@ -43,7 +43,13 @@ const Conversation = memo<ConversationProps>(
     const provider = useAgentStore((s) =>
       agentByIdSelectors.getAgentModelProviderById(currentAgentId)(s),
     );
-    const { handleUploadFiles } = useUploadFiles({ agentId: currentAgentId, model, provider });
+    const composerKey = useConversationStore(conversationSelectors.composerKey);
+    const { handleUploadFiles } = useUploadFiles({
+      agentId: currentAgentId,
+      contextKey: composerKey,
+      model,
+      provider,
+    });
 
     return (
       <DragUploadZone style={{ flex: 1, height: '100%' }} onUploadFiles={handleUploadFiles}>

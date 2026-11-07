@@ -53,7 +53,7 @@ class TaskService {
     completedWithin?: TaskCompletedWindow;
     excludeStatuses?: TaskStatus[];
     filter?: TaskListFilter;
-    groupBy?: 'assignee' | 'member' | 'priority';
+    groupBy?: 'assignee' | 'label' | 'member' | 'priority';
     groups?: Array<{
       key: string;
       limit?: number;
@@ -61,6 +61,8 @@ class TaskService {
       statuses: string[];
     }>;
     includeArchived?: boolean;
+    /** The label group whose labels are the columns when `groupBy` is 'label'. */
+    labelGroupId?: string;
     parentTaskId?: string | null;
     projectId?: string;
     /** "My tasks" narrowing: assigned to the caller, or created by them. */
@@ -129,6 +131,8 @@ class TaskService {
     description?: string;
     editorData?: unknown;
     instruction: string;
+    /** Labels attached on creation; validated before the task is written. */
+    labelIds?: string[];
     name?: string;
     parentTaskId?: string;
     priority?: number;

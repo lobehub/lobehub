@@ -31,6 +31,29 @@ export const linearScopeProjectLabel = (
 };
 
 /**
+ * The scope above the issue list. Including archived issues is chosen a step
+ * back, but it decides what the list holds, so it is named here too.
+ */
+export const linearImportScopeSummary = (
+  filter: {
+    linearProjectId: string | null;
+    linearProjectName: string | null;
+    stateTypes: unknown[];
+    teamName: string | null;
+  },
+  options: { includeArchived: boolean },
+  t: TFunction<'integration'>,
+): string =>
+  [
+    filter.teamName,
+    linearScopeProjectLabel(filter, t, { withAll: true }),
+    t('linear.sync.filter.statesSummary', { count: filter.stateTypes.length }),
+    options.includeArchived && t('linear.sync.options.includeArchived'),
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
+/**
  * Whether the scope step may move on. "All projects" waits for the team's
  * project list, since without it the choice may be a mistake; "No project"
  * needs only the team, so a failed or slow list does not block it.
@@ -56,6 +79,7 @@ export const formatLinearSyncResult = (
     result.created && t('linear.sync.result.created', { count: result.created }),
     result.updated && t('linear.sync.result.updated', { count: result.updated }),
     result.closed && t('linear.sync.result.closed', { count: result.closed }),
+    result.archived && t('linear.sync.result.archived', { count: result.archived }),
     result.commentsImported &&
       t('linear.sync.result.commentsImported', { count: result.commentsImported }),
     result.keptLocalEdits &&

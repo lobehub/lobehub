@@ -12,9 +12,8 @@ type GenerateObjectHandlePayload = NonNullable<
   NonNullable<OpenAICompatibleFactoryOptions['generateObject']>['handlePayload']
 >;
 
-const isGenerateObjectThinkingDisabled = (payload: GenerateObjectPayload) =>
-  (payload as GenerateObjectPayload & { thinking?: ChatStreamPayload['thinking'] }).thinking
-    ?.type === 'disabled';
+const getGenerateObjectThinkingType = (payload: GenerateObjectPayload) =>
+  (payload as GenerateObjectPayload & { thinking?: ChatStreamPayload['thinking'] }).thinking?.type;
 
 export const createDeepSeekAnthropicGenerateObject = async (
   client: Anthropic,
@@ -23,12 +22,30 @@ export const createDeepSeekAnthropicGenerateObject = async (
   pricing?: Pricing,
   config?: AnthropicGenerateObjectConfig,
 ) => {
-  // DeepSeek's Anthropic-compatible endpoint rejects named schema tool_choice
-  // while thinking is active, but accepts `{ type: "any" }`. V4 models may
-  // default to thinking enabled server-side, so keep `any` unless the caller
-  // explicitly disabled thinking; with a single schema tool it still forces
-  // structured output.
-  const thinkingDisabled = isGenerateObjectThinkingDisabled(payload);
+  // DeepSeek's Anthropic-compatible endpoint only accepts `auto` / `none` (or
+  // no) tool_choice while thinking is active; `any` and a named tool both 400
+  // with "Thinking mode does not support this tool_choice". `any` used to be
+  // accepted until 2026-11-02 07:17 UTC, when it started failing every
+  // structured-output request on V4 models, which default to thinking enabled
+  // server-side. So:
+  // - V4: disable thinking explicitly unless the caller enabled it, and force
+  //   the schema tool (mirrors `buildDeepSeekGenerateObjectPayload`).
+  // - Thinking active (caller-enabled V4, thinking-only deepseek-reasoner):
+  //   use `auto` plus a prompt instruction instead of a forced tool_choice.
+  // - Tools mode (several caller tools, e.g. the group-chat supervisor): the
+  //   endpoint now treats `any` as `auto` even with thinking disabled, so it no
+  //   longer forces a call. Send `auto` plus the "call one of the tools"
+  //   instruction regardless of thinking.
+  //   https://api-docs.deepseek.com/guides/anthropic_api#tool_choice
+  // Check the mapped request model too: a router can map a logical id to the
+  // upstream V4 id.
+  const modelIds = [payload.model, config?.requestModel];
+  const isV4 = modelIds.some((id) => isDeepSeekV4Model(id));
+  const isThinkingOnly = modelIds.some((id) => !!id && id.includes('deepseek-reasoner'));
+  const thinkingType = getGenerateObjectThinkingType(payload);
+  const thinkingDisabled = isV4 ? thinkingType !== 'enabled' : thinkingType === 'disabled';
+  const thinkingActive = !thinkingDisabled && (isV4 || isThinkingOnly);
+
   const requestParams: AnthropicGenerateObjectConfig['requestParams'] = {
     ...(!thinkingDisabled && payload.reasoning_effort
       ? {
@@ -53,8 +70,9 @@ export const createDeepSeekAnthropicGenerateObject = async (
 
   return createAnthropicGenerateObject(sanitizedClient, payload, options, pricing, {
     requestModel: config?.requestModel,
+    autoToolChoice: thinkingActive || !!payload.tools,
     requestParams,
-    schemaToolChoice: thinkingDisabled ? 'tool' : 'any',
+    schemaToolChoice: 'tool',
   });
 };
 

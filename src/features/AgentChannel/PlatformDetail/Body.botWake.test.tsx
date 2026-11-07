@@ -6,10 +6,10 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { useEffect } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
-import { flattenBotWakeSettings } from '@/server/services/agentSignal/scenarios/botWake/config';
 import { schema as discordSchema } from '@/server/services/bot/platforms/discord/schema';
 import { sharedSchema as feishuSchema } from '@/server/services/bot/platforms/feishu/definitions/schema';
 import type { SerializedPlatformDefinition } from '@/server/services/bot/platforms/types';
+import { flattenBotWakeSettings } from '@/server/services/conversationWake/config';
 
 import agentZh from '../../../../locales/zh-CN/agent.json';
 import agentEn from '../../../../packages/locales/src/default/agent';

@@ -811,6 +811,7 @@ export default defineConfig(
   {
     files: [
       'packages/agent-tracing/**/*',
+      'packages/style-equivalence/src/cli/**/*',
       'apps/cli/**/*',
       'packages/model-runtime/src/utils/debugStream.ts',
     ],
@@ -829,6 +830,29 @@ export default defineConfig(
     ],
     rules: { '@eslint-react/no-unnecessary-use-prefix': 'off' },
   },
+  restrictImports(
+    ['packages/style-equivalence/**/*'],
+    [
+      'error',
+      {
+        ...baseRestrictedImportOptions,
+        patterns: [
+          ...baseRestrictedImportOptions.patterns,
+          {
+            message:
+              'style-equivalence is project-agnostic; pass lobe-chat specifics through its config.',
+            regex: '^@/',
+          },
+          {
+            message:
+              'style-equivalence is project-agnostic; pass lobe-chat specifics through its config.',
+            regex:
+              '^(?:\\.\\./)+(?:apps|scripts|src/(?:app|business|components|config|const|envs|features|helpers|hooks|layout|libs|locales|routes|server|services|spa|store|styles|types|utils))/',
+          },
+        ],
+      },
+    ],
+  ),
   ...(stylexMigrationOverrides as UserOverride[]),
   // CommonJS files rely on `require()` by design
   {

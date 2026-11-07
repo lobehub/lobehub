@@ -63,6 +63,12 @@ vi.mock('@/database/models/workspaceMember', () => ({
   WorkspaceMemberModel: vi.fn(),
 }));
 
+vi.mock('@/database/models/taskLabel', () => ({
+  TaskLabelModel: vi.fn(function () {
+    return { getTaskLabels: vi.fn().mockResolvedValue([]) };
+  }),
+}));
+
 vi.mock('@/database/models/user', () => ({
   UserModel: { findByIds: vi.fn().mockResolvedValue([]) },
 }));

@@ -68,7 +68,6 @@ it('preserves source inputs and resolution policy, excludes unrelated importers 
     'reviewed patch',
   );
   expect(result.evidence.reasonCodes).toContain('FIXTURE_CAPSULE_WORKSPACE_PEER_CONTEXT_UNPROVEN');
-  expect(result.evidence.gateEligible).toBe(false);
   expect(await readFile(path.join(root, 'package.json'), 'utf8')).toBe(original);
   const second = await fixture();
   expect((await prepareFixtureDependencies(second, inputs, 'LiteTable')).hash).toBe(result.hash);

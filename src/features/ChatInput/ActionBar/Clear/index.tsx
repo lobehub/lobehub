@@ -8,16 +8,18 @@ import { useChatStore } from '@/store/chat';
 import { useFileStore } from '@/store/file';
 
 import { useChatInputResourceAccess } from '../../hooks/useChatInputResourceAccess';
+import { useChatInputUploadKey } from '../../hooks/useChatInputUpload';
 import { ChatInputAction } from '../components/ChatInputAction';
 
 export const useClearCurrentMessages = () => {
   const clearMessage = useChatStore((s) => s.clearMessage);
   const clearImageList = useFileStore((s) => s.clearChatUploadFileList);
+  const contextKey = useChatInputUploadKey();
 
   return useCallback(async () => {
     await clearMessage();
-    clearImageList();
-  }, [clearImageList, clearMessage]);
+    if (contextKey) clearImageList(contextKey);
+  }, [clearImageList, clearMessage, contextKey]);
 };
 
 const Clear = memo(() => {

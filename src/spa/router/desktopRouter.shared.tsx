@@ -683,18 +683,15 @@ const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): R
       },
       // Sandbox storage moved to Docs (`/resource/sandbox-storage`).
       { element: <LegacySandboxStorageRedirect />, path: 'drive' },
-      // Devices list and detail get their own page-shaped skeletons; the generic
-      // `:tab` routes below would load them under the form-shaped settings one.
+      // Devices list and detail are explicit routes so the page title resolves
+      // without a `:tab` param; their skeleton comes from the devices tab entry.
       {
         element: dynamicElement(
           () => import('@/routes/(main)/settings'),
           'Desktop > Settings > Devices',
         ),
         handle: {
-          meta: createSettingsRouteMeta({
-            Skeleton: createSurfaceSkeleton('grid'),
-            tab: SettingsTabs.Devices,
-          }),
+          meta: createSettingsRouteMeta({ tab: SettingsTabs.Devices }),
           settingsTab: SettingsTabs.Devices,
         },
         path: 'devices',
@@ -705,10 +702,7 @@ const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): R
           'Desktop > Settings > Devices > Detail',
         ),
         handle: {
-          meta: createSettingsRouteMeta({
-            Skeleton: createSurfaceSkeleton('detail'),
-            tab: SettingsTabs.Devices,
-          }),
+          meta: createSettingsRouteMeta({ tab: SettingsTabs.Devices }),
           settingsTab: SettingsTabs.Devices,
         },
         path: 'devices/:sub',

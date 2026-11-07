@@ -1,9 +1,11 @@
+import { Flexbox } from '@lobehub/ui';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import NotFound from '@/components/404';
 import SettingHeader from '@/features/Settings/features/SettingHeader';
+import SettingsPageActions from '@/features/Settings/features/SettingsPageActions';
 import { usePermission } from '@/hooks/usePermission';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors, preferenceSelectors } from '@/store/user/selectors';
@@ -14,7 +16,7 @@ import CreateAppButton from './features/CreateAppButton';
 import OAuthApps from './features/OAuthApps';
 import { useOAuthAppList } from './features/useOAuthAppList';
 
-const Page = () => {
+const Page = ({ showSettingHeader = true }: { showSettingHeader?: boolean }) => {
   const { t } = useTranslation('auth');
   const { allowed: hasEditPermission } = usePermission('create_content');
   const activeWorkspaceId = useActiveWorkspaceId();
@@ -36,18 +38,32 @@ const Page = () => {
   if (!isPreferenceInit)
     return (
       <>
-        <SettingHeader title={t('tab.oauthApps')} />
+        {showSettingHeader && <SettingHeader title={t('tab.oauthApps')} />}
         {params.sub ? <AppDetailSkeleton /> : <AppListSkeleton />}
       </>
     );
   if (!enableOAuthApps) return <NotFound />;
 
+  const canCreate = !params.sub && canEdit && !listEmpty;
+
   return (
     <>
-      <SettingHeader
-        extra={!params.sub && canEdit && !listEmpty && <CreateAppButton />}
-        title={t('tab.oauthApps')}
-      />
+      {showSettingHeader ? (
+        <SettingHeader extra={canCreate && <CreateAppButton />} title={t('tab.oauthApps')} />
+      ) : (
+        canCreate && (
+          <SettingsPageActions
+            // Mobile has no shared header slot; keep Create reachable above the list.
+            fallback={
+              <Flexbox horizontal justify={'flex-end'}>
+                <CreateAppButton />
+              </Flexbox>
+            }
+          >
+            <CreateAppButton />
+          </SettingsPageActions>
+        )
+      )}
       <OAuthApps canEdit={canEdit} />
     </>
   );

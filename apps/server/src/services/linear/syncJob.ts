@@ -65,8 +65,10 @@ export const mergeLinearSyncResults = (
   { resumed }: { resumed: boolean },
 ): LinearSyncResult => {
   if (!previous) return latest;
+  const archived = (previous.archived ?? 0) + (latest.archived ?? 0);
   const commentsImported = (previous.commentsImported ?? 0) + (latest.commentsImported ?? 0);
   const written = {
+    ...(archived ? { archived } : {}),
     closed: previous.closed + latest.closed,
     ...(commentsImported ? { commentsImported } : {}),
     created: previous.created + latest.created,
@@ -345,7 +347,12 @@ export class LinearSyncJobService {
     const token = await getLinearAccessToken(this.db, rule.connectionId);
     return sync.syncByFilter(
       token,
-      { linearProjectId: rule.linearProjectId, stateTypes: rule.stateTypes, teamId: rule.teamId },
+      {
+        includeArchived: metadata.includeArchived,
+        linearProjectId: rule.linearProjectId,
+        stateTypes: rule.stateTypes,
+        teamId: rule.teamId,
+      },
       { ...options, noCreate: metadata.reconcileOnly, startAfter: metadata.cursor },
     );
   }

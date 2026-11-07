@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   BOT_WAKE_SETTING_KEYS as KEY,
   MAX_BOT_WAKE_CHANNEL_LIST,
-} from '@/server/services/agentSignal/scenarios/botWake/config';
+} from '@/server/services/conversationWake/config';
 
 import { botWakeFields } from './botWakeFields';
 
