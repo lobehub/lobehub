@@ -92,10 +92,12 @@ import type { RunScope } from '../../lifecycle/types';
 import { createGatewayEventHandler } from '../gateway/gatewayEventHandler';
 import { isCompletedRuntimeEnd } from '../gateway/runtimeEndReason';
 import { withHeteroContext } from '../viewedTaskPrompt';
+import { markUnfinishedToolsCancelled } from './cancelledTools';
 import { getNativeHeteroSessionBindingKey, isRecoverableResumeError } from './heteroResume';
 import { preserveSkippedIntervention } from './interventionAck';
 import { createMessageWriteBatcher, type ToolMessageUpdateOperation } from './messageWriteBatcher';
 import { createPendingCreateLedger } from './pendingCreateLedger';
+import { waitForPersistQueue } from './persistQueue';
 import { resolveQuotaAccountSpawnPlan } from './resolveQuotaAccountEnv';
 import {
   buildEditedTopicPreviousConversation,
@@ -377,40 +379,7 @@ const subscribeBroadcasts = (
   };
 };
 
-const HETERO_TERMINAL_PERSIST_DRAIN_TIMEOUT_MS = 10_000;
 const HETERO_TERMINAL_EVENT_GRACE_TIMEOUT_MS = 3_000;
-
-const waitForPersistQueue = async (
-  queue: Promise<void>,
-  label: string,
-  timeoutMs = HETERO_TERMINAL_PERSIST_DRAIN_TIMEOUT_MS,
-): Promise<boolean> => {
-  let timeoutId: ReturnType<typeof setTimeout> | undefined;
-
-  const result = await Promise.race<
-    { error: unknown; status: 'rejected' } | { status: 'resolved' } | { status: 'timeout' }
-  >([
-    queue.then(
-      () => ({ status: 'resolved' }),
-      (error) => ({ error, status: 'rejected' }),
-    ),
-    new Promise<{ status: 'timeout' }>((resolve) => {
-      timeoutId = setTimeout(() => resolve({ status: 'timeout' }), timeoutMs);
-    }),
-  ]);
-
-  if (timeoutId) clearTimeout(timeoutId);
-
-  if (result.status === 'rejected') throw result.error;
-  if (result.status === 'timeout') {
-    console.warn(
-      `[HeterogeneousAgent] persistQueue did not drain within ${timeoutMs}ms (${label}); continuing terminal flow.`,
-    );
-    return false;
-  }
-
-  return true;
-};
 
 interface MessageBatchMutationResult {
   results?: Array<{ error?: string; index: number; success: boolean }>;
@@ -2652,6 +2621,18 @@ export const executeHeterogeneousAgent = async (
     }
   } finally {
     await waitForCompletionCallback();
+    if (isAborted() && !resumeFallbackTriggered) {
+      persistQueue = persistQueue.then(() => messageWriteBatcher.flush('cancel'));
+      await waitForPersistQueue(persistQueue, 'cancel')
+        .then(() =>
+          markUnfinishedToolsCancelled(get(), operationId, {
+            completedCallIds: completedToolStateCallIds,
+            mainCallIds: mainToolCallIds,
+            messageIdByCallId: toolMsgIdByCallId,
+          }),
+        )
+        .catch((err) => console.error('[HeterogeneousAgent] cancelled tool cleanup failed:', err));
+    }
     unsubscribe?.();
     // The desktop IPC session only owns this run's config and process handles.
     // Multi-turn resume uses the native agentSessionId persisted above, so the

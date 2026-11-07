@@ -173,10 +173,10 @@ describe('model-facing lh CLI docs', () => {
       'missing required argument on "lh kb upload" (expects 2, got 1)',
     ]);
     // A mandatory flag inside `[...]` reads as optional to the model.
-    expect(checkSnippet('lh plugin install -i <identifier> [--manifest <json>]')).toEqual([
-      'required option --manifest on "lh plugin install" is shown as optional',
+    expect(checkSnippet('lh legacy-plugin install -i <identifier> [--manifest <json>]')).toEqual([
+      'required option --manifest on "lh legacy-plugin install" is shown as optional',
     ]);
-    expect(checkSnippet('lh plugin install -i <identifier> --manifest <json>')).toEqual([]);
+    expect(checkSnippet('lh legacy-plugin install -i <identifier> --manifest <json>')).toEqual([]);
     // A bare command name in prose is a reference, not an invocation.
     expect(checkSnippet('lh kb view')).toEqual([]);
   });

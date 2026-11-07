@@ -20,11 +20,13 @@ export const startFixture = (
   Fixture: ComponentType<{ variant: string }>,
   variants: string[],
   containerMode: 'component-root' | 'fixture-wrapper',
+  appearances: Record<string, 'light' | 'dark'> = {},
 ) => {
   const root = document.getElementById('app');
   if (!root) throw new Error('FIXTURE_ROOT_MISSING');
   const variant = new URL(location.href).searchParams.get('variant') ?? variants[0];
   if (!variants.includes(variant)) throw new Error('UNKNOWN_STYLE_VARIANT');
+  document.documentElement.dataset.theme = appearances[variant] ?? 'light';
   document.body.style.margin = '0';
   document.body.style.fontFamily = 'Arial, sans-serif';
   createRoot(root).render(

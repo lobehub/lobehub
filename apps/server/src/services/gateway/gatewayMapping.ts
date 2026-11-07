@@ -6,8 +6,8 @@ import type { DecryptedMessengerAccountLink } from '@/database/models/messengerA
 import { gatewayEnv } from '@/envs/gateway';
 import type { BotRuntimeStatus } from '@/types/botRuntimeStatus';
 
-import { hasPassiveListeningRule } from '../agentSignal/scenarios/botWake/config';
 import { extractWatchKeywordEntries } from '../bot/platforms';
+import { hasPassiveListeningRule } from '../conversationWake/config';
 import type {
   MessageGatewayCapabilities,
   MessageGatewayConnectionConfig,

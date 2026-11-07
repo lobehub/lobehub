@@ -180,7 +180,10 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
           mcp: {
             args: mcpStdioConfig?.args,
             auth: {
-              clientId: oidcConfig?.clientId,
+              // Only a hand-registered client is the user's to edit. A client the
+              // server resolved (CIMD URL, DCR-issued id) stays out of the field;
+              // saving it back would relabel it as pre-registration.
+              clientId: oidcConfig?.scheme === 'pre_registration' ? oidcConfig.clientId : undefined,
               token: authType === 'bearer' ? (credentials as { token: string })?.token : undefined,
               type: authType === 'header' ? 'none' : authType,
             },

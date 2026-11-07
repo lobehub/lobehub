@@ -87,8 +87,8 @@ const stripStateForStream = <T extends Record<string, any>>(
 
 /**
  * Chokepoint helper applied inside every stream-event publish site.
- * Step completion events omit finalState unless the persisted run host opts in.
- * For other events carrying a `finalState`, strip `expertise`, `messages`,
+ * Step completion events omit finalState unless the persisted run host opts in,
+ * and step start events omit their `uiMessages` snapshot. For other events carrying a `finalState`, strip `expertise`, `messages`,
  * and the tool-set group off it (see `stripStateForStream` for the rationale).
  *
  * Centralizing the strip here means new callers — including direct
@@ -107,6 +107,15 @@ export const stripFinalStateInEventData = (data: unknown, eventType?: unknown): 
     isRecord(state) && isRecord(state.host) && state.host.includeFinalState === true;
   if (eventType === 'step_complete' && !includeFinalState) {
     const { finalState: _finalState, ...rest } = record;
+    return rest;
+  }
+  // A step_start snapshot is the whole message list (megabytes on a long topic),
+  // one per step. Clients take it from the gateway push, which publishes the
+  // event before this strip; nothing reads it back from the stream (the SSE
+  // route serves the CLI, which ignores it), so a stored copy per step only
+  // grew the stream and every replay of it.
+  if (eventType === 'step_start' && 'uiMessages' in record) {
+    const { uiMessages: _uiMessages, ...rest } = record;
     return rest;
   }
   const finalState = record.finalState;

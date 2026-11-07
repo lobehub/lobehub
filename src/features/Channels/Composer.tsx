@@ -8,10 +8,10 @@ import {
   ReactMentionPlugin,
 } from '@lobehub/editor';
 import { ChatInput, Editor, SendButton, useEditor } from '@lobehub/editor/react';
-import { ActionIcon, cssVar, Flexbox, Text, Upload } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Text } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
-import { $getSelection, $isRangeSelection } from 'lexical';
-import { CirclePlus, Reply, X } from 'lucide-react';
+import { $getSelection, $isRangeSelection, KEY_DOWN_COMMAND } from 'lexical';
+import { Reply, X } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -26,13 +26,17 @@ import { useEnterToSend } from '@/hooks/useEnterToSend';
 import { usePermission } from '@/hooks/usePermission';
 import { useSingleton } from '@/hooks/useSingleton';
 import { cacheScope } from '@/libs/replica';
+import type { ChannelQueuedSendInput } from '@/store/channel';
+import { useHomeStore } from '@/store/home';
+import { homeAgentListSelectors } from '@/store/home/selectors';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
+import { ComposerActions } from './ComposerActions';
 import { MemberAvatar } from './MemberAvatar';
 import { isCurrentUserMember, memberName } from './memberName';
-import { getMentionGroups } from './mentionGroups';
+import { getMentionGroups, mentionDescription } from './mentionGroups';
 import type { ChannelMentionInvite } from './mentions';
 import {
   $insertChannelMentionBoundary,
@@ -46,26 +50,47 @@ import { useComposerDraft } from './useComposerDraft';
 import { useMentionInvites } from './useMentionInvites';
 import type { ChannelReplyTarget } from './useReplyTarget';
 
+export type ChannelComposerMessage = Omit<ChannelQueuedSendInput, 'channelId' | 'threadId'>;
+
+export type ChannelComposerSend = (
+  content: string,
+  mentions: string[],
+  requestKey: string,
+  fileIds?: string[],
+  replyToId?: string,
+) => Promise<void>;
+
+/** Exactly one way to hand a message over. */
+type ComposerDelivery =
+  | {
+      /**
+       * Hands the message over without waiting and clears the input at once; the timeline
+       * shows whether it sent.
+       */
+      onQueue: (message: ChannelComposerMessage) => void;
+      onSend?: never;
+    }
+  | {
+      onQueue?: never;
+      /** Waits for the server, keeping the input until the message is stored. */
+      onSend: ChannelComposerSend;
+    };
+
 const plugins = [ReactCodePlugin, ReactListPlugin, ReactLinkHighlightPlugin, ReactMentionPlugin];
 
-/** A flat filled bar, like an IM message box, instead of the chat page's raised card. */
-const inputShell = {
-  backgroundColor: cssVar.colorFillTertiary,
-  borderColor: 'transparent',
-  borderRadius: 12,
-  boxShadow: 'none',
-};
+/** Keeps ChatInput's raised card (elevated background, border, soft shadow) from the chat page. */
+const inputShell = { borderRadius: 12 };
 
 export function Composer({
   activity,
   channel,
   draftKey,
   members,
+  onQueue,
   onSend,
   placeholder,
   replyTarget,
   onCancelReply,
-  threadId,
 }: {
   /** Who is replying right now; shown on the line above the input. */
   activity?: ReactNode;
@@ -77,15 +102,7 @@ export function Composer({
   placeholder: string;
   replyTarget?: ChannelReplyTarget | null;
   onCancelReply?: () => void;
-  threadId?: string | null;
-  onSend: (
-    content: string,
-    mentions: string[],
-    requestKey: string,
-    fileIds?: string[],
-    replyToId?: string,
-  ) => Promise<void>;
-}) {
+} & ComposerDelivery) {
   const { t } = useTranslation('channel');
   const workspaceId = useActiveWorkspaceId();
   const editor = useEditor();
@@ -100,9 +117,11 @@ export function Composer({
   const sending = useRef(false);
   const previousDocument = useRef('');
   const [error, setError] = useState('');
+  /** The card the mention picker docks to, full width above the input like an IM. */
+  const [card, setCard] = useState<HTMLDivElement | null>(null);
   const requests = useSingleton(createChannelSendRequest);
   const attachments = useAttachments();
-  const { allowed, reason } = usePermission('create_content');
+  const { allowed } = usePermission('create_content');
   const enableUpload = useServerConfigStore((s) => featureFlagsSelectors(s).enableKnowledgeBase);
   const canUpload = allowed && enableUpload;
   const upload = (files: File[]) => {
@@ -116,33 +135,82 @@ export function Composer({
   // Mentioning yourself notifies nobody and picks no reply.
   const mentionable = members.filter((member) => !isCurrentUserMember(member, userId));
   const invites = useMentionInvites(channel, members);
+  const canMention = mentionable.length > 0 || invites.enabled;
+  /** Types an @ at the caret and opens the same mention picker as typing it. */
+  const startMention = () => {
+    const lexical = editor.getLexicalEditor();
+    lexical?.focus(
+      () =>
+        lexical.update(() => {
+          // The picker ignores programmatic text until a keystroke re-arms it; doing both in
+          // one update keeps the intermediate state from closing it again.
+          lexical.dispatchCommand(
+            KEY_DOWN_COMMAND,
+            new KeyboardEvent('keydown', { key: 'Process' }),
+          );
+          if ($insertChannelMentionBoundary(new KeyboardEvent('keydown', { key: '@' }))) return;
+          const selection = $getSelection();
+          if ($isRangeSelection(selection)) selection.insertText('@');
+        }),
+      { defaultSelection: 'rootEnd' },
+    );
+  };
   const send = async () => {
     const value = String(editor.getDocument('markdown') || '').trim();
     const fileIds = attachments.readyFileIds();
     if (sending.current || !fileIds || (!value && !fileIds.length)) return;
+    const document = editor.getDocument('json');
+    const outsiders = channelMentionInvites(document);
     sending.current = true;
-    setBusy(true);
+    // A queued message leaves the input at once; only inviting someone new waits first.
+    if (!onQueue || outsiders.length) setBusy(true);
     setError('');
     invites.clearError();
     const sentRevision = draft.snapshot();
-    const document = editor.getDocument('json');
+    const clearInput = () => {
+      editor.cleanDocument();
+      draft.clear(sentRevision);
+      attachments.clear();
+      setContent('');
+    };
     try {
       // Mentioned outsiders join first, so the message can address them as members.
-      const invited = await invites.resolve(channelMentionInvites(document));
+      const invited = await invites.resolve(outsiders);
       if (!invited) return;
       const mentions = [...new Set([...channelMentionIds(document, memberIds), ...invited])];
+      if (onQueue) {
+        onQueue({
+          attachments: attachments.items.flatMap((item) =>
+            item.fileId && item.fileUrl
+              ? [
+                  {
+                    fileType: item.file.type,
+                    id: item.fileId,
+                    name: item.file.name,
+                    size: item.file.size,
+                    url: item.fileUrl,
+                  },
+                ]
+              : [],
+          ),
+          content: value,
+          fileIds,
+          mentions,
+          replyTo: replyTarget ?? undefined,
+          replyToId: replyTarget?.id,
+        });
+        clearInput();
+        return;
+      }
       const requestKey = requests.get(`${cacheScope.get()}:${draftKey}`, {
         content: value,
         fileIds,
         mentions,
         replyToId: replyTarget?.id,
       });
-      await onSend(value, mentions, requestKey, fileIds, replyTarget?.id);
+      await onSend?.(value, mentions, requestKey, fileIds, replyTarget?.id);
       requests.complete(requestKey);
-      editor.cleanDocument();
-      draft.clear(sentRevision);
-      attachments.clear();
-      setContent('');
+      clearInput();
     } catch (cause) {
       console.error('Failed to send Channel message', cause);
       setError(t('sendFailed'));
@@ -184,6 +252,7 @@ export function Composer({
           maxHeight={480}
           minHeight={0}
           resize={false}
+          slashMenuRef={setCard}
           style={inputShell}
           styles={{ body: { overflow: 'visible', padding: 0 } }}
           header={
@@ -197,15 +266,6 @@ export function Composer({
                         {t('reply.to', { name: replyTarget.author.name || t('deletedMember') })}
                         {' · '}
                         {replyTarget.content || t('reply.attachment')}
-                      </Text>
-                      <Text fontSize={12} type="secondary">
-                        {t(
-                          replyTarget.author.type === 'user'
-                            ? 'reply.personHint'
-                            : threadId
-                              ? 'reply.threadHint'
-                              : 'reply.agentHint',
-                        )}
                       </Text>
                     </Flexbox>
                     <ActionIcon
@@ -223,21 +283,15 @@ export function Composer({
           }
         >
           <div {...stylex.props(styles.composerRow)}>
-            {enableUpload && (
-              <Upload
-                multiple
-                disabled={busy || !canUpload}
-                onFiles={(files) => void upload(files)}
-              >
-                <ActionIcon
-                  aria-label={t('attachments.upload')}
-                  disabled={busy || !canUpload}
-                  icon={CirclePlus}
-                  size={{ blockSize: 28, size: 20 }}
-                  title={reason || t('attachments.upload')}
-                />
-              </Upload>
-            )}
+            <ComposerActions
+              disabled={busy}
+              upload={
+                enableUpload
+                  ? { blocked: !allowed, onFiles: (files) => void upload(files) }
+                  : undefined
+              }
+              onMention={canMention ? startMention : undefined}
+            />
             <div {...stylex.props(styles.composerEditor)}>
               <Editor
                 autoFocus
@@ -245,6 +299,7 @@ export function Composer({
                 content=""
                 editable={!busy}
                 editor={editor}
+                getPopupContainer={() => card}
                 placeholder={placeholder}
                 plugins={plugins}
                 slashPlacement="top"
@@ -260,12 +315,25 @@ export function Composer({
                       t('deletedMember'),
                       !!workspaceId,
                     ).flatMap<ISlashOption>((group) => {
-                      const items = group.members.map((member) => ({
-                        icon: <MemberAvatar member={member} size={24} />,
-                        key: member.id,
-                        label: memberName(member, t('deletedMember')),
-                        metadata: { type: 'channel-member', id: member.id },
-                      }));
+                      // Read when the picker opens; subscribing would rerender on every list change.
+                      const agents = homeAgentListSelectors.allAgents(useHomeStore.getState());
+                      const items = group.members.map((member) => {
+                        const label = memberName(member, t('deletedMember'));
+                        const agent = member.agentId
+                          ? agents.find((item) => item.id === member.agentId)
+                          : undefined;
+                        return {
+                          description: mentionDescription(
+                            label,
+                            agent?.title,
+                            agent?.description || member.description,
+                          ),
+                          icon: <MemberAvatar member={member} size={24} />,
+                          key: member.id,
+                          label,
+                          metadata: { type: 'channel-member', id: member.id },
+                        };
+                      });
                       return group.actorType
                         ? [
                             {
@@ -336,6 +404,7 @@ export function Composer({
                 aria-label={t('send')}
                 disabled={busy || attachments.blocked}
                 loading={busy}
+                shape="round"
                 size={28}
                 type="primary"
                 onSend={() => void send()}

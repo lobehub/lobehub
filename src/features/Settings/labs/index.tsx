@@ -8,7 +8,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
-import { SettingsSectionSkeleton } from '@/components/Skeleton';
+import { LabsFormSkeleton } from '@/components/Skeleton/Settings/tabs/Labs';
 import { FORM_STYLE } from '@/const/layoutTokens';
 import SettingHeader from '@/features/Settings/features/SettingHeader';
 import { SettingsSearchAnchor } from '@/features/SettingsSearch/anchor';
@@ -70,17 +70,8 @@ const LabsForm = memo(() => {
           onRetry={() => refreshUserState()}
         />
       );
-    // Same groups as the loaded form: General always, Workspace with workspace
-    // access, Desktop only in Electron.
-    return (
-      <SettingsSectionSkeleton
-        groups={[
-          { rows: generalItems.length, titleWidth: 72 },
-          ...(workspaceItems.length > 0 ? [{ rows: workspaceItems.length, titleWidth: 72 }] : []),
-          ...(isDesktop ? [{ rows: desktopItems.length, titleWidth: 72 }] : []),
-        ]}
-      />
-    );
+    // Only the form waits for user state; the alert above it is already settled.
+    return <LabsFormSkeleton />;
   }
 
   const checkedByFlag = Object.fromEntries(

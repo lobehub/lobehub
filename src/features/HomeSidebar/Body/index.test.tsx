@@ -12,11 +12,19 @@ interface MockGlobalState {
   updateSystemStatus: (patch: Partial<MockGlobalState['status']>) => void;
 }
 
+interface MockNavItem {
+  activeTab?: string;
+  key: string;
+  title: string;
+  url: string;
+}
+
 const mocks = vi.hoisted(() => ({
+  activeTab: 'home',
   globalState: undefined as unknown as MockGlobalState,
   navLayout: {
-    bottomMenuItems: [] as { key: string; title: string; url: string }[],
-    topNavItems: [] as { key: string; title: string; url: string }[],
+    bottomMenuItems: [] as MockNavItem[],
+    topNavItems: [] as MockNavItem[],
   },
   updateSystemStatus: vi.fn(),
 }));
@@ -64,11 +72,13 @@ vi.mock('react-router', () => ({
 }));
 
 vi.mock('@/features/NavPanel/components/NavItem', () => ({
-  default: ({ title }: { title: string }) => <div>{title}</div>,
+  default: ({ active, title }: { active?: boolean; title: string }) => (
+    <div data-active={active}>{title}</div>
+  ),
 }));
 
 vi.mock('@/hooks/useActiveTabKey', () => ({
-  useActiveTabKey: () => 'home',
+  useActiveTabKey: () => mocks.activeTab,
 }));
 
 vi.mock('@/hooks/useNavLayout', () => ({
@@ -104,6 +114,7 @@ vi.mock('@/store/global', () => ({
 }));
 
 beforeEach(() => {
+  mocks.activeTab = 'home';
   mocks.updateSystemStatus.mockReset();
   mocks.navLayout = {
     bottomMenuItems: [],
@@ -209,5 +220,18 @@ describe('Home sidebar body', () => {
     expect(children[0]).toContainElement(screen.getByTestId('sidebar-item-agent'));
     expect(children[1]).toHaveAttribute('data-testid', 'sidebar-channels');
     expect(children[2]).toContainElement(screen.getByTestId('sidebar-item-recents'));
+  });
+
+  // The Projects entry is keyed `project` like its sidebar layout id, but its page is `/projects`.
+  it('highlights the Projects link on the project list page', () => {
+    mocks.activeTab = 'projects';
+    mocks.navLayout.topNavItems = [
+      { activeTab: 'projects', key: 'project', title: 'Projects', url: '/projects' },
+    ];
+    mocks.globalState.status.sidebarItems = ['project', 'recents', 'agent'];
+
+    render(<Body />);
+
+    expect(screen.getByText('Projects')).toHaveAttribute('data-active', 'true');
   });
 });

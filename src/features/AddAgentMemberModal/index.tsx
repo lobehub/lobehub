@@ -1,6 +1,8 @@
 'use client';
 
-import { createStaticStyles, Divider, Flexbox } from '@lobehub/ui';
+import { Divider, Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -11,22 +13,18 @@ import SelectedAgentList from './SelectedAgentList';
 import { useAgentSelectionStore } from './store';
 import { useAddableGroupMembers } from './useAddableGroupMembers';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    display: flex;
-    flex-direction: row;
-
-    height: 500px;
-    padding: 12px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadius}px;
-  `,
-  rightColumn: css`
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-  `,
-}));
+const styles = stylex.create({
+  container: {
+    display: 'flex',
+    flexDirection: 'row',
+    height: '500px',
+    padding: '12px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: `${cssVar.borderRadius}px`,
+  },
+});
 
 /** Multi-select agent picker shared by chat groups and projects. */
 export interface AddGroupMemberModalProps {
@@ -91,7 +89,7 @@ const AddGroupMemberModal = memo<AddGroupMemberModalProps>(
         onCancel={handleCancel}
         onOk={handleConfirm}
       >
-        <Flexbox horizontal className={styles.container} gap={8}>
+        <Flexbox horizontal className={stylex.props(styles.container).className} gap={8}>
           {/* Left Column - Available Agents */}
           <AvailableAgentList agents={availableAgents} isLoading={isLoadingAgents} />
 

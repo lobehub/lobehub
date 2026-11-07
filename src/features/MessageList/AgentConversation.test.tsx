@@ -85,7 +85,9 @@ describe('AgentConversation avatar', () => {
       }),
     );
 
-    expect(screen.getByTestId('menu')).toHaveTextContent('delete,divider,channel-archive,channel-delete');
+    expect(screen.getByTestId('menu')).toHaveTextContent(
+      'delete,divider,channel-archive,channel-delete',
+    );
   });
 
   it('offers unarchive instead for an archived direct Channel', () => {

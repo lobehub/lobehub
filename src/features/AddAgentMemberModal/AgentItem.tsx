@@ -1,7 +1,9 @@
 'use client';
 
 import { agentDisplayName } from '@lobechat/types';
-import { Checkbox, createStaticStyles, Flexbox, Text } from '@lobehub/ui';
+import { Checkbox, Flexbox, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { useHover } from 'ahooks';
 import { X } from 'lucide-react';
 import { memo, useRef } from 'react';
@@ -10,48 +12,32 @@ import AgentAvatar from '@/components/AgentAvatar';
 
 import { useAgentSelectionStore } from './store';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  item: css`
-    cursor: pointer;
-
-    margin-block: 1px;
-    padding-block: 6px;
-    padding-inline: 8px;
-    border-radius: ${cssVar.borderRadius};
-
-    transition: background 0.2s ease;
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  removeButton: css`
-    cursor: pointer;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    width: 20px;
-    height: 20px;
-    border-radius: 4px;
-
-    color: ${cssVar.colorTextTertiary};
-
-    transition: all 0.2s ease;
-
-    &:hover {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillSecondary};
-    }
-  `,
-  title: css`
-    overflow: hidden;
-    flex: 1;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-}));
+const styles = stylex.create({
+  item: {
+    cursor: 'pointer',
+    marginBlock: '1px',
+    paddingBlock: '6px',
+    paddingInline: '8px',
+    borderRadius: cssVar.borderRadius,
+    transition: 'background 0.2s ease',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  removeButton: {
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '20px',
+    height: '20px',
+    borderRadius: '4px',
+    color: { 'default': cssVar.colorTextTertiary, ':hover': cssVar.colorText },
+    transition: 'all 0.2s ease',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillSecondary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  title: { overflow: 'hidden', flex: '1', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+});
 
 export interface AgentItemData {
   avatar: string | null;
@@ -89,7 +75,7 @@ const AgentItem = memo<AgentItemProps>(({ agent, defaultTitle, showCheckbox, sho
 
   return (
     <div
-      className={styles.item}
+      className={stylex.props(styles.item).className}
       ref={ref}
       style={{ cursor: showCheckbox ? 'pointer' : 'default' }}
       onClick={showCheckbox ? handleClick : undefined}
@@ -114,11 +100,11 @@ const AgentItem = memo<AgentItemProps>(({ agent, defaultTitle, showCheckbox, sho
           shape="circle"
           size={28}
         />
-        <Text ellipsis className={styles.title}>
+        <Text ellipsis className={stylex.props(styles.title).className}>
           {title}
         </Text>
         {showRemove && (
-          <div className={styles.removeButton} onClick={handleRemove}>
+          <div {...stylex.props(styles.removeButton)} onClick={handleRemove}>
             <X size={14} />
           </div>
         )}
