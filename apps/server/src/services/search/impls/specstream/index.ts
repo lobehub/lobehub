@@ -33,6 +33,9 @@ export class SpecStreamImpl implements SearchServiceImpl {
   // SpecStream picks its own sources, so retrying without `searchEngines` would repeat the same request
   readonly useAutoSearchEngineSelection = true;
 
+  // The request carries only the question, so a retry with fewer params would repeat a paid call
+  readonly ignoresSearchParams = true;
+
   private get apiKey(): string | undefined {
     return process.env.SPECSTREAM_API_KEY;
   }
