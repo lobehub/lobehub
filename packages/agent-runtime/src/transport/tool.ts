@@ -128,6 +128,12 @@ export interface ToolRunContext {
   stepIndex: number;
   threadId?: string;
   /**
+   * Todo-mutating calls made right before this one with no other tool call in
+   * between (see `countTrailingTodoCalls`). Todo runtimes use it to stop a model
+   * that keeps re-managing its list instead of working.
+   */
+  todoCallStreak?: number;
+  /**
    * Pre-existing tool message the result will be written into (resume /
    * `skipCreateToolMessage` flow) — unset when a new tool message is created
    * after execution.

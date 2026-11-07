@@ -15,8 +15,11 @@ import type {
   InstructionExecutor,
 } from '../types';
 import {
+  countTrailingTodoCalls,
   extractActivatedSkillsFromMessages,
   extractTodosFromMessages,
+  isTodoMutationCall,
+  normalizeTodosState,
   redactResultForEvents,
 } from '../utils';
 import { selectEffectiveToolManifestMap, selectToolSourceMap } from '../utils/operationToolSet';
@@ -107,7 +110,8 @@ const readSerializeKey = (tool: ChatToolPayload, argName: string): string | unde
  * entry, so they are read from the same effective map the run context exposes
  * to executors.
  *
- * - every call to an API marked `ordered` shares one lane;
+ * - every call to an API marked `ordered` shares one lane, and so does every
+ *   todo mutation (each must read the list the previous one produced);
  * - calls to one tool that name the same resource through `serializeBy` (the
  *   same file path) share a lane, across that tool's APIs;
  * - everything else gets a lane of its own.
@@ -126,7 +130,7 @@ const planBatchLanes = (
       Array<{ name?: string; ordered?: boolean; serializeBy?: string }> | undefined;
     const api = apis?.find((item) => item.name === tool.apiName);
 
-    if (api?.ordered === true) {
+    if (api?.ordered === true || isTodoMutationCall(tool.identifier, tool.apiName)) {
       ordered.push(tool);
       continue;
     }
@@ -190,6 +194,7 @@ const createRunContext = ({
     // a best-effort mirror that only exists once `createPlan` has run, so the
     // tool-execution side must not treat it as the source of truth.
     currentTodos: extractTodosFromMessages(state.messages)?.items,
+    todoCallStreak: countTrailingTodoCalls(state.messages, new Set([tool.id])),
     effectiveManifestMap: buildEffectiveManifestMap(state),
     groupId: host.operation.groupId ?? state.origin?.groupId,
     messageId: state.origin?.sourceMessageId,
@@ -847,6 +852,28 @@ export const callToolsBatch =
     // `tool_call_id → placeholder message id` for the deferred tools in this batch.
     const deferredToolMessageIds: Record<string, string> = {};
     const toolsToExecute = serverTools.length > 0 ? serverTools : toolsCalling;
+    // `state.messages` is the snapshot from before the batch, so a todo call
+    // rebuilt from it alone would miss its siblings' writes: `clearTodos` then
+    // `createTodos` resurrected the cleared items, and `createTodos` then
+    // `updateTodos(index: 0)` edited a stale item. Todo calls share the ordered
+    // lane, so each reads the list (and streak) the previous one left behind —
+    // through both `currentTodos` (server) and `stepContext.todos`, which the
+    // client transport hands to the lobe-agent client executor.
+    let batchTodos: ReturnType<typeof normalizeTodosState>;
+    // Streak per todo call in emission order: todo siblings before it extend
+    // the history streak, any other call before it resets it.
+    const todoStreaks = new Map<string, number>();
+    let todoStreak = countTrailingTodoCalls(
+      state.messages,
+      new Set(toolsCalling.map((tool) => tool.id)),
+    );
+    for (const tool of toolsCalling) {
+      if (!isTodoMutationCall(tool.identifier, tool.apiName)) {
+        todoStreak = 0;
+        continue;
+      }
+      todoStreaks.set(tool.id, todoStreak++);
+    }
 
     const runOne = async (tool: ChatToolPayload) => {
       const existingMessageId = Object.hasOwn(existingToolMessageIds, tool.id)
@@ -862,6 +889,14 @@ export const callToolsBatch =
         tool,
         toolMessageId: existingMessageId,
       });
+      const isTodoCall = isTodoMutationCall(tool.identifier, tool.apiName);
+      if (isTodoCall) {
+        if (batchTodos) {
+          runContext.currentTodos = batchTodos.items;
+          runContext.stepContext = { ...runContext.stepContext, todos: batchTodos };
+        }
+        runContext.todoCallStreak = todoStreaks.get(tool.id);
+      }
 
       await host.transports.stream.publishEvent({
         data: { parentMessageId, toolCalling: tool },
@@ -901,6 +936,10 @@ export const callToolsBatch =
         const executionResult = execution.result;
         const executionTime = executionResult.executionTime ?? 0;
         const isSuccess = executionResult.success;
+        if (isTodoCall) {
+          const todos = normalizeTodosState(executionResult.state?.todos, nowIso());
+          if (todos) batchTodos = todos;
+        }
 
         await host.transports.stream.publishEvent({
           data: {

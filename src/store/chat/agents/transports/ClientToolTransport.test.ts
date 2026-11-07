@@ -155,4 +155,60 @@ describe('ClientToolTransport', () => {
     expect(takeWorkIntentMock).toHaveBeenCalledWith('tool-call');
     expect(failOperation).toHaveBeenCalled();
   });
+
+  it('hands the run context stepContext (with batch-threaded todos) to the client executor', async () => {
+    const invoke = vi.fn().mockResolvedValue({ content: 'ok', success: true });
+    let operationIndex = 0;
+    const store = {
+      completeOperation: vi.fn(),
+      dbMessagesMap: {
+        'message-key': [{ id: 'assistant-message', parentId: 'user-message', role: 'assistant' }],
+      },
+      failOperation: vi.fn(),
+      internal_invokeDifferentTypePlugin: invoke,
+      onOperationCancel: vi.fn(),
+      operations: {
+        'root-operation': { context: { agentId: 'agent-1', messageId: 'assistant-message' } },
+      },
+      optimisticCreateMessage: vi.fn().mockResolvedValue({ id: 'tool-message' }),
+      startOperation: vi.fn(() => ({ operationId: `child-operation-${++operationIndex}` })),
+      updateOperationMetadata: vi.fn(),
+    } as unknown as ChatStore;
+    const messages = {
+      createToolMessageForOperation: vi.fn().mockResolvedValue({ id: 'tool-message' }),
+    } as unknown as ClientMessageTransport;
+    const transport = new ClientToolTransport(
+      () => store,
+      'message-key',
+      'root-operation',
+      messages,
+    );
+    const stepContext = {
+      todos: { items: [{ status: 'todo', text: 'new 1' }], updatedAt: '2026-11-07T00:00:00.000Z' },
+    };
+
+    await transport.run(
+      {
+        apiName: 'updateTodos',
+        arguments: '{"operations":[{"index":0,"type":"complete"}]}',
+        id: 'tool-call',
+        identifier: 'lobe-agent',
+        type: 'builtin',
+      },
+      {
+        callIndex: 1,
+        effectiveManifestMap: {},
+        mode: 'batch',
+        operationId: 'root-operation',
+        parentMessageId: 'assistant-message',
+        parsedArgs: {},
+        state: {},
+        stepContext,
+        stepIndex: 0,
+        toolName: 'lobe-agent/updateTodos',
+      } as unknown as ToolRunContext,
+    );
+
+    expect(invoke).toHaveBeenCalledWith('tool-message', expect.anything(), stepContext);
+  });
 });
