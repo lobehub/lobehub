@@ -1442,6 +1442,13 @@
       "when": 1793930690156,
       "tag": "0205_lobe_bench_environments_and_memory",
       "breakpoints": true
+    },
+    {
+      "idx": 206,
+      "version": "7",
+      "when": 1793984982722,
+      "tag": "0206_channel_job_wake",
+      "breakpoints": true
     }
   ],
   "version": "6"

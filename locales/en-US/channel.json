@@ -166,6 +166,7 @@
   "status.paused": "Paused",
   "status.preparing": "Preparing…",
   "status.running": "Replying…",
+  "status.silent": "Stayed quiet",
   "status.stopping": "Stopping · waiting for execution to end",
   "stopReply": "Stop reply",
   "submit": "Create",

@@ -1,3 +1,4 @@
+import type { ChannelJobWake } from '@lobechat/types';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 
 import type {
@@ -115,12 +116,15 @@ export const pairedAgent = async (
  * Queues one job per message and Agent member. Skips Agents whose
  * environment changed after the message, so a late route cannot run an old instruction
  * in a new directory. Returns the ids of the Agents that received a job.
+ *
+ * `wakes` records why each member was woken; a member without one owes an answer (`mention`).
  */
 export const deliver = async (
   tx: Transaction,
   message: ChannelMessageItem,
   agents: ChannelMemberItem[],
   requesterMemberId: string,
+  wakes?: Readonly<Record<string, ChannelJobWake>>,
 ): Promise<string[]> => {
   const recipients = agents.filter((agent) => agent.actorType === 'agent');
   if (!recipients.length) return [];
@@ -134,6 +138,7 @@ export const deliver = async (
         messageId: message.id,
         requesterMemberId,
         threadId: message.threadId,
+        wake: wakes?.[agent.id] ?? null,
       })),
     )
     .onConflictDoNothing();
