@@ -78,6 +78,33 @@ describe('useTaskBatchActions', () => {
     expect([...keep.keys()]).toEqual(['a']);
   });
 
+  it('runs the prepare step after the overlay and before the batch request', async () => {
+    const order: string[] = [];
+    beginOptimistic.mockImplementationOnce(() => {
+      order.push('overlay');
+      return overlay;
+    });
+    batchUpdate.mockImplementation(async () => {
+      order.push('batch');
+      return { failed: [], skipped: [], updated: ['a', 'b'] };
+    });
+    const prepare = vi.fn(async (ids: string[]) => {
+      order.push(`prepare:${ids.join(',')}`);
+    });
+    useTaskSelectionStore.getState().prune(new Set(['a', 'b']));
+    useTaskSelectionStore.getState().selectAll(['a', 'b']);
+    const { result } = renderHook(() => useTaskBatchActions());
+
+    await act(() =>
+      result.current.run(
+        { kind: 'update', patch: { assigneeAgentId: 'agt_private' } },
+        { prepare },
+      ),
+    );
+
+    expect(order).toEqual(['overlay', 'prepare:a,b', 'batch']);
+  });
+
   it('shows the result and clears the selection before the server answers', async () => {
     let resolve!: (value: unknown) => void;
     batchUpdate.mockReturnValue(new Promise((r) => (resolve = r)));

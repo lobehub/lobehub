@@ -1421,6 +1421,27 @@
       "when": 1793792795990,
       "tag": "0202_task_labels",
       "breakpoints": true
+    },
+    {
+      "idx": 203,
+      "version": "7",
+      "when": 1793815529290,
+      "tag": "0203_project_site_last_seen",
+      "breakpoints": true
+    },
+    {
+      "idx": 204,
+      "version": "7",
+      "when": 1793869041794,
+      "tag": "0204_workspace_invitation_link",
+      "breakpoints": true
+    },
+    {
+      "idx": 205,
+      "version": "7",
+      "when": 1793930690156,
+      "tag": "0205_lobe_bench_environments_and_memory",
+      "breakpoints": true
     }
   ],
   "version": "6"

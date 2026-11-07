@@ -32,6 +32,7 @@ const InboxConversation = memo<{ activeRouteId?: string; preview?: string }>(
 
     return (
       <ConversationRow
+        closeOnReselect
         active={active}
         preview={preview || meta.description || undefined}
         running={running}

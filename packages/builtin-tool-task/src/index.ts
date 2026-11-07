@@ -6,6 +6,7 @@ export {
   TASK_STATUSES,
   UNFINISHED_TASK_STATUSES,
 } from './constants';
+export { resolveToolLabelIds, type ToolLabelResolution } from './labels';
 export {
   DEFAULT_LIST_TASK_LIMIT,
   normalizeListTasksParams,

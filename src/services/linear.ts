@@ -4,6 +4,8 @@ import { lambdaClient } from '@/libs/trpc/client';
 
 export interface LinearIssueFilterParams {
   connectionId: string;
+  /** Also match archived issues, which Linear leaves out unless asked. */
+  includeArchived?: boolean;
   linearProjectId?: string | null;
   stateTypes: LinearIssueStateType[];
   teamId: string;
@@ -48,7 +50,7 @@ class LinearService {
     lambdaClient.linear.listSyncRules.query({ projectId });
 
   createSyncRule = async (
-    params: LinearIssueFilterParams & {
+    params: Omit<LinearIssueFilterParams, 'includeArchived'> & {
       linearProjectName?: string | null;
       projectId: string;
       teamName: string;
@@ -58,8 +60,10 @@ class LinearService {
   deleteSyncRule = async (ruleId: string) => lambdaClient.linear.deleteSyncRule.mutate({ ruleId });
 
   /** Starts a background run of a saved rule; returns the job id. */
-  startRuleSync = async (ruleId: string, options: { syncComments?: boolean } = {}) =>
-    lambdaClient.linear.startRuleSync.mutate({ ruleId, ...options });
+  startRuleSync = async (
+    ruleId: string,
+    options: { includeArchived?: boolean; syncComments?: boolean } = {},
+  ) => lambdaClient.linear.startRuleSync.mutate({ ruleId, ...options });
 }
 
 export const linearService = new LinearService();

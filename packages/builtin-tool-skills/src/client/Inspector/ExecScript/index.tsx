@@ -1,8 +1,9 @@
 'use client';
 
 import { type BuiltinInspectorProps } from '@lobechat/types';
-import { Spin } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
+import { cx, Spin } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Check, X } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -11,12 +12,7 @@ import { highlightTextStyles, inspectorTextStyles, shinyTextStyles } from '@/sty
 
 import type { ExecScriptParams, ExecScriptState } from '../../../types';
 
-const styles = createStaticStyles(({ css }) => ({
-  statusIcon: css`
-    margin-block-end: -2px;
-    margin-inline-start: 4px;
-  `,
-}));
+const styles = stylex.create({ statusIcon: { marginBlockEnd: '-2px', marginInlineStart: '4px' } });
 
 export const ExecScriptInspector = memo<BuiltinInspectorProps<ExecScriptParams, ExecScriptState>>(
   ({ args, partialArgs, isArgumentsStreaming, isLoading, pluginState }) => {
@@ -60,12 +56,20 @@ export const ExecScriptInspector = memo<BuiltinInspectorProps<ExecScriptParams, 
           </span>
           {description && <span className={highlightTextStyles.primary}>{description}</span>}
           {isLoading ? null : isStillRunning ? (
-            <Spin className={styles.statusIcon} size="small" />
+            <Spin className={stylex.props(styles.statusIcon).className} size="small" />
           ) : pluginState?.success !== undefined ? (
             isSuccess ? (
-              <Check className={styles.statusIcon} color={cssVar.colorSuccess} size={14} />
+              <Check
+                className={stylex.props(styles.statusIcon).className}
+                color={cssVar.colorSuccess}
+                size={14}
+              />
             ) : (
-              <X className={styles.statusIcon} color={cssVar.colorError} size={14} />
+              <X
+                className={stylex.props(styles.statusIcon).className}
+                color={cssVar.colorError}
+                size={14}
+              />
             )
           ) : null}
         </span>

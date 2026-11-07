@@ -67,4 +67,5 @@ export { VERIFY_ABANDONED_MS, VERIFY_ROLLUP_GRACE_MS } from './staleness';
 export { VerifyStatusService } from './statusService';
 export { sweepStuckVerifyRuns, type VerifySweepOutcome } from './sweep';
 export { resolveEvidenceMetadata } from './terminalEvidence';
+export { releaseUndeliveredRound } from './undeliveredRound';
 export { settleVerifierCheckFromTerminal } from './verifierTerminal';

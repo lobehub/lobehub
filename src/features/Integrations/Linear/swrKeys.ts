@@ -2,6 +2,7 @@ import type { LinearIssueStateType } from '@lobechat/types';
 
 interface IssueFilterKeyParams {
   connectionId: string;
+  includeArchived?: boolean;
   linearProjectId?: string | null;
   stateTypes: LinearIssueStateType[];
   teamId: string;
@@ -13,6 +14,7 @@ const issueFilterKey = (params: IssueFilterKeyParams) =>
     params.teamId,
     params.linearProjectId ?? null,
     [...params.stateTypes].sort().join(','),
+    !!params.includeArchived,
   ] as const;
 
 /**

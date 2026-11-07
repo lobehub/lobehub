@@ -490,6 +490,86 @@ describe('PiAdapter', () => {
     expect(adapter.adapt({ type: 'agent_settled' })).toEqual([]);
   });
 
+  it('treats a settlement Pi reports as aborted as interrupted, even without an aborted message', () => {
+    const adapter = new PiAdapter();
+    adapter.adapt({ type: 'turn_start' });
+    adapter.adapt({
+      args: {},
+      toolCallId: 'bash-1',
+      toolName: 'bash',
+      type: 'tool_execution_start',
+    });
+
+    const events = adapter.adapt({ aborted: true, type: 'agent_settled' });
+
+    expect(dataFor(events, 'error')).toEqual([]);
+    expect(dataFor(events, 'tool_end')).toEqual([{ isSuccess: false, toolCallId: 'bash-1' }]);
+    expect(dataFor(events, 'agent_runtime_end')).toEqual([
+      { kind: 'aborted', reason: 'interrupted' },
+    ]);
+  });
+
+  it('keeps nested tool calls made by another tool out of the transcript', () => {
+    const adapter = new PiAdapter();
+    const codemode = {
+      arguments: { code: 'await read({ path: "a" })' },
+      id: 'cm-1',
+      name: 'codemode',
+    };
+    const events = [
+      ...adapter.adapt({ type: 'turn_start' }),
+      ...adapter.adapt({
+        assistantMessageEvent: {
+          toolCall: { ...codemode, type: 'toolCall' },
+          type: 'toolcall_end',
+        },
+        type: 'message_update',
+      }),
+      ...adapter.adapt({
+        args: codemode.arguments,
+        toolCallId: codemode.id,
+        toolName: codemode.name,
+        type: 'tool_execution_start',
+      }),
+      ...adapter.adapt({
+        args: { path: 'a' },
+        parentToolCallId: 'cm-1',
+        toolCallId: 'cm-1/1',
+        toolName: 'read',
+        type: 'tool_execution_start',
+      }),
+      ...adapter.adapt({
+        isError: false,
+        parentToolCallId: 'cm-1',
+        result: { content: [{ text: 'nested', type: 'text' }] },
+        toolCallId: 'cm-1/1',
+        toolName: 'read',
+        type: 'tool_execution_end',
+      }),
+      ...adapter.adapt({
+        message: {
+          content: [{ text: 'script output', type: 'text' }],
+          isError: false,
+          role: 'toolResult',
+          toolCallId: 'cm-1',
+        },
+        type: 'message_end',
+      }),
+      ...adapter.adapt({ type: 'agent_settled' }),
+    ];
+
+    const toolIds = (type: HeterogeneousAgentEvent['type']) =>
+      dataFor(events, type).map((data) => data.toolCallId);
+    expect(toolIds('tool_start')).toEqual(['cm-1']);
+    expect(toolIds('tool_result')).toEqual(['cm-1']);
+    expect(toolIds('tool_end')).toEqual(['cm-1']);
+    expect(
+      dataFor(events, 'stream_chunk')
+        .filter((data) => data.chunkType === 'tools_calling')
+        .flatMap((data) => data.toolsCalling.map((tool: { id: string }) => tool.id)),
+    ).toEqual(['cm-1']);
+  });
+
   it('flushes completed and incomplete tools before the runtime fallback end', () => {
     const adapter = new PiAdapter();
     adapter.adapt({ type: 'turn_start' });

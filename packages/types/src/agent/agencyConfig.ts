@@ -491,6 +491,12 @@ export type ExecutionPlan = { target: DeviceExecutionTarget } &
      * (hetero dispatch).
      */
     | { kind: 'device-unrouted'; reason: ExecutionPlanUnroutedReason }
+    /**
+     * Bound to a managed cloud device that is not online yet but can be woken.
+     * The run stays on this device: callers wake it before they dispatch to it,
+     * and tool calls that reach it while it starts answer `DEVICE_WAKING`.
+     */
+    | { deviceId: string; kind: 'device-wakeable' }
     /** plain chat — no execution environment, no run tools, no device ever */
     | { kind: 'none' }
     /** ephemeral cloud sandbox */

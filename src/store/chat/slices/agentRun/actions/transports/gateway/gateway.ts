@@ -1277,7 +1277,7 @@ export class GatewayActionImpl {
       // Attachments picked in the subtopic composer were staged under the
       // `_new` key; carry them over so the next turn in the thread still sees
       // them (mirrors the new-topic handoff below).
-      getFileStoreState().moveChatContextSelections(
+      getFileStoreState().moveChatComposerAttachments(
         messageMapKey(messageContext),
         messageMapKey(resolvedMessageContext),
       );
@@ -1328,7 +1328,7 @@ export class GatewayActionImpl {
             title: optimisticTopic.title,
           },
         });
-        getFileStoreState().moveChatContextSelections(
+        getFileStoreState().moveChatComposerAttachments(
           messageMapKey({ ...messageContext, topicId: optimisticTopic.id }),
           messageMapKey({ ...messageContext, topicId: result.topicId }),
         );

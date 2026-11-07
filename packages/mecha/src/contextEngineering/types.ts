@@ -5,6 +5,7 @@ import type {
   AgentManagementContext,
   BotPlatformContext,
   DiscordContext,
+  DocumentReferenceItem,
   EvalContext,
   FileContextConfig,
   GroupAgentBuilderContext,
@@ -130,6 +131,7 @@ export interface ContextWorldSnapshot {
 export interface ContextStepSnapshot {
   agentBuilderContext?: AgentBuilderContext;
   agentManagementContext?: AgentManagementContext;
+  documentReferences?: DocumentReferenceItem[];
   groupAgentBuilderContext?: GroupAgentBuilderContext;
   onboardingContext?: OnboardingContext;
   planTodo?: PlanTodoConfig;

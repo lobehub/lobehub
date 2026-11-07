@@ -1,7 +1,13 @@
 // @vitest-environment node
+import { LINEAR_NO_PROJECT_ID } from '@lobechat/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { countLinearIssues, getLinearProjectTeamIds, listLinearIssues } from '../issues';
+import {
+  countLinearIssues,
+  getLinearIssuesByIds,
+  getLinearProjectTeamIds,
+  listLinearIssues,
+} from '../issues';
 
 const fetchMock = vi.fn();
 
@@ -49,6 +55,57 @@ describe('listLinearIssues filter', () => {
       project: { id: { eq: 'project-1' } },
       state: { type: { in: ['unstarted', 'started'] } },
     });
+  });
+  it('keeps the team and drops issues with a project when No project is chosen', async () => {
+    fetchMock.mockResolvedValue(reply(emptyIssues));
+
+    await countLinearIssues('token', {
+      linearProjectId: LINEAR_NO_PROJECT_ID,
+      stateTypes: ['backlog'],
+      teamId: 'team-pkg',
+    });
+
+    expect(requestBody(fetchMock.mock.calls[0]).variables.filter).toEqual({
+      project: { null: true },
+      state: { type: { in: ['backlog'] } },
+      team: { id: { eq: 'team-pkg' } },
+    });
+  });
+});
+
+describe('archived issues', () => {
+  it('leaves archived issues out of the list and the count unless asked, as Linear does', async () => {
+    fetchMock.mockImplementation(async () => reply(emptyIssues));
+    const filter = { stateTypes: ['completed' as const], teamId: 'team-pkg' };
+
+    await listLinearIssues('token', filter);
+    await countLinearIssues('token', filter);
+    await listLinearIssues('token', { ...filter, includeArchived: true });
+    await countLinearIssues('token', { ...filter, includeArchived: true });
+
+    const sent = fetchMock.mock.calls.map((call) => requestBody(call));
+    for (const body of sent) {
+      expect(body.query).toContain('includeArchived: $includeArchived');
+    }
+    expect(sent.map((body) => body.variables.includeArchived)).toEqual([false, false, true, true]);
+  });
+
+  it('looks picked and linked issues up by id whether archived or not', async () => {
+    fetchMock.mockResolvedValue(
+      reply({
+        issues: {
+          nodes: [{ id: 'archived-1' }],
+          pageInfo: { endCursor: null, hasNextPage: false },
+        },
+      }),
+    );
+
+    const issues = await getLinearIssuesByIds('token', ['archived-1']);
+
+    expect(issues).toMatchObject([{ id: 'archived-1' }]);
+    const body = requestBody(fetchMock.mock.calls[0]);
+    expect(body.query).toContain('includeArchived: true');
+    expect(body.variables.filter).toEqual({ id: { in: ['archived-1'] } });
   });
 });
 
@@ -125,6 +182,7 @@ describe('countLinearIssues', () => {
         team: { id: { eq: 'team-pkg' } },
       },
       first: 50,
+      includeArchived: false,
     });
     expect(requestBody(fetchMock.mock.calls[1]).variables.after).toBe('cursor-1');
   });

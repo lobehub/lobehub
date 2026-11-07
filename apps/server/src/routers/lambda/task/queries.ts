@@ -1,6 +1,7 @@
 import type { TaskListItem, TaskParticipant } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 
+import { TaskLabelModel } from '@/database/models/taskLabel';
 import { UserModel } from '@/database/models/user';
 import { router } from '@/libs/trpc/lambda';
 import { resolveTaskOrThrow } from '@/server/services/task/utils';
@@ -132,6 +133,16 @@ export const queriesRouter = router({
     try {
       const model = ctx.taskModel;
       const { completedWithin, parentIdentifier, scope, ...query } = input;
+      if (query.groupBy === 'label') {
+        const group = await new TaskLabelModel(
+          ctx.serverDB,
+          ctx.userId,
+          ctx.workspaceId ?? undefined,
+        ).findById(query.labelGroupId!);
+        if (!group?.isGroup) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'Label group not found' });
+        }
+      }
       const parentRef = query.parentTaskId !== undefined ? query.parentTaskId : parentIdentifier;
       const parentTaskId =
         typeof parentRef === 'string'

@@ -91,7 +91,12 @@ export const scheduleConnectorRefresh = (
     scheduleStaleConnectorToolsRefresh(
       [...params.connectorsMcp, ...params.discoverableConnectorsMcp],
       buildLastSyncedAtMap([...params.connectorTools, ...params.discoverableConnectorTools]),
-      { connectorModel: refreshConnectorModel, connectorToolModel: deps.connectorToolModel },
+      {
+        connectorModel: refreshConnectorModel,
+        connectorToolModel: deps.connectorToolModel,
+        // Lists under this user's mcp_apps flag, so view-only tools are found too
+        userId: deps.userId,
+      },
     );
   } catch (err) {
     log('execAgent: failed to schedule connector tool refresh (ignored): %O', err);

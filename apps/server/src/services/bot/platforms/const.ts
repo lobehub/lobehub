@@ -12,6 +12,24 @@ export const displayToolCallsField: FieldSchema = {
 };
 
 /**
+ * Whether the bot posts a short "working on it" message before the agent starts. Off by default:
+ * on platforms that cannot edit a sent message (QQ, WeChat) it stays in the chat as its own
+ * message, which breaks immersion for role-play bots. On editable platforms the same message is
+ * where tool-call progress is edited in, so `displayToolCalls` needs it on.
+ */
+export const processingMessageField: FieldSchema = {
+  key: 'processingMessage',
+  default: false,
+  description: 'channel.processingMessageHint',
+  label: 'channel.processingMessage',
+  type: 'boolean',
+};
+
+/** Only an explicit `true` posts the message; rows saved before the field existed skip it. */
+export const shouldPostProcessingMessage = (settings?: Record<string, unknown>): boolean =>
+  settings?.processingMessage === true;
+
+/**
  * Per-platform "how to find this ID" tooltip keys. Each platform paints a
  * different path to the value the operator has to paste — Discord wants
  * Developer Mode + right-click, Telegram wants @userinfobot, Slack uses

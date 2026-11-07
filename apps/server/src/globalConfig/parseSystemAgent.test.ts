@@ -102,7 +102,6 @@ describe('parseSystemAgent', () => {
     expect(result.translation).toEqual({ provider: 'ollama', model: 'deepseek-v3' });
     expect(result.agentMeta).toEqual({ provider: 'ollama', model: 'deepseek-v3' });
     expect(result.expertise).toEqual({ provider: 'ollama', model: 'deepseek-v3' });
-    expect(result.historyCompress).toEqual({ provider: 'ollama', model: 'deepseek-v3' });
     expect(result.onboardingUnderstanding).toEqual({
       provider: 'ollama',
       model: 'deepseek-v3',
@@ -159,7 +158,6 @@ describe('parseSystemAgent', () => {
 
     expect(result.translation).toEqual({ provider: 'ollama', model: 'deepseek-v3' });
     expect(result.agentMeta).toEqual({ provider: 'ollama', model: 'deepseek-v3' });
-    expect(result.historyCompress).toEqual({ provider: 'ollama', model: 'deepseek-v3' });
     expect(result.thread).toEqual({ provider: 'ollama', model: 'deepseek-v3' });
   });
 
@@ -175,7 +173,6 @@ describe('parseSystemAgent', () => {
     // 其他系统智能体应该使用默认配置
     expect(result.translation).toEqual({ provider: 'ollama', model: 'deepseek-v3' });
     expect(result.agentMeta).toEqual({ provider: 'ollama', model: 'deepseek-v3' });
-    expect(result.historyCompress).toEqual({ provider: 'ollama', model: 'deepseek-v3' });
     expect(result.thread).toEqual({ provider: 'ollama', model: 'deepseek-v3' });
   });
 

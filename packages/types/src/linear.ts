@@ -62,6 +62,16 @@ export const LINEAR_DEFAULT_IMPORT_STATE_TYPES: LinearIssueStateType[] = [
   'completed',
 ];
 
+/**
+ * `linearProjectId` value that scopes a filter or rule to the team's issues
+ * that belong to no Linear project. Linear project ids are UUIDs, so it never
+ * names a real project.
+ */
+export const LINEAR_NO_PROJECT_ID = 'none';
+
+export const isLinearNoProject = (linearProjectId: string | null | undefined): boolean =>
+  linearProjectId === LINEAR_NO_PROJECT_ID;
+
 /** Providers a task can be linked to through `task_external_links`. */
 export type TaskExternalProvider = 'linear';
 
@@ -203,6 +213,11 @@ export interface LinearSyncJobMetadata {
    * requests deep, so a run stops handing off after a few.
    */
   handOffs?: number;
+  /**
+   * A rule run also reads archived issues (`kind: 'rule'`). Picked issues are
+   * looked up by id, which finds archived ones either way.
+   */
+  includeArchived?: boolean;
   /** Picked issues (`kind: 'issues'`). */
   issueIds?: string[];
   kind: 'issues' | 'rule';

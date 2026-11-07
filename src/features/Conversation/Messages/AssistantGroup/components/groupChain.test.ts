@@ -94,3 +94,29 @@ describe('buildChainView task-completion notices', () => {
     expect(rendered.find((block) => block.id === 'wake')?.showTaskCompletionNotice).toBe(true);
   });
 });
+
+describe('buildChainView MCP App views', () => {
+  const appTool = {
+    apiName: 'show_dashboard',
+    arguments: '{}',
+    id: 't1',
+    identifier: 'dash',
+    result: { content: 'ok', id: 'r1', state: { mcpApp: { resourceUri: 'ui://dash/view' } } },
+    type: 'mcp' as const,
+  };
+  const nextTool = { ...appTool, apiName: 'search', id: 't2', result: undefined };
+  // The segment key the group renders the view under (`getChainSegmentKey`)
+  const viewKey = (tools: unknown[]) =>
+    buildChainView(
+      { blocks: [{ content: '', id: 'step1', tools }] as AssistantContentBlock[], id: 'group' },
+      { enableMcpApps: true, hasActiveOperation: true, isGenerating: true },
+    ).segments.flatMap((segment) => (segment.kind === 'workflow' ? segment.blocks : []))[0]
+      ?.renderKey;
+
+  it('keeps the key of a lone view once the model calls another tool in its step', () => {
+    const alone = viewKey([appTool]);
+
+    expect(alone).toBeDefined();
+    expect(viewKey([appTool, nextTool])).toBe(alone);
+  });
+});

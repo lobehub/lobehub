@@ -4,6 +4,8 @@ import {
   Button,
   Center,
   CopyButton,
+  // oxlint-disable-next-line stylex-migration/no-emotion-styles -- ActionIcon renders its svg without a slot
+  createStaticStyles,
   Flexbox,
   Icon,
   Input,
@@ -23,7 +25,6 @@ import ImperativeModal from '@/components/ImperativeModal';
 import { useShare } from '@/hooks/useShare';
 
 import CardBanner from '../../components/CardBanner';
-import iconStyles from './ShareButton.module.css';
 
 const styles = stylex.create({
   banner: {
@@ -52,6 +53,24 @@ interface ShareButtonProps extends ComponentProps<typeof Button> {
     url: string;
   };
 }
+
+const fallback = createStaticStyles(({ css }) => ({
+  icon: css`
+    border: 1px solid var(--lobe-color-fill-secondary);
+
+    svg {
+      fill: var(--lobe-color-text-secondary);
+    }
+
+    &:hover {
+      border: 1px solid var(--lobe-color-border-secondary);
+
+      svg {
+        fill: var(--lobe-color-text);
+      }
+    }
+  `,
+}));
 
 const ShareButton = memo<ShareButtonProps>(({ meta, ...rest }) => {
   const { x, reddit, telegram, whatsapp, mastodon, weibo } = useShare({
@@ -106,7 +125,7 @@ const ShareButton = memo<ShareButtonProps>(({ meta, ...rest }) => {
               item.icon && (
                 <a href={item.link} key={item.title} rel="noreferrer" target="_blank">
                   <ActionIcon
-                    className={iconStyles.icon}
+                    className={fallback.icon}
                     icon={item.icon}
                     size={{ blockSize: 36, borderRadius: 18, size: 16 }}
                     title={item.title}

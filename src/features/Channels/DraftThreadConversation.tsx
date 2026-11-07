@@ -1,7 +1,6 @@
 import type { ChannelDetail } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
-import type { ComponentProps } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { createStore, Provider } from '@/features/Conversation/store';
@@ -9,7 +8,7 @@ import WideScreenContainer from '@/features/WideScreenContainer';
 
 import { ArchivedNotice } from './ArchivedNotice';
 import { ThreadRootMessage } from './ChannelMessage';
-import { Composer } from './Composer';
+import { type ChannelComposerSend, Composer } from './Composer';
 import { styles } from './styles';
 import type { ChannelThreadDraft } from './threadDraft';
 import { channelDraftKey } from './useComposerDraft';
@@ -22,7 +21,7 @@ export function DraftThreadConversation({
 }: {
   detail: ChannelDetail;
   draft: ChannelThreadDraft;
-  onSend: ComponentProps<typeof Composer>['onSend'];
+  onSend: ChannelComposerSend;
 }) {
   const { t } = useTranslation('channel');
   return (
@@ -50,6 +49,7 @@ export function DraftThreadConversation({
           <ArchivedNotice channel={detail.channel} threadId={null} />
         ) : (
           <Composer
+            channel={detail.channel}
             draftKey={channelDraftKey(detail.channel.id, `draft:${draft.root.id}`)}
             members={detail.members.filter((member) => member.status === 'active')}
             placeholder={t('threadComposer')}

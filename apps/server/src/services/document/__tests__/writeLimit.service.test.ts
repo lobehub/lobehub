@@ -149,8 +149,8 @@ describe('DocumentService per-document character limit', () => {
       expect(documentModel.update).toHaveBeenCalled();
     });
 
-    // LOBE-15419: the room accepts browser edits without measuring them, so a
-    // projection that grows the page past the limit must not reach the row.
+    // The room accepts browser edits without measuring them, so a projection
+    // that grows the page past the limit must not reach the row.
     it('refuses a room projection that grows the page past the limit', async () => {
       refuse();
 

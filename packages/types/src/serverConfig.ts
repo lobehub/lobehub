@@ -61,6 +61,17 @@ export type IFeatureFlagsState = {
    * as an executor only when this is on; the server checks it again.
    */
   enableLlmRelay: boolean | undefined;
+  /**
+   * Creating managed cloud devices (`managed_cloud_device`). Off by default: the "Create in
+   * cloud" entry is hidden and the creation APIs answer FORBIDDEN. Existing managed devices keep
+   * working.
+   */
+  enableManagedCloudDevice: boolean | undefined;
+  /**
+   * MCP Apps views in the conversation (`mcp_apps`). Off by default: tool results
+   * that declare a `ui://` view render as plain results.
+   */
+  enableMcpApps: boolean | undefined;
   enableOnboardingV2: boolean | undefined;
   enableRAGEval: boolean | undefined;
   enableSTT: boolean | undefined;

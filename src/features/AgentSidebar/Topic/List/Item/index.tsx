@@ -429,6 +429,16 @@ const TopicItemRow = memo<TopicItemRowProps>(
         {t('draft')}
       </Text>
     ) : undefined;
+    // On a two-line row (title + working directory) the hint sits under the
+    // leading avatar instead, so it no longer eats into the title width.
+    const draftBelowIcon = hasDraft ? (
+      <Text
+        fontSize={10}
+        style={{ color: cssVar.colorError, flex: 'none', lineHeight: 1, whiteSpace: 'nowrap' }}
+      >
+        {t('draft')}
+      </Text>
+    ) : undefined;
 
     // Codex-style hover detail card: when the topic carries git context, hovering
     // the row reveals a card on the right with repo / branch / worktree / PR / CI —
@@ -550,10 +560,12 @@ const TopicItemRow = memo<TopicItemRowProps>(
       // like Codex. It is secondary metadata, so only an idle topic uses it
       // as the leading icon.
       if (metaCard?.pullRequest) {
-        const prVisual = PR_STATE_VISUAL[getPullRequestState(metaCard.pullRequest)];
+        const prState = getPullRequestState(metaCard.pullRequest);
+        const prVisual = PR_STATE_VISUAL[prState];
         const ciStatus = metaCard.pullRequest.ciStatus;
         const ciVisual = getCiVisual(ciStatus);
-        const showCiBadge = ciStatus !== undefined && ciStatus !== 'unknown';
+        const showCiBadge =
+          prState !== 'merged' && ciStatus !== undefined && ciStatus !== 'unknown';
         const tooltip = showCiBadge
           ? `${t(prVisual.labelKey)} · ${t(ciVisual.labelKey)}`
           : t(prVisual.labelKey);
@@ -623,7 +635,6 @@ const TopicItemRow = memo<TopicItemRowProps>(
           description={workingDirectoryNode}
           href={href}
           icon={leadingIconNode}
-          slots={{ titlePrefix: draftPrefix }}
           title={title === '...' ? <DotsLoading gap={3} size={4} /> : title}
           titleColor={cssVar.colorText}
           actions={() => (
@@ -655,6 +666,9 @@ const TopicItemRow = memo<TopicItemRowProps>(
                 />
               )}
             </>
+          }
+          slots={
+            workingDirectoryNode ? { iconBelow: draftBelowIcon } : { titlePrefix: draftPrefix }
           }
           onClick={handleClick}
           onDoubleClick={() => void handleDoubleClick()}

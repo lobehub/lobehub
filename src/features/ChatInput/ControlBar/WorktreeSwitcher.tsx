@@ -39,7 +39,7 @@ import { useTranslation } from 'react-i18next';
 import { gitService } from '@/services/git';
 
 import { openCreateWorktreeModal } from './CreateWorktreeModal';
-import gitMenuTriggerStyles from './gitMenuTrigger.module.css';
+import { gitMenuTriggerStyles } from './gitMenuTrigger';
 import { useSwitchWorktree } from './useSwitchWorktree';
 import { useWorktreeHomeDir } from './useWorktreeHomeDir';
 import { getPathName, isDisabled, normalizeDisplayPath } from './worktreeHelpers';

@@ -2,7 +2,8 @@
 
 import { isDesktop } from '@lobechat/const';
 import { HETEROGENEOUS_TYPE_LABELS } from '@lobechat/heterogeneous-agents';
-import type { DeviceExecutionTarget } from '@lobechat/types';
+import type { DeviceExecutionTarget, DeviceListItem } from '@lobechat/types';
+import { isManagedCloudDevice } from '@lobechat/types';
 import { Button, Flexbox, Icon, Popover, toast, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
@@ -36,6 +37,7 @@ import {
 } from '@/helpers/executionTarget';
 import { useIsGatewayModeEnabled } from '@/helpers/gatewayMode';
 import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
+import { deviceService } from '@/services/device';
 import { localFileService } from '@/services/electron/localFileService';
 import { useAgentStore } from '@/store/agent';
 import { useDeviceList } from '@/store/device';
@@ -46,6 +48,7 @@ import { formatLockedControlTooltip } from '../utils/lockedControlTooltip';
 import DeviceOptionRow from './DeviceOptionRow';
 import { getDevicePoolStatus } from './devicePoolStatus';
 import OptionRow from './OptionRow';
+import { reconnectDevice } from './reconnectDevice';
 import { useSandboxNetworkToggle } from './useSandboxNetworkToggle';
 import { useTopicAwareTargetSelect } from './useTopicAwareTargetSelect';
 
@@ -245,31 +248,36 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   const [reconnectingDeviceId, setReconnectingDeviceId] = useState<string>();
 
   const handleReconnectDevice = useCallback(
-    async (deviceId: string) => {
-      setReconnectingDeviceId(deviceId);
+    async (device: DeviceListItem) => {
+      const managed = isManagedCloudDevice(device);
+      setReconnectingDeviceId(device.deviceId);
       try {
-        if (isDesktop && deviceId === currentDeviceId) {
-          await useElectronStore.getState().connectGateway();
-        } else {
-          window.location.href = `lobehub://device/reconnect?deviceId=${encodeURIComponent(deviceId)}`;
-        }
-
-        // The deep link crosses browser → desktop → gateway → server, so give
-        // the live device registry a short window to converge instead of
-        // making the user close and reopen the picker to see the result.
-        let connected = false;
-        for (let attempt = 0; attempt < 8; attempt += 1) {
-          const nextDevices = await refreshDevices();
-          if (nextDevices?.some((device) => device.deviceId === deviceId && device.online)) {
-            connected = true;
-            break;
-          }
-          await new Promise((resolve) => setTimeout(resolve, 1000));
-        }
-        if (!connected) toast.error(t('heteroAgent.executionTarget.reconnectFailed'));
+        // A connected device's deep link crosses browser → desktop → gateway →
+        // server, and a woken managed device needs time to start, so poll the
+        // device list instead of making the user close and reopen the picker.
+        const outcome = await reconnectDevice(
+          device,
+          { isCurrentMachine: isDesktop && device.deviceId === currentDeviceId },
+          {
+            connectGateway: () => useElectronStore.getState().connectGateway(),
+            openDeepLink: (url) => {
+              window.location.href = url;
+            },
+            refreshDevices,
+            wakeManagedDevice: (input) => deviceService.wakeManagedDevice(input),
+          },
+        );
+        if (outcome === 'failed') toast.error(t('heteroAgent.executionTarget.reconnectFailed'));
+        if (outcome === 'starting') toast.info(t('heteroAgent.executionTarget.wakeStarting'));
       } catch (error) {
         console.error('Device reconnect failed:', error);
-        toast.error(t('heteroAgent.executionTarget.reconnectFailed'));
+        toast.error(
+          t(
+            managed
+              ? 'heteroAgent.executionTarget.wakeFailed'
+              : 'heteroAgent.executionTarget.reconnectFailed',
+          ),
+        );
       } finally {
         setReconnectingDeviceId(undefined);
       }
@@ -533,7 +541,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
           isActive('device', d.deviceId),
           isCurrentMachine ? [t('heteroAgent.executionTarget.gateway')] : [],
         )}
-        onReconnect={() => void handleReconnectDevice(d.deviceId)}
+        onReconnect={() => void handleReconnectDevice(d)}
         onSelect={() => void handleSelect('device', d.deviceId)}
       />
     );

@@ -221,6 +221,7 @@ vi.mock('@/store/user/selectors', () => ({
 }));
 
 vi.mock('../hooks/useAgentId', () => ({ useAgentId: () => 'agent-id' }));
+vi.mock('../hooks/useChatInputUpload', () => ({ useChatInputUploadKey: () => 'composer-key' }));
 vi.mock('../hooks/useLargeFileLocalPath', () => ({
   useLargeFileLocalPath: () => (files: File[]) => files,
 }));

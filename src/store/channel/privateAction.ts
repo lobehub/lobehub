@@ -10,6 +10,7 @@ import {
 import type { StoreSetter } from '@/store/types';
 import { isTrpcErrorCode } from '@/utils/trpcError';
 
+import { settleOutbox } from './outbox';
 import {
   channelDetailEntity,
   channelDetailResource,
@@ -50,6 +51,11 @@ export class ChannelPrivateAction {
     this.detail = createReplicaSlice(channelDetailResource, {
       actionPrefix: 'channel/detail',
       effects: {
+        onApplied: (data, params, { scope }) => {
+          const { outbox } = get();
+          const next = settleOutbox(outbox, params, data, scope);
+          if (next !== outbox) set({ outbox: next }, false, 'channel/outbox/settle');
+        },
         onError: (error, params, { scope }) => {
           if (params.threadId && isTrpcErrorCode(error, 'NOT_FOUND')) {
             this.removeThread(params.channelId, params.threadId, scope);

@@ -171,6 +171,7 @@ const findCustomInteractionSubmitHandler = (identifier: string, apiName?: string
  */
 const HETERO_CUSTOM_INTERACTION_IDENTIFIERS = new Set<string>([
   ClaudeCodeIdentifier,
+  'codex',
   COPILOT_IDENTIFIER,
   CURSOR_IDENTIFIER,
   DEVIN_IDENTIFIER,

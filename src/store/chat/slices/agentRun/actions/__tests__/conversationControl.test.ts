@@ -3391,7 +3391,7 @@ describe('ConversationControl actions', () => {
       expect(persistAnswersSpy).not.toHaveBeenCalled();
     });
 
-    it('fails closed after an unavailable durable source when operation memory is empty', async () => {
+    it('uses the persisted operation after an unavailable durable source on cold start', async () => {
       const { result } = renderHook(() => useChatStore());
       const agentId = 'remote-agent';
       const topicId = 'remote-topic';
@@ -3422,23 +3422,24 @@ describe('ConversationControl actions', () => {
       const sourceMutation = vi.mocked(
         lambdaClient.aiAgent.resolveAgentInterventionBySource.mutate,
       );
-      const pluginSpy = vi
-        .spyOn(result.current, 'optimisticUpdateMessagePlugin')
-        .mockResolvedValue(undefined);
       const legacyRemoteSubmit = vi.mocked(lambdaClient.aiAgent.submitHeteroIntervention.mutate);
       const localSubmit = vi
         .spyOn(heterogeneousAgentService, 'submitIntervention')
         .mockResolvedValue(undefined as any);
 
       await act(async () => {
-        await expect(
-          result.current.submitHeteroIntervention(toolMessage.id, 'submit', { Question: 'Answer' }),
-        ).rejects.toThrow('Question runtime is unavailable');
+        await result.current.submitHeteroIntervention(toolMessage.id, 'submit', {
+          Question: 'Answer',
+        });
       });
 
       expect(sourceMutation).toHaveBeenCalledOnce();
-      expect(pluginSpy).not.toHaveBeenCalled();
-      expect(legacyRemoteSubmit).not.toHaveBeenCalled();
+      expect(legacyRemoteSubmit).toHaveBeenCalledWith({
+        operationId: 'server-operation-source-unavailable',
+        resolutionRequestId: expect.any(String),
+        result: { Question: 'Answer' },
+        toolCallId: 'call-source-unavailable',
+      });
       expect(localSubmit).not.toHaveBeenCalled();
     });
 
@@ -3479,9 +3480,7 @@ describe('ConversationControl actions', () => {
         });
       });
 
-      const pluginSpy = vi
-        .spyOn(result.current, 'optimisticUpdateMessagePlugin')
-        .mockResolvedValue(undefined);
+      vi.spyOn(result.current, 'optimisticUpdateMessagePlugin').mockResolvedValue(undefined);
       vi.spyOn(result.current, 'optimisticUpdateMessageContent').mockResolvedValue(undefined);
       vi.spyOn(messageService, 'updateMessagePluginState').mockResolvedValue({
         messages: [],

@@ -8,6 +8,7 @@ import LobeThinking from './LobeThinking';
 import LocalFile from './LocalFile';
 import LocalFileLink from './LocalFileLink';
 import Mention from './Mention';
+import ReferDocument from './ReferDocument';
 import ReferTopic from './ReferTopic';
 import ScmEvent from './ScmEvent';
 import Skill from './Skill';
@@ -26,6 +27,7 @@ export const markdownElements: MarkdownElement[] = [
   LocalFile,
   Mention,
   ReferTopic,
+  ReferDocument,
   Skill,
   Tool,
   Task,

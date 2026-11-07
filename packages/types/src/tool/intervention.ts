@@ -164,6 +164,7 @@ export type ToolInterventionPresentation = {
 
 const ASK_USER_QUESTION_IDENTIFIERS = new Set([
   'claude-code',
+  'codex',
   'copilot',
   'cursor',
   'devin',
@@ -175,6 +176,7 @@ const ASK_USER_QUESTION_IDENTIFIERS = new Set([
 
 const HETEROGENEOUS_CUSTOM_INTERACTION_IDENTIFIERS = new Set([
   'claude-code',
+  'codex',
   'copilot',
   'cursor',
   'devin',

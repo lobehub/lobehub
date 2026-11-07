@@ -309,6 +309,17 @@ describe('mapFeatureFlagsEnvToState', () => {
     expect(mapFeatureFlagsEnvToState(config).enableDashboard).toBe(false);
   });
 
+  it('should keep MCP Apps views off by default and enable them per user or globally', () => {
+    expect(DEFAULT_FEATURE_FLAGS.mcp_apps).toBe(false);
+    expect(mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'user-1').enableMcpApps).toBe(false);
+
+    expect(mapFeatureFlagsEnvToState({ mcp_apps: true }).enableMcpApps).toBe(true);
+
+    const config = { mcp_apps: ['user-123'] };
+    expect(mapFeatureFlagsEnvToState(config, 'user-123').enableMcpApps).toBe(true);
+    expect(mapFeatureFlagsEnvToState(config, 'user-456').enableMcpApps).toBe(false);
+  });
+
   it('should keep the rail layout off by default and enable it per user or globally', () => {
     expect(DEFAULT_FEATURE_FLAGS.im_layout).toBe(false);
     expect(mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'user-1').enableImLayout).toBe(false);
@@ -330,6 +341,35 @@ describe('mapFeatureFlagsEnvToState', () => {
     expect(mapFeatureFlagsEnvToState(config, 'user-123').enableChannels).toBe(true);
     expect(mapFeatureFlagsEnvToState(config, 'user-456').enableChannels).toBe(false);
     expect(mapFeatureFlagsEnvToState(config).enableChannels).toBe(false);
+  });
+
+  it('should keep managed cloud device creation off by default and enable it per user or globally', () => {
+    expect(DEFAULT_FEATURE_FLAGS.managed_cloud_device).toBe(false);
+    expect(
+      mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'user-1').enableManagedCloudDevice,
+    ).toBe(false);
+
+    expect(mapFeatureFlagsEnvToState({ managed_cloud_device: true }).enableManagedCloudDevice).toBe(
+      true,
+    );
+
+    const config = { managed_cloud_device: ['user-123'] };
+    expect(mapFeatureFlagsEnvToState(config, 'user-123').enableManagedCloudDevice).toBe(true);
+    expect(mapFeatureFlagsEnvToState(config, 'user-456').enableManagedCloudDevice).toBe(false);
+    expect(mapFeatureFlagsEnvToState(config).enableManagedCloudDevice).toBe(false);
+  });
+
+  it('should keep allowlisted users on while managed cloud device creation rolls out', () => {
+    const allowlistOnly = { managed_cloud_device: ['rollout:0', 'user-123'] };
+    expect(mapFeatureFlagsEnvToState(allowlistOnly, 'user-123').enableManagedCloudDevice).toBe(
+      true,
+    );
+    expect(mapFeatureFlagsEnvToState(allowlistOnly, 'user-456').enableManagedCloudDevice).toBe(
+      false,
+    );
+
+    const everyone = { managed_cloud_device: ['rollout:100', 'user-123'] };
+    expect(mapFeatureFlagsEnvToState(everyone, 'user-456').enableManagedCloudDevice).toBe(true);
   });
 
   it('should correctly map boolean feature flags to state', () => {

@@ -337,6 +337,8 @@ export class PluginTypesActionImpl {
 
     try {
       const result = await mcpService.invokeMcpToolCall(payload, {
+        // Resolve connectors as this agent's runs do: a linked one serves only its agent
+        agentId: message?.agentId ?? undefined,
         signal: abortController?.signal,
         topicId: message?.topicId,
       });

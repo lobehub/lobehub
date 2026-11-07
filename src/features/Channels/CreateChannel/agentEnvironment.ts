@@ -36,6 +36,18 @@ export interface ChannelAgentEnvironment {
   workspaceScoped?: boolean;
 }
 
+/** Device issues of an inherited environment are fixed in the Agent's settings, not here. */
+const INHERITED_ISSUES = ['deviceOffline', 'deviceRequired', 'deviceUnavailable'] as const;
+
+const isInheritedIssue = (issue: ChannelAgentIssue): issue is (typeof INHERITED_ISSUES)[number] =>
+  (INHERITED_ISSUES as readonly ChannelAgentIssue[]).includes(issue);
+
+/** The `channel` locale key that explains an issue. */
+export const channelAgentIssueKey = (issue: ChannelAgentIssue, inherited?: boolean) =>
+  inherited && isInheritedIssue(issue)
+    ? (`environment.inherited.${issue}` as const)
+    : (`environment.${issue}` as const);
+
 const getRuntime = ({ agencyConfig, model }: ChannelAgentEnvironment) =>
   agencyConfig?.heterogeneousProvider?.type ??
   (isHeterogeneousAgentModelId(model) ? model! : 'native');

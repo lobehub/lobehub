@@ -7,6 +7,8 @@ const MAX_LIST_TASK_LIMIT = 100;
 
 export interface ListTasksParams {
   assigneeAgentId?: string;
+  /** Label (or label group) names; a task matches when it carries any of them. */
+  labels?: string[];
   limit?: number;
   offset?: number;
   parentIdentifier?: string;
@@ -16,6 +18,8 @@ export interface ListTasksParams {
 
 export interface TaskListQuery {
   assigneeAgentId?: string;
+  /** Set by the runtime once `labels` are resolved to ids. */
+  filter?: { label?: { operator: 'is'; values: string[] } };
   limit: number;
   offset: number;
   parentIdentifier?: string;
@@ -29,6 +33,7 @@ export interface TaskListDisplayFilters {
   isDefaultScope: boolean;
   isForAllAgents?: boolean;
   isForCurrentAgent?: boolean;
+  labels?: string[];
   parentIdentifier?: string;
   priorities?: number[];
   statuses?: TaskStatus[];
@@ -47,6 +52,7 @@ const hasExplicitFilter = (params: ListTasksParams): boolean =>
     params.parentIdentifier ||
     params.statuses?.length ||
     params.priorities?.length ||
+    params.labels?.length ||
     params.assigneeAgentId,
   );
 
@@ -77,6 +83,7 @@ export const normalizeListTasksParams = (
       isDefaultScope,
       isForAllAgents: isDefaultScope && defaultScope === 'allAgents',
       isForCurrentAgent: shouldUseCurrentAgent && Boolean(currentAgentId),
+      labels: normalizeOptionalFilterValues(params.labels),
       parentIdentifier: params.parentIdentifier,
       priorities,
       statuses,

@@ -177,6 +177,21 @@ describe('ConnectorToolModel', () => {
       expect(row.isWorkArtifact).toBe(true);
     });
 
+    it('stores the synced metadata and replaces it on every re-sync', async () => {
+      const model = new ConnectorToolModel(serverDB, userId);
+
+      await model.upsertMany(connectorId, [
+        tool({ metadata: { visibility: ['app'] }, toolName: 'load_page' }),
+      ]);
+      expect((await model.queryByConnector(connectorId))[0].metadata).toEqual({
+        visibility: ['app'],
+      });
+
+      // The server dropped its visibility: the tool is visible to the model again
+      await model.upsertMany(connectorId, [tool({ toolName: 'load_page' })]);
+      expect((await model.queryByConnector(connectorId))[0].metadata).toBeNull();
+    });
+
     it('writes workspaceId when the model is workspace-scoped', async () => {
       const model = new ConnectorToolModel(serverDB, userId, workspaceId);
 
@@ -304,6 +319,56 @@ describe('ConnectorToolModel', () => {
 
       const rows = await model.queryAllByConnectorIds([connectorId, otherConnectorId]);
       expect(rows.map((r) => r.toolName)).toEqual(['mine']);
+    });
+  });
+
+  describe('stable tool order', () => {
+    const toolKeys = (rows: { toolName: string; userConnectorId: string }[]) =>
+      rows.map((r) => `${r.userConnectorId}:${r.toolName}`);
+
+    it('groups tools by connector and sorts by toolName, unchanged after an upsert rewrites rows', async () => {
+      const secondConnectorId = await insertConnector({ identifier: 'notion' });
+      const model = new ConnectorToolModel(serverDB, userId);
+      // insert in reverse order so the physical row order differs from the sorted order
+      await model.upsertMany(secondConnectorId, [tool({ toolName: 'zeta' })]);
+      await model.upsertMany(connectorId, [tool({ toolName: 'zeta' }), tool({ toolName: 'beta' })]);
+      await model.upsertMany(secondConnectorId, [tool({ toolName: 'alpha' })]);
+      await model.upsertMany(connectorId, [tool({ toolName: 'alpha' })]);
+
+      const ids = [connectorId, secondConnectorId];
+      const expected = [
+        ...['alpha', 'beta', 'zeta'].map((name) => `${connectorId}:${name}`),
+        ...['alpha', 'zeta'].map((name) => `${secondConnectorId}:${name}`),
+      ].sort((a, b) => {
+        const [connA, nameA] = a.split(':');
+        const [connB, nameB] = b.split(':');
+        if (connA !== connB) return connA < connB ? -1 : 1;
+        return nameA < nameB ? -1 : nameA > nameB ? 1 : 0;
+      });
+
+      const firstAll = toolKeys(await model.queryAllByConnectorIds(ids));
+      const firstEnabled = toolKeys(await model.queryByConnectorIds(ids));
+      const firstSingle = (await model.queryByConnector(connectorId)).map((r) => r.toolName);
+      expect(firstAll).toEqual(expected);
+      expect(firstEnabled).toEqual(expected);
+      expect(firstSingle).toEqual(['alpha', 'beta', 'zeta']);
+
+      // a background refresh re-upserts existing rows (ON CONFLICT DO UPDATE writes new tuples)
+      await model.upsertMany(connectorId, [
+        tool({ description: 'refreshed', toolName: 'alpha' }),
+        tool({ description: 'refreshed', toolName: 'zeta' }),
+      ]);
+      await model.upsertMany(secondConnectorId, [
+        tool({ description: 'refreshed', toolName: 'alpha' }),
+      ]);
+
+      expect(toolKeys(await model.queryAllByConnectorIds(ids))).toEqual(firstAll);
+      expect(toolKeys(await model.queryByConnectorIds([secondConnectorId, connectorId]))).toEqual(
+        firstEnabled,
+      );
+      expect((await model.queryByConnector(connectorId)).map((r) => r.toolName)).toEqual(
+        firstSingle,
+      );
     });
   });
 

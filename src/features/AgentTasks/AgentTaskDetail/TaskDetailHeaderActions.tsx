@@ -77,7 +77,12 @@ const TaskDetailHeaderActions = memo(() => {
   }, [canEditTask, taskId, t, deleteTask, navigate]);
 
   const toggleArchive = useCallback(async () => {
-    if (!canArchive || !taskId) return;
+    if (!taskId) return;
+    if (!canArchive) {
+      // Touch users get no hover tooltip, so a blocked click says why.
+      if (archiveDeniedKey) toast.info(t(archiveDeniedKey));
+      return;
+    }
     try {
       await archiveTask(taskId, !isArchived);
     } catch (error) {
@@ -91,18 +96,7 @@ const TaskDetailHeaderActions = memo(() => {
           : 'taskList.contextMenu.archiveSuccess',
       ),
     );
-  }, [archiveTask, canArchive, isArchived, t, taskId]);
-
-  // ActionIcon overwrites an `aria-disabled` prop with its own `disabled` state,
-  // so the blocked state is set on the element directly.
-  const archiveButtonRef = useCallback(
-    (node: HTMLButtonElement | null) => {
-      if (!node) return;
-      if (canArchive) node.removeAttribute('aria-disabled');
-      else node.setAttribute('aria-disabled', 'true');
-    },
-    [canArchive],
-  );
+  }, [archiveDeniedKey, archiveTask, canArchive, isArchived, t, taskId]);
 
   const triggerPublish = useCallback(() => {
     if (!canEditTask) return;
@@ -284,14 +278,15 @@ const TaskDetailHeaderActions = memo(() => {
   return (
     <>
       {favoriteTarget && <FavoriteButton {...favoriteTarget} />}
-      {/* A blocked archive is aria-disabled but not natively disabled, so hover
-          and keyboard users can still read why; toggleArchive no-ops. */}
+      {/* A blocked archive stays enabled so hover and keyboard users can read why;
+          a click only repeats the reason. Never mark it `aria-disabled`: ActionIcon styles that
+          with `pointer-events: none`, which hides the reason and, when the attribute
+          outlives the block, leaves the button dead until a refresh. */}
       <ActionIcon
         aria-description={archiveDeniedReason}
         aria-label={archiveLabel}
         color={canArchive ? undefined : cssVar.colorTextDisabled}
         icon={isArchived ? ArchiveRestoreIcon : ArchiveIcon}
-        ref={archiveButtonRef}
         size={DESKTOP_HEADER_ICON_SMALL_SIZE}
         style={canArchive ? undefined : { cursor: 'not-allowed' }}
         title={archiveDeniedReason ?? archiveLabel}

@@ -86,7 +86,7 @@ const IssueList = memo<IssueListProps>(({ disabled, filter, onSelectionChange, s
       if (!filter || (previous && !previous.hasMore)) return null;
       return [...linearKeys.issues(filter), index === 0 ? null : previous?.cursor] as const;
     },
-    ([, , , , , cursor]) => linearService.listIssues({ ...filter!, cursor: cursor ?? undefined }),
+    ([, , , , , , cursor]) => linearService.listIssues({ ...filter!, cursor: cursor ?? undefined }),
     // The first page is refetched even when cached: an import since it was read
     // changes which issues show as synced.
     { revalidateOnFocus: false },

@@ -92,7 +92,8 @@ vi.mock('@/store/file', () => {
   });
   return {
     fileChatSelectors: {
-      chatUploadFileList: (s: { chatUploadFileList: unknown[] }) => s.chatUploadFileList,
+      chatUploadFileList: (contextKey: string) => (s: { chatUploadFileList: unknown[] }) =>
+        contextKey.startsWith('project-home:') ? s.chatUploadFileList : [],
     },
     useFileStore,
   };
@@ -250,7 +251,7 @@ describe('useProjectComposer', () => {
     });
 
     expect(editor.setJSONState).toHaveBeenCalledWith(editorData);
-    expect(mocks.restoreChatUploadFileList).toHaveBeenCalledWith([image]);
+    expect(mocks.restoreChatUploadFileList).toHaveBeenCalledWith('main_coordinator_tpc_1', [image]);
     expect(mocks.toastError).toHaveBeenCalledWith('overview.messageNotSent');
   });
 
@@ -397,7 +398,7 @@ describe('useProjectComposer', () => {
         projectId: 'prj_1',
       }),
     );
-    expect(mocks.clearChatUploadFileList).toHaveBeenCalledWith(['file_1']);
+    expect(mocks.clearChatUploadFileList).toHaveBeenCalledWith('project-home:prj_1', ['file_1']);
     expect(mocks.navigate).toHaveBeenCalledWith('/task/T-1/ship-it');
     expect(mocks.createProjectTopic).not.toHaveBeenCalled();
     expect(mocks.sendMessage).not.toHaveBeenCalled();
