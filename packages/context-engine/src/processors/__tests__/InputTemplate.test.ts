@@ -1,23 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import type { PipelineContext } from '../../types';
+import { createContext } from '../../testUtils';
 import { InputTemplateProcessor } from '../InputTemplate';
-
-const createContext = (messages: PipelineContext['messages']): PipelineContext => ({
-  initialState: {
-    messages: [],
-    model: 'gpt-4',
-    provider: 'openai',
-    systemRole: '',
-    tools: [],
-  },
-  messages,
-  metadata: {
-    model: 'gpt-4',
-    maxTokens: 4096,
-  },
-  isAborted: false,
-});
 
 describe('InputTemplateProcessor', () => {
   it('should apply template to user messages', async () => {
