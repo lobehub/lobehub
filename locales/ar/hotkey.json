@@ -27,6 +27,8 @@
   "openChatSettings.title": "فتح إعدادات المحادثة",
   "openHotkeyHelper.desc": "عرض تعليمات جميع اختصارات لوحة المفاتيح",
   "openHotkeyHelper.title": "فتح تعليمات الاختصارات",
+  "openTaskFilter.desc": "افتح قائمة التصفية في صفحة المهام",
+  "openTaskFilter.title": "تصفية المهام",
   "prevTab.desc": "التنقل إلى علامة التبويب السابقة في تطبيق سطح المكتب؛ يعود إلى علامة التبويب الأخيرة عند البداية",
   "prevTab.title": "علامة التبويب السابقة",
   "regenerateMessage.desc": "إعادة توليد الرسالة الأخيرة",

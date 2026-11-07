@@ -4,7 +4,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type {
   SchedulerRunTarget,
   WakeScheduler as WakeSchedulerClass,
-} from '../agentSignal/scenarios/botWake/scheduler';
+} from '../conversationWake/scheduler';
 import type { botWake } from './botWake';
 
 /**
@@ -27,7 +27,7 @@ describe.skipIf(!url)('botWake redis domain (real Redis)', () => {
     process.env.REDIS_URL = url;
     process.env.REDIS_PREFIX = prefix;
     domain = (await import('./botWake')).botWake;
-    WakeScheduler = (await import('../agentSignal/scenarios/botWake/scheduler')).WakeScheduler;
+    WakeScheduler = (await import('../conversationWake/scheduler')).WakeScheduler;
     const { default: IORedis } = await import('ioredis');
     const raw = new IORedis(url!);
     cleanup = async () => {

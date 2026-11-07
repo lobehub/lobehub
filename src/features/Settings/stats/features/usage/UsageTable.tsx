@@ -1,4 +1,6 @@
-import { createStaticStyles, cssVar, Flexbox, type TableColumn, Text, Tooltip } from '@lobehub/ui';
+import { Flexbox, type TableColumn, Text, Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -35,12 +37,10 @@ interface SortState {
   order: 'ascend' | 'descend';
 }
 
-const styles = createStaticStyles(({ css }) => ({
+const styles = stylex.create({
   // Line the footer up with InlineTable's first/last cells.
-  pagination: css`
-    padding-inline: 24px;
-  `,
-}));
+  pagination: { paddingInline: '24px' },
+});
 
 const UsageTable = memo<UsageChartProps>(({ dateStrings }) => {
   const { t } = useTranslation('auth');
@@ -187,7 +187,7 @@ const UsageTable = memo<UsageChartProps>(({ dateStrings }) => {
       />
       {total > 0 && (
         <TablePagination
-          className={styles.pagination}
+          className={stylex.props(styles.pagination).className}
           current={page}
           pageSize={pageSize}
           pageSizeOptions={PAGE_SIZE_OPTIONS}

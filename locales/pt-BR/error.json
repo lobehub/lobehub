@@ -89,6 +89,7 @@
   "response.GoogleAIBlockReason.SAFETY": "O conteúdo foi bloqueado por razões de segurança. Por favor, ajuste e tente novamente.",
   "response.GoogleAIBlockReason.SPII": "O conteúdo pode incluir informações pessoais sensíveis (SPII). Por favor, remova os detalhes sensíveis e tente novamente.",
   "response.GoogleAIBlockReason.default": "O conteúdo foi bloqueado ({{blockReason}}). Por favor, ajuste e tente novamente.",
+  "response.InsufficientBudgetForModel": "Seu saldo restante é insuficiente para este modelo. Adicione saldo, faça upgrade do plano ou tente um modelo mais barato.",
   "response.InvalidAccessCode": "Código de acesso inválido ou vazio. Insira o código correto ou adicione uma API Key personalizada.",
   "response.LobeHubModelDeprecated": "O modelo \"{{model}}\" não está mais disponível. Por favor, escolha um modelo atual no seletor de modelos.",
   "response.ModelContentModerationCooldown": "Esta solicitação não pôde usar o modelo selecionado ou modelos relacionados devido a uma restrição temporária de segurança de conteúdo. Tente novamente mais tarde ou escolha um modelo diferente.",
@@ -121,6 +122,8 @@
   "response.RemoteServerTimeout": "A conexão com o servidor expirou. Isso geralmente indica um problema na rede local — verifique a qualidade da sua rede, proxy ou configurações de VPN e tente novamente.",
   "response.RemoteServerUnreachable": "Não foi possível alcançar o servidor. Isso geralmente indica um problema na rede local — verifique sua conexão com a internet, proxy ou configurações de VPN e tente novamente.",
   "response.ServerAgentRuntimeError": "Desculpe, o serviço Agent está indisponível. Tente novamente mais tarde ou entre em contato por e-mail.",
+  "response.SubscriptionPlanLimit": "Você atingiu o limite de uso da sua assinatura, portanto este recurso está indisponível. Faça upgrade do plano ou configure uma API de modelo personalizada para continuar.",
+  "response.SubscriptionPlanLimitUltimate": "Você atingiu o limite de uso da sua assinatura, portanto este recurso está indisponível. Adicione saldo ou configure uma API de modelo personalizada para continuar.",
   "response.SystemTimeNotMatchError": "Desculpe, o horário do seu sistema não corresponde ao do servidor. Verifique e tente novamente.",
   "response.UnknownChatFetchError": "Desculpe, ocorreu um erro desconhecido na solicitação. Verifique as informações abaixo ou tente novamente.",
   "response.UnreadableServerResponse": "O servidor retornou uma resposta que o aplicativo não conseguiu ler. Isso geralmente é um problema temporário de rede ou gateway — tente novamente em um momento.",
@@ -210,9 +213,13 @@
   "workspaceFrozenByAdmin.frozenAt": "Congelado em",
   "workspaceFrozenByAdmin.reason": "Motivo",
   "workspaceFrozenByAdmin.title": "Workspace está congelado",
+  "workspaceFrozenByRiskControl.available": "Saldo disponível",
+  "workspaceFrozenByRiskControl.bannerDescription": "Adicione saldo para retomar os gastos.",
   "workspaceFrozenByRiskControl.bannerHint": "Clique para mais detalhes",
   "workspaceFrozenByRiskControl.bannerTitle": "Espaço de trabalho bloqueado pelo controle de risco",
   "workspaceFrozenByRiskControl.contactSupport": "Entrar em contato com o suporte",
+  "workspaceFrozenByRiskControl.description": "Este workspace foi congelado automaticamente pelo controle de risco após a detecção de gastos anormais. Adicione saldo para que o workspace esteja pronto para retomar as operações e entre em contato com o suporte para descongelá-lo.",
   "workspaceFrozenByRiskControl.frozenAt": "Congelado em",
-  "workspaceFrozenByRiskControl.title": "Workspace automaticamente congelado pelo controle de risco"
+  "workspaceFrozenByRiskControl.title": "Workspace automaticamente congelado pelo controle de risco",
+  "workspaceFrozenByRiskControl.topup": "Adicionar saldo"
 }

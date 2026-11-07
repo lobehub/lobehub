@@ -54,6 +54,8 @@ export interface CreateAgentAccountParams {
 export interface ProvisionAgentAccountParams {
   agentId: string;
   displayName?: string;
+  /** Preferred handle for the new account, when the provider can honour one. */
+  prefix?: string;
   provider: string;
 }
 
@@ -125,6 +127,14 @@ export class AgentAccountService {
   }): Promise<AgentAccountView[]> => this.model.query(query);
 
   get = (id: string): Promise<AgentAccountView | undefined> => this.model.findById(id);
+
+  /**
+   * Whether this deployment has the named provider registered. The inbound
+   * edge asks before dispatching so an unknown provider is a 404 (a webhook
+   * URL nobody configured) rather than the registry's thrown error read as a
+   * 500.
+   */
+  hasProvider = (provider: string): boolean => this.options.registry.has(provider);
 
   // --------------- Writes ---------------
 
@@ -199,6 +209,7 @@ export class AgentAccountService {
       displayName: params.displayName,
       isIdentifierHeld: (identifier) =>
         AgentAccountModel.isRoutingKeyHeld(this.db, provider.provider, identifier),
+      prefix: params.prefix,
       userId: this.userId,
       workspaceId: this.options.workspaceId,
     });
@@ -214,7 +225,10 @@ export class AgentAccountService {
         kind: provider.kind,
         metadata: issued.metadata ?? {},
         provider: provider.provider,
-        // The provider has already issued the handle; record the terminal state.
+        // A provider opens the account synchronously: `provision` only returns
+        // once the handle exists and is reachable, so the row is live from the
+        // first read. Leaving it `provisioning` would tell the user their new
+        // address is still opening while it is already able to receive.
         status: 'active',
       });
     } catch (error) {
@@ -248,7 +262,7 @@ export class AgentAccountService {
       }
       if (committed && committed.agentId === params.agentId) return committed;
 
-      // The provider holds a resource (an inbox, a number binding) that no live
+      // The provider holds a resource (an inbox) that no live
       // row of this agent points at. Hand it back so a failed write leaves
       // nothing billable behind; the release is best-effort because the original
       // error is the one worth surfacing.
@@ -412,10 +426,27 @@ export class AgentAccountService {
       return { accountId, event, outcome: 'ignored', reason: 'receive-disabled' };
     }
 
-    const message = await provider.normalizeInbound(event, ref);
+    let message: AgentAccountInboundMessage | null;
+    try {
+      message = await provider.normalizeInbound(event, ref);
+    } catch (error) {
+      // Verified and claimed but not processed: give the event id back so the
+      // provider's retry is handled instead of acknowledged as a duplicate.
+      await provider.releaseInbound?.(event.eventId)?.catch(() => undefined);
+      throw error;
+    }
     if (!message) return { accountId, event, outcome: 'ignored', reason: 'filtered' };
 
     return { accountId, event, message, outcome: 'delivered' };
+  };
+
+  /**
+   * Release the replay claim of a delivery whose handling failed after
+   * {@link handleInbound} accepted it, so the provider's retry is processed
+   * instead of acknowledged as a duplicate.
+   */
+  releaseInbound = async (providerName: string, eventId: string): Promise<void> => {
+    await this.options.registry.get(providerName).releaseInbound?.(eventId);
   };
 
   // --------------- Internals ---------------

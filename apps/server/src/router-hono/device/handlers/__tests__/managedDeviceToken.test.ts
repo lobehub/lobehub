@@ -33,7 +33,7 @@ const post = (body: unknown) =>
 
 const credentials = { deviceId: 'managed-device-1', secret: 'bootstrap-secret' };
 
-const makeAvailable = () => mocks.isAvailable.mockReturnValue(true);
+const makeAvailable = () => mocks.isAvailable.mockResolvedValue(true);
 
 beforeEach(async () => {
   vi.restoreAllMocks();

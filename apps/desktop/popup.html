@@ -27,6 +27,15 @@
         background: inherit;
         gap: 12px;
       }
+      /* The window is frameless, so the titlebar band is only draggable through CSS. This
+         screen is the whole window until React mounts, which left the titlebar dead for the
+         first paint. Height matches TITLE_BAR_HEIGHT in @lobechat/desktop-bridge. */
+      #loading-drag-bar {
+        position: fixed;
+        inset: 0 0 auto;
+        height: 38px;
+        -webkit-app-region: drag;
+      }
       @keyframes loading-draw {
         0% {
           stroke-dashoffset: 1000;
@@ -89,6 +98,7 @@
       })();
     </script>
     <div id="loading-screen">
+      <div id="loading-drag-bar"></div>
       <div id="loading-brand" aria-label="Loading" role="status">
         <svg
           fill="currentColor"

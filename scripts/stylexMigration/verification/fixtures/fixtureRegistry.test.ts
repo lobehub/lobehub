@@ -4,6 +4,26 @@ import { planFixtureProbes } from '../pipeline/probePlanner';
 import { fixtureIds, getStyleFixture, styleFixtureSchema } from './fixtureRegistry';
 
 describe('explicit fixture contract', () => {
+  it('splits WorkPreview resource/status cases inside the sixteen-shard budget', () => {
+    const resources = getStyleFixture('WorkPreview');
+    const statuses = getStyleFixture('WorkPreviewStatus');
+    expect(resources.styleVariants).toHaveLength(14);
+    expect(statuses.styleVariants).toHaveLength(4);
+    expect(planFixtureProbes(resources).length + planFixtureProbes(statuses).length).toBe(108);
+    expect(
+      getStyleFixture('PreviewToolbar').moduleBoundaries.every(
+        (edge) => edge.source !== './PathBreadcrumb',
+      ),
+    ).toBe(true);
+    expect(() =>
+      styleFixtureSchema.parse({
+        ...resources,
+        moduleBoundaries: [
+          { importer: 'src/fixture.tsx', source: 'store', replacement: 'fixtures/undeclared.ts' },
+        ],
+      }),
+    ).toThrow('UNDECLARED_BOUNDARY_ASSET');
+  });
   it('declares real versioned entries and does not claim source-unit coverage', () => {
     const fixture = getStyleFixture('LiteTable');
     expect(fixture.component.base.source).toBe('src/components/LiteTable/index.tsx');
@@ -16,6 +36,28 @@ describe('explicit fixture contract', () => {
       styleFixtureSchema.parse({ ...getStyleFixture('LiteTable'), render: '../escape.tsx' }),
     ).toThrow();
     expect(() => getStyleFixture('Unknown')).toThrow('FIXTURE_ADAPTER_UNAVAILABLE');
+  });
+
+  it('requires unique surfaces and explicitly scoped known portal variants', () => {
+    const fixture = getStyleFixture('GeneratingBorder');
+    const portal = {
+      id: 'popup',
+      kind: 'portal',
+      selector: '[data-popup]',
+      variants: ['generating'],
+    };
+    expect(
+      styleFixtureSchema
+        .parse({ ...fixture, surfaces: [...fixture.surfaces, portal] })
+        .surfaces.at(-1)?.variants,
+    ).toEqual(['generating']);
+    expect(() => styleFixtureSchema.parse({ ...fixture, surfaces: [portal, portal] })).toThrow(
+      'DUPLICATE_SURFACE_ID',
+    );
+    for (const variants of [['unknown'], ['generating', 'generating'], []])
+      expect(() =>
+        styleFixtureSchema.parse({ ...fixture, surfaces: [{ ...portal, variants }] }),
+      ).toThrow();
   });
   it('plans explicit breakpoint boundaries, RTL, states and all variants within budget', () => {
     const probes = planFixtureProbes(getStyleFixture('LiteTable'));
@@ -31,8 +73,8 @@ describe('explicit fixture contract', () => {
     ).toBe(false);
   });
 
-  it('connects all sixteen entries with explicit mounting and probe contracts', () => {
-    expect(fixtureIds).toHaveLength(16);
+  it('connects all entries with explicit mounting and probe contracts', () => {
+    expect(fixtureIds).toHaveLength(21);
     for (const id of fixtureIds) {
       const fixture = getStyleFixture(id);
       expect(fixture.component.id).toBe(id);

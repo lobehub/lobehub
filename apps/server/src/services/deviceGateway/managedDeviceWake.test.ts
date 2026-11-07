@@ -61,7 +61,7 @@ const live = (deviceId: string) => ({ deviceId, online: true });
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.isAvailable.mockReturnValue(true);
+  mocks.isAvailable.mockResolvedValue(true);
   mocks.findPersonalByDeviceId.mockResolvedValue(undefined);
   mocks.findWorkspaceDeviceById.mockResolvedValue(undefined);
   mocks.queryDeviceList.mockResolvedValue([]);
@@ -74,7 +74,7 @@ afterEach(() => {
 
 describe('findWakeableManagedDevices', () => {
   it('returns nothing and reads nothing when managed devices are not available', async () => {
-    mocks.isAvailable.mockReturnValue(false);
+    mocks.isAvailable.mockResolvedValue(false);
 
     await expect(findWakeableManagedDevices(caller, ['managed-a'])).resolves.toEqual([]);
     expect(mocks.findPersonalByDeviceId).not.toHaveBeenCalled();

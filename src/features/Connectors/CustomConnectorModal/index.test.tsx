@@ -133,3 +133,50 @@ describe('CustomConnectorModal edit pre-fill', () => {
     expect(seeded.customParams.description).toBeUndefined();
   });
 });
+
+/**
+ * Only a client the user registered by hand belongs in the Client ID field. A
+ * client the server resolved itself (a Client ID Metadata Document URL or a
+ * DCR-issued id) must stay out: saving the form would otherwise relabel it as
+ * pre-registration — pinning the CIMD URL and dropping the DCR secret the form
+ * never received.
+ */
+describe('CustomConnectorModal OAuth client pre-fill', () => {
+  const seedFor = async (oidcConfig: Record<string, unknown>) => {
+    mocks.state.connector = {
+      id: 'c1',
+      identifier: 'my-mcp',
+      mcpConnectionType: 'http',
+      mcpServerUrl: 'https://mcp.example.com/mcp',
+      metadata: {},
+      name: 'My MCP',
+      sourceType: 'custom',
+    };
+    mocks.state.getConnectorForEdit.mockResolvedValue({
+      credentials: null,
+      mcpStdioConfig: null,
+      metadata: {},
+      oidcConfig,
+    });
+
+    render(<CustomConnectorModal open connectorId="c1" onClose={() => {}} />);
+    await waitFor(() => expect(screen.getByTestId('seed').textContent).not.toBe('null'));
+    return JSON.parse(screen.getByTestId('seed').textContent!).customParams.mcp.auth;
+  };
+
+  beforeEach(() => vi.clearAllMocks());
+
+  it('shows a pre-registered client ID', async () => {
+    const auth = await seedFor({ clientId: 'my-app', scheme: 'pre_registration' });
+    expect(auth).toMatchObject({ clientId: 'my-app', type: 'oauth2' });
+  });
+
+  it.each([
+    ['client_id_metadata_document', 'https://app.example.com/oauth/connector/client-metadata.json'],
+    ['dcr', 'dcr-issued-id'],
+  ])('leaves the field empty for a %s client', async (scheme, clientId) => {
+    const auth = await seedFor({ clientId, scheme });
+    expect(auth.type).toBe('oauth2');
+    expect(auth.clientId).toBeUndefined();
+  });
+});

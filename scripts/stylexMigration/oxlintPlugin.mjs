@@ -9,5 +9,8 @@ import core from '@lobehub/oxlint-config/plugins/eslint-core';
  */
 export default {
   meta: { name: 'stylex-migration' },
-  rules: { 'no-emotion-styles': core.rules['no-restricted-imports'] },
+  rules: {
+    'no-emotion-styles': core.rules['no-restricted-imports'],
+    'no-plain-css': core.rules['no-restricted-imports'],
+  },
 };

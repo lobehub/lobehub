@@ -1,6 +1,7 @@
 import { TRACING_SCENARIOS } from '@lobechat/const';
 import type { DecisionResponse } from '@lobechat/model-runtime';
 import { buildChannelRoutingDecision, CHANNEL_ROUTING_PROMPT_VERSION } from '@lobechat/prompts';
+import type { ChannelJobWake } from '@lobechat/types';
 import { withTimeout } from 'es-toolkit';
 import pMap from 'p-map';
 
@@ -13,21 +14,41 @@ import {
 import type { LobeChatDatabase } from '@/database/type';
 import { resolveProviderRelay } from '@/server/modules/AgentRuntime/llmRelay/resolveLlmExecutionSite';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
+import { createWakeClassify } from '@/server/services/conversationWake/classify';
+import { createWakeDutyJudge } from '@/server/services/conversationWake/dutyJudge';
+import { redisService } from '@/server/services/redis';
 
 import { notifyChannel } from './notify';
 import { wakeChannel } from './queue';
 import { resolveChannelRoutingConfig } from './routingConfig';
+import type { ChannelRoutingInput as RoutingInput, MemberWakeJudgement } from './wake';
+import { judgeMemberWake, toChannelJobWake } from './wake';
 
 export const CHANNEL_ROUTING_TIMEOUT_MS = 10_000;
-type RoutingInput = NonNullable<Awaited<ReturnType<ChannelRoutingRepository['claim']>>>;
 
-/** Only calibrated boolean probabilities are thresholded, never choice concentration/confidence. */
+/** Model calls the members' own rules may make per channel and UTC hour (classifier + duties). */
+export const CHANNEL_WAKE_MODEL_CALLS_PER_HOUR = 300;
+
+/** Why routing woke a member it was unsure about: it may stay silent. */
+const UNCERTAIN_WAKE: ChannelJobWake = { kind: 'followup', reason: 'routing-uncertain' };
+
+/**
+ * Thresholds the decision model's answers. Only calibrated boolean probabilities count, never
+ * choice concentration/confidence.
+ *
+ * - At least 0.7: chosen, and owes an answer.
+ * - Between 0.3 and 0.7: woken as a `followup`, free to stay silent, unless its silent-wake
+ *   budget is spent (`quiet`). Uncertainty is not a provider failure.
+ * - At most 0.3: left out. Every answer confidently negative: `skipped`.
+ * - Any answer missing or invalid: `unassigned`, whatever the others said.
+ */
 export const selectChannelResponders = (
-  candidates: RoutingInput['candidates'],
+  candidates: Pick<RoutingInput['candidates'][number], 'memberId'>[],
   response: DecisionResponse,
+  quiet: ReadonlySet<string> = new Set(),
 ): ChannelRoutingDecision => {
   const selected: string[] = [];
-  let hasUncertainAnswer = false;
+  const uncertain: string[] = [];
   for (const { memberId } of candidates) {
     const answer = response.answers[memberId];
     if (
@@ -42,19 +63,42 @@ export const selectChannelResponders = (
         status: 'unassigned',
       };
     if (answer.probability >= 0.7) selected.push(memberId);
-    else if (answer.probability > 0.3) hasUncertainAnswer = true;
+    else if (answer.probability > 0.3 && !quiet.has(memberId)) uncertain.push(memberId);
   }
-  // Validate every answer before broadcasting: uncertainty is not a provider failure.
-  if (hasUncertainAnswer)
-    return {
-      memberIds: candidates.map(({ memberId }) => memberId),
-      reason: 'Decision uncertain; selected all eligible Agents',
-      status: 'assigned',
-    };
-  return selected.length
-    ? { memberIds: selected, reason: 'Selected by the Channel decision model', status: 'assigned' }
-    : { reason: 'No Agent response is needed', status: 'skipped' };
+  if (!selected.length && !uncertain.length)
+    return { reason: 'No Agent response is needed', status: 'skipped' };
+
+  return {
+    memberIds: [...selected, ...uncertain],
+    reason: uncertain.length
+      ? 'Selected by the Channel decision model; uncertain members may stay silent'
+      : 'Selected by the Channel decision model',
+    status: 'assigned',
+    ...(uncertain.length && {
+      wakes: Object.fromEntries(uncertain.map((memberId) => [memberId, UNCERTAIN_WAKE])),
+    }),
+  };
 };
+
+/** Compact per-member record of what the members' own rules said, for the routing audit row. */
+const summarizeJudgements = (judgements: MemberWakeJudgement[]) =>
+  JSON.stringify(
+    Object.fromEntries(
+      judgements.map((judgement) => [
+        judgement.memberId,
+        {
+          ...(judgement.excluded && { excluded: true }),
+          ...(judgement.quiet && { quiet: true }),
+          ...(judgement.initiation && { wake: judgement.initiation.reason }),
+          verdicts: (judgement.verdicts ?? []).map(
+            ({ policyId, reason, verdict }) => `${policyId}:${verdict}:${reason}`,
+          ),
+        },
+      ]),
+    ),
+  );
+
+const utcHour = (at: number) => new Date(at).toISOString().slice(0, 13);
 
 export class ChannelRoutingService {
   private readonly routing: ChannelRoutingRepository;
@@ -106,10 +150,53 @@ export class ChannelRoutingService {
       promptVersion: CHANNEL_ROUTING_PROMPT_VERSION,
       scenario: TRACING_SCENARIOS.ChannelRouting,
     };
+    // Bottom-up first: every member's own rules, the same pipeline an IM bot runs. Each model call
+    // in them has its own short deadline, so this settles before the decision model's one starts.
+    const judgements = await this.judgeMembers(channelId, input);
     try {
       return await withTimeout(async () => {
+        const wakes = (members: MemberWakeJudgement[]) =>
+          Object.fromEntries(
+            members.map(({ initiation, memberId }) => [memberId, toChannelJobWake(initiation!)]),
+          );
+        const claimed = judgements.filter(({ initiation }) => initiation);
+        // Called by name: those members, and nobody needs to arbitrate.
+        const named = claimed.filter(({ initiation }) => initiation!.reason === 'named-in-text');
+        if (named.length)
+          return {
+            memberIds: named.map(({ memberId }) => memberId),
+            reason: 'Named in the message',
+            status: 'assigned' as const,
+            wakes: wakes(named),
+          };
+        if (claimed.length === 1)
+          return {
+            memberIds: [claimed[0].memberId],
+            reason: 'Woken by its own rules',
+            status: 'assigned' as const,
+            wakes: wakes(claimed),
+          };
+
+        // Top-down where the members' rules leave a choice: several claim the message, or none
+        // does and the decision model picks among those whose rules allow it.
+        const pool = claimed.length ? claimed : judgements.filter(({ excluded }) => !excluded);
+        if (!pool.length)
+          return { reason: 'Every Agent here waits to be addressed', status: 'skipped' as const };
+        const candidates = input.candidates.filter(({ memberId }) =>
+          pool.some((judgement) => judgement.memberId === memberId),
+        );
+
         const config = await resolveChannelRoutingConfig(this.db, input.userId);
-        if (!config) return { reason: 'Channel decision model is disabled', status: 'unassigned' };
+        if (!config) {
+          return claimed.length
+            ? {
+                memberIds: claimed.map(({ memberId }) => memberId),
+                reason: 'Woken by their own rules',
+                status: 'assigned' as const,
+                wakes: wakes(claimed),
+              }
+            : { reason: 'Channel decision model is disabled', status: 'unassigned' as const };
+        }
         // A background worker has no initiating device tab. Never bypass the relay policy.
         if (
           await resolveProviderRelay({
@@ -130,7 +217,7 @@ export class ChannelRoutingService {
         controller.signal.throwIfAborted();
         const response = await runtime.decide(
           {
-            ...buildChannelRoutingDecision(input),
+            ...buildChannelRoutingDecision({ ...input, candidates }),
             model: config.model,
           },
           {
@@ -145,8 +232,31 @@ export class ChannelRoutingService {
             user: input.userId,
           },
         );
+        const quiet = new Set(
+          judgements.filter((judgement) => judgement.quiet).map(({ memberId }) => memberId),
+        );
+        const selected = selectChannelResponders(candidates, response, quiet);
+        // Arbitrating claims keeps any claimer that is not a confident no, woken for the reason its
+        // own rules gave: none of them owes an answer. An unusable answer is no verdict on the
+        // claims, so they all stand.
+        const kept =
+          selected.status === 'assigned'
+            ? claimed.filter(({ memberId }) => selected.memberIds.includes(memberId))
+            : selected.status === 'unassigned'
+              ? claimed
+              : [];
+        const decision: ChannelRoutingDecision = !claimed.length
+          ? selected
+          : kept.length
+            ? {
+                memberIds: kept.map(({ memberId }) => memberId),
+                reason: 'Woken by their own rules; arbitrated by the Channel decision model',
+                status: 'assigned',
+                wakes: wakes(kept),
+              }
+            : selected;
         return {
-          ...selectChannelResponders(input.candidates, response),
+          ...decision,
           details: {
             ...details,
             latencyMs: Date.now() - start,
@@ -154,6 +264,7 @@ export class ChannelRoutingService {
             provider: config.provider,
             servedModel: response.model,
             probabilities: JSON.stringify(response.answers),
+            wakeRules: summarizeJudgements(judgements),
             ...(response.usage?.totalTokens !== undefined && {
               totalTokens: response.usage.totalTokens,
             }),
@@ -167,6 +278,18 @@ export class ChannelRoutingService {
         messageId: input.messageId,
         error: error instanceof Error ? error.name : 'DecisionError',
       });
+      const claimed = judgements.filter(({ initiation }) => initiation);
+      // The members' own rules already decided: a failed arbitration must not drop them.
+      if (claimed.length)
+        return {
+          details: { ...details, latencyMs: Date.now() - start },
+          memberIds: claimed.map(({ memberId }) => memberId),
+          reason: 'Woken by their own rules; the Channel decision model failed or timed out',
+          status: 'assigned',
+          wakes: Object.fromEntries(
+            claimed.map(({ initiation, memberId }) => [memberId, toChannelJobWake(initiation!)]),
+          ),
+        };
       return {
         details: { ...details, latencyMs: Date.now() - start },
         reason: 'The Channel decision model failed or timed out',
@@ -175,5 +298,52 @@ export class ChannelRoutingService {
     } finally {
       controller.abort();
     }
+  }
+
+  /**
+   * Each candidate's own wake rules. Their model calls (classifier, duty judge) run as the
+   * sender, like routing, and share one hourly budget per channel; a member whose rules fail is
+   * left to routing.
+   */
+  private async judgeMembers(channelId: string, input: RoutingInput) {
+    const options = {
+      db: this.db,
+      userId: input.userId,
+      workspaceId: input.workspaceId ?? undefined,
+    };
+    const budgeted =
+      <TInput, TOutput>(call: (input: TInput, abortSignal: AbortSignal) => Promise<TOutput>) =>
+      async (value: TInput, abortSignal: AbortSignal): Promise<TOutput> => {
+        const calls = await redisService.botWake.countClassifierCall(
+          `channel:${channelId}`,
+          utcHour(Date.now()),
+        );
+        if (calls === undefined || calls > CHANNEL_WAKE_MODEL_CALLS_PER_HOUR)
+          throw new Error('classifier-budget');
+        return call(value, abortSignal);
+      };
+    const deps = {
+      classify: budgeted(createWakeClassify(options)),
+      dutyJudge: budgeted(createWakeDutyJudge(options)),
+      now: Date.now(),
+    };
+
+    return pMap(
+      input.candidates,
+      async (candidate) => {
+        try {
+          return await judgeMemberWake(channelId, input, candidate, deps);
+        } catch (error) {
+          console.error('[channel:wake]', {
+            channelId,
+            memberId: candidate.memberId,
+            error: error instanceof Error ? error.name : 'WakeError',
+          });
+          return { excluded: false, memberId: candidate.memberId, quiet: false };
+        }
+      },
+      // At most 20 candidates reach this point; in parallel, one slow member delays none.
+      { concurrency: input.candidates.length || 1 },
+    );
   }
 }

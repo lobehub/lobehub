@@ -17,6 +17,7 @@ import { getServerDefaultAgentConfig } from '@/server/globalConfig';
 import { extractTextFromMessage } from '@/server/services/agentRuntime/CompletionLifecycle/messageContent';
 import type { AgentHook } from '@/server/services/agentRuntime/hooks/types';
 import { AiAgentService } from '@/server/services/aiAgent';
+import { detectNoReply } from '@/server/services/conversationWake/noReply';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDevices';
 import { isQueueAgentRuntimeEnabled } from '@/server/services/queue/impls';
@@ -194,7 +195,7 @@ export class ChannelCoordinator {
         hooks: [completion],
         instructions: CHANNEL_INSTRUCTIONS,
         maxSteps: 32,
-        prompt: buildChannelPrompt(job.manifest, input, { context }),
+        prompt: buildChannelPrompt(job.manifest, input, { context, wake: job.wake }),
         reservedOperationId: job.operationId,
         trigger: 'channel',
         userInterventionConfig: { approvalMode: 'headless' },
@@ -248,6 +249,11 @@ export class ChannelCoordinator {
       return;
     }
     if (operation.status === 'done') {
+      // Already settled in silence: there is no draft to publish, only the writer to release.
+      if (job.status === 'silent') {
+        await this.stopWriters([job]);
+        return;
+      }
       if (job.publicationRevoked) {
         await this.stopWriters([job]);
         return;
@@ -260,6 +266,16 @@ export class ChannelCoordinator {
           operation.workspaceId ?? undefined,
         ).findLatestAssistantByOperationId({ operationId, topicId: job.topicId });
         const content = final?.tools?.length ? undefined : extractTextFromMessage(final);
+        // A wake nobody asked for may end in silence. Settled like a reply, not a failure.
+        // A run that stopped on a tool call (out of steps) did not choose silence: it failed.
+        const silence = final?.tools?.length
+          ? undefined
+          : detectNoReply({ content, wakeKind: job.wake?.kind });
+        if (silence && (await this.executions.silence(channelId, jobId, silence.reason))) {
+          await this.stopWriters([job]);
+          await notifyChannel(this.db, channelId);
+          return;
+        }
         if (!content?.trim()) {
           await this.stopWriters([job]);
           await notifyChannel(this.db, channelId);

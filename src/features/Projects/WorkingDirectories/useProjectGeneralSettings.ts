@@ -7,12 +7,6 @@ import { useFileStore } from '@/store/file';
 import type { ProjectDetail } from '@/store/project';
 import { useProjectStore } from '@/store/project';
 
-import {
-  diffGeneralSettings,
-  type GeneralSettingsDraft,
-  toGeneralSettingsDraft,
-} from './generalSettingsForm';
-
 const MAX_LOGO_SIZE = 2 * 1024 * 1024;
 
 type ProjectPatch = Parameters<typeof projectService.update>[1];
@@ -44,22 +38,17 @@ export const useSaveProjectField = (projectId: string) => {
   return { save, saving };
 };
 
-export const useGeneralSettingsForm = (project: ProjectDetail['project']) => {
+/** The logo saves as soon as it changes: there is no draft to confirm. */
+export const useProjectLogo = (project: ProjectDetail['project']) => {
   const { t } = useTranslation('project');
   const uploadWithProgress = useFileStore((s) => s.uploadWithProgress);
-  const { save: saveField, saving } = useSaveProjectField(project.id);
-  const [draft, setDraft] = useState(() => toGeneralSettingsDraft(project));
+  const { save, saving } = useSaveProjectField(project.id);
   const [uploading, setUploading] = useState(false);
-  const { count, patch, valid } = diffGeneralSettings(project, draft);
+  const avatar = project.avatar || null;
 
-  const setField = <K extends keyof GeneralSettingsDraft>(key: K, value: GeneralSettingsDraft[K]) =>
-    setDraft((current) => ({ ...current, [key]: value }));
-
-  const revert = () => setDraft(toGeneralSettingsDraft(project));
-
-  const save = async () => {
-    if (count === 0 || !valid) return;
-    return saveField(patch);
+  const saveLogo = async (next: string | null) => {
+    if (next === avatar) return;
+    await save({ avatar: next }, t('settings.logoUpdated'));
   };
 
   const onUpload = async (file: File) => {
@@ -75,7 +64,7 @@ export const useGeneralSettingsForm = (project: ProjectDetail['project']) => {
         toast.error(t('settings.logoUploadFailed'));
         return;
       }
-      setField('avatar', result.url);
+      await saveLogo(result.url);
     } catch (error) {
       console.error('Failed to upload project logo', error);
       toast.error(t('settings.logoUploadFailed'));
@@ -84,20 +73,14 @@ export const useGeneralSettingsForm = (project: ProjectDetail['project']) => {
     }
   };
 
-  // Uploads arrive as data URLs before `onUpload` has stored the file.
+  // Deleting goes through `onDelete`; uploads arrive as data URLs before
+  // `onUpload` has stored the file.
   const onChange = (next: string | null | undefined) => {
     if (!next || next.startsWith('data:')) return;
-    setField('avatar', next);
+    void saveLogo(next);
   };
 
-  return {
-    count,
-    draft,
-    logo: { busy: uploading, onChange, onDelete: () => setField('avatar', null), onUpload },
-    revert,
-    save,
-    saving,
-    setField,
-    valid,
-  };
+  const onDelete = () => saveLogo(null);
+
+  return { avatar, busy: uploading || saving, onChange, onDelete, onUpload };
 };

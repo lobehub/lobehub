@@ -40,6 +40,7 @@
   "generation.editing.hint": "Mô tả những gì cần thay đổi; mọi thứ khác sẽ giữ nguyên",
   "generation.editing.modelLocked": "Các chỉnh sửa giữ nguyên mô hình của video gốc",
   "generation.editing.title": "Đang chỉnh sửa V{{version}}",
+  "generation.freeQuota.exhausted": "🎁 Lượt sử dụng miễn phí đã hết. Video giờ sẽ dùng số dư của bạn.",
   "generation.freeQuota.remaining": "🎁 Còn {{remaining}} video miễn phí hôm nay",
   "generation.status.editing": "Đang tạo chỉnh sửa...",
   "generation.status.failed": "Tạo thất bại",

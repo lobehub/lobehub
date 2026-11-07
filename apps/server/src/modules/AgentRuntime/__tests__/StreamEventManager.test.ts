@@ -582,6 +582,42 @@ describe('StreamEventManager', () => {
     });
   });
 
+  describe('publishStreamEvent step_start', () => {
+    const storedData = () => {
+      const dataArg = mockRedis.xadd.mock.calls[0]?.find(
+        (a: any) => typeof a === 'string' && a.startsWith('{'),
+      );
+      return JSON.parse(dataArg);
+    };
+
+    // The snapshot is a whole message list per step (megabytes on a long topic).
+    // Its consumers get it from the gateway push; nothing reads it back from the
+    // stream, so keeping a copy per step only grew the stream and every replay.
+    it('keeps the uiMessages snapshot out of the stored stream entry', async () => {
+      mockRedis.xadd.mockResolvedValue('event-id-step');
+
+      await streamManager.publishStreamEvent('op-step', {
+        data: { llmCalls: 3, uiMessages: [{ content: 'x'.repeat(64), id: 'msg_1' }] },
+        stepIndex: 4,
+        type: 'step_start',
+      });
+
+      expect(storedData()).toEqual({ llmCalls: 3 });
+    });
+
+    it('stores a protocol-2 step_start unchanged', async () => {
+      mockRedis.xadd.mockResolvedValue('event-id-step');
+
+      await streamManager.publishStreamEvent('op-step', {
+        data: { llmCalls: 1, messageRevision: 4 },
+        stepIndex: 4,
+        type: 'step_start',
+      });
+
+      expect(storedData()).toEqual({ llmCalls: 1, messageRevision: 4 });
+    });
+  });
+
   describe('stripFinalStateInEventData', () => {
     it('returns data unchanged when finalState is absent', () => {
       const data = { phase: 'execution_complete', reason: 'done' };

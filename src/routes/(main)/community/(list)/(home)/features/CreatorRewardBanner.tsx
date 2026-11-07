@@ -87,7 +87,7 @@ const CreatorRewardBanner = memo(() => {
         </div>
       </Flexbox>
       <div
-        {...sx(styles.symbols, undefined, {
+        {...sx(styles.symbols, {
           // Runtime CDN URL, so it cannot live in stylex.create.
           backgroundImage: `url(${imageUrl('banner_creator.png')})`,
         })}

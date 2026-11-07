@@ -13,6 +13,7 @@ import {
   stopPropagation,
 } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
+import * as stylex from '@stylexjs/stylex';
 import { DownloadIcon, MoreHorizontalIcon, Plus, Trash2 } from 'lucide-react';
 import { lazy, memo, Suspense, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -106,9 +107,9 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill, isSelected, onSelect 
   const renderStatus = () => {
     if (!isBuiltin) return null;
     if (isBuiltinInstalled) {
-      return <span className={styles.connected}>{t('tools.builtins.installed')}</span>;
+      return <span {...stylex.props(styles.connected)}>{t('tools.builtins.installed')}</span>;
     }
-    return <span className={styles.disconnected}>{t('tools.builtins.uninstalled')}</span>;
+    return <span {...stylex.props(styles.disconnected)}>{t('tools.builtins.uninstalled')}</span>;
   };
 
   const renderActions = () => {
@@ -231,7 +232,7 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill, isSelected, onSelect 
       <Flexbox
         horizontal
         align="center"
-        className={styles.container}
+        className={stylex.props(styles.container).className}
         gap={16}
         justify="space-between"
         style={{
@@ -248,10 +249,10 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill, isSelected, onSelect 
             style={{ cursor: onSelect ? undefined : 'pointer' }}
             onClick={onSelect ? undefined : handleOpenDetail}
           >
-            <div className={`${styles.icon} ${showDisconnected ? styles.disconnectedIcon : ''}`}>
+            <div {...stylex.props(styles.icon, showDisconnected && styles.disconnectedIcon)}>
               {avatar ? <Avatar avatar={avatar} size={16} /> : <Icon icon={SkillsIcon} size={16} />}
             </div>
-            <span className={`${styles.title} ${showDisconnected ? styles.disconnectedTitle : ''}`}>
+            <span {...stylex.props(styles.title, showDisconnected && styles.disconnectedTitle)}>
               {title}
             </span>
           </Flexbox>

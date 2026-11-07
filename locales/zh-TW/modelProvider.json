@@ -302,6 +302,7 @@
   "providerModels.item.modelConfig.video.title": "支援影片識別",
   "providerModels.item.modelConfig.vision.extra": "此配置將僅開啟應用中的圖片上傳配置，是否支持識別完全取決於模型本身，請自行測試該模型的視覺識別能力可用性",
   "providerModels.item.modelConfig.vision.title": "支持視覺識別",
+  "providerModels.item.pricing.audioOutputTokens": "音訊輸出 ${{amount}}/M",
   "providerModels.item.pricing.image": "${{amount}}/圖片",
   "providerModels.item.pricing.inputCharts": "${{amount}}/M 字符",
   "providerModels.item.pricing.inputMinutes": "${{amount}}/分鐘",

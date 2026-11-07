@@ -22,9 +22,10 @@ export const styles = stylex.create({
     fontSize: '9px',
     fontWeight: 600,
     lineHeight: '12px',
-    color: cssVar.colorBgContainer,
+    color: '#fff',
     textAlign: 'center',
-    backgroundColor: cssVar.colorText,
+    // Red like the conversation rows' unread badge, so the count reads as unread, not as a label.
+    backgroundColor: cssVar.colorError,
   },
   item: {
     cursor: 'pointer',
@@ -36,13 +37,13 @@ export const styles = stylex.create({
     width: '30px',
     height: '30px',
     borderRadius: cssVar.borderRadius,
-    color: { default: cssVar.colorTextSecondary, ':hover': cssVar.colorText },
-    backgroundColor: { default: null, ':hover': cssVar.colorFillTertiary },
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
     transition: 'color 0.15s, background-color 0.15s',
   },
   itemActive: {
     color: cssVar.colorText,
-    backgroundColor: { default: cssVar.colorFillSecondary, ':hover': cssVar.colorFillSecondary },
+    backgroundColor: { 'default': cssVar.colorFillSecondary, ':hover': cssVar.colorFillSecondary },
   },
   rail: {
     userSelect: 'none',

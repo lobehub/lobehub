@@ -2,11 +2,11 @@ import { botWakeSchedulerCounter } from '@lobechat/observability-otel/modules/bo
 import type { Message } from 'chat';
 import debug from 'debug';
 
-import { resolveChannelKeys } from '@/server/services/agentSignal/scenarios/botWake/facts';
-import type { WakeScheduler } from '@/server/services/agentSignal/scenarios/botWake/scheduler';
+import type { WakeScheduler } from '@/server/services/conversationWake/scheduler';
 
 import { deferBotMessages } from '../deferredMessages';
 import { getOriginMessageId } from '../mergeMessages';
+import { resolveChannelKeys } from '../wake/platformFacts';
 import type { BotWakeEntryPoint, BotWakeRecorder } from './wakeDecision';
 
 const log = debug('lobe-server:bot:followup-gate');

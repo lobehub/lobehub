@@ -77,6 +77,12 @@ export type TaskExternalProvider = 'linear';
 
 /** Facts about the linked Linear issue kept on the link row, for display only. */
 export interface LinearIssueLinkMetadata {
+  /**
+   * The Linear archive the task already took up. Each archive applies once, so
+   * a task restored in LobeHub stays restored while the issue stays archived.
+   * Gone once Linear restores the issue, so archiving it again applies again.
+   */
+  appliedArchivedAt?: string;
   assigneeName?: string;
   /**
    * The issue's comments were read and copied at least once. A closed task
@@ -138,6 +144,8 @@ export interface LinearIssueCount {
 
 /** Why an issue was left alone. */
 export type LinearSyncSkipReason =
+  /** Linear archived it, but the task has a live schedule or heartbeat or an open Goal; a later run retries. */
+  | 'live'
   /** Linear closed it, but the task is running; it is not interrupted. */
   | 'running'
   /** The linked task is in the trash or no longer visible to the caller. */
@@ -152,6 +160,8 @@ export type LinearSyncSkipReason =
   | 'missing';
 
 export interface LinearSyncResult {
+  /** Tasks archived because their issue was archived in Linear. Absent in older results. */
+  archived?: number;
   /** Tasks closed because their issue was completed or canceled in Linear. */
   closed: number;
   /** Linear comments copied onto tasks as task comments. Absent in older results. */

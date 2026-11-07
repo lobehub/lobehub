@@ -2,13 +2,16 @@ import type {
   AgentAccountCapabilities,
   AgentAccountCredentialHint,
   AgentAccountKind,
+  AgentAccountPersistedKind,
   AgentAccountStatus,
 } from '@lobechat/types';
+import { AGENT_ACCOUNT_KINDS } from '@lobechat/types';
 import { and, desc, eq, inArray, ne, sql } from 'drizzle-orm';
 
 import type { AgentAccountItem, NewAgentAccount } from '../schemas';
 import { agentAccounts } from '../schemas';
 import type { LobeChatDatabase } from '../type';
+import { agentUsableBy } from '../utils/agent-access';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
 /**
@@ -29,8 +32,14 @@ export interface AgentAccountGateKeeper {
  * accidentally serialize the ciphertext, and `hasCredential` answers the only
  * question a read needs to ask about it.
  */
-export type AgentAccountView = Omit<AgentAccountItem, 'credentials'> & {
+export type AgentAccountView = Omit<AgentAccountItem, 'credentials' | 'kind'> & {
   hasCredential: boolean;
+  /**
+   * Widened past {@link AgentAccountKind} on purpose: an unfiltered read still
+   * returns rows whose kind the product retired, so a view must not claim a
+   * value the row does not carry. `liveOnly` reads narrow it back.
+   */
+  kind: AgentAccountPersistedKind;
 };
 
 /**
@@ -107,7 +116,7 @@ export const ROUTING_KEY_HELD_STATUSES: AgentAccountStatus[] = [
 ];
 
 /**
- * Agent accounts (mail / phone / wallet / service) and their credentials.
+ * Agent accounts (mail / wallet / service) and their credentials.
  *
  * Credential handling mirrors `AgentBotProviderModel` / `messengerAccountLinks`:
  * the secret is AES-GCM ciphertext written through an injected gatekeeper, and
@@ -131,8 +140,20 @@ export class AgentAccountModel {
     this.gateKeeper = gateKeeper;
   }
 
-  private ownership = () =>
-    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, agentAccounts);
+  /**
+   * Workspace scope AND the owning agent's visibility. An account carries its
+   * agent's secrets and inbound mail (verification codes included), so a
+   * workspace member must not reach the accounts of a colleague's private
+   * agent — workspace scope alone would let them.
+   */
+  private ownership = () => {
+    const ctx = { userId: this.userId, workspaceId: this.workspaceId };
+
+    return and(
+      buildWorkspaceWhere(ctx, agentAccounts),
+      agentUsableBy(this.db, agentAccounts.agentId, ctx),
+    )!;
+  };
 
   private encrypt = async (value: Record<string, string>): Promise<string> => {
     if (!this.gateKeeper) {
@@ -245,9 +266,24 @@ export class AgentAccountModel {
   query = async (params?: {
     agentId?: string;
     kind?: AgentAccountKind;
+    /**
+     * Only rows inbound still routes to ({@link INBOUND_ROUTABLE_STATUSES}). A
+     * revoked or suspended address is kept for audit, but mail sent to it no
+     * longer reaches the agent — the runtime must not present it as usable.
+     */
+    liveOnly?: boolean;
     provider?: string;
   }): Promise<AgentAccountView[]> => {
     const conditions = [this.ownership()];
+
+    if (params?.liveOnly) {
+      conditions.push(inArray(agentAccounts.status, INBOUND_ROUTABLE_STATUSES));
+      // `kind` is a plain text column, so a kind the product retired (the
+      // agent-owned `phone`, now a messenger channel) can outlive its
+      // provider. Such a row must not reach the runtime as a usable address;
+      // it stays visible to the unfiltered query so it can still be revoked.
+      conditions.push(inArray(agentAccounts.kind, [...AGENT_ACCOUNT_KINDS]));
+    }
 
     if (params?.agentId) conditions.push(eq(agentAccounts.agentId, params.agentId));
     if (params?.kind) conditions.push(eq(agentAccounts.kind, params.kind));
@@ -351,16 +387,36 @@ export class AgentAccountModel {
   };
 
   /**
+   * Resolve an account by id without a user scope.
+   *
+   * Used by the inbound path, which learns an account id from a verified
+   * (provider, identifier) match and then needs the row's `agentId` / owner to
+   * file the message. Authorization is the caller's job — exactly like
+   * {@link findByRoutingKey}.
+   */
+  static findByIdUnscoped = async (
+    db: LobeChatDatabase,
+    id: string,
+  ): Promise<AgentAccountView | undefined> => {
+    const [row] = await db
+      .select(viewColumns)
+      .from(agentAccounts)
+      .where(eq(agentAccounts.id, id))
+      .limit(1);
+
+    return row;
+  };
+
+  /**
    * Decrypt an account's credential while resolving an inbound webhook, so the
    * signature can be verified *before* the request is trusted. The trust model
    * is the same as the bot path: nothing else may call this.
    *
-   * Only a live account is routable. A revoked number that keeps receiving is
+   * Only a live account is routable. A revoked address that keeps receiving is
    * the worst kind of release: the row says the identity is gone while the
-   * carrier still delivers to it — and for Linq it is not even caught by the
-   * credential check, because the signing secret comes from deployment config
-   * rather than the account. Suspended accounts are excluded for the same
-   * reason.
+   * provider still delivers to it — and when the signing secret comes from
+   * deployment config rather than the account, the credential check does not
+   * catch it either. Suspended accounts are excluded for the same reason.
    */
   static findForInboundVerification = async (
     db: LobeChatDatabase,
