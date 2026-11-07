@@ -1,6 +1,7 @@
 // @vitest-environment node
 import {
   ACCEPTANCE_REVIEW_ERRORED_ERROR,
+  VERIFICATION_ENVIRONMENT_UNAVAILABLE_ERROR,
   VERIFICATION_ERRORED_ERROR,
   VERIFICATION_OUT_OF_CREDITS_ERROR,
   VERIFICATION_UNJUDGEABLE_ERROR,
@@ -748,6 +749,36 @@ describe('driveTaskFromVerify', () => {
       error: VERIFICATION_ERRORED_ERROR,
     });
     expect(deliverMock.mock.calls[0][0].errorMessage).toContain('out of balance');
+  });
+
+  it('errored because the run lacked a required capability → environment-unavailable, not a delivery failure', async () => {
+    runFindByOperation.mockResolvedValue({ id: 'run-1', metadata: null, status: 'errored' });
+    checkResultsListByRun.mockResolvedValueOnce([
+      {
+        checkItemTitle: 'Injected credentials are readable in the sandbox',
+        required: true,
+        status: 'errored',
+        toulmin: {
+          limitation:
+            "environment_unavailable: capabilities_missing=cloud_sandbox — this run's execution environment cannot exercise this check, so it was not evaluated.",
+        },
+      },
+      {
+        required: true,
+        status: 'skipped',
+        toulmin: { limitation: 'environment_unavailable: capabilities_missing=cloud_sandbox' },
+      },
+    ]);
+
+    await driveTaskFromVerify(db, 'u1', 'op-1');
+
+    expect(taskUpdateStatus).toHaveBeenCalledWith('task-1', 'paused', {
+      error: VERIFICATION_ENVIRONMENT_UNAVAILABLE_ERROR,
+    });
+    const deliverArg = deliverMock.mock.calls[0][0];
+    expect(deliverArg.reason).toBe('error');
+    expect(deliverArg.errorMessage).toContain('capabilities_missing=cloud_sandbox');
+    expect(deliverArg.errorMessage).toContain('not a delivery failure');
   });
 
   it('errored: an optional check refused for credits does not hide a retryable required error', async () => {

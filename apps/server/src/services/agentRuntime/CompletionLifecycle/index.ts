@@ -9,10 +9,12 @@ import {
 import { MessageModel } from '@/database/models/message';
 import { VerifyRunModel } from '@/database/models/verifyRun';
 import type { LobeChatDatabase } from '@/database/type';
+import { resolveRunActiveDeviceId } from '@/server/modules/AgentRuntime/executors/resolveRunActiveDeviceId';
 import { formatErrorForState } from '@/server/modules/AgentRuntime/formatErrorForState';
 import {
   instantiateVerifyPlanOnStart,
   releaseUndeliveredRound,
+  resolveRunCapabilities,
   runVerifyOnCompletion,
   settleFailedRepair,
 } from '@/server/services/verify';
@@ -496,6 +498,11 @@ export class CompletionLifecycle {
               deliverable: event.lastAssistantContent ?? '',
               goal,
               operationId,
+              // Where the builder actually ran — the verify gate refuses to judge
+              // criteria this environment could never have satisfied.
+              runtimeCapabilities: state
+                ? resolveRunCapabilities(state.plan?.execution, resolveRunActiveDeviceId(state))
+                : undefined,
             },
             this.workspaceId,
           ),

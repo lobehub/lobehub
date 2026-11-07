@@ -2,6 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { runVerifyAfterEvidenceSubmission, runVerifyOnCompletion } from '../lifecycle';
+import type * as RuntimeCapabilitiesModule from '../runtimeCapabilities';
 import { VERIFY_ABANDONED_MS } from '../staleness';
 
 const {
@@ -16,6 +17,7 @@ const {
   recordHeterogeneousDeliverableEvidence,
   resolveTaskAcceptance,
   resultListByRun,
+  settleEnvironmentUnavailable,
   startEvidenceSubmission,
   updateStatus,
 } = vi.hoisted(() => ({
@@ -30,6 +32,7 @@ const {
   recordHeterogeneousDeliverableEvidence: vi.fn(),
   resolveTaskAcceptance: vi.fn(),
   resultListByRun: vi.fn(),
+  settleEnvironmentUnavailable: vi.fn(),
   startEvidenceSubmission: vi.fn(),
   updateStatus: vi.fn(),
 }));
@@ -95,6 +98,10 @@ vi.mock('../evidenceSubmission', () => ({
   startEvidenceSubmission,
 }));
 vi.mock('../taskAcceptance', () => ({ attachTaskRunToAcceptance, resolveTaskAcceptance }));
+vi.mock('../runtimeCapabilities', async (importOriginal) => ({
+  ...(await importOriginal<typeof RuntimeCapabilitiesModule>()),
+  settleEnvironmentUnavailable,
+}));
 
 const db = {} as any;
 const params = { deliverable: 'done', goal: 'ship it', operationId: 'op-1' };
@@ -120,6 +127,7 @@ describe('runVerifyOnCompletion — verification claim', () => {
       recordHeterogeneousDeliverableEvidence,
       resolveTaskAcceptance,
       resultListByRun,
+      settleEnvironmentUnavailable,
       startEvidenceSubmission,
       updateStatus,
     ].forEach((m) => m.mockReset());
@@ -503,5 +511,128 @@ describe('runVerifyOnCompletion — verification claim', () => {
 
     expect(claimVerifying).not.toHaveBeenCalled();
     expect(execute).not.toHaveBeenCalled();
+  });
+});
+
+describe('runVerifyOnCompletion — runtime capability gate', () => {
+  const sandboxPlan = [
+    {
+      id: 'creds',
+      required: true,
+      verifierConfig: { requiredCapabilities: ['cloud_sandbox'] },
+    },
+    { id: 'summary', required: true, verifierConfig: {} },
+  ];
+  const taskOp = {
+    agentId: 'builder',
+    id: 'op-1',
+    model: 'm',
+    provider: 'p',
+    taskId: 'task-1',
+    topicId: 'topic-1',
+  };
+
+  beforeEach(() => {
+    [
+      claimEvidenceCollection,
+      claimVerifying,
+      evidenceListByRun,
+      execute,
+      finalizeVerifyRun,
+      findByOperation,
+      operationFindById,
+      settleEnvironmentUnavailable,
+      startEvidenceSubmission,
+    ].forEach((m) => m.mockReset());
+    resultListByRun.mockResolvedValue([]);
+    resolveTaskAcceptance.mockResolvedValue({
+      acceptance: { id: 'acceptance-1' },
+      config: { enabled: true },
+    });
+    attachTaskRunToAcceptance.mockImplementation(
+      async (_db: unknown, _userId: string, { run }: { run: unknown }) => run,
+    );
+    findByOperation.mockResolvedValue({ ...confirmedRun, plan: sandboxPlan });
+    operationFindById.mockResolvedValue(taskOp);
+    claimVerifying.mockResolvedValue(true);
+    claimEvidenceCollection.mockResolvedValue(true);
+    evidenceListByRun.mockResolvedValue([]);
+  });
+
+  /**
+   * Regression (T-11862): a run routed to a local device was judged against
+   * criteria that all required cloud-sandbox output. Every check came back
+   * `failed`, so a delivery nobody could evaluate there was reported as rejected.
+   */
+  it('blocks a round needing a cloud sandbox the device-routed run lacked, before evidence or judging', async () => {
+    await runVerifyOnCompletion(db, 'u1', { ...params, runtimeCapabilities: [] });
+
+    expect(startEvidenceSubmission).not.toHaveBeenCalled();
+    expect(execute).not.toHaveBeenCalled();
+    expect(claimVerifying).toHaveBeenCalledWith('op-1', expect.any(Date));
+    expect(settleEnvironmentUnavailable).toHaveBeenCalledWith(
+      db,
+      'u1',
+      {
+        operationId: 'op-1',
+        plan: sandboxPlan,
+        unsatisfiable: [{ item: sandboxPlan[0], missing: ['cloud_sandbox'] }],
+        verifyRunId: 'run-1',
+      },
+      undefined,
+    );
+    expect(finalizeVerifyRun).toHaveBeenCalledWith(db, 'u1', 'op-1', {}, undefined);
+  });
+
+  it("keeps a repair round's carried sandbox verdict instead of re-gating it", async () => {
+    resultListByRun.mockResolvedValue([
+      {
+        checkItemId: 'creds',
+        metadata: { carriedFrom: { checkResultId: 'r', roundIndex: 1, verifyRunId: 'run-0' } },
+        status: 'passed',
+      },
+    ]);
+
+    await runVerifyOnCompletion(db, 'u1', { ...params, runtimeCapabilities: [] });
+
+    expect(settleEnvironmentUnavailable).not.toHaveBeenCalled();
+  });
+
+  it('runs the round normally when the run had the required capability', async () => {
+    await runVerifyOnCompletion(db, 'u1', {
+      ...params,
+      runtimeCapabilities: ['cloud_sandbox'],
+    });
+
+    expect(settleEnvironmentUnavailable).not.toHaveBeenCalled();
+    expect(startEvidenceSubmission).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves the gate open when the run capabilities are unknown', async () => {
+    await runVerifyOnCompletion(db, 'u1', params);
+
+    expect(settleEnvironmentUnavailable).not.toHaveBeenCalled();
+    expect(startEvidenceSubmission).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not block on an optional criterion the environment cannot satisfy', async () => {
+    findByOperation.mockResolvedValue({
+      ...confirmedRun,
+      plan: [{ ...sandboxPlan[0], required: false }, sandboxPlan[1]],
+    });
+
+    await runVerifyOnCompletion(db, 'u1', { ...params, runtimeCapabilities: [] });
+
+    expect(settleEnvironmentUnavailable).not.toHaveBeenCalled();
+    expect(startEvidenceSubmission).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves a round another worker already claimed alone', async () => {
+    claimVerifying.mockResolvedValue(false);
+
+    await runVerifyOnCompletion(db, 'u1', { ...params, runtimeCapabilities: [] });
+
+    expect(settleEnvironmentUnavailable).not.toHaveBeenCalled();
+    expect(finalizeVerifyRun).not.toHaveBeenCalled();
   });
 });

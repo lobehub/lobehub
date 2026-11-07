@@ -8,7 +8,11 @@ import {
   GENERATED_CRITERIA_JSON_SCHEMA,
   VERIFY_PLAN_PROMPT_VERSION,
 } from '@lobechat/prompts';
-import type { RequiredEvidenceSpec, VerifyCheckItem } from '@lobechat/types';
+import type {
+  RequiredEvidenceSpec,
+  VerifyCheckItem,
+  VerifyRuntimeCapability,
+} from '@lobechat/types';
 import { RequestTrigger } from '@lobechat/types';
 import debug from 'debug';
 
@@ -65,6 +69,7 @@ export interface CriterionDraft {
   instruction?: string;
   onFail?: VerifyCheckItem['onFail'];
   required?: boolean;
+  requiredCapabilities?: VerifyRuntimeCapability[];
   requiredEvidence?: RequiredEvidenceSpec[];
   title: string;
   /** Verifier knobs (e.g. `requiredEvidence`) — attached when the user adds them. */
@@ -207,6 +212,7 @@ export class VerifyPlanGeneratorService {
         description: criterion.description,
         instruction: criterion.instruction,
         onFail: criterion.onFail ?? 'manual',
+        requiredCapabilities: criterion.requiredCapabilities,
         requiredEvidence: criterion.requiredEvidence,
         required: criterion.required ?? true,
         title: criterion.title,
@@ -249,6 +255,9 @@ export class VerifyPlanGeneratorService {
         verifierConfig: {
           ...draft.verifierConfig,
           ...(draft.requiredEvidence ? { requiredEvidence: draft.requiredEvidence } : {}),
+          ...(draft.requiredCapabilities?.length
+            ? { requiredCapabilities: draft.requiredCapabilities }
+            : {}),
         },
         verifierType: draft.verifierType ?? 'llm',
       });
@@ -385,7 +394,10 @@ export class VerifyPlanGeneratorService {
           sourceCriterionId: null,
           sourceRubricId: null,
           title: c.title,
-          verifierConfig: { requiredEvidence: c.requiredEvidence },
+          verifierConfig: {
+            requiredEvidence: c.requiredEvidence,
+            ...(c.requiredCapabilities ? { requiredCapabilities: c.requiredCapabilities } : {}),
+          },
           verifierType: c.verifierType,
         };
       }),

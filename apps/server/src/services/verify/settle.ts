@@ -1,5 +1,6 @@
 import {
   ACCEPTANCE_REVIEW_ERRORED_ERROR,
+  VERIFICATION_ENVIRONMENT_UNAVAILABLE_ERROR,
   VERIFICATION_ERRORED_ERROR,
   VERIFICATION_FAILED_ERROR,
   VERIFICATION_OUT_OF_CREDITS_ERROR,
@@ -22,6 +23,7 @@ import { AcceptanceService } from './acceptanceService';
 import { reviewGoalDelivery } from './goalReview';
 import { maybeAutoRepair, repairRejectedReview } from './repairService';
 import { VerifyReporterService } from './reporter';
+import { isEnvironmentUnavailableFailure } from './runtimeCapabilities';
 import { VerifyStatusService } from './statusService';
 import { attachTaskRunToAcceptance, resolveTaskAcceptance } from './taskAcceptance';
 import { isOutOfCreditsFailure } from './verifierError';
@@ -243,20 +245,25 @@ export const driveTaskFromVerify = async (
     // builder re-delivers. Name that cause, so the Goal coordinator asks for
     // credits instead of starting builder attempt after builder attempt into
     // the same refusal. An unreadable cause keeps the ordinary errored path.
-    const outOfCredits =
-      outcome === 'errored' &&
-      (await new VerifyCheckResultModel(db, userId, workspaceId)
-        .listByRun(run.id)
-        .then((results) =>
-          results.some(
-            (r) =>
-              r.required && r.status === 'errored' && isOutOfCreditsFailure(r.toulmin?.limitation),
-          ),
-        )
-        .catch((error) => {
-          log('verify-settle errored causes unavailable for %s: %O', run.id, error);
-          return false;
-        }));
+    //
+    // Likewise a round blocked because the run lacked an execution capability a
+    // criterion requires: the builder could not have produced it, so the summary
+    // says "environment unavailable" rather than "verification errored".
+    const erroredResults =
+      outcome === 'errored'
+        ? await new VerifyCheckResultModel(db, userId, workspaceId)
+            .listByRun(run.id)
+            .then((results) => results.filter((r) => r.required && r.status === 'errored'))
+            .catch((error) => {
+              log('verify-settle errored causes unavailable for %s: %O', run.id, error);
+              return [];
+            })
+        : [];
+    const outOfCredits = erroredResults.some((r) => isOutOfCreditsFailure(r.toulmin?.limitation));
+    const environmentUnavailableCause = erroredResults
+      .map((r) => r.toulmin?.limitation)
+      .find((limitation) => isEnvironmentUnavailableFailure(limitation));
+    const environmentUnavailable = !outOfCredits && !!environmentUnavailableCause;
 
     if (outcome === 'passed') {
       // Verify and, for Goal tasks, Acceptance review must pass before completing
@@ -306,9 +313,11 @@ export const driveTaskFromVerify = async (
             ? ACCEPTANCE_REVIEW_ERRORED_ERROR
             : outOfCredits
               ? VERIFICATION_OUT_OF_CREDITS_ERROR
-              : isErrored
-                ? VERIFICATION_ERRORED_ERROR
-                : VERIFICATION_FAILED_ERROR;
+              : environmentUnavailable
+                ? VERIFICATION_ENVIRONMENT_UNAVAILABLE_ERROR
+                : isErrored
+                  ? VERIFICATION_ERRORED_ERROR
+                  : VERIFICATION_FAILED_ERROR;
       if (task.automationMode) {
         // Mirror of the pass branch: verify judges THIS tick, not the lifetime
         // schedule. Pausing here would permanently disarm the cron (the
@@ -366,11 +375,13 @@ export const driveTaskFromVerify = async (
             )
           : outOfCredits
             ? 'Verification could not run because the account is out of balance for the verifier model; the delivery was not evaluated. Top up, then retry.'
-            : outcome === 'errored' || outcome === 'review_errored'
-              ? 'Verification could not be completed due to an internal error; the delivery was not evaluated. Please retry or review it manually.'
-              : outcome === 'unjudgeable'
-                ? 'Acceptance review could not judge this delivery from the captured evidence. Review it manually, or restate the check so evidence can settle it.'
-                : undefined;
+            : environmentUnavailable
+              ? `Verification could not run in this execution environment (${environmentUnavailableCause?.split(' — ')[0]}); the delivery was not evaluated. This is not a delivery failure: rerun the task where the required capability is available (e.g. the cloud sandbox), or restate the criterion.`
+              : outcome === 'errored' || outcome === 'review_errored'
+                ? 'Verification could not be completed due to an internal error; the delivery was not evaluated. Please retry or review it manually.'
+                : outcome === 'unjudgeable'
+                  ? 'Acceptance review could not judge this delivery from the captured evidence. Review it manually, or restate the check so evidence can settle it.'
+                  : undefined;
       await new TaskResultBridgeService(db, userId, workspaceId).deliver({
         operationId,
         reason: outcome === 'passed' ? 'done' : 'error',

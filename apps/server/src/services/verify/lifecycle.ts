@@ -1,5 +1,5 @@
 import { isHeterogeneousAgentModelId } from '@lobechat/const';
-import type { VerifyEvidenceType } from '@lobechat/types';
+import type { VerifyCheckItem, VerifyEvidenceType, VerifyRuntimeCapability } from '@lobechat/types';
 import debug from 'debug';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
@@ -19,6 +19,7 @@ import {
 } from './evidenceSubmission';
 import { VerifyExecutorService } from './executor';
 import { resolveVerifyModelConfig } from './modelConfig';
+import { findUnsatisfiableItems, settleEnvironmentUnavailable } from './runtimeCapabilities';
 import { finalizeVerifyRun } from './settle';
 import { VERIFY_ABANDONED_MS } from './staleness';
 import { VerifyStatusService } from './statusService';
@@ -64,12 +65,34 @@ export const resolveVerificationDeliverable = async (
     .join('\n\n');
 };
 
+/** Plan items without a verdict carried over from an earlier round. */
+const unsettledPlanItems = async (
+  db: LobeChatDatabase,
+  userId: string,
+  verifyRunId: string,
+  plan: VerifyCheckItem[],
+  workspaceId?: string,
+): Promise<VerifyCheckItem[]> => {
+  const [results, evidence] = await Promise.all([
+    new VerifyCheckResultModel(db, userId, workspaceId).listByRun(verifyRunId),
+    new VerifyEvidenceModel(db, userId, workspaceId).listByRun(verifyRunId),
+  ]);
+  const { settled } = settledCarriedItemIds(results, evidence);
+  return plan.filter((item) => !settled.has(item.id));
+};
+
 export interface RunVerifyOnCompletionParams {
   /** The run's final output / artifacts, judged against the plan. */
   deliverable: string;
   /** The user's task the run had to satisfy. */
   goal: string;
   operationId: string;
+  /**
+   * Execution capabilities the builder run actually had (see
+   * `resolveRunCapabilities`). Undefined when unknown, which skips the
+   * capability gate.
+   */
+  runtimeCapabilities?: VerifyRuntimeCapability[];
 }
 
 /**
@@ -132,6 +155,36 @@ const executeVerifyLifecycle = async (
     // A fold merges both plans onto the surviving row; anything else keeps the plan
     // the opt-in gate above already accepted.
     const plan = run.plan?.length ? run.plan : confirmedRun.plan;
+
+    // Capability gate: a required criterion that can only be exercised in an
+    // environment this run never had (a cloud sandbox while routed to a device)
+    // cannot pass however good the delivery is. Settle the round as
+    // environment-unavailable now — before the evidence turn and the judges —
+    // so it reads as "not evaluated" instead of a deterministic false `failed`.
+    //
+    // A repair round's carried checks already hold a verdict from the round that
+    // had the capability, so they are neither gated nor overwritten here.
+    const capabilities = params.runtimeCapabilities;
+    const gatePlan =
+      capabilities && findUnsatisfiableItems(plan, capabilities).length > 0
+        ? await unsettledPlanItems(db, userId, run.id, plan, workspaceId)
+        : [];
+    const unsatisfiable = capabilities ? findUnsatisfiableItems(gatePlan, capabilities) : [];
+    if (unsatisfiable.length > 0) {
+      const claimed = await new VerifyStatusService(db, userId, workspaceId).claimVerifying(
+        params.operationId,
+        new Date(Date.now() - VERIFY_ABANDONED_MS),
+      );
+      if (!claimed) return;
+      await settleEnvironmentUnavailable(
+        db,
+        userId,
+        { operationId: params.operationId, plan: gatePlan, unsatisfiable, verifyRunId: run.id },
+        workspaceId,
+      );
+      await finalizeVerifyRun(db, userId, params.operationId, {}, workspaceId);
+      return;
+    }
 
     // The builder now captures Acceptance evidence inside the main run. When it
     // covered the whole plan, the post-run evidence turn has nothing left to

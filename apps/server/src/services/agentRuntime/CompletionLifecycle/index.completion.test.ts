@@ -71,6 +71,34 @@ describe('CompletionLifecycle.dispatchHooks — verify plan race', () => {
     expect(runVerifySpy).toHaveBeenCalledTimes(1);
   });
 
+  it("hands the run's execution capabilities to the verify gate", async () => {
+    const lifecycle = buildLifecycle();
+    vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue(undefined);
+    vi.spyOn(lifecycle as any, 'createVerifyMessage').mockResolvedValue(undefined);
+    vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
+    vi.spyOn(hookDispatcher, 'unregister').mockImplementation(function () {});
+    const runVerifySpy = vi
+      .spyOn(verifyServices, 'runVerifyOnCompletion')
+      .mockResolvedValue(undefined);
+
+    // Routed to a local device: the cloud sandbox was never reachable.
+    const deviceState = {
+      binding: { device: { id: 'dev-1' } },
+      host: { hooks: [] },
+      origin: { agentId: 'a' },
+      plan: { execution: { deviceId: 'dev-1', kind: 'device', target: 'local' } },
+      status: 'done',
+    };
+    await lifecycle.dispatchHooks('op-1', deviceState, 'done');
+
+    expect(runVerifySpy).toHaveBeenCalledWith(
+      expect.anything(),
+      'user-1',
+      expect.objectContaining({ operationId: 'op-1', runtimeCapabilities: [] }),
+      undefined,
+    );
+  });
+
   it('does not register an instantiation for a repair / verifier sub-op (parentOperationId set)', async () => {
     const lifecycle = buildLifecycle();
     const instantiateSpy = vi

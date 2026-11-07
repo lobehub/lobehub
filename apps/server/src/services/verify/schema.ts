@@ -4,6 +4,7 @@ import {
   VERIFY_EVIDENCE_SCOPES,
   VERIFY_EVIDENCE_TYPES,
   VERIFY_ON_FAIL_ACTIONS,
+  VERIFY_RUNTIME_CAPABILITIES,
   VERIFY_VERDICTS,
   VERIFY_VERIFIER_TYPES,
 } from '@lobechat/prompts';
@@ -49,6 +50,19 @@ const generatedCriterionSchema = z.object({
         return parsed.success ? [parsed.data] : [];
       }),
     ),
+  // Unknown capabilities are dropped, not fatal: an over-declared criterion
+  // must not lose its row, and an under-declared one only skips the gate.
+  requiredCapabilities: z
+    .array(z.unknown())
+    .optional()
+    .catch(undefined)
+    .transform((items) => {
+      const known = items?.flatMap((item) => {
+        const parsed = z.enum(VERIFY_RUNTIME_CAPABILITIES).safeParse(item);
+        return parsed.success ? [parsed.data] : [];
+      });
+      return known?.length ? [...new Set(known)] : undefined;
+    }),
   required: z.boolean().optional().catch(undefined),
   title: z.string(),
   verifierType: z.enum(VERIFY_VERIFIER_TYPES),
