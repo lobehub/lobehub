@@ -65,8 +65,10 @@ export const mergeLinearSyncResults = (
   { resumed }: { resumed: boolean },
 ): LinearSyncResult => {
   if (!previous) return latest;
+  const archived = (previous.archived ?? 0) + (latest.archived ?? 0);
   const commentsImported = (previous.commentsImported ?? 0) + (latest.commentsImported ?? 0);
   const written = {
+    ...(archived ? { archived } : {}),
     closed: previous.closed + latest.closed,
     ...(commentsImported ? { commentsImported } : {}),
     created: previous.created + latest.created,

@@ -1,7 +1,7 @@
 // @vitest-environment node
-import { aggregateWakeVerdictsAsync } from '../botWake/aggregator';
-import { parseBotWakeSettings } from '../botWake/config';
-import type { WakeClassification, WakeClassify } from '../botWake/policies';
+import { aggregateWakeVerdictsAsync } from '../aggregator';
+import { parseBotWakeSettings } from '../config';
+import type { WakeClassification, WakeClassify } from '../policies';
 import {
   CLASSIFIER_POLICY_ID,
   createClassifierPolicy,
@@ -10,7 +10,7 @@ import {
   createWakePolicySet,
   INTERNAL_RULES_POLICY_ID,
   OWNER_RULES_POLICY_ID,
-} from '../botWake/policies';
+} from '../policies';
 import type {
   WakeAuthor,
   WakeChannelState,
@@ -18,7 +18,7 @@ import type {
   WakeRules,
   WakeSignal,
   WakeStateSnapshot,
-} from '../botWake/types';
+} from '../types';
 
 const NOW = 1_700_000_000_000;
 const human: WakeAuthor = { id: 'u1', isBot: false, isMe: false, isOwner: false, isSystem: false };

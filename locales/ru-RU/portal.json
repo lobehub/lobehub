@@ -19,6 +19,7 @@
   "artifacts.deploy.outdated": "Старая версия активна",
   "artifacts.deploy.publish": "Опубликовать",
   "artifacts.deploy.publishNewVersion": "Опубликовать эту версию",
+  "artifacts.deploy.quotaUnavailable": "Проверка лимита развертываний временно недоступна. Попробуйте позже.",
   "artifacts.deploy.serviceOverloaded": "Хостинг артефактов временно перегружен. Попробуйте опубликовать снова через некоторое время.",
   "artifacts.deploy.success": "Опубликовано",
   "artifacts.deploy.writeInProgress": "В настоящее время выполняется другое изменение развертывания. Попробуйте снова через некоторое время.",

@@ -15,8 +15,6 @@ export const MAX_NAMED_PARTICIPANTS = 8;
 /** A name shorter than this would match inside ordinary words. */
 const MIN_BOT_NAME_LENGTH = 2;
 
-const DISCORD_EPOCH_MS = 1_420_070_400_000;
-
 export interface ConversationLineInput {
   at: number;
   authorId?: string;
@@ -87,13 +85,6 @@ export const parseLine = (raw: string): WakeConversationLine | undefined => {
   } catch {
     return undefined;
   }
-};
-
-/** A Discord message id is a snowflake: the time it was sent is in its high bits. */
-export const discordMessageTime = (id: string): number | undefined => {
-  if (!/^\d{15,20}$/.test(id)) return undefined;
-
-  return Number(BigInt(id) >> 22n) + DISCORD_EPOCH_MS;
 };
 
 /**

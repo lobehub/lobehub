@@ -1,7 +1,7 @@
 // @vitest-environment node
-import type { SchedulerEvent, SchedulerOptions, SchedulerState } from '../botWake/scheduler';
-import { transitionScheduler } from '../botWake/scheduler';
-import replay from './__fixtures__/botWakeSchedulerReplay.json';
+import type { SchedulerEvent, SchedulerOptions, SchedulerState } from '../scheduler';
+import { transitionScheduler } from '../scheduler';
+import replay from './__fixtures__/schedulerReplay.json';
 
 interface RecordedStep {
   decision?: string;

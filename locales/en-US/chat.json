@@ -2496,6 +2496,8 @@
   "taskDetail.find.position": "{{current}}/{{total}}",
   "taskDetail.find.prev": "Previous match",
   "taskDetail.followUpFailed": "Couldn’t send the follow-up. Your message is kept — try again.",
+  "taskDetail.foreignWorkspace.notice": "This task belongs to {{workspace}}. It is shown read-only here.",
+  "taskDetail.foreignWorkspace.open": "Open in {{workspace}}",
   "taskDetail.goalTimeline.hover.cost": "Cost",
   "taskDetail.goalTimeline.hover.duration": "Duration",
   "taskDetail.goalTimeline.hover.status": "Status",

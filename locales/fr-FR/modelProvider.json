@@ -302,6 +302,7 @@
   "providerModels.item.modelConfig.video.title": "Prise en charge de la reconnaissance vidéo",
   "providerModels.item.modelConfig.vision.extra": "Cette configuration active uniquement la capacité de téléversement d'images dans l'application. La reconnaissance dépend du modèle. Veuillez tester ses capacités visuelles.",
   "providerModels.item.modelConfig.vision.title": "Prise en charge de la vision",
+  "providerModels.item.pricing.audioOutputTokens": "Sortie audio ${{amount}}/M",
   "providerModels.item.pricing.image": "${{amount}}/Image",
   "providerModels.item.pricing.inputCharts": "${{amount}}/M caractères",
   "providerModels.item.pricing.inputMinutes": "${{amount}}/minute",

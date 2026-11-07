@@ -1,8 +1,8 @@
 // @vitest-environment node
-import { aggregateWakeVerdictsAsync } from '../botWake/aggregator';
-import { createWakePolicySet } from '../botWake/policies';
-import type { WakeChannelState, WakeSignal } from '../botWake/types';
-import replay from './__fixtures__/botWakePolicyReplay.json';
+import { aggregateWakeVerdictsAsync } from '../aggregator';
+import { createWakePolicySet } from '../policies';
+import type { WakeChannelState, WakeSignal } from '../types';
+import replay from './__fixtures__/policyReplay.json';
 
 interface Entry {
   channel: Partial<WakeChannelState>;

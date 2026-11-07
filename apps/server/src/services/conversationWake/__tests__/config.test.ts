@@ -7,7 +7,7 @@ import {
   MAX_CUSTOM_INSTRUCTIONS_LENGTH,
   MAX_DUTIES_LENGTH,
   parseBotWakeSettings,
-} from '../botWake/config';
+} from '../config';
 
 describe('parseBotWakeSettings', () => {
   it.each([null, undefined, {}, { botWake: null }, { botWake: 'yes' }, { botWake: [] }])(
