@@ -124,6 +124,13 @@ const resources: FixtureResource[] = [
 
 const resourceMeta = (resource: FixtureResource) => ({
   ui: { prefersBorder: true },
+  ...(resource.name === 'legacy-output-template' && {
+    'openai/widgetCSP': {
+      connect_domains: ['https://allowed.invalid'],
+      resource_domains: [],
+      frame_domains: [],
+    },
+  }),
   [resource.hostNamespace ?? 'openai/ui']: {
     availableDisplayModes: resource.availableDisplayModes,
     preferredDisplayMode: resource.preferredDisplayMode,
@@ -135,6 +142,7 @@ const renderResource = (resource: FixtureResource) => {
     label: resource.title,
     resourceUri: resource.uri,
     appAvailableDisplayModes: resource.appAvailableDisplayModes ?? ['inline', 'fullscreen'],
+    legacyCsp: resource.name === 'legacy-output-template',
   }).replaceAll('<', '\\u003c');
 
   return FIXTURE_HTML.replace('__FIXTURE_CONFIG__', fixtureConfig);
