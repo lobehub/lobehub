@@ -32,13 +32,13 @@ tags:
 - **选择渠道**：你想使用自己的机器人名称和头像，或让同事、客户、群成员使用一个指定的 Agent。
 - **选择 [Messenger](/zh/docs/usage/messenger/overview)**：你只想通过 LobeHub 官方机器人使用自己的 Agent，不想创建机器人或管理 Token。
 
-| | **渠道（Channels）** | **Messenger** |
-| --- | --- | --- |
-| 聊天入口 | 你创建或连接的机器人 | LobeHub 官方机器人或托管服务 |
-| Agent 关系 | 每个渠道固定绑定一个 Agent | 每个账号选择一个当前 Agent，可随时切换 |
-| 谁来使用 | 你、获准用户、团队或社区成员 | 已关联 LobeHub 账号的用户本人 |
-| 配置位置 | **Agent → 渠道** | **设置 → Messenger** |
-| 你需要做什么 | 准备平台机器人或应用凭据，并设置访问范围 | 关联平台账号并选择 Agent |
+|          | **渠道（Channels）**     | **Messenger**          |
+| -------- | -------------------- | ---------------------- |
+| 聊天入口     | 你创建或连接的机器人           | LobeHub 官方机器人或托管服务     |
+| Agent 关系 | 每个渠道固定绑定一个 Agent     | 每个账号选择一个当前 Agent，可随时切换 |
+| 谁来使用     | 你、获准用户、团队或社区成员       | 已关联 LobeHub 账号的用户本人    |
+| 配置位置     | **Agent → 渠道**       | **设置 → Messenger**     |
+| 你需要做什么   | 准备平台机器人或应用凭据，并设置访问范围 | 关联平台账号并选择 Agent        |
 
 渠道是否对外开放由访问策略决定。你也可以把自己的机器人限制为仅自己或指定用户使用。
 
@@ -50,23 +50,24 @@ tags:
 
 ### 当前可用
 
-| 平台                                        | 描述                                                    |
-| ----------------------------------------- | ----------------------------------------------------- |
-| [Discord](/zh/docs/usage/channels/discord)   | 连接到 Discord 服务器，用于频道聊天和私信                             |
-| [Slack](/zh/docs/usage/channels/slack)       | 连接到 Slack，用于频道和私信对话                                   |
-| [Telegram](/zh/docs/usage/channels/telegram) | 连接到 Telegram，用于私人和群组对话                                |
-| [LINE](/zh/docs/usage/channels/line)         | 通过 LINE Messaging API 连接到 LINE，支持私聊和群聊                |
-| [QQ](/zh/docs/usage/channels/qq)             | 连接到 QQ，用于群聊和私信                                        |
-| [微信](/zh/docs/usage/channels/wechat)         | 通过 iLink Bot 连接微信私聊（Pro；群聊支持未确认）                    |
-| [飞书](/zh/docs/usage/channels/feishu)         | 连接到飞书，用于团队协作（中国版）                                     |
-| [Lark](/zh/docs/usage/channels/lark)         | 连接到 Lark，用于团队协作（国际版）                                  |
+| 平台                                           | 描述                                     |
+| -------------------------------------------- | -------------------------------------- |
+| [Discord](/zh/docs/usage/channels/discord)   | 连接到 Discord 服务器，用于频道聊天和私信              |
+| [Slack](/zh/docs/usage/channels/slack)       | 连接到 Slack，用于频道和私信对话                    |
+| [Telegram](/zh/docs/usage/channels/telegram) | 连接到 Telegram，用于私人和群组对话                 |
+| [LINE](/zh/docs/usage/channels/line)         | 通过 LINE Messaging API 连接到 LINE，支持私聊和群聊 |
+| [QQ](/zh/docs/usage/channels/qq)             | 连接到 QQ，用于群聊和私信                         |
+| [微信](/zh/docs/usage/channels/wechat)         | 通过 iLink Bot 连接微信私聊（Pro；群聊支持未确认）       |
+| [企业微信](/zh/docs/usage/channels/wecom)        | 智能机器人长连接，支持单聊和内部群 @（仅单实例长驻部署）          |
+| [飞书](/zh/docs/usage/channels/feishu)         | 连接到飞书，用于团队协作（中国版）                      |
+| [Lark](/zh/docs/usage/channels/lark)         | 连接到 Lark，用于团队协作（国际版）                   |
 
 ### 即将上线
 
-| 平台                                           | 状态与说明                                              |
-| -------------------------------------------- | ------------------------------------------------- |
-| [WhatsApp](/zh/docs/usage/channels/whatsapp) | 即将上线；当前不能配置。计划用于移动聊天中的客户支持与跟进。                 |
-| [iMessage](/zh/docs/usage/channels/imessage) | 即将上线；当前为占位入口。已有 Labs 说明不代表该频道已正式开放。             |
+| 平台                                           | 状态与说明                               |
+| -------------------------------------------- | ----------------------------------- |
+| [WhatsApp](/zh/docs/usage/channels/whatsapp) | 即将上线；当前不能配置。计划用于移动聊天中的客户支持与跟进。      |
+| [iMessage](/zh/docs/usage/channels/imessage) | 即将上线；当前为占位入口。已有 Labs 说明不代表该频道已正式开放。 |
 
 ## 工作原理
 
@@ -87,6 +88,7 @@ tags:
    - [LINE](/zh/docs/usage/channels/line)
    - [QQ](/zh/docs/usage/channels/qq)
    - [微信](/zh/docs/usage/channels/wechat)
+   - [企业微信](/zh/docs/usage/channels/wecom)
    - [飞书](/zh/docs/usage/channels/feishu)
    - [Lark](/zh/docs/usage/channels/lark)
 
@@ -98,13 +100,13 @@ WhatsApp 与 iMessage 当前显示为**即将上线**，不能按已开放渠道
 
 所有平台均支持文本消息。某些功能因平台而异：
 
-| 功能        | Discord | Slack | Telegram | LINE | QQ | 微信 | 飞书   | Lark |
-| --------- | ------- | ----- | -------- | ---- | -- | -- | ---- | ---- |
-| 文本消息      | 是       | 是     | 是        | 是    | 是  | 是  | 是    | 是    |
-| 私人消息      | 是       | 是     | 是        | 是    | 是  | 是  | 是    | 是    |
+| 功能        | Discord | Slack | Telegram | LINE | QQ | 微信  | 飞书   | Lark |
+| --------- | ------- | ----- | -------- | ---- | -- | --- | ---- | ---- |
+| 文本消息      | 是       | 是     | 是        | 是    | 是  | 是   | 是    | 是    |
+| 私人消息      | 是       | 是     | 是        | 是    | 是  | 是   | 是    | 是    |
 | 群组聊天      | 是       | 是     | 是        | 是    | 是  | 未确认 | 是    | 是    |
-| 表情反应      | 是       | 是     | 是        | 否    | 否  | 否  | 部分支持 | 部分支持 |
-| 图片 / 文件附件 | 是       | 是     | 是        | 仅入站  | 是  | 是  | 是    | 是    |
+| 表情反应      | 是       | 是     | 是        | 否    | 否  | 否   | 部分支持 | 部分支持 |
+| 图片 / 文件附件 | 是       | 是     | 是        | 仅入站  | 是  | 是   | 是    | 是    |
 
 微信群聊支持尚未从仓库资料中确认，本指南仅说明私聊接入。2026-07-08 公告说明的是付费访问调整，未宣布群聊支持。详见[微信渠道](/zh/docs/usage/channels/wechat)。
 

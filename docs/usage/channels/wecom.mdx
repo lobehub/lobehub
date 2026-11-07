@@ -1,0 +1,91 @@
+---
+title: Connect LobeHub to WeCom
+description: >-
+  Learn how to create a WeCom AI bot in API mode and connect it to your LobeHub
+  agent over its long connection, so colleagues can chat with your AI assistant
+  in direct chats and by @-mentioning it in internal group chats.
+tags:
+  - WeCom
+  - Message Channels
+  - Bot Setup
+  - Integration
+---
+
+# Connect LobeHub to WeCom
+
+Once a WeCom (企业微信) AI bot is connected to your LobeHub agent, colleagues can talk to the AI assistant in a WeCom direct chat, or @-mention the bot in an internal group chat.
+
+LobeHub uses the AI bot's **API mode with a long connection**: LobeHub connects out to WeCom, so **no public IP, callback URL, or ICP-filed domain is needed**.
+
+> **Availability:** a WeCom bot can only reply over its own long connection, so the channel works only on **a single long-running LobeHub server process** (for example a single-instance Docker self-host). Serverless deployments (such as Vercel) and deployments that host channel connections on an external message gateway do not show WeCom yet; multi-replica deployments make the replicas knock the same bot offline in turn, so they are not supported either.
+
+## Prerequisites
+
+- A WeCom organization and an admin account for its admin console
+- An unverified organization can have at most 100 members; WeCom's docs do not say whether an unverified organization can create AI bots
+
+## Step 1: Create an AI bot
+
+<Steps>
+  ### Open the admin console
+
+  Go to the [WeCom admin console](https://work.weixin.qq.com/wework_admin/frame) and sign in.
+
+  ### Create a bot in API mode
+
+  Go to **Smart Zone → AI Bots**, click **Create**, choose **API mode**, and receive messages over a **long connection**.
+
+  ### Copy the BotID and Secret
+
+  Copy the **BotID** and the long-connection **Secret** from the bot's API settings.
+
+  > **Important:** a bot can have only one long connection at a time. Connecting the same bot anywhere else (another deployment, a local dev environment, another tool) disconnects it from LobeHub.
+</Steps>
+
+## Step 2: Configure it in LobeHub
+
+<Steps>
+  ### Open channel settings
+
+  In LobeHub, open your agent's settings, select the **Channels** tab, and click **WeCom**.
+
+  ### Enter the credentials
+
+  - **BotID** — the BotID from Step 1
+  - **Secret** — the long-connection Secret from Step 1
+
+  ### Save and connect
+
+  Click **Save Configuration**. LobeHub opens the long connection with the BotID and Secret; once the status shows connected, the bot is ready.
+</Steps>
+
+## Step 3: Test it
+
+- **Direct chat:** find the bot in WeCom and send it a message. The bot shows a reply-in-progress bubble first, then fills in the answer.
+- **Group chat:** add the bot to an internal group chat and @-mention it. External and interconnected groups do not support bots.
+
+## Access policies
+
+As with other channels, the **DM policy**, **group policy**, and **allowed user IDs** decide which messages the bot accepts; see the [channel overview](/docs/usage/channels/overview#direct-message-policy). User and group IDs are the `userid` and `chatid` from WeCom messages. When the bot's creator is not a super admin, `userid` is an encrypted open_userid.
+
+## Configuration reference
+
+| Field                        | Required | Description                                               |
+| ---------------------------- | -------- | --------------------------------------------------------- |
+| **BotID**                    | Yes      | BotID of the AI bot (API mode)                            |
+| **Secret**                   | Yes      | The bot's long-connection Secret                          |
+| **Character limit**          | No       | Maximum characters per reply; 6000 by default and at most |
+| **DM policy / Group policy** | No       | Who may DM the bot and which groups it answers in         |
+
+## Limitations
+
+- **Text only in groups** — when the bot is @-mentioned in a group, WeCom only delivers text, mixed, and quoted messages.
+- **No topics or threads** — each group is one conversation.
+- **No editing, recalling, or reactions** — the bot's messages cannot be changed.
+- **No attachments in replies yet** — this version replies with text.
+- **Reply window** — a message can be answered within 24 hours; a streamed reply must finish within 10 minutes, after which the result is pushed as a new message.
+
+## Troubleshooting
+
+- **Status failed: taken over by another connection** — the same BotID opened a long connection elsewhere. Stop the other one, then save or reconnect in LobeHub.
+- **Invalid credentials when saving** — check that the BotID and Secret belong to the same bot and that the bot is in API mode.

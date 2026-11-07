@@ -39,6 +39,10 @@ import {
 } from '@/server/services/bot/platforms/feishu/registration';
 import { flattenBotWakeSettings } from '@/server/services/conversationWake/config';
 import { GatewayService } from '@/server/services/gateway';
+import {
+  canHostInProcessConnections,
+  inProcessConnectionUnavailableMessage,
+} from '@/server/services/gateway/inProcessConnections';
 import { getBotRuntimeStatus } from '@/server/services/gateway/runtimeStatus';
 
 import {
@@ -171,12 +175,24 @@ const withFormSettings = (platform: string, settings?: Record<string, unknown>) 
 
 export const agentBotProviderRouter = router({
   listPlatforms: authedProcedure.query(async ({ ctx }) => {
+    // A platform that replies over its own connection only runs where the process holding it also
+    // answers messages (see `canHostInProcessConnections`). Elsewhere it is marked, not dropped,
+    // so a bot configured before the deployment changed can still be opened and removed.
+    const hostsInProcess = canHostInProcessConnections();
     return Promise.all(
       platformRegistry.listSerializedPlatforms().map((platform) =>
-        withBotPlatformAccessMeta(platform, {
-          userId: ctx.userId,
-          workspaceId: ctx.workspaceId ?? undefined,
-        }),
+        withBotPlatformAccessMeta(
+          !hostsInProcess && platform.requiresInProcessConnection
+            ? {
+                ...platform,
+                unavailableReason: inProcessConnectionUnavailableMessage(platform.name),
+              }
+            : platform,
+          {
+            userId: ctx.userId,
+            workspaceId: ctx.workspaceId ?? undefined,
+          },
+        ),
       ),
     );
   }),
