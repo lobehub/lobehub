@@ -2,6 +2,7 @@ import type {
   ScmActorAssociation,
   ScmInstallationRepository,
   ScmInstallationSnapshot,
+  ScmRepositoryListItem,
 } from '@lobechat/types';
 import debug from 'debug';
 import { App, Octokit } from 'octokit';
@@ -189,6 +190,42 @@ export const listGitHubInstallationRepositories = async (
 
   log('installation %s has %d repositories', installationId, repositories.length);
   return repositories;
+};
+
+/**
+ * The repositories an installation can read, with what a picker shows. Bounded
+ * by `limit` because an all-repositories organization installation can reach
+ * thousands. GitHub returns them in its own order, not by push time, so a
+ * bounded list can miss recent work — `truncated` says so, and the picker
+ * points to pasting the URL instead.
+ */
+export const listGitHubInstallationRepositoryDetails = async (
+  installationId: string,
+  { limit = 500 }: { limit?: number } = {},
+): Promise<{ repositories: ScmRepositoryListItem[]; truncated: boolean }> => {
+  const app = getGitHubApp();
+  if (!app) throw new Error('GitHub App is not configured');
+
+  const octokit = await app.getInstallationOctokit(Number(installationId));
+  const repositories: ScmRepositoryListItem[] = [];
+  for await (const { data } of octokit.paginate.iterator('GET /installation/repositories', {
+    per_page: 100,
+  })) {
+    for (const repo of data) {
+      repositories.push({
+        defaultBranch: repo.default_branch,
+        description: repo.description ?? null,
+        fullName: repo.full_name,
+        htmlUrl: repo.html_url,
+        ownerAvatarUrl: repo.owner?.avatar_url ?? null,
+        private: repo.private,
+        pushedAt: repo.pushed_at ?? null,
+      });
+    }
+    if (repositories.length > limit) break;
+  }
+
+  return { repositories: repositories.slice(0, limit), truncated: repositories.length > limit };
 };
 
 /**
