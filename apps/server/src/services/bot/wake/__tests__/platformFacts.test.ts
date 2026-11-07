@@ -1,13 +1,16 @@
 // @vitest-environment node
+import { describe, expect, it } from 'vitest';
+
+import { wakeStateKeys } from '@/server/services/conversationWake/facts';
+
 import {
+  discordMessageTime,
   hasConversationLog,
-  isEmptyOrEmojiOnly,
-  judgeExplicitMention,
   parseDiscordMentions,
   resolveChannelKeys,
+  resolveConversationLogKey,
   resolveConversationLogKeys,
-  wakeStateKeys,
-} from '../botWake/facts';
+} from '../platformFacts';
 
 const BOT = '111';
 
@@ -82,68 +85,6 @@ describe('parseDiscordMentions', () => {
   });
 });
 
-describe('judgeExplicitMention', () => {
-  const none = { botMentioned: false, everyone: false, here: false, otherUserIds: [], roleIds: [] };
-
-  it.each([
-    {
-      adapter: true,
-      expected: true,
-      mentions: undefined,
-      name: 'no mentions parsed: trust the adapter',
-    },
-    {
-      adapter: false,
-      expected: false,
-      mentions: undefined,
-      name: 'no mentions parsed, adapter false',
-    },
-    {
-      adapter: true,
-      expected: false,
-      mentions: { ...none, everyone: true },
-      name: 'adapter counted @everyone',
-    },
-    {
-      adapter: true,
-      expected: false,
-      mentions: { ...none, roleIds: ['9'] },
-      name: 'adapter counted a role ping',
-    },
-    { adapter: true, expected: true, mentions: { ...none, botMentioned: true }, name: 'real @bot' },
-    {
-      adapter: false,
-      expected: true,
-      mentions: { ...none, botMentioned: true },
-      name: 'real @bot the adapter missed',
-    },
-  ])('$name', ({ adapter, expected, mentions }) => {
-    expect(judgeExplicitMention(adapter, mentions)).toBe(expected);
-  });
-});
-
-describe('isEmptyOrEmojiOnly', () => {
-  it.each([
-    ['', false, true],
-    ['   \n ', false, true],
-    ['👍', false, true],
-    ['👍🏽 🎉', false, true],
-    ['👨‍👩‍👧', false, true],
-    ['<:pepe:12345>', false, true],
-    ['<a:dance:12345> :smile:', false, true],
-    ['...', false, true],
-    ['？！', false, true],
-    ['', true, false],
-    ['👍', true, false],
-    ['ok', false, false],
-    ['好的', false, false],
-    ['👍 thanks', false, false],
-    ['42', false, false],
-  ])('%j (attachments=%s) -> %s', (text, attachments, expected) => {
-    expect(isEmptyOrEmojiOnly(text, attachments)).toBe(expected);
-  });
-});
-
 describe('resolveChannelKeys', () => {
   it('files a Discord channel message under the channel only', () => {
     const keys = resolveChannelKeys('discord', 'app', 'discord:g1:c1');
@@ -209,5 +150,23 @@ describe('hasConversationLog', () => {
     expect(resolveConversationLogKeys('feishu', 'feishu:group:oc_1')).toEqual([
       'feishu:group:oc_1',
     ]);
+  });
+});
+
+describe('resolveConversationLogKey', () => {
+  it('is shared by every bot in a channel and keeps a thread apart from its channel', () => {
+    expect(resolveConversationLogKey('discord', 'discord:g1:c1')).toBe('discord:g1:c1');
+    expect(resolveConversationLogKey('discord', 'discord:g1:c1:t1')).toBe('discord:g1:c1:t1');
+    expect(resolveConversationLogKey('telegram', 'telegram:-100123')).toBe('telegram:-100123');
+  });
+});
+
+describe('discordMessageTime', () => {
+  it('dates a Discord message from its id', () => {
+    // 1564248423568380028 was posted on 2026-10-26 (taken from a real decision row).
+    const at = discordMessageTime('1564248423568380028')!;
+
+    expect(new Date(at).toISOString().slice(0, 10)).toBe('2026-10-26');
+    expect(discordMessageTime('not-a-snowflake')).toBeUndefined();
   });
 });

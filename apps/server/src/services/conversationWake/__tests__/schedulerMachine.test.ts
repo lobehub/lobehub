@@ -4,8 +4,8 @@ import type {
   SchedulerEvent,
   SchedulerOptions,
   SchedulerState,
-} from '../botWake/scheduler';
-import { IDLE_STATE, MAX_PENDING_WAKES, transitionScheduler } from '../botWake/scheduler';
+} from '../scheduler';
+import { IDLE_STATE, MAX_PENDING_WAKES, transitionScheduler } from '../scheduler';
 
 const OPTIONS: SchedulerOptions = { collectMs: 20_000, cooldownMs: 60_000, runLeaseMs: 300_000 };
 const T0 = 1_000_000;

@@ -7,7 +7,7 @@ import {
   BOT_WAKE_SETTING_KEYS,
   flattenBotWakeSettings,
   hasPassiveListeningRule,
-} from '@/server/services/agentSignal/scenarios/botWake/config';
+} from '@/server/services/conversationWake/config';
 import { GatewayService } from '@/server/services/gateway';
 
 import { getBotMessageRouter } from './BotMessageRouter';

@@ -4,13 +4,11 @@ import { describe, expect, it } from 'vitest';
 import {
   CONVERSATION_LINE_MAX_CHARS,
   describeLine,
-  discordMessageTime,
   matchesBotName,
   parseLine,
   serializeLine,
   toConversationLine,
-} from '../botWake/conversation';
-import { resolveConversationLogKey } from '../botWake/facts';
+} from '../conversation';
 
 describe('conversation lines', () => {
   const base = { at: 1_000, authorId: 'u1', authorName: 'Alice', id: 'm1', isBot: false };
@@ -53,14 +51,6 @@ describe('conversation lines', () => {
     expect(parseLine(serializeLine(line))).toEqual(line);
     for (const junk of ['', 'nope', '{}', '{"id":1}', '[]', 'null'])
       expect(parseLine(junk)).toBeUndefined();
-  });
-
-  it('dates a Discord message from its id', () => {
-    // 1564248423568380028 was posted on 2026-10-26 (taken from a real decision row).
-    const at = discordMessageTime('1564248423568380028')!;
-
-    expect(new Date(at).toISOString().slice(0, 10)).toBe('2026-10-26');
-    expect(discordMessageTime('not-a-snowflake')).toBeUndefined();
   });
 
   it('labels the bot as the assistant and everyone else by name', () => {
@@ -110,13 +100,5 @@ describe('matchesBotName', () => {
     expect(matchesBotName('what is a+b', ['a+b'])).toBe(true);
     expect(matchesBotName('anything (x', ['(x'])).toBe(true);
     expect(matchesBotName('hello', ['.*'])).toBe(false);
-  });
-});
-
-describe('resolveConversationLogKey', () => {
-  it('is shared by every bot in a channel and keeps a thread apart from its channel', () => {
-    expect(resolveConversationLogKey('discord', 'discord:g1:c1')).toBe('discord:g1:c1');
-    expect(resolveConversationLogKey('discord', 'discord:g1:c1:t1')).toBe('discord:g1:c1:t1');
-    expect(resolveConversationLogKey('telegram', 'telegram:-100123')).toBe('telegram:-100123');
   });
 });
