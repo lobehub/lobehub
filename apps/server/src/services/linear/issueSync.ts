@@ -72,6 +72,12 @@ interface SyncOptions {
   createClosed?: boolean;
   /** Collects issues left uncreated because the run reached its task cap. */
   deferred?: Set<string>;
+  /**
+   * Create another task for an issue that already has a link, and collect it
+   * here by issue id. The link table allows one task per issue, so this task
+   * has none: later syncs do not update it, and the linked task is left alone.
+   */
+  duplicates?: Map<string, TaskItem>;
   /** Update and close linked tasks, but create none (a run past its task cap). */
   noCreate?: boolean;
   /** LobeHub project new tasks land in. */
@@ -207,11 +213,18 @@ export class LinearIssueSyncService {
     };
   }
 
-  /** Import the issues the user picked, whatever their state. */
+  /**
+   * Import the issues the user picked, whatever their state. An issue already
+   * imported updates its task, unless `importDuplicates` asks for another one.
+   */
   async importIssues(
     accessToken: string,
     issueIds: string[],
-    options: { syncComments?: boolean; targetProjectId?: string | null } = {},
+    options: {
+      importDuplicates?: boolean;
+      syncComments?: boolean;
+      targetProjectId?: string | null;
+    } = {},
   ): Promise<LinearSyncResult> {
     const issues = await getLinearIssuesByIds(accessToken, issueIds);
     const result = emptyResult();
@@ -228,17 +241,30 @@ export class LinearIssueSyncService {
       );
       for (const id of missing) skip(result, known.get(id) ?? id, 'missing');
     }
+    const duplicates = options.importDuplicates ? new Map<string, TaskItem>() : undefined;
+    // Read before syncing, which links first imports: their comments still go through the link.
+    const linkedBefore = new Set(
+      duplicates
+        ? (
+            await this.linkModel.findByExternalIds(
+              'linear',
+              issues.map((issue) => issue.id),
+            )
+          ).map((link) => link.externalId)
+        : [],
+    );
     await this.syncIssues(
       issues,
-      { createClosed: true, targetProjectId: options.targetProjectId },
+      { createClosed: true, duplicates, targetProjectId: options.targetProjectId },
       result,
     );
     if (options.syncComments) {
       await this.syncComments(
         accessToken,
-        issues.map((issue) => issue.id),
+        issues.filter((issue) => !linkedBefore.has(issue.id)).map((issue) => issue.id),
         result,
       );
+      if (duplicates) await this.copyCommentsToDuplicates(accessToken, issues, duplicates, result);
     }
     return result;
   }
@@ -408,7 +434,7 @@ export class LinearIssueSyncService {
     for (const issue of parentsFirst(issues)) {
       try {
         const link = links.get(issue.id);
-        if (link) {
+        if (link && !options.duplicates) {
           await this.syncLinked(issue, link, tasks.get(link.taskId), options, result);
         } else if (!options.closeOnly) {
           const created = await this.create(issue, links, tasks, options, result);
@@ -436,6 +462,12 @@ export class LinearIssueSyncService {
       skip(result, issue.identifier, 'closed');
       return;
     }
+    if (options.duplicates && result.created >= MAX_TASKS_CREATED_PER_SYNC) {
+      // Running again would copy the issues already done, so name the ones left
+      // instead of reporting a run that the next one continues.
+      skip(result, issue.identifier, 'duplicateLimit');
+      return;
+    }
     if (options.noCreate || result.created >= MAX_TASKS_CREATED_PER_SYNC) {
       result.truncated = true;
       options.deferred?.add(issue.id);
@@ -445,15 +477,32 @@ export class LinearIssueSyncService {
     const fields = linearIssueToTaskFields(issue);
     const targetProjectId = options.targetProjectId ?? null;
     // A subtask must share its parent's project, so attach only when it does.
+    // A parent duplicated in this run comes first, so the copies stay together.
     const parentLink = issue.parent ? links.get(issue.parent.id) : undefined;
-    const parentTask = parentLink ? tasks.get(parentLink.taskId) : undefined;
+    const parentTask =
+      (issue.parent && options.duplicates?.get(issue.parent.id)) ??
+      (parentLink ? tasks.get(parentLink.taskId) : undefined);
     const parentTaskId =
       parentTask && (parentTask.projectId ?? null) === targetProjectId ? parentTask.id : undefined;
+    const placement = { parentTaskId, projectId: targetProjectId ?? undefined };
 
-    const created = await this.createLinked(issue, fields, {
-      parentTaskId,
-      projectId: targetProjectId ?? undefined,
-    });
+    if (options.duplicates && links.has(issue.id)) {
+      const duplicate = await this.taskService.createTask({ ...fields, ...placement });
+      // Counted before closing: with no link, a retry would be another copy.
+      options.duplicates.set(issue.id, duplicate);
+      result.created += 1;
+      if (closed) {
+        try {
+          await this.close(duplicate, issue.state.type);
+        } catch (error) {
+          log('close duplicate of %s failed: %O', issue.identifier, error);
+          skip(result, issue.identifier, 'duplicateNotClosed');
+        }
+      }
+      return;
+    }
+
+    const created = await this.createLinked(issue, fields, placement);
     if ('winner' in created) {
       // A concurrent sync linked the issue first. Continue with its task, so
       // this run's children still nest under it.
@@ -698,17 +747,7 @@ export class LinearIssueSyncService {
       // a comment posted in LobeHub.
       await tasks.addComments(
         link.taskId,
-        fresh.map((comment) => {
-          // Linear's time, so the task's activity reads in the order it happened.
-          const createdAt = new Date(comment.createdAt);
-          return {
-            authorUserId: this.userId,
-            content: linearCommentToContent(comment),
-            createdAt,
-            updatedAt: createdAt,
-            userId: this.userId,
-          };
-        }),
+        fresh.map((comment) => this.toTaskComment(comment)),
       );
       await linkModel.recordSyncedComments(
         current.id,
@@ -716,6 +755,65 @@ export class LinearIssueSyncService {
       );
       return fresh.length;
     });
+  }
+
+  /**
+   * Copy the Linear comments of these issues onto their duplicate tasks. With
+   * no link to record them on, nothing retries a failure, so it is reported as
+   * final and the run goes on; a revoked token fails the run like reading issues.
+   */
+  private async copyCommentsToDuplicates(
+    accessToken: string,
+    issues: LinearIssue[],
+    duplicates: Map<string, TaskItem>,
+    result: LinearSyncResult,
+  ): Promise<void> {
+    const copied = issues.filter((issue) => duplicates.has(issue.id));
+    for (let start = 0; start < copied.length; start += LINEAR_PAGE_SIZE) {
+      const batch = copied.slice(start, start + LINEAR_PAGE_SIZE);
+      let comments: LinearIssueComment[];
+      try {
+        comments = await listLinearIssueComments(
+          accessToken,
+          batch.map((issue) => issue.id),
+        );
+      } catch (error) {
+        if (error instanceof LinearApiError && error.status === 401) throw error;
+        log('read comments of duplicates failed: %O', error);
+        // Further reads would most likely fail the same way.
+        for (const issue of copied.slice(start)) {
+          skip(result, issue.identifier, 'duplicateCommentsFailed');
+        }
+        return;
+      }
+
+      for (const issue of batch) {
+        const issueComments = comments.filter((comment) => comment.issueId === issue.id);
+        if (issueComments.length === 0) continue;
+        try {
+          await this.taskModel.addComments(
+            duplicates.get(issue.id)!.id,
+            issueComments.map((comment) => this.toTaskComment(comment)),
+          );
+          result.commentsImported = (result.commentsImported ?? 0) + issueComments.length;
+        } catch (error) {
+          log('copy comments of %s failed: %O', issue.identifier, error);
+          skip(result, issue.identifier, 'duplicateCommentsFailed');
+        }
+      }
+    }
+  }
+
+  private toTaskComment(comment: LinearIssueComment) {
+    // Linear's time, so the task's activity reads in the order it happened.
+    const createdAt = new Date(comment.createdAt);
+    return {
+      authorUserId: this.userId,
+      content: linearCommentToContent(comment),
+      createdAt,
+      updatedAt: createdAt,
+      userId: this.userId,
+    };
   }
 
   /** Links in this scope whose task the caller can still see. */

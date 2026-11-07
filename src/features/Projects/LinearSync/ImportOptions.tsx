@@ -32,7 +32,7 @@ interface OptionProps {
   onChange: (checked: boolean) => void;
 }
 
-const Option = memo<OptionProps>(({ checked, desc, label, onChange }) => (
+export const ImportOption = memo<OptionProps>(({ checked, desc, label, onChange }) => (
   <label {...stylex.props(styles.option)}>
     <Flexbox horizontal align={'flex-start'} gap={8}>
       <Checkbox checked={checked} style={{ marginBlockStart: 2 }} onChange={onChange} />
@@ -46,7 +46,7 @@ const Option = memo<OptionProps>(({ checked, desc, label, onChange }) => (
   </label>
 ));
 
-Option.displayName = 'LinearImportOption';
+ImportOption.displayName = 'LinearImportOption';
 
 /** What an import brings along besides the issues themselves. */
 const ImportOptions = memo<ImportOptionsProps>(
@@ -59,13 +59,13 @@ const ImportOptions = memo<ImportOptionsProps>(
           {t('linear.sync.options.importTitle')}
         </Text>
         <Flexbox gap={12} {...stylex.props(styles.group)}>
-          <Option
+          <ImportOption
             checked={syncComments}
             desc={t('linear.sync.options.syncCommentsDesc')}
             label={t('linear.sync.options.syncComments')}
             onChange={onSyncCommentsChange}
           />
-          <Option
+          <ImportOption
             checked={includeArchived}
             desc={t('linear.sync.options.includeArchivedDesc')}
             label={t('linear.sync.options.includeArchived')}

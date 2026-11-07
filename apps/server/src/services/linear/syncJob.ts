@@ -335,7 +335,10 @@ export class LinearSyncJobService {
 
     if (metadata.kind === 'issues') {
       const token = await getLinearAccessToken(this.db, metadata.connectionId);
-      return sync.importIssues(token, metadata.issueIds ?? [], options);
+      return sync.importIssues(token, metadata.issueIds ?? [], {
+        ...options,
+        importDuplicates: metadata.importDuplicates,
+      });
     }
 
     const rule = metadata.ruleId
