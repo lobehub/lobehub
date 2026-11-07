@@ -79,6 +79,13 @@ export const WebBrowsingManifest: BuiltinToolManifest = {
       'Search the web for current information and crawl web pages to extract content. Supports automatic engine selection, categories, and time ranges for comprehensive research.',
     title: 'Web Browsing',
   },
-  systemRole: systemPrompt(dayjs(new Date()).format('YYYY-MM-DD')),
+  /**
+   * The manifest is a module-level singleton, so baking the date here froze it
+   * at process start: a server-side run (e.g. agent gateway) that stays up
+   * across midnight kept telling the model the old day. Recompute per read.
+   */
+  get systemRole() {
+    return systemPrompt(dayjs().format('YYYY-MM-DD'));
+  },
   type: 'builtin',
 };
