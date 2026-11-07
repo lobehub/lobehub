@@ -45,8 +45,15 @@ export class ChannelCoordinator {
   advance = async (channelId: string) => {
     const [channel] = await this.db.select().from(channels).where(eq(channels.id, channelId));
     if (!channel) return;
+    const advances = [() => this.advanceExecutions(channelId, channel.workspaceId)];
     if (!channel.isDeleted && channel.status === 'active')
-      await new ChannelRoutingService(this.db).advance(channelId);
+      advances.push(() => new ChannelRoutingService(this.db).advance(channelId));
+    // Routing must not hold up unrelated jobs or recovery. Drain both branches even on
+    // failure so this worker never returns while the other branch is still dispatching.
+    await pMap(advances, (advance) => advance(), { stopOnError: false });
+  };
+
+  private advanceExecutions = async (channelId: string, workspaceId: string | null) => {
     const { heads, inFlight } = await this.executions.candidates(channelId);
     const pending = [...inFlight, ...heads];
 
@@ -66,7 +73,7 @@ export class ChannelCoordinator {
     ];
     const presence = await pMap(
       owners,
-      (owner) => getScopedOnlineDevices(this.db, owner, channel.workspaceId ?? undefined),
+      (owner) => getScopedOnlineDevices(this.db, owner, workspaceId ?? undefined),
       { concurrency: 5 },
     );
     const onlineDeviceIds = presence
@@ -92,7 +99,7 @@ export class ChannelCoordinator {
             });
             await Promise.all([
               notifyChannel(this.db, channelId),
-              claim ? this.dispatch(claim, channel.workspaceId) : undefined,
+              claim ? this.dispatch(claim, workspaceId) : undefined,
             ]);
           }
         },
