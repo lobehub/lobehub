@@ -10,6 +10,7 @@ export {
   formatAgentSenderHeader,
   LH_COMMAND_TOOL_IDENTIFIERS,
 } from './AgentSenderMessage';
+export { type ChannelTurnCompactConfig, ChannelTurnCompactProcessor } from './ChannelTurnCompact';
 export { CompressedGroupRoleTransformProcessor } from './CompressedGroupRoleTransform';
 export { DisabledToolCallFilter } from './DisabledToolCallFilter';
 export { GroupMessageFlattenProcessor } from './GroupMessageFlatten';

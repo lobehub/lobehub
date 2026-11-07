@@ -144,6 +144,29 @@ that topic, so a topic is never shared with another requester's runs. What the m
 other people reaches it only as public replies, which the prompt marks `self` so the member
 recognises its own earlier work instead of treating it as someone else's.
 
+### Long conversations
+
+A Channel topic does not rely on the native context compression:
+
+- **Earlier turns keep only their request.** Each run's user message carries one-turn context: the
+  unseen public messages, the quote, the gap and the wake hint. The context engine's
+  `ChannelTurnCompactProcessor` reduces every earlier Channel turn to its `channel_request` block,
+  matched by the run's boundary so a person's text is never touched. The latest turn stays whole.
+  The rewrite is deterministic and monotone, so the prompt prefix only changes where a new turn
+  starts.
+- **Old history reads become pointers.** `StaleToolResultTrim` replaces `lobe-channel` reads outside the
+  recent window with a stub saying to read again (rule `staleChannelHistory`), under its usual
+  size gate.
+- **Topics rotate by size.** `resolveTopic` stops continuing a topic once its stored message text
+  passes `CHANNEL_TOPIC_MAX_CHARS` (200k characters, about 50k tokens, under the 64k-token point
+  where native compression starts for an unknown 128k model). This applies to Threads too, which
+  never go idle. A fresh topic, whether it rotated or went idle, starts with the member's own last
+  three replies in the branch beside the usual unseen messages. That is deterministic, with no
+  summary call, and anything older is one history read away.
+
+The processor only matches Channel prompts. Bot topics could adopt the same idea for their
+injected context later; their behaviour is unchanged here.
+
 ### Why the Channel instructions stay in the system role
 
 `CHANNEL_INSTRUCTIONS` is constant text appended to the native run's system role, so it is already

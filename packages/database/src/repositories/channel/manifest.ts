@@ -88,10 +88,22 @@ export const readManifestMessages = async (
   db: LobeChatDatabase | Transaction,
   channelId: string,
   manifest: ChannelInputManifest,
-  options: { beforeSequence?: number; limit?: number; messageId?: string } = {},
+  options: {
+    /** Only this Agent's published replies. */
+    agentId?: string;
+    beforeSequence?: number;
+    limit?: number;
+    messageId?: string;
+  } = {},
 ): Promise<ChannelContextMessage[]> => {
   const scope = and(
     manifestScope(channelId, manifest),
+    options.agentId
+      ? and(
+          eq(channelMessages.agentId, options.agentId),
+          eq(channelMessages.routingStatus, 'reply'),
+        )
+      : undefined,
     options.beforeSequence === undefined
       ? undefined
       : lt(channelMessages.sequence, options.beforeSequence),

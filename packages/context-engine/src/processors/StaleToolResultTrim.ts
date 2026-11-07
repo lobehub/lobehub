@@ -120,6 +120,7 @@ const imageCountOf = (message: Message) =>
 const BROWSER = 'lobe-browser';
 const WEB_BROWSING = 'lobe-web-browsing';
 const MESSAGE = 'lobe-message';
+const CHANNEL = 'lobe-channel';
 
 export interface CacheEconomics {
   /** Cached-read price relative to the plain input price. */
@@ -173,6 +174,7 @@ const WRITE_APIS = new Set(['writeFile', 'editFile']);
 const COMMAND_APIS = new Set(['runCommand', 'getCommandOutput']);
 const CRAWL_APIS = new Set(['search', 'crawlSinglePage', 'crawlMultiPages']);
 const MESSAGE_READ_APIS = new Set(['readMessages', 'searchMessages']);
+const CHANNEL_READ_APIS = new Set(['readMessages', 'readMessage']);
 
 interface PluginInfo {
   apiName?: string;
@@ -598,6 +600,15 @@ export class StaleToolResultTrimProcessor extends BaseProcessor {
       return {
         content: `${content}\n[${images.length} image(s) from this ${apiName} result are no longer attached. Call ${apiName} again if you need to see them.]`,
         rule: 'staleMessageImages',
+      };
+    }
+
+    if (identifier === CHANNEL && CHANNEL_READ_APIS.has(apiName)) {
+      // Channel history is public and frozen at the run's cutoff: an old read can always be made
+      // again, so nothing but the pointer to it needs to stay.
+      return {
+        content: `[Earlier ${CHANNEL}.${apiName} result trimmed. The Channel history it read is unchanged; call ${apiName} again if you need it.]`,
+        rule: 'staleChannelHistory',
       };
     }
 
