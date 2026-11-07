@@ -644,7 +644,8 @@ export class EditorRuntime {
    * The caller validates quotes against the document's plain text, so a quote
    * can legitimately straddle tags. Matching segment by segment never finds
    * it; matching the concatenated text and mapping the hit back onto the
-   * markup does, and the tags inside the replaced range go away with it.
+   * markup does, while the runs the hit cuts through keep their tag pairs
+   * balanced.
    */
   private replaceAcrossRuns(
     content: string,
@@ -694,10 +695,78 @@ export class EditorRuntime {
       const { end, start } = ranges[i];
       const contentStart = contentIndexOf[start];
       const contentEnd = contentIndexOf[end - 1] + 1;
-      newContent = newContent.slice(0, contentStart) + newText + newContent.slice(contentEnd);
+      newContent = this.replacePlainRange(newContent, contentStart, contentEnd, newText);
     }
 
-    return { count: ranges.length, newContent };
+    return { count: ranges.length, newContent: this.dropEmptiedRuns(newContent) };
+  }
+
+  /**
+   * Replace a range of characters in a markup string without touching the tags
+   * around them.
+   *
+   * Cutting the whole slice out would take the tags it contains with it, so a
+   * quote that begins or ends inside a formatted run kept only half of the tag
+   * pair: `Payment within <b>90 days</b>.` minus `within 90` left
+   * `Payment 30 days</b>. Thanks.`. LiteXML drops such a node silently, so the
+   * caller reported one replacement while the document never changed. Deleting
+   * the characters and keeping the markup cannot unbalance a run.
+   */
+  private replacePlainRange(content: string, start: number, end: number, newText: string): string {
+    const tagRegex = /<[^>]+>/g;
+    let newContent = '';
+    let cursor = 0;
+    let inserted = false;
+
+    const appendText = (text: string, offset: number) => {
+      for (let i = 0; i < text.length; i += 1) {
+        const position = offset + i;
+
+        if (position === start && !inserted) {
+          newContent += newText;
+          inserted = true;
+        }
+
+        if (position >= start && position < end) continue;
+
+        newContent += text[i];
+      }
+    };
+
+    let tag: RegExpExecArray | null;
+
+    while ((tag = tagRegex.exec(content)) !== null) {
+      if (tag.index > cursor) appendText(content.slice(cursor, tag.index), cursor);
+      newContent += tag[0];
+      cursor = tag.index + tag[0].length;
+    }
+
+    if (cursor < content.length) appendText(content.slice(cursor), cursor);
+
+    // A match that ends at the last character has no following text to carry
+    // the insertion, so place it here.
+    if (!inserted) newContent += newText;
+
+    return newContent;
+  }
+
+  /**
+   * Drop the inline runs a replacement emptied, so a quote that swallowed the
+   * whole run does not leave `<b></b>` behind.
+   */
+  private dropEmptiedRuns(content: string): string {
+    const emptiedRun =
+      /<(b|strong|i|em|u|s|del|code|mark|span|a|sub|sup)((?:\s[^>]*?)?)>\s*<\/\1>/gi;
+
+    let current = content;
+    let previous: string;
+
+    do {
+      previous = current;
+      current = current.replaceAll(emptiedRun, '');
+    } while (current !== previous);
+
+    return current;
   }
 
   /**

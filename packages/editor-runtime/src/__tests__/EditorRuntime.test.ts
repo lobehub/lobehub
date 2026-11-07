@@ -5,6 +5,7 @@ import type { Mock } from 'vitest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { EditorRuntime } from '../EditorRuntime';
+import { findMalformedLiteXML } from '../liteXMLWellFormed';
 
 describe('EditorRuntime', () => {
   let runtime: EditorRuntime;
@@ -520,6 +521,77 @@ describe('EditorRuntime', () => {
       const markdown = editor.getDocument('markdown') as unknown as string;
       expect(markdown).toContain('Payment within 30 days. Thanks.');
       expect(markdown).not.toContain('90 days');
+    });
+
+    it('should keep the surrounding runs balanced when a quote ends inside one', async () => {
+      await runtime.initPage({ markdown: 'Payment within **90 days**. Thanks.' });
+      await moment();
+
+      // The quote starts outside the bold run and ends inside it, so the splice
+      // cuts the run in half. Keeping only `</b>` leaves unbalanced LiteXML,
+      // which the editor drops silently — the text would be gone for good.
+      const result = await runtime.replaceText({ searchText: 'within 90', newText: '30' });
+      await moment();
+
+      expect(result.replacementCount).toBe(1);
+
+      const xml = editor.getDocument('litexml') as unknown as string;
+
+      // A dropped pair would leave one tag behind and the editor would discard
+      // the node, so check the run survived whole before looking at the text.
+      expect(xml.split('<span').length).toBe(xml.split('</span>').length);
+      expect(
+        xml
+          .replaceAll(/<[^>]+>/g, '')
+          .replaceAll(/\s+([.,!?])/g, '$1')
+          .replaceAll(/\s+/g, ' ')
+          .trim(),
+      ).toContain('Payment 30 days. Thanks.');
+    });
+
+    it('should keep the surrounding runs balanced when a quote starts inside one', async () => {
+      await runtime.initPage({ markdown: 'Payment within **90 days**. Thanks.' });
+      await moment();
+
+      const result = await runtime.replaceText({
+        searchText: '90 days. Thanks.',
+        newText: '30 days. Thanks.',
+      });
+      await moment();
+
+      expect(result.replacementCount).toBe(1);
+
+      const xml = editor.getDocument('litexml') as unknown as string;
+
+      expect(xml.split('<span').length).toBe(xml.split('</span>').length);
+      expect(
+        xml
+          .replaceAll(/<[^>]+>/g, '')
+          .replaceAll(/\s+([.,!?])/g, '$1')
+          .replaceAll(/\s+/g, ' ')
+          .trim(),
+      ).toContain('Payment within 30 days. Thanks.');
+    });
+
+    it('should leave the runs well-formed when a quote cuts one in half', () => {
+      // The editor parses LiteXML as XML and drops a fragment that is not
+      // well-formed, so the guard against a half-removed tag pair belongs on
+      // the markup itself, not only on the text the editor reports back.
+      // `<b>` carries no run wrapper here, so the splice drops its opening tag
+      // and leaves `</b>` behind — the shape the review flagged.
+      const content = 'Payment within <b>90 days</b>. Thanks.';
+
+      const { count, newContent } = (runtime as any).replaceTextInContent(
+        content,
+        'within 90',
+        '30',
+        false,
+      );
+
+      expect(count).toBe(1);
+      expect(findMalformedLiteXML(newContent)).toBeUndefined();
+      expect(newContent).toContain('Payment 30');
+      expect(newContent).toContain('days');
     });
   });
 
