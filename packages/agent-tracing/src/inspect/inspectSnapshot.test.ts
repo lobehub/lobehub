@@ -46,6 +46,25 @@ describe('inspectSnapshot', () => {
     expect(JSON.parse(inspectSnapshot(snap, { json: true, step: '1' })).stepIndex).toBe(1);
   });
 
+  it('renders a targeted step with its resolved context engine snapshot', () => {
+    const hi = { content: 'hi', role: 'user' };
+    const snap = snapshot([
+      {
+        contextEngine: {
+          inputRefs: { toolCount: 't' },
+          outputRef: 'n',
+          pool: { hi, n: { refs: ['hi'] }, t: 2 },
+        },
+      },
+      { contextEngine: {} },
+    ]);
+
+    expect(JSON.parse(inspectSnapshot(snap, { json: true, step: '1' })).contextEngine).toEqual({
+      input: { toolCount: 2 },
+      output: [hi],
+    });
+  });
+
   it('defaults the step-scoped views to step 0', () => {
     const snap = snapshot([withSystemRole('first'), withSystemRole('second')]);
     expect(JSON.parse(inspectSnapshot(snap, { json: true, systemRole: true }))).toBe('first');

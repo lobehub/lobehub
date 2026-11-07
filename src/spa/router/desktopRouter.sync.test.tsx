@@ -23,6 +23,7 @@ import SettingsPageSkeleton from '@/components/Skeleton/Settings/Page';
 import ProviderSettingsSkeleton, {
   ProviderDetailSkeleton,
 } from '@/components/Skeleton/Settings/Provider';
+import { getSettingsTabSkeleton } from '@/components/Skeleton/Settings/tabs';
 import { createSurfaceSkeleton } from '@/components/Skeleton/Surface';
 import TasksSkeleton from '@/components/Skeleton/Tasks';
 import TopicsSkeleton from '@/components/Skeleton/Topics';
@@ -293,7 +294,7 @@ describe('desktop router shared definition', () => {
   );
 
   it.each(mainAreaVariants)(
-    '%s personal devices list and detail use their own skeletons, not the settings form',
+    '%s personal devices list and detail resolve the devices tab skeleton',
     (_, factory) => {
       for (const [url, leaf] of [
         ['/settings/devices', 'devices'],
@@ -307,9 +308,11 @@ describe('desktop router shared definition', () => {
 
         expect(matches?.at(-1)?.route.path).toBe(leaf);
         expect(handle.settingsTab).toBe('devices');
-        expect(handle.meta?.Skeleton).toBeDefined();
-        expect(handle.meta?.Skeleton).not.toBe(SettingsPageSkeleton);
+        // The settings page skeleton picks the devices entry by pathname, so the
+        // explicit routes render the card grid, not the generic settings form.
+        expect(handle.meta?.Skeleton).toBe(SettingsPageSkeleton);
       }
+      expect(getSettingsTabSkeleton('devices')).toBeDefined();
     },
   );
 

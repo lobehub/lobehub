@@ -1,8 +1,9 @@
 import type { LobeChatDatabase } from '@/database/type';
+import type { BotWakeConfig } from '@/server/services/conversationWake/types';
 
 import type { CreateDefaultAgentSignalPoliciesOptions } from '../policies';
 import type { AgentSignalMiddleware } from '../runtime/middleware';
-import type { BotWakeConfig, CreateBotWakePolicyOptions } from './botWake';
+import type { CreateBotWakePolicyOptions } from './botWake';
 
 export const AGENT_SIGNAL_SCENARIO_IDS = {
   botWake: 'bot-wake',

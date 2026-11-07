@@ -44,7 +44,8 @@ const TelegramDetail = memo<TelegramDetailProps>(({ appId, botUsername, name, on
 
   if (data.error && data.isInitialLoading)
     return <AsyncError error={data.error} variant={'block'} onRetry={data.mutate} />;
-  if (data.isInitialLoading) return <IntegrationDetailSkeleton withNestedContent />;
+  if (data.isInitialLoading)
+    return <IntegrationDetailSkeleton withNestedContent platform={'telegram'} />;
 
   const { links } = data;
   const hasLinks = links.length > 0;

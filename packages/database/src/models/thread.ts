@@ -1,6 +1,6 @@
 import type { CreateThreadParams, ThreadMetadata } from '@lobechat/types';
 import { RequestTrigger, ThreadStatus } from '@lobechat/types';
-import { and, desc, eq, isNull, notExists, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, notExists, sql } from 'drizzle-orm';
 
 import type { ThreadItem } from '../schemas';
 import { agentOperations, messages, threads } from '../schemas';
@@ -138,6 +138,8 @@ export class ThreadModel {
           // Internal Agent Signal and onboarding Understanding runs create
           // isolation threads that must stay out of the user-facing sub-agent
           // attachment list. Ordinary onboarding threads remain visible.
+          // Sub-agents of a task-result wakeup inherit its `task_callback`
+          // trigger: server-started follow-ups, kept out of the list the same way.
           notExists(
             this.db
               .select({ id: agentOperations.id })
@@ -145,7 +147,10 @@ export class ThreadModel {
               .where(
                 and(
                   eq(agentOperations.threadId, threads.id),
-                  eq(agentOperations.trigger, RequestTrigger.AgentSignal),
+                  inArray(agentOperations.trigger, [
+                    RequestTrigger.AgentSignal,
+                    RequestTrigger.TaskCallback,
+                  ]),
                 ),
               ),
           ),

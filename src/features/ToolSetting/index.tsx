@@ -6,7 +6,9 @@ import { useTranslation } from 'react-i18next';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
 import AutoSaveHint from '@/components/Editor/AutoSaveHint';
+import { ToolsChannelsSkeleton } from '@/components/Skeleton/Settings/tabs/Tools';
 import SettingHeader from '@/features/Settings/features/SettingHeader';
+import SettingsPageActions from '@/features/Settings/features/SettingsPageActions';
 import { useSaveState } from '@/hooks/useSaveState';
 import { useClientDataSWR } from '@/libs/swr';
 import { searchService } from '@/services/search';
@@ -16,7 +18,7 @@ import ChannelSection from './ChannelSection';
 
 const FETCH_AVAILABLE_CHANNELS_KEY = 'FETCH_AVAILABLE_WEB_BROWSING_CHANNELS';
 
-const ToolSetting = memo(() => {
+const ToolSetting = memo<{ showSettingHeader?: boolean }>(({ showSettingHeader = true }) => {
   const { t } = useTranslation('setting');
   const { status: saveStatus, lastSavedAt, save, retry } = useSaveState();
 
@@ -37,18 +39,31 @@ const ToolSetting = memo(() => {
     s.refreshUserState,
   ]);
 
+  const saveHint = (
+    <AutoSaveHint lastUpdatedTime={lastSavedAt} saveStatus={saveStatus} onRetry={retry} />
+  );
+
   return (
     <>
-      <SettingHeader
-        title={t('tab.tools')}
-        extra={
-          <AutoSaveHint lastUpdatedTime={lastSavedAt} saveStatus={saveStatus} onRetry={retry} />
-        }
-      />
+      {showSettingHeader ? (
+        <SettingHeader extra={saveHint} title={t('tab.tools')} />
+      ) : (
+        <SettingsPageActions
+          // Mobile has no shared header slot; keep the save status visible above the form.
+          fallback={
+            <Flexbox horizontal justify={'flex-end'}>
+              {saveHint}
+            </Flexbox>
+          }
+        >
+          {saveHint}
+        </SettingsPageActions>
+      )}
       <AsyncBoundary
         data={isUserStateInit ? data : undefined}
         error={error ?? (isUserStateInit ? undefined : isUserStateInitError)}
         isLoading={isLoading || !isUserStateInit}
+        loading={<ToolsChannelsSkeleton />}
         onRetry={() => {
           void mutate();
           void refreshUserState();

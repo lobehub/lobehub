@@ -127,6 +127,7 @@
   "workingDirectory.refreshFolders": "Aggiorna cartelle",
   "workingDirectory.refreshGitStatus": "Aggiorna stato ramo e PR",
   "workingDirectory.removeRecent": "Rimuovi dai recenti",
+  "workingDirectory.removeRecentFailed": "Impossibile rimuovere questa cartella. Riprova.",
   "workingDirectory.removeWorktreeAction": "Elimina worktree",
   "workingDirectory.removeWorktreeConfirm": "Eliminare il worktree “{{name}}”? Questo rimuove la directory del worktree ma mantiene il suo ramo. Git rifiuterà se ci sono modifiche non salvate.",
   "workingDirectory.removeWorktreeFailed": "Eliminazione del worktree fallita",

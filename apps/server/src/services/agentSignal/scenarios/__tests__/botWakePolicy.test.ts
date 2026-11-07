@@ -1,9 +1,10 @@
 // @vitest-environment node
 import { createSourceEvent } from '@lobechat/agent-signal/source';
 
+import type { WakePolicy, WakeStateSnapshot } from '@/server/services/conversationWake/types';
+
 import { createAgentSignalRuntime } from '../../runtime/AgentSignalRuntime';
 import { createBotWakePolicy } from '../botWake/policy';
-import type { WakePolicy, WakeStateSnapshot } from '../botWake/types';
 
 const denyAll: WakePolicy = {
   evaluate: () => ({ confidence: 1, reason: 'quiet-hours', tags: ['t'], verdict: 'deny' }),

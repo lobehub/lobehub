@@ -1931,9 +1931,6 @@ When I am ___, I need ___
   'systemAgent.generationTopic.title': 'AI Image Topic Naming',
   'systemAgent.helpInfo':
     'When creating a new agent, the default agent settings will be used as preset values.',
-  'systemAgent.historyCompress.label': 'Model',
-  'systemAgent.historyCompress.modelDesc': 'Model used to compress conversation history',
-  'systemAgent.historyCompress.title': 'Conversation History Compression',
   'systemAgent.inputCompletion.label': 'Model',
   'systemAgent.inputCompletion.modelDesc':
     'Suggests text while you type. When enabled, this model generates the suggestions.',

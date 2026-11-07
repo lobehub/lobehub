@@ -62,7 +62,8 @@ const DiscordDetail = memo<DiscordDetailProps>(({ appId, botUsername, name, onBa
 
   if (data.error && data.isInitialLoading)
     return <AsyncError error={data.error} variant={'block'} onRetry={data.mutate} />;
-  if (data.isInitialLoading) return <IntegrationDetailSkeleton withNestedContent />;
+  if (data.isInitialLoading)
+    return <IntegrationDetailSkeleton withNestedContent platform={'discord'} />;
 
   const { installations, links } = data;
   const hasInstallations = installations.length > 0;

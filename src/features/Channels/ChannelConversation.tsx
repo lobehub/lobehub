@@ -163,7 +163,7 @@ const Timeline = ({
               }}
               {...stylex.props(styles.feed)}
             >
-              <WideScreenContainer fullWidth paddingInline={24}>
+              <WideScreenContainer fullWidth paddingInline={16}>
                 {(detail.hasMore || before !== undefined) && (
                   <Flexbox horizontal align="center" gap={8} justify="center" paddingBlock={8}>
                     <Button
@@ -212,9 +212,7 @@ const Timeline = ({
                         role="separator"
                         {...stylex.props(styles.dateDivider)}
                       >
-                        <span {...stylex.props(styles.dateLine)} />
                         <time dateTime={date.toISOString()}>{timeFormats.date.format(date)}</time>
-                        <span {...stylex.props(styles.dateLine)} />
                       </div>
                     )}
                     {item.kind === 'event' ? (
@@ -223,6 +221,7 @@ const Timeline = ({
                       <ChannelMessage
                         continuation={continuation}
                         message={item.message}
+                        pending={outgoingById.get(item.message.id)!.status === 'sending'}
                         threadId={threadId}
                         delivery={
                           <OutgoingStatus

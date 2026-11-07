@@ -1,6 +1,5 @@
-import { Block, Flexbox } from '@lobehub/ui';
-import { Text } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { Block, Flexbox, Text } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import type { CSSProperties } from 'react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -10,14 +9,9 @@ import { useChatStore } from '@/store/chat';
 import { WebBrowsingManifest } from '../../../../manifest';
 import { EngineAvatarGroup } from '../../../components/EngineAvatar';
 
-const styles = createStaticStyles(({ css }) => ({
-  container: css`
-    cursor: pointer;
-    padding: 8px;
-    font-size: 12px;
-    color: initial;
-  `,
-}));
+const styles = stylex.create({
+  container: { cursor: 'pointer', padding: '8px', fontSize: '12px', color: 'initial' },
+});
 
 interface ShowMoreProps {
   engines: string[];
@@ -32,7 +26,7 @@ const ShowMore = memo<ShowMoreProps>(({ style, messageId, engines, resultsNumber
 
   return (
     <Block
-      className={styles.container}
+      className={stylex.props(styles.container).className}
       gap={2}
       justify={'space-between'}
       style={style}

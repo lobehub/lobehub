@@ -1,5 +1,6 @@
 import type { LobeAgentAgencyConfig, LobeAgentConfig } from './agent';
 import { getWorkingDirEffectivePath } from './device';
+import type { BotWakeKind } from './signal';
 
 /**
  * Channel: a shared conversation where people and Agents talk together.
@@ -112,6 +113,11 @@ export interface ChannelMemberConfig {
    * creator, so a workspace channel can use another member's device after its owner approves.
    */
   deviceOwnerId?: string;
+  /**
+   * This member's own reply strategy, over the channel's `ChannelConfig.wake`. Parsed by the
+   * shared wake schema; never part of the execution environment.
+   */
+  wake?: Record<string, unknown>;
   /** Set only from a device's canonical-path acknowledgement before claiming work. */
   workingDirectory?: string;
 }
@@ -176,8 +182,34 @@ export type ChannelRoutingMode = 'decision' | 'fallback';
  * - `completed`: the final reply was published.
  * - `failed`: ended without a publishable reply, or its execution failed or became unknown.
  * - `cancelled`: stopped, or it can never run (requester left, environment switched).
+ * - `silent`: a `followup` wake the Agent chose not to answer (`NO_REPLY`). Settled, not failed.
  */
-export type ChannelJobStatus = 'cancelled' | 'completed' | 'failed' | 'queued' | 'running';
+export type ChannelJobStatus =
+  'cancelled' | 'completed' | 'failed' | 'queued' | 'running' | 'silent';
+
+/**
+ * Why a job was woken, frozen when it is delivered.
+ *
+ * - `mention`: someone addressed the member (an @mention, a reply, the paired Agent of a direct
+ *   conversation) or routing chose it; it owes an answer.
+ * - `followup`: nobody addressed it; speaking is optional and it may end in `silent`.
+ *
+ * The details are what the woken Agent is told about the wake.
+ */
+export interface ChannelJobWake {
+  /** The message falls within the member's duties (`helpful`: it can settle an open question). */
+  duty?: { helpful?: boolean; matched?: string };
+  /** The member spoke here lately and this message followed. */
+  followup?: {
+    participants: { isBot: boolean; isOwner: boolean; name: string }[];
+    score?: number;
+  };
+  kind: BotWakeKind;
+  /** The message says the member's name without @-mentioning it. */
+  named?: boolean;
+  /** The rule that woke it, as the decision row records it. */
+  reason?: string;
+}
 
 /** Why a queued job cannot start yet. Typed so clients never infer it from error text. */
 export type ChannelJobBlockCode =

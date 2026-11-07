@@ -1,4 +1,4 @@
-import { workingDirConfigSchema } from '@lobechat/types';
+import { isManagedCloudDevice, workingDirConfigSchema } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -359,30 +359,36 @@ export const workspaceRouter = router({
         });
       }
       await assertDeviceNotBoundToFixedAgent(model, input.deviceId);
-      // Tell a live device to drop its workspace connection and stop
-      // auto-reconnecting, so removal doesn't leave an online ghost. For most
-      // rows this stays best-effort — an offline device simply stops resolving.
-      const unenrolled = await deviceGateway.unenrollWorkspace({
-        deviceId: input.deviceId,
-        userId: ctx.userId,
-        workspaceId: ctx.workspaceId,
-      });
-      // But never delete the row under a still-live socket that did not
-      // acknowledge the unenroll (old client without the handler, RPC error):
-      // for a PRIVATE row that would resurface the machine to other members
-      // (the row is the only thing `queryWorkspaceHiddenDeviceIds` hides it
-      // by), and for ANY row it leaves an unregistered ghost that members can
-      // still dispatch to yet can no longer remove — there is no row left to
-      // delete. Fail the removal while the socket is demonstrably alive; a
-      // dead socket can't ghost, so an offline device still deletes fine.
-      if (!unenrolled.success) {
-        const online = await deviceGateway.queryDeviceList(ctx.userId, ctx.workspaceId);
-        if (online.some((d) => d.deviceId === input.deviceId)) {
-          throw new TRPCError({
-            code: 'PRECONDITION_FAILED',
-            message:
-              'The device is still connected but did not acknowledge the unenroll — retry once it has disconnected or updated its client.',
-          });
+      // A managed cloud device skips the unenroll handshake. Its agent does
+      // not handle the unenroll RPC, so it would never acknowledge. Deleting
+      // the row reports the removal to the deployment, which retires the
+      // device and its credentials, so it cannot reconnect as a ghost.
+      if (!isManagedCloudDevice(row)) {
+        // Tell a live device to drop its workspace connection and stop
+        // auto-reconnecting, so removal doesn't leave an online ghost. For most
+        // rows this stays best-effort — an offline device simply stops resolving.
+        const unenrolled = await deviceGateway.unenrollWorkspace({
+          deviceId: input.deviceId,
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        });
+        // But never delete the row under a still-live socket that did not
+        // acknowledge the unenroll (old client without the handler, RPC error):
+        // for a PRIVATE row that would resurface the machine to other members
+        // (the row is the only thing `queryWorkspaceHiddenDeviceIds` hides it
+        // by), and for ANY row it leaves an unregistered ghost that members can
+        // still dispatch to yet can no longer remove — there is no row left to
+        // delete. Fail the removal while the socket is demonstrably alive; a
+        // dead socket can't ghost, so an offline device still deletes fine.
+        if (!unenrolled.success) {
+          const online = await deviceGateway.queryDeviceList(ctx.userId, ctx.workspaceId);
+          if (online.some((d) => d.deviceId === input.deviceId)) {
+            throw new TRPCError({
+              code: 'PRECONDITION_FAILED',
+              message:
+                'The device is still connected but did not acknowledge the unenroll — retry once it has disconnected or updated its client.',
+            });
+          }
         }
       }
       const removed = await model.deleteWorkspaceDevice(input.deviceId);
