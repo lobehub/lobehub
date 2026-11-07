@@ -256,6 +256,22 @@ describe.each(['single', 'batch'] as const)('%s tool step redelivery', (mode) =>
     expect(f.stored).toHaveLength(1);
   });
 
+  it('reuses a written result whose state stays pending while its work continues', async () => {
+    // A background sub-agent's start receipt: the call returned, but the row
+    // keeps `status: pending` until the sub-agent reports back.
+    const f = fixture([
+      {
+        content: 'Started in the background.',
+        metadata: { toolExecutionTimeMs: 5, toolResultSuccess: true },
+        pluginState: { background: true, status: 'pending' },
+      },
+    ]);
+    await execute(f);
+    expect(f.tools.run).not.toHaveBeenCalled();
+    expect(f.messages.updateToolMessage).not.toHaveBeenCalled();
+    expect(f.stored[0].pluginState).toEqual({ background: true, status: 'pending' });
+  });
+
   it('does not reuse a provider call id from another assistant', async () => {
     const f = fixture([{ content: 'unrelated result', parentId: 'other-assistant' }]);
     await execute(f);
