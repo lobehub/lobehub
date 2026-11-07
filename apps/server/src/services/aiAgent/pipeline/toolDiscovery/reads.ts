@@ -1,4 +1,5 @@
 import type { DeviceAttachment } from '@lobechat/builtin-tool-remote-device';
+import { hasCallableMcpEndpoint, isMarketplaceInstallCompleted } from '@lobechat/const';
 import type { LobeToolManifest } from '@lobechat/context-engine';
 import { FILE_PREVIEW_CHARS, isOversizedFileContent } from '@lobechat/prompts';
 import type { FrozenCredentialFacts } from '@lobechat/types';
@@ -115,7 +116,11 @@ const refreshConnectorTokens = async (
   );
 };
 
-/** Base marketplace OAuth rows require installation; agent-owned copies are independent. */
+/**
+ * Base marketplace rows with an endpoint require a finished install (the
+ * connector's own mark, or a pre-connector plugin row); agent-owned copies are
+ * independent.
+ */
 const filterInstalledMarketplaceConnectors = (
   connectors: DecryptedConnector[],
   installedIds: Set<string>,
@@ -124,7 +129,8 @@ const filterInstalledMarketplaceConnectors = (
     (connector) =>
       !!connector.agentId ||
       connector.sourceType !== 'marketplace' ||
-      !connector.mcpServerUrl ||
+      !hasCallableMcpEndpoint(connector) ||
+      isMarketplaceInstallCompleted(connector.metadata) ||
       installedIds.has(connector.identifier),
   );
 
@@ -160,14 +166,14 @@ const readConnectors = async (
     // must not make an unfinished marketplace install callable by a server run.
     const connectors = filterInstalledMarketplaceConnectors(resolved, installedIds);
 
-    // Only connectors WITH a real MCP endpoint (mcpServerUrl or stdio) can replace plugins in the
+    // Only connectors WITH a real MCP endpoint (mcpServerUrl, stdio or cloud) can replace plugins in the
     // manifest. Connectors WITHOUT an endpoint (e.g. Lobehub/Composio OAuth skills synced via
     // syncToolsFromClient) must continue using their original plugin executor path — otherwise
     // after humanIntervention approval the runtime tries to call mcpServerUrl='' and returns empty.
     const connectorsMcp = await refreshConnectorTokens(
       deps,
       connectorGateKeeper,
-      connectors.filter((c) => c.mcpServerUrl || c.mcpConnectionType === 'stdio'),
+      connectors.filter(hasCallableMcpEndpoint),
       onRefreshTimeout,
     );
 
@@ -242,7 +248,7 @@ const readDiscoverableConnectors = async (
       resolved = await deps.connectorModel.resolveAll(ctx.resolvedAgentId, gateKeeper);
     }
     const connectorsMcp = filterInstalledMarketplaceConnectors(resolved, installedIds).filter(
-      (c) => !candidates.has(c.identifier) && (c.mcpServerUrl || c.mcpConnectionType === 'stdio'),
+      (c) => !candidates.has(c.identifier) && hasCallableMcpEndpoint(c),
     );
     if (connectorsMcp.length === 0) return none;
 

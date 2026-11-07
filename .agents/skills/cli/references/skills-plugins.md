@@ -113,7 +113,7 @@ lh skill read-resource <id> <path>
 
 ## Legacy Plugin Management (`lh legacy-plugin`)
 
-Install and manage legacy 1.0 plugins stored in `user_installed_plugins`. For MCP connectors, use `lh connector`.
+List, update and uninstall legacy 1.0 plugins stored in `user_installed_plugins`. New plugins cannot be created here: add an MCP server with `lh connector add --url <url>`, and re-sync an existing connection with `lh connector refresh <idOrIdentifier>`.
 
 **Source**: `apps/cli/src/commands/plugin.ts`
 
@@ -124,19 +124,6 @@ lh legacy-plugin list [--json [fields]]
 ```
 
 **Table columns**: ID, IDENTIFIER, TYPE, TITLE
-
-### `lh legacy-plugin install`
-
-```bash
-lh legacy-plugin install -i <id> --manifest <json> [--type <type>] [--settings <json>]
-```
-
-| Option                  | Description                | Required               |
-| ----------------------- | -------------------------- | ---------------------- |
-| `-i, --identifier <id>` | Plugin identifier          | Yes                    |
-| `--manifest <json>`     | Plugin manifest JSON       | Yes                    |
-| `--type <type>`         | `plugin` or `customPlugin` | No (default: `plugin`) |
-| `--settings <json>`     | Plugin settings JSON       | No                     |
 
 ### `lh legacy-plugin uninstall <id>`
 

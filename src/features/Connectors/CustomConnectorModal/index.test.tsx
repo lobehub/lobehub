@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import CustomConnectorModal from './index';
 
 const mocks = vi.hoisted(() => ({
+  onSave: undefined as undefined | ((value: unknown) => Promise<void>),
   state: {
     connector: undefined as unknown,
     createConnector: vi.fn(),
@@ -39,9 +40,10 @@ vi.mock('@/store/tool/slices/connector', () => ({
 // The form itself is a heavy antd form; what matters here is the value the
 // modal seeds it with.
 vi.mock('@/features/PluginDevModal', () => ({
-  default: ({ value }: { value?: unknown }) => (
-    <div data-testid="seed">{JSON.stringify(value ?? null)}</div>
-  ),
+  default: ({ onSave, value }: { onSave?: (value: unknown) => Promise<void>; value?: unknown }) => {
+    mocks.onSave = onSave;
+    return <div data-testid="seed">{JSON.stringify(value ?? null)}</div>;
+  },
 }));
 
 vi.mock('@/utils/connectorOAuth', () => ({ waitForConnectorOAuth: vi.fn() }));
@@ -178,5 +180,71 @@ describe('CustomConnectorModal OAuth client pre-fill', () => {
     const auth = await seedFor({ clientId, scheme });
     expect(auth.type).toBe('oauth2');
     expect(auth.clientId).toBeUndefined();
+  });
+});
+
+describe('CustomConnectorModal edit save', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.state.connector = {
+      id: 'c1',
+      identifier: 'my-mcp',
+      mcpConnectionType: 'stdio',
+      mcpServerUrl: null,
+      metadata: { description: 'My MCP' },
+      name: 'My MCP',
+      sourceType: 'marketplace',
+    };
+    mocks.state.getConnectorForEdit.mockResolvedValue({
+      credentials: null,
+      mcpStdioConfig: { args: ['-y'], command: 'npx', env: { API_KEY: 'old' } },
+      metadata: { description: 'My MCP' },
+      oidcConfig: null,
+    });
+  });
+
+  it('persists an edited stdio command and lists its tools again', async () => {
+    render(<CustomConnectorModal open connectorId="c1" onClose={() => {}} />);
+    await waitFor(() => expect(screen.getByTestId('seed').textContent).not.toBe('null'));
+
+    await mocks.onSave!({
+      customParams: {
+        mcp: { args: ['--port', '1'], command: ' uvx ', env: { API_KEY: 'new' }, type: 'stdio' },
+      },
+      identifier: 'my-mcp',
+    });
+
+    expect(mocks.state.updateConnector).toHaveBeenCalledWith(
+      'c1',
+      expect.objectContaining({
+        mcpConnectionType: 'stdio',
+        mcpStdioConfig: { args: ['--port', '1'], command: 'uvx', env: { API_KEY: 'new' } },
+      }),
+    );
+    expect(mocks.state.syncConnectorTools).toHaveBeenCalledWith('c1');
+  });
+
+  it('lists the tools of an edited HTTP endpoint again', async () => {
+    mocks.state.connector = {
+      ...(mocks.state.connector as object),
+      mcpConnectionType: 'http',
+      mcpServerUrl: 'https://old.example.com',
+    };
+    render(<CustomConnectorModal open connectorId="c1" onClose={() => {}} />);
+    await waitFor(() => expect(screen.getByTestId('seed').textContent).not.toBe('null'));
+
+    await mocks.onSave!({
+      customParams: { mcp: { type: 'http', url: 'https://new.example.com' } },
+      identifier: 'my-mcp',
+    });
+
+    expect(mocks.state.updateConnector).toHaveBeenCalledWith(
+      'c1',
+      expect.objectContaining({
+        mcpConnectionType: 'http',
+        mcpServerUrl: 'https://new.example.com',
+      }),
+    );
+    expect(mocks.state.syncConnectorTools).toHaveBeenCalledWith('c1');
   });
 });

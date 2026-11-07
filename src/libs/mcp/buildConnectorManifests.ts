@@ -66,6 +66,17 @@ function buildMcpParams(connector: DecryptedConnector) {
   const customHeaders = connector.metadata?.customHeaders as Record<string, string> | undefined;
   const mergedHeaders = headers || customHeaders ? { ...headers, ...customHeaders } : undefined;
 
+  // A marketplace stdio server the market hosts: the tool executor calls it
+  // through the market's cloud gateway by identifier.
+  if (connector.mcpConnectionType === 'cloud') {
+    return {
+      headers: mergedHeaders,
+      name: connector.identifier,
+      type: 'cloud' as const,
+      url: (connector.metadata?.cloudEndPoint as string | undefined) ?? '',
+    };
+  }
+
   return {
     auth,
     headers: mergedHeaders,

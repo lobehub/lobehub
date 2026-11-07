@@ -64,7 +64,7 @@ run commands.
 | \`lh skill\` | Skill management (install, create, manage) | \`references/skill\` |
 | \`lh model\` | AI model management | \`references/model\` |
 | \`lh provider\` | AI provider management | \`references/provider\` |
-| \`lh legacy-plugin\` | Legacy 1.0 plugin management | \`references/plugin\` |
+| \`lh legacy-plugin\` / \`lh connector\` | Legacy 1.0 plugins; install MCP servers as connectors | \`references/plugin\` |
 | \`lh bot\` | Bot integration management (Discord, Slack, Telegram, etc.) | \`references/bot\` |
 | \`lh widget\` / \`lh dashboard\` | Monitoring widgets (sandboxed scripts) and the dashboards they sit on | \`references/dashboard\` |
 | \`lh eval\` | Evaluation workflow management | \`references/eval\` |

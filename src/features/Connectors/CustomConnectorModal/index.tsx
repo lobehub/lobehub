@@ -266,6 +266,16 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
 
         if (newUrl !== undefined) patch.mcpServerUrl = newUrl;
 
+        // The transport and a stdio command are edited here too, not only the URL.
+        patch.mcpConnectionType = isHttp ? 'http' : 'stdio';
+        if (!isHttp) {
+          patch.mcpStdioConfig = {
+            args: mcp.args ?? [],
+            command: (mcp.command ?? '').trim(),
+            env: cleanRecord(mcp.env),
+          };
+        }
+
         // Custom headers live in metadata (independent of the auth credential and
         // of the server URL), so always re-sync them from the form. Merge into the
         // existing metadata — a jsonb update replaces the whole column, so other
@@ -305,6 +315,9 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
         }
 
         await updateConnector(connectorId, patch);
+        // A changed endpoint, command or credential can expose different tools:
+        // list them again. An OAuth connector is synced by its callback instead.
+        if (!(isHttp && authType === 'oauth2')) await syncConnectorTools(connectorId);
 
         if (authType === 'oauth2' && isHttp) {
           const popup = ctx?.oauthPopup;

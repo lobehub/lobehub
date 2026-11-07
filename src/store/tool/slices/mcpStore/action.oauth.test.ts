@@ -4,7 +4,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as ReplicaModule from '@/libs/replica';
 import { discoverService } from '@/services/discover';
 import { mcpService } from '@/services/mcp';
-import { pluginService } from '@/services/plugin';
 import type { ToolStore } from '@/store/tool/store';
 import { MCPInstallStep } from '@/types/plugins';
 import type * as ConnectorOAuthModule from '@/utils/connectorOAuth';
@@ -31,7 +30,6 @@ vi.mock('@/services/discover', () => ({
   },
 }));
 vi.mock('@/services/mcp', () => ({ mcpService: { getStreamableMcpServerManifest: vi.fn() } }));
-vi.mock('@/services/plugin', () => ({ pluginService: { installPlugin: vi.fn() } }));
 vi.mock('@/utils/sleep', () => ({ sleep: async () => {} }));
 vi.mock('@/utils/connectorOAuth', async (original) => ({
   ...(await original<typeof ConnectorOAuthModule>()),
@@ -88,13 +86,19 @@ beforeEach(() => {
     mcpInstallAbortControllers: {},
     connectors: [],
     installedPlugins: [],
-    createConnector: vi.fn().mockResolvedValue({ id: 'connector-1', isNew: true }),
+    createConnector: vi.fn(async () => {
+      state.connectors = [connected() as never];
+      return { id: 'connector-1', isNew: true };
+    }),
     deleteConnector: vi.fn().mockResolvedValue(undefined),
+    getConnectorForEdit: vi.fn(async () => connected()),
     startConnectorOAuth: vi.fn().mockResolvedValue('https://oauth.example/authorize'),
     fetchConnectors: vi.fn(async () => {
       state.connectors = [connected() as never];
     }),
     refreshPlugins: vi.fn().mockResolvedValue(undefined),
+    syncConnectorTools: vi.fn().mockResolvedValue(undefined),
+    updateConnector: vi.fn().mockResolvedValue(undefined),
     uninstallPlugin: vi.fn().mockResolvedValue(undefined),
     updateInstallLoadingState: vi.fn(),
     updateMCPInstallProgress: (id: string, progress: unknown) => {
@@ -111,7 +115,6 @@ beforeEach(() => {
     structuredClone(manifestData) as never,
   );
   vi.mocked(waitForConnectorOAuth).mockResolvedValue(undefined);
-  vi.mocked(pluginService.installPlugin).mockResolvedValue(undefined);
 });
 afterEach(() => vi.restoreAllMocks());
 
@@ -126,7 +129,7 @@ describe('marketplace OAuth MCP installation', () => {
       MCPInstallStep.AUTHORIZATION_REQUIRED,
     );
     expect(mcpService.getStreamableMcpServerManifest).not.toHaveBeenCalled();
-    expect(pluginService.installPlugin).not.toHaveBeenCalled();
+    expect(state.updateConnector).not.toHaveBeenCalled();
   });
 
   it('offers OAuth discovery when an unmarked endpoint returns an authorization challenge', async () => {
@@ -143,7 +146,7 @@ describe('marketplace OAuth MCP installation', () => {
       step: MCPInstallStep.AUTHORIZATION_REQUIRED,
       connection: { auth: { type: 'oauth2' } },
     });
-    expect(pluginService.installPlugin).not.toHaveBeenCalled();
+    expect(state.updateConnector).not.toHaveBeenCalled();
   });
 
   it('does not infer OAuth from an unrelated server failure', async () => {
@@ -158,15 +161,17 @@ describe('marketplace OAuth MCP installation', () => {
     expect(mcpStoreSelectors.isMCPInstalling('market-mcp')(state)).toBe(false);
   });
 
-  it('installs the synchronized tools only after successful OAuth without copying tokens to the plugin', async () => {
+  it('marks the authorized connector installed only after successful OAuth', async () => {
     await prepare();
     expect(await actions.authorizeMCPPlugin('market-mcp')).toBe(true);
     expect(state.startConnectorOAuth).toHaveBeenCalled();
     expect(waitForConnectorOAuth).toHaveBeenCalled();
-    const installed = vi.mocked(pluginService.installPlugin).mock.calls[0][0];
-    expect(installed.manifest.api.map((tool) => tool.name)).toEqual(['list_tasks']);
-    expect(installed.manifest.meta?.title).toBe('Market MCP');
-    expect(JSON.stringify(installed)).not.toContain('accessToken');
+    expect(state.updateConnector).toHaveBeenCalledWith('connector-1', {
+      metadata: { marketplaceInstalled: true },
+    });
+    // OAuth already synced the tools on the server; nothing else is written.
+    expect(state.syncConnectorTools).not.toHaveBeenCalled();
+    expect(state.refreshPlugins).not.toHaveBeenCalled();
     expect(state.mcpInstallProgress['market-mcp']).toBeUndefined();
     expect(popup.close).toHaveBeenCalled();
   });
@@ -176,7 +181,7 @@ describe('marketplace OAuth MCP installation', () => {
     vi.mocked(state.startConnectorOAuth).mockRejectedValueOnce(new Error('Registration rejected'));
     await actions.authorizeMCPPlugin('market-mcp');
     expect(state.deleteConnector).toHaveBeenCalledWith('connector-1');
-    expect(pluginService.installPlugin).not.toHaveBeenCalled();
+    expect(state.updateConnector).not.toHaveBeenCalled();
     expect(state.mcpInstallProgress['market-mcp']).toMatchObject({
       step: MCPInstallStep.AUTHORIZATION_REQUIRED,
       errorInfo: { message: 'Registration rejected' },
@@ -196,7 +201,7 @@ describe('marketplace OAuth MCP installation', () => {
     await prepare();
     vi.mocked(waitForConnectorOAuth).mockRejectedValueOnce(new ConnectorOAuthError('failed'));
     await actions.authorizeMCPPlugin('market-mcp');
-    expect(pluginService.installPlugin).not.toHaveBeenCalled();
+    expect(state.updateConnector).not.toHaveBeenCalled();
     expect(state.mcpInstallProgress['market-mcp']).toMatchObject({
       step: MCPInstallStep.AUTHORIZATION_REQUIRED,
       errorInfo: { message: 'failed' },
@@ -217,7 +222,7 @@ describe('marketplace OAuth MCP installation', () => {
     await actions.cancelInstallMCPPlugin('market-mcp');
     complete();
     await installation;
-    expect(pluginService.installPlugin).not.toHaveBeenCalled();
+    expect(state.updateConnector).not.toHaveBeenCalled();
     expect(state.mcpInstallProgress['market-mcp']).toBeUndefined();
   });
 
@@ -234,7 +239,7 @@ describe('marketplace OAuth MCP installation', () => {
     );
   });
 
-  it('keeps OAuth credentials and custom headers out of the installed plugin snapshot', async () => {
+  it('keeps OAuth credentials out of the install mark', async () => {
     const data = structuredClone(manifestData);
     Object.assign(data.deploymentOptions[0].connection.auth, {
       accessToken: 'private-access-token',
@@ -247,13 +252,13 @@ describe('marketplace OAuth MCP installation', () => {
     vi.mocked(discoverService.getMCPPluginManifest).mockResolvedValue(data as never);
     await prepare();
     await actions.authorizeMCPPlugin('market-mcp');
-    const installed = JSON.stringify(vi.mocked(pluginService.installPlugin).mock.calls[0][0]);
-    expect(installed).not.toContain('private-access-token');
-    expect(installed).not.toContain('private-client-secret');
-    expect(installed).not.toContain('private-header');
+    const marked = JSON.stringify(vi.mocked(state.updateConnector).mock.calls[0]);
+    expect(marked).toContain('marketplaceInstalled');
+    expect(marked).not.toContain('private-access-token');
+    expect(marked).not.toContain('private-client-secret');
   });
 
-  it('keeps regular HTTP installations on the existing direct connection path', async () => {
+  it('stores a regular HTTP installation as a marketplace connector without OAuth', async () => {
     const data = structuredClone(manifestData);
     data.deploymentOptions[0].connection.auth.type = 'none';
     vi.mocked(discoverService.getMCPPluginManifest).mockResolvedValue(data as never);
@@ -262,8 +267,21 @@ describe('marketplace OAuth MCP installation', () => {
       identifier: 'market-mcp',
     } as unknown as ToolManifest);
     expect(await actions.installMCPPlugin('market-mcp')).toBe(true);
-    expect(state.createConnector).not.toHaveBeenCalled();
     expect(mcpService.getStreamableMcpServerManifest).toHaveBeenCalled();
+    expect(state.startConnectorOAuth).not.toHaveBeenCalled();
+    expect(state.createConnector).toHaveBeenCalledWith(
+      expect.objectContaining({
+        identifier: 'market-mcp',
+        mcpConnectionType: 'http',
+        mcpServerUrl: 'https://oauth.example/mcp',
+        sourceType: 'marketplace',
+      }),
+    );
+    expect(vi.mocked(state.createConnector).mock.calls[0][0]).not.toHaveProperty('oidcConfig');
+    expect(state.syncConnectorTools).toHaveBeenCalledWith('connector-1');
+    expect(state.updateConnector).toHaveBeenCalledWith('connector-1', {
+      metadata: { marketplaceInstalled: true },
+    });
   });
 
   it('removes the server-held marketplace credential when uninstalling', async () => {
@@ -281,33 +299,29 @@ describe('marketplace OAuth MCP installation', () => {
     expect(state.uninstallPlugin).toHaveBeenCalledWith('market-mcp');
   });
 
-  it('uninstalls a regular MCP without removing any connector', async () => {
+  it('still removes the legacy row when the connector list cannot load', async () => {
     vi.mocked(state.fetchConnectors).mockRejectedValueOnce(new Error('Connector API unavailable'));
     await actions.uninstallMCPPlugin('market-mcp');
-    expect(state.fetchConnectors).not.toHaveBeenCalled();
     expect(state.deleteConnector).not.toHaveBeenCalled();
     expect(state.uninstallPlugin).toHaveBeenCalledWith('market-mcp');
   });
 
-  it('confirms cached plugin records before deciding whether to remove OAuth credentials', async () => {
-    state.installedPlugins = [
-      { identifier: 'market-mcp', customParams: { mcp: { type: 'http' } } } as never,
-    ];
-    state.installedPluginsReplica = { entries: { installed: { source: 'storage' } } } as never;
-    vi.mocked(state.refreshPlugins).mockImplementationOnce(async () => {
-      state.installedPluginsReplica = { entries: { installed: { source: 'server' } } } as never;
-      state.installedPlugins = [
-        {
-          identifier: 'market-mcp',
-          customParams: {
-            mcp: { type: 'http', url: 'https://oauth.example/mcp', auth: { type: 'oauth2' } },
-          },
-        } as never,
-      ];
+  it('removes a connector-only install', async () => {
+    vi.mocked(state.fetchConnectors).mockImplementationOnce(async () => {
+      state.connectors = [
+        { ...connected(), metadata: { marketplaceInstalled: true }, mcpConnectionType: 'cloud' },
+      ] as never;
     });
     await actions.uninstallMCPPlugin('market-mcp');
-    expect(state.refreshPlugins).toHaveBeenCalledOnce();
     expect(state.deleteConnector).toHaveBeenCalledWith('connector-1');
     expect(state.uninstallPlugin).toHaveBeenCalledWith('market-mcp');
+  });
+
+  it('keeps an endpoint-less marketplace tool projection', async () => {
+    vi.mocked(state.fetchConnectors).mockImplementationOnce(async () => {
+      state.connectors = [{ ...connected(), mcpConnectionType: null, mcpServerUrl: null }] as never;
+    });
+    await actions.uninstallMCPPlugin('market-mcp');
+    expect(state.deleteConnector).not.toHaveBeenCalled();
   });
 });
