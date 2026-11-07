@@ -307,6 +307,7 @@ const AgentEditorCanvas = memo<AgentEditorCanvasProps>(({ agentId }) => {
       prevStreamingRef.current = streamingSystemRole;
       try {
         const markdown = streamingSystemRole || '';
+        lastSyncedRoleRef.current = undefined;
         setProgrammaticDocument(editor, 'markdown', markdown, markdown);
       } catch {
         // Ignore errors during streaming updates
