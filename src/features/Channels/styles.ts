@@ -64,6 +64,8 @@ export const styles = stylex.create({
     },
   },
   highlightedMessage: { backgroundColor: cssVar.colorInfoBg },
+  /** A message still on its way shows faded instead of carrying a status line. */
+  pendingMessage: { opacity: 0.6 },
   messageAvatar: {
     position: 'absolute',
     insetBlockStart: 8,
