@@ -12,7 +12,7 @@ import type {
 } from '@lobechat/types';
 import type { ReplicaOptimisticToken } from 'local-replica';
 import type { ReplicaSlice, ReplicaSyncSchedule } from 'local-replica/zustand';
-import { useCallback, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 
 import { mutate } from '@/libs/swr';
 import { deviceKeys, localFileKeys } from '@/libs/swr/keys';
@@ -284,25 +284,44 @@ const useGitStatusRead = <T>(
    * before the checkout cannot repaint the previous branch.
    */
   const optimistic = useRef<{
-    key: string;
+    params: GitStatusParams;
     token: ReplicaOptimisticToken<GitStatusRead<T>>;
   } | null>(null);
 
+  // The overlay lives in the shared replica, but its token belongs to this
+  // hook. Releasing the owner must not leave other views painting its branch.
+  useEffect(
+    () => () => {
+      const pending = optimistic.current;
+      if (pending?.params === params) {
+        pending.token.rollback();
+        optimistic.current = null;
+      }
+    },
+    [params, slice],
+  );
+
   const mutate = useCallback(
     async (data?: T, options?: { revalidate?: boolean }) => {
-      if (!key) return;
+      if (!key || !params) return;
       if (data !== undefined) {
+        // A new checkout can start while the previous confirmation is still
+        // in flight. Retire its overlay before replacing the only token that
+        // can release it, otherwise settling the new checkout reveals it again.
+        optimistic.current?.token.rollback();
         // The checkout can fail, or the app can close before `onAfterCheckout`
         // revalidates: keep the value in an overlay so the next launch paints
         // the confirmed branch, not one that never landed.
         optimistic.current = {
-          key,
+          params,
           token: slice.beginOptimistic(key, (current) => ({ ...current, value: data })),
         };
       }
       if (data === undefined || options?.revalidate !== false) {
         const pending = optimistic.current;
-        if (pending && params) {
+        // Match the read's lifetime, not just its key: after navigating away
+        // and back, an old callback must not settle the new checkout's overlay.
+        if (pending?.params === params) {
           // A fresh read, not `revalidate`: a pre-checkout request may still be
           // in flight, and its response would settle the overlay back to the
           // branch the user just left.
@@ -314,17 +333,15 @@ const useGitStatusRead = <T>(
             // The head response already persisted the confirmed value. Roll back
             // to it: committing would re-apply the optimistic mutation to the
             // base, so a FAILED checkout would be re-persisted as if it landed.
-            if (optimistic.current === pending) {
-              pending.token.rollback();
-              optimistic.current = null;
-            }
+            pending.token.rollback();
+            if (optimistic.current === pending) optimistic.current = null;
           }
           return;
         }
         await revalidate();
       }
     },
-    [key, slice, revalidate],
+    [key, params, slice, revalidate],
   );
 
   const set = useCallback(
