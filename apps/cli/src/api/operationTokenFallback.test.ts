@@ -116,6 +116,19 @@ describe('operation token fallback', () => {
     expect(userScopedRoute).toHaveBeenCalledTimes(1);
   });
 
+  /** The run did carry a token, so "the run passed no sign-in" would misstate the cause. */
+  it('keeps the operation-token wording inside an agent run with no machine login', async () => {
+    vi.stubEnv('LOBEHUB_TOPIC_ID', 'tpc_1');
+    vi.mocked(getValidToken).mockResolvedValue({ status: 'no-login' });
+
+    await expect(query(userScopedRoute)).rejects.toThrow(OPERATION_TOKEN_REFUSAL);
+    expect(log.warn).toHaveBeenCalledWith(
+      expect.stringContaining('no stored login of the same account'),
+    );
+    expect(log.warn).not.toHaveBeenCalledWith(expect.stringContaining('passed no LobeHub sign-in'));
+    vi.unstubAllEnvs();
+  });
+
   it.each([
     { detail: 'HTTP 502', status: 'unavailable' },
     { detail: 'invalid_client', status: 'refused' },

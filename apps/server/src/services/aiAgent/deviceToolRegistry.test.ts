@@ -5,24 +5,9 @@ import { RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
 import { builtinTools } from '@lobechat/builtin-tools';
 import { describe, expect, it } from 'vitest';
 
-import {
-  buildAllowedBuiltinTools,
-  DEVICE_TOOL_IDENTIFIERS,
-  isDeviceToolIdentifier,
-} from './deviceToolRegistry';
+import { buildAllowedBuiltinTools, isDeviceToolIdentifier } from './deviceToolRegistry';
 
 describe('deviceToolRegistry', () => {
-  it('pins the device tool set to local-system, AUV, remote-device, and browser', () => {
-    expect([...DEVICE_TOOL_IDENTIFIERS].sort()).toEqual(
-      [
-        LocalSystemManifest.identifier,
-        RemoteDeviceManifest.identifier,
-        BrowserManifest.identifier,
-        AuvManifest.identifier,
-      ].sort(),
-    );
-  });
-
   it('isDeviceToolIdentifier recognises the device tools', () => {
     expect(isDeviceToolIdentifier(LocalSystemManifest.identifier)).toBe(true);
     expect(isDeviceToolIdentifier(RemoteDeviceManifest.identifier)).toBe(true);

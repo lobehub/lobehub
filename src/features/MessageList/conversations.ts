@@ -1,11 +1,22 @@
-import type { RecentItem, SidebarAgentItem } from '@lobechat/types';
+import type { ChannelListItem, RecentItem, SidebarAgentItem } from '@lobechat/types';
+
+import { markdownToTxt } from '@/utils/markdownToTxt';
+
+/** A plain left click; modified clicks keep the browser's own handling of the link. */
+export const isPlainClick = (
+  event: Pick<MouseEvent, 'altKey' | 'button' | 'ctrlKey' | 'metaKey' | 'shiftKey'>,
+) => event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey;
 
 export interface Conversation {
   /** Latest activity: the newer of the item itself and its latest topic. */
   activeAt: Date;
+  /** The agent's direct Channel, when the row opens it. Carries its own archive / trash actions. */
+  channel?: ChannelListItem;
   item: SidebarAgentItem;
   /** One-line preview from the latest topic (assistant reply, else title). */
   preview?: string;
+  /** Unread messages of the agent's direct Channel, when the row opens it. */
+  unread?: number;
 }
 
 export interface ConversationSections {
@@ -24,6 +35,17 @@ const recentOwnerId = (recent: RecentItem): string | undefined => {
 };
 
 const toTime = (value: Date | string) => new Date(value).getTime();
+
+const oneLine = (text: string | null | undefined) =>
+  (text ?? '').replaceAll(/\s+/g, ' ').trim() || undefined;
+
+/** A Channel's latest message as one line of plain text. */
+export const channelPreview = (channel: Pick<ChannelListItem, 'lastMessage'>) =>
+  channel.lastMessage ? oneLine(markdownToTxt(channel.lastMessage.content)) : undefined;
+
+/** When a Channel last had a message, else when it was opened. */
+export const channelActivity = (channel: ChannelListItem): Date =>
+  new Date(channel.lastMessage?.createdAt ?? channel.updatedAt ?? channel.createdAt);
 
 /** Newest topic per owner (agent id, or the group named by the topic route). */
 const topicsByOwner = (recents: RecentItem[] | undefined): Map<string, RecentItem> => {
@@ -65,6 +87,8 @@ export const latestActivity = (
 export const buildConversationSections = (
   items: SidebarAgentItem[],
   recents: RecentItem[] | undefined,
+  /** The person's direct Channel per agent id. A row that opens one shows that conversation. */
+  directChannels?: Map<string, ChannelListItem>,
 ): ConversationSections => {
   const latestByOwner = topicsByOwner(recents);
 
@@ -74,8 +98,21 @@ export const buildConversationSections = (
     if (seen.has(item.id)) continue;
     seen.add(item.id);
 
-    const latest = latestByOwner.get(item.id);
     const itemTime = toTime(item.updatedAt);
+    const direct = directChannels?.get(item.id);
+    if (direct) {
+      // The row opens the direct Channel, so its legacy topics no longer describe it.
+      conversations.push({
+        activeAt: new Date(Math.max(itemTime, channelActivity(direct).getTime())),
+        channel: direct,
+        item,
+        preview: channelPreview(direct) ?? oneLine(item.description),
+        unread: direct.unreadCount ?? 0,
+      });
+      continue;
+    }
+
+    const latest = latestByOwner.get(item.id);
     const latestTime = latest ? toTime(latest.updatedAt) : 0;
 
     conversations.push({
@@ -97,17 +134,20 @@ export const buildConversationSections = (
 };
 
 export type ConversationEntry =
-  { activeAt: Date; type: 'inbox' } | (Conversation & { type: 'item' });
+  | { activeAt: Date; type: 'inbox' }
+  | { activeAt: Date; channel: ChannelListItem; type: 'channel' }
+  | (Conversation & { type: 'item' });
 
 /**
  * One IM list like WeChat's: pinned rows first, then everything else by latest
- * activity. Lobe AI is an ordinary row placed by its own activity, not pinned
- * to the top; a name / title filter narrows the whole list.
+ * activity. Lobe AI and group Channels are ordinary rows placed by their own
+ * activity, not pinned to the top; a name / title filter narrows the whole list.
  */
 export const buildConversationEntries = (
   { pinned, recent }: ConversationSections,
   inbox: { activeAt?: Date; title: string } | undefined,
   query = '',
+  channels: ChannelListItem[] = [],
 ): ConversationEntry[] => {
   const keyword = query.trim().toLowerCase();
   const matches = (...names: (string | null | undefined)[]) =>
@@ -120,7 +160,16 @@ export const buildConversationEntries = (
       .filter((c) => matches(c.item.name, c.item.title))
       .map((c) => ({ ...c, type: 'item' as const }));
 
-  const rest = items(recent);
+  const rest = [
+    ...items(recent),
+    ...channels
+      .filter((channel) => matches(channel.title))
+      .map((channel) => ({
+        activeAt: channelActivity(channel),
+        channel,
+        type: 'channel' as const,
+      })),
+  ].sort((a, b) => b.activeAt.getTime() - a.activeAt.getTime());
   if (inbox && matches(inbox.title)) {
     const activeAt = inbox.activeAt ?? new Date(0);
     const index = rest.findIndex((entry) => entry.activeAt.getTime() < activeAt.getTime());

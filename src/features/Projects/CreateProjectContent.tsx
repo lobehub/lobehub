@@ -1,40 +1,24 @@
-import {
-  Button,
-  cssVar,
-  Flexbox,
-  Input,
-  ModalFooter,
-  Text,
-  toast,
-  useModalContext,
-} from '@lobehub/ui';
+import { Button, Flexbox, Input, ModalFooter, Text, toast, useModalContext } from '@lobehub/ui';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useHomeStore } from '@/store/home';
-import { homeAgentListSelectors } from '@/store/home/selectors';
 import { type ProjectListItem, useProjectStore } from '@/store/project';
 
 import {
   buildCreateProjectRequest,
+  DEFAULT_MAIN_AGENT_MODE,
   getCreateProjectInput,
   getProjectFieldSuggestions,
   isProjectIdentifierValid,
   isProjectSlugValid,
-} from './createProjectForm';
-import MainAgentSection from './MainAgentSection';
-import {
-  DEDICATED_MAIN_AGENT,
   type MainAgentMode,
-  readRememberedMainAgent,
-  resolveDefaultMainAgent,
-  resolveDefaultMainAgentMode,
-  writeRememberedMainAgent,
-} from './mainAgentStorage';
+} from './createProjectForm';
+import CreateProjectMoreFields from './CreateProjectMoreFields';
+import MainAgentSection from './MainAgentSection';
 import ProjectAvatarField from './ProjectAvatarField';
 
 export interface CreateProjectOptions {
@@ -53,7 +37,7 @@ interface CreateProjectFormState {
   avatarUploading: boolean;
   identifier: string;
   loading: boolean;
-  /** Explicit pick in this modal; otherwise the remembered agent or LobeAI. */
+  /** Explicit pick in this modal; otherwise LobeAI. */
   mainAgentId?: string;
   mainAgentMode: MainAgentMode;
   name: string;
@@ -72,27 +56,17 @@ const CreateProjectContent = memo<CreateProjectOptions>(({ onCreated }) => {
   const { close } = useModalContext();
   const navigate = useWorkspaceAwareNavigate();
   const createProject = useProjectStore((s) => s.createProject);
-  const [remembered] = useState(() => readRememberedMainAgent(getActiveWorkspaceId()));
-  const [form, setForm] = useState<CreateProjectFormState>(() => ({
+  const [form, setForm] = useState<CreateProjectFormState>({
     avatarUploading: false,
     identifier: '',
     loading: false,
-    mainAgentMode: resolveDefaultMainAgentMode(remembered),
+    mainAgentMode: DEFAULT_MAIN_AGENT_MODE,
     name: '',
     slug: '',
     slugEdited: false,
-  }));
+  });
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
-  const defaultMainAgentId = useHomeStore((s) =>
-    resolveDefaultMainAgent({
-      // New projects are shared, so a private agent is not a valid default.
-      agentExists: (id) => homeAgentListSelectors.sharedAgents(s).some((agent) => agent.id === id),
-      inboxAgentId,
-      listLoaded: homeAgentListSelectors.isAgentListInit(s),
-      remembered,
-    }),
-  );
-  const mainAgentId = form.mainAgentId ?? defaultMainAgentId;
+  const mainAgentId = form.mainAgentId ?? inboxAgentId;
   const createInput = getCreateProjectInput(form);
   const identifierInvalid =
     Boolean(form.identifier.trim()) && !isProjectIdentifierValid(form.identifier);
@@ -122,9 +96,6 @@ const CreateProjectContent = memo<CreateProjectOptions>(({ onCreated }) => {
           mainAgentMode: form.mainAgentMode,
         }),
       );
-      const rememberedChoice =
-        form.mainAgentMode === 'dedicated' ? DEDICATED_MAIN_AGENT : mainAgentId;
-      if (rememberedChoice) writeRememberedMainAgent(rememberedChoice, getActiveWorkspaceId());
       if (form.mainAgentMode === 'dedicated') {
         // The project created an agent and maybe the Project label; show both.
         const { refreshAgentLabels, refreshAgentList } = useHomeStore.getState();
@@ -165,42 +136,6 @@ const CreateProjectContent = memo<CreateProjectOptions>(({ onCreated }) => {
             />
           </ProjectAvatarField>
         </Flexbox>
-        <Flexbox gap={6}>
-          <Text fontSize={13} weight={500}>
-            {t('create.identifierLabel')}
-          </Text>
-          <Input
-            aria-invalid={identifierInvalid}
-            maxLength={6}
-            placeholder={t('create.identifierPlaceholder')}
-            style={identifierInvalid ? { borderColor: cssVar.colorError } : undefined}
-            value={form.identifier}
-            onChange={(event) => updateForm({ identifier: event.target.value.toUpperCase() })}
-            onPressEnter={handleCreate}
-          />
-          <Text fontSize={12} type={identifierInvalid ? 'danger' : 'secondary'}>
-            {t(identifierInvalid ? 'create.identifierInvalid' : 'create.identifierDescription')}
-          </Text>
-        </Flexbox>
-        <Flexbox gap={6}>
-          <Text fontSize={13} weight={500}>
-            {t('create.slugLabel')}
-          </Text>
-          <Input
-            aria-invalid={!slugValid}
-            maxLength={100}
-            placeholder={t('create.slugPlaceholder')}
-            style={slugValid ? undefined : { borderColor: cssVar.colorError }}
-            value={form.slug}
-            onPressEnter={handleCreate}
-            onChange={(event) =>
-              updateForm({ slug: event.target.value.toLowerCase(), slugEdited: true })
-            }
-          />
-          <Text fontSize={12} type={slugValid ? 'secondary' : 'danger'}>
-            {t(slugValid ? 'create.slugDescription' : 'create.slugInvalid')}
-          </Text>
-        </Flexbox>
         <MainAgentSection
           agentId={mainAgentId}
           disabled={form.loading}
@@ -210,6 +145,18 @@ const CreateProjectContent = memo<CreateProjectOptions>(({ onCreated }) => {
           onAgentChange={(id) => updateForm({ mainAgentId: id })}
           onModeChange={(mainAgentMode) => updateForm({ mainAgentMode })}
         />
+        <CreateProjectMoreFields
+          identifier={form.identifier}
+          identifierInvalid={identifierInvalid}
+          slug={form.slug}
+          slugValid={slugValid}
+          onIdentifierChange={(identifier) => updateForm({ identifier })}
+          onSlugChange={(slug) => updateForm({ slug, slugEdited: true })}
+          onSubmit={handleCreate}
+        />
+        <Text fontSize={12} type="secondary">
+          {t('create.afterCreateHint')}
+        </Text>
       </Flexbox>
       <ModalFooter>
         <Button onClick={close}>{t('cancel', { ns: 'common' })}</Button>

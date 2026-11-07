@@ -1,12 +1,13 @@
 'use client';
 
 import { isDesktop } from '@lobechat/const';
-import { Flexbox, Select, Skeleton, Switch } from '@lobehub/ui';
+import { Select, Switch } from '@lobehub/ui';
 import { Form, type FormGroupItem, useForm } from '@lobehub/ui/form';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AutoSaveHint from '@/components/Editor/AutoSaveHint';
+import { FontSectionSkeleton } from '@/components/Skeleton/Settings/tabs/Appearance';
 import { FORM_STYLE } from '@/const/layoutTokens';
 import { SettingsSearchAnchor } from '@/features/SettingsSearch/anchor';
 import { useSaveState } from '@/hooks/useSaveState';
@@ -17,8 +18,6 @@ import { APPLICATION_DEFAULT_FONT, useSystemFontOptions } from '../useSystemFont
 import FallbackFontList from './FallbackFontList';
 import { FontSizeControl } from './FontSize';
 import { joinFontStack, parseFontStack } from './fontStack';
-
-const loadingTextStyle = { marginBlock: 1.5 };
 
 const FontSettings = memo(() => {
   const { t } = useTranslation('setting');
@@ -56,63 +55,7 @@ const FontSettings = memo(() => {
   const saveMonospaceStack = (stack: string[]) =>
     save(() => updatePreference({ terminalFontFamily: joinFontStack(stack) }));
 
-  if (!isUserStateInit) {
-    const loadingFont: FormGroupItem = {
-      children: [
-        ...(isDesktop
-          ? [
-              {
-                children: <Skeleton height={32} width={320} />,
-                desc: <Skeleton height={12} style={loadingTextStyle} width={240} />,
-                label: <Skeleton height={16} style={loadingTextStyle} width={96} />,
-                minWidth: undefined,
-              },
-              {
-                children: <Skeleton height={32} width={320} />,
-                desc: <Skeleton height={12} style={loadingTextStyle} width={280} />,
-                label: <Skeleton height={16} style={loadingTextStyle} width={128} />,
-                minWidth: undefined,
-              },
-            ]
-          : []),
-        {
-          children: (
-            <Flexbox gap={16} width={'100%'}>
-              <Flexbox gap={24}>
-                <Skeleton height={4} width={'100%'} />
-                <Flexbox horizontal align={'center'} justify={'space-between'}>
-                  <Skeleton height={14} width={12} />
-                  <Skeleton height={14} width={64} />
-                  <Skeleton height={14} width={12} />
-                </Flexbox>
-              </Flexbox>
-              <Flexbox justify={'center'} style={{ height: 30 }}>
-                <Skeleton height={16} style={{ maxWidth: '100%' }} width={400} />
-              </Flexbox>
-            </Flexbox>
-          ),
-          desc: <Skeleton height={12} style={loadingTextStyle} width={144} />,
-          label: <Skeleton height={16} style={loadingTextStyle} width={72} />,
-          layout: 'vertical',
-          minWidth: '100%',
-        },
-      ],
-      extra: <Skeleton height={16} width={136} />,
-      title: <Skeleton height={18} width={48} />,
-    };
-
-    return (
-      <Form
-        aria-busy
-        collapsible={false}
-        form={form}
-        items={[loadingFont]}
-        itemsType={'group'}
-        variant={'filled'}
-        {...FORM_STYLE}
-      />
-    );
-  }
+  if (!isUserStateInit) return <FontSectionSkeleton />;
 
   const font: FormGroupItem = {
     children: [

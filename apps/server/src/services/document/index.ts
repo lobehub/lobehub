@@ -823,15 +823,14 @@ export class DocumentService {
 
       const updates: Record<string, unknown> = {};
 
-      // Room projections persist what the room already accepted. Checked before
-      // anything is persisted. `restoreFromHistoryId` is not an exemption: the
-      // client sends it with a body the server does not match against the
-      // version, so only server-side restores opt out via `writeSource`.
-      // Editor data is measured too because it can arrive without `content`.
-      if (
-        (params.content !== undefined || editorDataParam !== undefined) &&
-        params.origin !== 'room-projection'
-      ) {
+      // Checked before anything is persisted. Room projections are checked too:
+      // the room accepts browser edits without measuring them, so the
+      // projection is the only place a collaborative page's length is enforced.
+      // `restoreFromHistoryId` is not an exemption: the client
+      // sends it with a body the server does not match against the version, so
+      // only server-side restores opt out via `writeSource`. Editor data is
+      // measured too because it can arrive without `content`.
+      if (params.content !== undefined || editorDataParam !== undefined) {
         await assertDocumentWriteWithinLimit({
           charCount: Math.max(params.content?.length ?? 0, countEditorDataText(editorDataParam)),
           previousCharCount: Math.max(

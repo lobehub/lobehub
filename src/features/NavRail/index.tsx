@@ -1,6 +1,5 @@
 'use client';
 
-import { AGENT_CHAT_URL } from '@lobechat/const';
 import { cssVar, Flexbox } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import {
@@ -17,18 +16,16 @@ import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { isDesktop } from '@/const/version';
-import { resolveInboxAgentRouteId } from '@/features/AgentRoute/useResolvedAgentRouteId';
 import { MAC_VIBRANCY_BACKGROUND } from '@/features/Electron/system/macWindowFullscreen';
 import InboxButton from '@/features/HomeSidebar/Header/components/InboxButton';
 import User from '@/features/HomeSidebar/Header/components/User';
 import { useActiveLocation } from '@/hooks/useActiveLocation';
-import { useAgentStore } from '@/store/agent';
-import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { isMacOS } from '@/utils/platform';
 
+import { ActiveChannelSync, useMessagesUrl } from './messagesTarget';
 import MoreMenu from './MoreMenu';
 import RailItem from './RailItem';
 import { resolveRailTab } from './railTab';
@@ -57,10 +54,8 @@ const NavRail = memo(() => {
 
   const activeTab = resolveRailTab(pathname, activeWorkspaceSlug);
 
-  // Messages opens straight into the Lobe AI conversation, like an IM app's
-  // default channel; the conversation list sits in the list column.
-  const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
-  const messagesUrl = AGENT_CHAT_URL(resolveInboxAgentRouteId(inboxAgentId), false);
+  // Messages returns to the active Channel, or home where the conversation list lives.
+  const { activeChannelId, url: messagesUrl } = useMessagesUrl(pathname, activeWorkspaceSlug);
 
   // Tab order follows the product IA: messages, contacts, docs, tasks, projects.
   const topItems = useMemo(
@@ -76,6 +71,7 @@ const NavRail = memo(() => {
 
   return (
     <Flexbox className={stylex.props(styles.rail).className} gap={12} style={railBackground}>
+      {activeChannelId && <ActiveChannelSync />}
       <User lite />
       <Flexbox align={'center'} gap={RAIL_GAP}>
         {topItems.map((item) => (

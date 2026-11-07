@@ -66,7 +66,7 @@ export default {
     'On the Bot page, Reset Token and copy it, then turn on Message Content Intent.',
   'channel.quickSetup.discord.invite.title': 'Invite the bot to your server',
   'channel.quickSetup.discord.invite.desc':
-    'The invite link already carries the permissions the bot needs.',
+    "The invite link already carries the permissions the bot needs. For a private channel, also add the bot in that channel's Settings → Permissions.",
   'channel.quickSetup.telegram.botfather.title': 'Create a bot with BotFather',
   'channel.quickSetup.telegram.botfather.desc': 'Send /newbot and pick a name and username.',
   'channel.quickSetup.telegram.token.title': 'Copy the token',
@@ -191,12 +191,18 @@ export default {
   'channel.connectStarting': 'Bot is starting. Please wait a moment.',
   'channel.connectSuccess': 'Bot connected successfully',
   'channel.connecting': 'Connecting...',
+  'channel.connectionError.application_mismatch':
+    "The Application ID doesn't match the bot token. Copy both from the same app in the Discord Developer Portal.",
   'channel.connectionError.application_not_found':
     'The bot application does not exist. Check the application ID in the platform console.',
+  'channel.connectionError.bot_not_installed':
+    "The bot isn't in any server yet. Open the invite link in the setup steps, add the bot to your server, then test again.",
   'channel.connectionError.connection_closed':
     'The platform connection was interrupted. LobeHub will try to reconnect automatically.',
   'channel.connectionError.invalid_credentials':
     'The bot credentials are invalid. Check the application ID, secret, and access tokens.',
+  'channel.connectionError.message_content_intent_disabled':
+    "Message Content Intent is off, so the bot can't read messages. Turn it on under Bot → Privileged Gateway Intents in the Discord Developer Portal and save.",
   'channel.connectionError.missing_credentials':
     'Required bot credentials are missing. Complete the bot configuration and try again.',
   'channel.connectionError.permission_denied':
@@ -757,6 +763,9 @@ export default {
   'channel.displayToolCalls': 'Display Tool Calls',
   'channel.displayToolCallsHint':
     'Show tool call details during AI responses. When disabled, only the final response is displayed for a cleaner experience.',
+  'channel.processingMessage': 'Processing Message',
+  'channel.processingMessageHint':
+    'Post a short message saying the bot is working on it before the reply. Where messages can be edited, tool call progress also shows in this message.',
   'channel.reactionMode': 'Status Reactions',
   'channel.reactionModeHint':
     'How the bot updates the emoji reaction on your message while it works. Every change can notify members who have message alerts enabled.',

@@ -543,9 +543,6 @@ describe('topicSelectors', () => {
 
       // Should not have a favorites group
       expect(grouped.find((g) => g.id === 'favorite')).toBeUndefined();
-
-      // Should have time-based groups
-      expect(grouped.every((g) => g.id !== 'favorite')).toBeTruthy();
     });
   });
 

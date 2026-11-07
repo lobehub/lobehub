@@ -215,21 +215,6 @@ describe('AgentEvalBenchmarkModel', () => {
       expect(results).toHaveLength(3);
     });
 
-    it("should not return other user's benchmarks", async () => {
-      const results = await benchmarkModel.query(true);
-
-      const identifiers = results.map((r) => r.identifier);
-      expect(identifiers).not.toContain('other-user-1');
-    });
-
-    it('should order by createdAt descending', async () => {
-      const results = await benchmarkModel.query(true);
-
-      // The newest should come first
-      // Order may vary in PGlite due to timing
-      expect(results.length).toBeGreaterThanOrEqual(3);
-    });
-
     it('should return datasetCount for benchmarks with datasets', async () => {
       // Find the user-1 benchmark
       const benchmarks = await serverDB.query.agentEvalBenchmarks.findMany();

@@ -3,6 +3,7 @@ import type {
   RegisterExternalWorkParams,
   SkillToolResultWorkInput,
   WorkDisplayField,
+  WorkVersionMetadata,
 } from '@lobechat/types';
 
 import { WORK_DESCRIPTION_PREVIEW_LENGTH } from './internal';
@@ -201,6 +202,26 @@ const hasStatusSignal = (record: Record<string, unknown>) =>
   typeof record.merged === 'boolean' ||
   typeof record.draft === 'boolean';
 
+/** PR branches as version metadata; `undefined` when neither is known. */
+const branchMetadata = (
+  head: string | null,
+  base: string | null,
+): WorkVersionMetadata | undefined => {
+  if (!head && !base) return undefined;
+
+  return { ...(head && { headBranch: head }), ...(base && { baseBranch: base }) };
+};
+
+/**
+ * A REST pull request carries `head` / `base` as `{ ref }` objects; the
+ * `create_pull_request` arguments name them as plain strings.
+ */
+const resolveBranch = (
+  record: Record<string, unknown>,
+  args: Record<string, unknown>,
+  key: 'base' | 'head',
+): string | null => fromRecord(toRecord(record[key]) ?? {}, ['ref']) ?? fromRecord(args, [key]);
+
 const githubResourceType = (entityType: GithubWorkEntityType): GithubWorkResourceType =>
   entityType === 'issue' ? 'github_issue' : 'github_pull_request';
 
@@ -235,6 +256,10 @@ const buildParams = (
     identifier: repo && number !== null ? `${repo}#${number}` : null,
     resourceType: githubResourceType(tool.entityType),
     messageId: params.messageId ?? null,
+    metadata:
+      tool.entityType === 'pull_request'
+        ? branchMetadata(resolveBranch(record, args, 'head'), resolveBranch(record, args, 'base'))
+        : undefined,
     rootOperationId: params.rootOperationId ?? null,
     status: patch('status', hasStatusSignal(record), resolveStatus(record)),
     threadId: params.threadId ?? null,
@@ -315,9 +340,13 @@ const parseGithubEntityUrls = (text: string | null): GithubEntityRef[] => {
 
 interface ParsedGhCommand {
   action: 'create' | 'edit';
+  /** `--base`: set on `gh pr create`, or changed by `gh pr edit`. */
+  base: string | null;
   body: string | null;
   draft: boolean;
   entityType: GithubWorkEntityType;
+  /** `--head`, `gh pr create` only; without it gh uses the checked-out branch, which the command text does not name. */
+  head: string | null;
   repo: string | null;
   targetNumber: number | null;
   targetRef: GithubEntityRef | null;
@@ -332,8 +361,10 @@ const parseGhSegment = (segment: string[]): ParsedGhCommand | null => {
   if (noun !== 'issue' && noun !== 'pr') return null;
   if (action !== 'create' && action !== 'edit') return null;
 
+  let base: string | null = null;
   let body: string | null = null;
   let draft = false;
+  let head: string | null = null;
   let repoFlag: string | null = null;
   let title: string | null = null;
   const positionals: string[] = [];
@@ -379,6 +410,16 @@ const parseGhSegment = (segment: string[]): ParsedGhCommand | null => {
         draft = true;
         break;
       }
+      case '-B':
+      case '--base': {
+        base = value;
+        break;
+      }
+      case '-H':
+      case '--head': {
+        head = value;
+        break;
+      }
       default: {
         // Other value flags had their value consumed above; other boolean
         // flags (--web, --fill, ...) carry nothing we snapshot.
@@ -398,11 +439,16 @@ const parseGhSegment = (segment: string[]): ParsedGhCommand | null => {
     else if (/^\d+$/.test(positional)) targetNumber = Number(positional);
   }
 
+  // Issues have no branches; drop any stray `-B` / `-H` values.
+  const isPullRequest = noun === 'pr';
+
   return {
     action,
+    base: isPullRequest ? base : null,
     body,
     draft,
-    entityType: noun === 'issue' ? 'issue' : 'pull_request',
+    entityType: isPullRequest ? 'pull_request' : 'issue',
+    head: isPullRequest ? head : null,
     repo,
     targetNumber,
     targetRef,
@@ -472,6 +518,7 @@ const normalizeGithubCliResult = (
       resourceId: identifier,
       resourceType: githubResourceType(ref.entityType),
       messageId: params.messageId ?? null,
+      metadata: branchMetadata(parsed.head, parsed.base),
       rootOperationId: params.rootOperationId ?? null,
       // gh only exposes --draft on create; an edit carries no status signal.
       status: patch('status', parsed.action === 'create', parsed.draft ? 'draft' : 'open'),

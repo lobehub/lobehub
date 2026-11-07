@@ -25,3 +25,9 @@ const ProjectAvatar = memo<ProjectAvatarProps>(({ avatar, name, size = 20 }) => 
 ProjectAvatar.displayName = 'ProjectAvatar';
 
 export default ProjectAvatar;
+
+// `avatar` is an emoji or image URL, not a component: `Icon` would pass it to
+// createElement as a tag name and crash the whole page.
+export const projectIcon = (project: { avatar?: string | null; name: string }) => (
+  <ProjectAvatar avatar={project.avatar} name={project.name} size={18} />
+);

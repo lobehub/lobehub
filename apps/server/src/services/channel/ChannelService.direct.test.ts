@@ -11,6 +11,7 @@ const {
   createGroupFromDirect,
   findAccess,
   findDevice,
+  findDirectAccess,
   getAgent,
   notify,
   querySystemInfo,
@@ -20,6 +21,7 @@ const {
   createGroupFromDirect: vi.fn(),
   findAccess: vi.fn(),
   findDevice: vi.fn(),
+  findDirectAccess: vi.fn(),
   getAgent: vi.fn(),
   notify: vi.fn(),
   querySystemInfo: vi.fn(),
@@ -31,6 +33,7 @@ vi.mock('@/database/repositories/channel', async (original) => ({
     create = create;
     createGroupFromDirect = createGroupFromDirect;
     findAccess = findAccess;
+    findDirectAccess = findDirectAccess;
   },
 }));
 vi.mock('@/database/models/project', () => ({ ProjectModel: class {} }));
@@ -146,15 +149,20 @@ describe('the direct Channel of a new Agent', () => {
       { ...claudeCode, executionTarget: 'sandbox' },
       'desktop',
     ],
-    [
-      'a runtime Channels do not support',
-      { heterogeneousProvider: { type: 'openclaw' } },
-      'desktop',
-    ],
-  ])('opens nothing for %s', async (_, agencyConfig, localDeviceId) => {
-    getAgent.mockResolvedValue({ agencyConfig, name: 'Agent' });
-    await expect(createDirect(localDeviceId)).resolves.toBeUndefined();
+  ])('opens the conversation without a device for %s', async (_, agencyConfig, localDeviceId) => {
+    getAgent.mockResolvedValue({ agencyConfig, name: 'Claude' });
+    await expect(createDirect(localDeviceId)).resolves.toEqual({ channel: { id: 'chn_1' } });
+    // Its device is chosen in the Channel; nothing is probed before then.
     expect(findDevice).not.toHaveBeenCalled();
+    expect(create).toHaveBeenCalledWith({ agentConfig: {}, agentId: 'agt_new', title: 'Claude' });
+  });
+
+  it('opens nothing for a runtime Channels do not support', async () => {
+    getAgent.mockResolvedValue({
+      agencyConfig: { heterogeneousProvider: { type: 'openclaw' } },
+      name: 'Agent',
+    });
+    await expect(createDirect('desktop')).resolves.toBeUndefined();
     expect(create).not.toHaveBeenCalled();
   });
 
@@ -172,6 +180,35 @@ describe('the direct Channel of a new Agent', () => {
     arrange();
     await expect(createDirect('desktop')).rejects.toBeInstanceOf(ChannelError);
     expect(create).not.toHaveBeenCalled();
+  });
+});
+
+describe('opening the direct Channel of an existing Agent', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    create.mockResolvedValue({ channel: { id: 'chn_new' } });
+    getAgent.mockResolvedValue({ model: 'gpt-5', name: 'Nasa' });
+  });
+  const openDirect = () => new ChannelService({} as never, 'owner').openDirect('agt_old');
+
+  it('reuses the existing conversation without probing its device again', async () => {
+    findDirectAccess.mockResolvedValue({ channel: { id: 'chn_old', isDeleted: null } });
+    await expect(openDirect()).resolves.toEqual({ channel: { id: 'chn_old', isDeleted: null } });
+    expect(findDirectAccess).toHaveBeenCalledWith('agt_old');
+    expect(getAgent).not.toHaveBeenCalled();
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('leaves a conversation the person moved to the trash there', async () => {
+    findDirectAccess.mockResolvedValue({ channel: { id: 'chn_old', isDeleted: true } });
+    await expect(openDirect()).resolves.toBeUndefined();
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('opens one for an Agent made before direct Channels', async () => {
+    findDirectAccess.mockResolvedValue(undefined);
+    await expect(openDirect()).resolves.toEqual({ channel: { id: 'chn_new' } });
+    expect(create).toHaveBeenCalledWith({ agentConfig: {}, agentId: 'agt_old', title: 'Nasa' });
   });
 });
 

@@ -3,13 +3,13 @@ You are executing a task within the LobeHub task system. Use the `lh task` CLI v
 
 # Task Lifecycle
 
-| Command                         | Description                                           |
-| ------------------------------- | ----------------------------------------------------- |
-| `lh task view <id>`             | View task details, instruction, documents, activities |
-| `lh task edit <id>`             | Update task name, instruction, status, priority       |
-| `lh task complete <id>`         | Mark task as completed                                |
-| `lh task comment <id> -m "..."` | Add a progress comment                                |
-| `lh task tree <id>`             | View subtask tree with dependencies                   |
+| Command                         | Description                                             |
+| ------------------------------- | ------------------------------------------------------- |
+| `lh task view <id>`             | View task details, instruction, documents, activities   |
+| `lh task edit <id>`             | Update task name, instruction, status, priority, labels |
+| `lh task complete <id>`         | Mark task as completed                                  |
+| `lh task comment <id> -m "..."` | Add a progress comment                                  |
+| `lh task tree <id>`             | View subtask tree with dependencies                     |
 
 # Working with Subtasks
 

@@ -9,6 +9,7 @@ import {
   REMOTE_HETEROGENEOUS_AGENT_CONFIGS,
 } from './heterogeneousAgent';
 import type {
+  CodexSpeedMode,
   HeterogeneousAgentMode,
   HeterogeneousCatalogAgentType,
   HeterogeneousReasoningEffort,
@@ -36,12 +37,16 @@ export type HeterogeneousAgentModelCatalogErrorCode =
 export interface HeterogeneousAgentModel {
   /** Exact value accepted by the provider's native model selector. Treat as opaque. */
   id: string;
+  /** Whether the CLI resolves its default model to this entry. */
+  isDefault?: boolean;
   /** Optional human-readable model label. */
   label?: string;
   /** Model identifier shown when the CLI does not provide a separate display label. */
   modelId: string;
   /** Provider or CLI family, used only for display grouping. */
   providerId: string;
+  /** Account-specific speed options reported by the execution device. */
+  speedModes?: CodexSpeedMode[];
 }
 
 export interface ListHeterogeneousAgentModelsParams {
@@ -363,9 +368,7 @@ export const applyTopicModelToHeterogeneousProvider = (
         : HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
   }
   if (speed !== undefined && capability.speed) {
-    selection.speed = capability.speed.supported(model)
-      ? speed
-      : HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
+    selection.speed = speed;
   }
   if (Object.keys(selection).length === 0) return withModel;
 
@@ -488,6 +491,12 @@ export type ExecutionPlan = { target: DeviceExecutionTarget } &
      * (hetero dispatch).
      */
     | { kind: 'device-unrouted'; reason: ExecutionPlanUnroutedReason }
+    /**
+     * Bound to a managed cloud device that is not online yet but can be woken.
+     * The run stays on this device: callers wake it before they dispatch to it,
+     * and tool calls that reach it while it starts answer `DEVICE_WAKING`.
+     */
+    | { deviceId: string; kind: 'device-wakeable' }
     /** plain chat — no execution environment, no run tools, no device ever */
     | { kind: 'none' }
     /** ephemeral cloud sandbox */

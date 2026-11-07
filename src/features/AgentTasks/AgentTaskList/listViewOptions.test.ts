@@ -7,11 +7,13 @@ import {
   collapseSubTasks,
   compareTaskItems,
   DEFAULT_TASK_LIST_VIEW_OPTIONS,
+  dropMissingLabelGroupings,
   getCompletedWithin,
   getVisibleTaskStatuses,
   groupTaskItems,
   HIDDEN_WHEN_COMPLETED_STATUSES,
   isTaskHiddenByCompletedFilter,
+  normalizeTaskGroupBy,
   normalizeTaskListViewOptions,
   toStoredTaskListViewOptions,
 } from './listViewOptions';
@@ -336,5 +338,42 @@ describe('getVisibleTaskStatuses', () => {
   it('applies no narrowing when completed tasks are shown', () => {
     expect(getVisibleTaskStatuses({ completedTasks: 'all' })).toBeUndefined();
     expect(getVisibleTaskStatuses({ completedTasks: 'week' })).toBeUndefined();
+  });
+});
+
+describe('dropMissingLabelGroupings', () => {
+  const options = { groupBy: 'label:g-type', subGroupBy: 'label:g-area' } as const;
+
+  it('keeps label groupings until the registry has loaded', () => {
+    expect(dropMissingLabelGroupings(options, undefined)).toBe(options);
+  });
+
+  it('keeps label groupings whose group still exists', () => {
+    expect(dropMissingLabelGroupings(options, new Set(['g-type', 'g-area']))).toBe(options);
+  });
+
+  it('falls back to the defaults for a deleted group', () => {
+    expect(dropMissingLabelGroupings(options, new Set(['g-area']))).toEqual({
+      groupBy: 'status',
+      subGroupBy: 'label:g-area',
+    });
+    expect(dropMissingLabelGroupings(options, new Set())).toEqual({
+      groupBy: 'status',
+      subGroupBy: 'none',
+    });
+  });
+
+  it('leaves non-label groupings alone', () => {
+    const plain = { groupBy: 'priority', subGroupBy: 'none' } as const;
+    expect(dropMissingLabelGroupings(plain, new Set())).toBe(plain);
+  });
+});
+
+describe('normalizeTaskGroupBy', () => {
+  it('keeps label groupings for the list, and falls back for unknown values', () => {
+    expect(normalizeTaskGroupBy('label:g-type', 'status')).toBe('label:g-type');
+    expect(normalizeTaskGroupBy('priority', 'status')).toBe('priority');
+    expect(normalizeTaskGroupBy('bogus', 'none')).toBe('none');
+    expect(normalizeTaskGroupBy(undefined, 'status')).toBe('status');
   });
 });

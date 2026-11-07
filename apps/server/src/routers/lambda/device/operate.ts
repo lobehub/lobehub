@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { router } from '@/libs/trpc/lambda';
 import { signTunnelAccessToken } from '@/libs/trpc/utils/internalJwt';
 import { deviceGateway } from '@/server/services/deviceGateway';
+import { requestManagedDeviceWake } from '@/server/services/deviceGateway/managedDeviceWake';
 import { deviceTunnels, TUNNEL_MAX_TTL_SECONDS } from '@/server/services/deviceGateway/tunnels';
 
 import { assertDeviceOperable } from './guards';
@@ -307,6 +308,35 @@ export const operateRouter = router({
       }
       if (outcome === 'not-found') {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Tunnel not found.' });
+      }
+      return { success: true };
+    }),
+  /**
+   * Ask a managed cloud device to start, for the device picker's wake
+   * control. Resolves when the provider accepts the request, not when the
+   * device is online: the caller watches the device list for that. Not gated
+   * on the create-time feature flag, so existing devices stay usable.
+   */
+  wakeManagedDevice: deviceProcedure
+    .input(z.object({ deviceId: z.string().min(1).max(64) }))
+    .mutation(async ({ ctx, input }) => {
+      await assertDeviceOperable(ctx, input.deviceId, 'wake the device');
+
+      let outcome: Awaited<ReturnType<typeof requestManagedDeviceWake>>;
+      try {
+        outcome = await requestManagedDeviceWake(
+          { db: ctx.serverDB, userId: ctx.userId, workspaceId: ctx.workspaceId },
+          input.deviceId,
+        );
+      } catch (error) {
+        console.warn('[device] Managed device wake failed', {
+          deviceId: input.deviceId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        throw new TRPCError({ code: 'BAD_GATEWAY', message: 'Could not wake the device.' });
+      }
+      if (outcome === 'not-managed') {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Managed cloud device not found.' });
       }
       return { success: true };
     }),

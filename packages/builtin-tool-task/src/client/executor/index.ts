@@ -54,6 +54,8 @@ import type {
   UpdateTaskCommentParams,
 } from '../../types';
 import { TaskApiName } from '../../types';
+import { applyTaskLabelDelta, resolveLabelIdsOrThrow } from './labelIds';
+import { settleAll } from './settleAll';
 
 const log = debug('lobe-task:executor');
 
@@ -207,6 +209,7 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
       instruction: string;
       assigneeAgentId?: string;
       assigneeUserId?: string;
+      labels?: string[];
       model?: string;
       name: string;
       parentIdentifier?: string;
@@ -235,12 +238,14 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
       // member owns the outcome, the agent executes) — a member owner does not
       // suppress the usual current-agent default.
       const parent = parentIdentifier ? (await taskService.find(parentIdentifier)).data : undefined;
+      const labelIds = await resolveLabelIdsOrThrow(params.labels);
       const task = await getTaskStoreState().createTask({
         assigneeAgentId: assigneeAgentId ?? (ctx?.scope === 'task' ? undefined : ctx?.agentId),
         assigneeUserId,
         config: toCreateTaskModelConfig(params),
         createdByAgentId: ctx?.agentId,
         instruction: params.instruction,
+        labelIds, // attached in the same request; the task is rolled back on failure
         name: params.name,
         parentTaskId: parent?.id,
         priority: params.priority,
@@ -261,6 +266,7 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
           id: task.id,
           identifier: task.identifier,
           instruction: params.instruction,
+          labels: task.labels ?? [],
           name: task.name,
           parentLabel: parent?.identifier,
           parentTaskId: parent?.id,
@@ -417,6 +423,7 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
   editTask = async (
     params: {
       addDependencies?: string[];
+      addLabels?: string[];
       assigneeAgentId?: string | null;
       assigneeUserId?: string | null;
       description?: string;
@@ -428,11 +435,17 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
       priority?: number;
       provider?: string | null;
       removeDependencies?: string[];
+      removeLabels?: string[];
     },
     ctx?: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
+    let undoLabels: (() => Promise<void>) | undefined;
     try {
       log('[TaskExecutor] editTask - params:', params);
+      const [add, remove] = await Promise.all([
+        resolveLabelIdsOrThrow(params.addLabels),
+        resolveLabelIdsOrThrow(params.removeLabels),
+      ]);
 
       const { addDependencies, removeDependencies } = params;
       const target = (await taskService.find(params.identifier)).data;
@@ -440,6 +453,11 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
       const store = getTaskStoreState();
       const changes: string[] = [];
       const ops: Promise<unknown>[] = [];
+      // Labels first: a label failure then writes nothing else, and a later
+      // failure undoes just this label change (see the catch below).
+      const { addLabels: _a, identifier: _i, removeLabels: _r, ...otherEdits } = params;
+      const hasOtherEdits = Object.values(otherEdits).some((value) => value !== undefined);
+      undoLabels = await applyTaskLabelDelta(identifier, { add, remove }, hasOtherEdits);
 
       const updateData: {
         description?: string;
@@ -534,8 +552,11 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
       };
       if (addDependencies?.length) await applyDependencies(addDependencies, false);
       if (removeDependencies?.length) await applyDependencies(removeDependencies, true);
+      if (remove.length || add.length) ops.push(store.refreshTaskList());
+      if (remove.length) changes.push(`labels removed: ${params.removeLabels!.join(', ')}`);
+      if (add.length) changes.push(`labels added: ${params.addLabels!.join(', ')}`);
 
-      await Promise.all(ops);
+      await settleAll(ops);
 
       return {
         content: formatTaskEdited(`${target.identifier} (id: ${target.id})`, changes),
@@ -543,6 +564,7 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
         success: true,
       };
     } catch (error) {
+      await undoLabels?.();
       log('[TaskExecutor] editTask - error:', error);
       const message = error instanceof Error ? error.message : 'Failed to edit task';
       return {
@@ -870,6 +892,7 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
   listTasks = async (
     params: {
       assigneeAgentId?: string;
+      labels?: string[];
       limit?: number;
       offset?: number;
       parentIdentifier?: string;
@@ -886,6 +909,9 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
         defaultScope: ctx?.scope === 'task' ? 'allAgents' : 'currentAgent',
       });
 
+      const labelIds = await resolveLabelIdsOrThrow(params.labels, true);
+      if (labelIds.length)
+        normalized.query.filter = { label: { operator: 'is', values: labelIds } };
       const result = await getTaskStoreState().fetchTaskList(normalized.query);
 
       const tasks = result.data ?? [];

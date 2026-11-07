@@ -132,6 +132,18 @@ export const channelRouter = router({
       data: await ctx.channelService.detail(input.channelId, input),
       success: true,
     })),
+  /**
+   * The caller's direct conversation with an Agent, opened on first use for Agents that predate
+   * direct Channels. Null when the Agent cannot answer in a Channel (no reachable device).
+   */
+  openDirect: channelProcedure
+    .input(z.object({ agentId: z.string().min(1), localDeviceId: z.string().min(1).optional() }))
+    .mutation(async ({ ctx, input }) => {
+      const access = await ctx.channelService.openDirect(input.agentId, {
+        localDeviceId: input.localDeviceId,
+      });
+      return { data: access?.channel.id ?? null, success: true };
+    }),
   list: channelProcedure.query(async ({ ctx }) => ({
     data: await ctx.channelService.repository.list(),
     success: true,

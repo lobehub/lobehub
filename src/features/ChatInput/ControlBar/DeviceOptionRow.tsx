@@ -11,6 +11,7 @@ import { ExecutionTargetDeviceStatus, ExecutionTargetIcon } from '@/features/Exe
 import { isDevicePresenceUnknown } from '@/store/device';
 
 import DeviceDetailPopover from './DeviceDetailPopover';
+import { getDeviceOptionState } from './deviceOptionState';
 import { handleDeviceRowKeyDown } from './deviceRowKeyDown';
 import OptionRow from './OptionRow';
 
@@ -45,16 +46,20 @@ const DeviceOptionRow = ({
   const { t } = useTranslation('chat');
   // A row restored from the persisted list is neither online nor offline yet.
   const presenceUnknown = isDevicePresenceUnknown(device);
+  const { offlineLabelKey, reconnectLabelKey, selectable, showReconnect } = getDeviceOptionState(
+    device,
+    { presenceUnknown },
+  );
 
   return (
     <DeviceDetailPopover device={device}>
       <div
         data-testid={`device-option-${device.deviceId}`}
-        onKeyDown={(event) => handleDeviceRowKeyDown(event, { disabled: !device.online, onSelect })}
+        onKeyDown={(event) => handleDeviceRowKeyDown(event, { disabled: !selectable, onSelect })}
       >
         <OptionRow
           active={active}
-          disabled={!device.online}
+          disabled={!selectable}
           icon={<ExecutionTargetIcon devicePlatform={device.platform} target={'device'} />}
           label={device.friendlyName || device.hostname || device.deviceId}
           tags={tags}
@@ -64,7 +69,7 @@ const DeviceOptionRow = ({
                 t('heteroAgent.executionTarget.gatewayDesc')
               ) : (
                 <ExecutionTargetDeviceStatus
-                  offlineLabel={t('heteroAgent.executionTarget.offline')}
+                  offlineLabel={t(offlineLabelKey)}
                   online={device.online}
                   unknown={presenceUnknown}
                   unknownLabel={t('heteroAgent.executionTarget.presenceChecking')}
@@ -73,7 +78,7 @@ const DeviceOptionRow = ({
                   })}
                 />
               )}
-              {device.online || presenceUnknown ? null : (
+              {showReconnect ? (
                 <Button
                   className={stylex.props(styles.reconnectButton).className}
                   icon={<Icon icon={RefreshCwIcon} size={10} />}
@@ -85,9 +90,9 @@ const DeviceOptionRow = ({
                     onReconnect();
                   }}
                 >
-                  {t('heteroAgent.executionTarget.reconnect')}
+                  {t(reconnectLabelKey)}
                 </Button>
-              )}
+              ) : null}
             </>
           }
           onClick={onSelect}

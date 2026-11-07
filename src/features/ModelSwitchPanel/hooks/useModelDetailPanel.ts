@@ -65,12 +65,46 @@ const getFormattedUnitPrice = (pricing: Pricing, unitName: PricingUnitName): For
   };
 };
 
+const DECIMAL_PATTERN = /\d+\.(\d+)/g;
+
+/** The most decimals any number inside the given price texts carries (`0.075` -> 3). */
+const getMaxDecimals = (texts: (string | undefined)[]) =>
+  texts.reduce(
+    (max, text) =>
+      [...(text ?? '').matchAll(DECIMAL_PATTERN)].reduce(
+        (acc, match) => Math.max(acc, match[1].length),
+        max,
+      ),
+    0,
+  );
+
+/** Pad every number in a price text to `digits` decimals (`0.30` -> `0.300`). */
+const padDecimals = (text: string, digits: number) =>
+  text.replaceAll(DECIMAL_PATTERN, (match, fraction: string) =>
+    fraction.length >= digits ? match : match + '0'.repeat(digits - fraction.length),
+  );
+
+/**
+ * Show prices that are read side by side with the same number of decimals, so `$0.075` and
+ * `$0.30` do not sit in one column with their decimal points apart.
+ */
+const unifyDecimals = (prices: FormattedUnitPrice[]): FormattedUnitPrice[] => {
+  const digits = getMaxDecimals(prices.flatMap((price) => [price.current, price.original]));
+
+  return prices.map((price) => ({
+    current: padDecimals(price.current, digits),
+    original: price.original === undefined ? undefined : padDecimals(price.original, digits),
+  }));
+};
+
 export const getPrice = (pricing: Pricing): TextPriceSummary => {
-  return {
-    cachedInput: getFormattedUnitPrice(pricing, 'textInput_cacheRead'),
-    input: getFormattedUnitPrice(pricing, 'textInput'),
-    output: getFormattedUnitPrice(pricing, 'textOutput'),
-  };
+  const [cachedInput, input, output] = unifyDecimals([
+    getFormattedUnitPrice(pricing, 'textInput_cacheRead'),
+    getFormattedUnitPrice(pricing, 'textInput'),
+    getFormattedUnitPrice(pricing, 'textOutput'),
+  ]);
+
+  return { cachedInput, input, output };
 };
 
 type PricingGroup = 'audio' | 'image' | 'text' | 'video';
@@ -123,6 +157,7 @@ const UNIT_SORT_ORDER: Record<PricingUnitName, number> = {
   videoGeneration: 1,
 };
 
+/** English fallback for the localized `ModelSwitchPanel.detail.pricing.suffix.*` keys. */
 const UNIT_LABEL_MAP: Record<string, string> = {
   image: '/img',
   megapixel: '/MP',
@@ -173,7 +208,7 @@ const formatUnitRate = (unit: PricingUnit, currency?: ModelPriceCurrency): Forma
 
   if (unit.strategy === 'lookup') {
     const entries = Object.entries(unit.lookup.prices);
-    if (entries.length === 0) return { current: '-' };
+    if (entries.length === 0) return { current: '--' };
 
     if (entries.length === 1) {
       const [key, price] = entries[0];
@@ -200,7 +235,7 @@ const formatUnitRate = (unit: PricingUnit, currency?: ModelPriceCurrency): Forma
     return { current: formatRange(formatRate(lowPrice), formatRate(highPrice)), original };
   }
 
-  return { current: '-' };
+  return { current: '--' };
 };
 
 interface PricingGroupData {
@@ -319,14 +354,43 @@ export const useModelDetailPanel = ({
     [t],
   );
 
+  // Rows priced in the same unit (`/M tokens`) are compared by eye, so they share decimals
+  const decimalsByUnit = useMemo(() => {
+    const currency = displayPricing?.currency as ModelPriceCurrency | undefined;
+    const texts = new Map<string, (string | undefined)[]>();
+    for (const unit of displayPricing?.units ?? []) {
+      const price = formatUnitRate(unit, currency);
+      texts.set(unit.unit, [...(texts.get(unit.unit) ?? []), price.current, price.original]);
+    }
+
+    return new Map<string, number>(
+      [...texts].map(([unit, values]) => [unit, getMaxDecimals(values)] as [string, number]),
+    );
+  }, [displayPricing?.currency, displayPricing?.units]);
+
   const formatUnitPrice = useCallback(
-    (unit: PricingUnit) => formatUnitRate(unit, displayPricing?.currency as ModelPriceCurrency),
-    [displayPricing?.currency],
+    (unit: PricingUnit): FormattedUnitPrice => {
+      const price = formatUnitRate(unit, displayPricing?.currency as ModelPriceCurrency);
+      const digits = decimalsByUnit.get(unit.unit) ?? 0;
+
+      return {
+        current: padDecimals(price.current, digits),
+        original: price.original === undefined ? undefined : padDecimals(price.original, digits),
+      };
+    },
+    [decimalsByUnit, displayPricing?.currency],
   );
 
   const getUnitPriceSuffix = useCallback(
-    (unit: PricingUnit['unit']) => UNIT_LABEL_MAP[unit] || '',
-    [],
+    (unit: PricingUnit['unit']) =>
+      UNIT_LABEL_MAP[unit]
+        ? String(
+            t(`ModelSwitchPanel.detail.pricing.suffix.${unit}` as any, {
+              defaultValue: UNIT_LABEL_MAP[unit],
+            }),
+          )
+        : '',
+    [t],
   );
 
   const handleExpandedChange = useCallback(

@@ -23,9 +23,13 @@ describe('api/http auth helpers', () => {
     vi.clearAllMocks();
     delete process.env.LOBEHUB_JWT;
     delete process.env.LOBEHUB_WORKSPACE_ID;
+    // Outside an agent run, so a missing login keeps the plain "log in first" wording.
+    vi.stubEnv('LOBEHUB_OPERATION_ID', '');
+    vi.stubEnv('LOBEHUB_TOPIC_ID', '');
   });
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     if (originalJwt === undefined) delete process.env.LOBEHUB_JWT;
     else process.env.LOBEHUB_JWT = originalJwt;
 

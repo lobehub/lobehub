@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   buildCreateProjectRequest,
+  DEFAULT_MAIN_AGENT_MODE,
   getCreateProjectInput,
   getProjectFieldSuggestions,
   isProjectIdentifierValid,
@@ -72,6 +73,15 @@ describe('createProjectForm', () => {
     ).toEqual({ avatar: '🚀', name: 'Launch' });
   });
 
+  it('creates a dedicated main agent by default', () => {
+    expect(
+      buildCreateProjectRequest(
+        { name: 'Launch' },
+        { mainAgentId: 'inbox', mainAgentMode: DEFAULT_MAIN_AGENT_MODE },
+      ),
+    ).toEqual({ name: 'Launch' });
+  });
+
   it('sends the picked agent when the project reuses an existing one', () => {
     expect(
       buildCreateProjectRequest(
@@ -79,5 +89,15 @@ describe('createProjectForm', () => {
         { mainAgentId: 'agt_1', mainAgentMode: 'existing' },
       ),
     ).toEqual({ coordinatorAgentId: 'agt_1', name: 'Launch', slug: 'launch' });
+  });
+
+  it('sends neither a project type nor a site, whatever the caller passes', () => {
+    expect(
+      buildCreateProjectRequest({ name: 'Launch' }, {
+        mainAgentMode: 'dedicated',
+        siteOrigin: 'https://launch.dev',
+        type: 'web',
+      } as never),
+    ).toEqual({ name: 'Launch' });
   });
 });

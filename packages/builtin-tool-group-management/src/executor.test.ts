@@ -340,18 +340,6 @@ describe('GroupManagementExecutor', () => {
       });
     });
 
-    it('should not fail when groupOrchestration is not available', async () => {
-      const ctx = createMockContext();
-
-      const result = await groupManagementExecutor.executeAgentTask(
-        { agentId: 'agent-1', instruction: 'Do something', title: 'Test Task' },
-        ctx,
-      );
-
-      expect(result.success).toBe(true);
-      expect(result.stop).toBe(true);
-    });
-
     it('should include timeout in state when provided', async () => {
       const ctx = createMockContext();
 

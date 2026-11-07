@@ -205,6 +205,9 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   // keys must not mint or manage keys
   apiKey: 'blocked',
   asr: { any: 'model:invoke' },
+  // `auth.getScope` only reports which scope the presented credential runs
+  // under, so any key — however narrow — can tell where its calls land
+  auth: 'open',
   artifactShare: rw('chat:read', null),
   // decrypts stored bot/messenger credentials and calls external channel APIs
   botMessage: 'blocked',
@@ -307,6 +310,7 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   storageOverage: 'blocked',
   subscription: 'blocked',
   task: rw('agent:read', 'agent:write'),
+  taskLabel: rw('agent:read', 'agent:write'),
   taskTemplate: rw('agent:read', 'agent:write'),
   thread: rw('chat:read', 'chat:write'),
   topUp: 'blocked',

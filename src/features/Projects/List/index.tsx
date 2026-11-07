@@ -8,6 +8,7 @@ import {
   ContextMenuTrigger,
   createStaticStyles,
   cssVar,
+  cx,
   type DropdownItem,
   DropdownMenu,
   Empty,
@@ -20,10 +21,13 @@ import {
 } from '@lobehub/ui';
 import dayjs from 'dayjs';
 import {
+  ArrowDownUpIcon,
   FolderClosedIcon,
   MoreHorizontalIcon,
+  PencilIcon,
   PlusIcon,
   SearchXIcon,
+  StarIcon,
   TrashIcon,
 } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
@@ -34,22 +38,32 @@ import AgentAvatar from '@/components/AgentAvatar';
 import AsyncError from '@/components/AsyncError';
 import { PROJECT_STATUS_VISUALS, resolveProjectStatus } from '@/components/ExecutionStatus';
 import AssigneeAvatar from '@/features/AgentTasks/features/AssigneeAvatar';
+import { useFavoriteMenuItem, useFavoriteToggle } from '@/features/Favorites';
 import NavHeader from '@/features/NavHeader';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { openCreateProjectModal } from '@/features/Projects/CreateProjectModal';
 import { createDeleteProjectModal } from '@/features/Projects/DeleteProjectModal';
 import ProjectDisabled from '@/features/Projects/ProjectDisabled';
+import { openRenameProjectModal } from '@/features/Projects/RenameProjectModal';
 import { useCanManageProject } from '@/features/Projects/useCanManageProject';
 import TopicCreatorAvatar from '@/features/TopicCreatorAvatar';
 import UserAvatar from '@/features/User/UserAvatar';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
+import { useGlobalStore } from '@/store/global';
+import type { ProjectListSortBy } from '@/store/global/initialState';
+import { systemStatusSelectors } from '@/store/global/selectors';
 import { useLoadedProjectList, useProjectStore } from '@/store/project';
 import type { ProjectListItem } from '@/store/project/store';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
 
+import { projectFavoriteTarget } from '../projectFavorite';
 import { resolveProjectListState } from '../projectListState';
+import SortableProjectRows from './SortableProjectRows';
+import { sortProjects } from './sortProjects';
+
+const SORT_BYS: ProjectListSortBy[] = ['manual', 'createdAt', 'updatedAt'];
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   actions: css`
@@ -74,6 +88,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     min-width: 0;
 
     color: inherit;
+  `,
+  favorited: css`
+    opacity: 1;
   `,
   owner: css`
     display: flex;
@@ -153,11 +170,51 @@ const ProjectCoordinatorAvatar = memo<{ project: ProjectListItem }>(({ project }
 
 ProjectCoordinatorAvatar.displayName = 'ProjectCoordinatorAvatar';
 
+/**
+ * Row star. Unlike `FavoriteButton` it does not take the favorite hotkey: the
+ * hotkey toggles the open page, not one row in a list.
+ */
+const ProjectFavoriteStar = memo<{ project: ProjectListItem }>(({ project }) => {
+  const { t } = useTranslation('common');
+  const { isFavorite, isReady, toggle } = useFavoriteToggle(projectFavoriteTarget(project));
+  const label = t(isFavorite ? 'favorite.remove' : 'favorite.add');
+
+  return (
+    // A favorited star stays visible so the row shows it is pinned. It sits
+    // inside the row link, so its click must not open the project.
+    <span
+      data-row-action
+      className={cx(styles.actions, 'project-row-actions', isFavorite && styles.favorited)}
+      onClick={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+      }}
+    >
+      <ActionIcon
+        aria-label={label}
+        aria-pressed={isFavorite}
+        color={isFavorite ? cssVar.colorWarning : undefined}
+        disabled={!isReady}
+        fill={isFavorite ? cssVar.colorWarning : 'none'}
+        icon={StarIcon}
+        size={'small'}
+        title={label}
+        onClick={() => void toggle()}
+      />
+    </span>
+  );
+});
+
+ProjectFavoriteStar.displayName = 'ProjectFavoriteStar';
+
 const ProjectRow = memo<{ project: ProjectListItem }>(({ project }) => {
   const { t } = useTranslation(['project', 'common']);
   const [deleting, setDeleting] = useState(false);
   const deleteProject = useProjectStore((s) => s.deleteProject);
-  const canDelete = useCanManageProject();
+  const canManage = useCanManageProject();
+  const favoriteMenuItem = useFavoriteMenuItem(projectFavoriteTarget(project), {
+    showHotkey: false,
+  });
   const status = resolveProjectStatus(project.status);
   const statusVisual = PROJECT_STATUS_VISUALS[status];
 
@@ -174,18 +231,30 @@ const ProjectRow = memo<{ project: ProjectListItem }>(({ project }) => {
   };
 
   const menuItems: DropdownItem[] = [
-    {
-      danger: true,
-      icon: <Icon icon={TrashIcon} />,
-      key: 'delete',
-      label: t('list.deleteAction'),
-      onClick: () => {
-        createDeleteProjectModal({
-          onConfirm: handleDelete,
-          project: { id: project.id, name: project.name },
-        });
-      },
-    },
+    ...(favoriteMenuItem ? [favoriteMenuItem] : []),
+    ...(canManage
+      ? ([
+          { type: 'divider' },
+          {
+            icon: <Icon icon={PencilIcon} />,
+            key: 'rename',
+            label: t('rename.action'),
+            onClick: () => openRenameProjectModal(project),
+          },
+          {
+            danger: true,
+            icon: <Icon icon={TrashIcon} />,
+            key: 'delete',
+            label: t('list.deleteAction'),
+            onClick: () => {
+              createDeleteProjectModal({
+                onConfirm: handleDelete,
+                project: { id: project.id, name: project.name },
+              });
+            },
+          },
+        ] satisfies DropdownItem[])
+      : []),
   ];
 
   const row = (
@@ -201,6 +270,7 @@ const ProjectRow = memo<{ project: ProjectListItem }>(({ project }) => {
           <Text className={styles.identifier} fontSize={12}>
             {project.identifier}
           </Text>
+          <ProjectFavoriteStar project={project} />
         </Flexbox>
         <Flexbox horizontal align={'center'} flex={'none'} gap={4}>
           <ProjectOwnerAvatar userId={project.userId} />
@@ -214,22 +284,20 @@ const ProjectRow = memo<{ project: ProjectListItem }>(({ project }) => {
           {dayjs(project.updatedAt).fromNow()}
         </Text>
       </WorkspaceLink>
-      {canDelete && (
-        <span className={`${styles.actions} project-row-actions`}>
-          <DropdownMenu items={menuItems} placement={'bottomRight'}>
-            <ActionIcon
-              icon={MoreHorizontalIcon}
-              loading={deleting}
-              size={'small'}
-              title={t('list.moreActions')}
-            />
-          </DropdownMenu>
-        </span>
-      )}
+      <span data-row-action className={cx(styles.actions, 'project-row-actions')}>
+        <DropdownMenu items={menuItems} placement={'bottomRight'}>
+          <ActionIcon
+            icon={MoreHorizontalIcon}
+            loading={deleting}
+            size={'small'}
+            title={t('list.moreActions')}
+          />
+        </DropdownMenu>
+      </span>
     </Flexbox>
   );
 
-  return canDelete ? <ContextMenuTrigger items={menuItems}>{row}</ContextMenuTrigger> : row;
+  return <ContextMenuTrigger items={menuItems}>{row}</ContextMenuTrigger>;
 });
 
 ProjectRow.displayName = 'ProjectRow';
@@ -243,18 +311,35 @@ const ProjectListPage = memo(() => {
     (s) => s.useFetchProjectList,
   )(enabled);
   const listState = resolveProjectListState({ error, isHydrated, isValidating, projects });
+  const sortBy = useGlobalStore(systemStatusSelectors.projectListSortBy);
+  const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
+  // The custom order is shared by the workspace, so only editors may change it.
+  const canManage = useCanManageProject();
+  const normalizedKeyword = keyword.trim().toLocaleLowerCase();
 
   const filteredProjects = useMemo(() => {
-    const normalizedKeyword = keyword.trim().toLocaleLowerCase();
     if (!projects) return [];
+    const sorted = sortProjects(projects, sortBy);
     return normalizedKeyword
-      ? projects.filter((project) =>
+      ? sorted.filter((project) =>
           [project.name, project.identifier, project.description]
             .filter(Boolean)
             .some((value) => value!.toLocaleLowerCase().includes(normalizedKeyword)),
         )
-      : projects;
-  }, [keyword, projects]);
+      : sorted;
+  }, [normalizedKeyword, projects, sortBy]);
+
+  const sortMenuItems = SORT_BYS.map((by) => ({
+    checked: sortBy === by,
+    key: by,
+    label: t(`sidebar.sort.${by}`),
+    onCheckedChange: () => updateSystemStatus({ projectListSortBy: by }),
+    type: 'checkbox' as const,
+  }));
+
+  // A drop inside search results would reorder only the matches, so dragging
+  // waits for the full list.
+  const draggable = sortBy === 'manual' && canManage && !normalizedKeyword;
 
   if (!enabled) return <ProjectDisabled />;
 
@@ -267,7 +352,13 @@ const ProjectListPage = memo(() => {
           </Text>
         }
       />
-      <WideScreenContainer gap={16} paddingBlock={16} wrapperStyle={{ flex: 1, overflowY: 'auto' }}>
+      <WideScreenContainer
+        fullWidth
+        gap={16}
+        paddingBlock={16}
+        paddingInline={16}
+        wrapperStyle={{ flex: 1, overflowY: 'auto' }}
+      >
         <Flexbox horizontal align={'center'} gap={12} justify={'space-between'}>
           <SearchBar
             allowClear
@@ -277,9 +368,16 @@ const ProjectListPage = memo(() => {
             value={keyword}
             onChange={(event) => setKeyword(event.target.value)}
           />
-          <Button icon={PlusIcon} style={{ flex: 'none' }} onClick={() => openCreateProjectModal()}>
-            {t('create.action')}
-          </Button>
+          <Flexbox horizontal align={'center'} flex={'none'} gap={8}>
+            <DropdownMenu items={sortMenuItems} placement={'bottomRight'}>
+              <Button icon={ArrowDownUpIcon} title={t('sidebar.sort.title')}>
+                {t(`sidebar.sort.${sortBy}`)}
+              </Button>
+            </DropdownMenu>
+            <Button icon={PlusIcon} onClick={() => openCreateProjectModal()}>
+              {t('create.action')}
+            </Button>
+          </Flexbox>
         </Flexbox>
         {listState === 'error' ? (
           <AsyncError error={error} onRetry={() => revalidate()} />
@@ -294,9 +392,14 @@ const ProjectListPage = memo(() => {
           </Center>
         ) : (
           <Flexbox gap={4}>
-            {filteredProjects.map((project) => (
-              <ProjectRow key={project.id} project={project} />
-            ))}
+            {draggable ? (
+              <SortableProjectRows
+                projects={filteredProjects}
+                renderRow={(project) => <ProjectRow project={project} />}
+              />
+            ) : (
+              filteredProjects.map((project) => <ProjectRow key={project.id} project={project} />)
+            )}
           </Flexbox>
         )}
       </WideScreenContainer>

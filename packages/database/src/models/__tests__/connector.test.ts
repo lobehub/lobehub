@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
@@ -264,6 +264,72 @@ describe('ConnectorModel', () => {
       const rows = await model.queryByIdentifiers(['linear', 'slack']);
 
       expect(rows.map((r) => r.identifier).sort()).toEqual(['linear', 'slack']);
+    });
+  });
+
+  describe('stable identifier order', () => {
+    const createConnectors = async (model: ConnectorModel, identifiers: string[]) => {
+      for (const identifier of identifiers) {
+        await model.create({
+          identifier,
+          name: identifier,
+          sourceType: 'builtin',
+          status: 'connected',
+        });
+      }
+    };
+
+    // The identifier indexes make small test tables come back sorted by accident;
+    // disable plain index scans so rows come back in physical (heap) order, as
+    // they do in production when the planner picks a seq or bitmap heap scan.
+    beforeEach(async () => {
+      await serverDB.execute(sql`SET enable_indexscan = off`);
+      await serverDB.execute(sql`SET enable_indexonlyscan = off`);
+    });
+
+    afterEach(async () => {
+      await serverDB.execute(sql`RESET enable_indexscan`);
+      await serverDB.execute(sql`RESET enable_indexonlyscan`);
+    });
+
+    it('returns connectors sorted by identifier regardless of insert, update or input order', async () => {
+      const model = new ConnectorModel(serverDB, userId);
+      // insert in reverse order so the physical row order differs from the sorted order
+      await createConnectors(model, ['slack', 'linear', 'github']);
+      const expected = ['github', 'linear', 'slack'];
+
+      const queried = await model.queryByIdentifiers(['linear', 'slack', 'github']);
+      const resolved = await model.resolveByIdentifiers(['slack', 'github', 'linear']);
+      expect(queried.map((r) => r.identifier)).toEqual(expected);
+      expect(resolved.map((r) => r.identifier)).toEqual(expected);
+      expect((await model.resolveAll()).map((r) => r.identifier)).toEqual(expected);
+
+      // an update rewrites the row and moves it in physical order
+      const github = queried.find((r) => r.identifier === 'github')!;
+      await model.update(github.id, { name: 'GitHub (renamed)' });
+
+      expect(
+        (await model.queryByIdentifiers(['github', 'linear', 'slack'])).map((r) => r.id),
+      ).toEqual(queried.map((r) => r.id));
+      expect(
+        (await model.resolveByIdentifiers(['linear', 'github', 'slack'])).map((r) => r.id),
+      ).toEqual(resolved.map((r) => r.id));
+      expect((await model.resolveAll()).map((r) => r.identifier)).toEqual(expected);
+    });
+
+    it('omits unknown identifiers and does not duplicate repeated ones', async () => {
+      const model = new ConnectorModel(serverDB, userId);
+      await createConnectors(model, ['slack', 'github']);
+
+      const identifiers = ['slack', 'missing', 'github', 'slack'];
+      expect((await model.queryByIdentifiers(identifiers)).map((r) => r.identifier)).toEqual([
+        'github',
+        'slack',
+      ]);
+      expect((await model.resolveByIdentifiers(identifiers)).map((r) => r.identifier)).toEqual([
+        'github',
+        'slack',
+      ]);
     });
   });
 

@@ -55,7 +55,9 @@ export default {
     'Add an Acceptance section to the task detail: describe acceptance in one sentence and let AI generate editable verify criteria.',
   'features.taskVerify.title': 'Acceptance',
   'features.selfLearning.desc':
-    'Let every agent learn from your conversations in the background: it remembers facts, refines skills, collects lessons, and reviews its day each night. Rounds you send back become rules. Each nightly review covers at most 50 conversations. See it all under Memory → Self-evolving.',
+    'Agents learn from your conversations in the background and review their day each night. See the results under Memory → Self-evolving.',
+  'features.selfLearning.note':
+    'This runs model calls in the background and uses additional quota. Each nightly review covers up to 50 conversations.',
   'features.selfLearning.title': 'Self-evolving',
   'features.topicBugReport.desc':
     'Adds Report Bug to the topic menu. Send the topic’s IDs, your app environment, and optional attachments to the LobeHub support team.',

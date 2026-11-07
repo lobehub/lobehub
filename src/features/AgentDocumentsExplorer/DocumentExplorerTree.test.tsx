@@ -5,7 +5,7 @@ import {
   CUSTOM_FOLDER_FILE_TYPE,
 } from '@lobechat/const';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import type { MouseEvent as ReactMouseEvent, ReactNode } from 'react';
+import type { DragEvent as ReactDragEvent, MouseEvent as ReactMouseEvent, ReactNode } from 'react';
 import { MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -91,6 +91,7 @@ vi.mock('@/features/ExplorerTree', async () => {
     header?: ReactNode;
     nodes: ExplorerTreeNode<unknown>[];
     onNodeClick?: (node: ExplorerTreeNode<unknown>, event: ReactMouseEvent<HTMLElement>) => void;
+    onNodeDragStart?: (node: ExplorerTreeNode<unknown>, event: ReactDragEvent<HTMLElement>) => void;
   }
 
   interface MockMenuItem {
@@ -106,6 +107,7 @@ vi.mock('@/features/ExplorerTree', async () => {
     header,
     nodes,
     onNodeClick,
+    onNodeDragStart,
   }: MockExplorerTreeProps) => {
     const renderNodes = (parentId: string | null): ReactNode =>
       nodes
@@ -120,6 +122,10 @@ vi.mock('@/features/ExplorerTree', async () => {
               data-menu-count={String(menuItems.length)}
               data-testid={`tree-node-${node.id}`}
               key={node.id}
+              onDragStart={(event) => {
+                event.stopPropagation();
+                onNodeDragStart?.(node, event);
+              }}
             >
               <button
                 data-testid={`tree-node-button-${node.id}`}
@@ -450,6 +456,39 @@ describe('DocumentExplorerTree', () => {
 
     expect(openDocumentMock).toHaveBeenCalledWith('doc-content-1', 'agent-doc-row-1');
     expect(navigateMock).not.toHaveBeenCalled();
+  });
+
+  it('only drags plain documents out of the tree', () => {
+    const onDocumentDragStart = vi.fn();
+    const data = [
+      createDocument({ documentId: 'doc-plain', id: 'plain-row', title: 'Plain' }),
+      createDocument({ documentId: 'doc-folder', id: 'folder-row', isFolder: true }),
+      createDocument({ documentId: 'doc-pending', id: 'pending:new-row', title: 'Creating' }),
+      createDocument({
+        category: AGENT_DOCUMENT_SKILL_CATEGORY,
+        documentId: 'doc-skill',
+        id: 'skill-row',
+      }),
+    ];
+
+    render(
+      <DocumentExplorerTree
+        agentId="agent-1"
+        data={data}
+        mutate={vi.fn()}
+        onDocumentDragStart={onDocumentDragStart}
+      />,
+      { wrapper: MemoryRouter },
+    );
+
+    fireEvent.dragStart(screen.getByTestId('tree-node-folder-row'));
+    fireEvent.dragStart(screen.getByTestId('tree-node-skill-row'));
+    fireEvent.dragStart(screen.getByTestId('tree-node-pending:new-row'));
+    expect(onDocumentDragStart).not.toHaveBeenCalled();
+
+    fireEvent.dragStart(screen.getByTestId('tree-node-plain-row'));
+    expect(onDocumentDragStart).toHaveBeenCalledTimes(1);
+    expect(onDocumentDragStart.mock.calls[0][0]).toMatchObject({ id: 'plain-row', title: 'Plain' });
   });
 
   it('does not default-expand document folders', () => {

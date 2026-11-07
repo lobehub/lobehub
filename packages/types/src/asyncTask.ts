@@ -22,6 +22,11 @@ export enum AsyncTaskErrorType {
   EmbeddingError = 'EmbeddingError',
 
   /**
+   * The plan's vector storage cannot hold this file's vectors; nothing was embedded.
+   */
+  EmbeddingQuotaExceeded = 'EmbeddingQuotaExceeded',
+
+  /**
    * File exceeds the in-memory parser limit and cannot be chunked.
    */
   FileTooLargeToParse = 'FileTooLargeToParse',

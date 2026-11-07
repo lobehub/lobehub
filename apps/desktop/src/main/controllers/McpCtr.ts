@@ -2,6 +2,14 @@ import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
 
 import {
+  getMcpServerFingerprint,
+  getMcpToolVisibility,
+  isMcpToolVisibleTo,
+  lacksUiResourceMeta,
+  partitionMcpToolsForViews,
+  withListingUiMeta,
+} from '@lobechat/const/mcpApp';
+import {
   deserializeMcpIpcPayload,
   type McpIpcPayload,
   serializeMcpIpcPayload,
@@ -21,6 +29,7 @@ import type {
   AudioContent,
   ImageContent,
   MCPClientParams,
+  McpTool,
   ResourceContent,
   ToolCallContent,
   ToolCallResult,
@@ -85,7 +94,7 @@ interface CustomPluginMetadata {
   name?: string;
 }
 
-interface GetStdioMcpServerManifestInput {
+interface GetStdioMcpServerManifestInput extends McpSessionOptions {
   args?: string[];
   command: string;
   env?: Record<string, string>;
@@ -94,7 +103,7 @@ interface GetStdioMcpServerManifestInput {
   type?: 'stdio';
 }
 
-interface GetStreamableMcpServerManifestInput {
+interface GetStreamableMcpServerManifestInput extends McpSessionOptions {
   auth?: {
     accessToken?: string;
     token?: string;
@@ -106,14 +115,99 @@ interface GetStreamableMcpServerManifestInput {
   url: string;
 }
 
-export interface CallToolInput {
+export interface StdioCallToolInput extends McpCallOptions {
   args: any;
   env: any;
+  http?: undefined;
   params: GetStdioMcpServerManifestInput;
   toolName: string;
 }
 
+/** A call to an HTTP endpoint only this machine can reach (localhost / LAN). */
+export interface HttpCallToolInput extends McpCallOptions {
+  args: any;
+  http: {
+    auth?: { accessToken?: string; token?: string; type: 'none' | 'bearer' | 'oauth2' };
+    headers?: Record<string, string>;
+    name: string;
+    url: string;
+  };
+  toolName: string;
+}
+
+export type CallToolInput = StdioCallToolInput | HttpCallToolInput;
+
+/** List a stdio or local-network HTTP server's tools, as the server declares them. */
+export type ListToolsInput = McpSessionOptions &
+  (
+    | { http: HttpCallToolInput['http']; stdio?: undefined }
+    | { http?: undefined; stdio: GetStdioMcpServerManifestInput }
+  );
+
+/** A tool as `listTools` reports it, with its MCP Apps `visibility` when declared. */
+export interface ListedMcpTool {
+  description?: string;
+  inputSchema: McpTool['inputSchema'];
+  name: string;
+  visibility?: string[];
+}
+
+export interface ReadUiResourceInput {
+  env?: any;
+  /** HTTP endpoint only this machine can reach (localhost / LAN). */
+  http?: {
+    auth?: { accessToken?: string; token?: string; type: 'none' | 'bearer' | 'oauth2' };
+    headers?: Record<string, string>;
+    name: string;
+    url: string;
+  };
+  params?: GetStdioMcpServerManifestInput;
+  uri: string;
+}
+
 type SuperJSONSerialized<T = unknown> = McpIpcPayload<T>;
+
+interface McpSessionOptions {
+  /** Announce MCP Apps on the session: the user has the `mcp_apps` flag. */
+  mcpApps?: boolean;
+}
+
+/** How a tool call runs: whether a view made it, and whether MCP Apps are on. */
+interface McpCallOptions extends McpSessionOptions {
+  /** An MCP App view's `tools/call`: only tools visible to the app run. */
+  fromApp?: boolean;
+}
+
+/**
+ * A manifest's api is what the model may call: tools whose MCP Apps visibility
+ * leaves out "model" exist only for their view, which reaches them through
+ * `callTool`, so they stay out of it.
+ */
+const toPluginApi = (tools: McpTool[]) =>
+  tools.map((item) => ({
+    description: item.description,
+    name: item.name,
+    parameters: item.inputSchema as any,
+  }));
+
+const toModelApi = (tools: McpTool[]) =>
+  toPluginApi(
+    tools.filter((tool) => isMcpToolVisibleTo(getMcpToolVisibility(tool._meta), 'model')),
+  );
+
+/**
+ * MCP Apps: what a plugin's views may call beyond its model-facing `api`, and
+ * which `api` tools they may not, so the view-call policy finds every tool a
+ * view may reach without the model seeing the view-only ones.
+ */
+const toMcpAppsManifestFields = (tools: McpTool[]) => {
+  const { appOnlyTools, modelOnlyToolNames } = partitionMcpToolsForViews(tools);
+
+  return {
+    ...(appOnlyTools.length > 0 && { mcpAppOnlyApi: toPluginApi(appOnlyTools) }),
+    ...(modelOnlyToolNames.length > 0 && { mcpModelOnlyTools: modelOnlyToolNames }),
+  };
+};
 
 const deserializePayload = deserializeMcpIpcPayload;
 
@@ -235,6 +329,8 @@ export default class McpCtr extends ControllerModule {
    * a call fails.
    */
   private mcpClientPool = new Map<string, MCPClient>();
+  /** The pool key each client was created under, so eviction finds its own entry. */
+  private mcpClientKeys = new WeakMap<MCPClient, string>();
   private mcpClientInitialization?: Map<string, Promise<MCPClient>>;
 
   /**
@@ -315,8 +411,12 @@ export default class McpCtr extends ControllerModule {
    * one when the pool has no healthy entry. Callers must NOT disconnect the
    * returned client — pooled sessions outlive a single tool call.
    */
-  private async acquireClient(params: MCPClientParams): Promise<MCPClient> {
-    const key = serializeMcpClientParams(params);
+  private async acquireClient(
+    params: MCPClientParams,
+    { mcpApps = false }: McpSessionOptions = {},
+  ): Promise<MCPClient> {
+    // Sessions that announce MCP Apps and ones that don't are pooled apart
+    const key = `${serializeMcpClientParams(params)}${mcpApps ? '#mcp-apps' : ''}`;
 
     // Every acquire refreshes the session's idle clock (fire-and-forget —
     // reaping must never delay or fail the tool call it runs alongside).
@@ -333,8 +433,9 @@ export default class McpCtr extends ControllerModule {
     const inFlight = this.mcpClientInitialization?.get(key);
     if (inFlight) return inFlight;
 
-    const creating = this.createClient(params)
+    const creating = this.createClient(params, { mcpApps })
       .then((client) => {
+        this.mcpClientKeys.set(client, key);
         this.mcpClientPool.set(key, client);
         this.mcpClientLastUsedAt.set(key, Date.now());
         return client;
@@ -397,7 +498,7 @@ export default class McpCtr extends ControllerModule {
    */
   private async evictClient(params: MCPClientParams, client?: MCPClient): Promise<void> {
     if (!client) return;
-    const key = serializeMcpClientParams(params);
+    const key = this.mcpClientKeys.get(client) ?? serializeMcpClientParams(params);
     const pooled = this.mcpClientPool.get(key);
     // Only evict when the failing call ran on the pooled instance —
     // a concurrent recreate may have already replaced it.
@@ -420,9 +521,9 @@ export default class McpCtr extends ControllerModule {
     }
   }
 
-  private async createClient(params: MCPClientParams) {
+  private async createClient(params: MCPClientParams, options: McpSessionOptions = {}) {
     const { MCPClient } = await loadMcpClient();
-    const client = new MCPClient(params);
+    const client = new MCPClient(params, options);
     await client.initialize();
     return client;
   }
@@ -494,27 +595,26 @@ export default class McpCtr extends ControllerModule {
 
     let client: MCPClient | undefined;
     try {
-      client = await this.acquireClient(params);
+      client = await this.acquireClient(params, { mcpApps: input.mcpApps });
       // Lease for the manifest refresh too: a concurrent stale-session
       // eviction must not disconnect underneath this pending request.
       const manifest = await this.withClientLease(client, () => client!.listManifests());
       const identifier = input.name;
 
-      const tools = manifest.tools || [];
+      const api = toModelApi(manifest.tools || []);
 
       return serializePayload({
-        api: tools.map((item) => ({
-          description: item.description,
-          name: item.name,
-          parameters: item.inputSchema as any,
-        })),
+        api,
         identifier,
         meta: {
           avatar: input.metadata?.avatar || 'MCP_AVATAR',
-          description: input.metadata?.description || getMcpServerDescription(identifier, manifest),
+          description:
+            input.metadata?.description ||
+            getMcpServerDescription(identifier, { ...manifest, tools: api }),
           title: input.metadata?.name || identifier,
         },
         ...manifest,
+        ...toMcpAppsManifestFields(manifest.tools || []),
         mcpParams: params,
         type: 'mcp' as any,
       });
@@ -557,24 +657,22 @@ export default class McpCtr extends ControllerModule {
       url: input.url,
     };
 
-    const client = await this.createClient(params);
+    const client = await this.createClient(params, { mcpApps: input.mcpApps });
     try {
       const tools = await client.listTools();
+      const api = toModelApi(tools);
       const identifier = input.identifier;
 
       return serializePayload({
-        api: tools.map((item) => ({
-          description: item.description,
-          name: item.name,
-          parameters: item.inputSchema as any,
-        })),
+        api,
         identifier,
+        ...toMcpAppsManifestFields(tools),
         mcpParams: params,
         meta: {
           avatar: input.metadata?.avatar || 'MCP_AVATAR',
           description:
             input.metadata?.description ||
-            getMcpServerDescription(identifier, { tools }, { includeToolExample: true }),
+            getMcpServerDescription(identifier, { tools: api }, { includeToolExample: true }),
           title: identifier,
         },
         type: 'mcp' as any,
@@ -584,10 +682,172 @@ export default class McpCtr extends ControllerModule {
     }
   }
 
+  /**
+   * Every tool a stdio or local-network HTTP server lists, including the ones
+   * only its views may call. A connector syncs this full list, since a view's
+   * call must find its tool synced; the model's manifest filters it later.
+   */
+  @IpcMethod()
+  async listTools(payload: SuperJSONSerialized<ListToolsInput>) {
+    const input = deserializePayload<ListToolsInput>(payload);
+    const toListed = (tools: McpTool[]): ListedMcpTool[] =>
+      tools.map((tool) => ({
+        description: tool.description,
+        inputSchema: tool.inputSchema,
+        name: tool.name,
+        visibility: getMcpToolVisibility(tool._meta),
+      }));
+
+    if (input.http) {
+      const client = await this.createClient(
+        { ...input.http, type: 'http' },
+        { mcpApps: input.mcpApps },
+      );
+      try {
+        return serializePayload(toListed(await client.listTools()));
+      } finally {
+        await client.disconnect();
+      }
+    }
+
+    const params: MCPClientParams = {
+      args: input.stdio.args || [],
+      command: input.stdio.command,
+      env: input.stdio.env,
+      name: input.stdio.name,
+      type: 'stdio',
+    };
+    let client: MCPClient | undefined;
+    try {
+      client = await this.acquireClient(params, { mcpApps: input.mcpApps });
+      const tools = await this.withClientLease(client, () => client!.listTools());
+      return serializePayload(toListed(tools));
+    } catch (error) {
+      // Same as the manifest refresh: drop a broken pooled session.
+      await this.evictClient(params, client);
+      throw error;
+    }
+  }
+
   @IpcMethod()
   async callTool(payload: SuperJSONSerialized<CallToolInput>) {
     const input = deserializePayload<CallToolInput>(payload);
-    return serializePayload(await this.runStdioMcpTool(input));
+    if ('http' in input && input.http) {
+      return serializePayload(
+        await this.runHttpMcpTool(input.http, input.toolName, input.args, {
+          fromApp: input.fromApp,
+          mcpApps: input.mcpApps,
+        }),
+      );
+    }
+    return serializePayload(await this.runStdioMcpTool(input as StdioCallToolInput));
+  }
+
+  /**
+   * Read an MCP Apps `ui://` resource from a stdio or local-network HTTP
+   * server, so the chat can render a tool result's interactive view.
+   *
+   * Unlike the web routes, not gated by the `mcp_apps` flag: the main process
+   * has no per-user flags, and the renderer only asks while the flag is on.
+   */
+  @IpcMethod()
+  async readUiResource(payload: SuperJSONSerialized<ReadUiResourceInput>) {
+    const input = deserializePayload<ReadUiResourceInput>(payload);
+    if (!input.uri?.startsWith('ui://')) throw new Error('Only ui:// resources can be read');
+
+    let params: MCPClientParams;
+    if (input.http) {
+      params = { ...input.http, type: 'http' };
+    } else if (input.params) {
+      params = {
+        args: input.params.args || [],
+        command: input.params.command,
+        env: input.env,
+        name: input.params.name,
+        type: 'stdio',
+      };
+    } else {
+      throw new Error('Missing MCP server params');
+    }
+
+    const read = (client: MCPClient) =>
+      this.withClientLease(client, async () => {
+        const result = await client.readResource(input.uri);
+        // A view's _meta.ui may be declared once, on its resources/list entry
+        if (!lacksUiResourceMeta(result)) return result;
+
+        const listed = await client.listResources().catch((error) => {
+          logger.warn('Failed to list resources for MCP App metadata:', { error });
+          return [];
+        });
+        return withListingUiMeta(result, input.uri, listed);
+      });
+    // Reading is idempotent, so unlike tool calls a dead transport is retried
+    // too: the stale session is evicted and the read runs once on a fresh one.
+    const isSessionFailure = (error: unknown) =>
+      isStaleSessionError(error) || isDeadTransportError(error);
+
+    // Views are read only while MCP Apps are on, on a session that announces them
+    const client = await this.acquireClient(params, { mcpApps: true });
+    try {
+      return serializePayload(await read(client));
+    } catch (error) {
+      if (!isSessionFailure(error)) throw error;
+
+      logger.warn('MCP App resource read failed on pooled session, retrying with a fresh one:', {
+        message: (error as Error).message,
+      });
+      await this.evictClient(params, client);
+      const retryClient = await this.acquireClient(params, { mcpApps: true });
+      try {
+        return serializePayload(await read(retryClient));
+      } catch (retryError) {
+        if (isSessionFailure(retryError)) await this.evictClient(params, retryClient);
+        throw retryError;
+      }
+    }
+  }
+
+  /** Fails closed: a view's call is refused while the tool's visibility can't be learned. */
+  private async isToolCallableByApp(client: MCPClient, toolName: string) {
+    try {
+      return await client.isToolCallableByApp(toolName);
+    } catch (error) {
+      // A broken session is the call's own failure: let runMcpTool evict and
+      // recover it, or every later view call would reuse the dead session
+      if (isStaleSessionError(error, client.getProtocolEra()) || isDeadTransportError(error)) {
+        throw error;
+      }
+      logger.warn('Failed to resolve MCP App visibility for tool:', { error, toolName });
+      return false;
+    }
+  }
+
+  /**
+   * Fails open: while the tool's visibility can't be learned, the model's call
+   * runs as it did before MCP Apps.
+   */
+  private async isToolHiddenFromModel(client: MCPClient, toolName: string) {
+    try {
+      return await client.isToolHiddenFromModel(toolName);
+    } catch (error) {
+      // A broken session is the call's own failure, recovered by runMcpTool
+      if (isStaleSessionError(error, client.getProtocolEra()) || isDeadTransportError(error)) {
+        throw error;
+      }
+      logger.warn('Failed to resolve MCP App visibility for tool:', { error, toolName });
+      return false;
+    }
+  }
+
+  /** Never fails the tool call: an unknown UI resource only means no interactive view. */
+  private async getToolUiResourceUri(client: MCPClient, toolName: string) {
+    try {
+      return await client.getToolUiResourceUri(toolName);
+    } catch (error) {
+      logger.warn('Failed to resolve MCP App resource for tool:', { error, toolName });
+      return undefined;
+    }
   }
 
   /**
@@ -598,7 +858,7 @@ export default class McpCtr extends ControllerModule {
    * caller can shape its own error response.
    */
   async runStdioMcpTool(
-    input: CallToolInput,
+    input: StdioCallToolInput,
   ): Promise<{ content: string; state: unknown; success: boolean }> {
     return this.runMcpTool(
       {
@@ -610,6 +870,7 @@ export default class McpCtr extends ControllerModule {
       },
       input.toolName,
       input.args,
+      { fromApp: input.fromApp, mcpApps: input.mcpApps },
     );
   }
 
@@ -627,6 +888,7 @@ export default class McpCtr extends ControllerModule {
     },
     toolName: string,
     rawArgs: unknown,
+    options: McpCallOptions = {},
   ): Promise<{ content: string; state: unknown; success: boolean }> {
     return this.runMcpTool(
       {
@@ -638,6 +900,7 @@ export default class McpCtr extends ControllerModule {
       },
       toolName,
       rawArgs,
+      options,
     );
   }
 
@@ -645,6 +908,7 @@ export default class McpCtr extends ControllerModule {
     params: MCPClientParams,
     toolName: string,
     rawArgs: unknown,
+    { fromApp = false, mcpApps = false }: McpCallOptions = {},
   ): Promise<{ content: string; state: unknown; success: boolean }> {
     try {
       const args = safeParseToRecord(rawArgs);
@@ -660,17 +924,56 @@ export default class McpCtr extends ControllerModule {
       const runOn = (client: MCPClient) =>
         this.withClientLease(client, async () => {
           try {
+            // A view may only call tools whose visibility includes the app,
+            // and only while MCP Apps are on
+            if (fromApp && !(mcpApps && (await this.isToolCallableByApp(client, toolName)))) {
+              const message = `The tool "${toolName}" can't be called from an interactive view.`;
+              return {
+                content: message,
+                error: { message, name: 'MCPToolError' },
+                state: { content: [{ text: message, type: 'text' }], isError: true },
+                success: false,
+              };
+            }
+            // A tool the server keeps from the model is its views' alone, even
+            // when the model names it (e.g. from an earlier turn)
+            if (!fromApp && mcpApps && (await this.isToolHiddenFromModel(client, toolName))) {
+              const message = `The tool "${toolName}" can only be called from its interactive view.`;
+              return {
+                content: message,
+                error: { message, name: 'MCPToolError' },
+                state: { content: [{ text: message, type: 'text' }], isError: true },
+                success: false,
+              };
+            }
+            const uiResourceUri = mcpApps
+              ? await this.getToolUiResourceUri(client, toolName)
+              : undefined;
             const raw = (await client.callTool(toolName, args)) as ToolCallResult;
-            const processed = raw.isError
-              ? raw.content
-              : await this.processContentBlocks(raw.content);
-            const content = await toMarkdown(processed, (key) =>
-              this.fileService.getFileHTTPURL(key),
-            );
+            // A view gets the tool's own MCP result: its media stays base64
+            // `data`, not the uploaded keys the chat stores and renders
+            const processed =
+              raw.isError || fromApp ? raw.content : await this.processContentBlocks(raw.content);
+            const content = fromApp
+              ? processed.flatMap((block) => (block.type === 'text' ? [block.text] : [])).join('\n')
+              : await toMarkdown(processed, (key) => this.fileService.getFileHTTPURL(key));
+            const state = {
+              ...raw,
+              content: processed,
+              // MCP Apps: the `ui://` resource the chat renders this result with,
+              // and the server it may be read back from
+              ...(uiResourceUri &&
+                !raw.isError && {
+                  mcpApp: {
+                    resourceUri: uiResourceUri,
+                    server: await getMcpServerFingerprint(params),
+                  },
+                }),
+            };
             return {
               content,
               ...(raw.isError ? { error: { message: content, name: 'MCPToolError' } } : {}),
-              state: { ...raw, content: processed },
+              state,
               success: raw.isError !== true,
             };
           } catch (error) {
@@ -681,7 +984,7 @@ export default class McpCtr extends ControllerModule {
         });
 
       try {
-        return await runOn(await this.acquireClient(params));
+        return await runOn(await this.acquireClient(params, { mcpApps }));
       } catch (firstError) {
         const failedClient = (firstError as { ranOnClient?: MCPClient })?.ranOnClient;
         if (!isStaleSessionError(firstError, failedClient?.getProtocolEra())) {
@@ -714,7 +1017,7 @@ export default class McpCtr extends ControllerModule {
         // per key, so two concurrent calls that shared the same stale client
         // and both failed build ONE replacement process — not two racing
         // create/set writes that strand the loser (and its established state).
-        const retryClient = await this.acquireClient(params);
+        const retryClient = await this.acquireClient(params, { mcpApps });
         try {
           return await runOn(retryClient);
         } catch (retryError) {

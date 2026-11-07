@@ -486,6 +486,33 @@ describe('normalizeGithubToolResult (structured REST results)', () => {
     expect(operation?.params.url).toBe('https://github.com/lobehub/lobehub/issues/5');
   });
 
+  it('reads PR branches from the REST `head` / `base` refs, falling back to the args', () => {
+    const fromRefs = structured(
+      {
+        base: { ref: 'canary' },
+        head: { label: 'lobehub:feat/x', ref: 'feat/x' },
+        number: 21,
+        repository_full_name: 'lobehub/lobehub',
+      },
+      undefined,
+      'create_pull_request',
+    );
+    expect(fromRefs?.params.metadata).toEqual({ baseBranch: 'canary', headBranch: 'feat/x' });
+
+    const fromArgs = structured(
+      { number: 22, repository_full_name: 'lobehub/lobehub' },
+      { base: 'main', head: 'feat/y' },
+      'create_pull_request',
+    );
+    expect(fromArgs?.params.metadata).toEqual({ baseBranch: 'main', headBranch: 'feat/y' });
+
+    const issue = structured(
+      { base: { ref: 'main' }, number: 23, repository_full_name: 'lobehub/lobehub' },
+      { head: 'feat/z' },
+    );
+    expect(issue?.params.metadata).toBeUndefined();
+  });
+
   it('collapses merged and draft into the display status', () => {
     const merged = structured({ merged: true, number: 5, repository_full_name: 'o/r' });
     expect(merged?.params.status).toBe('merged');
@@ -658,6 +685,38 @@ describe('normalizeGithubToolResult (gh CLI edge cases)', () => {
       identifier: 'lobehub/lobehub#9',
       title: 'Retitled',
     });
+  });
+
+  it('captures the PR branches from --head / --base, long and short forms', () => {
+    const long = runCommand(
+      `gh pr create --repo lobehub/lobehub --head feat/work-branch --base=canary --title 'T' --body-file /tmp/body.md`,
+      'https://github.com/lobehub/lobehub/pull/11',
+    );
+    expect(long?.params.metadata).toEqual({ baseBranch: 'canary', headBranch: 'feat/work-branch' });
+
+    const short = runCommand(
+      `gh pr create -R lobehub/lobehub -H fork-owner:fix/x -B main -t 'T'`,
+      'https://github.com/lobehub/lobehub/pull/12',
+    );
+    expect(short?.params.metadata).toEqual({ baseBranch: 'main', headBranch: 'fork-owner:fix/x' });
+  });
+
+  it('records only the base a `gh pr edit --base` changes, and nothing without branch flags', () => {
+    const retarget = runCommand(`gh pr edit 13 --repo lobehub/lobehub --base main`);
+    expect(retarget?.params.metadata).toEqual({ baseBranch: 'main' });
+
+    const retitle = runCommand(`gh pr edit 13 --repo lobehub/lobehub --title 'Retitled'`);
+    expect(retitle?.params.metadata).toBeUndefined();
+  });
+
+  it('never attaches branches to an issue', () => {
+    const operation = runCommand(
+      `gh issue create --repo lobehub/lobehub --title 'T' -H stray -B stray`,
+      'https://github.com/lobehub/lobehub/issues/14',
+    );
+
+    expect(operation?.params.resourceType).toBe('github_issue');
+    expect(operation?.params.metadata).toBeUndefined();
   });
 
   it('skips a create command that leaves no resolvable identity', () => {

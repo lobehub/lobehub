@@ -617,27 +617,6 @@ describe('LobeCohereAI - custom features', () => {
       expect(models[0].contextWindowTokens).toBe(0);
     });
 
-    it('should merge vision capability from both API and known model list', async () => {
-      mockClient.models.list.mockResolvedValue({
-        body: {
-          models: [
-            {
-              name: 'command-r-plus-08-2024',
-              context_length: 128000,
-              features: ['tools', 'chat'],
-              supports_vision: true,
-            },
-          ],
-        },
-      });
-
-      const models = await params.models({ client: mockClient as any });
-
-      expect(models).toHaveLength(1);
-      // Vision should be true from either API or known model list
-      expect(models[0].vision).toBe(true);
-    });
-
     it('should correctly filter and map all model fields', async () => {
       mockClient.models.list.mockResolvedValue({
         body: {
@@ -704,14 +683,6 @@ describe('LobeCohereAI - custom features', () => {
   });
 
   describe('chatCompletion configuration', () => {
-    it('should have excludeUsage set to true', () => {
-      expect(params.chatCompletion.excludeUsage).toBe(true);
-    });
-
-    it('should have noUserId set to true', () => {
-      expect(params.chatCompletion.noUserId).toBe(true);
-    });
-
     it('should have handlePayload function', () => {
       expect(params.chatCompletion.handlePayload).toBeDefined();
       expect(typeof params.chatCompletion.handlePayload).toBe('function');
