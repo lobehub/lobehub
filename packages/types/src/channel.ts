@@ -349,6 +349,8 @@ export interface ChannelPublicMessage {
   replyToId: string | null;
   routingStatus: ChannelMessageRoutingStatus;
   sequence: number;
+  /** The Agent topic behind a reply, only when the viewer ran it (owns that topic). */
+  sourceTopicId?: string | null;
   threadId: string | null;
   userId: string | null;
 }

@@ -146,6 +146,19 @@ vi.mock('../resolveWorkspaceScope', () => ({
   resolveRunWorkspaceId: mocks.resolveRunWorkspaceId,
 }));
 
+const createRuntimeContext = () => ({
+  serverDB: {} as never,
+  toolManifestMap: {},
+  topicId: 'topic-1',
+  userId: 'user-1',
+});
+
+const createDeviceCommandResult = () => ({
+  content: 'ok',
+  state: { exitCode: 0, stdout: 'ok', success: true },
+  success: true,
+});
+
 describe('skillsRuntime', () => {
   it.each(
     (['runCommand', 'execScript', 'exportFile'] as const).flatMap((api) =>
@@ -175,12 +188,7 @@ describe('skillsRuntime', () => {
           result: { success: false, exitCode: 1, stdout: '', stderr: 'Forbidden' },
         });
       }
-      const runtime = await skillsRuntime.factory({
-        serverDB: {} as never,
-        toolManifestMap: {},
-        topicId: 'topic-1',
-        userId: 'user-1',
-      });
+      const runtime = await skillsRuntime.factory(createRuntimeContext());
       const execute = () =>
         api === 'exportFile'
           ? runtime.exportFile({ path: '/page.html', filename: 'page.html' })
@@ -253,12 +261,7 @@ describe('skillsRuntime', () => {
               });
       mocks.sandboxService.callTool.mockImplementation(call);
       mocks.sandboxService.exportAndUploadFile.mockImplementation(call);
-      const runtime = await skillsRuntime.factory({
-        serverDB: {} as never,
-        toolManifestMap: {},
-        topicId: 'topic-1',
-        userId: 'user-1',
-      });
+      const runtime = await skillsRuntime.factory(createRuntimeContext());
       const execute = () =>
         api === 'exportFile'
           ? runtime.exportFile({ path: '/page.html', filename: 'page.html' })
@@ -346,12 +349,7 @@ describe('skillsRuntime', () => {
   // that cold cost alone, independent of test logic.
   it('executes scripts through the sandbox service and only attaches persisted skill zips', async () => {
     const { skillsRuntime } = await import('../skills');
-    const runtime = await skillsRuntime.factory({
-      serverDB: {} as never,
-      toolManifestMap: {},
-      topicId: 'topic-1',
-      userId: 'user-1',
-    });
+    const runtime = await skillsRuntime.factory(createRuntimeContext());
 
     const result = await runtime.execScript({
       activatedSkills: [
@@ -380,12 +378,7 @@ describe('skillsRuntime', () => {
 
   it('tags sandbox exec results with executionEnv for plugin-state observability', async () => {
     const { skillsRuntime } = await import('../skills');
-    const runtime = await skillsRuntime.factory({
-      serverDB: {} as never,
-      toolManifestMap: {},
-      topicId: 'topic-1',
-      userId: 'user-1',
-    });
+    const runtime = await skillsRuntime.factory(createRuntimeContext());
 
     const result = await runtime.execScript({
       activatedSkills: [],
@@ -405,10 +398,7 @@ describe('skillsRuntime', () => {
 
     const { skillsRuntime } = await import('../skills');
     const runtime = await skillsRuntime.factory({
-      serverDB: {} as never,
-      toolManifestMap: {},
-      topicId: 'topic-1',
-      userId: 'user-1',
+      ...createRuntimeContext(),
       workspaceId: 'workspace-1',
     });
 
@@ -439,10 +429,7 @@ describe('skillsRuntime', () => {
     const { skillsRuntime } = await import('../skills');
     const runtime = await skillsRuntime.factory({
       agentId: 'agent-1',
-      serverDB: {} as never,
-      toolManifestMap: {},
-      topicId: 'topic-1',
-      userId: 'user-1',
+      ...createRuntimeContext(),
     });
 
     await runtime.runCommand({ command: 'lh agent edit agt_123 -s "new prompt"' });
@@ -474,10 +461,7 @@ describe('skillsRuntime', () => {
     const { skillsRuntime } = await import('../skills');
     const runtime = await skillsRuntime.factory({
       operationId: 'op-abc',
-      serverDB: {} as never,
-      toolManifestMap: {},
-      topicId: 'topic-1',
-      userId: 'user-1',
+      ...createRuntimeContext(),
       workspaceId: 'workspace-1',
     });
 
@@ -506,10 +490,7 @@ describe('skillsRuntime', () => {
 
     const { skillsRuntime } = await import('../skills');
     const runtime = await skillsRuntime.factory({
-      serverDB: {} as never,
-      toolManifestMap: {},
-      topicId: 'topic-1',
-      userId: 'user-1',
+      ...createRuntimeContext(),
       workspaceId: 'workspace-1',
     });
 
@@ -546,12 +527,7 @@ describe('skillsRuntime', () => {
     });
 
     const { skillsRuntime } = await import('../skills');
-    const runtime = await skillsRuntime.factory({
-      serverDB: {} as never,
-      toolManifestMap: {},
-      topicId: 'topic-1',
-      userId: 'user-1',
-    });
+    const runtime = await skillsRuntime.factory(createRuntimeContext());
 
     const result = await runtime.execScript({
       activatedSkills: [],
@@ -576,10 +552,7 @@ describe('skillsRuntime', () => {
       activeDeviceId: 'device-1',
       agentId: 'agent-1',
       operationId: 'op-1',
-      serverDB: {} as never,
-      toolManifestMap: {},
-      topicId: 'topic-1',
-      userId: 'user-1',
+      ...createRuntimeContext(),
       workspaceId: 'workspace-1',
     });
 
@@ -609,10 +582,7 @@ describe('skillsRuntime', () => {
       const { skillsRuntime } = await import('../skills');
       const runtime = await skillsRuntime.factory({
         agentId: 'agent-1',
-        serverDB: {} as never,
-        toolManifestMap: {},
-        topicId: 'topic-1',
-        userId: 'user-1',
+        ...createRuntimeContext(),
       });
 
       const result = await runtime.activateSkill({ name: 'user-skill' });
@@ -636,10 +606,7 @@ describe('skillsRuntime', () => {
       const { skillsRuntime } = await import('../skills');
       const runtime = await skillsRuntime.factory({
         agentId: 'agent-1',
-        serverDB: {} as never,
-        toolManifestMap: {},
-        topicId: 'topic-1',
-        userId: 'user-1',
+        ...createRuntimeContext(),
       });
 
       const result = await runtime.activateSkill({ name: 'user-skill' });
@@ -662,10 +629,7 @@ describe('skillsRuntime', () => {
       return skillsRuntime.factory({
         agentId: 'agent-1',
         agentShareVisitor: { skillGrants },
-        serverDB: {} as never,
-        toolManifestMap: {},
-        topicId: 'topic-1',
-        userId: 'user-1',
+        ...createRuntimeContext(),
       } as never);
     };
 
@@ -785,10 +749,7 @@ describe('skillsRuntime', () => {
       const { skillsRuntime } = await import('../skills');
       const runtime = await skillsRuntime.factory({
         agentId: 'agent-1',
-        serverDB: {} as never,
-        toolManifestMap: {},
-        topicId: 'topic-1',
-        userId: 'user-1',
+        ...createRuntimeContext(),
       });
 
       expect((await runtime.activateSkill({ name: 'user-skill' })).success).toBe(true);
@@ -805,19 +766,12 @@ describe('skillsRuntime', () => {
         extractedDir: '/home/user/.lobehub/skills/extracted/zip-hash-1',
         success: true,
       });
-      mocks.executeToolCall.mockResolvedValue({
-        content: 'ok',
-        state: { exitCode: 0, stdout: 'ok', success: true },
-        success: true,
-      });
+      mocks.executeToolCall.mockResolvedValue(createDeviceCommandResult());
 
       const { skillsRuntime } = await import('../skills');
       const runtime = await skillsRuntime.factory({
         activeDeviceId: 'device-1',
-        serverDB: {} as never,
-        toolManifestMap: {},
-        topicId: 'topic-1',
-        userId: 'user-1',
+        ...createRuntimeContext(),
       });
 
       const result = await runtime.execScript({
@@ -860,10 +814,7 @@ describe('skillsRuntime', () => {
       const { skillsRuntime } = await import('../skills');
       const runtime = await skillsRuntime.factory({
         activeDeviceId: 'device-1',
-        serverDB: {} as never,
-        toolManifestMap: {},
-        topicId: 'topic-1',
-        userId: 'user-1',
+        ...createRuntimeContext(),
       });
 
       const result = await runtime.execScript({
@@ -890,10 +841,7 @@ describe('skillsRuntime', () => {
       const { skillsRuntime } = await import('../skills');
       const runtime = await skillsRuntime.factory({
         activeDeviceId: 'device-1',
-        serverDB: {} as never,
-        toolManifestMap: {},
-        topicId: 'topic-1',
-        userId: 'user-1',
+        ...createRuntimeContext(),
       });
 
       const result = await runtime.execScript({
@@ -927,10 +875,7 @@ describe('skillsRuntime', () => {
         const { skillsRuntime } = await import('../skills');
         const runtime = await skillsRuntime.factory({
           activeDeviceId: 'device-1',
-          serverDB: {} as never,
-          toolManifestMap: {},
-          topicId: 'topic-1',
-          userId: 'user-1',
+          ...createRuntimeContext(),
         });
 
         const result = await runtime.execScript({
@@ -956,10 +901,7 @@ describe('skillsRuntime', () => {
       const { skillsRuntime } = await import('../skills');
       const runtime = await skillsRuntime.factory({
         activeDeviceId: 'device-1',
-        serverDB: {} as never,
-        toolManifestMap: {},
-        topicId: 'topic-1',
-        userId: 'user-1',
+        ...createRuntimeContext(),
       });
 
       const result = await runtime.execScript({
@@ -974,19 +916,12 @@ describe('skillsRuntime', () => {
     });
 
     it('runs without a skill dir (workingDirectory cwd) when no archive exists', async () => {
-      mocks.executeToolCall.mockResolvedValue({
-        content: 'ok',
-        state: { exitCode: 0, stdout: 'ok', success: true },
-        success: true,
-      });
+      mocks.executeToolCall.mockResolvedValue(createDeviceCommandResult());
 
       const { skillsRuntime } = await import('../skills');
       const runtime = await skillsRuntime.factory({
         activeDeviceId: 'device-1',
-        serverDB: {} as never,
-        toolManifestMap: {},
-        topicId: 'topic-1',
-        userId: 'user-1',
+        ...createRuntimeContext(),
         workingDirectory: '/Users/me/project',
       });
 
@@ -1015,11 +950,7 @@ describe('skillsRuntime', () => {
         extractedDir: '/home/user/.lobehub/skills/extracted/zip-hash-1',
         success: true,
       });
-      mocks.executeToolCall.mockResolvedValue({
-        content: 'ok',
-        state: { exitCode: 0, stdout: 'ok', success: true },
-        success: true,
-      });
+      mocks.executeToolCall.mockResolvedValue(createDeviceCommandResult());
 
       const { skillsRuntime } = await import('../skills');
       const runtime = await skillsRuntime.factory({
@@ -1027,10 +958,7 @@ describe('skillsRuntime', () => {
         projectSkills: [
           { location: '/ws/.agents/skills/foo/SKILL.md', name: 'foo', source: 'project' },
         ],
-        serverDB: {} as never,
-        toolManifestMap: {},
-        topicId: 'topic-1',
-        userId: 'user-1',
+        ...createRuntimeContext(),
       });
 
       const result = await runtime.execScript({
@@ -1083,19 +1011,12 @@ describe('skillsRuntime', () => {
       mocks.prepareSkillDirectory.mockImplementation(function () {
         return new Promise((resolve) => resolvers.push(resolve));
       });
-      mocks.executeToolCall.mockResolvedValue({
-        content: 'ok',
-        state: { exitCode: 0, stdout: 'ok', success: true },
-        success: true,
-      });
+      mocks.executeToolCall.mockResolvedValue(createDeviceCommandResult());
 
       const { skillsRuntime } = await import('../skills');
       const runtime = await skillsRuntime.factory({
         activeDeviceId: 'device-1',
-        serverDB: {} as never,
-        toolManifestMap: {},
-        topicId: 'topic-1',
-        userId: 'user-1',
+        ...createRuntimeContext(),
       });
 
       const pending = runtime.execScript({
@@ -1150,10 +1071,7 @@ describe('skillsRuntime', () => {
       const { skillsRuntime } = await import('../skills');
       const runtime = await skillsRuntime.factory({
         activeDeviceId: 'device-1',
-        serverDB: {} as never,
-        toolManifestMap: {},
-        topicId: 'topic-1',
-        userId: 'user-1',
+        ...createRuntimeContext(),
       });
 
       const result = await runtime.execScript({
@@ -1185,10 +1103,7 @@ describe('skillsRuntime', () => {
       const { skillsRuntime } = await import('../skills');
       const runtime = await skillsRuntime.factory({
         activeDeviceId: 'device-1',
-        serverDB: {} as never,
-        toolManifestMap: {},
-        topicId: 'topic-1',
-        userId: 'user-1',
+        ...createRuntimeContext(),
       });
 
       const result = await runtime.execScript({
@@ -1219,10 +1134,7 @@ describe('skillsRuntime', () => {
       const { skillsRuntime } = await import('../skills');
       const runtime = await skillsRuntime.factory({
         activeDeviceId: 'device-1',
-        serverDB: {} as never,
-        toolManifestMap: {},
-        topicId: 'topic-1',
-        userId: 'user-1',
+        ...createRuntimeContext(),
       });
 
       const result = await runtime.execScript({
@@ -1248,10 +1160,7 @@ describe('skillsRuntime', () => {
       const { skillsRuntime } = await import('../skills');
       const runtime = await skillsRuntime.factory({
         activeDeviceId: 'device-1',
-        serverDB: {} as never,
-        toolManifestMap: {},
-        topicId: 'topic-1',
-        userId: 'user-1',
+        ...createRuntimeContext(),
       });
 
       const result = await runtime.execScript({
@@ -1266,20 +1175,13 @@ describe('skillsRuntime', () => {
     });
 
     it('forwards executionTimeoutMs as the shell observation timeout in the runCommand args', async () => {
-      mocks.executeToolCall.mockResolvedValue({
-        content: 'ok',
-        state: { exitCode: 0, stdout: 'ok', success: true },
-        success: true,
-      });
+      mocks.executeToolCall.mockResolvedValue(createDeviceCommandResult());
 
       const { skillsRuntime } = await import('../skills');
       const runtime = await skillsRuntime.factory({
         activeDeviceId: 'device-1',
         executionTimeoutMs: 300_000,
-        serverDB: {} as never,
-        toolManifestMap: {},
-        topicId: 'topic-1',
-        userId: 'user-1',
+        ...createRuntimeContext(),
       });
 
       await runtime.execScript({
@@ -1321,10 +1223,7 @@ describe('skillsRuntime', () => {
       const { skillsRuntime } = await import('../skills');
       const runtime = await skillsRuntime.factory({
         activeDeviceId: 'device-1',
-        serverDB: {} as never,
-        toolManifestMap: {},
-        topicId: 'topic-1',
-        userId: 'user-1',
+        ...createRuntimeContext(),
       });
 
       const result = await runtime.execScript({
@@ -1348,10 +1247,7 @@ describe('skillsRuntime', () => {
       const { skillsRuntime } = await import('../skills');
       const runtime = await skillsRuntime.factory({
         activeDeviceId: 'device-1',
-        serverDB: {} as never,
-        toolManifestMap: {},
-        topicId: 'topic-1',
-        userId: 'user-1',
+        ...createRuntimeContext(),
       });
 
       const result = await runtime.runCommand({ command: 'ls' });
@@ -1365,10 +1261,7 @@ describe('skillsRuntime', () => {
       const { skillsRuntime } = await import('../skills');
       const runtime = await skillsRuntime.factory({
         activeDeviceId: 'device-1',
-        serverDB: {} as never,
-        toolManifestMap: {},
-        topicId: 'topic-1',
-        userId: 'user-1',
+        ...createRuntimeContext(),
       });
 
       const result = await runtime.exportFile({ filename: 'out.csv', path: '/tmp/out.csv' });
@@ -1386,12 +1279,7 @@ describe('skillsRuntime', () => {
     const { filterBuiltinSkills } = await import('@/helpers/skillFilters');
     const { skillsRuntime } = await import('../skills');
 
-    await skillsRuntime.factory({
-      serverDB: {} as never,
-      toolManifestMap: {},
-      topicId: 'topic-1',
-      userId: 'user-1',
-    });
+    await skillsRuntime.factory(createRuntimeContext());
 
     expect(filterBuiltinSkills).toHaveBeenLastCalledWith(expect.anything(), {
       canExecuteOnDevice: false,
@@ -1399,10 +1287,7 @@ describe('skillsRuntime', () => {
 
     await skillsRuntime.factory({
       activeDeviceId: 'device-1',
-      serverDB: {} as never,
-      toolManifestMap: {},
-      topicId: 'topic-1',
-      userId: 'user-1',
+      ...createRuntimeContext(),
     });
 
     expect(filterBuiltinSkills).toHaveBeenLastCalledWith(expect.anything(), {
@@ -1426,10 +1311,7 @@ describe('skillsRuntime', () => {
     mocks.resolveContentWorkspaceId.mockResolvedValueOnce('workspace-1');
 
     await skillsRuntime.factory({
-      serverDB: {} as never,
-      toolManifestMap: {},
-      topicId: 'topic-1',
-      userId: 'user-1',
+      ...createRuntimeContext(),
       workspaceId: 'workspace-1',
     });
 
@@ -1439,12 +1321,7 @@ describe('skillsRuntime', () => {
       }),
     );
 
-    await skillsRuntime.factory({
-      serverDB: {} as never,
-      toolManifestMap: {},
-      topicId: 'topic-1',
-      userId: 'user-1',
-    });
+    await skillsRuntime.factory(createRuntimeContext());
 
     expect(MarketService).toHaveBeenLastCalledWith(
       expect.objectContaining({
@@ -1465,10 +1342,7 @@ describe('skillsRuntime', () => {
 
     await skillsRuntime.factory({
       agentId: 'agt-1',
-      serverDB: {} as never,
-      toolManifestMap: {},
-      topicId: 'topic-1',
-      userId: 'user-1',
+      ...createRuntimeContext(),
     });
 
     // The same id the session is keyed by, so the sandbox this runtime reaches

@@ -1,4 +1,4 @@
-import type { ChannelPublicJob } from '@lobechat/types';
+import type { ChannelDetail, ChannelPublicJob } from '@lobechat/types';
 
 export const channelJobStatus = (job: ChannelPublicJob) =>
   job.publicationRevoked && job.writerHeld
@@ -51,4 +51,24 @@ export const memberCurrentJob = (jobs: ChannelPublicJob[], memberId: string) => 
     own.find((job) => job.publicationRevoked && job.writerHeld) ??
     unresolvedFailures(own)[0]
   );
+};
+
+/** Replies a conversation still waits on, and whether a sent message awaits routing. */
+export const conversationReplies = (detail: ChannelDetail, threadId: string | null) => {
+  const { jobs = [], messages = [] } = detail;
+  return {
+    jobs: replyActivityJobs(jobs.filter((job) => (job.threadId ?? null) === threadId)),
+    receiving: messages.some((message) => message.routingStatus === 'pending'),
+  };
+};
+
+/**
+ * What a direct conversation's header says about its one Agent: "typing" while it works, or the
+ * reply it is `waiting` on when blocked or stopping. Null when nothing is pending.
+ */
+export const directReplyStatus = (detail: ChannelDetail) => {
+  const { jobs, receiving } = conversationReplies(detail, null);
+  const job = jobs[0] && memberCurrentJob(jobs, jobs[0].memberId);
+  if (!job) return receiving ? { jobs } : null;
+  return channelJobTone(job) === 'working' ? { jobs } : { jobs, waiting: job };
 };

@@ -4,6 +4,14 @@ import { describe, expect, it } from 'vitest';
 
 import { transformResponseAPIToStream, transformResponseToStream } from './nonStreamToStream';
 
+const createInputOnlyUsage = () => ({
+  total_tokens: 5,
+  input_tokens: 5,
+  output_tokens: 0,
+  input_tokens_details: { audio_tokens: 0, cache_read_tokens: 0 },
+  output_tokens_details: { audio_tokens: 0, reasoning_tokens: 0 },
+});
+
 describe('nonStreamToStream', () => {
   describe('transformResponseToStream', () => {
     it('should transform ChatCompletion to stream events correctly', async () => {
@@ -433,13 +441,7 @@ describe('nonStreamToStream', () => {
             // Missing content property
           },
         ],
-        usage: {
-          total_tokens: 5,
-          input_tokens: 5,
-          output_tokens: 0,
-          input_tokens_details: { audio_tokens: 0, cache_read_tokens: 0 },
-          output_tokens_details: { audio_tokens: 0, reasoning_tokens: 0 },
-        },
+        usage: createInputOnlyUsage(),
         created: 1677652288,
         created_at: 1677652288,
         model: 'gpt-4o-realtime-preview',
@@ -568,13 +570,7 @@ describe('nonStreamToStream', () => {
             ],
           },
         ],
-        usage: {
-          total_tokens: 5,
-          input_tokens: 5,
-          output_tokens: 0,
-          input_tokens_details: { audio_tokens: 0, cache_read_tokens: 0 },
-          output_tokens_details: { audio_tokens: 0, reasoning_tokens: 0 },
-        },
+        usage: createInputOnlyUsage(),
         created: 1677652288,
         created_at: 1677652288,
         model: 'gpt-4o-realtime-preview',
@@ -663,13 +659,7 @@ describe('nonStreamToStream', () => {
         status: 'completed',
         status_details: null,
         output: [],
-        usage: {
-          total_tokens: 5,
-          input_tokens: 5,
-          output_tokens: 0,
-          input_tokens_details: { audio_tokens: 0, cache_read_tokens: 0 },
-          output_tokens_details: { audio_tokens: 0, reasoning_tokens: 0 },
-        },
+        usage: createInputOnlyUsage(),
         created: 1677652288,
         created_at: 1677652288,
         model: 'gpt-4o-realtime-preview',
@@ -702,13 +692,7 @@ describe('nonStreamToStream', () => {
         status: 'completed',
         status_details: null,
         // output field is missing
-        usage: {
-          total_tokens: 5,
-          input_tokens: 5,
-          output_tokens: 0,
-          input_tokens_details: { audio_tokens: 0, cache_read_tokens: 0 },
-          output_tokens_details: { audio_tokens: 0, reasoning_tokens: 0 },
-        },
+        usage: createInputOnlyUsage(),
         created: 1677652288,
         created_at: 1677652288,
         model: 'gpt-4o-realtime-preview',

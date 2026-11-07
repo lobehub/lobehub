@@ -3,6 +3,7 @@ import type {
   AgentAccountCredentialHint,
   AgentAccountKind,
   AgentAccountPersistedKind,
+  AgentAccountSettings,
   AgentAccountStatus,
 } from '@lobechat/types';
 import { AGENT_ACCOUNT_KINDS } from '@lobechat/types';
@@ -55,6 +56,7 @@ export interface AgentAccountPatch {
   capabilities?: AgentAccountCapabilities;
   displayName?: string | null;
   metadata?: Record<string, unknown>;
+  settings?: AgentAccountSettings;
 }
 
 /** Strip the ciphertext from a freshly written row. */
@@ -84,6 +86,7 @@ const viewColumns = {
   metadata: agentAccounts.metadata,
   provider: agentAccounts.provider,
   revokedAt: agentAccounts.revokedAt,
+  settings: agentAccounts.settings,
   status: agentAccounts.status,
   updatedAt: agentAccounts.updatedAt,
   userId: agentAccounts.userId,

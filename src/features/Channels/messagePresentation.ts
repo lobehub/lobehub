@@ -37,3 +37,44 @@ export const channelTimeFormatters = (locale: string) => ({
   full: new Intl.DateTimeFormat(locale, { dateStyle: 'full', timeStyle: 'medium' }),
   time: new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit' }),
 });
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Whole calendar days from `date` to `now`, in local time, unaffected by daylight-saving shifts. */
+const calendarDaysAgo = (date: Date, now: Date) =>
+  Math.round(
+    (Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) -
+      Date.UTC(date.getFullYear(), date.getMonth(), date.getDate())) /
+      DAY_MS,
+  );
+
+/**
+ * A day divider's label, the way WeChat stamps a conversation: the time alone today, then
+ * "Yesterday", the weekday within the past week, the month and day within this year, or the full
+ * date before that, each followed by the time of the day's first message.
+ */
+export const channelDayLabel = (
+  date: Date,
+  {
+    locale,
+    now = new Date(),
+    yesterday,
+  }: {
+    locale: string;
+    now?: Date;
+    yesterday: string;
+  },
+) => {
+  const time = new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit' }).format(date);
+  const days = calendarDaysAgo(date, now);
+  if (days === 0) return time;
+  const day =
+    days === 1
+      ? yesterday
+      : days > 1 && days < 7
+        ? new Intl.DateTimeFormat(locale, { weekday: 'long' }).format(date)
+        : date.getFullYear() === now.getFullYear()
+          ? new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long' }).format(date)
+          : new Intl.DateTimeFormat(locale, { dateStyle: 'long' }).format(date);
+  return `${day} ${time}`;
+};

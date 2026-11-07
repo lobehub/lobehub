@@ -226,6 +226,26 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
     platform: 'darwin' as const,
   };
 
+  const createAgentConfig = (agencyConfig: Record<string, unknown>) => ({
+    agencyConfig,
+    chatConfig: {},
+    files: [],
+    id: 'agent-1',
+    knowledgeBases: [],
+    model: 'gpt-4',
+    plugins: [],
+    provider: 'openai',
+    systemRole: 'You are a helpful assistant',
+  });
+
+  const createOwnerBotContext = () => ({
+    applicationId: 'app-1',
+    isOwner: true,
+    platform: 'discord',
+    platformThreadId: 'discord:guild-1:channel-1',
+    senderExternalUserId: 'owner-id',
+  });
+
   // Override the agent's agencyConfig and rebuild the service. Auto-activation
   // is now exclusive to `executionTarget: 'auto'` — the default (`local`) never
   // grabs a device — so the auto-activation specs opt in explicitly.
@@ -233,17 +253,7 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
     const { AgentService } = await import('@/server/services/agent');
     vi.mocked(AgentService).mockImplementation(function () {
       return {
-        getAgentConfig: vi.fn().mockResolvedValue({
-          agencyConfig,
-          chatConfig: {},
-          files: [],
-          id: 'agent-1',
-          knowledgeBases: [],
-          model: 'gpt-4',
-          plugins: [],
-          provider: 'openai',
-          systemRole: 'You are a helpful assistant',
-        }),
+        getAgentConfig: vi.fn().mockResolvedValue(createAgentConfig(agencyConfig)),
       } as any;
     });
     service = new AiAgentService(mockDb, userId);
@@ -257,13 +267,7 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
 
       await service.execAgent({
         agentId: 'agent-1',
-        botContext: {
-          applicationId: 'app-1',
-          isOwner: true,
-          platform: 'discord',
-          platformThreadId: 'discord:guild-1:channel-1',
-          senderExternalUserId: 'owner-id',
-        } as any,
+        botContext: createOwnerBotContext() as any,
         prompt: 'List my files',
       });
 
@@ -279,13 +283,7 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
 
       await service.execAgent({
         agentId: 'agent-1',
-        botContext: {
-          applicationId: 'app-1',
-          isOwner: true,
-          platform: 'discord',
-          platformThreadId: 'discord:guild-1:channel-1',
-          senderExternalUserId: 'owner-id',
-        } as any,
+        botContext: createOwnerBotContext() as any,
         prompt: 'List my files',
       });
 
@@ -301,13 +299,7 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
 
       await service.execAgent({
         agentId: 'agent-1',
-        botContext: {
-          applicationId: 'app-1',
-          isOwner: true,
-          platform: 'discord',
-          platformThreadId: 'discord:guild-1:channel-1',
-          senderExternalUserId: 'owner-id',
-        } as any,
+        botContext: createOwnerBotContext() as any,
         prompt: 'List my files',
       });
 
@@ -324,13 +316,7 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
 
       await service.execAgent({
         agentId: 'agent-1',
-        botContext: {
-          applicationId: 'app-1',
-          isOwner: true,
-          platform: 'discord',
-          platformThreadId: 'discord:guild-1:channel-1',
-          senderExternalUserId: 'owner-id',
-        } as any,
+        botContext: createOwnerBotContext() as any,
         prompt: 'List my files',
       });
 
@@ -426,17 +412,7 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
       const { AgentService } = await import('@/server/services/agent');
       vi.mocked(AgentService).mockImplementation(function () {
         return {
-          getAgentConfig: vi.fn().mockResolvedValue({
-            agencyConfig,
-            chatConfig: {},
-            files: [],
-            id: 'agent-1',
-            knowledgeBases: [],
-            model: 'gpt-4',
-            plugins: [],
-            provider: 'openai',
-            systemRole: 'You are a helpful assistant',
-          }),
+          getAgentConfig: vi.fn().mockResolvedValue(createAgentConfig(agencyConfig)),
         } as any;
       });
       service = new AiAgentService(mockDb, userId);
@@ -486,17 +462,9 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
       const { AgentService } = await import('@/server/services/agent');
       vi.mocked(AgentService).mockImplementation(function () {
         return {
-          getAgentConfig: vi.fn().mockResolvedValue({
-            agencyConfig: { boundDeviceId: 'device-001' },
-            chatConfig: {},
-            files: [],
-            id: 'agent-1',
-            knowledgeBases: [],
-            model: 'gpt-4',
-            plugins: [],
-            provider: 'openai',
-            systemRole: 'You are a helpful assistant',
-          }),
+          getAgentConfig: vi
+            .fn()
+            .mockResolvedValue(createAgentConfig({ boundDeviceId: 'device-001' })),
         } as any;
       });
 
@@ -519,17 +487,9 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
       const { AgentService } = await import('@/server/services/agent');
       vi.mocked(AgentService).mockImplementation(function () {
         return {
-          getAgentConfig: vi.fn().mockResolvedValue({
-            agencyConfig: { boundDeviceId: 'device-001' },
-            chatConfig: {},
-            files: [],
-            id: 'agent-1',
-            knowledgeBases: [],
-            model: 'gpt-4',
-            plugins: [],
-            provider: 'openai',
-            systemRole: 'You are a helpful assistant',
-          }),
+          getAgentConfig: vi
+            .fn()
+            .mockResolvedValue(createAgentConfig({ boundDeviceId: 'device-001' })),
         } as any;
       });
 
@@ -636,17 +596,9 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
       const { AgentService } = await import('@/server/services/agent');
       vi.mocked(AgentService).mockImplementation(function () {
         return {
-          getAgentConfig: vi.fn().mockResolvedValue({
-            agencyConfig: { boundDeviceId: 'device-002' },
-            chatConfig: {},
-            files: [],
-            id: 'agent-1',
-            knowledgeBases: [],
-            model: 'gpt-4',
-            plugins: [],
-            provider: 'openai',
-            systemRole: 'You are a helpful assistant',
-          }),
+          getAgentConfig: vi
+            .fn()
+            .mockResolvedValue(createAgentConfig({ boundDeviceId: 'device-002' })),
         } as any;
       });
 
@@ -934,13 +886,7 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
 
       await service.execAgent({
         agentId: 'agent-1',
-        botContext: {
-          applicationId: 'app-1',
-          isOwner: true,
-          platform: 'discord',
-          platformThreadId: 'discord:guild-1:channel-1',
-          senderExternalUserId: 'owner-id',
-        } as any,
+        botContext: createOwnerBotContext() as any,
         prompt: 'List my files',
       });
 
@@ -1028,13 +974,7 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
 
       await service.execAgent({
         agentId: 'agent-1',
-        botContext: {
-          applicationId: 'app-1',
-          isOwner: true,
-          platform: 'discord',
-          platformThreadId: 'discord:guild-1:channel-1',
-          senderExternalUserId: 'owner-id',
-        } as any,
+        botContext: createOwnerBotContext() as any,
         prompt: 'List my files',
       });
 
@@ -1052,17 +992,9 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
       const { AgentService } = await import('@/server/services/agent');
       vi.mocked(AgentService).mockImplementation(function () {
         return {
-          getAgentConfig: vi.fn().mockResolvedValue({
-            agencyConfig: { boundDeviceId: 'device-001' },
-            chatConfig: {},
-            files: [],
-            id: 'agent-1',
-            knowledgeBases: [],
-            model: 'gpt-4',
-            plugins: [],
-            provider: 'openai',
-            systemRole: 'You are a helpful assistant',
-          }),
+          getAgentConfig: vi
+            .fn()
+            .mockResolvedValue(createAgentConfig({ boundDeviceId: 'device-001' })),
         } as any;
       });
 
@@ -1100,13 +1032,7 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
 
       await service.execAgent({
         agentId: 'agent-1',
-        botContext: {
-          applicationId: 'app-1',
-          isOwner: true,
-          platform: 'discord',
-          platformThreadId: 'discord:guild-1:channel-1',
-          senderExternalUserId: 'owner-id',
-        } as any,
+        botContext: createOwnerBotContext() as any,
         prompt: 'List my files',
       });
 
@@ -1120,13 +1046,7 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
 
       await service.execAgent({
         agentId: 'agent-1',
-        botContext: {
-          applicationId: 'app-1',
-          isOwner: true,
-          platform: 'discord',
-          platformThreadId: 'discord:guild-1:channel-1',
-          senderExternalUserId: 'owner-id',
-        } as any,
+        botContext: createOwnerBotContext() as any,
         prompt: 'List my files',
       });
 

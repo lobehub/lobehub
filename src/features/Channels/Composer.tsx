@@ -19,8 +19,6 @@ import { useTranslation } from 'react-i18next';
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useLocalDragUpload } from '@/components/DragUploadZone/useLocalDragUpload';
 import { usePasteFile } from '@/components/DragUploadZone/usePasteFile';
-import DraftFile from '@/features/ChatInput/Mobile/FilePreview/FileItem/File';
-import DraftImage from '@/features/ChatInput/Mobile/FilePreview/FileItem/Image';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useEnterToSend } from '@/hooks/useEnterToSend';
 import { usePermission } from '@/hooks/usePermission';
@@ -34,6 +32,7 @@ import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
 import { ComposerActions } from './ComposerActions';
+import { ComposerAttachments } from './ComposerAttachments';
 import { MemberAvatar } from './MemberAvatar';
 import { isCurrentUserMember, memberName } from './memberName';
 import { getMentionGroups, mentionDescription } from './mentionGroups';
@@ -92,7 +91,7 @@ export function Composer({
   replyTarget,
   onCancelReply,
 }: {
-  /** Who is replying right now; shown on the line above the input. */
+  /** Who is replying right now; shown on the line above the input. Omit to drop that line. */
   activity?: ReactNode;
   /** Lets an @mention invite people and Agents from outside the Channel. */
   channel?: ChannelListItem;
@@ -220,34 +219,24 @@ export function Composer({
     }
   };
   const preview = attachments.items.length > 0 && (
-    <Flexbox horizontal gap={8} inert={busy} padding={8} wrap="wrap">
-      {attachments.items.map((item) =>
-        item.file.type.startsWith('image/') && item.status === 'success' ? (
-          <DraftImage
-            alt={item.file.name}
-            key={item.id}
-            src={item.fileUrl}
-            onRemove={() => attachments.remove(item.id)}
-          />
-        ) : (
-          <DraftFile
-            {...item}
-            key={item.id}
-            onRemove={() => attachments.remove(item.id)}
-            onRetry={() => attachments.retry(item.id)}
-          />
-        ),
-      )}
-    </Flexbox>
+    <ComposerAttachments
+      disabled={busy}
+      items={attachments.items}
+      onRemove={attachments.remove}
+      onRetry={attachments.retry}
+    />
   );
   return (
-    <WideScreenContainer fullWidth paddingInline={24}>
+    <WideScreenContainer fullWidth paddingInline={16}>
       <Flexbox {...stylex.props(styles.composer)} gap={4} {...getContainerProps()}>
-        <div {...stylex.props(styles.composerStatus)}>
-          <Flexbox horizontal align="center" style={{ minWidth: 0 }}>
-            {activity}
-          </Flexbox>
-        </div>
+        {/* Without an activity line the input meets the feed directly, with no empty strip. */}
+        {activity != null && (
+          <div {...stylex.props(styles.composerStatus)}>
+            <Flexbox horizontal align="center" style={{ minWidth: 0 }}>
+              {activity}
+            </Flexbox>
+          </div>
+        )}
         <ChatInput
           maxHeight={480}
           minHeight={0}

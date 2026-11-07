@@ -1,7 +1,17 @@
 import type { ChannelDetail, ChannelPublicMessage } from '@lobechat/types';
-import { ActionIcon, Button, Divider, Flexbox, Icon, Text } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Button,
+  copyToClipboard,
+  Divider,
+  DropdownMenu,
+  Flexbox,
+  Icon,
+  Text,
+  toast,
+} from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
-import { GitBranch, Reply } from 'lucide-react';
+import { Copy, GitBranch, MessagesSquare, MoreHorizontal, Reply } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -20,6 +30,7 @@ import { MessageAttachments } from './MessageAttachments';
 import { channelTimeFormatters } from './messagePresentation';
 import { MessageFailureMark, MessageRoutingStatus } from './MessageReceipts';
 import { showsReplyQuote } from './replyQuote';
+import type { ReplyTopic } from './ReplyTopicPanel';
 import { styles } from './styles';
 import type { ChannelThreadDraft } from './threadDraft';
 import type { ChannelReplyTarget } from './useReplyTarget';
@@ -54,6 +65,7 @@ export const ChannelMessage = ({
   onStartThread,
   onReply,
   onJumpToMessage,
+  onOpenTopic,
   pending = false,
 }: {
   continuation?: boolean;
@@ -67,6 +79,8 @@ export const ChannelMessage = ({
   onStartThread?: (draft: ChannelThreadDraft) => void;
   onReply?: (message: ChannelPublicMessage) => void;
   onJumpToMessage?: (message: ChannelReplyTarget) => void;
+  /** Opens the Agent topic a reply came from; offered only when the server shares it. */
+  onOpenTopic?: (topic: ReplyTopic) => void;
   /** Sent from this tab and not yet confirmed by the server. */
   pending?: boolean;
   threadId?: string | null;
@@ -106,6 +120,41 @@ export const ChannelMessage = ({
   const agentMember = agentAuthorId
     ? detail.members.find((member) => member.agentId === agentAuthorId)
     : undefined;
+  const sourceTopicId = message.sourceTopicId;
+  const moreItems = [
+    ...(agentAuthorId && sourceTopicId && onOpenTopic
+      ? [
+          {
+            icon: MessagesSquare,
+            key: 'openTopic',
+            label: t('topic.open'),
+            onClick: () =>
+              onOpenTopic({
+                agentId: agentAuthorId,
+                avatar: message.author.avatar,
+                name: message.author.name || t('unnamedAgent'),
+                topicId: sourceTopicId,
+              }),
+          },
+        ]
+      : []),
+    ...(message.content
+      ? [
+          {
+            icon: Copy,
+            key: 'copy',
+            label: t('message.copy'),
+            onClick: async () => {
+              await copyToClipboard(message.content);
+              toast.success(t('message.copied'));
+            },
+          },
+        ]
+      : []),
+  ];
+  const hasToolbar = !!onReply || canBranch || moreItems.length > 0;
+  // A direct conversation is a chat with one Agent; folding its answers only adds a click.
+  const collapsible = !detail.channel.agentId;
   const mentionNames = detail.members
     .filter((member) => message.mentions.includes(member.id))
     .map((member) => memberName(member, ''))
@@ -119,7 +168,7 @@ export const ChannelMessage = ({
       role="article"
       {...stylex.props(
         styles.messageRow,
-        compact && (onReply || canBranch) && styles.continuationWithAction,
+        compact && hasToolbar && styles.continuationWithAction,
         highlighted && styles.highlightedMessage,
         pending && styles.pendingMessage,
         stylex.defaultMarker(),
@@ -205,11 +254,14 @@ export const ChannelMessage = ({
             {message.fileIds.length > 0 && (
               <MessageAttachments attachments={detail.attachments} fileIds={message.fileIds} />
             )}
-            {message.content && (
-              <CollapsibleContent key={message.id} maxHeight={160}>
+            {message.content &&
+              (collapsible ? (
+                <CollapsibleContent key={message.id} maxHeight={160}>
+                  <MessageText content={message.content} names={mentionNames} />
+                </CollapsibleContent>
+              ) : (
                 <MessageText content={message.content} names={mentionNames} />
-              </CollapsibleContent>
-            )}
+              ))}
           </Flexbox>
         }
         titleAddon={
@@ -219,36 +271,37 @@ export const ChannelMessage = ({
           </>
         }
       />
-      {(onReply || canBranch) && (
+      {hasToolbar && (
+        // Icon-only, like a chat app's hover toolbar; rarer actions sit behind "more".
         <div {...stylex.props(styles.messageToolbar)}>
-          {onReply &&
-            (compact ? (
+          {onReply && (
+            <ActionIcon
+              aria-label={t('reply.action')}
+              icon={Reply}
+              size="small"
+              title={t('reply.action')}
+              onClick={() => onReply(message)}
+            />
+          )}
+          {canBranch && (
+            <ActionIcon
+              aria-label={t('startThread')}
+              icon={GitBranch}
+              size="small"
+              title={t('startThread')}
+              onClick={startThread}
+            />
+          )}
+          {moreItems.length > 0 && (
+            <DropdownMenu items={moreItems}>
               <ActionIcon
-                aria-label={t('reply.action')}
-                icon={Reply}
+                aria-label={t('more', { ns: 'common' })}
+                icon={MoreHorizontal}
                 size="small"
-                title={t('reply.action')}
-                onClick={() => onReply(message)}
+                title={t('more', { ns: 'common' })}
               />
-            ) : (
-              <Button icon={Reply} size="small" type="text" onClick={() => onReply(message)}>
-                {t('reply.action')}
-              </Button>
-            ))}
-          {canBranch &&
-            (compact ? (
-              <ActionIcon
-                aria-label={t('startThread')}
-                icon={GitBranch}
-                size="small"
-                title={t('startThread')}
-                onClick={startThread}
-              />
-            ) : (
-              <Button icon={GitBranch} size="small" type="text" onClick={startThread}>
-                {t('startThread')}
-              </Button>
-            ))}
+            </DropdownMenu>
+          )}
         </div>
       )}
     </div>

@@ -8,6 +8,19 @@ import { merge } from '@/utils/merge';
 
 import { topicSelectors } from './selectors';
 
+const topicState = <T>(key: string, topics: T[], total: number) => ({
+  topicDataMap: {
+    [key]: {
+      items: topics,
+      total,
+      currentPage: 0,
+      hasMore: false,
+      pageSize: 20,
+    },
+  },
+  activeAgentId: 'test',
+});
+
 // Mock i18next
 vi.mock('i18next', () => ({
   t: vi.fn().mockImplementation((key) => key),
@@ -467,18 +480,10 @@ describe('topicSelectors', () => {
         { id: 'topic2', name: 'Topic 2', favorite: false, createAt: '2023-01-01' },
       ];
 
-      const state = merge(initialStore, {
-        topicDataMap: {
-          [topicMapKey({ agentId: 'test' })]: {
-            items: topics,
-            total: topics.length,
-            currentPage: 0,
-            hasMore: false,
-            pageSize: 20,
-          },
-        },
-        activeAgentId: 'test',
-      });
+      const state = merge(
+        initialStore,
+        topicState(topicMapKey({ agentId: 'test' }), topics, topics.length),
+      );
 
       const grouped = topicSelectors.groupedTopicsSelector()(state);
       expect(grouped).toHaveLength(1); // One time-based group
@@ -492,18 +497,10 @@ describe('topicSelectors', () => {
         { id: 'topic3', name: 'Topic 3', favorite: true, createAt: '2023-01-01' },
       ];
 
-      const state = merge(initialStore, {
-        topicDataMap: {
-          [topicMapKey({ agentId: 'test' })]: {
-            items: topics,
-            total: topics.length,
-            currentPage: 0,
-            hasMore: false,
-            pageSize: 20,
-          },
-        },
-        activeAgentId: 'test',
-      });
+      const state = merge(
+        initialStore,
+        topicState(topicMapKey({ agentId: 'test' }), topics, topics.length),
+      );
 
       const grouped = topicSelectors.groupedTopicsSelector()(state);
 
@@ -526,18 +523,10 @@ describe('topicSelectors', () => {
         { id: 'topic2', name: 'Topic 2', favorite: false, createAt: '2023-02-01' },
       ];
 
-      const state = merge(initialStore, {
-        topicDataMap: {
-          [topicMapKey({ agentId: 'test' })]: {
-            items: topics,
-            total: topics.length,
-            currentPage: 0,
-            hasMore: false,
-            pageSize: 20,
-          },
-        },
-        activeAgentId: 'test',
-      });
+      const state = merge(
+        initialStore,
+        topicState(topicMapKey({ agentId: 'test' }), topics, topics.length),
+      );
 
       const grouped = topicSelectors.groupedTopicsSelector()(state);
 
@@ -831,18 +820,7 @@ describe('topicSelectors', () => {
     ];
 
     const createStateWithTopics = (topics: any[]) =>
-      merge(initialStore, {
-        topicDataMap: {
-          [topicMapKey({ agentId: 'test' })]: {
-            items: topics,
-            total: topics.length,
-            currentPage: 0,
-            hasMore: false,
-            pageSize: 20,
-          },
-        },
-        activeAgentId: 'test',
-      });
+      merge(initialStore, topicState(topicMapKey({ agentId: 'test' }), topics, topics.length));
 
     it('should group by createdAt when sortBy is createdAt', () => {
       const state = createStateWithTopics(topicsWithDifferentTimes);

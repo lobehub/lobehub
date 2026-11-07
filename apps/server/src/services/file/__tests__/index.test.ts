@@ -450,7 +450,7 @@ describe('FileService', () => {
       );
     });
 
-    it('should write metadata compatible with UI upload path', async () => {
+    it('records upload metadata and a nonempty content hash', async () => {
       const content = Buffer.from('test content');
 
       await service.uploadFromBuffer(content, 'text/plain', 'files/test-user/abc/test.txt');
@@ -467,6 +467,10 @@ describe('FileService', () => {
         expect.any(Boolean),
         expect.anything(),
       );
+
+      expect(mockFileModel.checkHash).toHaveBeenCalled();
+      const createdRecord = mockFileModel.create.mock.calls[0][0];
+      expect(createdRecord.fileHash.length).toBeGreaterThan(0);
     });
 
     it('preserves private visibility and page-editor source for rehosted images', async () => {
@@ -512,16 +516,6 @@ describe('FileService', () => {
         tx,
       );
       expect(mockFileModel.create).toHaveBeenCalledWith(expect.anything(), false, tx);
-    });
-
-    it('should compute hash for deduplication', async () => {
-      const content = Buffer.from('test content');
-
-      await service.uploadFromBuffer(content, 'text/plain', 'files/test-user/abc/test.txt');
-
-      expect(mockFileModel.checkHash).toHaveBeenCalled();
-      const createdRecord = mockFileModel.create.mock.calls[0][0];
-      expect(createdRecord.fileHash.length).toBeGreaterThan(0);
     });
   });
 
