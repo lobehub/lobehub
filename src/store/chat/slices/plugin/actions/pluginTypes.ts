@@ -3,8 +3,10 @@ import {
   type RuntimeStepContext,
   type SubAgentCallbacks,
 } from '@lobechat/types';
+import { toRecord } from '@lobechat/utils/object';
 import debug from 'debug';
 
+import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { resolveEffectiveWorkingDirectory } from '@/helpers/effectiveWorkingDirectory';
 import { resolveClientLocalSandbox } from '@/helpers/localSandbox';
 import { type MCPToolCallResult } from '@/libs/mcp';
@@ -316,7 +318,7 @@ export class PluginTypesActionImpl {
   invokeMCPTypePlugin = async (
     id: string,
     payload: ChatToolPayload,
-  ): Promise<string | undefined> => {
+  ): Promise<MCPToolCallResult | undefined> => {
     let data: MCPToolCallResult | undefined;
 
     // Get message to extract agentId/topicId
@@ -326,6 +328,18 @@ export class PluginTypesActionImpl {
     const operationId = this.#get().messageOperationMap[id];
     const operation = operationId ? this.#get().operations[operationId] : undefined;
     const abortController = operation?.abortController;
+    let root = operation;
+    while (root && !root.metadata.mcpClientStep && root.parentOperationId)
+      root = this.#get().operations[root.parentOperationId];
+    const stepBindings = toRecord(root?.metadata.mcpClientSteps);
+    const clientStep = (stepBindings ? stepBindings[id] : root?.metadata.mcpClientStep) as
+      | {
+          operationId: string;
+          deadline: number;
+          deadlines?: Record<string, number>;
+          workspaceId?: string;
+        }
+      | undefined;
 
     log(
       '[invokeMCPTypePlugin] messageId=%s, tool=%s, operationId=%s, aborted=%s',
@@ -337,8 +351,27 @@ export class PluginTypesActionImpl {
 
     try {
       const result = await mcpService.invokeMcpToolCall(payload, {
+        clientRuntime: !!clientStep,
         // Resolve connectors as this agent's runs do: a linked one serves only its agent
-        agentId: message?.agentId ?? undefined,
+        agentId: message?.agentId ?? operation?.context?.agentId ?? undefined,
+        elicitation:
+          operationId && message?.parentId
+            ? {
+                identity: {
+                  apiName: payload.apiName,
+                  assistantMessageId: message.parentId,
+                  identifier: payload.identifier,
+                  operationId: clientStep?.operationId ?? operationId,
+                  toolCallId: payload.id,
+                  toolMessageId: id,
+                },
+                deadline:
+                  clientStep?.deadlines?.[id] ?? clientStep?.deadline ?? Date.now() + 60_000,
+                workspaceId: clientStep
+                  ? clientStep.workspaceId
+                  : (getActiveWorkspaceId() ?? undefined),
+              }
+            : undefined,
         signal: abortController?.signal,
         topicId: message?.topicId,
       });
@@ -370,13 +403,15 @@ export class PluginTypesActionImpl {
 
     // Archive oversized content (or truncate if archive context unavailable)
     const rawContent = data.content || (data.error as any)?.message || '';
-    const truncatedContent = await archiveToolResultViaServer({
-      agentId: message?.agentId,
-      content: rawContent,
-      identifier: payload.identifier,
-      toolCallId: payload.id,
-      topicId: message?.topicId,
-    });
+    const truncatedContent = data.contentFinalized
+      ? rawContent
+      : await archiveToolResultViaServer({
+          agentId: message?.agentId,
+          content: rawContent,
+          identifier: payload.identifier,
+          toolCallId: payload.id,
+          topicId: message?.topicId,
+        });
 
     // operationId already declared above, reuse it
     const context = operationId ? { operationId } : undefined;
@@ -392,7 +427,7 @@ export class PluginTypesActionImpl {
       context,
     );
 
-    return truncatedContent;
+    return { ...data, content: truncatedContent };
   };
 
   internal_invokeRemoteToolPlugin = async (

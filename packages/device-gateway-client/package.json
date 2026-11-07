@@ -12,6 +12,7 @@
     "test:coverage": "bunx vitest run --coverage"
   },
   "dependencies": {
+    "@lobechat/mcp-elicitation": "workspace:*",
     "@lobechat/types": "workspace:*",
     "ws": "^8.21.0"
   },

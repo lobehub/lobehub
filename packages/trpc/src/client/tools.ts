@@ -58,25 +58,35 @@ const errorHandlingLink: TRPCLink<ToolsRouter> = () => {
     );
 };
 
-export const toolsClient = createTRPCClient<ToolsRouter>({
-  links: [
-    errorHandlingLink,
-    httpBatchLink({
-      headers: async () => {
-        // dynamic import to avoid circular dependency
-        const { createHeaderWithAuth } = await import('@/services/_auth');
+const createToolsClient = (scope?: { workspaceId: string | null }) =>
+  createTRPCClient<ToolsRouter>({
+    links: [
+      errorHandlingLink,
+      httpBatchLink({
+        headers: async () => {
+          // dynamic import to avoid circular dependency
+          const { createHeaderWithAuth } = await import('@/services/_auth');
 
-        const headers = await createHeaderWithAuth();
+          const headers = await createHeaderWithAuth();
 
-        // Let business layer contribute extra headers (e.g. workspace context in Cloud).
-        const { getBusinessTrpcHeaders } = await import('@/business/client/trpc-headers');
-        Object.assign(headers as Record<string, string>, await getBusinessTrpcHeaders());
+          // Let business layer contribute extra headers (e.g. workspace context in Cloud).
+          const { getBusinessTrpcHeaders } = await import('@/business/client/trpc-headers');
+          Object.assign(headers as Record<string, string>, await getBusinessTrpcHeaders());
 
-        return headers;
-      },
-      maxURLLength: 2083,
-      transformer: superjson,
-      url: '/trpc/tools',
-    }),
-  ],
-});
+          if (scope) {
+            if (scope.workspaceId)
+              (headers as Record<string, string>)['X-Workspace-Id'] = scope.workspaceId;
+            else delete (headers as Record<string, string>)['X-Workspace-Id'];
+          }
+          return headers;
+        },
+        maxURLLength: 2083,
+        transformer: superjson,
+        url: '/trpc/tools',
+      }),
+    ],
+  });
+
+export const toolsClient = createToolsClient();
+export const createWorkspaceToolsClient = (workspaceId: string | null) =>
+  createToolsClient({ workspaceId });

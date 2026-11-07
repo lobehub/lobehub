@@ -210,6 +210,24 @@ describe('QueueService', () => {
       expect(request.body.timestamp).toEqual(expect.any(Number));
     });
 
+    it.each([1001, 1300, 1499, 1999])(
+      'never schedules %dms before its not-before deadline',
+      async (delay) => {
+        qstashMocks.publishJSON.mockResolvedValue({ messageId: 'not-before' });
+        const { QStashQueueServiceImpl } = await import('../impls/qstash');
+        const impl = new QStashQueueServiceImpl({ qstashToken: 'test-qstash-token' });
+        await impl.scheduleMessage({
+          delay,
+          endpoint: 'https://example.com/expire',
+          operationId: 'op',
+          stepIndex: 0,
+        });
+        expect(qstashMocks.publishJSON.mock.calls.at(-1)![0].delay * 1000).toBeGreaterThanOrEqual(
+          delay,
+        );
+      },
+    );
+
     it('should publish zero delay immediately without a QStash delay', async () => {
       qstashMocks.publishJSON.mockResolvedValue({ messageId: 'msg-test' });
 

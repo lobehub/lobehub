@@ -195,3 +195,18 @@ describe('what a server tool learns about the run', () => {
     );
   });
 });
+
+it('routes a resumed MCP approval through its durable executor map when the original payload has no executor annotation', async () => {
+  const fixture = setup([]);
+  fixture.state.operationToolSet = {
+    enabledToolIds: ['fs'],
+    executorMap: { fs: 'client' },
+    manifestMap: {
+      fs: { identifier: 'fs', api: [], meta: {}, mcpParams: { type: 'stdio', command: 'fixture' } },
+    },
+    sourceMap: { fs: 'mcp' },
+  } as NonNullable<AgentState['operationToolSet']>;
+  await fixture.step([{ ...call(), type: 'mcp' }]);
+  expect(dispatchClient).toHaveBeenCalledOnce();
+  expect(fixture.execute).not.toHaveBeenCalled();
+});

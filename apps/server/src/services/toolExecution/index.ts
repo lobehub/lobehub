@@ -1,10 +1,13 @@
 import { BRANDING_NAME } from '@lobechat/business-const';
+import { McpInputRequiredError } from '@lobechat/mcp-elicitation';
 import { DEFAULT_TOOL_RESULT_MAX_LENGTH, truncateToolResult } from '@lobechat/prompts/toolResult';
 import { type ChatToolPayload } from '@lobechat/types';
 import { safeParseJSON } from '@lobechat/utils';
 import { isDeviceOnlyMcpEndpoint } from '@lobechat/utils/mcpEndpoint';
+import type { ElicitRequestParams } from '@modelcontextprotocol/client';
 import debug from 'debug';
 
+import { MessageModel } from '@/database/models/message';
 import { ConnectorToolPermission } from '@/database/schemas';
 import {
   type CloudMCPParams,
@@ -16,6 +19,7 @@ import {
   buildBlockedToolResponse,
   getConnectorToolPermission,
 } from '@/libs/mcp/connectorPermissionCheck';
+import { signMcpDeviceGrant } from '@/libs/trpc/utils/internalJwt';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { resolveDeviceClientKind } from '@/server/services/deviceGateway/deviceChannels';
 import { resolveDeviceDispatchAuthorizationFailure } from '@/server/services/deviceGateway/dispatchAuthorization';
@@ -25,6 +29,13 @@ import { isMcpAppsEnabled } from '@/server/services/mcp/featureGate';
 
 import { DiscoverService } from '../discover';
 import { type MCPService } from '../mcp';
+import { mcpConnectionBinding } from '../mcp/elicitation/binding';
+import {
+  type McpCallIdentity,
+  type McpElicitationExpiry,
+  McpElicitationService,
+} from '../mcp/elicitation/McpElicitationService';
+import type { McpElicitationRuntime } from '../mcp/elicitation/resume';
 import { type BuiltinToolsExecutor } from './builtin';
 import { classifyToolError, getToolAccessDeniedError } from './errorClassification';
 import { buildMcpAuthorizationErrorContent, isMcpAuthorizationError } from './mcpAuthError';
@@ -40,7 +51,9 @@ const log = debug('lobe-server:tool-execution-service');
 
 interface ToolExecutionServiceDeps {
   builtinToolsExecutor: BuiltinToolsExecutor;
+  mcpRuntime?: McpElicitationRuntime;
   mcpService: MCPService;
+  onMcpElicitationExpired?: McpElicitationExpiry;
 }
 
 /**
@@ -146,10 +159,19 @@ const toModelContent = (result: any): string => {
 export class ToolExecutionService {
   private builtinToolsExecutor: BuiltinToolsExecutor;
   private mcpService: MCPService;
+  private onMcpElicitationExpired?: McpElicitationExpiry;
+  private mcpRuntime?: McpElicitationRuntime;
 
-  constructor({ mcpService, builtinToolsExecutor }: ToolExecutionServiceDeps) {
+  constructor({
+    mcpService,
+    builtinToolsExecutor,
+    onMcpElicitationExpired,
+    mcpRuntime,
+  }: ToolExecutionServiceDeps) {
     this.builtinToolsExecutor = builtinToolsExecutor;
     this.mcpService = mcpService;
+    this.onMcpElicitationExpired = onMcpElicitationExpired;
+    this.mcpRuntime = mcpRuntime;
   }
 
   async executeTool(
@@ -193,7 +215,6 @@ export class ToolExecutionService {
           break;
         }
 
-        case 'builtin':
         default: {
           data = await this.builtinToolsExecutor.execute(payload, context);
           break;
@@ -320,10 +341,40 @@ export class ToolExecutionService {
       };
     }
 
+    const elicitationService =
+      context.serverDB && context.userId && context.operationId && context.assistantMessageId
+        ? new McpElicitationService(
+            context.serverDB,
+            context.userId,
+            context.workspaceId,
+            this.onMcpElicitationExpired,
+            this.mcpRuntime,
+          )
+        : undefined;
+    const identity: McpCallIdentity | undefined = elicitationService
+      ? {
+          apiName,
+          assistantMessageId: context.assistantMessageId!,
+          identifier,
+          operationId: context.operationId!,
+          toolCallId: payload.id,
+          toolMessageId: context.toolMessageId,
+        }
+      : undefined;
+    const deadline = Date.now() + (context.executionTimeoutMs ?? 60_000);
+    let toolMessageId = context.toolMessageId;
     try {
       // Check if this is a cloud MCP endpoint
       if (mcpParams.type === 'cloud') {
         return await this.executeCloudMCPTool(payload, context, mcpParams);
+      }
+
+      if (elicitationService && identity) {
+        const ensuredMessageId = await elicitationService.ensureToolMessage(identity);
+        toolMessageId = ensuredMessageId;
+        await elicitationService.messages.updatePluginState(ensuredMessageId, {
+          mcpInvocationDeadline: deadline,
+        });
       }
 
       // Stdio must run on a desktop device. Without a configured gateway or a
@@ -335,6 +386,7 @@ export class ToolExecutionService {
           const message = `MCP server '${identifier}' uses stdio and must run on a desktop device, but this server's device gateway is not configured. Configure a device gateway on the server and connect the desktop app on the machine that hosts this MCP server, then retry.`;
           return {
             content: message,
+            toolMessageId,
             error: { code: 'MCP_GATEWAY_NOT_CONFIGURED', message },
             success: false,
           };
@@ -348,11 +400,18 @@ export class ToolExecutionService {
           const message = `MCP server '${identifier}' only your own machine can reach (stdio or local network). No online ${BRANDING_NAME} desktop app was found to run it (a device connected only through the \`lh connect\` CLI cannot run MCP servers) — open the ${BRANDING_NAME} desktop app on the machine that hosts this MCP server, then retry.`;
           return {
             content: message,
+            toolMessageId,
             error: { code: 'MCP_DEVICE_UNAVAILABLE', message },
             success: false,
           };
         }
-        return await this.executeMcpViaDevice(payload, context, mcpParams, tunnelTarget);
+        const result = await this.executeMcpViaDevice(
+          payload,
+          { ...context, toolMessageId },
+          mcpParams,
+          tunnelTarget,
+        );
+        return { ...result, toolMessageId: result.toolMessageId ?? toolMessageId };
       }
 
       // HTTP MCP endpoints can execute through the server-side MCP service.
@@ -361,6 +420,27 @@ export class ToolExecutionService {
         clientParams: mcpParams,
         mcpApps: await isMcpAppsEnabled(context.userId),
         toolName: apiName,
+        elicitation: {
+          scope: JSON.stringify([context.userId, context.workspaceId]),
+          signal: context.abortSignal
+            ? AbortSignal.any([
+                context.abortSignal,
+                AbortSignal.timeout(Math.max(1, deadline - Date.now())),
+              ])
+            : AbortSignal.timeout(Math.max(1, deadline - Date.now())),
+          timeoutMs: Math.max(1, deadline - Date.now()),
+          continuation: context.mcpContinuation,
+          host:
+            elicitationService && identity
+              ? {
+                  request: async (request, requestContext) => {
+                    return elicitationService
+                      .createLegacyHost({ ...identity, toolMessageId }, deadline)
+                      .request(request, requestContext);
+                  },
+                }
+              : undefined,
+        },
       });
 
       log('MCP tool execution completed for: %s:%s', identifier, apiName);
@@ -368,27 +448,65 @@ export class ToolExecutionService {
       return {
         content: typeof result === 'string' ? result : toModelContent(result),
         ...(result?.success === false
-          ? { error: { code: 'MCP_TOOL_ERROR', message: result.error?.message ?? result.content } }
+          ? {
+              error: {
+                code: 'MCP_TOOL_ERROR',
+                kind: 'stop',
+                message: result.error?.message ?? result.content,
+              },
+            }
           : {}),
         state: typeof result === 'object' ? result : undefined,
+        ...(toolMessageId && { toolMessageId }),
         success: result?.success !== false,
       };
     } catch (error) {
+      if (error instanceof McpInputRequiredError && elicitationService && identity) {
+        const entries = Object.entries(error.checkpoint.inputRequired.inputRequests ?? {});
+        const requests: Record<string, ElicitRequestParams> = Object.fromEntries(
+          entries.map(([key, request]) => [key, request.params as ElicitRequestParams]),
+        );
+        const pending = await elicitationService.open(identity, {
+          checkpoint: error.checkpoint,
+          connectionBinding: mcpConnectionBinding(mcpParams),
+          deadline,
+          legacy: false,
+          requests,
+        });
+        return {
+          content: '',
+          deferred: true,
+          state: { status: 'pending', toolMessageId: pending.toolMessageId },
+          success: true,
+          toolMessageId: pending.toolMessageId,
+        };
+      }
       log('MCP tool execution failed for %s:%s: %O', identifier, apiName, error);
+      const existingMessageId =
+        toolMessageId ??
+        (elicitationService && identity
+          ? await elicitationService.messages.findToolMessageIdByToolCallId(
+              identity.toolCallId,
+              identity.assistantMessageId,
+            )
+          : undefined);
       if (isMcpAuthorizationError(error)) {
         const content = buildMcpAuthorizationErrorContent(identifier, {
           isShareVisitor: !!context.agentShareVisitor,
         });
         return {
           content,
+          toolMessageId: existingMessageId ?? undefined,
           error: { code: 'UNAUTHORIZED', message: (error as Error).message },
           success: false,
         };
       }
       return {
         content: (error as Error).message,
+        ...(existingMessageId && { toolMessageId: existingMessageId }),
         error: {
           code: 'MCP_EXECUTION_ERROR',
+          kind: 'stop',
           message: (error as Error).message,
         },
         success: false,
@@ -503,6 +621,30 @@ export class ToolExecutionService {
       target.workspaceId ?? 'personal',
     );
 
+    const deadline = Date.now() + (context.executionTimeoutMs ?? 60_000);
+    const identity =
+      context.operationId && context.assistantMessageId
+        ? {
+            apiName,
+            assistantMessageId: context.assistantMessageId,
+            identifier,
+            operationId: context.operationId,
+            toolCallId: payload.id,
+            toolMessageId: context.toolMessageId,
+          }
+        : undefined;
+    const delegation =
+      identity && target.workspaceId
+        ? await signMcpDeviceGrant(
+            {
+              ...identity,
+              userId: context.userId!,
+              workspaceId: target.workspaceId,
+              deviceId: target.deviceId,
+            },
+            deadline,
+          )
+        : undefined;
     const result = await deviceGateway.executeMcpCall(
       {
         apiName,
@@ -517,6 +659,23 @@ export class ToolExecutionService {
                 env: mcpParams.env,
                 name: mcpParams.name,
                 type: 'stdio',
+                elicitation:
+                  context.operationId && context.assistantMessageId
+                    ? {
+                        delegation,
+                        identity: {
+                          apiName,
+                          assistantMessageId: context.assistantMessageId,
+                          identifier,
+                          operationId: context.operationId,
+                          toolCallId: payload.id,
+                          toolMessageId: context.toolMessageId,
+                        },
+                        deadline,
+                        workspaceId: context.workspaceId,
+                        continuation: context.mcpContinuation,
+                      }
+                    : undefined,
               }
             : {
                 // AuthConfig also carries OAuth client secrets / refresh tokens —
@@ -532,6 +691,23 @@ export class ToolExecutionService {
                 name: mcpParams.name,
                 type: 'http',
                 url: mcpParams.url,
+                elicitation:
+                  context.operationId && context.assistantMessageId
+                    ? {
+                        delegation,
+                        identity: {
+                          apiName,
+                          assistantMessageId: context.assistantMessageId,
+                          identifier,
+                          operationId: context.operationId,
+                          toolCallId: payload.id,
+                          toolMessageId: context.toolMessageId,
+                        },
+                        deadline,
+                        workspaceId: context.workspaceId,
+                        continuation: context.mcpContinuation,
+                      }
+                    : undefined,
               },
         userId: context.userId!,
         // Address the workspace device pool when the run is workspace-scoped —
@@ -542,6 +718,14 @@ export class ToolExecutionService {
       context.executionTimeoutMs,
     );
 
+    const existingToolMessageId =
+      context.serverDB && context.userId && context.assistantMessageId
+        ? await new MessageModel(
+            context.serverDB,
+            context.userId,
+            context.workspaceId,
+          ).findToolMessageIdByToolCallId(payload.id, context.assistantMessageId)
+        : undefined;
     if (!result.success) {
       // The device may already be running the call, so never let the retry
       // classifier replay it (see withoutDeviceReplay).
@@ -552,6 +736,7 @@ export class ToolExecutionService {
           message: result.error || result.content,
         },
         errorData: result.errorData,
+        toolMessageId: existingToolMessageId ?? undefined,
         success: false,
       });
     }
@@ -564,6 +749,7 @@ export class ToolExecutionService {
     return {
       content: result.content,
       state: result.state ? state : undefined,
+      toolMessageId: existingToolMessageId ?? undefined,
       success: true,
     };
   }
