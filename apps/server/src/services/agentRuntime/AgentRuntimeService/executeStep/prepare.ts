@@ -3,6 +3,7 @@ import {
   type AgentRuntimeContext,
   type AgentState,
   findCurrentTurnPendingToolMessages,
+  isGraphAgentState,
 } from '@lobechat/agent-runtime';
 import { type ChatToolPayload } from '@lobechat/types';
 import debug from 'debug';
@@ -37,6 +38,8 @@ const LLM_NEXT_PHASES = new Set([
  */
 const isSubAgentFinalAnswer = (context: AgentRuntimeContext, state: AgentState): boolean => {
   if (!state.origin?.lineage?.isSubAgent || context.phase !== 'llm_result') return false;
+  // A graph moves a tool-free LLM node on to the next one: not its final answer.
+  if (isGraphAgentState(state)) return false;
   const payload = context.payload as
     { hasToolsCalling?: boolean; result?: { tool_calls?: unknown[] } } | undefined;
 

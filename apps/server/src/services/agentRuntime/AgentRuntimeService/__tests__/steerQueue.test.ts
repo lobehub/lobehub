@@ -159,6 +159,17 @@ describe('server-side steer queue in the step loop', () => {
       ).resolves.toEqual({ messageId: 'msg-steer' });
     });
 
+    it('retries a seal that Redis rejects before reading', async () => {
+      steerQueueSeal.mockRejectedValueOnce(new Error('timeout')).mockResolvedValueOnce(undefined);
+
+      await injectQueuedFollowUp(createDeps(), 'op-child', 2, child, { lastRead: true });
+
+      expect(steerQueueSeal).toHaveBeenCalledTimes(2);
+      expect(steerQueueSeal.mock.invocationCallOrder[1]).toBeLessThan(
+        steerQueueLength.mock.invocationCallOrder[0],
+      );
+    });
+
     it('does not seal on a read the run makes before another LLM call', async () => {
       await injectQueuedFollowUp(createDeps(), 'op-child', 2, child);
 
@@ -350,6 +361,31 @@ describe('server-side steer queue in the step loop', () => {
           phase: 'user_input',
         });
         expect(currentState.messages).toEqual(refreshed);
+      });
+
+      it('does not treat a graph node’s tool-free result as the final answer', async () => {
+        const deps = createDeps(undefined);
+
+        await prepareStepInput(deps, {
+          agentState: stateOf({
+            messages: toolMessages,
+            metadata: { __graphRuntimeState: { graphState: { phase: 'node_in' } } },
+            origin: subAgentOrigin,
+            status: 'running',
+          } as any),
+          params: {
+            context: {
+              payload: { hasToolsCalling: false, result: { content: 'node', tool_calls: [] } },
+              phase: 'llm_result',
+            },
+            operationId: 'op-child',
+            stepIndex: 4,
+          } as any,
+          stepEntryMessages: undefined as any,
+        });
+
+        // Not read at all: a graph's llm_result is no decision point, and no seal.
+        expect(deps.injectQueuedFollowUp).not.toHaveBeenCalled();
       });
 
       it('takes the steer at its final answer instead of finishing without it', async () => {
