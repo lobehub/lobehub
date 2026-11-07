@@ -842,9 +842,10 @@ export class DocumentModel {
         const currentId = queue.shift()!;
         if (seen.has(currentId)) continue;
         seen.add(currentId);
-        const original = byId.get(currentId);
-        /* v8 ignore next -- unreachable: the queue only holds documentId (the subtree root collectSubtree fetched by that id) and ids pushed from subtree rows, so byId always has it */
-        if (!original) continue;
+        // Invariant: the queue only holds documentId (the subtree root
+        // collectSubtree fetched by that id) and ids pushed from subtree rows,
+        // all of which are byId keys.
+        const original = byId.get(currentId)!;
 
         const newParentId =
           currentId === documentId ? null : (idMap.get(original.parentId!) ?? null);
