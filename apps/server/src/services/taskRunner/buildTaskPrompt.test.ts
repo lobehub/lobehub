@@ -240,6 +240,68 @@ describe('buildTaskPrompt unresolved checks', () => {
     );
     expect(result.prompt).not.toContain('Check rebased');
   });
+  it('tells the next attempt which disputed checks were waived or must still be met', async () => {
+    const taskModel = new TaskModel(db, userId);
+    const task = await taskModel.create({ instruction: 'Ship the report.' });
+    await taskModel.update(task.id, { totalTopics: 1 });
+    const goal = await new GoalModel(db, userId).create({
+      subjectType: 'standalone',
+      title: 'Disputed checks',
+    });
+    const graphModel = new GoalGraphModel(db, userId);
+    const taskNode = await graphModel.createNode(goal.id, { kind: 'task', title: 'Ship' });
+    await graphModel.bindTask(goal.id, taskNode!.id, task.id);
+    const acceptance = await new AcceptanceModel(db, userId).create({
+      subjectId: task.id,
+      subjectType: 'task',
+    });
+    const [run] = await db
+      .insert(verifyRuns)
+      .values({
+        acceptanceId: acceptance.id,
+        plan: [planItem('pdf'), planItem('totals')],
+        roundIndex: 1,
+        userId,
+      } as never)
+      .returning();
+    const ruled = (outcome: 'overruled' | 'upheld') => ({
+      dispute: {
+        arbitration: { decidedAt: 'now', outcome, votes: [] },
+        filedAt: 'now',
+        kind: 'invalid_criterion' as const,
+        reason: 'Not in the requirement',
+      },
+    });
+    await db.insert(verifyCheckResults).values(
+      [
+        { checkItemId: 'pdf', metadata: ruled('upheld'), suggestion: 'Export a PDF.' },
+        { checkItemId: 'totals', metadata: ruled('overruled'), suggestion: 'Add a total row.' },
+      ].map((row) => ({
+        ...row,
+        status: 'failed' as const,
+        userId,
+        verdict: 'failed' as const,
+        verifierType: 'agent' as const,
+        verifyRunId: run.id,
+      })),
+    );
+
+    const result = await buildTaskPrompt((await taskModel.findById(task.id))!, {
+      briefModel: new BriefModel(db, userId),
+      db,
+      taskModel,
+      taskTopicModel: new TaskTopicModel(db, userId),
+      userId,
+    });
+
+    expect(result.prompt).toContain('Disputed criteria already ruled on:');
+    expect(result.prompt).toContain('Check pdf — upheld.');
+    expect(result.prompt).toContain('Check totals — overruled.');
+    // A waived check is not a gap to close.
+    expect(result.prompt).toContain('1. Check totals — Add a total row.');
+    expect(result.prompt).not.toContain('Export a PDF.');
+  });
+
   it('keeps flow nodes that reuse one criterion as separate checks', async () => {
     // Two flow nodes can point at the same criterion asset; folding them onto
     // the criterion id let one node's failure stand in for the node that passed.

@@ -1,8 +1,10 @@
+import { VERIFY_DISPUTE_KINDS } from '@lobechat/const/verify';
 import type { Command } from 'commander';
 import pc from 'picocolors';
 
 import { getTrpcClient } from '../../api/client';
 import { outputJson, printTable, timeAgo, truncate } from '../../utils/format';
+import { log } from '../../utils/logger';
 import { printResults } from './utils';
 
 /** `plan` — the per-run check plan lifecycle of an Agent Run's acceptance round. */
@@ -109,6 +111,54 @@ export function attachPlanCommands(parent: Command): Command {
       await client.verify.skipPlan.mutate({ operationId });
       console.log(`${pc.green('✓')} Skipped verification for run ${pc.bold(operationId)}`);
     });
+
+  plan
+    .command('dispute <operationId>')
+    .description(
+      'Dispute one check instead of satisfying it: invalid_criterion (the check itself is wrong; three review models rule on it, majority decides) or missed_evidence (submitted evidence already proves it)',
+    )
+    .requiredOption('--item <checkItemId>', 'The check item id (from `plan state`)')
+    .requiredOption('--kind <kind>', 'invalid_criterion | missed_evidence')
+    .requiredOption(
+      '--reason <text>',
+      'Your argument: which test applies, or where the evidence proves it',
+    )
+    .option('--evidence <ids>', 'Evidence ids on this check that prove it (comma-separated)')
+    .option('--json [fields]', 'Output JSON')
+    .action(
+      async (
+        operationId: string,
+        options: {
+          evidence?: string;
+          item: string;
+          json?: boolean | string;
+          kind: string;
+          reason: string;
+        },
+      ) => {
+        if (!(VERIFY_DISPUTE_KINDS as readonly string[]).includes(options.kind)) {
+          log.error(`--kind must be one of: ${VERIFY_DISPUTE_KINDS.join(', ')}`);
+          process.exit(1);
+        }
+        const client = await getTrpcClient();
+        const result = await client.verify.disputeCheck.mutate({
+          checkItemId: options.item,
+          evidenceIds: options.evidence
+            ?.split(',')
+            .map((s) => s.trim())
+            .filter(Boolean),
+          kind: options.kind as (typeof VERIFY_DISPUTE_KINDS)[number],
+          operationId,
+          reason: options.reason,
+        });
+        if (options.json !== undefined) {
+          outputJson(result, typeof options.json === 'string' ? options.json : undefined);
+          return;
+        }
+        console.log(`${result.success ? pc.green('✓') : pc.yellow('!')} ${result.message}`);
+        if (!result.success) process.exitCode = 1;
+      },
+    );
 
   attachPlanExecuteCommand(plan.command('execute <operationId>'));
   return plan;
