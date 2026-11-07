@@ -1,6 +1,7 @@
 import debug from 'debug';
 import type { Context } from 'hono';
 
+import { auth } from '@/auth';
 import { getServerDB } from '@/database/core/db-adaptor';
 import { MessengerInstallationModel } from '@/database/models/messengerInstallation';
 import { appEnv } from '@/envs/app';
@@ -207,6 +208,31 @@ export async function messengerOAuthCallback(c: Context): Promise<Response> {
   // by someone else does not block this — the personal link is theirs to make.
   let bindLinked = false;
   if (statePayload.bindPollId && (platform === 'slack' || platform === 'discord')) {
+    // A personal link belongs to the LobeHub user carried in `state`, but this
+    // redirect is a top-level GET that any browser can complete. Without the
+    // check below, an attacker could start a bind for their own account, hand
+    // the authorize URL to a victim, and have the victim's Slack/Discord
+    // identity linked to the attacker. `SameSite=Lax` session cookies are sent
+    // on this top-level redirect, so the legitimate flow still resolves to the
+    // same user; only the personal link is skipped when it does not.
+    let sessionUserId: string | undefined;
+    try {
+      sessionUserId = (await auth.api.getSession({ headers: c.req.raw.headers }))?.user?.id;
+    } catch (error) {
+      log('callback[%s]: getSession failed while checking the bind session: %O', platform, error);
+    }
+
+    if (sessionUserId !== statePayload.lobeUserId) {
+      log(
+        'callback[%s]: bind session mismatch (session=%s, state=%s), skipping personal link',
+        platform,
+        sessionUserId ?? 'none',
+        statePayload.lobeUserId,
+      );
+      await settleFailedBind(platform, statePayload);
+      return errorRedirect(url.origin, platform, 'bind_session_mismatch');
+    }
+
     try {
       const bind = await completeOAuthBind({
         install,

@@ -2,6 +2,7 @@
 import type { Context } from 'hono';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { auth } from '@/auth';
 import { MessengerInstallationModel } from '@/database/models/messengerInstallation';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { completeOAuthBind, failOAuthBind } from '@/server/services/messenger/bind/oauthBind';
@@ -47,6 +48,10 @@ vi.mock('@/config/messenger', () => ({
 
 vi.mock('@/envs/app', () => ({
   appEnv: { APP_URL: 'https://app.example.com' },
+}));
+
+vi.mock('@/auth', () => ({
+  auth: { api: { getSession: vi.fn() } },
 }));
 
 const { getMessengerSlackConfig, getMessengerDiscordConfig } = await import('@/config/messenger');
@@ -95,6 +100,8 @@ beforeEach(() => {
     team: { id: 'T_ACME', name: 'Acme Inc' },
   });
   vi.mocked(MessengerInstallationModel.findByTenant).mockResolvedValue(null);
+  // The browser completing the redirect is the user who started the bind.
+  vi.mocked(auth.api.getSession).mockResolvedValue({ user: { id: 'lobe-user-1' } } as any);
 });
 
 afterEach(() => {
@@ -467,6 +474,38 @@ describe('one-click bind on the OAuth callback', () => {
       userId: 'lobe-user-1',
     });
     expect(new URL(res.headers.get('location')!).searchParams.get('error')).toBe('access_denied');
+  });
+
+  it('skips the personal link when the browser session belongs to another user', async () => {
+    vi.mocked(auth.api.getSession).mockResolvedValue({ user: { id: 'lobe-user-2' } } as any);
+    vi.mocked(completeOAuthBind).mockResolvedValue({
+      linkedAt: 1,
+      platformUserId: 'U_INSTALLER',
+      status: 'linked',
+    });
+
+    const res = await messengerOAuthCallback(buildContext('slack', 'code=c&state=s'));
+
+    expect(completeOAuthBind).not.toHaveBeenCalled();
+    expect(failOAuthBind).toHaveBeenCalledWith({
+      platform: 'slack',
+      pollId: 'poll-1',
+      userId: 'lobe-user-1',
+    });
+    const loc = new URL(res.headers.get('location')!);
+    expect(loc.pathname).toBe('/settings/messenger/slack');
+    expect(loc.searchParams.get('error')).toBe('bind_session_mismatch');
+  });
+
+  it('skips the personal link when the callback carries no browser session', async () => {
+    vi.mocked(auth.api.getSession).mockResolvedValue(null as any);
+
+    const res = await messengerOAuthCallback(buildContext('slack', 'code=c&state=s'));
+
+    expect(completeOAuthBind).not.toHaveBeenCalled();
+    expect(new URL(res.headers.get('location')!).searchParams.get('error')).toBe(
+      'bind_session_mismatch',
+    );
   });
 
   it('stops the waiting page when the code exchange fails', async () => {
