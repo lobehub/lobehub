@@ -1,6 +1,8 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 
+import { LocalQueueServiceImpl } from '@/server/services/queue/impls';
+
 import { AgentRuntimeService } from '../AgentRuntimeService';
 import { StepOwnershipLostError } from '../AgentRuntimeService/executionErrors';
 
@@ -52,7 +54,9 @@ vi.mock('@/server/services/queue', () => ({
   }),
 }));
 vi.mock('@/server/services/queue/impls', () => ({
-  LocalQueueServiceImpl: class {},
+  LocalQueueServiceImpl: class {
+    setExecutionCallback() {}
+  },
 }));
 vi.mock('@/server/services/toolExecution', () => ({
   ToolExecutionService: vi.fn().mockImplementation(function () {
@@ -72,10 +76,14 @@ describe('AgentRuntimeService.executeStep - step ownership', () => {
   // A step whose LLM call outlives the lock TTL can be claimed by a redelivery
   // while it still runs. Whichever attempt no longer owns the lock must not
   // commit, or two chains continue the same operation.
-  const runContinuingStep = async (lockStillOwned: () => Promise<boolean>) => {
+  const runContinuingStep = async (
+    lockStillOwned: () => Promise<boolean>,
+    queue: 'local' | 'none' | 'redelivering' = 'redelivering',
+  ) => {
     const scheduleMessage = vi.fn().mockResolvedValue('msg-next');
+    const impl = queue === 'local' ? new LocalQueueServiceImpl() : {};
     const service = new AgentRuntimeService({} as any, 'user-1', {
-      queueService: { getImpl: () => ({}), scheduleMessage } as any,
+      queueService: queue === 'none' ? null : ({ getImpl: () => impl, scheduleMessage } as any),
     });
     const coordinator = (service as any).coordinator;
     const completionLifecycle = (service as any).completionLifecycle;
@@ -172,5 +180,27 @@ describe('AgentRuntimeService.executeStep - step ownership', () => {
 
     expect(coordinator.saveStepResult).not.toHaveBeenCalled();
     expect(coordinator.saveAgentState).not.toHaveBeenCalled();
+  });
+
+  // Without redelivery a refused commit is never retried, and no second
+  // delivery can own the step: fencing would only strand the run.
+  it('keeps committing on a queue that does not redeliver a failed step', async () => {
+    const { coordinator, run, scheduleMessage } = await runContinuingStep(
+      async () => false,
+      'local',
+    );
+
+    await expect(run).resolves.toMatchObject({ nextStepScheduled: true, success: true });
+
+    expect(coordinator.saveStepResult).toHaveBeenCalledTimes(1);
+    expect(scheduleMessage).toHaveBeenCalledWith(expect.objectContaining({ stepIndex: 4 }));
+  });
+
+  it('keeps committing when steps run without a queue', async () => {
+    const { coordinator, run } = await runContinuingStep(async () => false, 'none');
+
+    await expect(run).resolves.toMatchObject({ success: true });
+
+    expect(coordinator.saveStepResult).toHaveBeenCalledTimes(1);
   });
 });

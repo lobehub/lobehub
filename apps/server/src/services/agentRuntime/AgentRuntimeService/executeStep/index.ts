@@ -8,6 +8,8 @@ import {
 } from '@lobechat/observability-otel/modules/agent-runtime';
 import debug from 'debug';
 
+import { LocalQueueServiceImpl } from '@/server/services/queue/impls';
+
 import {
   type AgentExecutionParams,
   type AgentExecutionResult,
@@ -146,7 +148,15 @@ export async function executeStep(
     log('[%s][%d] Operation lease refresh failed: %O', operationId, stepIndex, error);
   });
   const stopStepLockHeartbeat = deps.startStepLockHeartbeat(operationId, stepIndex, stepLockOwner);
-  const assertOwnership = () => assertStepOwnership(deps, operationId, stepIndex, stepLockOwner);
+  // Only a queue that redelivers a failed step can retry a refused commit, and
+  // only there can a second delivery own the step at all. The local queue drops
+  // a failed callback and the sync path has no queue: fencing them would strand
+  // the run on a Redis blip.
+  const commitFenced =
+    !!deps.queueService && !(deps.queueService.getImpl() instanceof LocalQueueServiceImpl);
+  const assertOwnership = commitFenced
+    ? () => assertStepOwnership(deps, operationId, stepIndex, stepLockOwner)
+    : undefined;
 
   // Hoisted so the shared `finally` can stop it on every exit path — an
   // orphaned poll would keep reading Redis for a step that is long gone.

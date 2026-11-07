@@ -48,8 +48,8 @@ export async function runAndReconcileStep(
     runtime,
     stepIndex,
   }: PreparedStepInput & {
-    /** Throws once this attempt no longer owns the operation. */
-    assertOwnership: () => Promise<void>;
+    /** Throws once this attempt no longer owns the operation; absent when commits are not fenced. */
+    assertOwnership?: () => Promise<void>;
     operationId: string;
     runtime: AgentRuntime;
     stepIndex: number;
@@ -67,7 +67,7 @@ export async function runAndReconcileStep(
 
   // The LLM call is where a step can outlive its lock. Check before anything
   // below writes on the step's behalf (the client park saves state).
-  await assertOwnership();
+  await assertOwnership?.();
 
   // Inner runtime.step() catches model-runtime exceptions and stuffs the
   // raw error into newState.error without re-throwing — so the outer
@@ -164,8 +164,8 @@ export async function saveAndPublishStep(
     stepResult,
     stepStartUiMessages,
   }: {
-    /** Throws once this attempt no longer owns the operation. */
-    assertOwnership: () => Promise<void>;
+    /** Throws once this attempt no longer owns the operation; absent when commits are not fenced. */
+    assertOwnership?: () => Promise<void>;
     gatewayMessagePatchEnabled: boolean;
     operationId: string;
     startAt: number;
@@ -250,7 +250,7 @@ export async function saveAndPublishStep(
   // Save state, coordinator will handle event sending automatically. This is
   // the commit: a redelivery of this step is skipped as already done once it
   // lands, so only the lock owner may write it.
-  await assertOwnership();
+  await assertOwnership?.();
   await deps.coordinator.saveStepResult(operationId, {
     ...stepResult,
     executionTime: Date.now() - startAt,
