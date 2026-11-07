@@ -690,9 +690,7 @@ export const ERROR_PATTERNS: ErrorPattern[] = [
     match: sub('is temporarily at capacity'),
   },
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // RemoteMediaDownloadTimeout — provider-side remote media fetch
-  // ─────────────────────────────────────────────────────────────────────────
+  // ── RemoteMediaDownload* — provider-side remote media fetch ──────────────
   {
     code: AgentRuntimeErrorType.RemoteMediaDownloadTimeout,
     match: sub('Unable to download content from the provided URL before the timeout', {
@@ -700,6 +698,7 @@ export const ERROR_PATTERNS: ErrorPattern[] = [
     }),
     note: 'OpenAI-compatible remote media fetch timed out before inference.',
   },
+  { code: AgentRuntimeErrorType.RemoteMediaDownloadFailed, match: sub('Error while downloading') },
 
   // ─────────────────────────────────────────────────────────────────────────
   // ProviderNetworkError — connection / timeout

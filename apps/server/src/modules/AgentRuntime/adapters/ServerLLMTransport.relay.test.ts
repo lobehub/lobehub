@@ -331,4 +331,24 @@ describe('ServerLLMTransport · LLM relay', () => {
       metadata: { executionSite: 'client', interruptedMidStream: true },
     });
   });
+
+  // The device ignores a call id it has already settled, so resending a
+  // relayed attempt without its dead image would wait for a call that never runs.
+  it('does not resend a relayed attempt under the same call id when media is unreachable', async () => {
+    const { ctx } = createCtx();
+    const url = 'https://app.lobehub.com/f/file_dead';
+    relay.chat.mockRejectedValue({
+      error: { message: `Error while downloading ${url}.` },
+      errorType: 'RemoteMediaDownloadFailed',
+    });
+    const input = createInput();
+    input.context.messages = [
+      { content: [{ image_url: { url }, type: 'image_url' }], role: 'user' },
+    ] as LLMAttemptInput['context']['messages'];
+
+    const execution = await new ServerLLMTransport(ctx).runAttempt(input);
+
+    expect(execution.ok).toBe(false);
+    expect(relay.chat).toHaveBeenCalledTimes(1);
+  });
 });

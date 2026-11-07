@@ -64,6 +64,12 @@ import { resolveLlmExecutionSite } from '../llmRelay/resolveLlmExecutionSite';
 import { getAgentRuntimeRedisClient } from '../redis';
 import type { IStreamEventManager } from '../types';
 import { createServerCallLlmAttempt } from './serverCallLlmAttempt';
+import {
+  findUnreachableMediaUrl,
+  MAX_UNREACHABLE_MEDIA_STRIPS,
+  redactMediaUrl,
+  stripUnreachableMedia,
+} from './unreachableMedia';
 
 const getErrorMessage = (error: unknown): string => {
   if (error instanceof Error && error.message) return error.message;
@@ -326,6 +332,12 @@ export class ServerLLMTransport implements LLMTransport {
 
   private relayStreamCount = 0;
 
+  /**
+   * Media links a provider failed to download during this transport's run. Kept
+   * across attempts so a retry does not send the same dead link again.
+   */
+  private readonly unreachableMediaUrls = new Set<string>();
+
   /** Keeps a redriven step's call ids apart from the execution it replaces. */
   private readonly relayGeneration = randomBytes(6).toString('base64url');
 
@@ -359,10 +371,15 @@ export class ServerLLMTransport implements LLMTransport {
         attempt: input.attempt,
         callId,
       });
-      const execution = await this.runAttemptWithRuntime(input, relayRuntime, {
-        ...this.ctx,
-        streamManager: tagRelayChunks(this.ctx.streamManager, callId),
-      });
+      // A relay runtime is bound to one call id, which the device treats as the
+      // attempt's idempotency key and ignores when re-delivered, so it cannot
+      // resend within the attempt.
+      const execution = await this.runAttemptWithRuntime(
+        input,
+        relayRuntime,
+        { ...this.ctx, streamManager: tagRelayChunks(this.ctx.streamManager, callId) },
+        { resendWithoutUnreachableMedia: false },
+      );
       execution.output.executionSite = 'client';
       if (relayRuntime.result.usageEstimated) execution.output.usageEstimated = true;
 
@@ -663,10 +680,47 @@ export class ServerLLMTransport implements LLMTransport {
     return promise;
   }
 
+  /**
+   * Run one attempt, dropping remote media the provider cannot download.
+   *
+   * A provider that fails to fetch one image link rejects the whole request,
+   * so one dead link in the history would fail every attempt and every later
+   * turn. When the error names a link from the request, that part is replaced
+   * with a text note and the request is sent again.
+   */
   private async runAttemptWithRuntime(
     input: LLMAttemptInput,
     modelRuntime: Pick<ModelRuntime, 'chat' | 'handleChatStreamError'>,
     ctx: RuntimeExecutorContext = this.ctx,
+    { resendWithoutUnreachableMedia = true } = {},
+  ): Promise<LLMAttemptExecution> {
+    const strip = (messages: ChatStreamPayload['messages']) =>
+      this.unreachableMediaUrls.size > 0
+        ? stripUnreachableMedia(messages, this.unreachableMediaUrls)
+        : messages;
+    let messages = strip(input.context.messages as ChatStreamPayload['messages']);
+
+    for (let strips = 0; ; strips++) {
+      const execution = await this.executeAttempt(input, modelRuntime, ctx, messages);
+      if (execution.ok || !resendWithoutUnreachableMedia || strips >= MAX_UNREACHABLE_MEDIA_STRIPS)
+        return execution;
+
+      const url = findUnreachableMediaUrl(execution.error, messages);
+      if (!url || this.unreachableMediaUrls.has(url)) return execution;
+
+      console.warn(
+        `[ServerLLMTransport][${this.ctx.operationId}:${this.ctx.stepIndex}] provider could not download media, removing it from the request: ${redactMediaUrl(url)}`,
+      );
+      this.unreachableMediaUrls.add(url);
+      messages = strip(messages);
+    }
+  }
+
+  private async executeAttempt(
+    input: LLMAttemptInput,
+    modelRuntime: Pick<ModelRuntime, 'chat' | 'handleChatStreamError'>,
+    ctx: RuntimeExecutorContext,
+    messages: ChatStreamPayload['messages'],
   ): Promise<LLMAttemptExecution> {
     const resolved = input.context.resolvedTools;
     if (!resolved) throw new Error('Resolved tools are required for a server LLM attempt');
@@ -697,7 +751,7 @@ export class ServerLLMTransport implements LLMTransport {
         : await this.resolveAttemptDeploymentName(input.provider, input.model);
     const apiMode = await this.getResponseApiMode(input.provider);
     const chatPayload = {
-      messages: input.context.messages as ChatStreamPayload['messages'],
+      messages,
       model: input.model,
       stream: resolveRequestStream(this.ctx, input.context),
       tools,
