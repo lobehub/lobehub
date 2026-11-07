@@ -136,3 +136,7 @@ CONSOLE_JIT_SIGNING_KEY=onlyboxes-jit-signing-secret
   File export still writes the exported artifact to the configured LobeHub S3 storage. Configure the
   S3 environment variables when users need to download files generated inside the sandbox.
 </Callout>
+
+### Credentials
+
+On Onlyboxes, credentials an agent injects with `injectCredsToSandbox` are written to `~/.creds/sandbox-env.sh` (mode `600`) in the box, and every later shell command, script, and code run loads that file. Only `kv-env` credentials can be injected this way. OAuth tokens stay in Market, Market skips `kv-header` credentials in any sandbox, and `file` credentials are not supported on Onlyboxes yet, so these are reported back to the agent as not supported in the sandbox. To use a token such as a GitHub personal access token from shell commands, save it as a `kv-env` credential, for example `GITHUB_TOKEN`.

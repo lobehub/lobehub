@@ -229,7 +229,9 @@ export class CredsExecutionRuntime {
       const unsupportedInSandbox = result.unsupportedInSandbox || [];
 
       // Build response content
-      const injectedKeys = args.keys.filter((k) => !notFound.includes(k));
+      const injectedKeys = args.keys.filter(
+        (k) => !notFound.includes(k) && !unsupportedInSandbox.includes(k),
+      );
       let content = '';
 
       if (injectedKeys.length > 0) {
