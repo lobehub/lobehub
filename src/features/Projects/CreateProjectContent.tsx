@@ -2,29 +2,24 @@ import { Button, Flexbox, Input, ModalFooter, Text, toast, useModalContext } fro
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useAgentStore } from '@/store/agent';
+import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useHomeStore } from '@/store/home';
 import { type ProjectListItem, useProjectStore } from '@/store/project';
 
 import {
   buildCreateProjectRequest,
+  DEFAULT_MAIN_AGENT_MODE,
   getCreateProjectInput,
   getProjectFieldSuggestions,
   isProjectIdentifierValid,
   isProjectSlugValid,
+  type MainAgentMode,
 } from './createProjectForm';
 import CreateProjectMoreFields from './CreateProjectMoreFields';
 import MainAgentSection from './MainAgentSection';
-import {
-  DEDICATED_MAIN_AGENT,
-  type MainAgentMode,
-  readRememberedMainAgent,
-  resolveDefaultMainAgentMode,
-  writeRememberedMainAgent,
-} from './mainAgentStorage';
 import ProjectAvatarField from './ProjectAvatarField';
-import { useDefaultMainAgent } from './useDefaultMainAgent';
 
 export interface CreateProjectOptions {
   /**
@@ -42,7 +37,7 @@ interface CreateProjectFormState {
   avatarUploading: boolean;
   identifier: string;
   loading: boolean;
-  /** Explicit pick in this modal; otherwise the remembered agent or LobeAI. */
+  /** Explicit pick in this modal; otherwise LobeAI. */
   mainAgentId?: string;
   mainAgentMode: MainAgentMode;
   name: string;
@@ -61,18 +56,17 @@ const CreateProjectContent = memo<CreateProjectOptions>(({ onCreated }) => {
   const { close } = useModalContext();
   const navigate = useWorkspaceAwareNavigate();
   const createProject = useProjectStore((s) => s.createProject);
-  const [remembered] = useState(() => readRememberedMainAgent(getActiveWorkspaceId()));
-  const [form, setForm] = useState<CreateProjectFormState>(() => ({
+  const [form, setForm] = useState<CreateProjectFormState>({
     avatarUploading: false,
     identifier: '',
     loading: false,
-    mainAgentMode: resolveDefaultMainAgentMode(remembered),
+    mainAgentMode: DEFAULT_MAIN_AGENT_MODE,
     name: '',
     slug: '',
     slugEdited: false,
-  }));
-  const defaultMainAgentId = useDefaultMainAgent();
-  const mainAgentId = form.mainAgentId ?? defaultMainAgentId;
+  });
+  const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
+  const mainAgentId = form.mainAgentId ?? inboxAgentId;
   const createInput = getCreateProjectInput(form);
   const identifierInvalid =
     Boolean(form.identifier.trim()) && !isProjectIdentifierValid(form.identifier);
@@ -102,9 +96,6 @@ const CreateProjectContent = memo<CreateProjectOptions>(({ onCreated }) => {
           mainAgentMode: form.mainAgentMode,
         }),
       );
-      const rememberedChoice =
-        form.mainAgentMode === 'dedicated' ? DEDICATED_MAIN_AGENT : mainAgentId;
-      if (rememberedChoice) writeRememberedMainAgent(rememberedChoice, getActiveWorkspaceId());
       if (form.mainAgentMode === 'dedicated') {
         // The project created an agent and maybe the Project label; show both.
         const { refreshAgentLabels, refreshAgentList } = useHomeStore.getState();

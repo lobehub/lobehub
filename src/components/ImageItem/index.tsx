@@ -89,7 +89,7 @@ const ImageItem = memo<ImageItemProps>(
           )
         }
         classNames={{
-          wrapper: sx([styles.image, editable && styles.editableImage], className).className,
+          wrapper: sx(styles.image, editable && styles.editableImage, className).className,
         }}
         style={{
           aspectRatio,

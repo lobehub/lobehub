@@ -12,7 +12,6 @@ import {
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { GITHUB_RETURN_TO } from '@/features/Integrations/Github/installHref';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useProjectStore } from '@/store/project';
@@ -23,7 +22,6 @@ import {
   isProjectIdentifierValid,
 } from '../createProjectForm';
 import MainAgentField from '../MainAgentField';
-import { writeRememberedMainAgent } from '../mainAgentStorage';
 import { useDefaultMainAgent } from '../useDefaultMainAgent';
 import { parseGithubRepository } from './githubRepository';
 import RepositoryList from './RepositoryList';
@@ -41,7 +39,7 @@ interface FormState {
   duplicate?: 'identifier' | 'name';
   identifier: string;
   loading: boolean;
-  /** Explicit pick in this dialog; otherwise the remembered agent or LobeAI. */
+  /** Explicit pick in this dialog; otherwise the workspace inbox agent, LobeAI. */
   mainAgentId?: string;
   name: string;
   nameEdited: boolean;
@@ -117,7 +115,6 @@ const CreateFromGithubContent = () => {
           url: repository.url,
         },
       });
-      if (mainAgentId) writeRememberedMainAgent(mainAgentId, getActiveWorkspaceId());
       close();
       navigate(`/project/${project.slug ?? project.id}`);
     } catch (error) {

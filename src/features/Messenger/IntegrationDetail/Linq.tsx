@@ -290,7 +290,8 @@ const LinqDetail = memo<LinqDetailProps>(({ name, onBack }) => {
 
   if (data.error && data.isInitialLoading)
     return <AsyncError error={data.error} variant="block" onRetry={data.mutate} />;
-  if (data.isInitialLoading) return <IntegrationDetailSkeleton withNestedContent />;
+  if (data.isInitialLoading)
+    return <IntegrationDetailSkeleton withNestedContent platform={'linq'} />;
 
   const link = data.links[0];
 

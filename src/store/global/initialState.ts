@@ -478,7 +478,8 @@ export interface SystemStatus {
      * `hideCompleted` it replaces before normalization could migrate it.
      */
     completedTasks?: 'all' | 'day' | 'month' | 'none' | 'week';
-    groupBy: 'assignee' | 'member' | 'none' | 'priority' | 'status';
+    /** `label:<groupId>` groups by one label group. */
+    groupBy: 'assignee' | 'member' | 'none' | 'priority' | 'status' | `label:${string}`;
     /** @deprecated Replaced by `completedTasks`; read once to migrate. */
     hideCompleted?: boolean;
     nestedSubTasks: boolean;
@@ -486,7 +487,7 @@ export interface SystemStatus {
     orderCompletedByRecency: boolean;
     orderDirection: 'asc' | 'desc';
     showSubTasks: boolean;
-    subGroupBy: 'assignee' | 'member' | 'none' | 'priority' | 'status';
+    subGroupBy: 'assignee' | 'member' | 'none' | 'priority' | 'status' | `label:${string}`;
   };
   /**
    * Height of the chat bottom terminal panel. Persisted so resizing survives remounts.

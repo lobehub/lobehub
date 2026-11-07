@@ -54,47 +54,62 @@ afterEach(async () => {
 });
 
 describe('real Node CLI process exit contract', () => {
-  it('returns 2 for a partial plan instead of a successful empty comparison', async () => {
+  it('returns 0 for a collected plan without claiming a gate verdict', async () => {
     const { root, base } = await setup();
-    expect((await run(root, ['--base', base, '--head', 'HEAD', '--plan-only'])).code).toBe(2);
-    expect(await artifact(root)).toMatchObject({
-      gateEligible: false,
+    const result = await run(root, ['--base', base, '--head', 'HEAD', '--plan-only']);
+    expect(result.code).toBe(0);
+    const preflight = await artifact(root);
+    expect(preflight).toMatchObject({
       mode: 'preflight',
-      status: 'NEEDS_REVIEW',
+      reasonCodes: expect.arrayContaining(['PLAN_ONLY']),
     });
+    expect(preflight).not.toHaveProperty('gateEligible');
+    expect(preflight).not.toHaveProperty('status');
+    const summary = JSON.parse(result.stdout.trim().split('\n').at(-1)!);
+    expect(summary).not.toHaveProperty('gateEligible');
+    expect(summary).not.toHaveProperty('status');
   });
 
-  it('exports isolated source snapshots but stays blocked until dependencies and binding are proven', async () => {
+  it('exports isolated source snapshots and records the unproven dependency and binding gaps', async () => {
     const { root, base } = await setup();
-    expect((await run(root, ['--base', base, '--head', 'HEAD'])).code).toBe(2);
+    expect((await run(root, ['--base', base, '--head', 'HEAD'])).code).toBe(0);
     const result = await artifact(root);
     expect(result.snapshots.base.fileCount).toBe(1);
     expect(result.snapshots.candidate.dependencyRestore).toBe('NOT_RESTORED');
-    expect(result.reasonCodes).toContain('BROWSER_VERIFICATION_NOT_RUN');
-  });
-
-  it('uses exit 4 only for a proven identical candidate tree, not a fake PASS', async () => {
-    const { root } = await setup();
-    expect((await run(root, ['--base', 'HEAD', '--head', 'HEAD'])).code).toBe(4);
-    expect(await artifact(root)).toMatchObject({
-      gateEligible: false,
-      status: 'NOT_APPLICABLE',
-      reasonCodes: ['NO_STYLE_IMPACT'],
+    expect(result.reasonCodes).toEqual(
+      expect.arrayContaining(['BROWSER_VERIFICATION_NOT_RUN', 'DEPENDENCY_SNAPSHOT_NOT_RESTORED']),
+    );
+    expect(await artifact(root, 'source-cleanup.json')).toMatchObject({
+      removed: ['base-source', 'candidate-source'],
     });
   });
 
-  it('keeps even an empty plan non-gating', async () => {
+  it('retains source exports only on an explicit debugging request', async () => {
+    const { root, base } = await setup();
+    expect((await run(root, ['--base', base, '--head', 'HEAD', '--keep-sources'])).code).toBe(0);
+    const result = await artifact(root);
+    expect(
+      await readFile(path.join(result.snapshots.base.directory, 'component.ts'), 'utf8'),
+    ).toContain('1');
+  });
+
+  it('records an identical candidate tree as no style impact', async () => {
     const { root } = await setup();
-    expect((await run(root, ['--base', 'HEAD', '--head', 'HEAD', '--plan-only'])).code).toBe(2);
+    expect((await run(root, ['--base', 'HEAD', '--head', 'HEAD'])).code).toBe(0);
+    expect(await artifact(root)).toMatchObject({ reasonCodes: ['NO_STYLE_IMPACT'] });
+  });
+
+  it('collects an empty plan', async () => {
+    const { root } = await setup();
+    expect((await run(root, ['--base', 'HEAD', '--head', 'HEAD', '--plan-only'])).code).toBe(0);
   });
 
   it('returns 3 and records an error when a revision cannot be resolved', async () => {
     const { root } = await setup();
     expect((await run(root, ['--base', 'missing-ref', '--head', 'HEAD'])).code).toBe(3);
-    expect(await artifact(root, 'error.json')).toMatchObject({
-      gateEligible: false,
-      status: 'ERROR',
-    });
+    const error = await artifact(root, 'error.json');
+    expect(error).toMatchObject({ mode: 'preflight', status: 'ERROR' });
+    expect(error).not.toHaveProperty('gateEligible');
   });
 
   it('rejects invalid and unsupported options without a success result', async () => {

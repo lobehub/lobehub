@@ -2,6 +2,7 @@
 
 import { Avatar, createModal, Flexbox, Icon } from '@lobehub/ui';
 import { McpIcon } from '@lobehub/ui/icons';
+import * as stylex from '@stylexjs/stylex';
 import { memo, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -85,7 +86,7 @@ const McpSkillItem = memo<McpSkillItemProps>(
         <Flexbox
           horizontal
           align="center"
-          className={styles.container}
+          className={stylex.props(styles.container).className}
           gap={8}
           justify="space-between"
           style={{
@@ -95,14 +96,14 @@ const McpSkillItem = memo<McpSkillItemProps>(
           onClick={onSelect}
         >
           <Flexbox horizontal align="center" gap={8} style={{ flex: 1, overflow: 'hidden' }}>
-            <div className={styles.icon}>
+            <div {...stylex.props(styles.icon)}>
               {avatar && avatar !== 'MCP_AVATAR' ? (
                 <Avatar avatar={avatar} shape={'square'} size={16} />
               ) : (
                 <Icon icon={McpIcon} size={16} />
               )}
             </div>
-            <span className={styles.title} onClick={onSelect ? undefined : openDetail}>
+            <span {...stylex.props(styles.title)} onClick={onSelect ? undefined : openDetail}>
               {title}
             </span>
           </Flexbox>

@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 
 import ChatInputNotice from '@/features/ChatInput/ChatInputNotice';
 import ComposerExpandButton from '@/features/ChatInput/components/ComposerExpandButton';
+import { useChatInputUploadKey } from '@/features/ChatInput/hooks/useChatInputUpload';
 import { useChatInputStore } from '@/features/ChatInput/store';
 import { LayoutContainerContext } from '@/features/DesktopLayoutContainer/LayoutContainerContext';
 import { useChatStore } from '@/store/chat';
@@ -139,7 +140,8 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
     const hasContextSelections = useFileStore(
       fileChatSelectors.chatContextSelectionHasItem(contextSelectionKey),
     );
-    const hasFiles = useFileStore(fileChatSelectors.chatUploadFileListHasItem);
+    const uploadContextKey = useChatInputUploadKey();
+    const hasFiles = useFileStore(fileChatSelectors.chatUploadFileListHasItem(uploadContextKey));
     const [slashMenuRef, expand, showTypoBar, editor, leftActions] = useChatInputStore((s) => [
       s.slashMenuRef,
       s.expand,

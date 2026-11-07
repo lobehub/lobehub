@@ -42,6 +42,7 @@ import {
   compareTaskItems,
   groupTaskItems,
   isTaskHiddenByCompletedFilter,
+  normalizeTaskGroupBy,
 } from './listViewOptions';
 import SelectableTaskRow, { selectableTaskItemClassName } from './selection/SelectableTaskRow';
 import { useTaskSelectionStore } from './selection/store';
@@ -106,20 +107,6 @@ interface TaskListProps {
 
 /** Row height the window sizes itself by before it has measured real rows. */
 const DEFAULT_ROW_HEIGHT = 52;
-
-const TASK_GROUP_BY_VALUES = new Set<TaskGroupBy>([
-  'assignee',
-  'automationMode',
-  'member',
-  'none',
-  'priority',
-  'status',
-]);
-
-const normalizeGroupBy = (value: TaskGroupBy | string | undefined, fallback: TaskGroupBy) => {
-  if (!value) return fallback;
-  return TASK_GROUP_BY_VALUES.has(value as TaskGroupBy) ? (value as TaskGroupBy) : fallback;
-};
 
 const styles = stylex.create({
   // A flex box centres the icon instead of a transform on the icon itself,
@@ -257,8 +244,8 @@ const TaskList = memo<TaskListProps>((props) => {
   // let the missing rows vanish silently. Alternate collections (`items`)
   // paginate on their own.
   const isTruncated = !items && storeTasksTotal > COMPLETE_TASK_LIST_MAX_ITEMS;
-  const groupBy = normalizeGroupBy(options.groupBy, 'status');
-  const subGroupBy = normalizeGroupBy(options.subGroupBy, 'none');
+  const groupBy = normalizeTaskGroupBy(options.groupBy, 'status');
+  const subGroupBy = normalizeTaskGroupBy(options.subGroupBy, 'none');
   const effectiveSubGroupBy = groupBy === 'none' ? 'none' : subGroupBy;
   const unfinishedTasks = useMemo(
     () =>

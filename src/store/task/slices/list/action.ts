@@ -230,7 +230,9 @@ export class TaskListSliceActionImpl {
       ...(query.filter && { filter: query.filter }),
       ...(query.groupBy === 'status'
         ? { groups: DEFAULT_KANBAN_GROUPS }
-        : { groupBy: query.groupBy }),
+        : query.groupBy.startsWith('label:')
+          ? { groupBy: 'label' as const, labelGroupId: query.groupBy.slice('label:'.length) }
+          : { groupBy: query.groupBy as 'assignee' | 'member' | 'priority' }),
       includeArchived: query.includeArchived,
       projectId: query.projectId,
       scope: query.scope,
