@@ -13,6 +13,24 @@ tags:
 
 LobeHub 在部署时提供了丰富的模型服务商相关的环境变量，你可以使用这些环境变量轻松定义需要在 LobeHub 中开启的模型服务商。
 
+## Ace Data Cloud
+
+### `ACEDATACLOUD_API_KEY`
+
+- 部署可选：用户也可以在 Ace Data Cloud 服务商设置中填写自己的服务 API Token。
+- 非空时为服务器启用服务商。`ENABLED_ACEDATACLOUD` 由该 Key 推导，不是独立环境开关。
+- 默认未设置。示例：`your-ace-data-cloud-api-token`。
+
+### `ACEDATACLOUD_PROXY_URL`
+
+- 可选，覆盖 OpenAI 兼容 API 基础地址。
+- 默认 `https://api.acedata.cloud/v1`。不要再拼 `/openai` 或完整的 completion 路径。
+
+### `ACEDATACLOUD_MODEL_LIST`
+
+- 可选，使用共享模型列表语法，例如 `+MODEL_ID` 或 `-all,+MODEL_ID`。ID 来自当前目录。
+- 默认无静态模型清单；用户在服务商设置获取当前模型。
+
 ## OpenAI
 
 ### `ENABLED_OPENAI`

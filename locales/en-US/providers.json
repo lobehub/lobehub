@@ -1,4 +1,5 @@
 {
+  "acedatacloud.description": "Ace Data Cloud provides API access to chat models with usage-based billing.",
   "ai21.description": "AI21 Labs builds foundation models and AI systems for enterprises, accelerating generative AI in production.",
   "ai302.description": "302.AI is a pay-as-you-go AI platform offering a broad catalog of AI APIs and online AI apps.",
   "ai360.description": "360 AI is a model and service platform from 360, offering NLP models like 360GPT2 Pro, 360GPT Pro, and 360GPT Turbo. The models combine large-scale parameters and multimodal capabilities for text generation, semantic understanding, chat, and code, with flexible pricing for diverse needs.",
