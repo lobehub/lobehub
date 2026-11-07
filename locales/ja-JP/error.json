@@ -89,6 +89,7 @@
   "response.GoogleAIBlockReason.SAFETY": "コンテンツは安全上の理由でブロックされました。調整して再試行してください。",
   "response.GoogleAIBlockReason.SPII": "コンテンツに機密性の高い個人情報（SPII）が含まれている可能性があります。機密情報を削除して再試行してください。",
   "response.GoogleAIBlockReason.default": "コンテンツはブロックされました（{{blockReason}}）。調整して再試行してください。",
+  "response.InsufficientBudgetForModel": "このモデルに必要な残高が不足しています。チャージするか、プランをアップグレードするか、より低価格のモデルをお試しください。",
   "response.InvalidAccessCode": "アクセスパスワードが空または正しくありません。正しいパスワードを再入力するか、カスタム API キーを使用してください",
   "response.LobeHubModelDeprecated": "モデル「{{model}}」はもう利用できません。モデルセレクターから現在のモデルを選択してください。",
   "response.ModelContentModerationCooldown": "一時的なコンテンツ安全制限のため、このリクエストでは選択されたモデルまたは関連モデルを使用できませんでした。後でもう一度試すか、別のモデルを選択してください。",
@@ -121,6 +122,8 @@
   "response.RemoteServerTimeout": "サーバーへの接続がタイムアウトしました。これは通常、ローカルネットワークの問題を示します。ネットワーク品質、プロキシ、またはVPNの設定を確認して、再試行してください。",
   "response.RemoteServerUnreachable": "サーバーに到達できませんでした。これは通常、ローカルネットワークの問題を示します。インターネット接続、プロキシ、またはVPNの設定を確認して、再試行してください。",
   "response.ServerAgentRuntimeError": "アシスタント実行サービスが一時的に利用できません。時間を置いて再試行するか、メールでサポートにお問い合わせください",
+  "response.SubscriptionPlanLimit": "サブスクリプションの利用上限に達したため、この機能は利用できません。続けて利用するには、プランをアップグレードするか、カスタムモデル API を設定してください。",
+  "response.SubscriptionPlanLimitUltimate": "サブスクリプションの利用上限に達したため、この機能は利用できません。続けて利用するには、チャージするか、カスタムモデル API を設定してください。",
   "response.SystemTimeNotMatchError": "システム時刻がサーバーと一致しません。システム時刻を調整してから再試行してください",
   "response.UnknownChatFetchError": "リクエストが失敗しました（不明なエラー）。以下の情報に基づいてトラブルシューティングを行うか、再試行してください",
   "response.UnreadableServerResponse": "サーバーがアプリで読み取れない応答を返しました。これは通常、一時的なネットワークまたはゲートウェイの問題です。しばらくしてからもう一度お試しください。",
@@ -210,9 +213,13 @@
   "workspaceFrozenByAdmin.frozenAt": "凍結日時",
   "workspaceFrozenByAdmin.reason": "理由",
   "workspaceFrozenByAdmin.title": "ワークスペースが凍結されています",
+  "workspaceFrozenByRiskControl.available": "利用可能残高",
+  "workspaceFrozenByRiskControl.bannerDescription": "チャージすると利用を再開できます。",
   "workspaceFrozenByRiskControl.bannerHint": "詳細を見るにはクリックしてください",
   "workspaceFrozenByRiskControl.bannerTitle": "リスク管理によってワークスペースが凍結されました",
   "workspaceFrozenByRiskControl.contactSupport": "サポートに連絡",
+  "workspaceFrozenByRiskControl.description": "このワークスペースは、異常な利用が検出されたためリスク管理によって自動的に凍結されました。チャージしてワークスペースを再開できる状態にしてから、凍結の解除についてサポートに連絡してください。",
   "workspaceFrozenByRiskControl.frozenAt": "凍結日時",
-  "workspaceFrozenByRiskControl.title": "リスク管理によるワークスペースの自動凍結"
+  "workspaceFrozenByRiskControl.title": "リスク管理によるワークスペースの自動凍結",
+  "workspaceFrozenByRiskControl.topup": "チャージ"
 }

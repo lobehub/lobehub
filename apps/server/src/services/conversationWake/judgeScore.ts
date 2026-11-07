@@ -1,7 +1,7 @@
 import type { BotWakeJudgeKind, BotWakeJudgeScore, SignalDecisionVerdict } from '@lobechat/types';
 
-import { CLASSIFIER_POLICY_ID } from '@/server/services/agentSignal/scenarios/botWake/policies/classifier';
-import { DUTY_POLICY_ID } from '@/server/services/agentSignal/scenarios/botWake/policies/duty';
+import { CLASSIFIER_POLICY_ID } from '@/server/services/conversationWake/policies/classifier';
+import { DUTY_POLICY_ID } from '@/server/services/conversationWake/policies/duty';
 
 const KIND_BY_POLICY: Record<string, BotWakeJudgeKind> = {
   [CLASSIFIER_POLICY_ID]: 'addressed',

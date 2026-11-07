@@ -1,6 +1,6 @@
 // @vitest-environment node
-import type { WakeClassify } from '@/server/services/agentSignal/scenarios/botWake/policies';
-import type { WakeConversationLine } from '@/server/services/agentSignal/scenarios/botWake/types';
+import type { WakeClassify } from '@/server/services/conversationWake/policies';
+import type { WakeConversationLine } from '@/server/services/conversationWake/types';
 
 import { createBotWakeRecorder, type WakeStatePort } from './wakeDecision';
 

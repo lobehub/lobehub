@@ -1,8 +1,8 @@
 // @vitest-environment node
-import { BOT_WAKE_SETTING_KEYS as K, parseBotWakeSettings } from '../botWake/config';
-import type { WakeDutyJudge } from '../botWake/policies';
-import { createDutyPolicy, DUTY_HELPFUL_TAG, DUTY_POLICY_ID } from '../botWake/policies';
-import type { WakeAuthor, WakeConversationLine, WakeSignal } from '../botWake/types';
+import { BOT_WAKE_SETTING_KEYS as K, parseBotWakeSettings } from '../config';
+import type { WakeDutyJudge } from '../policies';
+import { createDutyPolicy, DUTY_HELPFUL_TAG, DUTY_POLICY_ID } from '../policies';
+import type { WakeAuthor, WakeConversationLine, WakeSignal } from '../types';
 
 const teammate: WakeAuthor = {
   id: 'bob',

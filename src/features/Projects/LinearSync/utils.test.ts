@@ -31,6 +31,12 @@ const result = (overrides: Partial<LinearSyncResult>): LinearSyncResult => ({
 });
 
 describe('formatLinearSyncResult', () => {
+  it('says how many tasks were archived, so a created task missing from the list is explained', () => {
+    expect(formatLinearSyncResult(result({ archived: 1, created: 2 }), t)).toBe(
+      'linear.sync.result.created:2 · linear.sync.result.archived:1',
+    );
+  });
+
   it('lists only what changed, and says when more remain', () => {
     expect(
       formatLinearSyncResult(

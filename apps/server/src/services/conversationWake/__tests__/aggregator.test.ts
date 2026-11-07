@@ -1,12 +1,12 @@
 // @vitest-environment node
-import { aggregateWakeVerdicts, isExplicitWake } from '../botWake/aggregator';
+import { aggregateWakeVerdicts, isExplicitWake } from '../aggregator';
 import type {
   WakePolicy,
   WakePolicyMode,
   WakeSignal,
   WakeStateSnapshot,
   WakeVerdict,
-} from '../botWake/types';
+} from '../types';
 
 const signal: WakeSignal = { message: 'hello', timestamp: 1 };
 const idle: WakeStateSnapshot = {
