@@ -85,7 +85,7 @@ const LibraryGallery = memo(() => {
         style={{ borderBottom: `1px solid ${cssVar.colorBorderSecondary}` }}
         left={
           <Flexbox horizontal align={'center'} gap={12} style={{ marginLeft: 8 }}>
-            {t('docs.section.library')}
+            <span style={{ whiteSpace: 'nowrap' }}>{t('docs.section.library')}</span>
             {showAgentSpaces && (
               <Tabs
                 activeKey={showingAgents ? AGENTS_TAB : MINE_TAB}
