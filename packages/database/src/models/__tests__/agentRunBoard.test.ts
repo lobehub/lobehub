@@ -215,31 +215,60 @@ describe('AgentRunBoardModel.listRuns', () => {
   });
 });
 
-describe('AgentRunBoardModel.listTopicIdsWithUserMessages', () => {
-  it('finds topics where the member wrote, ignoring assistant turns and other members', async () => {
-    await serverDB.insert(topics).values([
-      { id: 't-wrote', userId: teammate, workspaceId },
-      { id: 't-assistant', userId: teammate, workspaceId },
-      { id: 't-other', userId: teammate, workspaceId },
-    ]);
+describe('AgentRunBoardModel.listRuns involved scope', () => {
+  it('keeps the viewer’s own runs, topics they wrote in and asks addressed to them', async () => {
+    await serverDB.insert(topics).values({ id: 'spoken-topic', userId: teammate, workspaceId });
     await serverDB.insert(messages).values([
-      { content: 'hi', id: 'm1', role: 'user', topicId: 't-wrote', userId: owner, workspaceId },
       {
-        content: 'ok',
-        id: 'm2',
-        role: 'assistant',
-        topicId: 't-assistant',
+        content: 'hi',
+        id: 'm-user',
+        role: 'user',
+        topicId: 'spoken-topic',
         userId: owner,
         workspaceId,
       },
-      { content: 'x', id: 'm3', role: 'user', topicId: 't-other', userId: teammate, workspaceId },
+      {
+        content: 'reply',
+        id: 'm-assistant',
+        role: 'assistant',
+        topicId: 'base-topic',
+        userId: owner,
+        workspaceId,
+      },
     ]);
+    await insertRun('own-run', { userId: owner });
+    await insertRun('spoken-run', { topicId: 'spoken-topic' });
+    await insertRun('assistant-only-run');
+    await insertRun('asked-run', { status: 'waiting_for_human' });
+    await serverDB.insert(agentInterventions).values({
+      activityKey: 'activity',
+      allowedActions: [],
+      batchId: 'batch',
+      canonicalToolKey: 'stripe.refund',
+      deadline: new Date('2026-11-08T13:00:00Z'),
+      interactionKind: 'approval',
+      itemCount: 1,
+      itemIndex: 0,
+      operationId: 'asked-run',
+      requestRevisionHash: 'a'.repeat(64),
+      reviewContext: {},
+      reviewTokenHash: 'b'.repeat(64),
+      sanitizedRequest: {},
+      source: 'server',
+      stepIndex: 0,
+      surface: 'chat',
+      systemActionEligibility: 'none',
+      toolCallId: 'call',
+      userId: owner,
+      workspaceId,
+    } as never);
 
-    const model = new AgentRunBoardModel(serverDB, workspaceId);
+    const rows = await new AgentRunBoardModel(serverDB, workspaceId).listRuns({
+      involvedUserId: owner,
+      now,
+      since,
+    });
 
-    expect(
-      await model.listTopicIdsWithUserMessages(['t-wrote', 't-assistant', 't-other'], owner),
-    ).toEqual(['t-wrote']);
-    expect(await model.listTopicIdsWithUserMessages([], owner)).toEqual([]);
+    expect(rows.map((r) => r.id).sort()).toEqual(['asked-run', 'own-run', 'spoken-run']);
   });
 });

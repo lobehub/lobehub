@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { AgentRunBoardRow } from '@/database/models/agentRunBoard';
 
-import { buildAgentRunBoard, classifyRun, filterInvolvedRuns } from './index';
+import { buildAgentRunBoard, classifyRun } from './index';
 
 const generatedAt = new Date('2026-11-08T12:00:00Z');
 const now = generatedAt.getTime();
@@ -199,23 +199,5 @@ describe('buildAgentRunBoard', () => {
 
     expect(board.lanes).toHaveLength(30);
     expect(board.hiddenLaneCount).toBe(3);
-  });
-});
-
-describe('filterInvolvedRuns', () => {
-  it('keeps runs the viewer started, spoke in or must approve', () => {
-    const rows = [
-      row({ id: 'started', userId: 'me' }),
-      row({ id: 'spoke', topicId: 'spoken' }),
-      row({ id: 'approve', interventions: [intervention({ userId: 'me' })] }),
-      row({ id: 'unrelated' }),
-      row({ id: 'no-topic', topicId: null }),
-    ];
-
-    expect(filterInvolvedRuns(rows, 'me', new Set(['spoken'])).map((r) => r.id)).toEqual([
-      'started',
-      'spoke',
-      'approve',
-    ]);
   });
 });

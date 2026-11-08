@@ -73,13 +73,27 @@ export class AgentRunBoardModel {
     this.workspaceId = workspaceId;
   }
 
-  listRuns = async ({ now, since }: { now: Date; since: Date }): Promise<AgentRunBoardRow[]> => {
+  listRuns = async ({
+    now,
+    since,
+    involvedUserId,
+  }: {
+    now: Date;
+    since: Date;
+    /** Narrows the read to one member's runs *before* the workspace-wide limits. */
+    involvedUserId?: string;
+  }): Promise<AgentRunBoardRow[]> => {
+    // Applied inside both queries: the limits below cap the workspace, so a
+    // post-filter would see a board already emptied of the viewer's runs.
+    const involvement = involvedUserId ? this.involvedCondition(involvedUserId) : undefined;
+
     const [windowRows, waitingRows] = await Promise.all([
       this.selectRuns(
         and(
           gte(agentOperations.createdAt, new Date(since.getTime() - MAX_RUN_SPAN_MS)),
           ne(agentOperations.status, 'idle'),
           or(isNull(agentOperations.completedAt), gte(agentOperations.completedAt, since)),
+          involvement,
         ),
         RUN_LIMIT,
       ),
@@ -87,6 +101,7 @@ export class AgentRunBoardModel {
         and(
           gte(agentOperations.createdAt, new Date(now.getTime() - MAX_WAITING_AGE_MS)),
           eq(agentOperations.status, 'waiting_for_human'),
+          involvement,
         ),
         WAITING_RUN_LIMIT,
       ),
@@ -116,24 +131,31 @@ export class AgentRunBoardModel {
     return rows.map((row) => ({ ...row, interventions: byOperation.get(row.id) ?? [] }));
   };
 
-  /** Of these topics, the ones where this member wrote at least one message. */
-  listTopicIdsWithUserMessages = async (topicIds: string[], userId: string): Promise<string[]> => {
-    if (topicIds.length === 0) return [];
-
-    const rows = await this.db
-      .selectDistinct({ topicId: messages.topicId })
-      .from(messages)
-      .where(
-        and(
-          inArray(messages.topicId, topicIds),
-          eq(messages.userId, userId),
-          eq(messages.role, 'user'),
-          eq(messages.workspaceId, this.workspaceId),
-        ),
-      );
-
-    return rows.flatMap(({ topicId }) => (topicId ? [topicId] : []));
-  };
+  /**
+   * The same three predicates as `filterInvolvedRuns`, expressed in SQL so the
+   * limits bound matching runs instead of the unfiltered workspace.
+   */
+  private involvedCondition = (userId: string) =>
+    or(
+      // Ran it themselves.
+      eq(agentOperations.userId, userId),
+      // Wrote in the topic the run belongs to.
+      sql`${agentOperations.topicId} IN (
+        SELECT ${messages.topicId} FROM ${messages}
+        WHERE ${messages.userId} = ${userId}
+          AND ${messages.role} = 'user'
+          AND ${messages.workspaceId} = ${this.workspaceId}
+      )`,
+      // Was asked to intervene. The board only loads interventions for waiting
+      // rows, so the predicate stays on them to keep both paths in step.
+      and(
+        eq(agentOperations.status, 'waiting_for_human'),
+        sql`${agentOperations.id} IN (
+          SELECT ${agentInterventions.operationId} FROM ${agentInterventions}
+          WHERE ${agentInterventions.userId} = ${userId}
+        )`,
+      ),
+    );
 
   private selectRuns = async (condition: ReturnType<typeof and>, limit: number) => {
     const rows = await this.db
