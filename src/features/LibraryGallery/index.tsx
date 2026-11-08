@@ -1,6 +1,6 @@
 'use client';
 
-import { Button, cssVar, Empty, Flexbox, Segmented } from '@lobehub/ui';
+import { Button, cssVar, Empty, Flexbox, Tabs } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { LibraryBigIcon, PlusIcon } from 'lucide-react';
 import { memo, useLayoutEffect } from 'react';
@@ -87,15 +87,16 @@ const LibraryGallery = memo(() => {
           <Flexbox horizontal align={'center'} gap={12} style={{ marginLeft: 8 }}>
             {t('docs.section.library')}
             {showAgentSpaces && (
-              <Segmented
+              <Tabs
+                activeKey={showingAgents ? AGENTS_TAB : MINE_TAB}
                 size={'small'}
-                value={showingAgents ? AGENTS_TAB : MINE_TAB}
-                options={[
-                  { label: t('docs.library.tabs.mine'), value: MINE_TAB },
-                  { label: t('docs.library.tabs.agents'), value: AGENTS_TAB },
+                variant={'rounded'}
+                items={[
+                  { key: MINE_TAB, label: t('docs.library.tabs.mine') },
+                  { key: AGENTS_TAB, label: t('docs.library.tabs.agents') },
                 ]}
-                onChange={(value) =>
-                  setSearchParams(value === AGENTS_TAB ? { [TAB_PARAM]: AGENTS_TAB } : {}, {
+                onChange={(key) =>
+                  setSearchParams(key === AGENTS_TAB ? { [TAB_PARAM]: AGENTS_TAB } : {}, {
                     replace: true,
                   })
                 }
@@ -138,7 +139,6 @@ const LibraryGallery = memo(() => {
                       disabled={!canCreate}
                       icon={PlusIcon}
                       size={'middle'}
-                      type={'primary'}
                       onClick={handleCreate}
                     >
                       {t('library.new')}

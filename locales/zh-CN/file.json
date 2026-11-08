@@ -56,7 +56,7 @@
   "docs.home.tabs.mine": "我创建的",
   "docs.home.tabs.recent": "最近更新",
   "docs.home.tabs.shared": "与我共享",
-  "docs.library.agentSpaces.emptyDesc": "在对话中打开助理的文档后，会显示在这里",
+  "docs.library.agentSpaces.emptyDesc": "打开助理后，它的文档会显示在这里",
   "docs.library.agentSpaces.emptyTitle": "还没有助理知识库",
   "docs.library.agentSpaces.untitled": "未命名助理",
   "docs.library.emptyDesc": "把相关的文件和文稿收进知识库，供团队和助理一起使用",
