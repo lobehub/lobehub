@@ -9,6 +9,11 @@ import { AiAgentService } from '@/server/services/aiAgent';
 import { TopicStartReservationError } from '@/server/services/aiAgent/topicStartReservation';
 
 import type { AgentInboundWakeInput, AgentInboundWaker } from './inbound';
+import {
+  createOwnerChannelReportHook,
+  INBOX_RUN_INTERVENTION,
+  OWNER_CHANNEL_INSTRUCTION,
+} from './ownerChannel';
 import { fenceUntrustedInbox, toUntrustedInboxEntry } from './untrusted';
 
 /** Body budget for the wake prompt; the full text stays readable through the tool. */
@@ -22,6 +27,7 @@ const WAKE_BODY_PREVIEW_CHARS = 2000;
 export const buildInboundPrompt = (account: AgentAccountView, message: AgentInboxEntry): string =>
   [
     `A new message arrived for your ${account.kind} account ${account.identifier}. Decide whether it needs anything from you.`,
+    OWNER_CHANNEL_INSTRUCTION,
     fenceUntrustedInbox([
       toUntrustedInboxEntry(message, { maxBodyChars: WAKE_BODY_PREVIEW_CHARS }),
     ]),
@@ -57,8 +63,10 @@ export const createAgentInboundWaker = (db: LobeChatDatabase): AgentInboundWaker
       service.execAgent({
         agentId: account.agentId,
         appContext: { scope: 'agent', topicId },
+        hooks: [createOwnerChannelReportHook(db, account.id)],
         prompt: buildInboundPrompt(account, message),
         trigger: RequestTrigger.Inbox,
+        userInterventionConfig: INBOX_RUN_INTERVENTION,
       });
 
     /**

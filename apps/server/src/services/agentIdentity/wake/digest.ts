@@ -11,6 +11,11 @@ import { AiAgentService } from '@/server/services/aiAgent';
 import { QueueService } from '@/server/services/queue';
 import { agentSignalScopeFlowControl } from '@/server/workflows/agentSignal';
 
+import {
+  createOwnerChannelReportHook,
+  INBOX_RUN_INTERVENTION,
+  OWNER_CHANNEL_INSTRUCTION,
+} from '../ownerChannel';
 import { fenceUntrustedInbox, toUntrustedInboxEntry } from '../untrusted';
 import type { ResolvedWakeConfig } from './config';
 import { resolveWakeConfig } from './config';
@@ -88,7 +93,8 @@ export const holdForDigest = (
 export const buildDigestPrompt = (account: AgentAccountView, messages: AgentInboxEntry[]): string =>
   [
     `${messages.length} message${messages.length === 1 ? '' : 's'} arrived for your ${account.kind} account ${account.identifier} and were held for this digest, oldest first.`,
-    'Go through them together: work out which ones need your owner, which ones you can take care of, and which are noise. Tell your owner only about what needs them, briefly, and say why. Any message you send is held for their approval.',
+    'Go through them together: work out which ones need your owner, which ones you can take care of, and which are noise. Tell your owner only about what needs them, briefly, and say why.',
+    OWNER_CHANNEL_INSTRUCTION,
     fenceUntrustedInbox(
       messages.map((message) =>
         toUntrustedInboxEntry(message, { maxBodyChars: DIGEST_BODY_PREVIEW_CHARS }),
@@ -112,8 +118,10 @@ export const createDigestRunStarter =
     const result = await service.execAgent({
       agentId: account.agentId,
       appContext: { scope: 'agent' },
+      hooks: [createOwnerChannelReportHook(db, account.id)],
       prompt: buildDigestPrompt(account, messages),
       trigger: RequestTrigger.Inbox,
+      userInterventionConfig: INBOX_RUN_INTERVENTION,
     });
 
     return { error: result.error, topicId: result.topicId };
