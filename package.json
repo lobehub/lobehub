@@ -506,7 +506,7 @@
   },
   "devDependencies": {
     "@alint-js/cli": "0.7.3",
-    "@commitlint/cli": "^19.8.1",
+    "@commitlint/cli": "^21.2.4",
     "@edge-runtime/vm": "^5.0.0",
     "@huggingface/tasks": "^0.19.90",
     "@inquirer/prompts": "^8.5.2",
@@ -563,7 +563,7 @@
     "ajv": "^8.20.0",
     "ajv-keywords": "^5.1.0",
     "code-inspector-plugin": "1.3.6",
-    "commitlint": "^19.8.1",
+    "commitlint": "^21.2.4",
     "consola": "^3.4.2",
     "cross-env": "^10.1.0",
     "crypto-js": "^4.2.0",
