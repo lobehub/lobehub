@@ -25,8 +25,9 @@ describe('settleRunThread', () => {
       metadata: {
         operationId: 'op-1',
         sourceToolCallId: 'call-1',
+        runUsageBaseline: { totalTokens: 100 },
         startedAt: '2026-10-01T00:00:00.000Z',
-        totalTokens: 100,
+        totalTokens: 130,
       },
     });
     mockSettleRun.mockResolvedValue(true);
@@ -62,6 +63,47 @@ describe('settleRunThread', () => {
       startedAt: '2026-10-01T00:00:00.000Z',
       totalTokens: 150,
     });
+  });
+
+  it('ignores usage that polling wrote for the same run', async () => {
+    mockFindById.mockResolvedValue({
+      metadata: { operationId: 'op-1', startedAt: '2026-10-01T00:00:00.000Z', totalTokens: 100 },
+    });
+
+    await settleRunThread(
+      deps,
+      'op-1',
+      { origin, usage: { llm: { tokens: { total: 150 } } } },
+      'done',
+    );
+
+    expect(mockSettleRun.mock.calls[0][2].metadata.totalTokens).toBe(150);
+  });
+
+  it('settles a run that ends before its operation id is written', async () => {
+    mockFindById.mockResolvedValue({ metadata: { startedAt: '2026-10-01T00:00:00.000Z' } });
+
+    await settleRunThread(deps, 'op-1', { createdAt: '2026-10-01T00:00:01.000Z', origin }, 'done');
+
+    expect(mockSettleRun).toHaveBeenCalled();
+  });
+
+  it('does not settle a follow-up claim that started after this run', async () => {
+    mockFindById.mockResolvedValue({ metadata: { startedAt: '2026-10-01T00:05:00.000Z' } });
+
+    await settleRunThread(deps, 'op-1', { createdAt: '2026-10-01T00:00:01.000Z', origin }, 'done');
+
+    expect(mockSettleRun).not.toHaveBeenCalled();
+  });
+
+  it('does not settle a thread owned by another run', async () => {
+    mockFindById.mockResolvedValue({
+      metadata: { operationId: 'op-2', startedAt: '2026-10-01T00:00:00.000Z' },
+    });
+
+    await settleRunThread(deps, 'op-1', { origin }, 'done');
+
+    expect(mockSettleRun).not.toHaveBeenCalled();
   });
 
   it('records the run error on the thread', async () => {

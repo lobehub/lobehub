@@ -206,10 +206,10 @@ export class ThreadModel {
   /**
    * Compare-and-set a `processing` thread into the terminal status of its run.
    *
-   * Only the run that owns the thread may settle it: a late completion of an
-   * earlier run must not close a follow-up run that has since claimed the same
-   * thread. The operation id is written after the run starts, so a run that
-   * ends before that write finds it empty and still owns the thread.
+   * `value.metadata.startedAt` must be the value the caller read: every claim
+   * rewrites it, so an earlier run cannot close a follow-up that claimed the
+   * thread after that read. The operation id is written after the run starts,
+   * so it may still be empty; the caller decides whether an empty id is its own.
    *
    * @returns whether this caller settled the thread
    */
@@ -227,6 +227,7 @@ export class ThreadModel {
           this.ownership(),
           eq(threads.status, ThreadStatus.Processing),
           sql`COALESCE(${threads.metadata} ->> 'operationId', '') IN ('', ${operationId})`,
+          sql`COALESCE(${threads.metadata} ->> 'startedAt', '') = ${value.metadata.startedAt ?? ''}`,
         ),
       )
       .returning({ id: threads.id });

@@ -39,7 +39,11 @@ describe('ThreadModel coverage', () => {
         userId,
       });
     const value = {
-      metadata: { completedAt: '2026-10-01T00:01:00.000Z', operationId: 'op-1' },
+      metadata: {
+        completedAt: '2026-10-01T00:01:00.000Z',
+        operationId: 'op-1',
+        startedAt: '2026-10-01T00:00:00.000Z',
+      },
       status: ThreadStatus.Completed,
     };
 
@@ -61,6 +65,14 @@ describe('ThreadModel coverage', () => {
 
       expect(await threadModel.settleRun('thread-settle-later', 'op-1', value)).toBe(false);
       expect((await findThread('thread-settle-later'))?.status).toBe(ThreadStatus.Processing);
+    });
+
+    it('refuses when a follow-up claimed the thread after the caller read it', async () => {
+      await insertThread('thread-settle-claimed', ThreadStatus.Processing);
+
+      const stale = { ...value, metadata: { ...value.metadata, startedAt: 'earlier-claim' } };
+      expect(await threadModel.settleRun('thread-settle-claimed', 'op-1', stale)).toBe(false);
+      expect((await findThread('thread-settle-claimed'))?.status).toBe(ThreadStatus.Processing);
     });
 
     it('does not overwrite a thread that is no longer processing', async () => {

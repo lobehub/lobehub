@@ -105,6 +105,15 @@ export async function settleRunThread(
 
     const metadata = thread.metadata ?? {};
     const startedAt = metadata.startedAt;
+
+    // A claim clears the operation id until the new run has one. An empty id
+    // only belongs to this run if the run began after the thread was claimed.
+    const ownsThread = metadata.operationId
+      ? metadata.operationId === operationId
+      : !!startedAt && !!state.createdAt && new Date(state.createdAt) >= new Date(startedAt);
+    if (!ownsThread) return;
+
+    const baseline = metadata.runUsageBaseline ?? {};
     const llmCalls = getLlmCallCount(state);
 
     await threadModel.settleRun(threadId, operationId, {
@@ -114,12 +123,12 @@ export async function settleRunThread(
         duration: startedAt ? Date.now() - new Date(startedAt).getTime() : undefined,
         error: formatErrorForMetadata(state.error),
         operationId,
-        totalCost: addUsage(metadata.totalCost, state.cost?.total),
-        totalLlmCalls: addUsage(metadata.totalLlmCalls, llmCalls),
+        totalCost: addUsage(baseline.totalCost, state.cost?.total),
+        totalLlmCalls: addUsage(baseline.totalLlmCalls, llmCalls),
         totalMessages: state.messages?.length ?? metadata.totalMessages,
-        totalSteps: addUsage(metadata.totalLlmCalls, llmCalls),
-        totalTokens: addUsage(metadata.totalTokens, state.usage?.llm?.tokens?.total),
-        totalToolCalls: addUsage(metadata.totalToolCalls, state.usage?.tools?.totalCalls),
+        totalSteps: addUsage(baseline.totalLlmCalls, llmCalls),
+        totalTokens: addUsage(baseline.totalTokens, state.usage?.llm?.tokens?.total),
+        totalToolCalls: addUsage(baseline.totalToolCalls, state.usage?.tools?.totalCalls),
       },
       status: threadStatusForReason(reason),
     });

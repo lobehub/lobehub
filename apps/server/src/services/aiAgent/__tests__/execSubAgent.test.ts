@@ -492,7 +492,7 @@ describe('AiAgentService.execSubAgent', () => {
       expect(mockThreadModel.claimForRun).toHaveBeenCalledWith(
         'thread-old',
         { operationId: 'op-old', status: ThreadStatus.Failed },
-        { startedAt: expect.any(String) },
+        { runUsageBaseline: {}, startedAt: expect.any(String) },
       );
       expect(execAgentSpy).toHaveBeenCalledWith(
         expect.objectContaining({

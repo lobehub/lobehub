@@ -55,6 +55,15 @@ export interface ThreadMetadata {
   /** Operation ID for tracking */
   operationId?: string;
   /**
+   * Usage of the runs before the current one, fixed when the run claims the
+   * thread. The `total*` fields can't serve as this baseline: status polling
+   * rewrites them while the run is live.
+   */
+  runUsageBaseline?: Pick<
+    ThreadMetadata,
+    'totalCost' | 'totalLlmCalls' | 'totalTokens' | 'totalToolCalls'
+  >;
+  /**
    * The specific tool_use id within `sourceMessageId` that spawned this thread.
    * Used to position the thread inline as a `task` block within the parent
    * message's content stream — e.g. CC's `Task` tool_use spawning a subagent.
