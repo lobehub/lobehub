@@ -57,6 +57,7 @@
   "create.slugInvalid": "仅可使用小写字母、数字和单个连字符。",
   "create.slugLabel": "Slug（可选）",
   "create.slugPlaceholder": "my-project",
+  "create.slugTaken": "当前空间已有项目使用该链接名，请换一个。",
   "create.title": "新建项目",
   "createFromGithub.connect": "连接 GitHub",
   "createFromGithub.disconnected": "连接 GitHub 后可直接选择你的仓库，也可以在下方粘贴公开仓库的链接。",

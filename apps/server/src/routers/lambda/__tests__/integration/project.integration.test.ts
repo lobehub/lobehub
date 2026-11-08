@@ -128,8 +128,17 @@ describe('Project Router Integration', () => {
       caller.create({ identifier: 'LOBE', name: 'LobeHub Mobile' }),
     ).rejects.toMatchObject({
       code: 'CONFLICT',
-      message: expect.stringContaining('LOBE'),
+      // The code, not prose: the create forms key off it to mark the field.
+      message: 'DUPLICATE_PROJECT_IDENTIFIER',
     });
+  });
+
+  it('answers a duplicate slug with its own code, not the identifier one', async () => {
+    await caller.create({ name: 'LobeHub', slug: 'taken-link-name' });
+
+    await expect(
+      caller.create({ name: 'LobeHub Mobile', slug: 'taken-link-name' }),
+    ).rejects.toMatchObject({ code: 'CONFLICT', message: 'DUPLICATE_PROJECT_SLUG' });
   });
 
   it.each(['team/launch', 'roadmap?draft', '#plan', 'two--hyphens'])(

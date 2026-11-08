@@ -5,6 +5,7 @@ import {
   DEFAULT_MAIN_AGENT_MODE,
   doesConflictApplyTo,
   getCreateProjectInput,
+  getProjectConflictField,
   getProjectFieldSuggestions,
   isProjectIdentifierTaken,
   isProjectIdentifierValid,
@@ -74,6 +75,24 @@ describe('createProjectForm', () => {
     // Nothing was submitted, so there is no identifier to blame.
     expect(doesConflictApplyTo('', '')).toBe(false);
     expect(doesConflictApplyTo('', 'MOBILE')).toBe(false);
+  });
+
+  it('routes a conflict to the field the server named', () => {
+    const conflict = (code: string, message: string) => ({ data: { code }, message });
+
+    expect(getProjectConflictField(conflict('CONFLICT', 'DUPLICATE_PROJECT_IDENTIFIER'))).toBe(
+      'identifier',
+    );
+    expect(getProjectConflictField(conflict('CONFLICT', 'DUPLICATE_PROJECT_SLUG'))).toBe('slug');
+
+    // A conflict without a field code, or a failure of another kind, stays
+    // generic — the form must not blame a field it cannot name.
+    expect(getProjectConflictField(conflict('CONFLICT', 'SOMETHING_ELSE'))).toBeUndefined();
+    expect(
+      getProjectConflictField(conflict('BAD_REQUEST', 'DUPLICATE_PROJECT_SLUG')),
+    ).toBeUndefined();
+    expect(getProjectConflictField(new Error('boom'))).toBeUndefined();
+    expect(getProjectConflictField(undefined)).toBeUndefined();
   });
 
   it('normalizes and includes a user-provided slug', () => {

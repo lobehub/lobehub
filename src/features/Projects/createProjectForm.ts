@@ -1,4 +1,9 @@
-import { PROJECT_IDENTIFIER_REGEX } from '@lobechat/types';
+import {
+  PROJECT_DUPLICATE_IDENTIFIER,
+  PROJECT_DUPLICATE_SLUG,
+  PROJECT_IDENTIFIER_REGEX,
+  type ProjectDuplicateField,
+} from '@lobechat/types';
 import { kebabCase } from 'es-toolkit';
 import { pinyin } from 'pinyin-pro';
 
@@ -54,19 +59,35 @@ export const isProjectIdentifierTaken = (
 };
 
 /**
- * Whether a `CONFLICT` answered for `submittedIdentifier` still describes the
- * value in the field.
+ * Whether a `CONFLICT` answered for `submitted` still describes the value in the
+ * field.
  *
- * The identifier input stays editable while the create request is in flight, so
- * the answer can come back after the user has typed another value. The verdict
- * belongs to what was submitted; a different value typed meanwhile must not
- * inherit it. An empty submission carries no identifier (the server leaves the
- * column null), so it has nothing to attribute the conflict to.
+ * The inputs stay editable while the create request is in flight, so the answer
+ * can come back after the user has typed another value. The verdict belongs to
+ * what was submitted; a different value typed meanwhile must not inherit it. An
+ * empty submission carries no value (the server generates the slug, and leaves
+ * the identifier null), so it has nothing to attribute a conflict to.
  */
-export const doesConflictApplyTo = (submittedIdentifier: string, currentIdentifier: string) => {
-  const submitted = submittedIdentifier.trim().toUpperCase();
+export const doesConflictApplyTo = (submitted: string, current: string) => {
+  const submittedValue = submitted.trim().toUpperCase();
 
-  return Boolean(submitted) && currentIdentifier.trim().toUpperCase() === submitted;
+  return Boolean(submittedValue) && current.trim().toUpperCase() === submittedValue;
+};
+
+/**
+ * The field a project `CONFLICT` belongs to.
+ *
+ * The create router answers a taken slug or identifier with a machine-readable
+ * message (see `PROJECT_DUPLICATE_*`), so the form can put the error under the
+ * input that resolves it. Any other conflict stays a generic failure.
+ */
+export const getProjectConflictField = (error: unknown): ProjectDuplicateField | undefined => {
+  const conflict = error as { data?: { code?: string }; message?: string } | null | undefined;
+  if (conflict?.data?.code !== 'CONFLICT') return undefined;
+  if (conflict.message === PROJECT_DUPLICATE_IDENTIFIER) return 'identifier';
+  if (conflict.message === PROJECT_DUPLICATE_SLUG) return 'slug';
+
+  return undefined;
 };
 
 export const isProjectSlugValid = (slug: string) => {

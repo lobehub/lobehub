@@ -13,6 +13,7 @@ import {
   DEFAULT_MAIN_AGENT_MODE,
   doesConflictApplyTo,
   getCreateProjectInput,
+  getProjectConflictField,
   getProjectFieldSuggestions,
   isProjectIdentifierTaken,
   isProjectIdentifierValid,
@@ -46,6 +47,8 @@ interface CreateProjectFormState {
   mainAgentMode: MainAgentMode;
   name: string;
   slug: string;
+  /** Set when the server rejects the slug as already taken in this scope. */
+  slugConflict: boolean;
   slugEdited: boolean;
 }
 
@@ -69,6 +72,7 @@ const CreateProjectContent = memo<CreateProjectOptions>(({ onCreated }) => {
     mainAgentMode: DEFAULT_MAIN_AGENT_MODE,
     name: '',
     slug: '',
+    slugConflict: false,
     slugEdited: false,
   });
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
@@ -83,6 +87,9 @@ const CreateProjectContent = memo<CreateProjectOptions>(({ onCreated }) => {
     form.identifierConflict ||
     (loadedProjects ? isProjectIdentifierTaken(form.identifier, loadedProjects) : false);
   const slugValid = isProjectSlugValid(form.slug);
+  // Slugs are unique per scope too, so a name that derives an already-used slug
+  // ("LobeHub" twice) must report it on the slug field, not on the identifier.
+  const slugTaken = form.slugConflict;
 
   const updateForm = (patch: Partial<CreateProjectFormState>) => {
     setForm((current) => ({ ...current, ...patch }));
@@ -94,12 +101,17 @@ const CreateProjectContent = memo<CreateProjectOptions>(({ onCreated }) => {
       ...current,
       name,
       slug: current.slugEdited ? current.slug : suggestions.slug,
+      // A derived slug changes with the name, so a conflict reported for the
+      // previous one no longer applies. A slug typed by hand stays put.
+      slugConflict: current.slugEdited ? current.slugConflict : false,
     }));
   };
 
   const handleCreate = async () => {
-    if (!createInput || identifierTaken || form.loading || form.avatarUploading) return;
+    if (!createInput || identifierTaken || slugTaken || form.loading || form.avatarUploading)
+      return;
     const submittedIdentifier = createInput.identifier ?? '';
+    const submittedSlug = createInput.slug ?? '';
     updateForm({ loading: true });
     try {
       const project = await createProject(
@@ -121,15 +133,23 @@ const CreateProjectContent = memo<CreateProjectOptions>(({ onCreated }) => {
       console.error('Failed to create project', error);
       // The unique index stays the final authority: a concurrent create, or a
       // private project by another member that the loaded list cannot see, can
-      // still collide after the inline check. Report it on the field, not as a
-      // generic failure.
-      if ((error as { data?: { code?: string } } | undefined)?.data?.code === 'CONFLICT') {
+      // still collide after the inline check. The server names the field it
+      // rejected, so the error lands on that input instead of a generic toast.
+      const conflict = getProjectConflictField(error);
+      if (conflict === 'identifier') {
         setForm((current) => ({
           ...current,
           // Only the identifier that was submitted is known to be taken. The
           // field stays editable while the request is in flight, so a value
           // typed meanwhile must not inherit that verdict.
           identifierConflict: doesConflictApplyTo(submittedIdentifier, current.identifier),
+        }));
+        return;
+      }
+      if (conflict === 'slug') {
+        setForm((current) => ({
+          ...current,
+          slugConflict: doesConflictApplyTo(submittedSlug, current.slug),
         }));
         return;
       }
@@ -177,9 +197,10 @@ const CreateProjectContent = memo<CreateProjectOptions>(({ onCreated }) => {
           identifierInvalid={identifierInvalid}
           identifierTaken={identifierTaken}
           slug={form.slug}
+          slugTaken={slugTaken}
           slugValid={slugValid}
           onIdentifierChange={(identifier) => updateForm({ identifier, identifierConflict: false })}
-          onSlugChange={(slug) => updateForm({ slug, slugEdited: true })}
+          onSlugChange={(slug) => updateForm({ slug, slugConflict: false, slugEdited: true })}
           onSubmit={handleCreate}
         />
         <Text fontSize={12} type="secondary">
@@ -189,7 +210,7 @@ const CreateProjectContent = memo<CreateProjectOptions>(({ onCreated }) => {
       <ModalFooter>
         <Button onClick={close}>{t('cancel', { ns: 'common' })}</Button>
         <Button
-          disabled={!createInput || identifierTaken || form.avatarUploading}
+          disabled={!createInput || identifierTaken || slugTaken || form.avatarUploading}
           loading={form.loading}
           type="primary"
           onClick={handleCreate}

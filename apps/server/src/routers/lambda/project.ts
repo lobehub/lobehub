@@ -1,4 +1,9 @@
-import { PROJECT_IDENTIFIER_REGEX, PROJECT_STATUSES, PROJECT_VISIBILITIES } from '@lobechat/types';
+import {
+  PROJECT_DUPLICATE_IDENTIFIER,
+  PROJECT_IDENTIFIER_REGEX,
+  PROJECT_STATUSES,
+  PROJECT_VISIBILITIES,
+} from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -115,10 +120,10 @@ const knowledgeBaseBindingPatch = z.object({
 function mapProjectError(error: unknown, operation: string): never {
   if (error instanceof TRPCError) throw error;
   // A duplicate identifier is a field-level problem the client renders next to
-  // the input; `CONFLICT` keeps it distinguishable from a real server fault so
-  // callers stop showing a generic failure toast.
+  // the input; `CONFLICT` carries the machine-readable code the create forms key
+  // off, so they can mark the identifier rather than a generic failure.
   if (error instanceof ProjectIdentifierTakenError) {
-    throw new TRPCError({ cause: error, code: 'CONFLICT', message: error.message });
+    throw new TRPCError({ cause: error, code: 'CONFLICT', message: PROJECT_DUPLICATE_IDENTIFIER });
   }
   const message = error instanceof Error ? error.message : `Failed to ${operation} project`;
   console.error(`[project:${operation}]`, error);

@@ -12,6 +12,8 @@ interface CreateProjectMoreFieldsProps {
   onSlugChange: (value: string) => void;
   onSubmit: () => void;
   slug: string;
+  /** The slug is well-formed but already claimed in this scope. */
+  slugTaken: boolean;
   slugValid: boolean;
 }
 
@@ -23,13 +25,15 @@ const CreateProjectMoreFields = ({
   onSlugChange,
   onSubmit,
   slug,
+  slugTaken,
   slugValid,
 }: CreateProjectMoreFieldsProps) => {
   const { t } = useTranslation('project');
   const [expanded, setExpanded] = useState(false);
   // An invalid value stays visible so its error can't hide behind the fold.
   const identifierError = identifierInvalid || identifierTaken;
-  const open = expanded || identifierError || !slugValid;
+  const slugError = !slugValid || slugTaken;
+  const open = expanded || identifierError || slugError;
 
   return (
     <Flexbox gap={16}>
@@ -75,16 +79,22 @@ const CreateProjectMoreFields = ({
               {t('create.slugLabel')}
             </Text>
             <Input
-              aria-invalid={!slugValid}
+              aria-invalid={slugError}
               maxLength={100}
               placeholder={t('create.slugPlaceholder')}
-              style={slugValid ? undefined : { borderColor: cssVar.colorError }}
+              style={slugError ? { borderColor: cssVar.colorError } : undefined}
               value={slug}
               onChange={(event) => onSlugChange(event.target.value.toLowerCase())}
               onPressEnter={onSubmit}
             />
-            <Text fontSize={12} type={slugValid ? 'secondary' : 'danger'}>
-              {t(slugValid ? 'create.slugDescription' : 'create.slugInvalid')}
+            <Text fontSize={12} type={slugError ? 'danger' : 'secondary'}>
+              {t(
+                slugValid
+                  ? slugTaken
+                    ? 'create.slugTaken'
+                    : 'create.slugDescription'
+                  : 'create.slugInvalid',
+              )}
             </Text>
           </Flexbox>
         </>

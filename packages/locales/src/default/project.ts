@@ -174,8 +174,7 @@ export default {
   'create.identifierInvalid': 'Use 3–6 uppercase letters or numbers, starting with a letter.',
   'create.identifierLabel': 'Identifier (optional)',
   'create.identifierPlaceholder': 'ACE',
-  'create.identifierTaken':
-    'Another project in this workspace already uses this identifier.',
+  'create.identifierTaken': 'Another project in this workspace already uses this identifier.',
   'create.mainAgentDedicatedDescription':
     'Creates an agent named after the project, with its avatar and the Project label. It stays in your agents list.',
   'create.mainAgentDedicatedPlaceholder': 'Named after the project',
@@ -191,6 +190,7 @@ export default {
   'create.slugInvalid': 'Use lowercase letters, numbers, and single hyphens only.',
   'create.slugLabel': 'Slug (optional)',
   'create.slugPlaceholder': 'my-project',
+  'create.slugTaken': 'Another project in this workspace already uses this link name.',
   'create.title': 'New project',
   'createFromGithub.connect': 'Connect GitHub',
   'createFromGithub.disconnected':
