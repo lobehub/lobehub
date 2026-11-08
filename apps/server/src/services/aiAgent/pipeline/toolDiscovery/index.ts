@@ -37,6 +37,7 @@ import { createServerAgentToolsEngine } from '@/server/modules/Mecha';
 import { isAgentSignalEnabledForUser } from '@/server/services/agentSignal/featureGate';
 import { resolveUnsupportedMessageApis } from '@/server/services/bot/platforms/messageCapabilities';
 import { deviceGateway } from '@/server/services/deviceGateway';
+import { buildPluginMcpParams } from '@/server/services/mcp/pluginParams';
 
 import { buildAllowedBuiltinTools } from '../../deviceToolRegistry';
 import {
@@ -302,9 +303,14 @@ export const discoverTools = async (
     // PENDING/EXPIRED row through here exposes the full tool schema with no
     // Composio source, so every call falls to the builtin executor and fails
     // as "not implemented".
-    let pluginsWithoutConnectors = installedPlugins.filter(
-      (p) => !connectorIdentifierSet.has(p.identifier) && !p.customParams?.composio,
-    );
+    let pluginsWithoutConnectors = installedPlugins
+      .filter((p) => !connectorIdentifierSet.has(p.identifier) && !p.customParams?.composio)
+      .map((plugin) => {
+        const mcpParams = buildPluginMcpParams(plugin);
+        return mcpParams && plugin.manifest
+          ? { ...plugin, manifest: { ...plugin.manifest, type: 'mcp' as const, mcpParams } }
+          : plugin;
+      });
     log('execAgent: got %d connector manifests', connectorManifests.length);
 
     // 5b. Get model abilities from model-bank for function calling support check

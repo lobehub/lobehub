@@ -45,6 +45,7 @@ import {
   saveConnectorOAuthState,
 } from '@/server/services/connector/stateStore';
 import { syncConnectorToolsById } from '@/server/services/connector/sync';
+import { McpElicitationService } from '@/server/services/mcp/elicitation/McpElicitationService';
 import {
   resolveConnectorAuthorizerId,
   resolveUserDisplayMap,
@@ -60,6 +61,7 @@ import {
   isWorkspaceConnectorAdmin,
 } from './_helpers/connectorManagePolicy';
 import { upsertConnectorEntry } from './_helpers/upsertConnectorEntry';
+import { McpElicitationCallSchema } from './_schema/mcpElicitation';
 
 const connectorProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -817,6 +819,7 @@ export const connectorRouter = router({
         args: z.string().optional(),
         /** An MCP App view's `tools/call`: only tools visible to the app run. */
         fromApp: z.boolean().optional(),
+        elicitation: McpElicitationCallSchema.optional(),
         identifier: z.string().min(1),
         /** With `fromApp`: the server the view came from (`getMcpServerFingerprint`). */
         server: z.string().optional(),
@@ -825,7 +828,14 @@ export const connectorRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       try {
-        return await callConnectorToolById(input, ctx);
+        return await callConnectorToolById(input, {
+          ...ctx,
+          mcpElicitationService: new McpElicitationService(
+            ctx.serverDB,
+            ctx.userId,
+            ctx.workspaceId ?? undefined,
+          ),
+        });
       } catch (err: any) {
         if (err instanceof ConnectorToolCallError) {
           throw new TRPCError({ cause: err, code: err.code, message: err.message });

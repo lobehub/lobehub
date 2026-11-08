@@ -31,6 +31,29 @@ describe('workbench stub surface', () => {
     },
   );
 
+  it.each(['trpcClient.client.ts', 'trpcClient.ts'])(
+    'covers the client MCP preparation importer in %s',
+    (stubFile) => {
+      const importer = 'src/store/chat/agents/transports/handoffClientMcpTools.ts';
+      expect(
+        reportStubSurfaceGaps(
+          [
+            {
+              rel: importer,
+              source: readFileSync(path.resolve(stubDir, '../../../../', importer), 'utf8'),
+            },
+          ],
+          [
+            {
+              source: readFileSync(path.join(stubDir, stubFile), 'utf8'),
+              specifier: '@/libs/trpc/client',
+            },
+          ],
+        ),
+      ).toEqual([]);
+    },
+  );
+
   it('treats reject() and createTRPCClient() as open members', () => {
     const surface = parseStubSurface(
       readFileSync(path.join(stubDir, 'trpcClient.client.ts'), 'utf8'),

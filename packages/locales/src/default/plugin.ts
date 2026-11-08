@@ -1,4 +1,29 @@
 export default {
+  'mcpElicitation.omit': 'Omit {{field}}',
+  'mcpElicitation.next': 'Next request',
+  'mcpElicitation.title': '{{server}} requests your input',
+  'mcpElicitation.progress': 'Request {{current}} of {{total}}',
+  'mcpElicitation.deadline': 'Available until {{time}}',
+  'mcpElicitation.submitError':
+    'Your response could not be delivered. Check the connection and try again.',
+  'mcpElicitation.resolving': 'Your response is being delivered to the MCP server…',
+  'mcpElicitation.waiting':
+    'The external operation is still waiting. Continue to check its status.',
+  'mcpElicitation.retry': 'Check status',
+  'mcpElicitation.invalidInput': 'Check the requested values: {{detail}}',
+  'mcpElicitation.openError': 'The external page could not be opened. Try opening it again.',
+  'mcpElicitation.externalPrivacy':
+    'This opens in your browser. LobeHub cannot see the page or anything you enter there.',
+  'mcpElicitation.open': 'Open external page',
+  'mcpElicitation.return': 'Complete the action in your browser, then return here to continue.',
+  'mcpElicitation.continue': 'Continue original operation',
+  'mcpElicitation.accept': 'Send response',
+  'mcpElicitation.decline': 'Decline request',
+  'mcpElicitation.cancel': 'Cancel interaction',
+  'mcpElicitation.readError': 'Pending MCP requests could not be loaded. Reconnect to continue.',
+  'mcpElicitation.formPrivacy':
+    'Only provide non-sensitive information. Do not enter passwords, API keys, or other secrets.',
+
   'builtins.lobe-channel.title': 'Channel history',
   'builtins.lobe-channel.apiName.readMessages': 'Read Channel history',
   'builtins.lobe-channel.messageCount': 'Messages: {{count}}',

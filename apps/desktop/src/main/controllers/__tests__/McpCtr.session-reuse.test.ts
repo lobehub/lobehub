@@ -209,7 +209,11 @@ describe('McpCtr stdio session reuse (T-801 stateful MCP servers)', () => {
     // Pooled sessions are never disconnected between calls.
     expect(instance.disconnect).not.toHaveBeenCalled();
     // Second call actually ran (result produced).
-    expect(instance.callTool).toHaveBeenLastCalledWith('execute_python', {});
+    expect(instance.callTool).toHaveBeenLastCalledWith(
+      'execute_python',
+      {},
+      { continuation: undefined, host: undefined, signal: undefined },
+    );
   });
 
   it('spawns separate sessions for different connection params', async () => {

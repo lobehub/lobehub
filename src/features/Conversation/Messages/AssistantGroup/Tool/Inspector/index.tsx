@@ -12,6 +12,7 @@ import { memo } from 'react';
 
 import SafeBoundary from '@/components/ErrorBoundary';
 
+import { isPendingMcpToolResult } from '../toolResultBody';
 import ExecutionTime from './ExecutionTime';
 import StatusIndicator from './StatusIndicator';
 import ToolTitle from './ToolTitle';
@@ -58,7 +59,7 @@ const Inspectors = memo<InspectorProps>(
     toolCallId,
     toolCallStartTime,
   }) => {
-    const isPending = intervention?.status === 'pending';
+    const isPending = intervention?.status === 'pending' || isPendingMcpToolResult(result);
     const isAborted = intervention?.status === 'aborted';
     const isRejected = intervention?.status === 'rejected';
 

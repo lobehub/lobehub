@@ -1,6 +1,7 @@
 import { agentIdentity } from './agentIdentity';
 import { agentRunSlots } from './agentRunSlots';
 import { agentSignal } from './agentSignal';
+import { agentToolResults } from './agentToolResults';
 import { botWake } from './botWake';
 import { deviceSystemInfo } from './deviceSystemInfo';
 import { linear } from './linear';
@@ -14,6 +15,7 @@ import { workspaceRescan } from './workspaceRescan';
 export const redisService = {
   agentIdentity,
   agentRunSlots,
+  agentToolResults,
   agentSignal,
   botWake,
   deviceSystemInfo,

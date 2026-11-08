@@ -21,3 +21,14 @@ export const hasToolResultBody = (
   // its data in `structuredContent` for the view
   return !!result.content || (result.contentLength ?? 0) > 0 || !!getMcpAppFromState(result.state);
 };
+
+/** A persisted elicitation is a waiting tool even after the client runtime has yielded. */
+export const isPendingMcpToolResult = (result?: { state?: { mcpElicitation?: unknown } }) => {
+  const pending = result?.state?.mcpElicitation;
+  return (
+    !!pending &&
+    typeof pending === 'object' &&
+    'kind' in pending &&
+    pending.kind === 'mcp_elicitation'
+  );
+};

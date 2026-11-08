@@ -1,22 +1,28 @@
 import { spawn } from 'node:child_process';
 
-import { BRANDING_NAME } from '@lobechat/business-const';
 import { getMcpToolVisibility, isMcpToolVisibleTo } from '@lobechat/const/mcpApp';
-import { toRecord } from '@lobechat/utils/object';
 import {
-  Client,
+  McpElicitationClient,
+  type McpElicitationContinuation,
+  type McpElicitationHost,
+  McpInputRequiredError,
+  McpProtocolClient,
+} from '@lobechat/mcp-elicitation';
+import type { Client, Progress, Transport } from '@modelcontextprotocol/client';
+import {
   InsufficientScopeError,
+  ProtocolError,
   SdkError,
   SdkErrorCode,
   SdkHttpError,
   StreamableHTTPClientTransport,
   UnauthorizedError,
 } from '@modelcontextprotocol/client';
-import { type Progress, type Transport } from '@modelcontextprotocol/client';
 import { getDefaultEnvironment, StdioClientTransport } from '@modelcontextprotocol/client/stdio';
 import debug from 'debug';
 
 import { getToolUiResourceUri, isToolVisibleToApp, MCP_APPS_CLIENT_CAPABILITIES } from './mcpApp';
+import { getMcpToolTimeoutMs } from './timeout';
 import {
   type MCPClientParams,
   type MCPError,
@@ -31,10 +37,7 @@ import { getMCPErrorLogMetadata, getMCPLogOrigin } from './utils';
 const log = debug('lobe-mcp:client');
 // MCP tool call timeout (milliseconds), configurable via the environment variable MCP_TOOL_TIMEOUT, default is 60000
 // Parse MCP_TOOL_TIMEOUT, only use if it's a valid positive number, otherwise fallback to default 60000
-const MCP_TOOL_TIMEOUT = (() => {
-  const val = Number(process.env.MCP_TOOL_TIMEOUT);
-  return Number.isFinite(val) && val > 0 ? val : 60_000;
-})();
+const MCP_TOOL_TIMEOUT = getMcpToolTimeoutMs();
 // How long a failed tool listing counts as "no views" before the next result lists again
 const UI_RESOURCE_LIST_RETRY_MS = 60_000;
 
@@ -171,6 +174,7 @@ async function preCheckStdioCommand(params: {
 }
 
 export interface MCPClientOptions {
+  elicitationEnabled?: boolean;
   /**
    * Advertise MCP Apps (SEP-1865) during `initialize`, so servers expose their
    * interactive views. Off: the client announces itself as it did before MCP
@@ -181,6 +185,7 @@ export interface MCPClientOptions {
 
 export class MCPClient {
   private mcp: Client;
+  private elicitation: McpElicitationClient;
   private transport: Transport;
   private params: MCPClientParams;
   /** tool name → `ui://` resource URI, filled from the last successful `listTools` */
@@ -195,16 +200,19 @@ export class MCPClient {
   /** When the last `getToolUiResourceUri` listing failed, while no listing has succeeded */
   private uiResourceListFailedAt?: number;
 
-  constructor(params: MCPClientParams, { mcpApps = false }: MCPClientOptions = {}) {
+  constructor(
+    params: MCPClientParams,
+    { mcpApps = false, elicitationEnabled = false }: MCPClientOptions = {},
+  ) {
     this.params = params;
-    this.mcp = new Client(
+    this.mcp = new McpProtocolClient(
       { name: 'lobehub-mcp-client', version: '1.0.0' },
       {
         ...(mcpApps ? { capabilities: MCP_APPS_CLIENT_CAPABILITIES } : {}),
         // Stdio stays legacy: auto would spawn a sibling probe process and can
         // wait the entire probe timeout on servers that ignore unknown requests.
         versionNegotiation: { mode: params.type === 'http' ? 'auto' : 'legacy' },
-        // No elicitation/sampling/roots handlers are registered by this host.
+        // Elicitation is hosted explicitly; sampling and roots remain disabled.
         inputRequired: { autoFulfill: false },
       },
     );
@@ -213,6 +221,8 @@ export class MCPClient {
     this.mcp.setNotificationHandler('notifications/tools/list_changed', () =>
       this.forgetToolListing(),
     );
+
+    this.elicitation = new McpElicitationClient(this.mcp, elicitationEnabled);
 
     switch (params.type) {
       case 'http': {
@@ -373,7 +383,7 @@ export class MCPClient {
   }
 
   async disconnect() {
-    await this.mcp.close();
+    await this.elicitation.closeWhenIdle();
     log('MCP connection disconnected.');
   }
 
@@ -424,7 +434,8 @@ export class MCPClient {
         throw new Error('NoValidSessionId', { cause: e });
       }
 
-      return [];
+      if (ProtocolError.isInstance(e) && e.code === -32601) return [];
+      throw e;
     }
   }
 
@@ -441,7 +452,8 @@ export class MCPClient {
         throw new Error('NoValidSessionId', { cause: e });
       }
 
-      return [];
+      if (ProtocolError.isInstance(e) && e.code === -32601) return [];
+      throw e;
     }
   }
 
@@ -458,7 +470,8 @@ export class MCPClient {
         throw new Error('NoValidSessionId', { cause: e });
       }
 
-      return [];
+      if (ProtocolError.isInstance(e) && e.code === -32601) return [];
+      throw e;
     }
   }
 
@@ -537,7 +550,19 @@ export class MCPClient {
       !this.uiResourceUris &&
       (failedAt === undefined || Date.now() - failedAt >= UI_RESOURCE_LIST_RETRY_MS)
     ) {
-      await this.listTools();
+      try {
+        await this.listTools();
+      } catch (error) {
+        // View discovery is optional; protocol continuations and expired sessions
+        // must still reach the caller instead of becoming a cached empty listing.
+        if (
+          error instanceof McpInputRequiredError ||
+          (error as Error).message === 'NoValidSessionId' ||
+          (SdkError.isInstance(error) && error.code === SdkErrorCode.UnsupportedResultType)
+        )
+          throw error;
+        console.error('MCP App tool discovery failed:', getMCPErrorLogMetadata(error));
+      }
       this.uiResourceListFailedAt = this.uiResourceUris ? undefined : Date.now();
     }
   }
@@ -554,15 +579,38 @@ export class MCPClient {
     }
   }
 
-  async callTool(toolName: string, args: any): Promise<ToolCallResult> {
+  async callTool(
+    toolName: string,
+    args: any,
+    options: {
+      host?: McpElicitationHost;
+      continuation?: McpElicitationContinuation;
+      signal?: AbortSignal;
+      interactive?: boolean;
+      timeoutMs?: number;
+    } = {},
+  ): Promise<ToolCallResult> {
     log('Calling MCP tool: %O', { timeout: MCP_TOOL_TIMEOUT, toolName });
     try {
-      const result = await this.mcp.callTool(
-        { arguments: args, name: toolName },
-        {
-          timeout: MCP_TOOL_TIMEOUT,
-        },
-      );
+      const invoke =
+        options.interactive && options.host
+          ? () =>
+              this.elicitation.callToolInteractively(
+                { arguments: args, name: toolName },
+                { timeout: options.timeoutMs ?? MCP_TOOL_TIMEOUT, signal: options.signal },
+                options.host!,
+              )
+          : () =>
+              this.elicitation.callTool(
+                { arguments: args, name: toolName },
+                {
+                  timeout: options.timeoutMs ?? MCP_TOOL_TIMEOUT,
+                  signal: options.signal,
+                },
+                options.host,
+                options.continuation,
+              );
+      const result = await invoke();
       log('MCP tool call completed: %O', {
         contentBlockCount: Array.isArray(result.content) ? result.content.length : 0,
         isError: result.isError === true,
@@ -574,21 +622,6 @@ export class MCPClient {
       // with a fresh session is safe (no double side effects).
       if (this.isNoValidSessionError(e)) {
         throw new Error('NoValidSessionId', { cause: e });
-      }
-      if (
-        SdkError.isInstance(e) &&
-        e.code === SdkErrorCode.UnsupportedResultType &&
-        toRecord(e.data)?.resultType === 'input_required'
-      ) {
-        return {
-          content: [
-            {
-              type: 'text',
-              text: `This MCP tool requires user input that ${BRANDING_NAME} does not support yet. Use a tool that does not require additional input.`,
-            },
-          ],
-          isError: true,
-        };
       }
       throw e;
     }

@@ -9,6 +9,7 @@ import {
   partitionMcpToolsForViews,
   withListingUiMeta,
 } from '@lobechat/const/mcpApp';
+import type { McpElicitationCall } from '@lobechat/mcp-elicitation/types';
 import {
   deserializeMcpIpcPayload,
   type McpIpcPayload,
@@ -17,8 +18,10 @@ import {
 import { getMcpServerDescription } from '@lobechat/utils/mcpServerDescription';
 
 import FileService from '@/services/fileSrv';
+import GatewayConnectionService from '@/services/gatewayConnectionSrv';
 import { createLogger } from '@/utils/logger';
 
+import { getDesktopEnv } from '../env';
 import type { MCPClient } from '../libs/mcp/client';
 import {
   isDeadTransportError,
@@ -35,7 +38,15 @@ import type {
   ToolCallResult,
 } from '../libs/mcp/types';
 import { ControllerModule, IpcMethod } from './index';
+import { McpCompletionDelivery } from './mcpCompletionDelivery';
+import {
+  createNativeMcpElicitationHost,
+  relayNativeMcpResult,
+  runNativeMcpElicitation,
+} from './McpCtr/elicitation';
 import { checkDeployOption } from './mcpInstallCheck';
+import { McpInvocationRegistry } from './mcpInvocation';
+import RemoteServerConfigCtr from './RemoteServerConfigCtr';
 
 const logger = createLogger('controllers:McpCtr');
 const loadMcpClient = () => import('../libs/mcp/client');
@@ -117,6 +128,7 @@ interface GetStreamableMcpServerManifestInput extends McpSessionOptions {
 
 export interface StdioCallToolInput extends McpCallOptions {
   args: any;
+  elicitation?: McpElicitationCall;
   env: any;
   http?: undefined;
   params: GetStdioMcpServerManifestInput;
@@ -126,6 +138,7 @@ export interface StdioCallToolInput extends McpCallOptions {
 /** A call to an HTTP endpoint only this machine can reach (localhost / LAN). */
 export interface HttpCallToolInput extends McpCallOptions {
   args: any;
+  elicitation?: McpElicitationCall;
   http: {
     auth?: { accessToken?: string; token?: string; type: 'none' | 'bearer' | 'oauth2' };
     headers?: Record<string, string>;
@@ -168,6 +181,7 @@ export interface ReadUiResourceInput {
 type SuperJSONSerialized<T = unknown> = McpIpcPayload<T>;
 
 interface McpSessionOptions {
+  elicitationEnabled?: boolean;
   /** Announce MCP Apps on the session: the user has the `mcp_apps` flag. */
   mcpApps?: boolean;
 }
@@ -314,6 +328,9 @@ const toMarkdown = async (
  * Implements the same routes as `src/server/routers/desktop/mcp.ts`, but via IPC.
  */
 export default class McpCtr extends ControllerModule {
+  private mcpInvocations?: McpInvocationRegistry;
+  private readonly mcpCompletions = new McpCompletionDelivery();
+  private mcpProducerId?: string;
   static override readonly groupName = 'mcp';
 
   /**
@@ -413,10 +430,10 @@ export default class McpCtr extends ControllerModule {
    */
   private async acquireClient(
     params: MCPClientParams,
-    { mcpApps = false }: McpSessionOptions = {},
+    { mcpApps = false, elicitationEnabled = false }: McpSessionOptions = {},
   ): Promise<MCPClient> {
     // Sessions that announce MCP Apps and ones that don't are pooled apart
-    const key = `${serializeMcpClientParams(params)}${mcpApps ? '#mcp-apps' : ''}`;
+    const key = `${elicitationEnabled ? 'elicitation:' : ''}${serializeMcpClientParams(params)}${mcpApps ? '#mcp-apps' : ''}`;
 
     // Every acquire refreshes the session's idle clock (fire-and-forget —
     // reaping must never delay or fail the tool call it runs alongside).
@@ -433,7 +450,10 @@ export default class McpCtr extends ControllerModule {
     const inFlight = this.mcpClientInitialization?.get(key);
     if (inFlight) return inFlight;
 
-    const creating = this.createClient(params, { mcpApps })
+    const creating = this.createClient(params, {
+      mcpApps,
+      ...(elicitationEnabled && { elicitationEnabled }),
+    })
       .then((client) => {
         this.mcpClientKeys.set(client, key);
         this.mcpClientPool.set(key, client);
@@ -730,11 +750,16 @@ export default class McpCtr extends ControllerModule {
   }
 
   @IpcMethod()
+  async getToolTimeoutMs() {
+    return getDesktopEnv().MCP_TOOL_TIMEOUT;
+  }
+
+  @IpcMethod()
   async callTool(payload: SuperJSONSerialized<CallToolInput>) {
     const input = deserializePayload<CallToolInput>(payload);
     if ('http' in input && input.http) {
       return serializePayload(
-        await this.runHttpMcpTool(input.http, input.toolName, input.args, {
+        await this.runHttpMcpTool(input.http, input.toolName, input.args, input.elicitation, {
           fromApp: input.fromApp,
           mcpApps: input.mcpApps,
         }),
@@ -870,6 +895,7 @@ export default class McpCtr extends ControllerModule {
       },
       input.toolName,
       input.args,
+      input.elicitation,
       { fromApp: input.fromApp, mcpApps: input.mcpApps },
     );
   }
@@ -888,6 +914,7 @@ export default class McpCtr extends ControllerModule {
     },
     toolName: string,
     rawArgs: unknown,
+    elicitation?: McpElicitationCall,
     options: McpCallOptions = {},
   ): Promise<{ content: string; state: unknown; success: boolean }> {
     return this.runMcpTool(
@@ -900,7 +927,22 @@ export default class McpCtr extends ControllerModule {
       },
       toolName,
       rawArgs,
+      elicitation,
       options,
+    );
+  }
+
+  private async relayMcpResult(
+    elicitation: McpElicitationCall | undefined,
+    result: { content: string; state: unknown; success: boolean },
+    owner: { userId: string; serverUrl: string },
+  ) {
+    return relayNativeMcpResult(
+      this.app.getController(RemoteServerConfigCtr),
+      elicitation,
+      result,
+      owner,
+      () => this.app.getService(GatewayConnectionService).resolveCurrentDeviceId(),
     );
   }
 
@@ -908,6 +950,36 @@ export default class McpCtr extends ControllerModule {
     params: MCPClientParams,
     toolName: string,
     rawArgs: unknown,
+    elicitation?: McpElicitationCall,
+    options: McpCallOptions = {},
+  ): Promise<{ content: string; state: unknown; success: boolean }> {
+    if (!elicitation)
+      return this.runMcpToolOnce(params, toolName, rawArgs, undefined, undefined, options);
+    this.mcpInvocations ??= new McpInvocationRegistry();
+    this.mcpProducerId ??= randomUUID();
+    return runNativeMcpElicitation({
+      config: this.app.getController(RemoteServerConfigCtr),
+      elicitation,
+      fingerprint: createHash('sha256')
+        .update(
+          JSON.stringify([serializeMcpClientParams(params), toolName, safeParseToRecord(rawArgs)]),
+        )
+        .digest('hex'),
+      producerId: this.mcpProducerId,
+      invocations: this.mcpInvocations,
+      completions: this.mcpCompletions,
+      execute: (owner) =>
+        this.runMcpToolOnce(params, toolName, rawArgs, elicitation, owner, options),
+      relay: (result, owner) => this.relayMcpResult(elicitation, result, owner),
+    });
+  }
+
+  private async runMcpToolOnce(
+    params: MCPClientParams,
+    toolName: string,
+    rawArgs: unknown,
+    elicitation?: McpElicitationCall,
+    owner?: { userId: string; serverUrl: string },
     { fromApp = false, mcpApps = false }: McpCallOptions = {},
   ): Promise<{ content: string; state: unknown; success: boolean }> {
     try {
@@ -949,7 +1021,20 @@ export default class McpCtr extends ControllerModule {
             const uiResourceUri = mcpApps
               ? await this.getToolUiResourceUri(client, toolName)
               : undefined;
-            const raw = (await client.callTool(toolName, args)) as ToolCallResult;
+            const raw = (await client.callTool(toolName, args, {
+              continuation: elicitation?.continuation,
+              timeoutMs: elicitation ? Math.max(1, elicitation.deadline - Date.now()) : undefined,
+              signal: elicitation
+                ? AbortSignal.timeout(Math.max(1, elicitation.deadline - Date.now()))
+                : undefined,
+              host: elicitation
+                ? createNativeMcpElicitationHost(
+                    this.app.getController(RemoteServerConfigCtr),
+                    elicitation,
+                    owner,
+                  )
+                : undefined,
+            })) as ToolCallResult;
             // A view gets the tool's own MCP result: its media stays base64
             // `data`, not the uploaded keys the chat stores and renders
             const processed =
@@ -984,7 +1069,9 @@ export default class McpCtr extends ControllerModule {
         });
 
       try {
-        return await runOn(await this.acquireClient(params, { mcpApps }));
+        return await runOn(
+          await this.acquireClient(params, { mcpApps, elicitationEnabled: !!elicitation }),
+        );
       } catch (firstError) {
         const failedClient = (firstError as { ranOnClient?: MCPClient })?.ranOnClient;
         if (!isStaleSessionError(firstError, failedClient?.getProtocolEra())) {
@@ -1017,7 +1104,10 @@ export default class McpCtr extends ControllerModule {
         // per key, so two concurrent calls that shared the same stale client
         // and both failed build ONE replacement process — not two racing
         // create/set writes that strand the loser (and its established state).
-        const retryClient = await this.acquireClient(params, { mcpApps });
+        const retryClient = await this.acquireClient(params, {
+          mcpApps,
+          elicitationEnabled: !!elicitation,
+        });
         try {
           return await runOn(retryClient);
         } catch (retryError) {
