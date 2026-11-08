@@ -21,6 +21,7 @@ import { tasks } from '../schemas/task';
 import { topics } from '../schemas/topic';
 import { works } from '../schemas/work';
 import type { LobeChatDatabase } from '../type';
+import { isUserKnowledgeBase } from '../utils/knowledgeBaseType';
 import { joinTopicAgentsToProjects } from '../utils/projectTopicAgents';
 import { topicRunStartedAtColumn } from '../utils/topicRunStartedAt';
 import {
@@ -47,6 +48,8 @@ export interface CreateProjectInput {
   /** Task prefix for this project; omit to keep the scope's default prefix. */
   identifier?: string | null;
   name: string;
+  /** GitHub repository the project works on; attached as the project's environment. */
+  repository?: { defaultBranch?: string; name: string; url: string };
   slug?: string;
   visibility?: ProjectVisibility;
 }
@@ -56,7 +59,7 @@ export interface CreateProjectInput {
  * aggregate, so `ProjectRepository.create` resolves or creates it first and only
  * its id reaches this model.
  */
-export interface InsertProjectInput extends CreateProjectInput {
+export interface InsertProjectInput extends Omit<CreateProjectInput, 'repository'> {
   coordinatorAgentId: string;
 }
 
@@ -740,6 +743,7 @@ export class ProjectModel {
       .where(
         and(
           eq(projectKnowledgeBases.projectId, projectId),
+          isUserKnowledgeBase(),
           buildWorkspaceWhere(
             { userId: this.userId, workspaceId: this.workspaceId },
             knowledgeBases,
@@ -759,6 +763,7 @@ export class ProjectModel {
       .where(
         and(
           eq(knowledgeBases.id, input.knowledgeBaseId),
+          isUserKnowledgeBase(),
           buildWorkspaceWhere(
             { userId: this.userId, workspaceId: this.workspaceId },
             knowledgeBases,
@@ -935,6 +940,7 @@ export class ProjectModel {
         and(
           eq(projectKnowledgeBases.projectId, projectId),
           eq(projectKnowledgeBases.enabled, true),
+          isUserKnowledgeBase(),
           buildWorkspaceWhere(
             { userId: this.userId, workspaceId: this.workspaceId },
             knowledgeBases,

@@ -82,7 +82,7 @@ export const resolveReplacedOperationId = async (
  * - a parked run (`waiting_for_human` etc.) — the send may be its answer;
  * - a background producer's run (task, cron, bot, …), see
  *   `isComposerSupersedableTrigger` in `agentRuntime/foregroundOperation`.
- *   An Agent Signal run on the main spine (task-result wakeup) is retired
+ *   A task-result wakeup or an Agent Signal run on the main spine is retired
  *   like a foreground run: the client never tracks it, so it cannot queue;
  * - a device-hosted Claude Code / Codex run: cancelling it waits up to 10s
  *   for the device, far past the reservation's ~3s retry budget, so a

@@ -8,7 +8,7 @@ import type {
   TaskStatus,
 } from '@lobechat/types';
 
-import { lambdaClient, withLlmRelay } from '@/libs/trpc/client';
+import { createWorkspaceLambdaClient, lambdaClient, withLlmRelay } from '@/libs/trpc/client';
 import { buildLlmExecutorDeclaration, oneShotRelay } from '@/services/llmRelay';
 import { useUserStore } from '@/store/user';
 import { systemAgentSelectors } from '@/store/user/selectors';
@@ -22,6 +22,14 @@ class TaskService {
   find = async (id: string) => lambdaClient.task.find.query({ id });
 
   getDetail = async (id: string) => lambdaClient.task.detail.query({ id });
+
+  /**
+   * Read a task from a workspace other than the active one. Task identifiers
+   * are only unique within a workspace, so the read is pinned to the owning
+   * workspace instead of resolving against the active scope.
+   */
+  getDetailInWorkspace = async (id: string, workspaceId: string) =>
+    createWorkspaceLambdaClient(workspaceId).task.detail.query({ id });
 
   list = async (params: {
     /** Keyset cursor: rows strictly after this `(orderBy timestamp, seq)` position. */

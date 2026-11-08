@@ -34,12 +34,30 @@ const CONNECTOR_ID = '9f1f6f30-0000-4000-8000-000000000003';
 const METADATA_URL = 'https://app.example.com/oauth/connector/client-metadata.json';
 
 /** Authorization server co-located with the MCP server, advertising `metadata`. */
-const stubAuthorizationServer = (metadata: Record<string, unknown>) => {
+const stubAuthorizationServer = (
+  metadata: Record<string, unknown>,
+  resource?: { challengeScope?: string; scopes?: string[] },
+) => {
   const registrations: unknown[] = [];
   vi.stubGlobal(
     'fetch',
     vi.fn(async (url: string | URL, init?: RequestInit) => {
       const href = String(url);
+      if (resource && href === 'https://mcp.example.com/mcp') {
+        return new Response(null, {
+          headers: {
+            'WWW-Authenticate': `Bearer resource_metadata="https://mcp.example.com/.well-known/oauth-protected-resource"${resource.challengeScope === undefined ? '' : `, scope="${resource.challengeScope}"`}`,
+          },
+          status: 401,
+        });
+      }
+      if (resource && href === 'https://mcp.example.com/.well-known/oauth-protected-resource') {
+        return Response.json({
+          authorization_servers: ['https://mcp.example.com/'],
+          resource: 'https://mcp.example.com/mcp',
+          scopes_supported: resource.scopes,
+        });
+      }
       if (href === 'https://mcp.example.com/.well-known/oauth-authorization-server') {
         return Response.json({
           authorization_endpoint: 'https://mcp.example.com/authorize',
@@ -139,5 +157,118 @@ describe('connectorRouter.startOAuth client registration', () => {
       code: 'BAD_REQUEST',
       message: expect.stringContaining('neither Client ID Metadata Documents nor dynamic'),
     });
+  });
+
+  const vercelScopes = ['openid', 'email', 'profile', 'offline_access', 'ema_issuer:manage'];
+  const vercelMetadata = {
+    client_id_metadata_document_supported: true,
+    scopes_supported: vercelScopes,
+  };
+
+  it('requests resource scopes plus offline access and consent for Vercel-shaped metadata', async () => {
+    stubAuthorizationServer(vercelMetadata, { scopes: ['openid'] });
+
+    const url = new URL((await startOAuth()).authorizationUrl);
+
+    expect(url.searchParams.get('scope')).toBe('openid offline_access');
+    expect(url.searchParams.get('prompt')).toBe('consent');
+  });
+
+  it('prefers the WWW-Authenticate scope over resource metadata', async () => {
+    stubAuthorizationServer(vercelMetadata, {
+      challengeScope: 'tools:read tools:write',
+      scopes: ['openid'],
+    });
+
+    const url = new URL((await startOAuth()).authorizationUrl);
+
+    expect(url.searchParams.get('scope')).toBe('tools:read tools:write offline_access');
+  });
+
+  it.each([undefined, {}])(
+    'keeps the AS scope fallback when PRM has no scopes (%j)',
+    async (prm) => {
+      stubAuthorizationServer(vercelMetadata, prm);
+
+      const url = new URL((await startOAuth()).authorizationUrl);
+
+      expect(url.searchParams.get('scope')).toBe(vercelScopes.join(' '));
+      expect(url.searchParams.get('prompt')).toBe('consent');
+    },
+  );
+
+  it('keeps configured scopes ahead of challenge and resource metadata', async () => {
+    stubAuthorizationServer(vercelMetadata, {
+      challengeScope: 'challenged:read',
+      scopes: ['openid'],
+    });
+    connectorModelMock.findById.mockResolvedValue({
+      id: CONNECTOR_ID,
+      mcpServerUrl: 'https://mcp.example.com/mcp',
+      oidcConfig: { scheme: 'dcr', scopes: ['custom:read'] },
+      userId: 'me',
+    });
+
+    const url = new URL((await startOAuth()).authorizationUrl);
+
+    expect(url.searchParams.get('scope')).toBe('custom:read');
+    expect(url.searchParams.has('prompt')).toBe(false);
+    expect(connectorModelMock.update).toHaveBeenCalledWith(CONNECTOR_ID, {
+      oidcConfig: expect.objectContaining({ scopes: ['custom:read'] }),
+    });
+  });
+
+  it('keeps previously saved scopes and writes them back unchanged', async () => {
+    stubAuthorizationServer(vercelMetadata, { scopes: ['openid'] });
+    connectorModelMock.findById.mockResolvedValue({
+      id: CONNECTOR_ID,
+      mcpServerUrl: 'https://mcp.example.com/mcp',
+      oidcConfig: {
+        authorizationEndpoint: 'https://mcp.example.com/authorize',
+        clientId: METADATA_URL,
+        scheme: 'client_id_metadata_document',
+        scopes: vercelScopes,
+      },
+      userId: 'me',
+    });
+
+    const url = new URL((await startOAuth()).authorizationUrl);
+
+    expect(url.searchParams.get('scope')).toBe(vercelScopes.join(' '));
+    expect(connectorModelMock.update).toHaveBeenCalledWith(CONNECTOR_ID, {
+      oidcConfig: expect.objectContaining({ scopes: vercelScopes }),
+    });
+  });
+
+  it('does not request offline access or consent when the AS does not advertise it', async () => {
+    stubAuthorizationServer(
+      { ...vercelMetadata, scopes_supported: ['openid'] },
+      { scopes: ['openid'] },
+    );
+
+    const url = new URL((await startOAuth()).authorizationUrl);
+
+    expect(url.searchParams.get('scope')).toBe('openid');
+    expect(url.searchParams.has('prompt')).toBe(false);
+  });
+
+  it('omits scope and consent when no source advertises scopes', async () => {
+    stubAuthorizationServer({ client_id_metadata_document_supported: true });
+
+    const url = new URL((await startOAuth()).authorizationUrl);
+
+    expect(url.searchParams.has('scope')).toBe(false);
+    expect(url.searchParams.has('prompt')).toBe(false);
+  });
+
+  it('omits scope from dynamic registration when no source advertises scopes', async () => {
+    const registrations = stubAuthorizationServer({
+      registration_endpoint: 'https://mcp.example.com/register',
+    });
+
+    await startOAuth();
+
+    expect(registrations).toHaveLength(1);
+    expect(registrations[0]).not.toHaveProperty('scope');
   });
 });

@@ -14,6 +14,24 @@ import {
   handleDefaultAnthropicError,
 } from './index';
 
+const createQuestionChatConfig = (): NonNullable<
+  Parameters<typeof createAnthropicCompatibleRuntime>[0]['chatCompletion']
+> => ({
+  handlePayload: (payload) => ({
+    max_tokens: 1024,
+    messages: [{ content: 'Question', role: 'user' }],
+    model: payload.model,
+  }),
+});
+
+const createCustomClientConfig = (messagesCreate: ReturnType<typeof vi.fn>) => ({
+  createClient: () =>
+    ({
+      baseURL: 'https://aihubmix.com',
+      messages: { create: messagesCreate },
+    }) as unknown as Anthropic,
+});
+
 vi.mock('@anthropic-ai/sdk', () => {
   const MockAnthropic = vi.fn();
   return { default: MockAnthropic };
@@ -588,13 +606,7 @@ describe('createAnthropicCompatibleRuntime', () => {
       withResponse: vi.fn().mockResolvedValue({ data: rawStream }),
     }));
     const Runtime = createAnthropicCompatibleRuntime({
-      chatCompletion: {
-        handlePayload: (payload) => ({
-          max_tokens: 1024,
-          messages: [{ content: 'Question', role: 'user' }],
-          model: payload.model,
-        }),
-      },
+      chatCompletion: createQuestionChatConfig(),
       customClient: {
         createClient: () =>
           ({
@@ -683,20 +695,8 @@ describe('createAnthropicCompatibleRuntime', () => {
       withResponse: vi.fn().mockResolvedValue({ data: rawStream }),
     }));
     const Runtime = createAnthropicCompatibleRuntime({
-      chatCompletion: {
-        handlePayload: (payload) => ({
-          max_tokens: 1024,
-          messages: [{ content: 'Question', role: 'user' }],
-          model: payload.model,
-        }),
-      },
-      customClient: {
-        createClient: () =>
-          ({
-            baseURL: 'https://aihubmix.com',
-            messages: { create: messagesCreate },
-          }) as unknown as Anthropic,
-      },
+      chatCompletion: createQuestionChatConfig(),
+      customClient: createCustomClientConfig(messagesCreate),
       provider: 'test-provider',
     });
     const runtime = new Runtime({ apiKey: 'test-key' });
@@ -739,13 +739,7 @@ describe('createAnthropicCompatibleRuntime', () => {
       usage: { cache_read_input_tokens: 300, input_tokens: 12, output_tokens: 42 },
     });
     const Runtime = createAnthropicCompatibleRuntime({
-      chatCompletion: {
-        handlePayload: (payload) => ({
-          max_tokens: 1024,
-          messages: [{ content: 'Question', role: 'user' }],
-          model: payload.model,
-        }),
-      },
+      chatCompletion: createQuestionChatConfig(),
       customClient: {
         createClient: () =>
           ({
@@ -794,13 +788,7 @@ describe('createAnthropicCompatibleRuntime', () => {
           model: payload.model,
         }),
       },
-      customClient: {
-        createClient: () =>
-          ({
-            baseURL: 'https://aihubmix.com',
-            messages: { create: messagesCreate },
-          }) as unknown as Anthropic,
-      },
+      customClient: createCustomClientConfig(messagesCreate),
       provider: 'test-provider',
     });
     const runtime = new Runtime({
@@ -832,13 +820,7 @@ describe('createAnthropicCompatibleRuntime', () => {
       chatCompletion: {
         handlePayload: buildDefaultAnthropicPayload,
       },
-      customClient: {
-        createClient: () =>
-          ({
-            baseURL: 'https://aihubmix.com',
-            messages: { create: messagesCreate },
-          }) as unknown as Anthropic,
-      },
+      customClient: createCustomClientConfig(messagesCreate),
       provider: 'test-provider',
     });
     const runtime = new Runtime({

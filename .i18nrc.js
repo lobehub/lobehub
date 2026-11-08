@@ -37,7 +37,7 @@ module.exports = defineConfig({
     '  appears in the source: same names, same count. Never add a variable the',
     '  source does not have, and never drop one it does.',
     '- Leave product and brand names untranslated: LobeHub, LobeAI, Claude Code,',
-    '  Codex, OpenAI, Azure, GitHub, MCP.',
+    '  Codex, OpenAI, Azure, GitHub, MCP, Agent Signal.',
     '',
     'Turkish (tr-TR) glossary:',
     '- Agent -> Ajan. Not Temsilci, Aracı, Asistan or Ajans. "Ajans" means an',
@@ -51,7 +51,7 @@ module.exports = defineConfig({
   ].join('\n'),
   temperature: 0,
   saveImmediately: true,
-  modelName: 'gpt-4o',
+  modelName: 'deepseek-flash',
   experimental: {
     jsonMode: true,
   },

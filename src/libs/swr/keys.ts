@@ -47,6 +47,10 @@ export const channelKeys = {
     (channelId: string, memberId: string) =>
       ['channel:agentEnvironment', channelId, memberId] as const,
   ),
+  wakeConfig: def(
+    'channel:wakeConfig',
+    (channelId: string) => ['channel:wakeConfig', channelId] as const,
+  ),
   userCandidates: def(
     'channel:userCandidates',
     (channelId: string | undefined, search: string) =>
@@ -633,6 +637,10 @@ export const scmKeys = {
   identity: def('scm:identity', (provider: string) => ['scm:identity', provider]),
   installations: def('scm:installations', (workspaceId: string | null | undefined) => [
     'scm:installations',
+    workspaceId ?? null,
+  ]),
+  repositories: def('scm:repositories', (workspaceId: string | null | undefined) => [
+    'scm:repositories',
     workspaceId ?? null,
   ]),
   wakeTarget: def('scm:wakeTarget', (topicId: string) => ['scm:wakeTarget', topicId]),

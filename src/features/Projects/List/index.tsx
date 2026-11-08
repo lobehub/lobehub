@@ -1,6 +1,7 @@
 'use client';
 
 import { agentDisplayName } from '@lobechat/types';
+import { Github } from '@lobehub/icons';
 import {
   ActionIcon,
   Button,
@@ -41,6 +42,7 @@ import AssigneeAvatar from '@/features/AgentTasks/features/AssigneeAvatar';
 import { useFavoriteMenuItem, useFavoriteToggle } from '@/features/Favorites';
 import NavHeader from '@/features/NavHeader';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
+import { openCreateProjectFromGithubModal } from '@/features/Projects/CreateFromGithub';
 import { openCreateProjectModal } from '@/features/Projects/CreateProjectModal';
 import { createDeleteProjectModal } from '@/features/Projects/DeleteProjectModal';
 import ProjectDisabled from '@/features/Projects/ProjectDisabled';
@@ -337,6 +339,26 @@ const ProjectListPage = memo(() => {
     type: 'checkbox' as const,
   }));
 
+  const createMenuItems = useMemo<DropdownItem[]>(
+    () => [
+      {
+        icon: PlusIcon,
+        key: 'blank',
+        label: t('create.blank'),
+        onClick: () => openCreateProjectModal(),
+      },
+      {
+        // A filled brand mark: as a component, the menu's Icon wrapper would paint it with
+        // `fill: transparent` (stroke-icon styling) and leave the slot empty.
+        icon: <Github aria-hidden size={16} />,
+        key: 'github',
+        label: t('create.fromGithub'),
+        onClick: () => openCreateProjectFromGithubModal(),
+      },
+    ],
+    [t],
+  );
+
   // A drop inside search results would reorder only the matches, so dragging
   // waits for the full list.
   const draggable = sortBy === 'manual' && canManage && !normalizedKeyword;
@@ -374,9 +396,9 @@ const ProjectListPage = memo(() => {
                 {t(`sidebar.sort.${sortBy}`)}
               </Button>
             </DropdownMenu>
-            <Button icon={PlusIcon} onClick={() => openCreateProjectModal()}>
-              {t('create.action')}
-            </Button>
+            <DropdownMenu items={createMenuItems} placement={'bottomRight'}>
+              <Button icon={PlusIcon}>{t('create.action')}</Button>
+            </DropdownMenu>
           </Flexbox>
         </Flexbox>
         {listState === 'error' ? (

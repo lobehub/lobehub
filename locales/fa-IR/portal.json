@@ -19,6 +19,7 @@
   "artifacts.deploy.outdated": "نسخه قدیمی فعال است",
   "artifacts.deploy.publish": "انتشار",
   "artifacts.deploy.publishNewVersion": "انتشار این نسخه",
+  "artifacts.deploy.quotaUnavailable": "بررسی محدودیت انتشار به طور موقت در دسترس نیست. بعداً دوباره تلاش کنید.",
   "artifacts.deploy.serviceOverloaded": "میزبانی مصنوعات به طور موقت بیش از حد بارگذاری شده است. کمی بعد دوباره تلاش کنید.",
   "artifacts.deploy.success": "منتشر شد",
   "artifacts.deploy.writeInProgress": "تغییر دیگری در حال انتشار است. کمی بعد دوباره تلاش کنید.",

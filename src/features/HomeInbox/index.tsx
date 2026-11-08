@@ -1,4 +1,4 @@
-import { ActionIcon, createStaticStyles, cx, Flexbox, Segmented } from '@lobehub/ui';
+import { ActionIcon, createStaticStyles, cx, Flexbox } from '@lobehub/ui';
 import dayjs from 'dayjs';
 import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
 import { Fragment, memo, type ReactNode, useEffect, useMemo, useState } from 'react';
@@ -8,7 +8,6 @@ import {
   useHomeUsageWidget,
   useHomeUsageWidgetActive,
 } from '@/business/client/features/HomeUsageWidget';
-import { useWorkspaceMemberProfiles } from '@/business/client/hooks/useWorkspaceMemberProfiles';
 import AsyncError from '@/components/AsyncError';
 import { BriefCardSkeleton } from '@/features/DailyBrief/BriefCardSkeleton';
 import GroupBlock from '@/features/Home/components/GroupBlock';
@@ -38,18 +37,12 @@ import { resolveShownNewsOffset, shouldShowNewsItemTime } from './newsDayOffset'
 import NewsList from './NewsList';
 import { ownsRailSections } from './railSectionPlacement';
 import RunningTasksCard from './RunningTasksCard';
-import { filterTopicsForInboxScope, resolveInboxScopeToggleSection } from './scopeTogglePlacement';
+import { filterMyInboxTopics } from './scopeTogglePlacement';
 import { arrangeDayNews, splitBriefs } from './splitBriefs';
 import UnreadTopicList from './UnreadTopicList';
 import { useHomeInboxTopics } from './useHomeInboxTopics';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  onlyMe: css`
-    margin-inline-start: 8px;
-    padding-inline: 5px;
-    border-radius: 3px;
-    background: ${cssVar.colorFillQuaternary};
-  `,
+const styles = createStaticStyles(({ css }) => ({
   subtitle: css`
     margin-inline-start: 8px;
   `,
@@ -106,13 +99,8 @@ interface InboxSection {
  *   needs nothing from you.
  * - **News** — `insight` + `result` briefs (reports of finished work); read them
  *   or don't.
- *
- * **Workspace mode** adds a mine/team split, but only over the sections it can
- * honestly widen. Topics are workspace-shared, so the unread + running feeds
- * already carry every member's runs — the toggle filters them by triggerer, and
- * team view tags each row with whose it is. Briefs are per-user by a deliberate
- * ownership rule (a member never sees another's brief), so Needs-you and News
- * stay mine in both views; team view marks News as such rather than pretending.
+ * In a workspace this page stays the viewer's own: everyone's runs live on the
+ * team tab of Home (`HomeTeamBoard`).
  *
  * Sections are siblings, never nested: each names itself and carries its own
  * count, and one absent section never hides another's heading.
@@ -133,9 +121,6 @@ interface HomeInboxProps {
    * the main column without guessing from a loading rail.
    */
   onRailEmptyChange?: (empty: boolean) => void;
-  /** Controlled mine/team scope — lets the page share one scope across sibling sections. */
-  onScopeChange?: (scope: 'mine' | 'team') => void;
-  scope?: 'mine' | 'team';
   variant?: 'default' | 'main' | 'rail';
 }
 
@@ -146,8 +131,6 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
     hideUnread,
     inlineRail,
     onRailEmptyChange,
-    onScopeChange,
-    scope: controlledScope,
     variant = 'default',
   } = props;
   const isRail = variant === 'rail';
@@ -222,32 +205,20 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
     isLogin === true && usageActive && showRailSections && !hiddenWidgets.includes('usage'),
   );
 
-  // A team context is a workspace with more than the viewer in it. In personal
-  // mode this map is empty, so `isTeam` is false and the whole mine/team layer
-  // stays dark — the inbox is byte-for-byte the personal one.
-  const memberProfiles = useWorkspaceMemberProfiles();
-  const isTeam = memberProfiles.size > 1;
-
-  const [internalScope, setInternalScope] = useState<'mine' | 'team'>('mine');
-  const scope = controlledScope ?? internalScope;
-  const setScope = onScopeChange ?? setInternalScope;
-  const teamView = isTeam && scope === 'team';
-
   const { needsYou } = useMemo(() => splitBriefs(briefs), [briefs]);
   // Urgent briefs already waiting in "Needs you" leave the digest; the rest
   // lead with urgent, then normal, then info.
   const news = useMemo(() => arrangeDayNews(dayNews ?? [], briefs), [dayNews, briefs]);
 
-  // Topics are already workspace-wide from the server; "mine" is the viewer's
-  // own runs, "team" is everyone's. Personal mode has only the viewer's, so the
-  // filter is a no-op there.
+  // Topics are workspace-wide from the server; this page only shows the
+  // viewer's own, and the team tab owns everyone's.
   const unreadTopics = useMemo(
-    () => filterTopicsForInboxScope(topics.unread, myId, teamView),
-    [teamView, topics.unread, myId],
+    () => filterMyInboxTopics(topics.unread, myId),
+    [topics.unread, myId],
   );
   const runningTopics = useMemo(
-    () => filterTopicsForInboxScope(topics.running, myId, teamView),
-    [teamView, topics.running, myId],
+    () => filterMyInboxTopics(topics.running, myId),
+    [topics.running, myId],
   );
 
   if (!isLogin) return null;
@@ -291,33 +262,6 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
     );
   }
 
-  // Mine/team lives at page level (governs the topic sections), so it rides on
-  // the first titled section's header — the primary "Needs you", or Unread when
-  // there's nothing to handle. Only shown in a team workspace.
-  const scopeToggle = isTeam ? (
-    <Segmented
-      size={'small'}
-      value={scope}
-      options={[
-        { label: t('inbox.scope.mine'), value: 'mine' },
-        { label: t('inbox.scope.team'), value: 'team' },
-      ]}
-      onChange={(value) => setScope(value as 'mine' | 'team')}
-    />
-  ) : undefined;
-  const toggleSectionKey = scopeToggle
-    ? resolveInboxScopeToggleSection({
-        hiddenWidgets,
-        hideNeedsYou,
-        hideUnread,
-        needsYouCount: needsYou.length,
-        preferUnread: isMain,
-        unreadCount: unreadTopics.length,
-      })
-    : null;
-  const placeToggle = (key: typeof toggleSectionKey): ReactNode =>
-    key === toggleSectionKey ? scopeToggle : undefined;
-
   const sections: InboxSection[] = [];
 
   // A goal feed failure must not be silent: without this the card just vanishes,
@@ -356,11 +300,10 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
       isRail
         ? {
             key: 'needsYou',
-            node: <NeedsYouRailCard briefs={needsYou} scopeControl={placeToggle('needsYou')} />,
+            node: <NeedsYouRailCard briefs={needsYou} />,
             selfShelled: true,
           }
         : {
-            action: placeToggle('needsYou'),
             count: needsYou.length,
             key: 'needsYou',
             label: t('inbox.needsYou.title'),
@@ -386,7 +329,6 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
 
   if (!hideUnread && unreadTopics.length > 0)
     sections.push({
-      action: placeToggle('unread'),
       count: unreadTopics.length,
       key: 'unread',
       label: t('inbox.unread.title'),
@@ -394,7 +336,6 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
       node: (
         <UnreadTopicList
           bare={isRail}
-          showAuthor={teamView}
           topics={unreadTopics}
           onFollowUpSent={topics.promoteToRunning}
         />
@@ -418,7 +359,6 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
       sections.push({ key: 'needsYou-loading', node: <BriefCardSkeleton /> });
     } else if (!hideNeedsYou && needsYou.length > 0) {
       sections.push({
-        action: placeToggle('needsYou'),
         count: needsYou.length,
         key: 'needsYou',
         label: t('inbox.needsYou.title'),
@@ -440,7 +380,7 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
   if (!hideRunning && !isRail && runningTopics.length > 0)
     sections.push({
       key: 'running',
-      node: <RunningTasksCard bare={isRail} running={runningTopics} showAuthor={teamView} />,
+      node: <RunningTasksCard bare={isRail} running={runningTopics} />,
     });
 
   // A first-load failure of the day feed must not make the whole section
@@ -508,11 +448,6 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
       // Mid-paging (or on an empty day) the arrows are the section's only
       // controls — they must not vanish when the pointer leaves the header.
       actionAlwaysVisible: shownNewsOffset > 0 || news.length === 0,
-      // Team view: News is still only mine (briefs are per-user), so say so
-      // rather than let a team-scoped page imply it spans the team.
-      badge: teamView && (
-        <span className={cx(homeType.meta, styles.onlyMe)}>{t('inbox.scope.onlyMe')}</span>
-      ),
       count: news.length || undefined,
       key: 'news',
       label: newsLabel,
@@ -632,7 +567,7 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
           return (
             <GroupBlock
               action={action}
-              actionAlwaysVisible={actionAlwaysVisible || key === toggleSectionKey}
+              actionAlwaysVisible={actionAlwaysVisible}
               collapsed={collapsed}
               count={count}
               key={key}

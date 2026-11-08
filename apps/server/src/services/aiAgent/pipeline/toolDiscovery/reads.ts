@@ -5,6 +5,7 @@ import type { FrozenCredentialFacts } from '@lobechat/types';
 import { agentShareFileAccessScope, ordinaryFileAccessScope } from '@lobechat/types';
 import debug from 'debug';
 
+import { AgentAccountModel } from '@/database/models/agentAccount';
 import { ConnectorModel, type DecryptedConnector } from '@/database/models/connector';
 import { DocumentModel } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
@@ -416,6 +417,27 @@ const readHasOversizedFiles = async (
 };
 
 /**
+ * Whether the executing agent owns at least one live identity account. This
+ * is the fact the tool rules read to decide whether the agent-account tool
+ * ships this turn: the addresses and inbox reach the model as context, so the
+ * tool is enabled only when there is something for it to act on. Non-critical
+ * — a failed read simply leaves the tool out.
+ */
+const readHasIdentityAccount = async (
+  deps: ToolDiscoveryDeps,
+  ctx: ToolReadsContext,
+): Promise<boolean> => {
+  const accounts = await new AgentAccountModel(
+    deps.db,
+    deps.userId,
+    undefined,
+    deps.workspaceId,
+  ).query({ agentId: ctx.resolvedAgentId, liveOnly: true });
+
+  return accounts.length > 0;
+};
+
+/**
  * Every other read this send needs, started together. They hit different
  * backends — Postgres rows, the Market's live skill discovery, the device
  * gateway. Connector visibility uses the same installed-plugin snapshot; the
@@ -441,6 +463,7 @@ export const startToolReads = (deps: ToolDiscoveryDeps, ctx: ToolReadsContext) =
     ),
     attachedFileTypes: started(readAttachedFileTypes(deps, ctx)),
     oversizedFiles: started(readHasOversizedFiles(deps, ctx).catch(() => false)), // non-critical
+    hasIdentityAccount: started(readHasIdentityAccount(deps, ctx).catch(() => false)), // non-critical
     // A share run reads only the granted Composio connections, and skips the
     // read when nothing is granted.
     composioManifests: started(

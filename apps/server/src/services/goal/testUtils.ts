@@ -25,6 +25,23 @@ import type { LobeChatDatabase } from '@/database/type';
 import type { GoalService } from './index';
 import { GoalManagerService } from './manager';
 
+/** Fresh planner response for the standard 50-unit, five-probe batch scenarios. */
+export const createBatchDecomposition = () => ({
+  problemStatement: '把 50 个同构的 store 迁移到 replica',
+  rollout: {
+    recipeOutline: '把 store 换成 replica 支撑的实现',
+    repeatable: true,
+    unitCount: 50,
+    units: Array.from({ length: 50 }, (_, i) => `Unit ${i + 1}`),
+    variants: [],
+  },
+  tasks: Array.from({ length: 5 }, (_, i) => ({
+    dependsOn: [],
+    instruction: `把 src/store/store${i + 1}.ts 换成 replica 实现`,
+    title: `Unit ${i + 1}`,
+  })),
+});
+
 /** Seed the test user before each test and clear everything a goal test writes after it. */
 export const registerGoalServiceTestCleanup = (serverDB: LobeChatDatabase, userId: string) => {
   beforeEach(async () => {

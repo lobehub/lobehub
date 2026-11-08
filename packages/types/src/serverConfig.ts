@@ -78,6 +78,11 @@ export type IFeatureFlagsState = {
    * that declare a `ui://` view render as plain results.
    */
   enableMcpApps: boolean | undefined;
+  /**
+   * Agent documents move into a dedicated knowledge base at runtime
+   * (`agent_knowledge_space`). Off by default.
+   */
+  enableAgentKnowledgeSpace: boolean | undefined;
   enableOnboardingV2: boolean | undefined;
   enableRAGEval: boolean | undefined;
   enableSTT: boolean | undefined;
@@ -159,6 +164,12 @@ export interface GlobalServerConfig {
    * events via the Gateway instead of running the agent loop client-side.
    */
   agentGatewayUrl?: string;
+  /**
+   * Agent identity providers this deployment has credentials for
+   * (`agent-mail`). Empty means an agent cannot be given an address
+   * here, so the identity settings have nothing to offer.
+   */
+  agentIdentityProviders?: string[];
   aiProvider: ServerLanguageModel;
   defaultAgent?: PartialDeep<UserDefaultAgent>;
   /** Whether the server has DEVICE_GATEWAY_URL configured, independent of its public URL. */

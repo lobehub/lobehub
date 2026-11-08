@@ -6,11 +6,13 @@ import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AgentAvatar from '@/components/AgentAvatar';
+import { directAvatarState, replyAvatarState } from '@/features/Channels/jobStatus';
 import { useChannelMenu } from '@/features/Channels/useChannelMenu';
 import { useAgentDropdownMenu } from '@/features/HomeSidebar/Body/Agent/List/AgentItem/useDropdownMenu';
 import { usePreservedAgentUrl } from '@/features/HomeSidebar/Body/Agent/List/usePreservedAgentUrl';
 import { useAgentModal } from '@/features/HomeSidebar/Body/Agent/ModalProvider';
 import { usePrefetchAgent } from '@/hooks/usePrefetchAgent';
+import { channelSelectors, useChannelStore } from '@/store/channel';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
 
@@ -19,14 +21,13 @@ import { type Conversation } from './conversations';
 import { AVATAR_SIZE } from './style';
 import { useAgentConversationLink } from './useAgentConversationLink';
 
-/** The direct Channel's own conversation actions, next to the Agent's own menu. */
-const CONVERSATION_ACTION_KEYS = new Set(['archive', 'unarchive', 'delete']);
+/** The direct Channel's own conversation action, next to the Agent's own menu. */
+const CONVERSATION_ACTION_KEYS = new Set(['unarchive']);
 
 /**
- * A row that opens a direct Channel *is* that conversation, so the Channel's archive and
- * trash actions belong on the row: without them, archiving or trashing the conversation
- * means opening it first, and the Agent's Delete removes the Agent instead. Keys are
- * prefixed so they cannot collide with the Agent's own `delete`.
+ * A direct Channel is the chat with one Agent, so it cannot be archived or trashed. The row only
+ * frees one that was archived earlier. Keys are prefixed so they cannot collide with the Agent's
+ * own menu.
  */
 const conversationActions = (menu: DropdownItem[]): DropdownItem[] =>
   menu.flatMap((item) => {
@@ -47,11 +48,22 @@ const AgentConversation = memo<AgentConversationProps>(({ active, conversation }
   const { t } = useTranslation('chat');
   const { openCreateGroupModal } = useAgentModal();
   const prefetchAgent = usePrefetchAgent();
-  const running = useChatStore(operationSelectors.isAgentVisiblyRunning(id));
+  const chatRunning = useChatStore(operationSelectors.isAgentVisiblyRunning(id));
   const agentUrl = usePreservedAgentUrl(id);
   const { onClick, url } = useAgentConversationLink(id, agentUrl);
   const channelMenu = useChannelMenu();
   const directChannel = conversation.channel;
+  // A direct Channel replies through Channel jobs, not chat operations. The open conversation's
+  // view is polled while it works, so it is fresher than the list; any other cached view may be
+  // stale, so other rows read the jobs the list carries.
+  const replyState = useChannelStore((s) => {
+    if (!directChannel) return;
+    const detail = active
+      ? channelSelectors.detail({ channelId: directChannel.id, threadId: null })(s)
+      : undefined;
+    return detail ? directAvatarState(detail) : replyAvatarState(directChannel.replyJobs ?? []);
+  });
+  const avatarState = replyState ?? (chatRunning ? 'working' : undefined);
   const title = agentDisplayName(item, t('untitledAgent'));
   const avatarSrc = typeof avatar === 'string' ? avatar : undefined;
 
@@ -93,9 +105,8 @@ const AgentConversation = memo<AgentConversationProps>(({ active, conversation }
       active={active}
       activeAt={activeAt}
       contextMenuItems={menuItems}
-      pinned={!!pinned}
       preview={preview}
-      running={running}
+      running={chatRunning}
       title={title}
       unread={conversation.unread ?? item.unreadCount}
       url={url}
@@ -104,10 +115,12 @@ const AgentConversation = memo<AgentConversationProps>(({ active, conversation }
         // image or emoji, else the character generated from its id.
         <AgentAvatar
           agentId={id}
+          animated={!!avatarState}
           avatar={avatarSrc}
           background={backgroundColor || undefined}
           name={title}
           size={AVATAR_SIZE}
+          state={avatarState}
         />
       }
       onClick={onClick}

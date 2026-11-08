@@ -139,7 +139,7 @@ describe('resolve_aborted_tools executor', () => {
       expect(result.newState.status).toBe('done');
     });
 
-    it('should emit done event with user_aborted reason', async () => {
+    it('should emit a done event with the final state and user_aborted reason', async () => {
       // Given
       const mockStore = createMockStore();
       const context = createTestContext();
@@ -162,8 +162,9 @@ describe('resolve_aborted_tools executor', () => {
         type: 'done',
         reason: 'user_aborted',
         reasonDetail: 'User aborted operation with pending tool calls',
-        finalState: result.newState,
       });
+      expect(doneEvent.finalState).toEqual(result.newState);
+      expect(doneEvent.finalState.status).toBe('done');
     });
   });
 
@@ -389,30 +390,6 @@ describe('resolve_aborted_tools executor', () => {
       expect(result.newState).not.toBe(state);
       expect(result.newState.status).toBe('done');
       expect(state.status).toBe('waiting_for_human');
-    });
-  });
-
-  describe('Event Handling', () => {
-    it('should include finalState in event', async () => {
-      // Given
-      const mockStore = createMockStore();
-      const context = createTestContext();
-      const instruction = createResolveAbortedToolsInstruction();
-      const state = createInitialState();
-
-      // When
-      const result = await executeWithMockContext({
-        executor: 'resolve_aborted_tools',
-        instruction,
-        state,
-        mockStore,
-        context,
-      });
-
-      // Then
-      const doneEvent = result.events[0] as AgentEventDone;
-      expect(doneEvent.finalState).toEqual(result.newState);
-      expect(doneEvent.finalState.status).toBe('done');
     });
   });
 

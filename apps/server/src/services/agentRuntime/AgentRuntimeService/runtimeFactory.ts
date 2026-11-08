@@ -1,5 +1,9 @@
 import type { AgentRunLlmExecutor, AgentState } from '@lobechat/agent-runtime';
 import { AgentRuntime, findInMessages, GeneralChatAgent } from '@lobechat/agent-runtime';
+import {
+  AGENT_ACCOUNT_OUTBOUND_AUDIT,
+  createAgentAccountOutboundAudit,
+} from '@lobechat/builtin-tool-agent-account';
 import { DASHBOARD_DRY_RUN_AUDIT } from '@lobechat/builtin-tool-dashboard';
 import { dynamicInterventionAudits } from '@lobechat/builtin-tools/dynamicInterventionAudits';
 import { getModelPropertyWithFallback } from '@lobechat/model-runtime';
@@ -7,6 +11,7 @@ import { type UIChatMessage } from '@lobechat/types';
 import { RequestTrigger } from '@lobechat/types';
 import debug from 'debug';
 
+import { AgentInboxModel } from '@/database/models/agentInbox';
 import {
   createRuntimeExecutors,
   type RuntimeExecutorContext,
@@ -123,6 +128,27 @@ export async function getLlmExecutor(
 }
 
 /**
+ * Whether a run may be acting on mail from outside: an inbound message started it, or it runs in
+ * a topic that holds one. The second covers every later turn there — a background sub-agent's
+ * continuation, the owner chatting on — whatever trigger it carries. Fails closed: a lookup that
+ * errors holds the send.
+ */
+const holdsMailFromOutside = async (
+  db: RuntimeFactoryDeps['serverDB'],
+  origin: AgentState['origin'] | undefined,
+): Promise<boolean> => {
+  if (origin?.trigger === RequestTrigger.Inbox) return true;
+  if (!origin?.topicId) return false;
+
+  try {
+    return await AgentInboxModel.isInboxTopic(db, origin.topicId);
+  } catch (error) {
+    log('inbox topic lookup failed for %s; holding the send: %O', origin.topicId, error);
+    return true;
+  }
+};
+
+/**
  * Create Agent Runtime instance
  */
 export async function createAgentRuntime(
@@ -173,6 +199,11 @@ export async function createAgentRuntime(
     },
     dynamicInterventionAudits: {
       ...dynamicInterventionAudits,
+      // A run that may be acting on mail from outside answers to whoever wrote
+      // it: every send it makes waits for the owner's approval.
+      [AGENT_ACCOUNT_OUTBOUND_AUDIT]: createAgentAccountOutboundAudit({
+        holdEverySend: () => holdsMailFromOutside(deps.serverDB, origin),
+      }),
       [DASHBOARD_DRY_RUN_AUDIT]: createWidgetDryRunAudit(
         deps.serverDB,
         origin?.userId ?? deps.userId,

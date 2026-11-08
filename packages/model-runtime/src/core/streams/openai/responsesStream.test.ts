@@ -6,122 +6,101 @@ import { FIRST_CHUNK_ERROR_KEY } from '../protocol';
 import { createReadableStream, readStreamChunk } from '../utils';
 import { OpenAIResponsesStream } from './responsesStream';
 
+const createdResponse = (id: string) => ({
+  type: 'response.created',
+  response: { id, status: 'in_progress' },
+});
+
+const createWebBrowsingTools = () => [
+  {
+    type: 'function',
+    description:
+      'a search service. Useful for when you need to answer questions about current events. Input should be a search query. Output is a JSON array of the query results',
+    name: 'lobe-web-browsing____search',
+    parameters: {
+      properties: {
+        query: { description: 'The search query', type: 'string' },
+        searchCategories: {
+          description: 'The search categories you can set:',
+          items: {
+            enum: ['general', 'images', 'news', 'science', 'videos'],
+            type: 'string',
+          },
+          type: 'array',
+        },
+        searchEngines: {
+          description: 'The search engines you can use:',
+          items: {
+            enum: [
+              'google',
+              'bilibili',
+              'bing',
+              'duckduckgo',
+              'npm',
+              'pypi',
+              'github',
+              'arxiv',
+              'google scholar',
+              'z-library',
+              'reddit',
+              'imdb',
+              'brave',
+              'wikipedia',
+              'pinterest',
+              'unsplash',
+              'vimeo',
+              'youtube',
+            ],
+            type: 'string',
+          },
+          type: 'array',
+        },
+        searchTimeRange: {
+          description: 'The time range you can set:',
+          enum: ['anytime', 'day', 'week', 'month', 'year'],
+          type: 'string',
+        },
+      },
+      required: ['query'],
+      type: 'object',
+    },
+    strict: true,
+  },
+  {
+    type: 'function',
+    description:
+      'A crawler can visit page content. Output is a JSON object of title, content, url and website',
+    name: 'lobe-web-browsing____crawlSinglePage',
+    parameters: {
+      properties: { url: { description: 'The url need to be crawled', type: 'string' } },
+      required: ['url'],
+      type: 'object',
+    },
+    strict: true,
+  },
+  {
+    type: 'function',
+    description:
+      'A crawler can visit multi pages. If need to visit multi website, use this one. Output is an array of JSON object of title, content, url and website',
+    name: 'lobe-web-browsing____crawlMultiPages',
+    parameters: {
+      properties: {
+        urls: {
+          items: { description: 'The urls need to be crawled', type: 'string' },
+          type: 'array',
+        },
+      },
+      required: ['urls'],
+      type: 'object',
+    },
+    strict: true,
+  },
+];
+
 describe('OpenAIResponsesStream', () => {
   it('should transform OpenAI stream to protocol stream', async () => {
     const mockOpenAIStream = createReadableStream([
-      {
-        type: 'response.created',
-        response: {
-          id: 'resp_683e7b8ca3308190b6837f20d2c015cd0cf93af363cdcf58',
-          object: 'response',
-          created_at: 1748925324,
-          status: 'in_progress',
-          error: null,
-          incomplete_details: null,
-          instructions: null,
-          max_output_tokens: null,
-          model: 'o4-mini',
-          output: [],
-          parallel_tool_calls: true,
-          previous_response_id: null,
-          reasoning: { effort: 'medium', summary: null },
-          service_tier: 'auto',
-          store: false,
-          temperature: 1,
-          text: { format: { type: 'text' } },
-          tool_choice: 'auto',
-          tools: [
-            {
-              type: 'function',
-              description:
-                'a search service. Useful for when you need to answer questions about current events. Input should be a search query. Output is a JSON array of the query results',
-              name: 'lobe-web-browsing____search',
-              parameters: {
-                properties: {
-                  query: { description: 'The search query', type: 'string' },
-                  searchCategories: {
-                    description: 'The search categories you can set:',
-                    items: {
-                      enum: ['general', 'images', 'news', 'science', 'videos'],
-                      type: 'string',
-                    },
-                    type: 'array',
-                  },
-                  searchEngines: {
-                    description: 'The search engines you can use:',
-                    items: {
-                      enum: [
-                        'google',
-                        'bilibili',
-                        'bing',
-                        'duckduckgo',
-                        'npm',
-                        'pypi',
-                        'github',
-                        'arxiv',
-                        'google scholar',
-                        'z-library',
-                        'reddit',
-                        'imdb',
-                        'brave',
-                        'wikipedia',
-                        'pinterest',
-                        'unsplash',
-                        'vimeo',
-                        'youtube',
-                      ],
-                      type: 'string',
-                    },
-                    type: 'array',
-                  },
-                  searchTimeRange: {
-                    description: 'The time range you can set:',
-                    enum: ['anytime', 'day', 'week', 'month', 'year'],
-                    type: 'string',
-                  },
-                },
-                required: ['query'],
-                type: 'object',
-              },
-              strict: true,
-            },
-            {
-              type: 'function',
-              description:
-                'A crawler can visit page content. Output is a JSON object of title, content, url and website',
-              name: 'lobe-web-browsing____crawlSinglePage',
-              parameters: {
-                properties: { url: { description: 'The url need to be crawled', type: 'string' } },
-                required: ['url'],
-                type: 'object',
-              },
-              strict: true,
-            },
-            {
-              type: 'function',
-              description:
-                'A crawler can visit multi pages. If need to visit multi website, use this one. Output is an array of JSON object of title, content, url and website',
-              name: 'lobe-web-browsing____crawlMultiPages',
-              parameters: {
-                properties: {
-                  urls: {
-                    items: { description: 'The urls need to be crawled', type: 'string' },
-                    type: 'array',
-                  },
-                },
-                required: ['urls'],
-                type: 'object',
-              },
-              strict: true,
-            },
-          ],
-          top_p: 1,
-          truncation: 'disabled',
-          usage: null,
-          user: null,
-          metadata: {},
-        },
-      },
+      createdResponse('resp_683e7b8ca3308190b6837f20d2c015cd0cf93af363cdcf58'),
       {
         type: 'response.in_progress',
         response: {
@@ -143,91 +122,7 @@ describe('OpenAIResponsesStream', () => {
           temperature: 1,
           text: { format: { type: 'text' } },
           tool_choice: 'auto',
-          tools: [
-            {
-              type: 'function',
-              description:
-                'a search service. Useful for when you need to answer questions about current events. Input should be a search query. Output is a JSON array of the query results',
-              name: 'lobe-web-browsing____search',
-              parameters: {
-                properties: {
-                  query: { description: 'The search query', type: 'string' },
-                  searchCategories: {
-                    description: 'The search categories you can set:',
-                    items: {
-                      enum: ['general', 'images', 'news', 'science', 'videos'],
-                      type: 'string',
-                    },
-                    type: 'array',
-                  },
-                  searchEngines: {
-                    description: 'The search engines you can use:',
-                    items: {
-                      enum: [
-                        'google',
-                        'bilibili',
-                        'bing',
-                        'duckduckgo',
-                        'npm',
-                        'pypi',
-                        'github',
-                        'arxiv',
-                        'google scholar',
-                        'z-library',
-                        'reddit',
-                        'imdb',
-                        'brave',
-                        'wikipedia',
-                        'pinterest',
-                        'unsplash',
-                        'vimeo',
-                        'youtube',
-                      ],
-                      type: 'string',
-                    },
-                    type: 'array',
-                  },
-                  searchTimeRange: {
-                    description: 'The time range you can set:',
-                    enum: ['anytime', 'day', 'week', 'month', 'year'],
-                    type: 'string',
-                  },
-                },
-                required: ['query'],
-                type: 'object',
-              },
-              strict: true,
-            },
-            {
-              type: 'function',
-              description:
-                'A crawler can visit page content. Output is a JSON object of title, content, url and website',
-              name: 'lobe-web-browsing____crawlSinglePage',
-              parameters: {
-                properties: { url: { description: 'The url need to be crawled', type: 'string' } },
-                required: ['url'],
-                type: 'object',
-              },
-              strict: true,
-            },
-            {
-              type: 'function',
-              description:
-                'A crawler can visit multi pages. If need to visit multi website, use this one. Output is an array of JSON object of title, content, url and website',
-              name: 'lobe-web-browsing____crawlMultiPages',
-              parameters: {
-                properties: {
-                  urls: {
-                    items: { description: 'The urls need to be crawled', type: 'string' },
-                    type: 'array',
-                  },
-                },
-                required: ['urls'],
-                type: 'object',
-              },
-              strict: true,
-            },
-          ],
+          tools: createWebBrowsingTools(),
           top_p: 1,
           truncation: 'disabled',
           usage: null,
@@ -341,17 +236,7 @@ describe('OpenAIResponsesStream', () => {
   });
 
   it('should handle response.created event', async () => {
-    const mockOpenAIStream = createReadableStream([
-      {
-        type: 'response.created',
-        response: {
-          id: 'resp_test_123',
-          status: 'in_progress',
-          object: 'response',
-          created_at: 1234567890,
-        },
-      },
-    ]);
+    const mockOpenAIStream = createReadableStream([createdResponse('resp_test_123')]);
 
     const protocolStream = OpenAIResponsesStream(mockOpenAIStream);
     const chunks = await readStreamChunk(protocolStream);
@@ -363,13 +248,7 @@ describe('OpenAIResponsesStream', () => {
 
   it('should handle function_call in response.output_item.added', async () => {
     const mockOpenAIStream = createReadableStream([
-      {
-        type: 'response.created',
-        response: {
-          id: 'resp_test_456',
-          status: 'in_progress',
-        },
-      },
+      createdResponse('resp_test_456'),
       {
         type: 'response.output_item.added',
         output_index: 0,
@@ -392,13 +271,7 @@ describe('OpenAIResponsesStream', () => {
 
   it('should handle multiple function_calls with incrementing index', async () => {
     const mockOpenAIStream = createReadableStream([
-      {
-        type: 'response.created',
-        response: {
-          id: 'resp_multi_tool',
-          status: 'in_progress',
-        },
-      },
+      createdResponse('resp_multi_tool'),
       {
         type: 'response.output_item.added',
         output_index: 0,
@@ -430,13 +303,7 @@ describe('OpenAIResponsesStream', () => {
 
   it('should handle response.function_call_arguments.delta', async () => {
     const mockOpenAIStream = createReadableStream([
-      {
-        type: 'response.created',
-        response: {
-          id: 'resp_delta_test',
-          status: 'in_progress',
-        },
-      },
+      createdResponse('resp_delta_test'),
       {
         type: 'response.output_item.added',
         output_index: 0,
@@ -463,13 +330,7 @@ describe('OpenAIResponsesStream', () => {
 
   it('should handle response.output_text.delta', async () => {
     const mockOpenAIStream = createReadableStream([
-      {
-        type: 'response.created',
-        response: {
-          id: 'resp_text_delta',
-          status: 'in_progress',
-        },
-      },
+      createdResponse('resp_text_delta'),
       {
         type: 'response.output_text.delta',
         item_id: 'msg_123',
@@ -493,13 +354,7 @@ describe('OpenAIResponsesStream', () => {
 
   it('should handle response.reasoning_summary_part.added for first part', async () => {
     const mockOpenAIStream = createReadableStream([
-      {
-        type: 'response.created',
-        response: {
-          id: 'resp_reasoning',
-          status: 'in_progress',
-        },
-      },
+      createdResponse('resp_reasoning'),
       {
         type: 'response.reasoning_summary_part.added',
         item_id: 'reasoning_1',
@@ -517,13 +372,7 @@ describe('OpenAIResponsesStream', () => {
 
   it('should handle response.reasoning_summary_part.added for subsequent parts', async () => {
     const mockOpenAIStream = createReadableStream([
-      {
-        type: 'response.created',
-        response: {
-          id: 'resp_reasoning_multi',
-          status: 'in_progress',
-        },
-      },
+      createdResponse('resp_reasoning_multi'),
       {
         type: 'response.reasoning_summary_part.added',
         item_id: 'reasoning_1',
@@ -547,13 +396,7 @@ describe('OpenAIResponsesStream', () => {
 
   it('should handle response.reasoning_summary_text.delta', async () => {
     const mockOpenAIStream = createReadableStream([
-      {
-        type: 'response.created',
-        response: {
-          id: 'resp_reasoning_delta',
-          status: 'in_progress',
-        },
-      },
+      createdResponse('resp_reasoning_delta'),
       {
         type: 'response.reasoning_summary_text.delta',
         item_id: 'reasoning_123',
@@ -580,13 +423,7 @@ describe('OpenAIResponsesStream', () => {
 
   it('should handle xAI response.reasoning_text.delta', async () => {
     const mockOpenAIStream = createReadableStream([
-      {
-        type: 'response.created',
-        response: {
-          id: 'resp_reasoning_text_delta',
-          status: 'in_progress',
-        },
-      },
+      createdResponse('resp_reasoning_text_delta'),
       {
         type: 'response.reasoning_text.delta',
         item_id: 'reasoning_123',
@@ -603,13 +440,7 @@ describe('OpenAIResponsesStream', () => {
 
   it('should handle response.output_text.annotation.added', async () => {
     const mockOpenAIStream = createReadableStream([
-      {
-        type: 'response.created',
-        response: {
-          id: 'resp_annotation',
-          status: 'in_progress',
-        },
-      },
+      createdResponse('resp_annotation'),
       {
         type: 'response.output_text.annotation.added',
         item_id: 'msg_citation',
@@ -631,13 +462,7 @@ describe('OpenAIResponsesStream', () => {
 
   it('should handle multiple annotations and accumulate citations', async () => {
     const mockOpenAIStream = createReadableStream([
-      {
-        type: 'response.created',
-        response: {
-          id: 'resp_multi_citation',
-          status: 'in_progress',
-        },
-      },
+      createdResponse('resp_multi_citation'),
       {
         type: 'response.output_text.annotation.added',
         item_id: 'msg_cite',
@@ -670,13 +495,7 @@ describe('OpenAIResponsesStream', () => {
 
   it('should handle response.output_item.done with citations', async () => {
     const mockOpenAIStream = createReadableStream([
-      {
-        type: 'response.created',
-        response: {
-          id: 'resp_done_citation',
-          status: 'in_progress',
-        },
-      },
+      createdResponse('resp_done_citation'),
       {
         type: 'response.output_text.annotation.added',
         item_id: 'msg_final',
@@ -709,13 +528,7 @@ describe('OpenAIResponsesStream', () => {
 
   it('should handle response.output_item.done without citations', async () => {
     const mockOpenAIStream = createReadableStream([
-      {
-        type: 'response.created',
-        response: {
-          id: 'resp_done_no_citation',
-          status: 'in_progress',
-        },
-      },
+      createdResponse('resp_done_no_citation'),
       {
         type: 'response.output_item.done',
         output_index: 0,
@@ -736,13 +549,7 @@ describe('OpenAIResponsesStream', () => {
   it('should emit encrypted reasoning content as a reasoning signature', async () => {
     const reasoningSignatureScope: SignatureScope = { fingerprint: 'a'.repeat(32) };
     const mockOpenAIStream = createReadableStream([
-      {
-        type: 'response.created',
-        response: {
-          id: 'resp_reasoning_signature',
-          status: 'in_progress',
-        },
-      },
+      createdResponse('resp_reasoning_signature'),
       {
         type: 'response.output_item.done',
         output_index: 0,
@@ -893,13 +700,7 @@ describe('OpenAIResponsesStream', () => {
 
   it('should handle response.completed with usage', async () => {
     const mockOpenAIStream = createReadableStream([
-      {
-        type: 'response.created',
-        response: {
-          id: 'resp_completed_usage',
-          status: 'in_progress',
-        },
-      },
+      createdResponse('resp_completed_usage'),
       {
         type: 'response.completed',
         response: {
@@ -926,13 +727,7 @@ describe('OpenAIResponsesStream', () => {
   it('should handle response.completed without usage', async () => {
     const onFinal = vi.fn();
     const mockOpenAIStream = createReadableStream([
-      {
-        type: 'response.created',
-        response: {
-          id: 'resp_completed_no_usage',
-          status: 'in_progress',
-        },
-      },
+      createdResponse('resp_completed_no_usage'),
       {
         type: 'response.completed',
         response: {
@@ -968,13 +763,7 @@ describe('OpenAIResponsesStream', () => {
 
   it('should handle unknown chunk type as data', async () => {
     const mockOpenAIStream = createReadableStream([
-      {
-        type: 'response.created',
-        response: {
-          id: 'resp_unknown',
-          status: 'in_progress',
-        },
-      },
+      createdResponse('resp_unknown'),
       {
         type: 'response.unknown_event',
         data: 'some data',
@@ -990,13 +779,7 @@ describe('OpenAIResponsesStream', () => {
   it('should handle non-standard item types in output_item.added', async () => {
     // Test the default case in output_item.added when item type is not function_call
     const mockOpenAIStream = createReadableStream([
-      {
-        type: 'response.created',
-        response: {
-          id: 'resp_other_item',
-          status: 'in_progress',
-        },
-      },
+      createdResponse('resp_other_item'),
       {
         type: 'response.output_item.added',
         output_index: 0,
@@ -1020,13 +803,7 @@ describe('OpenAIResponsesStream', () => {
   it('should handle chunks with undefined values gracefully', async () => {
     // Test handling of chunks with undefined/missing properties
     const mockOpenAIStream = createReadableStream([
-      {
-        type: 'response.created',
-        response: {
-          id: 'resp_undefined_vals',
-          status: 'in_progress',
-        },
-      },
+      createdResponse('resp_undefined_vals'),
       {
         type: 'response.reasoning_summary_text.delta',
         item_id: undefined,
@@ -1044,121 +821,7 @@ describe('OpenAIResponsesStream', () => {
   describe('Reasoning', () => {
     it('summary', async () => {
       const mockOpenAIStream = createReadableStream([
-        {
-          type: 'response.created',
-          response: {
-            id: 'resp_684313b89200819087f27686e0c822260b502bf083132d0d',
-            object: 'response',
-            created_at: 1749226424,
-            status: 'in_progress',
-            error: null,
-            incomplete_details: null,
-            instructions: null,
-            max_output_tokens: null,
-            model: 'o4-mini',
-            output: [],
-            parallel_tool_calls: true,
-            previous_response_id: null,
-            reasoning: { effort: 'medium', summary: 'detailed' },
-            service_tier: 'auto',
-            store: false,
-            temperature: 1,
-            text: { format: { type: 'text' } },
-            tool_choice: 'auto',
-            tools: [
-              {
-                type: 'function',
-                description:
-                  'a search service. Useful for when you need to answer questions about current events. Input should be a search query. Output is a JSON array of the query results',
-                name: 'lobe-web-browsing____search',
-                parameters: {
-                  properties: {
-                    query: { description: 'The search query', type: 'string' },
-                    searchCategories: {
-                      description: 'The search categories you can set:',
-                      items: {
-                        enum: ['general', 'images', 'news', 'science', 'videos'],
-                        type: 'string',
-                      },
-                      type: 'array',
-                    },
-                    searchEngines: {
-                      description: 'The search engines you can use:',
-                      items: {
-                        enum: [
-                          'google',
-                          'bilibili',
-                          'bing',
-                          'duckduckgo',
-                          'npm',
-                          'pypi',
-                          'github',
-                          'arxiv',
-                          'google scholar',
-                          'z-library',
-                          'reddit',
-                          'imdb',
-                          'brave',
-                          'wikipedia',
-                          'pinterest',
-                          'unsplash',
-                          'vimeo',
-                          'youtube',
-                        ],
-                        type: 'string',
-                      },
-                      type: 'array',
-                    },
-                    searchTimeRange: {
-                      description: 'The time range you can set:',
-                      enum: ['anytime', 'day', 'week', 'month', 'year'],
-                      type: 'string',
-                    },
-                  },
-                  required: ['query'],
-                  type: 'object',
-                },
-                strict: true,
-              },
-              {
-                type: 'function',
-                description:
-                  'A crawler can visit page content. Output is a JSON object of title, content, url and website',
-                name: 'lobe-web-browsing____crawlSinglePage',
-                parameters: {
-                  properties: {
-                    url: { description: 'The url need to be crawled', type: 'string' },
-                  },
-                  required: ['url'],
-                  type: 'object',
-                },
-                strict: true,
-              },
-              {
-                type: 'function',
-                description:
-                  'A crawler can visit multi pages. If need to visit multi website, use this one. Output is an array of JSON object of title, content, url and website',
-                name: 'lobe-web-browsing____crawlMultiPages',
-                parameters: {
-                  properties: {
-                    urls: {
-                      items: { description: 'The urls need to be crawled', type: 'string' },
-                      type: 'array',
-                    },
-                  },
-                  required: ['urls'],
-                  type: 'object',
-                },
-                strict: true,
-              },
-            ],
-            top_p: 1,
-            truncation: 'disabled',
-            usage: null,
-            user: null,
-            metadata: {},
-          },
-        },
+        createdResponse('resp_684313b89200819087f27686e0c822260b502bf083132d0d'),
         {
           type: 'response.in_progress',
           response: {
@@ -1180,93 +843,7 @@ describe('OpenAIResponsesStream', () => {
             temperature: 1,
             text: { format: { type: 'text' } },
             tool_choice: 'auto',
-            tools: [
-              {
-                type: 'function',
-                description:
-                  'a search service. Useful for when you need to answer questions about current events. Input should be a search query. Output is a JSON array of the query results',
-                name: 'lobe-web-browsing____search',
-                parameters: {
-                  properties: {
-                    query: { description: 'The search query', type: 'string' },
-                    searchCategories: {
-                      description: 'The search categories you can set:',
-                      items: {
-                        enum: ['general', 'images', 'news', 'science', 'videos'],
-                        type: 'string',
-                      },
-                      type: 'array',
-                    },
-                    searchEngines: {
-                      description: 'The search engines you can use:',
-                      items: {
-                        enum: [
-                          'google',
-                          'bilibili',
-                          'bing',
-                          'duckduckgo',
-                          'npm',
-                          'pypi',
-                          'github',
-                          'arxiv',
-                          'google scholar',
-                          'z-library',
-                          'reddit',
-                          'imdb',
-                          'brave',
-                          'wikipedia',
-                          'pinterest',
-                          'unsplash',
-                          'vimeo',
-                          'youtube',
-                        ],
-                        type: 'string',
-                      },
-                      type: 'array',
-                    },
-                    searchTimeRange: {
-                      description: 'The time range you can set:',
-                      enum: ['anytime', 'day', 'week', 'month', 'year'],
-                      type: 'string',
-                    },
-                  },
-                  required: ['query'],
-                  type: 'object',
-                },
-                strict: true,
-              },
-              {
-                type: 'function',
-                description:
-                  'A crawler can visit page content. Output is a JSON object of title, content, url and website',
-                name: 'lobe-web-browsing____crawlSinglePage',
-                parameters: {
-                  properties: {
-                    url: { description: 'The url need to be crawled', type: 'string' },
-                  },
-                  required: ['url'],
-                  type: 'object',
-                },
-                strict: true,
-              },
-              {
-                type: 'function',
-                description:
-                  'A crawler can visit multi pages. If need to visit multi website, use this one. Output is an array of JSON object of title, content, url and website',
-                name: 'lobe-web-browsing____crawlMultiPages',
-                parameters: {
-                  properties: {
-                    urls: {
-                      items: { description: 'The urls need to be crawled', type: 'string' },
-                      type: 'array',
-                    },
-                  },
-                  required: ['urls'],
-                  type: 'object',
-                },
-                strict: true,
-              },
-            ],
+            tools: createWebBrowsingTools(),
             top_p: 1,
             truncation: 'disabled',
             usage: null,
@@ -1417,130 +994,7 @@ describe('OpenAIResponsesStream', () => {
           type: 'response.completed',
           response: {
             id: 'resp_684313b89200819087f27686e0c822260b502bf083132d0d',
-            object: 'response',
-            created_at: 1749226424,
             status: 'completed',
-            error: null,
-            incomplete_details: null,
-            instructions: null,
-            max_output_tokens: null,
-            model: 'o4-mini',
-            output: [
-              {
-                id: 'rs_684313b9774481908ee856625f82fb8c0b502bf083132d0d',
-                type: 'reasoning',
-                summary: [
-                  {
-                    type: 'summary_text',
-                    text: '**Answering a numeric comparison**\n\nThe user is asking in Chinese which number is larger: 9.1 or 9.92. This is straightforward since 9.92 is clearly larger, as it\'s greater than 9.1. We can respond with "9.92大于9.1" without needing to search for more information. It\'s a simplcomparison, but I could also add a little explanation, noting that 9.92 is indeed 0.82 more than 9.1. However, keeping it simple with "9.92 > 9.1" is perfectly fine!',
-                  },
-                ],
-              },
-              {
-                id: 'msg_684313bee2c88190b0f4b09621ad7dc60b502bf083132d0d',
-                type: 'message',
-                status: 'completed',
-                content: [{ type: 'output_text', annotations: [], text: '9.92 比 9.1 大。' }],
-                role: 'assistant',
-              },
-            ],
-            parallel_tool_calls: true,
-            previous_response_id: null,
-            reasoning: { effort: 'medium', summary: 'detailed' },
-            service_tier: 'default',
-            store: false,
-            temperature: 1,
-            text: { format: { type: 'text' } },
-            tool_choice: 'auto',
-            tools: [
-              {
-                type: 'function',
-                description:
-                  'a search service. Useful for when you need to answer questions about current events. Input should be a search query. Output is a JSON array of the query results',
-                name: 'lobe-web-browsing____search',
-                parameters: {
-                  properties: {
-                    query: { description: 'The search query', type: 'string' },
-                    searchCategories: {
-                      description: 'The search categories you can set:',
-                      items: {
-                        enum: ['general', 'images', 'news', 'science', 'videos'],
-                        type: 'string',
-                      },
-                      type: 'array',
-                    },
-                    searchEngines: {
-                      description: 'The search engines you can use:',
-                      items: {
-                        enum: [
-                          'google',
-                          'bilibili',
-                          'bing',
-                          'duckduckgo',
-                          'npm',
-                          'pypi',
-                          'github',
-                          'arxiv',
-                          'google scholar',
-                          'z-library',
-                          'reddit',
-                          'imdb',
-                          'brave',
-                          'wikipedia',
-                          'pinterest',
-                          'unsplash',
-                          'vimeo',
-                          'youtube',
-                        ],
-                        type: 'string',
-                      },
-                      type: 'array',
-                    },
-                    searchTimeRange: {
-                      description: 'The time range you can set:',
-                      enum: ['anytime', 'day', 'week', 'month', 'year'],
-                      type: 'string',
-                    },
-                  },
-                  required: ['query'],
-                  type: 'object',
-                },
-                strict: true,
-              },
-              {
-                type: 'function',
-                description:
-                  'A crawler can visit page content. Output is a JSON object of title, content, url and website',
-                name: 'lobe-web-browsing____crawlSinglePage',
-                parameters: {
-                  properties: {
-                    url: { description: 'The url need to be crawled', type: 'string' },
-                  },
-                  required: ['url'],
-                  type: 'object',
-                },
-                strict: true,
-              },
-              {
-                type: 'function',
-                description:
-                  'A crawler can visit multi pages. If need to visit multi website, use this one. Output is an array of JSON object of title, content, url and website',
-                name: 'lobe-web-browsing____crawlMultiPages',
-                parameters: {
-                  properties: {
-                    urls: {
-                      items: { description: 'The urls need to be crawled', type: 'string' },
-                      type: 'array',
-                    },
-                  },
-                  required: ['urls'],
-                  type: 'object',
-                },
-                strict: true,
-              },
-            ],
-            top_p: 1,
-            truncation: 'disabled',
             usage: {
               input_tokens: 2391,
               input_tokens_details: { cached_tokens: 2298 },
@@ -1548,8 +1002,6 @@ describe('OpenAIResponsesStream', () => {
               output_tokens_details: { reasoning_tokens: 128 },
               total_tokens: 2535,
             },
-            user: null,
-            metadata: {},
           },
         },
       ]);
@@ -1587,7 +1039,7 @@ describe('OpenAIResponsesStream', () => {
 
     it('surfaces response.failed as an error carrying the upstream message', async () => {
       const { chunks, completion } = await collect([
-        { type: 'response.created', response: { id: 'resp_failed', status: 'in_progress' } },
+        createdResponse('resp_failed'),
         {
           type: 'response.failed',
           response: {
@@ -1611,7 +1063,7 @@ describe('OpenAIResponsesStream', () => {
 
     it('surfaces a bare error event as an error', async () => {
       const { completion } = await collect([
-        { type: 'response.created', response: { id: 'resp_error', status: 'in_progress' } },
+        createdResponse('resp_error'),
         { type: 'error', code: 'rate_limit_exceeded', message: 'Rate limit reached', param: null },
       ]);
 
@@ -1620,7 +1072,7 @@ describe('OpenAIResponsesStream', () => {
 
     it('reports usage and a length stop for response.incomplete', async () => {
       const { completion } = await collect([
-        { type: 'response.created', response: { id: 'resp_incomplete', status: 'in_progress' } },
+        createdResponse('resp_incomplete'),
         {
           type: 'response.incomplete',
           response: {

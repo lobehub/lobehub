@@ -1,5 +1,6 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import { SWRConfig } from 'swr';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ChatSettingsTabs } from '@/store/global/initialState';
@@ -16,7 +17,8 @@ const mocks = vi.hoisted(() => ({
     optimisticUpdateAgentConfig: vi.fn(),
     optimisticUpdateAgentMeta: vi.fn(),
   },
-  userState: { preference: { lab: { enableAgentGraphConfig: false } } },
+  serverState: { serverConfig: { agentIdentityProviders: [] as string[] } },
+  userState: { preference: { lab: { enableAgentGraphConfig: false, enableAgentIdentity: false } } },
 }));
 
 vi.mock('@/features/AgentSetting', () => ({
@@ -42,6 +44,9 @@ vi.mock('@/features/AgentSetting', () => ({
   ),
 }));
 
+const accountService = vi.hoisted(() => ({ list: vi.fn(async () => [] as unknown[]) }));
+vi.mock('@/services/agentAccount', () => ({ agentAccountService: accountService }));
+
 vi.mock('@/store/agent', () => {
   const useAgentStore = (selector: (state: typeof mocks.agentState) => unknown) =>
     selector(mocks.agentState);
@@ -62,6 +67,18 @@ vi.mock('@/store/agent/selectors', () => ({
   },
 }));
 
+vi.mock('@/store/serverConfig', () => ({
+  useServerConfigStore: (selector: (state: typeof mocks.serverState) => unknown) =>
+    selector(mocks.serverState),
+}));
+
+vi.mock('@/store/serverConfig/selectors', () => ({
+  serverConfigSelectors: {
+    agentIdentityProviders: (state: typeof mocks.serverState) =>
+      state.serverConfig.agentIdentityProviders,
+  },
+}));
+
 vi.mock('@/store/user', () => ({
   useUserStore: (selector: (state: typeof mocks.userState) => unknown) => selector(mocks.userState),
 }));
@@ -70,6 +87,8 @@ vi.mock('@/store/user/selectors', () => ({
   labPreferSelectors: {
     enableAgentGraphConfig: (state: typeof mocks.userState) =>
       state.preference.lab.enableAgentGraphConfig,
+    enableAgentIdentity: (state: typeof mocks.userState) =>
+      state.preference.lab.enableAgentIdentity,
   },
 }));
 
@@ -78,6 +97,8 @@ describe('AgentSettings Content', () => {
     mocks.agentState.isInbox = true;
     mocks.agentState.isCurrentAgentHeterogeneous = false;
     mocks.userState.preference.lab.enableAgentGraphConfig = false;
+    mocks.userState.preference.lab.enableAgentIdentity = false;
+    mocks.serverState.serverConfig.agentIdentityProviders = [];
   });
 
   it('opens on the opening tab', () => {
@@ -110,5 +131,50 @@ describe('AgentSettings Content', () => {
     render(<Content />);
 
     expect(screen.getByTestId('layout')).toHaveAttribute('data-tabs', ChatSettingsTabs.Opening);
+  });
+
+  it('shows identity only with the Labs toggle on and a provider configured', () => {
+    mocks.serverState.serverConfig.agentIdentityProviders = ['agent-mail'];
+
+    const { unmount } = render(<Content />);
+    // A configured provider alone does not surface the experiment.
+    expect(screen.getByTestId('layout')).toHaveAttribute('data-tabs', ChatSettingsTabs.Opening);
+    unmount();
+
+    mocks.userState.preference.lab.enableAgentIdentity = true;
+    render(<Content />);
+    expect(screen.getByTestId('layout')).toHaveAttribute(
+      'data-tabs',
+      `${ChatSettingsTabs.Opening},${ChatSettingsTabs.Identity}`,
+    );
+  });
+
+  it('hides identity when the deployment has no identity provider, even in Labs', () => {
+    mocks.userState.preference.lab.enableAgentIdentity = true;
+
+    render(<Content />);
+
+    expect(screen.getByTestId('layout')).toHaveAttribute('data-tabs', ChatSettingsTabs.Opening);
+  });
+
+  it('keeps identity reachable for an agent that already owns an address, even with no provider', async () => {
+    mocks.userState.preference.lab.enableAgentIdentity = true;
+    accountService.list.mockResolvedValueOnce([
+      { id: 'acc_1', identifier: 'toby@lobe.id', status: 'active' },
+    ]);
+
+    render(
+      <SWRConfig value={{ dedupingInterval: 0, provider: () => new Map() }}>
+        <Content />
+      </SWRConfig>,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByTestId('layout')).toHaveAttribute(
+        'data-tabs',
+        `${ChatSettingsTabs.Opening},${ChatSettingsTabs.Identity}`,
+      ),
+    );
+    expect(accountService.list).toHaveBeenCalledWith({ agentId: 'inbox-agent' });
   });
 });

@@ -1,3 +1,4 @@
+import { EnvironmentModel } from '../../models/environment';
 import type { CreateProjectInput } from '../../models/project';
 import {
   normalizeProjectIdentifier,
@@ -6,6 +7,7 @@ import {
 } from '../../models/project';
 import { createProjectMainAgent } from '../../models/projectMainAgent';
 import { projectAgents } from '../../schemas/project';
+import { projectEnvironments } from '../../schemas/projectEnvironment';
 import type { LobeChatDatabase } from '../../type';
 
 /**
@@ -22,7 +24,7 @@ export class ProjectRepository {
     private readonly workspaceId?: string,
   ) {}
 
-  async create(input: CreateProjectInput) {
+  async create({ repository, ...input }: CreateProjectInput) {
     const identifier = normalizeProjectIdentifier(input.identifier);
 
     return this.db.transaction(async (tx) => {
@@ -59,6 +61,27 @@ export class ProjectRepository {
         identifier,
       });
       await this.linkCoordinator(db, project.id, mainAgent.id);
+
+      // The environment belongs to another aggregate too, and a repository the
+      // environment cannot accept must not leave a half-made project behind, so
+      // it is created in the same transaction.
+      if (repository) {
+        const environment = await new EnvironmentModel(
+          db,
+          this.userId,
+          this.workspaceId,
+        ).ensureForRepository({
+          defaultBranch: repository.defaultBranch,
+          name: repository.name,
+          repositoryUrl: repository.url,
+        });
+        await db.insert(projectEnvironments).values({
+          addedByUserId: this.userId,
+          environmentId: environment.id,
+          projectId: project.id,
+          workspaceId: this.workspaceId,
+        });
+      }
 
       return project;
     });

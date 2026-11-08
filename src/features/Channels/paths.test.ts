@@ -9,6 +9,8 @@ describe('matchChannel', () => {
     ['/acme/channels/chn_1', 'chn_1'],
     ['/project/pro_1/channels/chn_1', 'chn_1'],
     ['/acme/project/pro_1/channels/chn_1/', 'chn_1'],
+    ['/channels/chn_1/settings', 'chn_1'],
+    ['/acme/project/pro_1/channels/chn_1/settings/', 'chn_1'],
   ])('reads %s as an open Channel', (pathname, expected) => {
     expect(matchChannel(pathname)).toBe(expected);
   });

@@ -682,7 +682,10 @@ describe('ScmChangeRequestModel', () => {
     // the write — no longer carries it: an unlink committed in between.
     const echoed = await ScmChangeRequestModel.upsert(serverDB, {
       ...snapshot,
-      links: { acceptanceId: '11111111-2222-4333-8444-555555555555', acceptanceSource: 'row-binding' },
+      links: {
+        acceptanceId: '11111111-2222-4333-8444-555555555555',
+        acceptanceSource: 'row-binding',
+      },
     });
 
     expect(echoed.acceptanceId).toBeNull();

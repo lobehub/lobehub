@@ -214,6 +214,22 @@ export const projectWorkingDirectoryRouter = router({
           { db: ctx.serverDB, userId: ctx.userId, workspaceId: ctx.workspaceId },
           input.topicIds,
         );
+      // A binding pairs a device with a path on that device. Legacy topic
+      // metadata can pair one machine's device with another machine's path, and
+      // persisting that leaves every topic under it failing with
+      // `working_directory_not_found`. An unreachable device can't be verified
+      // and stays bindable; only a definite "not there" is rejected.
+      const stat = await deviceGateway.statPath({
+        deviceId: input.deviceId,
+        path: input.path,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId ?? undefined,
+      });
+      if (stat && (!stat.exists || !stat.isDirectory))
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: 'Working directory does not exist on this device',
+        });
       return { data: await ctx.directoryRepo.bind(input), success: true };
     }),
   list: procedure
