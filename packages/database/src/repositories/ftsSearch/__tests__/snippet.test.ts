@@ -43,6 +43,16 @@ describe('buildMatchSnippet', () => {
     expect(buildMatchSnippet(content, 'sla (v4.1)', 100)).toContain('The SLA (v4.1)');
   });
 
+  it('handles a matching term wider than the snippet window', () => {
+    const term = 'x'.repeat(400);
+    const content = `${filler(1000)}${term}`;
+
+    const snippet = buildMatchSnippet(content, term, 300)!;
+
+    expect(snippet).toContain('x'.repeat(290));
+    expect(snippet.length).toBeLessThanOrEqual(303);
+  });
+
   it('keeps the document head when no term is locatable', () => {
     const content = filler(1000);
 

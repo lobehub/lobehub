@@ -50,13 +50,17 @@ const findOccurrences = (content: string, terms: string[]): TermOccurrence[] =>
 const findBestSpan = (occurrences: TermOccurrence[], maxLength: number) => {
   const counts = new Map<string, number>();
   let left = 0;
-  let best = { end: occurrences[0].end, start: occurrences[0].start };
+  // A term wider than the window is clamped, or the left edge would pass the current occurrence.
+  const clampedEnd = ({ end, start }: TermOccurrence) => Math.min(end, start + maxLength);
+  let best = { end: clampedEnd(occurrences[0]), start: occurrences[0].start };
   let bestCoverage = 0;
 
   for (const occurrence of occurrences) {
     counts.set(occurrence.term, (counts.get(occurrence.term) ?? 0) + 1);
 
-    while (occurrence.end - occurrences[left].start > maxLength) {
+    const end = clampedEnd(occurrence);
+
+    while (end - occurrences[left].start > maxLength) {
       const { term } = occurrences[left];
       const remaining = counts.get(term)! - 1;
       if (remaining === 0) counts.delete(term);
@@ -66,7 +70,7 @@ const findBestSpan = (occurrences: TermOccurrence[], maxLength: number) => {
 
     if (counts.size > bestCoverage) {
       bestCoverage = counts.size;
-      best = { end: occurrence.end, start: occurrences[left].start };
+      best = { end, start: occurrences[left].start };
     }
   }
 
