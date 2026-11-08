@@ -66,6 +66,7 @@ import Search1APIProvider from './search1api';
 import SenseNovaProvider from './sensenova';
 import SiliconCloudProvider from './siliconcloud';
 import SparkProvider from './spark';
+import StandardComputeProvider from './standardcompute';
 import StepfunProvider from './stepfun';
 import StraicoProvider from './straico';
 import StreamLakeProvider from './streamlake';
@@ -228,6 +229,7 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   VercelAIGatewayProvider,
   CerebrasProvider,
   ZenMuxProvider,
+  StandardComputeProvider,
   OpenCodeZenProvider,
   OpenCodeCodingPlanProvider,
   StraicoProvider,
@@ -370,6 +372,7 @@ export { default as Search1APIProviderCard } from './search1api';
 export { default as SenseNovaProviderCard } from './sensenova';
 export { default as SiliconCloudProviderCard } from './siliconcloud';
 export { default as SparkProviderCard } from './spark';
+export { default as StandardComputeProviderCard } from './standardcompute';
 export { default as StepfunProviderCard } from './stepfun';
 export { default as StraicoProviderCard } from './straico';
 export { default as StreamLakeProviderCard } from './streamlake';
