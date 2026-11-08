@@ -103,8 +103,15 @@ export const AcceptanceOverview = ({
         <Flexbox className={styles.column} gap={12}>
           {/* Sharing sits beside the identity, as on the workbench page. The
               control gates itself on the server's review capability, so a
-              reader without it sees nothing here. */}
-          <Flexbox horizontal align={'flex-start'} gap={16} justify={'space-between'}>
+              reader without it sees nothing here. The inline padding clears the
+              ledger's collapsed chip, which floats over this corner. */}
+          <Flexbox
+            horizontal
+            align={'flex-start'}
+            gap={16}
+            justify={'space-between'}
+            style={{ paddingInlineEnd: 24 }}
+          >
             <Flexbox flex={1} style={{ minWidth: 0 }}>
               <AcceptanceIdentity
                 focusSlot={<AcceptanceEnterFocus />}

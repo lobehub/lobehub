@@ -20,6 +20,7 @@ import CollapsibleContent from '@/components/CollapsibleContent';
 import AgentProfilePopup from '@/features/AgentProfileCard/AgentProfilePopup';
 import { ChatItem } from '@/features/Conversation/ChatItem';
 import Markdown from '@/features/Conversation/Markdown';
+import EntityLinkElement from '@/features/EntityLink/element';
 import UserAvatar from '@/features/User/UserAvatar';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
@@ -38,7 +39,12 @@ import type { ChannelReplyTarget } from './useReplyTarget';
 const MentionChip = ({ children }: { children?: ReactNode }) => (
   <span {...stylex.props(styles.mention)}>{children}</span>
 );
-const mentionComponents = { [CHANNEL_MENTION_TAG]: MentionChip };
+// GitHub and LobeHub links render as the same chips the conversation shows.
+const messageComponents = {
+  [CHANNEL_MENTION_TAG]: MentionChip,
+  [EntityLinkElement.tag]: EntityLinkElement.Component,
+};
+const rehypePlugins = [EntityLinkElement.rehypePlugin];
 
 /** Message text with the members it mentioned shown as chips. */
 const MessageText = ({ content, names }: { content: string; names: string[] }) => {
@@ -47,7 +53,11 @@ const MessageText = ({ content, names }: { content: string; names: string[] }) =
   // memoized Markdown parse each message again on every refresh.
   const remarkPlugins = useMemo(() => [remarkChannelMentions(key ? key.split('\n') : [])], [key]);
   return (
-    <Markdown components={mentionComponents} remarkPlugins={remarkPlugins}>
+    <Markdown
+      components={messageComponents}
+      rehypePlugins={rehypePlugins}
+      remarkPlugins={remarkPlugins}
+    >
       {content}
     </Markdown>
   );
@@ -179,7 +189,7 @@ export const ChannelMessage = ({
         showAvatar
         showTitle
         agentId={message.author.type === 'agent' ? message.author.id : undefined}
-        avatarProps={{ size: 36 }}
+        avatarProps={{ shape: 'circle', size: 36 }}
         gap={4}
         id={message.id}
         paddingBlock={compact ? 2 : 8}
@@ -208,7 +218,7 @@ export const ChannelMessage = ({
         customAvatarRender={(_, avatar) => (
           <Flexbox {...stylex.props(styles.messageAvatar)}>
             {isOwnMessage ? (
-              <UserAvatar size={36} />
+              <UserAvatar shape={'circle'} size={36} />
             ) : agentAuthorId ? (
               // Same profile card an Agent shows on hover in goals and tasks.
               <AgentProfilePopup

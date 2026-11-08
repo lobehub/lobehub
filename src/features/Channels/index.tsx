@@ -1,4 +1,4 @@
-import { Flexbox, Tag, Text } from '@lobehub/ui';
+import { cssVar, Flexbox, Tag, Text } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { useSize } from 'ahooks';
 import { Hash } from 'lucide-react';
@@ -8,10 +8,13 @@ import { useParams } from 'react-router';
 
 import NotFound from '@/components/404';
 import { RouteLoading } from '@/components/Skeleton/RouteSegment';
+import { EntityLinkHostProvider } from '@/features/EntityLink/host';
 import NavHeader from '@/features/NavHeader';
 import { channelActions, channelSelectors, useChannelStore } from '@/store/channel';
+import { useChatStore } from '@/store/chat';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 
+import { AcceptancePanel, CHANNEL_ENTITY_PORTAL_SCOPE } from './AcceptancePanel';
 import { visibleChannelDetail } from './channelAccess';
 import { ChannelConversation } from './ChannelConversation';
 import { MEMBER_FLOAT_BREAKPOINT, MemberPanel } from './MemberPanel';
@@ -20,6 +23,7 @@ import { DirectReplyStatus } from './ReplyActivity';
 import { type ReplyTopic, ReplyTopicPanel } from './ReplyTopicPanel';
 import { styles } from './styles';
 import { THREAD_FLOAT_BREAKPOINT, ThreadPanel } from './ThreadPanel';
+import { useAcceptancePanelOpen } from './useAcceptancePanel';
 import { useThreadPanel } from './useThreadPanel';
 
 /** One Channel: the main conversation, with a thread beside it. */
@@ -39,14 +43,21 @@ function EnabledChannelPage() {
     ? detail.members.find((member) => member.agentId === detail.channel.agentId)
     : undefined;
   const [topic, setTopic] = useState<(ReplyTopic & { channelId: string }) | null>(null);
+  const acceptanceOpen = useAcceptancePanelOpen();
+  const clearPortalStack = useChatStore((s) => s.clearPortalStack);
+  // One side panel at a time. A report covers whatever was open and uncovers it when closed;
+  // explicitly opening another panel closes the report.
+  const threadId = acceptanceOpen ? null : panel.threadId;
+  const threadDraft = acceptanceOpen ? null : panel.draft;
   const membersOpen =
     !!detail?.channel.workspaceId &&
     membersChannelId === channelId &&
-    !panel.threadId &&
-    !panel.draft;
-  // One side panel at a time: a thread or the member list replaces the topic.
+    !threadId &&
+    !threadDraft &&
+    !acceptanceOpen;
+  // A thread or the member list replaces the topic.
   const openTopic =
-    topic?.channelId === channelId && !panel.threadId && !panel.draft && !membersOpen
+    topic?.channelId === channelId && !threadId && !threadDraft && !membersOpen && !acceptanceOpen
       ? topic
       : null;
   if (!channelId) return null;
@@ -59,7 +70,7 @@ function EnabledChannelPage() {
         left={
           <Flexbox horizontal align="center" gap={8}>
             {/* A direct conversation is titled by its Agent's name alone, like an IM chat. */}
-            {!directAgent && <Hash size={18} />}
+            {!directAgent && <Hash color={cssVar.colorTextDescription} size={16} />}
             <Text ellipsis weight={500}>
               {detail?.channel.title || t('title')}
             </Text>
@@ -80,6 +91,7 @@ function EnabledChannelPage() {
                         if (!membersOpen) {
                           panel.close();
                           setTopic(null);
+                          clearPortalStack();
                         }
                         setMembersChannelId(membersOpen ? null : channelId);
                       },
@@ -90,55 +102,63 @@ function EnabledChannelPage() {
           )
         }
       />
-      <Flexbox horizontal ref={conversationRef} {...stylex.props(styles.conversations)}>
-        <ChannelConversation
-          channelId={channelId}
-          key={channelId}
-          inert={
-            (!!(panel.threadId || panel.draft) &&
-              (conversationWidth ?? 1000) < THREAD_FLOAT_BREAKPOINT) ||
-            (membersOpen && (conversationWidth ?? 1000) < MEMBER_FLOAT_BREAKPOINT) ||
-            (!!openTopic && (conversationWidth ?? 1000) < THREAD_FLOAT_BREAKPOINT)
-          }
-          onOpenThread={(threadId, toggle) => {
-            setTopic(null);
-            panel.openThread(threadId, toggle);
-          }}
-          onOpenTopic={(next) => {
-            panel.close();
-            setMembersChannelId(null);
-            setTopic({ ...next, channelId });
-          }}
-          onStartThread={(draft) => {
-            setTopic(null);
-            panel.openDraft(draft);
-          }}
-        />
-        {detail && membersOpen && (
-          <MemberPanel
-            availableWidth={conversationWidth}
-            detail={detail}
-            id={memberPanelId}
-            onClose={() => setMembersChannelId(null)}
+      <EntityLinkHostProvider portal={CHANNEL_ENTITY_PORTAL_SCOPE}>
+        <Flexbox horizontal ref={conversationRef} {...stylex.props(styles.conversations)}>
+          <ChannelConversation
+            channelId={channelId}
+            key={channelId}
+            inert={
+              (!!(threadId || threadDraft || acceptanceOpen) &&
+                (conversationWidth ?? 1000) < THREAD_FLOAT_BREAKPOINT) ||
+              (membersOpen && (conversationWidth ?? 1000) < MEMBER_FLOAT_BREAKPOINT) ||
+              (!!openTopic && (conversationWidth ?? 1000) < THREAD_FLOAT_BREAKPOINT)
+            }
+            onOpenThread={(nextThreadId, toggle) => {
+              setTopic(null);
+              // A send that finishes behind an open report (toggle: false) must not close it.
+              if (toggle !== false) clearPortalStack();
+              // Under a report the thread only looks closed, so bring it back, don't toggle it off.
+              panel.openThread(nextThreadId, acceptanceOpen ? false : toggle);
+            }}
+            onOpenTopic={(next) => {
+              panel.close();
+              setMembersChannelId(null);
+              clearPortalStack();
+              setTopic({ ...next, channelId });
+            }}
+            onStartThread={(draft) => {
+              setTopic(null);
+              clearPortalStack();
+              panel.openDraft(draft);
+            }}
           />
-        )}
-        <ReplyTopicPanel
-          availableWidth={conversationWidth}
-          topic={openTopic}
-          onClose={() => setTopic(null)}
-        />
-        {detail && (
-          <ThreadPanel
+          {detail && membersOpen && (
+            <MemberPanel
+              availableWidth={conversationWidth}
+              detail={detail}
+              id={memberPanelId}
+              onClose={() => setMembersChannelId(null)}
+            />
+          )}
+          <ReplyTopicPanel
             availableWidth={conversationWidth}
-            detail={detail}
-            draft={panel.draft}
-            key={`thread:${channelId}`}
-            threadId={panel.threadId}
-            onClose={panel.close}
-            onSendDraft={panel.send}
+            topic={openTopic}
+            onClose={() => setTopic(null)}
           />
-        )}
-      </Flexbox>
+          {detail && (
+            <ThreadPanel
+              availableWidth={conversationWidth}
+              detail={detail}
+              draft={threadDraft}
+              key={`thread:${channelId}`}
+              threadId={threadId}
+              onClose={panel.close}
+              onSendDraft={panel.send}
+            />
+          )}
+          <AcceptancePanel availableWidth={conversationWidth} channelId={channelId} />
+        </Flexbox>
+      </EntityLinkHostProvider>
     </Flexbox>
   );
 }
