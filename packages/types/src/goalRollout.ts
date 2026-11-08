@@ -277,8 +277,12 @@ export interface GoalRolloutState {
    * and judges the gate in the same step — unless it sends probes back.
    */
   pendingDistill?: {
+    /** Package files the distilled plan adds or replaces beside the recipe (by path). */
+    files?: { content: string; path: string }[];
     reason: string;
     recipe: string;
+    /** Package paths the distilled plan drops. */
+    removedFiles?: string[];
     /**
      * Node ids (or titles) of the probes whose delivery falls short of the
      * plan. They run again on it, continuing their delivery, and are distilled
@@ -301,6 +305,10 @@ export interface GoalRolloutState {
      * rewrite. Absent re-runs every one of them; empty re-runs none.
      */
     rerun?: string[];
+    /** Package files the rewrite adds or replaces beside the recipe (by path). */
+    revisedFiles?: { content: string; path: string }[];
+    /** Package paths the rewrite drops. */
+    removedFiles?: string[];
     revisedReason?: string;
     revisedRecipe?: string;
   };

@@ -1,6 +1,8 @@
 import { GOAL_CLARIFICATION_OPTION } from '@lobechat/const/goal';
 import { z } from 'zod';
 
+import { packageFilesSchema } from '../../skill/packageFiles';
+import { planFileEdits } from '../planPackage';
 import { MAX_ROLLOUT_ROSTER } from '../rolloutBatch';
 import { goalWaitSchema } from '../wait';
 
@@ -61,6 +63,8 @@ const goalAskSchema = z
   );
 export const planRolloutSchema = z
   .object({
+    /** The references, templates and scripts the recipe relies on, shipped with it. */
+    files: packageFilesSchema.optional(),
     /** The one reusable recipe every unit follows; the batch's Template, revised on every break. */
     recipe: reason,
     /** Every unit after the probes in `tasks`, in delivery order; a unit may carry its own notes. */
@@ -140,6 +144,8 @@ export const goalPlanSchema = z.discriminatedUnion('action', [
   /** Answers a batch release handed over by the coordinator: the next wave goes out. */
   z.object({ action: z.literal('release'), reason }).strict(),
   /** Answers a plan sent back: the full revised recipe, and the reviewed units to re-run. */
-  z.object({ action: z.literal('revise_plan'), reason, recipe: reason, rerun }).strict(),
+  z
+    .object({ action: z.literal('revise_plan'), reason, recipe: reason, rerun, ...planFileEdits })
+    .strict(),
 ]);
 export type GoalPlan = z.infer<typeof goalPlanSchema>;

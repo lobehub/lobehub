@@ -96,6 +96,7 @@ const declareBatch = async (
     policy,
     problemId: problemId!,
     probes: plan.tasks.map((task) => ({ instruction: task.description, title: task.title })),
+    recipeFiles: plan.rollout.files,
     recipeOutline: plan.rollout.recipe,
     repeatable: true,
     roster,
@@ -281,8 +282,11 @@ export const submitPlan = async (
       await model.updateRolloutState(goalId, {
         ...rollout,
         pendingDistill: {
+          // What the probes produced that later units reuse ships with the plan.
+          ...(plan.files && { files: plan.files }),
           reason: plan.reason,
           recipe: plan.recipe,
+          ...(plan.removeFiles && { removedFiles: plan.removeFiles }),
           ...(plan.rerun?.length && { rerun: plan.rerun }),
         },
       });
@@ -299,6 +303,8 @@ export const submitPlan = async (
         pendingRevision: {
           ...rollout.pendingRevision,
           ...(plan.rerun && { rerun: plan.rerun }),
+          ...(plan.files && { revisedFiles: plan.files }),
+          ...(plan.removeFiles && { removedFiles: plan.removeFiles }),
           revisedReason: plan.reason,
           revisedRecipe: plan.recipe,
         },

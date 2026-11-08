@@ -149,6 +149,33 @@ describe('distilling the plan from settled probes', () => {
     expect(round.metadata!.releaseGate!.plan.content).toContain('Pitfalls the probes hit');
   });
 
+  // Distilling is where the probes' tooling becomes the batch's: a check
+  // script or a reference they produced ships in the plan package.
+  it('ships the files a distilled plan carries into the plan skill', async () => {
+    const { id } = await probesSettled();
+    await service().tick(id);
+    const { op, state: turn } = await distillTurn(db, userId, id);
+    await manager().submit(id, turn.token, op.id, {
+      action: 'revise_plan',
+      files: [
+        { content: 'gh pr checks "$1" --required', path: 'scripts/check-pr.sh' },
+        { content: '# Scope keys by workspace', path: 'references/scoping.md' },
+      ],
+      reason: 'Folded the scoping pitfall into step 1 and shipped the PR check',
+      recipe: distilled,
+    });
+    await ops().recordCompletion(op.id, { status: 'done' });
+    for (let i = 0; i < 3; i++) await service().tick(id);
+
+    const state = (await model().findById(id))!.config!.rolloutState!;
+    expect(state.pendingDistill).toBeUndefined();
+    const skill = await new UserSkillService(db, userId).getSkill(state.planSkill!.id);
+    expect(skill!.files.map((file) => file.path)).toEqual([
+      'references/scoping.md',
+      'scripts/check-pr.sh',
+    ]);
+  });
+
   it('re-runs the probes the main Agent sends back, then distills the round again', async () => {
     const { id, probeIds } = await probesSettled();
     const [shortProbe, metProbe] = probeIds;

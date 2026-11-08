@@ -1,10 +1,12 @@
 // @vitest-environment node
+import type { GoalRolloutState } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '@/database/core/getTestDB';
 import { GoalModel } from '@/database/models/goal';
 import { GoalGraphModel } from '@/database/models/goalGraph';
+import { UserSkillModel } from '@/database/models/userSkill';
 import { VerifyRunModel } from '@/database/models/verifyRun';
 import {
   acceptances,
@@ -22,6 +24,7 @@ import {
 } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { AiAgentService } from '@/server/services/aiAgent';
+import { UserSkillService } from '@/server/services/userSkill';
 import { mockSkillStorage } from '@/server/services/userSkill/testUtils';
 
 import { GoalCriteriaGeneratorService } from './criteriaGenerator';
@@ -216,7 +219,12 @@ describe('approving a batch release', () => {
   });
 
   /** Send the plan back from the report and land the main Agent's rewrite of it. */
-  const sendBackAndRewrite = async (service: GoalService, goalId: string, rerun?: string[]) => {
+  const sendBackAndRewrite = async (
+    service: GoalService,
+    goalId: string,
+    rerun?: string[],
+    pkg?: Pick<GoalRolloutState['pendingRevision'] & {}, 'removedFiles' | 'revisedFiles'>,
+  ) => {
     const pending = await pendingRelease(service, goalId);
     await service.answerReleaseGate(pending!.nodeId, 'revise', '每个 PR 都要过 codex review 和 CI');
     const goalModel = new GoalModel(serverDB, userId);
@@ -226,6 +234,7 @@ describe('approving a batch release', () => {
       pendingRevision: {
         ...state.pendingRevision!,
         ...(rerun && { rerun }),
+        ...pkg,
         revisedRecipe: '换 replica，并让 PR 过 codex review 和 CI',
       },
     });
@@ -312,6 +321,36 @@ describe('approving a batch release', () => {
           edge.kind === 'depends_on' && edge.sourceNodeId === second && edge.targetNodeId === first,
       ),
     ).toBe(true);
+  });
+
+  // The plan is a package: what the main Agent gathered while revising — a
+  // check script, a reference — ships with the recipe, and the version keeps it.
+  it('ships the files a rewrite adds with the revised plan, version by version', async () => {
+    const { goalId, service } = await passedProbes();
+    await service.tick(goalId);
+    const before = (await service.graph(goalId)).goal.config!.rolloutState!;
+
+    await sendBackAndRewrite(service, goalId, undefined, {
+      revisedFiles: [
+        { content: 'gh pr checks "$1" --required', path: 'scripts/check-pr.sh' },
+        { content: '# 读取约定', path: 'references/replica-read.md' },
+      ],
+    });
+
+    const skills = new UserSkillModel(serverDB, userId);
+    const skill = await skills.findById(before.planSkill!.id);
+    expect(skill!.files.map((file) => file.path)).toEqual([
+      'references/replica-read.md',
+      'scripts/check-pr.sh',
+    ]);
+    // Each version reads back from its own archive: v1 shipped SKILL.md alone.
+    const versions = new UserSkillService(serverDB, userId);
+    expect((await versions.getVersion(skill!.id, 1))!.files).toEqual([]);
+    const latest = await versions.getVersion(skill!.id, skill!.version);
+    expect(latest!.files!.map((file) => [file.path, file.content])).toEqual([
+      ['references/replica-read.md', '# 读取约定'],
+      ['scripts/check-pr.sh', 'gh pr checks "$1" --required'],
+    ]);
   });
 
   it('re-runs only the units the main Agent names', async () => {
