@@ -195,7 +195,11 @@ export class ChannelCoordinator {
         hooks: [completion],
         instructions: CHANNEL_INSTRUCTIONS,
         maxSteps: 32,
-        prompt: buildChannelPrompt(job.manifest, input, { context, wake: job.wake }),
+        prompt: buildChannelPrompt(job.manifest, input, {
+          context: context.messages,
+          omitted: context.omitted,
+          wake: job.wake,
+        }),
         reservedOperationId: job.operationId,
         trigger: 'channel',
         userInterventionConfig: { approvalMode: 'headless' },

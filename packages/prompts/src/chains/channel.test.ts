@@ -32,6 +32,28 @@ describe('Channel request prompt', () => {
   const caller = { id: 'caller', name: 'Mia', type: 'user' } as const;
   const coder = { id: 'coder', name: 'Coder', type: 'agent' } as const;
 
+  it('marks the member’s own earlier replies and says how much unseen history is left out', () => {
+    const self = { id: 'agent', name: 'Codex', type: 'agent' } as const;
+    const prompt = buildChannelPrompt(manifest, [message('current', 'And now?', caller)], {
+      boundary: 'b0',
+      context: [message('mine', 'Done for Ada.', self), message('theirs', 'Ok', coder)],
+      omitted: 3,
+    });
+
+    expect(prompt.split('\n').slice(0, 4)).toEqual([
+      '<channel_gap omitted="3" boundary="b0">',
+      '3 earlier public messages you have not seen are not shown. Read the public history if the request depends on them.',
+      '</channel_gap boundary="b0">',
+      '<channel_message from="Codex" type="agent" self="true" boundary="b0">',
+    ]);
+    expect(prompt).toContain('<channel_message from="Coder" type="agent" boundary="b0">');
+    expect(CHANNEL_INSTRUCTIONS).toContain('channel_gap');
+    expect(CHANNEL_INSTRUCTIONS).toContain('self="true"');
+    expect(buildChannelPrompt(manifest, [message('current', 'x', caller)])).not.toContain(
+      'channel_gap',
+    );
+  });
+
   it('tells a follow-up wake why it woke and that it may stay silent', () => {
     const request = [message('current', 'Anyone around?', caller)];
     const wake = {
@@ -116,7 +138,7 @@ describe('Channel request prompt', () => {
       threadId: 'thread',
       threadRootSequence: 2,
     };
-    const author = { id: 'agent', name: 'Author', type: 'agent' as const };
+    const author = { id: 'author-agent', name: 'Author', type: 'agent' as const };
     const messages: ChannelContextMessage[] = [
       { author, content: 'UNRELATED_HISTORY', id: 'old', sequence: 1, threadId: null },
       {
