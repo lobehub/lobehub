@@ -39,6 +39,7 @@ import { app, powerSaveBlocker } from 'electron';
 
 import { isDev } from '@/const/env';
 import { getDesktopEnv } from '@/env';
+import { createNodeProxyAgent } from '@/modules/networkProxy/nodeAgent';
 import { createLogger } from '@/utils/logger';
 import { getDesktopUserAgent } from '@/utils/user-agent';
 import { safeGetPath } from '@/utils/user-path';
@@ -699,6 +700,7 @@ export default class GatewayConnectionService extends ServiceModule {
     if (this.isStale(generation)) return CANCELLED;
 
     const client = new GatewayClient({
+      agent: () => this.createProxyAgent(gatewayUrl),
       channel: isDev ? 'desktop-dev' : 'desktop',
       connectionId: this.getConnectionId(),
       deviceId: this.getDeviceId(),
@@ -723,6 +725,14 @@ export default class GatewayConnectionService extends ServiceModule {
     });
 
     return { success: true };
+  }
+
+  /**
+   * The gateway socket goes through Node's `http` stack, which the proxy
+   * setting's undici dispatcher never reaches, so it gets its own agent.
+   */
+  private createProxyAgent(gatewayUrl: string) {
+    return createNodeProxyAgent(this.app.storeManager.get('networkProxy'), gatewayUrl);
   }
 
   private failConnect(
@@ -912,6 +922,7 @@ export default class GatewayConnectionService extends ServiceModule {
     }
 
     const client = new GatewayClient({
+      agent: () => this.createProxyAgent(session.endpoint.url),
       channel: isDev ? 'desktop-dev' : 'desktop',
       // Reuse the install's connectionId: the gateway dedupes stale sockets per
       // principal, so the workspace connection only ever replaces its own

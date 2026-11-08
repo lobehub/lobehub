@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events';
 
 import type { GatewayClient } from '@lobechat/device-gateway-client';
+import { HttpsProxyAgent } from 'https-proxy-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { App } from '@/core/App';
@@ -771,5 +772,48 @@ describe('GatewayConnectionService resolveCurrentDeviceId', () => {
     user = 'user-2';
     await expect(service.resolveCurrentDeviceId()).resolves.toBe('stable-user-2');
     expect(deriveDeviceIdMock).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('GatewayConnectionService proxy', () => {
+  const networkProxy = {
+    enableProxy: true,
+    proxyBypass: 'localhost, 127.0.0.1, ::1',
+    proxyPort: '8080',
+    proxyRequireAuth: false,
+    proxyServer: '127.0.0.1',
+    proxyType: 'http',
+  };
+
+  const createService = (proxy: unknown) =>
+    new GatewayConnectionService({
+      storeManager: {
+        get: vi.fn((key: string, fallback?: unknown) =>
+          key === 'networkProxy' ? proxy : fallback,
+        ),
+      },
+    } as unknown as App);
+
+  // ROOT CAUSE:
+  // The proxy setting only swapped undici's global dispatcher. `ws` dials with
+  // Node's `http` stack, so behind a firewall that only lets the proxy out the
+  // gateway socket reconnected forever while API requests worked (#22378).
+  it('routes the gateway socket through the configured proxy', () => {
+    const agent = createService(networkProxy)['createProxyAgent'](
+      'https://device-gateway.lobehub.com',
+    );
+
+    expect(agent).toBeInstanceOf(HttpsProxyAgent);
+  });
+
+  it('dials directly when the proxy is off or the gateway is bypassed', () => {
+    expect(
+      createService({ ...networkProxy, enableProxy: false })['createProxyAgent'](
+        'https://device-gateway.lobehub.com',
+      ),
+    ).toBeUndefined();
+    expect(
+      createService(networkProxy)['createProxyAgent']('http://localhost:8787'),
+    ).toBeUndefined();
   });
 });
