@@ -167,7 +167,7 @@ export const documents = pgTable(
      * documents. `NULL` means user-created, or that the creating agent has
      * since been deleted.
      */
-    createdByAgentId: text('created_by_agent_id').references((): AnyPgColumn => agents.id, {
+    createdByAgentId: text('created_by_agent_id').references(() => agents.id, {
       onDelete: 'set null',
     }),
 
