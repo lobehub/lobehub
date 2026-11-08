@@ -50,6 +50,8 @@ interface CollapsibleContentProps {
   children: ReactNode;
   /** Controlled collapsed state. Omit to let the component own it. Pass it when something outside the toggle expands the content — an editor gaining focus, for instance. */
   collapsed?: boolean;
+  /** Keeps the inline toggle for expanding only, for hosts that offer collapsing from their own menu. */
+  hideCollapseToggle?: boolean;
   /** Upper bound for the collapsed height; the effective clamp also honours the viewport. */
   maxHeight?: number;
   /** Fires on toggle with the next collapsed state. Required for the controlled mode; also useful as a plain notification in the uncontrolled one. */
@@ -78,6 +80,7 @@ const CollapsibleContent = memo<CollapsibleContentProps>(
   ({
     children,
     collapsed: collapsedProp,
+    hideCollapseToggle = false,
     maxHeight: maxHeightLimit = DEFAULT_MAX_HEIGHT,
     onCollapsedChange,
     onOverflowChange,
@@ -134,7 +137,7 @@ const CollapsibleContent = memo<CollapsibleContentProps>(
         >
           {children}
         </div>
-        {shouldCollapse && (
+        {shouldCollapse && (collapsed || !hideCollapseToggle) && (
           <div {...stylex.props(styles.toggleWrapper)}>
             <button
               aria-expanded={!collapsed}
