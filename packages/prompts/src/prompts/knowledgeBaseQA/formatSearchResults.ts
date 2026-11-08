@@ -14,6 +14,7 @@ export interface DocumentSearchResult {
   documentId: string;
   fileId?: string;
   knowledgeBaseId: string;
+  partialMatch?: boolean;
   relevance: number;
   snippet: string;
   title: string;
@@ -49,7 +50,8 @@ ${chunks.join('\n')}
  */
 const formatDocument = (doc: DocumentSearchResult): string => {
   const fileIdAttr = doc.fileId ? ` fileId="${doc.fileId}"` : '';
-  return `<document id="${doc.documentId}"${fileIdAttr} title="${doc.title}" relevance="${doc.relevance}" knowledgeBaseId="${doc.knowledgeBaseId}">
+  const matchAttr = doc.partialMatch ? ' match="partial"' : '';
+  return `<document id="${doc.documentId}"${fileIdAttr}${matchAttr} title="${doc.title}" relevance="${doc.relevance}" knowledgeBaseId="${doc.knowledgeBaseId}">
 <snippet>${doc.snippet}</snippet>
 </document>`;
 };
@@ -103,13 +105,17 @@ ${docsXml}
 </documents>`);
   }
 
+  const partialMatchNote = documentResults.some((doc) => doc.partialMatch)
+    ? ' Documents with match="partial" contain only some of the query terms and may be unrelated: read them to confirm before answering, and say so if they do not answer the question.'
+    : '';
+
   const instruction = `Search results from the knowledge base. ${
     fileResults.length > 0 && documentResults.length > 0
       ? 'Two source types: <files> (vector search, chunk-level) and <documents> (full-text search, document-level). '
       : fileResults.length > 0
         ? 'Source type: <files> (vector search, chunk-level). '
         : 'Source type: <documents> (full-text search, document-level). '
-  }Use the readKnowledge tool with the returned IDs (file_* or docs_*) to read the relevant content; it returns bounded windows, so page with offset when a result is truncated.${errorNote}`;
+  }Use the readKnowledge tool with the returned IDs (file_* or docs_*) to read the relevant content; it returns bounded windows, so page with offset when a result is truncated.${partialMatchNote}${errorNote}`;
 
   return `<knowledge_base_search_results query="${query}" totalCount="${totalCount}">
 <instruction>${instruction}</instruction>

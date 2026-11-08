@@ -377,7 +377,12 @@ export const searchElasticsearchCandidates = async (
               {
                 multi_match: {
                   fields,
-                  operator: 'and',
+                  ...(request.query.minimumMatchRatio === undefined
+                    ? { operator: 'and' }
+                    : {
+                        minimum_should_match: `${Math.round(request.query.minimumMatchRatio * 100)}%`,
+                        operator: 'or',
+                      }),
                   query: preparedQuery.executedQuery,
                   type: 'best_fields',
                 },

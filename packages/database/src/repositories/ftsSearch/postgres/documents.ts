@@ -219,6 +219,7 @@ export async function searchKnowledgeBaseDocuments(
   query: string,
   knowledgeBaseIds: string[],
   limit: number = 20,
+  minimumMatchRatio?: number,
 ): Promise<FtsSearchBackendResponse<FtsSearchKnowledgeBaseDocumentHit>> {
   if (!query || query.trim() === '') return { candidates: [], items: [] };
   if (!knowledgeBaseIds || knowledgeBaseIds.length === 0) {
@@ -226,9 +227,24 @@ export async function searchKnowledgeBaseDocuments(
   }
 
   const { db, dialect } = context;
+  const partialQuery =
+    minimumMatchRatio === undefined
+      ? undefined
+      : await dialect.partial(
+          db,
+          documents.id,
+          KNOWLEDGE_BASE_DOCUMENT_FIELDS,
+          query,
+          minimumMatchRatio,
+        );
+  if (minimumMatchRatio !== undefined && !partialQuery) return { candidates: [], items: [] };
+
   const preparedQuery = dialect.prepare(query);
-  const score = dialect.score(documents.id, KNOWLEDGE_BASE_DOCUMENT_FIELDS, preparedQuery);
-  const matchClause = dialect.match(KNOWLEDGE_BASE_DOCUMENT_FIELDS, preparedQuery);
+  const score =
+    partialQuery?.score ??
+    dialect.score(documents.id, KNOWLEDGE_BASE_DOCUMENT_FIELDS, preparedQuery);
+  const matchClause =
+    partialQuery?.match ?? dialect.match(KNOWLEDGE_BASE_DOCUMENT_FIELDS, preparedQuery);
   const folderClause = ne(documents.fileType, DOCUMENT_FOLDER_TYPE);
   const userClause = buildWorkspaceWhere(context.scope, documents);
 

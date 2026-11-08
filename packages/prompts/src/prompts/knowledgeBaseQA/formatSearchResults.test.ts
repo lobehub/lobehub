@@ -279,4 +279,28 @@ describe('formatSearchResults', () => {
     });
     expect(result).toMatchSnapshot();
   });
+
+  it('flags partial document matches and tells the model to confirm them', () => {
+    const result = formatSearchResults([], 'hotel limit', [
+      {
+        documentId: 'docs_1',
+        knowledgeBaseId: 'kb',
+        partialMatch: true,
+        relevance: 1,
+        snippet: 'hotel policy',
+        title: 'Policy',
+      },
+    ]);
+
+    expect(result).toContain('match="partial"');
+    expect(result).toContain('read them to confirm before answering');
+  });
+
+  it('adds no partial-match note for exact matches', () => {
+    const result = formatSearchResults([], 'hotel limit', [
+      { documentId: 'docs_1', knowledgeBaseId: 'kb', relevance: 1, snippet: 's', title: 'Policy' },
+    ]);
+
+    expect(result).not.toContain('match="partial"');
+  });
 });
