@@ -123,6 +123,7 @@ export const FeatureFlagsSchema = z.object({
   onboarding_v2: FeatureFlagValue.optional(),
   new_tier_plans: FeatureFlagValue.optional(),
   mobile_new_tier_sales: FeatureFlagValue.optional(),
+  mobile_sandbox_grant: FeatureFlagValue.optional(),
   storage_overage: FeatureFlagValue.optional(),
   workspace: FeatureFlagValue.optional(),
 
@@ -243,6 +244,9 @@ export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
   // publishes a whitelist (array of user IDs) or flips it to true.
   new_tier_plans: false,
   mobile_new_tier_sales: false,
+  // Server-only: Cloud lets a store sandbox purchase grant entitlement only for user IDs listed
+  // explicitly; `true` and percentage rollout count as off, and it never reaches the client state.
+  mobile_sandbox_grant: false,
   storage_overage: true,
   workspace: isDev,
 
