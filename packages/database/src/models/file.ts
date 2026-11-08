@@ -881,7 +881,8 @@ export class FileModel {
         .returning({ id: files.id });
 
       // Text parsed from the file is searchable on its own, so it follows the file. Any member's
-      // read may have produced it, so this is not limited to the caller's rows.
+      // read may have produced it, and the file update above already authorized this. Scope by
+      // tenant only: a visibility-aware filter would hide another member's private row.
       if (updated.length > 0) {
         await trx
           .update(documents)
@@ -890,10 +891,9 @@ export class FileModel {
             and(
               eq(documents.fileId, fileId),
               eq(documents.sourceType, 'file'),
-              buildWorkspaceWhere(
-                { userId: this.userId, workspaceId: this.workspaceId },
-                documents,
-              ),
+              this.workspaceId
+                ? eq(documents.workspaceId, this.workspaceId)
+                : eq(documents.userId, this.userId),
             ),
           );
       }
