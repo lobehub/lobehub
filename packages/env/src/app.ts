@@ -111,6 +111,12 @@ export const getAppConfig = () => {
        * @default false
        */
       enableQueueAgentRuntime: z.boolean().optional(),
+      /**
+       * Who gets the deferred operation init: plain chat sends return once the
+       * messages are durable and the step-0 worker runs discovery and prep.
+       * Unset is off, `*` is everyone, anything else is a comma-separated user id list.
+       */
+      AGENT_RUNTIME_DEFERRED_INIT: z.string().optional(),
       TELEMETRY_DISABLED: z.boolean().optional(),
     },
     runtimeEnv: {
@@ -157,6 +163,7 @@ export const getAppConfig = () => {
       AGENT_GATEWAY_PROTOCOL: process.env.AGENT_GATEWAY_PROTOCOL || undefined,
       AGENT_GATEWAY_INTERNAL_URL: process.env.AGENT_GATEWAY_INTERNAL_URL || undefined,
       enableQueueAgentRuntime: process.env.AGENT_RUNTIME_MODE === 'queue',
+      AGENT_RUNTIME_DEFERRED_INIT: process.env.AGENT_RUNTIME_DEFERRED_INIT || undefined,
       TELEMETRY_DISABLED: process.env.TELEMETRY_DISABLED === '1',
     },
   });
