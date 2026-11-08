@@ -26,6 +26,7 @@ export interface AgentRunBoardRow {
   agentAvatar: string | null;
   agentBackgroundColor: string | null;
   agentId: string;
+  agentOwnerId: string;
   agentTitle: string | null;
   completedAt: Date | null;
   createdAt: Date;
@@ -123,6 +124,7 @@ export class AgentRunBoardModel {
         agentAvatar: agents.avatar,
         agentBackgroundColor: agents.backgroundColor,
         agentId: agents.id,
+        agentOwnerId: agents.userId,
         agentTitle: agents.title,
         completedAt: agentOperations.completedAt,
         createdAt: agentOperations.createdAt,

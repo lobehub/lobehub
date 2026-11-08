@@ -1,4 +1,4 @@
-import type { AgentRunBoardData, AgentRunBoardLane } from '@lobechat/types';
+import type { AgentRunBoardData, AgentRunBoardLane, AgentRunBoardRunStatus } from '@lobechat/types';
 import { Flexbox, Text, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
@@ -8,14 +8,16 @@ import { useTranslation } from 'react-i18next';
 import { useWorkspaceMemberProfiles } from '@/business/client/hooks/useWorkspaceMemberProfiles';
 import AgentAvatar from '@/components/AgentAvatar';
 import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
+import AuthorChip from '@/features/HomeInbox/AuthorChip';
 import { sx } from '@/styles/sx';
 
 import {
   buildAxisTicks,
   formatDuration,
   layoutLaneTopics,
+  NOW_TICK_INDEX,
   type PlacedRun,
-  resolveRowLabel,
+  type TopicRow,
 } from './layout';
 import { RUN_STATUS_VISUALS } from './statusVisuals';
 import { useOpenRunDrawer } from './useOpenRunDrawer';
@@ -30,7 +32,9 @@ const styles = stylex.create({
     borderStyle: 'none',
     borderWidth: 0,
     cursor: { 'default': 'pointer', ':disabled': 'default' },
+    display: 'flex',
     height: BAR_HEIGHT,
+    overflow: 'hidden',
     opacity: { 'default': 1, ':hover': 0.75 },
     paddingBlock: 0,
     paddingInline: 0,
@@ -54,6 +58,7 @@ const styles = stylex.create({
     top: 0,
     width: 1,
   },
+  nowLine: { backgroundColor: cssVar.colorTextQuaternary },
   gridLines: {
     bottom: 0,
     insetInlineEnd: 0,
@@ -82,37 +87,48 @@ const styles = stylex.create({
   tickEnd: { transform: 'translateX(-100%)' },
   tickStart: { transform: 'none' },
   barLabel: {
+    alignItems: 'center',
     color: cssVar.colorText,
+    display: 'flex',
     fontSize: 12,
-    lineHeight: `${BAR_HEIGHT}px`,
-    overflow: 'hidden',
-    paddingInline: 8,
+    gap: 6,
+    height: BAR_HEIGHT,
+    paddingInline: 6,
     pointerEvents: 'none',
     position: 'absolute',
-    textOverflow: 'ellipsis',
     top: 3,
+  },
+  barLabelAuthor: { flexShrink: 0, pointerEvents: 'auto' },
+  barLabelText: {
+    minWidth: 0,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
   },
+  segment: { display: 'block', height: '100%' },
   track: { flexGrow: 1, height: 28, minWidth: 0, position: 'relative' },
 });
+
+const tint = (status: AgentRunBoardRunStatus) =>
+  `color-mix(in srgb, ${RUN_STATUS_VISUALS[status].color} 32%, transparent)`;
 
 const Bar = ({
   agentId,
   placed,
   title,
-  windowEnd,
+  now,
 }: {
   agentId: string;
   placed: PlacedRun;
   title: string;
-  windowEnd: Date;
+  now: Date;
 }) => {
   const { t } = useTranslation('home');
   const openDrawer = useOpenRunDrawer();
   const profiles = useWorkspaceMemberProfiles();
-  const { left, run, width } = placed;
+  const { left, run, runningShare, width } = placed;
   const member = profiles.get(run.userId);
-  const duration = formatDuration((run.endedAt ?? windowEnd).getTime() - run.startedAt.getTime());
+  const duration = formatDuration((run.endedAt ?? now).getTime() - run.startedAt.getTime());
 
   return (
     <Tooltip
@@ -133,46 +149,54 @@ const Bar = ({
         disabled={!run.topicId}
         type={'button'}
         {...sx(styles.bar, {
-          backgroundColor: `color-mix(in srgb, ${RUN_STATUS_VISUALS[run.status].color} 32%, transparent)`,
           insetInlineStart: `${left}%`,
           width: `${width}%`,
         })}
         onClick={() => openDrawer({ agentId, title, topicId: run.topicId })}
-      />
+      >
+        {runningShare !== null && (
+          <span
+            data-testid={'team-board-run-before-ask'}
+            {...sx(styles.segment, {
+              backgroundColor: tint('running'),
+              flexBasis: `${runningShare}%`,
+            })}
+          />
+        )}
+        <span {...sx(styles.segment, { backgroundColor: tint(run.status), flexGrow: 1 })} />
+      </button>
     </Tooltip>
   );
 };
 
-const RowLabel = ({ placed, title }: { placed: PlacedRun[]; title: string }) => {
-  const { anchor, offset } = resolveRowLabel(placed);
+const RowLabel = ({ row, title }: { row: TopicRow; title: string }) => {
+  const offset = row.runs[0].left;
 
   return (
     <span
       data-testid={'team-board-topic-title'}
-      {...sx(styles.barLabel, {
-        maxWidth: `${100 - offset}%`,
-        ...(anchor === 'start'
-          ? { insetInlineStart: `${offset}%` }
-          : { insetInlineEnd: `${offset}%` }),
-      })}
+      {...sx(styles.barLabel, { insetInlineStart: `${offset}%`, maxWidth: `${100 - offset}%` })}
     >
-      {title}
+      <span {...stylex.props(styles.barLabelAuthor)}>
+        <AuthorChip avatarOnly trigger={row.trigger} userId={row.startedBy} />
+      </span>
+      <span {...stylex.props(styles.barLabelText)}>{title}</span>
     </span>
   );
 };
 
 const Lane = ({
   lane,
-  windowEnd,
+  now,
   windowStart,
 }: {
   lane: AgentRunBoardLane;
-  windowEnd: Date;
+  now: Date;
   windowStart: Date;
 }) => {
   const { t } = useTranslation('home');
   const meta = useAgentDisplayMeta(lane.agentId);
-  const { overflow, rows } = layoutLaneTopics(lane.runs, windowStart, windowEnd);
+  const { overflow, rows } = layoutLaneTopics(lane.runs, windowStart, now);
   const agentTitle = lane.title || meta?.title || t('team.agent.untitled');
 
   return (
@@ -188,6 +212,7 @@ const Lane = ({
         <Text ellipsis weight={500}>
           {agentTitle}
         </Text>
+        <AuthorChip avatarOnly userId={lane.ownerUserId} />
       </Flexbox>
       {rows.map((row) => {
         const title = row.title || t('team.run.untitled');
@@ -205,12 +230,12 @@ const Lane = ({
                 <Bar
                   agentId={lane.agentId}
                   key={placed.run.id}
+                  now={now}
                   placed={placed}
                   title={title}
-                  windowEnd={windowEnd}
                 />
               ))}
-              <RowLabel placed={row.runs} title={title} />
+              <RowLabel row={row} title={title} />
             </div>
           </Flexbox>
         );
@@ -243,7 +268,7 @@ const Timeline = ({ board }: { board: AgentRunBoardData }) => {
               { insetInlineStart: tickPercent(index) },
             )}
           >
-            {index === ticks.length - 1 ? t('team.axis.now') : dayjs(tick).format('HH:mm')}
+            {index === NOW_TICK_INDEX ? t('team.axis.now') : dayjs(tick).format('HH:mm')}
           </span>
         ))}
       </div>
@@ -252,12 +277,14 @@ const Timeline = ({ board }: { board: AgentRunBoardData }) => {
           {ticks.map((tick, index) => (
             <span
               key={tick.getTime()}
-              {...sx(styles.gridLine, { insetInlineStart: tickPercent(index) })}
+              {...sx(styles.gridLine, index === NOW_TICK_INDEX && styles.nowLine, {
+                insetInlineStart: tickPercent(index),
+              })}
             />
           ))}
         </div>
         {lanes.map((lane) => (
-          <Lane key={lane.agentId} lane={lane} windowEnd={generatedAt} windowStart={windowStart} />
+          <Lane key={lane.agentId} lane={lane} now={generatedAt} windowStart={windowStart} />
         ))}
       </div>
       {hiddenLaneCount > 0 && (

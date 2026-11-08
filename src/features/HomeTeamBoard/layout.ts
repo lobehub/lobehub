@@ -1,12 +1,20 @@
-import type { AgentRunBoardLane, AgentRunBoardRun, AgentRunBoardRunStatus } from '@lobechat/types';
+import type {
+  AgentRunBoardActivityBucket,
+  AgentRunBoardLane,
+  AgentRunBoardRun,
+  AgentRunBoardRunStatus,
+} from '@lobechat/types';
 
 /** Short runs still need a mark wide enough to see and click. */
 export const MIN_BAR_PERCENT = 0.8;
 /** Past this an agent stops growing; the rest are counted. */
 export const MAX_TOPIC_ROWS = 5;
-const TICK_COUNT = 6;
-/** Past this a title would run off the axis, so it hangs back from the bar's end. */
-const LABEL_FLIP_PERCENT = 60;
+/** The window fills the first 3/5 of the axis; the rest is room for what comes next. */
+const FUTURE_RATIO = 2 / 3;
+const TICKS_PER_PAST = 3;
+const TICK_COUNT = 5;
+/** Which of the axis ticks is the present. */
+export const NOW_TICK_INDEX = TICKS_PER_PAST;
 
 const STATUS_RANK: Record<AgentRunBoardRunStatus, number> = {
   done: 3,
@@ -20,14 +28,19 @@ export interface PlacedRun {
   /** Inline-start offset, as a percentage of the time axis. */
   left: number;
   run: AgentRunBoardRun;
+  /** For a run waiting on a person: how much of its bar, in %, it ran before asking. */
+  runningShare: number | null;
   width: number;
 }
 
 export interface TopicRow {
   key: string;
   runs: PlacedRun[];
+  /** The member who started the topic. */
+  startedBy: string;
   title: string | null;
   topicId: string | null;
+  trigger: string | null;
 }
 
 export interface LaneLayout {
@@ -36,20 +49,27 @@ export interface LaneLayout {
   rows: TopicRow[];
 }
 
+/** The present sits at 3/5 of the axis, leaving the rest for time still to come. */
+export const resolveAxisEnd = (windowStart: Date, now: Date) =>
+  new Date(now.getTime() + (now.getTime() - windowStart.getTime()) * FUTURE_RATIO);
+
 const toPercent = (time: number, start: number, end: number) =>
   Math.min(100, Math.max(0, ((time - start) / (end - start)) * 100));
 
-const placeRun = (
-  run: AgentRunBoardRun,
-  start: number,
-  end: number,
-  windowEnd: Date,
-): PlacedRun => {
+const placeRun = (run: AgentRunBoardRun, start: number, end: number, now: Date): PlacedRun => {
   const from = toPercent(run.startedAt.getTime(), start, end);
-  const to = toPercent((run.endedAt ?? windowEnd).getTime(), start, end);
+  const to = toPercent((run.endedAt ?? now).getTime(), start, end);
   const width = Math.max(to - from, MIN_BAR_PERCENT);
+  const left = Math.min(from, 100 - width);
+  const waitingAt = run.waitingSince && toPercent(run.waitingSince.getTime(), start, end);
 
-  return { left: Math.min(from, 100 - width), run, width };
+  return {
+    left,
+    run,
+    runningShare:
+      waitingAt === null ? null : Math.min(100, Math.max(0, ((waitingAt - left) / width) * 100)),
+    width,
+  };
 };
 
 const latestStart = (runs: PlacedRun[]) =>
@@ -64,10 +84,10 @@ const rowRank = (runs: PlacedRun[]) => Math.min(...runs.map(({ run }) => STATUS_
 export const layoutLaneTopics = (
   runs: AgentRunBoardRun[],
   windowStart: Date,
-  windowEnd: Date,
+  now: Date,
 ): LaneLayout => {
   const start = windowStart.getTime();
-  const end = windowEnd.getTime();
+  const end = resolveAxisEnd(windowStart, now).getTime();
   const groups = Map.groupBy(runs, (run) => run.topicId ?? run.id);
 
   const rows = [...groups.entries()]
@@ -76,9 +96,11 @@ export const layoutLaneTopics = (
 
       return {
         key,
-        runs: ordered.map((run) => placeRun(run, start, end, windowEnd)),
+        runs: ordered.map((run) => placeRun(run, start, end, now)),
         title: ordered.findLast((run) => run.title)?.title ?? null,
+        startedBy: ordered[0].userId,
         topicId: ordered[0].topicId,
+        trigger: ordered[0].trigger,
       };
     })
     .sort((a, b) => rowRank(a.runs) - rowRank(b.runs) || latestStart(b.runs) - latestStart(a.runs));
@@ -87,24 +109,6 @@ export const layoutLaneTopics = (
     overflow: Math.max(0, rows.length - MAX_TOPIC_ROWS),
     rows: rows.slice(0, MAX_TOPIC_ROWS),
   };
-};
-
-export interface RowLabelPlacement {
-  anchor: 'end' | 'start';
-  /** Distance from that edge of the axis, as a percentage. */
-  offset: number;
-}
-
-/**
- * Where a topic's title sits along its row: from the first bar's start, or back
- * from the last bar's end when the row begins too far along to fit it.
- */
-export const resolveRowLabel = (runs: PlacedRun[]): RowLabelPlacement => {
-  const first = runs[0];
-  if (first.left <= LABEL_FLIP_PERCENT) return { anchor: 'start', offset: first.left };
-
-  const last = runs.at(-1)!;
-  return { anchor: 'end', offset: Math.max(0, 100 - (last.left + last.width)) };
 };
 
 const HOUR_MS = 60 * 60_000;
@@ -154,12 +158,31 @@ export const buildHourCells = (lanes: AgentRunBoardLane[], now: Date): HourCell[
   return cells;
 };
 
-/** Evenly spaced times along the axis, the last one being its end. */
-export const buildAxisTicks = (windowStart: Date, windowEnd: Date): Date[] => {
+/** Evenly spaced times along the axis, with the present at {@link NOW_TICK_INDEX}. */
+export const buildAxisTicks = (windowStart: Date, now: Date): Date[] => {
   const start = windowStart.getTime();
-  const step = (windowEnd.getTime() - start) / TICK_COUNT;
+  const step = (now.getTime() - start) / TICKS_PER_PAST;
 
   return Array.from({ length: TICK_COUNT + 1 }, (_, i) => new Date(start + step * i));
+};
+
+/** Empty slices after the present, so the chart shares the timeline's 3/5 axis. */
+export const extendActivityWithFuture = (
+  activity: AgentRunBoardActivityBucket[],
+): AgentRunBoardActivityBucket[] => {
+  if (activity.length < 2) return activity;
+
+  const last = activity.at(-1)!.startedAt.getTime();
+  const step = last - activity.at(-2)!.startedAt.getTime();
+  const future = Array.from({ length: Math.round(activity.length * FUTURE_RATIO) }, (_, i) => ({
+    done: 0,
+    failed: 0,
+    needsHuman: 0,
+    running: 0,
+    startedAt: new Date(last + step * (i + 1)),
+  }));
+
+  return [...activity, ...future];
 };
 
 /** A compact duration: `45s`, `14m`, `2h 5m`, `3d`. */

@@ -71,7 +71,14 @@ export const classifyRun = (row: AgentRunBoardRow, now: number): AgentRunBoardRu
 const runTitle = (row: AgentRunBoardRow) =>
   row.taskName || row.threadTitle || row.topicTitle || null;
 
-const toRun = (row: AgentRunBoardRow, status: AgentRunBoardRunStatus): AgentRunBoardRun => ({
+const oldestPending = (row: AgentRunBoardRow, now: number) =>
+  pendingInterventions(row, now).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())[0];
+
+const toRun = (
+  row: AgentRunBoardRow,
+  status: AgentRunBoardRunStatus,
+  now: number,
+): AgentRunBoardRun => ({
   endedAt:
     status === 'running' || status === 'needs_human' ? null : (row.completedAt ?? row.updatedAt),
   id: row.id,
@@ -82,6 +89,8 @@ const toRun = (row: AgentRunBoardRow, status: AgentRunBoardRunStatus): AgentRunB
   topicId: row.topicId,
   trigger: row.trigger,
   userId: row.userId,
+  waitingSince:
+    status === 'needs_human' ? (oldestPending(row, now)?.createdAt ?? row.updatedAt) : null,
 });
 
 const laneRank = (lane: AgentRunBoardLane) => {
@@ -110,10 +119,7 @@ const toNeedsHuman = (
   viewerId: string,
   now: number,
 ): AgentRunBoardAttentionItem => {
-  const pending = pendingInterventions(row, now).sort(
-    (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),
-  );
-  const first = pending[0];
+  const first = oldestPending(row, now);
   const ownerUserId = first?.userId ?? row.userId;
 
   return {
@@ -193,7 +199,7 @@ export const buildAgentRunBoard = ({
     const status = classifyRun(row, now);
     if (!status) continue;
 
-    const run = toRun(row, status);
+    const run = toRun(row, status, now);
     // A dead row keeps a recent `created_at`, but it can have stopped before the window.
     if (run.endedAt && run.endedAt.getTime() < windowStart.getTime()) continue;
 
@@ -218,6 +224,7 @@ export const buildAgentRunBoard = ({
       agentId: row.agentId,
       avatar: row.agentAvatar,
       backgroundColor: row.agentBackgroundColor,
+      ownerUserId: row.agentOwnerId,
       runs: [run],
       title: row.agentTitle,
     });

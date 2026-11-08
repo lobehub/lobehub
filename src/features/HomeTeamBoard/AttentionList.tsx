@@ -46,7 +46,7 @@ const styles = stylex.create({
     textAlign: 'start',
     width: 'calc(100% + 16px)',
   },
-  meta: { color: cssVar.colorTextTertiary, fontSize: 12 },
+  meta: { flexShrink: 0, fontSize: 12, whiteSpace: 'nowrap' },
 });
 
 const Item = ({ item, now }: { item: AgentRunBoardAttentionItem; now: Date }) => {
@@ -76,16 +76,16 @@ const Item = ({ item, now }: { item: AgentRunBoardAttentionItem; now: Date }) =>
           <Text ellipsis style={{ flex: 1 }} weight={500}>
             {title}
           </Text>
-          {!item.isMine && <AuthorChip userId={item.ownerUserId} />}
+          {!item.isMine && <AuthorChip avatarOnly userId={item.ownerUserId} />}
+          <span
+            {...sx(styles.meta, {
+              color: RUN_STATUS_VISUALS[failed ? 'failed' : 'needs_human'].color,
+            })}
+          >
+            {t(failed ? 'team.attention.failedAgo' : 'team.attention.waiting', { time: elapsed })}
+          </span>
         </Flexbox>
         {item.detail && <span {...stylex.props(styles.detail)}>{item.detail}</span>}
-        <span
-          {...sx(styles.meta, {
-            color: RUN_STATUS_VISUALS[failed ? 'failed' : 'needs_human'].color,
-          })}
-        >
-          {t(failed ? 'team.attention.failedAgo' : 'team.attention.waiting', { time: elapsed })}
-        </span>
       </Flexbox>
     </button>
   );

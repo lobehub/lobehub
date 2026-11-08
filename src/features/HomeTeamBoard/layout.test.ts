@@ -4,11 +4,12 @@ import { describe, expect, it } from 'vitest';
 import {
   buildAxisTicks,
   buildHourCells,
+  extendActivityWithFuture,
   formatDuration,
   layoutLaneTopics,
   MAX_TOPIC_ROWS,
   MIN_BAR_PERCENT,
-  resolveRowLabel,
+  NOW_TICK_INDEX,
 } from './layout';
 
 const start = new Date('2026-11-08T10:00:00Z');
@@ -30,6 +31,7 @@ const run = (
   topicId: null,
   trigger: null,
   userId: 'u',
+  waitingSince: null,
   ...overrides,
 });
 
@@ -37,14 +39,14 @@ describe('layoutLaneTopics', () => {
   it('positions a run as percentages and extends a live run to the end', () => {
     const { rows } = layoutLaneTopics([run('a', 30, null)], start, end);
 
-    expect(rows[0].runs[0]).toMatchObject({ left: 50, width: 50 });
+    expect(rows[0].runs[0]).toMatchObject({ left: 30, width: 30 });
   });
 
   it('clamps a run that began before the window', () => {
     const { rows } = layoutLaneTopics([run('a', -30, 6)], start, end);
 
     expect(rows[0].runs[0].left).toBe(0);
-    expect(rows[0].runs[0].width).toBe(10);
+    expect(rows[0].runs[0].width).toBe(6);
   });
 
   it('gives concurrent topics their own rows and lines up turns of one topic', () => {
@@ -91,26 +93,22 @@ describe('layoutLaneTopics', () => {
     expect(layout.overflow).toBe(2);
   });
 
-  it('keeps an instant run visible and inside the axis', () => {
+  it('splits a waiting run at the moment it asked', () => {
+    const { rows } = layoutLaneTopics(
+      [run('a', 0, null, { status: 'needs_human', waitingSince: at(45) })],
+      start,
+      end,
+    );
+
+    expect(rows[0].runs[0].runningShare).toBe(75);
+    expect(rows[0].startedBy).toBe('u');
+  });
+
+  it('keeps an instant run visible at the present', () => {
     const { rows } = layoutLaneTopics([run('a', 60, 60)], start, end);
 
     expect(rows[0].runs[0].width).toBe(MIN_BAR_PERCENT);
-    expect(rows[0].runs[0].left + rows[0].runs[0].width).toBeCloseTo(100);
-  });
-});
-
-describe('resolveRowLabel', () => {
-  const placed = (left: number, width: number) => ({ left, run: run('a', 0, 1), width });
-
-  it('starts the title at the first bar', () => {
-    expect(resolveRowLabel([placed(10, 5), placed(40, 5)])).toEqual({
-      anchor: 'start',
-      offset: 10,
-    });
-  });
-
-  it('hangs a late row back from its last bar', () => {
-    expect(resolveRowLabel([placed(80, 5), placed(90, 5)])).toEqual({ anchor: 'end', offset: 5 });
+    expect(rows[0].runs[0].left).toBe(60);
   });
 });
 
@@ -148,12 +146,27 @@ describe('buildHourCells', () => {
 });
 
 describe('buildAxisTicks', () => {
-  it('spans the window inclusive of both ends', () => {
+  it('puts the present at 3/5 of the axis', () => {
     const ticks = buildAxisTicks(start, end);
 
-    expect(ticks).toHaveLength(7);
+    expect(ticks).toHaveLength(6);
     expect(ticks[0]).toEqual(start);
-    expect(ticks[6]).toEqual(end);
+    expect(ticks[NOW_TICK_INDEX]).toEqual(end);
+  });
+});
+
+describe('extendActivityWithFuture', () => {
+  it('appends empty slices for the last 2/5 of the axis', () => {
+    const empty = { done: 0, failed: 0, needsHuman: 0, running: 0 };
+    const activity = Array.from({ length: 12 }, (_, i) => ({
+      ...empty,
+      done: 1,
+      startedAt: at(i * 5),
+    }));
+    const extended = extendActivityWithFuture(activity);
+
+    expect(extended).toHaveLength(20);
+    expect(extended[12]).toEqual({ ...empty, startedAt: at(60) });
   });
 });
 

@@ -15,11 +15,24 @@ const styles = stylex.create({
     color: { 'default': cssVar.colorTextTertiary, ':hover': cssVar.colorTextSecondary },
     cursor: 'pointer',
     fontSize: 14,
-    fontWeight: 500,
+    fontWeight: 400,
     paddingBlock: 4,
     paddingInline: 8,
+    position: 'relative',
   },
-  active: { color: { 'default': cssVar.colorText, ':hover': cssVar.colorText } },
+  active: {
+    color: { 'default': cssVar.colorText, ':hover': cssVar.colorText },
+    fontWeight: 600,
+  },
+  dot: {
+    backgroundColor: cssVar.colorText,
+    borderRadius: 2,
+    bottom: -2,
+    height: 4,
+    insetInlineStart: 'calc(50% - 2px)',
+    position: 'absolute',
+    width: 4,
+  },
 });
 
 interface HomeViewTabsProps {
@@ -43,6 +56,7 @@ const HomeViewTabs = ({ onChange, value }: HomeViewTabsProps) => {
           onClick={() => onChange(view)}
         >
           {t(`inbox.scope.${view}`)}
+          {value === view && <span {...stylex.props(styles.dot)} />}
         </button>
       ))}
     </Flexbox>

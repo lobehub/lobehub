@@ -85,7 +85,7 @@ const HomeTeamBoard = () => {
             }
           />
           <div {...stylex.props(styles.columns)}>
-            {data.lanes.length === 0 ? (
+            {!data.lanes?.length ? (
               <div {...stylex.props(styles.empty)}>{t('team.empty', { count: windowHours })}</div>
             ) : windowHours === 24 ? (
               <DayCalendar board={data} />

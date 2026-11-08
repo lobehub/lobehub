@@ -16,12 +16,16 @@ export interface AgentRunBoardRun {
   topicId: string | null;
   trigger: string | null;
   userId: string;
+  /** When a run that needs a person began waiting; it was running until then. */
+  waitingSince: Date | null;
 }
 
 export interface AgentRunBoardLane {
   agentId: string;
   avatar: string | null;
   backgroundColor: string | null;
+  /** The member the agent belongs to. */
+  ownerUserId: string;
   runs: AgentRunBoardRun[];
   title: string | null;
 }

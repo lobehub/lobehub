@@ -84,6 +84,7 @@ describe('AgentRunBoardModel.listRuns', () => {
     const [row] = await new AgentRunBoardModel(serverDB, workspaceId).listRuns({ now, since });
 
     expect(row).toMatchObject({
+      agentOwnerId: teammate,
       agentTitle: 'Public',
       errorMessage: 'boom',
       errorType: 'ToolError',

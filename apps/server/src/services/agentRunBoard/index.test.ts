@@ -14,6 +14,7 @@ const row = (overrides: Partial<AgentRunBoardRow> = {}): AgentRunBoardRow => ({
   agentAvatar: null,
   agentBackgroundColor: null,
   agentId: 'a1',
+  agentOwnerId: 'owner',
   agentTitle: 'Agent',
   completedAt: null,
   createdAt: minutesAgo(30),
@@ -128,6 +129,9 @@ describe('buildAgentRunBoard', () => {
       ['older-team', false],
     ]);
     expect(board.attention[0].detail).toBe('stripe.refund');
+    const older = board.lanes[0].runs.find((run) => run.id === 'older-team');
+    expect(older?.waitingSince).toEqual(minutesAgo(50));
+    expect(board.lanes[0].ownerUserId).toBe('owner');
   });
 
   it('prefers the task title and truncates failure detail', () => {

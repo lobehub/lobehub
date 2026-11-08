@@ -11,6 +11,7 @@ import dayjs from 'dayjs';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { extendActivityWithFuture } from './layout';
 import { RUN_STATUS_VISUALS } from './statusVisuals';
 
 const styles = stylex.create({
@@ -55,7 +56,7 @@ const ActivityPanel = ({ action, activity, summary }: ActivityPanelProps) => {
     label: t(`team.summary.${stat.key}`),
   }));
 
-  const data = activity.map((bucket) => ({
+  const data = extendActivityWithFuture(activity).map((bucket) => ({
     ...Object.fromEntries(series.map(({ key, label }) => [label, bucket[key]])),
     time: dayjs(bucket.startedAt).format('HH:mm'),
   }));
