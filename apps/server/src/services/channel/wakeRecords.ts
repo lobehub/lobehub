@@ -1,8 +1,11 @@
 import { AGENT_SIGNAL_SOURCE_TYPES } from '@lobechat/agent-signal/source';
 import type { DecisionResponse } from '@lobechat/model-runtime';
-import type { SignalDecisionVerdict } from '@lobechat/types';
+import type { ChannelMessageRoutingStatus, SignalDecisionVerdict } from '@lobechat/types';
 
-import type { ChannelRoutingDecision } from '@/database/repositories/channel';
+import type {
+  AppliedChannelRouting,
+  ChannelRoutingDecision,
+} from '@/database/repositories/channel';
 import type { LobeChatDatabase } from '@/database/type';
 import { recordSignalDecision } from '@/server/services/agentSignal/persistence/recordDecision';
 import { ROUTING_JUDGE_POLICY_ID } from '@/server/services/conversationWake/judgeScore';
@@ -42,16 +45,18 @@ export interface ChannelRoutingTrace {
 
 const finalReasonFor = (
   decision: ChannelRoutingDecision,
+  status: ChannelMessageRoutingStatus,
   chosen: boolean,
   memberId: string,
   judgement?: MemberWakeJudgement,
 ) => {
   if (chosen)
-    return decision.status === 'assigned'
-      ? (decision.wakes?.[memberId]?.reason ?? 'routing-selected')
-      : 'routing-selected';
+    return (
+      (decision.status === 'assigned' ? decision.wakes?.[memberId]?.reason : undefined) ??
+      'routing-selected'
+    );
   if (judgement?.excluded) return 'excluded';
-  return decision.status === 'unassigned' ? 'unassigned' : 'not-chosen';
+  return status === 'unassigned' ? 'unassigned' : 'not-chosen';
 };
 
 /**
@@ -68,6 +73,7 @@ export const recordChannelWakeDecisions = async (
   input: ChannelRoutingInput,
   decision: ChannelRoutingDecision,
   trace: ChannelRoutingTrace,
+  applied: AppliedChannelRouting,
 ) => {
   if (input.fallback) return;
 
@@ -76,9 +82,10 @@ export const recordChannelWakeDecisions = async (
     if (!candidate.ownerId) continue;
     const { memberId } = candidate;
     const judgement = trace.judgements?.find((entry) => entry.memberId === memberId);
-    const chosen = decision.status === 'assigned' && decision.memberIds.includes(memberId);
+    // Delivered, not proposed: a member dropped by the resolver's membership recheck got nothing.
+    const chosen = applied.status === 'assigned' && applied.recipients.includes(memberId);
     const answer = trace.answers?.[memberId];
-    const finalReason = finalReasonFor(decision, chosen, memberId, judgement);
+    const finalReason = finalReasonFor(decision, applied.status, chosen, memberId, judgement);
     const verdicts: SignalDecisionVerdict[] = [
       ...(judgement?.verdicts ?? []),
       ...(answer?.type === 'boolean'

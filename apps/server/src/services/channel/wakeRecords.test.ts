@@ -74,6 +74,7 @@ describe('Channel wake decision rows', () => {
           { excluded: false, memberId: 'reviewer', quiet: false },
         ],
       },
+      { recipients: ['coder'], status: 'assigned' },
     );
 
     // An Agent without an owner has nowhere to be read from.
@@ -113,6 +114,7 @@ describe('Channel wake decision rows', () => {
       { ...input, fallback: true },
       { memberIds: ['coder'], reason: 'fallback', status: 'assigned' },
       {},
+      { recipients: ['coder'], status: 'assigned' },
     );
     expect(record).not.toHaveBeenCalled();
 
@@ -125,8 +127,60 @@ describe('Channel wake decision rows', () => {
         input,
         { reason: 'Nobody', status: 'skipped' },
         {},
+        { recipients: [], status: 'skipped' },
       ),
     ).resolves.toBeUndefined();
     expect(record).toHaveBeenCalledTimes(2);
+  });
+
+  it('records what was delivered, not what the decision proposed', async () => {
+    await recordChannelWakeDecisions(
+      {} as never,
+      'chn',
+      input,
+      {
+        memberIds: ['coder', 'reviewer'],
+        reason: 'Both fit',
+        status: 'assigned',
+        wakes: {
+          coder: { kind: 'followup', reason: 'followup-window' },
+          reviewer: { kind: 'followup', reason: 'followup-window' },
+        },
+      },
+      { answers: { reviewer: { probability: 0.9, type: 'boolean' } } },
+      // The reviewer left while the model was running, so it received nothing.
+      { recipients: ['coder'], status: 'assigned' },
+    );
+
+    expect(rowFor('coder')).toMatchObject({
+      decision: { finalReason: 'followup-window', outcome: 'wake' },
+    });
+    expect(rowFor('reviewer')).toMatchObject({
+      decision: {
+        finalReason: 'not-chosen',
+        outcome: 'skip',
+        verdicts: [expect.objectContaining({ verdict: 'deny' })],
+      },
+    });
+  });
+
+  it('reports an unassigned message as unassigned when no proposed member was delivered to', async () => {
+    await recordChannelWakeDecisions(
+      {} as never,
+      'chn',
+      input,
+      {
+        memberIds: ['coder'],
+        reason: 'Woken by its own rules',
+        status: 'assigned',
+        wakes: { coder: { kind: 'followup', reason: 'followup-window' } },
+      },
+      {},
+      { recipients: [], status: 'unassigned' },
+    );
+
+    expect(rowFor('coder')).toMatchObject({
+      decision: { finalReason: 'unassigned', outcome: 'skip' },
+    });
   });
 });

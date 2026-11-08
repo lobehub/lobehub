@@ -124,9 +124,17 @@ export class ChannelRoutingService {
         if (!input) return;
         const trace: ChannelRoutingTrace = {};
         const decision = await this.decide(channelId, input, trace);
-        if (await this.executions.resolveRouting(channelId, id, input.attempt, decision)) {
+        const applied = await this.executions.resolveRouting(
+          channelId,
+          id,
+          input.attempt,
+          decision,
+        );
+        if (applied) {
           resolved += 1;
-          await recordChannelWakeDecisions(this.db, channelId, input, decision, trace);
+          // The resolver rechecks membership: record who was delivered to, not who was proposed,
+          // so the wake history never reports a wake that no Agent received.
+          await recordChannelWakeDecisions(this.db, channelId, input, decision, trace, applied);
         }
       },
       { concurrency: 3 },

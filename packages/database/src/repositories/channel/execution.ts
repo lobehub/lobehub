@@ -174,7 +174,7 @@ export class ChannelExecutionRepository {
       return true;
     });
 
-  /** Writes back a routing decision for `attempt`; false when the result is stale. */
+  /** Writes back a routing decision for `attempt`; null when the result is stale. */
   resolveRouting = async (
     channelId: string,
     messageId: string,
