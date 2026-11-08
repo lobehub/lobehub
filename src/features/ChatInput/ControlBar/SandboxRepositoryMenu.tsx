@@ -146,9 +146,7 @@ const SandboxRepositoryMenu = memo<SandboxRepositoryMenuProps>(
             <Text className={stylex.props(styles.hint).className} type={'danger'}>
               {t('sandboxEnvironment.loadFailed')}
             </Text>
-            <Button size={'small'} onClick={onRetry}>
-              {t('sandboxEnvironment.retry')}
-            </Button>
+            <Button onClick={onRetry}>{t('sandboxEnvironment.retry')}</Button>
           </Flexbox>
         )}
 
