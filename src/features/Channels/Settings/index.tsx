@@ -69,17 +69,17 @@ function EnabledChannelSettings() {
         >
           {detail && channel && (
             <Flexbox gap={24} {...stylex.props(settingsStyles.content)}>
-              <Tabs
-                activeKey={tab}
-                items={tabs.map((key) => ({ key, label: t(`settings.tab.${key}`) }))}
-                onChange={(key) => setSearchParams({ tab: key }, { replace: true })}
-              />
+              <div {...stylex.props(settingsStyles.tabBar)}>
+                <Tabs
+                  activeKey={tab}
+                  items={tabs.map((key) => ({ key, label: t(`settings.tab.${key}`) }))}
+                  variant="point"
+                  onChange={(key) => setSearchParams({ tab: key }, { replace: true })}
+                />
+              </div>
               {/* Kept mounted so switching tabs does not discard a draft. */}
               <div hidden={tab !== 'general'} key={`general:${channel.id}`}>
-                <Flexbox gap={24}>
-                  <GeneralSection channel={channel} />
-                  <DangerSection channel={channel} />
-                </Flexbox>
+                <GeneralSection channel={channel} />
               </div>
               <div hidden={tab !== 'members'}>
                 <MembersSection detail={detail} />
@@ -89,6 +89,11 @@ function EnabledChannelSettings() {
                   <ReplySection channelId={channel.id} />
                 </div>
               )}
+              <div hidden={tab !== 'advanced'}>
+                <Flexbox gap={24}>
+                  <DangerSection channel={channel} />
+                </Flexbox>
+              </div>
             </Flexbox>
           )}
         </AsyncBoundary>

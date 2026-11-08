@@ -14,6 +14,7 @@ export interface ChannelAgentSelection {
 export type ChannelWakeConfig = Record<string, unknown> & {
   customInstructions?: string;
   customInstructionsEnabled?: boolean;
+  duties?: Record<string, unknown> & { text?: string };
   enabled?: boolean;
   pace?: 'active' | 'balanced' | 'calm' | 'custom';
 };

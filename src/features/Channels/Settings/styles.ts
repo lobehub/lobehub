@@ -14,6 +14,11 @@ export const settingsStyles = stylex.create({
     paddingBlock: 24,
     paddingInline: 24,
   },
+  tabBar: {
+    borderBlockEndWidth: 1,
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
   card: {
     overflow: 'hidden',
     borderWidth: 1,

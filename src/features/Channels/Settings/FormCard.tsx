@@ -1,4 +1,4 @@
-import { Text } from '@lobehub/ui';
+import { Flexbox, Text } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import type { ReactNode } from 'react';
 
@@ -9,21 +9,34 @@ interface FormCardProps {
   children?: ReactNode;
   danger?: boolean;
   description?: string;
+  /** Beside the title, for an action on the card's whole content rather than a commit. */
+  headerAction?: ReactNode;
   hint?: ReactNode;
   title: string;
 }
 
 /** One setting: what it is and its control above, its hint and commit button in a footer bar. */
-export function FormCard({ action, children, danger, description, hint, title }: FormCardProps) {
+export function FormCard({
+  action,
+  children,
+  danger,
+  description,
+  headerAction,
+  hint,
+  title,
+}: FormCardProps) {
   return (
     <section {...stylex.props(styles.card, danger && styles.dangerCard)}>
       <div {...stylex.props(styles.body)}>
-        <div>
-          <Text as="h3" fontSize={18} style={{ margin: 0 }} weight={600}>
-            {title}
-          </Text>
-          {description && <Text type="secondary">{description}</Text>}
-        </div>
+        <Flexbox horizontal align="flex-start" gap={16} justify="space-between">
+          <div>
+            <Text as="h3" fontSize={18} style={{ margin: 0 }} weight={600}>
+              {title}
+            </Text>
+            {description && <Text type="secondary">{description}</Text>}
+          </div>
+          {headerAction}
+        </Flexbox>
         {children}
       </div>
       {(hint || action) && (

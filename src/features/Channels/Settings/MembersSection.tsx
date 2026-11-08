@@ -17,11 +17,10 @@ export function MembersSection({ detail }: { detail: ChannelDetail }) {
     <FormCard
       description={t('settings.members.description')}
       title={t('membersCount', { count: entries.length })}
-      action={
+      headerAction={
         canInviteMembers(channel) && (
           <Button
             icon={UserPlus}
-            type="primary"
             onClick={() =>
               openInviteMembers({
                 agentIds: members.flatMap((member) =>

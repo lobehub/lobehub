@@ -225,11 +225,8 @@ export default {
   'settings.save': 'Save',
   'settings.saved': 'Saved',
   'settings.general.name': 'Channel name',
-  'settings.reply.description':
-    'How Agents in this channel respond to messages that do not @mention them.',
   'settings.reply.enabled': 'Join without being mentioned',
   'settings.reply.enabledHint': 'When off, Agents only answer when someone @mentions them.',
-  'settings.reply.paceLabel': 'How often they join',
   'settings.reply.pace.calm': 'Calm',
   'settings.reply.pace.balanced': 'Balanced',
   'settings.reply.pace.active': 'Active',
@@ -254,8 +251,21 @@ export default {
   'settings.general.nameDescription': 'Shown in the channel list and at the top of the channel.',
   'settings.general.nameLimit': 'Up to {{count}} characters.',
   'settings.members.description': 'Agents and people who can read and reply in this channel.',
-  'settings.reply.paceDescription': 'How readily Agents join a conversation on their own.',
-  'settings.reply.instructionsDescription':
-    'Guidance for deciding when to reply. It is not a hard rule.',
   'settings.reply.instructionsLimit': 'Up to {{count}} characters.',
+  'settings.tab.advanced': 'Advanced',
+  'settings.reply.intro':
+    'How Agents in this channel respond to messages that do not @mention them.',
+  'settings.reply.section.switch': 'Proactive participation',
+  'settings.reply.section.pace': 'Pace',
+  'settings.reply.section.paceDesc': 'How soon, and how often, Agents speak up on their own.',
+  'settings.reply.section.judgement': 'Duties',
+  'settings.reply.section.judgementDesc':
+    'What Agents are responsible for, so they can step in without being called, and the instructions they follow.',
+  'settings.reply.duties': 'What Agents handle',
+  'settings.reply.dutiesHint':
+    'In your own words, one duty per line. Agents may step in when a message falls within them. Leave empty to turn this off.',
+  'settings.reply.dutiesPlaceholder': 'When someone describes a feature request, assess it.',
+  'settings.reply.instructionsHint':
+    'Tell Agents who to answer and what to leave alone. It guides them and is not a hard rule.',
+  'settings.reply.instructionsContent': 'Instructions',
 };

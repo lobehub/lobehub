@@ -86,8 +86,10 @@ export function MemberStatus({
 
   // Managing a group lives on its settings page; deleting it is not one click from the header.
   const groupMenu = () => [
+    ...channelMenu(channel).filter((item) => 'key' in item && item.key === 'copyId'),
     ...(channel.canDelete
       ? [
+          { type: 'divider' as const },
           {
             icon: Settings,
             key: 'settings',
@@ -96,7 +98,6 @@ export function MemberStatus({
           },
         ]
       : []),
-    ...channelMenu(channel).filter((item) => 'key' in item && item.key === 'copyId'),
   ];
 
   return (

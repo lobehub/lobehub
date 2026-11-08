@@ -93,7 +93,7 @@ describe('MemberStatus in a group Channel', () => {
   it('sends management to the settings page instead of offering delete', () => {
     render(createElement(MemberStatus, { detail: detail({ agentId: null }) }));
 
-    expect(menuKeys()).toEqual(['settings', 'copyId']);
+    expect(menuKeys()).toEqual(['copyId', 'settings']);
   });
 
   it('offers no settings to a member who cannot manage the Channel', () => {

@@ -4,8 +4,8 @@ import { channelSettingsTabs, resolveChannelSettingsTab } from './tabs';
 
 describe('channelSettingsTabs', () => {
   it('drops replies for an archived Channel', () => {
-    expect(channelSettingsTabs(false)).toEqual(['general', 'members', 'reply']);
-    expect(channelSettingsTabs(true)).toEqual(['general', 'members']);
+    expect(channelSettingsTabs(false)).toEqual(['general', 'members', 'reply', 'advanced']);
+    expect(channelSettingsTabs(true)).toEqual(['general', 'members', 'advanced']);
   });
 });
 
