@@ -1,4 +1,5 @@
-import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import type { AgentKnowledgeSpaceItem } from '@lobechat/types';
+import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 
 import {
   agentDocuments,
@@ -63,6 +64,32 @@ export class AgentSpaceRepository {
       .limit(1);
 
     return space?.id;
+  }
+
+  /**
+   * Lists the spaces of every agent visible to the caller, most recently edited agent first.
+   */
+  async list(): Promise<AgentKnowledgeSpaceItem[]> {
+    return this.db
+      .select({
+        agentId: agents.id,
+        avatar: agents.avatar,
+        backgroundColor: agents.backgroundColor,
+        description: agents.description,
+        id: knowledgeBases.id,
+        title: agents.title,
+      })
+      .from(agentsKnowledgeBases)
+      .innerJoin(knowledgeBases, eq(knowledgeBases.id, agentsKnowledgeBases.knowledgeBaseId))
+      .innerJoin(agents, eq(agents.id, agentsKnowledgeBases.agentId))
+      .where(
+        and(
+          buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, agents),
+          eq(knowledgeBases.type, AGENT_SPACE_TYPE),
+          sql`${knowledgeBases.settings} -> 'owner' ->> 'id' = ${agents.id}`,
+        ),
+      )
+      .orderBy(desc(agents.updatedAt));
   }
 
   /**

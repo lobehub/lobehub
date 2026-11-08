@@ -9,9 +9,11 @@ import { DocumentModel } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
 import { KnowledgeBaseModel } from '@/database/models/knowledgeBase';
 import { ResourcePermissionModel } from '@/database/models/resourcePermission';
+import { AgentSpaceRepository } from '@/database/repositories/agentSpace';
 import { DEDICATED_KNOWLEDGE_BASE_TYPES, DEFAULT_RESOURCE_ACCESS_LEVELS } from '@/database/schemas';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { getServerFeatureFlagsStateFromRuntimeConfig } from '@/server/featureFlags';
 import { FileService } from '@/server/services/file';
 import {
   getWorkspaceScopedPermissionMatches,
@@ -388,6 +390,15 @@ export const knowledgeBaseRouter = router({
 
       return ctx.knowledgeBaseModel.removeFilesFromKnowledgeBase(input.knowledgeBaseId, input.ids);
     }),
+
+  getAgentSpaces: knowledgeBaseProcedure.query(async ({ ctx }) => {
+    const { enableAgentKnowledgeSpace } = await getServerFeatureFlagsStateFromRuntimeConfig(
+      ctx.userId,
+    );
+    if (!enableAgentKnowledgeSpace) return [];
+
+    return new AgentSpaceRepository(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined).list();
+  }),
 
   removeKnowledgeBase: knowledgeBaseProcedure
     .use(withScopedPermission('knowledge_base:delete'))

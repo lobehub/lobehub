@@ -60,6 +60,12 @@ export default {
   'docs.home.tabs.mine': 'Created by me',
   'docs.home.tabs.recent': 'Recently updated',
   'docs.home.tabs.shared': 'Shared with me',
+  'docs.library.agentSpaces.emptyDesc':
+    "Each Agent's documents appear here after you open them in a conversation",
+  'docs.library.agentSpaces.emptyTitle': 'No Agent knowledge bases yet',
+  'docs.library.agentSpaces.untitled': 'Untitled Agent',
+  'docs.library.tabs.agents': 'Agents',
+  'docs.library.tabs.mine': 'My knowledge bases',
   'docs.library.emptyDesc':
     'Gather related files and pages into a knowledge base to share them with your team and Agents',
   'docs.library.emptyTitle': 'No knowledge bases yet',

@@ -115,6 +115,21 @@ describe('AgentSpaceRepository', () => {
     });
   });
 
+  describe('list', () => {
+    it('returns only the spaces of agents the caller can see, with agent identity', async () => {
+      const spaceId = await repository.ensure(agentId);
+      await db.insert(knowledgeBases).values({ id: 'kb-plain', name: 'Plain', userId });
+      await db
+        .insert(agentsKnowledgeBases)
+        .values({ agentId, knowledgeBaseId: 'kb-plain', userId });
+
+      await expect(repository.list()).resolves.toMatchObject([
+        { agentId, id: spaceId, title: 'Writer' },
+      ]);
+      await expect(new AgentSpaceRepository(db, otherUserId).list()).resolves.toEqual([]);
+    });
+  });
+
   describe('migrateBatch', () => {
     it('moves dedicated documents, including soft-deleted bindings, and keeps updatedAt', async () => {
       await insertDocument('doc-a');

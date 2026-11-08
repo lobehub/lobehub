@@ -1,5 +1,6 @@
 import {
   AGENT_ARTIFACT_SOURCE_TYPES,
+  AGENT_TOOL_RESULTS_DIR_NAME,
   CUSTOM_DOCUMENT_FILE_TYPE,
   CUSTOM_FOLDER_FILE_TYPE,
   HTML_DOCUMENT_FILE_TYPE,
@@ -587,6 +588,10 @@ export class KnowledgeRepo {
         // already come back through the file arm.
         knowledgeBaseId ? isNull(d.fileId) : undefined,
         knowledgeBaseId ? eq(d.knowledgeBaseId, knowledgeBaseId) : undefined,
+        // An agent's space holds its archive folder too, which is runtime data.
+        knowledgeBaseId
+          ? sql`${d.filename} IS DISTINCT FROM ${AGENT_TOOL_RESULTS_DIR_NAME}`
+          : undefined,
         !knowledgeBaseId && excludeKnowledgeBaseIds?.length
           ? or(isNull(d.knowledgeBaseId), notInArray(d.knowledgeBaseId, excludeKnowledgeBaseIds))
           : undefined,
