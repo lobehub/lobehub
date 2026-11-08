@@ -8,6 +8,27 @@ import { BOT_RUNTIME_STATUSES, type BotRuntimeStatus } from '@/types/botRuntimeS
 import { type ChannelPlatformDefinition, COMING_SOON_PLATFORMS } from './const';
 
 /**
+ * The channel catalog an agent sees: server platforms (minus ids a coming-soon placeholder
+ * shadows) followed by the placeholders. A platform this deployment cannot run
+ * (`unavailableReason`) stays only when the agent already has a bot on it, so that bot can still
+ * be opened, disabled or removed.
+ */
+export const mergeChannelPlatforms = (
+  platforms: ChannelPlatformDefinition[] | undefined,
+  comingSoon: ChannelPlatformDefinition[],
+  providers: Array<{ platform: string }> | undefined,
+): ChannelPlatformDefinition[] => {
+  const comingSoonIds = new Set(comingSoon.map((p) => p.id));
+  const configured = new Set((providers ?? []).map((provider) => provider.platform));
+  return [
+    ...(platforms ?? []).filter(
+      (p) => !comingSoonIds.has(p.id) && (!p.unavailableReason || configured.has(p.id)),
+    ),
+    ...comingSoon,
+  ];
+};
+
+/**
  * Channel platforms and an agent's bot providers, shared by every surface that
  * lists an agent's channels: the platform catalog (server platforms merged with
  * the frontend-only coming-soon entries), the agent's providers and their live
@@ -67,9 +88,8 @@ export const useAgentChannels = (agentId: string | undefined, canEdit: boolean) 
     const comingSoon = enableImessage
       ? COMING_SOON_PLATFORMS.filter((p) => p.id !== 'imessage')
       : COMING_SOON_PLATFORMS;
-    const comingSoonIds = new Set(comingSoon.map((p) => p.id));
-    return [...(platforms ?? []).filter((p) => !comingSoonIds.has(p.id)), ...comingSoon];
-  }, [platforms, enableImessage]);
+    return mergeChannelPlatforms(platforms, comingSoon, providers);
+  }, [platforms, enableImessage, providers]);
 
   const platformRuntimeStatuses = useMemo(
     () =>

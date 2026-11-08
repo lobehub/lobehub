@@ -164,7 +164,16 @@ describe('getSetupGuide', () => {
   });
 
   it('never asks for one credential in two steps', () => {
-    for (const platform of ['discord', 'slack', 'telegram', 'qq', 'line', 'feishu', 'lark']) {
+    for (const platform of [
+      'discord',
+      'slack',
+      'telegram',
+      'qq',
+      'line',
+      'feishu',
+      'lark',
+      'wecom',
+    ]) {
       const guide = getSetupGuide(platform, { appName: 'Moss' })!;
       const keys = guide.steps.flatMap((step) => step.fields ?? []);
 
@@ -175,6 +184,16 @@ describe('getSetupGuide', () => {
   it('lists the inline credentials per platform, and none for a platform without a guide', () => {
     expect([...getInlineFieldKeys('telegram')]).toEqual(['botToken']);
     expect(getInlineFieldKeys('wechat').size).toBe(0);
+  });
+
+  it('walks WeCom from the admin console to the BotID and Secret', () => {
+    const guide = getSetupGuide('wecom', { appName: 'Moss' })!;
+    expect(guide.steps.map((step) => step.key)).toEqual(['create', 'credentials']);
+    expect(guide.steps[0].link).toEqual({
+      href: 'https://work.weixin.qq.com/wework_admin/frame',
+      label: 'openConsole',
+    });
+    expect([...getInlineFieldKeys('wecom')]).toEqual(['applicationId', 'secret']);
   });
 
   it('asks to save right after the last step with a credential, before what needs a running bot', () => {

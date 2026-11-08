@@ -34,13 +34,13 @@ Users or group members → Your bot → One bound Agent
 - **Choose Channels** when you want your own bot name and identity, or want teammates, customers, or community members to use a specific Agent.
 - **Choose [Messenger](/docs/usage/messenger/overview)** when you only want to use your Agents through LobeHub's official bot and do not want to create a bot or manage tokens.
 
-| | **Channels** | **Messenger** |
-| --- | --- | --- |
-| Chat entry | A bot you create or connect | A LobeHub-managed bot or service |
-| Agent relationship | Each channel is bound to one Agent | Each linked account selects an active Agent and can switch it |
-| Who uses it | You, approved users, a team, or a community | The user whose platform account is linked to LobeHub |
-| Configured at | **Agent → Channels** | **Settings → Messenger** |
-| What you set up | Platform bot or app credentials and access rules | Account link and active Agent |
+|                    | **Channels**                                     | **Messenger**                                                 |
+| ------------------ | ------------------------------------------------ | ------------------------------------------------------------- |
+| Chat entry         | A bot you create or connect                      | A LobeHub-managed bot or service                              |
+| Agent relationship | Each channel is bound to one Agent               | Each linked account selects an active Agent and can switch it |
+| Who uses it        | You, approved users, a team, or a community      | The user whose platform account is linked to LobeHub          |
+| Configured at      | **Agent → Channels**                             | **Settings → Messenger**                                      |
+| What you set up    | Platform bot or app credentials and access rules | Account link and active Agent                                 |
 
 Access policies decide whether a Channel is private or shared. You can restrict your bot to yourself or selected users.
 
@@ -52,23 +52,24 @@ Access policies decide whether a Channel is private or shared. You can restrict 
 
 ### Available Now
 
-| Platform                                   | Description                                                                                   |
-| ------------------------------------------ | --------------------------------------------------------------------------------------------- |
-| [Discord](/docs/usage/channels/discord)    | Connect to Discord servers for channel chat and direct messages                               |
-| [Slack](/docs/usage/channels/slack)        | Connect to Slack for channel and direct message conversations                                 |
-| [Telegram](/docs/usage/channels/telegram)  | Connect to Telegram for private and group conversations                                       |
-| [LINE](/docs/usage/channels/line)          | Connect to LINE Messaging API for direct and group chats                                      |
-| [QQ](/docs/usage/channels/qq)              | Connect to QQ for group chats and direct messages                                             |
-| [WeChat (微信)](/docs/usage/channels/wechat) | Connect to WeChat via iLink Bot for direct messages (Pro; group support unconfirmed)          |
-| [Feishu (飞书)](/docs/usage/channels/feishu) | Connect to Feishu for team collaboration (Chinese version)                                    |
-| [Lark](/docs/usage/channels/lark)          | Connect to Lark for team collaboration (international version)                                |
+| Platform                                   | Description                                                                            |
+| ------------------------------------------ | -------------------------------------------------------------------------------------- |
+| [Discord](/docs/usage/channels/discord)    | Connect to Discord servers for channel chat and direct messages                        |
+| [Slack](/docs/usage/channels/slack)        | Connect to Slack for channel and direct message conversations                          |
+| [Telegram](/docs/usage/channels/telegram)  | Connect to Telegram for private and group conversations                                |
+| [LINE](/docs/usage/channels/line)          | Connect to LINE Messaging API for direct and group chats                               |
+| [QQ](/docs/usage/channels/qq)              | Connect to QQ for group chats and direct messages                                      |
+| [WeChat (微信)](/docs/usage/channels/wechat) | Connect to WeChat via iLink Bot for direct messages (Pro; group support unconfirmed)   |
+| [WeCom](/docs/usage/channels/wecom)        | Connect a WeCom AI bot for direct chats and group @-mentions (single-instance servers) |
+| [Feishu (飞书)](/docs/usage/channels/feishu) | Connect to Feishu for team collaboration (Chinese version)                             |
+| [Lark](/docs/usage/channels/lark)          | Connect to Lark for team collaboration (international version)                         |
 
 ### Coming Soon
 
-| Platform                                      | Status and description                                                                 |
-| --------------------------------------------- | -------------------------------------------------------------------------------------- |
-| [WhatsApp](/docs/usage/channels/whatsapp)     | Coming Soon; configuration is not available. Planned for mobile customer support and follow-up. |
-| [iMessage](/docs/usage/channels/imessage)     | Coming Soon; currently a placeholder. Existing Labs documentation does not mean general availability. |
+| Platform                                  | Status and description                                                                                |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| [WhatsApp](/docs/usage/channels/whatsapp) | Coming Soon; configuration is not available. Planned for mobile customer support and follow-up.       |
+| [iMessage](/docs/usage/channels/imessage) | Coming Soon; currently a placeholder. Existing Labs documentation does not mean general availability. |
 
 ## How It Works
 
@@ -89,6 +90,7 @@ Each Channel belongs to the current Agent. LobeHub passes incoming platform mess
    - [LINE](/docs/usage/channels/line)
    - [QQ](/docs/usage/channels/qq)
    - [WeChat (微信)](/docs/usage/channels/wechat)
+   - [WeCom (企业微信)](/docs/usage/channels/wecom)
    - [Feishu (飞书)](/docs/usage/channels/feishu)
    - [Lark](/docs/usage/channels/lark)
 
@@ -100,13 +102,13 @@ If **WeChat** is absent from the list, check that your personal account meets th
 
 Text messages are supported across all platforms. Some features vary by platform:
 
-| Feature                | Discord | Slack | Telegram | LINE    | QQ  | WeChat | Feishu  | Lark    |
-| ---------------------- | ------- | ----- | -------- | ------- | --- | ------ | ------- | ------- |
-| Text messages          | Yes     | Yes   | Yes      | Yes     | Yes | Yes    | Yes     | Yes     |
-| Direct messages        | Yes     | Yes   | Yes      | Yes     | Yes | Yes    | Yes     | Yes     |
+| Feature                | Discord | Slack | Telegram | LINE    | QQ  | WeChat      | Feishu  | Lark    |
+| ---------------------- | ------- | ----- | -------- | ------- | --- | ----------- | ------- | ------- |
+| Text messages          | Yes     | Yes   | Yes      | Yes     | Yes | Yes         | Yes     | Yes     |
+| Direct messages        | Yes     | Yes   | Yes      | Yes     | Yes | Yes         | Yes     | Yes     |
 | Group chats            | Yes     | Yes   | Yes      | Yes     | Yes | Unconfirmed | Yes     | Yes     |
-| Reactions              | Yes     | Yes   | Yes      | No      | No  | No     | Partial | Partial |
-| Image/file attachments | Yes     | Yes   | Yes      | Inbound | Yes | Yes    | Yes     | Yes     |
+| Reactions              | Yes     | Yes   | Yes      | No      | No  | No          | Partial | Partial |
+| Image/file attachments | Yes     | Yes   | Yes      | Inbound | Yes | Yes         | Yes     | Yes     |
 
 Repository documentation does not confirm WeChat group support. This guide covers direct messages only. The July 8 announcement changes paid access, not group support. See [WeChat](/docs/usage/channels/wechat).
 
@@ -140,11 +142,11 @@ DM Policy only governs DMs — group `@mentions` are gated independently by **Gr
 
 For the same group-capable platforms, each channel has a **Group Policy** that controls where the bot responds to `@mentions`. This is independent of DM Policy: a `groupPolicy=disabled` bot still accepts DMs (subject to DM Policy), and vice versa.
 
-| Policy        | Behavior                                                                                                               |
-| ------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| **Open**      | Respond to `@mentions` in any group, channel, or thread the bot can read. Default.                                     |
+| Policy        | Behavior                                                                                                                       |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| **Open**      | Respond to `@mentions` in any group, channel, or thread the bot can read. Default.                                             |
 | **Allowlist** | Respond only when the channel / group / chat ID is in **Allowed Channels**. Use to limit a bot to specific channels or groups. |
-| **Disabled**  | Ignore all non-DM traffic. The bot becomes DM-only.                                                                    |
+| **Disabled**  | Ignore all non-DM traffic. The bot becomes DM-only.                                                                            |
 
 When **Allowlist** is selected, **Allowed Channels** appears as a row editor — one entry per channel / group / chat ID, with an optional note (e.g. `#general`) shown only to you so you can recognise each ID later.
 

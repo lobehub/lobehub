@@ -132,6 +132,7 @@ versioned here — there's no Changesets/release flow to document for them.
 | `@lobechat/chat-adapter-line`     | LINE Messaging API — built in-repo                                                      |
 | `@lobechat/chat-adapter-qq`       | QQ Bot — built in-repo                                                                  |
 | `@lobechat/chat-adapter-wechat`   | WeChat (iLink) — built in-repo                                                          |
+| `@lobechat/chat-adapter-wecom`    | WeCom AI bot long connection — built in-repo                                            |
 
 ## Webhook setup
 
