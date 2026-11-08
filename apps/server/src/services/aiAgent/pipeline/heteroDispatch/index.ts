@@ -111,11 +111,8 @@ export const dispatchHeteroAgent = async (
   // also an authentication prerequisite: every callback
   // re-authorizes its operation token against this exact principal. Do not
   // mint a token or dispatch/spawn when persistence fails.
-  const operationPersisted = await new CompletionLifecycle(
-    deps.db,
-    deps.userId,
-    deps.workspaceId,
-  ).recordStart({
+  const completionLifecycle = new CompletionLifecycle(deps.db, deps.userId, deps.workspaceId);
+  const operationPersisted = await completionLifecycle.recordStart({
     requireReservation: !!input.reservedOperationId,
     agentId: persistAgentId,
     appContext: { ...appContext, sourceMessageId: userMessageId },
@@ -140,6 +137,11 @@ export const dispatchHeteroAgent = async (
   }
 
   await input.onOperationCreated?.(operationId);
+
+  // The builder runs elsewhere and this request ends once it is dispatched, so
+  // the plan has to be in place first or the builder finds no criteria to file
+  // evidence against.
+  await completionLifecycle.waitForVerifyPlan(operationId);
 
   const run: HeteroRun = {
     agentId: resolvedAgentId,
