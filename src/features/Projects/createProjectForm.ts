@@ -4,6 +4,11 @@ import { pinyin } from 'pinyin-pro';
 
 const PROJECT_SLUG_REGEX = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
+/** Mirrors the `max(100)` on `projectSlugInput` in the project router. */
+export const PROJECT_SLUG_MAX_LENGTH = 100;
+
+const boundSlug = (slug: string) => slug.slice(0, PROJECT_SLUG_MAX_LENGTH).replace(/-+$/, '');
+
 export interface CreateProjectDraft {
   identifier: string;
   name: string;
@@ -23,7 +28,7 @@ export const getProjectFieldSuggestions = (name: string): ProjectFieldSuggestion
     toneType: 'none',
     type: 'array',
   }).join(' ');
-  const slug = kebabCase(transliteratedName).replaceAll(/[^a-z0-9-]/g, '');
+  const slug = boundSlug(kebabCase(transliteratedName).replaceAll(/[^a-z0-9-]/g, ''));
 
   return { slug };
 };
@@ -33,7 +38,10 @@ export const isProjectIdentifierValid = (identifier: string) =>
 
 export const isProjectSlugValid = (slug: string) => {
   const normalizedSlug = slug.trim().toLowerCase();
-  return !normalizedSlug || PROJECT_SLUG_REGEX.test(normalizedSlug);
+  return (
+    !normalizedSlug ||
+    (normalizedSlug.length <= PROJECT_SLUG_MAX_LENGTH && PROJECT_SLUG_REGEX.test(normalizedSlug))
+  );
 };
 
 export const getCreateProjectInput = (draft: CreateProjectDraft) => {
