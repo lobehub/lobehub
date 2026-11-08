@@ -45,6 +45,7 @@
   "ProviderNetworkError": "与提供商的连接超时或被中断。请检查您的网络并重试。",
   "ProviderNoImageGenerated": "提供商未为这次请求返回图片。请调整提示词后重试，或选择支持图片生成的模型。",
   "ProviderServiceUnavailable": "提供商暂时过载或不可用。请稍后重试。",
+  "ProviderStreamInterrupted": "模型服务商在回复完成前断开了连接，通常是临时问题，请重试。",
   "QuotaLimitReached": "抱歉，此密钥的令牌使用量或请求次数已达到配额限制。请增加密钥配额或稍后重试。",
   "RateLimitExceeded": "抱歉，此密钥的令牌使用量或请求次数已达到速率限制。请稍后重试或增加密钥配额。",
   "RemoteMediaDownloadTimeout": "提供商下载附加的图片或文件时超时。请重试。",

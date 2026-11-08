@@ -1,9 +1,11 @@
 'use client';
 
-import './index.css';
-
 import { isDesktop } from '@lobechat/const';
-import { Flexbox } from '@lobehub/ui';
+import {
+  // oxlint-disable-next-line stylex-migration/no-emotion-styles -- the antd textarea inside a message has no slot
+  createStaticStyles,
+  Flexbox,
+} from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
 import { type MouseEvent, type ReactNode } from 'react';
@@ -40,6 +42,15 @@ const styles = stylex.create({
   loading: { opacity: 0.6 },
   message: { position: 'relative' },
 });
+
+const fallback = createStaticStyles(({ css }) => ({
+  message: css`
+    /* Prevent the antd textarea from growing too long. */
+    .ant-input {
+      max-height: 900px;
+    }
+  `,
+}));
 
 export interface MessageItemProps {
   className?: string;
@@ -281,7 +292,7 @@ const MessageItem = memo<MessageItemProps>(
           {...sx(
             styles.message,
             shouldDimCreatingMessage && styles.loading,
-            ['lobe-messages-0fc10b22-message', className].filter(Boolean).join(' '),
+            [fallback.message, className].filter(Boolean).join(' '),
           )}
           data-index={index}
           onContextMenu={onContextMenu}

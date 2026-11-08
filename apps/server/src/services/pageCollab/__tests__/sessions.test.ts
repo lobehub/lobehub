@@ -3,10 +3,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createPageSessions } from '../index';
 
-const { allowed, meta, roomOpen, row, storedOpen } = vi.hoisted(() => ({
+const { allowed, meta, roomOpen, roomOpenLive, row, storedOpen } = vi.hoisted(() => ({
   allowed: new Set<string>(),
   meta: { value: null as null | { userId: string; workspaceId: string | null } },
   roomOpen: vi.fn(),
+  roomOpenLive: vi.fn(),
   row: { value: undefined as undefined | Record<string, unknown> },
   storedOpen: vi.fn(),
 }));
@@ -26,6 +27,7 @@ vi.mock('../config', () => ({ isPageCollabEnabled: () => true }));
 
 vi.mock('../roomSession', () => ({
   RoomPageSessions: class {
+    openLiveSession = roomOpenLive;
     openSession = roomOpen;
   },
 }));
@@ -47,8 +49,9 @@ describe('createPageSessions', () => {
   beforeEach(() => {
     allowed.clear();
     meta.value = { userId: 'u1', workspaceId: 'ws_1' };
-    row.value = { fileType: 'custom/document', id: 'doc_1' };
+    row.value = { fileType: 'custom/document', id: 'doc_1', workspaceId: 'ws_1' };
     roomOpen.mockReset();
+    roomOpenLive.mockReset();
     storedOpen.mockReset();
   });
 
@@ -76,5 +79,34 @@ describe('createPageSessions', () => {
     await createPageSessions({} as any, writer).openSession('doc_1');
 
     expect(roomOpen).toHaveBeenCalledWith('doc_1');
+  });
+
+  it('edits a personal page on its stored row without opening a room', async () => {
+    meta.value = { userId: 'u2', workspaceId: null };
+    row.value = { fileType: 'custom/document', id: 'doc_1', workspaceId: null };
+    const personalWriter = { ...writer, workspaceId: undefined };
+
+    await createPageSessions({} as any, personalWriter).openSession('doc_1', {
+      expectedVersion: 3,
+    });
+
+    expect(roomOpen).not.toHaveBeenCalled();
+    expect(storedOpen).toHaveBeenCalledWith('doc_1', { expectedVersion: 3 });
+  });
+
+  it('keeps writing a personal page through a room an older client still has open', async () => {
+    meta.value = { userId: 'u2', workspaceId: null };
+    row.value = { fileType: 'custom/document', id: 'doc_1', workspaceId: null };
+    const live = { commit: vi.fn() };
+    roomOpenLive.mockResolvedValue(live);
+
+    const session = await createPageSessions({} as any, {
+      ...writer,
+      workspaceId: undefined,
+    }).openSession('doc_1');
+
+    expect(session).toBe(live);
+    expect(roomOpen).not.toHaveBeenCalled();
+    expect(storedOpen).not.toHaveBeenCalled();
   });
 });

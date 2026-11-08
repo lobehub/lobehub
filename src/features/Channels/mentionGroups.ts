@@ -55,3 +55,16 @@ export function matchInviteAgents<T extends { id: string }>(
   const { others, priority } = splitByPriority(matches, priorityIds);
   return [...priority, ...others].slice(0, MENTION_INVITE_LIMIT);
 }
+
+/**
+ * The second line of a mention option: an Agent's role, then what it does. Blank details and
+ * any that only repeat the shown name are dropped; nothing is left for a plain person.
+ */
+export function mentionDescription(name: string, ...details: (string | null | undefined)[]) {
+  const parts = [
+    ...new Set(
+      details.map((detail) => detail?.trim()).filter((detail) => !!detail && detail !== name),
+    ),
+  ];
+  return parts.length > 0 ? parts.join(' · ') : undefined;
+}

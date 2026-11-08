@@ -1440,6 +1440,27 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       severity: 'warning',
     };
 
+    const createExpectedAuthError = (rawAuthError: string) => ({
+      ...authMetadata,
+      body: expect.objectContaining({
+        agentType: 'claude-code',
+        code: HeterogeneousAgentSessionErrorCode.AuthRequired,
+        stderr: rawAuthError,
+      }),
+      message:
+        'Claude Code could not authenticate. Sign in again or refresh its credentials, then retry.',
+      type: 'AgentRuntimeError',
+    });
+
+    const createExpectedAuthErrorUpdate = (rawAuthError: string) => ({
+      id: 'ast-initial',
+      type: 'updateMessage',
+      value: {
+        content: '',
+        error: createExpectedAuthError(rawAuthError),
+      },
+    });
+
     it('preserves structured quota fields for a flattened local CLI error', async () => {
       const store = createMockStore();
       mockSendPrompt.mockRejectedValueOnce({
@@ -1530,38 +1551,11 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(contentWrite).toBeUndefined();
       expect(mockUpdateMessageError).toHaveBeenCalledWith(
         'ast-initial',
-        {
-          ...authMetadata,
-          body: expect.objectContaining({
-            agentType: 'claude-code',
-            code: HeterogeneousAgentSessionErrorCode.AuthRequired,
-            stderr: rawAuthError,
-          }),
-          message:
-            'Claude Code could not authenticate. Sign in again or refresh its credentials, then retry.',
-          type: 'AgentRuntimeError',
-        },
+        createExpectedAuthError(rawAuthError),
         expect.any(Object),
       );
       expect(store.internal_dispatchMessage).toHaveBeenCalledWith(
-        {
-          id: 'ast-initial',
-          type: 'updateMessage',
-          value: {
-            content: '',
-            error: {
-              ...authMetadata,
-              body: expect.objectContaining({
-                agentType: 'claude-code',
-                code: HeterogeneousAgentSessionErrorCode.AuthRequired,
-                stderr: rawAuthError,
-              }),
-              message:
-                'Claude Code could not authenticate. Sign in again or refresh its credentials, then retry.',
-              type: 'AgentRuntimeError',
-            },
-          },
-        },
+        createExpectedAuthErrorUpdate(rawAuthError),
         { operationId: 'op-1' },
       );
     });
@@ -1583,38 +1577,11 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(contentWrite).toBeUndefined();
       expect(mockUpdateMessageError).toHaveBeenCalledWith(
         'ast-initial',
-        {
-          ...authMetadata,
-          body: expect.objectContaining({
-            agentType: 'claude-code',
-            code: HeterogeneousAgentSessionErrorCode.AuthRequired,
-            stderr: rawAuthError,
-          }),
-          message:
-            'Claude Code could not authenticate. Sign in again or refresh its credentials, then retry.',
-          type: 'AgentRuntimeError',
-        },
+        createExpectedAuthError(rawAuthError),
         expect.any(Object),
       );
       expect(store.internal_dispatchMessage).toHaveBeenCalledWith(
-        {
-          id: 'ast-initial',
-          type: 'updateMessage',
-          value: {
-            content: '',
-            error: {
-              ...authMetadata,
-              body: expect.objectContaining({
-                agentType: 'claude-code',
-                code: HeterogeneousAgentSessionErrorCode.AuthRequired,
-                stderr: rawAuthError,
-              }),
-              message:
-                'Claude Code could not authenticate. Sign in again or refresh its credentials, then retry.',
-              type: 'AgentRuntimeError',
-            },
-          },
-        },
+        createExpectedAuthErrorUpdate(rawAuthError),
         { operationId: 'op-1' },
       );
     });
@@ -1653,38 +1620,11 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(contentWrite).toBeUndefined();
       expect(mockUpdateMessageError).toHaveBeenCalledWith(
         'ast-initial',
-        {
-          ...authMetadata,
-          body: expect.objectContaining({
-            agentType: 'claude-code',
-            code: HeterogeneousAgentSessionErrorCode.AuthRequired,
-            stderr: rawAuthError,
-          }),
-          message:
-            'Claude Code could not authenticate. Sign in again or refresh its credentials, then retry.',
-          type: 'AgentRuntimeError',
-        },
+        createExpectedAuthError(rawAuthError),
         expect.any(Object),
       );
       expect(store.internal_dispatchMessage).toHaveBeenCalledWith(
-        {
-          id: 'ast-initial',
-          type: 'updateMessage',
-          value: {
-            content: '',
-            error: {
-              ...authMetadata,
-              body: expect.objectContaining({
-                agentType: 'claude-code',
-                code: HeterogeneousAgentSessionErrorCode.AuthRequired,
-                stderr: rawAuthError,
-              }),
-              message:
-                'Claude Code could not authenticate. Sign in again or refresh its credentials, then retry.',
-              type: 'AgentRuntimeError',
-            },
-          },
-        },
+        createExpectedAuthErrorUpdate(rawAuthError),
         { operationId: 'op-1' },
       );
     });

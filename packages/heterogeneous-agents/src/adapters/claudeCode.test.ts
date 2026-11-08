@@ -2,6 +2,19 @@ import { describe, expect, it } from 'vitest';
 
 import { ClaudeCodeAdapter, ClaudeCodeSdkAdapter } from '.';
 
+const createToolUseEvent = (
+  messageId: string,
+  toolId: string,
+  toolName: string,
+  input: unknown,
+) => ({
+  message: {
+    id: messageId,
+    content: [{ id: toolId, input, name: toolName, type: 'tool_use' }],
+  },
+  type: 'assistant',
+});
+
 describe('ClaudeCodeAdapter', () => {
   describe('run cost', () => {
     // CC restores the session's cost tally on `--resume`, so `total_cost_usd`
@@ -831,13 +844,7 @@ describe('ClaudeCodeAdapter', () => {
       const adapter = new ClaudeCodeAdapter();
       adapter.adapt({ subtype: 'init', type: 'system' });
 
-      const events = adapter.adapt({
-        message: {
-          id: 'msg_1',
-          content: [{ id: 't1', input: { path: '/a' }, name: 'Read', type: 'tool_use' }],
-        },
-        type: 'assistant',
-      });
+      const events = adapter.adapt(createToolUseEvent('msg_1', 't1', 'Read', { path: '/a' }));
 
       const chunk = events.find(
         (e) => e.type === 'stream_chunk' && e.data.chunkType === 'tools_calling',
@@ -873,20 +880,9 @@ describe('ClaudeCodeAdapter', () => {
         ],
       };
 
-      const events = adapter.adapt({
-        message: {
-          id: 'msg_1',
-          content: [
-            {
-              id: 'tu_aq_1',
-              input: askInput,
-              name: 'mcp__lobe_cc__ask_user_question',
-              type: 'tool_use',
-            },
-          ],
-        },
-        type: 'assistant',
-      });
+      const events = adapter.adapt(
+        createToolUseEvent('msg_1', 'tu_aq_1', 'mcp__lobe_cc__ask_user_question', askInput),
+      );
 
       const chunk = events.find(
         (e) => e.type === 'stream_chunk' && e.data.chunkType === 'tools_calling',
@@ -908,13 +904,7 @@ describe('ClaudeCodeAdapter', () => {
     it('emits tool_result event with content for user tool_result block', () => {
       const adapter = new ClaudeCodeAdapter();
       adapter.adapt({ subtype: 'init', type: 'system' });
-      adapter.adapt({
-        message: {
-          id: 'msg_1',
-          content: [{ id: 't1', input: {}, name: 'Read', type: 'tool_use' }],
-        },
-        type: 'assistant',
-      });
+      adapter.adapt(createToolUseEvent('msg_1', 't1', 'Read', {}));
 
       const events = adapter.adapt({
         message: {
@@ -939,20 +929,9 @@ describe('ClaudeCodeAdapter', () => {
     it('aligns tool_end with the server shape — carries payload + result', () => {
       const adapter = new ClaudeCodeAdapter();
       adapter.adapt({ subtype: 'init', type: 'system' });
-      adapter.adapt({
-        message: {
-          id: 'msg_1',
-          content: [
-            {
-              id: 't1',
-              input: { command: 'git worktree add ../wt' },
-              name: 'Bash',
-              type: 'tool_use',
-            },
-          ],
-        },
-        type: 'assistant',
-      });
+      adapter.adapt(
+        createToolUseEvent('msg_1', 't1', 'Bash', { command: 'git worktree add ../wt' }),
+      );
 
       const events = adapter.adapt({
         message: {
@@ -980,13 +959,7 @@ describe('ClaudeCodeAdapter', () => {
     it('handles array-shaped tool_result content', () => {
       const adapter = new ClaudeCodeAdapter();
       adapter.adapt({ subtype: 'init', type: 'system' });
-      adapter.adapt({
-        message: {
-          id: 'msg_1',
-          content: [{ id: 't1', input: {}, name: 'Bash', type: 'tool_use' }],
-        },
-        type: 'assistant',
-      });
+      adapter.adapt(createToolUseEvent('msg_1', 't1', 'Bash', {}));
 
       const events = adapter.adapt({
         message: {
@@ -1012,13 +985,7 @@ describe('ClaudeCodeAdapter', () => {
     it('marks isError when tool_result is_error is true', () => {
       const adapter = new ClaudeCodeAdapter();
       adapter.adapt({ subtype: 'init', type: 'system' });
-      adapter.adapt({
-        message: {
-          id: 'msg_1',
-          content: [{ id: 't1', input: {}, name: 'Read', type: 'tool_use' }],
-        },
-        type: 'assistant',
-      });
+      adapter.adapt(createToolUseEvent('msg_1', 't1', 'Read', {}));
 
       const events = adapter.adapt({
         message: {
@@ -1232,15 +1199,7 @@ describe('ClaudeCodeAdapter', () => {
     it('joins tool_reference blocks into newline-separated tool names', () => {
       const adapter = new ClaudeCodeAdapter();
       adapter.adapt({ subtype: 'init', type: 'system' });
-      adapter.adapt({
-        message: {
-          id: 'msg_1',
-          content: [
-            { id: 'ts1', input: { query: 'linear' }, name: 'ToolSearch', type: 'tool_use' },
-          ],
-        },
-        type: 'assistant',
-      });
+      adapter.adapt(createToolUseEvent('msg_1', 'ts1', 'ToolSearch', { query: 'linear' }));
 
       const events = adapter.adapt({
         message: {
@@ -1280,15 +1239,7 @@ describe('ClaudeCodeAdapter', () => {
     it('mixes tool_reference with text blocks in a single tool_result', () => {
       const adapter = new ClaudeCodeAdapter();
       adapter.adapt({ subtype: 'init', type: 'system' });
-      adapter.adapt({
-        message: {
-          id: 'msg_1',
-          content: [
-            { id: 'ts1', input: { query: 'search' }, name: 'ToolSearch', type: 'tool_use' },
-          ],
-        },
-        type: 'assistant',
-      });
+      adapter.adapt(createToolUseEvent('msg_1', 'ts1', 'ToolSearch', { query: 'search' }));
 
       const events = adapter.adapt({
         message: {
@@ -1314,13 +1265,7 @@ describe('ClaudeCodeAdapter', () => {
     it('skips tool_reference entries with no tool_name', () => {
       const adapter = new ClaudeCodeAdapter();
       adapter.adapt({ subtype: 'init', type: 'system' });
-      adapter.adapt({
-        message: {
-          id: 'msg_1',
-          content: [{ id: 'ts1', input: { query: 'x' }, name: 'ToolSearch', type: 'tool_use' }],
-        },
-        type: 'assistant',
-      });
+      adapter.adapt(createToolUseEvent('msg_1', 'ts1', 'ToolSearch', { query: 'x' }));
 
       const events = adapter.adapt({
         message: {
@@ -1356,13 +1301,7 @@ describe('ClaudeCodeAdapter', () => {
     it('renders image blocks as a non-empty placeholder and preserves base64 on pluginState.images', () => {
       const adapter = new ClaudeCodeAdapter();
       adapter.adapt({ subtype: 'init', type: 'system' });
-      adapter.adapt({
-        message: {
-          id: 'msg_1',
-          content: [{ id: 'r1', input: { file_path: 'x.png' }, name: 'Read', type: 'tool_use' }],
-        },
-        type: 'assistant',
-      });
+      adapter.adapt(createToolUseEvent('msg_1', 'r1', 'Read', { file_path: 'x.png' }));
 
       const events = adapter.adapt({
         message: {
@@ -1398,13 +1337,7 @@ describe('ClaudeCodeAdapter', () => {
     it('falls back to generic label when media_type is missing', () => {
       const adapter = new ClaudeCodeAdapter();
       adapter.adapt({ subtype: 'init', type: 'system' });
-      adapter.adapt({
-        message: {
-          id: 'msg_1',
-          content: [{ id: 'r1', input: { file_path: 'x' }, name: 'Read', type: 'tool_use' }],
-        },
-        type: 'assistant',
-      });
+      adapter.adapt(createToolUseEvent('msg_1', 'r1', 'Read', { file_path: 'x' }));
 
       const events = adapter.adapt({
         message: {
@@ -1429,13 +1362,7 @@ describe('ClaudeCodeAdapter', () => {
   describe('TodoWrite pluginState synthesis', () => {
     const driveTodoWrite = (adapter: ClaudeCodeAdapter, input: unknown, toolId = 't1') => {
       adapter.adapt({ subtype: 'init', type: 'system' });
-      adapter.adapt({
-        message: {
-          id: 'msg_1',
-          content: [{ id: toolId, input, name: 'TodoWrite', type: 'tool_use' }],
-        },
-        type: 'assistant',
-      });
+      adapter.adapt(createToolUseEvent('msg_1', toolId, 'TodoWrite', input));
       const events = adapter.adapt({
         message: {
           content: [
@@ -1495,13 +1422,7 @@ describe('ClaudeCodeAdapter', () => {
     it('does not set pluginState for non-TodoWrite tools', () => {
       const adapter = new ClaudeCodeAdapter();
       adapter.adapt({ subtype: 'init', type: 'system' });
-      adapter.adapt({
-        message: {
-          id: 'msg_1',
-          content: [{ id: 't1', input: { path: '/a' }, name: 'Read', type: 'tool_use' }],
-        },
-        type: 'assistant',
-      });
+      adapter.adapt(createToolUseEvent('msg_1', 't1', 'Read', { path: '/a' }));
       const events = adapter.adapt({
         message: {
           content: [{ content: 'ok', tool_use_id: 't1', type: 'tool_result' }],
@@ -1519,20 +1440,11 @@ describe('ClaudeCodeAdapter', () => {
       // live todo UI with changes that never actually happened.
       const adapter = new ClaudeCodeAdapter();
       adapter.adapt({ subtype: 'init', type: 'system' });
-      adapter.adapt({
-        message: {
-          id: 'msg_1',
-          content: [
-            {
-              id: 't1',
-              input: { todos: [{ activeForm: 'A', content: 'a', status: 'pending' }] },
-              name: 'TodoWrite',
-              type: 'tool_use',
-            },
-          ],
-        },
-        type: 'assistant',
-      });
+      adapter.adapt(
+        createToolUseEvent('msg_1', 't1', 'TodoWrite', {
+          todos: [{ activeForm: 'A', content: 'a', status: 'pending' }],
+        }),
+      );
       const events = adapter.adapt({
         message: {
           content: [
@@ -1553,20 +1465,11 @@ describe('ClaudeCodeAdapter', () => {
 
       // Cache must still be drained — a later TodoWrite on a new id should
       // synthesize only from its own args, not inherit the failed one.
-      adapter.adapt({
-        message: {
-          id: 'msg_2',
-          content: [
-            {
-              id: 't2',
-              input: { todos: [{ activeForm: 'B', content: 'b', status: 'completed' }] },
-              name: 'TodoWrite',
-              type: 'tool_use',
-            },
-          ],
-        },
-        type: 'assistant',
-      });
+      adapter.adapt(
+        createToolUseEvent('msg_2', 't2', 'TodoWrite', {
+          todos: [{ activeForm: 'B', content: 'b', status: 'completed' }],
+        }),
+      );
       const next = adapter.adapt({
         message: {
           content: [{ content: 'ok', tool_use_id: 't2', type: 'tool_result' }],
@@ -1587,20 +1490,11 @@ describe('ClaudeCodeAdapter', () => {
 
       // Second TodoWrite on a new tool_use id — should resynthesize from its
       // own args, not leak from the prior cache.
-      adapter.adapt({
-        message: {
-          id: 'msg_2',
-          content: [
-            {
-              id: 't2',
-              input: { todos: [{ activeForm: 'B', content: 'b', status: 'completed' }] },
-              name: 'TodoWrite',
-              type: 'tool_use',
-            },
-          ],
-        },
-        type: 'assistant',
-      });
+      adapter.adapt(
+        createToolUseEvent('msg_2', 't2', 'TodoWrite', {
+          todos: [{ activeForm: 'B', content: 'b', status: 'completed' }],
+        }),
+      );
       const events = adapter.adapt({
         message: {
           content: [{ content: 'ok', tool_use_id: 't2', type: 'tool_result' }],
@@ -1624,13 +1518,7 @@ describe('ClaudeCodeAdapter', () => {
       msgId: string,
       opts?: { isError?: boolean },
     ) => {
-      adapter.adapt({
-        message: {
-          id: msgId,
-          content: [{ id: toolId, input, name: 'TaskCreate', type: 'tool_use' }],
-        },
-        type: 'assistant',
-      });
+      adapter.adapt(createToolUseEvent(msgId, toolId, 'TaskCreate', input));
       const events = adapter.adapt({
         message: {
           content: [
@@ -1669,13 +1557,7 @@ describe('ClaudeCodeAdapter', () => {
       msgId: string,
       opts?: { isError?: boolean },
     ) => {
-      adapter.adapt({
-        message: {
-          id: msgId,
-          content: [{ id: toolId, input, name: 'TaskUpdate', type: 'tool_use' }],
-        },
-        type: 'assistant',
-      });
+      adapter.adapt(createToolUseEvent(msgId, toolId, 'TaskUpdate', input));
       const events = adapter.adapt({
         message: {
           content: [
@@ -1706,13 +1588,7 @@ describe('ClaudeCodeAdapter', () => {
       resultContent: string,
       msgId: string,
     ) => {
-      adapter.adapt({
-        message: {
-          id: msgId,
-          content: [{ id: toolId, input: {}, name: 'TaskList', type: 'tool_use' }],
-        },
-        type: 'assistant',
-      });
+      adapter.adapt(createToolUseEvent(msgId, toolId, 'TaskList', {}));
       const events = adapter.adapt({
         message: {
           content: [{ content: resultContent, tool_use_id: toolId, type: 'tool_result' }],
@@ -2093,15 +1969,7 @@ describe('ClaudeCodeAdapter', () => {
       adapter.adapt({ subtype: 'init', type: 'system' });
 
       // 1. Assistant issues a tool_use under msg_1.
-      adapter.adapt({
-        message: {
-          id: 'msg_1',
-          content: [
-            { id: 'tu_1', input: { command: 'mock command' }, name: 'Bash', type: 'tool_use' },
-          ],
-        },
-        type: 'assistant',
-      });
+      adapter.adapt(createToolUseEvent('msg_1', 'tu_1', 'Bash', { command: 'mock command' }));
 
       // 2. Tool returns.
       adapter.adapt({
@@ -2144,15 +2012,7 @@ describe('ClaudeCodeAdapter', () => {
 
       // Second turn (NEW id) — opened by a real newStep, so the reducer's
       // currentMainMessageId becomes msg_2. This turn issues a tool_use.
-      adapter.adapt({
-        message: {
-          id: 'msg_2',
-          content: [
-            { id: 'tu_1', input: { command: 'mock command' }, name: 'Bash', type: 'tool_use' },
-          ],
-        },
-        type: 'assistant',
-      });
+      adapter.adapt(createToolUseEvent('msg_2', 'tu_1', 'Bash', { command: 'mock command' }));
       adapter.adapt({
         message: {
           content: [{ content: 'mock tool output', tool_use_id: 'tu_1', type: 'tool_result' }],
@@ -2359,13 +2219,7 @@ describe('ClaudeCodeAdapter', () => {
       adapter.adapt({ subtype: 'init', type: 'system' });
 
       // Start a tool call without providing result
-      adapter.adapt({
-        message: {
-          id: 'msg_1',
-          content: [{ id: 't1', input: {}, name: 'Read', type: 'tool_use' }],
-        },
-        type: 'assistant',
-      });
+      adapter.adapt(createToolUseEvent('msg_1', 't1', 'Read', {}));
 
       const events = adapter.flush();
       expect(events).toHaveLength(1);
@@ -2381,13 +2235,7 @@ describe('ClaudeCodeAdapter', () => {
       const adapter = new ClaudeCodeAdapter();
       adapter.adapt({ subtype: 'init', type: 'system' });
 
-      adapter.adapt({
-        message: {
-          id: 'msg_1',
-          content: [{ id: 't1', input: {}, name: 'Read', type: 'tool_use' }],
-        },
-        type: 'assistant',
-      });
+      adapter.adapt(createToolUseEvent('msg_1', 't1', 'Read', {}));
 
       adapter.flush();
       // Second flush should be empty
@@ -2480,26 +2328,14 @@ describe('ClaudeCodeAdapter', () => {
       adapter.adapt({ subtype: 'init', type: 'system' });
 
       // First tool_use block of msg_1
-      const e1 = adapter.adapt({
-        message: {
-          id: 'msg_1',
-          content: [{ id: 't1', input: { path: '/a' }, name: 'Read', type: 'tool_use' }],
-        },
-        type: 'assistant',
-      });
+      const e1 = adapter.adapt(createToolUseEvent('msg_1', 't1', 'Read', { path: '/a' }));
       const chunk1 = e1.find(
         (e) => e.type === 'stream_chunk' && e.data.chunkType === 'tools_calling',
       );
       expect(chunk1!.data.toolsCalling.map((t: any) => t.id)).toEqual(['t1']);
 
       // Second tool_use block on the SAME message.id — must carry both t1 + t2
-      const e2 = adapter.adapt({
-        message: {
-          id: 'msg_1',
-          content: [{ id: 't2', input: { cmd: 'ls' }, name: 'Bash', type: 'tool_use' }],
-        },
-        type: 'assistant',
-      });
+      const e2 = adapter.adapt(createToolUseEvent('msg_1', 't2', 'Bash', { cmd: 'ls' }));
       const chunk2 = e2.find(
         (e) => e.type === 'stream_chunk' && e.data.chunkType === 'tools_calling',
       );
@@ -2510,21 +2346,9 @@ describe('ClaudeCodeAdapter', () => {
       const adapter = new ClaudeCodeAdapter();
       adapter.adapt({ subtype: 'init', type: 'system' });
 
-      adapter.adapt({
-        message: {
-          id: 'msg_1',
-          content: [{ id: 't1', input: {}, name: 'Read', type: 'tool_use' }],
-        },
-        type: 'assistant',
-      });
+      adapter.adapt(createToolUseEvent('msg_1', 't1', 'Read', {}));
 
-      const e2 = adapter.adapt({
-        message: {
-          id: 'msg_1',
-          content: [{ id: 't2', input: {}, name: 'Bash', type: 'tool_use' }],
-        },
-        type: 'assistant',
-      });
+      const e2 = adapter.adapt(createToolUseEvent('msg_1', 't2', 'Bash', {}));
 
       const starts = e2.filter((e) => e.type === 'tool_start');
       expect(starts).toHaveLength(1);
@@ -2535,23 +2359,11 @@ describe('ClaudeCodeAdapter', () => {
       const adapter = new ClaudeCodeAdapter();
       adapter.adapt({ subtype: 'init', type: 'system' });
 
-      adapter.adapt({
-        message: {
-          id: 'msg_1',
-          content: [{ id: 't1', input: {}, name: 'Read', type: 'tool_use' }],
-        },
-        type: 'assistant',
-      });
+      adapter.adapt(createToolUseEvent('msg_1', 't1', 'Read', {}));
 
       // Same tool_use id re-sent — cumulative list must not duplicate it,
       // and tool_start must not fire again.
-      const e2 = adapter.adapt({
-        message: {
-          id: 'msg_1',
-          content: [{ id: 't1', input: {}, name: 'Read', type: 'tool_use' }],
-        },
-        type: 'assistant',
-      });
+      const e2 = adapter.adapt(createToolUseEvent('msg_1', 't1', 'Read', {}));
 
       const chunk = e2.find(
         (e) => e.type === 'stream_chunk' && e.data.chunkType === 'tools_calling',
@@ -2564,21 +2376,9 @@ describe('ClaudeCodeAdapter', () => {
       const adapter = new ClaudeCodeAdapter();
       adapter.adapt({ subtype: 'init', type: 'system' });
 
-      adapter.adapt({
-        message: {
-          id: 'msg_1',
-          content: [{ id: 't1', input: {}, name: 'Read', type: 'tool_use' }],
-        },
-        type: 'assistant',
-      });
+      adapter.adapt(createToolUseEvent('msg_1', 't1', 'Read', {}));
 
-      const events = adapter.adapt({
-        message: {
-          id: 'msg_2',
-          content: [{ id: 't2', input: {}, name: 'Bash', type: 'tool_use' }],
-        },
-        type: 'assistant',
-      });
+      const events = adapter.adapt(createToolUseEvent('msg_2', 't2', 'Bash', {}));
 
       const chunk = events.find(
         (e) => e.type === 'stream_chunk' && e.data.chunkType === 'tools_calling',
@@ -2734,13 +2534,7 @@ describe('ClaudeCodeAdapter', () => {
       // Same message.id continues with a tool_use block — tool_use never streams
       // as delta (input_json_delta would be partial JSON), so handleAssistant
       // remains the source of truth for tool invocations.
-      const events = adapter.adapt({
-        message: {
-          id: 'msg_1',
-          content: [{ id: 't1', input: { path: '/a' }, name: 'Read', type: 'tool_use' }],
-        },
-        type: 'assistant',
-      });
+      const events = adapter.adapt(createToolUseEvent('msg_1', 't1', 'Read', { path: '/a' }));
 
       const toolsChunk = events.find(
         (e) => e.type === 'stream_chunk' && e.data.chunkType === 'tools_calling',

@@ -17,6 +17,7 @@ import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { getActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
+import { useWorkspaces } from '@/business/client/hooks/useWorkspaces';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { shouldHardNavigateToWorkbench } from '@/libs/next/workbenchNavigation';
@@ -111,6 +112,7 @@ export const InternalEntityLink = memo<InternalEntityLinkProps>(({ href, label, 
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
   const portalAvailable = useEntityLinkPortal(reference.type);
   const dismissHost = useEntityLinkHostDismiss();
+  const workspaces = useWorkspaces();
   const [
     openAcceptance,
     openAgentDetail,
@@ -190,6 +192,17 @@ export const InternalEntityLink = memo<InternalEntityLinkProps>(({ href, label, 
             : buildWorkspaceAwarePath(reference.pathname, getActiveWorkspaceSlug()),
         );
         return;
+      }
+
+      // A task in another workspace still opens beside the conversation: the
+      // panel reads it through that workspace's scope (read-only) instead of
+      // switching the whole page into it.
+      if (reference.type === 'task' && reference.workspaceSlug && portalAvailable) {
+        const workspace = workspaces.find((item) => item.slug === reference.workspaceSlug);
+        if (workspace) {
+          openTaskDetail(reference.taskId, { id: workspace.id, slug: workspace.slug });
+          return;
+        }
       }
 
       // Portal-backed entities (verify / acceptance) open in-context regardless
@@ -294,6 +307,7 @@ export const InternalEntityLink = memo<InternalEntityLinkProps>(({ href, label, 
       reference,
       linkedAgentId,
       shouldResolveAgentDocument,
+      workspaces,
     ],
   );
 

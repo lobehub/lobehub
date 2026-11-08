@@ -1,5 +1,6 @@
+import { isBotWakeEnabled } from '@/server/services/conversationWake/gate';
+
 import { isAgentSignalEnabledForUser } from '../featureGate';
-import { isBotWakeEnabled } from './botWake/gate';
 import type {
   AgentSignalScenarioGateInput,
   AgentSignalScenarioId,

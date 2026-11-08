@@ -20,6 +20,11 @@ import { signHeteroOperationJWT } from '@/libs/trpc/utils/internalJwt';
 import { createStreamEventManager } from '@/server/modules/AgentRuntime/factory';
 import { mapAgentInterventionTRPCError } from '@/server/routers/lambda/_helpers/agentInterventionError';
 import { AiAgentService } from '@/server/services/aiAgent';
+import {
+  renewHeteroSteers,
+  returnHeteroSteer,
+  takeHeteroSteer,
+} from '@/server/services/aiAgent/steerQueue/hetero';
 import { HeterogeneousAgentService } from '@/server/services/heterogeneousAgent';
 import {
   HeteroOperationPrincipalError,
@@ -127,6 +132,25 @@ const WaitInterventionResponseSchema = z.object({
   lastEventId: z.string().default('$'),
   operationId: z.string().min(1),
 });
+
+/**
+ * Schema for `aiAgent.waitHeteroSteer` — the exec-side long-poll for follow-ups
+ * the user queued behind a live heterogeneous run (Claude Code), delivered into
+ * its session instead of waiting for the run to end.
+ */
+const WaitHeteroSteerSchema = z.object({
+  blockMs: z.number().int().positive().max(25_000).default(20_000),
+  operationId: z.string().min(1),
+});
+
+/** Schema for `aiAgent.returnHeteroSteer` — the session could not take the message. */
+const ReturnHeteroSteerSchema = z.object({
+  messageId: z.string().min(1),
+  operationId: z.string().min(1),
+});
+
+/** How often a `waitHeteroSteer` poll re-checks the queue while it holds the request. */
+const HETERO_STEER_CHECK_MS = 1500;
 
 /**
  * Schema for `aiAgent.submitHeteroIntervention` — the browser leg of remote
@@ -481,6 +505,96 @@ export const heteroRouter = router({
         events: events.filter((e) => e.type === 'agent_intervention_response'),
         lastEventId: nextEventId,
       };
+    }),
+  /**
+   * Exec-side long-poll for steer messages. `lh hetero exec` calls this in a
+   * loop for as long as its Claude Code session takes input; each call holds
+   * up to `blockMs` and returns the next follow-up to type into the session,
+   * or `null`. Every call also renews the leases of messages the session holds
+   * but has not picked up, so they return to the queue only if the run dies.
+   */
+  waitHeteroSteer: heteroAgentProcedure
+    .input(WaitHeteroSteerSchema)
+    .mutation(async ({ input, ctx }) => {
+      const { operationId, blockMs } = input;
+
+      await authorizeOperationCallback(ctx, operationId, 'hetero:ingest');
+
+      const [operation] = await ctx.serverDB
+        .select({
+          agentId: agentOperations.agentId,
+          parentOperationId: agentOperations.parentOperationId,
+          threadId: agentOperations.threadId,
+          topicId: agentOperations.topicId,
+          userId: agentOperations.userId,
+          workspaceId: agentOperations.workspaceId,
+        })
+        .from(agentOperations)
+        .where(eq(agentOperations.id, operationId))
+        .limit(1);
+
+      if (!operation || operation.userId !== ctx.userId) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'Operation not found or not owned by the caller',
+        });
+      }
+      // A child run (group member, sub-agent) is not where the user types. Say
+      // so, rather than answer an empty poll at once: the producer stops asking.
+      if (operation.parentOperationId || !operation.topicId) {
+        return { message: null, steerable: false as const };
+      }
+
+      const storeCtx = {
+        db: ctx.serverDB,
+        userId: ctx.userId,
+        workspaceId: operation.workspaceId,
+      };
+      const scope = {
+        threadId: operation.threadId ?? null,
+        topicId: operation.topicId,
+        userId: ctx.userId,
+      };
+
+      await renewHeteroSteers(operationId);
+
+      const deadline = Date.now() + blockMs;
+      for (;;) {
+        const message = await takeHeteroSteer(storeCtx, {
+          agentId: operation.agentId,
+          operationId,
+          scope,
+        });
+        if (message) return { message };
+        if (Date.now() + HETERO_STEER_CHECK_MS > deadline) return { message: null };
+        await new Promise((resolve) => setTimeout(resolve, HETERO_STEER_CHECK_MS));
+      }
+    }),
+  /**
+   * The session refused a message `waitHeteroSteer` handed out (its input had
+   * already closed): put the follow-up back, so it starts the next turn when
+   * the run ends.
+   */
+  returnHeteroSteer: heteroAgentProcedure
+    .input(ReturnHeteroSteerSchema)
+    .mutation(async ({ input, ctx }) => {
+      await authorizeOperationCallback(ctx, input.operationId, 'hetero:ingest', {
+        allowTerminalOperation: true,
+      });
+      const [operation] = await ctx.serverDB
+        .select({ userId: agentOperations.userId })
+        .from(agentOperations)
+        .where(eq(agentOperations.id, input.operationId))
+        .limit(1);
+      if (operation?.userId !== ctx.userId) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'Operation not found or not owned by the caller',
+        });
+      }
+
+      await returnHeteroSteer(input.operationId, input.messageId);
+      return { success: true as const };
     }),
   /**
    * Authenticated cold-start review lookup. The opaque token is the only

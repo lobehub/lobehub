@@ -1,7 +1,5 @@
 'use client';
 
-import './QuotaAccountManagerModal.css';
-
 import { isDesktop } from '@lobechat/const';
 import {
   currentUtilization,
@@ -12,6 +10,8 @@ import {
   ActionIcon,
   Button,
   createModal,
+  // oxlint-disable-next-line stylex-migration/no-emotion-styles -- RadioGroup renders its label / text DOM without a slot
+  createStaticStyles,
   DropdownMenu,
   Flexbox,
   Icon,
@@ -77,6 +77,21 @@ const styles = stylex.create({
   // [data-off='true']
   rowOff: { opacity: 0.5 },
 });
+
+const fallback = createStaticStyles(({ css }) => ({
+  radioGroup: css`
+    width: 100%;
+
+    > label {
+      width: 100%;
+    }
+
+    > label > span:last-child {
+      flex: 1;
+      min-width: 0;
+    }
+  `,
+}));
 
 type Account = QuotaAccount;
 type Binding = QuotaBinding;
@@ -417,7 +432,7 @@ const QuotaAccountManager = memo<QuotaAccountManagerProps>(({ agentId, deviceId 
         <AccountReadingsSync accountId={a.id} key={a.id} />
       ))}
       <RadioGroup
-        className={'lobe-quota-account-manager-modal-2f1ccb6d-radio-group'}
+        className={fallback.radioGroup}
         gap={2}
         horizontal={false}
         // Which mode is active is unknown until the bindings are on screen. The

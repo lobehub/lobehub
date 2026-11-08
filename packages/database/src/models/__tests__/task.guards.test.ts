@@ -329,7 +329,7 @@ describe('TaskModel.groupList guards', () => {
     );
   });
 
-  it('requires a label group to group by label', async () => {
+  it('requires a label group when grouping tasks by label', async () => {
     await expect(new TaskModel(serverDB, userId).groupList({ groupBy: 'label' })).rejects.toThrow(
       'A label group is required to group tasks by label',
     );

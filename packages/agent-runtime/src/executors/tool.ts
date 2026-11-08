@@ -568,6 +568,7 @@ export const callTool =
         if (!execution.resultPersisted) {
           await updateExistingToolMessage({
             host,
+            ownedByTransport: true,
             result: executionResult,
             toolMessageId,
             resultBlocked: execution.resultBlocked,
@@ -924,6 +925,7 @@ export const callToolsBatch =
           if (!execution.resultPersisted) {
             await updateExistingToolMessage({
               host,
+              ownedByTransport: true,
               result: executionResult,
               toolMessageId,
               resultBlocked: execution.resultBlocked,

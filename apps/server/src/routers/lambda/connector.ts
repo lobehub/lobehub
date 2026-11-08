@@ -36,8 +36,8 @@ import {
   buildAuthorizationUrl,
   discoverConnectorOAuth,
   getConnectorRedirectUri,
-  registerDynamicClient,
-  registeredAuthMethod,
+  resolveConnectorClient,
+  resolveConnectorOAuthScopes,
   toClientInformation,
 } from '@/server/services/connector/oauth';
 import {
@@ -596,9 +596,9 @@ export const connectorRouter = router({
    * Begin the OAuth authorization-code flow for a custom MCP connector.
    *
    * Discovers the authorization server (RFC 9728 → RFC 8414), resolves the
-   * client (pre-registration when a client_id was provided, otherwise RFC 7591
-   * dynamic registration), persists the resolved OIDC config, and returns the
-   * authorize URL for the client to open. The PKCE verifier is stashed in Redis
+   * client (pre-registration when a client_id was provided, otherwise a Client
+   * ID Metadata Document or RFC 7591 dynamic registration), persists the
+   * resolved OIDC config, and returns the authorize URL for the client to open. The PKCE verifier is stashed in Redis
    * keyed by `state`; the callback route completes the exchange.
    */
   startOAuth: connectorWriteProcedure
@@ -619,38 +619,24 @@ export const connectorRouter = router({
       // Discovery and registration failures below are server-compatibility
       // problems the user must fix in their OAuth setup, not internal errors —
       // surface them as BAD_REQUEST with the reason so the form can show it.
-      const { authorizationServerUrl, metadata } = await discoverConnectorOAuth(
-        connector.mcpServerUrl,
-      ).catch((error: unknown) => {
-        throw new TRPCError({
-          cause: error,
-          code: 'BAD_REQUEST',
-          message: (error as Error)?.message ?? String(error),
-        });
-      });
-
-      // Default to the scopes advertised by the server when the user did not
-      // specify any — many MCP authorization servers reject (or issue a useless
-      // token for) a scope-less request.
-      const scopes =
-        existing.scopes && existing.scopes.length > 0 ? existing.scopes : metadata.scopes_supported;
-
-      // 2. Resolve the OAuth client: pre-registration vs. DCR.
-      let clientId = existing.clientId;
-      let clientSecret = existing.clientSecret;
-      let tokenEndpointAuthMethod = existing.tokenEndpointAuthMethod;
-      const scheme: OIDCConfig['scheme'] = clientId ? 'pre_registration' : 'dcr';
-
-      if (!clientId) {
-        if (!metadata.registration_endpoint) {
+      const discovery = await discoverConnectorOAuth(connector.mcpServerUrl).catch(
+        (error: unknown) => {
           throw new TRPCError({
+            cause: error,
             code: 'BAD_REQUEST',
-            message:
-              'This server does not support dynamic registration. Provide an OAuth Client ID in Advanced settings.',
+            message: (error as Error)?.message ?? String(error),
           });
-        }
-        const reg = await registerDynamicClient({
+        },
+      );
+
+      const { authorizationServerUrl, metadata } = discovery;
+      const scopes = resolveConnectorOAuthScopes({ discovery, existingScopes: existing.scopes });
+
+      // 2. Resolve the OAuth client: pre-registration, CIMD, then DCR.
+      const { clientId, clientSecret, scheme, tokenEndpointAuthMethod } =
+        await resolveConnectorClient({
           authorizationServerUrl,
+          existing,
           metadata,
           redirectUri,
           scopes,
@@ -658,13 +644,9 @@ export const connectorRouter = router({
           throw new TRPCError({
             cause: error,
             code: 'BAD_REQUEST',
-            message: `Dynamic client registration failed: ${(error as Error)?.message ?? String(error)}`,
+            message: (error as Error)?.message ?? String(error),
           });
         });
-        clientId = reg.client_id;
-        clientSecret = reg.client_secret ?? undefined;
-        tokenEndpointAuthMethod = registeredAuthMethod(reg, metadata);
-      }
 
       // 3. Persist the resolved config so the callback + refresh can reuse it.
       const resolvedOidc: OIDCConfig = {

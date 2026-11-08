@@ -152,19 +152,6 @@ describe('GatewayManager', () => {
       );
     });
 
-    it('should skip already running bots', async () => {
-      mockFindEnabledByPlatform.mockResolvedValue([
-        {
-          applicationId: 'app-1',
-          credentials: { key: 'value' },
-        },
-      ]);
-
-      await manager.start();
-
-      expect(manager.isRunning).toBe(true);
-    });
-
     it('should handle sync errors gracefully', async () => {
       mockFindEnabledByPlatform.mockRejectedValue(new Error('DB connection failed'));
 

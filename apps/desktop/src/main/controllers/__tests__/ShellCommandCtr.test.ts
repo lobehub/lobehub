@@ -1,4 +1,5 @@
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync, writeSync } from 'node:fs';
+import type * as fsPromises from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
 import { delimiter, dirname, join, relative } from 'node:path';
 
@@ -9,6 +10,19 @@ import type { App } from '@/core/App';
 
 import CliCtr from '../CliCtr';
 import ShellCommandCtr from '../ShellCommandCtr';
+
+const createAvailableSandboxCapability = () => ({
+  available: true,
+  backend: 'srt',
+  networkIsolation: true,
+});
+
+const createUnprovisionedSandboxCapability = () => ({
+  available: false,
+  backend: 'none',
+  networkIsolation: false,
+  reason: 'Sandbox user is not provisioned',
+});
 
 const { ipcMainHandleMock } = vi.hoisted(() => ({
   ipcMainHandleMock: vi.fn(),
@@ -29,7 +43,7 @@ vi.mock('node:child_process', () => ({
 // The shared runner checks cwd exists before spawning; `spawn` is mocked, so
 // treat the fixture cwd (`/repo`) as a real directory.
 vi.mock('node:fs/promises', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('node:fs/promises')>()),
+  ...(await importOriginal<typeof fsPromises>()),
   stat: vi.fn().mockResolvedValue({ isDirectory: () => true }),
 }));
 
@@ -306,11 +320,7 @@ describe('ShellCommandCtr (thin wrapper)', () => {
       // Default to a host with a one-click setup (Windows); the cases that care
       // about the other platforms override it.
       mockCanInstallSandbox.mockReturnValue(true);
-      mockProbeSandboxCapability.mockResolvedValue({
-        available: true,
-        backend: 'srt',
-        networkIsolation: true,
-      });
+      mockProbeSandboxCapability.mockResolvedValue(createAvailableSandboxCapability());
       mockCreateSandboxLaunchPlan.mockResolvedValue({
         args: ['-c', 'echo test'],
         capability: { available: true, backend: 'srt', networkIsolation: true },
@@ -497,12 +507,7 @@ describe('ShellCommandCtr (thin wrapper)', () => {
         // Installing the desktop app is supposed to be enough: the row goes
         // from unavailable to usable without the user touching a terminal.
         mockCanInstallSandbox.mockReturnValue(true);
-        mockProbeSandboxCapability.mockResolvedValue({
-          available: false,
-          backend: 'none',
-          networkIsolation: false,
-          reason: 'Sandbox user is not provisioned',
-        });
+        mockProbeSandboxCapability.mockResolvedValue(createUnprovisionedSandboxCapability());
         expect(await ctr.getSandboxCapability()).toEqual({
           available: false,
           canInstall: true,
@@ -510,11 +515,7 @@ describe('ShellCommandCtr (thin wrapper)', () => {
         });
 
         mockInstallDeviceSandbox.mockResolvedValue({ status: 'installed' });
-        mockProbeSandboxCapability.mockResolvedValue({
-          available: true,
-          backend: 'srt',
-          networkIsolation: true,
-        });
+        mockProbeSandboxCapability.mockResolvedValue(createAvailableSandboxCapability());
 
         const result = await ctr.installSandbox();
 
@@ -531,11 +532,7 @@ describe('ShellCommandCtr (thin wrapper)', () => {
         expect((await ctr.getSandboxCapability()).available).toBe(false);
 
         mockInstallDeviceSandbox.mockResolvedValue({ status: 'installed' });
-        mockProbeSandboxCapability.mockResolvedValue({
-          available: true,
-          backend: 'srt',
-          networkIsolation: true,
-        });
+        mockProbeSandboxCapability.mockResolvedValue(createAvailableSandboxCapability());
 
         expect((await ctr.installSandbox()).capability.available).toBe(true);
       });
@@ -543,12 +540,7 @@ describe('ShellCommandCtr (thin wrapper)', () => {
       it('reports a dismissed elevation prompt as cancelled, not a failure', async () => {
         mockCanInstallSandbox.mockReturnValue(true);
         mockInstallDeviceSandbox.mockResolvedValue({ status: 'cancelled' });
-        mockProbeSandboxCapability.mockResolvedValue({
-          available: false,
-          backend: 'none',
-          networkIsolation: false,
-          reason: 'Sandbox user is not provisioned',
-        });
+        mockProbeSandboxCapability.mockResolvedValue(createUnprovisionedSandboxCapability());
 
         const result = await ctr.installSandbox();
 
@@ -560,12 +552,7 @@ describe('ShellCommandCtr (thin wrapper)', () => {
       it('surfaces an install failure without leaving the capability stale', async () => {
         mockCanInstallSandbox.mockReturnValue(true);
         mockInstallDeviceSandbox.mockRejectedValue(new Error('WFP filter install failed'));
-        mockProbeSandboxCapability.mockResolvedValue({
-          available: false,
-          backend: 'none',
-          networkIsolation: false,
-          reason: 'Sandbox user is not provisioned',
-        });
+        mockProbeSandboxCapability.mockResolvedValue(createUnprovisionedSandboxCapability());
 
         const result = await ctr.installSandbox();
 
@@ -596,11 +583,7 @@ describe('ShellCommandCtr (thin wrapper)', () => {
 
       it('does not offer setup on a host that already has a sandbox', async () => {
         mockCanInstallSandbox.mockReturnValue(true);
-        mockProbeSandboxCapability.mockResolvedValue({
-          available: true,
-          backend: 'srt',
-          networkIsolation: true,
-        });
+        mockProbeSandboxCapability.mockResolvedValue(createAvailableSandboxCapability());
 
         expect((await ctr.getSandboxCapability()).canInstall).toBe(false);
       });

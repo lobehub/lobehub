@@ -51,12 +51,14 @@ function expected(): Array<[name: string, type: 'mutation' | 'query']> {
     ['resolveAgentInterventionBySource', 'mutation'],
     ['resolveHeteroIntervention', 'mutation'],
     ['resumeClientLlmWait', 'mutation'],
+    ['returnHeteroSteer', 'mutation'],
     ['scheduleAgentRun', 'mutation'],
     ['setQueuedMessages', 'mutation'],
     ['startExecution', 'mutation'],
     ['stopPendingApproval', 'mutation'],
     ['submitHeteroIntervention', 'mutation'],
     ['updateClientTaskThreadStatus', 'mutation'],
+    ['waitHeteroSteer', 'mutation'],
     ['waitInterventionResponse', 'query'],
   ];
 }

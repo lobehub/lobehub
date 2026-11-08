@@ -476,6 +476,7 @@
   "channel.records.judge.deny": "under the threshold",
   "channel.records.judge.duty": "Is it within its duties",
   "channel.records.judge.hint": "{{judge}}: {{verdict}}",
+  "channel.records.judge.routing": "Should it be the one to answer",
   "channel.records.mark.correct": "Right call",
   "channel.records.mark.failed": "Couldn't save your mark. Try again.",
   "channel.records.mark.false_wake": "Shouldn't have woken",

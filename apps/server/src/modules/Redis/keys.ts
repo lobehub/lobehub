@@ -193,6 +193,13 @@ export const RedisKeys = {
      * Full key: agentSteer:thread_start:v1:{threadId}
      */
     threadStartFence: (threadId: string): string => `thread_start:v1:${threadId}`,
+    /**
+     * Follow-ups a heterogeneous run (Claude Code) took into its live session
+     * and has not picked up yet (field = user message id). Their drained batch
+     * stays leased until the agent replays the message.
+     * Full key: agentSteer:hetero_deliveries:v1:{operationId}
+     */
+    heteroDeliveries: (operationId: string): string => `hetero_deliveries:v1:${operationId}`,
   },
   /**
    * Agent identity scope — see {@link RedisKeyNamespace.AGENT_IDENTITY}.

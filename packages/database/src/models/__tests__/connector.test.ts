@@ -24,6 +24,24 @@ const gateKeeper = {
 
 const apikeyCredentials: ConnectorCredentials = { apiKey: 'secret-key', type: 'apikey' };
 
+const createBuiltinConnectorInput = (
+  identifier: string,
+  name: string,
+): Parameters<ConnectorModel['create']>[0] => ({
+  identifier,
+  name,
+  sourceType: 'builtin',
+  status: 'connected',
+});
+
+const createGitHubConnectorInput = (): Parameters<ConnectorModel['create']>[0] => ({
+  credentials: JSON.stringify(apikeyCredentials),
+  identifier: 'github',
+  name: 'GitHub',
+  sourceType: 'builtin',
+  status: 'connected',
+});
+
 beforeEach(async () => {
   vi.clearAllMocks();
   await serverDB.delete(users);
@@ -42,12 +60,7 @@ describe('ConnectorModel', () => {
     it('creates a connector without credentials', async () => {
       const model = new ConnectorModel(serverDB, userId);
 
-      const result = await model.create({
-        identifier: 'linear',
-        name: 'Linear',
-        sourceType: 'builtin',
-        status: 'connected',
-      });
+      const result = await model.create(createBuiltinConnectorInput('linear', 'Linear'));
 
       expect(result.id).toBeDefined();
       expect(result.userId).toBe(userId);
@@ -59,13 +72,7 @@ describe('ConnectorModel', () => {
     it('encrypts credentials with the constructor gateKeeper', async () => {
       const model = new ConnectorModel(serverDB, userId, undefined, gateKeeper);
 
-      const result = await model.create({
-        credentials: JSON.stringify(apikeyCredentials),
-        identifier: 'github',
-        name: 'GitHub',
-        sourceType: 'builtin',
-        status: 'connected',
-      });
+      const result = await model.create(createGitHubConnectorInput());
 
       expect(gateKeeper.encrypt).toHaveBeenCalledOnce();
       expect(result.credentials).toBe(`enc:${JSON.stringify(apikeyCredentials)}`);
@@ -88,12 +95,7 @@ describe('ConnectorModel', () => {
     it('persists workspaceId when the model is workspace-scoped', async () => {
       const model = new ConnectorModel(serverDB, userId, workspaceId);
 
-      const result = await model.create({
-        identifier: 'linear',
-        name: 'Linear',
-        sourceType: 'builtin',
-        status: 'connected',
-      });
+      const result = await model.create(createBuiltinConnectorInput('linear', 'Linear'));
 
       expect(result.workspaceId).toBe(workspaceId);
     });
@@ -105,16 +107,7 @@ describe('ConnectorModel', () => {
         encrypt: vi.fn(async (plaintext: string) => `call:${plaintext}`),
       };
 
-      const result = await model.create(
-        {
-          credentials: JSON.stringify(apikeyCredentials),
-          identifier: 'github',
-          name: 'GitHub',
-          sourceType: 'builtin',
-          status: 'connected',
-        },
-        callGateKeeper,
-      );
+      const result = await model.create(createGitHubConnectorInput(), callGateKeeper);
 
       expect(callGateKeeper.encrypt).toHaveBeenCalledOnce();
       expect(result.credentials).toBe(`call:${JSON.stringify(apikeyCredentials)}`);
@@ -125,21 +118,10 @@ describe('ConnectorModel', () => {
     it('returns only the current user / workspace connectors with decrypted credentials', async () => {
       const model = new ConnectorModel(serverDB, userId, undefined, gateKeeper);
 
-      await model.create({
-        credentials: JSON.stringify(apikeyCredentials),
-        identifier: 'github',
-        name: 'GitHub',
-        sourceType: 'builtin',
-        status: 'connected',
-      });
+      await model.create(createGitHubConnectorInput());
       // other user's connector must not leak
       const otherModel = new ConnectorModel(serverDB, otherUserId, undefined, gateKeeper);
-      await otherModel.create({
-        identifier: 'linear',
-        name: 'Linear',
-        sourceType: 'builtin',
-        status: 'connected',
-      });
+      await otherModel.create(createBuiltinConnectorInput('linear', 'Linear'));
 
       const rows = await model.query();
 
@@ -150,12 +132,7 @@ describe('ConnectorModel', () => {
 
     it('returns null credentials for rows without credentials', async () => {
       const model = new ConnectorModel(serverDB, userId, undefined, gateKeeper);
-      await model.create({
-        identifier: 'linear',
-        name: 'Linear',
-        sourceType: 'builtin',
-        status: 'connected',
-      });
+      await model.create(createBuiltinConnectorInput('linear', 'Linear'));
 
       const rows = await model.query();
 
@@ -242,24 +219,9 @@ describe('ConnectorModel', () => {
 
     it('returns only connectors matching the given identifiers', async () => {
       const model = new ConnectorModel(serverDB, userId);
-      await model.create({
-        identifier: 'linear',
-        name: 'Linear',
-        sourceType: 'builtin',
-        status: 'connected',
-      });
-      await model.create({
-        identifier: 'github',
-        name: 'GitHub',
-        sourceType: 'builtin',
-        status: 'connected',
-      });
-      await model.create({
-        identifier: 'slack',
-        name: 'Slack',
-        sourceType: 'builtin',
-        status: 'connected',
-      });
+      await model.create(createBuiltinConnectorInput('linear', 'Linear'));
+      await model.create(createBuiltinConnectorInput('github', 'GitHub'));
+      await model.create(createBuiltinConnectorInput('slack', 'Slack'));
 
       const rows = await model.queryByIdentifiers(['linear', 'slack']);
 
@@ -270,12 +232,7 @@ describe('ConnectorModel', () => {
   describe('stable identifier order', () => {
     const createConnectors = async (model: ConnectorModel, identifiers: string[]) => {
       for (const identifier of identifiers) {
-        await model.create({
-          identifier,
-          name: identifier,
-          sourceType: 'builtin',
-          status: 'connected',
-        });
+        await model.create(createBuiltinConnectorInput(identifier, identifier));
       }
     };
 
@@ -344,12 +301,9 @@ describe('ConnectorModel', () => {
         sourceType: 'builtin',
         status: 'connected',
       });
-      await new ConnectorModel(serverDB, otherUserId).create({
-        identifier: 'github',
-        name: 'Other GitHub',
-        sourceType: 'builtin',
-        status: 'connected',
-      });
+      await new ConnectorModel(serverDB, otherUserId).create(
+        createBuiltinConnectorInput('github', 'Other GitHub'),
+      );
       await serverDB.insert(agents).values({ id: 'github-agent', userId });
       await model.create({
         agentId: 'github-agent',
@@ -482,13 +436,7 @@ describe('ConnectorModel', () => {
   describe('findById', () => {
     it('returns the decrypted connector by id', async () => {
       const model = new ConnectorModel(serverDB, userId, undefined, gateKeeper);
-      const created = await model.create({
-        credentials: JSON.stringify(apikeyCredentials),
-        identifier: 'github',
-        name: 'GitHub',
-        sourceType: 'builtin',
-        status: 'connected',
-      });
+      const created = await model.create(createGitHubConnectorInput());
 
       const found = await model.findById(created.id);
 
@@ -503,12 +451,7 @@ describe('ConnectorModel', () => {
 
     it('returns null when the connector belongs to another user', async () => {
       const otherModel = new ConnectorModel(serverDB, otherUserId);
-      const created = await otherModel.create({
-        identifier: 'linear',
-        name: 'Linear',
-        sourceType: 'builtin',
-        status: 'connected',
-      });
+      const created = await otherModel.create(createBuiltinConnectorInput('linear', 'Linear'));
 
       const model = new ConnectorModel(serverDB, userId);
       expect(await model.findById(created.id)).toBeNull();
@@ -518,12 +461,7 @@ describe('ConnectorModel', () => {
   describe('update', () => {
     it('updates non-credential fields without touching credentials', async () => {
       const model = new ConnectorModel(serverDB, userId, undefined, gateKeeper);
-      const created = await model.create({
-        identifier: 'linear',
-        name: 'Linear',
-        sourceType: 'builtin',
-        status: 'connected',
-      });
+      const created = await model.create(createBuiltinConnectorInput('linear', 'Linear'));
 
       await model.update(created.id, { name: 'Linear Renamed' });
 
@@ -537,12 +475,7 @@ describe('ConnectorModel', () => {
 
     it('encrypts credentials when provided in the patch', async () => {
       const model = new ConnectorModel(serverDB, userId, undefined, gateKeeper);
-      const created = await model.create({
-        identifier: 'github',
-        name: 'GitHub',
-        sourceType: 'builtin',
-        status: 'connected',
-      });
+      const created = await model.create(createBuiltinConnectorInput('github', 'GitHub'));
 
       const newCredentials = JSON.stringify({ token: 'bearer-token', type: 'bearer' });
       await model.update(created.id, { credentials: newCredentials });
@@ -554,12 +487,7 @@ describe('ConnectorModel', () => {
 
     it('does not update connectors owned by another user', async () => {
       const otherModel = new ConnectorModel(serverDB, otherUserId);
-      const created = await otherModel.create({
-        identifier: 'linear',
-        name: 'Linear',
-        sourceType: 'builtin',
-        status: 'connected',
-      });
+      const created = await otherModel.create(createBuiltinConnectorInput('linear', 'Linear'));
 
       const model = new ConnectorModel(serverDB, userId);
       await model.update(created.id, { name: 'Hacked' });
@@ -575,12 +503,7 @@ describe('ConnectorModel', () => {
   describe('updateStatus', () => {
     it('updates the connector status', async () => {
       const model = new ConnectorModel(serverDB, userId);
-      const created = await model.create({
-        identifier: 'linear',
-        name: 'Linear',
-        sourceType: 'builtin',
-        status: 'connected',
-      });
+      const created = await model.create(createBuiltinConnectorInput('linear', 'Linear'));
 
       await model.updateStatus(created.id, 'error');
 
@@ -672,12 +595,7 @@ describe('ConnectorModel', () => {
   describe('delete', () => {
     it('deletes a connector owned by the user', async () => {
       const model = new ConnectorModel(serverDB, userId);
-      const created = await model.create({
-        identifier: 'linear',
-        name: 'Linear',
-        sourceType: 'builtin',
-        status: 'connected',
-      });
+      const created = await model.create(createBuiltinConnectorInput('linear', 'Linear'));
 
       await model.delete(created.id);
 
@@ -686,12 +604,7 @@ describe('ConnectorModel', () => {
 
     it('does not delete connectors owned by another user', async () => {
       const otherModel = new ConnectorModel(serverDB, otherUserId);
-      const created = await otherModel.create({
-        identifier: 'linear',
-        name: 'Linear',
-        sourceType: 'builtin',
-        status: 'connected',
-      });
+      const created = await otherModel.create(createBuiltinConnectorInput('linear', 'Linear'));
 
       const model = new ConnectorModel(serverDB, userId);
       await model.delete(created.id);

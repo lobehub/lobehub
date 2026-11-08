@@ -4769,31 +4769,14 @@ describe('GatewayActionImpl', () => {
       expect(connectToGateway).toHaveBeenCalled();
     });
 
-    // The operation is created optimistically off the marker, so every bail-out
-    // has to retire it — otherwise a stale marker leaves the composer spinning
-    // on a run that nothing will ever settle.
-    it('retires the optimistic operation when refreshGatewayToken returns NOT_FOUND', async () => {
-      const { action, completeOperation } = createSeededReconnectHarness();
-      vi.mocked(aiAgentService.refreshGatewayToken).mockRejectedValueOnce({
-        data: { code: 'NOT_FOUND' },
-      });
-
-      await action.reconnectToGatewayOperation({
-        assistantMessageId: 'ast-1',
-        operationId: 'server-op-1',
-        topicId: 'topic-1',
-      });
-
-      expect(completeOperation).toHaveBeenCalledWith('gw-op-reconnect');
-    });
-
     // Regression: a stale local runningOperation fires a reconnect,
     // but the server already cleared its marker and answers refreshGatewayToken
     // with TRPC NOT_FOUND. The reconnect must clear the local marker and bail
     // silently (no connect, no throw) so the SWR fetcher resolves instead of
     // looping 404s.
-    it('clears the local marker and bails when refreshGatewayToken returns NOT_FOUND', async () => {
-      const { action, connectToGateway, internalDispatchTopic } = createSeededReconnectHarness();
+    it('retires the local operation and clears the marker on NOT_FOUND', async () => {
+      const { action, completeOperation, connectToGateway, internalDispatchTopic } =
+        createSeededReconnectHarness();
       vi.mocked(aiAgentService.refreshGatewayToken).mockRejectedValueOnce({
         data: { code: 'NOT_FOUND' },
       });
@@ -4805,6 +4788,11 @@ describe('GatewayActionImpl', () => {
           topicId: 'topic-1',
         }),
       ).resolves.toBeUndefined();
+
+      // The operation is created optimistically off the marker, so every bail-out
+      // has to retire it — otherwise a stale marker leaves the composer spinning
+      // on a run that nothing will ever settle.
+      expect(completeOperation).toHaveBeenCalledWith('gw-op-reconnect');
 
       expect(internalDispatchTopic).toHaveBeenCalledWith({
         id: 'topic-1',

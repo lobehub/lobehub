@@ -25,6 +25,7 @@ import { publicProcedure, router } from '@/libs/trpc/lambda';
 import { acceptanceRouter } from './acceptance';
 import { acceptanceCommentRouter } from './acceptanceComment';
 import { agentRouter } from './agent';
+import { agentAccountRouter } from './agentAccount';
 import { agentBotProviderRouter } from './agentBotProvider';
 import { agentBotWakeRouter } from './agentBotWake';
 import { agentDocumentRouter } from './agentDocument';
@@ -81,6 +82,7 @@ import { knowledgeBaseRouter } from './knowledgeBase';
 import { linearRouter } from './linear';
 import { llmGenerationTracingRouter } from './llmGenerationTracing';
 import { marketRouter } from './market';
+import { meetingRouter } from './meeting';
 import { messageRouter } from './message';
 import { messengerRouter } from './messenger';
 import { metricRouter } from './metric';
@@ -128,6 +130,7 @@ export const lambdaRouter = router({
   acceptance: acceptanceRouter,
   acceptanceComment: acceptanceCommentRouter,
   agent: agentRouter,
+  agentAccount: agentAccountRouter,
   agentBotProvider: agentBotProviderRouter,
   agentBotWake: agentBotWakeRouter,
   agentNotify: agentNotifyRouter,
@@ -188,6 +191,7 @@ export const lambdaRouter = router({
   linear: linearRouter,
   llmGenerationTracing: llmGenerationTracingRouter,
   market: marketRouter,
+  meeting: meetingRouter,
   message: messageRouter,
   messenger: messengerRouter,
   metric: metricRouter,

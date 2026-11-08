@@ -86,14 +86,9 @@ describe('RoomPageSessions character limit', () => {
     expect(pushUpdate).toHaveBeenCalledTimes(1);
   });
 
-  it('exempts a system writer', async () => {
+  it('commits a system writer and preserves its persistence source', async () => {
     await expect(commitWith('system', 5, 500)).resolves.toBe(true);
     expect(pushUpdate).toHaveBeenCalledTimes(1);
-  });
-
-  it('persists under the writer source, so a system write is not refused by the projection', async () => {
-    await commitWith('system', 5, 500);
-
     expect(vi.mocked(persistPageState).mock.calls[0][3]).toMatchObject({ writeSource: 'system' });
   });
 });

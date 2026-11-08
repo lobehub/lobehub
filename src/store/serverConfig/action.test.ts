@@ -141,7 +141,7 @@ describe('ServerConfigAction', () => {
   });
 
   describe('SWR integration', () => {
-    it('should use correct SWR key', async () => {
+    it('should pass the server config key, fetcher and callbacks', async () => {
       const { useOnlyFetchOnceSWR } = vi.mocked(await import('@/libs/swr'));
 
       const store = initServerConfigStore({});
@@ -155,13 +155,6 @@ describe('ServerConfigAction', () => {
           onSuccess: expect.any(Function),
         }),
       );
-    });
-
-    it('should pass globalService.getGlobalConfig as fetcher', async () => {
-      const { useOnlyFetchOnceSWR } = vi.mocked(await import('@/libs/swr'));
-
-      const store = initServerConfigStore({});
-      store.getState().useInitServerConfig();
 
       expect(useOnlyFetchOnceSWR).toHaveBeenCalledWith(
         'serverConfig:get',

@@ -79,6 +79,7 @@ export const formatLinearSyncResult = (
     result.created && t('linear.sync.result.created', { count: result.created }),
     result.updated && t('linear.sync.result.updated', { count: result.updated }),
     result.closed && t('linear.sync.result.closed', { count: result.closed }),
+    result.archived && t('linear.sync.result.archived', { count: result.archived }),
     result.commentsImported &&
       t('linear.sync.result.commentsImported', { count: result.commentsImported }),
     result.keptLocalEdits &&
