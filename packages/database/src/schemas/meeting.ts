@@ -12,7 +12,6 @@ import type {
 } from '@lobechat/types';
 import { index, integer, jsonb, pgTable, text, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 
-import { idGenerator } from '../utils/idGenerator';
 import { timestamps, timestamptz } from './_helpers';
 import { documents, files } from './file';
 import { users } from './user';
@@ -29,10 +28,7 @@ import { workspaces } from './workspace';
 export const meetings = pgTable(
   'meetings',
   {
-    id: text('id')
-      .primaryKey()
-      .$defaultFn(() => idGenerator('meetings'))
-      .notNull(),
+    id: uuid('id').defaultRandom().primaryKey().notNull(),
 
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
@@ -63,7 +59,7 @@ export const meetings = pgTable(
     audioFileId: text('audio_file_id').references(() => files.id, { onDelete: 'set null' }),
     /**
      * Desktop local mode only: absolute path of the recording on the device
-     * that captured it, e.g. `~/Library/Application Support/LobeHub/meetings/mtg_x.wav`.
+     * that captured it, e.g. `~/Library/Application Support/LobeHub/meetings/<meetingId>.wav`.
      */
     localAudioPath: text('local_audio_path'),
 
@@ -82,7 +78,7 @@ export const meetingSpeakers = pgTable(
   'meeting_speakers',
   {
     id: uuid('id').defaultRandom().primaryKey().notNull(),
-    meetingId: text('meeting_id')
+    meetingId: uuid('meeting_id')
       .references(() => meetings.id, { onDelete: 'cascade' })
       .notNull(),
 
@@ -100,7 +96,7 @@ export const meetingSegments = pgTable(
   'meeting_segments',
   {
     id: uuid('id').defaultRandom().primaryKey().notNull(),
-    meetingId: text('meeting_id')
+    meetingId: uuid('meeting_id')
       .references(() => meetings.id, { onDelete: 'cascade' })
       .notNull(),
     speakerId: uuid('speaker_id').references(() => meetingSpeakers.id, { onDelete: 'set null' }),
@@ -130,7 +126,7 @@ export const meetingMinutes = pgTable(
   'meeting_minutes',
   {
     id: uuid('id').defaultRandom().primaryKey().notNull(),
-    meetingId: text('meeting_id')
+    meetingId: uuid('meeting_id')
       .references(() => meetings.id, { onDelete: 'cascade' })
       .notNull(),
 

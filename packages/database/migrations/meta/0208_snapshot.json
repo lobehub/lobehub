@@ -48526,9 +48526,10 @@
       "columns": {
         "id": {
           "name": "id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": true,
-          "notNull": true
+          "notNull": true,
+          "default": "gen_random_uuid()"
         },
         "user_id": {
           "name": "user_id",
@@ -48753,7 +48754,7 @@
         },
         "meeting_id": {
           "name": "meeting_id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": false,
           "notNull": true
         },
@@ -48896,7 +48897,7 @@
         },
         "meeting_id": {
           "name": "meeting_id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": false,
           "notNull": true
         },
@@ -49068,7 +49069,7 @@
         },
         "meeting_id": {
           "name": "meeting_id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": false,
           "notNull": true
         },
