@@ -77,6 +77,16 @@ describe('FileModel.setVisibility parsed document sync', () => {
     expect(await documentVisibility('parsed-by-member')).toBe('private');
   });
 
+  it('republishes a parsed document another member created', async () => {
+    await insertFile('public');
+    await insertDocument('parsed-by-member', { userId: memberId, visibility: 'public' });
+
+    await ownerFiles.setVisibility(fileId, 'private');
+    await ownerFiles.setVisibility(fileId, 'public');
+
+    expect(await documentVisibility('parsed-by-member')).toBe('public');
+  });
+
   it('leaves a document that is not parsed from the file alone', async () => {
     await insertFile('private');
     await insertDocument('page', { sourceType: 'editor' });
