@@ -2809,6 +2809,7 @@ table meetings {
   duration_ms integer
   audio_file_id text
   local_audio_path text
+  error jsonb
   visibility text [not null, default: 'private']
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
