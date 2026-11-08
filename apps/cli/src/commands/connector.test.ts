@@ -566,7 +566,9 @@ describe('connector command', () => {
       expect(consoleSpy).toHaveBeenCalledWith('https://auth.example.com/authorize?state=s');
       // The OAuth callback syncs tools itself; refresh is only the fallback.
       const output = consoleSpy.mock.calls.map((c: unknown[]) => String(c[0])).join('\n');
-      expect(output).toContain('Tools sync automatically after authorization');
+      expect(output).toContain(
+        'Tools sync automatically after authorization. Then check lh connector list',
+      );
       expect(output).not.toContain('After authorizing, run');
     });
 

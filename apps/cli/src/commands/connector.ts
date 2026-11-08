@@ -470,7 +470,7 @@ export function registerConnectorCommand(program: Command) {
         console.log(authorizationUrl);
         console.log(
           pc.dim(
-            `Tools sync automatically after authorization. If the page reports the sync failed, run: lh connector refresh ${input.identifier}`,
+            `Tools sync automatically after authorization. Then check lh connector list: if ${input.identifier} is not connected or has 0 tools, run: lh connector refresh ${input.identifier}`,
           ),
         );
         return;
