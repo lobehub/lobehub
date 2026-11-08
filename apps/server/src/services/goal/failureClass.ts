@@ -23,6 +23,7 @@ export type GoalEnvironmentProblem =
   | { kind: 'cli' }
   | { kind: 'credentials' }
   | { kind: 'device' }
+  | { kind: 'executionEnvironment' }
   | { kind: 'gateway' }
   | { kind: 'workingDirectory'; path: string };
 
@@ -67,6 +68,11 @@ const ENVIRONMENT_RULES: Array<{
     pattern:
       /\b(?:InvalidProviderAPIKey|NoAvailableProvider|InsufficientQuota|InsufficientBudgetForModel|AccountDeactivated|ModelNotFound)\b|not logged in|please run \/login|auth(?:entication)? required/i,
     problem: () => ({ kind: 'credentials' }),
+  },
+  {
+    // Verification blocked because the run lacked a capability a criterion needs.
+    pattern: /\benvironment_unavailable\b/,
+    problem: () => ({ kind: 'executionEnvironment' }),
   },
 ];
 

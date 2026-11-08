@@ -152,6 +152,17 @@ export const VERIFICATION_ERRORED_ERROR =
 export const VERIFICATION_OUT_OF_CREDITS_ERROR =
   'Verification could not run: the verifier model was refused for lack of balance (InsufficientBudgetForModel); the delivery was not evaluated.';
 /**
+ * Verification was blocked before it started: a required criterion can only be
+ * exercised with an execution capability (e.g. a cloud sandbox) the run never
+ * had, because it was routed to a device. The delivery was never evaluated.
+ *
+ * Deliberately has NO recovery branch. Another builder attempt routed the same
+ * way meets the same unsatisfiable criterion, so this goes to a person, who
+ * either reroutes the task or restates the criterion.
+ */
+export const VERIFICATION_ENVIRONMENT_UNAVAILABLE_ERROR =
+  "Verification could not run: the run's execution environment lacks a capability the acceptance criteria require (environment_unavailable); the delivery was not evaluated.";
+/**
  * The review read the evidence and found the criterion undecidable from it — it
  * asks for an action the review layer cannot perform (re-running the delivered
  * scripts, building, driving a live system).

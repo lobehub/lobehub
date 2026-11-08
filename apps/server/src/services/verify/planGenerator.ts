@@ -210,6 +210,12 @@ export class VerifyPlanGeneratorService {
         requiredEvidence: criterion.requiredEvidence,
         required: criterion.required ?? true,
         title: criterion.title,
+        // Inside `verifierConfig`, not top-level: the drafts go back through the
+        // public `createCriteria` schema, which keeps only that record — a
+        // top-level field would be stripped and the criterion lose its gate.
+        ...(criterion.requiredCapabilities
+          ? { verifierConfig: { requiredCapabilities: criterion.requiredCapabilities } }
+          : {}),
         verifierType: criterion.verifierType,
       }),
     );
@@ -385,7 +391,10 @@ export class VerifyPlanGeneratorService {
           sourceCriterionId: null,
           sourceRubricId: null,
           title: c.title,
-          verifierConfig: { requiredEvidence: c.requiredEvidence },
+          verifierConfig: {
+            requiredEvidence: c.requiredEvidence,
+            ...(c.requiredCapabilities ? { requiredCapabilities: c.requiredCapabilities } : {}),
+          },
           verifierType: c.verifierType,
         };
       }),

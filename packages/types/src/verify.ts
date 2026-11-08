@@ -934,6 +934,14 @@ export interface VerifyCheckItem {
 }
 
 /**
+ * An execution-environment capability a check item needs to be exercised at all.
+ * `cloud_sandbox`: the run's `runCommand` / `execScript` (and credential
+ * injection) executed in the LobeHub cloud sandbox rather than only on a routed
+ * device.
+ */
+export type VerifyRuntimeCapability = 'cloud_sandbox';
+
+/**
  * `verifierConfig` of a plan item authored by a harness before its run.
  *
  * Note what is NOT here: *how the item is judged* is `verifierType`
@@ -950,6 +958,13 @@ export interface VerifyAgentPlanConfig {
   expected?: string;
   /** How the item would be exercised (steps / command / probe). Prose. */
   method?: string;
+  /**
+   * Execution-environment capabilities the item can only be exercised with.
+   * Checked against the builder run's routing before verification starts: an
+   * item whose capability the run never had is settled `errored` as
+   * environment-unavailable instead of being judged `failed`.
+   */
+  requiredCapabilities?: VerifyRuntimeCapability[];
   /** Evidence media this item must produce — gated, not decorative. */
   requiredEvidence?: RequiredEvidenceSpec[];
   /**

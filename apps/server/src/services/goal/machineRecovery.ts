@@ -70,6 +70,9 @@ const environmentFix = (problem: GoalEnvironmentProblem): string => {
     case 'device': {
       return 'Reconnect the device (desktop app or `lh connect`), or bind the agent to another online device';
     }
+    case 'executionEnvironment': {
+      return "Switch the agent's execution target to one that provides the capability the acceptance criteria need (e.g. the cloud sandbox or auto), or restate the criteria so the routed environment can satisfy them";
+    }
     case 'gateway': {
       return 'Configure the device gateway on the server, or switch the agent to a connected local device';
     }
