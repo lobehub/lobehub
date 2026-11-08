@@ -220,4 +220,35 @@ export default {
   'reply.attachment': 'Attachment',
   'reply.viewOriginal': 'View original message',
   'reply.unavailable': 'Original message unavailable',
+  'settings.title': 'Channel settings',
+  'settings.back': 'Back to channel',
+  'settings.save': 'Save',
+  'settings.saved': 'Saved',
+  'settings.general.title': 'General',
+  'settings.general.name': 'Channel name',
+  'settings.reply.title': 'Replies',
+  'settings.reply.description':
+    'How Agents in this channel respond to messages that do not @mention them.',
+  'settings.reply.enabled': 'Join without being mentioned',
+  'settings.reply.enabledHint': 'When off, Agents only answer when someone @mentions them.',
+  'settings.reply.paceLabel': 'How often they join',
+  'settings.reply.pace.calm': 'Calm',
+  'settings.reply.pace.balanced': 'Balanced',
+  'settings.reply.pace.active': 'Active',
+  'settings.reply.pace.custom': 'Custom',
+  'settings.reply.paceHint.calm': 'Rarely joins, and stays quiet while you are active.',
+  'settings.reply.paceHint.balanced':
+    'Follows up for 5 minutes after replying, and stays quiet for 2 minutes after you speak.',
+  'settings.reply.paceHint.active':
+    'Follows up for 10 minutes after replying, even while you are active.',
+  'settings.reply.paceHint.custom':
+    'Uses values that were tuned by hand. Choose a pace to replace them.',
+  'settings.reply.instructions': 'Custom instructions',
+  'settings.reply.instructionsPlaceholder': 'Tell Agents who to answer and what to leave alone.',
+  'settings.reply.saveFailed': 'Could not save the replies settings. Try again.',
+  'settings.danger.title': 'Danger zone',
+  'settings.danger.archiveHint':
+    'Replies in progress stop and the channel stops taking messages. History stays readable.',
+  'settings.danger.unarchiveHint': 'Members can send messages in this channel again.',
+  'settings.danger.trashHint': 'You can restore the channel and its history from the trash.',
 };

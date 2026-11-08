@@ -2,7 +2,7 @@ import { CHANNEL_URL } from '@lobechat/const';
 import type { ChannelDetail } from '@lobechat/types';
 import { ActionIcon, Button, DropdownMenu, Flexbox, Popover, Text } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
-import { Bot, FolderCog, MoreHorizontal, UserPlus, Users } from 'lucide-react';
+import { Bot, FolderCog, MoreHorizontal, Settings, UserPlus, Users } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -80,6 +80,21 @@ export function MemberStatus({
     ),
   ];
 
+  // Managing a group lives on its settings page; deleting it is not one click from the header.
+  const groupMenu = () => [
+    ...(channel.canDelete
+      ? [
+          {
+            icon: Settings,
+            key: 'settings',
+            label: t('settings.title'),
+            onClick: () => navigate(`${CHANNEL_URL(channel.id, null, channel.projectId)}/settings`),
+          },
+        ]
+      : []),
+    ...channelMenu(channel).filter((item) => 'key' in item && item.key === 'copyId'),
+  ];
+
   return (
     <Flexbox horizontal align="center" gap={4}>
       <FailureIndicator detail={detail} />
@@ -153,7 +168,7 @@ export function MemberStatus({
           }
         />
       )}
-      <DropdownMenu items={direct ? directMenu() : channelMenu(channel)}>
+      <DropdownMenu items={direct ? directMenu() : groupMenu()}>
         <ActionIcon
           aria-label={t('more', { ns: 'common' })}
           icon={MoreHorizontal}

@@ -90,9 +90,15 @@ describe('MemberStatus in a direct conversation', () => {
 });
 
 describe('MemberStatus in a group Channel', () => {
-  it('offers every Channel action in the header menu', () => {
+  it('sends management to the settings page instead of offering delete', () => {
     render(createElement(MemberStatus, { detail: detail({ agentId: null }) }));
 
-    expect(menuKeys()).toEqual(['rename', 'copyId', 'archive', 'delete']);
+    expect(menuKeys()).toEqual(['settings', 'copyId']);
+  });
+
+  it('offers no settings to a member who cannot manage the Channel', () => {
+    render(createElement(MemberStatus, { detail: detail({ agentId: null, canDelete: false }) }));
+
+    expect(menuKeys()).toEqual(['copyId']);
   });
 });

@@ -88,6 +88,11 @@ const projectRoutes: RouteObject[] = [
             element: redirectElement('..'),
             handle: undefined,
           }),
+          'channels/:channelId/settings': (route) => ({
+            ...route,
+            element: redirectElement('../..'),
+            handle: undefined,
+          }),
           'index': withHandle({
             mobileShellHeader: true,
             mobileShellTitle: ProjectMobileShellTitle,
