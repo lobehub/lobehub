@@ -224,9 +224,7 @@ export default {
   'settings.back': 'Back to channel',
   'settings.save': 'Save',
   'settings.saved': 'Saved',
-  'settings.general.title': 'General',
   'settings.general.name': 'Channel name',
-  'settings.reply.title': 'Replies',
   'settings.reply.description':
     'How Agents in this channel respond to messages that do not @mention them.',
   'settings.reply.enabled': 'Join without being mentioned',
@@ -246,9 +244,18 @@ export default {
   'settings.reply.instructions': 'Custom instructions',
   'settings.reply.instructionsPlaceholder': 'Tell Agents who to answer and what to leave alone.',
   'settings.reply.saveFailed': 'Could not save the replies settings. Try again.',
-  'settings.danger.title': 'Danger zone',
   'settings.danger.archiveHint':
     'Replies in progress stop and the channel stops taking messages. History stays readable.',
   'settings.danger.unarchiveHint': 'Members can send messages in this channel again.',
   'settings.danger.trashHint': 'You can restore the channel and its history from the trash.',
+  'settings.tab.general': 'General',
+  'settings.tab.members': 'Members',
+  'settings.tab.reply': 'Replies',
+  'settings.general.nameDescription': 'Shown in the channel list and at the top of the channel.',
+  'settings.general.nameLimit': 'Up to {{count}} characters.',
+  'settings.members.description': 'Agents and people who can read and reply in this channel.',
+  'settings.reply.paceDescription': 'How readily Agents join a conversation on their own.',
+  'settings.reply.instructionsDescription':
+    'Guidance for deciding when to reply. It is not a hard rule.',
+  'settings.reply.instructionsLimit': 'Up to {{count}} characters.',
 };

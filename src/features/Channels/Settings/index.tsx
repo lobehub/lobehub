@@ -1,8 +1,8 @@
-import { ActionIcon, Flexbox, Text } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Tabs, Text } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { ArrowLeft } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Navigate, useNavigate, useParams } from 'react-router';
+import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router';
 
 import NotFound from '@/components/404';
 import AsyncBoundary from '@/components/AsyncBoundary';
@@ -18,12 +18,14 @@ import { GeneralSection } from './GeneralSection';
 import { MembersSection } from './MembersSection';
 import { ReplySection } from './ReplySection';
 import { settingsStyles } from './styles';
+import { channelSettingsTabs, resolveChannelSettingsTab } from './tabs';
 
 /** Everything an admin manages about a group Channel: its conversation stays uncluttered. */
 function EnabledChannelSettings() {
   const { t } = useTranslation('channel');
   const { channelId } = useParams<{ channelId: string }>();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const view = { channelId: channelId ?? '', threadId: null };
   const sync = channelActions.useFetchDetail(channelId ? view : null);
   const detail = visibleChannelDetail(useChannelStore(channelSelectors.detail(view)), sync.error);
@@ -34,6 +36,8 @@ function EnabledChannelSettings() {
     return <Navigate replace relative="path" to=".." />;
 
   const channel = detail?.channel;
+  const tabs = channelSettingsTabs(channel?.status === 'archived');
+  const tab = resolveChannelSettingsTab(searchParams.get('tab'), tabs);
 
   return (
     <Flexbox {...stylex.props(styles.layout)}>
@@ -64,14 +68,27 @@ function EnabledChannelSettings() {
           }}
         >
           {detail && channel && (
-            <Flexbox gap={32} {...stylex.props(settingsStyles.content)}>
-              <GeneralSection channel={channel} key={`general:${channel.id}`} />
-              <MembersSection detail={detail} />
-              {/* An archived Channel takes no writes until it is reopened. */}
-              {channel.status !== 'archived' && (
-                <ReplySection channelId={channel.id} key={`reply:${channel.id}`} />
+            <Flexbox gap={24} {...stylex.props(settingsStyles.content)}>
+              <Tabs
+                activeKey={tab}
+                items={tabs.map((key) => ({ key, label: t(`settings.tab.${key}`) }))}
+                onChange={(key) => setSearchParams({ tab: key }, { replace: true })}
+              />
+              {/* Kept mounted so switching tabs does not discard a draft. */}
+              <div hidden={tab !== 'general'} key={`general:${channel.id}`}>
+                <Flexbox gap={24}>
+                  <GeneralSection channel={channel} />
+                  <DangerSection channel={channel} />
+                </Flexbox>
+              </div>
+              <div hidden={tab !== 'members'}>
+                <MembersSection detail={detail} />
+              </div>
+              {tabs.includes('reply') && (
+                <div hidden={tab !== 'reply'} key={`reply:${channel.id}`}>
+                  <ReplySection channelId={channel.id} />
+                </div>
               )}
-              <DangerSection channel={channel} />
             </Flexbox>
           )}
         </AsyncBoundary>

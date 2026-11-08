@@ -1,13 +1,15 @@
 import type { ChannelListItem } from '@lobechat/types';
 import { CHANNEL_LIMITS } from '@lobechat/types';
-import { Button, Flexbox, Input, toast } from '@lobehub/ui';
+import { Button, Input, toast } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { channelActions } from '@/store/channel';
 import { isTrpcErrorCode } from '@/utils/trpcError';
 
-import { Section } from './Section';
+import { FormCard } from './FormCard';
+import { settingsStyles } from './styles';
 
 export function GeneralSection({ channel }: { channel: ChannelListItem }) {
   const { t } = useTranslation('channel');
@@ -30,24 +32,30 @@ export function GeneralSection({ channel }: { channel: ChannelListItem }) {
   };
 
   return (
-    <Section title={t('settings.general.title')}>
-      <Flexbox horizontal gap={8}>
-        <Input
-          aria-label={t('settings.general.name')}
-          disabled={archived}
-          maxLength={CHANNEL_LIMITS.titleLength}
-          placeholder={t('settings.general.name')}
-          value={title}
-          onChange={(event) => setTitle(event.target.value)}
-        />
+    <FormCard
+      description={t('settings.general.nameDescription')}
+      hint={t('settings.general.nameLimit', { count: CHANNEL_LIMITS.titleLength })}
+      title={t('settings.general.name')}
+      action={
         <Button
           disabled={archived || !next || next === channel.title}
           loading={saving}
+          type="primary"
           onClick={save}
         >
           {t('settings.save')}
         </Button>
-      </Flexbox>
-    </Section>
+      }
+    >
+      <div {...stylex.props(settingsStyles.field)}>
+        <Input
+          aria-label={t('settings.general.name')}
+          disabled={archived}
+          maxLength={CHANNEL_LIMITS.titleLength}
+          value={title}
+          onChange={(event) => setTitle(event.target.value)}
+        />
+      </div>
+    </FormCard>
   );
 }

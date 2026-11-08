@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { canInviteMembers } from '../channelAccess';
 import { openInviteMembers } from '../CreateChannel';
 import { MemberList, useMemberEntries } from '../MemberList';
-import { Section } from './Section';
+import { FormCard } from './FormCard';
 
 export function MembersSection({ detail }: { detail: ChannelDetail }) {
   const { t } = useTranslation('channel');
@@ -14,12 +14,14 @@ export function MembersSection({ detail }: { detail: ChannelDetail }) {
   const entries = useMemberEntries(detail);
 
   return (
-    <Section
+    <FormCard
+      description={t('settings.members.description')}
       title={t('membersCount', { count: entries.length })}
       action={
         canInviteMembers(channel) && (
           <Button
             icon={UserPlus}
+            type="primary"
             onClick={() =>
               openInviteMembers({
                 agentIds: members.flatMap((member) =>
@@ -36,6 +38,6 @@ export function MembersSection({ detail }: { detail: ChannelDetail }) {
       }
     >
       <MemberList detail={detail} />
-    </Section>
+    </FormCard>
   );
 }

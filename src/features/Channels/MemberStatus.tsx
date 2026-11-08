@@ -21,8 +21,11 @@ import { useChannelMenu } from './useChannelMenu';
 /** Header avatars before the rest fold into a count; the list shows everyone. */
 const MAX_VISIBLE = 5;
 
-/** Channel actions a direct conversation keeps; renaming would drift from the Agent's name. */
-const DIRECT_MENU_KEYS = new Set(['copyId', 'archive', 'unarchive', 'delete']);
+/**
+ * Channel actions a direct conversation keeps. It is the chat with one Agent, so it cannot be
+ * renamed, archived or trashed; `unarchive` only frees one that was archived earlier.
+ */
+const DIRECT_MENU_KEYS = new Set(['copyId', 'unarchive']);
 
 /**
  * Members as avatars with live status dots. One click lists everyone by name, because
@@ -75,8 +78,9 @@ export function MemberStatus({
           { type: 'divider' as const },
         ]
       : []),
+    // Keyed items only: the menu's own dividers separate actions a direct conversation does not have.
     ...channelMenu(channel).filter(
-      (item) => !('key' in item) || DIRECT_MENU_KEYS.has(String(item.key)),
+      (item) => 'key' in item && DIRECT_MENU_KEYS.has(String(item.key)),
     ),
   ];
 

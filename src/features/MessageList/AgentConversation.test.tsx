@@ -92,8 +92,8 @@ describe('AgentConversation avatar', () => {
     expect(screen.getByTestId('agent-avatar')).toHaveTextContent('agt_cook:🍳');
   });
 
-  // A row that opens a direct Channel is that conversation, so its archive / trash live here.
-  it('offers the direct Channel archive and trash actions beside the Agent menu', () => {
+  // A direct conversation is the chat with one Agent: it cannot be archived or trashed.
+  it('offers no archive or trash for an open direct Channel', () => {
     render(
       createElement(AgentConversation, {
         active: false,
@@ -101,9 +101,7 @@ describe('AgentConversation avatar', () => {
       }),
     );
 
-    expect(screen.getByTestId('menu')).toHaveTextContent(
-      'delete,divider,channel-archive,channel-delete',
-    );
+    expect(screen.getByTestId('menu').textContent).toBe('delete');
   });
 
   it('offers unarchive instead for an archived direct Channel', () => {

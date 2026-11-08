@@ -71,7 +71,7 @@ describe('MemberStatus in a direct conversation', () => {
   it('keeps the Agent environment setup in the menu', () => {
     render(createElement(MemberStatus, { detail: detail() }));
 
-    expect(menuKeys()).toEqual(['openAgent', 'environment', 'copyId', 'archive', 'delete']);
+    expect(menuKeys()).toEqual(['openAgent', 'environment', 'copyId']);
     fireEvent.click(screen.getByText('environment'));
     expect(openEnvironment).toHaveBeenCalledWith('chn_cook', expect.objectContaining(cook));
   });
