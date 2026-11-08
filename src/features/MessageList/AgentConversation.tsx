@@ -64,8 +64,6 @@ const AgentConversation = memo<AgentConversationProps>(({ active, conversation }
       : undefined;
     return detail ? directAvatarState(detail) : replyAvatarState(directChannel.replyJobs ?? []);
   });
-  // A blocked or stopping reply is not running; the avatar alone shows it is waiting.
-  const running = chatRunning || replyState === 'working' || replyState === 'thinking';
   const avatarState = replyState ?? (chatRunning ? 'working' : undefined);
   const title = agentDisplayName(item, t('untitledAgent'));
   const avatarSrc = typeof avatar === 'string' ? avatar : undefined;
@@ -109,7 +107,7 @@ const AgentConversation = memo<AgentConversationProps>(({ active, conversation }
       activeAt={activeAt}
       contextMenuItems={menuItems}
       preview={preview}
-      running={running}
+      running={chatRunning}
       title={title}
       unread={conversation.unread ?? item.unreadCount}
       url={url}
