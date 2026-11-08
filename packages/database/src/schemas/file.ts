@@ -27,7 +27,6 @@ import {
   timestamptz,
   updatedAt,
 } from './_helpers';
-import { agents } from './agent';
 import { asyncTasks } from './asyncTask';
 import { users } from './user';
 import { workspaces } from './workspace';
@@ -164,12 +163,9 @@ export const documents = pgTable(
     /**
      * Agent that created this document through a tool (e.g. notebook or
      * knowledge base), used to separate agent output from user-authored
-     * documents. `NULL` means user-created, or that the creating agent has
-     * since been deleted.
+     * documents. `NULL` means user-created.
      */
-    createdByAgentId: text('created_by_agent_id').references(() => agents.id, {
-      onDelete: 'set null',
-    }),
+    createdByAgentId: text('created_by_agent_id'),
 
     /**
      * Visibility within the owning workspace. `public` (default) means every

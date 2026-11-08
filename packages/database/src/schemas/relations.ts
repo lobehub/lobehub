@@ -2,7 +2,7 @@ import { relations } from 'drizzle-orm';
 import { index, pgTable, primaryKey, text, uuid, varchar } from 'drizzle-orm/pg-core';
 
 import { createdAt } from './_helpers';
-import { agents } from './agent';
+import { agents, agentsFiles, agentsKnowledgeBases } from './agent';
 import {
   agentEvalBenchmarks,
   agentEvalDatasets,
@@ -10,7 +10,6 @@ import {
   agentEvalRunTopics,
   agentEvalTestCases,
 } from './agentEvals';
-import { agentsFiles, agentsKnowledgeBases } from './agentKnowledge';
 import { agentShares } from './agentShare';
 import { asyncTasks } from './asyncTask';
 import { chatGroups, chatGroupsAgents } from './chatGroup';
