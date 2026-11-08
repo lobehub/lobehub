@@ -62,7 +62,14 @@ const Item = ({ item, now }: { item: AgentRunBoardAttentionItem; now: Date }) =>
       disabled={!item.topicId}
       type={'button'}
       {...stylex.props(styles.item)}
-      onClick={() => openDrawer({ agentId: item.agentId, title, topicId: item.topicId })}
+      onClick={() =>
+        openDrawer({
+          agentId: item.agentId,
+          runningOperation: item.runningOperation,
+          title,
+          topicId: item.topicId,
+        })
+      }
     >
       <Flexbox gap={4}>
         <Flexbox horizontal align={'center'} gap={8}>

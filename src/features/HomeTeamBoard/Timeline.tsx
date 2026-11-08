@@ -152,7 +152,14 @@ const Bar = ({
           insetInlineStart: `${left}%`,
           width: `${width}%`,
         })}
-        onClick={() => openDrawer({ agentId, title, topicId: run.topicId })}
+        onClick={() =>
+          openDrawer({
+            agentId,
+            runningOperation: run.runningOperation,
+            title,
+            topicId: run.topicId,
+          })
+        }
       >
         {runningShare !== null && (
           <span

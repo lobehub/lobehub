@@ -1,9 +1,11 @@
+import type { AgentRunBoardRunningOperation } from '@lobechat/types';
 import { useCallback } from 'react';
 
 import { useTaskStore } from '@/store/task';
 
 export interface RunDrawerTarget {
   agentId: string;
+  runningOperation: AgentRunBoardRunningOperation | null;
   title: string;
   topicId: string | null;
 }
@@ -14,11 +16,11 @@ export const useOpenRunDrawer = () => {
   const openTopicDrawer = useTaskStore((s) => s.openTopicDrawer);
 
   return useCallback(
-    ({ agentId, title, topicId }: RunDrawerTarget) => {
+    ({ agentId, runningOperation, title, topicId }: RunDrawerTarget) => {
       if (!topicId) return;
       // Clears any prior drawer state, so it has to run before opening.
       setActiveTaskId(undefined);
-      openTopicDrawer(topicId, { agentId, title });
+      openTopicDrawer(topicId, { agentId, runningOperation: runningOperation ?? undefined, title });
     },
     [openTopicDrawer, setActiveTaskId],
   );

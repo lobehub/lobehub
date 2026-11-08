@@ -1,4 +1,4 @@
-import type { AgentOperationStatus } from '@lobechat/types';
+import type { AgentOperationStatus, AgentRunBoardRunningOperation } from '@lobechat/types';
 import { and, desc, eq, gte, inArray, isNotNull, isNull, ne, or, sql } from 'drizzle-orm';
 
 import {
@@ -8,7 +8,6 @@ import {
   chatGroups,
   tasks,
   taskTopics,
-  threads,
   topics,
 } from '../schemas';
 import type { LobeChatDatabase } from '../type';
@@ -37,10 +36,10 @@ export interface AgentRunBoardRow {
   /** Empty when the run never wrote an intervention row (client-side asks, self-hosted). */
   interventions: AgentRunBoardInterventionRow[];
   model: string | null;
+  runningOperation: AgentRunBoardRunningOperation | null;
   startedAt: Date | null;
   status: AgentOperationStatus;
   taskName: string | null;
-  threadTitle: string | null;
   topicId: string | null;
   topicTitle: string | null;
   trigger: string | null;
@@ -134,10 +133,10 @@ export class AgentRunBoardModel {
         heteroType: sql<string | null>`${topics.metadata} -> 'runningOperation' ->> 'heteroType'`,
         id: agentOperations.id,
         model: agentOperations.model,
+        runningOperation: sql<AgentRunBoardRunningOperation | null>`${topics.metadata} -> 'runningOperation'`,
         startedAt: agentOperations.startedAt,
         status: agentOperations.status,
         taskName: tasks.name,
-        threadTitle: threads.title,
         topicId: agentOperations.topicId,
         topicTitle: topics.title,
         trigger: agentOperations.trigger,
@@ -152,7 +151,6 @@ export class AgentRunBoardModel {
       .innerJoin(topics, eq(agentOperations.topicId, topics.id))
       .leftJoin(chatGroups, eq(agentOperations.chatGroupId, chatGroups.id))
       .leftJoin(tasks, eq(agentOperations.taskId, tasks.id))
-      .leftJoin(threads, eq(agentOperations.threadId, threads.id))
       .where(
         and(
           eq(agentOperations.workspaceId, this.workspaceId),

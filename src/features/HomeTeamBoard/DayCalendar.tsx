@@ -75,7 +75,14 @@ const CalendarItem = ({ item }: { item: HourCellItem }) => {
       title={`${title} · ${t(`team.status.${run.status}`)}`}
       type={'button'}
       {...stylex.props(styles.item)}
-      onClick={() => openDrawer({ agentId, title, topicId: run.topicId })}
+      onClick={() =>
+        openDrawer({
+          agentId,
+          runningOperation: run.runningOperation,
+          title,
+          topicId: run.topicId,
+        })
+      }
     >
       <span {...sx(styles.dot, { backgroundColor: RUN_STATUS_VISUALS[run.status].color })} />
       <span {...stylex.props(styles.title)}>{title}</span>

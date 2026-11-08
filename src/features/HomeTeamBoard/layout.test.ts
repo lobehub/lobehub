@@ -25,6 +25,7 @@ const run = (
   endedAt: to === null ? null : at(to),
   id,
   model: null,
+  runningOperation: null,
   startedAt: at(from),
   status: to === null ? 'running' : 'done',
   title: null,

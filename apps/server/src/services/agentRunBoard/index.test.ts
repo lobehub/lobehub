@@ -26,8 +26,8 @@ const row = (overrides: Partial<AgentRunBoardRow> = {}): AgentRunBoardRow => ({
   model: 'm',
   startedAt: minutesAgo(30),
   status: 'running',
+  runningOperation: null,
   taskName: null,
-  threadTitle: null,
   topicId: 't',
   topicTitle: 'Topic',
   trigger: 'chat',
@@ -146,6 +146,19 @@ describe('buildAgentRunBoard', () => {
 
     expect(board.attention[0].title).toBe('Refund');
     expect(board.attention[0].detail).toHaveLength(200);
+  });
+
+  it('hands the stream marker only to the viewer who started the run', () => {
+    const runningOperation = { assistantMessageId: 'msg', operationId: 'op' };
+    const mine = build([row({ runningOperation, userId: 'me' })]);
+    const theirs = build([row({ runningOperation })]);
+    const stale = build([
+      row({ runningOperation: { ...runningOperation, operationId: 'newer' }, userId: 'me' }),
+    ]);
+
+    expect(mine.lanes[0].runs[0].runningOperation).toEqual(runningOperation);
+    expect(theirs.lanes[0].runs[0].runningOperation).toBeNull();
+    expect(stale.lanes[0].runs[0].runningOperation).toBeNull();
   });
 
   it('drops a dead run whose lease froze before the window', () => {

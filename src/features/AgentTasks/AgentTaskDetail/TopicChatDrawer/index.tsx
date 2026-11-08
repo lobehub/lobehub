@@ -176,6 +176,7 @@ const TopicChatDrawer = memo<TopicChatDrawerProps>(({ defaultExpanded = false })
   const activeTaskId = useTaskStore((s) => s.activeTaskId);
   const agentId = useTaskStore(taskDetailSelectors.topicDrawerAgentId);
   const drawerTitle = useTaskStore(taskDetailSelectors.topicDrawerTitle);
+  const fallbackRunningOperation = useTaskStore((s) => s.activeTopicDrawerRunningOperation);
   const inputFocusRequest = useTaskStore(taskDetailSelectors.topicDrawerFocusRequest);
   const activity = useTaskStore(taskActivitySelectors.activeDrawerTopicActivity);
   const closeTopicDrawer = useTaskStore((s) => s.closeTopicDrawer);
@@ -433,7 +434,7 @@ const TopicChatDrawer = memo<TopicChatDrawerProps>(({ defaultExpanded = false })
             <TopicChatDrawerBody
               agentId={agentId!}
               inputFocusRequest={inputFocusRequest}
-              runningOperation={activity?.runningOperation}
+              runningOperation={activity?.runningOperation ?? fallbackRunningOperation}
               topicId={topicId!}
             />
           ))}

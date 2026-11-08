@@ -68,8 +68,14 @@ export const classifyRun = (row: AgentRunBoardRow, now: number): AgentRunBoardRu
   }
 };
 
-const runTitle = (row: AgentRunBoardRow) =>
-  row.taskName || row.threadTitle || row.topicTitle || null;
+// Not the thread's title: a click opens the parent topic, so the label has to match it.
+const runTitle = (row: AgentRunBoardRow) => row.taskName || row.topicTitle || null;
+
+/** Only the viewer's own run: the marker is what the drawer reattaches to the stream with. */
+const ownRunningOperation = (row: AgentRunBoardRow, viewerId: string) =>
+  row.userId === viewerId && row.runningOperation?.operationId === row.id
+    ? row.runningOperation
+    : null;
 
 const oldestPending = (row: AgentRunBoardRow, now: number) =>
   pendingInterventions(row, now).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())[0];
@@ -78,11 +84,14 @@ const toRun = (
   row: AgentRunBoardRow,
   status: AgentRunBoardRunStatus,
   now: number,
+  viewerId: string,
 ): AgentRunBoardRun => ({
   endedAt:
     status === 'running' || status === 'needs_human' ? null : (row.completedAt ?? row.updatedAt),
   id: row.id,
   model: row.model,
+  runningOperation:
+    status === 'running' || status === 'needs_human' ? ownRunningOperation(row, viewerId) : null,
   startedAt: row.startedAt ?? row.createdAt,
   status,
   title: runTitle(row),
@@ -104,12 +113,13 @@ const laneRank = (lane: AgentRunBoardLane) => {
 const latestStart = (lane: AgentRunBoardLane) =>
   Math.max(...lane.runs.map((r) => r.startedAt.getTime()));
 
-const attentionBase = (row: AgentRunBoardRow) => ({
+const attentionBase = (row: AgentRunBoardRow, viewerId: string) => ({
   agentAvatar: row.agentAvatar,
   agentBackgroundColor: row.agentBackgroundColor,
   agentId: row.agentId,
   agentTitle: row.agentTitle,
   operationId: row.id,
+  runningOperation: ownRunningOperation(row, viewerId),
   title: runTitle(row),
   topicId: row.topicId,
 });
@@ -123,7 +133,7 @@ const toNeedsHuman = (
   const ownerUserId = first?.userId ?? row.userId;
 
   return {
-    ...attentionBase(row),
+    ...attentionBase(row, viewerId),
     detail: first?.canonicalToolKey ?? null,
     isMine: ownerUserId === viewerId,
     kind: 'needs_human',
@@ -133,7 +143,7 @@ const toNeedsHuman = (
 };
 
 const toFailed = (row: AgentRunBoardRow, viewerId: string): AgentRunBoardAttentionItem => ({
-  ...attentionBase(row),
+  ...attentionBase(row, viewerId),
   detail: (row.errorMessage || row.errorType)?.slice(0, MAX_DETAIL_LENGTH) ?? null,
   isMine: row.userId === viewerId,
   kind: 'failed',
@@ -199,7 +209,7 @@ export const buildAgentRunBoard = ({
     const status = classifyRun(row, now);
     if (!status) continue;
 
-    const run = toRun(row, status, now);
+    const run = toRun(row, status, now, viewerId);
     // A dead row keeps a recent `created_at`, but it can have stopped before the window.
     if (run.endedAt && run.endedAt.getTime() < windowStart.getTime()) continue;
 
