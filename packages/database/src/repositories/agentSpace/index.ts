@@ -43,16 +43,19 @@ export class AgentSpaceRepository {
   ) {}
 
   /**
-   * Finds the agent's space, without creating one.
+   * Finds the space of an agent visible to the caller, without creating one.
    */
   async findId(agentId: string, db: Db = this.db): Promise<string | undefined> {
     const [space] = await db
       .select({ id: knowledgeBases.id })
       .from(agentsKnowledgeBases)
       .innerJoin(knowledgeBases, eq(knowledgeBases.id, agentsKnowledgeBases.knowledgeBaseId))
+      .innerJoin(agents, eq(agents.id, agentsKnowledgeBases.agentId))
       .where(
         and(
           eq(agentsKnowledgeBases.agentId, agentId),
+          // The mount is keyed by agent alone, so the caller's access comes from the agent.
+          buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, agents),
           eq(knowledgeBases.type, AGENT_SPACE_TYPE),
           sql`${knowledgeBases.settings} -> 'owner' ->> 'id' = ${agentId}`,
         ),

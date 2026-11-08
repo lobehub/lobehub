@@ -97,6 +97,14 @@ describe('AgentSpaceRepository', () => {
       ).resolves.toEqual([]);
     });
 
+    it('does not reveal an existing space to a caller who cannot see the agent', async () => {
+      await repository.ensure(agentId);
+      const outsider = new AgentSpaceRepository(db, otherUserId);
+
+      await expect(outsider.findId(agentId)).resolves.toBeUndefined();
+      await expect(outsider.ensure(agentId)).resolves.toBeUndefined();
+    });
+
     it('does not mistake an ordinary mounted library for the space', async () => {
       await db.insert(knowledgeBases).values({ id: 'kb-mounted', name: 'Mounted', userId });
       await db
