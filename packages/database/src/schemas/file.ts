@@ -202,9 +202,6 @@ export const documents = pgTable(
     index('documents_file_id_idx').on(table.fileId),
     index('documents_parent_id_idx').on(table.parentId),
     index('documents_knowledge_base_id_idx').on(table.knowledgeBaseId),
-    index('documents_created_by_agent_id_idx')
-      .on(table.createdByAgentId)
-      .where(isNotNull(table.createdByAgentId)),
     uniqueIndex('documents_client_id_user_id_unique').on(table.clientId, table.userId),
     uniqueIndex('documents_slug_user_id_unique')
       .on(table.slug, table.userId)

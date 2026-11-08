@@ -2180,7 +2180,6 @@ table documents {
     file_id [name: 'documents_file_id_idx']
     parent_id [name: 'documents_parent_id_idx']
     knowledge_base_id [name: 'documents_knowledge_base_id_idx']
-    created_by_agent_id [name: 'documents_created_by_agent_id_idx']
     (client_id, user_id) [name: 'documents_client_id_user_id_unique', unique]
     (slug, user_id) [name: 'documents_slug_user_id_unique', unique]
     workspace_id [name: 'documents_workspace_id_idx']
