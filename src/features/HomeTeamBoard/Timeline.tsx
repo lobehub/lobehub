@@ -17,6 +17,7 @@ import {
   layoutLaneTopics,
   NOW_TICK_INDEX,
   type PlacedRun,
+  resolveRowLabel,
   type TopicRow,
 } from './layout';
 import { RUN_STATUS_VISUALS } from './statusVisuals';
@@ -177,12 +178,17 @@ const Bar = ({
 };
 
 const RowLabel = ({ row, title }: { row: TopicRow; title: string }) => {
-  const offset = row.runs[0].left;
+  const { anchor, offset, room } = resolveRowLabel(row.runs);
 
   return (
     <span
       data-testid={'team-board-topic-title'}
-      {...sx(styles.barLabel, { insetInlineStart: `${offset}%`, maxWidth: `${100 - offset}%` })}
+      {...sx(styles.barLabel, {
+        ...(anchor === 'start'
+          ? { insetInlineStart: `${offset}%` }
+          : { insetInlineEnd: `${offset}%` }),
+        maxWidth: `${room}%`,
+      })}
     >
       <span {...stylex.props(styles.barLabelAuthor)}>
         <AuthorChip avatarOnly trigger={row.trigger} userId={row.startedBy} />

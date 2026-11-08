@@ -9,10 +9,12 @@ import type {
 export const MIN_BAR_PERCENT = 0.8;
 /** Past this an agent stops growing; the rest are counted. */
 export const MAX_TOPIC_ROWS = 5;
-/** The window fills the first 3/5 of the axis; the rest is room for what comes next. */
-const FUTURE_RATIO = 2 / 3;
-const TICKS_PER_PAST = 3;
+/** The window fills the first 4/5 of the axis; the rest is room for what comes next. */
+const FUTURE_RATIO = 1 / 4;
+const TICKS_PER_PAST = 4;
 const TICK_COUNT = 5;
+/** A title starting past this would run out of room, so it hangs left of its bar's end. */
+const LABEL_FLIP_PERCENT = 55;
 /** Which of the axis ticks is the present. */
 export const NOW_TICK_INDEX = TICKS_PER_PAST;
 
@@ -49,7 +51,7 @@ export interface LaneLayout {
   rows: TopicRow[];
 }
 
-/** The present sits at 3/5 of the axis, leaving the rest for time still to come. */
+/** The present sits at 4/5 of the axis, leaving the rest for time still to come. */
 export const resolveAxisEnd = (windowStart: Date, now: Date) =>
   new Date(now.getTime() + (now.getTime() - windowStart.getTime()) * FUTURE_RATIO);
 
@@ -111,6 +113,28 @@ export const layoutLaneTopics = (
   };
 };
 
+export interface RowLabelPlacement {
+  anchor: 'end' | 'start';
+  /** Distance from that edge of the axis, as a percentage. */
+  offset: number;
+  /** The room the title has, as a percentage of the axis. */
+  room: number;
+}
+
+/**
+ * Where a topic's title sits along its row: from the first bar's start, or back
+ * from the last bar's end when the row begins too late to fit it.
+ */
+export const resolveRowLabel = (runs: PlacedRun[]): RowLabelPlacement => {
+  const first = runs[0];
+  if (first.left <= LABEL_FLIP_PERCENT)
+    return { anchor: 'start', offset: first.left, room: 100 - first.left };
+
+  const last = runs.at(-1)!;
+  const end = last.left + last.width;
+  return { anchor: 'end', offset: 100 - end, room: end };
+};
+
 const HOUR_MS = 60 * 60_000;
 const DAY_HOURS = 24;
 
@@ -166,7 +190,7 @@ export const buildAxisTicks = (windowStart: Date, now: Date): Date[] => {
   return Array.from({ length: TICK_COUNT + 1 }, (_, i) => new Date(start + step * i));
 };
 
-/** Empty slices after the present, so the chart shares the timeline's 3/5 axis. */
+/** Empty slices after the present, so the chart shares the timeline's 4/5 axis. */
 export const extendActivityWithFuture = (
   activity: AgentRunBoardActivityBucket[],
 ): AgentRunBoardActivityBucket[] => {

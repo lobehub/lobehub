@@ -10,6 +10,7 @@ import {
   MAX_TOPIC_ROWS,
   MIN_BAR_PERCENT,
   NOW_TICK_INDEX,
+  resolveRowLabel,
 } from './layout';
 
 const start = new Date('2026-11-08T10:00:00Z');
@@ -40,14 +41,14 @@ describe('layoutLaneTopics', () => {
   it('positions a run as percentages and extends a live run to the end', () => {
     const { rows } = layoutLaneTopics([run('a', 30, null)], start, end);
 
-    expect(rows[0].runs[0]).toMatchObject({ left: 30, width: 30 });
+    expect(rows[0].runs[0]).toMatchObject({ left: 40, width: 40 });
   });
 
   it('clamps a run that began before the window', () => {
     const { rows } = layoutLaneTopics([run('a', -30, 6)], start, end);
 
     expect(rows[0].runs[0].left).toBe(0);
-    expect(rows[0].runs[0].width).toBe(6);
+    expect(rows[0].runs[0].width).toBe(8);
   });
 
   it('gives concurrent topics their own rows and lines up turns of one topic', () => {
@@ -109,7 +110,32 @@ describe('layoutLaneTopics', () => {
     const { rows } = layoutLaneTopics([run('a', 60, 60)], start, end);
 
     expect(rows[0].runs[0].width).toBe(MIN_BAR_PERCENT);
-    expect(rows[0].runs[0].left).toBe(60);
+    expect(rows[0].runs[0].left).toBe(80);
+  });
+});
+
+describe('resolveRowLabel', () => {
+  const placed = (left: number, width: number) => ({
+    left,
+    run: run('a', 0, 1),
+    runningShare: null,
+    width,
+  });
+
+  it('starts the title at the first bar', () => {
+    expect(resolveRowLabel([placed(10, 5), placed(40, 5)])).toEqual({
+      anchor: 'start',
+      offset: 10,
+      room: 90,
+    });
+  });
+
+  it('hangs a late row back from its last bar, using the room on its left', () => {
+    expect(resolveRowLabel([placed(70, 5), placed(78, 2)])).toEqual({
+      anchor: 'end',
+      offset: 20,
+      room: 80,
+    });
   });
 });
 
@@ -147,7 +173,7 @@ describe('buildHourCells', () => {
 });
 
 describe('buildAxisTicks', () => {
-  it('puts the present at 3/5 of the axis', () => {
+  it('puts the present at 4/5 of the axis', () => {
     const ticks = buildAxisTicks(start, end);
 
     expect(ticks).toHaveLength(6);
@@ -157,7 +183,7 @@ describe('buildAxisTicks', () => {
 });
 
 describe('extendActivityWithFuture', () => {
-  it('appends empty slices for the last 2/5 of the axis', () => {
+  it('appends empty slices for the last 1/5 of the axis', () => {
     const empty = { done: 0, failed: 0, needsHuman: 0, running: 0 };
     const activity = Array.from({ length: 12 }, (_, i) => ({
       ...empty,
@@ -166,7 +192,7 @@ describe('extendActivityWithFuture', () => {
     }));
     const extended = extendActivityWithFuture(activity);
 
-    expect(extended).toHaveLength(20);
+    expect(extended).toHaveLength(15);
     expect(extended[12]).toEqual({ ...empty, startedAt: at(60) });
   });
 });
