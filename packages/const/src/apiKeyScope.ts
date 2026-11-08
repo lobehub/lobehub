@@ -210,6 +210,7 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   // memory, tool results — and `getSnapshotUrl` hands back a presigned URL that
   // needs no further auth, so a restricted key holding one would read past its
   // own scope. Same call as `llmGenerationTracing`.
+  agentRunBoard: 'blocked',
   agentTrace: 'blocked',
   aiAgent: rw('agent:read', 'agent:write'),
   aiChat: { any: 'model:invoke' },

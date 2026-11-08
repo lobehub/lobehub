@@ -56,6 +56,14 @@ export const FeatureFlagsSchema = z.object({
   agent_llm_relay: FeatureFlagValue.optional(),
 
   /**
+   * Rollout gate for deferring an operation's init: a plain chat send returns
+   * once its messages are durable and the step-0 worker runs tool discovery and
+   * context assembly. Off: the send path runs them before returning. Array
+   * values are user ids.
+   */
+  agent_deferred_init: FeatureFlagValue.optional(),
+
+  /**
    * Dashboards: monitoring widgets built by the `builtin-dashboard` agent tool,
    * the home / project dashboard pages, the widget Portal and in-chat widget
    * previews. Off: none of it is reachable and the tool is never offered;
@@ -206,6 +214,7 @@ export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
 
   // Off until the client executor ships everywhere; allowlist first.
   agent_llm_relay: false,
+  agent_deferred_init: false,
 
   // Off until an admin publishes a user allowlist or flips it to true.
   dashboard: false,
@@ -270,6 +279,11 @@ export const mapFeatureFlagsEnvToState = (
       'agent_gateway_mux_mobile',
     ),
     enableLlmRelay: evaluateFeatureFlag(config.agent_llm_relay, userId, 'agent_llm_relay'),
+    enableDeferredInit: evaluateFeatureFlag(
+      config.agent_deferred_init,
+      userId,
+      'agent_deferred_init',
+    ),
     enableDashboard: evaluateFeatureFlag(config.dashboard, userId, 'dashboard'),
     enableMcpApps: evaluateFeatureFlag(config.mcp_apps, userId, 'mcp_apps'),
     enableAgentKnowledgeSpace: evaluateFeatureFlag(

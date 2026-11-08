@@ -1,4 +1,4 @@
-import type { TaskDetailActivityAuthor, TaskDetailData } from '@lobechat/types';
+import type { TaskDetailActivity, TaskDetailActivityAuthor, TaskDetailData } from '@lobechat/types';
 import {
   clearTaskReposSelection,
   readTaskExecutionConfig,
@@ -404,6 +404,7 @@ export class TaskDetailSliceActionImpl {
         activeTaskId: cachedTaskId(taskId, this.#get().taskRefIndex),
         activeTopicDrawerAgentId: undefined,
         activeTopicDrawerFocusRequest: undefined,
+        activeTopicDrawerRunningOperation: undefined,
         activeTopicDrawerTitle: undefined,
         activeTopicDrawerTopicId: undefined,
       },
@@ -422,7 +423,12 @@ export class TaskDetailSliceActionImpl {
    */
   openTopicDrawer = (
     topicId: string,
-    topic?: { agentId?: string; autoFocus?: boolean; title?: string },
+    topic?: {
+      agentId?: string;
+      autoFocus?: boolean;
+      runningOperation?: TaskDetailActivity['runningOperation'];
+      title?: string;
+    },
   ): void => {
     const current = this.#get();
     if (current.activeTopicDrawerTopicId === topicId && !topic?.autoFocus) return;
@@ -432,6 +438,7 @@ export class TaskDetailSliceActionImpl {
         activeTopicDrawerFocusRequest: topic?.autoFocus
           ? (current.activeTopicDrawerFocusRequest ?? 0) + 1
           : undefined,
+        activeTopicDrawerRunningOperation: topic?.runningOperation,
         activeTopicDrawerTitle: topic?.title,
         activeTopicDrawerTopicId: topicId,
       },
@@ -446,6 +453,7 @@ export class TaskDetailSliceActionImpl {
       {
         activeTopicDrawerAgentId: undefined,
         activeTopicDrawerFocusRequest: undefined,
+        activeTopicDrawerRunningOperation: undefined,
         activeTopicDrawerTitle: undefined,
         activeTopicDrawerTopicId: undefined,
       },

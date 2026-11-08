@@ -13,6 +13,7 @@ import type {
   ToolSource,
 } from '@lobechat/context-engine';
 import type {
+  AgentRunInitRequest,
   AgentShareVisitorContext,
   ChatTopicBotContext,
   EvalToolForwardingConfig,
@@ -613,6 +614,12 @@ export interface OperationCreationParams {
    * sub-tree back to its root.
    */
   parentOperationId?: string;
+  /**
+   * Create the operation without its init: the step-0 worker runs it from this
+   * request. The init's own fields (`toolSet`, `initialMessages`, …) are then
+   * ignored and `initialContext` is only the placeholder step 0 is queued with.
+   */
+  pendingInitRequest?: AgentRunInitRequest;
   /**
    * A project's root instruction files, collected once during operation prep.
    * Run context for the context engine to inject — see `expertise`.
