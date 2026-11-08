@@ -24,6 +24,14 @@ export const userSkillRouter = router({
   get: userSkillProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => (await ctx.userSkillService.getSkill(input.id)) ?? null),
+
+  /** One version as it shipped: its `SKILL.md` and the files beside it. */
+  getVersion: userSkillProcedure
+    .input(z.object({ id: z.string(), version: z.number().int().min(1) }))
+    .query(
+      async ({ ctx, input }) =>
+        (await ctx.userSkillService.getVersion(input.id, input.version)) ?? null,
+    ),
 });
 
 export type UserSkillRouter = typeof userSkillRouter;

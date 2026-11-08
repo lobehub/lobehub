@@ -29,6 +29,11 @@ export enum FileSource {
   ImageGeneration = 'image_generation',
   PageEditor = 'page-editor',
   /**
+   * A file a skill package holds: a binary file beside its `SKILL.md`, or a
+   * published version's archive. Owned by the skill, not by the library.
+   */
+  Skill = 'skill',
+  /**
    * Image an agent's tool returned — a Claude Code `Read` on an image file —
    * uploaded so the tool card can preview it. Owned by that message, not by
    * the user's library.
@@ -55,6 +60,7 @@ export const LIBRARY_HIDDEN_FILE_SOURCES: FileSource[] = [
   FileSource.Canvas,
   FileSource.ToolResult,
   FileSource.ChatAttachment,
+  FileSource.Skill,
 ];
 
 /** Sources a generation model wrote, as opposed to anything a human put there. */

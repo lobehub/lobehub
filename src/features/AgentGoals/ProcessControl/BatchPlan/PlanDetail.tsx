@@ -8,6 +8,7 @@ import SkillViewer from '@/features/SkillViewer';
 import type { GoalGraphView } from '../goalGraphViewModel';
 import type { BatchModel, BatchRound } from '../Graph/batchModel';
 import { usePlanVersions, usePlanVersionSelection } from './planVersion';
+import { useSkillVersion } from './skillVersions';
 
 /**
  * A batch's plan, opened from its node, read as the skill it is kept as: the
@@ -26,19 +27,24 @@ interface PlanDetailProps {
 const PlanDetail = memo<PlanDetailProps>(({ graph, model, round }) => {
   const { t } = useTranslation('chat');
   const { selected } = usePlanVersionSelection();
-  const { files, isLoading, versions } = usePlanVersions(graph, model);
-
-  if (isLoading) return <Loading />;
-
+  const { files: latestFiles, isLoading, skillId, versions } = usePlanVersions(graph, model);
   const revision = selected ?? round.planVersion;
   const current = versions.find((version) => version.revision === revision);
+  const { data: shipped, isLoading: isVersionLoading } = useSkillVersion(
+    current && skillId,
+    revision,
+  );
+
+  if (isLoading || isVersionLoading) return <Loading />;
+
   const forked = model.rounds.find((item) => item.planVersion === revision)?.forked;
 
   return (
     <SkillViewer
-      content={current?.content}
+      content={shipped?.content ?? current?.content}
       entityId={`${model.planSkill?.id ?? model.batchId}:${revision}`}
-      files={files}
+      // The package as this version shipped it, when it kept its own files.
+      files={shipped?.files ?? latestFiles}
       notice={
         forked && (
           <Text fontSize={12} style={{ paddingBlockStart: 12 }} type={'secondary'}>

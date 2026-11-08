@@ -3,9 +3,13 @@ import type { LobeChatDatabase } from '@lobechat/database';
 import { resourcesTreePrompt } from '@lobechat/prompts';
 import type { SkillResourceMeta } from '@lobechat/types';
 import { sha256 } from 'js-sha256';
+import pMap from 'p-map';
 
+import { FileModel } from '@/database/models/file';
 import {
+  type UserSkillArchiveUpload,
   type UserSkillFile,
+  type UserSkillFileEdits,
   type UserSkillItem,
   UserSkillModel,
   type UserSkillOrigin,
@@ -13,6 +17,11 @@ import {
 } from '@/database/models/userSkill';
 
 import { renderSkillIndexContent, validateSkillName } from '../skillManagement/frontmatter';
+import { packSkillArchive, type SkillArchiveFile, unpackSkillArchive } from './archive';
+import { skillStorage } from './storage';
+
+/** Storage reads one publish runs at once. */
+const STORAGE_READ_CONCURRENCY = 5;
 
 /**
  * The user's own skill library: skills that belong to the user rather than to
@@ -22,6 +31,11 @@ import { renderSkillIndexContent, validateSkillName } from '../skillManagement/f
  * Every run lists the library (name and description) and can activate a skill
  * by name; a run that names a skill in its plugins — `user-skills:<name>` — gets
  * its content injected up front, scripts included.
+ *
+ * Every write publishes a version: the whole package zipped and uploaded, then
+ * recorded with the write in one transaction. A run reads the skill's
+ * documents, which every write leaves equal to its latest version; scripts run
+ * from that version's archive.
  */
 
 export const isUserSkillIdentifier = (id: string) => id.startsWith(USER_SKILLS_IDENTIFIER_PREFIX);
@@ -48,6 +62,8 @@ export const canonicalUserSkillIdentifier = (name: string): string | undefined =
 
 /** A skill as the skill pool and the skills runtime take it. */
 export interface UserRuntimeSkill {
+  /** The latest version's archive, which `execScript` unpacks to run its scripts. */
+  archive?: { fileHash: string; url: string };
   /** `SKILL.md` alone — `activateSkill` appends the tree of its scripts itself. */
   body: string;
   /** `SKILL.md`, then the tree of its scripts: what a run injects up front. */
@@ -61,13 +77,43 @@ export interface UserRuntimeSkill {
 
 export interface UserSkillDetail extends UserSkillItem {
   identifier: string;
-  versions: UserSkillVersion[];
+  /** Each version's number, note and origin; its package is read with `getVersion`. */
+  versions: Omit<UserSkillVersion, 'archive' | 'content'>[];
+}
+
+/** One version as it shipped: its `SKILL.md` and the files beside it. */
+export interface UserSkillVersionDetail {
+  content: string;
+  /**
+   * The files that version shipped. Absent on a version from before archives,
+   * which kept only its `SKILL.md`: read the skill's current files.
+   */
+  files?: SkillArchiveFile[];
+  note?: string;
+  origin?: UserSkillOrigin;
+  version: number;
 }
 
 const MAX_NAME_ATTEMPTS = 50;
 
-const toResources = (files: UserSkillFile[]): Record<string, SkillResourceMeta> | undefined =>
-  files.length
+/** Writes that lose the race to another publish rebuild their archive this many times. */
+const MAX_PUBLISH_ATTEMPTS = 3;
+
+/** The package after `edits`: removed paths dropped, upserted ones replaced or added. */
+const applyEdits = (files: UserSkillFile[], edits?: UserSkillFileEdits): UserSkillFile[] => {
+  if (!edits) return files;
+  const byPath = new Map(files.map((file) => [file.path, file]));
+  for (const path of edits.remove ?? []) byPath.delete(path);
+  for (const file of edits.upsert ?? []) byPath.set(file.path, file);
+  return [...byPath.values()];
+};
+
+const toResources = (all: UserSkillFile[]): Record<string, SkillResourceMeta> | undefined => {
+  // Resources are served inline as text. A binary file's bytes sit in its
+  // `files` row, which the skills runtime does not read for user skills yet, so
+  // it is left out rather than offered as an empty text file.
+  const files = all.filter((file) => !file.fileId);
+  return files.length
     ? Object.fromEntries(
         files.map((file) => [
           file.path,
@@ -75,11 +121,13 @@ const toResources = (files: UserSkillFile[]): Record<string, SkillResourceMeta> 
         ]),
       )
     : undefined;
+};
 
 export const toRuntimeSkill = (skill: UserSkillItem): UserRuntimeSkill => {
   const identifier = buildUserSkillIdentifier(skill.name);
   const resources = toResources(skill.files);
   return {
+    ...(skill.archive && { archive: { fileHash: skill.archive.fileHash, url: skill.archive.url } }),
     body: skill.content,
     content: resources
       ? `${skill.content}\n\n${resourcesTreePrompt(identifier, resources)}`
@@ -95,6 +143,9 @@ export const toRuntimeSkill = (skill: UserSkillItem): UserRuntimeSkill => {
 
 export class UserSkillService {
   private model: UserSkillModel;
+  private db: LobeChatDatabase;
+  private userId: string;
+  private workspaceId?: string;
 
   /**
    * `callerAgentVisibility` is the run's agent: a workspace-public agent reads
@@ -107,7 +158,38 @@ export class UserSkillService {
     callerAgentVisibility?: 'private' | 'public' | null,
   ) {
     this.model = new UserSkillModel(db, userId, workspaceId, callerAgentVisibility);
+    this.db = db;
+    this.userId = userId;
+    this.workspaceId = workspaceId;
   }
+
+  private owner = () => ({ db: this.db, userId: this.userId, workspaceId: this.workspaceId });
+
+  /**
+   * Zips a package and uploads it, keyed by its hash: the same package
+   * published again lands on the same object.
+   */
+  private publish = async (skillMd: string, files: UserSkillFile[]) => {
+    const binaryIds = files.flatMap((file) => (file.fileId ? [file.fileId] : []));
+    const stored = binaryIds.length
+      ? await new FileModel(this.db, this.userId, this.workspaceId).findByIds(binaryIds)
+      : [];
+    // A package's size is the caller's, so its storage reads go a few at a time.
+    const entries = await pMap(
+      files,
+      async (file) => {
+        if (!file.fileId) return { data: file.content, path: file.path };
+        const row = stored.find((item) => item.id === file.fileId);
+        if (!row) throw new Error(`Skill file ${file.path} names a file that is not there`);
+        return { data: await skillStorage.read(this.owner(), row.url), path: file.path };
+      },
+      { concurrency: STORAGE_READ_CONCURRENCY },
+    );
+    const { bytes, hash } = packSkillArchive(skillMd, entries);
+    const url = `skills/user/${hash}.zip`;
+    await skillStorage.write(this.owner(), url, bytes);
+    return { fileHash: hash, size: bytes.length, url } satisfies UserSkillArchiveUpload;
+  };
 
   /** A free name from `base`: `base`, then `base-2`, `base-3`, … */
   private freeName = async (base: string) => {
@@ -130,12 +212,14 @@ export class UserSkillService {
     title: string;
   }): Promise<UserSkillItem> => {
     const name = await this.freeName(params.name);
+    const content = renderSkillIndexContent({
+      bodyMarkdown: params.body,
+      description: params.description,
+      name,
+    });
     return this.model.create({
-      content: renderSkillIndexContent({
-        bodyMarkdown: params.body,
-        description: params.description,
-        name,
-      }),
+      archive: await this.publish(content, params.files ?? []),
+      content,
       description: params.description,
       files: params.files,
       name,
@@ -145,32 +229,58 @@ export class UserSkillService {
     });
   };
 
-  /** Writes the next version of a skill's body. Returns its number. */
+  /** Writes and publishes the next version of a skill. Returns its number. */
   reviseSkill = async (
     id: string,
-    params: { body: string; note?: string; origin?: UserSkillOrigin },
+    params: {
+      body: string;
+      files?: UserSkillFileEdits;
+      note?: string;
+      origin?: UserSkillOrigin;
+    },
   ): Promise<number | undefined> => {
-    const skill = await this.model.findById(id);
-    if (!skill) return undefined;
-    return this.model.revise(id, {
-      content: renderSkillIndexContent({
+    for (let attempt = 1; attempt <= MAX_PUBLISH_ATTEMPTS; attempt++) {
+      const skill = await this.model.findById(id);
+      if (!skill) return undefined;
+      const content = renderSkillIndexContent({
         bodyMarkdown: params.body,
         description: skill.description,
         name: skill.name,
-      }),
-      note: params.note,
-      origin: params.origin,
-    });
+      });
+      // The archive is the package as it reads after this write, so it is built
+      // from the version read here; a publish landing in between makes it stale.
+      const result = await this.model.revise(id, {
+        archive: await this.publish(content, applyEdits(skill.files, params.files)),
+        baseVersion: skill.version,
+        content,
+        files: params.files,
+        note: params.note,
+        origin: params.origin,
+      });
+      if (result !== 'stale') return result;
+    }
+    throw new Error(`Skill ${id} kept changing while this version was published`);
   };
 
   getSkill = async (id: string): Promise<UserSkillDetail | undefined> => {
     const skill = await this.model.findById(id);
     if (!skill) return undefined;
+    const versions = await this.model.listVersions(id);
     return {
       ...skill,
       identifier: buildUserSkillIdentifier(skill.name),
-      versions: await this.model.listVersions(id),
+      versions: versions.map(({ archive: _, content: __, ...version }) => version),
     };
+  };
+
+  /** One version as it shipped, read back from its archive. */
+  getVersion = async (id: string, version: number): Promise<UserSkillVersionDetail | undefined> => {
+    const found = (await this.model.listVersions(id)).find((item) => item.version === version);
+    if (!found) return undefined;
+    const { note, origin } = found;
+    if (!found.archive) return { content: found.content ?? '', note, origin, version };
+    const unpacked = unpackSkillArchive(await skillStorage.read(this.owner(), found.archive.url));
+    return { ...unpacked, note, origin, version };
   };
 
   /** Every skill in the library, shaped for a run. */
