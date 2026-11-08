@@ -43,6 +43,7 @@ import type { Command } from 'commander';
 import { getTrpcClient } from '../api/client';
 import { cliVersion } from '../pkg';
 import { CoalescingBatchIngester } from '../utils/CoalescingBatchIngester';
+import { withHeteroSteer } from '../utils/heteroSteer';
 import { HeteroTraceRecorder } from '../utils/HeteroTraceRecorder';
 import { log } from '../utils/logger';
 import { createOperationHeartbeat } from '../utils/OperationHeartbeat';
@@ -1107,15 +1108,14 @@ const exec = async (options: ExecOptions): Promise<void> => {
       return { code: 1, signal: null as NodeJS.Signals | null };
     });
 
-    // Stream events. Each event is optionally written as JSONL and pushed
-    // into the ingester.  When intercepting resume errors, a matching
-    // `error` event is withheld from the ingester and flags a retry instead.
+    // Stream events (steering Claude Code, see withHeteroSteer); each is optionally written as JSONL
+    // and pushed into the ingester. A resume `error` is withheld and flags a retry instead.
     let resumeNotFound = false;
     let sawTerminalError = false;
     let terminalErrorMessage: string | undefined;
     let terminalErrorData: Record<string, unknown> | undefined;
     try {
-      for await (const event of handle.events) {
+      for await (const event of withHeteroSteer(handle, !!sink && { getTrpcClient, operationId })) {
         if (interceptResumeErrors && event.type === 'error') {
           const data = event.data as Record<string, unknown> | undefined;
           const msg = String(data?.message ?? data?.error ?? '');

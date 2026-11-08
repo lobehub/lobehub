@@ -1,8 +1,4 @@
-import type {
-  AgentInboxSourceType,
-  AgentMailAddress,
-  AgentMailAttachment,
-} from '@lobechat/types';
+import type { AgentInboxSourceType, AgentMailAddress, AgentMailAttachment } from '@lobechat/types';
 import {
   and,
   asc,
@@ -21,7 +17,7 @@ import {
 } from 'drizzle-orm';
 
 import type { AgentInboxMessageItem, NewAgentInboxMessage } from '../schemas';
-import { agentInboxMessages, agentMails } from '../schemas';
+import { agentInboxMessages, agentMails, signalDecisions } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { agentUsableBy } from '../utils/agent-access';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
@@ -291,6 +287,127 @@ export class AgentInboxModel {
       .returning({ id: agentInboxMessages.id });
 
     return rows.length > 0;
+  };
+
+  /**
+   * Take the items of one account that are waiting for a digest: deferred by a
+   * wake decision (a `defer` row in `signal_decisions` for the mail's signal),
+   * unread, unclaimed (or left behind by a dead worker) and received at or
+   * after `since`, oldest first. Mail that was merely left unread — stored while
+   * wake was off, or dropped past the wake budget — is never swept in. Claimed
+   * the way {@link claimWake} claims one item, so two flushes of the same digest
+   * cannot both take the same item.
+   *
+   * Returns the claimed items' ids; their content is read with
+   * {@link findEntries}.
+   */
+  static claimDigest = async (
+    db: LobeChatDatabase,
+    params: { accountId: string; limit: number; since: Date },
+  ): Promise<string[]> => {
+    const waiting = and(
+      eq(agentInboxMessages.accountId, params.accountId),
+      isNull(agentInboxMessages.readAt),
+      gte(agentInboxMessages.receivedAt, params.since),
+      or(
+        isNull(agentInboxMessages.wakeClaimedAt),
+        lt(
+          agentInboxMessages.wakeClaimedAt,
+          sql`now() - make_interval(secs => ${WAKE_CLAIM_LEASE_SECONDS})`,
+        ),
+      ),
+      sql`exists (
+        select 1 from ${agentMails}
+        join ${signalDecisions} on ${signalDecisions.signalId} = ${agentMails.signalId}
+        where ${agentMails.id} = ${agentInboxMessages.sourceId}
+          and ${agentInboxMessages.sourceType} = 'mail'
+          and ${signalDecisions.outcome} = 'defer'
+      )`,
+    );
+
+    // Two statements, not `update … where id in (select … limit … for update
+    // skip locked)`: a planner may run that subquery once per row, and the
+    // limit then no longer bounds the batch.
+    return db.transaction(async (tx) => {
+      const candidates = await tx
+        .select({ id: agentInboxMessages.id })
+        .from(agentInboxMessages)
+        .where(waiting)
+        .orderBy(asc(agentInboxMessages.receivedAt))
+        .limit(params.limit)
+        .for('update', { skipLocked: true });
+      if (candidates.length === 0) return [];
+
+      const claimed = await tx
+        .update(agentInboxMessages)
+        .set({ wakeClaimedAt: sql`now()` })
+        .where(
+          and(
+            inArray(
+              agentInboxMessages.id,
+              candidates.map((row) => row.id),
+            ),
+            waiting,
+          ),
+        )
+        .returning({ id: agentInboxMessages.id });
+      const ids = new Set(claimed.map((row) => row.id));
+
+      return candidates.map((row) => row.id).filter((id) => ids.has(id));
+    });
+  };
+
+  /** Several items with their content, unscoped, oldest first — for the digest run. */
+  static findEntries = async (db: LobeChatDatabase, ids: string[]): Promise<AgentInboxEntry[]> => {
+    if (ids.length === 0) return [];
+
+    return db
+      .select(entryColumns)
+      .from(agentInboxMessages)
+      .leftJoin(agentMails, mailOfItem)
+      .where(inArray(agentInboxMessages.id, ids))
+      .orderBy(asc(agentInboxMessages.receivedAt));
+  };
+
+  /** {@link releaseWake} for every item of a digest run that did not start, in one statement. */
+  static releaseWakes = async (db: LobeChatDatabase, ids: string[]): Promise<void> => {
+    if (ids.length === 0) return;
+
+    await db
+      .update(agentInboxMessages)
+      .set({ wakeClaimedAt: null })
+      .where(inArray(agentInboxMessages.id, ids));
+  };
+
+  /** {@link markWoken} for every item of one digest run, in one statement. */
+  static markManyWoken = async (
+    db: LobeChatDatabase,
+    ids: string[],
+    topicId: string | undefined,
+  ): Promise<void> => {
+    if (ids.length === 0) return;
+
+    await db
+      .update(agentInboxMessages)
+      .set({
+        readAt: sql`coalesce(${agentInboxMessages.readAt}, now())`,
+        ...(topicId ? { topicId } : {}),
+      })
+      .where(inArray(agentInboxMessages.id, ids));
+  };
+
+  /**
+   * Whether a topic was opened or continued by mail from outside. Unscoped:
+   * the runtime asks while gating a send, keyed by the run's own topic.
+   */
+  static isInboxTopic = async (db: LobeChatDatabase, topicId: string): Promise<boolean> => {
+    const [row] = await db
+      .select({ id: agentInboxMessages.id })
+      .from(agentInboxMessages)
+      .where(eq(agentInboxMessages.topicId, topicId))
+      .limit(1);
+
+    return !!row;
   };
 
   /** Give a wake claim back after the wake failed, so the provider's retry can wake it. */

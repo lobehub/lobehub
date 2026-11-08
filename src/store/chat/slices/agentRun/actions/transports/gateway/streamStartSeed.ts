@@ -2,6 +2,7 @@ import type { StreamStartData } from '@lobechat/agent-gateway-client';
 import type { ConversationContext } from '@lobechat/types';
 
 import { dbMessageSelectors } from '@/store/chat/slices/message/selectors';
+import type { OperationMetadata } from '@/store/chat/slices/operation/types';
 import type { ChatStore } from '@/store/chat/store';
 
 /**
@@ -67,3 +68,15 @@ export const insertStreamStartSeeds = (
     dispatchContext,
   );
 };
+
+/**
+ * Operation metadata a `stream_start` sets: the step is loading again, and a
+ * heterogeneous run whose producer delivers queued follow-ups into the live
+ * session (`liveSteer`, Claude Code) no longer holds its queue to the run end.
+ */
+export const streamStartOperationMetadata = (
+  data: object | undefined,
+): Partial<OperationMetadata> => ({
+  visibleLoadingDone: false,
+  ...(data && 'liveSteer' in data && data.liveSteer === true ? { liveSteer: true } : {}),
+});

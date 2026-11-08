@@ -475,6 +475,30 @@ describe('AgentAccountService — actions', () => {
     );
   });
 
+  it("lets the owner set an issued account's wake rules, in the shape this build accepts", async () => {
+    const { fetchImpl } = createMailFetch();
+    const service = buildService(fetchImpl);
+    const created = await service.provision({ agentId, provider: 'agent-mail' });
+
+    // Settings are the owner's, not the provider's: patchable on an issued account.
+    await expect(
+      service.update(created.id, {
+        settings: { wake: { mode: 'on', wakeSenders: [' CEO@LobeHub.com '] } },
+      }),
+    ).resolves.toBe(created.id);
+    expect(await service.get(created.id)).toMatchObject({
+      metadata: { clientId: 'cli_1', inboxId: 'inb_1' },
+      settings: { wake: { mode: 'on', wakeSenders: ['ceo@lobehub.com'] } },
+    });
+
+    await expect(
+      service.update(created.id, { settings: { wake: { mode: 'loud' } } as any }),
+    ).rejects.toMatchObject({ code: 'invalid_settings', reason: 'invalid' });
+    expect(await service.get(created.id)).toMatchObject({
+      settings: { wake: { mode: 'on' } },
+    });
+  });
+
   it('admits exactly the members the agent edit ACL admits, for every write', async () => {
     const workspaceId = 'agent-identity-service-ws';
     const editorId = 'agent-identity-service-editor';

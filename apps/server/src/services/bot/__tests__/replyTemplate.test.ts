@@ -748,6 +748,25 @@ describe('replyTemplate', () => {
       expect(zh).toContain('网络连接异常');
     });
 
+    it('treats a provider-closed stream as a transient network drop, not an internal error', () => {
+      const en = renderAgentError(
+        'ProviderStreamInterrupted',
+        'Stream ended unexpectedly',
+        'op-stream',
+      );
+      expect(en).toContain('Network error talking to the model provider');
+      expect(en).toContain('E6005');
+      expect(en).not.toContain('Something went wrong on our side');
+
+      const zh = renderAgentError(
+        'ProviderStreamInterrupted',
+        'Stream ended unexpectedly',
+        'op-stream',
+        'zh-CN',
+      );
+      expect(zh).toContain('网络连接异常');
+    });
+
     it('maps provider-capacity codes to the temporarily-unavailable copy', () => {
       const unavailable = renderAgentError('ProviderServiceUnavailable', undefined, 'op-1');
       const noChannel = renderAgentError('NoAvailableChannel', undefined, 'op-1');
