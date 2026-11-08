@@ -392,6 +392,8 @@ export const listHeterogeneousAgentModels = async (
         commandPath: resolved.command,
         cwd: cwd ?? process.cwd(),
         env: env as NodeJS.ProcessEnv,
+        // Keep the interactive catalog budget instead of the runtime's 60s turn
+        // budget: a cold boot should surface a retryable timeout, not a hang.
         timeoutMs: MODEL_CATALOG_TIMEOUT_MS,
       });
       return { models, status: 'success', updatedAt };

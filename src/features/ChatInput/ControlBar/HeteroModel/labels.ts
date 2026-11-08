@@ -1,5 +1,5 @@
 import type { HeterogeneousAgentMode, HeterogeneousReasoningEffort } from '@lobechat/types';
-import { HETEROGENEOUS_AGENT_DEFAULT_SELECTION } from '@lobechat/types';
+import { HETEROGENEOUS_AGENT_DEFAULT_SELECTION, parseModelTuple } from '@lobechat/types';
 
 import { MODEL_LABELS } from './modelOptions';
 
@@ -41,30 +41,14 @@ export const getEffortLabelKeys = (
 
 export const getModeLabelKey = (mode: HeterogeneousAgentMode) => MODE_LABEL_KEYS[mode];
 
-/**
- * DeepSeek Harness persists a selection as a JSON `[provider, model]` tuple so
- * two providers can offer the same model name. Only the model half is display.
- */
-const modelNameOfTuple = (model: string): string | undefined => {
-  if (!model.startsWith('[')) return;
-  try {
-    const parsed: unknown = JSON.parse(model);
-    if (Array.isArray(parsed) && parsed.length === 2 && typeof parsed[1] === 'string') {
-      return parsed[1];
-    }
-  } catch {
-    // Not a tuple; fall through to the plain label handling.
-  }
-};
-
 export const getModelLabel = (model: string, defaultLabel: string) => {
   if (model === HETEROGENEOUS_AGENT_DEFAULT_SELECTION) return defaultLabel;
 
   const aliasLabel = MODEL_LABELS[model];
   if (aliasLabel) return aliasLabel;
 
-  const tupleModel = modelNameOfTuple(model);
-  if (tupleModel) return tupleModel;
+  const tuple = parseModelTuple(model);
+  if (tuple) return tuple.modelId;
 
   const match = /^claude-(opus|sonnet|haiku)-(\d+)-(\d+)/.exec(model);
   if (!match) return model;

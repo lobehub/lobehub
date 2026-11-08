@@ -261,6 +261,40 @@ describe('spawnDshAcpSession', () => {
     expect(await methodsOf(logPath)).toEqual(['initialize', 'session/new', 'session/close']);
   });
 
+  it('dedupes repeated choice values from the runtime catalog', async () => {
+    const { dir, logPath } = await start({});
+    const duplicateConfig = [
+      {
+        ...MODEL_CONFIG[0],
+        options: [
+          {
+            group: 'deepseek-official',
+            name: 'DeepSeek',
+            options: [
+              { name: 'deepseek-v4-flash', value: '["deepseek-official","deepseek-v4-flash"]' },
+              {
+                name: 'deepseek-v4-flash (dup)',
+                value: '["deepseek-official","deepseek-v4-flash"]',
+              },
+              { name: 'DeepSeek-V4-Pro', value: '["deepseek-official","deepseek-v4-pro"]' },
+            ],
+          },
+        ],
+      },
+    ];
+
+    const models = await listDshAcpModels({
+      commandPath: path.join(dir, 'dsh'),
+      cwd: dir,
+      env: { ...process.env, FAKE_CONFIG: JSON.stringify(duplicateConfig), FAKE_LOG: logPath },
+    });
+
+    expect(models.map(({ id }) => id)).toEqual([
+      '["deepseek-official","deepseek-v4-flash"]',
+      '["deepseek-official","deepseek-v4-pro"]',
+    ]);
+  });
+
   it('switches to a requested model the runtime offers', async () => {
     const { handle, logPath } = await start({ model: 'deepseek-v4-pro' });
 

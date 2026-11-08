@@ -1,5 +1,6 @@
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 import type { HeterogeneousAgentModel } from '@lobechat/types';
+import { parseModelTuple } from '@lobechat/types';
 import { isRecord } from '@lobechat/utils/object';
 
 import type { AcpAgentSessionOptions } from './acpAgentSession';
@@ -133,16 +134,8 @@ const modelChoices = (configOptions: DshConfigOption[] | undefined) => {
 };
 
 /** The model name inside a `[provider, model]` choice value. */
-const modelOf = (value: string | undefined): string | undefined => {
-  if (!value) return;
-  try {
-    const parsed = JSON.parse(value);
-    if (Array.isArray(parsed) && typeof parsed[1] === 'string') return parsed[1];
-  } catch {
-    // Not the encoded pair; treat the raw value as the model name.
-  }
-  return value;
-};
+const modelOf = (value: string | undefined): string | undefined =>
+  value ? (parseModelTuple(value)?.modelId ?? value) : undefined;
 
 /** DeepSeek Harness's ACP lifecycle on the shared session base. */
 export class DshAcpSession extends AcpAgentSession<DshInitializeResult, DshAcpSessionOptions> {
@@ -179,25 +172,22 @@ export class DshAcpSession extends AcpAgentSession<DshInitializeResult, DshAcpSe
         throw new Error('DeepSeek Harness ACP did not expose a model configuration option');
       }
 
-      const models = modelChoices(result.configOptions).choices.map(({ name, value }) => {
+      const seen = new Set<string>();
+      const models = modelChoices(result.configOptions).choices.flatMap(({ name, value }) => {
         // The value is an opaque selection id; the `[provider, model]` pair is
         // only a convention, and an unrecognized encoding must still be usable.
-        let modelId = value;
-        let providerId = 'deepseek-harness';
-        try {
-          const pair: unknown = JSON.parse(value);
-          if (
-            Array.isArray(pair) &&
-            pair.length === 2 &&
-            typeof pair[0] === 'string' &&
-            typeof pair[1] === 'string'
-          ) {
-            [providerId, modelId] = pair;
-          }
-        } catch {
-          // Not the pair encoding; keep the opaque value as the model id.
-        }
-        return { id: value, ...(name ? { label: name } : {}), modelId, providerId };
+        if (seen.has(value)) return [];
+        seen.add(value);
+
+        const tuple = parseModelTuple(value);
+        return [
+          {
+            id: value,
+            ...(name ? { label: name } : {}),
+            modelId: tuple?.modelId ?? value,
+            providerId: tuple?.providerId ?? 'deepseek-harness',
+          },
+        ];
       });
 
       if (initialized?.agentCapabilities?.sessionCapabilities?.close) {

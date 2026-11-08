@@ -9,6 +9,7 @@ import {
   HETEROGENEOUS_AGENT_DEFAULT_SELECTION,
   isCodexServerDefaultCustomModel,
   isHeteroSelectorAvailable,
+  parseModelTuple,
 } from './heteroSelectorCapabilities';
 
 describe('selector availability', () => {
@@ -323,5 +324,21 @@ describe('DeepSeek Harness exec args', () => {
       '--model',
       '["deepseek-account","deepseek-flash"]',
     ]);
+  });
+});
+
+describe('parseModelTuple', () => {
+  it('decodes the provider and model halves', () => {
+    expect(parseModelTuple('["deepseek-account","deepseek-v4-pro"]')).toEqual({
+      modelId: 'deepseek-v4-pro',
+      providerId: 'deepseek-account',
+    });
+  });
+
+  it('returns undefined for opaque and malformed values', () => {
+    expect(parseModelTuple('deepseek-v4-pro')).toBeUndefined();
+    expect(parseModelTuple('["deepseek-account"]')).toBeUndefined();
+    expect(parseModelTuple('["deepseek-account",42]')).toBeUndefined();
+    expect(parseModelTuple('[not json')).toBeUndefined();
   });
 });

@@ -4,6 +4,7 @@ import {
   appendAttachedFilesToPrompt,
   collectHeteroAttachedFiles,
   isLocalHeterogeneousType,
+  isLocalRuntimeHeterogeneousType,
   resolveDispatchedClaudeCodeEntrypoint,
 } from '@lobechat/heterogeneous-agents';
 import {
@@ -322,7 +323,7 @@ export const prepareHeteroRun = async (
   // and need the selector flags (e.g. `--model <tuple>`) built for it, even
   // though they are not local-CLI descriptor agents.
   const heteroExecArgs =
-    isLocalHeterogeneousType(heteroType) || heteroType === 'deepseek-harness'
+    isLocalHeterogeneousType(heteroType) || isLocalRuntimeHeterogeneousType(heteroType)
       ? buildHeteroExecArgs(
           heterogeneousProvider?.type === heteroType
             ? applyTopicModelToHeterogeneousProvider(

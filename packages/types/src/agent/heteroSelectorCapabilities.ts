@@ -303,6 +303,34 @@ const resolvePersistedModel = (source: HeteroSelectionSource | null | undefined)
     : HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
 };
 
+export interface ParsedModelTuple {
+  modelId: string;
+  providerId: string;
+}
+
+/**
+ * Decode a persisted `[provider, model]` selection value. Catalog providers use
+ * this encoding when two providers can offer the same model name; opaque values
+ * return undefined so callers can keep the raw value.
+ */
+export const parseModelTuple = (value: string): ParsedModelTuple | undefined => {
+  if (!value.startsWith('[')) return;
+
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (
+      Array.isArray(parsed) &&
+      parsed.length === 2 &&
+      typeof parsed[0] === 'string' &&
+      typeof parsed[1] === 'string'
+    ) {
+      return { modelId: parsed[1], providerId: parsed[0] };
+    }
+  } catch {
+    // Not the encoded pair; callers fall back to the raw value.
+  }
+};
+
 export type HeteroCliEncoding =
   { flags: readonly string[]; kind: 'flag' } | { key: string; kind: 'config' };
 
