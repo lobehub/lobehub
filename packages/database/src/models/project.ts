@@ -21,6 +21,7 @@ import { tasks } from '../schemas/task';
 import { topics } from '../schemas/topic';
 import { works } from '../schemas/work';
 import type { LobeChatDatabase } from '../type';
+import { isUserKnowledgeBase } from '../utils/knowledgeBaseType';
 import { joinTopicAgentsToProjects } from '../utils/projectTopicAgents';
 import { topicRunStartedAtColumn } from '../utils/topicRunStartedAt';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
@@ -720,6 +721,7 @@ export class ProjectModel {
       .where(
         and(
           eq(projectKnowledgeBases.projectId, projectId),
+          isUserKnowledgeBase(),
           buildWorkspaceWhere(
             { userId: this.userId, workspaceId: this.workspaceId },
             knowledgeBases,
@@ -915,6 +917,7 @@ export class ProjectModel {
         and(
           eq(projectKnowledgeBases.projectId, projectId),
           eq(projectKnowledgeBases.enabled, true),
+          isUserKnowledgeBase(),
           buildWorkspaceWhere(
             { userId: this.userId, workspaceId: this.workspaceId },
             knowledgeBases,

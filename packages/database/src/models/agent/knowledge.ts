@@ -1,6 +1,7 @@
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, or } from 'drizzle-orm';
 
 import { agentsFiles, agentsKnowledgeBases, files, knowledgeBases } from '../../schemas';
+import { isUserKnowledgeBase } from '../../utils/knowledgeBaseType';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../../utils/workspace';
 import { type AgentModelContext } from './context';
 
@@ -22,7 +23,14 @@ export const getAgentAssignedKnowledge = async (ctx: AgentModelContext, id: stri
     ctx.db
       .select({ enabled: agentsKnowledgeBases.enabled, knowledgeBases })
       .from(agentsKnowledgeBases)
-      .where(and(eq(agentsKnowledgeBases.agentId, id), ctx.agentsKnowledgeBasesOwnership()))
+      .where(
+        and(
+          eq(agentsKnowledgeBases.agentId, id),
+          ctx.agentsKnowledgeBasesOwnership(),
+          // Keep "unavailable" mounts (left join missed); only an owned space is hidden.
+          or(isNull(knowledgeBases.id), isUserKnowledgeBase()),
+        ),
+      )
       .orderBy(desc(agentsKnowledgeBases.createdAt))
       .leftJoin(
         knowledgeBases,
