@@ -59,6 +59,24 @@ export const packageFilesSchema = z
 export type PackageFile = z.infer<typeof packageFilesSchema>[number];
 
 /**
+ * A package as an edit leaves it: the paths it drops go, the paths it names
+ * replace what was there, and everything else stays. A revision is an edit, so
+ * this is the set its limits are checked against.
+ */
+export const mergePackageFiles = <T extends { path: string }>(
+  files: T[],
+  edits?: { remove?: string[]; upsert?: T[] },
+): T[] => {
+  if (!edits) return files;
+
+  const byPath = new Map(files.map((file) => [file.path, file]));
+  for (const path of edits.remove ?? []) byPath.delete(path);
+  for (const file of edits.upsert ?? []) byPath.set(file.path, file);
+
+  return [...byPath.values()];
+};
+
+/**
  * A revision names the files it touches, not the whole package, so its edit can
  * be small and still push the package it lands in past the limits. Returns why
  * the merged package does not fit, or `undefined` when it does. Binary files
