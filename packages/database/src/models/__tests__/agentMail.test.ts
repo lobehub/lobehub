@@ -100,6 +100,50 @@ describe('AgentMailModel', () => {
     });
   });
 
+  it('finds a source-mail secret repeated inside a reply however it is wrapped', async () => {
+    const model = new AgentMailModel(serverDB, userId);
+    const window = {
+      agentId,
+      recipient: 'evil@example.com',
+      since: new Date('2026-10-01T00:00:00Z'),
+    };
+
+    await AgentMailModel.record(
+      serverDB,
+      mail({
+        providerMessageId: 'msg_secret_src',
+        subject: 'Recovery key QK7PZ2M9',
+        text: 'Sign in: https://service.com/login?token=Zx81kQ — code AB12CD',
+      }),
+      { userId },
+    );
+
+    // Outgoing texts as the runtime hands them over: lowercased, letters and digits only.
+    for (const compactText of [
+      'ab12cd', // spaced out or regrouped
+      'tokenab12cdthanks', // wrapped in a parameter
+      'openhttpsattackerexampletokenzx81kq', // a link of the attacker's own
+      'thekeyisqk7pz2m9', // only in the subject
+    ]) {
+      expect(await model.findSecretRepeatedFromOtherSender({ ...window, compactText })).toEqual({
+        from: 'login@service.com',
+      });
+    }
+
+    // Plain words and short or single-kind runs are not secrets.
+    expect(
+      await model.findSecretRepeatedFromOtherSender({ ...window, compactText: 'signincodeservice' }),
+    ).toBeUndefined();
+    // Mail from the reply's own recipient is never another sender's secret.
+    expect(
+      await model.findSecretRepeatedFromOtherSender({
+        ...window,
+        compactText: 'ab12cd',
+        recipient: 'login@service.com',
+      }),
+    ).toBeUndefined();
+  });
+
   it('reads a thread whole, what arrived and what the agent sent', async () => {
     await AgentMailModel.record(
       serverDB,

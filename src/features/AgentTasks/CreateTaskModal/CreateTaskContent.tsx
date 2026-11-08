@@ -1,6 +1,6 @@
 'use client';
 
-import type { TaskExecutionConfig } from '@lobechat/types';
+import type { TaskExecutionConfig, TaskLabelRef } from '@lobechat/types';
 import { toTaskExecutionConfigPatch } from '@lobechat/types';
 import { useEditor } from '@lobehub/editor/react';
 import {
@@ -10,11 +10,12 @@ import {
   confirmModal,
   cssVar,
   Flexbox,
+  Icon,
   Text,
   toast,
   useModalContext,
 } from '@lobehub/ui';
-import { Minimize2, Paperclip, X } from 'lucide-react';
+import { Minimize2, Paperclip, TagIcon, X } from 'lucide-react';
 import { type KeyboardEvent, memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -25,9 +26,13 @@ import {
   pickAndInsertAttachments,
 } from '@/features/EditorCanvas/editorAttachments';
 import { releaseEditorSelection } from '@/features/EditorCanvas/releaseEditorSelection';
+import { pickedLabelIds, resolveTaskLabelRefs } from '@/features/TaskLabels/labelPickerModel';
+import TaskLabelChips from '@/features/TaskLabels/TaskLabelChips';
+import TaskLabelPicker from '@/features/TaskLabels/TaskLabelPicker';
 import { usePermission } from '@/hooks/usePermission';
 import { useGlobalStore } from '@/store/global';
-import { useTaskStore } from '@/store/task';
+import { getTaskStoreState, useTaskStore } from '@/store/task';
+import { taskLabelSelectors } from '@/store/task/selectors';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
@@ -57,6 +62,8 @@ import { useTitleEnterToInstruction } from './useTitleEnterToInstruction';
 
 export interface CreateTaskContentProps {
   agentId?: string;
+  /** Initial labels, e.g. the label column of a board grouped by a label group. */
+  defaultLabelIds?: string[];
   /** Initial priority, e.g. the Kanban priority column the modal was opened from. */
   defaultPriority?: number;
   /**
@@ -81,6 +88,7 @@ export interface CreateTaskContentProps {
 const CreateTaskContent = memo<CreateTaskContentProps>(
   ({
     agentId,
+    defaultLabelIds,
     defaultPriority = 0,
     lockAssignee,
     onCreated,
@@ -100,6 +108,26 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
 
     const [title, setTitle] = useState('');
     const [priority, setPriority] = useState(defaultPriority);
+    const isLabelsInit = useTaskStore(taskLabelSelectors.isLabelsInit);
+    const labelRegistry = useTaskStore(taskLabelSelectors.labels);
+    const [labels, setLabels] = useState<TaskLabelRef[]>(() =>
+      resolveTaskLabelRefs(getTaskStoreState().taskLabels, defaultLabelIds),
+    );
+    // Opened before the registry loaded (a cold start on a label-grouped
+    // list): hold the column's labels until they can be resolved, instead of
+    // filtering them against an empty registry and losing them.
+    const pendingDefaultLabelIdsRef = useRef(
+      getTaskStoreState().taskLabelsInit ? undefined : defaultLabelIds,
+    );
+    useEffect(() => {
+      const pending = pendingDefaultLabelIdsRef.current;
+      if (!isLabelsInit || !pending?.length) return;
+      pendingDefaultLabelIdsRef.current = undefined;
+      // Keep anything the user already picked meanwhile.
+      setLabels((current) =>
+        current.length > 0 ? current : resolveTaskLabelRefs(labelRegistry, pending),
+      );
+    }, [isLabelsInit, labelRegistry]);
     const [assigneeAgentId, setAssigneeAgentId] = useState<string | undefined>(agentId);
     // `undefined` follows the default (the creator); `null` is an explicit "unassigned".
     const [memberChoice, setMemberChoice] = useState<string | null | undefined>();
@@ -196,6 +224,7 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
           ...(isScheduled ? toScheduledCreateParams(scheduleDraft, config) : { config }),
           editorData: editorJson,
           instruction: instruction || title.trim(),
+          ...pickedLabelIds(labels, pendingDefaultLabelIdsRef.current),
           name: title.trim() || undefined,
           priority: priority || undefined,
           projectId,
@@ -226,6 +255,7 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
       editor,
       isMemberPending,
       isScheduled,
+      labels,
       onCreated,
       priority,
       projectId,
@@ -324,6 +354,7 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
         <div style={{ minHeight: 0, overflowY: 'auto' }}>
           <div style={{ minHeight: 144, padding: '0 24px' }}>
             <EditorCanvas
+              blockImageCaretGuard
               disabled={!canCreateTask}
               editor={editor}
               floatingToolbar={false}
@@ -374,6 +405,28 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
                 </Text>
               </Block>
             </TaskPriorityTag>
+
+            <TaskLabelPicker value={labels} onChange={setLabels}>
+              <Block
+                clickable
+                horizontal
+                align="center"
+                gap={6}
+                height={24}
+                paddingBlock={3}
+                paddingInline={8}
+                variant={'borderless'}
+              >
+                {labels.length > 0 ? (
+                  <TaskLabelChips labels={labels} max={3} />
+                ) : (
+                  <>
+                    <Icon color={cssVar.colorTextDescription} icon={TagIcon} size={14} />
+                    <Text fontSize={12}>{t('taskLabel.label')}</Text>
+                  </>
+                )}
+              </Block>
+            </TaskLabelPicker>
 
             {activeWorkspaceId && (
               <AssigneeMemberSelector

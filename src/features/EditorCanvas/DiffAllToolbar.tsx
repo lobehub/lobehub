@@ -1,7 +1,7 @@
 'use client';
 
 import type { IEditor } from '@lobehub/editor';
-import { DiffAction, LITEXML_DIFFNODE_ALL_COMMAND } from '@lobehub/editor';
+import { DiffAction } from '@lobehub/editor';
 import { Block, Button, createStaticStyles, cssVar, cx, Flexbox, Icon } from '@lobehub/ui';
 import { Check, X } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
@@ -9,6 +9,8 @@ import { useTranslation } from 'react-i18next';
 
 import { useIsDark } from '@/hooks/useIsDark';
 import { useDocumentStore } from '@/store/document';
+
+import { resolveAllDiffs } from './resolveAllDiffs';
 
 const styles = createStaticStyles(({ css }) => ({
   container: css`
@@ -135,9 +137,7 @@ const DiffAllToolbar = memo<DiffAllToolbarProps>(({ documentId, editor }) => {
             size={'small'}
             type="text"
             onClick={async () => {
-              editor.dispatchCommand(LITEXML_DIFFNODE_ALL_COMMAND, {
-                action: DiffAction.Reject,
-              });
+              resolveAllDiffs(editor, DiffAction.Reject);
               await handleSave();
             }}
           >
@@ -148,9 +148,7 @@ const DiffAllToolbar = memo<DiffAllToolbarProps>(({ documentId, editor }) => {
             size={'small'}
             type="fill"
             onClick={async () => {
-              editor.dispatchCommand(LITEXML_DIFFNODE_ALL_COMMAND, {
-                action: DiffAction.Accept,
-              });
+              resolveAllDiffs(editor, DiffAction.Accept);
               await handleSave();
             }}
           >

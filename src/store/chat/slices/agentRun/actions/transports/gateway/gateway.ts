@@ -39,13 +39,10 @@ import { shareChatService } from '@/services/shareChat';
 import { topicService } from '@/services/topic';
 import { getAgentStoreState } from '@/store/agent';
 import { chatConfigByIdSelectors } from '@/store/agent/selectors';
-import {
-  consumePendingSandboxSelection,
-  getPendingSandboxSelection,
-  toSandboxTopicMetadata,
-} from '@/store/chat/pendingSandboxSelection';
-import { consumePendingTopicRepos, getPendingTopicRepos } from '@/store/chat/pendingTopicRepos';
+import { consumePendingSandboxSelection } from '@/store/chat/pendingSandboxSelection';
+import { consumePendingTopicRepos } from '@/store/chat/pendingTopicRepos';
 import { topicSelectors } from '@/store/chat/selectors';
+import { leaveBlankConversationBucket } from '@/store/chat/slices/agentRun/actions/clearBlankBucket';
 import { operationSelectors } from '@/store/chat/slices/operation/selectors';
 import {
   SETTLEABLE_TOPIC_RUN_OPERATION_TYPES,
@@ -77,6 +74,7 @@ import { createGatewayEventHandler } from './gatewayEventHandler';
 import { createGatewayEventRouter } from './gatewayEventRouter';
 import { createGatewayMemberStreamHandler, mergeGroupSnapshot } from './gatewayMemberStreamHandler';
 import { awaitStartRequest, interruptGatewayTaskOrThrow } from './gatewayStartRequest';
+import { resolveInitialTopicMetadata } from './initialTopicMetadata';
 import {
   type GatewayMuxIdentity,
   getGatewayMux,
@@ -87,6 +85,7 @@ import { flagQueuedMessagesOnRunStart, syncQueuedMessagesFlag } from './queuedMe
 import { gatewayRunOperationMetadata } from './runOperationMetadata';
 import { isCompletedRuntimeEnd } from './runtimeEndReason';
 import * as serverSteerQueue from './serverSteerQueue';
+import { watchSubAgentRun, type WatchSubAgentRunParams } from './watchSubAgentRun';
 
 const getGatewayServerConfig = () =>
   (typeof window !== 'undefined'
@@ -512,14 +511,8 @@ export class GatewayActionImpl {
 
     let superseded = false;
 
-    // Share visitors take protocol v2 wherever the deployment has it: the
-    // public surface has no user to carry a rollout flag. Owner runs wait for
-    // the rollout to reach them.
     const muxIdentity: GatewayMuxIdentity = { agentShareId, gatewayUrl };
-    const useGatewayMux =
-      (agentShareId
-        ? getGatewayServerConfig()?.agentGatewayProtocol === 2
-        : canUseGatewayProtocolV2()) && !isGatewayMuxUnavailable(muxIdentity);
+    const useGatewayMux = canUseGatewayProtocolV2() && !isGatewayMuxUnavailable(muxIdentity);
     let muxClient: OperationClient | undefined;
     if (useGatewayMux) {
       const mux = this.resolveGatewayMux(muxIdentity);
@@ -951,6 +944,8 @@ export class GatewayActionImpl {
     onTopicCreated?: (topicId: string) => void | Promise<void>;
     /** Called when the gateway session completes (agent finished running) */
     onComplete?: () => void;
+    /** New-topic cwd for a send without an optimistic row (an isolated handoff topic). */
+    newTopicMetadata?: ChatTopicMetadata;
     /** Temporary sidebar topic inserted by sendMessage before the server creates the real topic. */
     optimisticTopic?: { id: string; metadata?: ChatTopicMetadata; title: string };
     /** Parent message ID for regeneration/continue (skip user message creation, branch from this message) */
@@ -1040,6 +1035,7 @@ export class GatewayActionImpl {
       metadata,
       onComplete,
       onMessageAccepted,
+      newTopicMetadata,
       onTopicCreated,
       optimisticTopic,
       parentMessageId,
@@ -1073,46 +1069,12 @@ export class GatewayActionImpl {
     // the turn persists onto the topic's main spine and the subtopic collapses
     // back into the main chat.
 
-    // If this is a new topic, read any repos the user pre-selected before
-    // sending the first message. We read without consuming yet — if execAgentTask
-    // fails or is aborted, the selection is preserved so a retry can still pick
-    // it up. We clear only after the server confirms the topic was created.
-    const pendingRepos =
-      isCreateNewTopic && messageContext.agentId
-        ? getPendingTopicRepos(messageContext.agentId)
-        : [];
-    // Pending repo selection wins; otherwise carry the caller-resolved topic
-    // metadata (e.g. the hetero cwd `conversationLifecycle` resolved from the
-    // effective device + per-user legacy slot) so the SERVER topic is born with
-    // it — the server can't read client-local state, and without this a
-    // workspace hetero run's first send would fall back to the device default
-    // cwd instead of the member's pick.
-    // The instance the composer bound before any topic existed. Merged rather
-    // than folded into the branches below: it is orthogonal to the cwd, and a
-    // conversation can start with one, the other, or both.
-    const pendingSandboxSelection =
-      isCreateNewTopic && executionContext.agentId
-        ? getPendingSandboxSelection(executionContext.agentId)
-        : undefined;
-    const sandboxTopicMetadata = toSandboxTopicMetadata(pendingSandboxSelection);
-    const cwdTopicMetadata =
-      pendingRepos.length > 0
-        ? {
-            repos: pendingRepos,
-            workingDirectory: pendingRepos[0],
-            workingDirectoryConfig: { path: pendingRepos[0], repoType: 'github' as const },
-          }
-        : isCreateNewTopic && optimisticTopic?.metadata?.workingDirectory
-          ? {
-              repos: optimisticTopic.metadata.repos,
-              workingDirectory: optimisticTopic.metadata.workingDirectory,
-              workingDirectoryConfig: optimisticTopic.metadata.workingDirectoryConfig,
-            }
-          : undefined;
-    const initialTopicMetadata =
-      cwdTopicMetadata || sandboxTopicMetadata
-        ? { ...cwdTopicMetadata, ...sandboxTopicMetadata }
-        : undefined;
+    const initialTopicMetadata = resolveInitialTopicMetadata({
+      callerTopicMetadata: optimisticTopic?.metadata ?? newTopicMetadata,
+      isCreateNewTopic,
+      repoAgentId: messageContext.agentId,
+      sandboxAgentId: executionContext.agentId,
+    });
 
     // Honour user-initiated cancel during phase-1 init: while we await the
     // execAgentTask round-trip the caller's loading state is still running, so
@@ -1315,7 +1277,7 @@ export class GatewayActionImpl {
       // Attachments picked in the subtopic composer were staged under the
       // `_new` key; carry them over so the next turn in the thread still sees
       // them (mirrors the new-topic handoff below).
-      getFileStoreState().moveChatContextSelections(
+      getFileStoreState().moveChatComposerAttachments(
         messageMapKey(messageContext),
         messageMapKey(resolvedMessageContext),
       );
@@ -1366,7 +1328,7 @@ export class GatewayActionImpl {
             title: optimisticTopic.title,
           },
         });
-        getFileStoreState().moveChatContextSelections(
+        getFileStoreState().moveChatComposerAttachments(
           messageMapKey({ ...messageContext, topicId: optimisticTopic.id }),
           messageMapKey({ ...messageContext, topicId: result.topicId }),
         );
@@ -1378,23 +1340,10 @@ export class GatewayActionImpl {
         /* non-critical */
       }
 
-      if (!messageContext.isolatedTopic) {
-        await this.#get().switchTopic(result.topicId, {
-          clearNewKey: true,
-          // The cleanup targets the blank bucket this send came from — the
-          // user may be viewing a different conversation by now.
-          clearNewKeyContext: {
-            agentId: messageContext.agentId,
-            groupId: messageContext.groupId,
-          },
-          // Guard against yanking the user back if they navigated to another
-          // topic while execAgentTask's persistence round-trip was in flight.
-          // Both ids are accepted: the optimistic-topic re-key above moves
-          // `activeTopicId` from the minted id to the persisted one.
-          onlyIfActiveTopicIn: [messageContext.topicId ?? null, result.topicId],
-          skipRefreshMessage: true,
-        });
-      }
+      await leaveBlankConversationBucket(this.#get, messageContext, {
+        isolated: messageContext.isolatedTopic,
+        topicId: result.topicId,
+      });
 
       // Refresh the topic list so the new topic appears in topicDataMap (sidebar).
       // Unlike the direct-API sendMessage path (which receives topics[] in the
@@ -1754,6 +1703,13 @@ export class GatewayActionImpl {
     }
     return resumed;
   };
+
+  /** Stream a sub-agent run this tab dispatched but does not drive; see `watchSubAgentRun`. */
+  watchSubAgentRun = (params: WatchSubAgentRunParams): (() => void) =>
+    watchSubAgentRun(this.#get, params, {
+      disconnect: this.disconnectFromGateway,
+      gatewayUrl: getGatewayServerConfig()?.agentGatewayUrl,
+    });
 
   /**
    * Reconnect to an existing Gateway operation after page reload.

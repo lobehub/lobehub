@@ -18,6 +18,7 @@ import type { AgentContextDocument } from '../../providers/AgentDocumentInjector
 import type { AgentManagementContext } from '../../providers/AgentManagementContextInjector';
 import type { BotPlatformContext } from '../../providers/BotPlatformContextInjector';
 import type { DiscordContext } from '../../providers/DiscordContextProvider';
+import type { DocumentReferenceItem } from '../../providers/DocumentReferenceContextInjector';
 import type { EvalContext } from '../../providers/EvalContextSystemInjector';
 import type { GroupAgentBuilderContext } from '../../providers/GroupAgentBuilderContextInjector';
 import type { GroupMemberInfo } from '../../providers/GroupContextInjector';
@@ -357,6 +358,10 @@ export interface MessagesEngineParams {
   /** Topic reference summaries to inject into last user message */
   topicReferences?: TopicReferenceItem[];
 
+  // ========== Document References ==========
+  /** Agent documents referenced via `<refer_document>`, injected into last user message */
+  documentReferences?: DocumentReferenceItem[];
+
   // ========== Page Editor context ==========
   /**
    * Initial context captured at operation start (frontend runtime usage)
@@ -396,6 +401,7 @@ export { type AgentBuilderContext } from '../../providers/AgentBuilderContextInj
 export { type AgentManagementContext } from '../../providers/AgentManagementContextInjector';
 export { type BotPlatformContext } from '../../providers/BotPlatformContextInjector';
 export { type DiscordContext } from '../../providers/DiscordContextProvider';
+export { type DocumentReferenceItem } from '../../providers/DocumentReferenceContextInjector';
 export { type EvalContext } from '../../providers/EvalContextSystemInjector';
 export { type GroupAgentBuilderContext } from '../../providers/GroupAgentBuilderContextInjector';
 export { type Plan } from '../../providers/PlanInjector';

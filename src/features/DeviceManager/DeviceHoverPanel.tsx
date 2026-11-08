@@ -29,6 +29,11 @@ import UsageMeter, { UsageMeterGroup, UsageMeterSkeleton } from './DeviceHealth/
 import { latestUsageView } from './DeviceHealth/viewState';
 import { buildDeviceHoverSummary } from './deviceHoverSummary';
 import { getDeviceIcon } from './getDeviceIcon';
+import {
+  getManagedDeviceStatus,
+  managedStatusLabelKey,
+  presenceDotColor,
+} from './managedDeviceStatus';
 
 const styles = createStaticStyles(({ css }) => ({
   code: css`
@@ -108,8 +113,8 @@ interface DeviceHoverPanelProps {
 
 /**
  * A device's details at a glance, shown beside its row in the execution
- * environment picker: live state and load first (what decides whether to run
- * there), then the machine's specs. A read-only digest of the detail page's
+ * environment picker: live state and resource usage first (what decides
+ * whether to run there), each in its own group, then the machine's specs. A read-only digest of the detail page's
  * overview, reading the same metric series so opening one warms the other.
  */
 const DeviceHoverPanel = ({ device }: DeviceHoverPanelProps) => {
@@ -121,6 +126,7 @@ const DeviceHoverPanel = ({ device }: DeviceHoverPanelProps) => {
   const usage = latestUsageView({ data, error });
   const summary = buildDeviceHoverSummary(device, data);
   const { online } = summary;
+  const managedStatus = getManagedDeviceStatus(device);
 
   return (
     <Flexbox className={styles.container}>
@@ -128,7 +134,7 @@ const DeviceHoverPanel = ({ device }: DeviceHoverPanelProps) => {
       <InfoRow icon={PowerIcon} label={t('devices.detail.status')}>
         <span
           style={{
-            background: online ? cssVar.colorSuccess : cssVar.colorTextQuaternary,
+            background: presenceDotColor(managedStatus, online),
             borderRadius: '50%',
             flex: 'none',
             height: 6,
@@ -136,11 +142,13 @@ const DeviceHoverPanel = ({ device }: DeviceHoverPanelProps) => {
           }}
         />
         <span>
-          {summary.onlineUnknown
-            ? t('devices.status.checking')
-            : online
-              ? t('devices.status.online')
-              : t('devices.status.offline')}
+          {managedStatus
+            ? t(managedStatusLabelKey[managedStatus])
+            : summary.onlineUnknown
+              ? t('devices.status.checking')
+              : online
+                ? t('devices.status.online')
+                : t('devices.status.offline')}
         </span>
       </InfoRow>
       {online && (
@@ -157,25 +165,39 @@ const DeviceHoverPanel = ({ device }: DeviceHoverPanelProps) => {
         </InfoRow>
       )}
       {online && (
-        <div className={styles.usage}>
-          {usage.loading ? (
-            <UsageMeterGroup loading>
-              <UsageMeterSkeleton />
-              <UsageMeterSkeleton />
-            </UsageMeterGroup>
-          ) : (
-            <UsageMeterGroup>
-              <UsageMeter label={t('devices.card.cpuUsage')} value={usage.latest?.cpuPercent} />
-              <UsageMeter
-                label={t('devices.card.memoryUsage')}
-                value={usage.latest?.memoryPercent}
-              />
-              {usage.reportsDisk && (
-                <UsageMeter label={t('devices.card.diskUsage')} value={usage.latest?.diskPercent} />
-              )}
-            </UsageMeterGroup>
-          )}
-        </div>
+        <>
+          <Section color={cssVar.colorWarning} title={t('devices.detail.usage')} />
+          <div className={styles.usage}>
+            {usage.loading ? (
+              <UsageMeterGroup loading>
+                {/* CPU, memory and load: the rows a Linux / macOS device always shows. */}
+                <UsageMeterSkeleton />
+                <UsageMeterSkeleton />
+                <UsageMeterSkeleton />
+              </UsageMeterGroup>
+            ) : (
+              <UsageMeterGroup>
+                <UsageMeter label={t('devices.card.cpuUsage')} value={usage.latest?.cpuPercent} />
+                <UsageMeter
+                  label={t('devices.card.memoryUsage')}
+                  value={usage.latest?.memoryPercent}
+                />
+                {usage.reportsLoad && (
+                  <UsageMeter
+                    label={t('devices.detail.loadUsage')}
+                    value={usage.latest?.loadPercent}
+                  />
+                )}
+                {usage.reportsDisk && (
+                  <UsageMeter
+                    label={t('devices.card.diskUsage')}
+                    value={usage.latest?.diskPercent}
+                  />
+                )}
+              </UsageMeterGroup>
+            )}
+          </div>
+        </>
       )}
 
       <Section color={cssVar.colorInfo} title={t('devices.detail.specs')} />

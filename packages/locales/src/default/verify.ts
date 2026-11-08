@@ -250,7 +250,21 @@ export default {
   'acceptance.checks.rerun': 'Verified in {{count}} rounds',
   'acceptance.checks.rerunHint': 'This check ran in {{count}} rounds; the latest result counts.',
   'acceptance.checks.title': 'Acceptance checks',
+  'acceptance.checks.waived': 'Waived',
+  'acceptance.checks.waivedHint':
+    'A review panel agreed this check is invalid, so it no longer blocks acceptance.',
   'acceptance.detail.suggestion': 'Suggestion',
+  'acceptance.dispute.kind.invalid_criterion': 'Check is invalid',
+  'acceptance.dispute.kind.missed_evidence': 'Evidence already proves it',
+  'acceptance.dispute.outcome.overruled': 'Overruled · check stands',
+  'acceptance.dispute.outcome.pending': 'Awaiting arbitration',
+  'acceptance.dispute.outcome.undecided': 'No majority · check stands',
+  'acceptance.dispute.outcome.upheld': 'Upheld · check waived',
+  'acceptance.dispute.tally': '{{upheld}}/{{judged}} upheld',
+  'acceptance.dispute.title': 'Builder dispute',
+  'acceptance.dispute.vote.errored': 'Could not rule',
+  'acceptance.dispute.vote.overruled': 'Overruled',
+  'acceptance.dispute.vote.upheld': 'Upheld',
   'acceptance.error.description': 'Check your connection and try loading this acceptance again.',
   'acceptance.error.title': 'Unable to load acceptance',
   'acceptance.notFound.description': 'It may have been deleted, or it was never shared with you.',
@@ -448,9 +462,9 @@ export default {
   'acceptance.origin.agentFallback': 'Agent',
   'acceptance.origin.backToRuns': 'Back to runs',
   'acceptance.origin.openTopic': 'Open topic',
-  'acceptance.preview.review': 'Review on preview',
+  'acceptance.preview.review': 'Accept on preview',
   'acceptance.preview.reviewHint':
-    'Open the deployed preview with the review toolbar to comment on the live page',
+    'Open the deployed preview with the acceptance toolbar to comment on the live page',
   'acceptance.reject.descriptionCopy':
     'No agent is attached to this delivery. Rejecting copies the repair prompt, including any reason you add — paste it to any agent to start the next round.',
   'acceptance.reject.description':

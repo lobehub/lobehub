@@ -1,4 +1,9 @@
-import { AGENT_ACCOUNT_PERSISTED_KINDS, AGENT_ACCOUNT_STATUSES } from '@lobechat/types';
+import {
+  AGENT_ACCOUNT_DIGEST_MINUTES_RANGE,
+  AGENT_ACCOUNT_PERSISTED_KINDS,
+  AGENT_ACCOUNT_STATUSES,
+  AGENT_ACCOUNT_WAKE_MODES,
+} from '@lobechat/types';
 import { API_KEY_PREFIX } from '@lobechat/utils/apiKey';
 import { generateSpecs } from 'hono-openapi';
 
@@ -60,6 +65,26 @@ const agentAccountProperties = {
   metadata: nullableObject,
   provider: { type: 'string' },
   revokedAt: { ...dateTime, type: ['string', 'null'] },
+  // The owner's own settings. Stored JSON, so a field a later build adds may appear.
+  settings: {
+    additionalProperties: true,
+    properties: {
+      wake: {
+        additionalProperties: true,
+        properties: {
+          digestMinutes: {
+            maximum: AGENT_ACCOUNT_DIGEST_MINUTES_RANGE.max,
+            minimum: AGENT_ACCOUNT_DIGEST_MINUTES_RANGE.min,
+            type: 'integer',
+          },
+          mode: { enum: AGENT_ACCOUNT_WAKE_MODES, type: 'string' },
+          wakeSenders: { items: { type: 'string' }, type: 'array' },
+        },
+        type: 'object',
+      },
+    },
+    type: 'object',
+  },
   status: { enum: AGENT_ACCOUNT_STATUSES, type: 'string' },
   updatedAt: dateTime,
   userId: { type: 'string' },

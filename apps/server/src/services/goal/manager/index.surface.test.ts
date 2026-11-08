@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { LobeChatDatabase } from '@/database/type';
 
+import { withoutGoalReport } from '../report';
 import * as managerModule from './index';
 import {
   answeredProblem,
@@ -10,7 +11,6 @@ import {
   GoalManagerService,
   goalPlanSchema,
   managerSnapshot,
-  MAX_FAILED_MANAGER_TURNS,
   problemKey,
 } from './index';
 
@@ -30,7 +30,6 @@ describe('goal manager public surface', () => {
       'managerSnapshot',
       'problemKey',
     ]);
-    expect(MAX_FAILED_MANAGER_TURNS).toBe(5);
   });
 
   it('exposes the same public members on the service', () => {
@@ -53,8 +52,6 @@ describe('goal manager public surface', () => {
     ];
     for (const member of members)
       expect(typeof (service as unknown as Record<string, unknown>)[member]).toBe('function');
-    // `planInstead` stays a prototype method: tests spy on it there.
-    expect(Object.hasOwn(GoalManagerService.prototype, 'planInstead')).toBe(true);
   });
 
   it('keys a takeover problem by its task, and reads the answered one back', () => {
@@ -95,6 +92,28 @@ describe('goal manager public surface', () => {
         nodes: [{ ...graph.nodes[0], status: 'resolved' }],
       } as typeof graph),
     ).not.toBe(managerSnapshot(graph));
+  });
+
+  it('hashes the full graph and the coordinator view of it alike', () => {
+    // The tick hands the manager `withoutGoalReport(graph)`, while the turn claim
+    // re-reads the full graph under the lock. A Goal carrying a report node must
+    // not look changed between the two, or the claim never succeeds.
+    const graph = {
+      decisions: [],
+      edges: [{ kind: 'depends_on', sourceNodeId: 'n1', targetNodeId: 'report' }],
+      goal: {
+        config: { manager: {}, report: { nodeId: 'report' } },
+        maxRounds: 3,
+        maxTotalCost: null,
+        requirement: 'r',
+      },
+      nodes: [
+        { id: 'n1', status: 'resolved', updatedAt: new Date(1) },
+        { id: 'report', status: 'active', updatedAt: new Date(1) },
+      ],
+      workVersions: [{ nodeId: 'report', relation: 'output', workVersionId: 'w1' }],
+    } as unknown as Parameters<typeof managerSnapshot>[0];
+    expect(managerSnapshot(withoutGoalReport(graph))).toBe(managerSnapshot(graph));
   });
 
   it('parses every plan action through one schema', () => {

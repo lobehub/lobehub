@@ -97,5 +97,6 @@ export const buildMessagesEngineParams = (snapshot: ContextSnapshot): MessagesEn
       workspaceContext: step?.workspaceContext,
     }),
     ...(step?.topicReferences?.length && { topicReferences: step.topicReferences }),
+    ...(step?.documentReferences?.length && { documentReferences: step.documentReferences }),
   };
 };

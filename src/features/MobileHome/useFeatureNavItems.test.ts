@@ -1,5 +1,5 @@
 import { renderHook } from '@testing-library/react';
-import { FileText, HomeIcon, ListTodo, SearchIcon, Target } from 'lucide-react';
+import { FileText, FolderKanban, HomeIcon, ListTodo, SearchIcon, Target } from 'lucide-react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useFeatureNavItems } from './useFeatureNavItems';
@@ -19,6 +19,14 @@ vi.mock('@/hooks/useNavLayout', () => ({
       { icon: SearchIcon, key: 'search', onClick: vi.fn(), title: 'Search' },
       { icon: HomeIcon, key: 'home', title: 'Home', url: '/' },
       { icon: ListTodo, key: 'tasks', title: 'Tasks', url: '/tasks' },
+      // `useNavLayout` hides projects while the lab is off.
+      {
+        hidden: !mocks.enableProjects,
+        icon: FolderKanban,
+        key: 'project',
+        title: 'Projects',
+        url: '/projects',
+      },
       // `useNavLayout` hides goals while the lab is off.
       { hidden: true, icon: Target, key: 'goals', title: 'Goals', url: '/goals' },
     ],
@@ -27,14 +35,6 @@ vi.mock('@/hooks/useNavLayout', () => ({
 
 vi.mock('@/business/client/hooks/useActiveWorkspaceSlug', () => ({
   useActiveWorkspaceSlug: () => mocks.workspaceSlug,
-}));
-
-vi.mock('@/store/user', () => ({
-  useUserStore: (selector: (state: unknown) => unknown) => selector({}),
-}));
-
-vi.mock('@/store/user/selectors', () => ({
-  labPreferSelectors: { enableProjects: () => mocks.enableProjects },
 }));
 
 const keysOf = () => renderHook(() => useFeatureNavItems()).result.current.map((i) => i.key);
@@ -54,7 +54,7 @@ describe('useFeatureNavItems', () => {
   it('adds projects only while the projects lab is on', () => {
     mocks.enableProjects = true;
 
-    expect(keysOf()).toEqual(['tasks', 'projects', 'pages']);
+    expect(keysOf()).toEqual(['tasks', 'project', 'pages']);
   });
 
   it('adds the workspace settings entry inside a workspace', () => {

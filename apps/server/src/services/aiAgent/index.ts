@@ -75,6 +75,8 @@ import {
 } from './pipeline/groupMemberApproval';
 import { resolveNewThread } from './pipeline/newThread';
 import { createGroupAgentTopic, type PrecreatedTopicDeps } from './pipeline/precreatedTopic';
+import { releaseUnstartedRunFee, type RunFeeClaim } from './pipeline/runFee';
+import { releaseUnstartedRunSlot, type RunSlotClaim } from './pipeline/runSlot';
 import { scheduleAgentRun } from './pipeline/scheduleAgentRun';
 import { runWithTopicStart, type TopicStartDeps } from './pipeline/topicStart';
 import { bindTopicWorkingDirectory } from './pipeline/topicWorkingDirectory';
@@ -342,6 +344,14 @@ export class AiAgentService {
     return this.agentRuntimeService.executeStep(params);
   }
 
+  /**
+   * Whether someone already asked this run to stop. The run may still be
+   * finishing its current step, so its row can read `running` for a moment.
+   */
+  isOperationInterrupted(operationId: string): Promise<boolean> {
+    return this.agentRuntimeService.isOperationInterrupted(operationId);
+  }
+
   /** Continue a run parked in `waiting_for_client` (see AgentRuntimeService). */
   resumeFromClientLlmWait(
     params: Parameters<AgentRuntimeService['resumeFromClientLlmWait']>[0],
@@ -519,9 +529,14 @@ export class AiAgentService {
       rollbackSnapshot: [],
     };
 
+    const runSlot: RunSlotClaim = {};
+    const runFee: RunFeeClaim = {};
+
     try {
-      return await execAgentTurn(this.execAgentTurnDeps, params, approvalClaim);
+      return await execAgentTurn(this.execAgentTurnDeps, params, approvalClaim, runSlot, runFee);
     } finally {
+      await releaseUnstartedRunSlot(runSlot, this.userId);
+      await releaseUnstartedRunFee(runFee, this.userId);
       if (
         !approvalClaim.continuationPrepared &&
         !approvalClaim.continuationStarted &&

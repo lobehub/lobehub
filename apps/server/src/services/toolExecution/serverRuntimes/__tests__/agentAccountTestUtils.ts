@@ -1,5 +1,5 @@
 import { AgentAccountIdentifier } from '@lobechat/builtin-tool-agent-account';
-import type { AgentMailAttachment } from '@lobechat/types';
+import type { AgentMailAddress, AgentMailAttachment } from '@lobechat/types';
 import { afterEach, beforeAll, beforeEach, vi } from 'vitest';
 
 import { agentAccounts, agentInboxMessages, agents, users } from '@/database/schemas';
@@ -25,6 +25,8 @@ export interface InboundDelivery {
   provider?: string;
   providerMessageId: string;
   receivedAt: Date;
+  /** The mail's `Reply-To`, when the sender redirects replies elsewhere. */
+  replyTo?: AgentMailAddress[];
   subject?: string;
   text: string;
   threadKey?: string;
@@ -84,15 +86,16 @@ export const useAgentAccountRuntime = (serverDB: LobeChatDatabase) => {
       },
       message: {
         from: params.from,
-        mail: params.attachments
-          ? {
-              attachments: params.attachments,
-              cc: [],
-              references: [],
-              replyTo: [],
-              to: [{ address: params.to }],
-            }
-          : undefined,
+        mail:
+          params.attachments || params.replyTo
+            ? {
+                attachments: params.attachments ?? [],
+                cc: [],
+                references: [],
+                replyTo: params.replyTo ?? [],
+                to: [{ address: params.to }],
+              }
+            : undefined,
         providerMessageId: params.providerMessageId,
         receivedAt: params.receivedAt,
         subject: params.subject,

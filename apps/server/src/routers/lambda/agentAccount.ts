@@ -12,6 +12,7 @@ import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { AgentAccountService, isAgentAccountError } from '@/server/services/agentIdentity';
 import { createDefaultAgentAccountRegistry } from '@/server/services/agentIdentity/providers';
+import { agentAccountSettingsSchema } from '@/server/services/agentIdentity/wake/config';
 import { assertCanEditResource } from '@/server/services/resourcePermission';
 
 /**
@@ -266,6 +267,8 @@ export const agentAccountRouter = router({
         capabilities: capabilitiesSchema.optional(),
         displayName: z.string().nullable().optional(),
         metadata: z.record(z.string(), z.unknown()).optional(),
+        /** The owner's own settings (wake rules); patchable whoever provides the account. */
+        settings: agentAccountSettingsSchema.optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {

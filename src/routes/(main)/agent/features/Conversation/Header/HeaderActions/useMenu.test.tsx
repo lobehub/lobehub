@@ -237,6 +237,30 @@ describe('Conversation header action menu', () => {
     });
   });
 
+  it('leads the topic-actions group with Share only when the caller provides it', () => {
+    useLocationMock.mockReturnValue({ pathname: '/agent/agent-1' });
+    const onShare = vi.fn();
+    const keysOf = (items: unknown[]) =>
+      items.map((item) => (isActionItem(item) ? item.key : undefined)).filter(Boolean);
+
+    const { result: personal } = renderHook(() => useMenu());
+    expect(keysOf(personal.current.menuItems())).not.toContain('share');
+
+    const { result } = renderHook(() => useMenu({ share: { disabled: true, onClick: onShare } }));
+    const items = result.current.menuItems();
+    const keys = keysOf(items);
+    expect(keys.slice(keys.indexOf('share'), keys.indexOf('share') + 2)).toEqual([
+      'share',
+      'copyWorkingDirectory',
+    ]);
+
+    const shareItem = items.find((item) => isActionItem(item) && item.key === 'share');
+    expect(shareItem).toMatchObject({ disabled: true, label: 'common:share' });
+    if (!isActionItem(shareItem)) throw new Error('Expected share action');
+    shareItem.onClick?.();
+    expect(onShare).toHaveBeenCalledTimes(1);
+  });
+
   it('offers Favorites for the open topic beside Pin, without the hotkey', () => {
     const { result } = renderHook(() => useMenu());
 

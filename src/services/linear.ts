@@ -4,6 +4,8 @@ import { lambdaClient } from '@/libs/trpc/client';
 
 export interface LinearIssueFilterParams {
   connectionId: string;
+  /** Also match archived issues, which Linear leaves out unless asked. */
+  includeArchived?: boolean;
   linearProjectId?: string | null;
   stateTypes: LinearIssueStateType[];
   teamId: string;
@@ -27,9 +29,20 @@ class LinearService {
   listIssues = async (params: LinearIssueFilterParams & { cursor?: string }) =>
     lambdaClient.linear.listIssues.query(params);
 
+  /** How many issues match the filter; the count stops at a server-side limit. */
+  countIssues = async (params: LinearIssueFilterParams) =>
+    lambdaClient.linear.countIssues.query(params);
+
   /** Starts a background import; returns the job id. */
-  startImport = async (params: { connectionId: string; issueIds: string[]; projectId: string }) =>
-    lambdaClient.linear.startImport.mutate(params);
+  startImport = async (params: {
+    connectionId: string;
+    issueIds: string[];
+    projectId: string;
+    syncComments?: boolean;
+  }) => lambdaClient.linear.startImport.mutate(params);
+
+  cancelSync = async (projectId: string, jobId: string) =>
+    lambdaClient.linear.cancelSync.mutate({ jobId, projectId });
 
   listSyncJobs = async (projectId: string) => lambdaClient.linear.listSyncJobs.query({ projectId });
 
@@ -37,7 +50,7 @@ class LinearService {
     lambdaClient.linear.listSyncRules.query({ projectId });
 
   createSyncRule = async (
-    params: LinearIssueFilterParams & {
+    params: Omit<LinearIssueFilterParams, 'includeArchived'> & {
       linearProjectName?: string | null;
       projectId: string;
       teamName: string;
@@ -47,7 +60,10 @@ class LinearService {
   deleteSyncRule = async (ruleId: string) => lambdaClient.linear.deleteSyncRule.mutate({ ruleId });
 
   /** Starts a background run of a saved rule; returns the job id. */
-  startRuleSync = async (ruleId: string) => lambdaClient.linear.startRuleSync.mutate({ ruleId });
+  startRuleSync = async (
+    ruleId: string,
+    options: { includeArchived?: boolean; syncComments?: boolean } = {},
+  ) => lambdaClient.linear.startRuleSync.mutate({ ruleId, ...options });
 }
 
 export const linearService = new LinearService();

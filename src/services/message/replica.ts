@@ -1,7 +1,7 @@
 import type { ConversationContext, UIChatMessage } from '@lobechat/types';
 
-import { AppIndexedDBStorage } from '@/libs/replica';
 import {
+  AppIndexedDBStorage,
   cacheScope,
   defineReplica,
   isReplicaSyncKey,

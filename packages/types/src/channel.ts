@@ -1,4 +1,6 @@
-import type { LobeAgentConfig } from './agent';
+import type { LobeAgentAgencyConfig, LobeAgentConfig } from './agent';
+import { getWorkingDirEffectivePath } from './device';
+import type { BotWakeKind } from './signal';
 
 /**
  * Channel: a shared conversation where people and Agents talk together.
@@ -19,6 +21,41 @@ export type ChannelRuntime = (typeof CHANNEL_RUNTIMES)[number];
 
 export const isChannelRuntime = (runtime: string): runtime is ChannelRuntime =>
   (CHANNEL_RUNTIMES as readonly string[]).includes(runtime);
+
+/**
+ * The device a Channel seats an Agent on until someone picks another: the one the Agent is bound
+ * to, else this person's own desktop for an Agent that runs on its user's machine (`local`, or an
+ * external runtime with no target). Never another available or online device.
+ */
+export const defaultChannelAgentDevice = ({
+  agencyConfig,
+  localDeviceId,
+  runtime,
+  workspaceScoped,
+}: {
+  agencyConfig?: Pick<LobeAgentAgencyConfig, 'boundDeviceId' | 'executionTarget'> | null;
+  /** This person's own desktop, when they act from one. */
+  localDeviceId?: string;
+  runtime: string;
+  /** The Agent runs on workspace devices only, never a personal desktop. */
+  workspaceScoped?: boolean;
+}): string | undefined => {
+  const target = agencyConfig?.executionTarget;
+  if (target === 'none' || target === 'sandbox' || target === 'auto') return;
+  const localDefault =
+    !workspaceScoped && (target === 'local' || (target === undefined && runtime !== 'native'));
+  return agencyConfig?.boundDeviceId || (localDefault ? localDeviceId : undefined);
+};
+
+/** The directory on that device: the Agent's own choice there, else the device's default. */
+export const defaultChannelAgentDirectory = (
+  agencyConfig: Pick<LobeAgentAgencyConfig, 'workingDirByDevice'> | null | undefined,
+  deviceId: string,
+  deviceDefaultCwd?: string | null,
+): string | undefined =>
+  getWorkingDirEffectivePath(agencyConfig?.workingDirByDevice?.[deviceId]) ||
+  deviceDefaultCwd ||
+  undefined;
 
 export const CHANNEL_LIMITS = {
   /** Files attached to one message. */
@@ -76,8 +113,22 @@ export interface ChannelMemberConfig {
    * creator, so a workspace channel can use another member's device after its owner approves.
    */
   deviceOwnerId?: string;
+  /**
+   * This member's own reply strategy, over the channel's `ChannelConfig.wake`. Parsed by the
+   * shared wake schema; never part of the execution environment.
+   */
+  wake?: Record<string, unknown>;
   /** Set only from a device's canonical-path acknowledgement before claiming work. */
   workingDirectory?: string;
+}
+
+/**
+ * Channel-wide settings a member configures and the server validates, unlike `ChannelMetadata`.
+ * Agent members can override them in `ChannelMemberConfig`; NULL means every default applies.
+ */
+export interface ChannelConfig {
+  /** How Agents decide to answer unaddressed messages; parsed by the shared wake schema. */
+  wake?: Record<string, unknown>;
 }
 
 /** Free-form member state that does not need its own column. */
@@ -131,13 +182,40 @@ export type ChannelRoutingMode = 'decision' | 'fallback';
  * - `completed`: the final reply was published.
  * - `failed`: ended without a publishable reply, or its execution failed or became unknown.
  * - `cancelled`: stopped, or it can never run (requester left, environment switched).
+ * - `silent`: a `followup` wake the Agent chose not to answer (`NO_REPLY`). Settled, not failed.
  */
-export type ChannelJobStatus = 'cancelled' | 'completed' | 'failed' | 'queued' | 'running';
+export type ChannelJobStatus =
+  'cancelled' | 'completed' | 'failed' | 'queued' | 'running' | 'silent';
+
+/**
+ * Why a job was woken, frozen when it is delivered.
+ *
+ * - `mention`: someone addressed the member (an @mention, a reply, the paired Agent of a direct
+ *   conversation) or routing chose it; it owes an answer.
+ * - `followup`: nobody addressed it; speaking is optional and it may end in `silent`.
+ *
+ * The details are what the woken Agent is told about the wake.
+ */
+export interface ChannelJobWake {
+  /** The message falls within the member's duties (`helpful`: it can settle an open question). */
+  duty?: { helpful?: boolean; matched?: string };
+  /** The member spoke here lately and this message followed. */
+  followup?: {
+    participants: { isBot: boolean; isOwner: boolean; name: string }[];
+    score?: number;
+  };
+  kind: BotWakeKind;
+  /** The message says the member's name without @-mentioning it. */
+  named?: boolean;
+  /** The rule that woke it, as the decision row records it. */
+  reason?: string;
+}
 
 /** Why a queued job cannot start yet. Typed so clients never infer it from error text. */
 export type ChannelJobBlockCode =
   | 'device_approval_pending'
   | 'device_offline'
+  | 'device_required'
   | 'directory_locked'
   | 'member_busy'
   | 'unavailable'
@@ -155,6 +233,7 @@ export interface ChannelContextMessage {
   /** Stable references; URLs and document contents are resolved at execution time. */
   fileIds?: string[];
   id: string;
+  replyToId?: string | null;
   sequence: number;
   threadId: string | null;
 }
@@ -212,15 +291,23 @@ export type ChannelAuditDetails = Record<string, boolean | number | string | str
 
 /** Public client projection. No execution configuration, private topic or draft fields. */
 export interface ChannelListItem {
+  /** The bound Agent of a direct conversation; null for a group. */
+  agentId: string | null;
   /** Server-computed for the current member. */
   canDelete: boolean;
   createdAt: Date;
   id: string;
+  /** The newest main-channel message, cut for a preview; set by the Channel list. */
+  lastMessage?: { content: string; createdAt: Date } | null;
   /** The project the channel is grouped under; null for a standalone channel. */
   projectId: string | null;
   sequence: number;
   status: ChannelStatus;
   title: string;
+  /** Main-channel messages the caller has not read; set by the Channel list. */
+  unreadCount?: number;
+  /** Bumped by every new message, so it orders conversations by latest activity. */
+  updatedAt?: Date;
   workspaceId: string | null;
 }
 
@@ -254,9 +341,16 @@ export interface ChannelPublicMessage {
   id: string;
   mentions: string[];
   recipientMemberIds: string[];
+  /** Bounded public quote, including when its original is outside the loaded page. */
+  replyTo?: Pick<
+    ChannelPublicMessage,
+    'id' | 'author' | 'content' | 'sequence' | 'threadId'
+  > | null;
   replyToId: string | null;
   routingStatus: ChannelMessageRoutingStatus;
   sequence: number;
+  /** The Agent topic behind a reply, only when the viewer ran it (owns that topic). */
+  sourceTopicId?: string | null;
   threadId: string | null;
   userId: string | null;
 }

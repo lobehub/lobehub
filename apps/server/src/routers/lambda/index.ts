@@ -46,6 +46,7 @@ import { aiModelRouter } from './aiModel';
 import { aiProviderRouter } from './aiProvider';
 import { apiKeyRouter } from './apiKey';
 import { asrRouter } from './asr';
+import { authRouter } from './auth';
 import { botMessageRouter } from './botMessage';
 import { briefRouter } from './brief';
 import { canvasRouter } from './canvas';
@@ -105,6 +106,7 @@ import { sessionGroupRouter } from './sessionGroup';
 import { shareRouter } from './share';
 import { shareChatRouter } from './shareChat';
 import { taskRouter } from './task';
+import { taskLabelRouter } from './taskLabel';
 import { threadRouter } from './thread';
 import { topicRouter } from './topic';
 import { topicCommentRouter } from './topicComment';
@@ -156,6 +158,7 @@ export const lambdaRouter = router({
   aiProvider: aiProviderRouter,
   apiKey: apiKeyRouter,
   asr: asrRouter,
+  auth: authRouter,
   tts: ttsRouter,
   chunk: chunkRouter,
   comfyui: comfyuiRouter,
@@ -210,6 +213,7 @@ export const lambdaRouter = router({
   share: shareRouter,
   shareChat: shareChatRouter,
   task: taskRouter,
+  taskLabel: taskLabelRouter,
   thread: threadRouter,
   topic: topicRouter,
   trash: trashRouter,

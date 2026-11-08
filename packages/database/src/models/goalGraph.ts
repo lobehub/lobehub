@@ -15,6 +15,7 @@ import type {
   GoalStatus,
 } from '@lobechat/types';
 import { experimentStatus } from '@lobechat/utils/goalGraph';
+import { ACCEPTANCE_STATUSES_CLOSED_BY_RETIREMENT } from '@lobechat/utils/verify/acceptanceStatus';
 import {
   and,
   asc,
@@ -39,6 +40,7 @@ import {
   goalNodeWorkVersions,
 } from '../schemas/goalGraph';
 import { briefs, tasks } from '../schemas/task';
+import { acceptances } from '../schemas/verify';
 import { works, workVersions } from '../schemas/work';
 import type { LobeChatDatabase, Transaction } from '../type';
 import { notTrashed } from '../utils/softDelete';
@@ -568,6 +570,92 @@ export class GoalGraphModel {
     return nearest ? { id: nearest.id, title: nearest.title } : undefined;
   };
 
+  /**
+   * {@link findGoalByTaskId} for many tasks in two queries, with the same
+   * nearest-ancestor rule and the goal's status — for bulk task writes that
+   * must not probe each task on its own. Tasks without a goal are absent.
+   */
+  findGoalsByTaskIds = async (
+    taskIds: string[],
+  ): Promise<Map<string, { id: string; status: string; title: string }>> => {
+    const result = new Map<string, { id: string; status: string; title: string }>();
+    if (taskIds.length === 0) return result;
+
+    const chain = await this.db.execute<{ depth: number; id: string; root: string }>(sql`
+      WITH RECURSIVE chain(root, id, depth, visited) AS (
+        SELECT ${tasks.id}, ${tasks.id}, 0, ARRAY[${tasks.id}] FROM ${tasks}
+        WHERE ${tasks.id} IN (${sql.join(
+          taskIds.map((id) => sql`${id}`),
+          sql`, `,
+        )})
+        UNION ALL
+        SELECT chain.root, ${tasks.parentTaskId}, chain.depth + 1, chain.visited || ${tasks.parentTaskId}
+        FROM ${tasks} JOIN chain ON ${tasks.id} = chain.id
+        WHERE ${tasks.parentTaskId} IS NOT NULL
+          AND NOT (${tasks.parentTaskId} = ANY(chain.visited))
+      )
+      SELECT root, id, depth FROM chain
+    `);
+    // ancestor id → every selected root it sits above, with its distance.
+    const rootsOf = new Map<string, { depth: number; root: string }[]>();
+    for (const row of chain.rows) {
+      const list = rootsOf.get(row.id) ?? [];
+      list.push({ depth: Number(row.depth), root: row.root });
+      rootsOf.set(row.id, list);
+    }
+    const chainIds = [...rootsOf.keys()];
+    if (chainIds.length === 0) return result;
+
+    const rows = await this.db
+      .select({
+        carrierTaskId: goals.subjectId,
+        createdAt: goals.createdAt,
+        id: goals.id,
+        nodeTaskId: goalNodes.taskId,
+        status: goals.status,
+        subjectType: goals.subjectType,
+        title: goals.title,
+      })
+      .from(goals)
+      .leftJoin(goalNodes, and(eq(goalNodes.goalId, goals.id), inArray(goalNodes.taskId, chainIds)))
+      .where(
+        and(
+          this.ownership(),
+          or(
+            inArray(goalNodes.taskId, chainIds),
+            and(eq(goals.subjectType, 'task'), inArray(goals.subjectId, chainIds)),
+          ),
+        ),
+      );
+
+    const best = new Map<
+      string,
+      { createdAt: number; depth: number; row: (typeof rows)[number] }
+    >();
+    const consider = (anchorId: string | null, row: (typeof rows)[number]) => {
+      if (!anchorId) return;
+      for (const { depth, root } of rootsOf.get(anchorId) ?? []) {
+        const createdAt = new Date(row.createdAt).getTime();
+        const current = best.get(root);
+        if (
+          !current ||
+          depth < current.depth ||
+          (depth === current.depth && createdAt > current.createdAt)
+        ) {
+          best.set(root, { createdAt, depth, row });
+        }
+      }
+    };
+    for (const row of rows) {
+      consider(row.nodeTaskId, row);
+      if (row.subjectType === 'task') consider(row.carrierTaskId, row);
+    }
+    for (const [root, { row }] of best) {
+      result.set(root, { id: row.id, status: row.status, title: row.title });
+    }
+    return result;
+  };
+
   createNode = async (goalId: string, input: CreateNodeInput) =>
     this.db.transaction(async (tx) => {
       if (!(await this.ownedGoal(goalId, tx))) return undefined;
@@ -919,6 +1007,34 @@ export class GoalGraphModel {
         reason,
         taskId: node.taskId ?? undefined,
       });
+      // A retired node's delivery will never be judged: its outcome is
+      // discarded (see GoalService completion). Left open — awaiting sign-off,
+      // a first round that never comes (`pending` / `planned`), or rework after
+      // a reject — its acceptance stays in the active list for work the Goal
+      // already dropped. Close it in the same transaction so the node and its
+      // acceptance reach their terminal states together. A round still
+      // verifying is left to land; settling it closes it (recomputeStatus).
+      if (status === 'retired' && node.taskId) {
+        // Lock the acceptance whatever its status: a round settling right now
+        // (AcceptanceModel.settleTaskPolicyStatus) holds the same lock while it
+        // checks for retirement, so a `verifying` row skipped here cannot be
+        // written back to `delivered` after this commits unseen.
+        await tx
+          .select({ id: acceptances.id })
+          .from(acceptances)
+          .where(and(eq(acceptances.subjectType, 'task'), eq(acceptances.subjectId, node.taskId)))
+          .for('update');
+        await tx
+          .update(acceptances)
+          .set({ completedAt: new Date(), status: 'closed' })
+          .where(
+            and(
+              eq(acceptances.subjectType, 'task'),
+              eq(acceptances.subjectId, node.taskId),
+              inArray(acceptances.status, [...ACCEPTANCE_STATUSES_CLOSED_BY_RETIREMENT]),
+            ),
+          );
+      }
       return node;
     });
 

@@ -12,6 +12,13 @@
  * browser tool. Mirrors `BrowserIdentifier` in `@lobechat/builtin-tool-browser`,
  * which device runtimes do not import because it carries the React renders.
  */
+import {
+  browserEditCommandOf,
+  DEFAULT_BROWSER_VIEWPORT,
+  parseBrowserKey,
+  parseBrowserViewport,
+} from './browserInput';
+
 export const BROWSER_IDENTIFIER = 'lobe-browser';
 
 /** Matches the desktop `readPage` cap so both devices hand the model the same budget. */
@@ -26,10 +33,19 @@ export type AgentBrowserExec = (session: string, commands: string[][]) => Promis
 
 export interface AgentBrowserCallOptions {
   exec: AgentBrowserExec;
+  /** OS of the browser's host, for `ControlOrMeta` and macOS editing shortcuts. */
+  platform?: string;
   /** Reads the PNG the `screenshot` step wrote. */
   readFile: (filePath: string) => Promise<Uint8Array>;
   /** Where `screenshot` writes its capture; owned (and cleaned up) by the caller. */
   screenshotPath: string;
+}
+
+export interface AgentBrowserCommandContext {
+  /** `fill` only: the target is a native `<select>`; see {@link runAgentBrowserCall}. */
+  fillsSelect?: boolean;
+  /** OS of the browser's host, for `ControlOrMeta` and macOS editing shortcuts. */
+  platform?: string;
 }
 
 export interface AgentBrowserToolResult {
@@ -89,8 +105,7 @@ export const buildAgentBrowserCommands = (
   apiName: string,
   args: Record<string, unknown>,
   screenshotPath: string,
-  /** `fill` only: the target is a native `<select>`; see {@link runAgentBrowserCall}. */
-  fillsSelect = false,
+  { fillsSelect = false, platform = process.platform }: AgentBrowserCommandContext = {},
 ): string[][] => {
   switch (apiName) {
     case 'navigate': {
@@ -119,8 +134,19 @@ export const buildAgentBrowserCommands = (
       return commands;
     }
     case 'press': {
-      if (typeof args.key !== 'string' || !args.key) throw new Error('key is required');
-      return [['press', args.key]];
+      // agent-browser reports success for any key name, pressed or not.
+      const combo = parseBrowserKey(args.key, platform);
+      const commands = [['press', combo.combo]];
+      // Headless Chrome on macOS does not run Meta+A/C/V/X/Z from the key event.
+      const editCommand = browserEditCommandOf(combo, platform);
+      if (editCommand) {
+        commands.push(['eval', `document.execCommand(${JSON.stringify(editCommand)})`]);
+      }
+      return commands;
+    }
+    case 'setViewport': {
+      const { height, width } = parseBrowserViewport(args) ?? DEFAULT_BROWSER_VIEWPORT;
+      return [['set', 'viewport', String(width), String(height)]];
     }
     case 'scroll': {
       return [['mouse', 'wheel', toNumber(args.dy, 'dy'), toNumber(args.dx ?? 0, 'dx')]];
@@ -191,12 +217,11 @@ export const runAgentBrowserCall = async (
     // The server rides the run identity in the args; it is not an api parameter.
     const { __agentId: _agentId, __topicId: topicId, ...args } = rawArgs;
     const session = agentBrowserSessionName(topicId);
-    const commands = buildAgentBrowserCommands(
-      apiName,
-      args,
-      options.screenshotPath,
-      apiName === 'fill' && (await isNativeSelect(options.exec, session, args.ref)),
-    );
+    const platform = options.platform ?? process.platform;
+    const commands = buildAgentBrowserCommands(apiName, args, options.screenshotPath, {
+      fillsSelect: apiName === 'fill' && (await isNativeSelect(options.exec, session, args.ref)),
+      platform,
+    });
     const steps = parseSteps(await options.exec(session, commands));
 
     const failed = steps.find((step) => !step.success);
@@ -247,7 +272,18 @@ export const runAgentBrowserCall = async (
         };
       }
       case 'press': {
-        return { content: `Pressed ${String(args.key)}.`, success: true };
+        const combo = parseBrowserKey(args.key, platform);
+        const editCommand = browserEditCommandOf(combo, platform);
+        // `execCommand` answers false when the page refuses it, e.g. paste without clipboard access.
+        const refused = editCommand && result(1).result === false;
+        return {
+          content: `Pressed ${combo.combo}${refused ? `, but the page did not run ${editCommand}` : ''}.`,
+          success: true,
+        };
+      }
+      case 'setViewport': {
+        const [, , width, height] = commands[0];
+        return { content: `Viewport set to ${width}×${height}.`, success: true };
       }
       case 'scroll': {
         return { content: `Scrolled by ${String(args.dy)}px.`, success: true };

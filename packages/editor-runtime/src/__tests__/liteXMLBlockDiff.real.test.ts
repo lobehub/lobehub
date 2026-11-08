@@ -7,11 +7,13 @@ import {
   MarkdownPlugin,
   moment,
 } from '@lobehub/editor';
+import { createHeadlessEditor, DEFAULT_HEADLESS_EDITOR_PLUGINS } from '@lobehub/editor/headless';
 import { DiffAction, LITEXML_DIFFNODE_ALL_COMMAND } from '@lobehub/editor/litexml-commands';
 import { $getRoot, type ElementNode, type TextNode } from 'lexical';
 import { describe, expect, it } from 'vitest';
 
 import { normalizeEditorDataDiffNodes } from '../../../../src/libs/editor/normalizeDiffNodes';
+import { alignLiteXMLBlocks } from '../alignLiteXMLBlocks';
 import { EditorRuntime } from '../EditorRuntime';
 import { diffLiteXMLBlocks } from '../liteXMLBlockDiff';
 
@@ -70,6 +72,16 @@ const setup = async (markdown: string) => {
   };
 };
 
+const chartNodesOf = (editorData: { root: unknown }) => {
+  const charts: Record<string, unknown>[] = [];
+  const walk = (node: any) => {
+    if (node?.type === 'chart') charts.push(node);
+    node?.children?.forEach(walk);
+  };
+  walk(editorData.root);
+  return charts;
+};
+
 const topLevelIds = (xml: string) =>
   [...xml.matchAll(/^ {2}<\w+ id="([^"]+)"/gm)].map((match) => match[1]);
 
@@ -124,6 +136,33 @@ describe('diffLiteXMLBlocks against a real editor', () => {
       expect(page.markdownOf()).toBe(
         action === DiffAction.Accept ? 'intro\n\ntail\n\n1. new item\n2. next item' : before,
       );
+    },
+  );
+
+  it.each([DiffAction.Accept, DiffAction.Reject])(
+    'reviews a paragraph rewritten without its id as one modification, action %s',
+    async (action) => {
+      const page = await setup(
+        'intro\n\n所以这块我们到现在也还没想清楚。至少我觉得，资源的使用权限得分开看。\n\ntail',
+      );
+      const before = page.markdownOf();
+      const rewritten =
+        'intro\n\n所以这块我们到现在也还没想清楚。表面上是在分资源的使用权限。\n\n我隐约觉得，这碰到了最根本的关系。\n\ntail';
+      const { result } = await page.apply((xml) =>
+        xml.replace(
+          /<p id="[^"]+">(?:(?!<\/p>)[\s\S])*至少我觉得[\s\S]*?<\/p>/,
+          '<p>所以这块我们到现在也还没想清楚。表面上是在分资源的使用权限。</p><p>我隐约觉得，这碰到了最根本的关系。</p>',
+        ),
+      );
+
+      expect(result.successCount).toBe(result.totalCount);
+      const json = JSON.stringify(page.json());
+      expect(json).toContain('"diffType":"modify"');
+      expect(json).not.toContain('"diffType":"remove"');
+      expect(page.markdownOf()).toBe(rewritten);
+      await page.resolve(action);
+      expect(JSON.stringify(page.json())).not.toContain('"type":"diff"');
+      expect(page.markdownOf()).toBe(action === DiffAction.Accept ? rewritten : before);
     },
   );
 
@@ -318,5 +357,41 @@ describe('diffLiteXMLBlocks against a real editor', () => {
 
     expect(result.successCount).toBe(result.totalCount);
     expect(page.markdownOf()).toBe('para ONE\n\npara two\n\npara THREE');
+  });
+
+  it('keeps a chart parseable when its block is applied from a diff', async () => {
+    const spec = {
+      data: [{ k: 'a', v: 1 }],
+      series: [{ key: 'v' }],
+      type: 'bar',
+      version: 1,
+      x: 'k',
+    };
+    const headless = () => createHeadlessEditor({ plugins: DEFAULT_HEADLESS_EDITOR_PLUGINS });
+    const room = headless();
+    const target = headless();
+    room.hydrateMarkdown('intro\n\nold body\n', { keepId: true });
+    target.hydrateMarkdown(`intro\n\n\`\`\`chart\n${JSON.stringify(spec)}\n\`\`\`\n`, {
+      keepId: true,
+    });
+
+    const current = room.export({ litexml: true }).litexml ?? '';
+    const aligned = alignLiteXMLBlocks(current, target.export({ litexml: true }).litexml ?? '');
+    if (!aligned) throw new Error('blocks did not align');
+    const diff = diffLiteXMLBlocks(current, aligned);
+    if (!diff.ok) throw new Error(diff.reason);
+    await room.applyLiteXML(
+      diff.operations.map((operation) =>
+        operation.action === 'modify'
+          ? { action: 'replace' as const, litexml: operation.litexml }
+          : operation,
+      ),
+    );
+
+    expect(chartNodesOf(room.export().editorData)).toEqual([
+      expect.objectContaining({ spec: expect.objectContaining({ type: 'bar', x: 'k' }) }),
+    ]);
+    room.destroy();
+    target.destroy();
   });
 });

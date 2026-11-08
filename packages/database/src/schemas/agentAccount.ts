@@ -2,6 +2,7 @@ import type {
   AgentAccountCapabilities,
   AgentAccountCredentialHint,
   AgentAccountKind,
+  AgentAccountSettings,
   AgentAccountStatus,
 } from '@lobechat/types';
 import { sql } from 'drizzle-orm';
@@ -89,6 +90,13 @@ export const agentAccounts = pgTable(
 
     /** Provider-side non-secret handles (inboxId, chatId, walletId, …). */
     metadata: jsonb('metadata').$type<Record<string, unknown>>().default({}),
+
+    /**
+     * The owner's own settings for the account, such as its wake rules. Kept
+     * apart from `metadata`, which a managed provider owns and the owner may
+     * not rewrite.
+     */
+    settings: jsonb('settings').$type<AgentAccountSettings>().notNull().default({}),
 
     /** When the account was released. Kept for audit; the row is not deleted. */
     revokedAt: timestamptz('revoked_at'),

@@ -10,6 +10,7 @@ import useSWR from 'swr';
 import { linearKeys } from '@/features/Integrations/Linear/swrKeys';
 import { linearService } from '@/services/linear';
 
+import ImportOptions from './ImportOptions';
 import IssueList from './IssueList';
 import RunStep from './RunStep';
 import ScopeStep from './ScopeStep';
@@ -19,15 +20,20 @@ import {
   type LinearIssueImportModalOptions,
 } from './types';
 import { jobsShownInDialog, useLinearSyncJobs } from './useLinearSyncJobs';
-import { isActiveLinearSyncJob, linearSyncErrorMessage } from './utils';
+import {
+  canLeaveLinearScopeStep,
+  isActiveLinearSyncJob,
+  linearImportScopeSummary,
+  linearSyncErrorMessage,
+} from './utils';
 
 type Step = 'scope' | 'issues' | 'run';
 
 /**
  * Import Linear issues into the project in three steps: pick the scope (team,
- * Linear project, states), pick issues — or save the scope as a rule and sync
- * all of it — then watch the sync. The sync runs in the background, so the
- * dialog can be closed while it works. Linear is only read.
+ * Linear project, states) and the import options, pick issues — or save the
+ * scope as a rule and sync all of it — then watch the sync. The sync runs in the
+ * background, so the dialog can be closed while it works. Linear is only read.
  */
 const ImportIssuesContent = memo<LinearIssueImportModalOptions>(
   ({ connection, onSynced, projectId }) => {
@@ -36,6 +42,10 @@ const ImportIssuesContent = memo<LinearIssueImportModalOptions>(
     const [step, setStep] = useState<Step>('scope');
     const [filter, setFilter] = useState<LinearImportFilter>(initialImportFilter);
     const [selected, setSelected] = useState<Set<string>>(() => new Set());
+    // Comments carry much of an issue's context, so they come along unless unchecked.
+    const [syncComments, setSyncComments] = useState(true);
+    // Archived issues stay out, as in Linear, unless asked for.
+    const [includeArchived, setIncludeArchived] = useState(false);
     const [starting, setStarting] = useState<'import' | 'rule' | null>(null);
     const [jobId, setJobId] = useState<string>();
     // Shown as the running title until the job loads, so a single import never reads as a rule sync.
@@ -63,6 +73,12 @@ const ImportIssuesContent = memo<LinearIssueImportModalOptions>(
       setFilter((current) => ({ ...current, ...patch }));
       setSavedRuleId(undefined);
       // The list changes with the scope; a hidden selection would import blind.
+      setSelected(new Set());
+    };
+
+    const changeIncludeArchived = (checked: boolean) => {
+      setIncludeArchived(checked);
+      // The list changes with it; a hidden selection would import blind.
       setSelected(new Set());
     };
 
@@ -98,6 +114,7 @@ const ImportIssuesContent = memo<LinearIssueImportModalOptions>(
           connectionId: connection.id,
           issueIds: [...selected],
           projectId,
+          syncComments,
         }),
       );
 
@@ -117,7 +134,7 @@ const ImportIssuesContent = memo<LinearIssueImportModalOptions>(
           ruleId = rule.id;
           setSavedRuleId(rule.id);
         }
-        return linearService.startRuleSync(ruleId);
+        return linearService.startRuleSync(ruleId, { includeArchived, syncComments });
       });
 
     const leaveRunning = () => {
@@ -125,18 +142,17 @@ const ImportIssuesContent = memo<LinearIssueImportModalOptions>(
       close();
     };
 
-    const scopeLabel = [
-      filter.teamName,
-      filter.linearProjectName ?? t('linear.sync.filter.allProjects'),
-      t('linear.sync.filter.statesSummary', { count: filter.stateTypes.length }),
-    ].join(' · ');
-
     const footer = (() => {
       if (step === 'scope') {
         return (
           <Button
-            disabled={!filter.teamId || projectsLoading || !!projectsError}
             type={'primary'}
+            disabled={
+              !canLeaveLinearScopeStep(filter, {
+                error: projectsError,
+                isLoading: projectsLoading,
+              })
+            }
             onClick={() => setStep('issues')}
           >
             {t('linear.sync.wizard.next')}
@@ -208,19 +224,28 @@ const ImportIssuesContent = memo<LinearIssueImportModalOptions>(
     return (
       <Flexbox gap={20}>
         {step === 'scope' ? (
-          <ScopeStep connectionId={connection.id} value={filter} onChange={updateFilter} />
+          <>
+            <ScopeStep connectionId={connection.id} value={filter} onChange={updateFilter} />
+            <ImportOptions
+              includeArchived={includeArchived}
+              syncComments={syncComments}
+              onIncludeArchivedChange={changeIncludeArchived}
+              onSyncCommentsChange={setSyncComments}
+            />
+          </>
         ) : null}
 
         {step === 'issues' ? (
           <Flexbox gap={12}>
             <Text ellipsis fontSize={12} type={'secondary'}>
-              {scopeLabel}
+              {linearImportScopeSummary(filter, { includeArchived }, t)}
             </Text>
             <IssueList
               disabled={starting !== null}
               selected={selected}
               filter={{
                 connectionId: connection.id,
+                includeArchived,
                 linearProjectId: filter.linearProjectId,
                 stateTypes: filter.stateTypes,
                 teamId: filter.teamId!,

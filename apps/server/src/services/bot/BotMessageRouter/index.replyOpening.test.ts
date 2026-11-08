@@ -45,17 +45,16 @@ vi.mock('../wake/scheduler', () => ({
   recordWakeRunOutcome: vi.fn(),
   resolveWakeScheduler: () => undefined,
 }));
-vi.mock('../wake/classify', () => ({
+vi.mock('@/server/services/conversationWake/classify', () => ({
   createWakeClassify: () => vi.fn(),
 }));
-vi.mock('../wake/dutyJudge', () => ({
+vi.mock('@/server/services/conversationWake/dutyJudge', () => ({
   createWakeDutyJudge: () => vi.fn(),
 }));
 vi.mock('../wake/opener', () => ({ createReplyOpener: () => mocks.opener }));
-vi.mock('../wake/identity', () => ({
+vi.mock('@/server/services/conversationWake/identity', () => ({
   createWakeIdentityLoader: () => async () => ({ agentName: 'Nasa', ownerNames: ['Arvin'] }),
 }));
-vi.mock('@/server/featureFlags', async () => (await import('./testUtils')).featureFlagsModule());
 vi.mock('@/database/core/db-adaptor', async () => (await import('./testUtils')).dbAdaptorModule());
 vi.mock('@/database/models/agentBotProvider', async () =>
   (await import('./testUtils')).agentBotProviderModule(),
@@ -114,7 +113,7 @@ const boot = async (settings: Record<string, unknown> = {}) => {
   mockFindEnabledByPlatform.mockResolvedValue([
     makeProvider({
       applicationId: 'app-1',
-      settings: { dmPolicy: 'open', userId: OWNER, ...settings },
+      settings: { botWakeDisabled: false, dmPolicy: 'open', userId: OWNER, ...settings },
     }),
   ]);
   await new BotMessageRouter().getWebhookHandler(

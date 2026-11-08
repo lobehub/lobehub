@@ -48,6 +48,31 @@ const answer = async (channelId: string, jobId: string) => {
 };
 
 describe('claim guards', () => {
+  it('asks for a device before an external Agent without one replies', async () => {
+    const model = new ChannelRepository(db, fixture.ownerId);
+    const { channel } = await model.create({ title: 'Direct to Codex' });
+    const agent = await fixture.addAgent(channel.id, 'Codex', {
+      model: 'gpt-5',
+      provider: 'openai',
+      runtime: 'codex',
+    });
+
+    const waiting = await request(model, channel.id, agent.id, 'no-device');
+    expect(await execution.claim(channel.id, waiting.job.id, lease)).toBeNull();
+    expect(await jobById(waiting.job.id)).toMatchObject({
+      blockedCode: 'device_required',
+      status: 'queued',
+    });
+
+    // Choosing a device lets the same queued job start.
+    await model.updateAgentEnvironment(channel.id, agent.id, {
+      deviceId: 'device-4',
+      deviceOwnerId: fixture.ownerId,
+      workingDirectory: '/repo',
+    });
+    expect(await execution.claim(channel.id, waiting.job.id, lease)).not.toBeNull();
+  });
+
   it('requires an approved grant that matches the device, directory and owner', async () => {
     const { asOwner, channel, member } = await fixture.createTeamChannel();
     // A private device owned by the member, not shared with the workspace.

@@ -5,15 +5,20 @@ import {
   type AgentArtworkStyle,
   DEFAULT_AGENT_ARTWORK_STYLE,
 } from '@lobechat/prompts';
-import { Center, createStaticStyles, cssVar, Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import {
   ActionIcon,
   Button,
+  Center,
+  createStaticStyles,
+  cssVar,
   type DropdownItem,
   DropdownMenu,
+  Flexbox,
+  Icon,
   Spin,
   Text,
   toast,
+  Tooltip,
 } from '@lobehub/ui';
 import { Check, ImageIcon, MoreHorizontal, Trash2, UploadIcon, WandSparkles } from 'lucide-react';
 import { memo, useCallback, useId, useRef, useState } from 'react';

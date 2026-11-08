@@ -65,7 +65,13 @@ export const groupAccessFields = (fields: FieldSchema[]): AccessSectionGroup[] =
 };
 
 /** What a reply looks like in the chat. These save themselves as soon as they change. */
-export const REPLY_KEYS = ['replyPlacement', 'displayToolCalls', 'showUsageStats', 'reactionMode'];
+export const REPLY_KEYS = [
+  'replyPlacement',
+  'displayToolCalls',
+  'processingMessage',
+  'showUsageStats',
+  'reactionMode',
+];
 
 /**
  * How the bot talks: its style everywhere, a style per channel, and the emoji it may use. Long
@@ -101,7 +107,7 @@ export const groupReplyFields = (fields: FieldSchema[]): ReplySection[] => {
 const WAKE_KEYS = ['watchKeywords'];
 export const WAKE_KEY_PREFIX = 'botWake';
 
-export type WakeSectionKey = 'channels' | 'judgement' | 'keywords' | 'more' | 'pace';
+export type WakeSectionKey = 'channels' | 'judgement' | 'keywords' | 'more' | 'pace' | 'switch';
 
 export interface WakeSection {
   fields: FieldSchema[];
@@ -113,7 +119,9 @@ export interface WakeSection {
  * them. The strings are the keys of `BOT_WAKE_SETTING_KEYS` (a test keeps the two in step); they
  * are spelled out here so the page does not pull the server's settings parser into the bundle.
  *
- * - judgement (shown as "duties"), first: the decision a person makes before any other, what the
+ * - switch, first: whether the bot may speak up on its own at all. Off hides every block below
+ *   but the keywords, which wake the bot without any judgement either way
+ * - judgement (shown as "duties"): the decision a person makes before any other, what the
  *   bot is responsible for, so it may speak up without being called when a message falls within
  *   it. The duties text area with its dial under it, then the custom instructions (a switch with
  *   its text area opening under it) that guide every judgement.
@@ -123,6 +131,7 @@ export interface WakeSection {
  *   (and how sure it must be that a message right after its own reply is still for it)
  */
 const WAKE_SECTION_KEYS: Array<[Exclude<WakeSectionKey, 'more'>, string[]]> = [
+  ['switch', ['botWakeDisabled']],
   [
     'judgement',
     [
@@ -149,9 +158,6 @@ const WAKE_SECTION_KEYS: Array<[Exclude<WakeSectionKey, 'more'>, string[]]> = [
   ],
 ];
 
-/** The hidden master switch is not an option a person sets. */
-const WAKE_MASTER = 'botWakeEnabled';
-
 /**
  * Split the wake tab's fields into the blocks the page shows. Empty blocks are dropped, so a user
  * the bot-wake options are not released to sees only the keywords. An option not named above
@@ -159,7 +165,7 @@ const WAKE_MASTER = 'botWakeEnabled';
  */
 export const groupWakeFields = (fields: FieldSchema[]): WakeSection[] => {
   const byKey = new Map(fields.map((field) => [field.key, field]));
-  const placed = new Set<string>([WAKE_MASTER]);
+  const placed = new Set<string>();
 
   const sections: WakeSection[] = WAKE_SECTION_KEYS.map(([key, keys]) => {
     keys.forEach((k) => placed.add(k));

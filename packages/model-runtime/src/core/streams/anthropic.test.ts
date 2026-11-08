@@ -2,6 +2,21 @@ import type { Stream } from '@anthropic-ai/sdk/streaming';
 import { describe, expect, it, vi } from 'vitest';
 
 import { AnthropicStream } from './anthropic';
+import { createReadableStream } from './utils';
+
+const createMessageStart = <T>(id: string, model: string, usage: T) => ({
+  type: 'message_start',
+  message: {
+    id,
+    type: 'message',
+    role: 'assistant',
+    model,
+    content: [],
+    stop_reason: null,
+    stop_sequence: null,
+    usage,
+  },
+});
 
 describe('AnthropicStream', () => {
   it('should transform Anthropic stream to protocol stream', async () => {
@@ -120,19 +135,10 @@ describe('AnthropicStream', () => {
 
   it('should handle tool use event and ReadableStream input', async () => {
     const streams = [
-      {
-        type: 'message_start',
-        message: {
-          id: 'msg_017aTuY86wNxth5TE544yqJq',
-          type: 'message',
-          role: 'assistant',
-          model: 'claude-3-sonnet-20240229',
-          content: [],
-          stop_reason: null,
-          stop_sequence: null,
-          usage: { input_tokens: 457, output_tokens: 1 },
-        },
-      },
+      createMessageStart('msg_017aTuY86wNxth5TE544yqJq', 'claude-3-sonnet-20240229', {
+        input_tokens: 457,
+        output_tokens: 1,
+      }),
       { type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } },
       { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: '好' } },
       { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: '的:' } },
@@ -176,14 +182,7 @@ describe('AnthropicStream', () => {
       },
     ];
 
-    const mockReadableStream = new ReadableStream({
-      start(controller) {
-        streams.forEach((chunk) => {
-          controller.enqueue(chunk);
-        });
-        controller.close();
-      },
-    });
+    const mockReadableStream = createReadableStream(streams);
 
     const onToolCallMock = vi.fn();
 
@@ -247,7 +246,7 @@ describe('AnthropicStream', () => {
 
         'id: msg_017aTuY86wNxth5TE544yqJq',
         'event: usage',
-        'data: {"inputCacheMissTokens":457,"totalInputTokens":457,"totalOutputTokens":84,"totalTokens":541}\n',
+        'data: {"inputCacheMissTokens":457,"totalInputTokens":457,"totalOutputTokens":83,"totalTokens":540}\n',
       ].map((item) => `${item}\n`),
     );
 
@@ -255,19 +254,10 @@ describe('AnthropicStream', () => {
   });
   it('should handle parallel tools use event and ReadableStream input', async () => {
     const streams = [
-      {
-        type: 'message_start',
-        message: {
-          id: 'msg_0175ryA67RbGrnRrGBXFQEYK',
-          type: 'message',
-          role: 'assistant',
-          model: 'claude-3-5-sonnet-20240620',
-          content: [],
-          stop_reason: null,
-          stop_sequence: null,
-          usage: { input_tokens: 485, output_tokens: 4 },
-        },
-      },
+      createMessageStart('msg_0175ryA67RbGrnRrGBXFQEYK', 'claude-3-5-sonnet-20240620', {
+        input_tokens: 485,
+        output_tokens: 4,
+      }),
       { type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } },
       {
         type: 'content_block_delta',
@@ -330,14 +320,7 @@ describe('AnthropicStream', () => {
       { type: 'message_stop' },
     ];
 
-    const mockReadableStream = new ReadableStream({
-      start(controller) {
-        streams.forEach((chunk) => {
-          controller.enqueue(chunk);
-        });
-        controller.close();
-      },
-    });
+    const mockReadableStream = createReadableStream(streams);
 
     const onToolCallMock = vi.fn();
 
@@ -405,7 +388,7 @@ describe('AnthropicStream', () => {
 
         'id: msg_0175ryA67RbGrnRrGBXFQEYK',
         'event: usage',
-        'data: {"inputCacheMissTokens":485,"totalInputTokens":485,"totalOutputTokens":154,"totalTokens":639}\n',
+        'data: {"inputCacheMissTokens":485,"totalInputTokens":485,"totalOutputTokens":150,"totalTokens":635}\n',
         'id: msg_0175ryA67RbGrnRrGBXFQEYK',
         'event: stop',
         'data: "message_stop"\n',
@@ -417,24 +400,12 @@ describe('AnthropicStream', () => {
 
   it('should handle prompts context caching', async () => {
     const streams = [
-      {
-        type: 'message_start',
-        message: {
-          id: 'msg_01Vxc4yQTEjkDSba3N3BMbH8',
-          type: 'message',
-          role: 'assistant',
-          model: 'claude-3-7-sonnet-20250219',
-          content: [],
-          stop_reason: null,
-          stop_sequence: null,
-          usage: {
-            input_tokens: 6,
-            cache_creation_input_tokens: 457,
-            cache_read_input_tokens: 17918,
-            output_tokens: 2,
-          },
-        },
-      },
+      createMessageStart('msg_01Vxc4yQTEjkDSba3N3BMbH8', 'claude-3-7-sonnet-20250219', {
+        input_tokens: 6,
+        cache_creation_input_tokens: 457,
+        cache_read_input_tokens: 17918,
+        output_tokens: 2,
+      }),
       { type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } },
       { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: '\n\n根' } },
       {
@@ -451,14 +422,7 @@ describe('AnthropicStream', () => {
       { type: 'message_stop' },
     ];
 
-    const mockReadableStream = new ReadableStream({
-      start(controller) {
-        streams.forEach((chunk) => {
-          controller.enqueue(chunk);
-        });
-        controller.close();
-      },
-    });
+    const mockReadableStream = createReadableStream(streams);
 
     const protocolStream = AnthropicStream(mockReadableStream);
 
@@ -492,7 +456,7 @@ describe('AnthropicStream', () => {
         'data: "end_turn"\n',
         'id: msg_01Vxc4yQTEjkDSba3N3BMbH8',
         'event: usage',
-        'data: {"inputCacheMissTokens":6,"inputCachedTokens":17918,"inputWriteCacheTokens":457,"totalInputTokens":18381,"totalOutputTokens":3224,"totalTokens":21605}\n',
+        'data: {"inputCacheMissTokens":6,"inputCachedTokens":17918,"inputWriteCacheTokens":457,"totalInputTokens":18381,"totalOutputTokens":3222,"totalTokens":21603}\n',
 
         'id: msg_01Vxc4yQTEjkDSba3N3BMbH8',
         'event: stop',
@@ -503,24 +467,12 @@ describe('AnthropicStream', () => {
   describe('thinking', () => {
     it('should handle normal thinking ', async () => {
       const streams = [
-        {
-          type: 'message_start',
-          message: {
-            id: 'msg_01MNsLe7n1uVLtu6W8rCFujD',
-            type: 'message',
-            role: 'assistant',
-            model: 'claude-3-7-sonnet-20250219',
-            content: [],
-            stop_reason: null,
-            stop_sequence: null,
-            usage: {
-              input_tokens: 46,
-              cache_creation_input_tokens: 0,
-              cache_read_input_tokens: 0,
-              output_tokens: 11,
-            },
-          },
-        },
+        createMessageStart('msg_01MNsLe7n1uVLtu6W8rCFujD', 'claude-3-7-sonnet-20250219', {
+          input_tokens: 46,
+          cache_creation_input_tokens: 0,
+          cache_read_input_tokens: 0,
+          output_tokens: 11,
+        }),
         {
           type: 'content_block_start',
           index: 0,
@@ -566,14 +518,7 @@ describe('AnthropicStream', () => {
         { type: 'message_stop' },
       ];
 
-      const mockReadableStream = new ReadableStream({
-        start(controller) {
-          streams.forEach((chunk) => {
-            controller.enqueue(chunk);
-          });
-          controller.close();
-        },
-      });
+      const mockReadableStream = createReadableStream(streams);
 
       const protocolStream = AnthropicStream(mockReadableStream);
 
@@ -623,7 +568,7 @@ describe('AnthropicStream', () => {
           'data: "end_turn"\n',
           'id: msg_01MNsLe7n1uVLtu6W8rCFujD',
           'event: usage',
-          'data: {"inputCacheMissTokens":46,"inputCachedTokens":0,"totalInputTokens":46,"totalOutputTokens":365,"totalTokens":411}\n',
+          'data: {"inputCacheMissTokens":46,"inputCachedTokens":0,"totalInputTokens":46,"totalOutputTokens":354,"totalTokens":400}\n',
           'id: msg_01MNsLe7n1uVLtu6W8rCFujD',
           'event: stop',
           'data: "message_stop"\n',
@@ -633,24 +578,12 @@ describe('AnthropicStream', () => {
 
     it('should handle flagged thinking ', async () => {
       const streams = [
-        {
-          type: 'message_start',
-          message: {
-            id: 'msg_019q32esPvu3TftzZnL6JPys',
-            type: 'message',
-            role: 'assistant',
-            model: 'claude-3-7-sonnet-20250219',
-            content: [],
-            stop_reason: null,
-            stop_sequence: null,
-            usage: {
-              input_tokens: 92,
-              cache_creation_input_tokens: 0,
-              cache_read_input_tokens: 0,
-              output_tokens: 4,
-            },
-          },
-        },
+        createMessageStart('msg_019q32esPvu3TftzZnL6JPys', 'claude-3-7-sonnet-20250219', {
+          input_tokens: 92,
+          cache_creation_input_tokens: 0,
+          cache_read_input_tokens: 0,
+          output_tokens: 4,
+        }),
         {
           type: 'content_block_start',
           index: 0,
@@ -714,14 +647,7 @@ describe('AnthropicStream', () => {
         { type: 'message_stop' },
       ];
 
-      const mockReadableStream = new ReadableStream({
-        start(controller) {
-          streams.forEach((chunk) => {
-            controller.enqueue(chunk);
-          });
-          controller.close();
-        },
-      });
+      const mockReadableStream = createReadableStream(streams);
 
       const protocolStream = AnthropicStream(mockReadableStream);
 
@@ -783,7 +709,7 @@ describe('AnthropicStream', () => {
           'data: "end_turn"\n',
           'id: msg_019q32esPvu3TftzZnL6JPys',
           'event: usage',
-          'data: {"inputCacheMissTokens":92,"inputCachedTokens":0,"totalInputTokens":92,"totalOutputTokens":263,"totalTokens":355}\n',
+          'data: {"inputCacheMissTokens":92,"inputCachedTokens":0,"totalInputTokens":92,"totalOutputTokens":259,"totalTokens":351}\n',
           'id: msg_019q32esPvu3TftzZnL6JPys',
           'event: stop',
           'data: "message_stop"\n',
@@ -835,24 +761,12 @@ describe('AnthropicStream', () => {
 
   it('should handle un-normal block type', async () => {
     const streams = [
-      {
-        type: 'message_start',
-        message: {
-          id: 'msg_01MNsLe7n1uVLtu6W8rCFujD',
-          type: 'message',
-          role: 'assistant',
-          model: 'claude-3-7-sonnet-20250219',
-          content: [],
-          stop_reason: null,
-          stop_sequence: null,
-          usage: {
-            input_tokens: 46,
-            cache_creation_input_tokens: 0,
-            cache_read_input_tokens: 0,
-            output_tokens: 11,
-          },
-        },
-      },
+      createMessageStart('msg_01MNsLe7n1uVLtu6W8rCFujD', 'claude-3-7-sonnet-20250219', {
+        input_tokens: 46,
+        cache_creation_input_tokens: 0,
+        cache_read_input_tokens: 0,
+        output_tokens: 11,
+      }),
       {
         type: 'content_block_start',
         index: 0,
@@ -876,14 +790,7 @@ describe('AnthropicStream', () => {
       { type: 'message_stop' },
     ];
 
-    const mockReadableStream = new ReadableStream({
-      start(controller) {
-        streams.forEach((chunk) => {
-          controller.enqueue(chunk);
-        });
-        controller.close();
-      },
-    });
+    const mockReadableStream = createReadableStream(streams);
 
     const protocolStream = AnthropicStream(mockReadableStream);
 

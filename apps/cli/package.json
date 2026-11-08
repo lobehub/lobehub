@@ -1,6 +1,6 @@
 {
   "name": "@lobehub/cli",
-  "version": "0.0.72",
+  "version": "0.0.76",
   "type": "module",
   "bin": {
     "lh": "dist/index.js",
@@ -47,6 +47,7 @@
     "@lobechat/tool-runtime": "workspace:*",
     "@lobechat/types": "workspace:*",
     "@lobechat/utils": "workspace:*",
+    "@modelcontextprotocol/client": "~2.4.0",
     "@trpc/client": "^11.18.0",
     "@types/node": "^24.13.2",
     "@types/semver": "^7.7.1",
@@ -55,6 +56,7 @@
     "dayjs": "^1.11.21",
     "debug": "^4.4.3",
     "diff": "^8.0.4",
+    "es-toolkit": "^1.50.0",
     "fast-glob": "^3.3.3",
     "ignore": "^7.0.5",
     "picocolors": "^1.1.1",

@@ -116,7 +116,7 @@ jobs:
     name: Calculate Canary Version
     needs: [check-trigger, core-ota]
     if: |
-      always() && needs.check-trigger.outputs.should_build == 'true' &&
+      !cancelled() && needs.check-trigger.outputs.should_build == 'true' &&
       (inputs.force_full || needs.core-ota.outputs.requires_full_release == 'true' || needs.core-ota.outputs.skipped == 'true')
     runs-on: ubuntu-latest
     outputs:
@@ -254,6 +254,10 @@ jobs:
   test:
     name: Code quality check
     needs: [calculate-version]
+    # force_full skips core-ota, and a skipped ancestor skips every job on the default
+    # success() condition, even when calculate-version itself succeeded. Each job below
+    # therefore checks its direct dependencies explicitly.
+    if: ${{ !cancelled() && needs.calculate-version.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout base
@@ -275,6 +279,7 @@ jobs:
   # ============================================
   build:
     needs: [calculate-version, test]
+    if: ${{ !cancelled() && needs.calculate-version.result == 'success' && needs.test.result == 'success' }}
     name: Build Desktop App
     runs-on: ${{ matrix.os }}
     strategy:
@@ -431,6 +436,7 @@ jobs:
   # ============================================
   merge-mac-files:
     needs: [build]
+    if: ${{ !cancelled() && needs.build.result == 'success' }}
     name: Merge macOS Release Files
     runs-on: ubuntu-latest
     permissions:
@@ -477,6 +483,7 @@ jobs:
   # ============================================
   publish-release:
     needs: [merge-mac-files, calculate-version]
+    if: ${{ !cancelled() && needs.merge-mac-files.result == 'success' && needs.calculate-version.result == 'success' }}
     name: Publish Canary Release
     runs-on: ubuntu-latest
     permissions:
@@ -522,6 +529,7 @@ jobs:
   # ============================================
   publish-s3:
     needs: [merge-mac-files, calculate-version]
+    if: ${{ !cancelled() && needs.merge-mac-files.result == 'success' && needs.calculate-version.result == 'success' }}
     name: Publish to S3
     runs-on: ubuntu-latest
     steps:
@@ -551,6 +559,7 @@ jobs:
   # ============================================
   publish-sparkle:
     needs: [publish-s3, calculate-version]
+    if: ${{ !cancelled() && needs.publish-s3.result == 'success' && needs.calculate-version.result == 'success' }}
     name: Publish Sparkle Appcast
     runs-on: macos-15
     steps:
@@ -581,6 +590,7 @@ jobs:
   # ============================================
   cleanup-old-canaries:
     needs: [publish-release, publish-s3]
+    if: ${{ !cancelled() && needs.publish-release.result == 'success' && needs.publish-s3.result == 'success' }}
     name: Cleanup Old Canary Releases
     runs-on: ubuntu-latest
     permissions:

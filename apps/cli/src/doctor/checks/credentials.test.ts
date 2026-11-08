@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { runCheck } from '../testUtils';
 import { credentialChecks } from './credentials';
@@ -22,13 +22,32 @@ describe('credentials.source', () => {
     source.value = { kind: 'stored', origin: 'stored login', token: 'abcd1234', tokenType: 'jwt' };
   });
 
-  it('fails when nothing is available to authenticate with', async () => {
-    source.value = { kind: 'stored', origin: 'stored login', tokenType: 'jwt' };
+  describe('with no credential', () => {
+    beforeEach(() => {
+      source.value = { kind: 'stored', origin: 'stored login', tokenType: 'jwt' };
+      vi.stubEnv('LOBEHUB_OPERATION_ID', '');
+      vi.stubEnv('LOBEHUB_TOPIC_ID', '');
+    });
+    afterEach(() => vi.unstubAllEnvs());
 
-    const outcome = await runCheck(credentialChecks, 'credentials.source');
+    it('fails when nothing is available to authenticate with', async () => {
+      const outcome = await runCheck(credentialChecks, 'credentials.source');
 
-    expect(outcome.status).toBe('fail');
-    expect(outcome.fix).toContain('login');
+      expect(outcome.status).toBe('fail');
+      expect(outcome.detail).toContain('No credential anywhere');
+      expect(outcome.fix).toContain('login');
+    });
+
+    /** The agent that hit this pointed the user at a desktop restart instead of a login. */
+    it('tells an agent run why it has no credential and that the user must log in', async () => {
+      vi.stubEnv('LOBEHUB_TOPIC_ID', 'tpc_1');
+
+      const outcome = await runCheck(credentialChecks, 'credentials.source');
+
+      expect(outcome.status).toBe('fail');
+      expect(outcome.detail).toContain('agent conversation');
+      expect(outcome.fix).toContain("Ask the user to run 'lh login'");
+    });
   });
 
   it('warns that an inherited LOBEHUB_JWT outranks the stored login', async () => {

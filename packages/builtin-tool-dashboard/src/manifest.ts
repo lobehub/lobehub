@@ -32,7 +32,7 @@ const runtimeSchema = {
 
 const outputTypeSchema = {
   description:
-    'Shape of the JSON the script prints: stat (one number), list (items), series (time series), table (columns + rows).',
+    'Shape of the JSON the script prints: stat (one number), list (items), series (time series), table (columns + rows), data (free-form JSON drawn by view.layout — for rich cards such as weather).',
   enum: [...WIDGET_OUTPUT_TYPES],
   type: 'string',
 };
@@ -103,6 +103,38 @@ const manifestSchema = {
       required: ['allow'],
       type: 'object',
     },
+    params: {
+      description:
+        'Settings a person fills in (city, target date, repository) that the script reads from its environment as text. Never secrets — credentials go in env. Set value for this widget; default is the fallback.',
+      items: {
+        additionalProperties: false,
+        properties: {
+          default: { type: ['string', 'number', 'boolean'] },
+          description: { type: 'string' },
+          label: { description: 'Human label, e.g. "City".', type: 'string' },
+          name: { description: 'UPPER_SNAKE_CASE env name, e.g. CITY.', type: 'string' },
+          options: {
+            description: 'Choices of a select param.',
+            items: {
+              additionalProperties: false,
+              properties: { label: { type: 'string' }, value: { type: 'string' } },
+              required: ['value'],
+              type: 'object',
+            },
+            type: 'array',
+          },
+          required: { type: 'boolean' },
+          type: { enum: ['string', 'number', 'boolean', 'date', 'select'], type: 'string' },
+          value: {
+            description: "This widget's value (a date as YYYY-MM-DD).",
+            type: ['string', 'number', 'boolean'],
+          },
+        },
+        required: ['name', 'type'],
+        type: 'object',
+      },
+      type: 'array',
+    },
     schedule: {
       additionalProperties: false,
       description:
@@ -124,7 +156,7 @@ const manifestSchema = {
 
 const viewSchema = {
   additionalProperties: false,
-  description: 'Rendering hints for the card.',
+  description: 'How the card looks.',
   properties: {
     chart: { enum: ['line', 'bar', 'area'], type: 'string' },
     columns: {
@@ -132,7 +164,22 @@ const viewSchema = {
       items: { type: 'string' },
       type: 'array',
     },
+    html: {
+      description:
+        'A self-contained HTML document (inline CSS / JS / SVG / canvas) that draws the whole card in a sandboxed frame — for visuals the layout nodes cannot express, such as an illustrated scene or an animation. It reads the output from window.widgetData and cannot load anything from the network. Takes precedence over layout. See <card_html>.',
+      type: 'string',
+    },
+    layout: {
+      description:
+        'Declarative card template (a tree of stack / grid / text / icon / image / progress / ring / dots / sparkline / badge / divider / spacer / repeat nodes) whose values bind to the output by path. Required for outputType data; replaces the default rendering for the other types. See <card_layout>.',
+      type: 'object',
+    },
     limit: { description: 'Maximum list / table rows on the card.', type: 'number' },
+    surface: {
+      description:
+        'Card background: a surface name (default, sky, cloudy, rain, storm, snow, night, sunset, forest, ocean, sand, rose, slate) or a binding {"bind":"data.x","map":{…}} that picks one from the data.',
+      type: ['string', 'object'],
+    },
   },
   type: 'object',
 };
@@ -146,6 +193,22 @@ export const DashboardManifest: BuiltinToolManifest = {
       parameters: {
         additionalProperties: false,
         properties: {},
+        type: 'object',
+      },
+    },
+    {
+      description:
+        'Ready-made widgets (weather, countdown, year progress, GitHub repository, Hacker News, …) with their settings. Check it before writing a widget from scratch: install a match with createWidgetDraft({presetId, params}).',
+      name: DashboardApiName.listWidgetPresets,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          category: {
+            description: 'Only presets of this category.',
+            enum: ['time', 'weather', 'dev', 'life', 'finance', 'content', 'business'],
+            type: 'string',
+          },
+        },
         type: 'object',
       },
     },
@@ -172,11 +235,21 @@ export const DashboardManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'Create a monitoring widget and save its first draft. Nothing runs and nothing goes live; call dryRunWidget next. The widget is owned by the current agent (and project, in a project conversation).',
+        'Create a monitoring widget and save its first draft. Nothing runs and nothing goes live; call dryRunWidget next. The widget is owned by the current agent (and project, in a project conversation). Pass presetId to install a preset from listWidgetPresets: its script, manifest and view are used, params fills its settings, and any other field you pass overrides the preset.',
       name: DashboardApiName.createWidgetDraft,
       parameters: {
         additionalProperties: false,
         properties: {
+          params: {
+            additionalProperties: { type: ['string', 'number', 'boolean'] },
+            description:
+              'With presetId: values for the preset\'s params by name, e.g. {"CITY":"Hangzhou"}.',
+            type: 'object',
+          },
+          presetId: {
+            description: 'Id of a preset from listWidgetPresets to install.',
+            type: 'string',
+          },
           description: {
             description:
               'Metric definition (口径) shown on the card: data source, filters, time window and unit.',
@@ -189,7 +262,7 @@ export const DashboardManifest: BuiltinToolManifest = {
           title: { description: 'Short card title, e.g. "Open bug issues".', type: 'string' },
           view: viewSchema,
         },
-        required: ['title', 'description', 'script', 'runtime', 'outputType'],
+        required: [],
         type: 'object',
       },
     },

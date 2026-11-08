@@ -1072,14 +1072,10 @@ describe('HeterogeneousAgentService', () => {
   });
 
   // ───────────────────────────────────────────────────────────────────────────
-  // End-to-end DATA-FLOW reproduction of the runtime path: seed the run's hooks
-  // the way execAgent does (real hookDispatcher.register → getSerializedHooks →
-  // persist onto runningOperation via a shared in-memory topic store with REAL
-  // shallow-merge semantics), then run the REAL heteroFinish against the SAME
-  // store. This exercises the cross-process round-trip the isolated unit tests
-  // hand-wave, and lets us reproduce the production "stuck task_topics" symptom
-  // by injecting the suspected lost-update race on topic.metadata.
-  describe('heteroFinish — seed→read→deliver round-trip + lost-update repro', () => {
+  // Serialize hooks into the topic mirror, then finish after dropping the
+  // in-memory registration. The topic store is a fake; this covers hook
+  // serialization and dispatch, not ingest or database concurrency.
+  describe('heteroFinish — serialized topic hook round-trip', () => {
     const originalToken = process.env.QSTASH_TOKEN;
     const originalAppUrl = process.env.APP_URL;
     const TOPIC = 'topic-int';
@@ -1096,9 +1092,7 @@ describe('HeterogeneousAgentService', () => {
       },
     };
 
-    // Shared topic store whose updateMetadata mirrors TopicModel.updateMetadata.
-    // `mergeBase` lets a test force the historical stale-snapshot race, while
-    // settleRunningOperation models the operation-owned terminal CAS.
+    // Fake topic store for seeding and settling this run's serialized hooks.
     const makeStore = () => {
       let meta: Record<string, any> = {};
       const topicModel = {
@@ -1148,14 +1142,14 @@ describe('HeterogeneousAgentService', () => {
             threadId: operation.threadId,
           };
         }),
-        updateMetadata: vi.fn(async (_id: string, patch: Record<string, any>, mergeBase?: any) => {
-          meta = { ...(mergeBase ?? meta), ...patch };
+        updateMetadata: vi.fn(async (_id: string, patch: Record<string, any>) => {
+          meta = { ...meta, ...patch };
         }),
       } as any;
       return { get: () => meta, topicModel };
     };
 
-    // Reproduce execAgent's seed step exactly.
+    // Use the real hook serializer to seed the topic mirror.
     const seed = (store: ReturnType<typeof makeStore>, operationId: string) => {
       hookDispatcher.register(operationId, [taskHook]);
       const serializedHooks = hookDispatcher.getSerializedHooks(operationId);
@@ -1189,12 +1183,11 @@ describe('HeterogeneousAgentService', () => {
       else process.env.APP_URL = originalAppUrl;
     });
 
-    it('happy path: a fresh-read heteroIngest write preserves hooks → heteroFinish delivers', async () => {
+    it('dispatches serialized topic hooks after the in-memory registration is gone', async () => {
       const store = makeStore();
       await seed(store, 'op-int');
 
-      // A normal mid-run ingest write reads the CURRENT snapshot, so the
-      // shallow-merge keeps runningOperation intact.
+      // An unrelated metadata update preserves the seeded hooks in this fake.
       await store.topicModel.updateMetadata(TOPIC, {
         heteroCurrentMsgId: { msgId: 'm1', operationId: 'op-int' },
       });
@@ -1217,40 +1210,6 @@ describe('HeterogeneousAgentService', () => {
       expect(mockPublishJSON.mock.calls[0][0].url).toContain(
         '/api/workflows/task/on-topic-complete',
       );
-    });
-
-    it('REPRO: a stale-read ingest write clobbers runningOperation.hooks → heteroFinish delivers nothing (the stuck-task symptom)', async () => {
-      const store = makeStore();
-      // Snapshot BEFORE the seed commits — what a racing reader would have seen.
-      const preSeedSnapshot = { ...store.get() };
-      await seed(store, 'op-int');
-      expect(store.get().runningOperation?.hooks).toHaveLength(1);
-
-      // A concurrent heteroIngest whose read-modify-write started from the
-      // pre-seed snapshot (replica lag / interleave): merging its patch over the
-      // STALE base drops runningOperation entirely — a classic lost update.
-      await store.topicModel.updateMetadata(
-        TOPIC,
-        { heteroCurrentMsgId: { msgId: 'm1', operationId: 'op-int' } },
-        preSeedSnapshot,
-      );
-      expect(store.get().runningOperation).toBeUndefined();
-
-      // Model the process boundary: heteroFinish's in-memory dispatcher is empty,
-      // so the clobbered runningOperation is its ONLY source of the hook.
-      hookDispatcher.unregister('op-int');
-
-      await makeService(store).heteroFinish({
-        agentType: 'claude-code',
-        operationId: 'op-int',
-        result: 'success',
-        topicId: TOPIC,
-      });
-
-      // Exactly the production failure: the run finished, but the terminal hook
-      // had nothing to deliver, so onTopicComplete never fires and the task
-      // topic is stranded at `running`.
-      expect(mockPublishJSON).not.toHaveBeenCalled();
     });
   });
 });

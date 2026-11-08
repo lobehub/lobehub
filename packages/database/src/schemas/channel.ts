@@ -1,9 +1,11 @@
 import type {
   ChannelAuditDetails,
+  ChannelConfig,
   ChannelExecutionConfig,
   ChannelInputManifest,
   ChannelJobBlockCode,
   ChannelJobStatus,
+  ChannelJobWake,
   ChannelMemberActorType,
   ChannelMemberConfig,
   ChannelMemberGrantMetadata,
@@ -92,6 +94,8 @@ export const channels = pgTable(
      * Ignored for personal channels.
      */
     visibility: text('visibility').$type<ChannelVisibility>().notNull().default('private'),
+    /** Validated channel settings; NULL uses the defaults. */
+    config: jsonb('config').$type<ChannelConfig>(),
     metadata: jsonb('metadata').$type<ChannelMetadata>().default({}),
     /** Recycle bin — see `schemas/trash.ts`. */
     ...softDeleteColumns(),
@@ -420,6 +424,8 @@ export const channelJobs = pgTable(
     operationId: text('operation_id')
       .unique()
       .references((): AnyPgColumn => agentOperations.id, { onDelete: 'set null' }),
+    /** Why the member was woken, frozen at delivery. NULL means an owed answer (`mention`). */
+    wake: jsonb('wake').$type<ChannelJobWake>(),
     /** Where the run's input ends, frozen at claim; later messages belong to the next job. */
     manifest: jsonb('manifest').$type<ChannelInputManifest>(),
     /** Effective Agent settings and Channel environment frozen at claim time. */

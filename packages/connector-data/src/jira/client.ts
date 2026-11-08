@@ -54,7 +54,7 @@ export const createJiraConnectorClient = (
   const run = createComposioToolRunner('jira', options);
 
   return {
-    listProjects: async ({ maxResults } = {}) => {
+    listProjects: async ({ maxResults }: { maxResults?: number } = {}) => {
       const data = await run(LIST_PROJECTS_TOOL_SLUG, 'listProjects', {
         expand: 'description,lead',
         maxResults: pageSize(maxResults, DEFAULT_PROJECTS),

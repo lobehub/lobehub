@@ -2,11 +2,13 @@
 
 import { type VoiceMessageRecording } from '@lobechat/types';
 import { type SlashOptions } from '@lobehub/editor';
-import { type ChatInputActionsProps } from '@lobehub/editor/react';
-import { Alert, type DropdownItem, Flexbox, toast } from '@lobehub/ui';
+import {
+  type ChatInputActionsProps,
+  type ChatInputProps as EditorChatInputProps,
+} from '@lobehub/editor/react';
+import { type DropdownItem, Flexbox, toast } from '@lobehub/ui';
 import { type ReactNode } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
-import { useTranslation } from 'react-i18next';
 
 import {
   getBusinessChatInputSendAreaPrefix,
@@ -42,6 +44,7 @@ import InputCompletionErrorAlert from './InputCompletionErrorAlert';
 import LinkedGoalTray from './LinkedGoalTray';
 import OpStatusTray from './OpStatusTray';
 import QueueTray from './QueueTray';
+import SendErrorAlert from './SendErrorAlert';
 import { sendVoiceMessage } from './sendVoiceMessage';
 import { transcribeVoiceMessage } from './transcribeVoiceMessage';
 import { useConversationChatInputUiState } from './useConversationChatInputUiState';
@@ -50,7 +53,6 @@ import {
   getContextWindowMessages,
   getConversationSendButtonProps,
   toChatInputMessages,
-  toDisplayableSendErrorMessage,
 } from './utils';
 import {
   canSendVoiceMessage,
@@ -111,6 +113,10 @@ export interface ChatInputProps {
    * Chat input capability switches. Omitted capabilities keep the default enabled state.
    */
   feature?: ChatInputFeature;
+  /**
+   * Props forwarded to the editor's input container (e.g. a smaller default height)
+   */
+  inputContainerProps?: EditorChatInputProps;
   /**
    * Swap the action bar and send area for skeleton placeholders while
    * the underlying agent/session config is still hydrating. The editor
@@ -183,6 +189,7 @@ const ChatInput = memo<ChatInputProps>(
     disableQueue,
     disableSend,
     feature,
+    inputContainerProps,
     leftActions = [],
     leftContent,
     rightActions = [],
@@ -199,8 +206,6 @@ const ChatInput = memo<ChatInputProps>(
     onEditorReady,
     skipScrollMarginWithList,
   }) => {
-    const { t } = useTranslation('chat');
-
     // ConversationStore state
     const storeApi = useConversationStoreApi();
     const dbMessages = useConversationStore(dataSelectors.dbMessages);
@@ -272,26 +277,10 @@ const ChatInput = memo<ChatInputProps>(
     const sendMessageErrorMsg = useConversationStore(messageStateSelectors.sendMessageError);
     const clearSendMessageError = useChatStore((s) => s.clearSendMessageError);
 
-    // `inputSendErrorMsg` is the failed call's `error.message` verbatim, so it
-    // can still be a raw database dump on servers predating the databaseError
-    // middleware. That text is SQL plus every bound parameter — including the
-    // user's own input — so it is never echoed; generic copy stands in for it.
-    const sendMessageErrorTitle = useMemo(
-      () =>
-        sendMessageErrorMsg
-          ? t('input.errorMsg', {
-              errorMsg:
-                toDisplayableSendErrorMessage(sendMessageErrorMsg) ??
-                t('unknownError', { ns: 'common' }),
-            })
-          : undefined,
-      [sendMessageErrorMsg, t],
-    );
-
     // File store - for UI state only (disabled button, etc.)
-    const fileList = useFileStore(fileChatSelectors.chatUploadFileList);
+    const fileList = useFileStore(fileChatSelectors.chatUploadFileList(contextKey));
     const contextList = useFileStore(fileChatSelectors.chatContextSelections(contextKey));
-    const isUploadingFiles = useFileStore(fileChatSelectors.isUploadingFiles);
+    const isUploadingFiles = useFileStore(fileChatSelectors.isUploadingFiles(contextKey));
 
     // Queue state
     const hasQueuedMessages = useChatStore(
@@ -328,11 +317,12 @@ const ChatInput = memo<ChatInputProps>(
     const resolveSendBlocked = useCallback(() => {
       if (disableSend) return true;
 
+      const { context: liveContext, editor } = storeApi.getState();
+      const liveContextKey = messageMapKey(liveContext);
       const fileStore = useFileStore.getState();
-      if (fileChatSelectors.isUploadingFiles(fileStore)) return true;
+      if (fileChatSelectors.isUploadingFiles(liveContextKey)(fileStore)) return true;
       if (customDisabled !== undefined) return customDisabled;
 
-      const { context: liveContext, editor } = storeApi.getState();
       if (
         disableQueue &&
         operationSelectors.isInputLoadingByContext(liveContext)(useChatStore.getState())
@@ -340,9 +330,9 @@ const ChatInput = memo<ChatInputProps>(
         return true;
 
       const hasText = String(editor?.getMarkdownContent?.() || '').trim().length > 0;
-      const hasFiles = fileChatSelectors.chatUploadFileList(fileStore).length > 0;
+      const hasFiles = fileChatSelectors.chatUploadFileList(liveContextKey)(fileStore).length > 0;
       const hasContextSelections =
-        fileChatSelectors.chatContextSelections(messageMapKey(liveContext))(fileStore).length > 0;
+        fileChatSelectors.chatContextSelections(liveContextKey)(fileStore).length > 0;
       return !hasText && !hasFiles && !hasContextSelections;
     }, [customDisabled, disableQueue, disableSend, storeApi]);
     const shouldUsePlainSendButton = !showSendMenu && !!sendMenu;
@@ -358,8 +348,8 @@ const ChatInput = memo<ChatInputProps>(
 
         // Get instant values from stores at trigger time
         const fileStore = useFileStore.getState();
-        const currentFileList = fileChatSelectors.chatUploadFileList(fileStore);
-        const currentIsUploading = fileChatSelectors.isUploadingFiles(fileStore);
+        const currentFileList = fileChatSelectors.chatUploadFileList(contextKey)(fileStore);
+        const currentIsUploading = fileChatSelectors.isUploadingFiles(contextKey)(fileStore);
         const currentContextList = fileChatSelectors.chatContextSelections(contextKey)(fileStore);
 
         if (currentIsUploading) return;
@@ -393,7 +383,7 @@ const ChatInput = memo<ChatInputProps>(
 
         const clearComposer = () => {
           clearContent();
-          fileStore.clearChatUploadFileList();
+          fileStore.clearChatUploadFileList(contextKey);
           fileStore.clearChatContextSelections(contextKey);
         };
 
@@ -429,7 +419,7 @@ const ChatInput = memo<ChatInputProps>(
             // message owned the content must hand every part of it back —
             // uploads and context selections, not just the editor text the
             // lifecycle restores on its own.
-            store.restoreChatUploadFileList(currentFileList);
+            store.restoreChatUploadFileList(contextKey, currentFileList);
             store.restoreChatContextSelections(contextKey, currentContextList);
           },
           pageSelections,
@@ -486,15 +476,8 @@ const ChatInput = memo<ChatInputProps>(
         {/* Keep the chat input mounted while an intervention panel is showing —
             unmounting would wipe the Lexical editor's in-memory document. */}
         <div style={{ display: hasPendingInterventions ? 'none' : 'contents' }}>
-          {sendMessageErrorTitle && (
-            <Flexbox paddingBlock={'0 6px'} paddingInline={12}>
-              <Alert
-                closable
-                title={sendMessageErrorTitle}
-                type={'secondary'}
-                onClose={clearSendMessageError}
-              />
-            </Flexbox>
+          {sendMessageErrorMsg && (
+            <SendErrorAlert errorMessage={sendMessageErrorMsg} onClose={clearSendMessageError} />
           )}
           {businessAlerts}
           <Flexbox
@@ -528,6 +511,7 @@ const ChatInput = memo<ChatInputProps>(
             controlBarSlot={controlBarSlot}
             extraActionItems={extraActionItems}
             hidden={hasPendingInterventions}
+            inputContainerProps={inputContainerProps}
             isConfigLoading={isConfigLoading}
             leftContent={leftContent}
             placeholderVariant={placeholderVariant}

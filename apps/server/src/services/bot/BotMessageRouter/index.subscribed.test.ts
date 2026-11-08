@@ -15,7 +15,6 @@ import {
   resetBotMessageRouterMocks,
 } from './testUtils';
 
-vi.mock('@/server/featureFlags', async () => (await import('./testUtils')).featureFlagsModule());
 vi.mock('@/database/core/db-adaptor', async () => (await import('./testUtils')).dbAdaptorModule());
 vi.mock('@/database/models/agentBotProvider', async () =>
   (await import('./testUtils')).agentBotProviderModule(),
@@ -473,6 +472,7 @@ describe('BotMessageRouter', () => {
 
     it('marks a watch-keyword wake as a followup, which may end in silence', async () => {
       const handler = await loadSubscribedHandler({
+        botWakeDisabled: false,
         dmPolicy: 'open',
         watchKeywords: [{ keyword: 'bug' }],
       });

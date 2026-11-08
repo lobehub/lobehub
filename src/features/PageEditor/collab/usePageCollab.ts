@@ -1,7 +1,7 @@
 import { IYjsService, ReactYjsPlugin } from '@lobehub/editor';
 import { Editor } from '@lobehub/editor/react';
 import { confirmModal } from '@lobehub/ui';
-import { useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import * as Y from 'yjs';
 
@@ -15,7 +15,10 @@ import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
 import { usePageEditorStore, useStoreApi } from '../store';
+import { getPresenceColor, type PresenceAwarenessData } from './presence';
 import { PageCollabProvider } from './provider';
+import { usePresenceColor } from './usePresenceColor';
+import { useTabAway } from './useTabAway';
 import { whenBodyFilled } from './whenBodyFilled';
 
 const PAGE_META_KEY = 'meta';
@@ -27,6 +30,8 @@ const offlineSnapshots = new Map<string, unknown>();
 const PAGE_LIST_REFRESH_DELAY_MS = 3000;
 
 const BODY_FILL_TIMEOUT_MS = 500;
+
+const MAX_AWARENESS_AVATAR_LENGTH = 512;
 
 // Deployment-static config, read once like the gateway transport does. Rooms
 // exist only where the server enables page collaboration (LobeHub Cloud).
@@ -40,14 +45,20 @@ const readGatewayUrl = () => {
 export const usePageCollabEnabled = () => !!readGatewayUrl();
 
 /**
- * Whether this document edits through a room. A SKILL.md saves its frontmatter
- * alongside the body over HTTP, so it never joins one, which carries the body alone.
+ * Whether this document edits through a room. Only workspace pages do: a
+ * personal page has a single editor, so a room adds nothing but its costs. A
+ * SKILL.md saves its frontmatter alongside the body over HTTP, so it never joins
+ * one, which carries the body alone.
  */
 export const usePageCollabEligible = (documentId: string | undefined) => {
   const isSkillMarkdown = useDocumentStore((s) =>
     documentId ? s.documents[documentId]?.contentFormat === 'skillMarkdown' : false,
   );
-  return usePageCollabEnabled() && !!documentId && !isSkillMarkdown;
+  const isPersonalPage = useDocumentStore((s) => {
+    const document = documentId ? s.documentDetailMap[documentId]?.document : undefined;
+    return !!document && !document.workspaceId;
+  });
+  return usePageCollabEnabled() && !!documentId && !isSkillMarkdown && !isPersonalPage;
 };
 
 export const usePageCollab = (documentId: string | undefined, onReset?: () => void) => {
@@ -56,6 +67,9 @@ export const usePageCollab = (documentId: string | undefined, onReset?: () => vo
   const enabled = usePageCollabEligible(documentId);
   const gatewayUrl = readGatewayUrl();
   const username = useUserStore(userProfileSelectors.displayUserName);
+  const userId = useUserStore(userProfileSelectors.userId);
+  const avatar = useUserStore(userProfileSelectors.userAvatar);
+  const away = useTabAway();
   const docLoaded = useDocumentStore((s) => (documentId ? !!s.documents[documentId] : false));
   const setDocumentCollab = useDocumentStore((s) => s.setDocumentCollab);
   const collabStatus = usePageEditorStore((s) => s.collab?.status);
@@ -78,6 +92,10 @@ export const usePageCollab = (documentId: string | undefined, onReset?: () => vo
         const editor = storeApi.getState().editor;
         if (editor) void useDocumentStore.getState().onEditorInit(editor, documentId!);
       },
+      // Like a refused autosave: the banner and save status say it, without a toast.
+      onCharLimitExceeded: (refusal) =>
+        useDocumentStore.getState().setCharLimitRefusal(documentId!, refusal),
+      onCharLimitCleared: () => useDocumentStore.getState().clearCharLimitRefusal(documentId!),
       onPendingChange: (pending) => setCollab({ pending }),
       onReset: (reason) => {
         const editor = storeApi.getState().editor;
@@ -117,7 +135,7 @@ export const usePageCollab = (documentId: string | undefined, onReset?: () => vo
     // The previous page's session state is still in the store at this point.
     setCollab({ bodyReady: false, retry: () => provider.retry(), status: 'connecting' });
 
-    return { doc, provider, stopBodyWait: () => stopBodyWait?.() };
+    return { doc, joinedAt: Date.now(), provider, stopBodyWait: () => stopBodyWait?.() };
   }, [enabled, gatewayUrl, documentId, storeApi, onReset]);
 
   useEffect(() => {
@@ -191,9 +209,42 @@ export const usePageCollab = (documentId: string | undefined, onReset?: () => vo
     });
   }, [session, documentId, collabStatus, storeApi, t]);
 
+  // Awareness is re-sent on every cursor move, so an inline data-URI avatar stays local.
+  const awarenessData = useMemo<PresenceAwarenessData>(
+    () => ({
+      avatar: avatar && avatar.length <= MAX_AWARENESS_AVATAR_LENGTH ? avatar : undefined,
+      joinedAt: session?.joinedAt,
+      userId,
+    }),
+    [avatar, session, userId],
+  );
+  const cursorColor = userId ? getPresenceColor(userId) : undefined;
+
+  // Not a plugin prop: a new prop object remounts the Yjs plugin mid-session.
+  useEffect(() => {
+    const awareness = session?.provider.awareness;
+    const local = awareness?.getLocalState();
+    if (!awareness || !local) return;
+    awareness.setLocalState({ ...local, awarenessData: { ...awarenessData, away } });
+  }, [session, away, awarenessData]);
+
+  const getCursors = useCallback(
+    () => storeApi.getState().editor?.requireService(IYjsService)?.getState()?.binding.cursors,
+    [storeApi],
+  );
+  usePresenceColor({
+    awareness: session?.provider.awareness,
+    clientId: session?.doc.clientID,
+    getCursors,
+    joinedAt: session?.joinedAt,
+    userId,
+  });
+
   return useMemo(() => {
     if (!session) return undefined;
     return Editor.withProps(ReactYjsPlugin, {
+      awarenessData,
+      cursorColor,
       id: 'page',
       providerFactory: (id: string, docMap: Map<string, Y.Doc>) => {
         docMap.set(id, session.doc);
@@ -203,5 +254,5 @@ export const usePageCollab = (documentId: string | undefined, onReset?: () => vo
       username,
       yjsDoc: session.doc,
     });
-  }, [session, username]);
+  }, [session, username, awarenessData, cursorColor]);
 };

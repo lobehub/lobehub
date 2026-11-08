@@ -260,7 +260,7 @@ export class TaskResultBridgeService {
         prompt: `Process ${receipts.length} completed task result${receipts.length === 1 ? '' : 's'}`,
         suppressUserMessage: true,
         topicStartReservationId: reservationId,
-        trigger: RequestTrigger.AgentSignal,
+        trigger: RequestTrigger.TaskCallback,
         userInterventionConfig,
       });
       await callbackStore.attachCreatorOperation(receiptIds, result.operationId);

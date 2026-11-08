@@ -18,6 +18,7 @@ import { TRPCError } from '@trpc/server';
 
 import { GoalGraphModel } from '@/database/models/goalGraph';
 import { TaskModel } from '@/database/models/task';
+import { TaskArchiveModel } from '@/database/models/taskArchive';
 import { GoalRepository } from '@/database/repositories/goal';
 
 import { collectStrandedDependents, GOAL_ACCEPTANCE_TASK_TITLE } from '../decideNextMove';
@@ -301,7 +302,9 @@ export const reopenForChanges = async (
   comment?: string,
 ): Promise<string | undefined> => {
   const goal = await ctx.goalModel.findByGraphTask(taskId);
-  if (!goal || !REOPENABLE_GOAL_STATUSES.has(goal.status)) return undefined;
+  // An archived goal stays put: the reject is recorded, but nothing reworks it
+  // until the owner restores the goal. Rechecked under the row lock below.
+  if (!goal || goal.archivedAt || !REOPENABLE_GOAL_STATUSES.has(goal.status)) return undefined;
   const graph = await ctx.requireGraph(goal.id);
   const node = graph.nodes.find(
     (candidate) =>
@@ -312,20 +315,45 @@ export const reopenForChanges = async (
   if (node?.status !== 'resolved') return undefined;
 
   const reason = comment ? `Changes requested: ${comment}` : 'Changes requested';
-  await ctx.taskModel.updateStatus(taskId, 'backlog', { error: null });
-  await ctx.graphModel.updateNodeStatus(goal.id, node.id, 'active', reason);
-  await ctx.goalModel.update(goal.id, {
-    config: {
-      ...graph.goal.config,
-      changeRequest: {
-        ...(comment ? { comment } : {}),
-        requestedAt: new Date().toISOString(),
-        taskId,
+  // One transaction under the goal's row lock, so the reopen and an archive
+  // serialize: an archive that committed first is seen here and nothing is
+  // written; one that comes after waits for this commit and then finds a
+  // running goal, which it does not match. No half-reopened archived goal.
+  const reopened = await ctx.db.transaction(async (tx) => {
+    const goals = new GoalRepository(tx, ctx.userId, ctx.workspaceId);
+    const current = await goals.lockById(goal.id);
+    if (!current || current.archivedAt || !REOPENABLE_GOAL_STATUSES.has(current.status))
+      return false;
+
+    // The runner refuses an archived Task, so the one being reworked comes back
+    // even if it was archived on its own (or by an earlier sign-off).
+    // Leave `completed` first: that archive only matches a finished Task, so one
+    // racing this reopen either lands before the unarchive or matches nothing.
+    await new TaskModel(tx, ctx.userId, ctx.workspaceId).updateStatus(taskId, 'backlog', {
+      error: null,
+    });
+    await new TaskArchiveModel(tx, ctx.userId, ctx.workspaceId).unarchive(taskId);
+    const graphModel = new GoalGraphModel(tx, ctx.userId, ctx.workspaceId);
+    await graphModel.updateNodeStatus(goal.id, node.id, 'active', reason);
+    await goals.update(goal.id, {
+      config: {
+        ...current.config,
+        changeRequest: {
+          ...(comment ? { comment } : {}),
+          requestedAt: new Date().toISOString(),
+          taskId,
+        },
       },
-    },
+    });
+    if (current.status !== 'running') {
+      await goals.updateStatus(goal.id, 'running');
+      await graphModel
+        .recordGoalStatus(goal.id, current.status, 'running', reason)
+        .catch((error) => console.error('[GoalService] failed to record goal status:', error));
+    }
+    return true;
   });
-  await ctx.transitionStatus(graph.goal, 'running', reason, 'user');
-  return goal.id;
+  return reopened ? goal.id : undefined;
 };
 
 /**

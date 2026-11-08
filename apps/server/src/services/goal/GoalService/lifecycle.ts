@@ -6,6 +6,7 @@ import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
 import { GoalRepository } from '@/database/repositories/goal';
 
+import { assertGoalNotArchived } from '../archiveGuard';
 import { GoalAssignmentService } from '../assignment';
 import { GOAL_ACCEPTANCE_TASK_TITLE, TERMINAL_NODE_STATUSES } from '../decideNextMove';
 import { GoalManagerService } from '../manager';
@@ -156,6 +157,8 @@ export const transitionStatus = async (
 
 export const pause = async (ctx: GoalServiceContext, goalId: string) => {
   const graph = await ctx.requireGraph(goalId);
+  // An archived goal is done with (completed or canceled); pausing would reopen it out of sight.
+  assertGoalNotArchived(graph.goal);
   // A draft never ran; pausing it would let a later resume skip `start`.
   if (graph.goal.status === 'draft') throw draftNotStarted(goalId);
   // From here the pause is the person's, so no later measurement lifts it.
@@ -182,6 +185,8 @@ export const restart = async (
   options?: { agentId?: string },
 ): Promise<{ goal: GoalItem; restartedTaskIds: string[] }> => {
   const graph = await ctx.requireGraph(goalId);
+  // Restarting resets Tasks and resumes the goal; an archived one stays put.
+  assertGoalNotArchived(graph.goal);
   const assignment = new GoalAssignmentService(ctx.db, ctx.userId, ctx.workspaceId);
   if (options?.agentId) await assignment.assertUsableForGoal(graph.goal, options.agentId);
 
@@ -287,6 +292,7 @@ export const resume = async (ctx: GoalServiceContext, goalId: string) => {
     const model = new GoalRepository(tx, ctx.userId, ctx.workspaceId);
     const current = await model.lockById(goalId);
     if (!current) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+    assertGoalNotArchived(current);
     // Only `start` launches a draft: it settles the creating run's planning
     // turn and checks who may launch it, which a plain status flip skips.
     if (current.status === 'draft') throw draftNotStarted(goalId);
@@ -327,6 +333,10 @@ export const close = async (
   await ctx.db.transaction(async (db) => {
     const model = new GoalRepository(db, ctx.userId, ctx.workspaceId);
     const current = await model.lockById(goalId);
+    // An archived goal's status is frozen until it is restored; refuse before
+    // interrupting anything. (`updateStatus` refuses it too, should an archive
+    // land after this lock is released.)
+    if (current) assertGoalNotArchived(current);
     // Only a goal that can still dispatch needs fencing.
     if (!current || ['paused', 'achieved', 'failed', 'canceled'].includes(current.status)) return;
     await model.updateStatus(goalId, 'paused');

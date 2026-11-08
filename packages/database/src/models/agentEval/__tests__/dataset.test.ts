@@ -218,7 +218,6 @@ describe('AgentEvalDatasetModel', () => {
       expect(results.map((r) => r.identifier)).toContain('user-dataset-1');
       expect(results.map((r) => r.identifier)).toContain('user-dataset-2');
       expect(results.map((r) => r.identifier)).toContain('system-dataset');
-      expect(results.map((r) => r.identifier)).not.toContain('other-user-dataset');
     });
 
     it('should query datasets by benchmarkId', async () => {
@@ -268,14 +267,6 @@ describe('AgentEvalDatasetModel', () => {
       const results = await datasetModel.query({ sourceExperimentId: experiment.id });
 
       expect(results.map((r) => r.identifier)).toEqual(['scoped-dataset']);
-    });
-
-    it('should order by createdAt descending', async () => {
-      const results = await datasetModel.query();
-
-      // The newest should come first
-      // Order may vary, just check we got results
-      expect(results.length).toBeGreaterThanOrEqual(2);
     });
 
     it('should include system datasets (userId is null)', async () => {

@@ -46,6 +46,24 @@ const CODE_RELAY_LOOKBACK_MS = 7 * 24 * 60 * 60 * 1000;
 
 const normalizeAddress = (value: string) => value.trim().toLowerCase();
 
+/**
+ * Who a provider-side reply to `entry` actually reaches.
+ *
+ * The mail API's reply route answers the message's `Reply-To` when it sets one
+ * and the sender otherwise, so those are not always the same mailbox. Returns
+ * `undefined` when the mail names several reply targets: no single recipient
+ * can then be authorized for an unattended reply.
+ */
+const replyRecipientOf = (entry: AgentInboxEntry): string | undefined => {
+  const targets = (entry.replyTo ?? [])
+    .map((target) => target.address?.trim())
+    .filter((address): address is string => Boolean(address));
+
+  if (targets.length === 0) return entry.from;
+
+  return targets.length === 1 ? targets[0] : undefined;
+};
+
 /** How far back a wait with no cursor and no known run start looks. */
 const DEFAULT_WAIT_LOOKBACK_MS = 2 * 60 * 1000;
 /** A run that started longer ago than this does not widen the default cursor further. */
@@ -53,6 +71,14 @@ const MAX_WAIT_LOOKBACK_MS = 30 * 60 * 1000;
 
 /** Letters and digits only, lowercased: what is left of a code however it is reformatted. */
 const compact = (value: string) => value.replaceAll(/[^\da-z]/gi, '').toLowerCase();
+
+/**
+ * Most secret candidates one unattended reply may carry. Each is one predicate
+ * in the relay query, so the count is bounded — and a reply over it is held for
+ * the user rather than checked in part: padding the text with harmless links
+ * must not push a copied secret past the ones that get checked.
+ */
+const MAX_SECRET_CANDIDATES = 200;
 
 /**
  * Secret-shaped fragments of the outgoing text that the numeric code extractor
@@ -65,11 +91,15 @@ const secretCandidates = (text: string): string[] => {
   const tokens = (text.match(/[\w+./=-]{6,}/g) ?? []).filter(
     (token) => token.length >= 20 || (/\d/.test(token) && /[A-Z]/i.test(token)),
   );
-  return [...new Set([...urls, ...tokens, ...splitTokenCandidates(text)])].slice(0, 200);
+  return [...new Set([...urls, ...tokens, ...splitTokenCandidates(text)])];
 };
 
-/** Shortest a regrouped token must be once joined; shorter joins are ordinary words and times. */
-const MIN_SPLIT_TOKEN_CHARS = 8;
+/**
+ * Shortest a regrouped token must be once joined — the same six characters the
+ * ordinary token extractor accepts, so a short OTP sent as `AB 12 CD` is checked
+ * just like `AB12CD`. Shorter joins are ordinary words and times.
+ */
+const MIN_SPLIT_TOKEN_CHARS = 6;
 const MAX_SPLIT_TOKEN_CHARS = 40;
 
 /**
@@ -85,7 +115,9 @@ const splitTokenCandidates = (text: string): string[] => {
   const runs = text.match(/[\dA-Z]{1,5}(?:[\s.-][\dA-Z]{1,5})+/gi) ?? [];
 
   for (const run of runs) {
-    const groups = run.split(/[\s.-]/).slice(0, 24);
+    // Every group: a bound here would let leading filler push the secret past it.
+    // The joined-length cap below already keeps the work per start bounded.
+    const groups = run.split(/[\s.-]/);
     for (let start = 0; start < groups.length; start += 1) {
       let joined = '';
       for (let end = start; end < groups.length; end += 1) {
@@ -193,11 +225,36 @@ export const agentAccountRuntime: ServerRuntimeRegistration = {
         };
       }
 
+      // The reply route answers the message's `Reply-To`, not the address in
+      // its `From`. Checking only `from` would let a message signed by one
+      // address redirect the unattended reply — and any code or token it
+      // carries — to a different mailbox the checks below never looked at.
+      const deliveredTo = replyRecipientOf(replyTo);
+      if (!deliveredTo) {
+        return {
+          refusal: `The message from ${args.to} in thread ${args.threadKey} sets several Reply-To addresses, so who this reply reaches cannot be determined. Send it without \`threadKey\` to ask the user to approve it.`,
+        };
+      }
+      if (normalizeAddress(deliveredTo) !== recipient) {
+        return {
+          refusal: `Replies to ${args.to}'s message in thread ${args.threadKey} are delivered to ${deliveredTo}, because that message sets Reply-To. Reply to ${deliveredTo} instead, or send it without \`threadKey\` to ask the user to approve it.`,
+        };
+      }
+
       // One query over the whole lookback window: a page of recent mail would
       // let an outside sender flood the inbox until the message carrying the
       // code falls off it, and the relay would then go out unattended.
       // Compared with separators stripped on both sides, so a code reformatted
       // on request (`839 201`, `839-201`, `8.3.9.2.0.1`) is still recognised.
+      // Fail closed: a reply with more secret-shaped fragments than one check
+      // covers cannot be cleared, so it goes to the user instead of out.
+      const candidates = [...new Set(secretCandidates(args.text).map(compact))];
+      if (candidates.length > MAX_SECRET_CANDIDATES) {
+        return {
+          refusal: `This reply carries more links and tokens (${candidates.length}) than can be checked for content copied from other senders' mail (at most ${MAX_SECRET_CANDIDATES}). Send it without \`threadKey\` to ask the user to approve it.`,
+        };
+      }
+
       const compactText = compact(args.text);
       const relayed = (
         await inbox.listCodesFromOtherSenders({
@@ -213,15 +270,25 @@ export const agentAccountRuntime: ServerRuntimeRegistration = {
       // another sender's mail is held for the user just the same.
       const copied = relayed
         ? undefined
-        : await inbox.findTextFromOtherSender({
+        : ((await inbox.findTextFromOtherSender({
             agentId: requireAgentId(),
             // Same treatment as the codes above: a token reformatted on the way
             // out (`AB12CD34` sent as `ab-12-cd-34`) is the same secret, so both
             // sides are compared with case and separators stripped.
-            candidates: secretCandidates(args.text).map(compact),
+            candidates,
             recipient,
             since: new Date(Date.now() - CODE_RELAY_LOOKBACK_MS),
-          });
+          })) ??
+          // The same question asked from the source side: does the reply,
+          // stripped to letters and digits, contain a secret another sender's
+          // mail carries? Spacing a token out, wrapping it in `token=` or a link
+          // of the attacker's own changes nothing once both sides are compacted.
+          (await inbox.findSecretRepeatedFromOtherSender({
+            agentId: requireAgentId(),
+            compactText,
+            recipient,
+            since: new Date(Date.now() - CODE_RELAY_LOOKBACK_MS),
+          })));
       if (copied) {
         return {
           refusal: `This reply repeats a link or token from a message ${copied.from} sent you. Content from one sender's mail is never relayed to another without the user's approval — send it without \`threadKey\` to ask the user.`,

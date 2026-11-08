@@ -97,6 +97,18 @@ describe('connectorRouter.syncToolsFromClientById', () => {
     );
   });
 
+  it('keeps the MCP Apps visibility the desktop reported for each tool', async () => {
+    await caller().syncToolsFromClientById({
+      id: CONNECTOR_ID,
+      tools: [{ toolName: 'show_dashboard' }, { toolName: 'load_page', visibility: ['app'] }],
+    });
+
+    expect(connectorToolModelMock.upsertMany).toHaveBeenCalledWith(CONNECTOR_ID, [
+      expect.objectContaining({ metadata: null, toolName: 'show_dashboard' }),
+      expect.objectContaining({ metadata: { visibility: ['app'] }, toolName: 'load_page' }),
+    ]);
+  });
+
   it('rejects an unknown connector id', async () => {
     connectorModelMock.findById.mockResolvedValue(undefined);
 

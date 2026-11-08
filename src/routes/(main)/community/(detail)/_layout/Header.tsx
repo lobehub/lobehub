@@ -1,6 +1,7 @@
 'use client';
 
 import { ActionIcon, cssVar, Flexbox } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { ArrowLeft } from 'lucide-react';
 import { memo } from 'react';
 import { useLocation } from 'react-router';
@@ -58,7 +59,7 @@ const Header = memo(() => {
 
   return (
     <NavHeader
-      className={styles.headerContainer}
+      className={stylex.props(styles.headerContainer).className}
       right={<UserAvatar avatarOverride={detailAvatar} />}
       style={cssVariables}
       left={

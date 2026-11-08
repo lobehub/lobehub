@@ -1,5 +1,5 @@
 import type { ChannelMemberConfig, ChannelMemberRole, ChannelVisibility } from '@lobechat/types';
-import { and, desc, eq, isNull, or } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 
 import { TrashModel } from '../../models/trash';
 import type { ChannelItem, ChannelJobItem, ChannelMessageItem } from '../../schemas';
@@ -22,7 +22,7 @@ import {
 } from './agent';
 import { findThread } from './delivery';
 import { ChannelError } from './error';
-import { addChannelUser, channelUserCandidates } from './people';
+import { addChannelUser, channelUserCandidates, newChannelUserCandidates } from './people';
 import { retryRouting } from './routing';
 import type { ChannelSendInput } from './send';
 import { sendMessage } from './send';
@@ -63,6 +63,9 @@ const hasRole = (role: ChannelMemberRole | null, minRole: ChannelMemberRole) =>
  * scope (personal, or the given workspace). Every write runs inside `write`, which holds the
  * `channels` row lock so mutations of one channel serialize in a transaction.
  */
+/** Characters of the latest message a Channel list item carries as its preview. */
+const LIST_PREVIEW_LENGTH = 200;
+
 export class ChannelRepository {
   private readonly workspaceId: string | null;
 
@@ -77,17 +80,24 @@ export class ChannelRepository {
   /** Opens the unique direct conversation, or creates a group with its initial members. */
   create = async (params: {
     agentId?: string;
+    /** The direct conversation's Agent environment; the caller resolved and checked it. */
+    agentConfig?: ChannelMemberConfig;
     agents?: ChannelAddAgentInput[];
     /** Callers check that the project is readable in this scope. */
     projectId?: string;
     title: string;
+    /** Workspace people a group starts with, checked the same way as adding them later. */
+    userIds?: string[];
     visibility?: ChannelVisibility;
   }) =>
     this.db.transaction(async (tx) => {
       const { agentId } = params;
       if (
         agentId !== undefined &&
-        (!agentId.trim() || params.visibility === 'public' || !!params.agents?.length)
+        (!agentId.trim() ||
+          params.visibility === 'public' ||
+          !!params.agents?.length ||
+          !!params.userIds?.length)
       )
         throw new ChannelError(
           'BAD_REQUEST',
@@ -115,23 +125,66 @@ export class ChannelRepository {
         if (existing) return existing;
         throw new ChannelError('CONFLICT', 'The direct conversation is unavailable');
       }
-      const [member] = await tx
-        .insert(channelMembers)
-        .values({
-          actorType: 'user',
-          channelId: channel.id,
-          lastReadSequence: 0,
-          role: 'owner',
-          userId: this.userId,
-        })
-        .returning();
+      const member = await this.addOwner(tx, channel.id);
 
-      if (agentId) await addAgentMember(tx, channel, this.userId, { agentId });
+      if (agentId)
+        await addAgentMember(tx, channel, this.userId, { agentId, config: params.agentConfig });
       for (const agent of params.agents ?? [])
         await addAgentMember(tx, channel, this.userId, agent);
+      const access = { channel, member } satisfies ChannelAccess;
+      for (const userId of new Set(params.userIds)) await addChannelUser(tx, access, userId);
 
-      return { channel, member } satisfies ChannelAccess;
+      return access;
     });
+
+  /**
+   * Inviting into a direct conversation starts a group instead, and the direct conversation stays
+   * as it is. The group holds its person and Agent, the Agent keeping its channel-local
+   * environment, joined by the invited Agents and workspace people.
+   */
+  createGroupFromDirect = async (
+    channelId: string,
+    params: { agents?: ChannelAddAgentInput[]; title: string; userIds?: string[] },
+  ) =>
+    this.write(
+      channelId,
+      async (tx, { channel: direct }) => {
+        if (!direct.agentId)
+          throw new ChannelError('BAD_REQUEST', 'Only a direct conversation starts a group');
+        if (!params.agents?.length && !params.userIds?.length)
+          throw new ChannelError('BAD_REQUEST', 'Invite at least one person or Agent');
+        const [bound] = await tx
+          .select()
+          .from(channelMembers)
+          .where(
+            and(
+              eq(channelMembers.channelId, direct.id),
+              eq(channelMembers.agentId, direct.agentId),
+              eq(channelMembers.status, 'active'),
+            ),
+          )
+          .limit(1);
+        if (!bound) throw new ChannelError('NOT_FOUND', 'Agent member not found');
+
+        const [channel] = await tx
+          .insert(channels)
+          .values({ title: params.title, userId: this.userId, workspaceId: this.workspaceId })
+          .returning();
+        const member = await this.addOwner(tx, channel.id);
+        const access = { channel, member } satisfies ChannelAccess;
+        await addAgentMember(tx, channel, this.userId, {
+          agentId: direct.agentId,
+          config: bound.config ?? undefined,
+          description: bound.description,
+          name: bound.name ?? undefined,
+        });
+        for (const agent of params.agents ?? [])
+          await addAgentMember(tx, channel, this.userId, agent);
+        for (const userId of new Set(params.userIds)) await addChannelUser(tx, access, userId);
+        return access;
+      },
+      { minRole: 'admin' },
+    );
 
   /** Adds a usable Agent reference; a missing reference is allowed only for retained history. */
   addAgent = async (channelId: string, input: ChannelAddAgentInput) =>
@@ -197,6 +250,16 @@ export class ChannelRepository {
   addUser = async (channelId: string, userId: string) =>
     this.write(channelId, (tx, access) => addChannelUser(tx, access, userId), { minRole: 'admin' });
 
+  /** People a new Channel in this workspace can start with. */
+  newChannelUserCandidates = async (search?: string) => {
+    const { workspaceId } = this;
+    if (!workspaceId)
+      throw new ChannelError('BAD_REQUEST', 'People can only be added to workspace group channels');
+    return this.db.transaction((tx) =>
+      newChannelUserCandidates(tx, workspaceId, this.userId, search),
+    );
+  };
+
   userCandidates = async (channelId: string, search?: string) =>
     this.write(channelId, (tx, access) => channelUserCandidates(tx, access, search), {
       minRole: 'admin',
@@ -208,7 +271,7 @@ export class ChannelRepository {
       async (tx, access) => {
         if (access.channel.isDeleted) throw new ChannelError('NOT_FOUND', 'Channel not found');
         const admin = hasRole(access.member.role, 'admin');
-        const view = await readChannelView(tx, channelId, options);
+        const view = await readChannelView(tx, channelId, options, this.userId);
         return {
           channel: { ...access.channel, canDelete: admin },
           ...view,
@@ -246,15 +309,56 @@ export class ChannelRepository {
    * Channels the caller belongs to in the current scope, newest first. Archived ones are
    * included with their `status`, so they stay readable outside the active list.
    */
-  list = async (): Promise<Array<ChannelItem & { canDelete: boolean }>> => {
+  list = async (): Promise<
+    Array<
+      ChannelItem & {
+        canDelete: boolean;
+        lastMessage: { content: string; createdAt: Date } | null;
+        unreadCount: number;
+      }
+    >
+  > => {
     const rows = await this.db
-      .select({ channel: channels, role: channelMembers.role })
+      .select({
+        channel: channels,
+        lastReadSequence: channelMembers.lastReadSequence,
+        role: channelMembers.role,
+      })
       .from(channels)
       .innerJoin(channelMembers, eq(channelMembers.channelId, channels.id))
       .where(and(this.membershipWhere(), notTrashed(channels.isDeleted)))
       .orderBy(desc(channels.createdAt));
 
-    return rows.map(({ channel, role }) => ({ ...channel, canDelete: hasRole(role, 'admin') }));
+    // The newest main-channel message of each, for a conversation-list preview.
+    const latest = rows.length
+      ? await this.db
+          .selectDistinctOn([channelMessages.channelId], {
+            channelId: channelMessages.channelId,
+            content: sql<string>`left(${channelMessages.content}, ${LIST_PREVIEW_LENGTH})`,
+            createdAt: channelMessages.createdAt,
+          })
+          .from(channelMessages)
+          .where(
+            and(
+              inArray(
+                channelMessages.channelId,
+                rows.map(({ channel }) => channel.id),
+              ),
+              isNull(channelMessages.threadId),
+            ),
+          )
+          .orderBy(channelMessages.channelId, desc(channelMessages.sequence))
+      : [];
+    const lastMessageOf = new Map(
+      latest.map(({ channelId, ...message }) => [channelId, message] as const),
+    );
+
+    return rows.map(({ channel, lastReadSequence, role }) => ({
+      ...channel,
+      canDelete: hasRole(role, 'admin'),
+      lastMessage: lastMessageOf.get(channel.id) ?? null,
+      unreadCount: Math.max(0, channel.sequence - (lastReadSequence ?? 0)),
+    }));
   };
 
   /** Read access. Returns undefined when the channel is missing or the caller is no member. */
@@ -268,6 +372,10 @@ export class ChannelRepository {
 
     return row;
   };
+
+  /** The caller's direct conversation with an Agent in this scope, trashed or not. */
+  findDirectAccess = (agentId: string): Promise<ChannelAccess | undefined> =>
+    this.findDirect(this.db, agentId);
 
   /**
    * Runs `fn` while holding the channel row lock, after checking that the caller is an
@@ -487,8 +595,22 @@ export class ChannelRepository {
       return retryRouting(tx, channelId, messageId);
     });
 
+  private addOwner = async (tx: Transaction, channelId: string) => {
+    const [member] = await tx
+      .insert(channelMembers)
+      .values({
+        actorType: 'user',
+        channelId,
+        lastReadSequence: 0,
+        role: 'owner',
+        userId: this.userId,
+      })
+      .returning();
+    return member;
+  };
+
   private findDirect = async (
-    tx: Transaction,
+    tx: LobeChatDatabase | Transaction,
     agentId: string,
   ): Promise<ChannelAccess | undefined> => {
     const [row] = await tx

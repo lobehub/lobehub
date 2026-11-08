@@ -1,8 +1,11 @@
 import type { BriefArtifacts } from '../brief';
 import type { ChatFileItem } from '../message/ui/chat';
+import type { TaskLabelRef } from './label';
 
 export * from './archive';
 export * from './execution';
+export * from './label';
+export * from './listFilter';
 
 // ── Task type aliases ──
 
@@ -362,6 +365,8 @@ export interface TaskItem {
   id: string;
   identifier: string;
   instruction: string;
+  /** Labels on the task, attached by task list and detail reads. */
+  labels?: TaskLabelRef[];
   lastHeartbeatAt: Date | null;
   maxTopics: number | null;
   name: string | null;
@@ -648,6 +653,7 @@ export interface TaskDetailData {
   id?: string;
   identifier: string;
   instruction: string;
+  labels?: TaskLabelRef[];
   name?: string | null;
   parent?: { id?: string; agentId?: string | null; identifier: string; name: string | null } | null;
   priority?: number | null;

@@ -21,6 +21,10 @@ export const RedisKeyNamespace = {
    */
   AGENT_SIGNAL: 'agent-signal',
   /**
+   * Leases on the agent runs a user has in flight, used to cap how many run at once.
+   */
+  AGENT_RUN: 'agentRun',
+  /**
    * Follow-ups a user queued behind a running agent turn ("steer"). The server
    * drains them into the next turn itself when the running one hands back.
    */
@@ -147,6 +151,16 @@ export const RedisKeys = {
     schedulerLock: (key: string): string => `scheduler_lock:v1:${key}`,
   },
   /**
+   * Run lease scope — see {@link RedisKeyNamespace.AGENT_RUN}.
+   */
+  agentRun: {
+    /**
+     * One user's in-flight run leases (field = holder id, value = expiry in ms).
+     * Full key: agentRun:run_slots:v1:{userId}
+     */
+    runSlots: (userId: string): string => `run_slots:v1:${userId}`,
+  },
+  /**
    * Steer queue scope — see {@link RedisKeyNamespace.AGENT_STEER}.
    */
   agentSteer: {
@@ -179,6 +193,13 @@ export const RedisKeys = {
      * Full key: agentSteer:thread_start:v1:{threadId}
      */
     threadStartFence: (threadId: string): string => `thread_start:v1:${threadId}`,
+    /**
+     * Follow-ups a heterogeneous run (Claude Code) took into its live session
+     * and has not picked up yet (field = user message id). Their drained batch
+     * stays leased until the agent replays the message.
+     * Full key: agentSteer:hetero_deliveries:v1:{operationId}
+     */
+    heteroDeliveries: (operationId: string): string => `hetero_deliveries:v1:${operationId}`,
   },
   /**
    * Agent identity scope — see {@link RedisKeyNamespace.AGENT_IDENTITY}.
@@ -260,6 +281,7 @@ export const RedisKeys = {
  */
 export const RedisKeyScopeNamespace = {
   agentIdentity: RedisKeyNamespace.AGENT_IDENTITY,
+  agentRun: RedisKeyNamespace.AGENT_RUN,
   agentSignal: RedisKeyNamespace.AGENT_SIGNAL,
   agentSteer: RedisKeyNamespace.AGENT_STEER,
   aiGeneration: RedisKeyNamespace.AI_GENERATION,

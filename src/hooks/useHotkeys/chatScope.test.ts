@@ -1,9 +1,12 @@
-import { HotkeyEnum, HotkeyGroupEnum, HotkeyScopeEnum } from '@lobechat/const/hotkeys';
+import {
+  HotkeyEnum,
+  HotkeyGroupEnum,
+  HOTKEYS_REGISTRATION,
+  HotkeyScopeEnum,
+} from '@lobechat/const/hotkeys';
 import type { HotkeyId } from '@lobechat/types';
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-
-import { HOTKEYS_REGISTRATION } from '@/const/hotkeys';
 
 import { useFindInTopicHotkey, useToggleTerminalPanelHotkey } from './chatScope';
 

@@ -24,6 +24,8 @@ const goalModelProvider = (planningProvider?: string) =>
 
 export interface GoalListParams {
   agentId?: string;
+  /** List only archived goals; omitted, archived goals are left out. */
+  archived?: boolean;
   limit?: number;
   offset?: number;
   projectId?: string;
@@ -187,6 +189,10 @@ class GoalService {
   close = async (id: string, status: 'achieved' | 'canceled') =>
     lambdaClient.goal.close.mutate({ id, status });
 
+  /** Archive (or restore) a completed or canceled goal; archived goals leave every list. */
+  archive = async (id: string, archived: boolean) =>
+    lambdaClient.goal.archive.mutate({ archived, id });
+
   /** Resolve a pending decision gate. Does not resume a paused goal by itself. */
   decide = async (params: {
     decisionId: string;
@@ -202,6 +208,10 @@ class GoalService {
   /** Route the goal's Tasks to a dedicated executor; `null` hands them back to the goal agent. */
   setTaskAgent = async (id: string, agentId: string | null) =>
     lambdaClient.goal.setTaskAgent.mutate({ agentId, id });
+
+  /** Make a workspace goal private or public; its own Tasks follow. */
+  setVisibility = async (id: string, visibility: 'private' | 'public') =>
+    lambdaClient.goal.setVisibility.mutate({ id, visibility });
 
   /** The model the goal agent plans with; `null` falls back to the agent's own. */
   setModel = async (id: string, modelConfig: { model: string; provider: string } | null) =>

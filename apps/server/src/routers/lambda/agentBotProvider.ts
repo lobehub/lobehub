@@ -12,11 +12,11 @@ import { AgentBotProviderModel } from '@/database/models/agentBotProvider';
 import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
 import type { LobeChatDatabase } from '@/database/type';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
-import { flattenBotWakeSettings } from '@/server/services/agentSignal/scenarios/botWake/config';
 import {
   assertBotAccessSettings,
   assertWatchKeywordsWritable,
   invalidateBotAfterUpdate,
+  mergeBotSettingsForCreate,
   mergeBotSettingsForPersist,
 } from '@/server/services/bot/agentBotProviderSettings';
 import { getBotMessageRouter } from '@/server/services/bot/BotMessageRouter';
@@ -37,6 +37,7 @@ import {
   beginFeishuAppRegistration,
   pollFeishuAppRegistration,
 } from '@/server/services/bot/platforms/feishu/registration';
+import { flattenBotWakeSettings } from '@/server/services/conversationWake/config';
 import { GatewayService } from '@/server/services/gateway';
 import { getBotRuntimeStatus } from '@/server/services/gateway/runtimeStatus';
 
@@ -216,7 +217,12 @@ export const agentBotProviderRouter = router({
 
       const payload = {
         ...input,
-        settings: mergeBotSettingsForPersist(input.platform, input.settings),
+        settings: await mergeBotSettingsForCreate(
+          ctx.serverDB,
+          input.agentId,
+          input.platform,
+          input.settings,
+        ),
       };
       assertAccessSettingsForTRPC(payload.settings);
       await assertWatchKeywordsWritable({

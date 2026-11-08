@@ -20,6 +20,8 @@ vi.mock('@/server/services/deviceGateway', () => ({
     queryDeviceList: vi.fn().mockResolvedValue([]),
   },
 }));
+const mcpAppsEnabled = vi.hoisted(() => vi.fn().mockResolvedValue(false));
+vi.mock('@/server/services/mcp/featureGate', () => ({ isMcpAppsEnabled: mcpAppsEnabled }));
 vi.mock('@/server/services/deviceGateway/dispatchAuthorization', () => ({
   resolveDeviceDispatchAuthorizationFailure: vi.fn().mockResolvedValue(undefined),
 }));
@@ -529,6 +531,24 @@ describe('ToolExecutionService', () => {
       );
     });
 
+    it('drops the MCP App view a device marked on its result', async () => {
+      vi.mocked(deviceGateway.executeMcpCall).mockResolvedValueOnce({
+        content: 'ok',
+        state: { content: [], mcpApp: { resourceUri: 'ui://dash/view' } },
+        success: true,
+      } as any);
+      const result = await makeService().executeTool(
+        mcpPayload,
+        contextWith(
+          { args: [], command: 'dash-mcp', name: 'my-mcp', type: 'stdio' },
+          { activeDeviceId: 'device-1' },
+        ),
+      );
+
+      // Another client opening the conversation would serve it from its own machine
+      expect(result.state).toEqual({ content: [] });
+    });
+
     it('tunnels a local-network HTTP MCP call and narrows the auth payload', async () => {
       const service = makeService();
       await service.executeTool(
@@ -736,6 +756,83 @@ describe('ToolExecutionService', () => {
 
       expect(callTool).toHaveBeenCalledTimes(1);
       expect(deviceGateway.executeMcpCall).not.toHaveBeenCalled();
+    });
+
+    it.each([true, false])(
+      "passes the run owner's mcp_apps flag (%s) to the server MCP call",
+      async (enabled) => {
+        mcpAppsEnabled.mockResolvedValueOnce(enabled);
+        const callTool = vi.fn().mockResolvedValue({ ok: true });
+        const service = makeService({ callTool });
+
+        await service.executeTool(
+          mcpPayload,
+          contextWith({ name: 'my-mcp', type: 'http', url: 'https://mcp.example.com' }),
+        );
+
+        expect(mcpAppsEnabled).toHaveBeenCalledWith('user-1');
+        expect(callTool).toHaveBeenCalledWith(expect.objectContaining({ mcpApps: enabled }));
+      },
+    );
+
+    it("gives the model only the text of an HTTP MCP result with a view, keeping the view's data in its state", async () => {
+      const raw = {
+        _meta: { view: { rows: ['secret'] } },
+        content: [{ text: 'Found 1 row', type: 'text' }],
+        structuredContent: { rows: ['secret'] },
+      };
+      const callTool = vi.fn().mockResolvedValue({
+        content: 'Found 1 row',
+        state: { ...raw, mcpApp: { resourceUri: 'ui://rows' } },
+        success: true,
+      });
+      const service = makeService({ callTool });
+
+      const result = await service.executeTool(
+        mcpPayload,
+        contextWith({ name: 'my-mcp', type: 'http', url: 'https://mcp.example.com' }),
+      );
+
+      expect(result.content).toBe('Found 1 row');
+      expect(result.state).toMatchObject({
+        state: { _meta: raw._meta, mcpApp: { resourceUri: 'ui://rows' } },
+      });
+    });
+
+    it("keeps an HTTP MCP result's structured output for the model when it has no view", async () => {
+      const callTool = vi.fn().mockResolvedValue({
+        content: '',
+        state: { content: [], structuredContent: { temperature: 20 } },
+        success: true,
+      });
+      const service = makeService({ callTool });
+
+      const result = await service.executeTool(
+        mcpPayload,
+        contextWith({ name: 'my-mcp', type: 'http', url: 'https://mcp.example.com' }),
+      );
+
+      expect(JSON.parse(result.content).state.structuredContent).toEqual({ temperature: 20 });
+    });
+
+    it("keeps an HTTP MCP result's _meta from the model when it has no view, in its state", async () => {
+      // An error from an Apps-aware server: no view, but view-only metadata
+      const state = {
+        _meta: { view: { token: 'view-only' } },
+        content: [{ text: 'failed', type: 'text' }],
+        isError: true,
+      };
+      const callTool = vi.fn().mockResolvedValue({ content: 'failed', state, success: false });
+      const service = makeService({ callTool });
+
+      const result = await service.executeTool(
+        mcpPayload,
+        contextWith({ name: 'my-mcp', type: 'http', url: 'https://mcp.example.com' }),
+      );
+
+      expect(result.content).not.toContain('view-only');
+      expect(JSON.parse(result.content).state.content).toEqual(state.content);
+      expect(result.state).toMatchObject({ state });
     });
 
     it.each([

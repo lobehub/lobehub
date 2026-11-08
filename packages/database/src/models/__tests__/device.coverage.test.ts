@@ -135,8 +135,10 @@ describe('DeviceModel coverage edges', () => {
       });
       await workspaceModel.register({ deviceId: 'devcov-shared-id', identitySource: 'machine-id' });
 
-      await workspaceModel.deleteWorkspaceDevice('devcov-shared-id');
+      const removed = await workspaceModel.deleteWorkspaceDevice('devcov-shared-id');
 
+      expect(removed).toHaveLength(1);
+      expect(removed?.[0]).toMatchObject({ deviceId: 'devcov-shared-id', workspaceId });
       const remaining = await serverDB.query.devices.findMany({
         where: eq(devices.deviceId, 'devcov-shared-id'),
       });

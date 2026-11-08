@@ -1,4 +1,7 @@
-import { createReviewCommentSchema, reviewDecisionSchema } from '@lobechat/types';
+import {
+  acceptanceReviewDecisionSchema,
+  createAcceptanceReviewCommentSchema,
+} from '@lobechat/types';
 import type { Context } from 'hono';
 import { z } from 'zod';
 
@@ -73,7 +76,7 @@ export const listComments = async (c: ReviewContext) => {
 };
 
 export const createComment = async (c: ReviewContext) => {
-  const body = await parseBody(c, createReviewCommentSchema);
+  const body = await parseBody(c, createAcceptanceReviewCommentSchema);
   if (body.error) return body.error;
   const input = body.data;
   const { acceptance, can } = c.get('access');
@@ -132,7 +135,7 @@ export const deleteComment = async (c: ReviewContext) => {
 };
 
 export const decide = async (c: ReviewContext) => {
-  const body = await parseBody(c, reviewDecisionSchema);
+  const body = await parseBody(c, acceptanceReviewDecisionSchema);
   if (body.error) return body.error;
   const { note, verdict } = body.data;
   const { acceptance, can } = c.get('access');

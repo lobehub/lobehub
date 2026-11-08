@@ -9,6 +9,19 @@ import {
   createGoogleGenerateObjectWithTools,
 } from './generateObject';
 
+const createGoogleClient = (response: unknown) => ({
+  models: { generateContent: vi.fn().mockResolvedValue(response) },
+});
+
+const createEmptyTestTool = () => ({
+  function: {
+    description: 'Test function',
+    name: 'test_function',
+    parameters: { properties: {}, type: 'object' as const },
+  },
+  type: 'function' as const,
+});
+
 describe('Google generateObject', () => {
   describe('convertOpenAISchemaToGoogleSchema', () => {
     it('should convert basic types correctly', () => {
@@ -535,13 +548,9 @@ describe('Google generateObject', () => {
 
   describe('createGoogleGenerateObject', () => {
     it('should return parsed JSON object on successful API call', async () => {
-      const mockClient = {
-        models: {
-          generateContent: vi.fn().mockResolvedValue({
-            text: '{"name": "John", "age": 30}',
-          }),
-        },
-      };
+      const mockClient = createGoogleClient({
+        text: '{"name": "John", "age": 30}',
+      });
 
       const contents = [{ parts: [{ text: 'Generate a person object' }], role: 'user' }];
 
@@ -579,13 +588,9 @@ describe('Google generateObject', () => {
     });
 
     it('should handle options correctly', async () => {
-      const mockClient = {
-        models: {
-          generateContent: vi.fn().mockResolvedValue({
-            text: '{"status": "success"}',
-          }),
-        },
-      };
+      const mockClient = createGoogleClient({
+        text: '{"status": "success"}',
+      });
 
       const contents = [{ parts: [{ text: 'Generate status' }], role: 'user' }];
 
@@ -626,18 +631,14 @@ describe('Google generateObject', () => {
     });
 
     it('should call onUsage callback with usage data', async () => {
-      const mockClient = {
-        models: {
-          generateContent: vi.fn().mockResolvedValue({
-            text: '{"result": "ok"}',
-            usageMetadata: {
-              candidatesTokenCount: 20,
-              promptTokenCount: 80,
-              totalTokenCount: 100,
-            },
-          }),
+      const mockClient = createGoogleClient({
+        text: '{"result": "ok"}',
+        usageMetadata: {
+          candidatesTokenCount: 20,
+          promptTokenCount: 80,
+          totalTokenCount: 100,
         },
-      };
+      });
 
       const contents = [{ parts: [{ text: 'Generate data' }], role: 'user' }];
 
@@ -666,13 +667,9 @@ describe('Google generateObject', () => {
     });
 
     it('should return undefined when JSON parsing fails', async () => {
-      const mockClient = {
-        models: {
-          generateContent: vi.fn().mockResolvedValue({
-            text: 'invalid json string',
-          }),
-        },
-      };
+      const mockClient = createGoogleClient({
+        text: 'invalid json string',
+      });
 
       const contents: any[] = [];
       const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -698,13 +695,9 @@ describe('Google generateObject', () => {
     });
 
     it('should handle complex nested schemas', async () => {
-      const mockClient = {
-        models: {
-          generateContent: vi.fn().mockResolvedValue({
-            text: '{"user": {"name": "Alice", "profile": {"age": 25, "preferences": ["music", "sports"]}}, "metadata": {"created": "2024-01-01"}}',
-          }),
-        },
-      };
+      const mockClient = createGoogleClient({
+        text: '{"user": {"name": "Alice", "profile": {"age": 25, "preferences": ["music", "sports"]}}, "metadata": {"created": "2024-01-01"}}',
+      });
 
       const contents: any[] = [];
 
@@ -813,26 +806,22 @@ describe('Google generateObject', () => {
 
   describe('createGoogleGenerateObjectWithTools', () => {
     it('should return function calls on successful API call with tools', async () => {
-      const mockClient = {
-        models: {
-          generateContent: vi.fn().mockResolvedValue({
-            candidates: [
-              {
-                content: {
-                  parts: [
-                    {
-                      functionCall: {
-                        args: { city: 'New York', unit: 'celsius' },
-                        name: 'get_weather',
-                      },
-                    },
-                  ],
+      const mockClient = createGoogleClient({
+        candidates: [
+          {
+            content: {
+              parts: [
+                {
+                  functionCall: {
+                    args: { city: 'New York', unit: 'celsius' },
+                    name: 'get_weather',
+                  },
                 },
-              },
-            ],
-          }),
-        },
-      };
+              ],
+            },
+          },
+        ],
+      });
 
       const contents = [{ parts: [{ text: 'What is the weather in New York?' }], role: 'user' }];
 
@@ -897,31 +886,27 @@ describe('Google generateObject', () => {
     });
 
     it('should call onUsage callback with usage data', async () => {
-      const mockClient = {
-        models: {
-          generateContent: vi.fn().mockResolvedValue({
-            candidates: [
-              {
-                content: {
-                  parts: [
-                    {
-                      functionCall: {
-                        args: { city: 'Tokyo' },
-                        name: 'get_weather',
-                      },
-                    },
-                  ],
+      const mockClient = createGoogleClient({
+        candidates: [
+          {
+            content: {
+              parts: [
+                {
+                  functionCall: {
+                    args: { city: 'Tokyo' },
+                    name: 'get_weather',
+                  },
                 },
-              },
-            ],
-            usageMetadata: {
-              candidatesTokenCount: 30,
-              promptTokenCount: 70,
-              totalTokenCount: 100,
+              ],
             },
-          }),
+          },
+        ],
+        usageMetadata: {
+          candidatesTokenCount: 30,
+          promptTokenCount: 70,
+          totalTokenCount: 100,
         },
-      };
+      });
 
       const contents = [{ parts: [{ text: 'What is the weather in Tokyo?' }], role: 'user' }];
 
@@ -959,32 +944,28 @@ describe('Google generateObject', () => {
     });
 
     it('should handle multiple function calls', async () => {
-      const mockClient = {
-        models: {
-          generateContent: vi.fn().mockResolvedValue({
-            candidates: [
-              {
-                content: {
-                  parts: [
-                    {
-                      functionCall: {
-                        args: { city: 'New York', unit: 'celsius' },
-                        name: 'get_weather',
-                      },
-                    },
-                    {
-                      functionCall: {
-                        args: { timezone: 'America/New_York' },
-                        name: 'get_time',
-                      },
-                    },
-                  ],
+      const mockClient = createGoogleClient({
+        candidates: [
+          {
+            content: {
+              parts: [
+                {
+                  functionCall: {
+                    args: { city: 'New York', unit: 'celsius' },
+                    name: 'get_weather',
+                  },
                 },
-              },
-            ],
-          }),
-        },
-      };
+                {
+                  functionCall: {
+                    args: { timezone: 'America/New_York' },
+                    name: 'get_time',
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      });
 
       const contents: any[] = [];
 
@@ -1033,26 +1014,22 @@ describe('Google generateObject', () => {
     });
 
     it('should handle options correctly', async () => {
-      const mockClient = {
-        models: {
-          generateContent: vi.fn().mockResolvedValue({
-            candidates: [
-              {
-                content: {
-                  parts: [
-                    {
-                      functionCall: {
-                        args: { a: 5, b: 3, operation: 'add' },
-                        name: 'calculate',
-                      },
-                    },
-                  ],
+      const mockClient = createGoogleClient({
+        candidates: [
+          {
+            content: {
+              parts: [
+                {
+                  functionCall: {
+                    args: { a: 5, b: 3, operation: 'add' },
+                    name: 'calculate',
+                  },
                 },
-              },
-            ],
-          }),
-        },
-      };
+              ],
+            },
+          },
+        ],
+      });
 
       const contents: any[] = [];
 
@@ -1097,42 +1074,26 @@ describe('Google generateObject', () => {
     });
 
     it('should return undefined when no function calls in response', async () => {
-      const mockClient = {
-        models: {
-          generateContent: vi.fn().mockResolvedValue({
-            candidates: [
-              {
-                content: {
-                  parts: [
-                    {
-                      text: 'Some text response without function call',
-                    },
-                  ],
+      const mockClient = createGoogleClient({
+        candidates: [
+          {
+            content: {
+              parts: [
+                {
+                  text: 'Some text response without function call',
                 },
-              },
-            ],
-          }),
-        },
-      };
+              ],
+            },
+          },
+        ],
+      });
 
       const contents: any[] = [];
 
       const payload = {
         contents,
         model: 'gemini-2.5-flash',
-        tools: [
-          {
-            function: {
-              description: 'Test function',
-              name: 'test_function',
-              parameters: {
-                properties: {},
-                type: 'object' as const,
-              },
-            },
-            type: 'function' as const,
-          },
-        ],
+        tools: [createEmptyTestTool()],
       };
 
       const result = await createGoogleGenerateObjectWithTools(mockClient as any, payload);
@@ -1141,36 +1102,20 @@ describe('Google generateObject', () => {
     });
 
     it('should return undefined when no content parts in response', async () => {
-      const mockClient = {
-        models: {
-          generateContent: vi.fn().mockResolvedValue({
-            candidates: [
-              {
-                content: {},
-              },
-            ],
-          }),
-        },
-      };
+      const mockClient = createGoogleClient({
+        candidates: [
+          {
+            content: {},
+          },
+        ],
+      });
 
       const contents: any[] = [];
 
       const payload = {
         contents,
         model: 'gemini-2.5-flash',
-        tools: [
-          {
-            function: {
-              description: 'Test function',
-              name: 'test_function',
-              parameters: {
-                properties: {},
-                type: 'object' as const,
-              },
-            },
-            type: 'function' as const,
-          },
-        ],
+        tools: [createEmptyTestTool()],
       };
 
       const result = await createGoogleGenerateObjectWithTools(mockClient as any, payload);
@@ -1192,19 +1137,7 @@ describe('Google generateObject', () => {
       const payload = {
         contents,
         model: 'gemini-2.5-flash',
-        tools: [
-          {
-            function: {
-              description: 'Test function',
-              name: 'test_function',
-              parameters: {
-                properties: {},
-                type: 'object' as const,
-              },
-            },
-            type: 'function' as const,
-          },
-        ],
+        tools: [createEmptyTestTool()],
       };
 
       await expect(createGoogleGenerateObjectWithTools(mockClient as any, payload)).rejects.toThrow(
@@ -1227,19 +1160,7 @@ describe('Google generateObject', () => {
       const payload = {
         contents,
         model: 'gemini-2.5-flash',
-        tools: [
-          {
-            function: {
-              description: 'Test function',
-              name: 'test_function',
-              parameters: {
-                properties: {},
-                type: 'object' as const,
-              },
-            },
-            type: 'function' as const,
-          },
-        ],
+        tools: [createEmptyTestTool()],
       };
 
       const options = {
@@ -1252,26 +1173,22 @@ describe('Google generateObject', () => {
     });
 
     it('should handle tools with empty parameters', async () => {
-      const mockClient = {
-        models: {
-          generateContent: vi.fn().mockResolvedValue({
-            candidates: [
-              {
-                content: {
-                  parts: [
-                    {
-                      functionCall: {
-                        args: {},
-                        name: 'simple_function',
-                      },
-                    },
-                  ],
+      const mockClient = createGoogleClient({
+        candidates: [
+          {
+            content: {
+              parts: [
+                {
+                  functionCall: {
+                    args: {},
+                    name: 'simple_function',
+                  },
                 },
-              },
-            ],
-          }),
-        },
-      };
+              ],
+            },
+          },
+        ],
+      });
 
       const contents: any[] = [];
 

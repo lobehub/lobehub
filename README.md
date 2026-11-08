@@ -4,11 +4,10 @@
 
 # LobeHub
 
-LobeHub organizes your agents into 7×24 operation.
+**Super-Agents on Your Team**
 
-It hires, schedules, reports on your entire AI team.
-
-You stay in charge — without staying online.
+Add super-agents to the chats your team already uses.<br/>
+They take on work by themselves and get better every week.
 
 **English** · [简体中文](./README.zh-CN.md) · [Official Site][official-site] · [Changelog][changelog] · [Documents][docs] · [Blog][blog] · [Feedback][github-issues-link]
 
@@ -38,8 +37,6 @@ You stay in charge — without staying online.
 [![][share-mastodon-shield]][share-mastodon-link]
 [![][share-linkedin-shield]][share-linkedin-link]
 
-<sup>Your Chief Agent Operator</sup>
-
 <a href="https://www.producthunt.com/products/lobehub?embed=true&amp;utm_source=badge-top-post-badge&amp;utm_medium=badge&amp;utm_campaign=badge-lobehub-2" target="_blank" rel="noopener noreferrer"><img alt="LobeHub - Your Chief Agent Operator for multi-agent work | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/top-post-badge.svg?post_id=1147569&amp;theme=light&amp;period=daily&amp;t=1779247564355"></a> <a href="https://trendshift.io/repositories/19224" target="_blank"><img src="https://trendshift.io/api/badge/repositories/19224" alt="lobehub%2Flobehub | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
 
 [![](https://vercel.com/oss/program-badge.svg)](https://vercel.com/oss)
@@ -53,21 +50,21 @@ You stay in charge — without staying online.
 
 - [👋🏻 Getting Started & Join Our Community](#-getting-started--join-our-community)
 - [✨ Features](#-features)
-  - [Operator: Agents as the Unit of Work](#operator-agents-as-the-unit-of-work)
-  - [Create: Agents as the Unit of Work](#create-agents-as-the-unit-of-work)
-  - [Collaborate: Scale New Forms of Collaboration Networks](#collaborate-scale-new-forms-of-collaboration-networks)
-  - [Evolve: Co-evolution of Humans and Agents](#evolve-co-evolution-of-humans-and-agents)
+  - [From new hire to one of the team](#from-new-hire-to-one-of-the-team)
+  - [`Day 1` Welcome to the team](#day-1-welcome-to-the-team)
+  - [`Week 1` Its first task](#week-1-its-first-task)
+  - [`Month 1–2` Settling in as the team grows](#month-12-settling-in-as-the-team-grows)
+  - [`Month 3` It passes its review](#month-3-it-passes-its-review)
+  - [Bring them onto your team](#bring-them-onto-your-team)
+- [🧩 Marketplace](#-marketplace)
+- [📖 Documentation](#-documentation)
 - [🛳 Self Hosting](#-self-hosting)
-  - [`A` Deploying with Vercel, Zeabur , Sealos or Alibaba Cloud](#a-deploying-with-vercel-zeabur--sealos-or-alibaba-cloud)
-  - [`B` Deploying with Docker](#b-deploying-with-docker)
-  - [Environment Variable](#environment-variable)
-  - [Obtain OpenAI API Key](#obtain-openai-api-key)
-- [📦 Ecosystem](#-ecosystem)
-- [🧩 Plugins](#-plugins)
+  - [`A` Docker Compose (recommended)](#a-docker-compose-recommended)
+  - [`B` One-click deploy](#b-one-click-deploy)
 - [⌨️ Local Development](#️-local-development)
 - [🤝 Contributing](#-contributing)
 - [❤️ Sponsor](#️-sponsor)
-- [🔗 More Products](#-more-products)
+- [🔬 Research](#-research)
 
 ####
 
@@ -82,7 +79,6 @@ You stay in charge — without staying online.
 ## 👋🏻 Getting Started & Join Our Community
 
 We are a group of e/acc design-engineers, hoping to provide modern design components and tools for AIGC.
-By adopting the Bootstrapping approach, we aim to provide developers and users with a more open, transparent, and user-friendly product ecosystem.
 
 Whether for users or professional developers, LobeHub will be your AI Agent playground. Please be aware that LobeHub is currently under active development, and feedback is welcome for any [issues][issues-link] encountered.
 
@@ -106,24 +102,46 @@ Whether for users or professional developers, LobeHub will be your AI Agent play
 
 ## ✨ Features
 
-Today’s agents are one-off, task-driven tools. They lack context, live in isolation, and require manual hand-offs between different windows and models. While some maintain memory, it is often global, shallow, and impersonal. In this mode, users are forced to toggle between fragmented conversations, making it difficult to form structured productivity.
+<div align="center">
 
-**LobeHub changes everything.**
+### From new hire to one of the team
 
-LobeHub is a work-and-lifestyle space to find, build, and collaborate with agent teammates that grow with you. In LobeHub, we treat **Agents as the unit of work**, providing an infrastructure where humans and agents co-evolve.
+See what Lobe AI gets done, from its first day in your team chat onward.
 
-![](https://github.com/user-attachments/assets/89d1c402-a62b-4794-82ea-17e5ee1a6165)
+<sub>WHAT MAKES A SUPER-AGENT</sub>
 
-### Operator: Agents as the Unit of Work
+</div>
 
-Hires, schedules, and reports on your entire AI team.
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <b>🔌 Flexible access</b><br/>
+      Plug in any IM app, agent or model, all in one place.
+    </td>
+    <td width="50%" valign="top">
+      <b>⚡ Parallel work</b><br/>
+      Runs several tasks at once, so you don't have to chase each one.
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <b>🙋 Finds its own work</b><br/>
+      Takes on the tasks that suit it, without someone passing messages along.
+    </td>
+    <td width="50%" valign="top">
+      <b>📈 Gets more expert</b><br/>
+      The more you use it, the faster an agent builds up its expertise.
+    </td>
+  </tr>
+</table>
 
-- **More productivity. Fewer tools**: Bring all your agents under one roof.
-- **IM Gateway**: Agents where you already chat.
+### `Day 1` Welcome to the team
 
-![](https://github.com/user-attachments/assets/7b08d6d9-9dff-4b06-a919-324630554509)
+You add it to your team chat and ask it to read up. By lunch it has gone through the history and said hello to everyone.
 
-[![][back-to-top]](#readme-top)
+![Before it starts, it reads up](https://hub-apac-1.lobeobjects.space/blog/assets/ed6fc1ef1e21e4add545c1e83c32fcb4.webp)
+
+![Lobe AI's IM Bots settings, its team badge and its Day 1 checklist](https://hub-apac-1.lobeobjects.space/blog/assets/a1c721a3cbe9cb8ec0f515217322b514.webp)
 
 <div align="right">
 
@@ -131,18 +149,15 @@ Hires, schedules, and reports on your entire AI team.
 
 </div>
 
-![](https://github.com/user-attachments/assets/81e89324-fc66-4024-99a3-aa8e16ec8184)
+### `Week 1` Its first task
 
-### Create: Agents as the Unit of Work
+Someone posts a feature request in Discord and nobody assigns it. Lobe AI takes it on, and you only step in once, to accept the result.
 
-Building a personalized AI team starts with the **Agent Builder**. You can describe what you need once, and the agent setup starts right away, applying auto-configurations so you can use it instantly.
+![Picks it up: nobody tags it, and it takes the request anyway](https://hub-apac-1.lobeobjects.space/blog/assets/b0c761a9084a5958d4205e5d056fa3ae.webp)
 
-- **Unified Intelligence**: Seamlessly access any model and any modality—all under your control.
-- **10,000+ Skills**: Connect your agents to the skills you use every day with a library of over 10,000 tools and MCP-compatible plugins.
+![Hands it in: you check the evidence, accept, and the PR merges](https://hub-apac-1.lobeobjects.space/blog/assets/b8635a2bf3b600697068d70690a62438.webp)
 
-![](https://github.com/user-attachments/assets/949b8166-486d-4750-ad7a-cfe7bfcb84e3)
-
-[![][back-to-top]](#readme-top)
+![Reports back: it replies in the original thread](https://hub-apac-1.lobeobjects.space/blog/assets/3e187a7e1fd004238163b58e20c59817.webp)
 
 <div align="right">
 
@@ -150,20 +165,13 @@ Building a personalized AI team starts with the **Agent Builder**. You can descr
 
 </div>
 
-![](https://hub-apac-1.lobeobjects.space/blog/assets/771ff3d30b9ef93e65e55021cc43d356.webp)
+### `Month 1–2` Settling in as the team grows
 
-### Collaborate: Scale New Forms of Collaboration Networks
+Everyone now has their own agent, and design, releases and docs each have a dedicated one. Lobe AI is still learning when to speak up and when to stay quiet.
 
-LobeHub introduces **Agent Groups**, allowing you to work with agents like real teammates. The system assembles the right agents for the task, enabling parallel collaboration and iterative improvement.
+![One brief every morning](https://hub-apac-1.lobeobjects.space/blog/assets/c4e5bac0c35f840d9476256996e93e49.webp)
 
-- **Pages**: Write and refine content with multiple agents in one place with a shared context.
-- **Schedule**: Schedule runs and let agents do the work at the right time, even while you are away.
-- **Project**: Organize work by project to keep everything structured and easy to track.
-- **Workspace**: A shared space for teams to collaborate with agents, ensuring clear ownership and visibility across the organization.
-
-![](https://github.com/user-attachments/assets/e51526c6-e09c-4a5a-9cec-dcd3fd68a3a8)
-
-[![][back-to-top]](#readme-top)
+![It's learning when to speak up](https://hub-apac-1.lobeobjects.space/blog/assets/bc065ed83d1ab0862aea98a7216ff787.webp)
 
 <div align="right">
 
@@ -171,16 +179,11 @@ LobeHub introduces **Agent Groups**, allowing you to work with agents like real 
 
 </div>
 
-![](https://hub-apac-1.lobeobjects.space/blog/assets/fe98eae9fcb6acc47c8e1fb69bdb4b50.webp)
+### `Month 3` It passes its review
 
-### Evolve: Co-evolution of Humans and Agents
+When it started, it got about half of these right. Now it rarely misses, and every correction you gave it has become a lesson it keeps.
 
-The best AI is one that understands you deeply. LobeHub features **Personal Memory** that builds a clear understanding of your needs.
-
-- **Continual Learning**: Your agents learn from how you work, adapting their behavior to act at the right moment.
-- **White-Box Memory**: We believe in transparency. Your agents use structured, editable memory, giving you full control over what they remember.
-
-![](https://github.com/user-attachments/assets/5c6e16f0-7f47-4baf-9aeb-3a00deb8ff5b)
+![What it has learned](https://hub-apac-1.lobeobjects.space/blog/assets/82c6818a9dc6fa27cf5aea75a092b448.webp)
 
 <div align="right">
 
@@ -188,7 +191,76 @@ The best AI is one that understands you deeply. LobeHub features **Personal Memo
 
 </div>
 
-> ✨ more features will be added when LobeHub evolve.
+<div align="center">
+
+### Bring them onto your team
+
+Start with one, and add more when you need them.
+
+[**Try LobeHub Cloud**][vercel-link] · [**Self-host it**](#-self-hosting)
+
+</div>
+
+<div align="right">
+
+[![][back-to-top]](#readme-top)
+
+</div>
+
+## 🧩 Marketplace
+
+Find agents, MCP servers and skills on [lobehub.com][official-site], add them to your workspace, or publish your own.
+
+| Market                                | What you'll find                                                                                                   |
+| :------------------------------------ | :----------------------------------------------------------------------------------------------------------------- |
+| [**🤖 Agents**][market-agents]        | Ready-to-use agents for writing, Q\&A, images, video, voice and workflows. Add one to your workspace and adapt it. |
+| [**🔌 MCP Servers**][market-mcp]      | MCP servers rated on activity, stability and community feedback, so you can pick ones you can trust.               |
+| [**🧠 Skills**][market-skills]        | Agent skills in the open `SKILL.md` format. They also work in Claude Code, Codex CLI and ChatGPT.                  |
+| [**🎨 AI / LLM Icons**][market-icons] | A free icon set for major AI brands and models, with SVG, PNG and vector downloads.                                |
+
+**Publish your own**
+
+- **Agents**: submit one from its settings in LobeHub. The [Creator Reward Program][creator-program] features a community agent every two weeks.
+
+- **MCP servers**: ask your agent to `Read https://lobehub.com/publish-mcp/skill.md and follow the instructions to publish my MCP server to the LobeHub Marketplace`, or use the CLI:
+
+  ```bash
+  npx -y @lobehub/market-cli login
+  npx -y @lobehub/market-cli plugin submit https://github.com/OWNER/REPOSITORY
+  ```
+
+- **Skills**: submit a GitHub repository from the [Skills marketplace][market-skills].
+
+<div align="right">
+
+[![][back-to-top]](#readme-top)
+
+</div>
+
+## 📖 Documentation
+
+All documentation lives at [lobehub.com/docs](https://lobehub.com/docs/usage/start):
+
+| Section                                                                                 | What's covered                                                                               |
+| :-------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------- |
+| [Get LobeHub](https://lobehub.com/docs/usage/getting-started/get-lobehub)               | Web, macOS, Windows, Linux and mobile apps, and where work runs                              |
+| [Lobe AI](https://lobehub.com/docs/usage/getting-started/lobe-ai)                       | The built-in agent: chat, code, research and write with no setup                             |
+| [Agents](https://lobehub.com/docs/usage/getting-started/agent)                          | System role, model, skills, connectors, web search, resources and memory                     |
+| [Agent Team](https://lobehub.com/docs/usage/agent/agent-team)                           | Several agents working together: sequential, parallel, iterative or debate                   |
+| [Connect External Agents](https://lobehub.com/docs/usage/agent/connect-external-agents) | Bring in Claude Code, Codex, OpenClaw, Hermes and more, with project context and permissions |
+| [Tasks](https://lobehub.com/docs/usage/getting-started/task)                            | Delegate work, track status, follow up in comments, run once or on a schedule                |
+| [Memory](https://lobehub.com/docs/usage/getting-started/memory)                         | Structured memories you can review, edit and delete                                          |
+| [Pages](https://lobehub.com/docs/usage/getting-started/page)                            | Write long documents with agents, in Markdown                                                |
+| [Resource Library](https://lobehub.com/docs/usage/getting-started/resource)             | Documents, generated images and drafts your agents can answer from                           |
+| [Channels](https://lobehub.com/docs/usage/channels/overview)                            | Your own bots on Discord, Slack, Telegram, LINE, QQ, WeChat, Feishu and Lark                 |
+| [Messenger](https://lobehub.com/docs/usage/messenger/overview)                          | Chat with your agents through LobeHub's bot on Telegram, Slack, Discord and WeChat           |
+| [GitHub Integration](https://lobehub.com/docs/usage/integrations/github)                | Track agents' pull requests; merging accepts the work, failed checks go back to the agent    |
+| [Marketplace](https://lobehub.com/docs/usage/community/overview)                        | Community agents, MCP servers and skills                                                     |
+| [Model Providers](https://lobehub.com/docs/usage/providers)                             | Setup guides for 40+ providers, inference platforms and local models                         |
+| [Self-Hosting](https://lobehub.com/docs/self-hosting/start)                             | Docker Compose, Vercel and other deployment platforms                                        |
+| [Environment Variables](https://lobehub.com/docs/self-hosting/environment-variables)    | Every configuration option, including model providers                                        |
+| [Authentication](https://lobehub.com/docs/self-hosting/auth)                            | Sign-in with Better Auth and SSO providers such as Auth0                                     |
+| [Development](https://lobehub.com/docs/development/start)                               | Tech stack, local setup and contribution guidelines                                          |
 
 <div align="right">
 
@@ -198,20 +270,27 @@ The best AI is one that understands you deeply. LobeHub features **Personal Memo
 
 ## 🛳 Self Hosting
 
-LobeHub provides Self-Hosted Version with Vercel, Alibaba Cloud, and [Docker Image][docker-release-link]. This allows you to deploy your own chatbot within a few minutes without any prior knowledge.
+Run LobeHub on your own infrastructure and keep your data with you. The full guide is in [📘 Build your own LobeHub][docs-self-hosting].
 
-> \[!TIP]
->
-> Learn more about [📘 Build your own LobeHub][docs-self-hosting] by checking it out.
+### `A` Docker Compose (recommended)
 
-### `A` Deploying with Vercel, Zeabur , Sealos or Alibaba Cloud
+[![][docker-release-shield]][docker-release-link]
+[![][docker-size-shield]][docker-size-link]
+[![][docker-pulls-shield]][docker-pulls-link]
 
-"If you want to deploy this service yourself on Vercel, Zeabur or Alibaba Cloud, you can follow these steps:
+Starts LobeHub with PostgreSQL, Redis, RustFS file storage, SearXNG search and the agent gateway. Runs on Linux and macOS, or on Windows through [WSL 2](https://aka.ms/wsl).
 
-- Prepare your [OpenAI API Key](https://platform.openai.com/account/api-keys).
-- Click the button below to start deployment: Log in directly with your GitHub account, and remember to fill in the `OPENAI_API_KEY`(required) on the environment variable section.
-- After deployment, you can start using it.
-- Bind a custom domain (optional): The DNS of the domain assigned by Vercel is polluted in some areas; binding a custom domain can connect directly.
+```bash
+mkdir lobehub && cd lobehub
+bash <(curl -fsSL https://lobe.li/setup.sh) -l en
+docker compose up -d
+```
+
+Then open <http://localhost:3210>. Ports, LAN and domain modes, and upgrades are covered in the [📘 Docker Compose guide][docs-docker].
+
+### `B` One-click deploy
+
+Vercel needs a PostgreSQL database, S3-compatible storage and a few secrets before you deploy. The [📘 Vercel guide][docs-vercel] walks through each one.
 
 <div align="center">
 
@@ -220,142 +299,6 @@ LobeHub provides Self-Hosted Version with Vercel, Alibaba Cloud, and [Docker Ima
 | [![][deploy-button-image]][deploy-link] | [![][deploy-on-zeabur-button-image]][deploy-on-zeabur-link] | [![][deploy-on-sealos-button-image]][deploy-on-sealos-link] | [![][deploy-on-repocloud-button-image]][deploy-on-repocloud-link] | [![][deploy-on-alibaba-cloud-button-image]][deploy-on-alibaba-cloud-link] |
 
 </div>
-
-#### After Fork
-
-After fork, only retain the upstream sync action and disable other actions in your repository on GitHub.
-
-#### Keep Updated
-
-If you have deployed your own project following the one-click deployment steps in the README, you might encounter constant prompts indicating "updates available." This is because Vercel defaults to creating a new project instead of forking this one, resulting in an inability to detect updates accurately.
-
-> \[!TIP]
->
-> We suggest you redeploy using the following steps, [📘 Auto Sync With Latest][docs-upstream-sync]
-
-<br/>
-
-### `B` Deploying with Docker
-
-[![][docker-release-shield]][docker-release-link]
-[![][docker-size-shield]][docker-size-link]
-[![][docker-pulls-shield]][docker-pulls-link]
-
-We provide a Docker image for deploying the LobeHub service on your own private device. Use the following command to start the LobeHub service:
-
-1. create a folder to for storage files
-
-```fish
-$ mkdir lobehub-db && cd lobehub-db
-```
-
-2. init the LobeHub infrastructure
-
-```fish
-bash <(curl -fsSL https://lobe.li/setup.sh)
-```
-
-3. Start the LobeHub service
-
-```fish
-docker compose up -d
-```
-
-> \[!NOTE]
->
-> For detailed instructions on deploying with Docker, please refer to the [📘 Docker Deployment Guide][docs-docker]
-
-<br/>
-
-### Environment Variable
-
-This project provides some additional configuration items set with environment variables:
-
-| Environment Variable | Required | Description                                                                                                                                                               | Example                                                                                                              |
-| -------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `OPENAI_API_KEY`     | Yes      | This is the API key you apply on the OpenAI account page                                                                                                                  | `sk-xxxxxx...xxxxxx`                                                                                                 |
-| `OPENAI_PROXY_URL`   | No       | If you manually configure the OpenAI interface proxy, you can use this configuration item to override the default OpenAI API request base URL                             | `https://api.chatanywhere.cn` or `https://aihubmix.com/v1` <br/>The default value is<br/>`https://api.openai.com/v1` |
-| `OPENAI_MODEL_LIST`  | No       | Used to control the model list. Use `+` to add a model, `-` to hide a model, and `model_name=display_name` to customize the display name of a model, separated by commas. | `qwen-7b-chat,+glm-6b,-gpt-3.5-turbo`                                                                                |
-
-> \[!NOTE]
->
-> The complete list of environment variables can be found in the [📘 Environment Variables][docs-env-var]
-
-### Obtain OpenAI API Key
-
-An API Key is required to chat with LLMs in LobeHub. This section uses the OpenAI model provider as an example to briefly introduce how to obtain an API Key.
-
-#### `A` Via the Official OpenAI Channel
-
-- Sign up for an [OpenAI account](https://platform.openai.com/signup); you will need an international phone number and a non-mainland-China email address;
-- After signing up, go to the [API Keys](https://platform.openai.com/api-keys) page and click `Create new secret key` to create a new API Key:
-
-| Step 1: Open the creation dialog                                                                                                                   | Step 2: Create the API Key                                                                                                                         | Step 3: Get the API Key                                                                                                                            |
-| -------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| <img src="https://github-production-user-asset-6210df.s3.amazonaws.com/28616219/296253192-ff2193dd-f125-4e58-82e8-91bc376c0d68.png" height="200"/> | <img src="https://github-production-user-asset-6210df.s3.amazonaws.com/28616219/296254170-803bacf0-4471-4171-ae79-0eab08d621d1.png" height="200"/> | <img src="https://github-production-user-asset-6210df.s3.amazonaws.com/28616219/296255167-f2745f2b-f083-4ba8-bc78-9b558e0002de.png" height="200"/> |
-
-- Fill this API Key into the LobeHub API Key configuration and you are ready to go.
-
-> \[!TIP]
->
-> Newly registered accounts usually come with a $5 free credit, but it is only valid for three months.
-> If you want to keep using your API Key long-term, you need to bind a credit card to complete payment. Since OpenAI only supports foreign-currency credit cards, you will need to find a suitable payment channel yourself, which is not covered in detail here.
-
-<br/>
-
-#### `B` Via an OpenAI Third-Party Proxy
-
-If you find signing up for an OpenAI account or binding a foreign-currency credit card troublesome, you can consider using a well-known OpenAI third-party proxy to obtain an API Key, which can effectively lower the barrier to getting one. At the same time, however, once you use a third-party service, you may also need to bear its potential risks — please decide based on your own actual situation. Below is a list of common third-party model proxies for your reference:
-
-|                                                                     | Provider     | Features                                                                                                                  | Proxy URL                 | Link                                               |
-| ------------------------------------------------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------- | ------------------------- | -------------------------------------------------- |
-| <img src="https://resource.aihubmix.com/logo.png?v=1" width="48" /> | **AIHubMix** | Uses the OpenAI enterprise API; all models site-wide at **14% off** the official price (incl. GPT-5.6 and Claude Fable 5) | `https://aihubmix.com/v1` | [Get](https://console.aihubmix.com/token?aff=8DBz) |
-
-> \[!WARNING]
->
-> **Disclaimer**: The OpenAI API Keys recommended here are provided by third-party proxies, so we are not responsible for the **validity** or **security** of these API Keys. Please bear the risks of purchasing and using them yourself.
-
-> \[!NOTE]
->
-> If you are a model service provider and believe your service is stable enough and reasonably priced, feel free to contact us — we will consider recommending it after trying and testing it ourselves.
-
-<div align="right">
-
-[![][back-to-top]](#readme-top)
-
-</div>
-
-## 📦 Ecosystem
-
-| NPM                               | Repository                              | Description                                                                                           | Version                                   |
-| --------------------------------- | --------------------------------------- | ----------------------------------------------------------------------------------------------------- | ----------------------------------------- |
-| [@lobehub/ui][lobe-ui-link]       | [lobehub/lobe-ui][lobe-ui-github]       | Open-source UI component library dedicated to building AIGC web applications.                         | [![][lobe-ui-shield]][lobe-ui-link]       |
-| [@lobehub/icons][lobe-icons-link] | [lobehub/lobe-icons][lobe-icons-github] | Popular AI / LLM Model Brand SVG Logo and Icon Collection.                                            | [![][lobe-icons-shield]][lobe-icons-link] |
-| [@lobehub/tts][lobe-tts-link]     | [lobehub/lobe-tts][lobe-tts-github]     | High-quality & reliable TTS/STT React Hooks library                                                   | [![][lobe-tts-shield]][lobe-tts-link]     |
-| [@lobehub/lint][lobe-lint-link]   | [lobehub/lobe-lint][lobe-lint-github]   | Configurations for ESlint, Stylelint, Commitlint, Prettier, Remark, and Semantic Release for LobeHub. | [![][lobe-lint-shield]][lobe-lint-link]   |
-
-<div align="right">
-
-[![][back-to-top]](#readme-top)
-
-</div>
-
-## 🧩 Plugins
-
-Plugins provide a means to extend the [Function Calling][docs-function-call] capabilities of LobeHub. They can be used to introduce new function calls and even new ways to render message results. If you are interested in plugin development, please refer to our [📘 Plugin Development Guide][docs-plugin-dev] in the Wiki.
-
-- [lobe-chat-plugins][lobe-chat-plugins]: This is the plugin index for LobeHub. It accesses index.json from this repository to display a list of available plugins for LobeHub to the user.
-- [chat-plugin-template][chat-plugin-template]: This is the plugin template for LobeHub plugin development.
-- [@lobehub/chat-plugin-sdk][chat-plugin-sdk]: The LobeHub Plugin SDK assists you in creating exceptional chat plugins for LobeHub.
-- [@lobehub/chat-plugins-gateway][chat-plugins-gateway]: The LobeHub Plugins Gateway is a backend service that provides a gateway for LobeHub plugins. We deploy this service using Vercel. The primary API POST /api/v1/runner is deployed as an Edge Function.
-
-> \[!NOTE]
->
-> The plugin system is currently undergoing major development. You can learn more in the following issues:
->
-> - [x] [**Plugin Phase 1**](https://github.com/lobehub/lobehub/issues/73): Implement separation of the plugin from the main body, split the plugin into an independent repository for maintenance, and realize dynamic loading of the plugin.
-> - [x] [**Plugin Phase 2**](https://github.com/lobehub/lobehub/issues/97): The security and stability of the plugin's use, more accurately presenting abnormal states, the maintainability of the plugin architecture, and developer-friendly.
-> - [x] [**Plugin Phase 3**](https://github.com/lobehub/lobehub/issues/149): Higher-level and more comprehensive customization capabilities, support for plugin authentication, and examples.
 
 <div align="right">
 
@@ -375,7 +318,7 @@ Or clone it for local development:
 $ git clone https://github.com/lobehub/lobehub.git
 $ cd lobehub
 $ pnpm install
-$ pnpm dev          # Full-stack (Next.js + Vite SPA)
+$ bun run dev       # Full-stack (Next.js + Vite SPA)
 $ bun run dev:spa   # SPA frontend only (port 9876)
 ```
 
@@ -406,7 +349,7 @@ Contributions of all types are more than welcome; if you are interested in contr
 
 [![][pr-welcome-shield]][pr-welcome-link]
 [![][submit-agents-shield]][submit-agents-link]
-[![][submit-plugin-shield]][submit-plugin-link]
+[![][publish-mcp-shield]][publish-mcp-link]
 
 <a href="https://github.com/lobehub/lobehub/graphs/contributors" target="_blank">
   <table>
@@ -463,12 +406,11 @@ Every bit counts and your one-time donation sparkles in our galaxy of support! Y
 
 </div>
 
-## 🔗 More Products
+## 🔬 Research
 
-- **[🅰️ Lobe SD Theme][lobe-theme]:** Modern theme for Stable Diffusion WebUI, exquisite interface design, highly customizable UI, and efficiency-boosting features.
-- **[⛵️ Lobe Midjourney WebUI][lobe-midjourney-webui]:** WebUI for Midjourney, leverages AI to quickly generate a wide array of rich and diverse images from text prompts, sparking creativity and enhancing conversations.
-- **[🌏 Lobe i18n][lobe-i18n] :** Lobe i18n is an automation tool for the i18n (internationalization) translation process, powered by ChatGPT. It supports features such as automatic splitting of large files, incremental updates, and customization options for the OpenAI model, API proxy, and temperature.
-- **[💌 Lobe Commit][lobe-commit]:** Lobe Commit is a CLI tool that leverages Langchain/ChatGPT to generate Gitmoji-based commit messages.
+- **[📊 MCPMark][mcpmark]:** A stress-testing benchmark for MCP. Its tasks are realistic, multi-step and verifiable, covering file systems, databases, Playwright browser automation, GitHub and more. Built by EVAL SYS, LobeHub and the National University of Singapore, and open source under Apache-2.0.
+- **[📄 Research paper][mcpmark-paper]:** Read our research paper on Hugging Face Papers.
+- **[🧪 EVAL SYS][eval-sys]:** An evaluation systems organization, one of the teams behind MCPMark.
 
 <div align="right">
 
@@ -489,50 +431,16 @@ This project is [LobeHub Community License](./LICENSE) licensed.
 
 <!-- LINK GROUP -->
 
-<!-- PROVIDER LIST -->
-
-- **[OpenCode Zen](https://lobechat.com/discover/provider/opencodezen)**:
-
-<details><summary><kbd>See more providers (+-9)</kbd></summary>
-
-</details>
-
-> 📊 Total providers: [<kbd>**1**</kbd>](https://lobechat.com/discover/providers)
-
- <!-- AGENT LIST -->
-
-| Recent Submits                                                                                                                                                                 | Description                                                                                                                                                                                                              |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| [Turtle Soup Host](https://lobechat.com/discover/assistant/lateral-thinking-puzzle)<br/><sup>By **[CSY2022](https://github.com/CSY2022)** on **2025-06-19**</sup>              | A turtle soup host needs to provide the scenario, the complete story (truth of the event), and the key point (the condition for guessing correctly).<br/>`turtle-soup` `reasoning` `interaction` `puzzle` `role-playing` |
-| [Academic Writing Assistant](https://lobechat.com/discover/assistant/academic-writing-assistant)<br/><sup>By **[swarfte](https://github.com/swarfte)** on **2025-06-17**</sup> | Expert in academic research paper writing and formal documentation<br/>`academic-writing` `research` `formal-style`                                                                                                      |
-| [Gourmet Reviewer🍟](https://lobechat.com/discover/assistant/food-reviewer)<br/><sup>By **[renhai-lab](https://github.com/renhai-lab)** on **2025-06-17**</sup>                | Food critique expert<br/>`gourmet` `review` `writing`                                                                                                                                                                    |
-| [Minecraft Senior Developer](https://lobechat.com/discover/assistant/java-development)<br/><sup>By **[iamyuuk](https://github.com/iamyuuk)** on **2025-06-17**</sup>           | Expert in advanced Java development and Minecraft mod and server plugin development<br/>`development` `programming` `minecraft` `java`                                                                                   |
-
-> 📊 Total agents: [<kbd>**505**</kbd> ](https://lobechat.com/discover/assistants)
-
- <!-- PLUGIN LIST -->
-
-| Recent Submits                                                                                                             | Description                                                                                                                                     |
-| -------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| [Shopping tools](https://lobechat.com/discover/plugin/ShoppingTools)<br/><sup>By **shoppingtools** on **2026-01-12**</sup> | Search for products on eBay & AliExpress, find eBay events & coupons. Get prompt examples.<br/>`shopping` `e-bay` `ali-express` `coupons`       |
-| [SEO Assistant](https://lobechat.com/discover/plugin/seo_assistant)<br/><sup>By **webfx** on **2026-01-12**</sup>          | The SEO Assistant can generate search engine keyword information in order to aid the creation of content.<br/>`seo` `keyword`                   |
-| [Video Captions](https://lobechat.com/discover/plugin/VideoCaptions)<br/><sup>By **maila** on **2025-12-13**</sup>         | Convert Youtube links into transcribed text, enable asking questions, create chapters, and summarize its content.<br/>`video-to-text` `youtube` |
-| [WeatherGPT](https://lobechat.com/discover/plugin/WeatherGPT)<br/><sup>By **steven-tey** on **2025-12-13**</sup>           | Get current weather information for a specific location.<br/>`weather`                                                                          |
-
-> 📊 Total plugins: [<kbd>**40**</kbd>](https://lobechat.com/discover/plugins)
-
 [back-to-top]: https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square
 [blog]: https://lobehub.com/blog
 [changelog]: https://lobehub.com/changelog
-[chat-plugin-sdk]: https://github.com/lobehub/chat-plugin-sdk
-[chat-plugin-template]: https://github.com/lobehub/chat-plugin-template
-[chat-plugins-gateway]: https://github.com/lobehub/chat-plugins-gateway
 [codecov-link]: https://codecov.io/gh/lobehub/lobehub
 [codecov-shield]: https://img.shields.io/codecov/c/github/lobehub/lobehub?labelColor=black&style=flat-square&logo=codecov&logoColor=white
 [codespaces-link]: https://codespaces.new/lobehub/lobehub
 [codespaces-shield]: https://github.com/codespaces/badge.svg
+[creator-program]: https://lobehub.com/creator
 [deploy-button-image]: https://vercel.com/button
-[deploy-link]: https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Flobehub%2Flobehub&env=OPENAI_API_KEY&envDescription=Find%20your%20OpenAI%20API%20Key%20by%20click%20the%20right%20Learn%20More%20button.&envLink=https%3A%2F%2Fplatform.openai.com%2Faccount%2Fapi-keys&project-name=lobehub&repository-name=lobehub
+[deploy-link]: https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Flobehub%2Flobehub&env=APP_URL,DATABASE_URL,KEY_VAULTS_SECRET,AUTH_SECRET,JWKS_KEY&envDescription=Database%2C%20encryption%20and%20sign-in%20variables%20LobeHub%20needs%20on%20Vercel.%20Add%20S3%20storage%20variables%20for%20file%20uploads.&envLink=https%3A%2F%2Flobehub.com%2Fdocs%2Fself-hosting%2Fplatform%2Fvercel&project-name=lobehub&repository-name=lobehub
 [deploy-on-alibaba-cloud-button-image]: https://service-info-public.oss-cn-hangzhou.aliyuncs.com/computenest-en.svg
 [deploy-on-alibaba-cloud-link]: https://computenest.console.aliyun.com/service/instance/create/default?type=user&ServiceName=LobeHub%E7%A4%BE%E5%8C%BA%E7%89%88
 [deploy-on-repocloud-button-image]: https://d16t0pc4846x52.cloudfront.net/deploylobe.svg
@@ -552,12 +460,10 @@ This project is [LobeHub Community License](./LICENSE) licensed.
 [docker-size-shield]: https://img.shields.io/docker/image-size/lobehub/lobehub?color=369eff&labelColor=black&style=flat-square&sort=semver
 [docs]: https://lobehub.com/docs/usage/start
 [docs-dev-guide]: https://lobehub.com/docs/development/start
-[docs-docker]: https://lobehub.com/docs/self-hosting/server-database/docker-compose
-[docs-env-var]: https://lobehub.com/docs/self-hosting/environment-variables
-[docs-function-call]: https://lobehub.com/blog/openai-function-call
-[docs-plugin-dev]: https://lobehub.com/docs/usage/plugins/development
+[docs-docker]: https://lobehub.com/docs/self-hosting/platform/docker-compose
 [docs-self-hosting]: https://lobehub.com/docs/self-hosting/start
-[docs-upstream-sync]: https://lobehub.com/docs/self-hosting/advanced/upstream-sync
+[docs-vercel]: https://lobehub.com/docs/self-hosting/platform/vercel
+[eval-sys]: https://github.com/eval-sys
 [fossa-license-link]: https://app.fossa.com/projects/git%2Bgithub.com%2Flobehub%2Flobehub
 [fossa-license-shield]: https://app.fossa.com/api/projects/git%2Bgithub.com%2Flobehub%2Flobehub.svg?type=large
 [github-action-release-link]: https://github.com/lobehub/lobehub/actions/workflows/release.yml
@@ -579,30 +485,21 @@ This project is [LobeHub Community License](./LICENSE) licensed.
 [github-releasedate-shield]: https://img.shields.io/github/release-date/lobehub/lobehub?labelColor=black&style=flat-square
 [github-stars-link]: https://github.com/lobehub/lobehub/stargazers
 [github-stars-shield]: https://img.shields.io/github/stars/lobehub/lobehub?color=ffcb47&labelColor=black&style=flat-square
-[image-banner]: https://github.com/user-attachments/assets/5f78ae58-ed4f-4d38-8037-96109fbba58c
-[image-star]: https://github.com/user-attachments/assets/3216e25b-186f-4a54-9cb4-2f124aec0471
+[image-banner]: https://hub-apac-1.lobeobjects.space/blog/assets/8beb20539c0fdd1b8fbbc6a07f293a78.webp
+[image-star]: https://hub-apac-1.lobeobjects.space/blog/assets/893e882a8231960b5a729d691b8a40b3.webp
 [issues-link]: https://img.shields.io/github/issues/lobehub/lobehub.svg?style=flat
-[lobe-chat-plugins]: https://github.com/lobehub/lobe-chat-plugins
-[lobe-commit]: https://github.com/lobehub/lobe-commit/tree/master/packages/lobe-commit
-[lobe-i18n]: https://github.com/lobehub/lobe-commit/tree/master/packages/lobe-i18n
-[lobe-icons-github]: https://github.com/lobehub/lobe-icons
-[lobe-icons-link]: https://www.npmjs.com/package/@lobehub/icons
-[lobe-icons-shield]: https://img.shields.io/npm/v/@lobehub/icons?color=369eff&labelColor=black&logo=npm&logoColor=white&style=flat-square
-[lobe-lint-github]: https://github.com/lobehub/lobe-lint
-[lobe-lint-link]: https://www.npmjs.com/package/@lobehub/lint
-[lobe-lint-shield]: https://img.shields.io/npm/v/@lobehub/lint?color=369eff&labelColor=black&logo=npm&logoColor=white&style=flat-square
-[lobe-midjourney-webui]: https://github.com/lobehub/lobe-midjourney-webui
-[lobe-theme]: https://github.com/lobehub/sd-webui-lobe-theme
-[lobe-tts-github]: https://github.com/lobehub/lobe-tts
-[lobe-tts-link]: https://www.npmjs.com/package/@lobehub/tts
-[lobe-tts-shield]: https://img.shields.io/npm/v/@lobehub/tts?color=369eff&labelColor=black&logo=npm&logoColor=white&style=flat-square
-[lobe-ui-github]: https://github.com/lobehub/lobe-ui
-[lobe-ui-link]: https://www.npmjs.com/package/@lobehub/ui
-[lobe-ui-shield]: https://img.shields.io/npm/v/@lobehub/ui?color=369eff&labelColor=black&logo=npm&logoColor=white&style=flat-square
+[market-agents]: https://lobehub.com/agent
+[market-icons]: https://lobehub.com/icons
+[market-mcp]: https://lobehub.com/mcp
+[market-skills]: https://lobehub.com/skills
+[mcpmark]: https://mcpmark.ai
+[mcpmark-paper]: https://huggingface.co/papers/2509.24002
 [official-site]: https://lobehub.com
 [pr-welcome-link]: https://github.com/lobehub/lobehub/pulls
 [pr-welcome-shield]: https://img.shields.io/badge/🤯_pr_welcome-%E2%86%92-ffcb47?labelColor=black&style=for-the-badge
 [profile-link]: https://github.com/lobehub
+[publish-mcp-link]: https://lobehub.com/mcp
+[publish-mcp-shield]: https://img.shields.io/badge/🔌/🏪_publish_mcp-%E2%86%92-95f3d9?labelColor=black&style=for-the-badge
 [share-linkedin-link]: https://linkedin.com/feed
 [share-linkedin-shield]: https://img.shields.io/badge/-share%20on%20linkedin-black?labelColor=black&logo=linkedin&logoColor=white&style=flat-square
 [share-mastodon-link]: https://mastodon.social/share?text=Check%20this%20GitHub%20repository%20out%20%F0%9F%A4%AF%20LobeHub%20-%20An%20open-source,%20extensible%20%28Function%20Calling%29,%20high-performance%20chatbot%20framework.%20It%20supports%20one-click%20free%20deployment%20of%20your%20private%20ChatGPT%2FLLM%20web%20application.%20https://github.com/lobehub/lobehub%20#chatbot%20#chatGPT%20#openAI
@@ -619,7 +516,5 @@ This project is [LobeHub Community License](./LICENSE) licensed.
 [share-x-shield]: https://img.shields.io/badge/-share%20on%20x-black?labelColor=black&logo=x&logoColor=white&style=flat-square
 [submit-agents-link]: https://github.com/lobehub/lobe-chat-agents
 [submit-agents-shield]: https://img.shields.io/badge/🤖/🏪_submit_agent-%E2%86%92-c4f042?labelColor=black&style=for-the-badge
-[submit-plugin-link]: https://github.com/lobehub/lobe-chat-plugins
-[submit-plugin-shield]: https://img.shields.io/badge/🧩/🏪_submit_plugin-%E2%86%92-95f3d9?labelColor=black&style=for-the-badge
 [vercel-link]: https://app.lobehub.com
 [vercel-shield]: https://img.shields.io/badge/vercel-online-55b467?labelColor=black&logo=vercel&style=flat-square

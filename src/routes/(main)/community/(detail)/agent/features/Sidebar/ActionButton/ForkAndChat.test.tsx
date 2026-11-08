@@ -30,7 +30,6 @@ vi.mock('@lobehub/ui', async (importOriginal) => ({
   Button: ({ children, onClick }: { children: ReactNode; onClick?: () => void }) => (
     <button onClick={onClick}>{children}</button>
   ),
-  createStaticStyles: () => ({}),
   Flexbox: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   Select: () => null,
   toast: mocks.toast,

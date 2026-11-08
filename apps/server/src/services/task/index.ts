@@ -16,6 +16,7 @@ import { AiAgentService } from '../aiAgent';
 import { displaySubtaskPlan, type SubtaskGraphPlan, TaskGraphService } from '../taskGraph';
 import { type ReviewResult, TaskReviewService } from '../taskReview';
 import { TaskRunnerService } from '../taskRunner';
+import { trashTasksInTransaction } from '../trash';
 import { writeKeepingArchivedIdle } from './archiveGuard';
 import { armScheduleOnColumnWrite } from './armScheduleOnColumnWrite';
 import { armScheduleOnCreate } from './armScheduleOnCreate';
@@ -37,6 +38,26 @@ const SUBTASK_KICKOFF_CONCURRENCY = 5;
 
 /** How long after a run starts a task may have no recorded operation yet. */
 const TASK_RUN_STARTING_GRACE_MS = 2 * 60 * 1000;
+
+/**
+ * The runner marks a task `running` before it dispatches the agent and records
+ * the topic / operation only after dispatch returns. Inside that window there
+ * is nothing to interrupt yet, so a write that stops the task would orphan the
+ * run about to start. Past the grace window a missing operation means the
+ * start died.
+ */
+export const isTaskRunStarting = (
+  task: { startedAt?: Date | string | null; status: string },
+  runningTopics: { operationId?: string | null }[],
+  now = Date.now(),
+): boolean => {
+  if (task.status !== 'running') return false;
+  const startedAt = task.startedAt ? new Date(task.startedAt).getTime() : 0;
+  return (
+    now - startedAt < TASK_RUN_STARTING_GRACE_MS &&
+    (runningTopics.length === 0 || runningTopics.some((topic) => !topic.operationId))
+  );
+};
 
 export interface CreateTaskInput {
   assigneeAgentId?: string;
@@ -339,12 +360,7 @@ export class TaskService {
     // that window finds nothing to interrupt and would orphan the run it is
     // about to start. Past the grace window a missing operation means the
     // start died, and deletion goes ahead.
-    const startedAt = task.startedAt ? new Date(task.startedAt).getTime() : 0;
-    const isStarting =
-      task.status === 'running' &&
-      Date.now() - startedAt < TASK_RUN_STARTING_GRACE_MS &&
-      (runningTopics.length === 0 || runningTopics.some((topic) => !topic.operationId));
-    if (isStarting) {
+    if (isTaskRunStarting(task, runningTopics)) {
       throw new TRPCError({
         code: 'CONFLICT',
         message: 'This task is still starting its run. Try deleting it again in a moment.',
@@ -369,14 +385,12 @@ export class TaskService {
     // stops its own execution. Compare-and-delete on the status as well, so a
     // run that moved the task on in the meantime is never deleted under.
     //
-    // The tool contract ("dependencies/topics/comments cascade-delete") is
-    // honored here for topics themselves: `task_topics` rows go via FK
-    // cascade, but the underlying `topics` rows have no FK back to `tasks`
-    // and would otherwise survive as orphans that keep showing up in the
-    // sidebar. Collect their ids before the task row goes (the cascade wipes
-    // the links with it), then delete the topic rows in the same transaction.
-    // The kept operation's own topic is excluded — it must survive with its
-    // run (see the snapshot below).
+    // The task goes to the recycle bin, and its linked topics with it: the
+    // `topics` rows have no FK back to `tasks` and would otherwise keep
+    // showing up in the sidebar. Collect their ids under the lock and trash
+    // them in the same transaction (they come back with a restore and are
+    // hard-deleted at purge). The kept operation's own topic is excluded — it
+    // must survive with its run (see the snapshot below).
     const handled = new Set(runningTopics.map((topic) => topic.operationId));
     const outcome = await this.db.transaction(async (tx) => {
       const taskModel = new TaskModel(tx, this.userId, this.workspaceId);
@@ -401,16 +415,15 @@ export class TaskService {
         .map((topic) => topic.topicId)
         .filter((topicId): topicId is string => !!topicId);
 
-      if (!(await taskModel.deleteIfStatus(task.id, task.status))) return 'conflict' as const;
-
-      if (topicIds.length > 0) {
-        // trashScope variant: a linked topic already sitting in the recycle
-        // bin must go too, or restoring it later resurrects the sidebar
-        // orphan this cascade exists to eliminate.
-        await new TopicModel(tx, this.userId, this.workspaceId).batchDeleteIncludingTrashed(
-          topicIds,
-        );
-      }
+      // Into the recycle bin, with its linked topics as children (restorable
+      // for the retention window, hard-deleted at purge). The status CAS is
+      // part of the stamp: a task a run moved on is not trashed under it.
+      const trashed = await trashTasksInTransaction(
+        tx,
+        { userId: this.userId, workspaceId: this.workspaceId },
+        [{ status: task.status, taskId: task.id, topicIds }],
+      );
+      if (trashed.length === 0) return 'conflict' as const;
       return 'deleted' as const;
     });
     if (outcome === 'conflict') {
@@ -597,6 +610,18 @@ export class TaskService {
    */
   async assertAssigneeUserAssignable(assigneeUserId?: string | null): Promise<void> {
     await this.assertAssigneeUserAssignableWithDatabase(this.db, assigneeUserId);
+  }
+
+  /**
+   * {@link assertAssigneeUserAssignable} inside the caller's transaction,
+   * locking the member row until it commits — for bulk writes that assign
+   * many tasks in one transaction.
+   */
+  async assertAssigneeUserAssignableLocked(
+    tx: LobeChatDatabase,
+    assigneeUserId: string,
+  ): Promise<void> {
+    await this.assertAssigneeUserAssignableWithDatabase(tx, assigneeUserId, true);
   }
 
   private async assertAssigneeUserAssignableWithDatabase(

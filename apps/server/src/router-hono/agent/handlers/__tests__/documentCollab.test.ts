@@ -91,4 +91,33 @@ describe('documentProjection', () => {
 
     expect((await project({ documentId: 'doc_1', update: '' })).status).toBe(409);
   });
+
+  it('answers 422 with the limit when the room grew the page past it', async () => {
+    const { TRPCError } = await import('@trpc/server');
+    persistPageState.mockRejectedValue(
+      new TRPCError({
+        cause: {
+          data: {
+            actual: 501_502,
+            code: 'DocumentCharLimitExceeded',
+            limit: 500_000,
+            plan: 'plus',
+          },
+        },
+        code: 'BAD_REQUEST',
+        message: 'Document is too long',
+      }),
+    );
+
+    const res = await project({ documentId: 'doc_1', update: '' });
+
+    expect(res.status).toBe(422);
+    expect(await res.json()).toEqual({
+      actual: 501_502,
+      code: 'DocumentCharLimitExceeded',
+      error: 'Document is too long',
+      limit: 500_000,
+      plan: 'plus',
+    });
+  });
 });

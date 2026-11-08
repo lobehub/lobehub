@@ -8,8 +8,10 @@ import {
   resolveConnectorCatalogItem,
 } from '@lobechat/const';
 import type { BuiltinSkillManifest, LobeBuiltinTool } from '@lobechat/types';
-import { Center, createStaticStyles, cx, Empty } from '@lobehub/ui';
+import { Center, Empty } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
 import { ChevronDownIcon, ChevronRightIcon } from 'lucide-react';
 import type React from 'react';
@@ -41,54 +43,31 @@ import McpSkillItem from './McpSkillItem';
 import type { ToolDetailType } from './SkillDetail';
 import { useSkillListVariant } from './SkillListRow';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  `,
-  description: css`
-    margin-block-end: 8px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  empty: css`
-    padding: 24px;
-    color: ${cssVar.colorTextTertiary};
-    text-align: center;
-  `,
-  sectionHeader: css`
-    cursor: pointer;
-    user-select: none;
-
-    display: flex;
-    gap: 4px;
-    align-items: center;
-
-    padding-block: 12px 4px;
-    padding-inline: 4px;
-
-    font-size: 12px;
-    font-weight: 500;
-    color: ${cssVar.colorTextSecondary};
-
-    &:hover {
-      color: ${cssVar.colorText};
-    }
-  `,
-  sectionHeaderPage: css`
-    gap: 8px;
-
-    padding-block: 24px 8px;
-    padding-inline: 12px;
-
-    font-size: 13px;
-    font-weight: 600;
-  `,
-  sectionCount: css`
-    font-weight: 400;
-    color: ${cssVar.colorTextDescription};
-  `,
-}));
+const styles = stylex.create({
+  container: { display: 'flex', flexDirection: 'column', gap: '2px' },
+  sectionHeader: {
+    cursor: 'pointer',
+    userSelect: 'none',
+    display: 'flex',
+    gap: '4px',
+    alignItems: 'center',
+    paddingBlockStart: '12px',
+    paddingBlockEnd: '4px',
+    paddingInline: '4px',
+    fontSize: '12px',
+    fontWeight: 500,
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
+  },
+  sectionHeaderPage: {
+    gap: '8px',
+    paddingBlockStart: '24px',
+    paddingBlockEnd: '8px',
+    paddingInline: '12px',
+    fontSize: '13px',
+    fontWeight: 600,
+  },
+  sectionCount: { fontWeight: 400, color: cssVar.colorTextDescription },
+});
 
 export type SkillViewMode = 'connector' | 'skill';
 
@@ -337,7 +316,7 @@ const SkillList = memo<SkillListProps>(
     // empty (error gated ahead of empty).
     if (skillsError && !hasAnySkills) {
       return (
-        <Center className={styles.container} paddingBlock={48}>
+        <Center className={stylex.props(styles.container).className} paddingBlock={48}>
           <AsyncError error={skillsError} variant={'block'} onRetry={reloadSkills} />
         </Center>
       );
@@ -345,7 +324,7 @@ const SkillList = memo<SkillListProps>(
 
     if (!hasAnySkills) {
       return (
-        <Center className={styles.container} paddingBlock={48}>
+        <Center className={stylex.props(styles.container).className} paddingBlock={48}>
           <Empty description={t('tab.skillDesc')} icon={SkillsIcon} title={t('tab.skillEmpty')} />
         </Center>
       );
@@ -443,16 +422,16 @@ const SkillList = memo<SkillListProps>(
       if (isPage)
         return (
           <>
-            <div className={cx(styles.sectionHeader, styles.sectionHeaderPage)}>
+            <div {...stylex.props(styles.sectionHeader, styles.sectionHeaderPage)}>
               {label}
-              {count !== undefined && <span className={styles.sectionCount}>{count}</span>}
+              {count !== undefined && <span {...stylex.props(styles.sectionCount)}>{count}</span>}
             </div>
             {children}
           </>
         );
       return (
         <>
-          <div className={styles.sectionHeader} onClick={() => toggleSection(key)}>
+          <div {...stylex.props(styles.sectionHeader)} onClick={() => toggleSection(key)}>
             {isCollapsed ? <ChevronRightIcon size={10} /> : <ChevronDownIcon size={10} />}
             {label}
           </div>
@@ -480,7 +459,7 @@ const SkillList = memo<SkillListProps>(
     const hasAgentConnectors = isConnectorView && agentBoundConnectors.length > 0;
 
     return (
-      <div className={styles.container}>
+      <div {...stylex.props(styles.container)}>
         {hasBuiltinTools &&
           renderSection(
             'builtinTools',

@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { applyLookupPricingParamDefaults, validateNoUrlsInConfig } from './utils';
+import {
+  applyLookupPricingParamDefaults,
+  findUnsupportedImageParams,
+  validateNoUrlsInConfig,
+} from './utils';
 
 const getModelPricingMock = vi.hoisted(() => vi.fn());
 const getModelParametersMock = vi.hoisted(() => vi.fn());
@@ -96,7 +100,11 @@ describe('applyLookupPricingParamDefaults', () => {
     getModelPricingMock.mockRejectedValue(new Error('model config unavailable'));
 
     const params = { prompt: 'a red apple' };
-    const result = await applyLookupPricingParamDefaults(params, 'grok-imagine-image-2.0', 'lobehub');
+    const result = await applyLookupPricingParamDefaults(
+      params,
+      'grok-imagine-image-2.0',
+      'lobehub',
+    );
 
     expect(result).toBe(params);
   });
@@ -106,7 +114,11 @@ describe('applyLookupPricingParamDefaults', () => {
     getModelParametersMock.mockResolvedValue(undefined);
 
     const params = { prompt: 'a red apple' };
-    const result = await applyLookupPricingParamDefaults(params, 'grok-imagine-image-2.0', 'lobehub');
+    const result = await applyLookupPricingParamDefaults(
+      params,
+      'grok-imagine-image-2.0',
+      'lobehub',
+    );
 
     expect(result).toBe(params);
   });
@@ -220,8 +232,7 @@ describe('validateNoUrlsInConfig utility', () => {
 
     it('should throw for presigned URL with query parameters', () => {
       const config = {
-        imageUrl:
-          'https://s3.amazonaws.com/bucket/file.jpg?X-Amz-Signature=abc&X-Amz-Expires=3600',
+        imageUrl: 'https://s3.amazonaws.com/bucket/file.jpg?X-Amz-Signature=abc&X-Amz-Expires=3600',
       };
 
       expect(() => validateNoUrlsInConfig(config)).toThrow(
@@ -255,5 +266,41 @@ describe('validateNoUrlsInConfig utility', () => {
 
       expect(() => validateNoUrlsInConfig(config)).not.toThrow();
     });
+  });
+});
+
+describe('findUnsupportedImageParams', () => {
+  const gptImageSchema = {
+    imageUrls: { default: [] },
+    prompt: { default: '' },
+    quality: { default: 'auto', enum: ['auto', 'high'] },
+    size: { default: 'auto', enum: ['auto', '1024x1024'] },
+  };
+
+  it('reports keys the model does not declare', () => {
+    expect(
+      findUnsupportedImageParams(
+        { height: 2048, prompt: 'a cat', size: '1024x1024', width: 2048 },
+        gptImageSchema,
+      ),
+    ).toEqual(['height', 'width']);
+  });
+
+  it('accepts declared keys and prompt', () => {
+    expect(
+      findUnsupportedImageParams(
+        { prompt: 'a cat', quality: 'high', size: 'auto' },
+        gptImageSchema,
+      ),
+    ).toEqual([]);
+  });
+
+  it('ignores keys without a value', () => {
+    expect(
+      findUnsupportedImageParams(
+        { imageUrl: null, prompt: 'a cat', seed: undefined },
+        gptImageSchema,
+      ),
+    ).toEqual([]);
   });
 });

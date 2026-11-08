@@ -53,6 +53,7 @@ export const getHistoryPreviewText = (markdown: string): string =>
   markdown
     .replaceAll(/<mention\s[^>]*name="([^"]*)"[^>]*>/g, '@$1')
     .replaceAll(/<refer_topic\s[^>]*name="([^"]*)"[^>]*>/g, '#$1')
+    .replaceAll(/<refer_document\s[^>]*name="([^"]*)"[^>]*>/g, '#$1')
     .replaceAll(/<localFile\s[^>]*name="([^"]*)"[^>]*>/g, '$1')
     .replaceAll(/<[^>]+>/g, ' ')
     .replaceAll(/\s+/g, ' ')

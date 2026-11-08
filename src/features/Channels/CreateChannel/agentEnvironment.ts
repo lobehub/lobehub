@@ -1,6 +1,10 @@
 import { isHeterogeneousAgentModelId } from '@lobechat/const';
 import type { DeviceListItem, LobeAgentAgencyConfig } from '@lobechat/types';
-import { getWorkingDirEffectivePath, isChannelRuntime } from '@lobechat/types';
+import {
+  defaultChannelAgentDevice,
+  defaultChannelAgentDirectory,
+  isChannelRuntime,
+} from '@lobechat/types';
 
 import type { ChannelAgentSelection } from '@/services/channel';
 
@@ -32,18 +36,30 @@ export interface ChannelAgentEnvironment {
   workspaceScoped?: boolean;
 }
 
+/** Device issues of an inherited environment are fixed in the Agent's settings, not here. */
+const INHERITED_ISSUES = ['deviceOffline', 'deviceRequired', 'deviceUnavailable'] as const;
+
+const isInheritedIssue = (issue: ChannelAgentIssue): issue is (typeof INHERITED_ISSUES)[number] =>
+  (INHERITED_ISSUES as readonly ChannelAgentIssue[]).includes(issue);
+
+/** The `channel` locale key that explains an issue. */
+export const channelAgentIssueKey = (issue: ChannelAgentIssue, inherited?: boolean) =>
+  inherited && isInheritedIssue(issue)
+    ? (`environment.inherited.${issue}` as const)
+    : (`environment.${issue}` as const);
+
 const getRuntime = ({ agencyConfig, model }: ChannelAgentEnvironment) =>
   agencyConfig?.heterogeneousProvider?.type ??
   (isHeterogeneousAgentModelId(model) ? model! : 'native');
 
 const getDeviceDirectory = (deviceId: string | undefined, environment: ChannelAgentEnvironment) => {
   if (!deviceId) return;
-  const configured = environment.agencyConfig?.workingDirByDevice?.[deviceId];
-  return (
-    getWorkingDirEffectivePath(configured) ||
-    (environment.devicesConfirmed
-      ? environment.devices?.find((device) => device.deviceId === deviceId)?.defaultCwd || undefined
-      : undefined)
+  return defaultChannelAgentDirectory(
+    environment.agencyConfig,
+    deviceId,
+    environment.devicesConfirmed
+      ? environment.devices?.find((device) => device.deviceId === deviceId)?.defaultCwd
+      : undefined,
   );
 };
 
@@ -53,13 +69,12 @@ export const createChannelAgentSelection = (
   environment: ChannelAgentEnvironment,
 ): ChannelAgentSelection => {
   const { agencyConfig, currentDeviceId, isDesktop, workspaceScoped } = environment;
-  const target = agencyConfig?.executionTarget;
-  if (target === 'none' || target === 'sandbox' || target === 'auto') return { agentId };
-  const localDefault =
-    isDesktop &&
-    !workspaceScoped &&
-    (target === 'local' || (target === undefined && getRuntime(environment) !== 'native'));
-  const deviceId = agencyConfig?.boundDeviceId || (localDefault ? currentDeviceId : undefined);
+  const deviceId = defaultChannelAgentDevice({
+    agencyConfig,
+    localDeviceId: isDesktop ? currentDeviceId : undefined,
+    runtime: getRuntime(environment),
+    workspaceScoped,
+  });
   if (!deviceId) return { agentId };
   return { agentId, deviceId, workingDirectory: getDeviceDirectory(deviceId, environment) };
 };
@@ -122,6 +137,15 @@ export const reconcileChannelAgentDraft = (
 
 export const canSubmitChannelAgents = (agents: ChannelAgentDraft[]) =>
   agents.length > 0 && agents.every((agent) => agent.initialized && !agent.issue);
+
+/**
+ * Every chosen Agent must be ready to run. A new Channel may start with only its creator, while
+ * an invitation has to add someone.
+ */
+export const canSubmitChannelMembers = (
+  agents: ChannelAgentDraft[],
+  { creating, people }: { creating: boolean; people: number },
+) => (!agents.length || canSubmitChannelAgents(agents)) && (creating || agents.length + people > 0);
 
 /** Only send the channel-local choices, never form state or Agent configuration. */
 export const toChannelAgentSelection = (draft: ChannelAgentDraft): ChannelAgentSelection => {

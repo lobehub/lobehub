@@ -35,7 +35,9 @@ import { buildOperationInitRequest, runOperationInit } from './operationInit';
 import { createHistoryMessagesLoader } from './operationPrep';
 import { resolveRunAgentConfig } from './resolveRunAgentConfig';
 import { loadResumeParentMessage } from './resumeParent';
+import { bindRunFee, claimRunFee, type RunFeeClaim, shouldHoldRunFee } from './runFee';
 import { resolveRunSettings } from './runSettings';
+import { bindRunSlot, claimRunSlot, resolveRunSlotPolicy, type RunSlotClaim } from './runSlot';
 import { traceSendStage } from './sendTracing';
 import { startOperation } from './startOperation';
 import { bindTopicWorkingDirectory } from './topicWorkingDirectory';
@@ -87,6 +89,8 @@ export const execAgentTurn = async (
   deps: ExecAgentTurnDeps,
   params: InternalExecAgentParams,
   approvalClaim: ApprovalClaimState,
+  runSlot: RunSlotClaim = {},
+  runFee: RunFeeClaim = {},
 ): Promise<ExecAgentResult> => {
   const {
     additionalPluginIds,
@@ -283,6 +287,16 @@ export const execAgentTurn = async (
   // Applied to the resolved config before anything downstream (knowledge
   // flags, tools engine, context snapshot) reads it.
   if (shareGate) applyShareGateToAgentConfig(agentConfig);
+
+  // Before the turn writes any row: a refused send leaves nothing behind.
+  await claimRunSlot(runSlot, {
+    policy: resolveRunSlotPolicy(params, { agentConfig, workspaceId: deps.workspaceId }),
+    userId: deps.userId,
+  });
+  await claimRunFee(runFee, {
+    hold: shouldHoldRunFee(params, { agentConfig, workspaceId: deps.workspaceId }),
+    userId: deps.userId,
+  });
 
   let resumeParentMessage: Awaited<ReturnType<MessageModel['findById']>>;
 
@@ -590,6 +604,8 @@ export const execAgentTurn = async (
     params.reservedOperationId ??
     continuationOperationId ??
     `op_${Date.now()}_${resolvedAgentId}_${topicId}_${nanoid(8)}`;
+  await bindRunSlot(runSlot, deps.userId, operationId);
+  await bindRunFee(runFee, deps.userId, operationId);
 
   // Stages 5–18 — the run's init: the tool surface, the message/context
   // assembly, and the human decision a resumed approval turns into the first
@@ -719,7 +735,7 @@ export const execAgentTurn = async (
 
   // 19. Create the operation via AgentRuntimeService, persist the reconnect
   // marker, and mint the gateway token (see `pipeline/startOperation`).
-  return traceSendStage('start_operation', () =>
+  const started = await traceSendStage('start_operation', () =>
     startOperation(
       {
         agentRuntimeService: deps.agentRuntimeService,
@@ -739,6 +755,13 @@ export const execAgentTurn = async (
         approvalSourceToolMessageIds,
         autoStart,
         onOperationCreated: params.onOperationCreated,
+        // From here the run's completion releases the slot and settles the
+        // fee; a run that never started (failed, or created without
+        // auto-start) gives both back.
+        onScheduled: () => {
+          runSlot.handedOff = true;
+          runFee.handedOff = true;
+        },
         botContext,
         botPlatformContext,
         clientIp,
@@ -774,4 +797,5 @@ export const execAgentTurn = async (
       },
     ),
   );
+  return started;
 };

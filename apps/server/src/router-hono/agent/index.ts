@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 
+import { agentAccountDigestFlush } from './handlers/agentAccountDigestFlush';
 import { agentAccountWebhook, agentAccountWebhookBodyLimit } from './handlers/agentAccountWebhook';
 import { botCallback } from './handlers/botCallback';
 import { botReplay } from './handlers/botReplay';
@@ -127,6 +128,10 @@ app.post('/webhooks/:platform/:appId?', platformWebhook);
 // the handler, so the only middleware is a body cap that runs before anything
 // is buffered.
 app.post('/accounts/webhooks/:provider', agentAccountWebhookBodyLimit, agentAccountWebhook);
+
+// POST /api/agent/accounts/digest-flush — delayed run of the mail held for one
+// account's digest (QStash)
+app.post('/accounts/digest-flush', qstashAuth(), agentAccountDigestFlush);
 
 // GET /api/agent/messenger/:platform/install — start per-tenant OAuth install
 app.get('/messenger/:platform/install', messengerInstall);

@@ -1,6 +1,8 @@
 import type { SidebarAgentItem } from '@lobechat/types';
 import { agentDisplayName, agentSecondaryDisplayName } from '@lobechat/types';
-import { ActionIcon, createStaticStyles, cssVar, Spin } from '@lobehub/ui';
+import { ActionIcon, Spin } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { PinIcon } from 'lucide-react';
 import { type CSSProperties, type DragEvent } from 'react';
 import { memo, useCallback, useMemo } from 'react';
@@ -20,56 +22,49 @@ import Actions from '../Item/Actions';
 import { usePreservedAgentUrl } from '../usePreservedAgentUrl';
 import { useAgentDropdownMenu } from './useDropdownMenu';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  badge: css`
-    pointer-events: none;
-
-    position: absolute;
-    inset-block-end: -3px;
-    inset-inline-end: -3px;
-
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-
-    min-width: 14px;
-    height: 14px;
-    padding-inline: 3px;
-    border: 1.5px solid ${cssVar.colorBgContainer};
-    border-radius: 999px;
-
-    font-size: 9px;
-    font-weight: 600;
-    line-height: 1;
-    color: #fff;
-
-    background: ${cssVar.colorError};
-  `,
-  runningBadge: css`
-    pointer-events: none;
-
-    position: absolute;
-    inset-block-end: -3px;
-    inset-inline-end: -3px;
-
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-
-    width: 14px;
-    height: 14px;
-    border: 1.5px solid ${cssVar.colorBgContainer};
-    border-radius: 999px;
-
-    color: ${cssVar.colorWarning};
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  wrapper: css`
-    position: relative;
-    display: inline-flex;
-  `,
-}));
+const styles = stylex.create({
+  badge: {
+    pointerEvents: 'none',
+    position: 'absolute',
+    insetBlockEnd: '-3px',
+    insetInlineEnd: '-3px',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: '14px',
+    height: '14px',
+    paddingInline: '3px',
+    borderWidth: '1.5px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBgContainer,
+    borderRadius: '999px',
+    fontSize: '9px',
+    fontWeight: 600,
+    lineHeight: 1,
+    color: '#fff',
+    backgroundColor: cssVar.colorError,
+    backgroundImage: 'none',
+  },
+  runningBadge: {
+    pointerEvents: 'none',
+    position: 'absolute',
+    insetBlockEnd: '-3px',
+    insetInlineEnd: '-3px',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '14px',
+    height: '14px',
+    borderWidth: '1.5px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBgContainer,
+    borderRadius: '999px',
+    color: cssVar.colorWarning,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  wrapper: { position: 'relative', display: 'inline-flex' },
+});
 
 interface AgentItemProps {
   className?: string;
@@ -159,9 +154,9 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className, onNavigate, se
 
     if (isLoading) {
       return (
-        <span className={styles.wrapper}>
+        <span {...stylex.props(styles.wrapper)}>
           {avatarNode}
-          <span className={styles.runningBadge}>
+          <span {...stylex.props(styles.runningBadge)}>
             <Spin size={9} style={{ color: 'inherit' }} />
           </span>
         </span>
@@ -170,9 +165,9 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className, onNavigate, se
 
     if (unreadCount > 0) {
       return (
-        <span className={styles.wrapper}>
+        <span {...stylex.props(styles.wrapper)}>
           {avatarNode}
-          <span className={styles.badge}>{unreadCount > 99 ? '99+' : unreadCount}</span>
+          <span {...stylex.props(styles.badge)}>{unreadCount > 99 ? '99+' : unreadCount}</span>
         </span>
       );
     }

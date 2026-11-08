@@ -8,7 +8,7 @@ import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
-import { SettingsSectionSkeleton } from '@/components/Skeleton';
+import AdvancedSkeleton from '@/components/Skeleton/Settings/tabs/Advanced';
 import { FORM_STYLE } from '@/const/layoutTokens';
 import SettingHeader from '@/features/Settings/features/SettingHeader';
 import { SettingsSearchAnchor } from '@/features/SettingsSearch/anchor';
@@ -20,7 +20,7 @@ import { type UserGeneralConfig } from '@/types/user/settings';
 
 type UpdateChannelValue = 'canary' | 'stable';
 
-const Page = memo(() => {
+const Page = memo<{ showSettingHeader?: boolean }>(({ showSettingHeader = true }) => {
   const { t } = useTranslation('setting');
 
   const general = useUserStore((s) => settingsSelectors.currentSettings(s).general, isEqual);
@@ -83,17 +83,11 @@ const Page = memo(() => {
           onRetry={() => refreshUserState()}
         />
       );
-    // Mirror the loaded page: header plus the tools group (dev mode + optional
-    // gateway mode) and, on desktop, the single-row update-channel group.
+    // The registered tab skeleton, so the chunk and data waits show one shape.
     return (
       <>
-        <SettingHeader title={t('tab.advanced')} />
-        <SettingsSectionSkeleton
-          groups={[
-            { rows: enableGatewayMode ? 2 : 1, titleWidth: 160 },
-            ...(isDesktop ? [{ rows: 1, titleWidth: 112 }] : []),
-          ]}
-        />
+        {showSettingHeader && <SettingHeader title={t('tab.advanced')} />}
+        <AdvancedSkeleton.Body />
       </>
     );
   }
@@ -161,7 +155,7 @@ const Page = memo(() => {
 
   return (
     <>
-      <SettingHeader title={t('tab.advanced')} />
+      {showSettingHeader && <SettingHeader title={t('tab.advanced')} />}
       <Form
         collapsible={false}
         form={form}

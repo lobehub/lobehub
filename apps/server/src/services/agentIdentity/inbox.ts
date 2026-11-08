@@ -95,6 +95,10 @@ export class AgentInboxService {
   findTextFromOtherSender = (params: Parameters<AgentMailModel['findTextFromOtherSender']>[0]) =>
     this.mail.findTextFromOtherSender(params);
 
+  findSecretRepeatedFromOtherSender = (
+    params: Parameters<AgentMailModel['findSecretRepeatedFromOtherSender']>[0],
+  ) => this.mail.findSecretRepeatedFromOtherSender(params);
+
   listCodesFromOtherSenders = (
     params: Parameters<AgentMailModel['listCodesFromOtherSenders']>[0],
   ) => this.mail.listCodesFromOtherSenders(params);
@@ -119,7 +123,11 @@ export class AgentInboxService {
         agentId: account.agentId,
         attachments: detail?.attachments,
         cc: detail?.cc,
-        codes: extractVerificationCodes(message.text),
+        // A sender can put the code in the subject alone; the agent reads the
+        // subject too, so it is as much a secret as the body.
+        codes: extractVerificationCodes(
+          message.subject ? `${message.subject}\n${message.text}` : message.text,
+        ),
         deliveredAt: message.receivedAt,
         direction: 'inbound',
         fromAddress: message.from,

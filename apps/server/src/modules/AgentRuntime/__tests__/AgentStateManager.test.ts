@@ -330,7 +330,10 @@ describe('AgentStateManager', () => {
       expect(redisMock.setex.mock.calls.some((c) => c[0] === `agent_runtime_toolset:${op}`)).toBe(
         false,
       );
-      expect(redisMock.expire).not.toHaveBeenCalledWith(`agent_runtime_toolset:${op}`, expect.anything());
+      expect(redisMock.expire).not.toHaveBeenCalledWith(
+        `agent_runtime_toolset:${op}`,
+        expect.anything(),
+      );
       const blob = redisMock.setex.mock.calls.find((c) => c[0] === `agent_runtime_state:${op}`);
       expect(JSON.parse(blob![2] as string).operationToolSet).toEqual(toolSet);
     });

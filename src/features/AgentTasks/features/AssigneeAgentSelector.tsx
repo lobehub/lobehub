@@ -1,4 +1,3 @@
-import { DEFAULT_INBOX_AVATAR } from '@lobechat/const';
 import { agentDisplayName } from '@lobechat/types';
 import {
   confirmModal,
@@ -10,7 +9,6 @@ import {
   Text,
   Tooltip,
 } from '@lobehub/ui';
-import isEqual from 'fast-deep-equal';
 import { ChevronDown, ChevronRight, UserRoundX } from 'lucide-react';
 import type { CSSProperties, KeyboardEvent, ReactNode } from 'react';
 import { memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -22,26 +20,19 @@ import NavItem from '@/features/NavPanel/components/NavItem';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import AgentItem from '@/features/PageEditor/Copilot/AgentSelector/AgentItem';
 import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
-import { useFetchAgentList } from '@/hooks/useFetchAgentList';
 import { usePermission } from '@/hooks/usePermission';
-import { useAgentStore } from '@/store/agent';
-import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 import { useGlobalStore } from '@/store/global';
-import { useHomeStore } from '@/store/home';
-import { homeAgentListSelectors } from '@/store/home/selectors';
 import { useTaskStore } from '@/store/task';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
 import {
-  type AssigneeAgentSection,
-  buildAssigneeAgentSections,
   filterAssigneeSections,
   matchesAssigneeSearch,
   pickRecentAssignees,
-  pushRecentAssignee,
   shouldOfferPrivateAgents,
 } from './assigneeAgentSections';
+import { useAssigneeAgentScopes } from './useAssigneeAgentScopes';
 
 interface AssigneeAgentSelectorProps {
   /** Offer the "unassigned" option; off where an owner is required. */
@@ -79,12 +70,6 @@ type PickerRow =
       title: string;
     };
 
-interface PickerScope {
-  id: string;
-  sections: AssigneeAgentSection[];
-  title?: string;
-}
-
 const RECENT_SECTION_ID = 'recent';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -101,6 +86,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     background: transparent;
     outline: none;
+
+    /* The global focus ring would box the whole popover top; the divider takes its place. */
+    &:focus-visible {
+      border-block-end-color: ${cssVar.colorPrimary};
+    }
 
     &::placeholder {
       color: ${cssVar.colorTextPlaceholder};
@@ -189,30 +179,9 @@ const AssigneeAgentSelector = memo<AssigneeAgentSelectorProps>(
     const updateTask = useTaskStore((s) => s.updateTask);
     const updateTaskVisibility = useTaskStore((s) => s.updateTaskVisibility);
     const currentUserId = useUserStore(userProfileSelectors.userId);
-    const pinnedAgents = useHomeStore(homeAgentListSelectors.pinnedAgents, isEqual);
-    const agentGroups = useHomeStore(homeAgentListSelectors.agentGroups, isEqual);
-    const ungroupedAgents = useHomeStore(homeAgentListSelectors.ungroupedAgents, isEqual);
-    const privateAgentGroups = useHomeStore(homeAgentListSelectors.privateAgentGroups, isEqual);
-    const privatePinnedAgents = useHomeStore(homeAgentListSelectors.privatePinnedAgents, isEqual);
-    const privateUngroupedAgents = useHomeStore(
-      homeAgentListSelectors.privateUngroupedAgents,
-      isEqual,
-    );
-    const hasPrivateAgents = useHomeStore(homeAgentListSelectors.hasPrivateAgents);
-    const isAgentListInit = useHomeStore(homeAgentListSelectors.isAgentListInit);
-
-    const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
-    const inboxMeta = useAgentStore((s) =>
-      inboxAgentId ? agentSelectors.getAgentMetaById(inboxAgentId)(s) : undefined,
-    );
-
-    useFetchAgentList();
-
-    const workspaceId = useActiveWorkspaceId();
-    const recentKey = workspaceId ?? 'personal';
-    const recentIds = useGlobalStore((s) => s.status.recentAssigneeAgentIds?.[recentKey]);
     const collapsedGroups = useGlobalStore((s) => s.status.assigneeAgentSelectorCollapsedGroups);
     const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
+    const workspaceId = useActiveWorkspaceId();
 
     const {
       offer: offerPrivateAgents,
@@ -227,78 +196,15 @@ const AssigneeAgentSelector = memo<AssigneeAgentSelectorProps>(
       workspaceId,
     });
 
-    const scopes = useMemo<PickerScope[]>(() => {
-      const labels = {
-        pinned: t('navPanel.pinned', { ns: 'common' }),
-        ungrouped: t('defaultList', { ns: 'chat' }),
-      };
-      const result: PickerScope[] = [];
-
-      if (offerPrivateAgents)
-        result.push({
-          id: 'private',
-          sections: buildAssigneeAgentSections({
-            groups: privateAgentGroups,
-            labels,
-            pinned: privatePinnedAgents,
-            scope: 'private',
-            ungrouped: privateUngroupedAgents,
-          }),
-          title: takesOver
-            ? t('taskManager.agentSelector.privateGroupTakesOver', { ns: 'topic' })
-            : offerPrivateOnPublic
-              ? t('taskManager.agentSelector.privateGroupMakesPrivate', { ns: 'topic' })
-              : t('taskManager.agentSelector.privateGroup', { ns: 'topic' }),
-        });
-
-      const workspaceSections = buildAssigneeAgentSections({
-        groups: agentGroups,
-        labels,
-        pinned: pinnedAgents,
-        scope: 'workspace',
-        ungrouped: ungroupedAgents,
+    const { inboxAgent, isAgentListInit, privateAgentIds, recentIds, rememberAssignee, scopes } =
+      useAssigneeAgentScopes({
+        offerPrivate: offerPrivateAgents,
+        privateTitle: takesOver
+          ? t('taskManager.agentSelector.privateGroupTakesOver', { ns: 'topic' })
+          : offerPrivateOnPublic
+            ? t('taskManager.agentSelector.privateGroupMakesPrivate', { ns: 'topic' })
+            : t('taskManager.agentSelector.privateGroup', { ns: 'topic' }),
       });
-      result.push({
-        id: 'workspace',
-        sections: workspaceSections,
-        title: hasPrivateAgents
-          ? t('taskManager.agentSelector.workspaceGroup', { ns: 'topic' })
-          : undefined,
-      });
-
-      return result;
-    }, [
-      agentGroups,
-      hasPrivateAgents,
-      offerPrivateAgents,
-      offerPrivateOnPublic,
-      pinnedAgents,
-      privateAgentGroups,
-      privatePinnedAgents,
-      privateUngroupedAgents,
-      t,
-      takesOver,
-      ungroupedAgents,
-    ]);
-
-    // The sidebar keeps the inbox above every group, so it leads the list here
-    // too, ahead of Recent, where a header-less row would read as a recent pick.
-    const inboxAgent = useMemo<SidebarAgentItem | undefined>(() => {
-      if (!inboxAgentId) return;
-      const listed = scopes.some((scope) =>
-        scope.sections.some((section) => section.agents.some((agent) => agent.id === inboxAgentId)),
-      );
-      if (listed) return;
-      return {
-        avatar: inboxMeta?.avatar || DEFAULT_INBOX_AVATAR,
-        description: null,
-        id: inboxAgentId,
-        pinned: false,
-        title: agentDisplayName(inboxMeta, t('inbox.title', { ns: 'chat' })),
-        type: 'agent' as const,
-        updatedAt: new Date(),
-      };
-    }, [inboxAgentId, inboxMeta, scopes, t]);
 
     const query = search.trim().toLowerCase();
     const recentAgents = useMemo(
@@ -395,24 +301,9 @@ const AssigneeAgentSelector = memo<AssigneeAgentSelectorProps>(
       setActiveIndex(selectedIndex >= 0 ? selectedIndex : 0);
     }, [currentAgentId, flatOptions, query]);
 
-    const privateAgentIds = useMemo(
-      () =>
-        new Set(
-          scopes
-            .find((scope) => scope.id === 'private')
-            ?.sections.flatMap((section) => section.agents.map((agent) => agent.id)),
-        ),
-      [scopes],
-    );
-
     const assignAgent = useCallback(
       (agentId: string | null, agent?: SidebarAgentItem) => {
-        if (agentId) {
-          const current = useGlobalStore.getState().status.recentAssigneeAgentIds?.[recentKey];
-          updateSystemStatus({
-            recentAssigneeAgentIds: { [recentKey]: pushRecentAssignee(current, agentId) },
-          });
-        }
+        if (agentId) rememberAssignee(agentId);
         if (onChange) {
           onChange(agentId);
           return;
@@ -437,7 +328,7 @@ const AssigneeAgentSelector = memo<AssigneeAgentSelectorProps>(
           },
         );
       },
-      [onChange, recentKey, taskIdentifier, updateSystemStatus, updateTask],
+      [onChange, rememberAssignee, taskIdentifier, updateTask],
     );
 
     const handleAgentChange = useCallback(

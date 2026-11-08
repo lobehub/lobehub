@@ -98,6 +98,7 @@ export async function listHeterogeneousAgentModels(
     type:
       | 'codebuddy'
       | 'codex'
+      | 'copilot'
       | 'cursor'
       | 'devin'
       | 'droid'

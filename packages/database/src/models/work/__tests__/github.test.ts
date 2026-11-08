@@ -412,4 +412,48 @@ describe('WorkModel · github', () => {
     const workRows = await serverDB.select().from(works).where(eq(works.type, 'external'));
     expect(workRows).toHaveLength(2);
   });
+
+  it('keeps the PR branches captured at create across edits that do not name them', async () => {
+    const workModel = new WorkModel(serverDB, userId);
+    const gh = (command: string, toolCallId: string, rootOperationId: string) =>
+      workModel.handleSkillToolResult({
+        provider: 'github',
+        data: { command, exitCode: 0, output: 'https://github.com/lobehub/lobehub/pull/31\n' },
+        rootOperationId,
+        toolCallId,
+        toolName: 'runCommand',
+        topicId,
+      });
+
+    const created = await gh(
+      'gh pr create --repo lobehub/lobehub --head feat/branch-card --base canary --title "Branch card" --body-file /tmp/body.md',
+      'tool-call-pr-branch-create',
+      'op-pr-branch-create',
+    );
+    await gh(
+      'gh pr edit 31 --repo lobehub/lobehub --title "Branch card, retitled"',
+      'tool-call-pr-branch-retitle',
+      'op-pr-branch-retitle',
+    );
+    await gh(
+      'gh pr edit 31 --repo lobehub/lobehub --base main',
+      'tool-call-pr-branch-retarget',
+      'op-pr-branch-retarget',
+    );
+
+    const versions = await workModel.listVersions(created!.id);
+    expect(versions.map((item) => [item.version, item.metadata])).toEqual([
+      [3, { baseBranch: 'main', headBranch: 'feat/branch-card' }],
+      [2, { baseBranch: 'canary', headBranch: 'feat/branch-card' }],
+      [1, { baseBranch: 'canary', headBranch: 'feat/branch-card' }],
+    ]);
+
+    // Summary cards render the current version, so an older message's card
+    // shows the latest branches too.
+    const byOperation = await workModel.listSummariesByRootOperations({
+      rootOperationIds: ['op-pr-branch-retitle'],
+    });
+    const summary = expectExternalSummaryItem(byOperation['op-pr-branch-retitle']?.[0]);
+    expect(summary.event.metadata).toEqual({ baseBranch: 'main', headBranch: 'feat/branch-card' });
+  });
 });
