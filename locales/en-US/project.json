@@ -95,7 +95,7 @@
   "directories.boundTip": "This directory belongs to the project ({{path}}). Switch devices to use the project's directory on another device.",
   "directories.chooseAgent": "Choose Agent",
   "directories.conversations": "Topics",
-  "directories.coordinator": "Project coordinator",
+  "directories.coordinator": "Lead",
   "directories.createProject": "Create a project",
   "directories.currentFolder": "Current folder",
   "directories.detectRepository": "Detect GitHub repository",

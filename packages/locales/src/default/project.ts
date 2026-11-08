@@ -93,7 +93,7 @@ export default {
   'directories.environmentName': 'Environment name',
   'directories.editEnvironment': 'Configure environment',
 
-  'directories.coordinator': 'Project coordinator',
+  'directories.coordinator': 'Lead',
   'directories.environment': 'Environment',
   'directories.newEnvironment': 'Create environment',
 
