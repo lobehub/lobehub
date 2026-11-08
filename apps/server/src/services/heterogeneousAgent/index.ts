@@ -27,6 +27,7 @@ import { type IStreamEventManager } from '@/server/modules/AgentRuntime/types';
 import { CompletionLifecycle } from '@/server/services/agentRuntime/CompletionLifecycle';
 import type { SerializedHook } from '@/server/services/agentRuntime/hooks/types';
 import { createDefaultSnapshotStore } from '@/server/services/agentRuntime/snapshotStore';
+import { releaseHeteroSteers } from '@/server/services/aiAgent/steerQueue/hetero';
 import type { SteerQueueScope } from '@/server/services/redis/steerQueue';
 import { instantiateVerifyPlanOnStart } from '@/server/services/verify';
 
@@ -740,7 +741,13 @@ export class HeterogeneousAgentService {
     // Follow-ups the user queued behind this run start as the next turn here,
     // as they do when a native run ends. The completion above released the
     // topic, which the next turn has to claim. A failed run leaves its queue
-    // to the user.
+    // to the user. Messages typed into the session that it never picked up go
+    // back to the queue first, so they are among them.
+    if (steerScope) {
+      await releaseHeteroSteers(operationId).catch((err) => {
+        log('heteroFinish: returning undelivered steer messages failed: %O', err);
+      });
+    }
     if (result === 'success' && steerScope) await this.startQueuedFollowUp(operationId, steerScope);
   }
 

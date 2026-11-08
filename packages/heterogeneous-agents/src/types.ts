@@ -331,6 +331,8 @@ export interface UsageData {
  * Data shape for `step_complete` events. `phase` disambiguates the subtype:
  *   - `turn_metadata`: per-turn snapshot of model + provider + usage (once per LLM call)
  *   - `result_usage`: authoritative grand total at the end of a session
+ *   - `user_message`: Claude Code picked up a user message delivered into the
+ *     live session (`--replay-user-messages`); `uuid` is the one it was sent with
  */
 export interface StepCompleteData {
   /**
@@ -341,7 +343,7 @@ export interface StepCompleteData {
   costUsd?: number;
   /** Model id for this turn (only meaningful on `turn_metadata`). */
   model?: string;
-  phase: 'turn_metadata' | 'result_usage';
+  phase: 'turn_metadata' | 'result_usage' | 'user_message';
   /**
    * Provider identifier for this turn — the CLI / adapter name (e.g.
    * `claude-code`, `codex`), not the underlying LLM vendor. CLI-wrapped agents
@@ -350,6 +352,8 @@ export interface StepCompleteData {
    */
   provider?: string;
   usage?: UsageData;
+  /** The replayed message's uuid (only on `user_message`). */
+  uuid?: string;
 }
 
 export interface HeterogeneousRateLimitInfo {
