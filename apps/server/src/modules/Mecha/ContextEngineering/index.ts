@@ -14,6 +14,7 @@ import { type ServerMessagesEngineParams } from './types';
 export const toContextSnapshot = ({
   additionalContexts,
   additionalVariables,
+  agentAccountContext,
   agentBuilderContext,
   agentDocuments,
   agentGroup,
@@ -94,6 +95,7 @@ export const toContextSnapshot = ({
     messages,
   },
   step: {
+    agentAccountContext,
     agentBuilderContext,
     agentManagementContext,
     documentReferences,

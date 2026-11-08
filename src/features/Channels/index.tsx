@@ -14,9 +14,10 @@ import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfi
 
 import { visibleChannelDetail } from './channelAccess';
 import { ChannelConversation } from './ChannelConversation';
-import { MemberAvatar } from './MemberAvatar';
 import { MEMBER_FLOAT_BREAKPOINT, MemberPanel } from './MemberPanel';
 import { MemberStatus } from './MemberStatus';
+import { DirectReplyStatus } from './ReplyActivity';
+import { type ReplyTopic, ReplyTopicPanel } from './ReplyTopicPanel';
 import { styles } from './styles';
 import { THREAD_FLOAT_BREAKPOINT, ThreadPanel } from './ThreadPanel';
 import { useThreadPanel } from './useThreadPanel';
@@ -34,27 +35,36 @@ function EnabledChannelPage() {
   const view = { channelId: channelId ?? '', threadId: null };
   const sync = channelActions.useFetchDetail(channelId ? view : null);
   const detail = visibleChannelDetail(useChannelStore(channelSelectors.detail(view)), sync.error);
-  // A direct conversation is titled by its Agent, so it shows the Agent rather than a `#`.
   const directAgent = detail?.channel.agentId
     ? detail.members.find((member) => member.agentId === detail.channel.agentId)
     : undefined;
+  const [topic, setTopic] = useState<(ReplyTopic & { channelId: string }) | null>(null);
   const membersOpen =
     !!detail?.channel.workspaceId &&
     membersChannelId === channelId &&
     !panel.threadId &&
     !panel.draft;
+  // One side panel at a time: a thread or the member list replaces the topic.
+  const openTopic =
+    topic?.channelId === channelId && !panel.threadId && !panel.draft && !membersOpen
+      ? topic
+      : null;
   if (!channelId) return null;
 
   return (
     <Flexbox {...stylex.props(styles.layout)}>
       <NavHeader
+        // A rule separates the header from the feed scrolling under it.
+        {...stylex.props(styles.threadHeader)}
         left={
           <Flexbox horizontal align="center" gap={8}>
-            {directAgent ? <MemberAvatar member={directAgent} size={24} /> : <Hash size={18} />}
+            {/* A direct conversation is titled by its Agent's name alone, like an IM chat. */}
+            {!directAgent && <Hash size={18} />}
             <Text ellipsis weight={500}>
               {detail?.channel.title || t('title')}
             </Text>
             {detail?.channel.status === 'archived' && <Tag size="small">{t('archived')}</Tag>}
+            {directAgent && <DirectReplyStatus detail={detail!} />}
           </Flexbox>
         }
         right={
@@ -67,7 +77,10 @@ function EnabledChannelPage() {
                       id: memberPanelId,
                       open: membersOpen,
                       onToggle: () => {
-                        if (!membersOpen) panel.close();
+                        if (!membersOpen) {
+                          panel.close();
+                          setTopic(null);
+                        }
                         setMembersChannelId(membersOpen ? null : channelId);
                       },
                     }
@@ -84,10 +97,22 @@ function EnabledChannelPage() {
           inert={
             (!!(panel.threadId || panel.draft) &&
               (conversationWidth ?? 1000) < THREAD_FLOAT_BREAKPOINT) ||
-            (membersOpen && (conversationWidth ?? 1000) < MEMBER_FLOAT_BREAKPOINT)
+            (membersOpen && (conversationWidth ?? 1000) < MEMBER_FLOAT_BREAKPOINT) ||
+            (!!openTopic && (conversationWidth ?? 1000) < THREAD_FLOAT_BREAKPOINT)
           }
-          onOpenThread={panel.openThread}
-          onStartThread={panel.openDraft}
+          onOpenThread={(threadId, toggle) => {
+            setTopic(null);
+            panel.openThread(threadId, toggle);
+          }}
+          onOpenTopic={(next) => {
+            panel.close();
+            setMembersChannelId(null);
+            setTopic({ ...next, channelId });
+          }}
+          onStartThread={(draft) => {
+            setTopic(null);
+            panel.openDraft(draft);
+          }}
         />
         {detail && membersOpen && (
           <MemberPanel
@@ -97,6 +122,11 @@ function EnabledChannelPage() {
             onClose={() => setMembersChannelId(null)}
           />
         )}
+        <ReplyTopicPanel
+          availableWidth={conversationWidth}
+          topic={openTopic}
+          onClose={() => setTopic(null)}
+        />
         {detail && (
           <ThreadPanel
             availableWidth={conversationWidth}

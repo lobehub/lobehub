@@ -171,6 +171,11 @@ export interface OperationMetadata {
   inputEditorTempState?: any | null; // Editor state snapshot for cancel restoration
   inputSendErrorMsg?: string; // Error message to display in UI
   /**
+   * A heterogeneous CLI run (Claude Code) whose producer types queued follow-ups
+   * into its live session, so its queue drains at the next step, not the run end.
+   */
+  liveSteer?: boolean;
+  /**
    * User-facing LLM-call total for the running operation.
    *
    * Counts only actual model invocations — tool-only runtime iterations do not
@@ -178,6 +183,7 @@ export interface OperationMetadata {
    * scheduling/execution index.
    */
   llmCalls?: number;
+
   // Progress information
   progress?: {
     current: number;

@@ -334,6 +334,14 @@ export const activityStyles = stylex.create({
     paddingInline: 4,
     color: cssVar.colorTextSecondary,
   },
+  /** Beside the Agent's name in a direct conversation's header. */
+  header: {
+    color: cssVar.colorTextDescription,
+  },
+  headerButton: {
+    height: 22,
+    paddingInline: 4,
+  },
   avatars: {
     display: 'inline-flex',
     flex: 'none',

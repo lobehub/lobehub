@@ -47,7 +47,6 @@ export function MemberStatus({
   const overflow = entries.length - MAX_VISIBLE;
   const title = t('membersCount', { count: entries.length });
   const direct = !!channel.agentId;
-  const inviteSize = direct ? undefined : 'small';
   // A direct conversation is a chat with one Agent: no roster to show, only its actions, like an
   // IM header. Its title is the Agent's name, so it cannot be renamed here.
   const directMenu = () => [
@@ -90,6 +89,7 @@ export function MemberStatus({
           aria-expanded={memberPanel.open}
           aria-label={t(memberPanel.open ? 'members.hide' : 'members.show')}
           icon={Users}
+          size="small"
           title={t(memberPanel.open ? 'members.hide' : 'members.show')}
           onClick={memberPanel.onToggle}
         />
@@ -126,7 +126,7 @@ export function MemberStatus({
         <ActionIcon
           aria-label={t('invite.title')}
           icon={UserPlus}
-          size={inviteSize}
+          size="small"
           title={t('invite.title')}
           onClick={() =>
             openInviteMembers(
@@ -149,6 +149,7 @@ export function MemberStatus({
           <ActionIcon
             aria-label={t('more', { ns: 'common' })}
             icon={MoreHorizontal}
+            size="small"
             title={t('more', { ns: 'common' })}
           />
         </DropdownMenu>

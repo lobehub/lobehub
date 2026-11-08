@@ -1234,7 +1234,7 @@ describe('TaskService', () => {
       expect(running?.cost).toBeNull();
     });
 
-    it('should not include topicCount when no topics exist', async () => {
+    it('should omit topicCount and heartbeat when both are absent', async () => {
       const task = {
         assigneeAgentId: null,
         assigneeUserId: null,
@@ -1269,6 +1269,7 @@ describe('TaskService', () => {
       const result = await service.getTaskDetail('TASK-1');
 
       expect(result?.topicCount).toBeUndefined();
+      expect(result?.heartbeat).toBeUndefined();
     });
 
     it('should build workspace tree nodes from pinned documents', async () => {
@@ -1386,43 +1387,6 @@ describe('TaskService', () => {
         scheduledAt: '2024-01-01T12:00:05.000Z',
         timeout: 60,
       });
-    });
-
-    it('should not include heartbeat when neither heartbeatTimeout nor lastHeartbeatAt is set', async () => {
-      const task = {
-        assigneeAgentId: null,
-        assigneeUserId: null,
-        createdAt: null,
-        description: null,
-        error: null,
-        heartbeatInterval: null,
-        heartbeatTimeout: null,
-        id: 'task_001',
-        identifier: 'TASK-1',
-        instruction: null,
-        lastHeartbeatAt: null,
-        name: 'Task 1',
-        parentTaskId: null,
-        priority: 'normal',
-        status: 'todo',
-        totalTopics: 0,
-      };
-
-      mockTaskModel.findById.mockResolvedValue(task);
-      mockTaskModel.findAllDescendants.mockResolvedValue([]);
-      mockTaskModel.getDependencies.mockResolvedValue([]);
-      mockTaskTopicModel.findWithHandoff.mockResolvedValue([]);
-      mockBriefModel.findByTaskId.mockResolvedValue([]);
-      mockTaskModel.getComments.mockResolvedValue([]);
-      mockTaskModel.getTreePinnedDocuments.mockResolvedValue({ nodeMap: {}, tree: [] });
-      mockTaskModel.findByIds.mockResolvedValue([]);
-      mockTaskModel.getCheckpointConfig.mockReturnValue({});
-      mockTaskModel.getVerifyConfig.mockReturnValue(undefined);
-
-      const service = new TaskService(db, userId);
-      const result = await service.getTaskDetail('TASK-1');
-
-      expect(result?.heartbeat).toBeUndefined();
     });
 
     it('should gracefully handle failing optional calls via catch', async () => {

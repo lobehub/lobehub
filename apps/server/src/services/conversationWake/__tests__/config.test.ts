@@ -678,15 +678,4 @@ describe('an operator override of the modes', () => {
     expect(flattened).not.toHaveProperty('botWake');
     expect(parseBotWakeSettings(flattened).ruleMode).toBe('enforce');
   });
-
-  it('is not read from the flat keys an earlier form saved', () => {
-    const parsed = parseBotWakeSettings({
-      botWakeClassifierMode: 'off',
-      botWakeDisabled: false,
-      botWakeMode: 'shadow',
-    });
-
-    expect(parsed.ruleMode).toBe('enforce');
-    expect(parsed.rules.classifier.mode).toBe('enforce');
-  });
 });

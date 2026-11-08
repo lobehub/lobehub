@@ -164,6 +164,49 @@ const SettingsSchema = z
   .partial();
 
 /**
+ * A reply strategy as an API accepts it: the shape of {@link BotWakeConfig}, validated strictly so
+ * a bad value is refused instead of silently falling back the way stored settings do. There is no
+ * scheduler: only platforms with a delivery queue (IM bots) collect bursts.
+ */
+const strictMode = z.enum(['off', 'shadow', 'enforce']);
+const probability = z.number().min(0).max(1);
+const strictSeconds = z.number().int().min(0).max(86_400);
+const strictIdList = z.array(z.string().trim().min(1)).max(MAX_BOT_WAKE_CHANNEL_LIST);
+export const WakeConfigInputSchema = z
+  .object({
+    classifier: z.object({ mode: strictMode, threshold: probability }).partial().strict(),
+    customInstructions: z.string().max(MAX_CUSTOM_INSTRUCTIONS_LENGTH),
+    customInstructionsEnabled: z.boolean(),
+    duties: z
+      .object({
+        helpfulThreshold: probability,
+        mode: strictMode,
+        text: z.string().max(MAX_DUTIES_LENGTH),
+        threshold: probability,
+      })
+      .partial()
+      .strict(),
+    enabled: z.boolean(),
+    mode: strictMode,
+    pace: z.enum(BOT_WAKE_PACES),
+    rules: z
+      .object({
+        allowChannels: strictIdList,
+        denyChannels: strictIdList,
+        maxSilentWakes: z.number().int().min(0).max(100),
+        ownerPresenceSeconds: strictSeconds,
+        scope: z.enum(['all', 'bot-threads', 'none']),
+        windowSeconds: strictSeconds,
+      })
+      .partial()
+      .strict(),
+  })
+  .partial()
+  .strict();
+
+export type WakeConfigInput = z.infer<typeof WakeConfigInputSchema>;
+
+/**
  * The provider setting keys the channel settings form writes. The form renders every field of the
  * `settings` group flat, so the bot-wake options are flat keys there rather than one nested
  * object.

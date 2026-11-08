@@ -476,6 +476,7 @@
   "channel.records.judge.deny": "未达阈值",
   "channel.records.judge.duty": "判断是否属于它的职责",
   "channel.records.judge.hint": "{{judge}}：{{verdict}}",
+  "channel.records.judge.routing": "判断该不该由它来回答",
   "channel.records.mark.correct": "判断正确",
   "channel.records.mark.failed": "标记没保存，请重试",
   "channel.records.mark.false_wake": "不该唤醒",

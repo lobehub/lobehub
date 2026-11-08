@@ -8,6 +8,7 @@ import {
 } from './ChannelRoutingService';
 
 const mocks = vi.hoisted(() => ({
+  record: vi.fn(),
   classify: vi.fn(),
   countCall: vi.fn(),
   claim: vi.fn(),
@@ -46,6 +47,7 @@ vi.mock('@/server/services/redis', () => ({
   redisService: { botWake: { countClassifierCall: mocks.countCall } },
 }));
 vi.mock('./notify', () => ({ notifyChannel: mocks.notify }));
+vi.mock('./wakeRecords', () => ({ recordChannelWakeDecisions: mocks.record }));
 vi.mock('./queue', () => ({ wakeChannel: mocks.wake }));
 
 const input = {
@@ -99,7 +101,7 @@ beforeEach(() => {
   mocks.resolveConfig.mockResolvedValue({ model: 'jev-1.14.0', provider: 'typesafe' });
   mocks.init.mockResolvedValue({ decide: mocks.decide });
   mocks.decide.mockResolvedValue(response(0.95, 0.05));
-  mocks.resolve.mockResolvedValue(true);
+  mocks.resolve.mockResolvedValue({ recipients: ['coder'], status: 'assigned' });
   mocks.countCall.mockResolvedValue(1);
 });
 afterEach(() => {
@@ -287,6 +289,52 @@ describe('routing worker', () => {
     );
   });
 
+  it('records the members’ decisions once the routing result is applied, and only then', async () => {
+    await run();
+    expect(mocks.record).toHaveBeenCalledWith(
+      {},
+      'channel',
+      expect.objectContaining({ messageId: 'message' }),
+      expect.objectContaining({ memberIds: ['coder'], status: 'assigned' }),
+      expect.objectContaining({
+        answers: response(0.95, 0.05).answers,
+        judgements: expect.any(Array),
+      }),
+      { recipients: ['coder'], status: 'assigned' },
+    );
+
+    mocks.record.mockClear();
+    mocks.resolve.mockResolvedValue(null);
+    await run();
+    expect(mocks.record).not.toHaveBeenCalled();
+  });
+
+  it('records the recipients the resolver delivered to, not the proposed members', async () => {
+    // The reviewer left while the model was running, so only the coder was delivered to.
+    mocks.resolve.mockResolvedValue({ recipients: ['coder'], status: 'assigned' });
+    await run();
+    expect(mocks.record).toHaveBeenCalledWith(
+      {},
+      'channel',
+      expect.anything(),
+      expect.objectContaining({ memberIds: ['coder'], status: 'assigned' }),
+      expect.anything(),
+      { recipients: ['coder'], status: 'assigned' },
+    );
+
+    mocks.record.mockClear();
+    mocks.resolve.mockResolvedValue({ recipients: [], status: 'unassigned' });
+    await run();
+    expect(mocks.record).toHaveBeenCalledWith(
+      {},
+      'channel',
+      expect.anything(),
+      expect.objectContaining({ memberIds: ['coder'], status: 'assigned' }),
+      expect.anything(),
+      { recipients: [], status: 'unassigned' },
+    );
+  });
+
   it('does not call the provider if another worker owns the attempt', async () => {
     mocks.claim.mockResolvedValue(null);
     await run();
@@ -357,7 +405,7 @@ describe('routing worker', () => {
   });
 
   it('does not retry a stale write-back or create jobs itself', async () => {
-    mocks.resolve.mockResolvedValue(false);
+    mocks.resolve.mockResolvedValue(null);
     await run();
     expect(mocks.resolve).toHaveBeenCalledTimes(1);
     expect(mocks.decide).toHaveBeenCalledTimes(1);

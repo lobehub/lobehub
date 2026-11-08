@@ -100,7 +100,7 @@ const TRANSIENT_PATTERNS = [
   /"error"\s*:\s*"TIMEOUT"/,
   /\boperation-not-running\b|\bstale-operation\b/,
   /\bFailed to persist tool_result\b/i,
-  /\b(?:RateLimitExceeded|ProviderServiceUnavailable|ProviderNetworkError|GatewayTimeout)\b/,
+  /\b(?:RateLimitExceeded|ProviderServiceUnavailable|ProviderNetworkError|ProviderStreamInterrupted|GatewayTimeout)\b/,
   /ECONNRESET|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|ENOTFOUND|fetch failed|network error|socket hang up|service unavailable|bad gateway|gateway timeout|\boverloaded\b|\b50[234]\b/i,
 ];
 

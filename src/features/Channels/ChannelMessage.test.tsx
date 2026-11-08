@@ -58,6 +58,7 @@ vi.mock('./MessageReceipts', () => ({
 
 const detail = {
   attachments: [],
+  channel: { agentId: null, id: 'chn_1' },
   jobs: [],
   members: [{ agentId: 'agt_1', description: 'Architect', id: 'mem_1' }],
   threads: [],

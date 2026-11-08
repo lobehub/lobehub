@@ -22,6 +22,36 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as heteroCliProcessModule from '../../utils/heteroCliProcess';
 import HeterogeneousAgentCtr, { redactPromptArgs } from '../HeterogeneousAgentImpl';
 
+const createAgentAppOptions = (appStoragePath: string) => ({
+  appStoragePath,
+  storeManager: { get: vi.fn() },
+});
+
+const createMockWindows = (send: ReturnType<typeof vi.fn>) => [
+  {
+    isDestroyed: () => false,
+    webContents: { send },
+  },
+];
+
+const createCodexAppServerOptions = (): Parameters<HeterogeneousAgentCtr['startSession']>[0] => ({
+  agentType: 'codex',
+  command: 'codex',
+  useCodexAppServer: true,
+});
+
+const createProviderBinding = (): NonNullable<
+  Parameters<HeterogeneousAgentCtr['startSession']>[0]['providerBinding']
+> => ({
+  apiConfig: { model: 'gpt-test', providerId: 'openai' },
+  kind: 'provider',
+});
+
+const createCodexOptions = (): Parameters<HeterogeneousAgentCtr['startSession']>[0] => ({
+  agentType: 'codex',
+  command: 'codex',
+});
+
 /**
  * A fresh CLI session's serialized prompt leads with the `lh` introduction (Claude
  * Code loads it as a skill instead); a resumed one (`startSession({ resumeSessionId })`) does not.
@@ -838,14 +868,8 @@ describe('HeterogeneousAgentCtr', () => {
       proc.exitCode = null;
       proc.signalCode = null;
       nextFakeProc = proc;
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
-      const { sessionId } = await ctr.startSession({
-        agentType: 'codex',
-        command: 'codex',
-      });
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
+      const { sessionId } = await ctr.startSession(createCodexOptions());
       const prompt = ctr.sendPrompt({
         operationId: 'op-cancel-wait',
         prompt: 'sleep 60',
@@ -891,14 +915,12 @@ describe('HeterogeneousAgentCtr', () => {
         proc.pid = 4242;
         proc.signalCode = null;
         nextFakeProc = proc;
-        const ctr = new HeterogeneousAgentCtr({
-          appStoragePath,
-          storeManager: { get: vi.fn() },
-        } as unknown as ConstructorParameters<typeof HeterogeneousAgentCtr>[0]);
-        const { sessionId } = await ctr.startSession({
-          agentType: 'codex',
-          command: 'codex',
-        });
+        const ctr = new HeterogeneousAgentCtr(
+          createAgentAppOptions(appStoragePath) as unknown as ConstructorParameters<
+            typeof HeterogeneousAgentCtr
+          >[0],
+        );
+        const { sessionId } = await ctr.startSession(createCodexOptions());
         const spawnCount = spawnCalls.length;
         const prompt = ctr.sendPrompt({
           operationId: 'op-cancel-timeout',
@@ -1088,10 +1110,7 @@ describe('HeterogeneousAgentCtr', () => {
         updatedAt: Date.now(),
         weekly: null,
       });
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
       const params = { command: '/custom/bin/codex', env: { CODEX_HOME: '/tmp/codex-home' } };
 
       await ctr.getCodexQuota(params);
@@ -1134,10 +1153,7 @@ describe('HeterogeneousAgentCtr', () => {
       };
       fetchCodexQuotaMock.mockResolvedValueOnce(initialQuota).mockResolvedValueOnce(refreshedQuota);
       consumeCodexRateLimitResetCreditMock.mockResolvedValue('reset');
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
       const source = {
         command: '/custom/bin/codex',
         env: { CODEX_HOME: '/tmp/codex-home' },
@@ -1200,10 +1216,7 @@ describe('HeterogeneousAgentCtr', () => {
         )
         .mockResolvedValueOnce(refreshedQuota);
       consumeCodexRateLimitResetCreditMock.mockResolvedValue('reset');
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
       const source = {
         command: '/custom/bin/codex',
         env: { CODEX_HOME: '/tmp/codex-home' },
@@ -1241,10 +1254,7 @@ describe('HeterogeneousAgentCtr', () => {
         weekly: null,
       } satisfies KimiCodeQuotaSnapshot;
       fetchKimiCodeQuotaMock.mockResolvedValue(quota);
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
       const params = {
         env: { KIMI_CODE_HOME: '/tmp/kimi-code-home' },
         kimiCodeHomePath: '/tmp/kimi-code-home',
@@ -1270,10 +1280,7 @@ describe('HeterogeneousAgentCtr', () => {
         weekly: null,
       } satisfies KimiCodeQuotaSnapshot;
       fetchKimiCodeQuotaMock.mockResolvedValue(quota);
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
       const params = { env: { KIMI_CODE_HOME: '/tmp/kimi-code-home' } };
 
       await ctr.getKimiCodeQuota(params);
@@ -1291,10 +1298,7 @@ describe('HeterogeneousAgentCtr', () => {
     it('drives the installed dsh CLI acp profile and broadcasts unified stream events', async () => {
       const send = vi.fn();
       mockGetAllWindows.mockReturnValue([{ isDestroyed: () => false, webContents: { send } }]);
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
       const { sessionId } = await ctr.startSession({
         agentType: 'deepseek-harness',
         args: ['--config', '/custom/dsh.json'],
@@ -1345,10 +1349,7 @@ describe('HeterogeneousAgentCtr', () => {
 
     it('does not re-send the session introduction when resuming a dsh session', async () => {
       mockGetAllWindows.mockReturnValue([]);
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
       const { sessionId } = await ctr.startSession({
         agentType: 'deepseek-harness',
         command: '',
@@ -1384,10 +1385,7 @@ describe('HeterogeneousAgentCtr', () => {
           };
         },
       }));
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
       const { sessionId } = await ctr.startSession({
         agentType: 'deepseek-harness',
         command: '',
@@ -1405,10 +1403,7 @@ describe('HeterogeneousAgentCtr', () => {
       const send = vi.fn();
       mockGetAllWindows.mockReturnValue([{ isDestroyed: () => false, webContents: { send } }]);
       dshDetectMock.mockResolvedValueOnce({ available: false, error: 'not found' });
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
       const { sessionId } = await ctr.startSession({
         agentType: 'deepseek-harness',
         command: '',
@@ -1430,10 +1425,7 @@ describe('HeterogeneousAgentCtr', () => {
         path: '/Users/me/.local/bin/dsh',
         version: '0.0.1',
       });
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
       const { sessionId } = await ctr.startSession({
         agentType: 'deepseek-harness',
         command: '',
@@ -1449,10 +1441,7 @@ describe('HeterogeneousAgentCtr', () => {
     it('does not launch the runtime when Stop lands before it starts', async () => {
       const send = vi.fn();
       mockGetAllWindows.mockReturnValue([{ isDestroyed: () => false, webContents: { send } }]);
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
       const { sessionId } = await ctr.startSession({
         agentType: 'deepseek-harness',
         command: '',
@@ -1633,16 +1622,8 @@ describe('HeterogeneousAgentCtr', () => {
     it('uses Claude SDK streaming lab instead of spawning claude -p', async () => {
       process.env.LOBE_CLAUDE_CODE_SDK = '1';
       const send = vi.fn();
-      mockGetAllWindows.mockReturnValue([
-        {
-          isDestroyed: () => false,
-          webContents: { send },
-        },
-      ]);
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      mockGetAllWindows.mockReturnValue(createMockWindows(send));
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
       const { sessionId } = await ctr.startSession({
         agentType: 'claude-code',
         args: ['--model', 'claude-sonnet-4-6', '--effort', 'medium'],
@@ -1693,10 +1674,7 @@ describe('HeterogeneousAgentCtr', () => {
           vi.setSystemTime(new Date(start.getTime() + 5000));
         });
         nextFakeProc = createFakeProc().proc;
-        const ctr = new HeterogeneousAgentCtr({
-          appStoragePath,
-          storeManager: { get: vi.fn() },
-        } as any);
+        const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
         const { sessionId } = await ctr.startSession({
           agentType: 'claude-code',
           command: 'claude',
@@ -1725,10 +1703,7 @@ describe('HeterogeneousAgentCtr', () => {
       // orphan that keeps writing the transcript a replay would read, and a
       // PID-less ledger entry looks safe to recover next to it.
       process.env.LOBE_CLAUDE_CODE_SDK = '1';
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
       const { sessionId } = await ctr.startSession({
         agentType: 'claude-code',
         command: 'claude',
@@ -1760,10 +1735,7 @@ describe('HeterogeneousAgentCtr', () => {
 
     it('does not start the Claude SDK when server-default execution is cancelled during preparation', async () => {
       process.env.LOBE_CLAUDE_CODE_SDK = '1';
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
       const { sessionId } = await ctr.startSession({
         agentType: 'claude-code',
         command: 'claude',
@@ -1950,16 +1922,8 @@ describe('HeterogeneousAgentCtr', () => {
 
     it('routes Cursor through ACP and persists its native session id', async () => {
       const send = vi.fn();
-      mockGetAllWindows.mockReturnValue([
-        {
-          isDestroyed: () => false,
-          webContents: { send },
-        },
-      ]);
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      mockGetAllWindows.mockReturnValue(createMockWindows(send));
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
       const { sessionId } = await ctr.startSession({
         agentType: 'cursor',
         args: ['--model', 'composer-1.5'],
@@ -2003,12 +1967,7 @@ describe('HeterogeneousAgentCtr', () => {
 
     it('forwards Cursor questions through the existing intervention bridge and returns the answer', async () => {
       const send = vi.fn();
-      mockGetAllWindows.mockReturnValue([
-        {
-          isDestroyed: () => false,
-          webContents: { send },
-        },
-      ]);
+      mockGetAllWindows.mockReturnValue(createMockWindows(send));
       let receivedAnswer: unknown;
       cursorAcpSessionRunMock.mockImplementation(async (options) => {
         receivedAnswer = await options.askUserBridge.pending({
@@ -2025,10 +1984,7 @@ describe('HeterogeneousAgentCtr', () => {
           toolCallId: 'cursor-question-1',
         });
       });
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
       const { sessionId } = await ctr.startSession({ agentType: 'cursor', command: 'agent' });
       const run = ctr.sendPrompt({ operationId: 'op-cursor-question', prompt: 'work', sessionId });
 
@@ -2056,12 +2012,7 @@ describe('HeterogeneousAgentCtr', () => {
 
     it('classifies an exact Cursor ACP session/load not-found error for resume fallback', async () => {
       const send = vi.fn();
-      mockGetAllWindows.mockReturnValue([
-        {
-          isDestroyed: () => false,
-          webContents: { send },
-        },
-      ]);
+      mockGetAllWindows.mockReturnValue(createMockWindows(send));
       const missingSessionError = new AcpRpcResponseError('session/load', {
         code: -32_602,
         message: 'Session "legacy-cursor-session" not found',
@@ -2070,10 +2021,7 @@ describe('HeterogeneousAgentCtr', () => {
         await options.onStderr('Cursor ACP diagnostic\n');
         throw missingSessionError;
       });
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
       const { sessionId } = await ctr.startSession({
         agentType: 'cursor',
         command: 'agent',
@@ -2118,10 +2066,7 @@ describe('HeterogeneousAgentCtr', () => {
             resolveRun = resolve;
           }),
       );
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
       const { sessionId } = await ctr.startSession({ agentType: 'cursor', command: 'agent' });
       const run = ctr.sendPrompt({ operationId: 'op-cursor', prompt: 'work', sessionId });
       await vi.waitFor(() => expect(cursorAcpSessionConstructMock).toHaveBeenCalledOnce());
@@ -2142,16 +2087,8 @@ describe('HeterogeneousAgentCtr', () => {
 
     it('routes Devin through ACP and persists its native session and model', async () => {
       const send = vi.fn();
-      mockGetAllWindows.mockReturnValue([
-        {
-          isDestroyed: () => false,
-          webContents: { send },
-        },
-      ]);
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      mockGetAllWindows.mockReturnValue(createMockWindows(send));
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
       const { sessionId } = await ctr.startSession({
         agentType: 'devin',
         args: ['--model', 'claude-sonnet-4-6-thinking'],
@@ -2197,12 +2134,7 @@ describe('HeterogeneousAgentCtr', () => {
 
     it('forwards Devin permission choices through the intervention bridge', async () => {
       const send = vi.fn();
-      mockGetAllWindows.mockReturnValue([
-        {
-          isDestroyed: () => false,
-          webContents: { send },
-        },
-      ]);
+      mockGetAllWindows.mockReturnValue(createMockWindows(send));
       let receivedAnswer: unknown;
       devinAcpSessionRunMock.mockImplementation(async (options) => {
         receivedAnswer = await options.askUserBridge.pending({
@@ -2219,10 +2151,7 @@ describe('HeterogeneousAgentCtr', () => {
           toolCallId: 'devin-permission-1',
         });
       });
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
       const { sessionId } = await ctr.startSession({ agentType: 'devin', command: 'devin' });
       const run = ctr.sendPrompt({ operationId: 'op-devin-question', prompt: 'work', sessionId });
 
@@ -2254,12 +2183,7 @@ describe('HeterogeneousAgentCtr', () => {
 
     it('classifies a missing resumed Devin ACP session', async () => {
       const send = vi.fn();
-      mockGetAllWindows.mockReturnValue([
-        {
-          isDestroyed: () => false,
-          webContents: { send },
-        },
-      ]);
+      mockGetAllWindows.mockReturnValue(createMockWindows(send));
       const missingSessionError = new AcpRpcResponseError('session/load', {
         code: -32_016,
         data: {
@@ -2269,10 +2193,7 @@ describe('HeterogeneousAgentCtr', () => {
         message: 'Session not found',
       });
       devinAcpSessionRunMock.mockRejectedValue(missingSessionError);
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
       const { sessionId } = await ctr.startSession({
         agentType: 'devin',
         command: 'devin',
@@ -2307,10 +2228,7 @@ describe('HeterogeneousAgentCtr', () => {
             resolveRun = resolve;
           }),
       );
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
       const { sessionId } = await ctr.startSession({ agentType: 'devin', command: 'devin' });
       const run = ctr.sendPrompt({ operationId: 'op-devin', prompt: 'work', sessionId });
       await vi.waitFor(() => expect(devinAcpSessionConstructMock).toHaveBeenCalledOnce());
@@ -2331,16 +2249,8 @@ describe('HeterogeneousAgentCtr', () => {
 
     it('uses the ACP runtime, persists the native session id, and broadcasts its lifecycle', async () => {
       const send = vi.fn();
-      mockGetAllWindows.mockReturnValue([
-        {
-          isDestroyed: () => false,
-          webContents: { send },
-        },
-      ]);
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      mockGetAllWindows.mockReturnValue(createMockWindows(send));
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
       const { sessionId } = await ctr.startSession({
         agentType: 'grok-build',
         args: ['--model', 'grok-build'],
@@ -2392,10 +2302,7 @@ describe('HeterogeneousAgentCtr', () => {
     });
 
     it('launches provider-bound Grok with a managed secret-free profile', async () => {
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
       const { sessionId } = await ctr.startSession({
         agentType: 'grok-build',
         args: ['--model', 'stale-model', '--effort', 'high'],
@@ -2405,10 +2312,7 @@ describe('HeterogeneousAgentCtr', () => {
           GROK_CONFIG: 'untrusted',
           XAI_API_KEY: 'stale-key',
         },
-        providerBinding: {
-          apiConfig: { model: 'gpt-test', providerId: 'openai' },
-          kind: 'provider',
-        },
+        providerBinding: createProviderBinding(),
       });
 
       const originalLegacyApiKey = process.env.GROK_CODE_XAI_API_KEY;
@@ -2464,10 +2368,7 @@ describe('HeterogeneousAgentCtr', () => {
             resolveRun = resolve;
           }),
       );
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
       const { sessionId } = await ctr.startSession({
         agentType: 'grok-build',
         command: 'grok',
@@ -2484,19 +2385,11 @@ describe('HeterogeneousAgentCtr', () => {
 
     it('classifies ACP authentication failures for the existing sign-in guide', async () => {
       const send = vi.fn();
-      mockGetAllWindows.mockReturnValue([
-        {
-          isDestroyed: () => false,
-          webContents: { send },
-        },
-      ]);
+      mockGetAllWindows.mockReturnValue(createMockWindows(send));
       grokAcpSessionRunMock.mockRejectedValue(
         new Error('Authentication required. Run `grok login`, then retry.'),
       );
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
       const { sessionId } = await ctr.startSession({
         agentType: 'grok-build',
         command: 'grok',
@@ -2517,12 +2410,7 @@ describe('HeterogeneousAgentCtr', () => {
 
     it('classifies a missing resumed ACP session after broadcasting its terminal error', async () => {
       const send = vi.fn();
-      mockGetAllWindows.mockReturnValue([
-        {
-          isDestroyed: () => false,
-          webContents: { send },
-        },
-      ]);
+      mockGetAllWindows.mockReturnValue(createMockWindows(send));
       const missingSessionError = new AcpRpcResponseError('session/load', {
         code: -32_603,
         data: { code: 'FS_NOT_FOUND', detail: '/sessions/missing-grok-session' },
@@ -2547,10 +2435,7 @@ describe('HeterogeneousAgentCtr', () => {
         ]);
         throw missingSessionError;
       });
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
       const { sessionId } = await ctr.startSession({
         agentType: 'grok-build',
         command: 'grok',
@@ -2594,10 +2479,7 @@ describe('HeterogeneousAgentCtr', () => {
     });
 
     it('does not classify a non-load ACP filesystem error as a stale resume session', () => {
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
       const promptError = new AcpRpcResponseError('session/prompt', {
         code: -32_603,
         data: { code: 'FS_NOT_FOUND', detail: '/workspace/missing-file' },
@@ -2685,10 +2567,7 @@ describe('HeterogeneousAgentCtr', () => {
     });
 
     it('keeps the env-only binding across fresh and resumed runs without persisting the key', async () => {
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
       const providerBinding = {
         apiConfig: { model: 'upstream-model', providerId: 'custom-openai' },
         kind: 'provider' as const,
@@ -2868,10 +2747,7 @@ describe('HeterogeneousAgentCtr', () => {
         relayInvocation,
         success: true,
       });
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
       const { sessionId } = await ctr.startSession({
         agentType,
         command: agentType,
@@ -2915,10 +2791,7 @@ describe('HeterogeneousAgentCtr', () => {
         model: 'kimi-k3',
         nativeResponses: false,
       });
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
       const { sessionId } = await ctr.startSession({
         agentType: 'codex',
         command: 'codex',
@@ -2952,10 +2825,7 @@ describe('HeterogeneousAgentCtr', () => {
     it('still launches server-default Codex when the model card cannot be read', async () => {
       nextFakeProc = createFakeProc().proc;
       describeServerDefaultModelMock.mockRejectedValueOnce(new Error('offline'));
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
       const { sessionId } = await ctr.startSession({
         agentType: 'codex',
         command: 'codex',
@@ -2977,10 +2847,7 @@ describe('HeterogeneousAgentCtr', () => {
 
     it('injects a Kimi operation token into its Anthropic credential env', async () => {
       nextFakeProc = createFakeProc().proc;
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
       const { sessionId } = await ctr.startSession({
         agentType: 'kimi-code',
         command: 'kimi',
@@ -3023,10 +2890,7 @@ describe('HeterogeneousAgentCtr', () => {
     });
 
     it('injects a Pi operation token into its Responses credential env', async () => {
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
       const { sessionId } = await ctr.startSession({
         agentType: 'pi',
         command: 'pi',
@@ -3082,10 +2946,7 @@ describe('HeterogeneousAgentCtr', () => {
           }),
       );
       nextFakeProc = createFakeProc().proc;
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
       const { sessionId } = await ctr.startSession({
         agentType: 'codex',
         command: 'codex',
@@ -3122,10 +2983,7 @@ describe('HeterogeneousAgentCtr', () => {
 
     it('does not launch server-default Codex when cancelled during spawn preparation', async () => {
       nextFakeProc = createFakeProc().proc;
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
       const { sessionId } = await ctr.startSession({
         agentType: 'codex',
         command: 'codex',
@@ -3172,10 +3030,7 @@ describe('HeterogeneousAgentCtr', () => {
         storeManager: { get: vi.fn() },
         binaryManager: { detect },
       } as any);
-      const { sessionId } = await ctr.startSession({
-        agentType: 'codex',
-        command: 'codex',
-      });
+      const { sessionId } = await ctr.startSession(createCodexOptions());
 
       await expect(
         ctr.sendPrompt({ operationId: 'op-test', prompt: 'hello', sessionId }),
@@ -3195,19 +3050,13 @@ describe('HeterogeneousAgentCtr', () => {
           settings: { sdkType: 'openai', supportResponsesApi: true },
         },
       });
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
 
       await expect(
         ctr.startSession({
           agentType: 'codex',
           command: 'codex',
-          providerBinding: {
-            apiConfig: { model: 'gpt-test', providerId: 'openai' },
-            kind: 'provider',
-          },
+          providerBinding: createProviderBinding(),
         }),
       ).rejects.toThrow('Model "openai/gpt-test" is disabled or unavailable.');
     });
@@ -3222,10 +3071,7 @@ describe('HeterogeneousAgentCtr', () => {
       const { sessionId } = await ctr.startSession({
         agentType: 'codex',
         command: 'codex',
-        providerBinding: {
-          apiConfig: { model: 'gpt-test', providerId: 'openai' },
-          kind: 'provider',
-        },
+        providerBinding: createProviderBinding(),
       });
       const runsDir = path.join(appStoragePath, 'heteroAgent', 'runs');
       expect(await readdir(runsDir)).toEqual([sessionId]);
@@ -3239,10 +3085,7 @@ describe('HeterogeneousAgentCtr', () => {
 
     it('forces provider-bound Codex through exec without persisting or logging its secret', async () => {
       const { cliArgs, options, sessionId } = await runSendPrompt('provider-bound prompt', {
-        providerBinding: {
-          apiConfig: { model: 'gpt-test', providerId: 'openai' },
-          kind: 'provider',
-        },
+        providerBinding: createProviderBinding(),
         useCodexAppServer: true,
       });
 
@@ -3273,17 +3116,11 @@ describe('HeterogeneousAgentCtr', () => {
           throw new Error('spawn failed');
         },
       };
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
       const { sessionId } = await ctr.startSession({
         agentType: 'codex',
         command: 'codex',
-        providerBinding: {
-          apiConfig: { model: 'gpt-test', providerId: 'openai' },
-          kind: 'provider',
-        },
+        providerBinding: createProviderBinding(),
       });
 
       await expect(
@@ -3295,25 +3132,16 @@ describe('HeterogeneousAgentCtr', () => {
     });
 
     it('resumes a provider-bound session only when the resolved binding key matches', async () => {
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
       const first = await ctr.startSession({
         agentType: 'codex',
         command: 'codex',
-        providerBinding: {
-          apiConfig: { model: 'gpt-test', providerId: 'openai' },
-          kind: 'provider',
-        },
+        providerBinding: createProviderBinding(),
       });
       const legacy = await ctr.startSession({
         agentType: 'codex',
         command: 'codex',
-        providerBinding: {
-          apiConfig: { model: 'gpt-test', providerId: 'openai' },
-          kind: 'provider',
-        },
+        providerBinding: createProviderBinding(),
         resumeSessionId: 'thread-without-binding-key',
       });
       const rejected = await ctr.startSession({
@@ -3359,10 +3187,7 @@ describe('HeterogeneousAgentCtr', () => {
         storeManager: { get: vi.fn() },
         binaryManager: { detect },
       } as any);
-      const { sessionId } = await ctr.startSession({
-        agentType: 'codex',
-        command: 'codex',
-      });
+      const { sessionId } = await ctr.startSession(createCodexOptions());
 
       await expect(
         ctr.sendPrompt({ operationId: 'op-test', prompt: 'hello', sessionId }),
@@ -3450,10 +3275,7 @@ describe('HeterogeneousAgentCtr', () => {
         storeManager: { get: vi.fn() },
         binaryManager: { detect },
       } as any);
-      const { sessionId } = await ctr.startSession({
-        agentType: 'codex',
-        command: 'codex',
-      });
+      const { sessionId } = await ctr.startSession(createCodexOptions());
       await ctr.sendPrompt({ operationId: 'op-test', prompt: 'hello', sessionId });
 
       expect(spawnCalls[0].command).toBe(resolvedPath);
@@ -3538,16 +3360,8 @@ describe('HeterogeneousAgentCtr', () => {
 
     it('uses Codex app-server lab instead of spawning codex exec', async () => {
       const send = vi.fn();
-      mockGetAllWindows.mockReturnValue([
-        {
-          isDestroyed: () => false,
-          webContents: { send },
-        },
-      ]);
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      mockGetAllWindows.mockReturnValue(createMockWindows(send));
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
       const { sessionId } = await ctr.startSession({
         agentType: 'codex',
         args: ['--model', 'gpt-5.5-codex'],
@@ -3588,15 +3402,8 @@ describe('HeterogeneousAgentCtr', () => {
     });
 
     it('reuses one native thread session across multiple turns', async () => {
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
-      const { sessionId } = await ctr.startSession({
-        agentType: 'codex',
-        command: 'codex',
-        useCodexAppServer: true,
-      });
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
+      const { sessionId } = await ctr.startSession(createCodexAppServerOptions());
 
       await ctr.sendPrompt({ operationId: 'op-1', prompt: 'first', sessionId });
       await ctr.sendPrompt({ operationId: 'op-2', prompt: 'second', sessionId });
@@ -3610,20 +3417,9 @@ describe('HeterogeneousAgentCtr', () => {
     });
 
     it('does not switch to exec when the shared native client is incompatible', async () => {
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
-      const first = await ctr.startSession({
-        agentType: 'codex',
-        command: 'codex',
-        useCodexAppServer: true,
-      });
-      const second = await ctr.startSession({
-        agentType: 'codex',
-        command: 'codex',
-        useCodexAppServer: true,
-      });
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
+      const first = await ctr.startSession(createCodexAppServerOptions());
+      const second = await ctr.startSession(createCodexAppServerOptions());
       await ctr.sendPrompt({ operationId: 'op-1', prompt: 'first', sessionId: first.sessionId });
 
       codexAppServerCanReuse.value = false;
@@ -3638,15 +3434,8 @@ describe('HeterogeneousAgentCtr', () => {
 
     it('replaces an incompatible shared client after its last thread session closes', async () => {
       codexAppServerShouldFailAfterThread.value = true;
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
-      const first = await ctr.startSession({
-        agentType: 'codex',
-        command: 'codex',
-        useCodexAppServer: true,
-      });
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
+      const first = await ctr.startSession(createCodexAppServerOptions());
       await expect(
         ctr.sendPrompt({ operationId: 'op-1', prompt: 'fail', sessionId: first.sessionId }),
       ).rejects.toThrow('Codex app-server disconnected');
@@ -3654,11 +3443,7 @@ describe('HeterogeneousAgentCtr', () => {
 
       codexAppServerShouldFailAfterThread.value = false;
       codexAppServerCanReuse.value = false;
-      const second = await ctr.startSession({
-        agentType: 'codex',
-        command: 'codex',
-        useCodexAppServer: true,
-      });
+      const second = await ctr.startSession(createCodexAppServerOptions());
       await ctr.sendPrompt({ operationId: 'op-2', prompt: 'retry', sessionId: second.sessionId });
 
       expect(codexAppServerClientCloseMock).toHaveBeenCalledOnce();
@@ -3672,10 +3457,7 @@ describe('HeterogeneousAgentCtr', () => {
     ])('keeps unsupported Codex $label arguments on exec', async ({ args }) => {
       const { proc } = createFakeProc();
       nextFakeProc = proc;
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
       const { sessionId } = await ctr.startSession({
         agentType: 'codex',
         args,
@@ -3692,10 +3474,7 @@ describe('HeterogeneousAgentCtr', () => {
     });
 
     it('does not replay an existing thread through exec when its arguments are unsupported', async () => {
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
       const { sessionId } = await ctr.startSession({
         agentType: 'codex',
         args: ['--profile', 'work'],
@@ -3715,24 +3494,12 @@ describe('HeterogeneousAgentCtr', () => {
 
     it('falls back to codex exec when the native handshake is incompatible', async () => {
       const send = vi.fn();
-      mockGetAllWindows.mockReturnValue([
-        {
-          isDestroyed: () => false,
-          webContents: { send },
-        },
-      ]);
+      mockGetAllWindows.mockReturnValue(createMockWindows(send));
       const { proc } = createFakeProc();
       nextFakeProc = proc;
       codexAppServerShouldFallback.value = true;
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
-      const { sessionId } = await ctr.startSession({
-        agentType: 'codex',
-        command: 'codex',
-        useCodexAppServer: true,
-      });
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
+      const { sessionId } = await ctr.startSession(createCodexAppServerOptions());
 
       await ctr.sendPrompt({ operationId: 'op-test', prompt: 'fallback safely', sessionId });
 
@@ -3760,15 +3527,8 @@ describe('HeterogeneousAgentCtr', () => {
 
     it('does not fall back to exec after the native thread is established', async () => {
       codexAppServerShouldFailAfterThread.value = true;
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
-      const { sessionId } = await ctr.startSession({
-        agentType: 'codex',
-        command: 'codex',
-        useCodexAppServer: true,
-      });
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
+      const { sessionId } = await ctr.startSession(createCodexAppServerOptions());
 
       await expect(
         ctr.sendPrompt({ operationId: 'op-test', prompt: 'do not replay', sessionId }),
@@ -3784,15 +3544,8 @@ describe('HeterogeneousAgentCtr', () => {
     });
 
     it('clears a closed native thread session after a genuine interrupt failure', async () => {
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
-      const { sessionId } = await ctr.startSession({
-        agentType: 'codex',
-        command: 'codex',
-        useCodexAppServer: true,
-      });
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
+      const { sessionId } = await ctr.startSession(createCodexAppServerOptions());
       await ctr.sendPrompt({ operationId: 'op-1', prompt: 'first', sessionId });
       codexAppServerInterruptMock.mockRejectedValueOnce(new Error('Interrupt rejected'));
 
@@ -3805,10 +3558,7 @@ describe('HeterogeneousAgentCtr', () => {
     });
 
     it('resumes existing Codex threads through native app-server', async () => {
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
       const { sessionId } = await ctr.startSession({
         agentType: 'codex',
         command: 'codex',
@@ -3827,10 +3577,7 @@ describe('HeterogeneousAgentCtr', () => {
 
     it('does not replay an existing Codex thread through exec when thread/resume fails', async () => {
       codexAppServerShouldFailResume.value = true;
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
       const { sessionId } = await ctr.startSession({
         agentType: 'codex',
         command: 'codex',
@@ -3925,14 +3672,8 @@ describe('HeterogeneousAgentCtr', () => {
       ];
       const { proc } = createFakeProc();
       nextFakeProc = proc;
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
-      const { sessionId } = await ctr.startSession({
-        agentType: 'codex',
-        command: 'codex',
-      });
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
+      const { sessionId } = await ctr.startSession(createCodexOptions());
 
       await expect(
         ctr.sendPrompt({
@@ -3962,14 +3703,8 @@ describe('HeterogeneousAgentCtr', () => {
         ],
       });
       nextFakeProc = proc;
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
-      const { sessionId } = await ctr.startSession({
-        agentType: 'codex',
-        command: 'codex',
-      });
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
+      const { sessionId } = await ctr.startSession(createCodexOptions());
 
       await expect(
         ctr.sendPrompt({ operationId: 'op-test', prompt: 'hello', sessionId }),
@@ -4141,10 +3876,7 @@ describe('HeterogeneousAgentCtr', () => {
     });
 
     it('classifies stale Codex resume stderr as a structured resume error', () => {
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
 
       const payload = (ctr as any).getSessionErrorPayload(
         'No conversation found for thread thread_stale_123',
@@ -4171,10 +3903,7 @@ describe('HeterogeneousAgentCtr', () => {
     });
 
     it('classifies CLI authentication failures as auth-required errors', () => {
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
 
       const payload = (ctr as any).getSessionErrorPayload(
         'Failed to authenticate. API Error: 401 {"type":"error","error":{"type":"authentication_error","message":"Invalid authentication credentials"}}',
@@ -4199,10 +3928,7 @@ describe('HeterogeneousAgentCtr', () => {
     });
 
     it('classifies missing credentials for Pi as an auth-required error', () => {
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
 
       const payload = (ctr as any).getSessionErrorPayload(
         'No API key found for provider anthropic',
@@ -4228,16 +3954,8 @@ describe('HeterogeneousAgentCtr', () => {
   describe('sendPrompt (droid)', () => {
     it('routes Factory Droid through ACP and persists the native session id', async () => {
       const send = vi.fn();
-      mockGetAllWindows.mockReturnValue([
-        {
-          isDestroyed: () => false,
-          webContents: { send },
-        },
-      ]);
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      mockGetAllWindows.mockReturnValue(createMockWindows(send));
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
       const { sessionId } = await ctr.startSession({
         agentType: 'droid',
         args: ['--tag', 'lobe'],
@@ -4278,12 +3996,7 @@ describe('HeterogeneousAgentCtr', () => {
 
     it('classifies a missing Droid ACP session for resume fallback', async () => {
       const send = vi.fn();
-      mockGetAllWindows.mockReturnValue([
-        {
-          isDestroyed: () => false,
-          webContents: { send },
-        },
-      ]);
+      mockGetAllWindows.mockReturnValue(createMockWindows(send));
       const missingSessionError = new AcpRpcResponseError('session/load', {
         code: -32_603,
         data: { details: 'Session missing-droid-session not found' },
@@ -4293,10 +4006,7 @@ describe('HeterogeneousAgentCtr', () => {
         await options.onStderr('Droid ACP diagnostic\n');
         throw missingSessionError;
       });
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
       const { sessionId } = await ctr.startSession({
         agentType: 'droid',
         command: 'droid',
@@ -4334,16 +4044,8 @@ describe('HeterogeneousAgentCtr', () => {
   describe('sendPrompt (trae)', () => {
     it('routes TRAE through ACP and persists the native session id', async () => {
       const send = vi.fn();
-      mockGetAllWindows.mockReturnValue([
-        {
-          isDestroyed: () => false,
-          webContents: { send },
-        },
-      ]);
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      mockGetAllWindows.mockReturnValue(createMockWindows(send));
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
       const { sessionId } = await ctr.startSession({
         agentType: 'trae',
         args: ['--feature=test'],
@@ -4383,10 +4085,7 @@ describe('HeterogeneousAgentCtr', () => {
     });
 
     it('launches a provider-bound TRAE session with invocation-local config and existing auth', async () => {
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
       const { sessionId } = await ctr.startSession({
         agentType: 'trae',
         args: ['--model', 'stale-model', '--profile', 'personal', '--permission-mode', 'auto'],
@@ -4397,10 +4096,7 @@ describe('HeterogeneousAgentCtr', () => {
           TRAE_HOME: '/user/trae',
         },
         initialModel: 'stale-native-model',
-        providerBinding: {
-          apiConfig: { model: 'gpt-test', providerId: 'openai' },
-          kind: 'provider',
-        },
+        providerBinding: createProviderBinding(),
       });
 
       await ctr.sendPrompt({ operationId: 'op-trae-provider', prompt: 'hello', sessionId });
@@ -4442,10 +4138,7 @@ describe('HeterogeneousAgentCtr', () => {
     });
 
     it('uses invocation-local TRAE config and existing auth for server-default runs', async () => {
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
       const { sessionId } = await ctr.startSession({
         agentType: 'trae',
         command: 'traecli',
@@ -4521,10 +4214,7 @@ describe('HeterogeneousAgentCtr', () => {
       const providerSession = await ctr.startSession({
         agentType: 'trae',
         command: 'traecli',
-        providerBinding: {
-          apiConfig: { model: 'gpt-test', providerId: 'openai' },
-          kind: 'provider',
-        },
+        providerBinding: createProviderBinding(),
       });
 
       await expect(
@@ -4553,20 +4243,12 @@ describe('HeterogeneousAgentCtr', () => {
 
     it('classifies authentication diagnostics emitted only on ACP stderr', async () => {
       const send = vi.fn();
-      mockGetAllWindows.mockReturnValue([
-        {
-          isDestroyed: () => false,
-          webContents: { send },
-        },
-      ]);
+      mockGetAllWindows.mockReturnValue(createMockWindows(send));
       traeAcpSessionRunMock.mockImplementation(async (options) => {
         await options.onStderr('Please sign in through TRAE Enterprise\n');
         throw new Error('TRAE ACP exited unexpectedly (code 1, signal null)');
       });
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
       const { sessionId } = await ctr.startSession({
         agentType: 'trae',
         command: 'traecli',
@@ -4590,16 +4272,8 @@ describe('HeterogeneousAgentCtr', () => {
   describe('sendPrompt (pi rpc)', () => {
     it('routes pi prompts through the RPC transport with resume args and captures the native session id', async () => {
       const send = vi.fn();
-      mockGetAllWindows.mockReturnValue([
-        {
-          isDestroyed: () => false,
-          webContents: { send },
-        },
-      ]);
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      mockGetAllWindows.mockReturnValue(createMockWindows(send));
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
       const { sessionId } = await ctr.startSession({
         agentType: 'pi',
         args: ['--provider', 'anthropic'],
@@ -4627,12 +4301,7 @@ describe('HeterogeneousAgentCtr', () => {
 
     it('waits for RPC cancellation instead of killing the process tree', async () => {
       const send = vi.fn();
-      mockGetAllWindows.mockReturnValue([
-        {
-          isDestroyed: () => false,
-          webContents: { send },
-        },
-      ]);
+      mockGetAllWindows.mockReturnValue(createMockWindows(send));
       let resolveRun: ((result: { aborted: boolean }) => void) | undefined;
       piRpcSessionRunMock.mockImplementation(
         () =>
@@ -4640,10 +4309,7 @@ describe('HeterogeneousAgentCtr', () => {
             resolveRun = resolve;
           }),
       );
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
       const { sessionId } = await ctr.startSession({
         agentType: 'pi',
         command: 'pi',
@@ -4678,10 +4344,7 @@ describe('HeterogeneousAgentCtr', () => {
         piRpcSessionRunMock.mockReturnValue(
           new Promise<{ aborted: boolean }>((resolve) => (finishRun = resolve)),
         );
-        const ctr = new HeterogeneousAgentCtr({
-          appStoragePath,
-          storeManager: { get: vi.fn() },
-        } as any);
+        const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
         const { sessionId } = await ctr.startSession({ agentType: 'pi', command: 'pi' });
         const run = ctr.sendPrompt({ operationId: 'op-pi', prompt: 'work', sessionId });
         await vi.waitFor(() => expect(piRpcSessionRunMock).toHaveBeenCalled());
@@ -4696,16 +4359,8 @@ describe('HeterogeneousAgentCtr', () => {
 
     it('reuses the pooled process across turns of the same conversation', async () => {
       const send = vi.fn();
-      mockGetAllWindows.mockReturnValue([
-        {
-          isDestroyed: () => false,
-          webContents: { send },
-        },
-      ]);
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      mockGetAllWindows.mockReturnValue(createMockWindows(send));
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
 
       // Turn 1: no native id yet → spawn a fresh process.
       const env = { LOBEHUB_AGENT_ID: 'agent-pi', LOBEHUB_TOPIC_ID: 'topic-pi' };
@@ -4757,16 +4412,8 @@ describe('HeterogeneousAgentCtr', () => {
       'spawns fresh when runtime options change between turns: $secondOptions',
       async ({ firstOptions, secondOptions }) => {
         const send = vi.fn();
-        mockGetAllWindows.mockReturnValue([
-          {
-            isDestroyed: () => false,
-            webContents: { send },
-          },
-        ]);
-        const ctr = new HeterogeneousAgentCtr({
-          appStoragePath,
-          storeManager: { get: vi.fn() },
-        } as any);
+        mockGetAllWindows.mockReturnValue(createMockWindows(send));
+        const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
 
         // Turn 1 with one runtime configuration.
         const first = await ctr.startSession({
@@ -4797,17 +4444,9 @@ describe('HeterogeneousAgentCtr', () => {
 
     it('reaps an idle pooled pi process after the grace window', async () => {
       const send = vi.fn();
-      mockGetAllWindows.mockReturnValue([
-        {
-          isDestroyed: () => false,
-          webContents: { send },
-        },
-      ]);
+      mockGetAllWindows.mockReturnValue(createMockWindows(send));
       process.env.LOBE_PI_RPC_IDLE_TIMEOUT_MS = '60';
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
       const { sessionId } = await ctr.startSession({ agentType: 'pi', command: 'pi' });
       await ctr.sendPrompt({ operationId: 'op-idle', prompt: 'x', sessionId });
 
@@ -4818,17 +4457,9 @@ describe('HeterogeneousAgentCtr', () => {
 
     it('surfaces pi RPC failures as session errors without a json fallback', async () => {
       const send = vi.fn();
-      mockGetAllWindows.mockReturnValue([
-        {
-          isDestroyed: () => false,
-          webContents: { send },
-        },
-      ]);
+      mockGetAllWindows.mockReturnValue(createMockWindows(send));
       piRpcSessionRunMock.mockRejectedValue(new Error('pi RPC exited unexpectedly (code 1)'));
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
       const { sessionId } = await ctr.startSession({
         agentType: 'pi',
         command: 'pi',
@@ -4905,16 +4536,8 @@ describe('HeterogeneousAgentCtr', () => {
       'does not start $label when cancelled during transport preparation',
       async ({ agentType, command, constructMock, runMock, useCodexAppServer }) => {
         const send = vi.fn();
-        mockGetAllWindows.mockReturnValue([
-          {
-            isDestroyed: () => false,
-            webContents: { send },
-          },
-        ]);
-        const ctr = new HeterogeneousAgentCtr({
-          appStoragePath,
-          storeManager: { get: vi.fn() },
-        } as any);
+        mockGetAllWindows.mockReturnValue(createMockWindows(send));
+        const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
         const { sessionId } = await ctr.startSession({
           agentType,
           command,
@@ -4980,10 +4603,7 @@ describe('HeterogeneousAgentCtr', () => {
     it('uses the self-contained embedded CLI instead of a global lh from PATH', async () => {
       const proc = createGatewayCliProc();
       nextFakeProc = proc;
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
 
       const ack = ctr.spawnLhHeteroExec(params);
 
@@ -5036,10 +4656,7 @@ describe('HeterogeneousAgentCtr', () => {
         try {
           const proc = createGatewayCliProc();
           nextFakeProc = proc;
-          const ctr = new HeterogeneousAgentCtr({
-            appStoragePath,
-            storeManager: { get: vi.fn() },
-          } as any);
+          const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
 
           const ack = ctr.spawnLhHeteroExec({ ...params, agentId, assistantMessageId: undefined });
           proc.emit('spawn');
@@ -5061,10 +4678,7 @@ describe('HeterogeneousAgentCtr', () => {
     it('forwards the topic workspace as LOBEHUB_WORKSPACE_ID for ingest', async () => {
       const proc = createGatewayCliProc();
       nextFakeProc = proc;
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
 
       const ack = ctr.spawnLhHeteroExec({ ...params, workspaceId: 'ws-lobehub' });
       proc.emit('spawn');
@@ -5078,10 +4692,7 @@ describe('HeterogeneousAgentCtr', () => {
     it('encodes primary and resume fallback contexts for the embedded CLI', async () => {
       const proc = createGatewayCliProc();
       nextFakeProc = proc;
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
 
       const ack = ctr.spawnLhHeteroExec({
         ...params,
@@ -5112,10 +4723,7 @@ describe('HeterogeneousAgentCtr', () => {
     it('rejects the gateway request when the embedded CLI cannot spawn', async () => {
       const proc = createGatewayCliProc();
       nextFakeProc = proc;
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
 
       const ack = ctr.spawnLhHeteroExec(params);
       proc.emit('error', new Error('spawn EACCES'));
@@ -5129,10 +4737,7 @@ describe('HeterogeneousAgentCtr', () => {
       const proc = createGatewayCliProc();
       nextFakeProc = proc;
       mockMissingDir(missingCwd);
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
 
       const ack = ctr.spawnLhHeteroExec({ ...params, cwd: missingCwd });
 
@@ -5152,10 +4757,7 @@ describe('HeterogeneousAgentCtr', () => {
       vi.mocked(existsSync).mockImplementation(
         (candidate) => candidate !== '/fake/cli/dist/index.js',
       );
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
 
       await expect(ctr.spawnLhHeteroExec(params)).resolves.toEqual({
         reason: `Embedded CLI not found at ${path.normalize('/fake/cli/dist/index.js')}`,
@@ -5170,10 +4772,7 @@ describe('HeterogeneousAgentCtr', () => {
         throw new Error('write EPIPE');
       });
       nextFakeProc = proc;
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
 
       const ack = ctr.spawnLhHeteroExec(params);
       expect(() => proc.emit('spawn')).not.toThrow();
@@ -5184,10 +4783,7 @@ describe('HeterogeneousAgentCtr', () => {
     it('handles a late stdin EPIPE after acceptance without an uncaught stream error', async () => {
       const proc = createGatewayCliProc();
       nextFakeProc = proc;
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
 
       const ack = ctr.spawnLhHeteroExec(params);
       proc.emit('spawn');
@@ -5220,10 +4816,7 @@ describe('HeterogeneousAgentCtr', () => {
       });
       const proc = createGatewayCliProc();
       nextFakeProc = proc;
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
 
       try {
         const ack = ctr.spawnLhHeteroExec(params);
@@ -5335,10 +4928,7 @@ describe('HeterogeneousAgentCtr', () => {
             { type: 'turn.completed' },
           ].map((record) => JSON.stringify(record) + '\n'),
         }).proc;
-        const ctr = new HeterogeneousAgentCtr({
-          appStoragePath,
-          storeManager: { get: vi.fn() },
-        } as any);
+        const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
         const upload = vi.fn(async () => {
           if (mode === 'failed') throw new Error('Upload rejected');
           return { fileId: 'file-dog', url: 'https://cdn/dog.png' };
@@ -5422,10 +5012,7 @@ describe('HeterogeneousAgentCtr', () => {
       };
       nextFakeProc = proc;
 
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
       const { sessionId } = await ctr.startSession({ agentType: 'codex', command: 'codex' });
       await ctr.sendPrompt({ operationId: 'op-test', prompt: 'hello', sessionId });
 
@@ -5460,10 +5047,7 @@ describe('HeterogeneousAgentCtr', () => {
       })}\n`;
       nextFakeProc = createFakeProc({ stdoutLines: [initLine, assistantLine] }).proc;
 
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
       const { sessionId } = await ctr.startSession({ agentType: 'amp', command: 'amp' });
       await ctr.sendPrompt({ operationId: 'op-test', prompt: 'hello', sessionId });
 
@@ -5537,10 +5121,7 @@ describe('HeterogeneousAgentCtr', () => {
       proc.kill = vi.fn();
       proc.killed = false;
 
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
 
       proc.__start = () => {
         setImmediate(() => {
@@ -5633,10 +5214,7 @@ describe('HeterogeneousAgentCtr', () => {
       electron.app.on.mockClear();
       electron.app.quit.mockClear();
       vi.spyOn(process, 'on').mockImplementation(() => process);
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
       const { sessionId } = await ctr.startSession({ agentType: 'pi', command: 'pi' });
       const session = (ctr as any).sessions.get(sessionId);
       let finishActive!: () => void;
@@ -5677,10 +5255,7 @@ describe('HeterogeneousAgentCtr', () => {
       const electron = (await import('electron')) as any;
       electron.app.on.mockClear();
       electron.app.quit.mockClear();
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
       const { sessionId } = await ctr.startSession({
         agentType: 'deepseek-harness',
         command: '',
@@ -5711,10 +5286,7 @@ describe('HeterogeneousAgentCtr', () => {
     it('before-quit closes a running TRAE ACP session', async () => {
       const electron = (await import('electron')) as any;
       electron.app.on.mockClear();
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
       const { sessionId } = await ctr.startSession({ agentType: 'trae', command: 'traecli' });
       const session = (ctr as any).sessions.get(sessionId);
       session.traeAcpSession = { close: traeAcpSessionCloseMock };
@@ -5732,10 +5304,7 @@ describe('HeterogeneousAgentCtr', () => {
       const electron = (await import('electron')) as any;
       electron.app.on.mockClear();
 
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
 
       const fileA = await seedPendingIntervention(ctr, 'opA');
       const fileB = await seedPendingIntervention(ctr, 'opB');
@@ -5762,10 +5331,7 @@ describe('HeterogeneousAgentCtr', () => {
       const processOnSpy = vi.spyOn(process, 'on').mockImplementation(() => process);
       const processExitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
 
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
       const file = await seedPendingIntervention(ctr, 'opSigterm');
 
       ctr.afterAppReady();
@@ -5782,10 +5348,7 @@ describe('HeterogeneousAgentCtr', () => {
       const electron = (await import('electron')) as any;
       electron.app.on.mockClear();
 
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
+      const ctr = new HeterogeneousAgentCtr(createAgentAppOptions(appStoragePath) as any);
       const file = await seedPendingIntervention(ctr, 'opIdempotent');
 
       // Pre-delete the file out from under the controller — simulates a

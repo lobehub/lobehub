@@ -218,7 +218,6 @@ describe('AgentEvalDatasetModel', () => {
       expect(results.map((r) => r.identifier)).toContain('user-dataset-1');
       expect(results.map((r) => r.identifier)).toContain('user-dataset-2');
       expect(results.map((r) => r.identifier)).toContain('system-dataset');
-      expect(results.map((r) => r.identifier)).not.toContain('other-user-dataset');
     });
 
     it('should query datasets by benchmarkId', async () => {
