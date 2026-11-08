@@ -16,6 +16,7 @@ import {
   type UserSkillVersion,
 } from '@/database/models/userSkill';
 
+import { packageSizeProblem } from '../skill/packageFiles';
 import { renderSkillIndexContent, validateSkillName } from '../skillManagement/frontmatter';
 import { packSkillArchive, type SkillArchiveFile, unpackSkillArchive } from './archive';
 import { skillStorage } from './storage';
@@ -249,8 +250,14 @@ export class UserSkillService {
       });
       // The archive is the package as it reads after this write, so it is built
       // from the version read here; a publish landing in between makes it stale.
+      // The edit is checked against the merged package it lands in, not on its
+      // own: files it does not name stay, and they count towards the limits too.
+      const files = applyEdits(skill.files, params.files);
+      const problem = packageSizeProblem(files);
+      if (problem) throw new Error(problem);
+
       const result = await this.model.revise(id, {
-        archive: await this.publish(content, applyEdits(skill.files, params.files)),
+        archive: await this.publish(content, files),
         baseVersion: skill.version,
         content,
         files: params.files,

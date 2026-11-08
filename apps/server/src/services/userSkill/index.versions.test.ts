@@ -6,6 +6,7 @@ import { UserSkillModel } from '@/database/models/userSkill';
 import { documents, files, globalFiles, users } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 
+import { MAX_PACKAGE_FILES } from '../skill/packageFiles';
 import { UserSkillService } from './index';
 import { skillStorage } from './storage';
 import { mockSkillStorage } from './testUtils';
@@ -111,6 +112,29 @@ describe('UserSkillService versions', () => {
       { binary: true, content: '', path: 'assets/logo.png', size: 6 },
       { content: 'echo ok', path: 'scripts/check.sh', size: 7 },
     ]);
+  });
+
+  // A revision names the files it touches; the package it lands in is already
+  // full, so the edit is checked against the merged set.
+  it('refuses an edit that only overflows the merged package', async () => {
+    const skill = await service().createSkill({
+      body: 'v1 body',
+      description: 'How each unit is done',
+      files: Array.from({ length: MAX_PACKAGE_FILES }, (_, i) => ({
+        content: 'x',
+        path: `references/${i}.md`,
+      })),
+      name: 'full-plan',
+      title: 'Full plan',
+    });
+
+    await expect(
+      service().reviseSkill(skill.id, {
+        body: 'v2 body',
+        files: { upsert: [{ content: 'y', path: 'references/extra.md' }] },
+      }),
+    ).rejects.toThrow(/at most 20 files/);
+    expect(await service().getVersion(skill.id, 2)).toBeUndefined();
   });
 
   // A version from before archives kept only its SKILL.md.
