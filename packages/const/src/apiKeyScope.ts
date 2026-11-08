@@ -278,6 +278,8 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   market: rw('agent:read', 'agent:write'),
   // tool execution inside a chat run
   mcp: { any: 'model:invoke' },
+  // recorded meetings: transcripts and minutes are conversation content
+  meeting: rw('chat:read', 'chat:write'),
   message: rw('chat:read', 'chat:write'),
   // IM channel management carries channel credentials
   messenger: 'blocked',
