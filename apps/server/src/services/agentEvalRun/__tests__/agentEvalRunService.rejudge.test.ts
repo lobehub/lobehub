@@ -129,6 +129,43 @@ describe('AgentEvalRunService.rejudgeRun', () => {
     expect(generateObject).not.toHaveBeenCalled();
   });
 
+  it('regrades an attempt once held as an error for an empty answer as a failure', async () => {
+    // Graded before a normally finished turn with no text counted as the model's failure.
+    const chain = await setupEvalChain({
+      assistantOutput: '',
+      datasetEvalConfig: { judgePrompt: RULES, model: 'judge-model', provider: 'openai' },
+      datasetEvalMode: 'rule-checklist',
+      totalCases: 1,
+    });
+    await new AgentEvalRunModel(serverDB, userId).update(chain.run.id, {
+      metrics: { errorCases: 1, failedCases: 0, passedCases: 0, totalCases: 1 },
+      status: 'completed',
+    });
+    await new AgentEvalRunTopicModel(serverDB, userId).updateByRunAndTopic(
+      chain.run.id,
+      chain.topic.id,
+      {
+        evalResult: { completionReason: 'done', error: 'No assistant output', rubricScores: [] },
+        passed: false,
+        score: 0,
+        status: 'error',
+      },
+    );
+
+    const result = await new AgentEvalRunService(serverDB, userId).rejudgeRun(chain.run.id);
+
+    expect(result).toMatchObject({ failedCases: 1, passedCases: 0, rejudged: 1 });
+    expect(generateObject).not.toHaveBeenCalled();
+    const runTopic = await serverDB.query.agentEvalRunTopics.findFirst();
+    expect(runTopic?.status).toBe('failed');
+    expect(runTopic?.evalResult?.error).toBe('Ended without a final answer');
+    const [updated] = await serverDB
+      .select()
+      .from(agentEvalRuns)
+      .where(eq(agentEvalRuns.id, chain.run.id));
+    expect(updated.metrics).toMatchObject({ errorCases: 0, failedCases: 1 });
+  });
+
   it('refuses a run that is still executing', async () => {
     const { run } = await setupJudgedRun();
     await new AgentEvalRunModel(serverDB, userId).update(run.id, { status: 'running' });

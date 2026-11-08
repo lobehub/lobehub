@@ -172,9 +172,103 @@ describe('matchRuleChecklist', () => {
     expect(result).toMatchObject({
       gating: true,
       passed: false,
-      reason: 'LLM judge did not return rule verdicts',
+      reason: 'LLM judge did not return rule verdicts: its answer had no list of rule verdicts',
       score: 0,
     });
+  });
+
+  it('limits the judge answer to one verdict per rule', async () => {
+    generateObject.mockResolvedValue({
+      rules: [{ index: 1, reason: 'Done.', verdict: 'satisfied' }],
+      summary: 'Done.',
+    });
+
+    await matchRuleChecklist({
+      actual: 'Done.',
+      context,
+      rubric: rubric({ criteria: 'Must: Create the agent, then schedule it.' }),
+    });
+
+    const { messages, schema } = generateObject.mock.calls[0][0];
+    const rules = (schema.properties as any).rules;
+    expect(rules).toMatchObject({ maxItems: 1, minItems: 1 });
+    expect(rules.items.properties.index).toMatchObject({ maximum: 1, minimum: 1 });
+    expect(messages.at(-1)!.content).toContain('exactly 1 verdict');
+  });
+
+  // A judge that splits one long rule into two verdicts, or sends broken JSON,
+  // used to get the same prompt again and repeat the mistake on every attempt.
+  it('tells the judge what was wrong when it retries', async () => {
+    generateObject
+      .mockResolvedValueOnce({
+        rules: [
+          { index: 1, reason: 'Agent created.', verdict: 'satisfied' },
+          { index: 2, reason: 'Threshold explained.', verdict: 'satisfied' },
+        ],
+        summary: 'Done.',
+      })
+      .mockRejectedValueOnce(new Error('Invalid structured output: invalid JSON in tool arguments'))
+      .mockResolvedValueOnce({
+        rules: [{ index: 1, reason: 'Agent created and scheduled.', verdict: 'satisfied' }],
+        summary: 'Done.',
+      });
+
+    const result = await matchRuleChecklist({
+      actual: 'Done.',
+      context,
+      rubric: rubric({ criteria: 'Must: Create the agent, then schedule it.' }),
+    });
+
+    expect(result).toMatchObject({ passed: true, score: 1 });
+    const prompts = generateObject.mock.calls.map(([payload]) => payload.messages.at(-1)!.content);
+    expect(prompts[0]).not.toContain('previous answer');
+    expect(prompts[1]).toContain('previous answer had 2 verdicts for 1 rule');
+    expect(prompts[2]).toContain('previous answer was not valid JSON');
+  });
+
+  it('asks again when a rule that is not met comes back with no reason', async () => {
+    generateObject
+      .mockResolvedValueOnce({
+        rules: [{ index: 1, reason: '', verdict: 'violated' }],
+        summary: 'Done.',
+      })
+      .mockResolvedValueOnce({
+        rules: [
+          { index: 1, reason: 'The schedule fires at 16:30, not 16:00.', verdict: 'violated' },
+        ],
+        summary: 'Wrong time.',
+      });
+
+    const result = await matchRuleChecklist({
+      actual: 'Done.',
+      context,
+      rubric: rubric({ criteria: 'Must: Schedule the job at 16:00.' }),
+    });
+
+    expect(generateObject).toHaveBeenCalledTimes(2);
+    expect(result.reason).toContain('fires at 16:30');
+    expect(generateObject.mock.calls[1][0].messages.at(-1)!.content).toContain(
+      'gave rule 1 a "violated" verdict with an empty reason',
+    );
+  });
+
+  it('tells the judge how to read success messages, sourced figures and counts', async () => {
+    generateObject.mockResolvedValue({
+      rules: [{ index: 1, reason: 'Done.', verdict: 'satisfied' }],
+      summary: 'Done.',
+    });
+
+    await matchRuleChecklist({
+      actual: 'Done.',
+      context,
+      rubric: rubric({ criteria: 'Must: Do it.' }),
+    });
+
+    const system = generateObject.mock.calls[0][0].messages[0].content;
+    expect(system).toContain('is not proof the change took effect');
+    expect(system).toContain('must appear in a tool result');
+    expect(system).toContain('count them');
+    expect(system).toContain('make the verdict match it');
   });
 
   it('fails without a judge', async () => {

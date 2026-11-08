@@ -3,6 +3,7 @@ import pMap from 'p-map';
 import { evaluateAndFinalizeRun } from './aggregate';
 import { assertRunCaseCompatibility } from './caseCompatibility';
 import { evaluateCase } from './completion';
+import { isRegradableEmptyAnswer } from './emptyAnswer';
 import { REJUDGEABLE_STATUSES } from './judgeError';
 import { rejudgeTopicThreads } from './thread';
 import type { EvalRunDeps } from './types';
@@ -22,8 +23,9 @@ export interface RejudgeRunResult {
  * Grades a finished run again with the dataset's current judge setup (eval
  * mode, rules, judge model, evidence) from the trajectories it recorded: no
  * model answers again, only the judge runs. Cases with a verdict and cases
- * whose judge failed (`judge_error`) are graded again; cases that never ran to
- * an answer (errors, timeouts, external) are left as they are, and the run's
+ * whose judge failed (`judge_error`) are graded again, and so are attempts
+ * once held as errors for an empty answer; other cases that never ran to an
+ * answer (errors, timeouts, external) are left as they are, and the run's
  * metrics are rebuilt from the new verdicts.
  */
 export async function rejudgeRun(deps: EvalRunDeps, runId: string): Promise<RejudgeRunResult> {
@@ -34,7 +36,15 @@ export async function rejudgeRun(deps: EvalRunDeps, runId: string): Promise<Reju
   }
 
   const runTopics = await deps.runTopicModel.findByRunId(runId);
-  const targets = runTopics.filter((runTopic) => REJUDGEABLE_STATUSES.has(runTopic.status ?? ''));
+  // Also cases held as errors only for attempts that ended with no answer,
+  // which the current reading may grade as failures.
+  const targets = runTopics.filter(
+    (runTopic) =>
+      REJUDGEABLE_STATUSES.has(runTopic.status ?? '') ||
+      (runTopic.status === 'error' &&
+        (runTopic.evalResult?.threads?.some(isRegradableEmptyAnswer) ||
+          isRegradableEmptyAnswer({ error: runTopic.evalResult?.error, status: runTopic.status }))),
+  );
   await assertRunCaseCompatibility(deps, run, targets);
 
   await pMap(

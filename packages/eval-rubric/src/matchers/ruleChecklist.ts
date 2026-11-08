@@ -21,9 +21,16 @@ const DEFAULT_SYSTEM_ROLE = [
   'Verdicts:',
   '- "satisfied": the output or the evidence shows the rule was met.',
   '- "violated": the output or the evidence shows the rule was broken, or a "Must" rule was not done.',
-  '- "unverifiable": the materials show neither.',
+  '- "unverifiable": the materials show neither. Use it only when nothing in the output or the evidence bears on the rule; when they show the rule met or broken, say so.',
   'A "Must not" rule is satisfied when nothing in the output or the evidence breaks it.',
   'A tool call that failed and had no effect does not count as doing the action: judge rules about how many times something was done by the calls that succeeded.',
+  '',
+  'How to read the evidence:',
+  '- A result that says "success" is not proof the change took effect. Check that it names the record, field and value the rule is about; a result showing another field or no change means the action was not done.',
+  '- Figures, names and facts the output presents as found (market sizes, rates, prices, IDs, quotes) must appear in a tool result. A figure credited to a source whose result failed, was empty or was never read is not supported.',
+  '- When a rule names a number (exactly three links, five items, one event), count them in the output or the evidence before deciding, and give the count in the reason.',
+  '- Time and schedule rules: work out what the call actually does (for example the times a cron pattern fires) rather than trusting the description the agent wrote.',
+  '- Write the reason first, then make the verdict match it. A reason that says the rule was met with a "violated" verdict, or the other way round, is wrong.',
   '',
   'A [Reference], when given, describes one acceptable way to handle the task. Use it only to understand what the rules mean; it is not a rule. Never mark a rule violated because the attempt differs from the reference.',
   '',
@@ -32,27 +39,39 @@ const DEFAULT_SYSTEM_ROLE = [
 
 const VERDICTS = ['satisfied', 'violated', 'unverifiable'] as const;
 
-const CHECKLIST_SCHEMA: Record<string, unknown> = {
+/**
+ * The judge answer for `count` rules: one verdict per rule, numbered 1 to
+ * `count`. The bounds also steer judges that do not enforce the schema.
+ */
+const checklistSchema = (count: number): Record<string, unknown> => ({
   additionalProperties: false,
   properties: {
     rules: {
+      description: `Exactly ${count} verdict${count === 1 ? '' : 's'}, one per rule`,
       items: {
         additionalProperties: false,
         properties: {
-          index: { description: 'The rule number, starting at 1', type: 'integer' },
+          index: {
+            description: `The rule number, from 1 to ${count}`,
+            maximum: count,
+            minimum: 1,
+            type: 'integer',
+          },
           reason: { description: 'One sentence grounding the verdict', type: 'string' },
           verdict: { enum: VERDICTS, type: 'string' },
         },
         required: ['index', 'verdict', 'reason'],
         type: 'object',
       },
+      maxItems: count,
+      minItems: count,
       type: 'array',
     },
     summary: { description: 'One sentence on the attempt as a whole', type: 'string' },
   },
   required: ['rules', 'summary'],
   type: 'object',
-};
+});
 
 export interface ChecklistRule {
   kind: 'must' | 'must-not' | 'rule';
@@ -123,32 +142,52 @@ interface JudgeRuleRow {
   verdict?: unknown;
 }
 
-/** Require exactly one explicit verdict for every one-based rule in the schema. */
-const readVerdicts = (rules: ChecklistRule[], rows: unknown[]): EvalRuleVerdict[] | undefined => {
-  if (rows.length !== rules.length) return undefined;
+const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? '' : 's'}`;
+
+/**
+ * Require exactly one explicit verdict for every one-based rule in the schema;
+ * otherwise say what is wrong, so a retry can be told.
+ */
+const readVerdicts = (
+  rules: ChecklistRule[],
+  rows: unknown[],
+): { problem: string } | { verdicts: EvalRuleVerdict[] } => {
+  if (rows.length !== rules.length)
+    return {
+      problem: `had ${plural(rows.length, 'verdict')} for ${plural(rules.length, 'rule')}`,
+    };
   const byIndex = new Map<number, EvalRuleVerdict>();
   for (const value of rows) {
     const row = value as JudgeRuleRow | null | undefined;
     const index = row?.index;
     const verdict = VERDICTS.find((item) => item === row?.verdict);
-    if (
-      typeof index !== 'number' ||
-      !Number.isInteger(index) ||
-      index < 1 ||
-      index > rules.length ||
-      byIndex.has(index) ||
-      !verdict ||
-      typeof row?.reason !== 'string'
-    )
-      return undefined;
+    if (typeof index !== 'number' || !Number.isInteger(index) || index < 1 || index > rules.length)
+      return { problem: `numbered a verdict ${String(index)}, outside 1 to ${rules.length}` };
+    if (byIndex.has(index)) return { problem: `gave rule ${index} more than one verdict` };
+    if (!verdict || typeof row?.reason !== 'string')
+      return { problem: `gave rule ${index} no valid verdict and reason` };
+    // A rule that is not met has to say why: the failure is read from this reason.
+    if (verdict !== 'satisfied' && !row.reason.trim())
+      return { problem: `gave rule ${index} a "${verdict}" verdict with an empty reason` };
     byIndex.set(index, {
       ...(row.reason && { reason: row.reason }),
       rule: ruleLabel(rules[index - 1]),
       verdict,
     });
   }
-  return rules.map((_, position) => byIndex.get(position + 1)!);
+  return { verdicts: rules.map((_, position) => byIndex.get(position + 1)!) };
 };
+
+/** Asks for exactly one verdict per rule; after an unusable answer, also says what was wrong. */
+const answerInstruction = (count: number, problem?: string) =>
+  [
+    ...(problem
+      ? [
+          `[Correction]\nYour previous answer ${problem}, so it could not be used. Answer again from the same materials.`,
+        ]
+      : []),
+    `[Answer]\nThere ${count === 1 ? 'is' : 'are'} ${plural(count, 'rule')}. Return exactly ${plural(count, 'verdict')}, numbered 1 to ${count}, one per rule as listed: never split a rule into several verdicts or merge rules. Return only valid JSON matching the schema.`,
+  ].join('\n\n');
 
 export interface MatchRuleChecklistParams {
   actual: string;
@@ -182,35 +221,43 @@ export const matchRuleChecklist = async ({
   if (rules.some((rule) => !rule.text)) {
     return { ...judgeErrorResult('No checklist rules configured'), gating: true };
   }
-  const messages = [
-    { content: cfg.systemRole || DEFAULT_SYSTEM_ROLE, role: 'system' as const },
-    {
-      content: buildUserPrompt(rules, actual, expected, input, context.judgeEvidence),
-      role: 'user' as const,
-    },
-  ];
+  const userPrompt = buildUserPrompt(rules, actual, expected, input, context.judgeEvidence);
+  const schema = checklistSchema(rules.length);
   const maxAttempts = Math.max(1, context.judgeMaxAttempts ?? 3);
 
   let lastResult: MatchResult = {
     ...judgeErrorResult('LLM judge did not return rule verdicts'),
     gating: true,
   };
+  // Why the previous answer was unusable: the retry says so instead of asking
+  // the same question again and getting the same mistake back.
+  let problem: string | undefined;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
       const result = await context.generateObject({
-        messages,
+        messages: [
+          { content: cfg.systemRole || DEFAULT_SYSTEM_ROLE, role: 'system' as const },
+          {
+            content: `${userPrompt}\n\n${answerInstruction(rules.length, problem)}`,
+            role: 'user' as const,
+          },
+        ],
         model,
         provider: cfg.provider,
-        schema: CHECKLIST_SCHEMA,
+        schema,
       });
-      const verdicts = Array.isArray(result?.rules) ? readVerdicts(rules, result.rules) : undefined;
-      if (!verdicts || typeof result?.summary !== 'string') {
+      const read = Array.isArray(result?.rules)
+        ? readVerdicts(rules, result.rules)
+        : { problem: 'had no list of rule verdicts' };
+      if ('problem' in read || typeof result?.summary !== 'string') {
+        problem = 'problem' in read ? read.problem : 'had no summary';
         lastResult = {
-          ...judgeErrorResult('LLM judge did not return rule verdicts'),
+          ...judgeErrorResult(`LLM judge did not return rule verdicts: its answer ${problem}`),
           gating: true,
         };
         continue;
       }
+      const { verdicts } = read;
 
       const satisfied = verdicts.filter((item) => item.verdict === 'satisfied').length;
       const summary = typeof result.summary === 'string' ? result.summary.trim() : '';
@@ -229,10 +276,10 @@ export const matchRuleChecklist = async ({
         verdicts,
       };
     } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      problem = /invalid json/i.test(message) ? 'was not valid JSON' : 'could not be read';
       lastResult = {
-        ...judgeErrorResult(
-          `LLM judge failed: ${error instanceof Error ? error.message : String(error)}`,
-        ),
+        ...judgeErrorResult(`LLM judge failed: ${message}`),
         gating: true,
       };
     }

@@ -25,6 +25,7 @@ import {
   THREAD_TRIGGER_CONCURRENCY,
 } from './constants';
 import { createEvalRunDeps } from './deps';
+import { classifyEmptyAnswer, isRegradableEmptyAnswer } from './emptyAnswer';
 import {
   attemptReply,
   buildEvalModeRubric,
@@ -582,20 +583,14 @@ async function evaluateThread(
   const lastAssistantMsg = assistantMessages.at(-1);
 
   if (!lastAssistantMsg || !lastAssistantMsg.content) {
-    // Same reading as the topic path: running into the step cap without an
-    // answer is the model's outcome, not an infrastructure error.
-    const stepCap = run.config?.maxSteps as number | undefined;
-    const hitStepCap = !!stepCap && (telemetry.steps ?? 0) >= stepCap;
-    return {
-      ...baseMeta,
-      error: hitStepCap
-        ? `Reached the step limit (${stepCap}) without a final answer`
-        : 'No assistant output',
-      passed: false,
-      rubricScores: [],
-      score: 0,
-      status: hitStepCap ? 'failed' : 'error',
-    };
+    // Same reading as the topic path (see classifyEmptyAnswer).
+    const outcome = classifyEmptyAnswer({
+      completionReason: telemetry.completionReason,
+      lastAssistantMessage: lastAssistantMsg,
+      stepCap: run.config?.maxSteps as number | undefined,
+      steps: telemetry.steps,
+    });
+    return { ...baseMeta, ...outcome, passed: false, rubricScores: [], score: 0 };
   }
 
   // Resolve rubrics
@@ -729,7 +724,10 @@ export async function rejudgeTopicThreads(
 
   for (const thread of evalThreads) {
     const meta = (thread.metadata ?? {}) as Record<string, unknown>;
-    if (!('completedAt' in meta) || !REJUDGEABLE_THREAD_STATUSES.has(String(meta.status))) {
+    if (
+      !('completedAt' in meta) ||
+      !(REJUDGEABLE_THREAD_STATUSES.has(String(meta.status)) || isRegradableEmptyAnswer(meta))
+    ) {
       continue;
     }
     const evalResult = await evaluateThread(deps, {

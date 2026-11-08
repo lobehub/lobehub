@@ -1,6 +1,6 @@
 import type * as EvalRubric from '@lobechat/eval-rubric';
 import type { EvaluateResult } from '@lobechat/eval-rubric';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -194,6 +194,37 @@ describe('invalid output and Stop races', () => {
     const attempt = result?.evalResult?.threads?.find((item) => item.threadId === threadIds[0]);
     expect(attempt?.status).toBe(hitStepCap ? 'failed' : 'error');
     expect(attempt?.error).toContain(hitStepCap ? 'step limit' : 'No assistant output');
+  });
+
+  it('fails, not errors, an attempt the provider finished with no text', async () => {
+    // A turn that ended normally (no provider error) with an empty answer, e.g. a
+    // tool call announced and never sent: the model's outcome, which a rerun repeats.
+    evaluate.mockResolvedValue(passing);
+    const svc = new AgentEvalRunService(serverDB, userId);
+    const { finish, run, testCase, threadIds, topic } = await setupTwoThreadCase(svc);
+    await runModel().update(run.id, { config: { k: 2, maxSteps: 20 } });
+    await serverDB
+      .update(messages)
+      .set({ content: '' })
+      .where(and(eq(messages.threadId, threadIds[0]), eq(messages.role, 'assistant')));
+    await svc.recordThreadCompletion({
+      runId: run.id,
+      status: 'completed',
+      testCaseId: testCase.id,
+      threadId: threadIds[0],
+      topicId: topic.id,
+      telemetry: { completionReason: 'done', steps: 5 },
+    });
+    await finish(1, 'completed');
+    const result = await runTopicModel().findByRunAndTestCase(run.id, testCase.id);
+    const attempt = result?.evalResult?.threads?.find((item) => item.threadId === threadIds[0]);
+    expect(attempt).toMatchObject({
+      error: 'Ended without a final answer',
+      passed: false,
+      status: 'failed',
+    });
+    expect(result?.status).toBe('passed');
+    expect((await runModel().findById(run.id))?.metrics?.errorCases).toBe(0);
   });
 
   it('keeps a timeout mixed with a passed attempt out of model verdicts', async () => {

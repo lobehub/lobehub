@@ -7,6 +7,7 @@ import type {
 } from '@lobechat/types';
 
 import { EVAL_HISTORY_TAIL_METADATA_KEY } from './constants';
+import { classifyEmptyAnswer } from './emptyAnswer';
 import {
   attemptReply,
   buildEvalModeRubric,
@@ -196,22 +197,19 @@ export async function evaluateCase(
   const existingResult = { ...runTopic.evalResult };
 
   if (!lastAssistantMsg || !lastAssistantMsg.content) {
-    // No final answer. An attempt that ran into its step cap kept calling tools
-    // instead of answering: that is the model's outcome and grades as a
-    // failure. Anything else (provider error, dropped stream) stays an error.
-    const stepCap = run.config?.maxSteps as number | undefined;
-    const hitStepCap = !!stepCap && (existingResult?.steps ?? 0) >= stepCap;
+    // No final answer: the step cap, or a turn the provider finished with no
+    // text, is the model's failure; anything else stays an error (see classifyEmptyAnswer).
+    const { error, status } = classifyEmptyAnswer({
+      completionReason: existingResult?.completionReason as string | undefined,
+      lastAssistantMessage: lastAssistantMsg,
+      stepCap: run.config?.maxSteps as number | undefined,
+      steps: existingResult?.steps as number | undefined,
+    });
     await writeCompletion(deps, runTopic, {
-      evalResult: {
-        ...existingResult,
-        error: hitStepCap
-          ? `Reached the step limit (${stepCap}) without a final answer`
-          : 'No assistant output',
-        rubricScores: [],
-      },
+      evalResult: { ...existingResult, error, rubricScores: [] },
       passed: false,
       score: 0,
-      status: hitStepCap ? 'failed' : 'error',
+      status,
     });
     return;
   }
