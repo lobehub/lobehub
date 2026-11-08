@@ -8,52 +8,31 @@ import { AiAgentService } from '../index';
 const {
   mockDeviceFindByDeviceId,
   mockDeviceFindWorkspaceDeviceById,
-  mockBuildRemoteDeviceHeteroContext,
-  mockCreateOperationMetadata,
   mockDispatchAgentRun,
-  mockExecuteToolCall,
-  mockInterruptOperation,
   mockGetHeterogeneousResumeSessionId,
   mockMessageCreate,
   mockMessageQuery,
-  mockMessageUpdate,
   mockResolveAttachmentsByFileIds,
-  mockSpawnHeteroSandbox,
-  mockIngestAttachment,
-  mockPublishAgentRuntimeInit,
-  mockPublishAgentRuntimeEnd,
 } = vi.hoisted(() => ({
-  mockBuildRemoteDeviceHeteroContext: vi.fn().mockReturnValue('device context'),
-  mockCreateOperationMetadata: vi.fn().mockResolvedValue(undefined),
   mockDeviceFindByDeviceId: vi.fn(),
   mockDeviceFindWorkspaceDeviceById: vi.fn(),
   mockDispatchAgentRun: vi.fn().mockResolvedValue({ success: true }),
-  mockExecuteToolCall: vi.fn().mockResolvedValue({ success: true }),
-  mockInterruptOperation: vi.fn().mockResolvedValue(true),
   mockGetHeterogeneousResumeSessionId: vi.fn().mockResolvedValue(undefined),
-  mockIngestAttachment: vi.fn(),
   mockMessageCreate: vi.fn(),
   mockMessageQuery: vi.fn(),
-  mockMessageUpdate: vi.fn().mockResolvedValue({}),
-  mockPublishAgentRuntimeEnd: vi.fn().mockResolvedValue('end-event-id'),
-  mockPublishAgentRuntimeInit: vi.fn().mockResolvedValue('init-event-id'),
   mockResolveAttachmentsByFileIds: vi.fn(),
-  mockSpawnHeteroSandbox: vi.fn().mockResolvedValue(undefined),
 }));
 
-// Local hetero (claude-code / codebuddy / codex / cursor / opencode / pi / qoder) seeds
-// publishAgentRuntimeInit so the agent-gateway DO reports `running` on a later reconnect. Stub the factory so
-// the assertion below can verify the init, and so the real one (which probes
-// Redis synchronously) doesn't throw a server-env error in the test env.
+// The real factory probes Redis synchronously and throws in the test env.
 vi.mock('@/server/modules/AgentRuntime/factory', () => ({
   createAgentStateManager: vi.fn(function () {
     return {
-      createOperationMetadata: mockCreateOperationMetadata,
+      createOperationMetadata: vi.fn().mockResolvedValue(undefined),
     };
   }),
   createStreamEventManager: () => ({
-    publishAgentRuntimeEnd: mockPublishAgentRuntimeEnd,
-    publishAgentRuntimeInit: mockPublishAgentRuntimeInit,
+    publishAgentRuntimeEnd: vi.fn().mockResolvedValue('end-event-id'),
+    publishAgentRuntimeInit: vi.fn().mockResolvedValue('init-event-id'),
   }),
   isRedisAvailable: vi.fn(function () {
     return false;
@@ -76,7 +55,7 @@ vi.mock('@/server/services/file', () => ({
 }));
 
 vi.mock('../ingestAttachment', () => ({
-  ingestAttachment: mockIngestAttachment,
+  ingestAttachment: vi.fn(),
 }));
 
 vi.mock('@/libs/trusted-client', () => ({
@@ -106,7 +85,7 @@ vi.mock('@/database/models/message', () => ({
       getLatestNonToolMessageId: vi.fn().mockResolvedValue(undefined),
       getLatestSpineMessageId: vi.fn().mockResolvedValue(undefined),
       query: mockMessageQuery,
-      update: mockMessageUpdate,
+      update: vi.fn().mockResolvedValue({}),
     };
   }),
 }));
@@ -206,7 +185,7 @@ vi.mock('@/server/services/heterogeneousAgent', () => ({
 }));
 
 vi.mock('@/server/services/heterogeneousAgent/sandboxRunner', () => ({
-  spawnHeteroSandbox: mockSpawnHeteroSandbox,
+  spawnHeteroSandbox: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('@/server/services/file/resolveAttachments', () => ({
@@ -230,7 +209,7 @@ vi.mock('@/server/services/agentRuntime', () => ({
         operationId: 'op-123',
         success: true,
       }),
-      interruptOperation: mockInterruptOperation,
+      interruptOperation: vi.fn().mockResolvedValue(true),
     };
   }),
 }));
@@ -246,7 +225,7 @@ vi.mock('@/server/modules/Mecha', () => ({
 vi.mock('@/server/services/deviceGateway', () => ({
   deviceGateway: {
     dispatchAgentRun: mockDispatchAgentRun,
-    executeToolCall: mockExecuteToolCall,
+    executeToolCall: vi.fn().mockResolvedValue({ success: true }),
     isConfigured: false,
     queryDeviceList: vi.fn().mockResolvedValue([]),
     resolveDeviceWorkspaceId: vi.fn().mockResolvedValue(undefined),
@@ -258,7 +237,7 @@ vi.mock('@/server/services/deviceGateway/dispatchAuthorization', () => ({
 }));
 
 vi.mock('@/server/services/heterogeneousAgent/remoteDeviceHeteroContext', () => ({
-  buildRemoteDeviceHeteroContext: mockBuildRemoteDeviceHeteroContext,
+  buildRemoteDeviceHeteroContext: vi.fn().mockReturnValue('device context'),
 }));
 
 describe('AiAgentService.execAgent - external agent run fee', () => {
