@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  compareStreamIds,
   getDefaultReasonDetail,
   StreamEventManager,
   stripFinalStateInEventData,
@@ -41,6 +42,20 @@ describe('StreamEventManager', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     streamManager = new StreamEventManager();
+  });
+
+  describe('compareStreamIds', () => {
+    it('orders by milliseconds, then sequence', () => {
+      expect(compareStreamIds('9-5', '10-0')).toBeLessThan(0);
+      expect(compareStreamIds('10-2', '10-10')).toBeLessThan(0);
+      expect(compareStreamIds('10-1', '10-1')).toBe(0);
+      expect(compareStreamIds('11', '10-99')).toBeGreaterThan(0);
+    });
+
+    it('fails closed for a cursor that is not a stream id', () => {
+      expect(compareStreamIds('missing', '1-0')).toBeNaN();
+      expect(compareStreamIds('1-0', '1-x')).toBeNaN();
+    });
   });
 
   describe('deleteStreamEvents', () => {
@@ -126,8 +141,41 @@ describe('StreamEventManager', () => {
       expect((await streamManager.getStreamHistoryPage('op-1')).available).toBe(false);
       mockRedis.xrange.mockResolvedValueOnce([]);
       expect((await streamManager.getStreamHistoryPage('op-1')).available).toBe(false);
-      mockRedis.xrange.mockResolvedValueOnce([]);
+      // Missing cursor on an expired stream: no entry, and no init to anchor it.
+      mockRedis.xrange.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
       expect((await streamManager.getStreamHistoryPage('op-1', '1-0')).available).toBe(false);
+    });
+
+    // A superseded `tools_calling` snapshot is removed after a newer entry lands,
+    // so a follower whose cursor was that snapshot must keep paging, not fail.
+    it('continues after a cursor whose snapshot was removed mid-stream', async () => {
+      mockRedis.xrange
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([row('1-0', 'agent_runtime_init')])
+        .mockResolvedValueOnce([row('4-0', 'stream_chunk')]);
+
+      const page = await streamManager.getStreamHistoryPage('op-1', '3-0', 2);
+
+      expect(page).toMatchObject({ available: true, hasMore: false, nextCursor: '4-0' });
+      expect(page.events.map((event) => event.id)).toEqual(['4-0']);
+    });
+
+    it('fails closed for a missing cursor with nothing after it or no init before it', async () => {
+      mockRedis.xrange
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([row('1-0', 'agent_runtime_init')])
+        .mockResolvedValueOnce([]);
+      expect((await streamManager.getStreamHistoryPage('op-1', '3-0')).available).toBe(false);
+
+      mockRedis.xrange
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([row('5-0', 'agent_runtime_init')]);
+      expect((await streamManager.getStreamHistoryPage('op-1', '3-0')).available).toBe(false);
+
+      mockRedis.xrange
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([row('1-0', 'stream_chunk')]);
+      expect((await streamManager.getStreamHistoryPage('op-1', '3-0')).available).toBe(false);
     });
 
     it('propagates Redis errors instead of reporting an empty successful history', async () => {
