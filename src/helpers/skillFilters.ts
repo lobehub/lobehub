@@ -1,48 +1,33 @@
-import { AgentBrowserIdentifier } from '@lobechat/builtin-skills';
 import { isDesktop } from '@lobechat/const';
+// Imported from the leaf module rather than the package barrel: this helper
+// is used by store slices and settings UI, which must not pull the whole
+// agent-runtime graph in behind a two-line gate.
+import {
+  type BuiltinSkillEnvironment,
+  isBuiltinSkillEnabled,
+  USER_HIDDEN_BUILTIN_SKILLS,
+} from '@lobechat/mecha/builtinSkillGate';
 import { type BuiltinSkill } from '@lobechat/types';
 
-export interface BuiltinSkillFilterContext {
-  /**
-   * Whether the current run can execute commands on a local device. Server-side
-   * callers must derive this from the run's execution plan (`activeDeviceId`
-   * presence) — the compile-time `isDesktop` constant is always false there.
-   */
-  canExecuteOnDevice: boolean;
-}
+export type BuiltinSkillFilterContext = BuiltinSkillEnvironment;
 
-const DEVICE_ONLY_BUILTIN_SKILLS = new Set([AgentBrowserIdentifier]);
-const USER_HIDDEN_BUILTIN_SKILLS = new Set(['task']);
-
-// Client default: the desktop app is itself the execution device.
-const DEFAULT_CONTEXT: BuiltinSkillFilterContext = {
-  canExecuteOnDevice: isDesktop,
-};
-
-const resolveBuiltinSkillFilterContext = (
-  context: BuiltinSkillFilterContext = DEFAULT_CONTEXT,
-): BuiltinSkillFilterContext => ({
-  canExecuteOnDevice: context.canExecuteOnDevice ?? DEFAULT_CONTEXT.canExecuteOnDevice,
-});
+// The rule lives in `@lobechat/mecha` so both hosts gate the device-only
+// builtin skills the same way. On the client the desktop app is itself the
+// execution device; server callers must derive it from the run's execution
+// plan, since the compile-time `isDesktop` constant is always false there.
+const DEFAULT_CONTEXT: BuiltinSkillFilterContext = { canExecuteOnDevice: isDesktop };
 
 export const shouldEnableBuiltinSkill = (
   skillId: string,
   context: BuiltinSkillFilterContext = DEFAULT_CONTEXT,
-): boolean => {
-  const resolvedContext = resolveBuiltinSkillFilterContext(context);
+): boolean =>
+  isBuiltinSkillEnabled(skillId, {
+    canExecuteOnDevice: context.canExecuteOnDevice ?? DEFAULT_CONTEXT.canExecuteOnDevice,
+  });
 
-  if (USER_HIDDEN_BUILTIN_SKILLS.has(skillId)) return false;
-
-  if (DEVICE_ONLY_BUILTIN_SKILLS.has(skillId)) return resolvedContext.canExecuteOnDevice;
-
-  return true;
-};
-
-export const filterBuiltinSkills = (
-  skills: BuiltinSkill[],
+export const filterBuiltinSkills = <T extends Pick<BuiltinSkill, 'identifier'>>(
+  skills: T[],
   context: BuiltinSkillFilterContext = DEFAULT_CONTEXT,
-): BuiltinSkill[] => {
-  return skills.filter((skill) => shouldEnableBuiltinSkill(skill.identifier, context));
-};
+): T[] => skills.filter((skill) => shouldEnableBuiltinSkill(skill.identifier, context));
 
 export { USER_HIDDEN_BUILTIN_SKILLS };

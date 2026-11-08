@@ -1,6 +1,6 @@
 'use client';
 
-import { Text } from '@lobehub/ui/base-ui';
+import { Text } from '@lobehub/ui';
 import { useEffect, useRef, useState } from 'react';
 
 interface ElapsedTimeProps {

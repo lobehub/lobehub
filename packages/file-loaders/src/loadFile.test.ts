@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -80,6 +80,57 @@ describe('loadFile', () => {
     } finally {
       errorSpy.mockRestore();
       await rm(tempDir, { force: true, recursive: true });
+    }
+  });
+
+  it('surfaces a loader that reports failure through error pages at the document level', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const tempDir = await mkdtemp(path.join(tmpdir(), 'lobe-file-loaders-'));
+
+    try {
+      // `stat` succeeds on a directory, then TextLoader's `readFile` fails with
+      // EISDIR and returns an error page instead of throwing.
+      const dir = path.join(tempDir, 'looks-like-a-file.txt');
+      await mkdir(dir);
+
+      const doc = await loadFile(dir);
+
+      expect(doc.content).toBe('');
+      expect(doc.pages?.[0].metadata.error).toContain('Failed to load text file');
+      expect(doc.metadata.error).toContain('Failed to load text file');
+    } finally {
+      errorSpy.mockRestore();
+      await rm(tempDir, { force: true, recursive: true });
+    }
+  });
+
+  it('keeps a partially failed load successful when some pages loaded', async () => {
+    vi.resetModules();
+    vi.doMock('./loaders', () => ({
+      getFileLoader: async () =>
+        class PartialLoader {
+          async loadPages() {
+            return [
+              { charCount: 2, lineCount: 1, metadata: {}, pageContent: 'ok' },
+              { charCount: 0, lineCount: 0, metadata: { error: 'page 2 broken' }, pageContent: '' },
+            ];
+          }
+
+          async aggregateContent(pages: { pageContent: string }[]) {
+            return pages.map((page) => page.pageContent).join('');
+          }
+        },
+    }));
+
+    try {
+      const { loadFile: loadFileWithMock } = await import('./loadFile');
+      const doc = await loadFileWithMock(fp('test.txt'));
+
+      expect(doc.content).toBe('ok');
+      expect(doc.metadata.error).toBeUndefined();
+    } finally {
+      vi.doUnmock('./loaders');
+      vi.resetModules();
     }
   });
 

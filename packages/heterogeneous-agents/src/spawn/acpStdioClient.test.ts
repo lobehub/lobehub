@@ -33,12 +33,35 @@ const createProcess = () => {
 };
 
 afterEach(() => {
+  vi.useRealTimers();
   Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform });
   vi.restoreAllMocks();
   spawnMock.mockReset();
 });
 
 describe('AcpStdioClient', () => {
+  it('marks request timeouts so callers can distinguish them from command failures', async () => {
+    vi.useFakeTimers();
+    const { child } = createProcess();
+    spawnMock.mockReturnValue(child);
+    vi.spyOn(process, 'kill').mockImplementation(() => true);
+    const client = new AcpStdioClient({
+      args: [],
+      commandPath: 'agent',
+      cwd: '/workspace',
+      env: {},
+      onMessage: vi.fn(),
+      onRawMessage: vi.fn(),
+      onStderr: vi.fn(),
+    });
+    await client.start();
+    const timedOut = expect(client.request('initialize', {}, 100)).rejects.toMatchObject({
+      code: 'ETIMEDOUT',
+    });
+    await Promise.all([timedOut, vi.advanceTimersByTimeAsync(100)]);
+    client.close();
+  });
+
   it('frames split NDJSON and correlates concurrent responses by request id', async () => {
     const { child, stdout, writes } = createProcess();
     spawnMock.mockReturnValue(child);
@@ -208,6 +231,33 @@ describe('AcpStdioClient', () => {
 
     expect(onMessage).toHaveBeenCalledOnce();
     expect(onMessage).toHaveBeenCalledWith({ method: 'first' });
+  });
+
+  it('inherits an outer wrapper process group and signals the child directly', async () => {
+    const { child } = createProcess();
+    spawnMock.mockReturnValue(child);
+    const processKill = vi.spyOn(process, 'kill').mockImplementation(() => true);
+    const client = new AcpStdioClient({
+      args: ['agent', 'stdio'],
+      commandPath: 'agent',
+      cwd: '/workspace',
+      detached: false,
+      env: { ...process.env },
+      onMessage: vi.fn(),
+      onRawMessage: vi.fn(),
+      onStderr: vi.fn(),
+    });
+    await client.start();
+
+    expect(spawnMock).toHaveBeenCalledWith(
+      'agent',
+      ['agent', 'stdio'],
+      expect.objectContaining({ detached: false }),
+    );
+    client.close('SIGKILL');
+
+    expect(child.kill).toHaveBeenCalledWith('SIGKILL');
+    expect(processKill).not.toHaveBeenCalled();
   });
 
   it('terminates the child process tree with taskkill on Windows', async () => {

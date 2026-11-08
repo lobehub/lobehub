@@ -12,19 +12,84 @@ const moonshotChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_048_576,
     description:
+      "Kimi K3.1 Pro is the first model in the K3.1 series and Kimi's most capable flagship to date: a 3T-class model with native visual understanding and a 1M-token context window, with major gains in coding, 3D creation, and financial research and modeling. Reasoning is always on, configured via the top-level reasoning_effort field.",
+    displayName: 'Kimi K3.1 Pro',
+    family: 'kimi',
+    generation: 'kimi-k3.1',
+    id: 'kimi-k3.1-pro',
+    isOfficial: true,
+    maxOutput: 131_072,
+    pricing: {
+      currency: 'USD',
+      units: [
+        { name: 'textInput_cacheRead', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 10, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-10-23',
+    settings: {
+      disabledParams: ['frequency_penalty', 'presence_penalty', 'temperature', 'top_p'],
+      extendParams: ['kimiK3ReasoningEffort'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      structuredOutput: true,
+      video: true,
+      vision: true,
+    },
+    contextWindowTokens: 1_048_576,
+    description:
+      'Kimi K3.1 Pro HighSpeed is the high-speed variant of Kimi K3.1 Pro with the same capabilities and 1M-token context window at roughly 2-3x the output speed, for scenarios that need faster responses.',
+    displayName: 'Kimi K3.1 Pro HighSpeed',
+    family: 'kimi',
+    generation: 'kimi-k3.1',
+    id: 'kimi-k3.1-pro-highspeed',
+    isOfficial: true,
+    maxOutput: 131_072,
+    pricing: {
+      currency: 'USD',
+      units: [
+        { name: 'textInput_cacheRead', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 20, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-10-23',
+    settings: {
+      disabledParams: ['frequency_penalty', 'presence_penalty', 'temperature', 'top_p'],
+      extendParams: ['kimiK3ReasoningEffort'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      structuredOutput: true,
+      video: true,
+      vision: true,
+    },
+    contextWindowTokens: 1_048_576,
+    description:
       "Kimi K3 is Kimi's most capable model to date, with 2.8 trillion parameters. Built on Kimi Delta Attention and Attention Residuals, it offers native visual understanding and a 1M-token context window for frontier intelligence scenarios such as software engineering, knowledge work, and deep reasoning. Reasoning is always on, configured via the top-level reasoning_effort field.",
     displayName: 'Kimi K3',
     enabled: true,
     family: 'kimi',
     generation: 'kimi-k3',
     id: 'kimi-k3',
+    isOfficial: true,
     maxOutput: 131_072,
     pricing: {
       currency: 'USD',
       units: [
-        { name: 'textInput_cacheRead', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 20, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 100, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 15, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2026-07-16',
@@ -52,13 +117,14 @@ const moonshotChatModels: AIChatModelCard[] = [
     family: 'kimi',
     generation: 'kimi-k2.7',
     id: 'kimi-k2.7-code',
+    isOfficial: true,
     maxOutput: 32_768,
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        { name: 'textInput_cacheRead', rate: 1.3, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 6.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 27, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.19, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.95, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2026-06-12',
@@ -81,11 +147,11 @@ const moonshotChatModels: AIChatModelCard[] = [
     id: 'kimi-k2.7-code-highspeed',
     maxOutput: 32_768,
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        { name: 'textInput_cacheRead', rate: 2.6, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 13, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 54, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.38, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 1.9, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 8, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2026-06-15',
@@ -106,175 +172,20 @@ const moonshotChatModels: AIChatModelCard[] = [
     family: 'kimi',
     generation: 'kimi-k2.6',
     id: 'kimi-k2.6',
+    isOfficial: true,
     maxOutput: 32_768,
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        { name: 'textInput_cacheRead', rate: 1.1, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 6.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 27, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.16, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.95, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2026-04-20',
     settings: {
       extendParams: ['enableReasoning', 'preserveThinking'],
     },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-      structuredOutput: true,
-      video: true,
-      vision: true,
-    },
-    contextWindowTokens: 262_144,
-    description:
-      'Kimi K2.5 is Kimi\'s most versatile model to date, featuring a native multimodal architecture that supports both vision and text inputs, "thinking" and "non-thinking" modes, and both conversational and agent tasks.',
-    displayName: 'Kimi K2.5',
-    family: 'kimi',
-    generation: 'kimi-k2.5',
-    id: 'kimi-k2.5',
-    maxOutput: 32_768,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput_cacheRead', rate: 0.7, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 21, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2026-01-27',
-    settings: {
-      extendParams: ['enableReasoning'],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-    },
-    contextWindowTokens: 8192,
-    description:
-      'Moonshot V1 8K is optimized for short text generation with efficient performance, handling 8,192 tokens for short chats, notes, and quick content.',
-    displayName: 'Moonshot V1 8K',
-    family: 'kimi',
-    generation: 'moonshot-v1',
-    id: 'moonshot-v1-8k',
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 10, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-    },
-    contextWindowTokens: 32_768,
-    description:
-      'Moonshot V1 32K supports 32,768 tokens for medium-length context, ideal for long documents and complex dialogues in content creation, reports, and chat systems.',
-    displayName: 'Moonshot V1 32K',
-    family: 'kimi',
-    generation: 'moonshot-v1',
-    id: 'moonshot-v1-32k',
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 20, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-    },
-    contextWindowTokens: 131_072,
-    description:
-      'Moonshot V1 128K provides ultra-long context for very long text generation, handling up to 128,000 tokens for research, academic, and large-document scenarios.',
-    displayName: 'Moonshot V1 128K',
-    family: 'kimi',
-    generation: 'moonshot-v1',
-    id: 'moonshot-v1-128k',
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 10, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 30, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      vision: true,
-    },
-    contextWindowTokens: 8192,
-    description:
-      'Kimi vision models (including moonshot-v1-8k-vision-preview/moonshot-v1-32k-vision-preview/moonshot-v1-128k-vision-preview) can understand image content such as text, colors, and object shapes.',
-    displayName: 'Moonshot V1 8K Vision Preview',
-    family: 'kimi',
-    generation: 'moonshot-v1',
-    id: 'moonshot-v1-8k-vision-preview',
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 10, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-01-14',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      vision: true,
-    },
-    contextWindowTokens: 32_768,
-    description:
-      'Kimi vision models (including moonshot-v1-8k-vision-preview/moonshot-v1-32k-vision-preview/moonshot-v1-128k-vision-preview) can understand image content such as text, colors, and object shapes.',
-    displayName: 'Moonshot V1 32K Vision Preview',
-    family: 'kimi',
-    generation: 'moonshot-v1',
-    id: 'moonshot-v1-32k-vision-preview',
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 20, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-01-14',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      vision: true,
-    },
-    contextWindowTokens: 131_072,
-    description:
-      'Kimi vision models (including moonshot-v1-8k-vision-preview/moonshot-v1-32k-vision-preview/moonshot-v1-128k-vision-preview) can understand image content such as text, colors, and object shapes.',
-    displayName: 'Moonshot V1 128K Vision Preview',
-    family: 'kimi',
-    generation: 'moonshot-v1',
-    id: 'moonshot-v1-128k-vision-preview',
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 10, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 30, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-01-14',
     type: 'chat',
   },
 ];

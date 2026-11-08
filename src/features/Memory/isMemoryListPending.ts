@@ -15,4 +15,4 @@ export const isMemoryListPending = ({
   loading,
   resetting,
 }: MemoryListPendingContext) =>
-  Boolean(resetting) || (!initialized && !error) || (Boolean(error) && loading);
+  Boolean(resetting && !error) || (!initialized && !error) || (Boolean(error) && loading);

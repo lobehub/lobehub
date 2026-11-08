@@ -1,28 +1,62 @@
 import type {
+  NotificationSettings,
   SSOProvider,
+  SystemAgentItem,
   UserGeneralConfig,
   UserGuide,
   UserKeyVaults,
   UserPreference,
   UserSettings,
+  WidgetDryRunGrant,
 } from '@lobechat/types';
+import { mergeNotificationSettings } from '@lobechat/utils/mergeNotificationSettings';
 import { TRPCError } from '@trpc/server';
 import dayjs from 'dayjs';
-import { and, asc, eq, gt, inArray, max, or, sql } from 'drizzle-orm';
+import { and, asc, eq, gt, inArray, isNotNull, isNull, max, or, sql } from 'drizzle-orm';
 import type { PartialDeep } from 'type-fest';
 
 import { merge } from '@/utils/merge';
 import { today } from '@/utils/time';
 
 import type { NewUser, UserItem, UserSettingsItem } from '../schemas';
-import { messages, nextauthAccounts, topics, users, userSettings } from '../schemas';
+import {
+  agents,
+  channels,
+  chatGroups,
+  goals,
+  messages,
+  nextauthAccounts,
+  sessions,
+  taskLabels,
+  topics,
+  users,
+  userSettings,
+} from '../schemas';
 import type { LobeChatDatabase } from '../type';
+import { notTrashed } from '../utils/softDelete';
+import { hasLiveParentTopic } from '../utils/topicVisibility';
 import { AGENT_TRANSFER_PENDING_OWNER_DELETE, AgentTransferJobModel } from './agentTransferJob';
 
 type DecryptUserKeyVaults = (
   encryptKeyVaultsStr: string | null,
   userId?: string,
 ) => Promise<UserKeyVaults>;
+
+/** PostgreSQL stores statement_timeout as a signed 32-bit millisecond value.
+ * @see https://github.com/postgres/postgres/blob/f9562b95/src/backend/utils/misc/guc_parameters.dat
+ */
+const MAX_STATEMENT_TIMEOUT_MS = 2_147_483_647;
+
+const validateDeletionStatementTimeout = (timeoutMs?: number) => {
+  if (
+    timeoutMs !== undefined &&
+    (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > MAX_STATEMENT_TIMEOUT_MS)
+  ) {
+    throw new Error(
+      `Account deletion statement timeout must be between 1 and ${MAX_STATEMENT_TIMEOUT_MS} milliseconds`,
+    );
+  }
+};
 
 export class UserNotFoundError extends TRPCError {
   constructor() {
@@ -72,7 +106,15 @@ export class UserModel {
         userCreatedAt: users.createdAt,
       })
       .from(users)
-      .leftJoin(messages, and(eq(messages.userId, users.id), eq(messages.role, 'user')))
+      .leftJoin(
+        messages,
+        and(
+          eq(messages.userId, users.id),
+          eq(messages.role, 'user'),
+          notTrashed(messages.isDeleted),
+          hasLiveParentTopic(messages.topicId),
+        ),
+      )
       .where(eq(users.id, this.userId))
       .groupBy(users.createdAt);
 
@@ -333,6 +375,28 @@ export class UserModel {
   };
 
   /**
+   * Append one standing widget dry-run grant to `tool.widgetDryRunGrants` in
+   * a single statement, so a concurrent writer of another `tool` key (or of
+   * another grant) is never clobbered by a stale client snapshot.
+   */
+  appendWidgetDryRunGrant = async (grant: WidgetDryRunGrant) => {
+    const item = JSON.stringify([grant]);
+
+    return this.db
+      .insert(userSettings)
+      .values({ id: this.userId, tool: { widgetDryRunGrants: [grant] } })
+      .onConflictDoUpdate({
+        set: {
+          tool: sql`coalesce(${userSettings.tool}, '{}'::jsonb) || jsonb_build_object(
+            'widgetDryRunGrants',
+            coalesce(${userSettings.tool}->'widgetDryRunGrants', '[]'::jsonb) || ${item}::jsonb
+          )`,
+        },
+        target: userSettings.id,
+      });
+  };
+
+  /**
    * Atomically replace the uninstalled-builtin-tools list for one scope
    * (personal, or one workspace's slot) inside the `tool` column, leaving every
    * other key — `humanIntervention`, the other scope's lists — untouched. Same
@@ -371,6 +435,79 @@ export class UserModel {
         },
         target: userSettings.id,
       });
+  };
+
+  /**
+   * Atomically replace the ordered search-provider and/or crawler-impl lists
+   * inside the `tool` column, leaving every other key untouched. Same rationale
+   * as `mergeToolInterventionSetting`: a whole-column write built from a
+   * possibly-stale tab snapshot would revert sibling keys (e.g. approvalMode)
+   * changed from other tabs.
+   */
+  replaceToolChannelsSetting = async (value: {
+    crawlerImpls?: string[];
+    searchProviders?: string[];
+  }) => {
+    const patch: Record<string, string[]> = {};
+    if (value.crawlerImpls) patch.crawlerImpls = value.crawlerImpls;
+    if (value.searchProviders) patch.searchProviders = value.searchProviders;
+
+    return this.db
+      .insert(userSettings)
+      .values({ id: this.userId, tool: patch })
+      .onConflictDoUpdate({
+        set: {
+          tool: sql`coalesce(${userSettings.tool}, '{}'::jsonb) || ${JSON.stringify(patch)}::jsonb`,
+        },
+        target: userSettings.id,
+      });
+  };
+
+  /**
+   * Atomically merge a partial config into ONE `systemAgent` entry, leaving the
+   * entry's other fields and every sibling entry untouched. Same rationale as
+   * `replaceToolChannelsSetting`: the generic settings write replaces the whole
+   * column from a possibly-stale tab snapshot. Callers must restrict `key` to
+   * an allowlist; it is bound as a parameter, never interpolated.
+   */
+  mergeSystemAgentItemSetting = async (key: string, value: Partial<SystemAgentItem>) => {
+    const patch = JSON.stringify(value);
+    // A legacy scalar under the same key cannot be merged into — replace it.
+    const currentItem = sql`case when jsonb_typeof(${userSettings.systemAgent} -> ${key}::text) = 'object' then ${userSettings.systemAgent} -> ${key}::text else '{}'::jsonb end`;
+
+    return this.db
+      .insert(userSettings)
+      .values({ id: this.userId, systemAgent: { [key]: value } })
+      .onConflictDoUpdate({
+        set: {
+          systemAgent: sql`coalesce(${userSettings.systemAgent}, '{}'::jsonb) || jsonb_build_object(${key}::text, ${currentItem} || ${patch}::jsonb)`,
+        },
+        target: userSettings.id,
+      });
+  };
+
+  getNotificationSetting = async (): Promise<NotificationSettings> => {
+    const row = await this.db.query.userSettings.findFirst({
+      columns: { notification: true },
+      where: eq(userSettings.id, this.userId),
+    });
+    return (row?.notification as NotificationSettings | null) ?? {};
+  };
+
+  /**
+   * Merge a notification patch over the stored personal settings and return
+   * the result. `updateSetting` replaces the whole column, so a caller holding
+   * only the switch it wants to flip would wipe every other toggle. Read →
+   * merge → write like `WorkspaceUserSettingsModel.updatePreference`: only the
+   * owner writes this row, so a lost update needs the same user racing itself.
+   */
+  mergeNotificationSetting = async (patch: NotificationSettings) => {
+    const notification = mergeNotificationSettings(await this.getNotificationSetting(), patch);
+    await this.db
+      .insert(userSettings)
+      .values({ id: this.userId, notification })
+      .onConflictDoUpdate({ set: { notification }, target: userSettings.id });
+    return notification;
   };
 
   updatePreference = async (value: Partial<UserPreference>) => {
@@ -448,21 +585,224 @@ export class UserModel {
    * drop `topics` where `senderId = id`; messages, threads, and topic
    * documents cascade from `topics.id`, so the topic delete is enough.
    */
-  static deleteUser = async (db: LobeChatDatabase, id: string) => {
+  static deleteUser = async (
+    db: LobeChatDatabase,
+    id: string,
+    options: { statementTimeoutMs?: number; transactionTimeoutMs?: number } = {},
+  ) => {
+    const timeoutMs = options.statementTimeoutMs;
+    validateDeletionStatementTimeout(timeoutMs);
+    validateDeletionStatementTimeout(options.transactionTimeoutMs);
     // A pending agent-TRANSFER backfill means message rows moved to (or from)
     // this user still carry the other side's scope snapshot; cascading the
     // delete now would destroy history the transfer already re-homed. Transfer
-    // is admin-initiated and drains in minutes — the delete can simply be
+    // drains in minutes — the delete can simply be
     // retried afterwards. Pending `copy` jobs do not block: they duplicate
     // rather than move, and both sides self-heal (see `isPendingTransfer`).
     if (await AgentTransferJobModel.hasPendingJobTouchingUser(db, id)) {
       throw new Error(AGENT_TRANSFER_PENDING_OWNER_DELETE);
     }
     return db.transaction(async (tx) => {
+      const deadline =
+        options.transactionTimeoutMs === undefined
+          ? undefined
+          : Date.now() + options.transactionTimeoutMs;
+      // PostgreSQL statement_timeout restarts for each statement. Spend one
+      // shared budget across all cascades instead of granting each another 300s.
+      const applyRemainingTimeout = async () => {
+        const remaining = deadline === undefined ? timeoutMs : deadline - Date.now();
+        if (remaining !== undefined && remaining <= 0)
+          throw new Error('Account deletion transaction deadline exceeded');
+        if (remaining !== undefined) {
+          const limit = Math.min(remaining, timeoutMs ?? remaining);
+          await tx.execute(sql`SELECT set_config('statement_timeout', ${String(limit)}, true)`);
+        }
+      };
+      await applyRemainingTimeout();
+      // Lock the account first. A concurrent insert referencing it takes a
+      // KEY SHARE lock on this row, so one already in flight commits before we
+      // proceed (and the cleanups below see it), and any later one waits and
+      // then fails its FK — none can slip in between a cleanup and the final
+      // delete, where a SET NULL FK would orphan it.
+      await tx.select({ id: users.id }).from(users).where(eq(users.id, id)).for('update');
+      await applyRemainingTimeout();
+      // A goal decision can reference the same user that owns its parent goal.
+      // Delete the graph first so its CASCADE completes before the user delete
+      // runs the decision's SET NULL action on an already-deleted node.
+      await tx.delete(goals).where(eq(goals.userId, id));
+      await applyRemainingTimeout();
       // Purge share-visitor topics authored by this user under any creator.
       await tx.delete(topics).where(eq(topics.senderId, id));
-      return tx.delete(users).where(eq(users.id, id));
+      await applyRemainingTimeout();
+      // Personal channels and direct conversations belong to this user alone. Workspace groups
+      // outlive their creator: the user cascade only clears the channel's and member's `user_id`.
+      await tx
+        .delete(channels)
+        .where(
+          and(
+            eq(channels.userId, id),
+            or(isNull(channels.workspaceId), isNotNull(channels.agentId)),
+          ),
+        );
+      await applyRemainingTimeout();
+      // Personal task labels go with their owner; workspace labels stay and the
+      // user cascade only clears their `user_id`.
+      await tx
+        .delete(taskLabels)
+        .where(and(eq(taskLabels.userId, id), isNull(taskLabels.workspaceId)));
+      await applyRemainingTimeout();
+      const result = await tx.delete(users).where(eq(users.id, id));
+      if (deadline !== undefined && Date.now() >= deadline)
+        throw new Error('Account deletion transaction deadline exceeded');
+      return result;
     });
+  };
+
+  /**
+   * Remove high-volume rows in committed batches before the final user cascade.
+   * An interrupted call can safely resume from the remaining rows. The final
+   * transaction still checks for pending transfers and handles concurrent writes.
+   * Call only after account deletion has become irreversible, because each batch commits.
+   */
+  static deleteUserInBatches = async (
+    db: LobeChatDatabase,
+    id: string,
+    options: {
+      batchSize?: number;
+      finalStatementTimeoutMs?: number;
+      shouldContinue?: () => boolean;
+    } = {},
+  ) => {
+    const batchSize = options.batchSize ?? 500;
+    if (!Number.isSafeInteger(batchSize) || batchSize < 1) {
+      throw new Error('Account deletion batch size must be a positive integer');
+    }
+    const timeoutMs = options.finalStatementTimeoutMs;
+    validateDeletionStatementTimeout(timeoutMs);
+    const topicBatchSize = Math.min(batchSize, 20);
+
+    if (await AgentTransferJobModel.hasPendingJobTouchingUser(db, id)) {
+      throw new Error(AGENT_TRANSFER_PENDING_OWNER_DELETE);
+    }
+
+    const topiclessMessage = and(eq(messages.userId, id), isNull(messages.topicId));
+    for (;;) {
+      if (options.shouldContinue?.() === false) return false;
+      const rows = await db
+        .select({
+          id: messages.id,
+          agentId: messages.agentId,
+          groupId: messages.groupId,
+          sessionId: messages.sessionId,
+        })
+        .from(messages)
+        .where(topiclessMessage)
+        .limit(batchSize);
+      if (rows.length === 0) break;
+      await db.transaction(async (tx) => {
+        // Topicless history moves with its group/agent/session. Lock those
+        // parents before checking jobs, so a new transfer cannot commit between
+        // the guard and deletion. Recheck captured links to avoid deleting rows
+        // that were reattached to an unlocked parent while we waited.
+        for (const [table, ids] of [
+          [chatGroups, rows.flatMap((row) => (row.groupId ? [row.groupId] : []))],
+          [agents, rows.flatMap((row) => (row.agentId ? [row.agentId] : []))],
+          [sessions, rows.flatMap((row) => (row.sessionId ? [row.sessionId] : []))],
+        ] as const) {
+          if (ids.length > 0)
+            await tx
+              .select({ id: table.id })
+              .from(table)
+              .where(inArray(table.id, [...new Set(ids)]))
+              .orderBy(asc(table.id))
+              .for('update');
+        }
+        if (await AgentTransferJobModel.hasPendingJobTouchingUser(tx, id))
+          throw new Error(AGENT_TRANSFER_PENDING_OWNER_DELETE);
+        await tx
+          .delete(messages)
+          .where(
+            and(
+              topiclessMessage,
+              or(
+                ...rows.map((row) =>
+                  and(
+                    eq(messages.id, row.id),
+                    row.agentId === null
+                      ? isNull(messages.agentId)
+                      : eq(messages.agentId, row.agentId),
+                    row.groupId === null
+                      ? isNull(messages.groupId)
+                      : eq(messages.groupId, row.groupId),
+                    row.sessionId === null
+                      ? isNull(messages.sessionId)
+                      : eq(messages.sessionId, row.sessionId),
+                  ),
+                ),
+              ),
+            ),
+          );
+      });
+    }
+
+    const ownedTopic = or(eq(topics.userId, id), eq(topics.senderId, id));
+    for (;;) {
+      if (options.shouldContinue?.() === false) return false;
+      const foundTopics = await db.transaction(async (tx) => {
+        // Transfers lock topics before changing their owner and messages. Holding
+        // the same locks keeps every captured message inside its original scope.
+        const currentTopics = await tx
+          .select({ id: topics.id })
+          .from(topics)
+          .where(ownedTopic)
+          .orderBy(asc(topics.id))
+          .limit(topicBatchSize)
+          .for('update');
+        if (currentTopics.length === 0) return false;
+        if (await AgentTransferJobModel.hasPendingJobTouchingUser(tx, id)) {
+          throw new Error(AGENT_TRANSFER_PENDING_OWNER_DELETE);
+        }
+
+        const topicIds = currentTopics.map((topic) => topic.id);
+        // A visitor's topic can contain messages owned by the host account.
+        const rows = await tx
+          .select({ id: messages.id })
+          .from(messages)
+          .where(inArray(messages.topicId, topicIds))
+          .limit(batchSize);
+        if (rows.length > 0) {
+          await tx.delete(messages).where(
+            and(
+              inArray(messages.topicId, topicIds),
+              inArray(
+                messages.id,
+                rows.map((row) => row.id),
+              ),
+            ),
+          );
+        }
+
+        const remainingTopics = await tx
+          .selectDistinct({ id: messages.topicId })
+          .from(messages)
+          .where(inArray(messages.topicId, topicIds));
+        const remainingTopicIds = new Set(remainingTopics.map((topic) => topic.id));
+        const emptyTopicIds = topicIds.filter((topicId) => !remainingTopicIds.has(topicId));
+        if (emptyTopicIds.length > 0) {
+          await tx.delete(topics).where(and(inArray(topics.id, emptyTopicIds), ownedTopic));
+        }
+        return true;
+      });
+      if (!foundTopics) break;
+    }
+
+    if (options.shouldContinue?.() === false) return false;
+
+    await UserModel.deleteUser(db, id, {
+      statementTimeoutMs: options.finalStatementTimeoutMs,
+      transactionTimeoutMs: options.finalStatementTimeoutMs,
+    });
+    return true;
   };
 
   static findById = async (db: LobeChatDatabase, id: string) => {

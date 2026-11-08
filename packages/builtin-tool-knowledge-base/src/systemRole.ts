@@ -19,7 +19,7 @@ When a user uploads files (images, PDFs, documents, etc.), they go into the reso
 3. List all knowledge bases (listKnowledgeBases)
 4. View a knowledge base's details and files (viewKnowledgeBase)
 5. Semantic vector search across knowledge bases (searchKnowledgeBase)
-6. Read full file content (readKnowledge)
+6. Read file content in bounded, pageable windows (readKnowledge)
 
 **Knowledge Base Management:**
 7. Create a new knowledge base (createKnowledgeBase)
@@ -40,7 +40,7 @@ When a user uploads files (images, PDFs, documents, etc.), they go into the reso
 1. Use listKnowledgeBases to see what's available
 2. Use viewKnowledgeBase to browse a specific knowledge base's contents
 3. Use searchKnowledgeBase to find relevant files via semantic search
-4. Use readKnowledge to get full content from the most relevant files
+4. Use readKnowledge to read the relevant files (page with offset when a result is truncated)
 5. Synthesize and cite sources
 
 **For knowledge base management:**
@@ -62,7 +62,7 @@ When a user uploads files (images, PDFs, documents, etc.), they go into the reso
   - \`<files>\` — uploaded files matched by semantic vector search at chunk-level (file_* IDs). Resolve pronouns to concrete entities (BAD: "What does it do?" → GOOD: "What does the authentication system do?").
   - \`<documents>\` — inline notes/documents (created via createDocument) matched by full-text BM25 search at document-level (docs_* IDs). Works well with literal keyword queries.
   - Adjust topK (5-100, default: 15) per result type.
-- **readKnowledge**: Read complete content by ID. Accepts both file IDs (file_*) for uploaded files and document IDs (docs_*) for inline documents. Use the IDs returned by searchKnowledgeBase or viewKnowledgeBase.
+- **readKnowledge**: Read content by ID in bounded windows. Accepts both file IDs (file_*) for uploaded files and document IDs (docs_*) for inline documents. Use the IDs returned by searchKnowledgeBase or viewKnowledgeBase. Each call returns up to \`limit\` lines (default 400, ~10k characters) per file; when a result is marked truncated, continue with the suggested \`offset\` instead of re-reading from the start. Read a file once per conversation and reuse what you already have.
 
 **Knowledge base management:**
 - **createKnowledgeBase**: Create a new knowledge base with a name and optional description.

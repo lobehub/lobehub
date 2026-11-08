@@ -1,5 +1,6 @@
 // @vitest-environment node
-import { eq } from 'drizzle-orm';
+import { agentShareWorkAccessScope, type RegisterExternalWorkParams } from '@lobechat/types';
+import { and, eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { works } from '../../../schemas';
@@ -17,6 +18,58 @@ beforeEach(seedWorkTestData);
 afterEach(cleanupWorkTestData);
 
 describe('WorkModel · github', () => {
+  it('keeps one Work per share scope for the same external resource', async () => {
+    // GitHub/Linear resource ids are stable across runs, so the creator and a
+    // share visitor (both running as the creator) can register the same issue.
+    const issue = (toolCallId: string): RegisterExternalWorkParams => ({
+      changeType: 'updated',
+      identifier: 'lobehub/lobehub#77',
+      patchFields: ['identifier', 'title'],
+      resourceId: 'lobehub/lobehub#77',
+      resourceType: 'github_issue',
+      title: 'Shared issue',
+      toolCallId,
+      toolIdentifier: 'github',
+      toolName: 'get_issue',
+      topicId,
+    });
+    const visitorScope = (visitorTopicId: string) =>
+      agentShareWorkAccessScope({
+        shareId: 'share-github',
+        topicId: visitorTopicId,
+        visitorUserId: 'visitor-github',
+      });
+
+    const creator = new WorkModel(serverDB, userId);
+    const visitorA = new WorkModel(serverDB, userId, undefined, visitorScope('visitor-topic-a'));
+    const visitorB = new WorkModel(serverDB, userId, undefined, visitorScope('visitor-topic-b'));
+
+    const register = async (model: WorkModel, toolCallId: string) => {
+      const work = await model.registerExternal(issue(toolCallId));
+      if (!work) throw new Error(`expected a Work for ${toolCallId}`);
+      return work;
+    };
+
+    const creatorWork = await register(creator, 'call-creator');
+    const visitorWork = await register(visitorA, 'call-visitor-a');
+    const otherVisitorWork = await register(visitorB, 'call-visitor-b');
+    // A repeat in the same scope still dedupes onto that scope's row.
+    const visitorRepeat = await register(visitorA, 'call-visitor-a-2');
+
+    expect(new Set([creatorWork.id, visitorWork.id, otherVisitorWork.id]).size).toBe(3);
+    expect(visitorRepeat.id).toBe(visitorWork.id);
+    expect(await visitorA.listVersions(visitorWork.id)).toHaveLength(2);
+
+    const rows = await serverDB
+      .select({ id: works.id, metadata: works.metadata })
+      .from(works)
+      .where(
+        and(eq(works.resourceType, 'github_issue'), eq(works.resourceId, 'lobehub/lobehub#77')),
+      );
+    expect(rows).toHaveLength(3);
+    expect(rows.find((row) => row.id === creatorWork.id)?.metadata).toBeNull();
+  });
+
   it('registers GitHub issue creates and appends versions for edits', async () => {
     const workModel = new WorkModel(serverDB, userId);
 
@@ -358,5 +411,49 @@ describe('WorkModel · github', () => {
 
     const workRows = await serverDB.select().from(works).where(eq(works.type, 'external'));
     expect(workRows).toHaveLength(2);
+  });
+
+  it('keeps the PR branches captured at create across edits that do not name them', async () => {
+    const workModel = new WorkModel(serverDB, userId);
+    const gh = (command: string, toolCallId: string, rootOperationId: string) =>
+      workModel.handleSkillToolResult({
+        provider: 'github',
+        data: { command, exitCode: 0, output: 'https://github.com/lobehub/lobehub/pull/31\n' },
+        rootOperationId,
+        toolCallId,
+        toolName: 'runCommand',
+        topicId,
+      });
+
+    const created = await gh(
+      'gh pr create --repo lobehub/lobehub --head feat/branch-card --base canary --title "Branch card" --body-file /tmp/body.md',
+      'tool-call-pr-branch-create',
+      'op-pr-branch-create',
+    );
+    await gh(
+      'gh pr edit 31 --repo lobehub/lobehub --title "Branch card, retitled"',
+      'tool-call-pr-branch-retitle',
+      'op-pr-branch-retitle',
+    );
+    await gh(
+      'gh pr edit 31 --repo lobehub/lobehub --base main',
+      'tool-call-pr-branch-retarget',
+      'op-pr-branch-retarget',
+    );
+
+    const versions = await workModel.listVersions(created!.id);
+    expect(versions.map((item) => [item.version, item.metadata])).toEqual([
+      [3, { baseBranch: 'main', headBranch: 'feat/branch-card' }],
+      [2, { baseBranch: 'canary', headBranch: 'feat/branch-card' }],
+      [1, { baseBranch: 'canary', headBranch: 'feat/branch-card' }],
+    ]);
+
+    // Summary cards render the current version, so an older message's card
+    // shows the latest branches too.
+    const byOperation = await workModel.listSummariesByRootOperations({
+      rootOperationIds: ['op-pr-branch-retitle'],
+    });
+    const summary = expectExternalSummaryItem(byOperation['op-pr-branch-retitle']?.[0]);
+    expect(summary.event.metadata).toEqual({ baseBranch: 'main', headBranch: 'feat/branch-card' });
   });
 });

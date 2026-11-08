@@ -10,7 +10,7 @@ interface UseSystemFontOptionsParams {
   enabled?: boolean;
   monospaceOnly?: boolean;
   unavailableLabel: (font: string) => string;
-  value?: string;
+  values?: string[];
 }
 
 export const useSystemFontOptions = ({
@@ -18,7 +18,7 @@ export const useSystemFontOptions = ({
   enabled = true,
   monospaceOnly,
   unavailableLabel,
-  value,
+  values,
 }: UseSystemFontOptionsParams) => {
   const [systemFonts, setSystemFonts] = useState<SystemFont[]>([]);
   const [isLoading, setIsLoading] = useState(enabled);
@@ -60,14 +60,12 @@ export const useSystemFontOptions = ({
   }, [enabled, monospaceOnly]);
 
   const options = useMemo(() => {
-    const fontOptions = [...systemFonts];
+    const missing = (values ?? [])
+      .filter((value) => !systemFonts.some((font) => font.value === value))
+      .map((value) => ({ label: unavailableLabel(value), value }));
 
-    if (value && !systemFonts.some((font) => font.value === value)) {
-      fontOptions.unshift({ label: unavailableLabel(value), value });
-    }
-
-    return [{ label: defaultLabel, value: APPLICATION_DEFAULT_FONT }, ...fontOptions];
-  }, [systemFonts, value, defaultLabel, unavailableLabel]);
+    return [{ label: defaultLabel, value: APPLICATION_DEFAULT_FONT }, ...missing, ...systemFonts];
+  }, [systemFonts, values, defaultLabel, unavailableLabel]);
 
   return { hasLoadError, isLoading, options };
 };

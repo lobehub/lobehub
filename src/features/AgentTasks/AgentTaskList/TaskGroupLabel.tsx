@@ -1,8 +1,8 @@
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
-import { CalendarClock, HeartPulse, UserRound } from 'lucide-react';
+import { cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
+import { CalendarClock, HeartPulse, TagIcon, UserRound } from 'lucide-react';
 import { memo } from 'react';
+
+import TaskLabelDot from '@/features/TaskLabels/TaskLabelDot';
 
 import AssigneeAvatar from '../features/AssigneeAvatar';
 import AssigneeUserAvatar from '../features/AssigneeUserAvatar';
@@ -15,6 +15,7 @@ import TaskStatusIcon from '../features/TaskStatusIcon';
 import { useAgentDisplayMeta } from '../shared/useAgentDisplayMeta';
 import { useUserDisplayMeta } from '../shared/useUserDisplayMeta';
 import type { TaskGroupMeta } from './listViewOptions';
+import { isTaskLabelGroupBy } from './listViewOptions';
 
 const PRIORITY_ICON_MAP = {
   0: PriorityNoneIcon,
@@ -35,6 +36,11 @@ const AssigneeUserLabel = memo<{ userId: string }>(({ userId }) => {
 });
 
 const TaskGroupPrefix = ({ group }: { group: TaskGroupMeta }) => {
+  if (isTaskLabelGroupBy(group.groupBy)) {
+    if (group.labelId) return <TaskLabelDot color={group.labelColor} size={10} />;
+    return <Icon color={cssVar.colorTextDescription} icon={TagIcon} size={14} />;
+  }
+
   if (group.groupBy === 'assignee') {
     if (group.assigneeId) return <AssigneeAvatar agentId={group.assigneeId} size={18} />;
     return <Icon icon={UserRound} size={14} />;

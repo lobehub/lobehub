@@ -1,25 +1,39 @@
 'use client';
 
-import type { GoalStatus } from '@lobechat/const/goal';
-import { Block, Empty, Flexbox } from '@lobehub/ui';
-import { ActionIcon, Button, Segmented, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  ActionIcon,
+  Block,
+  Button,
+  createStaticStyles,
+  cssVar,
+  Empty,
+  Flexbox,
+  ScrollShadow,
+  Segmented,
+  Text,
+} from '@lobehub/ui';
 import { LayoutGridIcon, ListIcon, PlusIcon, RefreshCwIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import GoalSkeleton from '@/components/Skeleton/Goal';
+import GoalSkeleton, { GoalListRowsSkeleton } from '@/components/Skeleton/Goal';
 import AgentBreadcrumb from '@/features/AgentBreadcrumb';
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useCacheScope } from '@/libs/swr/useCacheScope';
+import type { GoalListFilter } from '@/store/goal';
 import { goalSelectors, useGoalStore } from '@/store/goal';
+import { globalGoalListScopeId, goalListKey, goalListScopeId } from '@/store/goal/projection';
 
 import { createGoalModal } from './CreateGoalModal';
+import GoalAgentFilter from './GoalAgentFilter';
+import { goalAgentFilterOptions } from './goalAgentFilterOptions';
 import { GoalCardItem } from './GoalCardItem';
 import GoalEmptyState from './GoalEmptyState';
 import type { GoalExampleSeed } from './goalExamples';
 import { GoalListItem } from './GoalListItem';
+import { useGoalListAutoLoad } from './useGoalListAutoLoad';
 
 const styles = createStaticStyles(({ css }) => ({
   countBadge: css`
@@ -61,12 +75,35 @@ const styles = createStaticStyles(({ css }) => ({
       border-inline-start: 0;
     }
   `,
+  sentinel: css`
+    height: 1px;
+  `,
 }));
 
-/** Goals whose loop has stopped for good — hidden by the default "open" filter. */
-const TERMINAL_GOAL_STATUSES = new Set<GoalStatus>(['achieved', 'failed', 'canceled']);
+/**
+ * The list failed to load — the page's own read, or the selected tab's. Both
+ * carry the same retry, which revalidates every tab's entry at once.
+ */
+const GoalLoadError = ({ onRetry }: { onRetry: () => void }) => {
+  const { t } = useTranslation('chat');
+
+  return (
+    <Block padding={32} variant={'outlined'}>
+      <Flexbox align={'center'} gap={12}>
+        <Text weight={600}>{t('goalList.loadError')}</Text>
+        <Text fontSize={13} type={'secondary'}>
+          {t('goalList.loadErrorDescription')}
+        </Text>
+        <Button icon={RefreshCwIcon} onClick={onRetry}>
+          {t('goalList.retry')}
+        </Button>
+      </Flexbox>
+    </Block>
+  );
+};
 
 interface AgentGoalsPageProps {
+  /** Neither id: the cross-agent page, listing every agent's goals. */
   agentId?: string;
   projectId?: string;
 }
@@ -74,30 +111,141 @@ interface AgentGoalsPageProps {
 const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
   const { t } = useTranslation('chat');
   const navigate = useWorkspaceAwareNavigate();
-  const scopeId = projectId ? `project:${projectId}` : agentId!;
+  const cacheScope = useCacheScope();
+  const isGlobal = !agentId && !projectId;
+  const agentFilter = useGoalStore((s) => s.goalListAgentFilter);
+  const setAgentFilter = useGoalStore((s) => s.setGoalListAgentFilter);
+  // The cross-agent page narrowed to one agent reads that agent's own list —
+  // the same server query and cache entry as the agent's Goals page.
+  const queryAgentId = isGlobal ? agentFilter : agentId;
+  const globalScope = isGlobal && !queryAgentId ? cacheScope : undefined;
+  const scopeId = goalListScopeId({ agentId: queryAgentId, globalScope, projectId });
+  const allGoalsScopeId = isGlobal ? globalGoalListScopeId(cacheScope) : scopeId;
   const useFetchGoals = useGoalStore((s) => s.useFetchGoals);
   const refreshGoals = useGoalStore((s) => s.refreshGoals);
-  const goals = useGoalStore(goalSelectors.goalList(scopeId));
-  const isInitialized = useGoalStore(goalSelectors.isGoalListInitialized(scopeId));
   const filter = useGoalStore((s) => s.goalListFilter);
   const viewMode = useGoalStore((s) => s.goalViewMode);
   const visibleLimit = useGoalStore((s) => s.goalListVisibleLimit);
   const setFilter = useGoalStore((s) => s.setGoalListFilter);
   const setViewMode = useGoalStore((s) => s.setGoalViewMode);
   const loadMoreGoals = useGoalStore((s) => s.loadMoreGoals);
-  const { error, isLoading } = useFetchGoals(agentId, projectId);
+  // The rows live in the replica view; the hook only orchestrates the fetch, so
+  // a revisit paints the persisted projection on the first frame instead of an
+  // empty-state frame while the sync lands.
+  const { error, isLoading } = useFetchGoals(queryAgentId, projectId, 'all', globalScope);
+  // The active tab reads its own statuses from the server. `all` shares the
+  // window read's entry, so the page only pays for an extra request once the
+  // user opens a narrow tab.
+  const tabSync = useFetchGoals(queryAgentId, projectId, filter, globalScope);
+  // An agent's or project's page: `delivered` is a whole-set count, not a count
+  // of the page the list happens to hold — read the review set's own total so
+  // the overview can never disagree with what the Needs-review tab shows once a
+  // goal sits past the list's page. The read has to run whichever tab is
+  // active, since the overview shows it regardless.
+  // The cross-agent page has no overview; it reads every agent's goals instead,
+  // which the agent filter lists its options from even while narrowed.
+  useFetchGoals(
+    isGlobal ? undefined : agentId,
+    projectId,
+    isGlobal ? 'all' : 'review',
+    isGlobal ? cacheScope : undefined,
+  );
+  // Archived goals are left out of `all`, so a scope whose every goal was put
+  // away reads as empty. Ask the Archived tab of the same scope the empty check
+  // reads, but only then: the onboarding state would otherwise hide the tab the
+  // goals went to.
+  const archivedProbe = {
+    agentId: isGlobal ? undefined : agentId,
+    filter: 'archived' as const,
+    globalScope: isGlobal ? cacheScope : undefined,
+    projectId,
+  };
+  const listView = useGoalStore(goalSelectors.goalListView(scopeId));
+  const allGoalsView = useGoalStore(goalSelectors.goalListView(allGoalsScopeId));
+  const tabView = useGoalStore(
+    goalSelectors.goalListView(
+      filter === 'all'
+        ? scopeId
+        : goalListKey({ agentId: queryAgentId, filter, globalScope, projectId }),
+    ),
+  );
+  const reviewView = useGoalStore(
+    goalSelectors.goalListView(goalListKey({ agentId, filter: 'review', projectId })),
+  );
+  const goals = useMemo(() => listView?.goals ?? [], [listView]);
+  // Whether the scope has any goal at all — on the cross-agent page that is
+  // every agent's list, so narrowing to one agent shows the filtered-empty
+  // state rather than the first-goal onboarding.
+  const isScopeEmpty =
+    (isGlobal ? (allGoalsView?.goals.length ?? 0) : goals.length) === 0 && !isLoading;
+  // The cross-agent Archived tab also lists its agent options from the scope's
+  // archived goals: `all` leaves them out, so an agent whose every goal was
+  // archived would otherwise be missing from the picker of the tab holding them.
+  const readsArchivedScope = isScopeEmpty || (isGlobal && filter === 'archived');
+  const archivedSync = useFetchGoals(
+    readsArchivedScope ? archivedProbe.agentId : undefined,
+    readsArchivedScope ? archivedProbe.projectId : undefined,
+    'archived',
+    readsArchivedScope ? archivedProbe.globalScope : undefined,
+  );
+  const archivedView = useGoalStore(goalSelectors.goalListView(goalListKey(archivedProbe)));
+  const agentFilterOptions = useMemo(
+    () =>
+      isGlobal
+        ? goalAgentFilterOptions((filter === 'archived' ? archivedView : allGoalsView)?.goals ?? [])
+        : [],
+    [allGoalsView, archivedView, filter, isGlobal],
+  );
+  // Onboarding only once the probe has answered "nothing archived either":
+  // while it is in flight the page holds its skeleton, and a failed probe keeps
+  // the tabs (the Archived tab then reads and reports its own failure) rather
+  // than a first-goal screen that would hide them.
+  // A persisted empty projection is not an answer either: the last live goal
+  // may have been archived elsewhere since, so an empty hydrated row waits for
+  // the revalidation in flight.
+  const isArchivedProbePending =
+    isScopeEmpty &&
+    !archivedSync.error &&
+    (archivedView === undefined || (archivedView.goals.length === 0 && archivedSync.isValidating));
+  const hasNoGoals =
+    isScopeEmpty &&
+    !isArchivedProbePending &&
+    archivedView !== undefined &&
+    archivedView.goals.length === 0;
   const summary = useMemo(() => {
-    const delivered = goals.filter(({ goal }) => goal.status === 'review').length;
+    const total = listView?.total ?? goals.length;
+    // An aggregate that has not answered is unknown, not zero. Falling back to
+    // the review goals visible in the list's page would understate it for
+    // exactly the accounts this page reads past one page, and present that
+    // partial count as the delivered total.
+    const delivered = reviewView?.total;
 
-    return { delivered, pursuing: goals.length - delivered, total: goals.length };
-  }, [goals]);
-  const filteredGoals = useMemo(() => {
-    if (filter === 'all') return goals;
-
-    return goals.filter(({ goal }) => !TERMINAL_GOAL_STATUSES.has(goal.status));
-  }, [filter, goals]);
-  const visibleGoalCount = filteredGoals.length;
+    return {
+      delivered,
+      pursuing: delivered === undefined ? undefined : total - delivered,
+      total,
+    };
+  }, [goals.length, listView?.total, reviewView?.total]);
+  // A page of the newest goals cannot prove a tab empty, and neither can a read
+  // that failed: hold the list's shape while the tab's own read is in flight,
+  // and surface its failure rather than spinning on it.
+  const isTabUnresolved = filter !== 'all' && tabView === undefined;
+  const isTabPending = isTabUnresolved && !tabSync.error;
+  const isTabError = isTabUnresolved && Boolean(tabSync.error);
+  // The rows are the tab's own read, with no client-side fallback: a page of the
+  // newest goals cannot stand in for the tab's answer, and presenting it as if
+  // it could is what let a tab claim an outcome it had no way to know.
+  const filteredGoals = useMemo(
+    () => (filter === 'all' ? goals : (tabView?.goals ?? [])),
+    [filter, goals, tabView],
+  );
+  const isFilterEmpty = !isTabUnresolved && filteredGoals.length === 0;
+  // The tab's count is the server's answer for that tab. Until it arrives — or
+  // when it failed — the list's page cannot stand in for it either.
+  const visibleGoalCount = isTabUnresolved ? '—' : filteredGoals.length;
   const GoalItem = viewMode === 'list' ? GoalListItem : GoalCardItem;
+  const hasMoreGoals = !isTabUnresolved && visibleLimit < filteredGoals.length;
+  const sentinelRef = useGoalListAutoLoad(hasMoreGoals, loadMoreGoals, visibleLimit);
   const openCreateGoal = (seed?: GoalExampleSeed) => {
     createGoalModal({
       agentId,
@@ -110,7 +258,10 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
       // instead of the modal blocking on it.
       onCreated: (goal) => {
         void refreshGoals(scopeId);
-        const ownerId = goal.agentId ?? agentId;
+        if (allGoalsScopeId !== scopeId) void refreshGoals(allGoalsScopeId);
+        // The cross-agent page keeps the user in the workspace, like a task
+        // opened from the global task list.
+        const ownerId = isGlobal ? undefined : (goal.agentId ?? agentId);
         navigate(ownerId ? `/agent/${ownerId}/goal/${goal.goalId}` : `/goal/${goal.goalId}`);
       },
     });
@@ -133,92 +284,123 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
         }
       />
       <WideScreenContainer
+        fullWidth
         flex={1}
         gap={16}
         paddingBlock={16}
+        paddingInline={16}
         wrapperStyle={{ flex: 1, overflowY: 'auto' }}
       >
-        {isLoading && !isInitialized ? (
+        {isLoading || isArchivedProbePending ? (
           <GoalSkeleton chrome={'body'} />
-        ) : error ? (
-          <Block padding={32} variant={'outlined'}>
-            <Flexbox align={'center'} gap={12}>
-              <Text weight={600}>{t('goalList.loadError')}</Text>
-              <Text fontSize={13} type={'secondary'}>
-                {t('goalList.loadErrorDescription')}
-              </Text>
-              <Button
-                icon={RefreshCwIcon}
-                size={'small'}
-                onClick={() => void refreshGoals(scopeId)}
-              >
-                {t('goalList.retry')}
-              </Button>
-            </Flexbox>
-          </Block>
-        ) : goals.length === 0 ? (
+        ) : error && listView === undefined ? (
+          // Only a read that left nothing to show becomes the page: a failed
+          // revalidation keeps the hydrated rows on screen (the same guard the
+          // home rail, the goal portal and the detail page use), so a network
+          // blip no longer hides goals the user already has locally.
+          <GoalLoadError onRetry={() => void refreshGoals(scopeId)} />
+        ) : hasNoGoals ? (
           <GoalEmptyState onCreate={openCreateGoal} />
         ) : (
           <>
-            <Flexbox className={styles.overview}>
-              <Flexbox horizontal align={'center'} gap={20} justify={'space-between'} wrap={'wrap'}>
-                <Flexbox gap={3}>
-                  <Text fontSize={20} weight={600}>
-                    {t('goalPage.title')}
-                  </Text>
-                  <Text type={'secondary'}>{t('goalPage.description')}</Text>
-                </Flexbox>
-                <Flexbox horizontal gap={20}>
-                  <Flexbox className={styles.metric} gap={2}>
+            {/* The overview sizes up one agent's or project's goals; across
+              every agent the list and its tabs already carry that. */}
+            {!isGlobal && (
+              <Flexbox className={styles.overview}>
+                <Flexbox
+                  horizontal
+                  align={'center'}
+                  gap={20}
+                  justify={'space-between'}
+                  wrap={'wrap'}
+                >
+                  <Flexbox gap={3}>
                     <Text fontSize={20} weight={600}>
-                      {summary.total}
+                      {t('goalPage.title')}
                     </Text>
-                    <Text fontSize={12} type={'secondary'}>
-                      {t('goalPage.metrics.total')}
-                    </Text>
+                    <Text type={'secondary'}>{t('goalPage.description')}</Text>
                   </Flexbox>
-                  <Flexbox className={styles.metric} gap={2}>
-                    <Text fontSize={20} weight={600}>
-                      {summary.pursuing}
-                    </Text>
-                    <Text fontSize={12} type={'secondary'}>
-                      {t('goalPage.metrics.pursuing')}
-                    </Text>
-                  </Flexbox>
-                  <Flexbox className={styles.metric} gap={2}>
-                    <Text fontSize={20} weight={600}>
-                      {summary.delivered}
-                    </Text>
-                    <Text fontSize={12} type={'secondary'}>
-                      {t('goalPage.metrics.delivered')}
-                    </Text>
+                  <Flexbox horizontal gap={20}>
+                    <Flexbox className={styles.metric} gap={2}>
+                      <Text fontSize={20} weight={600}>
+                        {summary.total}
+                      </Text>
+                      <Text fontSize={12} type={'secondary'}>
+                        {t('goalPage.metrics.total')}
+                      </Text>
+                    </Flexbox>
+                    <Flexbox className={styles.metric} gap={2}>
+                      <Text fontSize={20} weight={600}>
+                        {summary.pursuing ?? '—'}
+                      </Text>
+                      <Text fontSize={12} type={'secondary'}>
+                        {t('goalPage.metrics.pursuing')}
+                      </Text>
+                    </Flexbox>
+                    <Flexbox className={styles.metric} gap={2}>
+                      <Text fontSize={20} weight={600}>
+                        {summary.delivered ?? '—'}
+                      </Text>
+                      <Text fontSize={12} type={'secondary'}>
+                        {t('goalPage.metrics.delivered')}
+                      </Text>
+                    </Flexbox>
                   </Flexbox>
                 </Flexbox>
               </Flexbox>
-            </Flexbox>
+            )}
             <Flexbox gap={10}>
-              <Flexbox horizontal align={'center'} justify={'space-between'}>
-                <Flexbox horizontal align={'center'} gap={8}>
+              {/* Wraps so the filters drop below the title on a phone instead of crushing it. */}
+              <Flexbox horizontal align={'center'} gap={8} justify={'space-between'} wrap={'wrap'}>
+                <Flexbox horizontal align={'center'} flex={'none'} gap={8}>
                   <Text fontSize={16} weight={600}>
                     {t('goalPage.listTitle')}
                   </Text>
                   <span className={styles.countBadge}>{visibleGoalCount}</span>
                 </Flexbox>
-                <Flexbox horizontal align={'center'} gap={8}>
+                {/* On a phone the filters can outgrow the row; the edge fade shows it scrolls. */}
+                <ScrollShadow
+                  hideScrollBar
+                  horizontal
+                  align={'center'}
+                  gap={8}
+                  orientation={'horizontal'}
+                  size={24}
+                  style={{ maxWidth: '100%' }}
+                >
+                  {isGlobal && (
+                    <GoalAgentFilter
+                      options={agentFilterOptions}
+                      value={agentFilter}
+                      onChange={setAgentFilter}
+                    />
+                  )}
                   <Segmented
                     size={'small'}
                     value={filter}
                     options={[
                       {
-                        label: t('goalPage.filter.open'),
-                        value: 'active',
-                      },
-                      {
                         label: t('goalPage.filter.all'),
                         value: 'all',
                       },
+                      {
+                        label: t('goalPage.filter.review'),
+                        value: 'review',
+                      },
+                      {
+                        label: t('goalPage.filter.running'),
+                        value: 'running',
+                      },
+                      {
+                        label: t('goalPage.filter.achieved'),
+                        value: 'achieved',
+                      },
+                      {
+                        label: t('goalPage.filter.archived'),
+                        value: 'archived',
+                      },
                     ]}
-                    onChange={(value) => setFilter(value as 'active' | 'all')}
+                    onChange={(value) => setFilter(value as GoalListFilter)}
                   />
                   <ActionIcon
                     icon={ListIcon}
@@ -236,10 +418,14 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
                     variant={viewMode === 'card' ? 'filled' : 'borderless'}
                     onClick={() => setViewMode('card')}
                   />
-                </Flexbox>
+                </ScrollShadow>
               </Flexbox>
               <div className={viewMode === 'card' ? styles.list : styles.listRows}>
-                {filteredGoals.length === 0 ? (
+                {isTabError ? (
+                  <GoalLoadError onRetry={() => void refreshGoals(scopeId)} />
+                ) : isTabPending ? (
+                  <GoalListRowsSkeleton />
+                ) : isFilterEmpty ? (
                   <Block padding={32} variant={'outlined'}>
                     <Empty
                       description={t('goalPage.filteredEmptyDescription')}
@@ -250,17 +436,16 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
                   filteredGoals
                     .slice(0, visibleLimit)
                     .map((item) => (
-                      <GoalItem goal={item} key={item.goal.id} projectId={projectId} />
+                      <GoalItem
+                        globalScopeId={isGlobal ? scopeId : undefined}
+                        goal={item}
+                        key={item.goal.id}
+                        projectId={projectId}
+                      />
                     ))
                 )}
               </div>
-              {visibleLimit < filteredGoals.length && (
-                <Flexbox align={'center'} paddingBlock={8}>
-                  <Button size={'small'} onClick={loadMoreGoals}>
-                    {t('goalPage.loadMore')}
-                  </Button>
-                </Flexbox>
-              )}
+              {hasMoreGoals && <div aria-hidden className={styles.sentinel} ref={sentinelRef} />}
             </Flexbox>
           </>
         )}

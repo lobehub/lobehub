@@ -1,7 +1,6 @@
 'use client';
 
-import { Icon } from '@lobehub/ui';
-import { Tag } from '@lobehub/ui/base-ui';
+import { Icon, Tag } from '@lobehub/ui';
 import qs from 'query-string';
 import { memo, useMemo } from 'react';
 
@@ -12,6 +11,7 @@ import { useCategory } from '@/hooks/useMCPCategory';
 import { useQuery } from '@/hooks/useQuery';
 import { SCROLL_PARENT_ID } from '@/routes/(main)/community/features/const';
 import { useDiscoverStore } from '@/store/discover';
+import { mcpSelectors } from '@/store/discover/selectors';
 import { McpCategory, McpSorts } from '@/types/discover';
 
 import CategoryMenu from '../../../../components/CategoryMenu';
@@ -22,7 +22,8 @@ const Category = memo(() => {
     category?: McpCategory;
     q?: string;
   };
-  const { data: items = [] } = useMcpCategories({ q });
+  const { queryKey } = useMcpCategories({ q });
+  const items = useDiscoverStore(mcpSelectors.mcpCategories(queryKey));
   const navigate = useWorkspaceAwareNavigate();
   const cates = useCategory();
 

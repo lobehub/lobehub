@@ -12,7 +12,7 @@ import { RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
  *   flow), so a call can arrive before any device was activated.
  * - Type 2 — lost mid-run: the device dropped offline between steps, the next
  *   operation re-resolves its plan to `device-unrouted`
- *   (`bound-device-offline`), and `metadata.activeDeviceId` is cleared.
+ *   (`bound-device-offline`), and `binding.device.id` is left unset.
  *
  * Historically the runtime factory guards threw a bare
  * `activeDeviceId is required for ...` error string. The model received no

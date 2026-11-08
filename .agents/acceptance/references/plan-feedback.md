@@ -1,7 +1,10 @@
 # Phase 1 plan feedback
 
-Use this template at the end of Phase 1 (see [`../PROCESS.md`](../PROCESS.md)). Match the user's conversation language.
-Keep it concrete and compact: report observed state, not generic readiness claims.
+Use this template at the end of Phase 1 (see [`../PROCESS.md`](../PROCESS.md)). It
+is written into the round's review notes and handed to the acceptance-checker for plan
+review — not posted to the user for approval. Match the user's conversation
+language. Keep it concrete and compact: report observed state, not generic
+readiness claims.
 
 ## Readiness verdicts
 
@@ -83,40 +86,39 @@ ids, and carry every `supersedes` chain forward unchanged. For every user-visibl
 UI case, plan the screenshot or recording that proves that exact claim — program
 output may supplement visual evidence but never replaces it.
 
-## Confirmation behavior
+## Gate behavior
 
-For the first run attached to a subject Acceptance, use the runtime structured
-question tool (`request_user_input` / ask-user-question equivalent) after the
-feedback. Do not bury the question inside the template text.
+The acceptance-checker is the gate, in the first round only. Plan/case feedback
+is capped at two responses total; the second is optional and checks revisions.
+The primary resolves remaining findings itself without requesting a third response.
+Hand the feedback plus the
+draft plan to the acceptance-checker (skill `references/acceptance-checker.md`); on **✅ Ready** / **⚠️ Ready with
+warnings** and an acceptance-checker decision of "ready" (or every material finding
+resolved), enter Execute. The acceptance-checker returns once more for the first round's
+evidence review before publishing, and not again after that. Never ask the
+user to approve the plan, and never present `Start` / `Discuss first` style
+buttons for a routine run.
 
-When the verdict is **Ready** or **Ready with warnings**, use:
-
-1. `Start (Recommended)` — approve the displayed environment and plan; enter Execute.
-2. `Discuss first` — revise scope, cases, assumptions, or environment handling.
-
-When the verdict is **Blocked**, do not offer Start. Use:
-
-1. `I'll provide it (Recommended)` — the user will supply or complete the listed
-   user-owned prerequisite.
-2. `Revise the plan` — change the scope or approach to remove the blocker.
-
-Match button labels to the user's language. Wait for the user's response. If the
-user resolves a blocker, re-check the affected environment item and present an
-updated gate; do not rely only on the user's statement that it is fixed.
+When the verdict is **❌ Blocked** on a **user-owned** item, ask the user one
+structured question naming exactly that prerequisite and why it is required,
+then stop. If the user resolves it, re-check the affected environment item; do
+not rely only on the user's statement that it is fixed. Agent-owned blockers
+are never sent to the user.
 
 ### Follow-up rounds
 
-The first approved plan authorizes later repair-and-reverify iterations on the
-same subject Acceptance. For a follow-up triggered by user feedback or an
-iteration request:
+For a follow-up triggered by user feedback or an iteration request:
 
 - read `lh acceptance view <subject> --json`;
 - silently re-check environment and auth;
 - repair and re-run the affected stable check ids;
-- publish a new immutable round to the same Acceptance automatically;
-- do not ask the user to approve another routine plan.
+- publish a new immutable round to the same Acceptance automatically (no
+  acceptance-checker re-review — the acceptance-checker takes part in the first round only);
+- do not ask the user to approve the follow-up plan.
 
-Present a new confirmation gate only when scope, business goal, evidence surface,
-external authority, destructiveness, or a user-owned prerequisite materially
-changes. A code revision, local server restart, fixture update, screenshot
-recapture, retry, or automatic follow-up publication does not reset approval.
+The only reasons to ask the user in a follow-up are a user-owned prerequisite
+(a secret, a device/2FA approval, a permission only they can grant, a
+destructive action) or a product decision that materially changes the plan —
+scope, business goal, evidence surface, or external authority. A code
+revision, local server restart, fixture update, screenshot recapture, retry,
+or automatic follow-up publication is never a reason to ask.

@@ -1,4 +1,5 @@
 import type {
+  DocumentCommentAnchorList,
   DocumentCommentDetail,
   DocumentCommentItem as DocumentCommentDTO,
 } from '@lobechat/types';
@@ -20,10 +21,10 @@ import { documentComments, users, workspaceMembers } from '@/database/schemas';
 import type { DocumentCommentItem } from '@/database/schemas/documentComment';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { canViewDocumentContent } from '@/server/services/documentAccess';
 import { publishResourceEvent } from '@/server/services/resourceEvents';
 import {
   assertCanPerformResourceAction,
-  canPerformResourceAction,
   getResourceMeta,
 } from '@/server/services/resourcePermission';
 import { getWorkspaceScopedPermissionMatches } from '@/server/services/workspacePermission';
@@ -37,6 +38,24 @@ const editorDataSchema = z
   .json()
   .refine((value) => Buffer.byteLength(JSON.stringify(value), 'utf8') <= MAX_EDITOR_DATA_BYTES, {
     message: 'editorData must not exceed 128 KiB',
+  });
+/** Generous enough for a paragraph-sized selection, short enough to stay an excerpt. */
+const ANCHOR_QUOTE_MAX = 2000;
+const ANCHOR_CONTEXT_MAX = 100;
+const selectionAnchorSchema = z
+  .object({
+    end: z.number().int().min(0),
+    prefix: z.string().max(ANCHOR_CONTEXT_MAX).optional(),
+    quote: z.string().min(1).max(ANCHOR_QUOTE_MAX),
+    start: z.number().int().min(0),
+    suffix: z.string().max(ANCHOR_CONTEXT_MAX).optional(),
+  })
+  // The offsets are only a hint for re-location — the quote is what actually
+  // finds the run — but an inconsistent pair means the client measured against
+  // something other than the text it sent, so reject it rather than store a
+  // hint that will mis-rank every candidate.
+  .refine(({ end, quote, start }) => end === start + quote.length, {
+    message: 'selectionAnchor end must equal start + quote.length',
   });
 const pageSchema = z.object({
   cursor: z.string().min(1).optional(),
@@ -201,14 +220,11 @@ const notifyActivitiesBestEffort = (
               const grantedPermissions = permissionsByUserId.get(userId);
               if (!grantedPermissions) return null;
 
-              const canView = await canPerformResourceAction({
-                action: 'view',
+              const canView = await canViewDocumentContent({
                 db: ctx.serverDB,
-                effectiveAccessLevel: 'view',
                 grantedPermissions,
                 meta,
                 resourceId: documentId,
-                resourceType: 'document',
                 userId,
                 workspaceId: ctx.workspaceId,
               });
@@ -378,8 +394,19 @@ export const documentCommentRouter = router({
           documentId: idSchema,
           editorData: editorDataSchema.optional(),
           parentCommentId: idSchema.optional(),
+          selectionAnchor: selectionAnchorSchema.optional(),
         })
-        .superRefine(validateCommentBody),
+        .superRefine(validateCommentBody)
+        .superRefine((value, ctx) => {
+          // A reply belongs to its thread's anchor; accepting a second one
+          // would split a thread across two runs of the body.
+          if (!value.parentCommentId || !value.selectionAnchor) return;
+          ctx.addIssue({
+            code: 'custom',
+            message: 'A reply cannot carry its own selectionAnchor',
+            path: ['selectionAnchor'],
+          });
+        }),
     )
     .mutation(async ({ ctx, input }) => {
       const { grantedPermissions } = await assertPermission(ctx, 'DOCUMENT_COMMENT_CREATE');
@@ -466,6 +493,16 @@ export const documentCommentRouter = router({
     return { ...enriched[0], replyCount } satisfies DocumentCommentDetail;
   }),
 
+  listAnchors: documentCommentProcedure
+    .input(z.object({ documentId: idSchema }))
+    .query(async ({ ctx, input }) => {
+      const { grantedPermissions } = await assertPermission(ctx, 'DOCUMENT_COMMENT_READ');
+      await assertDocumentView(ctx, input.documentId, grantedPermissions);
+      return {
+        items: await ctx.documentCommentModel.listAnchors(input.documentId),
+      } satisfies DocumentCommentAnchorList;
+    }),
+
   listReplies: documentCommentProcedure
     .input(pageSchema.extend({ rootCommentId: idSchema }))
     .query(async ({ ctx, input }) => {
@@ -480,7 +517,7 @@ export const documentCommentRouter = router({
     }),
 
   listThreads: documentCommentProcedure
-    .input(pageSchema.extend({ documentId: idSchema }))
+    .input(pageSchema.extend({ anchored: z.boolean().optional(), documentId: idSchema }))
     .query(async ({ ctx, input }) => {
       const { grantedPermissions } = await assertPermission(ctx, 'DOCUMENT_COMMENT_READ');
       await assertDocumentView(ctx, input.documentId, grantedPermissions);

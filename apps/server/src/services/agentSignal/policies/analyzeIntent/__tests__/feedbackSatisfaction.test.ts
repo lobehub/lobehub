@@ -8,6 +8,7 @@ import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 
 import { createRuntimeProcessorContext } from '../../../runtime/context';
 import { createFeedbackSatisfactionJudgeProcessor } from '../feedbackSatisfaction';
+import { createFeedbackTestContext } from './testUtils';
 
 vi.mock('@/server/modules/ModelRuntime', () => ({
   initModelRuntimeFromDB: vi.fn(),
@@ -113,17 +114,7 @@ describe('feedbackSatisfactionJudge', () => {
       result: 'satisfied',
     });
 
-    const ctx = createRuntimeProcessorContext({
-      backend: {
-        async getGuardState() {
-          return {};
-        },
-        async touchGuardState() {
-          return {};
-        },
-      },
-      scopeKey: 'topic:thread_1',
-    });
+    const ctx = createFeedbackTestContext();
 
     const processor = createFeedbackSatisfactionJudgeProcessor({
       db: {} as LobeChatDatabase,
@@ -205,17 +196,7 @@ describe('feedbackSatisfactionJudge', () => {
         result: 'satisfied',
       }),
     };
-    const ctx = createRuntimeProcessorContext({
-      backend: {
-        async getGuardState() {
-          return {};
-        },
-        async touchGuardState() {
-          return {};
-        },
-      },
-      scopeKey: 'topic:thread_1',
-    });
+    const ctx = createFeedbackTestContext();
     const processor = createFeedbackSatisfactionJudgeProcessor({ judge });
     const result = await processor.handle(
       createUserMessageSource(
@@ -259,17 +240,7 @@ describe('feedbackSatisfactionJudge', () => {
         result: 'not_satisfied',
       }),
     };
-    const ctx = createRuntimeProcessorContext({
-      backend: {
-        async getGuardState() {
-          return {};
-        },
-        async touchGuardState() {
-          return {};
-        },
-      },
-      scopeKey: 'topic:thread_1',
-    });
+    const ctx = createFeedbackTestContext();
     const processor = createFeedbackSatisfactionJudgeProcessor({ judge });
     const result = await processor.handle(
       createUserMessageSource(
@@ -314,17 +285,7 @@ describe('feedbackSatisfactionJudge', () => {
         result: 'not_satisfied',
       }),
     };
-    const ctx = createRuntimeProcessorContext({
-      backend: {
-        async getGuardState() {
-          return {};
-        },
-        async touchGuardState() {
-          return {};
-        },
-      },
-      scopeKey: 'topic:thread_1',
-    });
+    const ctx = createFeedbackTestContext();
     const processor = createFeedbackSatisfactionJudgeProcessor({ judge });
     const result = await processor.handle(
       createUserMessageSource(
@@ -363,17 +324,7 @@ describe('feedbackSatisfactionJudge', () => {
         result: 'satisfied',
       }),
     };
-    const ctx = createRuntimeProcessorContext({
-      backend: {
-        async getGuardState() {
-          return {};
-        },
-        async touchGuardState() {
-          return {};
-        },
-      },
-      scopeKey: 'topic:thread_1',
-    });
+    const ctx = createFeedbackTestContext();
     const processor = createFeedbackSatisfactionJudgeProcessor({ judge });
     const result = await processor.handle(
       createUserMessageSource(
@@ -401,5 +352,37 @@ describe('feedbackSatisfactionJudge', () => {
         ],
       }),
     );
+  });
+
+  /**
+   * @example
+   * An exhausted per-user classifier budget concludes the source without a judge call.
+   */
+  it('does not call the judge when the classifier budget denies the call', async () => {
+    const judge = { judgeSatisfaction: vi.fn() };
+    const classifierBudget = vi.fn().mockResolvedValue({
+      allowed: false,
+      count: 201,
+      kind: 'feedback-classifier',
+      limit: 200,
+      reason: 'exceeded',
+    });
+    const ctx = createRuntimeProcessorContext({
+      backend: { getGuardState: vi.fn(), touchGuardState: vi.fn() },
+      scopeKey: 'topic:thread_1',
+    });
+
+    const processor = createFeedbackSatisfactionJudgeProcessor({ classifierBudget, judge });
+    const result = await processor.handle(
+      createUserMessageSource('source_budget', 'That was wrong.'),
+      ctx,
+    );
+
+    expect(classifierBudget).toHaveBeenCalledTimes(1);
+    expect(judge.judgeSatisfaction).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      concluded: { reason: 'Daily Agent Signal feedback-classifier budget exceeded (200/day).' },
+      status: 'conclude',
+    });
   });
 });

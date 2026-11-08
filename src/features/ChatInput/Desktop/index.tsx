@@ -2,16 +2,14 @@
 
 import { type ChatInputProps } from '@lobehub/editor/react';
 import { ChatInput, ChatInputActionBar } from '@lobehub/editor/react';
-import { Center, Flexbox } from '@lobehub/ui';
-import { Skeleton, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cx } from 'antd-style';
-import { type ReactNode, use } from 'react';
-import { memo, useEffect } from 'react';
+import { Center, createStaticStyles, cx, Flexbox, Skeleton, Text } from '@lobehub/ui';
+import { memo, type ReactNode, use, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
 import ChatInputNotice from '@/features/ChatInput/ChatInputNotice';
 import ComposerExpandButton from '@/features/ChatInput/components/ComposerExpandButton';
+import { useChatInputUploadKey } from '@/features/ChatInput/hooks/useChatInputUpload';
 import { useChatInputStore } from '@/features/ChatInput/store';
 import { LayoutContainerContext } from '@/features/DesktopLayoutContainer/LayoutContainerContext';
 import { useChatStore } from '@/store/chat';
@@ -20,12 +18,13 @@ import { fileChatSelectors, useFileStore } from '@/store/file';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 
-import { type ActionToolbarProps } from '../ActionBar';
 import ActionBar from '../ActionBar';
+import { type ActionToolbarProps } from '../ActionBar';
 import ControlBar from '../ControlBar';
 import InputEditor from '../InputEditor';
 import { useSkillDrop } from '../InputEditor/ActionTag/useSkillDrop';
 import { type PlaceholderVariant } from '../InputEditor/Placeholder';
+import { useDocumentDrop } from '../InputEditor/ReferDocument/useDocumentDrop';
 import { useTopicDrop } from '../InputEditor/ReferTopic/useTopicDrop';
 import { useWorkspaceFileDrop } from '../InputEditor/useWorkspaceFileDrop';
 import SendArea from '../SendArea';
@@ -141,7 +140,8 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
     const hasContextSelections = useFileStore(
       fileChatSelectors.chatContextSelectionHasItem(contextSelectionKey),
     );
-    const hasFiles = useFileStore(fileChatSelectors.chatUploadFileListHasItem);
+    const uploadContextKey = useChatInputUploadKey();
+    const hasFiles = useFileStore(fileChatSelectors.chatUploadFileListHasItem(uploadContextKey));
     const [slashMenuRef, expand, showTypoBar, editor, leftActions] = useChatInputStore((s) => [
       s.slashMenuRef,
       s.expand,
@@ -159,6 +159,7 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
     const setExpand = useChatInputStore((s) => s.setExpand);
     const skillDrop = useSkillDrop();
     const topicDrop = useTopicDrop();
+    const documentDrop = useDocumentDrop();
     const workspaceFileDrop = useWorkspaceFileDrop();
 
     // Fan a single drag event out to every custom-MIME drop handler. Each one
@@ -166,11 +167,13 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
     const handleDragOver = (event: React.DragEvent) => {
       skillDrop.onDragOver(event);
       topicDrop.onDragOver(event);
+      documentDrop.onDragOver(event);
       workspaceFileDrop.onDragOver(event);
     };
     const handleDrop = (event: React.DragEvent) => {
       skillDrop.onDrop(event);
       topicDrop.onDrop(event);
+      documentDrop.onDrop(event);
       workspaceFileDrop.onDrop(event);
     };
 
@@ -197,6 +200,9 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
     // shrink-to-fit box is pushed past the bar's right edge and leaves a
     // one-slot hole between the last action and the expand toggle. Keep the
     // toggle in a row outside that box.
+    // NOTICE: The hover-only expand button stays in layout at zero opacity to
+    // prevent shifting. Keep the notice before it so the hidden 32px control
+    // does not create a false gap after the microphone action.
     const leftSlotContent = (
       <Flexbox horizontal align={'center'} flex={'none'} gap={2}>
         <Flexbox horizontal align={'center'} className={styles.leftActions}>
@@ -209,13 +215,13 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
             />
           )}
         </Flexbox>
+        {noticeNode}
         <ComposerExpandButton />
       </Flexbox>
     );
     const leftSlot = noticeNode ? (
-      <Flexbox horizontal align={'center'} className={styles.leftSlot} gap={4}>
+      <Flexbox horizontal align={'center'} className={styles.leftSlot}>
         {leftSlotContent}
-        {noticeNode}
       </Flexbox>
     ) : (
       leftSlotContent

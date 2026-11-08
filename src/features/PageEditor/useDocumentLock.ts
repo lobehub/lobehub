@@ -5,10 +5,10 @@ import { useEffect, useMemo, useRef } from 'react';
 import { type EditLockClient, useEditLock } from '@/features/EditLock';
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import { usePermission } from '@/hooks/usePermission';
-import { mutate } from '@/libs/swr';
+import { revalidateReplica } from '@/libs/replica';
 import { documentService } from '@/services/document';
-import { documentSWRKeys } from '@/services/document/swrKeys';
 import { useDocumentStore } from '@/store/document';
+import { documentDetailResource } from '@/store/document/slices/document/projection';
 import { editorSelectors } from '@/store/document/slices/editor';
 
 import { usePageEditorStore } from './store';
@@ -72,7 +72,11 @@ export const useDocumentLock = () => {
     'document',
     isWorkspacePage && documentId ? documentId : undefined,
   );
-  const workspacePage = Boolean(documentId && canEdit && canEditResource && isWorkspacePage);
+  // A collaboration room merges concurrent edits, so it never takes the lock.
+  const inRoom = usePageEditorStore((s) => !!s.collab);
+  const workspacePage = Boolean(
+    documentId && canEdit && canEditResource && isWorkspacePage && !inRoom,
+  );
   const ownerId = useMemo(
     () => (documentId ? createLockOwnerId(documentId) : undefined),
     [documentId],
@@ -133,7 +137,7 @@ export const useDocumentLock = () => {
     const recovered = prevHealthRef.current === 'lost' && lock.health === 'healthy';
     prevHealthRef.current = lock.health;
     if (recovered && documentId) {
-      void mutate(documentSWRKeys.editor(documentId));
+      void revalidateReplica(documentDetailResource, documentId);
     }
   }, [lock.health, documentId]);
 
@@ -150,7 +154,7 @@ export const useDocumentLock = () => {
     const tookOver = wasLockedByOtherRef.current && !isLockedByOther;
     wasLockedByOtherRef.current = Boolean(isLockedByOther);
     if (isLockedByOther || tookOver || saveBlockedByLock) {
-      void mutate(documentSWRKeys.editor(documentId));
+      void revalidateReplica(documentDetailResource, documentId);
     }
   }, [workspacePage, documentId, isLockedByOther, saveBlockedByLock]);
 

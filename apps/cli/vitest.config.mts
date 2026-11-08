@@ -36,8 +36,8 @@ export default defineConfig({
     ],
   },
   test: {
+    include: ['src/**/*.test.ts', 'scripts/**/*.test.ts', 'tests/**/*.test.ts', '*.test.ts'],
     coverage: {
-      all: false,
       reporter: ['text', 'json', 'lcov', 'text-summary'],
     },
     environment: 'node',

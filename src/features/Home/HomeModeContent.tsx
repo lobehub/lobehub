@@ -2,20 +2,31 @@ import { TASK_STATUSES } from '@lobechat/builtin-tool-task';
 import type { RecentItem, TaskStatus } from '@lobechat/types';
 import { agentDisplayName } from '@lobechat/types';
 import type { FlexboxProps } from '@lobehub/ui';
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Avatar, Segmented, Skeleton, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import {
+  createStaticStyles,
+  cssVar,
+  cx,
+  Flexbox,
+  Icon,
+  Segmented,
+  Skeleton,
+  Text,
+} from '@lobehub/ui';
 import { HashIcon } from 'lucide-react';
 import { memo, type ReactNode, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceMemberProfiles } from '@/business/client/hooks/useWorkspaceMemberProfiles';
+import AgentAvatar from '@/components/AgentAvatar';
 import AsyncError from '@/components/AsyncError';
 import AssigneeAvatar from '@/features/AgentTasks/features/AssigneeAvatar';
 import TaskStatusIcon from '@/features/AgentTasks/features/TaskStatusIcon';
 import TaskTriggerTag from '@/features/AgentTasks/features/TaskTriggerTag';
 import { taskDetailPath } from '@/features/AgentTasks/shared/taskDetailPath';
 import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
+// Deep import, not the feature barrel: the inbox renderer loads lazily with
+// HomeInbox, and this surface must not pull it into its own chunk.
+import { EntityLinkHostProvider } from '@/features/EntityLink/host';
 import HomeInbox from '@/features/HomeInbox';
 import AuthorChip from '@/features/HomeInbox/AuthorChip';
 import { filterTopicsForInboxScope } from '@/features/HomeInbox/scopeTogglePlacement';
@@ -38,6 +49,7 @@ import { useUserStore } from '@/store/user';
 import { authSelectors, userProfileSelectors } from '@/store/user/slices/auth/selectors';
 import { markdownToTxt } from '@/utils/markdownToTxt';
 
+import { HOME_ENTITY_PORTAL_SCOPE } from './acceptancePortalView';
 import GroupBlock from './components/GroupBlock';
 import { homeType } from './components/homeType';
 import RunningGlyph from './components/RunningGlyph';
@@ -214,7 +226,8 @@ const RecentTopicRow = memo<{ showAuthor?: boolean; topic: RecentItem }>(
         title={topic.title}
         icon={
           agent ? (
-            <Avatar
+            <AgentAvatar
+              agentId={topic.agentId}
               avatar={agent.avatar}
               background={agent.backgroundColor}
               className={styles.topicAvatar}
@@ -308,7 +321,7 @@ const TaskRow = memo<{ showTrigger?: boolean; task: TaskListItem }>(
     return (
       <Row
         description={description}
-        href={taskDetailPath(task.identifier)}
+        href={taskDetailPath(task.identifier, undefined, task.name)}
         title={title}
         // A row that is executing right now wears the shared animated running
         // mark instead of the static glyph — the same liveness signal running
@@ -363,9 +376,9 @@ const TaskContent = memo(() => {
     statuses: RECENT_TASK_STATUSES,
     visibility: 'all',
   });
-  const tasks = useTaskStore(taskListSelectors.taskList);
-  const tasksTotal = useTaskStore(taskListSelectors.taskListTotal);
-  const tasksInit = useTaskStore(taskListSelectors.isTaskListInit);
+  const tasks = useTaskStore(taskListSelectors.taskList(tasksSWR.queryKey));
+  const tasksTotal = useTaskStore(taskListSelectors.taskListTotal(tasksSWR.queryKey));
+  const tasksInit = useTaskStore(taskListSelectors.isTaskListInit(tasksSWR.queryKey));
   const taskCount = useGlobalStore(systemStatusSelectors.homeTaskCount);
   const shown = tasks.slice(0, taskCount);
 
@@ -486,7 +499,7 @@ const HomeModeContent = memo<HomeModeContentProps>(({ inlineRail, mode, onSugges
     isLogin && !recentsHidden
       ? recentKeys.topicList(HOME_TOPIC_RECENT_LIMIT, cacheScope, teamView ? 'team' : 'mine')
       : null,
-    () => recentService.getAll(HOME_TOPIC_RECENT_LIMIT, ['topic'], true, !teamView),
+    () => recentService.getAll(HOME_TOPIC_RECENT_LIMIT, ['topic'], true, !teamView, teamView),
     { revalidateOnFocus: false },
   );
 
@@ -500,9 +513,9 @@ const HomeModeContent = memo<HomeModeContentProps>(({ inlineRail, mode, onSugges
     [inboxTopics.running, myId],
   );
   const useFetchBriefs = useBriefStore((s) => s.useFetchBriefs);
-  const briefsSWR = useFetchBriefs(isLogin, cacheScope);
-  const briefs = useBriefStore(briefListSelectors.briefs(cacheScope));
-  const briefsInit = useBriefStore(briefListSelectors.isBriefsInit(cacheScope));
+  const briefsSWR = useFetchBriefs(isLogin);
+  const briefs = useBriefStore(briefListSelectors.briefs);
+  const briefsInit = useBriefStore(briefListSelectors.isBriefsInit);
   const needsYouCount = useMemo(() => splitBriefs(briefs).needsYou.length, [briefs]);
   const topicRecents = recentsSWR.data ?? [];
 
@@ -538,7 +551,9 @@ const HomeModeContent = memo<HomeModeContentProps>(({ inlineRail, mode, onSugges
       return (
         <Flexbox gap={32}>
           {starters}
-          <HomeInbox inlineRail variant={'main'} />
+          <EntityLinkHostProvider portal={HOME_ENTITY_PORTAL_SCOPE}>
+            <HomeInbox inlineRail variant={'main'} />
+          </EntityLinkHostProvider>
           <Recommendations variant={'main'} />
         </Flexbox>
       );
@@ -546,12 +561,14 @@ const HomeModeContent = memo<HomeModeContentProps>(({ inlineRail, mode, onSugges
 
     return (
       <Flexbox gap={32}>
-        <HomeInbox
-          inlineRail={inlineRail}
-          scope={scope}
-          variant={'main'}
-          onScopeChange={setScope}
-        />
+        <EntityLinkHostProvider portal={HOME_ENTITY_PORTAL_SCOPE}>
+          <HomeInbox
+            inlineRail={inlineRail}
+            scope={scope}
+            variant={'main'}
+            onScopeChange={setScope}
+          />
+        </EntityLinkHostProvider>
         {!recentsHidden && (state !== 'ready' || topicRecents.length > 0) && (
           <GroupBlock
             actionAlwaysVisible
@@ -614,7 +631,9 @@ const HomeModeContent = memo<HomeModeContentProps>(({ inlineRail, mode, onSugges
     // hidden — task mode never surfaces them, folded or not.
     return (
       <Flexbox gap={32}>
-        <HomeInbox hideNeedsYou hideUnread inlineRail variant={'main'} />
+        <EntityLinkHostProvider portal={HOME_ENTITY_PORTAL_SCOPE}>
+          <HomeInbox hideNeedsYou hideUnread inlineRail variant={'main'} />
+        </EntityLinkHostProvider>
         {taskBlocks}
         <Recommendations variant={'main'} />
       </Flexbox>

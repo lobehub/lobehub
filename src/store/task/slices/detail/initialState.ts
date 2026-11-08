@@ -1,26 +1,35 @@
 import type { TaskDetailData } from '@lobechat/types';
 
+import { createReplicaState, type ReplicaState } from '@/libs/replica';
 import { type SaveStatus } from '@/types/saveState';
 
 export interface TaskDetailSliceState {
   activeTaskId?: string;
+  activeTaskRef?: string;
   /**
    * Topic-scoped fallbacks for a drawer opened outside a task detail — the home
    * inbox opens runs that may have no parent task at all, so there is no
    * `taskDetailMap` entry to read the agent / title from.
    */
   activeTopicDrawerAgentId?: string;
+  /** Bumped on every opening with conversational intent — the body expands and
+      focuses its reply composer each time it changes, so a repeated request
+      on an already-open drawer is still observable. */
+  activeTopicDrawerFocusRequest?: number;
   activeTopicDrawerTitle?: string;
   activeTopicDrawerTopicId?: string;
   isCreatingTask: boolean;
   isDeletingTask: boolean;
   taskDetailMap: Record<string, TaskDetailData>;
+  /** Replica bookkeeping of `taskDetailMap` (its view). */
+  taskDetailReplica: ReplicaState<TaskDetailData>;
   /**
    * Increments only when an authoritative source outside the mounted task editor
    * changes its persisted instruction snapshot. The editor uses this as an
    * explicit reload signal instead of comparing against live, unsaved content.
    */
   taskInstructionRevisionMap: Record<string, number>;
+  taskRefIndex: Record<string, string>;
   // Save status is scoped per task id (mirrors `taskDetailMap`). A store-wide
   // field would leak one task's `failed` state across navigation, since
   // `setActiveTaskId` only swaps `activeTaskId` and never clears the status.
@@ -31,6 +40,8 @@ export const initialTaskDetailSliceState: TaskDetailSliceState = {
   isCreatingTask: false,
   isDeletingTask: false,
   taskDetailMap: {},
+  taskRefIndex: {},
+  taskDetailReplica: createReplicaState(),
   taskInstructionRevisionMap: {},
   taskSaveStatusMap: {},
 };

@@ -28,7 +28,9 @@ const { mockAppEnv, mockGetTaskTemplateRecommendations, mockMarket } = vi.hoiste
 });
 
 vi.mock('@/server/services/market', () => ({
-  MarketService: vi.fn(() => ({ market: mockMarket })),
+  MarketService: vi.fn(function () {
+    return { market: mockMarket };
+  }),
 }));
 
 vi.mock('@/envs/app', () => ({
@@ -54,7 +56,7 @@ describe('TaskTemplateService.listDailyRecommend', () => {
     vi.clearAllMocks();
     mockAppEnv.MARKET_TRUSTED_CLIENT_ID = 'client-id';
     mockAppEnv.MARKET_TRUSTED_CLIENT_SECRET = 'secret';
-    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(function () {});
     mockMarket.taskTemplates = {
       getTaskTemplateRecommendations: mockGetTaskTemplateRecommendations,
     };

@@ -1,5 +1,4 @@
-import { Empty, Flexbox } from '@lobehub/ui';
-import { Table } from 'antd';
+import { Empty, Flexbox, Table } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { Wrench } from 'lucide-react';
 import { memo } from 'react';
@@ -27,12 +26,12 @@ const APIs = memo<{
   return (
     <Flexbox paddingBlock={16} width={'100%'}>
       <Table
-        bordered
         dataSource={pluginManifest.api}
         pagination={false}
         rowKey={'name'}
         size={'small'}
         tableLayout="fixed"
+        variant="outlined"
         columns={[
           {
             dataIndex: 'name',

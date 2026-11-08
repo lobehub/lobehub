@@ -57,14 +57,31 @@ export const devices = pgTable(
     // on the machine (`lh connect --workspace`).
     sharedFromDeviceId: varchar('shared_from_device_id', { length: 64 }),
 
-    /** Machine-derived id (sha256 truncated to 32 chars; 64 leaves room for fallback randomUUID) */
+    /**
+     * Machine-derived id (sha256 truncated to 32 chars; 64 leaves room for
+     * fallback randomUUID). For a managed cloud device it is the id the
+     * managed device provider assigned.
+     */
     deviceId: varchar('device_id', { length: 64 }).notNull(),
-    /** 'machine-id' | 'fallback' — validated by zod at the router boundary */
+    /**
+     * 'machine-id' | 'fallback' — reported by the connecting client, validated
+     * by zod at the router boundary — or `MANAGED_CLOUD_DEVICE_IDENTITY_SOURCE`
+     * from `@lobechat/types`, which the server writes when it creates a managed
+     * cloud device. The client registration routers do not accept that value.
+     */
     identitySource: varchar('identity_source', { length: 20 }).notNull(),
 
     hostname: text('hostname'),
     /** 'darwin' | 'win32' | 'linux' */
     platform: varchar('platform', { length: 20 }),
+    /**
+     * CPU architecture as reported by the client (`process.arch`: 'x64' | 'arm64',
+     * stored raw — no normalization — so future values like linux arm keep working).
+     * Only a device running a client new enough to report it gets a value;
+     * historical rows stay NULL (arch is not derivable from stored data).
+     */
+    architecture: varchar('architecture', { length: 20 }),
+    metadata: jsonb('metadata').$type<Record<string, string>>(),
     /** User-editable alias */
     friendlyName: text('friendly_name'),
 

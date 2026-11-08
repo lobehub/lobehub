@@ -1,8 +1,19 @@
 import { ModelEmptyError } from '@lobechat/model-runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { chatService } from '@/services/chat';
+
 import type { ChatStore } from '../../store';
 import { ClientLLMTransport } from './ClientLLMTransport';
+
+const createContentPolicyFailure = () => ({
+  error: {
+    message: 'The content may contain prohibited content. Please adjust it and try again.',
+    type: 'ProviderContentPolicyViolation',
+  },
+  events: [],
+  interrupted: false,
+});
 
 // A grounding-only completion streams no text into `content`, but carries
 // citation metadata and burns real output tokens. The stream (driven via
@@ -105,6 +116,34 @@ const input = {
   state: {},
 } as any;
 
+describe('ClientLLMTransport.stream · conversation affinity', () => {
+  it('keeps compression requests scoped to the operation when the active topic changes', async () => {
+    const { store, transport } = createTransport();
+    store.activeTopicId = 'other-topic';
+    vi.mocked(chatService.getChatCompletion).mockClear();
+
+    for (let i = 0; i < 2; i++) {
+      await transport.stream({ messages: [], model: 'glm-5', provider: 'opencodecodingplan' });
+    }
+
+    expect(chatService.getChatCompletion).toHaveBeenCalledTimes(2);
+    for (const [, options] of vi.mocked(chatService.getChatCompletion).mock.calls) {
+      expect(options?.topicId).toBe('topic-1');
+      // The summary's usage groups with the run that compressed its context.
+      expect(options?.operationId).toBe('op-1');
+    }
+  });
+});
+
+describe('ClientLLMTransport.runAttempt · usage attribution', () => {
+  it('sends the run operation id so the call usage groups with its run', async () => {
+    vi.mocked(chatService.getChatCompletion).mockClear();
+    await createTransport().transport.runAttempt(input);
+
+    expect(vi.mocked(chatService.getChatCompletion).mock.calls[0][1]?.operationId).toBe('op-1');
+  });
+});
+
 describe('ClientLLMTransport.runAttempt · empty-completion grounding guard', () => {
   beforeEach(() => {
     finishGrounding = grounding;
@@ -180,14 +219,7 @@ describe('ClientLLMTransport.retryPolicy.onError · terminal operation teardown'
       scope: 'group',
     });
 
-    transport.retryPolicy.onError?.({
-      error: {
-        message: 'The content may contain prohibited content. Please adjust it and try again.',
-        type: 'ProviderContentPolicyViolation',
-      },
-      events: [],
-      interrupted: false,
-    });
+    transport.retryPolicy.onError?.(createContentPolicyFailure());
 
     expect(store.updateTopicStatus).toHaveBeenCalledWith({
       agentId: 'agent-1',
@@ -216,14 +248,7 @@ describe('ClientLLMTransport.retryPolicy.onError · terminal operation teardown'
     const { store, transport } = createTransport();
     store.operations['op-1'].status = 'cancelled';
 
-    transport.retryPolicy.onError?.({
-      error: {
-        message: 'The content may contain prohibited content. Please adjust it and try again.',
-        type: 'ProviderContentPolicyViolation',
-      },
-      events: [],
-      interrupted: false,
-    });
+    transport.retryPolicy.onError?.(createContentPolicyFailure());
 
     expect(store.internal_dispatchMessage).toHaveBeenCalled();
     expect(store.failOperation).not.toHaveBeenCalled();
@@ -233,14 +258,7 @@ describe('ClientLLMTransport.retryPolicy.onError · terminal operation teardown'
   it('does not reset topic status for nested sub-agent operations', () => {
     const { store, transport } = createTransport({ scope: 'sub_agent' });
 
-    transport.retryPolicy.onError?.({
-      error: {
-        message: 'The content may contain prohibited content. Please adjust it and try again.',
-        type: 'ProviderContentPolicyViolation',
-      },
-      events: [],
-      interrupted: false,
-    });
+    transport.retryPolicy.onError?.(createContentPolicyFailure());
 
     expect(store.failOperation).toHaveBeenCalled();
     expect(store.updateTopicStatus).not.toHaveBeenCalled();

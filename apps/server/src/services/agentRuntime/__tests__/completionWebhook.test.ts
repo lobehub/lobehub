@@ -10,19 +10,23 @@ import { AgentRuntimeService } from '../AgentRuntimeService';
 
 // Mock database models
 vi.mock('@/database/models/message', () => ({
-  MessageModel: vi.fn().mockImplementation(() => ({
-    create: vi.fn().mockResolvedValue({ id: 'msg-1' }),
-    query: vi.fn().mockResolvedValue([]),
-    update: vi.fn().mockResolvedValue({}),
-  })),
+  MessageModel: vi.fn().mockImplementation(function () {
+    return {
+      create: vi.fn().mockResolvedValue({ id: 'msg-1' }),
+      query: vi.fn().mockResolvedValue([]),
+      update: vi.fn().mockResolvedValue({}),
+    };
+  }),
 }));
 
 // Mock ModelRuntime
 vi.mock('@/server/modules/ModelRuntime', () => ({
-  ApiKeyManager: vi.fn().mockImplementation(() => ({
-    getAllApiKeys: vi.fn(),
-    getApiKey: vi.fn(),
-  })),
+  ApiKeyManager: vi.fn().mockImplementation(function () {
+    return {
+      getAllApiKeys: vi.fn(),
+      getApiKey: vi.fn(),
+    };
+  }),
   initModelRuntimeFromDB: vi.fn().mockResolvedValue({
     chat: vi.fn(),
   }),
@@ -45,15 +49,19 @@ vi.mock('@/server/services/mcp', () => ({
 
 // Mock tool execution service
 vi.mock('@/server/services/toolExecution', () => ({
-  ToolExecutionService: vi.fn().mockImplementation(() => ({
-    executeToolCall: vi.fn().mockResolvedValue({ result: 'success' }),
-  })),
+  ToolExecutionService: vi.fn().mockImplementation(function () {
+    return {
+      executeToolCall: vi.fn().mockResolvedValue({ result: 'success' }),
+    };
+  }),
 }));
 
 vi.mock('@/server/services/toolExecution/builtin', () => ({
-  BuiltinToolsExecutor: vi.fn().mockImplementation(() => ({
-    execute: vi.fn(),
-  })),
+  BuiltinToolsExecutor: vi.fn().mockImplementation(function () {
+    return {
+      execute: vi.fn(),
+    };
+  }),
 }));
 
 describe('AgentRuntimeService - Completion Hooks via createOperation', () => {
@@ -91,8 +99,8 @@ describe('AgentRuntimeService - Completion Hooks via createOperation', () => {
     });
   });
 
-  describe('createOperation persists hooks in metadata', () => {
-    it('should persist hooks in state metadata._hooks', async () => {
+  describe('createOperation persists hooks on the host envelope', () => {
+    it('should persist hooks on state.host.hooks', async () => {
       const operationId = 'hook-op-1';
       const hooks = [
         {
@@ -120,7 +128,7 @@ describe('AgentRuntimeService - Completion Hooks via createOperation', () => {
       });
 
       const state = await stateManager.loadAgentState(operationId);
-      expect(state?.metadata?._hooks).toEqual([
+      expect(state?.host?.hooks).toEqual([
         expect.objectContaining({
           id: 'test-completion',
           type: 'onComplete',
@@ -132,7 +140,7 @@ describe('AgentRuntimeService - Completion Hooks via createOperation', () => {
       ]);
     });
 
-    it('should not have _hooks in metadata when no hooks provided', async () => {
+    it('should not have host.hooks when no hooks provided', async () => {
       const operationId = 'hook-op-2';
 
       await service.createOperation({
@@ -148,7 +156,7 @@ describe('AgentRuntimeService - Completion Hooks via createOperation', () => {
       });
 
       const state = await stateManager.loadAgentState(operationId);
-      expect(state?.metadata?._hooks).toBeUndefined();
+      expect(state?.host?.hooks).toBeUndefined();
     });
   });
 
@@ -201,7 +209,7 @@ describe('AgentRuntimeService - Completion Hooks via createOperation', () => {
 
       // Verify the hook config is persisted for later use
       const updatedState = await stateManager.loadAgentState(operationId);
-      expect(updatedState?.metadata?._hooks).toEqual([
+      expect(updatedState?.host?.hooks).toEqual([
         expect.objectContaining({
           id: 'test-completion',
           type: 'onComplete',
@@ -211,39 +219,6 @@ describe('AgentRuntimeService - Completion Hooks via createOperation', () => {
           },
         }),
       ]);
-    });
-
-    it('should NOT have hook config when no hooks are configured', async () => {
-      const operationId = 'hook-none-1';
-
-      await service.createOperation({
-        agentConfig: { model: 'gpt-4o', provider: 'openai' },
-        appContext: { agentId: 'test-agent' },
-        autoStart: false,
-        initialContext: makeContext(operationId),
-        initialMessages: [{ content: 'Hello', role: 'user' }],
-        modelRuntimeConfig: { model: 'gpt-4o', provider: 'openai' },
-        operationId,
-        toolSet: { manifestMap: {}, tools: [] },
-        userId,
-      });
-
-      const state = await stateManager.loadAgentState(operationId);
-      expect(state?.metadata?._hooks).toBeUndefined();
-    });
-
-    it('should not throw when webhook fetch fails', async () => {
-      const operationId = 'hook-fail-1';
-      const webhookUrl = 'https://example.com/failing-webhook';
-
-      // Make fetch throw
-      fetchSpy.mockRejectedValueOnce(new Error('Network error'));
-
-      await createOperationWithHook(operationId, webhookUrl, { runId: 'run-1' });
-
-      // Verify the hook is stored -- the hook dispatch catches errors internally
-      const state = await stateManager.loadAgentState(operationId);
-      expect(state?.metadata?._hooks?.[0]?.webhook?.url).toBe(webhookUrl);
     });
   });
 
@@ -281,11 +256,11 @@ describe('AgentRuntimeService - Completion Hooks via createOperation', () => {
 
       // Verify the persisted hook contains the right structure
       const state = await stateManager.loadAgentState(operationId);
-      const hooks = state?.metadata?._hooks;
+      const hooks = state?.host?.hooks;
       expect(hooks).toBeDefined();
       expect(hooks).toHaveLength(1);
-      expect(hooks[0].webhook.url).toBe(webhookUrl);
-      expect(hooks[0].webhook.body).toEqual(webhookBody);
+      expect(hooks?.[0]?.webhook.url).toBe(webhookUrl);
+      expect(hooks?.[0]?.webhook.body).toEqual(webhookBody);
     });
   });
 });

@@ -40,6 +40,9 @@ export const trashItems = pgTable(
     resourceType: text('resource_type').$type<TrashResourceType>().notNull(),
     resourceId: text('resource_id').notNull(),
 
+    /** Project at first trash registration; deliberately no FK so project deletion retains it. */
+    projectId: text('project_id'),
+
     /** Denormalised display title captured at trash time. */
     title: text('title'),
     meta: jsonb('meta').$type<TrashItemMeta>(),
@@ -88,6 +91,8 @@ export const trashItems = pgTable(
       .on(t.expiresAt)
       .where(sql`${t.rootId} IS NULL`),
     index('trash_items_root_id_idx').on(t.rootId),
+    index('trash_items_user_id_idx').on(t.userId),
+    index('trash_items_deleted_by_user_id_idx').on(t.deletedByUserId),
   ],
 );
 

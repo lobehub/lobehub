@@ -1,10 +1,10 @@
 // @vitest-environment node
-import { eq } from 'drizzle-orm';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { eq, sql } from 'drizzle-orm';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
 import type { AgentShareConfig } from '../../schemas';
-import { agents, agentShares, users, workspaces } from '../../schemas';
+import { agents, agentShares, topics, users, workspaces } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { AgentShareModel } from '../agentShare';
 
@@ -16,21 +16,32 @@ const agentId = 'agent-share-test-agent';
 const otherAgentId = 'agent-share-test-other-agent';
 const workspaceAgentId = 'agent-share-test-workspace-agent';
 const workspaceId = 'agent-share-test-workspace';
+const otherWorkspaceId = 'agent-share-test-other-workspace';
 
 const agentShareModel = new AgentShareModel(serverDB, userId);
 const otherAgentShareModel = new AgentShareModel(serverDB, otherUserId);
+const workspaceAgentShareModel = new AgentShareModel(serverDB, userId, workspaceId);
+const otherWorkspaceAgentShareModel = new AgentShareModel(serverDB, userId, otherWorkspaceId);
 
 describe('AgentShareModel', () => {
   beforeEach(async () => {
     await serverDB.delete(users);
     await serverDB.transaction(async (tx) => {
       await tx.insert(users).values([{ id: userId }, { id: otherUserId }]);
-      await tx.insert(workspaces).values({
-        id: workspaceId,
-        name: 'Agent Share Test Workspace',
-        primaryOwnerId: userId,
-        slug: 'agent-share-test-workspace',
-      });
+      await tx.insert(workspaces).values([
+        {
+          id: workspaceId,
+          name: 'Agent Share Test Workspace',
+          primaryOwnerId: userId,
+          slug: 'agent-share-test-workspace',
+        },
+        {
+          id: otherWorkspaceId,
+          name: 'Other Agent Share Test Workspace',
+          primaryOwnerId: userId,
+          slug: 'agent-share-test-other-workspace',
+        },
+      ]);
       await tx.insert(agents).values([
         {
           avatar: '🤯',
@@ -38,6 +49,9 @@ describe('AgentShareModel', () => {
           description: 'Shareable agent',
           id: agentId,
           name: 'Shareable Agent',
+          // Explicit (the column defaults to random words): `create` seeds the
+          // share slug from it, so tests below can assert the exact value.
+          slug: 'shareable-agent',
           title: 'Shareable Agent Title',
           userId,
         },
@@ -91,7 +105,64 @@ describe('AgentShareModel', () => {
       expect(rows[0].visibility).toBe('private');
     });
 
-    it('rejects missing, foreign, and workspace agents', async () => {
+    describe('profile slug seed', () => {
+      it("seeds the share slug from the agent's own profile slug", async () => {
+        await serverDB
+          .update(agents)
+          .set({ slug: 'wild-built-using' })
+          .where(eq(agents.id, agentId));
+
+        const share = await agentShareModel.create(agentId, 'link');
+
+        expect(share.shareConfig.slug).toBe('wild-built-using');
+        expect(await AgentShareModel.findBySlugOrId(serverDB, 'wild-built-using')).toMatchObject({
+          agentId,
+        });
+      });
+
+      it('leaves the slug unset when another share already holds it', async () => {
+        // Agent slugs are unique per owner only, so two owners can both have
+        // an agent called `shared-name`; the share slug namespace is global.
+        await serverDB.update(agents).set({ slug: 'shared-name' }).where(eq(agents.id, agentId));
+        await serverDB
+          .update(agents)
+          .set({ slug: 'shared-name' })
+          .where(eq(agents.id, otherAgentId));
+
+        const first = await otherAgentShareModel.create(otherAgentId, 'link');
+        const second = await agentShareModel.create(agentId, 'link');
+
+        expect(first.shareConfig.slug).toBe('shared-name');
+        expect(second.shareConfig.slug).toBeUndefined();
+        expect(await AgentShareModel.findBySlugOrId(serverDB, 'shared-name')).toMatchObject({
+          agentId: otherAgentId,
+        });
+      });
+
+      it.each([
+        ['reserved word', 'settings'],
+        ['too short for a share slug', 'ab'],
+      ])('leaves the slug unset when the profile slug is a %s', async (_, slug) => {
+        await serverDB.update(agents).set({ slug }).where(eq(agents.id, agentId));
+
+        const share = await agentShareModel.create(agentId, 'link');
+
+        expect(share.shareConfig.slug).toBeUndefined();
+      });
+
+      it('does not touch the slug of an existing share on re-create', async () => {
+        await serverDB.update(agents).set({ slug: 'first-name' }).where(eq(agents.id, agentId));
+        await agentShareModel.create(agentId, 'link');
+        await agentShareModel.updateSlug(agentId, null);
+        await serverDB.update(agents).set({ slug: 'second-name' }).where(eq(agents.id, agentId));
+
+        const recreated = await agentShareModel.create(agentId, 'link');
+
+        expect(recreated.shareConfig.slug).toBeUndefined();
+      });
+    });
+
+    it('rejects missing, foreign, and workspace agents from personal scope', async () => {
       await expect(agentShareModel.create('missing-agent')).rejects.toMatchObject({
         code: 'FORBIDDEN',
       });
@@ -102,9 +173,212 @@ describe('AgentShareModel', () => {
         code: 'FORBIDDEN',
       });
     });
+
+    it('creates a share scoped to the workspace', async () => {
+      const share = await workspaceAgentShareModel.create(workspaceAgentId, 'link');
+
+      expect(share).toMatchObject({
+        agentId: workspaceAgentId,
+        visibility: 'link',
+      });
+      await expect(
+        otherWorkspaceAgentShareModel.getByAgentId(workspaceAgentId),
+      ).resolves.toBeNull();
+    });
+  });
+
+  describe('Agent-derived workspace scope', () => {
+    it('resolves runtime identity and limits without a duplicated share scope', async () => {
+      const [share] = await serverDB
+        .insert(agentShares)
+        .values({
+          agentId: workspaceAgentId,
+          shareConfig: { maxTopicsPerVisitor: 3, monthlySpendLimit: 2.5 },
+          visibility: 'link',
+        })
+        .returning();
+
+      await expect(AgentShareModel.findByShareId(serverDB, share.id)).resolves.toMatchObject({
+        agentId: workspaceAgentId,
+        ownerId: userId,
+        shareId: share.id,
+        workspaceId,
+        workspaceSlug: 'agent-share-test-workspace',
+      });
+      await expect(
+        AgentShareModel.readCurrentVisitorCaps(serverDB, workspaceAgentId),
+      ).resolves.toMatchObject({
+        maxTopicsPerVisitor: 3,
+        monthlySpendLimit: 2.5,
+        shareId: share.id,
+        workspaceId,
+      });
+      await expect(
+        AgentShareModel.isRunStillAuthorized(serverDB, {
+          agentId: workspaceAgentId,
+          shareId: share.id,
+        }),
+      ).resolves.toBe(true);
+    });
+
+    it('scopes owner mutations and administrator pause through the Agent', async () => {
+      const [share] = await serverDB
+        .insert(agentShares)
+        .values({
+          agentId: workspaceAgentId,
+          visibility: 'link',
+        })
+        .returning();
+
+      await expect(
+        otherWorkspaceAgentShareModel.updateVisibility(workspaceAgentId, 'private'),
+      ).resolves.toBeNull();
+      await expect(agentShareModel.getByAgentId(workspaceAgentId)).resolves.toBeNull();
+      await expect(
+        otherWorkspaceAgentShareModel.deleteByAgentId(workspaceAgentId),
+      ).resolves.toBeNull();
+      await expect(
+        AgentShareModel.forceDisableWorkspaceShare(serverDB, otherWorkspaceId, share.id),
+      ).resolves.toBeNull();
+      await expect(
+        workspaceAgentShareModel.updateConfig(workspaceAgentId, { maxTopicsPerVisitor: 4 }),
+      ).resolves.toMatchObject({
+        id: share.id,
+        shareConfig: { maxTopicsPerVisitor: 4 },
+        visibility: 'link',
+      });
+      await expect(
+        AgentShareModel.listWorkspaceSharesForAudit(serverDB, workspaceId, {
+          limit: 50,
+          offset: 0,
+        }),
+      ).resolves.toEqual([
+        expect.objectContaining({ agentId: workspaceAgentId, shareId: share.id }),
+      ]);
+      await expect(
+        AgentShareModel.listWorkspaceSharesForAudit(serverDB, otherWorkspaceId, {
+          limit: 50,
+          offset: 0,
+        }),
+      ).resolves.toEqual([]);
+      await expect(
+        AgentShareModel.forceDisableWorkspaceShare(serverDB, workspaceId, share.id),
+      ).resolves.toMatchObject({
+        shareId: share.id,
+        visibility: 'private',
+      });
+    });
+  });
+
+  describe('workspace administrator operations', () => {
+    it('rechecks Workspace mutation authority after taking the Agent lock', async () => {
+      const authorizeMutation = vi.fn().mockRejectedValue(new Error('stale-authority'));
+      const model = new AgentShareModel(serverDB, userId, workspaceId, { authorizeMutation });
+
+      await expect(model.create(workspaceAgentId, 'link')).rejects.toThrow('stale-authority');
+      expect(authorizeMutation).toHaveBeenCalledWith(expect.anything(), workspaceAgentId);
+      await expect(model.getByAgentId(workspaceAgentId)).resolves.toBeNull();
+    });
+
+    it('lists only minimal audit metadata and force-disables within the workspace', async () => {
+      const workspaceShare = await workspaceAgentShareModel.create(workspaceAgentId, 'link');
+      await workspaceAgentShareModel.updateConfig(workspaceAgentId, {
+        allowCreatorViewSessions: true,
+        toolGrants: [{ identifier: 'private-tool' }],
+      });
+      await agentShareModel.create(agentId, 'link');
+
+      const auditRows = await AgentShareModel.listWorkspaceSharesForAudit(serverDB, workspaceId, {
+        limit: 50,
+        offset: 0,
+      });
+
+      expect(auditRows).toHaveLength(1);
+      expect(auditRows[0]).toMatchObject({
+        agentId: workspaceAgentId,
+        ownerId: userId,
+        shareId: workspaceShare.id,
+        shareVisibility: 'link',
+        userViewCount: 0,
+      });
+      expect(auditRows[0]).not.toHaveProperty('shareConfig');
+      expect(auditRows[0]).not.toHaveProperty('agentTitle');
+
+      await expect(
+        AgentShareModel.forceDisableWorkspaceShare(serverDB, otherWorkspaceId, workspaceShare.id),
+      ).resolves.toBeNull();
+      await expect(
+        AgentShareModel.forceDisableWorkspaceShare(serverDB, workspaceId, workspaceShare.id),
+      ).resolves.toMatchObject({
+        agentId: workspaceAgentId,
+        shareId: workspaceShare.id,
+        visibility: 'private',
+      });
+      await expect(workspaceAgentShareModel.getByAgentId(workspaceAgentId)).resolves.toMatchObject({
+        visibility: 'private',
+      });
+    });
+
+    it('rechecks administrator authority after taking the Agent lock', async () => {
+      const workspaceShare = await workspaceAgentShareModel.create(workspaceAgentId, 'link');
+      const authorizeMutation = vi.fn().mockRejectedValue(new Error('stale-admin-authority'));
+
+      await expect(
+        AgentShareModel.forceDisableWorkspaceShare(serverDB, workspaceId, workspaceShare.id, {
+          authorizeMutation,
+        }),
+      ).rejects.toThrow('stale-admin-authority');
+      expect(authorizeMutation).toHaveBeenCalledWith(expect.anything(), workspaceAgentId);
+      await expect(workspaceAgentShareModel.getByAgentId(workspaceAgentId)).resolves.toMatchObject({
+        visibility: 'link',
+      });
+    });
   });
 
   describe('owner operations', () => {
+    it('persists demo cases independently and retains them through unrelated patches', async () => {
+      await agentShareModel.create(agentId);
+      const demoCases = [
+        { prompt: 'Review this change', description: 'Identify regression risks' },
+      ];
+      await agentShareModel.updateConfig(agentId, { demoCases });
+      await agentShareModel.updateConfig(agentId, { maxTurnsPerTopic: 8 });
+      expect((await agentShareModel.getByAgentId(agentId))?.shareConfig.demoCases).toEqual(
+        demoCases,
+      );
+      expect(
+        (await AgentShareModel.findBySlugOrId(serverDB, 'shareable-agent'))?.shareConfig.demoCases,
+      ).toEqual(demoCases);
+      const [agent] = await serverDB
+        .select({ openingQuestions: agents.openingQuestions })
+        .from(agents)
+        .where(eq(agents.id, agentId));
+      expect(agent.openingQuestions ?? []).toEqual([]);
+      await agentShareModel.updateConfig(agentId, { demoCases: [] });
+      expect((await agentShareModel.getByAgentId(agentId))?.shareConfig.demoCases).toEqual([]);
+    });
+
+    it('does not let another owner replace profile content', async () => {
+      await agentShareModel.create(agentId);
+      expect(
+        await otherAgentShareModel.updateConfig(agentId, {
+          demoCases: [{ prompt: 'Injected', description: '' }],
+        }),
+      ).toBeNull();
+      expect((await agentShareModel.getByAgentId(agentId))?.shareConfig.demoCases).toEqual([]);
+    });
+
+    it('rejects unknown selected Works without partially saving the patch', async () => {
+      await agentShareModel.create(agentId);
+      await expect(
+        agentShareModel.updateConfig(agentId, {
+          demoCases: [{ prompt: 'Do not save', description: '' }],
+          featuredWorkIds: ['missing-work'],
+        }),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+      expect((await agentShareModel.getByAgentId(agentId))?.shareConfig.demoCases).toEqual([]);
+    });
+
     it('normalizes a legacy null config to conservative defaults', async () => {
       const [legacyShare] = await serverDB.insert(agentShares).values({ agentId }).returning();
 
@@ -114,6 +388,9 @@ describe('AgentShareModel', () => {
       expect(ownerShare?.shareConfig).toEqual({
         allowCreatorViewSessions: false,
         allowReadMemory: false,
+        demoCases: [],
+        featuredWorkIds: [],
+        maxFileStorage: 512 * 1024 * 1024,
         maxTopicsPerVisitor: 5,
         maxTurnsPerTopic: 20,
         monthlySpendLimit: 10,
@@ -130,6 +407,7 @@ describe('AgentShareModel', () => {
       const config: AgentShareConfig = {
         allowCreatorViewSessions: true,
         allowReadMemory: true,
+        maxFileStorage: 256 * 1024 * 1024,
         maxTopicsPerVisitor: 10,
         maxTurnsPerTopic: 40,
         monthlySpendLimit: 25,
@@ -141,8 +419,11 @@ describe('AgentShareModel', () => {
       const updated = await agentShareModel.updateConfig(agentId, config);
       const readBack = await agentShareModel.getByAgentId(agentId);
 
-      expect(updated?.shareConfig).toEqual(config);
-      expect(readBack?.shareConfig).toEqual(config);
+      // The slug seeded from the agent's profile slug at `create` survives a
+      // full config overwrite — it is owner-facing url state, not config.
+      const expected = { demoCases: [], featuredWorkIds: [], ...config, slug: 'shareable-agent' };
+      expect(updated?.shareConfig).toEqual(expected);
+      expect(readBack?.shareConfig).toEqual(expected);
     });
 
     it('atomically merges stale cross-context patches without losing sibling fields', async () => {
@@ -179,14 +460,21 @@ describe('AgentShareModel', () => {
       // `0` is a real cap ("stop all visitor runs"), never a cleared one.
       expect(updated?.shareConfig.monthlySpendLimit).toBe(0);
       expect(updated?.shareConfig.showModelInfo).toBe(true);
-      expect(updated?.shareConfig.slug).toBeUndefined();
+      // The seeded profile slug is untouched; the smuggled one never lands.
+      expect(updated?.shareConfig.slug).toBe('shareable-agent');
       expect(await AgentShareModel.findBySlugOrId(serverDB, 'sneaky-slug')).toBeNull();
     });
 
     // `deleteByAgentId` is the hard-teardown path, deliberately NOT what the
     // disable flow uses (see the cycle test below).
-    it('updates visibility, and hard-deletes the share on demand', async () => {
+    it('updates visibility and deletes only the share when explicitly requested', async () => {
       const created = await agentShareModel.create(agentId);
+      await serverDB.insert(topics).values({
+        agentId,
+        id: 'agent-share-legacy-visitor-topic',
+        senderId: otherUserId,
+        userId,
+      });
 
       const updated = await agentShareModel.updateVisibility(agentId, 'link');
       expect(updated?.visibility).toBe('link');
@@ -194,6 +482,12 @@ describe('AgentShareModel', () => {
       const deleted = await agentShareModel.deleteByAgentId(agentId);
       expect(deleted?.id).toBe(created?.id);
       expect(await AgentShareModel.findByShareId(serverDB, created!.id)).toBeNull();
+      expect(
+        await serverDB
+          .select()
+          .from(topics)
+          .where(eq(topics.id, 'agent-share-legacy-visitor-topic')),
+      ).toHaveLength(1);
     });
 
     it('returns null for missing shares', async () => {
@@ -382,17 +676,30 @@ describe('AgentShareModel', () => {
       });
     });
 
-    it('does not expose a workspace agent even if a share row exists', async () => {
-      const [share] = await serverDB
-        .insert(agentShares)
-        .values({
-          agentId: workspaceAgentId,
-          shareConfig: { maxTopicsPerVisitor: 5, maxTurnsPerTopic: 20 },
-          visibility: 'link',
-        })
-        .returning();
+    it('resolves a workspace share with its billing scope', async () => {
+      const created = await workspaceAgentShareModel.create(workspaceAgentId, 'link');
+
+      expect(await AgentShareModel.findByShareId(serverDB, created.id)).toMatchObject({
+        agentId: workspaceAgentId,
+        ownerId: userId,
+        shareId: created.id,
+        workspaceId,
+      });
+    });
+
+    it('hides a share and revokes its run when the agent is in the recycle bin', async () => {
+      const share = await agentShareModel.create(agentId, 'link');
+      await serverDB
+        .update(agents)
+        .set({ deletedAt: new Date(), isDeleted: true })
+        .where(eq(agents.id, agentId));
 
       expect(await AgentShareModel.findByShareId(serverDB, share.id)).toBeNull();
+      expect(await AgentShareModel.findBySlugOrId(serverDB, 'shareable-agent')).toBeNull();
+      expect(await agentShareModel.getByAgentId(agentId)).toBeNull();
+      expect(
+        await AgentShareModel.isRunStillAuthorized(serverDB, { agentId, shareId: share.id }),
+      ).toBe(false);
     });
 
     it('returns null for an unknown UUID', async () => {
@@ -464,6 +771,17 @@ describe('AgentShareModel', () => {
       ).toBe(true);
     });
 
+    it('authorizes a live link share on a workspace agent', async () => {
+      const created = await workspaceAgentShareModel.create(workspaceAgentId, 'link');
+
+      expect(
+        await AgentShareModel.isRunStillAuthorized(serverDB, {
+          agentId: workspaceAgentId,
+          shareId: created.id,
+        }),
+      ).toBe(true);
+    });
+
     it('revokes once the share is paused or replaced', async () => {
       const created = await agentShareModel.create(agentId, 'link');
 
@@ -478,17 +796,6 @@ describe('AgentShareModel', () => {
           agentId,
           shareId: '00000000-0000-0000-0000-000000000000',
         }),
-      ).toBe(false);
-    });
-
-    // `transferAgent` does not touch `agent_shares`; the per-step check must
-    // notice the agent left personal scope on its own, like `findByShareId`.
-    it('revokes an in-flight run once the agent is moved into a workspace', async () => {
-      const created = await agentShareModel.create(agentId, 'link');
-      await serverDB.update(agents).set({ workspaceId }).where(eq(agents.id, agentId));
-
-      expect(
-        await AgentShareModel.isRunStillAuthorized(serverDB, { agentId, shareId: created!.id }),
       ).toBe(false);
     });
   });
@@ -507,6 +814,7 @@ describe('AgentShareModel', () => {
         maxTurnsPerTopic: 8,
         monthlySpendLimit: 2.5,
         shareId: created!.id,
+        workspaceId: null,
       });
     });
 
@@ -516,7 +824,28 @@ describe('AgentShareModel', () => {
         maxTurnsPerTopic: 20,
         monthlySpendLimit: 10,
         shareId: null,
+        workspaceId: null,
       });
+    });
+  });
+
+  describe('lockUploadAdmission', () => {
+    const heldAdvisoryLocks = async (db: LobeChatDatabase) => {
+      const { rows } = await db.execute(
+        sql`SELECT count(*)::int AS held FROM pg_locks WHERE locktype = 'advisory'`,
+      );
+      return (rows[0] as { held: number }).held;
+    };
+
+    it('holds a transaction-scoped advisory lock that is released at commit', async () => {
+      await serverDB.transaction(async (tx) => {
+        await AgentShareModel.lockUploadAdmission(tx, 'share-lock-test');
+        await expect(heldAdvisoryLocks(tx)).resolves.toBe(1);
+        // Re-entrant within the same transaction: a retry does not deadlock.
+        await AgentShareModel.lockUploadAdmission(tx, 'share-lock-test');
+      });
+
+      await expect(heldAdvisoryLocks(serverDB)).resolves.toBe(0);
     });
   });
 

@@ -1,4 +1,4 @@
-import { Collapse, Flexbox, Markdown } from '@lobehub/ui';
+import { Accordion, Flexbox, Markdown } from '@lobehub/ui';
 import qs from 'query-string';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -18,15 +18,16 @@ const Overview = memo<{ inModal?: boolean }>(({ inModal }) => {
 
   return (
     <Flexbox gap={48}>
-      <Collapse
-        defaultActiveKey={['summary']}
-        expandIconPlacement={'end'}
+      <Accordion
+        defaultValue={['summary']}
+        indicatorPlacement={'end'}
+        styles={{ content: { padding: '12px 16px' } }}
         variant={'outlined'}
         items={[
           {
             children: !!summary ? <Markdown>{summary}</Markdown> : summary,
             key: 'summary',
-            label: t('mcp.details.summary.title'),
+            title: t('mcp.details.summary.title'),
           },
         ]}
       />

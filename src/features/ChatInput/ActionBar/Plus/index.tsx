@@ -1,23 +1,15 @@
 'use client';
 
 import { validateVideoFileSize } from '@lobechat/utils/client';
-import type { IconProps } from '@lobehub/ui';
-import { Icon, Popover } from '@lobehub/ui';
-import { Tag, toast } from '@lobehub/ui/base-ui';
-import { GlobeOffIcon, SkillsIcon } from '@lobehub/ui/icons';
-import { Upload } from 'antd';
-import { css, cssVar, cx } from 'antd-style';
+import { css, cssVar, cx, Icon, Popover, toast, Upload } from '@lobehub/ui';
+import { SkillsIcon } from '@lobehub/ui/icons';
 import {
-  Brain,
   CheckIcon,
   ChevronRight,
   Cloud,
-  CloudCog,
   FileUp,
-  Globe,
   LibraryBig,
   PlusIcon,
-  SearchCheck,
   Settings2Icon,
   TargetIcon,
   TypeIcon,
@@ -26,14 +18,13 @@ import type { ReactNode } from 'react';
 import { memo, Suspense, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { imageUrl } from '@/const/url';
 import { openAttachKnowledgeModal } from '@/features/LibraryModal';
 import { useIsDark } from '@/hooks/useIsDark';
 import { useMediaUploadAbility } from '@/hooks/useMediaUploadAbility';
 import { useModelSupportToolUse } from '@/hooks/useModelSupportToolUse';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
-import { aiModelSelectors, aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
-import { useFileStore } from '@/store/file';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import {
@@ -46,7 +37,9 @@ import { labPreferSelectors, settingsSelectors } from '@/store/user/selectors';
 
 import { useAgentId } from '../../hooks/useAgentId';
 import { useChatInputResourceAccess } from '../../hooks/useChatInputResourceAccess';
+import { useChatInputUpload } from '../../hooks/useChatInputUpload';
 import { useEffectiveModel } from '../../hooks/useEffectiveModel';
+import { useLargeFileLocalPath } from '../../hooks/useLargeFileLocalPath';
 import { useUpdateAgentConfig } from '../../hooks/useUpdateAgentConfig';
 import { insertGoalTag } from '../../InputEditor/ActionTag/goalTag';
 import { useChatInputStore } from '../../store';
@@ -54,7 +47,6 @@ import { type ActionDropdownMenuItems } from '../components/ActionDropdown';
 import { ChatInputAction } from '../components/ChatInputAction';
 import { useDetailPopoverState } from '../components/useDetailPopoverState';
 import { useControls as useKnowledgeControls } from '../Knowledge/useControls';
-import { useMemoryEnabled } from '../Memory/useMemoryEnabled';
 import { useControls as useToolsControls } from '../Tools/useControls';
 
 const hotArea = css`
@@ -84,43 +76,6 @@ const activeLabel = css`
   }
 `;
 
-const searchOptionRow = css`
-  display: flex;
-  gap: 10px;
-  align-items: center;
-
-  width: 100%;
-  min-width: 220px;
-  max-width: 320px;
-
-  .title {
-    line-height: 1.25;
-  }
-
-  .desc {
-    margin-block-start: 3px;
-
-    font-size: 12px;
-    line-height: 1.35;
-    color: ${cssVar.colorTextDescription};
-    white-space: normal;
-  }
-`;
-
-const searchIconBox = css`
-  display: flex;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-
-  width: 36px;
-  height: 36px;
-  border: 1px solid ${cssVar.colorBorderSecondary};
-  border-radius: 8px;
-
-  background: ${cssVar.colorBgContainer};
-`;
-
 const labelWithChip = css`
   display: inline-flex;
   gap: 8px;
@@ -143,20 +98,6 @@ const countChip = css`
   color: ${cssVar.colorTextSecondary};
 
   background: ${cssVar.colorFillSecondary};
-`;
-
-const gatewayModeLabel = css`
-  display: inline-flex;
-  gap: 8px;
-  align-items: center;
-  min-width: 0;
-
-  .title {
-    overflow: hidden;
-    min-width: 0;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
 `;
 
 const gatewayModeInfoCard = css`
@@ -191,9 +132,6 @@ const gatewayModeInfoCard = css`
     color: ${cssVar.colorTextSecondary};
   }
 `;
-
-const activeIcon = (icon: IconProps['icon'], active?: boolean): IconProps['icon'] =>
-  active ? <Icon color={cssVar.colorInfo} icon={icon} size={16} /> : icon;
 
 type DropdownItemWithPopover = NonNullable<ActionDropdownMenuItems>[number] & {
   label?: ReactNode;
@@ -298,9 +236,9 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
   const { updateAgentChatConfig } = useUpdateAgentConfig();
 
   // Goal creation is lab-gated while the product surface is being rolled out.
-  const enableTopicAcceptance = useUserStore(labPreferSelectors.enableTopicAcceptance);
+  const enableGoals = useUserStore(labPreferSelectors.enableGoals);
 
-  const upload = useFileStore((s) => s.uploadChatFiles);
+  const upload = useChatInputUpload();
   const { enableKnowledgeBase } = useServerConfigStore(featureFlagsSelectors);
   const enableGatewayMode = useServerConfigStore(serverConfigSelectors.enableGatewayMode);
   const defaultDisableGatewayMode = useUserStore(
@@ -321,16 +259,14 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
   const skillActivateMode = useAgentStore((s) =>
     chatConfigByIdSelectors.getSkillActivateModeById(agentId)(s),
   );
-  const [searchMode, useModelBuiltinSearch, disableGatewayMode] = useAgentStore((s) => [
-    chatConfigByIdSelectors.getSearchModeById(agentId)(s),
-    chatConfigByIdSelectors.getUseModelBuiltinSearchById(agentId)(s),
-    chatConfigByIdSelectors.getChatConfigById(agentId)(s).disableGatewayMode,
-  ]);
+  const disableGatewayMode = useAgentStore(
+    (s) => chatConfigByIdSelectors.getChatConfigById(agentId)(s).disableGatewayMode,
+  );
   const isGatewayModeEnabled = (disableGatewayMode ?? defaultDisableGatewayMode) !== true;
 
-  const isMemoryEnabled = useMemoryEnabled(agentId);
   const [showTypoBar, setShowTypoBar] = useChatInputStore((s) => [s.showTypoBar, s.setShowTypoBar]);
   const editor = useChatInputStore((s) => s.editor);
+  const routeLargeFilesToLocalPaths = useLargeFileLocalPath(agentId, editor);
   const { canUploadImage, canUploadVideo, canUploadAudio } = useMediaUploadAbility(
     model,
     provider,
@@ -355,42 +291,6 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
     marketItems: skillItems,
     pinnedCount: skillPinnedCount,
   } = useToolsControls({ closeDropdown });
-
-  const isModelBuiltinSearchInternal = useAiInfraStore(
-    aiModelSelectors.isModelBuiltinSearchInternal(model, provider),
-  );
-  const isModelHasBuiltinSearch = useAiInfraStore(
-    aiModelSelectors.isModelHasBuiltinSearchConfig(model, provider),
-  );
-  const isProviderHasBuiltinSearch = useAiInfraStore(
-    aiProviderSelectors.isProviderHasBuiltinSearchConfig(provider),
-  );
-  const showProviderSearch =
-    !isModelBuiltinSearchInternal && (isModelHasBuiltinSearch || isProviderHasBuiltinSearch);
-
-  // Derived active search option
-  const activeSearchOption: 'off' | 'app' | 'provider' =
-    searchMode === 'off' ? 'off' : useModelBuiltinSearch ? 'provider' : 'app';
-
-  const handleToggleMemory = useCallback(
-    async (enabled: boolean) => {
-      await updateAgentChatConfig({ memory: { enabled } });
-    },
-    [updateAgentChatConfig],
-  );
-
-  const handleSelectSearch = useCallback(
-    async (option: 'off' | 'app' | 'provider') => {
-      if (option === 'off') {
-        await updateAgentChatConfig({ searchMode: 'off', useModelBuiltinSearch: false });
-      } else if (option === 'app') {
-        await updateAgentChatConfig({ searchMode: 'auto', useModelBuiltinSearch: false });
-      } else {
-        await updateAgentChatConfig({ searchMode: 'auto', useModelBuiltinSearch: true });
-      }
-    },
-    [updateAgentChatConfig],
-  );
 
   const handleToggleGatewayMode = useCallback(
     async (checked: boolean) => {
@@ -419,22 +319,6 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
         label
       );
 
-    const renderSearchOption = (
-      icon: ReactNode,
-      title: string,
-      description: string,
-      active: boolean,
-    ) => (
-      <div className={cx(searchOptionRow)}>
-        <div className={cx(searchIconBox)}>{icon}</div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div className="title">{title}</div>
-          {description && <div className="desc">{description}</div>}
-        </div>
-        {active && <Icon icon={CheckIcon} size={14} />}
-      </div>
-    );
-
     const renderLabelWithCount = (label: string, count: number, prefix?: string) =>
       count > 0 || prefix ? (
         <span className={cx(labelWithChip)}>
@@ -445,24 +329,12 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
         label
       );
 
-    const renderGatewayModeLabel = () => (
-      <span className={cx(gatewayModeLabel)}>
-        {/* Brand name — same in every language, so no i18n. */}
-        <span className="title">Agent Gateway</span>
-        <Tag color={'info'} size={'small'} variant={'filled'}>
-          {t('gatewayMode.beta')}
-        </Tag>
-      </span>
-    );
-
     const gatewayModeInfo = (
       <div className={cx(gatewayModeInfoCard)}>
         <img
           alt=""
           className="cover"
-          src={
-            isDark ? '/app-images/agent_gateway_dark.webp' : '/app-images/agent_gateway_light.webp'
-          }
+          src={imageUrl(isDark ? 'agent_gateway_dark.webp' : 'agent_gateway_light.webp')}
         />
         <div className="body">
           <div className="title">{t('gatewayMode.cardTitle')}</div>
@@ -488,8 +360,7 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
         label: (
           <Upload
             multiple
-            showUploadList={false}
-            beforeUpload={async (file) => {
+            beforeUpload={(file) => {
               if (file.type.startsWith('image') && !canUploadImage) return false;
               if (file.type.startsWith('video') && !canUploadVideo) return false;
               if (file.type.startsWith('audio') && !canUploadAudio) return false;
@@ -503,10 +374,13 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
                 );
                 return false;
               }
+              return true;
+            }}
+            onFiles={async (files) => {
               close();
               editor?.focus();
-              await upload([file], agentId);
-              return false;
+              const filesToUpload = routeLargeFilesToLocalPaths(files);
+              if (filesToUpload.length > 0) await upload(filesToUpload, agentId);
             }}
           >
             <div className={cx(hotArea)}>{t('upload.action.fileOrImageUpload')}</div>
@@ -554,97 +428,18 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
               checked: isGatewayModeEnabled,
               icon: Cloud,
               key: 'gateway-mode',
-              label: (
-                <PopoverLabel label={renderGatewayModeLabel()} popoverContent={gatewayModeInfo} />
-              ),
+              // Brand name — same in every language, so no i18n.
+              label: <PopoverLabel label={'Agent Gateway'} popoverContent={gatewayModeInfo} />,
               onCheckedChange: handleToggleGatewayMode,
               type: 'switch',
             } as ActionDropdownMenuItems[number],
           ]
         : [];
 
-    // Memory / Web Search / Skills form one group (no dividers between them),
-    // hidden entirely when the user can't configure resources.
-    const coreItems: ActionDropdownMenuItems = canConfigureResource
-      ? [
-          // Memory toggle — trailing switch; toggle by clicking the switch or the whole row
-          {
-            checked: Boolean(isMemoryEnabled),
-            icon: Brain,
-            key: 'memory',
-            label: t('memory.title'),
-            onCheckedChange: handleToggleMemory,
-            type: 'switch',
-          },
-          // Web search: simple toggle when 2 options, submenu when 3
-          ...(showProviderSearch
-            ? [
-                {
-                  children: [
-                    {
-                      key: 'search-off',
-                      label: renderSearchOption(
-                        <Icon icon={GlobeOffIcon} size={18} />,
-                        t('plus.search.off'),
-                        t('plus.search.offDesc'),
-                        activeSearchOption === 'off',
-                      ),
-                      onClick: () => handleSelectSearch('off'),
-                    },
-                    {
-                      key: 'search-app',
-                      label: renderSearchOption(
-                        <Icon
-                          color={activeSearchOption === 'app' ? cssVar.colorInfo : undefined}
-                          icon={SearchCheck}
-                          size={18}
-                        />,
-                        t('plus.search.appSearch'),
-                        t('plus.search.appSearchDesc'),
-                        activeSearchOption === 'app',
-                      ),
-                      onClick: () => handleSelectSearch('app'),
-                    },
-                    {
-                      key: 'search-provider',
-                      label: renderSearchOption(
-                        <Icon
-                          color={activeSearchOption === 'provider' ? cssVar.colorInfo : undefined}
-                          icon={CloudCog}
-                          size={18}
-                        />,
-                        t('plus.search.modelSearch'),
-                        t('plus.search.modelSearchDesc'),
-                        activeSearchOption === 'provider',
-                      ),
-                      onClick: () => handleSelectSearch('provider'),
-                    },
-                  ],
-                  extra: <Icon className="lobe-submenu-chevron" icon={ChevronRight} size={16} />,
-                  icon: activeIcon(
-                    activeSearchOption === 'off' ? GlobeOffIcon : Globe,
-                    activeSearchOption !== 'off',
-                  ),
-                  key: 'search-group',
-                  label: t('search.title'),
-                } as ActionDropdownMenuItems[number],
-              ]
-            : [
-                // Web search toggle — trailing switch; toggle by clicking the switch or the whole row
-                {
-                  checked: activeSearchOption !== 'off',
-                  icon: Globe,
-                  key: 'search-toggle',
-                  label: t('search.title'),
-                  onCheckedChange: (checked: boolean) =>
-                    handleSelectSearch(checked ? 'app' : 'off'),
-                  type: 'switch',
-                } as ActionDropdownMenuItems[number],
-              ]),
-          // Skills (with "Add Skills..." merged in) stays in the same group.
-          ...toolsItems,
-        ]
-      : [];
+    // Memory and web search are activation entries of the Tools popover now: they
+    // live in its "Auto" group, can be disabled there, and carry their own settings,
+    // so this menu only owns the route to them.
+    const coreItems: ActionDropdownMenuItems = canConfigureResource ? [...toolsItems] : [];
 
     // Formatting toolbar is always available; Agent Gateway + advanced params
     // only when the user can configure resources.
@@ -707,9 +502,9 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
       : uploadItems;
 
     // Goal creation has one canonical entry: drop the goal chip at the head of
-    // the composer. The agent then plans and calls lobe-goal.createGoal,
+    // the composer. The agent then plans and calls builtin-goal.createGoal,
     // regardless of whether this conversation already has a topic.
-    const acceptanceItems: ActionDropdownMenuItems = enableTopicAcceptance
+    const acceptanceItems: ActionDropdownMenuItems = enableGoals
       ? [
           {
             icon: TargetIcon,
@@ -737,9 +532,8 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
       .flatMap((group, index) => (index === 0 ? group : [{ type: 'divider' as const }, ...group]));
   }, [
     agentId,
-    activeSearchOption,
     canConfigureResource,
-    enableTopicAcceptance,
+    enableGoals,
     canUploadImage,
     canUploadVideo,
     canUploadAudio,
@@ -747,19 +541,15 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
     enableFC,
     enableGatewayMode,
     enableKnowledgeBase,
-    handleSelectSearch,
     handleToggleGatewayMode,
-    handleToggleMemory,
     handleToggleParams,
     isAgentModeEnabled,
     isDark,
     isGatewayModeEnabled,
-    isMemoryEnabled,
     isParamsPanelActive,
     isSkillPolicyMenuOpen,
     knowledgeEnabledCount,
     setShowTypoBar,
-    showProviderSearch,
     showTypoBar,
     skillActivateMode,
     skillAutoCount,
@@ -773,6 +563,7 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
     skillMarketFooter,
     skillMarketHeader,
     upload,
+    routeLargeFilesToLocalPaths,
     close,
   ]);
 

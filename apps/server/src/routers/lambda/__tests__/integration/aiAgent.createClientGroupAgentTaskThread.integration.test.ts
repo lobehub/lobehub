@@ -19,20 +19,28 @@ import { cleanupTestUser, createTestUser } from './setup';
 // Mock getServerDB to return our test database instance
 let testDB: LobeChatDatabase;
 vi.mock('@/database/core/db-adaptor', () => ({
-  getServerDB: vi.fn(() => testDB),
+  getServerDB: vi.fn(function () {
+    return testDB;
+  }),
 }));
 
 // Mock services
 vi.mock('@/server/services/aiAgent', () => ({
-  AiAgentService: vi.fn().mockImplementation(() => ({})),
+  AiAgentService: vi.fn().mockImplementation(function () {
+    return {};
+  }),
 }));
 
 vi.mock('@/server/services/agentRuntime', () => ({
-  AgentRuntimeService: vi.fn().mockImplementation(() => ({})),
+  AgentRuntimeService: vi.fn().mockImplementation(function () {
+    return {};
+  }),
 }));
 
 vi.mock('@/server/services/aiChat', () => ({
-  AiChatService: vi.fn().mockImplementation(() => ({})),
+  AiChatService: vi.fn().mockImplementation(function () {
+    return {};
+  }),
 }));
 
 describe('createClientGroupAgentTaskThread Integration', () => {
@@ -196,55 +204,6 @@ describe('createClientGroupAgentTaskThread Integration', () => {
       expect(userMsgInThread).toBeDefined();
       expect(userMsgInThread?.agentId).toBe(workerAgentId);
       expect(userMsgInThread?.threadId).toBe(result.threadId);
-    });
-
-    it('should NOT filter by agentId (messages from any agent in thread are included)', async () => {
-      const caller = aiAgentRouter.createCaller(createTestContext());
-
-      const result = await caller.createClientGroupAgentTaskThread({
-        groupId: testGroupId,
-        instruction: 'Execute the task',
-        parentMessageId,
-        subAgentId: workerAgentId,
-        topicId: testTopicId,
-      });
-
-      // Create a message in the thread with a DIFFERENT agentId (simulating supervisor adding to thread)
-      await serverDB.insert(messages).values({
-        userId,
-        role: 'assistant',
-        content: 'Response from supervisor in thread',
-        topicId: testTopicId,
-        agentId: supervisorAgentId, // Different from subAgentId!
-        groupId: testGroupId,
-        threadId: result.threadId,
-      });
-
-      // Query thread messages again via API
-      const result2 = await caller.createClientGroupAgentTaskThread({
-        groupId: testGroupId,
-        instruction: 'Another task',
-        parentMessageId,
-        subAgentId: workerAgentId,
-        topicId: testTopicId,
-      });
-
-      // The key test: messages in a thread from different agents should all be queryable
-      // This verifies the API doesn't filter by agentId
-      const [supervisorMsgInThread] = await serverDB
-        .select()
-        .from(messages)
-        .where(eq(messages.threadId, result.threadId));
-
-      // If we directly query the database, we should find messages with different agentIds
-      const threadMsgs = await serverDB
-        .select()
-        .from(messages)
-        .where(eq(messages.threadId, result.threadId));
-
-      const agentIds = [...new Set(threadMsgs.map((m) => m.agentId))];
-      // Thread should be able to contain messages from multiple agents
-      expect(agentIds.length).toBeGreaterThanOrEqual(1);
     });
 
     it('should include ancestor messages in thread context', async () => {

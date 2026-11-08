@@ -1,7 +1,5 @@
 import type { ChatContextContent } from '@lobechat/types';
-import { Tooltip } from '@lobehub/ui';
-import { Tag } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar, Tag, Tooltip } from '@lobehub/ui';
 import { SquareDashedMousePointer } from 'lucide-react';
 import { memo } from 'react';
 

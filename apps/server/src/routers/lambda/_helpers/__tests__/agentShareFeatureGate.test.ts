@@ -65,30 +65,31 @@ describe('assertAgentShareVisitorEnabled', () => {
     mocks.businessConst.ENABLE_BUSINESS_FEATURES = false;
     mocks.getFlags.mockResolvedValue({ enableAgentShare: true });
 
-    await expect(assertAgentShareVisitorEnabled('visitor-1')).rejects.toMatchObject({
-      code: 'FORBIDDEN',
-    });
+    expect(() => assertAgentShareVisitorEnabled()).toThrow(
+      expect.objectContaining({
+        code: 'FORBIDDEN',
+      }),
+    );
     expect(mocks.getFlags).not.toHaveBeenCalled();
   });
 
-  it('rejects visitors outside the grayscale whitelist', async () => {
+  it('admits visitors outside the grayscale whitelist', async () => {
     mocks.getFlags.mockResolvedValue({ enableAgentShare: false });
 
-    await expect(assertAgentShareVisitorEnabled('visitor-1')).rejects.toBeInstanceOf(TRPCError);
-    expect(mocks.getFlags).toHaveBeenCalledWith('visitor-1');
+    expect(() => assertAgentShareVisitorEnabled()).not.toThrow();
+    expect(mocks.getFlags).not.toHaveBeenCalled();
   });
 
-  it('fails closed when the flag is unconfigured', async () => {
+  it('admits visitors when the flag is unconfigured', async () => {
     mocks.getFlags.mockResolvedValue({ enableAgentShare: undefined });
 
-    await expect(assertAgentShareVisitorEnabled('visitor-1')).rejects.toMatchObject({
-      code: 'FORBIDDEN',
-    });
+    expect(() => assertAgentShareVisitorEnabled()).not.toThrow();
+    expect(mocks.getFlags).not.toHaveBeenCalled();
   });
 
   it('admits whitelisted visitors', async () => {
     mocks.getFlags.mockResolvedValue({ enableAgentShare: true });
 
-    await expect(assertAgentShareVisitorEnabled('visitor-1')).resolves.toBeUndefined();
+    expect(() => assertAgentShareVisitorEnabled()).not.toThrow();
   });
 });

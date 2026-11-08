@@ -45,6 +45,7 @@ const activeOperation = (overrides: Record<string, unknown> = {}) => ({
   model: 'model-a',
   provider: 'lobehub',
   status: 'running',
+  topicId: 'tpc_run',
   userId: 'user-1',
   workspaceId: null,
   ...overrides,
@@ -67,23 +68,29 @@ describe('resolveActiveHeteroOperationPrincipal', () => {
     hasPermission.mockResolvedValue(true);
   });
 
-  it('re-authorizes the durable running operation on each request', async () => {
-    const principal = await resolveActiveHeteroOperationPrincipal({
-      capability: 'model:invoke',
-      claims,
-      db: dbWithOperation(activeOperation()),
-      operationId: 'op-1',
-    });
+  it.each(['kimi-code', 'opencode'])(
+    're-authorizes a running %s operation on each request',
+    async (agentType) => {
+      const principal = await resolveActiveHeteroOperationPrincipal({
+        capability: 'model:invoke',
+        claims,
+        db: dbWithOperation(
+          activeOperation({ metadata: { agentType, serverDefaultHeterogeneous: true } }),
+        ),
+        operationId: 'op-1',
+      });
 
-    expect(principal).toEqual({
-      agentType: 'kimi-code',
-      operationId: 'op-1',
-      userId: 'user-1',
-      workspaceId: undefined,
-    });
-    expect(activeUser).toHaveBeenCalledWith(expect.anything(), 'user-1');
-    expect(hasPermission).toHaveBeenCalledOnce();
-  });
+      expect(principal).toEqual({
+        agentType,
+        operationId: 'op-1',
+        topicId: 'tpc_run',
+        userId: 'user-1',
+        workspaceId: undefined,
+      });
+      expect(activeUser).toHaveBeenCalledWith(expect.anything(), 'user-1');
+      expect(hasPermission).toHaveBeenCalledOnce();
+    },
+  );
 
   it('rejects a token that does not grant the requested operation', async () => {
     await expect(
@@ -108,6 +115,47 @@ describe('resolveActiveHeteroOperationPrincipal', () => {
     ).rejects.toEqual(new HeteroOperationPrincipalError('Operation has already ended', 409));
   });
 
+  it('lets a terminal-tolerant callback through a settled operation, checks intact', async () => {
+    // The reporting callbacks (ingest refusal / finish) have to reach their
+    // handlers on a settled row — that row IS what they report on. Everything
+    // else about the token is still re-authorized.
+    await expect(
+      resolveActiveHeteroOperationPrincipal({
+        allowTerminalOperation: true,
+        capability: 'hetero:ingest',
+        claims: { ...claims, capabilities: ['hetero:ingest'] },
+        db: dbWithOperation(activeOperation({ status: 'done' })),
+        operationId: 'op-1',
+      }),
+    ).resolves.toMatchObject({ operationId: 'op-1', userId: 'user-1' });
+    expect(hasPermission).toHaveBeenCalledOnce();
+
+    // The allowance is opt-in per call site, never implied by the capability:
+    // token renewal asks for `hetero:ingest` too and must stay strict.
+    await expect(
+      resolveActiveHeteroOperationPrincipal({
+        capability: 'hetero:ingest',
+        claims: { ...claims, capabilities: ['hetero:ingest'] },
+        db: dbWithOperation(activeOperation({ status: 'done' })),
+        operationId: 'op-1',
+      }),
+    ).rejects.toEqual(new HeteroOperationPrincipalError('Operation has already ended', 409));
+  });
+
+  it('still rejects a terminal-tolerant callback whose token is out of scope', async () => {
+    await expect(
+      resolveActiveHeteroOperationPrincipal({
+        allowTerminalOperation: true,
+        capability: 'hetero:finish',
+        claims: { ...claims, capabilities: ['hetero:finish'] },
+        db: dbWithOperation(activeOperation({ status: 'done', userId: 'someone-else' })),
+        operationId: 'op-1',
+      }),
+    ).rejects.toEqual(
+      new HeteroOperationPrincipalError('Operation is outside the token scope', 403),
+    );
+  });
+
   it('rejects a model selection that no longer matches the operation', async () => {
     await expect(
       resolveActiveHeteroOperationPrincipal({
@@ -122,7 +170,7 @@ describe('resolveActiveHeteroOperationPrincipal', () => {
   it.each([
     ['missing server-default marker', { agentType: 'kimi-code' }],
     ['missing agent type', { serverDefaultHeterogeneous: true }],
-    ['unsupported agent type', { agentType: 'opencode', serverDefaultHeterogeneous: true }],
+    ['unsupported agent type', { agentType: 'amp', serverDefaultHeterogeneous: true }],
   ])('rejects model invocation with %s in durable metadata', async (_label, metadata) => {
     await expect(
       resolveActiveHeteroOperationPrincipal({

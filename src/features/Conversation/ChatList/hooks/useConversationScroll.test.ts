@@ -1,6 +1,7 @@
 /**
  * @vitest-environment happy-dom
  */
+import type { UIChatMessage } from '@lobechat/types';
 import { act, renderHook } from '@testing-library/react';
 import { createRef, type RefObject } from 'react';
 import { type VListHandle } from 'virtua';
@@ -117,7 +118,10 @@ describe('useConversationScroll — pin behavior', () => {
    * to verify "user + assistant pair was just appended".
    */
   type StoreFixture = {
-    displayMessages: Array<{ id: string; role: 'user' | 'assistant' }>;
+    displayMessages: Array<
+      Pick<UIChatMessage, 'id' | 'role'> & Partial<Pick<UIChatMessage, 'extra' | 'parentId'>>
+    >;
+    hasLaterMessages?: boolean;
     isAIGenerating: boolean;
     virtuaScrollMethods: {
       getItemOffset?: (i: number) => number;
@@ -146,6 +150,7 @@ describe('useConversationScroll — pin behavior', () => {
     vi.mocked(useConversationStore).mockImplementation((selector: any) => {
       const probe: any = {
         displayMessages: currentFixture.displayMessages,
+        hasLaterMessages: currentFixture.hasLaterMessages ?? false,
         operationState: { isAIGenerating: currentFixture.isAIGenerating },
         virtuaScrollMethods: currentFixture.virtuaScrollMethods,
       };
@@ -192,13 +197,18 @@ describe('useConversationScroll — pin behavior', () => {
     const rerender = (next: {
       contextKey?: string;
       dataSource: string[];
+      fixture?: Partial<StoreFixture>;
+      hasLaterMessages?: boolean;
       isSecondLastMessageFromUser: boolean;
     }) => {
+      const { fixture, hasLaterMessages, ...props } = next;
       currentFixture = {
         ...currentFixture,
         displayMessages: deriveDisplayMessages(next.isSecondLastMessageFromUser),
+        hasLaterMessages: hasLaterMessages ?? currentFixture.hasLaterMessages,
+        ...fixture,
       };
-      hook.rerender({ contextKey: undefined, ...next });
+      hook.rerender({ contextKey: undefined, ...props });
     };
 
     return { ...hook, rerender };
@@ -220,7 +230,7 @@ describe('useConversationScroll — pin behavior', () => {
 
   it('scrolls to the user message when a user+assistant pair is appended', () => {
     const { rerender } = renderScrollHook({
-      dataSource: [assistantId, 'prev'],
+      dataSource: ['m0', 'm1'],
       isSecondLastMessageFromUser: false,
     });
 
@@ -235,7 +245,7 @@ describe('useConversationScroll — pin behavior', () => {
 
   it('translates the pin target by headerOffset when a header slot row is present', () => {
     const { rerender } = renderScrollHook({
-      dataSource: [assistantId, 'prev'],
+      dataSource: ['m0', 'm1'],
       headerOffset: 1,
       isSecondLastMessageFromUser: false,
     });
@@ -249,6 +259,163 @@ describe('useConversationScroll — pin behavior', () => {
     expect(scrollToIndex).toHaveBeenCalledTimes(1);
     expect(scrollToIndex).toHaveBeenCalledWith(3, { align: 'start', smooth: true });
   });
+
+  it('does not scroll when a forward read appends its next page as a user+assistant pair', () => {
+    const { rerender } = renderScrollHook({
+      dataSource: ['m0', 'm1'],
+      fixture: { hasLaterMessages: true },
+      isSecondLastMessageFromUser: false,
+    });
+
+    // The last page lands: later rounds are no longer unread after it.
+    rerender({
+      dataSource: ['m0', 'm1', userId, assistantId],
+      hasLaterMessages: false,
+      isSecondLastMessageFromUser: true,
+    });
+
+    expect(scrollToIndex).not.toHaveBeenCalled();
+  });
+
+  it('does not scroll when an older round is prepended in front of the loaded rows', () => {
+    const { rerender } = renderScrollHook({
+      dataSource: [userId, assistantId],
+      isSecondLastMessageFromUser: true,
+    });
+
+    rerender({
+      dataSource: ['older-user', 'older-assistant', userId, assistantId],
+      isSecondLastMessageFromUser: true,
+    });
+
+    expect(scrollToIndex).not.toHaveBeenCalled();
+  });
+
+  it('keeps a sent turn pinned when an earlier history page arrives', async () => {
+    let offsets = [0, 100, 200, 350];
+    let sizes = [100, 100, 150, 100];
+    const { result, rerender } = renderScrollHook({
+      dataSource: ['m0', 'm1'],
+      fixture: {
+        virtuaScrollMethods: {
+          getItemOffset: (index) => offsets[index],
+          getItemSize: (index) => sizes[index],
+          getViewportSize: () => 800,
+        },
+      },
+      isSecondLastMessageFromUser: false,
+    });
+
+    rerender({
+      dataSource: ['m0', 'm1', userId, assistantId],
+      isSecondLastMessageFromUser: true,
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(32);
+    });
+    expect(result.current.spacerHeight).toBe(550);
+    scrollToIndex.mockClear();
+
+    offsets = [0, 50, 100, 200, 3000, 3150];
+    sizes = [50, 50, 100, 2800, 150, 100];
+    rerender({
+      dataSource: ['older-user', 'older-assistant', 'm0', 'm1', userId, assistantId],
+      isSecondLastMessageFromUser: true,
+    });
+    expect(scrollToIndex).not.toHaveBeenCalled();
+
+    act(() => {
+      result.current.registerSpacerNode(document.createElement('div'));
+    });
+
+    expect(scrollToIndex).toHaveBeenLastCalledWith(4, { align: 'start', smooth: true });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(32);
+    });
+    expect(result.current.spacerHeight).toBe(550);
+  });
+
+  it.each(['assistant', 'assistantGroup', 'agentCouncil', 'supervisor'] as const)(
+    'remeasures a regenerated %s reply as it grows',
+    async (role) => {
+      let assistantHeight = 100;
+      const replacementId = 'replacement-assistant';
+      const userNode = document.createElement('div');
+      userNode.dataset.messageId = userId;
+      userNode.getBoundingClientRect = () => ({ height: 150 }) as DOMRect;
+      const replacementNode = document.createElement('div');
+      replacementNode.dataset.messageId = replacementId;
+      replacementNode.getBoundingClientRect = () => ({ height: assistantHeight }) as DOMRect;
+      document.body.append(userNode);
+
+      try {
+        const { result, rerender } = renderScrollHook({
+          dataSource: ['m0', 'm1'],
+          fixture: {
+            virtuaScrollMethods: {
+              getItemOffset: (index) => [0, 100, 200, 350][index],
+              getItemSize: (index) => (index === 3 ? assistantHeight : 150),
+              getViewportSize: () => 800,
+            },
+          },
+          isSecondLastMessageFromUser: false,
+        });
+        rerender({
+          dataSource: ['m0', 'm1', userId, assistantId],
+          isSecondLastMessageFromUser: true,
+        });
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(32);
+        });
+        expect(result.current.spacerHeight).toBe(550);
+
+        // Regeneration leaves the user alone before its new branch is rendered.
+        rerender({
+          dataSource: ['m0', 'm1', userId],
+          fixture: {
+            displayMessages: [{ id: userId, role: 'user' }],
+            isAIGenerating: true,
+          },
+          isSecondLastMessageFromUser: false,
+        });
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(32);
+        });
+        expect(result.current.spacerHeight).toBe(650);
+
+        document.body.append(replacementNode);
+        rerender({
+          dataSource: ['m0', 'm1', userId, replacementId],
+          fixture: {
+            displayMessages: [
+              { id: userId, role: 'user' },
+              role === 'agentCouncil'
+                ? { extra: { parentMessageId: userId }, id: replacementId, role }
+                : { id: replacementId, parentId: userId, role },
+            ],
+          },
+          isSecondLastMessageFromUser: true,
+        });
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(32);
+        });
+        expect(result.current.spacerHeight).toBe(550);
+
+        assistantHeight = 700;
+        act(() => {
+          const observer = MockResizeObserver.latest;
+          if (observer?.observed.includes(replacementNode)) observer.trigger();
+        });
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(32);
+        });
+        expect(result.current.spacerHeight).toBe(0);
+      } finally {
+        userNode.remove();
+        replacementNode.remove();
+      }
+    },
+  );
 
   it('does not scroll when only the assistant message is appended', () => {
     const { rerender } = renderScrollHook({
@@ -298,7 +465,7 @@ describe('useConversationScroll — pin behavior', () => {
   it('does not treat a topic switch as a send even when the length delta is +2', () => {
     const { rerender } = renderScrollHook({
       contextKey: 'main_agt_1_tpc_a',
-      dataSource: [assistantId, 'prev'],
+      dataSource: ['m0', 'm1'],
       isSecondLastMessageFromUser: false,
     });
 
@@ -314,7 +481,7 @@ describe('useConversationScroll — pin behavior', () => {
   it('deactivates a live spacer when the context switches', async () => {
     const { result, rerender } = renderScrollHook({
       contextKey: 'main_agt_1_tpc_a',
-      dataSource: [assistantId, 'prev'],
+      dataSource: ['m0', 'm1'],
       isSecondLastMessageFromUser: false,
       fixture: {
         virtuaScrollMethods: {
@@ -367,7 +534,7 @@ describe('useConversationScroll — pin behavior', () => {
 
   it('stops pinning once the user scrolls up', () => {
     const { result, rerender } = renderScrollHook({
-      dataSource: [assistantId, 'prev'],
+      dataSource: ['m0', 'm1'],
       isSecondLastMessageFromUser: false,
     });
 
@@ -398,12 +565,12 @@ describe('useConversationScroll — pin behavior', () => {
     expect(scrollToIndex).not.toHaveBeenCalled();
   });
 
-  // Regression: settle re-pins fire while the content height is still changing
-  // (e.g. a workflow collapse at turn completion). A smooth scroll there is
-  // itself a visible slide, so only the initial send scroll may animate.
-  it('re-pins without smooth scrolling once the spacer layout settles', () => {
+  // Regression: the send scroll fires before the spacer row exists and gets
+  // clamped by virtua, so the visible slide is the settle re-pin after mount.
+  // An instant re-pin there aborts the animation (the "no slide" bug).
+  it('keeps settle re-pins smooth right after send', () => {
     const { result, rerender } = renderScrollHook({
-      dataSource: [assistantId, 'prev'],
+      dataSource: ['m0', 'm1'],
       isSecondLastMessageFromUser: false,
     });
 
@@ -414,8 +581,31 @@ describe('useConversationScroll — pin behavior', () => {
     expect(scrollToIndex).toHaveBeenCalledWith(2, { align: 'start', smooth: true });
     scrollToIndex.mockClear();
 
-    // Registering the spacer node bumps spacerLayoutVersion, which is the
-    // "layout settled" beat the pin controller retries on.
+    vi.advanceTimersByTime(100);
+    const spacerNode = document.createElement('div');
+    act(() => {
+      result.current.registerSpacerNode(spacerNode);
+    });
+
+    expect(scrollToIndex).toHaveBeenCalledWith(2, { align: 'start', smooth: true });
+  });
+
+  // Regression: settle re-pins fire while the content height is still changing
+  // (e.g. a workflow collapse at turn completion). A smooth scroll there is
+  // itself a visible slide, so late re-pins must land instantly.
+  it('re-pins without smooth scrolling once the send animation window has passed', () => {
+    const { result, rerender } = renderScrollHook({
+      dataSource: ['m0', 'm1'],
+      isSecondLastMessageFromUser: false,
+    });
+
+    rerender({
+      dataSource: ['m0', 'm1', userId, assistantId],
+      isSecondLastMessageFromUser: true,
+    });
+    scrollToIndex.mockClear();
+
+    vi.advanceTimersByTime(1000);
     const spacerNode = document.createElement('div');
     act(() => {
       result.current.registerSpacerNode(spacerNode);
@@ -485,7 +675,7 @@ describe('useConversationScroll — pin behavior', () => {
 
     try {
       const { rerender } = renderScrollHook({
-        dataSource: [assistantId, 'prev'],
+        dataSource: ['m0', 'm1'],
         isSecondLastMessageFromUser: false,
       });
 

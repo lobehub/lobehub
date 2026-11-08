@@ -208,6 +208,12 @@ describe('TopicSummaryModel', () => {
         trigger: 'eval',
         userId,
       },
+      {
+        createdAt: new Date('2026-07-31T00:00:00Z'),
+        id: 'channel-run',
+        trigger: 'channel',
+        userId,
+      },
     ]);
     await db.insert(messages).values([
       {
@@ -223,6 +229,14 @@ describe('TopicSummaryModel', () => {
         id: 'm-evaluation',
         role: 'user',
         topicId: 'evaluation',
+        updatedAt: new Date('2026-07-31T10:00:00Z'),
+        userId,
+      },
+      {
+        content: 'channel request',
+        id: 'm-channel-run',
+        role: 'user',
+        topicId: 'channel-run',
         updatedAt: new Date('2026-07-31T10:00:00Z'),
         userId,
       },
@@ -305,5 +319,152 @@ describe('TopicSummaryModel', () => {
     expect(updated).toBe(true);
     expect(topic.description).toBe('Description');
     expect(topic.historySummary).toBe('Summary');
+  });
+
+  it('skips topics and messages sitting in the recycle bin', async () => {
+    const stamp = { deletedAt: new Date('2026-07-31T10:30:00Z'), isDeleted: true };
+    await db.insert(topics).values([
+      { createdAt: new Date('2026-07-31T00:00:00Z'), id: 'trashed-topic', userId, ...stamp },
+      { createdAt: new Date('2026-07-31T00:00:00Z'), id: 'live-topic', userId },
+    ]);
+    await db.insert(messages).values([
+      // a trashed topic never becomes a candidate, however fresh its messages
+      {
+        content: 'a',
+        id: 'm-trashed-topic',
+        role: 'user',
+        topicId: 'trashed-topic',
+        updatedAt: new Date('2026-07-31T10:00:00Z'),
+        userId,
+      },
+      // a trashed message neither dates nor feeds a live topic's summary
+      {
+        content: 'live',
+        id: 'm-live',
+        role: 'user',
+        topicId: 'live-topic',
+        updatedAt: new Date('2026-07-31T09:00:00Z'),
+        userId,
+      },
+      {
+        content: 'gone',
+        id: 'm-gone',
+        role: 'assistant',
+        topicId: 'live-topic',
+        updatedAt: new Date('2026-07-31T10:00:00Z'),
+        userId,
+        ...stamp,
+      },
+    ]);
+
+    const result = await model.listCandidates({
+      idleBefore: new Date('2026-07-31T11:00:00Z'),
+      limit: 20,
+      topicCreatedAfter: new Date('2026-07-30T12:00:00Z'),
+    });
+
+    expect(result).toEqual([
+      expect.objectContaining({
+        id: 'live-topic',
+        lastMessageUpdatedAt: new Date('2026-07-31T09:00:00Z'),
+      }),
+    ]);
+  });
+
+  it('does not commit a summary onto a topic that was trashed after it was selected', async () => {
+    await db.insert(topics).values({ id: 'late-trash', userId });
+    await db.insert(messages).values({
+      content: 'hello',
+      id: 'm-late',
+      role: 'user',
+      topicId: 'late-trash',
+      updatedAt: new Date('2026-07-31T10:00:00Z'),
+      userId,
+    });
+    await db
+      .update(topics)
+      .set({ deletedAt: new Date(), isDeleted: true })
+      .where(eq(topics.id, 'late-trash'));
+
+    const updated = await model.updateSummaryIfCurrent({
+      description: 'Description',
+      lastMessageId: 'm-late',
+      lastMessageUpdatedAt: new Date('2026-07-31T10:00:00Z'),
+      summary: 'Summary',
+      topicId: 'late-trash',
+    });
+    const [topic] = await db.select().from(topics).where(eq(topics.id, 'late-trash'));
+
+    expect(updated).toBe(false);
+    expect(topic.historySummary).toBeNull();
+  });
+
+  it('pages with the id/time cursor and lets force re-read already-summarized topics', async () => {
+    const first = new Date('2026-07-31T10:00:00Z');
+    const second = new Date('2026-07-31T10:30:00Z');
+
+    await db.insert(topics).values([
+      { createdAt: new Date('2026-07-31T00:00:00Z'), id: 'cursor-a', userId },
+      { createdAt: new Date('2026-07-31T00:00:00Z'), id: 'cursor-b', userId },
+      {
+        createdAt: new Date('2026-07-31T00:00:00Z'),
+        id: 'cursor-c',
+        metadata: {
+          autoSummary: {
+            lastMessageId: 'm-cursor-c',
+            lastMessageUpdatedAt: second.toISOString(),
+            summarizedAt: now.toISOString(),
+            version: 1,
+          },
+        },
+        userId,
+      },
+    ]);
+    await db.insert(messages).values([
+      {
+        content: 'a',
+        id: 'm-cursor-a',
+        role: 'user',
+        topicId: 'cursor-a',
+        updatedAt: first,
+        userId,
+      },
+      {
+        content: 'b',
+        id: 'm-cursor-b',
+        role: 'user',
+        topicId: 'cursor-b',
+        updatedAt: first,
+        userId,
+      },
+      {
+        content: 'c',
+        id: 'm-cursor-c',
+        role: 'user',
+        topicId: 'cursor-c',
+        updatedAt: second,
+        userId,
+      },
+    ]);
+
+    // The scheduled pass skips the topic whose watermark already matches its
+    // latest message, so paging never re-summarizes the same turn twice.
+    const scheduled = await model.listCandidates({
+      idleBefore: new Date('2026-07-31T11:00:00Z'),
+      limit: 20,
+      topicCreatedAfter: new Date('2026-07-30T12:00:00Z'),
+    });
+    expect(scheduled.map(({ id }) => id)).toEqual(['cursor-a', 'cursor-b']);
+
+    // A forced sweep drops both gates, and the cursor resumes strictly after
+    // `cursor-a` — same timestamp, greater id — then takes the newer topic.
+    const forced = await model.listCandidates({
+      cursor: { id: 'cursor-a', lastMessageUpdatedAt: first },
+      force: true,
+      idleBefore: new Date('2026-07-31T11:00:00Z'),
+      limit: 20,
+      topicCreatedAfter: new Date('2026-07-30T12:00:00Z'),
+    });
+    expect(forced.map(({ id }) => id)).toEqual(['cursor-b', 'cursor-c']);
   });
 });

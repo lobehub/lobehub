@@ -193,6 +193,15 @@ describe('canApproveInterventionBatch', () => {
     expect(canApproveInterventionBatch(members as any)).toBe(false);
   });
 
+  it('never bulk-approves the secure credential form, which must save before approving', () => {
+    expect(
+      canApproveInterventionBatch([
+        pending('lobe-creds', 'requestCredsInput', 1),
+        pending('filesystem', 'writeFile', 2),
+      ]),
+    ).toBe(false);
+  });
+
   it('does not render a bulk action for a single binary card', () => {
     expect(canApproveInterventionBatch([pending('filesystem', 'writeFile', 1)])).toBe(false);
   });
@@ -219,6 +228,79 @@ describe('canApproveInterventionBatch', () => {
     expect(classifyToolInterventionPresentation('cursor', 'requestPermission')).toEqual({
       interactionKind: 'custom',
       surface: 'form',
+    });
+  });
+
+  describe('a question whose producer stopped waiting', () => {
+    const HOUR = 60 * 60 * 1000;
+
+    const askUserToolRow = (deadline: number): UIChatMessage =>
+      ({
+        id: 'tool-expired',
+        parentId: 'assistant-1',
+        plugin: {
+          apiName: 'askUserQuestion',
+          arguments: '{}',
+          id: 'call-expired',
+          identifier: 'claude-code',
+          type: 'builtin',
+        },
+        pluginIntervention: { status: 'pending' },
+        pluginState: { heterogeneousIntervention: { deadline } },
+        role: 'tool',
+        tool_call_id: 'call-expired',
+      }) as any;
+
+    const askUserGroup = (deadline: number): UIChatMessage =>
+      ({
+        children: [
+          {
+            tools: [
+              {
+                apiName: 'askUserQuestion',
+                arguments: '{}',
+                id: 'call-expired',
+                identifier: 'claude-code',
+                intervention: { status: 'pending' },
+                result: {
+                  content: '',
+                  id: 'tool-expired',
+                  state: { heterogeneousIntervention: { deadline } },
+                },
+                result_msg_id: 'tool-expired',
+                type: 'builtin',
+              },
+            ],
+          },
+        ],
+        id: 'assistant-1',
+        role: 'assistantGroup',
+      }) as any;
+
+    it('is no longer offered as an answerable card — standalone tool row', () => {
+      // Past the producer's deadline its bridge has deleted the pending entry
+      // and its long-poll has stopped listening. Offering the card would ask the
+      // user to answer into a void.
+      expect(getPendingInterventions([askUserToolRow(Date.now() - HOUR)])).toHaveLength(0);
+      expect(getPendingInterventions([askUserToolRow(Date.now() + HOUR)])).toHaveLength(1);
+    });
+
+    it('is no longer offered as an answerable card — folded tool entry', () => {
+      expect(getPendingInterventions([askUserGroup(Date.now() - HOUR)])).toHaveLength(0);
+      expect(getPendingInterventions([askUserGroup(Date.now() + HOUR)])).toHaveLength(1);
+    });
+
+    it('carries the producer deadline so consumers can expire the card live', () => {
+      const deadline = Date.now() + HOUR;
+      expect(getPendingInterventions([askUserToolRow(deadline)])[0].deadline).toBe(deadline);
+      expect(getPendingInterventions([askUserGroup(deadline)])[0].deadline).toBe(deadline);
+    });
+
+    it('keeps a card whose producer never stamped a deadline', () => {
+      // Without the producer's clock we cannot claim it gave up.
+      const noDeadline = askUserToolRow(0);
+      delete (noDeadline as any).pluginState;
+      expect(getPendingInterventions([noDeadline])).toHaveLength(1);
     });
   });
 });

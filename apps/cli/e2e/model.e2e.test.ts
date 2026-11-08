@@ -1,6 +1,6 @@
 import { execSync } from 'node:child_process';
 
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 /**
  * E2E tests for `lh model` AI model management commands.
@@ -9,65 +9,107 @@ import { describe, expect, it } from 'vitest';
  * - `lh` CLI is installed and linked globally
  * - User is authenticated (`lh login` completed)
  * - Network access to the LobeHub server
- * - At least one provider (e.g. openai) must be available
  *
- * These tests create a real model, verify CRUD operations, then clean up.
+ * The suite owns a uniquely named provider and deletes it after the run. It
+ * never changes models belonging to an existing provider on the user account.
  */
 
 const CLI = process.env.LH_CLI_PATH || 'lh';
 const TIMEOUT = 30_000;
-const TEST_PROVIDER = 'openai';
+const suiteId = `${Date.now()}-${process.pid}`;
+const TEST_PROVIDER = `e2e-model-provider-${suiteId}`;
+const TEST_PROVIDER_NAME = `E2E Model Provider ${suiteId}`;
+
+const listFixtures = [
+  { enabled: true, id: `e2e-list-chat-a-${suiteId}`, type: 'chat' },
+  { enabled: true, id: `e2e-list-chat-b-${suiteId}`, type: 'chat' },
+  { enabled: true, id: `e2e-list-embedding-${suiteId}`, type: 'embedding' },
+  { enabled: false, id: `e2e-list-disabled-chat-${suiteId}`, type: 'chat' },
+  { enabled: false, id: `e2e-list-disabled-tts-${suiteId}`, type: 'tts' },
+] as const;
 
 function run(args: string): string {
   return execSync(`${CLI} ${args}`, {
-    encoding: 'utf-8',
+    encoding: 'utf8',
     env: { ...process.env, PATH: `${process.env.HOME}/.bun/bin:${process.env.PATH}` },
     timeout: TIMEOUT,
   }).trim();
 }
 
-function runJson<T = any>(args: string): T {
+function runJson<T>(args: string): T {
   const output = run(args);
   return JSON.parse(output) as T;
 }
 
 describe('lh model - E2E', () => {
-  const testModelId = `e2e-model-${Date.now()}`;
+  const testModelId = `e2e-model-${suiteId}`;
   const testDisplayName = 'E2E Test Model';
+  let providerCreated = false;
+
+  beforeAll(() => {
+    run(
+      `provider create --id ${TEST_PROVIDER} --name "${TEST_PROVIDER_NAME}" --source custom --sdk-type openai`,
+    );
+    providerCreated = true;
+
+    for (const fixture of listFixtures) {
+      run(
+        `model create --id ${fixture.id} --provider ${TEST_PROVIDER} --display-name "${fixture.id}" --type ${fixture.type}`,
+      );
+      if (!fixture.enabled) {
+        run(`model toggle ${fixture.id} --provider ${TEST_PROVIDER} --disable`);
+      }
+    }
+  }, TIMEOUT * 2);
+
+  afterAll(() => {
+    if (providerCreated) run(`provider delete ${TEST_PROVIDER} --yes`);
+  });
 
   // ── list ──────────────────────────────────────────────
 
   describe('list', () => {
-    it('should list models for a provider in table format', () => {
+    it('should list the suite models for a provider in table format', () => {
       const output = run(`model list ${TEST_PROVIDER}`);
       expect(output).toContain('ID');
       expect(output).toContain('NAME');
       expect(output).toContain('ENABLED');
       expect(output).toContain('TYPE');
+      for (const fixture of listFixtures) expect(output).toContain(fixture.id);
     });
 
-    it('should filter enabled models', () => {
-      const output = run(`model list ${TEST_PROVIDER} --enabled`);
-      // Every row should have ✓
-      expect(output).not.toContain('✗');
+    it('should return only the enabled fixture models', () => {
+      const list = runJson<{ enabled: boolean; id: string }[]>(
+        `model list ${TEST_PROVIDER} --enabled --json id,enabled`,
+      );
+      const ids = list.map(({ id }) => id);
+
+      expect(ids).toEqual(
+        expect.arrayContaining(listFixtures.filter((model) => model.enabled).map(({ id }) => id)),
+      );
+      expect(ids).not.toEqual(
+        expect.arrayContaining(listFixtures.filter((model) => !model.enabled).map(({ id }) => id)),
+      );
+      expect(list.every(({ enabled }) => enabled)).toBe(true);
     });
 
     it('should output JSON with field filtering', () => {
       const list = runJson<{ id: string; type: string }[]>(
         `model list ${TEST_PROVIDER} --json id,type -L 5`,
       );
-      expect(Array.isArray(list)).toBe(true);
-      expect(list.length).toBeLessThanOrEqual(5);
-      if (list.length > 0) {
-        expect(list[0]).toHaveProperty('id');
-        expect(list[0]).toHaveProperty('type');
-        expect(list[0]).not.toHaveProperty('displayName');
-      }
+      expect(list).toHaveLength(5);
+      expect(list.map(({ id }) => id)).toEqual(
+        expect.arrayContaining(listFixtures.map(({ id }) => id)),
+      );
+      expect(list[0]).toHaveProperty('id');
+      expect(list[0]).toHaveProperty('type');
+      expect(list[0]).not.toHaveProperty('displayName');
     });
 
-    it('should respect limit option', () => {
-      const list = runJson<any[]>(`model list ${TEST_PROVIDER} --json id -L 3`);
-      expect(list.length).toBeLessThanOrEqual(3);
+    it('should respect limit option with more fixtures than the limit', () => {
+      const list = runJson<{ id: string }[]>(`model list ${TEST_PROVIDER} --json id -L 3`);
+      expect(list).toHaveLength(3);
+      expect(list.every(({ id }) => listFixtures.some((fixture) => fixture.id === id))).toBe(true);
     });
   });
 
@@ -83,8 +125,7 @@ describe('lh model - E2E', () => {
 
     it('should appear in the model list', () => {
       const list = runJson<{ id: string }[]>(`model list ${TEST_PROVIDER} --json id`);
-      const found = list.find((m) => m.id === testModelId);
-      expect(found).toBeDefined();
+      expect(list.some(({ id }) => id === testModelId)).toBe(true);
     });
   });
 
@@ -112,7 +153,7 @@ describe('lh model - E2E', () => {
     });
 
     it('should error for nonexistent model', () => {
-      expect(() => run('model view nonexistent-model-xyz')).toThrow();
+      expect(() => run(`model view nonexistent-model-${suiteId}`)).toThrow();
     });
   });
 
@@ -179,7 +220,7 @@ describe('lh model - E2E', () => {
     });
   });
 
-  // ── delete (cleanup) ──────────────────────────────────
+  // ── delete ────────────────────────────────────────────
 
   describe('delete', () => {
     it('should delete the model', () => {
@@ -193,13 +234,45 @@ describe('lh model - E2E', () => {
     });
   });
 
-  // ── clear (test with caution) ─────────────────────────
+  // ── clear ─────────────────────────────────────────────
 
   describe('clear', () => {
-    it('should clear remote models for provider', () => {
+    it('should clear a remote model while preserving a custom model', () => {
+      const remoteModelId = `e2e-remote-${suiteId}`;
+      const customModelId = `e2e-custom-${suiteId}`;
+      const remoteModels = JSON.stringify([
+        {
+          displayName: 'E2E Remote Model',
+          enabled: true,
+          id: remoteModelId,
+          source: 'remote',
+          type: 'chat',
+        },
+      ]);
+      run(`model batch-update ${TEST_PROVIDER} --models '${remoteModels}'`);
+      run(
+        `model create --id ${customModelId} --provider ${TEST_PROVIDER} --display-name "E2E Custom Model" --type chat`,
+      );
+
+      const seeded = runJson<{ id: string; source: string }[]>(
+        `model list ${TEST_PROVIDER} --json id,source`,
+      );
+      expect(seeded).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ id: remoteModelId, source: 'remote' }),
+          expect.objectContaining({ id: customModelId, source: 'custom' }),
+        ]),
+      );
+
       const output = run(`model clear --provider ${TEST_PROVIDER} --remote --yes`);
       expect(output).toContain('Cleared remote models');
       expect(output).toContain(TEST_PROVIDER);
+
+      const remaining = runJson<{ id: string }[]>(`model list ${TEST_PROVIDER} --json id`).map(
+        ({ id }) => id,
+      );
+      expect(remaining).not.toContain(remoteModelId);
+      expect(remaining).toContain(customModelId);
     });
   });
 });

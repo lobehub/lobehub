@@ -5,6 +5,8 @@ import { VERIFY_ABANDONED_MS, VERIFY_ROLLUP_GRACE_MS } from '../staleness';
 import { sweepStuckVerifyRuns } from '../sweep';
 
 const {
+  releaseUndeliveredRound,
+  settleFailedRepair,
   claimVerifying,
   findStuckVerifying,
   operationFindById,
@@ -13,6 +15,8 @@ const {
   upsertByCheckItem,
   finalizeVerifyRun,
 } = vi.hoisted(() => ({
+  releaseUndeliveredRound: vi.fn(),
+  settleFailedRepair: vi.fn(),
   claimVerifying: vi.fn(),
   finalizeVerifyRun: vi.fn(),
   findStuckVerifying: vi.fn(),
@@ -24,19 +28,29 @@ const {
 
 vi.mock('@/database/models/verifyRun', () => ({
   VerifyRunModel: Object.assign(
-    vi.fn(() => ({})),
+    vi.fn(function () {
+      return {};
+    }),
     { findStuckVerifying },
   ),
 }));
 vi.mock('@/database/models/verifyCheckResult', () => ({
-  VerifyCheckResultModel: vi.fn(() => ({ listByRun: resultListByRun, upsertByCheckItem })),
+  VerifyCheckResultModel: vi.fn(function () {
+    return { listByRun: resultListByRun, upsertByCheckItem };
+  }),
 }));
 vi.mock('@/database/models/agentOperation', () => ({
-  AgentOperationModel: vi.fn(() => ({ findById: operationFindById })),
+  AgentOperationModel: vi.fn(function () {
+    return { findById: operationFindById };
+  }),
 }));
 vi.mock('../statusService', () => ({
-  VerifyStatusService: vi.fn(() => ({ claimVerifying, recompute })),
+  VerifyStatusService: vi.fn(function () {
+    return { claimVerifying, recompute };
+  }),
 }));
+vi.mock('../repairTerminal', () => ({ settleFailedRepair }));
+vi.mock('../undeliveredRound', () => ({ releaseUndeliveredRound }));
 vi.mock('../settle', () => ({ finalizeVerifyRun }));
 
 const db = {} as any;
@@ -63,6 +77,8 @@ const singlePage = (runs: unknown[]) => {
 describe('sweepStuckVerifyRuns', () => {
   beforeEach(() => {
     [
+      releaseUndeliveredRound,
+      settleFailedRepair,
       claimVerifying,
       finalizeVerifyRun,
       findStuckVerifying,
@@ -282,5 +298,32 @@ describe('sweepStuckVerifyRuns', () => {
     });
     expect(outcome.skipped).toBe(1);
     expect(outcome.settled).toEqual(['run-newer']);
+  });
+  it('recovers a planned repair whose operation died before judging began', async () => {
+    singlePage([stuckRun({ status: 'planned' })]);
+    settleFailedRepair.mockResolvedValue(true);
+    expect((await sweepStuckVerifyRuns(db, { now: NOW })).abandoned).toEqual(['run-1']);
+    expect(settleFailedRepair).toHaveBeenCalledWith(db, 'u1', 'op-1', undefined);
+    expect(releaseUndeliveredRound).not.toHaveBeenCalled();
+    expect(finalizeVerifyRun).not.toHaveBeenCalled();
+  });
+
+  it('releases the planned round of a task run that ended without a delivery', async () => {
+    singlePage([stuckRun({ status: 'planned' })]);
+    settleFailedRepair.mockResolvedValue(false);
+    releaseUndeliveredRound.mockResolvedValue(true);
+    const outcome = await sweepStuckVerifyRuns(db, { now: NOW });
+    expect(outcome.released).toEqual(['run-1']);
+    expect(outcome.abandoned).toEqual([]);
+    expect(releaseUndeliveredRound).toHaveBeenCalledWith(db, 'u1', 'op-1', undefined);
+    expect(claimVerifying).not.toHaveBeenCalled();
+    expect(finalizeVerifyRun).not.toHaveBeenCalled();
+  });
+
+  it('skips a planned round neither path can close', async () => {
+    singlePage([stuckRun({ status: 'planned' })]);
+    settleFailedRepair.mockResolvedValue(false);
+    releaseUndeliveredRound.mockResolvedValue(false);
+    expect((await sweepStuckVerifyRuns(db, { now: NOW })).skipped).toBe(1);
   });
 });

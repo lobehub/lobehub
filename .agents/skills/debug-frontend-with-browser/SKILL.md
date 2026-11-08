@@ -1,6 +1,6 @@
 ---
 name: debug-frontend-with-browser
-description: Frontend diagnosis extension for the acceptance skill. Use for intermittent rendering, ordering, stale-state, navigation, virtual-list, React/Zustand, optimistic-update, refresh-dependent, or browser-only failures where the first broken boundary may be DOM, component input, derived state, client cache, network data, or a pure transformation. Before any browser, Electron, or live-app interaction, this skill must load and follow the acceptance skill and the repository's `.agents/acceptance/` project layer; it adds only boundary tracing, minimal fixture replay, and regression attribution.
+description: 'Use for intermittent UI, stale state, ordering, navigation or browser-only bugs. Extends acceptance with boundary tracing and regression diagnosis.'
 ---
 
 # Debug Frontend with Browser

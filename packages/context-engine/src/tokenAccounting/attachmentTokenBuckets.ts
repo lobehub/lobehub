@@ -8,8 +8,8 @@ import type {
   UIChatMessage,
   UploadFileItem,
 } from '@lobechat/types';
-import { estimateAudioInputTokens } from '@lobechat/utils/audio';
-import { getMimeType } from '@lobechat/utils/mimeType';
+import { estimateAudioInputTokens } from '../utils/audio';
+import { getMimeType } from '../utils/mimeType';
 import { estimateTokenCount } from 'tokenx';
 
 const ESTIMATE_INPUT_MESSAGE_ID = '__cost_estimate_input__';

@@ -6,7 +6,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createContextInner } from '@/libs/trpc/lambda/context';
 
 vi.mock('@/database/core/db-adaptor', () => ({
-  getServerDB: vi.fn(() => ({})),
+  getServerDB: vi.fn(function () {
+    return {};
+  }),
 }));
 
 // `assertAgentShareCreationEnabled` (`_helpers/agentShareFeatureGate.ts`) runs
@@ -36,25 +38,67 @@ vi.mock('@lobechat/business-const', async () => {
   };
 });
 
+const mockAssertShareModelAllowed = vi.fn();
+vi.mock('@/server/services/agent', () => ({
+  AgentService: vi.fn(function () {
+    return {
+      prepareShareModel: mockAssertShareModelAllowed,
+      withShareModelLock: (_id: string, action: (service: unknown, shares: unknown) => unknown) =>
+        action(
+          { prepareShareModel: mockAssertShareModelAllowed },
+          { create: mockCreate, updateVisibility: mockUpdateVisibility },
+        ),
+    };
+  }),
+}));
+
 const mockCreate = vi.fn();
+const mockFindByShareId = vi.fn();
+const mockForceDisableWorkspaceShare = vi.fn();
 const mockGetByAgentId = vi.fn();
+const mockListWorkspaceSharesForAudit = vi.fn();
 const mockUpdateConfig = vi.fn();
 const mockUpdateSlug = vi.fn();
 const mockUpdateVisibility = vi.fn();
+const mockListEligibleWorks = vi.fn();
 
 vi.mock('@/database/models/agentShare', () => ({
-  AgentShareModel: vi.fn(() => ({
-    create: mockCreate,
-    getByAgentId: mockGetByAgentId,
-    updateConfig: mockUpdateConfig,
-    updateSlug: mockUpdateSlug,
-    updateVisibility: mockUpdateVisibility,
-  })),
+  AgentShareModel: Object.assign(
+    vi.fn(function () {
+      return {
+        create: mockCreate,
+        getByAgentId: mockGetByAgentId,
+        updateConfig: mockUpdateConfig,
+        updateSlug: mockUpdateSlug,
+        updateVisibility: mockUpdateVisibility,
+      };
+    }),
+    {
+      findByShareId: mockFindByShareId,
+      forceDisableWorkspaceShare: mockForceDisableWorkspaceShare,
+      listWorkspaceSharesForAudit: mockListWorkspaceSharesForAudit,
+    },
+  ),
+}));
+
+vi.mock('@/database/models/agentShareProfile', () => ({
+  AgentShareProfileModel: vi.fn(function () {
+    return { listEligibleWorks: mockListEligibleWorks };
+  }),
 }));
 
 const mockCountShareVisitors = vi.fn();
 vi.mock('@/database/models/topic', () => ({
-  TopicModel: vi.fn(() => ({ countShareVisitors: mockCountShareVisitors })),
+  TopicModel: vi.fn(function () {
+    return { countShareVisitors: mockCountShareVisitors };
+  }),
+}));
+
+const mockCountAgentShareUsage = vi.fn();
+vi.mock('@/database/models/file', () => ({
+  FileModel: vi.fn(function () {
+    return { countAgentShareUsage: mockCountAgentShareUsage };
+  }),
 }));
 
 const mockGetAgentShareMonthlySpend = vi.fn();
@@ -71,6 +115,32 @@ vi.mock('@/server/featureFlags', () => ({
 const { agentShareConfigPatchSchema, agentShareConfigSchema, agentShareRouter } =
   await import('../agentShare');
 
+describe('share profile configuration', () => {
+  it('accepts independent demo cases and an ordered selection of works', () => {
+    const config = {
+      demoCases: [{ description: 'Find a minimal fix', prompt: 'Help me debug this error' }],
+      featuredWorkIds: ['work-first', 'work-second'],
+    };
+    expect(agentShareConfigPatchSchema.parse(config)).toEqual(config);
+  });
+
+  it('allows clearing profile content without changing other settings', () => {
+    expect(agentShareConfigPatchSchema.parse({ demoCases: [], featuredWorkIds: [] })).toEqual({
+      demoCases: [],
+      featuredWorkIds: [],
+    });
+  });
+
+  it.each([
+    { demoCases: [{ description: 'Empty task', prompt: ' ' }] },
+    { demoCases: [{ description: 'Description', prompt: 'Task', openingQuestion: 'Other' }] },
+    { featuredWorkIds: ['same', 'same'] },
+    { featuredWorkIds: [''] },
+  ])('rejects invalid profile content: %j', (config) => {
+    expect(agentShareConfigPatchSchema.safeParse(config).success).toBe(false);
+  });
+});
+
 const share = {
   agentId: 'agent-1',
   id: 'share-1',
@@ -81,16 +151,30 @@ const share = {
 describe('agentShareRouter', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockAssertShareModelAllowed.mockReset().mockResolvedValue(undefined);
     mocks.businessConst.ENABLE_BUSINESS_FEATURES = true;
     mockCreate.mockResolvedValue(share);
+    mockFindByShareId.mockResolvedValue({
+      ...share,
+      ownerId: 'user-1',
+      workspaceId: null,
+    });
+    mockForceDisableWorkspaceShare.mockResolvedValue({
+      agentId: 'agent-1',
+      shareId: '00000000-0000-4000-8000-000000000001',
+      visibility: 'private',
+    });
     mockGetByAgentId.mockResolvedValue(share);
+    mockListWorkspaceSharesForAudit.mockResolvedValue([]);
     mockUpdateConfig.mockResolvedValue(share);
     mockUpdateSlug.mockResolvedValue({
       ...share,
       shareConfig: { ...share.shareConfig, slug: 'my-slug' },
     });
     mockUpdateVisibility.mockResolvedValue(share);
+    mockListEligibleWorks.mockResolvedValue({ hasMore: false, items: [] });
     mockCountShareVisitors.mockResolvedValue({ topicCount: 7, visitorCount: 3 });
+    mockCountAgentShareUsage.mockResolvedValue(0);
     mockGetAgentShareMonthlySpend.mockResolvedValue(null);
     mockGetFeatureFlagsState.mockResolvedValue({ enableAgentShare: true });
   });
@@ -118,11 +202,112 @@ describe('agentShareRouter', () => {
     expect(mockCreate).toHaveBeenCalledWith('agent-1', 'link');
   });
 
+  it.each(['enableShare', 'updateVisibility'] as const)(
+    'rejects unsupported providers through %s before publishing',
+    async (method) => {
+      mockAssertShareModelAllowed.mockRejectedValue(
+        new TRPCError({ code: 'BAD_REQUEST', message: 'Unsupported share provider' }),
+      );
+      const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-1' }));
+      await expect(
+        caller[method]({ agentId: 'agent-1', visibility: 'link' }),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+      expect(mockCreate).not.toHaveBeenCalled();
+      expect(mockUpdateVisibility).not.toHaveBeenCalled();
+    },
+  );
+
+  it('allows disabling a share with an unsupported provider', async () => {
+    mockAssertShareModelAllowed.mockRejectedValue(new Error('Unsupported share provider'));
+    const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-1' }));
+    await expect(
+      caller.updateVisibility({ agentId: 'agent-1', visibility: 'private' }),
+    ).resolves.toEqual(share);
+  });
+
   it('returns null when a personal agent has no share', async () => {
     mockGetByAgentId.mockResolvedValue(null);
     const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-1' }));
 
     await expect(caller.getShareStatus({ agentId: 'agent-1' })).resolves.toBeNull();
+  });
+
+  it('requires Workspace context for administrator audit operations', async () => {
+    const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'admin-1' }));
+
+    await expect(caller.getWorkspaceShareAudit({})).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    });
+    expect(mockListWorkspaceSharesForAudit).not.toHaveBeenCalled();
+  });
+
+  it('returns the Workspace share audit projection and force-disables by share id', async () => {
+    const caller = agentShareRouter.createCaller(
+      await createContextInner({ userId: 'admin-1', workspaceId: 'workspace-1' }),
+    );
+    const shareId = '00000000-0000-4000-8000-000000000001';
+
+    await caller.getWorkspaceShareAudit({ limit: 25, offset: 50 });
+    await caller.forceDisableWorkspaceShare({ shareId });
+
+    expect(mockListWorkspaceSharesForAudit).toHaveBeenCalledWith(expect.anything(), 'workspace-1', {
+      limit: 25,
+      offset: 50,
+    });
+    expect(mockForceDisableWorkspaceShare).toHaveBeenCalledWith(
+      expect.anything(),
+      'workspace-1',
+      shareId,
+      expect.objectContaining({ authorizeMutation: expect.any(Function) }),
+    );
+  });
+
+  it('lists paged owner candidates and carries selected ids for older pages', async () => {
+    const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-1' }));
+    const page = { hasMore: true, items: [{ id: 'older-work' }] };
+    mockListEligibleWorks.mockResolvedValue(page);
+
+    await expect(
+      caller.listEligibleWorks({
+        agentId: 'agent-1',
+        includeWorkIds: ['older-work'],
+        limit: 30,
+        offset: 30,
+      }),
+    ).resolves.toEqual(page);
+    expect(mockListEligibleWorks).toHaveBeenCalledWith('agent-1', {
+      includeWorkIds: ['older-work'],
+      limit: 30,
+      offset: 30,
+    });
+  });
+
+  it('rejects an unauthenticated or non-owner candidate request', async () => {
+    const anonymousCaller = agentShareRouter.createCaller(await createContextInner());
+    await expect(
+      anonymousCaller.listEligibleWorks({ agentId: 'agent-1', includeWorkIds: [] }),
+    ).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
+
+    mockGetByAgentId.mockResolvedValue(null);
+    const visitorCaller = agentShareRouter.createCaller(
+      await createContextInner({ userId: 'visitor-user' }),
+    );
+    await expect(
+      visitorCaller.listEligibleWorks({ agentId: 'agent-1', includeWorkIds: [] }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    expect(mockListEligibleWorks).not.toHaveBeenCalled();
+  });
+
+  it('rejects duplicate selected ids before querying the model', async () => {
+    const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-1' }));
+
+    await expect(
+      caller.listEligibleWorks({
+        agentId: 'agent-1',
+        includeWorkIds: ['same-work', 'same-work'],
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect(mockListEligibleWorks).not.toHaveBeenCalled();
   });
 
   it('forwards an atomic share configuration patch', async () => {
@@ -396,9 +581,13 @@ describe('agentShareRouter', () => {
         userViewCount: 42,
       });
       mockGetAgentShareMonthlySpend.mockResolvedValue(2.5);
+      mockCountAgentShareUsage.mockResolvedValue(3 * 1024 * 1024);
       const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-1' }));
 
       await expect(caller.getShareStats({ agentId: 'agent-1' })).resolves.toEqual({
+        fileStorageUsed: 3 * 1024 * 1024,
+        // Cap missing from a share saved before the field existed → default.
+        maxFileStorage: 512 * 1024 * 1024,
         monthlySpend: 2.5,
         monthlySpendLimit: 10,
         topicCount: 7,
@@ -406,10 +595,27 @@ describe('agentShareRouter', () => {
         visitorCount: 3,
       });
       expect(mockCountShareVisitors).toHaveBeenCalledWith({ agentId: 'agent-1' });
+      // Keyed by the share INSTANCE, not the agent: a share that was turned
+      // off and re-created must not inherit the old instance's bytes.
+      expect(mockCountAgentShareUsage).toHaveBeenCalledWith('share-1');
       expect(mockGetAgentShareMonthlySpend).toHaveBeenCalledWith({
         agentId: 'agent-1',
         ownerUserId: 'user-1',
+        shareId: 'share-1',
+        workspaceId: undefined,
       });
+    });
+
+    it('reports the configured upload cap when the owner has set one', async () => {
+      mockGetByAgentId.mockResolvedValue({
+        ...share,
+        shareConfig: { ...share.shareConfig, maxFileStorage: 0 },
+      });
+      const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-1' }));
+
+      const stats = await caller.getShareStats({ agentId: 'agent-1' });
+
+      expect(stats.maxFileStorage).toBe(0);
     });
 
     it('reports unknown spend as null rather than zero', async () => {

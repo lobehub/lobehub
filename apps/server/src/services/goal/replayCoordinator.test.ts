@@ -1,7 +1,12 @@
 import type { GoalGraphState, GoalTickSnapshot, GoalTrajectory } from '@lobechat/agent-tracing';
 import { describe, expect, it } from 'vitest';
 
-import { replayGoalAgainstCurrentCoordinator } from './replayCoordinator';
+import {
+  coordinatorDecider,
+  fromTraceGraphState,
+  replayGoalAgainstCurrentCoordinator,
+} from './replayCoordinator';
+import { toTraceGraphState } from './traceObservation';
 
 const task = (id: string, overrides: Partial<GoalGraphState['nodes'][number]> = {}) => ({
   createdAt: 1000,
@@ -250,4 +255,12 @@ describe('replaying trajectories recorded before the scheduler', () => {
 
     expect(result.divergences.filter((item) => item.replayed === 'missing_task')).toEqual([]);
   });
+});
+
+it('preserves exploration policy through trace and replay', () => {
+  const state = graphState({ nodes: [task('baseline', { status: 'resolved' })] });
+  state.goal.exploration = { instruction: 'Explore alternatives', maxExperiments: 3 };
+  const roundtrip = toTraceGraphState(fromTraceGraphState(state));
+  expect(roundtrip.goal.exploration).toEqual(state.goal.exploration);
+  expect(coordinatorDecider({ graph: roundtrip }).branch).toBe('explore_graph');
 });

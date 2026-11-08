@@ -1,8 +1,7 @@
 import { Flexbox } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { Outlet } from 'react-router';
-import { SWRConfig } from 'swr';
 
-import SuspenseRouteBoundary from '@/components/SuspenseRouteBoundary';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { RouteSkeletonChromeProvider } from '@/spa/router/routeSkeletonChrome';
 
@@ -15,9 +14,13 @@ const Layout = () => {
   return (
     <>
       <Header />
-      <Flexbox className={styles.mainContainer} height={'100%'} width={'100%'}>
+      <Flexbox
+        className={stylex.props(styles.mainContainer).className}
+        height={'100%'}
+        width={'100%'}
+      >
         <WideScreenContainer
-          className={styles.contentContainer}
+          className={stylex.props(styles.contentContainer).className}
           gap={16}
           minWidth={MAX_WIDTH}
           style={{ paddingBottom: 56, paddingTop: 16 }}
@@ -27,15 +30,11 @@ const Layout = () => {
           }}
         >
           <Flexbox gap={16} style={{ paddingBlockEnd: 40 }} width={'100%'}>
-            <SWRConfig value={{ suspense: true }}>
-              <SuspenseRouteBoundary>
-                <RouteSkeletonChromeProvider>
-                  <Outlet />
-                </RouteSkeletonChromeProvider>
-              </SuspenseRouteBoundary>
-            </SWRConfig>
+            <RouteSkeletonChromeProvider>
+              <Outlet />
+            </RouteSkeletonChromeProvider>
           </Flexbox>
-          <div className={styles.spacer} />
+          <div {...stylex.props(styles.spacer)} />
           <Footer />
         </WideScreenContainer>
       </Flexbox>

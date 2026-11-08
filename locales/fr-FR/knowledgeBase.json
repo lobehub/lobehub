@@ -9,6 +9,7 @@
   "addToKnowledgeBase.title": "Ajouter à la bibliothèque",
   "addToKnowledgeBase.totalFiles": "{{count}} fichiers sélectionnés",
   "createNew.confirm": "Créer",
+  "createNew.cover.label": "Couverture",
   "createNew.description.label": "Description de la bibliothèque (facultatif)",
   "createNew.description.placeholder": "La description aide le LLM à mieux comprendre votre bibliothèque",
   "createNew.edit.confirm": "Enregistrer les modifications",

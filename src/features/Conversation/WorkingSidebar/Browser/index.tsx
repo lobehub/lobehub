@@ -1,8 +1,17 @@
 import { isDesktop } from '@lobechat/const';
 import { nanoid } from '@lobechat/utils';
-import { Center, Empty, Flexbox, Icon, Input } from '@lobehub/ui';
-import { ActionIcon, Button, Text, toast } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import {
+  ActionIcon,
+  Button,
+  Center,
+  createStaticStyles,
+  Empty,
+  Flexbox,
+  Icon,
+  Input,
+  Text,
+  toast,
+} from '@lobehub/ui';
 import {
   Camera,
   ChevronLeft,
@@ -233,7 +242,8 @@ const BrowserPane = memo<BrowserPaneProps>((props) => {
   };
 
   const addScreenshotToInput = async () => {
-    if (isCapturing || !agentId) return;
+    if (isCapturing || !agentId || !composerTarget.writable) return;
+    const { contextKey } = composerTarget;
     setIsCapturing(true);
     try {
       const result = await electronBrowserSidebarService.captureScreenshot({ sessionId });
@@ -245,7 +255,7 @@ const BrowserPane = memo<BrowserPaneProps>((props) => {
       const file = dataUrlToFile(result.dataUrl, buildScreenshotFileName(result.title));
       // The attachment appears in the input immediately (pending state); the
       // upload itself reports its own progress and errors.
-      void useFileStore.getState().uploadChatFiles([file], agentId);
+      void useFileStore.getState().uploadChatFiles(contextKey, [file], agentId);
       toast.success(t('workingPanel.browser.actions.captured'));
       focusChatInput();
     } catch (error) {
@@ -426,7 +436,7 @@ const BrowserPane = memo<BrowserPaneProps>((props) => {
             }
           />
           <ActionIcon
-            disabled={!state.attached || !agentId}
+            disabled={!state.attached || !agentId || !composerTarget.writable}
             icon={Camera}
             loading={isCapturing}
             size={DESKTOP_HEADER_ICON_SMALL_SIZE}

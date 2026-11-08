@@ -1,11 +1,13 @@
 import type {
+  DocumentCommentAnchorList,
   DocumentCommentDetail,
   DocumentCommentItem,
   DocumentCommentReplyPage,
+  DocumentCommentSelectionAnchor,
   DocumentCommentSummary,
   DocumentCommentThreadPage,
 } from '@lobechat/types';
-import { useCallback } from 'react';
+import { useCallback, useEffect } from 'react';
 import useSWRInfinite from 'swr/infinite';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
@@ -23,13 +25,43 @@ import {
 } from './optimistic';
 
 const PAGE_SIZE = 20;
+/**
+ * The gutter needs every anchored thread mounted at once (each card sits at
+ * its own height), so its pages are fetched at the router's cap and drained
+ * in the background rather than behind a "load more" button.
+ */
+const ANCHORED_PAGE_SIZE = 50;
 
-const fetchThreads = ([, , documentId, cursor]: readonly string[]) =>
-  documentCommentService.listThreads({
+export type DocumentCommentThreadScope = 'all' | 'anchored' | 'document';
+
+/**
+ * Keeps a page to its scope's own subset even when the backend ignored the
+ * `anchored` parameter — a production server predating it strips the unknown
+ * key and answers both scopes with the same mixed pages (the documented debug
+ * proxy runs the latest SPA against exactly that). Without this, the two
+ * caches overlap and the list below the body renders every such thread
+ * twice. The cursor still walks the server's own order, so paging stays
+ * consistent; a page may just carry fewer items than asked for.
+ */
+export const partitionThreadPage = (
+  page: DocumentCommentThreadPage,
+  scope: DocumentCommentThreadScope,
+): DocumentCommentThreadPage => {
+  if (scope === 'all') return page;
+  const wantsAnchored = scope === 'anchored';
+  const items = page.items.filter(({ root }) => Boolean(root.selectionAnchor) === wantsAnchored);
+  return items.length === page.items.length ? page : { ...page, items };
+};
+
+const fetchThreads = async ([, , documentId, cursor, scope]: readonly string[]) => {
+  const page = await documentCommentService.listThreads({
+    anchored: scope === 'all' ? undefined : scope === 'anchored',
     cursor: cursor || undefined,
     documentId,
-    limit: PAGE_SIZE,
+    limit: scope === 'anchored' ? ANCHORED_PAGE_SIZE : PAGE_SIZE,
   });
+  return partitionThreadPage(page, scope as DocumentCommentThreadScope);
+};
 
 const fetchReplies = ([, , rootCommentId, cursor]: readonly string[]) =>
   documentCommentService.listReplies({
@@ -91,6 +123,7 @@ export const useOptimisticDocumentComment = () => {
       editorData,
       parentCommentId,
       replyTo,
+      selectionAnchor,
     }: {
       clientId: string;
       content: string;
@@ -98,6 +131,7 @@ export const useOptimisticDocumentComment = () => {
       editorData: DocumentCommentItem['editorData'];
       parentCommentId?: string;
       replyTo?: DocumentCommentItem['replyTo'];
+      selectionAnchor?: DocumentCommentSelectionAnchor;
     }) => {
       if (!workspaceId) throw new Error('Workspace is required for document comments');
 
@@ -115,6 +149,7 @@ export const useOptimisticDocumentComment = () => {
         editorData,
         parentCommentId,
         replyTo,
+        selectionAnchor,
         userId: user?.id ?? null,
         workspaceId,
       });
@@ -123,7 +158,46 @@ export const useOptimisticDocumentComment = () => {
   );
 };
 
-export const useDocumentCommentThreads = (documentId?: string | null) => {
+/**
+ * Every anchored root of the document, independent of how many thread pages
+ * the list has loaded. Body highlights are painted from this so a
+ * newer anchored comment is discoverable from the document right after a
+ * reload, not only once the reader has paged the list far enough to reach it.
+ */
+export const useDocumentCommentAnchorList = (documentId?: string | null) => {
+  const workspaceId = useActiveWorkspaceId();
+  return useClientDataSWR<DocumentCommentAnchorList>(
+    documentId && workspaceId ? documentCommentKeys.anchors(workspaceId, documentId) : null,
+    () => documentCommentService.listAnchors(documentId!),
+  );
+};
+
+/**
+ * How many pages of anchored threads the gutter fetches ahead of demand while
+ * it is open, so the cards beside the text are there for the runs a reader
+ * is most likely looking at. Anything past it stays paginated: a highlight
+ * whose thread is not loaded is still painted (from the anchor list) and
+ * fetches its own thread on pick, and the list below the body pages the rest.
+ */
+export const ANCHORED_EAGER_PAGE_LIMIT = 4;
+
+/** The page count to request next while draining ahead of demand, capped at `limit`. */
+export const nextEagerPageCount = (current: number, limit: number) =>
+  current < limit ? current + 1 : current;
+
+export const useDocumentCommentThreads = (
+  documentId?: string | null,
+  scope: DocumentCommentThreadScope = 'all',
+  {
+    eagerPageLimit = 0,
+  }: {
+    /**
+     * Pages to fetch ahead of demand, one after another, without the reader
+     * asking; `0` (the default) leaves paging entirely to `loadMore`.
+     */
+    eagerPageLimit?: number;
+  } = {},
+) => {
   const workspaceId = useActiveWorkspaceId();
   const getKey = useCallback(
     (_index: number, previous: DocumentCommentThreadPage | null) => {
@@ -132,25 +206,38 @@ export const useDocumentCommentThreads = (documentId?: string | null) => {
         workspaceId,
         documentId,
         previous?.nextCursor ?? undefined,
+        scope,
       );
     },
-    [documentId, workspaceId],
+    [documentId, scope, workspaceId],
   );
   const response = useSWRInfinite<DocumentCommentThreadPage>(getKey, fetchThreads, {
     revalidateFirstPage: false,
   });
+  const pagination = getPaginationState(
+    response.data,
+    response.error,
+    response.isLoading,
+    response.isValidating,
+    response.size,
+  );
+  const { setSize, size } = response;
+  const { hasMore, isLoadingMore } = pagination;
+
+  // Fetch ahead of demand up to the caller's budget: for the gutter, a card
+  // it has not loaded is a highlight with nothing beside it. The budget keeps
+  // a document with hundreds of anchored roots from mounting every one of
+  // them (twice — gutter and list) before the reader has looked at any.
+  useEffect(() => {
+    if (!hasMore || isLoadingMore || size >= eagerPageLimit) return;
+    void setSize((current) => nextEagerPageCount(current, eagerPageLimit));
+  }, [eagerPageLimit, hasMore, isLoadingMore, setSize, size]);
 
   return {
     ...response,
-    ...getPaginationState(
-      response.data,
-      response.error,
-      response.isLoading,
-      response.isValidating,
-      response.size,
-    ),
+    ...pagination,
     items: flattenDocumentCommentThreads(response.data),
-    loadMore: () => response.setSize((current) => current + 1),
+    loadMore: () => setSize((current) => current + 1),
     reload: () => response.mutate(),
   };
 };

@@ -16,19 +16,40 @@ dayjs.extend(utc);
 dayjs.extend(timezonePlugin);
 
 const FALLBACK_TIMEZONE = 'UTC';
-const NIGHT_WINDOW_START_HOUR = 2;
-const NIGHT_WINDOW_END_HOUR_EXCLUSIVE = 4;
+
+/**
+ * Nightly jobs that share the scheduler: the Agent Signal self-review, and the retro a bot agent
+ * writes about its day on chat platforms. Each reviews the previous local day.
+ */
+export type NightlyJob = 'bot-retro' | 'self-review';
+
+/** Local hours (start inclusive, end exclusive) in which each nightly job runs. */
+export const NIGHT_WINDOW_HOURS: Record<NightlyJob, { endExclusive: number; start: number }> = {
+  'bot-retro': { endExclusive: 6, start: 4 },
+  'self-review': { endExclusive: 4, start: 2 },
+};
 
 /**
  * How far back the candidate scan looks for user activity.
  *
  * A user is dispatched only if their local previous day had activity, and that day can start
- * at most `NIGHT_WINDOW_END_HOUR_EXCLUSIVE + 24` hours before the cron instant. Rounding up
- * keeps the floor a strict superset of every per-user window regardless of timezone.
+ * at most `endExclusive + 24` hours before the cron instant. Taking the latest window keeps the
+ * floor a strict superset of every per-user window of every job regardless of timezone.
  */
-const ACTIVITY_LOOKBACK_HOURS = 30;
+const ACTIVITY_LOOKBACK_HOURS =
+  Math.max(...Object.values(NIGHT_WINDOW_HOURS).map((window) => window.endExclusive)) + 24;
 
 const HOUR_IN_MS = 60 * 60 * 1000;
+
+/**
+ * Hours added on each side of the night window for the SQL local-hour prefilter.
+ *
+ * PostgreSQL resolves timezones with its own tzdata build, which can lag `Intl` by an offset
+ * change. Widening the SQL window keeps it a strict superset of the exact `Intl` window that
+ * {@link getLocalNightWindow} re-applies, so a tzdata disagreement can cost a skipped row in this
+ * page but never a missed review.
+ */
+const SQL_PREFILTER_SLACK_HOURS = 1;
 
 /** Active agent target returned by the nightly review scheduler data boundary. */
 export interface NightlyReviewAgentTarget {
@@ -62,6 +83,19 @@ export interface ListNightlyReviewEligibleUsersInput {
   cursor?: NightlyReviewScheduleCursor;
   /** Maximum eligible users to return. */
   limit?: number;
+  /**
+   * Coarse local-hour prefilter pushed into the user scan.
+   *
+   * Always a superset of the exact night window; the service re-checks the exact window after.
+   */
+  localHourWindow?: {
+    /** UTC instant whose local hour is evaluated. */
+    at: Date;
+    /** Exclusive local hour upper bound. */
+    endHourExclusive: number;
+    /** Inclusive local hour lower bound. */
+    startHour: number;
+  };
   /** Optional allowlist for targeted backfills or tests. */
   whitelist?: string[];
 }
@@ -100,6 +134,12 @@ export interface NightlyReviewScheduleAdapters {
 
 /** Options for listing exactly one page of nightly review user candidates. */
 export interface ListNightlyReviewEligibleUsersPageOptions extends ListNightlyReviewEligibleUsersInput {
+  /**
+   * Job whose local night window the page is filtered to.
+   *
+   * @default 'self-review'
+   */
+  job?: NightlyJob;
   /** Maximum eligible users returned by this page. */
   limit: number;
   /** UTC instant shared by the whole pagination tree, used to narrow the candidate scan. */
@@ -162,18 +202,21 @@ export interface NightlyReviewScheduleService {
    * Expects:
    * - `limit` is a positive, externally bounded page size
    * - The adapter sorts users by `createdAt, id`
-   * - `requestedAt` narrows the scan to users with recent activity;
-   *   {@link dispatchNightlyReviewForUser} remains the only authority on the local window
+   * - `requestedAt` narrows the scan to users with recent activity whose local clock is inside
+   *   the night window; {@link dispatchNightlyReviewForUser} re-checks the window as a second gate
    *
    * Returns:
-   * - The current users and a next cursor only when the page is full
+   * - Only users inside their night window (the adapter already dropped users whose Labs →
+   *   Self-evolving switch is off), and a next cursor whenever the scanned page was full (even if
+   *   every scanned user was filtered out)
    */
   listEligibleUsersPage: (
     options: ListNightlyReviewEligibleUsersPageOptions,
   ) => Promise<NightlyReviewEligibleUsersPage>;
 }
 
-interface LocalNightWindow {
+/** One user's review day and whether their local clock is inside a job's night window. */
+export interface LocalNightWindow {
   localDate: string;
   reviewWindowEnd: Date;
   reviewWindowStart: Date;
@@ -194,7 +237,17 @@ const resolveTimezone = (timezone: string | null | undefined): string => {
   }
 };
 
-const getLocalNightWindow = (now: Date, timezone: string | null | undefined): LocalNightWindow => {
+/**
+ * Resolves the previous local day under review and whether `now` falls in the job's night window.
+ *
+ * Invalid or missing timezones fall back to UTC.
+ */
+export const getLocalNightWindow = (
+  now: Date,
+  timezone: string | null | undefined,
+  job: NightlyJob = 'self-review',
+): LocalNightWindow => {
+  const hours = NIGHT_WINDOW_HOURS[job];
   const resolvedTimezone = resolveTimezone(timezone);
   const localNow = dayjs(now).tz(resolvedTimezone);
   const reviewDate = localNow.subtract(1, 'day').format('YYYY-MM-DD');
@@ -206,8 +259,7 @@ const getLocalNightWindow = (now: Date, timezone: string | null | undefined): Lo
     reviewWindowEnd: localDayStart.toDate(),
     reviewWindowStart: localDayStart.subtract(1, 'day').toDate(),
     timezone: resolvedTimezone,
-    withinWindow:
-      localHour >= NIGHT_WINDOW_START_HOUR && localHour < NIGHT_WINDOW_END_HOUR_EXCLUSIVE,
+    withinWindow: localHour >= hours.start && localHour < hours.endExclusive,
   };
 };
 
@@ -316,24 +368,45 @@ export const createSelfReviewScheduleService = (
         },
         async (span) => {
           try {
-            const users = await adapters.listEligibleUsers({
-              ...options,
+            const { job = 'self-review', ...listOptions } = options;
+            const { requestedAt } = options;
+            const hours = NIGHT_WINDOW_HOURS[job];
+            const scannedUsers = await adapters.listEligibleUsers({
+              ...listOptions,
               // Without `requestedAt` the caller is a test or a legacy path; fall back to the
               // unnarrowed scan rather than inventing a floor from wall-clock time.
-              ...(options.requestedAt
+              ...(requestedAt
                 ? {
                     activeSince: new Date(
-                      options.requestedAt.getTime() - ACTIVITY_LOOKBACK_HOURS * HOUR_IN_MS,
+                      requestedAt.getTime() - ACTIVITY_LOOKBACK_HOURS * HOUR_IN_MS,
                     ),
+                    localHourWindow: {
+                      at: requestedAt,
+                      endHourExclusive: hours.endExclusive + SQL_PREFILTER_SLACK_HOURS,
+                      startHour: hours.start - SQL_PREFILTER_SLACK_HOURS,
+                    },
                   }
                 : {}),
             });
-            const lastUser = users.at(-1);
+            // The cursor follows the scanned rows, not the filtered ones: a page whose users are
+            // all filtered out must still hand the traversal on to the next page.
+            const lastUser = scannedUsers.at(-1);
             const nextCursor =
-              users.length === options.limit && lastUser
+              scannedUsers.length === options.limit && lastUser
                 ? { createdAt: lastUser.createdAt, id: lastUser.id }
                 : undefined;
 
+            const users = requestedAt
+              ? scannedUsers.filter(
+                  (user) => getLocalNightWindow(requestedAt, user.timezone, job).withinWindow,
+                )
+              : scannedUsers;
+
+            span.setAttribute('agent.signal.nightly.scanned_user_count', scannedUsers.length);
+            span.setAttribute(
+              'agent.signal.nightly.outside_window_count',
+              scannedUsers.length - users.length,
+            );
             span.setAttribute('agent.signal.nightly.user_count', users.length);
             span.setAttribute('agent.signal.nightly.has_next_page', Boolean(nextCursor));
             span.setStatus({ code: SpanStatusCode.OK });
@@ -394,6 +467,7 @@ export const createServerNightlyReviewScheduleService = (
         activeSince: input?.activeSince,
         cursor: input?.cursor,
         limit: input?.limit,
+        localHourWindow: input?.localHourWindow,
         whitelist: input?.whitelist,
       }),
   });

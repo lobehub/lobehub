@@ -6,15 +6,24 @@ skill reads it — it never guesses LobeHub's commands.
 
 Its two siblings:
 
-- [`PROCESS.md`](./PROCESS.md) — the run process (approval gate, execution rules,
+- [`PROCESS.md`](./PROCESS.md) — the run process (plan gate, execution rules,
   publishing, teardown).
 - `.agents/skills/acceptance/` — the portable skill: what a check, evidence,
-  report, and round are. In this repository that path is a symlink onto the
-  skill's source, `packages/builtin-skills/src/acceptance/`.
+  report, and round are. This is a committed, generated snapshot of
+  [`lobehub/acceptance`](https://github.com/lobehub/acceptance), the only maintenance
+  source. Update it from the repository's current default branch with
+  `bun apps/cli/src/index.ts acceptance update --json`, then review and commit the
+  downloaded files. The JSON records the exact source commit; publishing a tag
+  or release is not required. Do not hand-edit this installed copy.
+  `.claude/skills` shares `.agents/skills`.
 
-Every script referenced below lives under `.agents/acceptance/scripts/`, including
-the generic capture toolchain (`report-init.sh`, `cdp-screenshot.sh`,
-`record-gif.sh`, `check-screen-recording.sh`, …).
+Project helpers (`report-init.sh`, `record-gif.sh`, `capture-app-window.sh`, …)
+live under `.agents/acceptance/scripts/`. Generic CDP capture and screen-recording
+preflight live only under `.agents/skills/acceptance/scripts/`; invoke their shell
+scripts with `bash`. See the installed skill's
+[`screenshot-helpers.md`](../skills/acceptance/references/screenshot-helpers.md)
+for commands, prerequisites, and exit codes. Do not copy these implementations
+into the project layer.
 
 ## 1. Project summary
 
@@ -44,6 +53,10 @@ stale standalone install: a recently added workspace package fails to resolve �
   - With repo-root `.env` present: use the existing local config — `bun run dev`
     (full-stack, needed for Web smoke) or `AGENT_RUNTIME_MODE=queue pnpm run dev:next`
     (backend only). Do NOT call any `init-dev-env.sh` subcommand when `.env` exists.
+    If that `.env` config does not boot (expired credentials, schema behind
+    the checkout, `setup-auth.sh` refusing to seed), do not repair it in place —
+    open a clean `git worktree` with no root `.env` and use the bootstrap below
+    ([dev-server.md](./references/dev-server.md#root-env-exists-but-does-not-boot)).
   - Without `.env`: use the skill-owned bootstrap `.agents/acceptance/scripts/init-dev-env.sh`
     (Postgres, Redis, migrations, auth/key-vault/S3 test env, seed user, then the
     repo's own dev server — not `e2e/scripts/setup.ts`). It hard-blocks when
@@ -115,7 +128,7 @@ stale standalone install: a recently added workspace package fails to resolve �
   Default script env (no-`.env` bootstrap): `APP_URL=http://localhost:3010`,
   `DATABASE_URL=postgresql://postgres:postgres@localhost:5433/postgres`,
   `DATABASE_DRIVER=node`, `AGENT_RUNTIME_MODE=queue`,
-  `REDIS_URL=redis://localhost:6380`, `FEATURE_FLAGS=-agent_self_iteration`,
+  `REDIS_URL=redis://localhost:6380`, an empty `FEATURE_FLAGS`,
   `KEY_VAULTS_SECRET`, `AUTH_SECRET`, auth verification off, a generated
   `JWKS_KEY` (persisted at `.records/env/agent-testing-jwks.json`, required by every
   async-task dispatch such as image generation), `SSRF_ALLOW_PRIVATE_IP_ADDRESS=1`
@@ -177,17 +190,30 @@ stale standalone install: a recently added workspace package fails to resolve �
 - Invocation: from source, no rebuild — `cd apps/cli && bun src/index.ts <cmd>`
   (referred to as `$CLI`). CLI-side code changes take effect immediately.
 
-- Auth: see §3 CLI. Source the seeded profile first:
-  `source .records/env/agent-testing-cli.env`. It sets `LOBE_API_KEY` /
-  `LOBEHUB_CLI_API_KEY`, `LOBEHUB_SERVER=http://localhost:3010`, and
-  `LOBEHUB_CLI_HOME=.lobehub-dev` for isolated settings.
+- Auth: see §3 CLI. Load `.records/env/agent-testing-cli.env` only inside the
+  local-test subshell below. It sets `LOBE_API_KEY` / `LOBEHUB_CLI_API_KEY`,
+  `LOBEHUB_SERVER=http://localhost:3010`, and `LOBEHUB_CLI_HOME=.lobehub-dev`
+  for isolated settings.
 
-- **Local-run vs publish env distinction:** those seeded overrides are for
-  _running_ the local backend test. They are WRONG for _publishing_ — a localhost
-  run yields a verify URL nobody else can open, and the local stub S3 makes
-  evidence upload fail. Strip them for the publish step (the skill's Step 6 does
-  `env -u LOBEHUB_SERVER -u LOBE_API_KEY -u LOBEHUB_CLI_API_KEY -u LOBEHUB_CLI_HOME lh verify ingest-report …`
-  so `lh` uses production defaults + the user's real `~/.lobehub` login).
+- **Local-run vs publish env distinction:** seeded credentials are only for the
+  local backend. Load the test profile inside a subshell so it does not overwrite
+  production credentials in the parent shell; remove any inherited production
+  JWT inside that subshell because it would override the seeded API key:
+
+  ```bash
+  (
+    unset LOBEHUB_JWT
+    source .records/env/agent-testing-cli.env
+    lh whoami
+    # Run the local CLI test commands here.
+  )
+  ```
+
+  For publication or existing-round lookup, follow
+  [Publish auth preflight](PROCESS.md#publish-auth-preflight). Preserve known
+  production credentials; do not blindly clear API keys or assume `~/.lobehub`
+  contains a login. Never change only the server URL while retaining a local
+  test credential.
 
 - Standalone install: `cd apps/cli && pnpm install` (root install does not cover it).
 
@@ -196,13 +222,15 @@ stale standalone install: a recently added workspace package fails to resolve �
   edited-file cards, works, topic content), drive the run with
 
   ```bash
-  lh agent run -a local --sse --json -p '<prompt>' [-t < agentId > --device < topicId > ]
+  lh agent run -a <agentId> --json -p '<prompt>' [-t <topicId>] [--device local]
   ```
 
-  and use the browser only to capture the rendered evidence afterwards. `--sse`
-  is REQUIRED against a local dev server — without it the run dies with
-  `Gateway auth failed: signature verification failed` (local agent-gateway
-  JWKS mismatch; see `references/probe-field-notes.md` E43). `--json` gives assertable
+  and use the browser only to capture the rendered evidence afterwards. CLI
+  streaming uses the agent gateway WebSocket only. For local runs, configure
+  both the backend and CLI to use the same local `AGENT_GATEWAY_URL`, with
+  matching service-token and local JWT verification configuration (see
+  `references/agent-gateway.md`). The production gateway cannot verify local
+  JWT signatures; there is no SSE fallback. `--json` gives assertable
   output; reuse `-t` to chain multi-step cases in one topic. This is faster and
   far more deterministic than typing prompts through agent-browser, and the
   server-side state it produces is identical.
@@ -222,10 +250,16 @@ stale standalone install: a recently added workspace package fails to resolve �
 - SPA proxying note: Web smoke needs the full-stack `dev` so Next proxies the
   SPA HTML from Vite; `dev-next` alone will not serve the SPA.
 
-- Local frontend against production backend: `bun run dev:spa` prints a
-  `_dangerous_local_dev_proxy` URL that loads your local Vite SPA inside the
-  online environment (HMR against real server config) — for verifying frontend
-  behavior against production data only, NOT for testing backend branch changes.
+- **Verify against a branch-running environment, not the production proxy:**
+  `bun run dev:spa` prints a `_dangerous_local_dev_proxy` URL that loads your
+  local Vite SPA inside the online environment (HMR against real server config).
+  That is a development convenience: it serves your local frontend over
+  production's backend, origin, and data. Its output is **never acceptance
+  evidence**, and it does not prove the delivered branch. Verify Web changes in
+  the local full-stack dev server (`$SERVER_URL`, default `http://localhost:3010`),
+  or a frontend-only change in Electron (`PROCESS.md` Step 3). If a criterion
+  cannot be exercised in an environment that runs the delivered branch, record
+  that check `blocked` and report the gap — do not substitute the proxy for it.
 
 ### Electron
 
@@ -252,54 +286,15 @@ stale standalone install: a recently added workspace package fails to resolve �
   `agent-browser --session s<port> --cdp <port>`. Pool design, the collision
   matrix, and the login-copy recipe: `.agents/acceptance/references/multi-instance.md`.
 
-#### Official heterogeneous-provider compatibility matrix
+### Heterogeneous-agent compatibility (project skill)
 
-Use `heterogeneous-agent-official-smoke.mjs` to exercise every model currently
-advertised by the server for Claude Code, Codex, Grok Build, Kimi Code, Pi, and TRAE.
-It tests only LobeHub's official `server-default` provider binding; user-defined
-providers and their API keys are outside this matrix.
-
-```bash
-HARNESS=.agents/acceptance/scripts/heterogeneous-agent-official-smoke.mjs
-
-# Read the live matrix and probe already-installed CLI versions. No model calls.
-node "$HARNESS" list --agent claude-code,codex --model MODEL_ID
-
-# Run selected cells sequentially through the real Desktop IPC + official relay.
-node "$HARNESS" run --confirm-live --topic-id TOPIC_ID --cdp 9222
-```
-
-The filters, topic id, and non-default CDP port are optional when the current
-Electron window already provides the intended scope.
-
-- Prerequisites: an already-running, signed-in Electron instance and either an
-  active personal topic or `--topic-id`. Use the Electron commands above to
-  start and authenticate the app.
-- The server's live `getServerDefaultHeterogeneousCapability` response is the
-  source of truth; model ids are not hard-coded in the harness.
-- The harness invokes no installer, updater command, or sign-in flow. Detection
-  does execute existing CLIs with version/help flags. To also suppress Claude
-  Code's own background update checks during detection, start or restart the
-  Electron instance with
-  `DISABLE_AUTOUPDATER=1 DISABLE_UPDATES=1 .agents/acceptance/scripts/electron-dev.sh start`.
-  Claude cells receive both variables independently as session environment.
-  Every model for a missing CLI is recorded as `blocked` without invoking an
-  installer/updater.
-- `run` makes real official-provider requests, consumes usage, and creates
-  server operation records. This is why `--confirm-live` is mandatory. It does
-  not persist chat messages because the harness listens to the direct IPC stream.
-  By default, CLIs run in an isolated workspace inside the report directory
-  rather than in the repository; use `--cwd` only when a specific project is
-  part of the compatibility claim.
-- Each cell starts idempotently inside the renderer and is observed with short
-  host-side polls. Do not collapse this into one long `agent-browser eval`:
-  long evaluations can be re-evaluated after roughly 30 seconds, duplicating
-  live requests and operation ids.
-- The local structured report lands under
-  `.records/reports/<timestamp>-heterogeneous-official-provider-smoke/` unless
-  `--report-dir` is supplied. It is not published automatically.
-- Exit codes: `0` all cells passed; `1` at least one failed; `2` no failures but
-  at least one blocked; `3` Electron/auth/capability preflight failed.
+The live official-provider model matrix belongs to the
+`testing-heterogeneous-agents` project skill
+(`.agents/skills/testing-heterogeneous-agents/`). It extends Acceptance with the
+matrix semantics and harness while reusing the Electron environment, auth, and
+CDP commands above. It is manual-only: the user must explicitly invoke
+`/testing-heterogeneous-agents` in Claude Code or `$testing-heterogeneous-agents`
+in Codex. Do not automatically load or run it during other acceptance tasks.
 
 ### Bot channels (project skill)
 
@@ -352,6 +347,47 @@ closed-loop probe/dump/analyze tooling lives at
 `.agents/acceptance/scripts/agent-gateway/`; the closed-loop + JWKS setup workflow is
 in `.agents/acceptance/references/agent-gateway.md`.
 
+`.agents/acceptance/scripts/acceptance-guard.sh` bounds a run's memory. It wraps the
+skill's [resource guard](../skills/acceptance/references/resource-guard.md) with this
+repository's groups and thresholds and pins a per-run state directory, so a round
+that boots a browser, a dev server and type-check workers cannot swap the host out
+and freeze the client driving the run. Run and teardown discipline:
+[`PROCESS.md`](./PROCESS.md) Step 4 and Step 6.
+
+```bash
+GUARD=.agents/acceptance/scripts/acceptance-guard.sh
+export ACCEPTANCE_RUN_TAG="acceptance-<subject>-<timestamp>-$$"   # required
+
+bash "$GUARD" start                     # before the first heavy command
+bash "$GUARD" claim <pid>...            # a process this run started
+bash "$GUARD" claim-browser <session>   # the browser behind an agent-browser session
+bash "$GUARD" check --json              # 0 green, 10 yellow, 20 red, 2 unknown/error
+bash "$GUARD" status --json             # samples, tiers, recorded stops
+bash "$GUARD" stop                      # teardown, always
+```
+
+| Setting                   | Default                                       | Why                                                        |
+| ------------------------- | --------------------------------------------- | ---------------------------------------------------------- |
+| `ACCEPTANCE_RUN_TAG`      | — (required)                                  | Proves ownership; must be ≥ 8 chars and `[A-Za-z0-9._-]+`  |
+| `ACCEPTANCE_GUARD_DIR`    | `${TMPDIR:-/tmp}/lobe-acceptance/guard/<tag>` | Keeps the run's samples and claims out of the working tree |
+| `ACCEPTANCE_GUARD_YELLOW` | `swap=60,free=20`                             | Linux host warning thresholds                              |
+| `ACCEPTANCE_GUARD_RED`    | `swap=80,free=8`                              | Linux host stop thresholds                                 |
+
+Thresholds are host-level on purpose. The groups (`Google Chrome for Testing`,
+`next-server|vite`, `tsrs`) also match other worktrees' servers and other runs'
+browsers — five such processes held \~20 GB here — so a group or total RSS cap turns a
+merely busy machine red and stops a healthy run. The groups select what
+`stop-owned` may stop; they do not determine this adapter's tier.
+
+On **macOS**, kernel pressure (`kern.memorystatus_vm_pressure_level`: 1 normal,
+2 warning, 4 critical) determines the tier. Free-page and swap percentages are
+diagnostics only: neither low unused RAM nor a high fraction of dynamically
+allocated swap proves exhaustion. Three consecutive red samples are required
+before automatic termination. Unknown pressure exits 2 and never kills processes.
+On **Linux**, the existing `MemAvailable` and swap thresholds apply; cgroup/PSI
+support is not implemented. Native Windows is unsupported. See the skill's
+[platform policy](../skills/acceptance/references/resource-guard.md#platform-policy).
+
 ## 6. Known constraints
 
 - **QStash is a hard prerequisite for ANY agent-runtime test.** Any test that
@@ -368,9 +404,9 @@ in `.agents/acceptance/references/agent-gateway.md`.
   .agents/acceptance/scripts/init-dev-env.sh preflight # non-zero exit if QStash (or Redis) is down
   ```
 
-  `FEATURE_FLAGS=-agent_self_iteration` only drops the self-iteration workflow
-  (so a simple chat does not fan out); it does NOT remove QStash from the
-  agent-runtime dispatch path. Treat QStash as required, not an "only-for-workflow"
+  Background self-iteration only runs for users who turned on Labs →
+  Self-evolving (off for new users), so a simple chat does not fan out; that
+  does NOT remove QStash from the agent-runtime dispatch path. Treat QStash as required, not an "only-for-workflow"
   nicety.
 
 - **Verify which runtime actually ran — do not assume.** Some features have two
@@ -393,7 +429,7 @@ in `.agents/acceptance/references/agent-gateway.md`.
 - **OS-capture surfaces are macOS-only** (bot channels, `capture-app-window.sh`,
   osascript screenshots): they come out black without Screen Recording (TCC)
   permission or when the display is asleep/locked. CDP-based evidence
-  (`agent-browser screenshot`, `.agents/acceptance/scripts/cdp-screenshot.sh`) is
+  (`agent-browser screenshot`, `bash .agents/skills/acceptance/scripts/cdp-screenshot.sh`) is
   unaffected. Electron runs on Linux/cloud only under `xvfb-run`, and there OS
   capture does not work — prefer CDP evidence for cloud-portable runs.
 

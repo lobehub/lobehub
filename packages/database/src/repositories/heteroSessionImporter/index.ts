@@ -59,6 +59,17 @@ export class HeteroSessionImporterRepo {
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, cols);
 
   /**
+   * Identity probes must see trashed rows because clientId uniqueness still
+   * covers them. This never feeds a product read; it only prevents a retry
+   * from treating an existing database identity as insertable.
+   */
+  private identityScopeWhere = (cols: { userId: any; workspaceId: any }) =>
+    buildWorkspaceWhere(
+      { includeTrashed: true, userId: this.userId, workspaceId: this.workspaceId },
+      cols,
+    );
+
+  /**
    * The agent's heterogeneous runtime type (`claude-code`, `codex`, …), pinned
    * onto every topic this importer creates. Resolved once per batch: it is the
    * same agent for the whole call, and every reader that attributes a topic to
@@ -111,9 +122,15 @@ export class HeteroSessionImporterRepo {
 
       // 1. find or create the topic by clientId within the active scope
       const [existingTopic] = await tx
-        .select({ id: topics.id, metadata: topics.metadata })
+        .select({ id: topics.id, isDeleted: topics.isDeleted, metadata: topics.metadata })
         .from(topics)
-        .where(and(eq(topics.clientId, session.topicClientId), this.scopeWhere(topics)));
+        .where(and(eq(topics.clientId, session.topicClientId), this.identityScopeWhere(topics)));
+
+      if (existingTopic?.isDeleted === true) {
+        throw new Error(
+          `session ${session.sessionId} is already imported into a trashed topic; restore it before syncing`,
+        );
+      }
 
       // the (clientId, userId) unique index makes one session = one topic per
       // user GLOBALLY — if it exists outside the active scope, appending there
@@ -170,7 +187,7 @@ export class HeteroSessionImporterRepo {
               threadId: messages.threadId,
             })
             .from(messages)
-            .where(and(eq(messages.topicId, topicId), this.scopeWhere(messages)))
+            .where(and(eq(messages.topicId, topicId), this.identityScopeWhere(messages)))
         : [];
       const clientIdToDbId = new Map<string, string>();
       for (const row of existingRows) if (row.clientId) clientIdToDbId.set(row.clientId, row.id);
@@ -202,7 +219,7 @@ export class HeteroSessionImporterRepo {
         const [existingThread] = await tx
           .select({ id: threads.id })
           .from(threads)
-          .where(and(eq(threads.clientId, thread.clientId), this.scopeWhere(threads)));
+          .where(and(eq(threads.clientId, thread.clientId), this.identityScopeWhere(threads)));
 
         let threadId = existingThread?.id;
         if (!threadId) {

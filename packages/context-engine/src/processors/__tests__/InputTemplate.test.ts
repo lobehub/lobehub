@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { createContext } from '../../testUtils';
 import { InputTemplateProcessor } from '../InputTemplate';
 
 describe('InputTemplateProcessor', () => {
@@ -8,36 +9,22 @@ describe('InputTemplateProcessor', () => {
       inputTemplate: 'Template: {{text}} - End',
     });
 
-    const context = {
-      initialState: {
-        messages: [],
-        model: 'gpt-4',
-        provider: 'openai',
-        systemRole: '',
-        tools: [],
+    const context = createContext([
+      {
+        id: '1',
+        role: 'user',
+        content: 'Original user message',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
       },
-      messages: [
-        {
-          id: '1',
-          role: 'user',
-          content: 'Original user message',
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-        },
-        {
-          id: '2',
-          role: 'assistant',
-          content: 'Assistant response',
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-        },
-      ],
-      metadata: {
-        model: 'gpt-4',
-        maxTokens: 4096,
+      {
+        id: '2',
+        role: 'assistant',
+        content: 'Assistant response',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
       },
-      isAborted: false,
-    };
+    ]);
 
     const result = await processor.process(context);
 
@@ -49,29 +36,15 @@ describe('InputTemplateProcessor', () => {
   it('should skip processing when no template is configured', async () => {
     const processor = new InputTemplateProcessor({});
 
-    const context = {
-      initialState: {
-        messages: [],
-        model: 'gpt-4',
-        provider: 'openai',
-        systemRole: '',
-        tools: [],
+    const context = createContext([
+      {
+        id: '1',
+        role: 'user',
+        content: 'User message',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
       },
-      messages: [
-        {
-          id: '1',
-          role: 'user',
-          content: 'User message',
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-        },
-      ],
-      metadata: {
-        model: 'gpt-4',
-        maxTokens: 4096,
-      },
-      isAborted: false,
-    };
+    ]);
 
     const result = await processor.process(context);
 
@@ -84,29 +57,15 @@ describe('InputTemplateProcessor', () => {
       inputTemplate: 'Static template content',
     });
 
-    const context = {
-      initialState: {
-        messages: [],
-        model: 'gpt-4',
-        provider: 'openai',
-        systemRole: '',
-        tools: [],
+    const context = createContext([
+      {
+        id: '1',
+        role: 'user',
+        content: 'Original message',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
       },
-      messages: [
-        {
-          id: '1',
-          role: 'user',
-          content: 'Original message',
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-        },
-      ],
-      metadata: {
-        model: 'gpt-4',
-        maxTokens: 4096,
-      },
-      isAborted: false,
-    };
+    ]);
 
     const result = await processor.process(context);
 
@@ -121,29 +80,15 @@ describe('InputTemplateProcessor', () => {
       inputTemplate: '<%- invalid javascript code %>',
     });
 
-    const context = {
-      initialState: {
-        messages: [],
-        model: 'gpt-4',
-        provider: 'openai',
-        systemRole: '',
-        tools: [],
+    const context = createContext([
+      {
+        id: '1',
+        role: 'user',
+        content: 'User message',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
       },
-      messages: [
-        {
-          id: '1',
-          role: 'user',
-          content: 'User message',
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-        },
-      ],
-      metadata: {
-        model: 'gpt-4',
-        maxTokens: 4096,
-      },
-      isAborted: false,
-    };
+    ]);
 
     const result = await processor.process(context);
 
@@ -159,29 +104,15 @@ describe('InputTemplateProcessor', () => {
       inputTemplate: '{{text}} <%- throw new Error("Application error") %>',
     });
 
-    const context = {
-      initialState: {
-        messages: [],
-        model: 'gpt-4',
-        provider: 'openai',
-        systemRole: '',
-        tools: [],
+    const context = createContext([
+      {
+        id: '1',
+        role: 'user',
+        content: 'User message',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
       },
-      messages: [
-        {
-          id: '1',
-          role: 'user',
-          content: 'User message',
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-        },
-      ],
-      metadata: {
-        model: 'gpt-4',
-        maxTokens: 4096,
-      },
-      isAborted: false,
-    };
+    ]);
 
     const result = await processor.process(context);
 
@@ -195,43 +126,29 @@ describe('InputTemplateProcessor', () => {
       inputTemplate: 'Processed: {{text}}',
     });
 
-    const context = {
-      initialState: {
-        messages: [],
-        model: 'gpt-4',
-        provider: 'openai',
-        systemRole: '',
-        tools: [],
+    const context = createContext([
+      {
+        id: '1',
+        role: 'user',
+        content: 'User message',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
       },
-      messages: [
-        {
-          id: '1',
-          role: 'user',
-          content: 'User message',
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-        },
-        {
-          id: '2',
-          role: 'assistant',
-          content: 'Assistant message',
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-        },
-        {
-          id: '3',
-          role: 'system',
-          content: 'System message',
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-        },
-      ],
-      metadata: {
-        model: 'gpt-4',
-        maxTokens: 4096,
+      {
+        id: '2',
+        role: 'assistant',
+        content: 'Assistant message',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
       },
-      isAborted: false,
-    };
+      {
+        id: '3',
+        role: 'system',
+        content: 'System message',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      },
+    ]);
 
     const result = await processor.process(context);
 
@@ -239,5 +156,29 @@ describe('InputTemplateProcessor', () => {
     expect(result.messages[1].content).toBe('Assistant message'); // Unchanged
     expect(result.messages[2].content).toBe('System message'); // Unchanged
     expect(result.metadata.inputTemplateProcessed).toBe(1);
+  });
+
+  // A background sub-agent's report arrives as a user message from that
+  // sub-agent; the template is for what the human typed.
+  it('leaves a sub-agent result message untouched', async () => {
+    const processor = new InputTemplateProcessor({ inputTemplate: 'Template: {{text}} - End' });
+
+    const result = await processor.process({
+      initialState: { messages: [], model: 'gpt-4', provider: 'openai', systemRole: '', tools: [] },
+      isAborted: false,
+      messages: [
+        {
+          content: 'The poem',
+          createdAt: Date.now(),
+          id: '1',
+          metadata: { subAgentCallback: { name: 'Poet', status: 'completed', threadId: 'thd' } },
+          role: 'user',
+          updatedAt: Date.now(),
+        },
+      ],
+      metadata: { maxTokens: 4096, model: 'gpt-4' },
+    } as any);
+
+    expect(result.messages[0].content).toBe('The poem');
   });
 });

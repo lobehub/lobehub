@@ -153,9 +153,12 @@ class SkillStoreServerRuntimeService implements SkillStoreRuntimeService {
     }
   };
 
-  importFromZipUrl = async (url: string): Promise<SkillImportServiceResult> => {
+  importFromZipUrl = async (
+    url: string,
+    options?: { identifier?: string; source?: 'market' | 'user' },
+  ): Promise<SkillImportServiceResult> => {
     try {
-      const result = await this.importer.importFromUrl({ url });
+      const result = await this.importer.importFromUrl({ url }, options);
       await this.emitSkillOutcome({
         apiName: 'importFromZipUrl',
         intentClass: 'tool_command',
@@ -220,7 +223,9 @@ class SkillStoreServerRuntimeService implements SkillStoreRuntimeService {
       const downloadUrl = this.marketService.getSkillDownloadUrl(identifier);
       log('Download URL: %s', downloadUrl);
 
-      const result = await this.importFromZipUrl(downloadUrl);
+      // Same identifier as the Skill Store UI / `lh skill install` path, so a
+      // skill installed there is recognized instead of colliding on its name.
+      const result = await this.importFromZipUrl(downloadUrl, { identifier, source: 'market' });
       log('Import from market result: %O', result);
       return result;
     } catch (error) {

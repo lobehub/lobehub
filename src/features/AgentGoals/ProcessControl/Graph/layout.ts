@@ -1,4 +1,8 @@
-import type { GoalGraphEdge, GoalGraphNode, GoalNodeKind } from '@lobechat/types';
+import type { GoalGraphEdge, GoalGraphNode } from '@lobechat/types';
+
+import type { GoalGraphNodeKind } from '../../Experiments/model';
+
+type LayoutNode = Omit<GoalGraphNode, 'kind'> & { kind: GoalGraphNodeKind };
 
 /**
  * Layered DAG layout for the exploration graph.
@@ -9,8 +13,22 @@ import type { GoalGraphEdge, GoalGraphNode, GoalNodeKind } from '@lobechat/types
  * dependency for a layout that fits in a screen of code.
  */
 
-export const NODE_WIDTH = { decision: 250, finding: 240, problem: 230, task: 260 } as const;
-export const NODE_HEIGHT = { decision: 76, finding: 76, problem: 76, task: 112 } as const;
+export const NODE_WIDTH = {
+  batch: 260,
+  decision: 250,
+  experiment: 260,
+  finding: 240,
+  problem: 230,
+  task: 260,
+} as const;
+export const NODE_HEIGHT = {
+  batch: 112,
+  decision: 76,
+  experiment: 112,
+  finding: 76,
+  problem: 76,
+  task: 112,
+} as const;
 
 const RANK_GAP = 56;
 const COLUMN_GAP = 32;
@@ -25,6 +43,7 @@ export type LayoutEdge = Pick<GoalGraphEdge, 'kind' | 'sourceNodeId' | 'targetNo
  */
 const rankDirection = (edge: LayoutEdge): [string, string] | undefined => {
   switch (edge.kind) {
+    case 'contains':
     case 'decomposes':
     case 'investigates':
     case 'leads_to':
@@ -32,6 +51,8 @@ const rankDirection = (edge: LayoutEdge): [string, string] | undefined => {
       return [edge.sourceNodeId, edge.targetNodeId];
     }
     // A blocker sits above the node waiting on it.
+    case 'answers':
+    case 'derived_from':
     case 'depends_on': {
       return [edge.targetNodeId, edge.sourceNodeId];
     }
@@ -50,6 +71,8 @@ export interface LayoutBox {
 
 /** A synthetic edge standing in for a ranked chain that runs through hidden nodes. */
 export interface GraphBridge {
+  /** How many nodes left off the map the link stands in for, when the host knows. */
+  hops?: number;
   sourceNodeId: string;
   targetNodeId: string;
 }
@@ -60,9 +83,9 @@ export interface GraphBridge {
  * the survivors keep their depth instead of collapsing into one orphan row.
  */
 export const hideKinds = (
-  nodes: GoalGraphNode[],
+  nodes: LayoutNode[],
   edges: LayoutEdge[],
-  hidden: ReadonlySet<GoalNodeKind>,
+  hidden: ReadonlySet<GoalGraphNodeKind>,
 ): { bridges: GraphBridge[]; visibleIds: Set<string> } => {
   const visibleIds = new Set<string>();
   const hiddenIds = new Set<string>();
@@ -107,8 +130,10 @@ export const hideKinds = (
 };
 
 export const layoutGraph = (
-  nodes: GoalGraphNode[],
+  nodes: LayoutNode[],
   edges: LayoutEdge[],
+  sizes: Readonly<Record<string, Partial<Pick<LayoutBox, 'width' | 'height'>>>> = {},
+  gaps = { column: COLUMN_GAP, rank: RANK_GAP },
 ): Record<string, LayoutBox> => {
   const index = new Map(nodes.map((node, i) => [node.id, i]));
   const links = edges.map(rankDirection).filter((link): link is [string, string] => {
@@ -133,7 +158,7 @@ export const layoutGraph = (
   const parents = new Map<string, string[]>();
   for (const [from, to] of links) parents.set(to, [...(parents.get(to) ?? []), from]);
 
-  const rows = new Map<number, GoalGraphNode[]>();
+  const rows = new Map<number, LayoutNode[]>();
   for (const node of nodes) {
     const r = rank.get(node.id)!;
     rows.set(r, [...(rows.get(r) ?? []), node]);
@@ -150,23 +175,47 @@ export const layoutGraph = (
         barycenter(a, parents, order) - barycenter(b, parents, order) ||
         index.get(a.id)! - index.get(b.id)!,
     );
-    const widths = row.map((node) => NODE_WIDTH[node.kind]);
-    const total = widths.reduce((sum, w) => sum + w, 0) + COLUMN_GAP * (row.length - 1);
-    let x = -total / 2;
+    const widths = row.map((node) => sizes[node.id]?.width ?? NODE_WIDTH[node.kind]);
+    const xs = placeRow(
+      row.map((node, i) => barycenter(node, parents, order) - widths[i] / 2),
+      widths,
+      gaps.column,
+    );
     let height = 0;
     row.forEach((node, i) => {
-      boxes[node.id] = { height: NODE_HEIGHT[node.kind], width: widths[i], x, y };
-      order.set(node.id, x + widths[i] / 2);
-      x += widths[i] + COLUMN_GAP;
-      height = Math.max(height, NODE_HEIGHT[node.kind]);
+      const nodeHeight = sizes[node.id]?.height ?? NODE_HEIGHT[node.kind];
+      boxes[node.id] = { height: nodeHeight, width: widths[i], x: xs[i], y };
+      order.set(node.id, xs[i] + widths[i] / 2);
+      height = Math.max(height, nodeHeight);
     });
-    y += height + RANK_GAP;
+    y += height + gaps.rank;
   }
   return boxes;
 };
 
+/**
+ * Settle one ordered row: every node wants its `desired` left edge (centred
+ * under its parents), and none may overlap its neighbour.
+ *
+ * Centring the whole row on the canvas instead put a finding between two tasks
+ * rather than under the one that produced it. A left-to-right sweep pushes each
+ * node clear of the one before it; a right-to-left sweep pulls each clear of
+ * the one after. Each sweep alone drifts the row to one side. Both keep order
+ * with at least `gap` between neighbours, so their mean does too, and a crowd
+ * that all wants the same spot ends up centred on it.
+ */
+const placeRow = (desired: number[], widths: number[], gap: number): number[] => {
+  const forward = [...desired];
+  for (let i = 1; i < forward.length; i++)
+    forward[i] = Math.max(forward[i], forward[i - 1] + widths[i - 1] + gap);
+  const backward = [...desired];
+  for (let i = backward.length - 2; i >= 0; i--)
+    backward[i] = Math.min(backward[i], backward[i + 1] - widths[i] - gap);
+  return forward.map((x, i) => (x + backward[i]) / 2);
+};
+
 const barycenter = (
-  node: GoalGraphNode,
+  node: LayoutNode,
   parents: Map<string, string[]>,
   placed: Map<string, number>,
 ) => {

@@ -1,5 +1,5 @@
 import { LOBE_CHAT_CLOUD } from '@lobechat/business-const';
-import { toast } from '@lobehub/ui/base-ui';
+import { toast } from '@lobehub/ui';
 import { t } from 'i18next';
 
 import { handleFileUploadError } from '@/business/client/handleFileUploadError';
@@ -29,6 +29,11 @@ type OnStatusUpdate = (
 
 interface UploadWithProgressParams {
   abortController?: AbortController;
+  /**
+   * Agent whose conversation this upload is attached to. In a public agent the
+   * server shares the attachment with the conversation's readers.
+   */
+  conversationAgentId?: string;
   file: File;
   /**
    * Additional metadata persisted with the file record. Media capture flows use
@@ -70,7 +75,7 @@ interface UploadWithProgressResult {
   url: string;
 }
 
-const normalizeUploadedFileType = async (
+export const normalizeUploadedFileType = async (
   file: File,
 ): Promise<{ detectedMimeType?: string; file: File }> => {
   const { fileTypeFromBlob } = await import('file-type');
@@ -113,11 +118,13 @@ export class FileUploadActionImpl {
   uploadBase64FileWithProgress = async (
     base64: string,
   ): Promise<UploadWithProgressResult | undefined> => {
+    let uploadedPathname: string | undefined;
     try {
       // Extract image dimensions from base64 data
       const dimensions = await getImageDimensions(base64);
 
       const { metadata, fileType, size, hash } = await uploadService.uploadBase64ToS3(base64);
+      uploadedPathname = metadata.path;
 
       const res = await fileService.createFile({
         fileType,
@@ -127,8 +134,10 @@ export class FileUploadActionImpl {
         size,
         url: metadata.path,
       });
+      uploadedPathname = undefined;
       return { ...res, dimensions, filename: metadata.filename };
     } catch (error) {
+      if (uploadedPathname) await uploadService.releaseUpload(uploadedPathname);
       if (handleFileUploadError(error)) return;
 
       throw error;
@@ -146,8 +155,10 @@ export class FileUploadActionImpl {
     abortController,
     visibility,
     fileMetadata,
+    conversationAgentId,
   }: UploadWithProgressParams): Promise<UploadWithProgressResult | undefined> => {
     const statusId = uploadId ?? file.name;
+    let uploadedPathname: string | undefined;
 
     try {
       const { detectedMimeType, file: normalizedFile } = await normalizeUploadedFileType(file);
@@ -208,6 +219,7 @@ export class FileUploadActionImpl {
         if (!success) return;
 
         metadata = { ...data };
+        uploadedPathname = data.path;
       }
 
       // 4. use more powerful file type detector to get file type
@@ -229,6 +241,7 @@ export class FileUploadActionImpl {
 
       const data = await fileService.createFile(
         {
+          conversationAgentId,
           fileType,
           hash,
           metadata: {
@@ -246,6 +259,7 @@ export class FileUploadActionImpl {
         },
         knowledgeBaseId,
       );
+      uploadedPathname = undefined;
 
       onStatusUpdate?.({
         id: statusId,
@@ -261,6 +275,7 @@ export class FileUploadActionImpl {
 
       return { ...data, dimensions, filename: normalizedFile.name };
     } catch (error) {
+      if (uploadedPathname) await uploadService.releaseUpload(uploadedPathname);
       if (abortController?.signal.aborted) {
         onStatusUpdate?.({
           id: statusId,

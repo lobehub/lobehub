@@ -31,7 +31,11 @@ export const fromTraceGraphState = (state: GoalGraphState): GoalGraphSnapshot =>
     })),
     edges: state.edges,
     events: [],
-    goal: { ...state.goal, config: null, projectId: null },
+    goal: {
+      ...state.goal,
+      config: state.goal.exploration ? { exploration: state.goal.exploration } : null,
+      projectId: null,
+    },
     nodes: state.nodes.map((node) => ({
       ...node,
       createdAt: new Date(node.createdAt),

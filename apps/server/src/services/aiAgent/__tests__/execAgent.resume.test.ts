@@ -3,6 +3,22 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AiAgentService } from '../index';
 
+const resumeParentMessage = () => ({
+  id: 'u1',
+  role: 'user',
+  sessionId: 'session-1',
+  threadId: 'thread-1',
+  topicId: 'topic-1',
+});
+
+const resumeAgentInput = (): Parameters<AiAgentService['execAgent']>[0] => ({
+  agentId: 'agent-1',
+  appContext: { sessionId: 'session-1', threadId: 'thread-1', topicId: 'topic-1' },
+  parentMessageId: 'u1',
+  prompt: 'ignored',
+  resume: true,
+});
+
 const { mockCreateOperation, mockFindById, mockMessageCreate, mockMessageQuery, mockQueryTree } =
   vi.hoisted(() => ({
     mockCreateOperation: vi.fn(),
@@ -19,94 +35,118 @@ vi.mock('@/libs/trusted-client', () => ({
 }));
 
 vi.mock('@/database/models/message', () => ({
-  MessageModel: vi.fn().mockImplementation(() => ({
-    create: mockMessageCreate,
-    getLatestNonToolMessageId: vi.fn().mockResolvedValue(undefined),
-    getLatestSpineMessageId: vi.fn().mockResolvedValue(undefined),
-    findById: mockFindById,
-    query: mockMessageQuery,
-    queryTopicMessageTree: mockQueryTree,
-    update: vi.fn().mockResolvedValue({}),
-  })),
+  MessageModel: vi.fn().mockImplementation(function () {
+    return {
+      create: mockMessageCreate,
+      getLatestNonToolMessageId: vi.fn().mockResolvedValue(undefined),
+      getLatestSpineMessageId: vi.fn().mockResolvedValue(undefined),
+      findById: mockFindById,
+      query: mockMessageQuery,
+      queryTopicMessageTree: mockQueryTree,
+      update: vi.fn().mockResolvedValue({}),
+    };
+  }),
 }));
 
 vi.mock('@/database/models/agent', () => ({
-  AgentModel: vi.fn().mockImplementation(() => ({
-    queryAgents: vi.fn().mockResolvedValue([]),
-  })),
+  AgentModel: vi.fn().mockImplementation(function () {
+    return {
+      queryAgents: vi.fn().mockResolvedValue([]),
+    };
+  }),
 }));
 
 vi.mock('@/server/services/agent', () => ({
-  AgentService: vi.fn().mockImplementation(() => ({
-    getAgentConfig: vi.fn().mockResolvedValue({
-      chatConfig: {},
-      id: 'agent-1',
-      knowledgeBases: [],
-      model: 'gpt-4',
-      plugins: [],
-      provider: 'openai',
-      systemRole: 'You are a helpful assistant',
-    }),
-  })),
+  AgentService: vi.fn().mockImplementation(function () {
+    return {
+      getAgentConfig: vi.fn().mockResolvedValue({
+        chatConfig: {},
+        id: 'agent-1',
+        knowledgeBases: [],
+        model: 'gpt-4',
+        plugins: [],
+        provider: 'openai',
+        systemRole: 'You are a helpful assistant',
+      }),
+    };
+  }),
 }));
 
 vi.mock('@/database/models/plugin', () => ({
-  PluginModel: vi.fn().mockImplementation(() => ({
-    query: vi.fn().mockResolvedValue([]),
-  })),
+  PluginModel: vi.fn().mockImplementation(function () {
+    return {
+      query: vi.fn().mockResolvedValue([]),
+    };
+  }),
 }));
 
 vi.mock('@/database/models/topic', () => ({
-  TopicModel: vi.fn().mockImplementation(() => ({
-    releaseTaskCallbackReservation: vi.fn().mockResolvedValue(undefined),
-    tryReserveTaskCallback: vi.fn().mockResolvedValue(true),
-    create: vi.fn().mockResolvedValue({ id: 'topic-1' }),
-    findById: vi.fn().mockResolvedValue(null),
-  })),
+  TopicModel: vi.fn().mockImplementation(function () {
+    return {
+      releaseTaskCallbackReservation: vi.fn().mockResolvedValue(undefined),
+      tryReserveTaskCallback: vi.fn().mockResolvedValue(true),
+      create: vi.fn().mockResolvedValue({ id: 'topic-1' }),
+      findById: vi.fn().mockResolvedValue(null),
+    };
+  }),
 }));
 
 vi.mock('@/database/models/thread', () => ({
-  ThreadModel: vi.fn().mockImplementation(() => ({
-    create: vi.fn(),
-    findById: vi.fn(),
-    update: vi.fn(),
-  })),
+  ThreadModel: vi.fn().mockImplementation(function () {
+    return {
+      create: vi.fn(),
+      findById: vi.fn(),
+      update: vi.fn(),
+    };
+  }),
 }));
 
 vi.mock('@/database/models/user', () => ({
-  UserModel: vi.fn().mockImplementation(() => ({
-    getUserSettings: vi.fn().mockResolvedValue(undefined),
-  })),
+  UserModel: vi.fn().mockImplementation(function () {
+    return {
+      getUserSettings: vi.fn().mockResolvedValue(undefined),
+    };
+  }),
 }));
 
 vi.mock('@/database/models/userMemory/persona', () => ({
-  UserPersonaModel: vi.fn().mockImplementation(() => ({
-    getLatestPersonaDocument: vi.fn().mockResolvedValue(undefined),
-  })),
+  UserPersonaModel: vi.fn().mockImplementation(function () {
+    return {
+      getLatestPersonaDocument: vi.fn().mockResolvedValue(undefined),
+    };
+  }),
 }));
 
 vi.mock('@/server/services/agentRuntime', () => ({
-  AgentRuntimeService: vi.fn().mockImplementation(() => ({
-    createOperation: mockCreateOperation,
-  })),
+  AgentRuntimeService: vi.fn().mockImplementation(function () {
+    return {
+      createOperation: mockCreateOperation,
+    };
+  }),
 }));
 
 vi.mock('@/server/services/market', () => ({
-  MarketService: vi.fn().mockImplementation(() => ({
-    getLobehubSkillManifests: vi.fn().mockResolvedValue([]),
-  })),
+  MarketService: vi.fn().mockImplementation(function () {
+    return {
+      getLobehubSkillManifests: vi.fn().mockResolvedValue([]),
+    };
+  }),
 }));
 
 vi.mock('@/server/services/composio', () => ({
-  ComposioService: vi.fn().mockImplementation(() => ({
-    getComposioManifests: vi.fn().mockResolvedValue([]),
-  })),
+  ComposioService: vi.fn().mockImplementation(function () {
+    return {
+      getComposioManifests: vi.fn().mockResolvedValue([]),
+    };
+  }),
 }));
 
 vi.mock('@/server/services/file', () => ({
-  FileService: vi.fn().mockImplementation(() => ({
-    uploadFromUrl: vi.fn(),
-  })),
+  FileService: vi.fn().mockImplementation(function () {
+    return {
+      uploadFromUrl: vi.fn(),
+    };
+  }),
 }));
 
 vi.mock('@/server/modules/Mecha', () => ({
@@ -266,13 +306,7 @@ describe('AiAgentService.execAgent - resume mode', () => {
   // branch; feeding it back makes the model continue the old answer
   // ([U1, A1] -> continue) instead of producing a fresh one ([U1] -> A2).
   it('regenerate: drops the anchor user message existing answer branch from history', async () => {
-    mockFindById.mockResolvedValue({
-      id: 'u1',
-      role: 'user',
-      sessionId: 'session-1',
-      threadId: 'thread-1',
-      topicId: 'topic-1',
-    });
+    mockFindById.mockResolvedValue(resumeParentMessage());
 
     mockMessageQuery.mockResolvedValue([
       { content: 'prior question', id: 'prior-u', role: 'user' },
@@ -288,13 +322,7 @@ describe('AiAgentService.execAgent - resume mode', () => {
       { id: 'a1', messageGroupId: null, parentId: 'u1' },
     ]);
 
-    await service.execAgent({
-      agentId: 'agent-1',
-      appContext: { sessionId: 'session-1', threadId: 'thread-1', topicId: 'topic-1' },
-      parentMessageId: 'u1',
-      prompt: 'ignored',
-      resume: true,
-    });
+    await service.execAgent(resumeAgentInput());
 
     const call = mockCreateOperation.mock.calls[0][0];
     expect(call.initialMessages.map((m: any) => m.id)).toEqual(['prior-u', 'prior-a', 'u1']);
@@ -303,13 +331,7 @@ describe('AiAgentService.execAgent - resume mode', () => {
   // Regression: regenerating a MIDDLE turn must also drop the turns that
   // continued from it (they live on the old branch), so history ends at U1.
   it('regenerate: drops later turns that continued from the anchor (middle-turn regenerate)', async () => {
-    mockFindById.mockResolvedValue({
-      id: 'u1',
-      role: 'user',
-      sessionId: 'session-1',
-      threadId: 'thread-1',
-      topicId: 'topic-1',
-    });
+    mockFindById.mockResolvedValue(resumeParentMessage());
 
     mockMessageQuery.mockResolvedValue([
       { content: 'the question', id: 'u1', role: 'user' },
@@ -324,13 +346,7 @@ describe('AiAgentService.execAgent - resume mode', () => {
       { id: 'a2', messageGroupId: null, parentId: 'u2' },
     ]);
 
-    await service.execAgent({
-      agentId: 'agent-1',
-      appContext: { sessionId: 'session-1', threadId: 'thread-1', topicId: 'topic-1' },
-      parentMessageId: 'u1',
-      prompt: 'ignored',
-      resume: true,
-    });
+    await service.execAgent(resumeAgentInput());
 
     const call = mockCreateOperation.mock.calls[0][0];
     expect(call.initialMessages.map((m: any) => m.id)).toEqual(['u1']);
@@ -341,13 +357,7 @@ describe('AiAgentService.execAgent - resume mode', () => {
   // `parentId`. Pruning must use the raw message tree so the group (whose members
   // descend from the anchor) is dropped instead of being fed back as a summary.
   it('regenerate: drops a compressedGroup node whose compacted members descend from the anchor', async () => {
-    mockFindById.mockResolvedValue({
-      id: 'u1',
-      role: 'user',
-      sessionId: 'session-1',
-      threadId: 'thread-1',
-      topicId: 'topic-1',
-    });
+    mockFindById.mockResolvedValue(resumeParentMessage());
 
     // `query` hides the grouped messages and injects a synthetic group node
     // (id = group id, role = 'compressedGroup', no parentId).
@@ -367,13 +377,7 @@ describe('AiAgentService.execAgent - resume mode', () => {
       { id: 'a2', messageGroupId: 'grp-1', parentId: 'u2' },
     ]);
 
-    await service.execAgent({
-      agentId: 'agent-1',
-      appContext: { sessionId: 'session-1', threadId: 'thread-1', topicId: 'topic-1' },
-      parentMessageId: 'u1',
-      prompt: 'ignored',
-      resume: true,
-    });
+    await service.execAgent(resumeAgentInput());
 
     const call = mockCreateOperation.mock.calls[0][0];
     expect(call.initialMessages.map((m: any) => m.id)).toEqual(['prior-u', 'prior-a', 'u1']);
@@ -382,13 +386,7 @@ describe('AiAgentService.execAgent - resume mode', () => {
   // Guard: a compression group of PRIOR turns (not descended from the anchor)
   // must be kept — it is legitimate earlier context.
   it('regenerate: keeps a compressedGroup node whose members precede the anchor', async () => {
-    mockFindById.mockResolvedValue({
-      id: 'u1',
-      role: 'user',
-      sessionId: 'session-1',
-      threadId: 'thread-1',
-      topicId: 'topic-1',
-    });
+    mockFindById.mockResolvedValue(resumeParentMessage());
 
     mockMessageQuery.mockResolvedValue([
       { content: 'summary of early turns', id: 'grp-0', role: 'compressedGroup' },
@@ -402,13 +400,7 @@ describe('AiAgentService.execAgent - resume mode', () => {
       { id: 'a1', messageGroupId: null, parentId: 'u1' },
     ]);
 
-    await service.execAgent({
-      agentId: 'agent-1',
-      appContext: { sessionId: 'session-1', threadId: 'thread-1', topicId: 'topic-1' },
-      parentMessageId: 'u1',
-      prompt: 'ignored',
-      resume: true,
-    });
+    await service.execAgent(resumeAgentInput());
 
     const call = mockCreateOperation.mock.calls[0][0];
     expect(call.initialMessages.map((m: any) => m.id)).toEqual(['grp-0', 'u1']);

@@ -99,6 +99,7 @@ RUN rm -rf src/app/desktop "src/app/(backend)/trpc/desktop"
 RUN npm run build:docker
 RUN pnpm exec esbuild scripts/elasticsearchReindex/index.ts --bundle --platform=node --format=cjs --outfile=/app/fts-search-elasticsearch-reindex.cjs --external:pg --external:drizzle-orm '--external:drizzle-orm/*'
 RUN pnpm exec esbuild scripts/elasticsearchSync/cli.ts --bundle --platform=node --format=cjs --outfile=/app/fts-search-elasticsearch-sync.cjs --external:pg --external:drizzle-orm '--external:drizzle-orm/*'
+RUN pnpm exec esbuild scripts/elasticsearchCleanupIneligibleMessages/cli.ts --bundle --platform=node --format=cjs --outfile=/app/fts-search-ineligible-message-cleanup.cjs --external:pg --external:drizzle-orm '--external:drizzle-orm/*'
 RUN pnpm exec esbuild scripts/pgSearchCleanup/index.ts --bundle --platform=node --format=cjs --outfile=/app/fts-search-pg-search-cleanup.cjs --external:pg
 
 # Preserve SWC helpers referenced through pnpm virtual-store symlinks by Next.js.
@@ -121,8 +122,10 @@ COPY --from=builder /app/public/_spa-workbench /app/public/_spa-workbench
 COPY --from=builder /app/packages/database/migrations /app/migrations
 COPY --from=builder /app/scripts/migrateServerDB/docker.cjs /app/docker.cjs
 COPY --from=builder /app/scripts/migrateServerDB/errorHint.js /app/errorHint.js
+COPY --from=builder /app/scripts/migrateServerDB/pgSearchGuard.js /app/pgSearchGuard.js
 COPY --from=builder /app/fts-search-elasticsearch-reindex.cjs /app/fts-search-elasticsearch-reindex.cjs
 COPY --from=builder /app/fts-search-elasticsearch-sync.cjs /app/fts-search-elasticsearch-sync.cjs
+COPY --from=builder /app/fts-search-ineligible-message-cleanup.cjs /app/fts-search-ineligible-message-cleanup.cjs
 COPY --from=builder /app/fts-search-pg-search-cleanup.cjs /app/fts-search-pg-search-cleanup.cjs
 
 # copy dependencies
@@ -312,6 +315,8 @@ ENV \
     QWEN_API_KEY="" QWEN_MODEL_LIST="" QWEN_PROXY_URL="" \
     # SambaNova
     SAMBANOVA_API_KEY="" SAMBANOVA_MODEL_LIST="" \
+    # Meta
+    META_API_KEY="" META_MODEL_LIST="" META_PROXY_URL="" \
     # Search1API
     SEARCH1API_API_KEY="" SEARCH1API_MODEL_LIST="" \
     # SenseNova
@@ -326,6 +331,8 @@ ENV \
     TAICHU_API_KEY="" TAICHU_MODEL_LIST="" \
     # TogetherAI
     TOGETHERAI_API_KEY="" TOGETHERAI_MODEL_LIST="" \
+    # Unsloth
+    UNSLOTH_API_KEY="" UNSLOTH_MODEL_LIST="" UNSLOTH_PROXY_URL="" \
     # Upstage
     UPSTAGE_API_KEY="" UPSTAGE_MODEL_LIST="" \
     # v0 (Vercel)

@@ -1,10 +1,16 @@
 /**
  * @vitest-environment happy-dom
  */
-import { render, screen } from '@testing-library/react';
+import type { BuiltinInterventionProps } from '@lobechat/types';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import FallbackIntervention from './Fallback';
+import Intervention from './index';
+
+const { submitHeteroIntervention } = vi.hoisted(() => ({
+  submitHeteroIntervention: vi.fn(),
+}));
 
 const metaMap: Record<string, { avatar?: string; title?: string }> = {
   'calculator': { title: 'Calculator' },
@@ -28,6 +34,43 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
+vi.mock('@lobechat/builtin-tools/interventions', () => ({
+  getBuiltinIntervention: (identifier?: string, apiName?: string) => {
+    if (identifier === 'gated' && apiName === 'review') {
+      return ({ onApprovalBlockedChange }: BuiltinInterventionProps) => (
+        <>
+          <button type="button" onClick={() => onApprovalBlockedChange?.(true)}>
+            block
+          </button>
+          <button type="button" onClick={() => onApprovalBlockedChange?.(false)}>
+            release
+          </button>
+        </>
+      );
+    }
+    if (identifier !== 'devin' || apiName !== 'askUserQuestion') return;
+
+    return ({ onInteractionAction }: BuiltinInterventionProps) => (
+      <button
+        data-testid="devin-permission-option"
+        type="button"
+        onClick={() =>
+          void onInteractionAction?.({
+            payload: { 'Allow Devin to continue?': 'allow-once' },
+            type: 'submit',
+          })
+        }
+      >
+        Allow once
+      </button>
+    );
+  },
+}));
+
+vi.mock('../../../../../hooks/useConversationResourceAccess', () => ({
+  useConversationResourceAccess: () => ({ canUseResource: true }),
+}));
+
 vi.mock('@/store/tool/selectors', () => ({
   toolSelectors: {
     getMetaById: (id: string) => () => metaMap[id],
@@ -39,6 +82,11 @@ vi.mock('@/store/tool', () => ({
     getPluginTitle: (meta?: { title?: string }) => meta?.title,
   },
   useToolStore: (selector: (state: unknown) => unknown) => selector({}),
+}));
+
+vi.mock('@/store/chat', () => ({
+  useChatStore: (selector: (state: unknown) => unknown) =>
+    selector({ runQuestionSubmission: vi.fn() }),
 }));
 
 vi.mock('@/store/user', () => ({
@@ -56,8 +104,21 @@ vi.mock('../../../../../store', () => ({
     getDbMessageById: () => () => undefined,
   },
   useConversationStore: (
-    selector: (state: { updatePluginArguments: ReturnType<typeof vi.fn> }) => unknown,
-  ) => selector({ updatePluginArguments: vi.fn() }),
+    selector: (state: {
+      cancelToolInteraction: ReturnType<typeof vi.fn>;
+      skipToolInteraction: ReturnType<typeof vi.fn>;
+      submitHeteroIntervention: typeof submitHeteroIntervention;
+      submitToolInteraction: ReturnType<typeof vi.fn>;
+      updatePluginArguments: ReturnType<typeof vi.fn>;
+    }) => unknown,
+  ) =>
+    selector({
+      cancelToolInteraction: vi.fn(),
+      skipToolInteraction: vi.fn(),
+      submitHeteroIntervention,
+      submitToolInteraction: vi.fn(),
+      updatePluginArguments: vi.fn(),
+    }),
 }));
 
 vi.mock('../Arguments', () => ({
@@ -65,7 +126,11 @@ vi.mock('../Arguments', () => ({
 }));
 
 vi.mock('./ApprovalActions', () => ({
-  default: () => <div>approval-actions</div>,
+  default: ({ approveDisabled }: { approveDisabled?: boolean }) => (
+    <div data-approve-disabled={String(!!approveDisabled)} data-testid="approval-actions">
+      approval-actions
+    </div>
+  ),
 }));
 
 vi.mock('./KeyValueEditor', () => ({
@@ -124,5 +189,49 @@ describe('FallbackIntervention', () => {
 
     expect(screen.queryByText(iconUrl)).not.toBeInTheDocument();
     expect(screen.getByRole('img', { name: 'Web Search' })).toHaveAttribute('src', iconUrl);
+  });
+});
+
+describe('heterogeneous custom intervention', () => {
+  it('routes a Devin permission option ID through submitHeteroIntervention', async () => {
+    render(
+      <Intervention
+        apiName="askUserQuestion"
+        id="message-devin-permission"
+        identifier="devin"
+        requestArgs='{"questions":[{"question":"Allow Devin to continue?","options":[{"id":"allow-once","label":"Allow once"}]}]}'
+        toolCallId="devin-permission-1"
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId('devin-permission-option'));
+
+    await waitFor(() => {
+      expect(submitHeteroIntervention).toHaveBeenCalledWith('message-devin-permission', 'submit', {
+        'Allow Devin to continue?': 'allow-once',
+      });
+    });
+  });
+});
+
+describe('approval-mode builtin intervention', () => {
+  it('holds the approve action while the intervention blocks approval', () => {
+    render(
+      <Intervention
+        apiName="review"
+        id="message-gated"
+        identifier="gated"
+        requestArgs="{}"
+        toolCallId="gated-1"
+      />,
+    );
+    const actions = screen.getByTestId('approval-actions');
+    expect(actions).toHaveAttribute('data-approve-disabled', 'false');
+
+    fireEvent.click(screen.getByText('block'));
+    expect(actions).toHaveAttribute('data-approve-disabled', 'true');
+
+    fireEvent.click(screen.getByText('release'));
+    expect(actions).toHaveAttribute('data-approve-disabled', 'false');
   });
 });

@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
@@ -6,9 +7,11 @@ import {
   expertiseDomains,
   expertiseDomainSnapshots,
   expertiseHits,
+  expertiseLessonRevisions,
   expertiseLessons,
   expertiseRuns,
   users,
+  verifyCheckResults,
 } from '..';
 
 const serverDB = await getTestDB();
@@ -118,6 +121,84 @@ describe('expertise domain constraints', () => {
         runId: runB.id,
       }),
     ).rejects.toThrow();
+  });
+
+  it('keeps a hit after the rejection it was learned from is deleted', async () => {
+    const { domainB, lessonB, runB } = await createFixture();
+
+    const [checkResult] = await serverDB
+      .insert(verifyCheckResults)
+      .values({ checkItemId: 'check-item-1', userId, verifierType: 'agent' })
+      .returning();
+
+    const [hit] = await serverDB
+      .insert(expertiseHits)
+      .values({
+        domainId: domainB.id,
+        lessonId: lessonB.id,
+        outcome: 'violation',
+        runId: runB.id,
+        sourceCheckResultId: checkResult.id,
+      })
+      .returning();
+
+    await serverDB.delete(verifyCheckResults).where(eq(verifyCheckResults.id, checkResult.id));
+
+    // Provenance, not ownership: deleting an acceptance must not delete what it taught.
+    const [survivor] = await serverDB
+      .select()
+      .from(expertiseHits)
+      .where(eq(expertiseHits.id, hit.id));
+
+    expect(survivor).toBeDefined();
+    expect(survivor.sourceCheckResultId).toBeNull();
+  });
+
+  it('keeps which accepted delivery a generalized boundary was read from', async () => {
+    const { lessonB } = await createFixture();
+    const evidence = {
+      boundaries: [
+        {
+          checkResultIds: ['ok-menu'],
+          limit: 'Separators that isolate a destructive menu action are allowed',
+        },
+      ],
+      instances: ['rejected-1', 'rejected-2', 'rejected-3'],
+      shipped: ['ok-menu', 'ok-table'],
+    };
+
+    await serverDB.insert(expertiseLessonRevisions).values([
+      {
+        changedBy: 'system',
+        evidence,
+        kind: 'generalize',
+        lessonId: lessonB.id,
+        revision: 1,
+        sections: [],
+      },
+      // A person's rewrite carries its authority in `feedback`, so it has no evidence.
+      {
+        changedBy: 'user',
+        feedback: 'tables are fine',
+        lessonId: lessonB.id,
+        revision: 2,
+        sections: [],
+      },
+    ]);
+
+    const rows = await serverDB
+      .select({
+        evidence: expertiseLessonRevisions.evidence,
+        revision: expertiseLessonRevisions.revision,
+      })
+      .from(expertiseLessonRevisions)
+      .where(eq(expertiseLessonRevisions.lessonId, lessonB.id))
+      .orderBy(expertiseLessonRevisions.revision);
+
+    expect(rows).toEqual([
+      { evidence, revision: 1 },
+      { evidence: null, revision: 2 },
+    ]);
   });
 
   it('rejects snapshots whose run belongs to another domain', async () => {

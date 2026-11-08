@@ -13,26 +13,85 @@ export interface RouterRuntimeRequestContext {
 }
 
 export enum RequestTrigger {
+  /** Agent profile autocomplete: title, description, tags and avatar emoji. */
+  AgentMeta = 'agent_meta',
   AgentShare = 'agent_share',
   AgentSignal = 'agent_signal',
   Api = 'api',
+  /** Speech-to-text transcription, e.g. voice messages and `lh generate asr`. */
+  Asr = 'asr',
   Bot = 'bot',
+  /** Agent builder suggestion chips. */
+  BuilderSuggestion = 'builder_suggestion',
   Chat = 'chat',
   Cli = 'cli',
+  /** Context compression summary that replaces older messages in a conversation. */
+  ContextCompression = 'context_compression',
   Cron = 'cron',
   Eval = 'eval',
+  /** Agent self-evolution: expertise ingestion, domain drafts and consolidation. */
+  Expertise = 'expertise',
   FileEmbedding = 'file_embedding',
+  /** Follow-up suggestions generated after an assistant reply. */
+  FollowUp = 'follow_up',
+  /** Image / video generation topic title summaries. */
+  GenerationTopicTitle = 'generation_topic_title',
+  /** Goal planning: exploration, acceptance criteria drafts and decomposition. */
+  Goal = 'goal',
+  /** Rolling history summary stored on a topic. */
+  HistorySummary = 'history_summary',
   Image = 'image',
+  /**
+   * A message arrived on one of the agent's own accounts (e.g. mail) and
+   * woke it. Mirrors {@link RequestTrigger.Scm}: an external event delivered to
+   * an identity the agent owns, rather than a user turn.
+   */
+  Inbox = 'inbox',
+  /** Chat input inline completion suggestions while the user is typing. */
+  InputCompletion = 'input_completion',
   Memory = 'memory',
   MultimodalAnalysis = 'multimodal_analysis',
   Notify = 'notify',
   Onboarding = 'onboarding',
   Openapi = 'openapi',
+  /** Rewrite of an image / video generation prompt. */
+  PromptRewrite = 'prompt_rewrite',
+  /** Connectivity check from the provider settings page. */
+  ProviderCheck = 'provider_check',
   /** A run the user deferred to a future time (`topic.metadata.scheduledRun`). */
   Scheduled = 'scheduled',
+  /** A provider event on a pull request (CI failure, review) woke the agent that opened it. */
+  Scm = 'scm',
   SemanticSearch = 'semantic_search',
   SignupEmailLLMReview = 'signup_email_llm_review',
+  /** Task runs and their auxiliary calls (briefs, handoff, intent, instructions). */
+  Task = 'task',
+  /**
+   * The creator agent woken in its own conversation to pick up finished task
+   * results (`taskResultBridge`). Server-started, but it continues the user's
+   * conversation on the main spine, unlike {@link RequestTrigger.Task} runs.
+   */
+  TaskCallback = 'task_callback',
+  /** Thread (sub-topic) title summaries. */
+  ThreadTitle = 'thread_title',
+  /**
+   * @deprecated Legacy bucket for every title summary. New requests use
+   * {@link RequestTrigger.TopicTitle}, {@link RequestTrigger.ThreadTitle} or
+   * {@link RequestTrigger.GenerationTopicTitle}; kept so historical logs still resolve a label.
+   */
   Topic = 'topic',
+  /** Server-side topic classification that runs after the auto summary. */
+  TopicAnalysis = 'topic_analysis',
+  /** Server-side topic auto summary (description + rolling summary). */
+  TopicSummary = 'topic_summary',
+  /** Chat topic title summaries, both client and server generated. */
+  TopicTitle = 'topic_title',
+  /** Translation of a chat message or a generation prompt, including language detection. */
+  Translate = 'translate',
+  /** Text-to-speech synthesis, e.g. `lh generate tts`. */
+  Tts = 'tts',
+  /** Acceptance verification: plan generation, judging, review prediction and reports. */
+  Verify = 'verify',
   Video = 'video',
 }
 
@@ -82,9 +141,15 @@ export interface AgentShareVisitorContext {
   /** `AgentShareConfig.showModelInfo` — gates visitor-facing model/provider/usage redaction. */
   showModelInfo?: boolean;
   /**
+   * Mirrors `shareConfig.skillGrants` so the skill runtime can enforce the same
+   * per-skill allowlist the operation's skill pool was built from. Absent or
+   * empty grants no skill. Carried separately from {@link toolGrants} because a
+   * skill grant also governs the no-tool pinned-content path.
+   */
+  skillGrants?: string[];
+  /**
    * Mirrors `shareConfig.toolGrants` so tool runtimes that resolve their
-   * target outside `toolManifestMap` (e.g. `activateSkill`,
-   * `lobe-topic-reference`) can apply the same allowlist the assembled tool set
+   * target outside `toolManifestMap` (e.g. `activateSkill`) can apply the same allowlist the assembled tool set
    * already enforces.
    */
   toolGrants?: AgentShareToolGrant[];
@@ -192,6 +257,8 @@ export const AgentRuntimeErrorType = {
   ProviderServiceUnavailable: 'ProviderServiceUnavailable',
   /** Network timeout / connection drop talking to the provider. */
   ProviderNetworkError: 'ProviderNetworkError',
+  /** Provider timed out while downloading a remote image or file URL. */
+  RemoteMediaDownloadTimeout: 'RemoteMediaDownloadTimeout',
   /** Proxy/router has no channel for the requested model (key pool exhausted, no upstream). */
   NoAvailableChannel: 'NoAvailableChannel',
   /** Upstream content-moderation / safety filter rejected the input or output. */
@@ -200,6 +267,14 @@ export const AgentRuntimeErrorType = {
   CapabilityNotSupported: 'CapabilityNotSupported',
   /** Provider rejected the request as malformed (bad JSON, schema validation, etc.). */
   InvalidRequestFormat: 'InvalidRequestFormat',
+  /** Upstream rejected the serialized request body as too large (HTTP 413). */
+  RequestBodyTooLarge: 'RequestBodyTooLarge',
+  /**
+   * Upstream rejected the request for carrying more images than the channel allows
+   * (e.g. Azure OpenAI caps each request at 50). The limit is per channel, so another
+   * route for the same model may still accept the request.
+   */
+  ExceededImageLimit: 'ExceededImageLimit',
   /**
    * Upstream proxy / gateway layer failed (openresty, litellm, HTML 5xx,
    * Cloudflare 525) — distinct from the provider's own service. Split out of
@@ -223,12 +298,36 @@ export const AgentRuntimeErrorType = {
   OperationInactivityTimeout: 'OperationInactivityTimeout',
 
   InvalidOllamaArgs: 'InvalidOllamaArgs',
+  /**
+   * The model can only be reached from the user's own device, and no open
+   * LobeHub client picked up the request (no client declared it can run this
+   * provider, or none claimed the call in time). Retrying once a client is
+   * open recovers the run.
+   */
+  ClientLlmExecutorUnavailable: 'ClientLlmExecutorUnavailable',
+  /**
+   * The device running a relayed model request stopped sending output
+   * (closed, refreshed or lost its connection) before the request finished.
+   */
+  ClientLlmExecutorLost: 'ClientLlmExecutorLost',
+  /**
+   * A relayed model request on the user's device did not produce its first
+   * output, or did not finish, within the allowed time.
+   */
+  ClientLlmTimeout: 'ClientLlmTimeout',
   OllamaBizError: 'OllamaBizError',
   OllamaServiceUnavailable: 'OllamaServiceUnavailable',
 
   InvalidBedrockCredentials: 'InvalidBedrockCredentials',
   InvalidVertexCredentials: 'InvalidVertexCredentials',
   StreamChunkError: 'StreamChunkError',
+  /**
+   * The provider closed the stream without a terminal event (no stop / usage /
+   * error), e.g. its connection dropped or its server gave up mid-response.
+   * Upstream-owned and transient, unlike `StreamChunkError`, which is a chunk
+   * the harness could not parse or process.
+   */
+  ProviderStreamInterrupted: 'ProviderStreamInterrupted',
   /**
    * The model returned an empty completion — no text content, no tool calls,
    * and ~0 output tokens — typically after a stalled tool loop where it

@@ -1,4 +1,5 @@
 import { BRANDING_NAME } from '@lobechat/business-const';
+import type { TFunction } from 'i18next';
 import type { MetaDescriptor } from 'react-router';
 
 // Shared with landing-rr: share pages ship behind the lobehub.com gateway, so
@@ -7,22 +8,23 @@ import type { MetaDescriptor } from 'react-router';
 const OG_IMAGE_URL = 'https://lobehub.com/assets/cao-og.webp';
 const TWITTER_SITE = '@lobehub';
 
-type DescriptionKey = 'artifactDescription' | 'pageDescription' | 'topicDescription';
+type DescriptionKey =
+  'artifactDescription' | 'fileDescription' | 'pageDescription' | 'topicDescription';
 
 const FALLBACK_DESCRIPTION: Record<DescriptionKey, string> = {
   artifactDescription: `An artifact shared from ${BRANDING_NAME}.`,
+  fileDescription: `A file shared from ${BRANDING_NAME}.`,
   pageDescription: `A page shared from ${BRANDING_NAME}.`,
   topicDescription: `A conversation shared from ${BRANDING_NAME}.`,
 };
 
-export const shareMetaDescription = (resources: unknown, key: DescriptionKey): string => {
-  const chat = (resources as Record<string, Record<string, unknown>> | undefined)?.chat;
-  const text = chat?.[`sharePage.meta.${key}`];
-
-  return typeof text === 'string'
-    ? text.replaceAll('{{appName}}', BRANDING_NAME)
+export const shareMetaDescription = (
+  t: TFunction<'chat'> | undefined,
+  key: DescriptionKey,
+): string =>
+  t
+    ? t(`sharePage.meta.${key}`, { appName: BRANDING_NAME, defaultValue: FALLBACK_DESCRIPTION[key] })
     : FALLBACK_DESCRIPTION[key];
-};
 
 export const truncateDescription = (text: string | null | undefined, max = 200) => {
   if (!text) return undefined;

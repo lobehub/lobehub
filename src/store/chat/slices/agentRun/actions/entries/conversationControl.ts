@@ -7,6 +7,7 @@ import {
   type MessageMetadata,
   type UIChatMessage,
 } from '@lobechat/types';
+import { toast } from '@lobehub/ui';
 import { t } from 'i18next';
 
 import { type ChatInputEditor } from '@/features/ChatInput';
@@ -16,13 +17,8 @@ import {
   aiAgentService,
   type ResolveAgentInterventionBySourceResult,
 } from '@/services/aiAgent';
-import { getAgentStoreState } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
-import { displayMessageSelectors } from '@/store/chat/selectors';
-import {
-  type AgentRuntimeType,
-  selectRuntimeType,
-} from '@/store/chat/slices/agentRun/actions/dispatch/agentDispatcher';
+import { shareChatService } from '@/services/shareChat';
+import { type AgentRuntimeType } from '@/store/chat/slices/agentRun/actions/dispatch/agentDispatcher';
 import { type OptimisticUpdateContext } from '@/store/chat/slices/message/actions/optimisticUpdate';
 import { dbMessageSelectors } from '@/store/chat/slices/message/selectors';
 import { operationSelectors } from '@/store/chat/slices/operation/selectors';
@@ -35,6 +31,12 @@ import { useUserStore } from '@/store/user';
 
 import { buildRunLifecycle } from '../lifecycle/buildRunLifecycle';
 import { type RunScope } from '../lifecycle/types';
+import { readClientRunMessages } from './ensureFullHistoryForClientRun';
+import {
+  shouldUseConfiguredGatewayResume as resolveConfiguredGatewayResume,
+  shouldUseGatewayResume as resolveGatewayResume,
+} from './gatewayResume';
+import { createInterventionProjection } from './interventionProjection';
 
 /**
  * Actions for controlling conversation operations like cancellation and error handling
@@ -106,6 +108,7 @@ export class ConversationControlActionImpl {
   readonly #interventionResolutionRequestIds = new Map<string, string>();
   /** Stable per-intervention idempotency key reused by transport retries. */
   readonly #heteroResolutionRequestIds = new Map<string, string>();
+  readonly #interventions = createInterventionProjection(() => this.#get());
 
   constructor(set: Setter, get: () => ChatStore, _api?: unknown) {
     void _api;
@@ -162,52 +165,51 @@ export class ConversationControlActionImpl {
       this.#interventionResolutionRequestIds.get(resolutionKey) ?? globalThis.crypto.randomUUID();
     this.#interventionResolutionRequestIds.set(resolutionKey, resolutionRequestId);
 
-    const result = await aiAgentService.resolveAgentInterventionBySource({
+    const sourceParams = {
       action: params.action,
       batchId: first.batchId,
       operationId: first.operationId,
       resolutionRequestId,
       targets: sourceTargets,
-    });
+    };
+    // A share visitor answers their own share run through the share-authorized
+    // mirror; the owner-scoped endpoint would reject them.
+    const agentShareId = params.context?.agentShareId;
+    const result = agentShareId
+      ? params.context?.topicId
+        ? await shareChatService.resolveInterventionBySource(
+            agentShareId,
+            params.context.topicId,
+            sourceParams,
+          )
+        : ({ handled: false } as const)
+      : await aiAgentService.resolveAgentInterventionBySource(sourceParams);
     if (result.handled) {
       this.#interventionResolutionRequestIds.delete(resolutionKey);
+      // The server owns the decision now: keep a claimed one, undo a lost one before the refresh.
+      if (result.state === 'claimed') this.#interventions.settle(params.toolMessageIds);
+      else this.#interventions.rollback(params.toolMessageIds);
+      if (result.state === 'claimed' && params.context) {
+        for (const id of params.toolMessageIds) {
+          this.#get().internal_confirmQuestionSubmission(id, params.action, params.context);
+        }
+      }
       if (result.state === 'already_resolved' && params.context) {
-        await this.#get().refreshMessages(params.context);
+        const submittingQuestions = params.toolMessageIds.filter(
+          (id) => this.#get().questionSubmissions[id],
+        );
+        if (submittingQuestions.length > 0) {
+          await Promise.all(
+            submittingQuestions.map((id) =>
+              this.#get().checkQuestionSubmission(id, params.context!),
+            ),
+          );
+        } else {
+          await this.#get().refreshMessages(params.context);
+        }
       }
     }
     return result;
-  };
-
-  /**
-   * Decide whether approve/reject/reject_continue should go through the
-   * Gateway resume path (new op carrying `resumeApproval`) instead of the
-   * local `executeClientAgent` path. Mirrors the "interrupt + new op"
-   * pattern from .
-   *
-   * Routes via `selectRuntimeType` so approve/reject align with how the
-   * conversation was dispatched at sendMessage time. Hetero resume is not yet
-   * implemented and falls through to client local resume — see .
-   *
-   * We deliberately do **not** look for a living `execServerAgentRuntime`
-   * op here. The server's `waiting_for_human` → `agent_runtime_end` signal
-   * marks the paused op `completed` client-side, and `startOperation` runs
-   * `cleanupCompletedOperations(30_000)` on every new op, which means the
-   * paused op is typically gone by the time the user clicks approve — so
-   * scanning for it would flip us back into client-mode against a live
-   * Gateway backend.
-   */
-  #shouldUseGatewayResume = (context: ConversationContext): boolean => {
-    const agentConfig = context.agentId
-      ? agentSelectors.getAgentConfigById(context.agentId)(getAgentStoreState())
-      : undefined;
-    return (
-      selectRuntimeType({
-        boundDeviceId: agentConfig?.agencyConfig?.boundDeviceId,
-        executionTarget: agentConfig?.agencyConfig?.executionTarget,
-        heterogeneousProvider: agentConfig?.agencyConfig?.heterogeneousProvider,
-        isGatewayMode: this.#get().isGatewayModeEnabled(context.agentId),
-      }) === 'gateway'
-    );
   };
 
   /**
@@ -231,8 +233,24 @@ export class ConversationControlActionImpl {
     })(this.#get());
     return ops.filter(
       (op) =>
-        op.type === 'execServerAgentRuntime' && op.status === 'running' && !op.metadata?.isAborting,
+        op.type === 'execServerAgentRuntime' &&
+        op.status === 'running' &&
+        !op.metadata?.isAborting &&
+        !(groupId && this.#isLiveGatewayOp(op)),
     );
+  };
+
+  /**
+   * Whether an op's gateway stream is still open. In a group chat that is the
+   * supervisor waiting on its members (e.g. a member parked on the approval
+   * being resolved): it is not paused, it will stream the members' continuation
+   * and its own closing, and retiring it would drop both from the screen.
+   */
+  #isLiveGatewayOp = (op: Operation) => {
+    const serverOperationId = op.metadata?.serverOperationId;
+    if (!serverOperationId) return false;
+    const status = this.#get().gatewayConnections[serverOperationId]?.status;
+    return !!status && status !== 'disconnected';
   };
 
   #resolveHeteroInterventionExecutionOperation = (
@@ -359,8 +377,19 @@ export class ConversationControlActionImpl {
     return true;
   };
 
-  #writeTopicStatus = (context: ConversationContext, status: ChatTopicStatus): void => {
-    if (!context.topicId) return;
+  #discardSettledHeteroQuestion = (id: string): boolean => {
+    const intervention = dbMessageSelectors.getDbMessageById(id)(this.#get())?.pluginIntervention;
+    if (!intervention || intervention.status === 'pending') return false;
+    if (intervention.status === 'aborted') {
+      toast.info(t('tool.intervention.toolEnded', { ns: 'chat' }));
+    }
+    return true;
+  };
+
+  #writeTopicStatus = (context: ConversationContext, status: ChatTopicStatus, force?: boolean) => {
+    // A share visitor's topic belongs to the creator; the owner-scoped topic
+    // write would be rejected, and the share page has no topic status UI.
+    if (!context.topicId || context.agentShareId) return;
 
     const topicScope =
       context.scope === 'group' || context.scope === 'group_agent' ? context.scope : undefined;
@@ -369,6 +398,7 @@ export class ConversationControlActionImpl {
       agentId: context.agentId,
       groupId: context.groupId,
       ...(topicScope ? { scope: topicScope } : {}),
+      force,
       status,
       topicId: context.topicId,
     });
@@ -433,13 +463,16 @@ export class ConversationControlActionImpl {
     const targetEditor =
       editor ?? (contextKey === messageMapKey(activeContext) ? this.#get().mainInputEditor : null);
     if (targetEditor) {
-      // Find the latest sendMessage operation with editor state
-      for (const opId of [...operationIds].reverse()) {
-        const op = this.#get().operations[opId];
-        if (op && op.type === 'sendMessage' && op.metadata.inputEditorTempState) {
-          targetEditor.setJSONState(op.metadata.inputEditorTempState);
-          break;
-        }
+      // Only the latest send can own the draft. Never fall back to a stale
+      // snapshot from an earlier turn when stopping an accepted message.
+      const operationId = [...operationIds]
+        .reverse()
+        .find((id) => this.#get().operations[id]?.type === 'sendMessage');
+      const operation = operationId ? this.#get().operations[operationId] : undefined;
+      if (operation?.status === 'cancelled' && operation.metadata.inputEditorTempState) {
+        const snapshot = operation.metadata.inputEditorTempState;
+        this.#get().updateOperationMetadata(operation.id, { inputEditorTempState: null });
+        targetEditor.setJSONState(snapshot);
       }
     }
   };
@@ -468,6 +501,11 @@ export class ConversationControlActionImpl {
     branchIndex: number,
     context?: OptimisticUpdateContext,
   ): Promise<void> => {
+    const store = this.#get();
+    const messageContext = store.internal_getConversationContext(context);
+    // A branch change only changes the displayed reply; it does not authorize
+    // recovery of an old failure when its card mounts.
+    store.revokeHeteroAutoRetry(messageContext);
     await this.#get().optimisticUpdateMessageMetadata(
       messageId,
       { activeBranchIndex: branchIndex },
@@ -524,6 +562,100 @@ export class ConversationControlActionImpl {
     return !!op && op.status !== 'running';
   };
 
+  /** Resolve the source first; false falls through to the original client path. */
+  #resumeGatewayApproval = async (approval: {
+    action: AgentInterventionSourceAction;
+    anchorMessageId: string;
+    context: ConversationContext;
+    logTag: string;
+    /** Runs once the resumed run started; `handled` means the source store took the decision. */
+    onClaimed?: (handled: boolean) => Promise<void>;
+    operationId: string;
+    prepareLegacy?: () => Promise<void>;
+    /** Resume through the message-row claim when no source store handles the decision. */
+    resumeLegacy: (params: Parameters<ChatStore['executeGatewayAgent']>[0]) => Promise<unknown>;
+    rollbackLocalDecision: () => void;
+    toolMessageIds: string[];
+  }): Promise<boolean> => {
+    const { anchorMessageId, context, logTag, operationId, toolMessageIds } = approval;
+    const isStopped = () => this.#get().operations[operationId]?.status === 'cancelled';
+    const settleStopped = () => {
+      this.#interventions.rollback(toolMessageIds);
+      return this.#get()
+        .refreshMessages(context)
+        .catch((error) => console.error(`${logTag} refresh after Stop failed:`, error));
+    };
+    if (isStopped()) {
+      approval.rollbackLocalDecision();
+      return true;
+    }
+
+    // Retired only once the resume starts, so a retry still sees Gateway mode.
+    const pausedOpIds = this.#getRunningServerOps(context).map((op) => op.id);
+    const params = {
+      context,
+      message: '',
+      metadata: this.#getRequestMetadataFromMessageChain(anchorMessageId),
+      parentMessageId: anchorMessageId,
+      parentOperationId: operationId,
+    };
+    try {
+      const sourceResolution = await this.tryResolveAgentInterventionBySource({
+        action: approval.action,
+        context,
+        toolMessageIds,
+      });
+      if (this.#discardAlreadyResolvedSource(sourceResolution, operationId)) return true;
+      if (!sourceResolution.handled) {
+        const gateway = await resolveConfiguredGatewayResume(context, this.#get);
+        if (!gateway && isStopped()) {
+          approval.rollbackLocalDecision();
+          return true;
+        }
+        await approval.prepareLegacy?.();
+        if (!gateway) return false;
+      }
+
+      this.#emitRunResumed(context, {
+        operationId,
+        parentMessageId: anchorMessageId,
+        runtimeType: 'gateway',
+      });
+      if (!sourceResolution.handled) await approval.resumeLegacy(params);
+      else if (sourceResolution.execution) {
+        await this.#get().executeGatewayAgent({
+          ...params,
+          precreatedResult: sourceResolution.execution,
+        });
+      }
+      await approval.onClaimed?.(sourceResolution.handled);
+      // The server took the decision. A stopped run never writes its own status,
+      // so force past the local row: it already reads `active` (pinned when the
+      // paused run ended) while the server's still reads `waitingForHuman`.
+      this.#writeTopicStatus(context, 'active', isStopped());
+      this.#completeOpsById(pausedOpIds);
+      if (isStopped()) {
+        await settleStopped();
+        return true;
+      }
+      this.#get().completeOperation(operationId);
+      return true;
+    } catch (error) {
+      if (isStopped()) {
+        await settleStopped();
+        return true;
+      }
+      const err = error as Error;
+      console.error(`${logTag} Gateway resume failed:`, err);
+      approval.rollbackLocalDecision();
+      this.#get().failOperation(operationId, {
+        type: 'approveToolCalling',
+        message: err.message || 'Unknown error',
+      });
+      throw error;
+    }
+  };
+
   approveToolCalling = async (
     toolMessageId: string,
     _assistantGroupId: string,
@@ -548,6 +680,7 @@ export class ConversationControlActionImpl {
     // 1. Get tool message and verify it exists
     const toolMessage = dbMessageSelectors.getDbMessageById(toolMessageId)(this.#get());
     if (!toolMessage) return;
+    let approvedToolCall = toolMessage.plugin;
 
     // Create an operation to carry the context for optimistic updates
     // This ensures optimistic updates use the correct agentId/topicId
@@ -565,124 +698,91 @@ export class ConversationControlActionImpl {
     });
 
     const optimisticContext = { operationId };
-    const shouldUseGatewayResume = this.#shouldUseGatewayResume(effectiveContext);
+    const rollbackLocalDecision = this.#interventions.applyLocalDecision(
+      [toolMessageId],
+      { status: 'approved' },
+      optimisticContext,
+    );
+    const shouldUseGatewayResume = await resolveGatewayResume(
+      effectiveContext,
+      [toolMessageId],
+      this.#get,
+    );
 
-    if (!shouldUseGatewayResume) {
-      this.#writeTopicStatus(effectiveContext, 'active');
-      // Park → resume: a new op continues the run paused on this tool's approval.
-      this.#emitRunResumed(effectiveContext, {
-        operationId,
-        parentMessageId: toolMessageId,
-        runtimeType: 'client',
-      });
-    }
+    // Local runtime persists the decision itself. A Gateway claim needs the row still
+    // `pending` on the server, so it must not persist an optimistic approval first.
 
-    // Local runtime owns its message mutation. Gateway resumes claim the
-    // still-pending row atomically on the server, so they must not persist an
-    // optimistic approved state before calling the claim endpoint.
-    if (!shouldUseGatewayResume) {
-      await this.#get().optimisticUpdateMessagePlugin(
-        toolMessageId,
-        { intervention: { status: 'approved' } },
-        optimisticContext,
-      );
-    }
-
-    // NOTE: intentionally do NOT bail on Stop here. `intervention: approved` is
-    // already persisted above; returning early would leave the tool marked
-    // approved but never executed — a stuck conversation. Stop pressed in this
-    // sub-second window is best-effort (the paused run can't be aborted yet);
-    // let the approval complete atomically and honor the next Stop normally.
-    const requestMetadata = this.#getRequestMetadataFromMessageChain(toolMessageId);
-
-    // 2.5. Server-mode: start a **new** Gateway op carrying the approval
-    // decision via `resumeApproval`. The server reads the target tool
-    // message, persists `intervention=approved`, dispatches the approved
-    // tool, and streams results back on the new op. No in-place resume of
-    // the paused op — simpler state + avoids stepIndex races.
     if (shouldUseGatewayResume) {
       const toolCallId = toolMessage.tool_call_id;
       if (!toolCallId) {
         console.warn(
           '[approveToolCalling][server] tool message missing tool_call_id; skipping resume',
         );
+        rollbackLocalDecision();
         completeOperation(operationId);
         return;
       }
-      // Snapshot paused op IDs before the resume call; retire them only
-      // after executeGatewayAgent succeeds so a transient failure leaves
-      // the running marker intact and `#shouldUseGatewayResume` still flags
-      // Gateway mode on retry.
-      const pausedOpIds = this.#getRunningServerOps(effectiveContext).map((op) => op.id);
-      try {
-        const sourceResolution = await this.tryResolveAgentInterventionBySource({
+      // A share run belongs to the agent's owner, so a server-side `remember`
+      // would write the OWNER's allow list (the share mirror rejects it). A
+      // visitor's "don't ask again" approves once and lands in their own allow
+      // list instead, which their share runs send as `userInterventionConfig`.
+      const remembersOnServer = !!options?.rememberToolKey && !effectiveContext.agentShareId;
+      if (
+        await this.#resumeGatewayApproval({
           action: {
             ...(options?.editedArguments && {
               edits: { [toolMessageId]: options.editedArguments },
             }),
-            scope: options?.rememberToolKey ? 'remember' : 'once',
+            scope: remembersOnServer ? 'remember' : 'once',
             type: 'approve_tool',
           },
+          anchorMessageId: toolMessageId,
           context: effectiveContext,
-          toolMessageIds: [toolMessageId],
-        });
-        if (this.#discardAlreadyResolvedSource(sourceResolution, operationId)) return;
-
-        this.#emitRunResumed(effectiveContext, {
+          logTag: '[approveToolCalling][server]',
+          onClaimed: async (handled) => {
+            if (options?.rememberToolKey && !(handled && remembersOnServer)) {
+              await useUserStore.getState().addToolToAllowList(options.rememberToolKey);
+            }
+          },
           operationId,
-          parentMessageId: toolMessageId,
-          runtimeType: 'gateway',
-        });
-        if (sourceResolution.handled) {
-          if (sourceResolution.execution) {
-            await this.#get().executeGatewayAgent({
-              context: effectiveContext,
-              message: '',
-              metadata: requestMetadata,
-              parentMessageId: toolMessageId,
-              precreatedResult: sourceResolution.execution,
-            });
-          }
-        } else {
-          // OSS compatibility: no generic durable store. Persist a staged edit
-          // only now, after the generic capability probe, then use the existing
-          // message-row claim path.
-          if (options?.editedArguments) {
+          prepareLegacy: async () => {
+            if (!options?.editedArguments) return;
             await options.onLegacyEditFallback?.();
-          }
-          await this.#get().executeGatewayAgent({
-            context: effectiveContext,
-            message: '',
-            metadata: requestMetadata,
-            parentMessageId: toolMessageId,
-            resumeApproval: {
-              decision: 'approved',
-              parentMessageId: toolMessageId,
-              toolCallId,
-            },
-          });
-          if (options?.rememberToolKey) {
-            await useUserStore.getState().addToolToAllowList(options.rememberToolKey);
-          }
-        }
-        this.#writeTopicStatus(effectiveContext, 'active');
-        this.#completeOpsById(pausedOpIds);
-        completeOperation(operationId);
-      } catch (error) {
-        const err = error as Error;
-        console.error('[approveToolCalling][server] Gateway resume failed:', err);
-        this.#get().failOperation(operationId, {
-          type: 'approveToolCalling',
-          message: err.message || 'Unknown error',
-        });
-        throw error;
-      }
-      return;
+            approvedToolCall =
+              dbMessageSelectors.getDbMessageById(toolMessageId)(this.#get())?.plugin ??
+              approvedToolCall;
+          },
+          resumeLegacy: async (params) => {
+            await this.#get().executeGatewayAgent({
+              ...params,
+              resumeApproval: { decision: 'approved', parentMessageId: toolMessageId, toolCallId },
+            });
+          },
+          rollbackLocalDecision,
+          toolMessageIds: [toolMessageId],
+        })
+      )
+        return;
     }
+
+    this.#writeTopicStatus(effectiveContext, 'active');
+    // Park → resume: a new op continues the run paused on this tool's approval.
+    this.#emitRunResumed(effectiveContext, {
+      operationId,
+      parentMessageId: toolMessageId,
+      runtimeType: 'client',
+    });
+    await this.#interventions.settleAfter([toolMessageId], () =>
+      this.#get().optimisticUpdateMessagePlugin(
+        toolMessageId,
+        { intervention: { status: 'approved' } },
+        optimisticContext,
+      ),
+    );
 
     // 3. Get current messages for state construction using context
     const chatKey = messageMapKey({ agentId, topicId, threadId, scope });
-    const currentMessages = displayMessageSelectors.getDisplayMessagesByKey(chatKey)(this.#get());
+    const currentMessages = await readClientRunMessages(this.#get, effectiveContext, chatKey);
     const currentRequestMetadata = this.#getRequestMetadataFromMessageChain(
       toolMessageId,
       currentMessages,
@@ -703,7 +803,7 @@ export class ConversationControlActionImpl {
       ...initialContext,
       phase: 'human_approved_tool',
       payload: {
-        approvedToolCall: toolMessage.plugin,
+        approvedToolCall,
         parentMessageId: toolMessageId,
         skipCreateToolMessage: true,
       },
@@ -737,36 +837,7 @@ export class ConversationControlActionImpl {
     }
   };
 
-  /**
-   * Approve every pending tool of a parallel batch in ONE action.
-   *
-   * Server mode resolves the whole batch through a single Gateway op carrying
-   * `resumeApprovals`, so the run executes all approved tools as one
-   * `call_tools_batch` and continues the LLM exactly once with the complete
-   * result set. Looping `approveToolCalling` instead would start one op per
-   * tool, and each op continues the run while its siblings are still empty
-   * pending rows — which is what forks the parent chain and shows the model
-   * blank tool results.
-   *
-   * Client mode has no batch resume: the local runtime re-parks on the
-   * remaining pending tools after each approval, so sequential approvals are
-   * already correct there. Approvals are issued in order and awaited so the
-   * runtime never sees two resumes racing on the same assistant turn.
-   */
-  /**
-   * Stop a run parked on tool approval — "from this step on, don't continue".
-   *
-   * Distinct from rejecting a tool: a rejection resumes the model so it can
-   * respond to the refusal, whereas stopping ends the turn outright. Nothing
-   * in the batch executes.
-   *
-   * This cannot go through the ordinary cancel actions: they all filter on
-   * `status === 'running'`, and a parked run's client operation is `completed`
-   * (the server's park is stream-terminal) and pruned ~30s later, so the client
-   * no longer holds its operation object. The pending tool rows retain the
-   * authoritative operationId + sealed batchId, which are the only identities
-   * accepted by the server stop path.
-   */
+  /** Stop the authoritative sealed batch; a parked run no longer has an active client operation. */
   stopPendingApproval = async (
     toolMessageIds: string[],
     context?: ConversationContext,
@@ -818,12 +889,16 @@ export class ConversationControlActionImpl {
       if (this.#discardAlreadyResolvedSource(sourceResolution)) return;
 
       if (!sourceResolution.handled) {
-        await aiAgentService.stopPendingApproval({
-          batchId,
-          operationId,
-          toolMessageIds: addressable,
-          topicId,
-        });
+        const stopParams = { batchId, operationId, toolMessageIds: addressable, topicId };
+        await (effectiveContext.agentShareId
+          ? shareChatService.stopPendingApproval(effectiveContext.agentShareId, stopParams)
+          : aiAgentService.stopPendingApproval(stopParams));
+      }
+      // Settle the cards locally. A group member's stop ends no stream this
+      // client still listens on, so no refetch would ever land the aborted rows
+      // and the card would stay on screen until a reload.
+      for (const id of addressable) {
+        this.#interventions.dispatch(id, { status: 'aborted' }, { context: effectiveContext });
       }
       this.#completeOpsById(pausedOpIds);
     } catch (error) {
@@ -844,14 +919,14 @@ export class ConversationControlActionImpl {
       threadId: this.#get().activeThreadId,
     };
 
-    if (!this.#shouldUseGatewayResume(effectiveContext)) {
+    if (!(await resolveGatewayResume(effectiveContext, toolMessageIds, this.#get))) {
       for (const toolMessageId of toolMessageIds) {
         await this.approveToolCalling(toolMessageId, '', effectiveContext);
       }
       return;
     }
 
-    const { completeOperation, startOperation } = this.#get();
+    const { startOperation } = this.#get();
 
     // Drop anything that can't be addressed: an optimistic row (`tmp_`) has no
     // server identity yet, and a tool message without `tool_call_id` can't be
@@ -874,58 +949,34 @@ export class ConversationControlActionImpl {
     // The op-level anchor. The server re-derives the spine anchor from the
     // batch itself, so this only has to be one of the batch's own rows.
     const anchorMessageId = decisions.at(-1)!.parentMessageId;
+    const approvedIds = decisions.map(({ parentMessageId }) => parentMessageId);
 
     const { operationId } = startOperation({
       type: 'approveToolCalling',
       context: { ...effectiveContext, messageId: anchorMessageId },
     });
+    const rollbackLocalDecision = this.#interventions.applyLocalDecision(
+      approvedIds,
+      { status: 'approved' },
+      { operationId },
+    );
 
-    const requestMetadata = this.#getRequestMetadataFromMessageChain(anchorMessageId);
-    const pausedOpIds = this.#getRunningServerOps(effectiveContext).map((op) => op.id);
-
-    try {
-      const sourceResolution = await this.tryResolveAgentInterventionBySource({
-        action: { scope: 'once', type: 'approve_tool' },
-        context: effectiveContext,
-        toolMessageIds: decisions.map(({ parentMessageId }) => parentMessageId),
-      });
-      if (this.#discardAlreadyResolvedSource(sourceResolution, operationId)) return;
-
-      this.#emitRunResumed(effectiveContext, {
-        operationId,
-        parentMessageId: anchorMessageId,
-        runtimeType: 'gateway',
-      });
-      if (sourceResolution.handled) {
-        if (sourceResolution.execution) {
-          await this.#get().executeGatewayAgent({
-            context: effectiveContext,
-            message: '',
-            metadata: requestMetadata,
-            parentMessageId: anchorMessageId,
-            precreatedResult: sourceResolution.execution,
-          });
-        }
-      } else {
-        await this.#get().executeGatewayAgent({
-          context: effectiveContext,
-          message: '',
-          metadata: requestMetadata,
-          parentMessageId: anchorMessageId,
-          resumeApprovals: decisions,
-        });
+    const resumed = await this.#resumeGatewayApproval({
+      action: { scope: 'once', type: 'approve_tool' },
+      anchorMessageId,
+      context: effectiveContext,
+      logTag: '[approveAllToolCalls][server]',
+      operationId,
+      resumeLegacy: (params) =>
+        this.#get().executeGatewayAgent({ ...params, resumeApprovals: decisions }),
+      rollbackLocalDecision,
+      toolMessageIds: approvedIds,
+    });
+    if (!resumed) {
+      this.#get().completeOperation(operationId);
+      for (const toolMessageId of toolMessageIds) {
+        await this.approveToolCalling(toolMessageId, '', effectiveContext);
       }
-      this.#writeTopicStatus(effectiveContext, 'active');
-      this.#completeOpsById(pausedOpIds);
-      completeOperation(operationId);
-    } catch (error) {
-      const err = error as Error;
-      console.error('[approveAllToolCalls][server] Gateway resume failed:', err);
-      this.#get().failOperation(operationId, {
-        type: 'approveToolCalling',
-        message: err.message || 'Unknown error',
-      });
-      throw error;
     }
   };
 
@@ -977,55 +1028,15 @@ export class ConversationControlActionImpl {
     const optimisticContext: OptimisticUpdateContext = { operationId };
     let resolvedOptions = options;
     let resolvedResponse = response;
-    const shouldCreateUserMessage = resolvedOptions?.createUserMessage !== false;
-    const shouldUseGatewayResume = this.#shouldUseGatewayResume(effectiveContext);
-
-    if (!shouldUseGatewayResume) {
-      this.#writeTopicStatus(effectiveContext, 'active');
-      // Park → resume: a new op continues the run paused on this tool interaction.
-      this.#emitRunResumed(effectiveContext, {
-        operationId,
-        parentMessageId: toolMessageId,
-        runtimeType: 'client',
-      });
-    }
+    const shouldUseGatewayResume = await resolveGatewayResume(
+      effectiveContext,
+      [toolMessageId],
+      this.#get,
+    );
 
     let toolContent =
       resolvedOptions?.toolResultContent ?? `User submitted: ${JSON.stringify(resolvedResponse)}`;
-    if (!shouldUseGatewayResume) {
-      // Client runtime owns its local pending row. Gateway must leave the DB
-      // row pending until resumeToolResult acquires the server-side CAS.
-      await this.#get().optimisticUpdateMessagePlugin(
-        toolMessageId,
-        { intervention: { status: 'approved' } },
-        optimisticContext,
-      );
-      await this.#get().optimisticUpdateMessageContent(
-        toolMessageId,
-        toolContent,
-        undefined,
-        optimisticContext,
-      );
 
-      if (resolvedOptions?.pluginState) {
-        await this.#get().optimisticUpdatePluginState(
-          toolMessageId,
-          resolvedOptions.pluginState,
-          optimisticContext,
-        );
-      }
-    }
-
-    // NOTE: intentionally do NOT bail on Stop here. In client mode the result
-    // is already persisted; in Gateway mode the authoritative claim+resume
-    // below is the indivisible action. Honor the next Stop after it settles.
-
-    // 1.5. Server-mode: start a **new** Gateway op carrying the human answer as
-    // the tool result via `resumeToolResult`. The server writes the answer as
-    // the pending tool message's content, marks intervention approved, and
-    // resumes from `phase: 'tool_result'` (NO re-execution). The synthetic user
-    // message (2b) is not needed — the server continues from the answered tool
-    // call. Mirrors approveToolCalling's gateway branch.
     if (shouldUseGatewayResume) {
       const toolCallId = toolMessage.tool_call_id;
       if (!toolCallId) {
@@ -1036,9 +1047,7 @@ export class ConversationControlActionImpl {
         return;
       }
       const requestMetadata = this.#getRequestMetadataFromMessageChain(toolMessageId);
-      // Snapshot paused op IDs before the resume call; retire them only after
-      // executeGatewayAgent succeeds so a transient failure leaves the running
-      // marker intact and `#shouldUseGatewayResume` still flags Gateway mode.
+      // Retire paused operations only after a successful server resume.
       const pausedOpIds = this.#getRunningServerOps(effectiveContext).map((op) => op.id);
       try {
         const answerResult = toAgentInterventionAnswerResult(resolvedResponse);
@@ -1055,23 +1064,7 @@ export class ConversationControlActionImpl {
 
         if (this.#discardAlreadyResolvedSource(sourceResolution, operationId)) return;
 
-        this.#emitRunResumed(effectiveContext, {
-          operationId,
-          parentMessageId: toolMessageId,
-          runtimeType: 'gateway',
-        });
-
-        if (sourceResolution.handled) {
-          if (sourceResolution.execution) {
-            await this.#get().executeGatewayAgent({
-              context: effectiveContext,
-              message: '',
-              metadata: requestMetadata,
-              parentMessageId: toolMessageId,
-              precreatedResult: sourceResolution.execution,
-            });
-          }
-        } else {
+        if (!sourceResolution.handled) {
           const legacyFallback = await resolvedOptions?.prepareLegacyFallback?.();
           if (legacyFallback) {
             resolvedResponse = legacyFallback.response;
@@ -1080,23 +1073,50 @@ export class ConversationControlActionImpl {
               resolvedOptions.toolResultContent ??
               `User submitted: ${JSON.stringify(resolvedResponse)}`;
           }
-          await this.#get().executeGatewayAgent({
-            context: effectiveContext,
-            message: '',
-            metadata: requestMetadata,
-            parentMessageId: toolMessageId,
-            resumeToolResult: {
-              content: toolContent,
-              outcome: 'submitted',
-              parentMessageId: toolMessageId,
-              toolCallId,
-              ...(resolvedOptions?.pluginState ? { pluginState: resolvedOptions.pluginState } : {}),
-            },
-          });
         }
-        this.#writeTopicStatus(effectiveContext, 'active');
-        this.#completeOpsById(pausedOpIds);
-        completeOperation(operationId);
+
+        if (
+          sourceResolution.handled ||
+          (await resolveConfiguredGatewayResume(effectiveContext, this.#get))
+        ) {
+          this.#emitRunResumed(effectiveContext, {
+            operationId,
+            parentMessageId: toolMessageId,
+            runtimeType: 'gateway',
+          });
+
+          if (sourceResolution.handled) {
+            if (sourceResolution.execution) {
+              await this.#get().executeGatewayAgent({
+                context: effectiveContext,
+                message: '',
+                metadata: requestMetadata,
+                parentMessageId: toolMessageId,
+                precreatedResult: sourceResolution.execution,
+              });
+            }
+          } else {
+            await this.#get().executeGatewayAgent({
+              context: effectiveContext,
+              message: '',
+              metadata: requestMetadata,
+              parentMessageId: toolMessageId,
+              resumeToolResult: {
+                content: toolContent,
+                outcome: 'submitted',
+                parentMessageId: toolMessageId,
+                toolCallId,
+                ...(resolvedOptions?.pluginState
+                  ? { pluginState: resolvedOptions.pluginState }
+                  : {}),
+              },
+            });
+          }
+          this.#writeTopicStatus(effectiveContext, 'active');
+          this.#completeOpsById(pausedOpIds);
+          completeOperation(operationId);
+          return;
+        }
       } catch (error) {
         const err = error as Error;
         console.error('[submitToolInteraction][server] Gateway resume failed:', err);
@@ -1106,17 +1126,43 @@ export class ConversationControlActionImpl {
         });
         throw error;
       }
-      return;
+    }
+
+    const shouldCreateUserMessage = resolvedOptions?.createUserMessage !== false;
+    this.#writeTopicStatus(effectiveContext, 'active');
+    // Park → resume: a new op continues the run paused on this tool interaction.
+    this.#emitRunResumed(effectiveContext, {
+      operationId,
+      parentMessageId: toolMessageId,
+      runtimeType: 'client',
+    });
+    // Client runtime owns its local pending row. Gateway must leave the DB
+    // row pending until resumeToolResult acquires the server-side CAS.
+    await this.#get().optimisticUpdateMessagePlugin(
+      toolMessageId,
+      { intervention: { status: 'approved' } },
+      optimisticContext,
+    );
+    await this.#get().optimisticUpdateMessageContent(
+      toolMessageId,
+      toolContent,
+      undefined,
+      optimisticContext,
+    );
+
+    if (resolvedOptions?.pluginState) {
+      await this.#get().optimisticUpdatePluginState(
+        toolMessageId,
+        resolvedOptions.pluginState,
+        optimisticContext,
+      );
     }
 
     const chatKey = messageMapKey({ agentId, topicId, threadId, scope });
 
-    // 2a. Tool-result-only path: skip the synthetic user message and resume from the
-    // tool message. Used by interventions whose UI handles its own side effect (e.g.
-    // the agent marketplace picker forks agents directly) — the LLM should see the
-    // tool result, not a fake user turn.
+    // A completed interaction result resumes without a synthetic user message or tool re-execution.
     if (!shouldCreateUserMessage) {
-      const currentMessages = displayMessageSelectors.getDisplayMessagesByKey(chatKey)(this.#get());
+      const currentMessages = await readClientRunMessages(this.#get, effectiveContext, chatKey);
       const requestMetadata = this.#getRequestMetadataFromMessageChain(
         toolMessageId,
         currentMessages,
@@ -1131,12 +1177,7 @@ export class ConversationControlActionImpl {
         operationId,
       });
 
-      // Resume directly from `tool_result` phase rather than `human_approved_tool`.
-      // The intervention UI already wrote the final tool result content via
-      // `optimisticUpdateMessageContent`; routing through `human_approved_tool`
-      // would re-execute the builtin tool on the server and overwrite our
-      // content with the server-side placeholder (e.g. the marketplace picker
-      // would clobber the picked-templates result with "picker is now visible").
+      // The UI already stored the result; do not execute the intervention tool again.
       const agentRuntimeContext: AgentRuntimeContext = {
         ...initialContext,
         phase: 'tool_result',
@@ -1198,11 +1239,10 @@ export class ConversationControlActionImpl {
     // optimisticCreateMessage above is another await round-trip after the earlier
     // guard, and executeClientAgent would otherwise start a fresh child run that
     // wasn't present when the cancellation propagated.
+    const currentMessages = await readClientRunMessages(this.#get, effectiveContext, chatKey);
     if (this.#wasInterimOpStopped(operationId)) return;
 
     // 3. Resume agent from user message (not tool re-execution)
-    const currentMessages = displayMessageSelectors.getDisplayMessagesByKey(chatKey)(this.#get());
-
     const { state, context: initialContext } = this.#get().internal_createAgentState({
       messages: currentMessages,
       parentMessageId: userMsg.id,
@@ -1266,17 +1306,11 @@ export class ConversationControlActionImpl {
     });
 
     const optimisticContext: OptimisticUpdateContext = { operationId };
-    const shouldUseGatewayResume = this.#shouldUseGatewayResume(effectiveContext);
-
-    if (!shouldUseGatewayResume) {
-      this.#writeTopicStatus(effectiveContext, 'active');
-      // Park → resume: a new op continues the run paused on this tool interaction.
-      this.#emitRunResumed(effectiveContext, {
-        operationId,
-        parentMessageId: toolMessageId,
-        runtimeType: 'client',
-      });
-    }
+    const shouldUseGatewayResume = await resolveGatewayResume(
+      effectiveContext,
+      [toolMessageId],
+      this.#get,
+    );
 
     const toolContent = reason ? `User skipped: ${reason}` : 'User skipped this question.';
 
@@ -1302,41 +1336,47 @@ export class ConversationControlActionImpl {
           toolMessageIds: [toolMessageId],
         });
         if (this.#discardAlreadyResolvedSource(sourceResolution, operationId)) return;
+        if (!sourceResolution.handled) await options?.onLegacyFallback?.();
 
-        this.#emitRunResumed(effectiveContext, {
-          operationId,
-          parentMessageId: toolMessageId,
-          runtimeType: 'gateway',
-        });
-        if (sourceResolution.handled) {
-          if (sourceResolution.execution) {
+        if (
+          sourceResolution.handled ||
+          (await resolveConfiguredGatewayResume(effectiveContext, this.#get))
+        ) {
+          this.#emitRunResumed(effectiveContext, {
+            operationId,
+            parentMessageId: toolMessageId,
+            runtimeType: 'gateway',
+          });
+          if (sourceResolution.handled) {
+            if (sourceResolution.execution) {
+              await this.#get().executeGatewayAgent({
+                context: effectiveContext,
+                message: '',
+                metadata: requestMetadata,
+                parentMessageId: toolMessageId,
+                precreatedResult: sourceResolution.execution,
+              });
+            }
+          } else {
             await this.#get().executeGatewayAgent({
               context: effectiveContext,
               message: '',
               metadata: requestMetadata,
               parentMessageId: toolMessageId,
-              precreatedResult: sourceResolution.execution,
+              resumeToolResult: {
+                content: toolContent,
+                outcome: 'skipped',
+                parentMessageId: toolMessageId,
+                rejectionReason: reason,
+                toolCallId,
+              },
             });
           }
-        } else {
-          await options?.onLegacyFallback?.();
-          await this.#get().executeGatewayAgent({
-            context: effectiveContext,
-            message: '',
-            metadata: requestMetadata,
-            parentMessageId: toolMessageId,
-            resumeToolResult: {
-              content: toolContent,
-              outcome: 'skipped',
-              parentMessageId: toolMessageId,
-              rejectionReason: reason,
-              toolCallId,
-            },
-          });
+          this.#writeTopicStatus(effectiveContext, 'active');
+          this.#completeOpsById(pausedOpIds);
+          completeOperation(operationId);
+          return;
         }
-        this.#writeTopicStatus(effectiveContext, 'active');
-        this.#completeOpsById(pausedOpIds);
-        completeOperation(operationId);
       } catch (error) {
         const err = error as Error;
         console.error('[skipToolInteraction][server] Gateway resume failed:', err);
@@ -1346,8 +1386,15 @@ export class ConversationControlActionImpl {
         });
         throw error;
       }
-      return;
     }
+
+    this.#writeTopicStatus(effectiveContext, 'active');
+    // Park → resume: a new op continues the run paused on this tool interaction.
+    this.#emitRunResumed(effectiveContext, {
+      operationId,
+      parentMessageId: toolMessageId,
+      runtimeType: 'client',
+    });
 
     // 1. Mark intervention as rejected (skipped) with reason
     await this.#get().optimisticUpdateMessagePlugin(
@@ -1400,11 +1447,10 @@ export class ConversationControlActionImpl {
     // optimisticCreateMessage above is another await round-trip after the guard
     // before it, and executeClientAgent would otherwise start a fresh child run
     // that wasn't present when the cancellation propagated.
+    const currentMessages = await readClientRunMessages(this.#get, effectiveContext, chatKey);
     if (this.#wasInterimOpStopped(operationId)) return;
 
     // 3. Resume agent from user message
-    const currentMessages = displayMessageSelectors.getDisplayMessagesByKey(chatKey)(this.#get());
-
     const { state, context: initialContext } = this.#get().internal_createAgentState({
       messages: currentMessages,
       parentMessageId: userMsg.id,
@@ -1453,7 +1499,11 @@ export class ConversationControlActionImpl {
 
     const toolMessage = dbMessageSelectors.getDbMessageById(toolMessageId)(this.#get());
     if (!toolMessage) return;
-    const shouldUseGatewayStop = this.#shouldUseGatewayResume(effectiveContext);
+    const shouldUseGatewayStop = await resolveGatewayResume(
+      effectiveContext,
+      [toolMessageId],
+      this.#get,
+    );
 
     const { operationId } = startOperation({
       type: 'cancelToolInteraction',
@@ -1501,15 +1551,21 @@ export class ConversationControlActionImpl {
           toolMessageIds: [toolMessageId],
         });
         if (this.#discardAlreadyResolvedSource(sourceResolution, operationId)) return;
+        if (!sourceResolution.handled) await options?.onLegacyFallback?.();
 
-        if (!sourceResolution.handled) {
-          await options?.onLegacyFallback?.();
-          await this.stopPendingApproval(
-            batchToolMessageIds.length > 0 ? batchToolMessageIds : [toolMessageId],
-            effectiveContext,
-          );
+        if (
+          sourceResolution.handled ||
+          (await resolveConfiguredGatewayResume(effectiveContext, this.#get))
+        ) {
+          if (!sourceResolution.handled) {
+            await this.stopPendingApproval(
+              batchToolMessageIds.length > 0 ? batchToolMessageIds : [toolMessageId],
+              effectiveContext,
+            );
+          }
+          completeOperation(operationId);
+          return;
         }
-        completeOperation(operationId);
       } catch (error) {
         const err = error as Error;
         this.#get().failOperation(operationId, {
@@ -1518,7 +1574,6 @@ export class ConversationControlActionImpl {
         });
         throw error;
       }
-      return;
     }
 
     this.#writeTopicStatus(effectiveContext, 'active');
@@ -1551,8 +1606,7 @@ export class ConversationControlActionImpl {
    *   keeps going on its own; no synthetic user message, no new op.
    *
    * The framework's intervention surface still drives the UI: we just
-   * stamp the local terminal state immediately. Remote submits remain
-   * `pending + resolving` until the blocked producer echoes its ACK, so the
+   * keep submissions `pending + resolving` until the producer echoes its ACK, so the
    * form stays visible and disabled across remounts without claiming success.
    *
    * `actionType`:
@@ -1568,12 +1622,12 @@ export class ConversationControlActionImpl {
     context?: ConversationContext,
   ): Promise<void> => {
     const toolMessage = dbMessageSelectors.getDbMessageById(toolMessageId)(this.#get());
-    if (!toolMessage) return;
+    if (!toolMessage) throw new Error('Question message is unavailable');
+    if (this.#discardSettledHeteroQuestion(toolMessageId)) return;
 
     const toolCallId = toolMessage.tool_call_id;
     if (!toolCallId) {
-      console.warn('[submitHeteroIntervention] tool message has no tool_call_id', toolMessageId);
-      return;
+      throw new Error('Question has no tool call identity');
     }
 
     const effectiveContext: ConversationContext = context ?? {
@@ -1582,7 +1636,6 @@ export class ConversationControlActionImpl {
       threadId: this.#get().activeThreadId,
     };
     const originalIntervention = toolMessage.pluginIntervention;
-    const originalContent = toolMessage.content;
     const interventionState = (
       toolMessage.pluginState as
         { heterogeneousIntervention?: { interactionKind?: unknown } } | undefined
@@ -1599,39 +1652,31 @@ export class ConversationControlActionImpl {
     // durable first-winner claim. The message/runtime ids are locators only;
     // the source endpoint remains responsible for ACL and token authority.
     if (originalIntervention?.batchId && originalIntervention.operationId && sourceAction) {
-      const sourceResolution = await this.tryResolveAgentInterventionBySource({
-        action: sourceAction,
-        context: effectiveContext,
-        toolMessageIds: [toolMessageId],
-      });
+      let sourceResolution: ResolveAgentInterventionBySourceResult;
+      try {
+        sourceResolution = await this.tryResolveAgentInterventionBySource({
+          action: sourceAction,
+          context: effectiveContext,
+          toolMessageIds: [toolMessageId],
+        });
+      } catch (error) {
+        if (this.#discardSettledHeteroQuestion(toolMessageId)) return;
+        if (await this.#get().checkQuestionSubmission(toolMessageId, effectiveContext)) {
+          this.#discardSettledHeteroQuestion(toolMessageId);
+          return;
+        }
+        throw error;
+      }
+      if (this.#discardSettledHeteroQuestion(toolMessageId)) return;
       if (this.#discardAlreadyResolvedSource(sourceResolution)) return;
 
       if (sourceResolution.handled) {
         const sourceOptimisticContext: OptimisticUpdateContext = { context: effectiveContext };
-        const resolvingIntervention = {
-          ...originalIntervention,
-          resolving: true,
-          status: 'pending' as const,
-        };
-        this.#get().internal_dispatchMessage(
-          {
-            id: toolMessageId,
-            type: 'updateMessage',
-            value: { pluginIntervention: resolvingIntervention },
-          },
+        this.#interventions.dispatch(
+          toolMessageId,
+          { resolving: true, skipped: actionType === 'skip', status: 'pending' },
           sourceOptimisticContext,
         );
-        if (toolMessage.parentId) {
-          this.#get().internal_dispatchMessage(
-            {
-              id: toolMessage.parentId,
-              tool_call_id: toolCallId,
-              type: 'updateMessageTools',
-              value: { intervention: resolvingIntervention },
-            },
-            sourceOptimisticContext,
-          );
-        }
         if (actionType === 'submit') {
           await this.setInterventionAnswers(toolMessageId, payload ?? {}, sourceOptimisticContext);
         }
@@ -1641,18 +1686,21 @@ export class ConversationControlActionImpl {
 
     // Walk up to the assistant that owns this tool. `messageOperationMap` is a
     // most-granular pointer, so it may reference a transient child op
-    // (`reasoning`, `toolCalling`, ...), not the runtime execution that owns
-    // the AskUser bridge. This memory-only lookup is deliberately deferred
-    // until the durable path is unavailable or reports `handled: false`; it is
-    // provenance for local desktop IPC / legacy fallback, never server auth.
+    // (`reasoning`, `toolCalling`, ...), not the runtime owning the AskUser bridge.
+    // Prefer live IPC provenance; on OSS reload, the persisted op locates the
+    // remote callback. The server still authorizes the operation independently.
     const { messageOperationMap } = this.#get();
     const candidateOperationId =
       (toolMessage.parentId && messageOperationMap?.[toolMessage.parentId]) ??
-      messageOperationMap?.[toolMessageId];
+      messageOperationMap?.[toolMessageId] ??
+      originalIntervention?.operationId;
 
     if (!candidateOperationId) {
-      console.warn('[submitHeteroIntervention] no operationId for', toolMessageId);
-      return;
+      if (await this.#get().checkQuestionSubmission(toolMessageId, effectiveContext)) {
+        this.#discardSettledHeteroQuestion(toolMessageId);
+        return;
+      }
+      throw new Error('Question runtime is unavailable');
     }
 
     // Resolve the runtime execution op before choosing IPC vs remote transport.
@@ -1661,76 +1709,30 @@ export class ConversationControlActionImpl {
     const { operation, operationId } =
       this.#resolveHeteroInterventionExecutionOperation(candidateOperationId);
 
-    // If the operation has already been garbage-collected (e.g. the bridge
-    // timed out earlier and `runtime_end` rolled the op into `completed`
-    // 30s+ ago), don't pass the stale opId into the optimistic chain — the
-    // `internal_getConversationContext` fallback uses global state, which
-    // matches the active conversation the user just clicked in. The IPC
-    // submit below stays unchanged: `bridge.resolve()` no-ops on unknown
-    // toolCallIds, so it's safe to fire even when the bridge is gone.
+    // A cold/GC'd run still uses the card's captured context, never the active tab.
     const operationAlive = !!operation;
     if (!operationAlive) {
       console.warn(
-        '[submitHeteroIntervention] operation already gone, using global-state fallback for optimistic write:',
+        '[submitHeteroIntervention] operation already gone, using card context:',
         operationId,
       );
     }
-    const optimisticContext: OptimisticUpdateContext = operationAlive ? { operationId } : {};
+    const optimisticContext: OptimisticUpdateContext = operationAlive
+      ? { operationId }
+      : { context: effectiveContext };
     const isLocalDesktopHetero = operation?.type === 'execHeterogeneousAgent';
 
-    if (!isLocalDesktopHetero) {
-      // Publishing the user intent is not completion. Keep the interaction
-      // pending but mark its in-flight phase so a remount/retry cannot present
-      // an optimistic terminal state before the producer has consumed it.
-      await this.#get().optimisticUpdateMessagePlugin(
-        toolMessageId,
-        { intervention: { resolving: true, status: 'pending' } },
-        optimisticContext,
-      );
-      if (actionType === 'submit') {
-        await this.setInterventionAnswers(toolMessageId, payload ?? {}, optimisticContext);
-      }
-    } else if (actionType === 'submit') {
-      await this.#get().optimisticUpdateMessagePlugin(
-        toolMessageId,
-        { intervention: { status: 'approved' } },
-        optimisticContext,
-      );
-      // Persist the structured `{ [questionText]: selectedLabel(s) }` answers
-      // to `pluginState.askUserAnswers` so the Render component can show
-      // Q&A pairs instead of parsing the bridge's prose `User answers:`
-      // dump out of `content`. Best-effort — never block the IPC submit.
+    // Both transports wait for the producer's result event. Local IPC delivery
+    // does not prove that an already-ended bridge consumed the answer.
+    this.#interventions.dispatch(
+      toolMessageId,
+      { resolving: true, skipped: actionType === 'skip', status: 'pending' },
+      optimisticContext,
+    );
+    if (actionType === 'submit') {
       await this.setInterventionAnswers(toolMessageId, payload ?? {}, optimisticContext);
-      // Bridge formats its own "User answers:" string for CC, so the eventual
-      // tool_result re-rewrites this content. The optimistic write is just
-      // for the brief gap between Submit and CC echoing the result back.
-      const summary = `User submitted: ${JSON.stringify(payload ?? {})}`;
-      await this.#get().optimisticUpdateMessageContent(
-        toolMessageId,
-        summary,
-        undefined,
-        optimisticContext,
-      );
-    } else {
-      const reason = actionType === 'skip' ? 'User skipped' : 'User cancelled';
-      await this.#get().optimisticUpdateMessagePlugin(
-        toolMessageId,
-        {
-          intervention: {
-            rejectedReason: reason,
-            skipped: actionType === 'skip',
-            status: 'rejected',
-          },
-        },
-        optimisticContext,
-      );
-      await this.#get().optimisticUpdateMessageContent(
-        toolMessageId,
-        `${reason} this interaction.`,
-        undefined,
-        optimisticContext,
-      );
     }
+    if (this.#discardSettledHeteroQuestion(toolMessageId)) return;
 
     // Forward the answer to the producer over the transport THIS op actually
     // ran on — read from the op itself, not re-derived from the current agent
@@ -1757,39 +1759,47 @@ export class ConversationControlActionImpl {
             : { cancelReason: 'user_cancelled', cancelled: true, operationId, toolCallId },
         );
       } else {
+        // The producer long-polls the server operation's stream. A gateway run's
+        // local op id is client-only, so an answer published under it never
+        // reaches the producer.
+        const remoteOperationId = operation?.metadata?.serverOperationId ?? operationId;
         const resolutionIntent = JSON.stringify(
           canonicalizeResolutionPayload({ actionType, payload: payload ?? {} }),
         );
-        const resolutionKey = `${operationId}:${toolCallId}:${resolutionIntent}`;
+        const resolutionKey = `${remoteOperationId}:${toolCallId}:${resolutionIntent}`;
         const resolutionRequestId =
           this.#heteroResolutionRequestIds.get(resolutionKey) ?? globalThis.crypto.randomUUID();
         this.#heteroResolutionRequestIds.set(resolutionKey, resolutionRequestId);
         await lambdaClient.aiAgent.submitHeteroIntervention.mutate(
           actionType === 'submit'
-            ? { operationId, resolutionRequestId, result: payload ?? {}, toolCallId }
+            ? {
+                operationId: remoteOperationId,
+                resolutionRequestId,
+                result: payload ?? {},
+                toolCallId,
+              }
             : {
                 cancelReason: 'user_cancelled',
                 cancelled: true,
-                operationId,
+                operationId: remoteOperationId,
                 resolutionRequestId,
                 toolCallId,
               },
         );
       }
     } catch (err) {
+      if (this.#discardSettledHeteroQuestion(toolMessageId)) return;
       console.error('[submitHeteroIntervention] submitIntervention failed:', err);
-      await this.#get().optimisticUpdateMessagePlugin(
+      // Only the client-owned in-flight hint needs undoing. Writing pending
+      // back to the server could overwrite a producer result racing this error.
+      this.#interventions.dispatch(
         toolMessageId,
-        { intervention: originalIntervention ?? { status: 'pending' } },
+        { resolving: false, skipped: originalIntervention?.skipped ?? false, status: 'pending' },
         optimisticContext,
       );
-      if (isLocalDesktopHetero) {
-        await this.#get().optimisticUpdateMessageContent(
-          toolMessageId,
-          originalContent,
-          undefined,
-          optimisticContext,
-        );
+      if (await this.#get().checkQuestionSubmission(toolMessageId, effectiveContext)) {
+        this.#discardSettledHeteroQuestion(toolMessageId);
+        return;
       }
       throw err;
     }
@@ -1899,39 +1909,29 @@ export class ConversationControlActionImpl {
     });
 
     const optimisticContext = { operationId };
-    const shouldUseGatewayResume = this.#shouldUseGatewayResume(effectiveContext);
-
-    if (!shouldUseGatewayResume) this.#writeTopicStatus(effectiveContext, 'active');
+    const rollbackLocalDecision = this.#interventions.applyLocalDecision(
+      [messageId],
+      { rejectedReason: reason, status: 'rejected' },
+      optimisticContext,
+    );
+    const shouldUseGatewayResume = await resolveGatewayResume(
+      effectiveContext,
+      [messageId],
+      this.#get,
+    );
 
     const toolContent = !!reason
       ? `User reject this tool calling with reason: ${reason}`
       : 'User reject this tool calling without reason';
-    if (!shouldUseGatewayResume) {
-      await this.#get().optimisticUpdateMessagePlugin(
-        toolMessage.id,
-        { intervention: { rejectedReason: reason, status: 'rejected' } },
-        optimisticContext,
-      );
-      await this.#get().optimisticUpdateMessageContent(
-        messageId,
-        toolContent,
-        undefined,
-        optimisticContext,
-      );
-    }
     const requestMetadata = this.#getRequestMetadataFromMessageChain(messageId);
 
-    // Server-mode: start a **new** Gateway op carrying the rejection.
-    // We use `rejected_continue` uniformly — server-side `rejected` and
-    // `rejected_continue` share the same code path (both surface the
-    // rejection to the LLM as user feedback), so a separate `rejected`
-    // decision adds complexity without behavioural difference.
     if (shouldUseGatewayResume) {
       const toolCallId = toolMessage.tool_call_id;
       if (!toolCallId) {
         console.warn(
           '[rejectToolCalling][server] tool message missing tool_call_id; skipping resume',
         );
+        rollbackLocalDecision();
         completeOperation(operationId);
         return;
       }
@@ -1944,41 +1944,49 @@ export class ConversationControlActionImpl {
         });
         if (this.#discardAlreadyResolvedSource(sourceResolution, operationId)) return;
 
-        // Park → resume: the new gateway op continues the run paused on this tool.
-        this.#emitRunResumed(effectiveContext, {
-          operationId,
-          parentMessageId: messageId,
-          runtimeType: 'gateway',
-        });
-        if (sourceResolution.handled) {
-          if (sourceResolution.execution) {
+        if (
+          sourceResolution.handled ||
+          (await resolveConfiguredGatewayResume(effectiveContext, this.#get))
+        ) {
+          // Park → resume: the new gateway op continues the run paused on this tool.
+          this.#emitRunResumed(effectiveContext, {
+            operationId,
+            parentMessageId: messageId,
+            runtimeType: 'gateway',
+          });
+          if (sourceResolution.handled) {
+            if (sourceResolution.execution) {
+              await this.#get().executeGatewayAgent({
+                context: effectiveContext,
+                message: '',
+                metadata: requestMetadata,
+                parentMessageId: messageId,
+                precreatedResult: sourceResolution.execution,
+              });
+            }
+          } else {
             await this.#get().executeGatewayAgent({
               context: effectiveContext,
               message: '',
               metadata: requestMetadata,
               parentMessageId: messageId,
-              precreatedResult: sourceResolution.execution,
+              resumeApproval: {
+                decision: 'rejected_continue',
+                parentMessageId: messageId,
+                rejectionReason: reason,
+                toolCallId,
+              },
             });
           }
-        } else {
-          await this.#get().executeGatewayAgent({
-            context: effectiveContext,
-            message: '',
-            metadata: requestMetadata,
-            parentMessageId: messageId,
-            resumeApproval: {
-              decision: 'rejected_continue',
-              parentMessageId: messageId,
-              rejectionReason: reason,
-              toolCallId,
-            },
-          });
+          this.#writeTopicStatus(effectiveContext, 'active');
+          this.#completeOpsById(pausedOpIds);
+          completeOperation(operationId);
+          return;
         }
-        this.#writeTopicStatus(effectiveContext, 'active');
-        this.#completeOpsById(pausedOpIds);
       } catch (error) {
         const err = error as Error;
         console.error('[rejectToolCalling][server] Gateway resume failed:', err);
+        rollbackLocalDecision();
         this.#get().failOperation(operationId, {
           type: 'rejectToolCalling',
           message: err.message || 'Unknown error',
@@ -1986,6 +1994,21 @@ export class ConversationControlActionImpl {
         throw error;
       }
     }
+
+    this.#writeTopicStatus(effectiveContext, 'active');
+    await this.#interventions.settleAfter([messageId], async () => {
+      await this.#get().optimisticUpdateMessagePlugin(
+        toolMessage.id,
+        { intervention: { rejectedReason: reason, status: 'rejected' } },
+        optimisticContext,
+      );
+      await this.#get().optimisticUpdateMessageContent(
+        messageId,
+        toolContent,
+        undefined,
+        optimisticContext,
+      );
+    });
 
     completeOperation(operationId);
   };
@@ -2014,18 +2037,23 @@ export class ConversationControlActionImpl {
     // the LLM loop with the rejection content surfaced as user feedback.
     // Skip the client-mode `rejectToolCalling` chain below — that would fire
     // a duplicate halting `reject` before this continue signal.
-    if (this.#shouldUseGatewayResume(effectiveContext)) {
+    const rollbackLocalDecision = this.#interventions.applyLocalDecision(
+      [messageId],
+      { rejectedReason: reason, status: 'rejected' },
+      { context: effectiveContext },
+    );
+    if (await resolveGatewayResume(effectiveContext, [messageId], this.#get)) {
       const requestMetadata = this.#getRequestMetadataFromMessageChain(messageId);
       const toolCallId = toolMessage.tool_call_id;
       if (!toolCallId) {
         console.warn(
           '[rejectAndContinueToolCalling][server] tool message missing tool_call_id; skipping resume',
         );
+        rollbackLocalDecision();
         return;
       }
 
       const pausedOpIds = this.#getRunningServerOps(effectiveContext).map((op) => op.id);
-
       const { operationId } = startOperation({
         type: 'rejectToolCalling',
         context: {
@@ -2045,49 +2073,56 @@ export class ConversationControlActionImpl {
         });
         if (this.#discardAlreadyResolvedSource(sourceResolution, operationId)) return;
 
-        // Park → resume: the new gateway op continues the run paused on this tool.
-        this.#emitRunResumed(effectiveContext, {
-          operationId,
-          parentMessageId: messageId,
-          runtimeType: 'gateway',
-        });
-        if (sourceResolution.handled) {
-          if (sourceResolution.execution) {
+        if (
+          sourceResolution.handled ||
+          (await resolveConfiguredGatewayResume(effectiveContext, this.#get))
+        ) {
+          // Park → resume: the new gateway op continues the run paused on this tool.
+          this.#emitRunResumed(effectiveContext, {
+            operationId,
+            parentMessageId: messageId,
+            runtimeType: 'gateway',
+          });
+          if (sourceResolution.handled) {
+            if (sourceResolution.execution) {
+              await this.#get().executeGatewayAgent({
+                context: effectiveContext,
+                message: '',
+                metadata: requestMetadata,
+                parentMessageId: messageId,
+                precreatedResult: sourceResolution.execution,
+              });
+            }
+          } else {
             await this.#get().executeGatewayAgent({
               context: effectiveContext,
               message: '',
               metadata: requestMetadata,
               parentMessageId: messageId,
-              precreatedResult: sourceResolution.execution,
+              resumeApproval: {
+                decision: 'rejected_continue',
+                parentMessageId: messageId,
+                rejectionReason: reason,
+                toolCallId,
+              },
             });
           }
-        } else {
-          await this.#get().executeGatewayAgent({
-            context: effectiveContext,
-            message: '',
-            metadata: requestMetadata,
-            parentMessageId: messageId,
-            resumeApproval: {
-              decision: 'rejected_continue',
-              parentMessageId: messageId,
-              rejectionReason: reason,
-              toolCallId,
-            },
-          });
+          this.#writeTopicStatus(effectiveContext, 'active');
+          this.#completeOpsById(pausedOpIds);
+          completeOperation(operationId);
+          return;
         }
-        this.#writeTopicStatus(effectiveContext, 'active');
-        this.#completeOpsById(pausedOpIds);
         completeOperation(operationId);
       } catch (error) {
         const err = error as Error;
         console.error('[rejectAndContinueToolCalling][server] Gateway resume failed:', err);
+        rollbackLocalDecision();
         this.#get().failOperation(operationId, {
           type: 'rejectToolCalling',
           message: err.message || 'Unknown error',
         });
         throw error;
       }
-      return;
     }
 
     // Client-mode path: reject first (persists rejection + updates content),
@@ -2115,7 +2150,7 @@ export class ConversationControlActionImpl {
 
     // Get current messages for state construction using context
     const chatKey = messageMapKey({ agentId, topicId, threadId, scope });
-    const currentMessages = displayMessageSelectors.getDisplayMessagesByKey(chatKey)(this.#get());
+    const currentMessages = await readClientRunMessages(this.#get, effectiveContext, chatKey);
     const requestMetadata = this.#getRequestMetadataFromMessageChain(messageId, currentMessages);
 
     // Create agent state and context to continue from rejected tool message

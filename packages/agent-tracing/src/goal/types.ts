@@ -16,11 +16,15 @@
 
 /** What caused this advance. `unknown` covers traces written before a caller was labelled. */
 export type GoalAdvanceTrigger =
+  | 'wake'
   | 'create'
+  /** A draft was started: the coordinator's first move on an arranged graph. */
+  | 'start'
   | 'decide'
   | 'settle'
   | 'sweep'
   | 'resume'
+  | 'restart'
   | 'budget'
   | 'manual'
   /** A measurement landed — the goal moves on observation, not only on work. */
@@ -38,6 +42,7 @@ export type GoalTickBranch =
   | 'no_frontier'
   /** The graph has no tasks yet — decompose the goal into explorable directions first. */
   | 'plan_decomposition'
+  | 'explore_graph'
   /** Every task node finished; the goal-level acceptance contract is next. */
   | 'terminal_acceptance'
   /**
@@ -64,7 +69,11 @@ export type GoalTickBranch =
   /** Budget stopped the goal before this task could be dispatched. */
   | 'budget_exhausted'
   /** Start a run for the chosen task. */
-  | 'dispatch_task';
+  | 'dispatch_task'
+  /** A repeated batch's gate passed; the coordinator releases the next wave. */
+  | 'rollout_gate'
+  /** A repeated batch's gate is blocked; the coordinator hands it to a person. */
+  | 'pattern_break';
 
 export type GoalTickOutcome =
   'advanced' | 'achieved' | 'waiting_human' | 'waiting_external' | 'no_progress' | 'failed';
@@ -73,6 +82,17 @@ export type GoalTickOutcome =
 
 export interface GoalTraceGoal {
   agentId?: string | null;
+  exploration?: {
+    instruction: string;
+    maxExperiments: number;
+    checkpoint?: {
+      token: string;
+      snapshot: string;
+      expiresAt: string;
+      readyForAcceptance?: boolean;
+      reviewedNodeIds?: string[];
+    };
+  };
   id: string;
   maxRounds?: number | null;
   maxTotalCost?: number | null;

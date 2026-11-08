@@ -11,9 +11,12 @@ import {
   ClaudeCodeSdkAdapter,
   CodeBuddyAdapter,
   CodexAdapter,
+  CopilotAcpAdapter,
   CursorAcpAdapter,
   CursorAdapter,
+  DevinAcpAdapter,
   DroidAcpAdapter,
+  DshAcpAdapter,
   GrokBuildAdapter,
   KimiCodeAdapter,
   OpenCodeAdapter,
@@ -41,11 +44,17 @@ const localAgentRegistry = {
   'codex': {
     createAdapter: () => new CodexAdapter(),
   },
+  'copilot': {
+    createAdapter: () => new CopilotAcpAdapter(),
+  },
   'cursor': {
     createAdapter: () => new CursorAdapter(),
   },
   'droid': {
     createAdapter: () => new DroidAcpAdapter(),
+  },
+  'devin': {
+    createAdapter: () => new DevinAcpAdapter(),
   },
   'grok-build': {
     createAdapter: () => new GrokBuildAdapter(),
@@ -77,6 +86,14 @@ const runtimeAdapterRegistry = {
   },
   'droid-acp': {
     createAdapter: () => new DroidAcpAdapter(),
+  },
+  /**
+   * DeepSeek Harness over its `acp` profile. Registered here rather than in
+   * `localAgentRegistry` because it carries no local CLI install/auth
+   * descriptor: LobeHub drives the user-installed `dsh` as a protocol runtime.
+   */
+  'deepseek-harness': {
+    createAdapter: () => new DshAcpAdapter(),
   },
 } satisfies Record<string, AgentRegistryEntry>;
 

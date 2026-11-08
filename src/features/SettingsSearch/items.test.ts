@@ -13,9 +13,10 @@ import {
 const webContext: SettingsSearchContext = {
   disableEmailPassword: false,
   enableBusinessFeatures: true,
+  enableChannels: false,
   enableComposio: true,
   enableGatewayMode: true,
-  enableSTT: true,
+  enableWorkspace: false,
   hasEmail: true,
   hideDocs: false,
   isDesktop: false,
@@ -25,6 +26,15 @@ const webContext: SettingsSearchContext = {
 };
 
 describe('settings search index', () => {
+  it('only exposes the channel decision setting when channels are enabled', () => {
+    const item = SETTINGS_SEARCH_ITEMS.find(
+      (entry) => entry.labelKey === 'systemAgent.channelRouting.title',
+    )!;
+
+    expect(item.visible?.({ ...webContext, enableChannels: false }) ?? true).toBe(false);
+    expect(item.visible?.({ ...webContext, enableChannels: true }) ?? true).toBe(true);
+  });
+
   it('derives one search item per lab feature in catalog order', () => {
     const labsItems = SETTINGS_SEARCH_ITEMS.filter((item) => item.tab === SettingsTabs.Labs);
 
@@ -38,12 +48,20 @@ describe('settings search index', () => {
 
     for (const feature of LAB_FEATURES) {
       const item = labsItems.find(({ anchor }) => anchor === `labs-${feature.flag}`)!;
-      expect(item.visible?.(webContext) ?? true).toBe(!feature.desktopOnly);
+      expect(item.visible?.(webContext) ?? true).toBe(
+        !feature.desktopOnly && !feature.workspaceOnly,
+      );
     }
   });
 
   it('indexes the inbox notification channel', () => {
     expect(SETTINGS_SEARCH_ITEMS.some((item) => item.anchor === 'notification-inbox')).toBe(true);
+  });
+
+  it('does not offer the retired TTS setting in search', () => {
+    expect(SETTINGS_SEARCH_ITEMS.some((item) => item.anchor === 'service-model-tts')).toBe(false);
+    expect(TAB_SEARCH_EN_KEYWORDS[SettingsTabs.ServiceModel]).not.toContain('tts');
+    expect(TAB_SEARCH_EN_KEYWORDS[SettingsTabs.ServiceModel]).not.toContain('tts settings');
   });
 
   it('keeps an English floor for labs and oauth apps tabs', () => {
@@ -63,7 +81,7 @@ describe('settings search index', () => {
       expect.arrayContaining(['telegram', 'slack', 'discord', 'wechat']),
     );
     expect(TAB_SEARCH_EN_KEYWORDS[SettingsTabs.ServiceModel]).toEqual(
-      expect.arrayContaining(['search', 'tts settings']),
+      expect.arrayContaining(['search', 'model assignment']),
     );
     expect(TAB_SEARCH_EN_KEYWORDS[SettingsTabs.Storage]).toEqual(
       expect.arrayContaining(['knowledge base']),

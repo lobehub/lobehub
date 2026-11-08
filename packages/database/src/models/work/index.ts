@@ -1,23 +1,44 @@
 import {
+  type CanvasWorkPublishMetadata,
   type DeleteDocumentWorkParams,
   type DeleteTaskWorkParams,
+  type DeleteWorkParams,
   isWorkSkillProvider,
+  type RegisterCanvasWorkParams,
   type RegisterDocumentWorkParams,
   type RegisterExternalWorkParams,
   type RegisterFileWorkParams,
   type RegisterSkillToolResultWorkParams,
   type RegisterTaskWorkParams,
   type SkillToolResultWorkInput,
+  type WorkAccessScope,
   type WorkItem,
   type WorkSkillProvider,
+  type WorkVisibility,
 } from '@lobechat/types';
 
 import type { LobeChatDatabase } from '../../type';
+import {
+  findCanvasIdByWorkId,
+  findCanvasIdsByDeploymentIds,
+  findCanvasWork,
+  findCanvasWorkVersion,
+  findCanvasWorkVersionByToolCall,
+  findReferencedCanvasManifestKeys,
+  listCanvasWorks,
+  recordCanvasPublish,
+  registerCanvasWork,
+} from './canvas';
 import type { WorkContext } from './context';
 import { registerDocumentWork } from './document';
 import { registerExternalWork } from './external';
 import { findFileWorkVersionByToolCall, registerFileWork } from './file';
 import { normalizeGithubShellToolResult, normalizeGithubToolResult } from './githubToolResult';
+import {
+  findLatestGoalReportVersion,
+  registerGoalReportWork,
+  type RegisterGoalReportWorkParams,
+} from './goalReport';
 import { normalizeLinearToolResult } from './linearToolResult';
 import * as queries from './queries';
 import { registerTaskWork } from './task';
@@ -47,8 +68,19 @@ const SKILL_TOOL_RESULT_NORMALIZERS = {
 export class WorkModel {
   private readonly ctx: WorkContext;
 
-  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
-    this.ctx = { db, userId, workspaceId };
+  /**
+   * @param accessScope - Agent Share boundary; defaults to the ordinary
+   * (creator-facing) scope. Share-runtime callers pass
+   * `agentShareWorkAccessScope(...)` so registration stamps provenance and
+   * reads stay confined to that visitor topic.
+   */
+  constructor(
+    db: LobeChatDatabase,
+    userId: string,
+    workspaceId?: string,
+    accessScope?: WorkAccessScope,
+  ) {
+    this.ctx = { accessScope, db, userId, workspaceId };
   }
 
   registerTask = (params: RegisterTaskWorkParams): Promise<WorkItem | null> =>
@@ -62,6 +94,38 @@ export class WorkModel {
 
   registerFile = (params: RegisterFileWorkParams): Promise<WorkItem> =>
     registerFileWork(this.ctx, params);
+
+  registerCanvas = (params: RegisterCanvasWorkParams): Promise<WorkItem> =>
+    registerCanvasWork(this.ctx, params);
+
+  findCanvas = (canvasId: string) => findCanvasWork(this.ctx, canvasId);
+
+  findCanvasIdByWorkId = (workId: string) => findCanvasIdByWorkId(this.ctx, workId);
+
+  findCanvasIdsByDeploymentIds = (deploymentIds: string[]) =>
+    findCanvasIdsByDeploymentIds(this.ctx, deploymentIds);
+
+  recordCanvasPublish = (
+    canvasId: string,
+    params: CanvasWorkPublishMetadata & { url: string },
+  ): Promise<WorkItem | null> => recordCanvasPublish(this.ctx, canvasId, params);
+
+  findCanvasVersion = (workId: string, version: number) =>
+    findCanvasWorkVersion(this.ctx, workId, version);
+
+  findCanvasVersionByToolCall = (canvasId: string, toolCallId: string) =>
+    findCanvasWorkVersionByToolCall(this.ctx, canvasId, toolCallId);
+
+  findReferencedCanvasManifestKeys = (keys: string[]) =>
+    findReferencedCanvasManifestKeys(this.ctx, keys);
+
+  listCanvases = (params: { agentId?: string | null; limit?: number }) =>
+    listCanvasWorks(this.ctx, params);
+
+  registerGoalReport = (params: RegisterGoalReportWorkParams): Promise<WorkItem> =>
+    registerGoalReportWork(this.ctx, params);
+
+  findLatestGoalReport = (goalId: string) => findLatestGoalReportVersion(this.ctx, goalId);
 
   /**
    * Existence probe for a file Work's one-version-per-operation dedup key, so
@@ -114,6 +178,16 @@ export class WorkModel {
 
   deleteTaskWork = (params: DeleteTaskWorkParams): Promise<void> =>
     writes.deleteTaskWork(this.ctx, params);
+
+  deleteWork = (params: DeleteWorkParams) => writes.deleteWork(this.ctx, params);
+
+  /** See {@link writes.reassignTaskWorksOwner}. */
+  reassignTaskWorksOwner = (taskIds: string[], fromUserId: string): Promise<void> =>
+    writes.reassignTaskWorksOwner(this.ctx, taskIds, fromUserId);
+
+  /** See {@link writes.setTaskWorksVisibility}. */
+  setTaskWorksVisibility = (taskIds: string[], visibility: WorkVisibility): Promise<void> =>
+    writes.setTaskWorksVisibility(this.ctx, taskIds, visibility);
 
   listByRootOperation = (params: {
     includeFileWorks?: boolean;

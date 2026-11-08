@@ -1,7 +1,6 @@
 import path from 'node:path';
 
 import type { HeterogeneousProviderBindingProtocol } from '@lobechat/heterogeneous-agents';
-import { PI_BASE_ARGS } from '@lobechat/heterogeneous-agents/spawn';
 import { formatServerDefaultHeterogeneousModel } from '@lobechat/types';
 
 import type { HeterogeneousAgentBuildPlanParams, HeterogeneousAgentDriver } from '../types';
@@ -51,6 +50,28 @@ export const sanitizePiProviderBindingArgs = (source: string[]): string[] => {
   return args;
 };
 
+/** The model-card facts a Pi model entry is built from, whichever side supplied them. */
+interface PiModelCard {
+  abilities?: { reasoning?: boolean; vision?: boolean };
+  contextWindowTokens?: number;
+  displayName?: string;
+  maxOutput?: number;
+}
+
+/** A Pi custom-provider model entry; conservative defaults where the card is silent. */
+const buildPiModel = (model: string, requestModel: string, card: PiModelCard | undefined) => ({
+  contextWindow:
+    card?.contextWindowTokens && card.contextWindowTokens > 0
+      ? card.contextWindowTokens
+      : DEFAULT_CONTEXT_WINDOW,
+  cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
+  id: requestModel,
+  input: card?.abilities?.vision ? ['text', 'image'] : ['text'],
+  maxTokens: card?.maxOutput && card.maxOutput > 0 ? card.maxOutput : DEFAULT_MAX_TOKENS,
+  name: card?.displayName?.trim() || model,
+  reasoning: card?.abilities?.reasoning === true,
+});
+
 const sanitizePiProviderBindingEnv = (source: Record<string, string> | undefined) => {
   const env = { ...source };
   delete env[HOST_API_KEY_ENV];
@@ -59,24 +80,12 @@ const sanitizePiProviderBindingEnv = (source: Record<string, string> | undefined
   return env;
 };
 
+/** Pi uses RPC exclusively; the driver still owns managed provider profiles. */
 export const piDriver: HeterogeneousAgentDriver = {
-  async buildSpawnPlan({
-    args,
-    helpers,
-    promptInput,
-    resumeSessionId,
-  }: HeterogeneousAgentBuildPlanParams) {
-    const inputPlan = await helpers.buildAgentInput('pi', promptInput);
-
-    return {
-      args: [
-        ...PI_BASE_ARGS,
-        ...(resumeSessionId ? ['--session-id', resumeSessionId] : []),
-        ...args,
-        ...inputPlan.args,
-      ],
-      stdinPayload: inputPlan.stdin,
-    };
+  async buildSpawnPlan(_params: HeterogeneousAgentBuildPlanParams) {
+    throw new Error(
+      'pi runs over the RPC transport only — use PiRpcSession / createPiRpcAgentHandle, not the CLI spawn path',
+    );
   },
   prepareProviderBinding({ args, env, profileDir, resolution }) {
     if (!resolution.endpoint) throw new Error('Pi provider binding requires an API endpoint.');
@@ -85,31 +94,14 @@ export const piDriver: HeterogeneousAgentDriver = {
     if (!apiKey) throw new Error('Pi provider binding requires an API key.');
 
     const model = resolution.apiConfig.model;
-    const metadata = resolution.modelMetadata;
     const providerId = `lobehub-${path.basename(profileDir)}`;
-    const contextWindow =
-      metadata?.contextWindowTokens && metadata.contextWindowTokens > 0
-        ? metadata.contextWindowTokens
-        : DEFAULT_CONTEXT_WINDOW;
-    const maxTokens =
-      metadata?.maxOutput && metadata.maxOutput > 0 ? metadata.maxOutput : DEFAULT_MAX_TOKENS;
     const modelsConfig = {
       providers: {
         [providerId]: {
           api: PI_API_BY_PROTOCOL[resolution.protocol],
           apiKey: `$${HOST_API_KEY_ENV}`,
           baseUrl: resolution.endpoint,
-          models: [
-            {
-              contextWindow,
-              cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
-              id: model,
-              input: metadata?.abilities?.vision ? ['text', 'image'] : ['text'],
-              maxTokens,
-              name: metadata?.displayName?.trim() || model,
-              reasoning: metadata?.abilities?.reasoning === true,
-            },
-          ],
+          models: [buildPiModel(model, model, resolution.modelMetadata)],
           name: 'LobeHub Provider',
         },
       },
@@ -127,7 +119,7 @@ export const piDriver: HeterogeneousAgentDriver = {
       profileFiles: [{ content: `${JSON.stringify(modelsConfig, null, 2)}\n`, path: MODELS_FILE }],
     };
   },
-  prepareServerDefaultBinding({ args, endpoint, env, model, profileDir }) {
+  prepareServerDefaultBinding({ args, endpoint, env, model, modelDescriptor, profileDir }) {
     const providerId = 'lobehub-server-default';
     const requestModel = formatServerDefaultHeterogeneousModel(model);
     const modelsConfig = {
@@ -136,17 +128,7 @@ export const piDriver: HeterogeneousAgentDriver = {
           api: 'openai-responses',
           apiKey: `$${HOST_API_KEY_ENV}`,
           baseUrl: `${endpoint}/api/v1/openai/v1`,
-          models: [
-            {
-              contextWindow: DEFAULT_CONTEXT_WINDOW,
-              cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
-              id: requestModel,
-              input: ['text'],
-              maxTokens: DEFAULT_MAX_TOKENS,
-              name: model,
-              reasoning: false,
-            },
-          ],
+          models: [buildPiModel(model, requestModel, modelDescriptor)],
           name: 'LobeHub Server Default',
         },
       },

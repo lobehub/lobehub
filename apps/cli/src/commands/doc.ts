@@ -6,9 +6,13 @@ import pc from 'picocolors';
 import { getTrpcClient } from '../api/client';
 import { confirm, outputJson, printTable, timeAgo, truncate } from '../utils/format';
 import { log } from '../utils/logger';
+import { resolveUrlBuilder, resourcePath, withUrl, withUrls } from './resourceUrl';
 import { resolveAppUrlBuilder } from './task/url';
 
 // ── Helpers ────────────────────────────────────────────────
+
+/** Upper bound for `--all`: at 100 rows a page this covers 100k documents. */
+const MAX_ALL_PAGES = 1000;
 
 function readBodyContent(options: { body?: string; bodyFile?: string }): string | undefined {
   if (options.bodyFile) {
@@ -30,37 +34,129 @@ export function registerDocCommand(program: Command) {
 
   doc
     .command('list')
-    .description('List documents')
-    .option('-L, --limit <n>', 'Maximum number of items to fetch', '30')
+    .description('List documents, one page at a time')
+    .option('-L, --limit <n>', 'Page size (1-100)', '30')
+    .option('--page <n>', 'Zero-based page index; 0 is the first page of the sort order', '0')
+    .option('--sort-by <field>', 'Sort field: createdAt | updatedAt | title', 'updatedAt')
+    .option('--all', 'Walk every page and return all matching documents')
     .option('--file-type <type>', 'Filter by file type')
     .option('--source-type <type>', 'Filter by source type (file, web, api, topic)')
     .option('--json [fields]', 'Output JSON, optionally specify fields (comma-separated)')
     .action(
       async (options: {
+        all?: boolean;
         fileType?: string;
         json?: string | boolean;
         limit?: string;
+        page?: string;
+        sortBy?: string;
         sourceType?: string;
       }) => {
         const client = await getTrpcClient();
-        const pageSize = Number.parseInt(options.limit || '30', 10);
 
-        const query: { fileTypes?: string[]; pageSize: number; sourceTypes?: string[] } = {
-          pageSize,
-        };
+        const pageSize = Number.parseInt(options.limit || '30', 10);
+        if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > 100) {
+          log.error('--limit must be an integer between 1 and 100');
+          process.exit(1);
+          return;
+        }
+
+        const sortBy = options.sortBy || 'updatedAt';
+        if (sortBy !== 'createdAt' && sortBy !== 'updatedAt' && sortBy !== 'title') {
+          log.error('--sort-by must be one of: createdAt, updatedAt, title');
+          process.exit(1);
+          return;
+        }
+
+        const startPage = Number.parseInt(options.page || '0', 10);
+        if (!Number.isInteger(startPage) || startPage < 0) {
+          log.error('--page must be a non-negative integer');
+          process.exit(1);
+          return;
+        }
+
+        const query: {
+          current: number;
+          fileTypes?: string[];
+          pageSize: number;
+          sortBy: 'createdAt' | 'title' | 'updatedAt';
+          sourceTypes?: string[];
+        } = { current: startPage, pageSize, sortBy };
         if (options.fileType) query.fileTypes = [options.fileType];
         if (options.sourceType) query.sourceTypes = [options.sourceType];
-        const result = await client.document.queryDocuments.query(query);
-        const docs = Array.isArray(result) ? result : ((result as any).items ?? []);
+
+        const fetchPage = async (page: number) => {
+          const result = await client.document.queryDocuments.query({ ...query, current: page });
+          const items = Array.isArray(result) ? result : ((result as any).items ?? []);
+          const total = Array.isArray(result) ? undefined : (result as any).total;
+          return { items, total };
+        };
+
+        let docs: any[] = [];
+        let total: number | undefined;
+        let page = startPage;
+        // `--all` normally stops when the server runs out of rows. If it stops
+        // because of MAX_ALL_PAGES instead, the result is incomplete and the
+        // caller has to be told rather than handed a short list as if complete.
+        let truncated = false;
+
+        if (options.all) {
+          // Walk forward until the server runs out of rows. The cap keeps a bad
+          // `total` from turning the loop into an unbounded request stream.
+          let exhausted = false;
+          for (let i = 0; i < MAX_ALL_PAGES; i++) {
+            const chunk = await fetchPage(page);
+            total = chunk.total ?? total;
+            if (chunk.items.length === 0) {
+              exhausted = true;
+              break;
+            }
+
+            docs = docs.concat(chunk.items);
+            if (total !== undefined ? docs.length >= total : chunk.items.length < pageSize) {
+              exhausted = true;
+              break;
+            }
+            page += 1;
+          }
+          truncated = !exhausted;
+          page = startPage;
+        } else {
+          const chunk = await fetchPage(page);
+          docs = chunk.items;
+          total = chunk.total;
+        }
+
+        const pageCount =
+          total === undefined ? undefined : Math.max(1, Math.ceil(total / pageSize));
+        const hasNext =
+          !options.all &&
+          (total === undefined ? docs.length === pageSize : page + 1 < (pageCount ?? 0));
 
         if (options.json !== undefined) {
           const fields = typeof options.json === 'string' ? options.json : undefined;
-          outputJson(docs, fields);
+          outputJson(
+            withUrls(docs, await resolveUrlBuilder(client), resourcePath.document),
+            fields,
+          );
+          // Keep stdout valid JSON — the pagination hint goes to stderr.
+          if (hasNext) {
+            process.stderr.write(
+              `${docs.length} row(s) returned, more available — continue with --page ${page + 1}\n`,
+            );
+          }
+          if (truncated) {
+            process.stderr.write(
+              `Warning: --all stopped at the ${MAX_ALL_PAGES}-page cap after ${docs.length}${total === undefined ? '' : ` of ${total}`} document(s); the list is incomplete — narrow the filters or raise --limit\n`,
+            );
+          }
           return;
         }
 
         if (docs.length === 0) {
-          console.log('No documents found.');
+          console.log(
+            total ? `No documents on page ${page + 1} (${total} total).` : 'No documents found.',
+          );
           return;
         }
 
@@ -72,6 +168,24 @@ export function registerDocCommand(program: Command) {
         ]);
 
         printTable(rows, ['ID', 'TITLE', 'TYPE', 'UPDATED']);
+
+        if (options.all) {
+          if (truncated) {
+            log.warn(
+              `Showing ${docs.length}${total === undefined ? '' : ` of ${total}`} — stopped at the ${MAX_ALL_PAGES}-page cap, so the list is incomplete; narrow the filters or raise --limit`,
+            );
+          } else {
+            log.info(`Total: ${total ?? docs.length} (all pages)`);
+          }
+          return;
+        }
+
+        const from = page * pageSize + 1;
+        const to = page * pageSize + docs.length;
+        const range = `${from}-${to}${total === undefined ? '' : ` of ${total}`}`;
+        const pager =
+          pageCount === undefined ? `page ${page + 1}` : `page ${page + 1}/${pageCount}`;
+        log.info(`${range} · ${pager}${hasNext ? ` · next: --page ${page + 1}` : ' · last page'}`);
       },
     );
 
@@ -93,7 +207,14 @@ export function registerDocCommand(program: Command) {
 
       if (options.json !== undefined) {
         const fields = typeof options.json === 'string' ? options.json : undefined;
-        outputJson(document, fields);
+        outputJson(
+          withUrl(
+            document,
+            await resolveUrlBuilder(client),
+            resourcePath.document(document as any),
+          ),
+          fields,
+        );
         return;
       }
 
@@ -140,18 +261,22 @@ export function registerDocCommand(program: Command) {
         const buildUrl = await resolveAppUrlBuilder(client);
 
         const result = await client.document.createDocument.mutate({
+          // The server builds the editor state from `content`; the CLI has no editor.
           content,
-          editorData: JSON.stringify({ content: content || '', type: 'doc' }),
           fileType: options.fileType,
           knowledgeBaseId: options.kb,
+          // Inside an agent run, credit the document to that run so it shows up
+          // as the run's deliverable (e.g. on a Goal) instead of a loose page.
+          ...(process.env.LOBEHUB_OPERATION_ID
+            ? { operationId: process.env.LOBEHUB_OPERATION_ID }
+            : {}),
           parentId: options.parent,
           slug: options.slug,
           title: options.title,
         });
-        const pathname = options.kb
-          ? `/resource/library/${encodeURIComponent(options.kb)}?file=${encodeURIComponent(result.id)}`
-          : `/page/${encodeURIComponent(result.id)}`;
-        const url = buildUrl(pathname);
+        const url = buildUrl(
+          resourcePath.document({ id: result.id, knowledgeBaseId: options.kb })!,
+        );
 
         console.log(`${pc.green('✓')} Created document ${pc.bold(result.id)}`);
         console.log(`${pc.bold('document')}: ${url}`);
@@ -191,7 +316,6 @@ export function registerDocCommand(program: Command) {
 
       const items = documents.map((d) => ({
         content: d.content,
-        editorData: JSON.stringify({ content: d.content || '', type: 'doc' }),
         fileType: d.fileType,
         knowledgeBaseId: d.knowledgeBaseId,
         parentId: d.parentId,
@@ -204,10 +328,9 @@ export function registerDocCommand(program: Command) {
       const urls = await Promise.all(
         created.map((document, index) => {
           const source = items[index];
-          const pathname = source?.knowledgeBaseId
-            ? `/resource/library/${encodeURIComponent(source.knowledgeBaseId)}?file=${encodeURIComponent(document.id)}`
-            : `/page/${encodeURIComponent(document.id)}`;
-          return buildUrl(pathname);
+          return buildUrl(
+            resourcePath.document({ id: document.id, knowledgeBaseId: source?.knowledgeBaseId })!,
+          );
         }),
       );
       console.log(`${pc.green('✓')} Created ${created.length} document(s)`);
@@ -250,14 +373,14 @@ export function registerDocCommand(program: Command) {
 
         const params: Record<string, any> = { id };
         if (options.title) params.title = options.title;
-        if (content !== undefined) {
-          params.content = content;
-          params.editorData = JSON.stringify({ content, type: 'doc' });
-        }
+        // The server rebuilds the editor state from the new content.
+        if (content !== undefined) params.content = content;
         if (options.parent !== undefined) {
           params.parentId = options.parent || null;
         }
         if (options.fileType) params.fileType = options.fileType;
+        // Inside an agent run, an edit becomes a new version of that run's deliverable.
+        if (process.env.LOBEHUB_OPERATION_ID) params.operationId = process.env.LOBEHUB_OPERATION_ID;
 
         await client.document.updateDocument.mutate(params as any);
         console.log(`${pc.green('✓')} Updated document ${pc.bold(id)}`);
@@ -328,8 +451,8 @@ export function registerDocCommand(program: Command) {
     .action(async (docId: string, topicId: string) => {
       const client = await getTrpcClient();
 
-      // Create the document via notebook router which handles topic association
-      // First verify the document exists
+      // Attach the existing document; creating a copy here used to leave two
+      // documents (and two run deliverables) for a single link.
       const document = await client.document.getDocumentById.query({ id: docId });
       if (!document) {
         log.error(`Document not found: ${docId}`);
@@ -337,16 +460,10 @@ export function registerDocCommand(program: Command) {
         return;
       }
 
-      // Use notebook.createDocument to create a linked copy, associating with the topic
-      const result = await client.notebook.createDocument.mutate({
-        content: document.content || '',
-        description: document.description || '',
-        title: document.title || 'Untitled',
-        topicId,
-      });
+      const result = await client.notebook.associateDocument.mutate({ documentId: docId, topicId });
 
       console.log(
-        `${pc.green('✓')} Linked document ${pc.bold(result.id)} to topic ${pc.bold(topicId)}`,
+        `${pc.green('✓')} Linked document ${pc.bold(result.documentId)} to topic ${pc.bold(topicId)}`,
       );
     });
 
@@ -367,7 +484,7 @@ export function registerDocCommand(program: Command) {
 
       if (options.json !== undefined) {
         const fields = typeof options.json === 'string' ? options.json : undefined;
-        outputJson(docs, fields);
+        outputJson(withUrls(docs, await resolveUrlBuilder(client), resourcePath.document), fields);
         return;
       }
 

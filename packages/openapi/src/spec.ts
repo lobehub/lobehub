@@ -1,7 +1,16 @@
+import {
+  AGENT_ACCOUNT_DIGEST_MINUTES_RANGE,
+  AGENT_ACCOUNT_PERSISTED_KINDS,
+  AGENT_ACCOUNT_STATUSES,
+  AGENT_ACCOUNT_WAKE_MODES,
+} from '@lobechat/types';
 import { API_KEY_PREFIX } from '@lobechat/utils/apiKey';
 import { generateSpecs } from 'hono-openapi';
 
 import { API_KEY_SCOPES } from '@/const/apiKeyScope';
+import type { AgentAccountView } from '@/database/models/agentAccount';
+
+import { evalResponseSchema } from './types/eval-response.type';
 
 const HTTP_METHODS = new Set(['DELETE', 'GET', 'PATCH', 'POST', 'PUT']);
 
@@ -21,7 +30,86 @@ const nullableBoolean = { type: ['boolean', 'null'] } as const;
 const nullableNumber = { type: ['number', 'null'] } as const;
 const nullableObject = { additionalProperties: true, type: ['object', 'null'] } as const;
 
+/**
+ * Every field an account view carries. Typed against the view so a column added
+ * to it fails type-checking here rather than being silently dropped from the
+ * SDK — the schema sets `additionalProperties: false`, so a missing field also
+ * makes strict response validators reject real payloads.
+ */
+const agentAccountProperties = {
+  /** Last time the account was read or used — every account view carries it. */
+  accessedAt: dateTime,
+  agentId: { type: 'string' },
+  capabilities: {
+    additionalProperties: false,
+    properties: {
+      login: nullableBoolean,
+      receive: { type: 'boolean' },
+      send: { type: 'boolean' },
+      sign: nullableBoolean,
+    },
+    required: ['receive', 'send'],
+    type: 'object',
+  },
+  createdAt: dateTime,
+  credentialHint: nullableObject,
+  displayName: nullableString,
+  /** Whether a secret is installed. Never the secret itself. */
+  hasCredential: { type: 'boolean' },
+  id: { type: 'string' },
+  identifier: { type: 'string' },
+  // The persisted kinds, not just the creatable ones: an unfiltered read still
+  // returns retired-kind rows, and the response contract must not exclude a
+  // value the API actually returns.
+  kind: { enum: AGENT_ACCOUNT_PERSISTED_KINDS, type: 'string' },
+  metadata: nullableObject,
+  provider: { type: 'string' },
+  revokedAt: { ...dateTime, type: ['string', 'null'] },
+  // The owner's own settings. Stored JSON, so a field a later build adds may appear.
+  settings: {
+    additionalProperties: true,
+    properties: {
+      wake: {
+        additionalProperties: true,
+        properties: {
+          digestMinutes: {
+            maximum: AGENT_ACCOUNT_DIGEST_MINUTES_RANGE.max,
+            minimum: AGENT_ACCOUNT_DIGEST_MINUTES_RANGE.min,
+            type: 'integer',
+          },
+          mode: { enum: AGENT_ACCOUNT_WAKE_MODES, type: 'string' },
+          wakeSenders: { items: { type: 'string' }, type: 'array' },
+        },
+        type: 'object',
+      },
+    },
+    type: 'object',
+  },
+  status: { enum: AGENT_ACCOUNT_STATUSES, type: 'string' },
+  updatedAt: dateTime,
+  userId: { type: 'string' },
+  workspaceId: nullableString,
+} satisfies Record<keyof AgentAccountView, SchemaObject>;
+
 const resourceSchemas: Record<string, SchemaObject> = {
+  AgentAccount: {
+    additionalProperties: false,
+    properties: agentAccountProperties,
+    required: [
+      'id',
+      'agentId',
+      'kind',
+      'identifier',
+      'provider',
+      'status',
+      'capabilities',
+      'hasCredential',
+      'accessedAt',
+      'createdAt',
+      'updatedAt',
+    ],
+    type: 'object',
+  },
   ApiKey: {
     additionalProperties: false,
     properties: {
@@ -47,6 +135,19 @@ const resourceSchemas: Record<string, SchemaObject> = {
       id: { type: 'string' },
       model: nullableString,
       params: nullableObject,
+      personal: { type: 'boolean' },
+      plugins: {
+        type: 'array',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            identifier: { type: 'string' },
+            mode: { type: 'string', enum: ['pinned', 'auto', 'disabled'] },
+          },
+          required: ['identifier', 'mode'],
+        },
+      },
       provider: nullableString,
       slug: nullableString,
       systemRole: nullableString,
@@ -66,6 +167,50 @@ const resourceSchemas: Record<string, SchemaObject> = {
       updatedAt: dateTime,
     },
     required: ['id', 'name', 'createdAt', 'updatedAt'],
+    type: 'object',
+  },
+  ChatGroup: {
+    additionalProperties: false,
+    properties: {
+      avatar: nullableString,
+      backgroundColor: nullableString,
+      createdAt: dateTime,
+      description: nullableString,
+      id: { type: 'string' },
+      members: {
+        items: {
+          additionalProperties: false,
+          properties: {
+            agentId: { type: 'string' },
+            enabled: nullableBoolean,
+            order: { type: ['integer', 'null'] },
+            role: {
+              enum: ['supervisor', 'participant', 'assistant', null],
+              type: ['string', 'null'],
+            },
+          },
+          required: ['agentId', 'enabled', 'order', 'role'],
+          type: 'object',
+        },
+        type: 'array',
+      },
+      personal: { type: 'boolean' },
+      pinned: nullableBoolean,
+      title: nullableString,
+      updatedAt: dateTime,
+    },
+    required: [
+      'id',
+      'title',
+      'description',
+      'avatar',
+      'backgroundColor',
+      'personal',
+      'pinned',
+      'members',
+      'createdAt',
+      'updatedAt',
+    ],
     type: 'object',
   },
   ChatResponse: {
@@ -368,6 +513,19 @@ const resourceSchemas: Record<string, SchemaObject> = {
         required: ['since', 'until'],
         type: 'object',
       },
+      quota: {
+        additionalProperties: false,
+        properties: {
+          limit: nullableNumber,
+          remaining: nullableNumber,
+          resetsAt: { ...dateTime, type: ['string', 'null'] },
+          source: { enum: ['personal', 'workspace_pool', 'member_budget'], type: 'string' },
+          used: { type: 'number' },
+          usedRatio: nullableNumber,
+        },
+        required: ['limit', 'remaining', 'resetsAt', 'source', 'used', 'usedRatio'],
+        type: ['object', 'null'],
+      },
       remainingBalance: nullableNumber,
       scope: { enum: ['personal', 'workspace'], type: 'string' },
       spent: { type: 'number' },
@@ -390,6 +548,7 @@ const resourceSchemas: Record<string, SchemaObject> = {
       'currency',
       'daily',
       'period',
+      'quota',
       'remainingBalance',
       'scope',
       'spent',
@@ -403,6 +562,7 @@ const groupResources: Record<string, { listKey: string; schema: string }> = {
   'agent-groups': { listKey: 'agentGroups', schema: 'AgentGroup' },
   'agents': { listKey: 'agents', schema: 'Agent' },
   'api-keys': { listKey: 'apiKeys', schema: 'ApiKey' },
+  'chat-groups': { listKey: 'chatGroups', schema: 'ChatGroup' },
   'files': { listKey: 'files', schema: 'File' },
   'knowledge-bases': { listKey: 'knowledgeBases', schema: 'KnowledgeBase' },
   'messages': { listKey: 'messages', schema: 'Message' },
@@ -417,6 +577,128 @@ const groupResources: Record<string, { listKey: string; schema: string }> = {
 };
 
 const ref = (schema: string): SchemaObject => ({ $ref: `#/components/schemas/${schema}` });
+
+/** One chat bubble of the IM channel — whole, never a partial stream. */
+const imMessageSchema: SchemaObject = {
+  additionalProperties: false,
+  properties: {
+    agentId: nullableString,
+    content: { type: 'string' },
+    createdAt: dateTime,
+    error: { type: 'boolean' },
+    files: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          id: { type: 'string' },
+          name: { type: 'string' },
+          fileType: { type: 'string' },
+          size: { type: 'number' },
+          url: { type: 'string' },
+        },
+        required: ['id', 'name', 'fileType', 'size', 'url'],
+      },
+    },
+    id: { type: 'string' },
+    role: { enum: ['assistant', 'user'], type: 'string' },
+  },
+  required: ['agentId', 'content', 'createdAt', 'error', 'id', 'role'],
+  type: 'object',
+};
+
+const imResponseSchema = (method: string, rest: string): SchemaObject => {
+  if (method === 'post' && rest === 'messages') {
+    return {
+      additionalProperties: false,
+      properties: {
+        accepted: { type: 'boolean' },
+        operationId: nullableString,
+        topicId: { type: 'string' },
+        userMessage: imMessageSchema,
+      },
+      required: ['accepted', 'operationId', 'topicId', 'userMessage'],
+      type: 'object',
+    };
+  }
+
+  if (rest.endsWith('/read')) {
+    return {
+      additionalProperties: false,
+      properties: { unread: { minimum: 0, type: 'integer' } },
+      required: ['unread'],
+      type: 'object',
+    };
+  }
+
+  return {
+    additionalProperties: false,
+    properties: {
+      cursor: { type: 'string' },
+      messages: { items: imMessageSchema, type: 'array' },
+      readUpTo: {
+        anyOf: [
+          {
+            additionalProperties: false,
+            properties: { messageId: { type: 'string' }, readAt: dateTime },
+            required: ['messageId', 'readAt'],
+            type: 'object',
+          },
+          { type: 'null' },
+        ],
+      },
+      state: { type: 'string' },
+      typing: { type: 'boolean' },
+      unread: { minimum: 0, type: 'integer' },
+    },
+    required: ['cursor', 'messages', 'readUpTo', 'state', 'typing', 'unread'],
+    type: 'object',
+  };
+};
+
+/**
+ * Personal-agent resources whose payload is coordinator / inbox state rather
+ * than a stable CRUD row (a goal's graph snapshot, a category of memory
+ * entries, a page of receipts). The spec stays deliberately vague for these —
+ * same policy as unnamed sub-operations: `additionalProperties` over a guessed
+ * shape, so a generated client is never confidently mistyped.
+ */
+const PERSONAL_AGENT_GROUPS = new Set(['goals', 'memories', 'notifications', 'signals', 'tasks']);
+
+/**
+ * Handlers whose success status is not 200. A controller's return code is not
+ * visible to the generator, so every non-200 success has to be declared here —
+ * otherwise the document (and the SDK generated from it) advertises a status
+ * the runtime never sends, and status-discriminating clients branch wrongly.
+ */
+const CREATED_OPERATIONS = new Set([
+  'POST agent-groups',
+  'POST agents/{id}/duplicate',
+  'POST agents/{id}/accounts',
+  'POST api-keys',
+  'POST chat-groups',
+  'POST eval/benchmarks',
+  'POST eval/datasets',
+  'POST eval/datasets/{datasetId}/test-cases',
+  'POST goals',
+  'POST mcp-servers',
+  'POST tasks',
+]);
+
+const ACCEPTED_OPERATIONS = new Set([
+  'POST eval/runs',
+  'POST signals/source-events',
+  'POST signals/trigger',
+  'POST tasks/{id}/runs',
+]);
+
+const successStatusFor = (group: string, rest: string, method: string): number => {
+  const operation = `${method.toUpperCase()} ${group}${rest ? `/${rest}` : ''}`;
+  if (ACCEPTED_OPERATIONS.has(operation)) return 202;
+  if (CREATED_OPERATIONS.has(operation)) return 201;
+  return 200;
+};
 
 const successEnvelope = (data: SchemaObject): SchemaObject => ({
   additionalProperties: false,
@@ -442,6 +724,10 @@ const getSuccessSchema = (group: string, rest: string, method: string): SchemaOb
       required: ['service', 'status', 'timestamp'],
       type: 'object',
     };
+  }
+
+  if (PERSONAL_AGENT_GROUPS.has(group)) {
+    return successEnvelope({ additionalProperties: true, type: ['array', 'object', 'null'] });
   }
 
   if (group === 'responses') {
@@ -481,20 +767,93 @@ const getSuccessSchema = (group: string, rest: string, method: string): SchemaOb
     return successEnvelope(ref('ChatResponse'));
   }
 
-  if (group === 'eval') {
-    if (rest.endsWith('/results')) {
-      return successEnvelope({
-        additionalProperties: false,
-        properties: {
-          results: { items: ref('EvalRunResult'), type: 'array' },
-          runId: { type: 'string' },
-          total: { minimum: 0, type: 'integer' },
+  if (group === 'eval') return successEnvelope(evalResponseSchema(method, rest));
+
+  if (group === 'topics' && rest.endsWith('/threads'))
+    return successEnvelope({
+      type: 'object',
+      properties: {
+        threads: {
+          type: 'array',
+          items: {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              id: { type: 'string' },
+              topicId: { type: 'string' },
+              title: nullableString,
+              type: { type: 'string' },
+              status: nullableString,
+              parentThreadId: nullableString,
+              createdAt: dateTime,
+              updatedAt: dateTime,
+            },
+          },
         },
-        required: ['runId', 'total', 'results'],
-        type: 'object',
-      });
+        total: { type: 'integer' },
+      },
+      required: ['threads', 'total'],
+    });
+  if (group === 'plugins')
+    return successEnvelope({
+      type: 'object',
+      properties: {
+        plugins: {
+          type: 'array',
+          items: {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              identifier: { type: 'string' },
+              type: { type: 'string' },
+              createdAt: dateTime,
+              updatedAt: dateTime,
+            },
+          },
+        },
+        total: { type: 'integer' },
+      },
+      required: ['plugins', 'total'],
+    });
+
+  if (group === 'im') return successEnvelope(imResponseSchema(method, rest));
+
+  if (group === 'push-tokens') {
+    if (method === 'delete') return successEnvelope({ type: 'null' });
+    return successEnvelope({
+      additionalProperties: false,
+      properties: { deviceId: { type: 'string' }, platform: { type: 'string' } },
+      required: ['deviceId', 'platform'],
+      type: 'object',
+    });
+  }
+
+  /**
+   * Agent identity assets: `/agents/{id}/accounts`. Every route answers with an
+   * `AgentAccount` (the collection GET wraps them), and none of them can carry
+   * a credential — the write-only sub-resource answers with the hint plus
+   * `hasCredential`, never the secret.
+   */
+  if (group === 'agents') {
+    if (rest === '{id}/accounts') {
+      if (method === 'get') {
+        return successEnvelope({
+          additionalProperties: false,
+          properties: {
+            accounts: { items: ref('AgentAccount'), type: 'array' },
+            total: { minimum: 0, type: 'integer' },
+          },
+          required: ['accounts', 'total'],
+          type: 'object',
+        });
+      }
+
+      return successEnvelope(ref('AgentAccount'));
     }
-    return successEnvelope(ref('EvalRun'));
+
+    if (rest === '{id}/accounts/{accountId}' || rest === '{id}/accounts/{accountId}/credential') {
+      return successEnvelope(ref('AgentAccount'));
+    }
   }
 
   const resource = groupResources[group];
@@ -517,6 +876,10 @@ const getSuccessSchema = (group: string, rest: string, method: string): SchemaOb
       required: [resource.listKey],
       type: 'object',
     });
+  }
+
+  if (group === 'chat-groups' && rest === '{id}/members') {
+    return successEnvelope(ref('ChatGroup'));
   }
 
   if (method === 'delete') {
@@ -733,14 +1096,15 @@ export const buildSpecDocument = async (app: GenerateSpecsApp) => {
         successContent['text/event-stream'] = { schema: { type: 'string' } };
       }
 
-      const successStatus =
-        group === 'eval' && method === 'post' && rest === 'runs'
-          ? 202
-          : ['agent-groups', 'api-keys', 'mcp-servers'].includes(group) &&
-              method === 'post' &&
-              rest === ''
-            ? 201
-            : 200;
+      const successStatus = successStatusFor(group, rest, method);
+      // `hono-openapi` fills a contentless 200 into operations that declare a
+      // request body but no responses. When the handler actually answers
+      // 201/202 that placeholder is not a real response and must go, or the
+      // document keeps advertising a status the runtime never sends.
+      const placeholder200 = op.responses[200] as { content?: unknown } | undefined;
+      if (successStatus !== 200 && placeholder200 && !placeholder200.content) {
+        delete op.responses[200];
+      }
       const currentSuccess = (op.responses[successStatus] ?? {}) as Record<string, unknown>;
       op.responses[successStatus] = {
         ...currentSuccess,

@@ -1,3 +1,4 @@
+import type { Mock } from 'vitest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { App as AppCore } from '../../App';
@@ -154,8 +155,8 @@ describe('WindowStateManager', () => {
 
   describe('createCloseHandler', () => {
     let mockBrowserWindow: any;
-    let onCleanup: ReturnType<typeof vi.fn>;
-    let onHide: ReturnType<typeof vi.fn>;
+    let onCleanup: Mock<() => void>;
+    let onHide: Mock<() => void>;
 
     beforeEach(() => {
       mockBrowserWindow = {

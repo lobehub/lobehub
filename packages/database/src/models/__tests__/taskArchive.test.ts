@@ -1,0 +1,168 @@
+// @vitest-environment node
+import { eq, sql } from 'drizzle-orm';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
+import { getTestDB } from '../../core/getTestDB';
+import { users } from '../../schemas';
+import { tasks as tasksTable } from '../../schemas/task';
+import type { LobeChatDatabase } from '../../type';
+import { TaskModel } from '../task';
+import { TaskArchiveModel } from '../taskArchive';
+
+const serverDB: LobeChatDatabase = await getTestDB();
+
+const userId = 'task-archive-model-test-user-id';
+const otherUserId = 'task-archive-model-test-other-user-id';
+
+beforeEach(async () => {
+  await serverDB.delete(users);
+  await serverDB.insert(users).values([{ id: userId }, { id: otherUserId }]);
+});
+
+afterEach(async () => {
+  await serverDB.delete(users);
+});
+
+describe('TaskArchiveModel', () => {
+  it('archives an idle task once and keeps the first timestamp', async () => {
+    const tasks = new TaskModel(serverDB, userId);
+    const model = new TaskArchiveModel(serverDB, userId);
+    const task = await tasks.create({ instruction: 'Idle task' });
+
+    const first = await model.archive(task.id);
+    expect(first?.archivedAt).toBeInstanceOf(Date);
+
+    const again = await model.archive(task.id);
+    expect(again?.archivedAt).toEqual(first?.archivedAt);
+    expect(again?.status).toBe('backlog');
+  });
+
+  it('archives only a task still in one of the given statuses', async () => {
+    const tasks = new TaskModel(serverDB, userId);
+    const model = new TaskArchiveModel(serverDB, userId);
+    const task = await tasks.create({ instruction: 'Reopened task' });
+    await tasks.updateStatus(task.id, 'completed', { completedAt: new Date() });
+    // Reopened between the caller's read and its archive write.
+    await tasks.updateStatus(task.id, 'backlog');
+
+    expect(await model.archive(task.id, { onlyStatuses: ['completed', 'canceled'] })).toBeNull();
+    expect((await tasks.findById(task.id))?.archivedAt).toBeNull();
+
+    await tasks.updateStatus(task.id, 'canceled');
+    expect(
+      (await model.archive(task.id, { onlyStatuses: ['completed', 'canceled'] }))?.archivedAt,
+    ).toBeInstanceOf(Date);
+  });
+
+  it('refuses a running task in the same statement', async () => {
+    const tasks = new TaskModel(serverDB, userId);
+    const model = new TaskArchiveModel(serverDB, userId);
+    const task = await tasks.create({ instruction: 'Running task' });
+    await tasks.updateStatus(task.id, 'running');
+
+    expect(await model.archive(task.id)).toBeNull();
+    expect((await tasks.findById(task.id))?.archivedAt).toBeNull();
+  });
+
+  it('refuses a schedule that can still fire, but not one that is finished', async () => {
+    const tasks = new TaskModel(serverDB, userId);
+    const model = new TaskArchiveModel(serverDB, userId);
+    const live = await tasks.create({
+      automationMode: 'schedule',
+      instruction: 'Live schedule',
+      schedulePattern: '0 9 * * *',
+    });
+    const done = await tasks.create({
+      automationMode: 'schedule',
+      instruction: 'Finished schedule',
+      schedulePattern: '0 9 * * *',
+    });
+    await tasks.updateStatus(done.id, 'completed', { completedAt: new Date() });
+
+    expect(await model.archive(live.id)).toBeNull();
+    expect((await model.archive(done.id))?.archivedAt).toBeInstanceOf(Date);
+  });
+
+  it('archives a paused schedule but not a paused heartbeat', async () => {
+    const tasks = new TaskModel(serverDB, userId);
+    const model = new TaskArchiveModel(serverDB, userId);
+    const schedule = await tasks.create({
+      automationMode: 'schedule',
+      instruction: 'Paused schedule',
+      schedulePattern: '0 9 * * *',
+    });
+    const heartbeat = await tasks.create({
+      automationMode: 'heartbeat',
+      heartbeatInterval: 600,
+      instruction: 'Paused heartbeat',
+    });
+    await tasks.updateStatus(schedule.id, 'paused');
+    await tasks.updateStatus(heartbeat.id, 'paused');
+
+    expect((await model.archive(schedule.id))?.archivedAt).toBeInstanceOf(Date);
+    expect(await model.archive(heartbeat.id)).toBeNull();
+  });
+
+  it('lists an archived paused schedule with the ordinary tasks, not the scheduled ones', async () => {
+    const tasks = new TaskModel(serverDB, userId);
+    const model = new TaskArchiveModel(serverDB, userId);
+    const schedule = await tasks.create({
+      automationMode: 'schedule',
+      instruction: 'Paused schedule',
+      schedulePattern: '0 9 * * *',
+    });
+    await tasks.updateStatus(schedule.id, 'paused');
+    await model.archive(schedule.id);
+
+    const ordinary = await tasks.list({ automated: false, includeArchived: true });
+    expect(ordinary.tasks.map((task) => task.id)).toEqual([schedule.id]);
+    const scheduled = await tasks.list({ automated: true, includeArchived: true });
+    expect(scheduled.tasks).toEqual([]);
+  });
+
+  it('unarchives regardless of state', async () => {
+    const tasks = new TaskModel(serverDB, userId);
+    const model = new TaskArchiveModel(serverDB, userId);
+    const task = await tasks.create({ instruction: 'Archived task' });
+    await model.archive(task.id);
+
+    const restored = await model.unarchive(task.id);
+    expect(restored?.archivedAt).toBeNull();
+  });
+
+  it('unarchives nothing when it is handed no ids', async () => {
+    const model = new TaskArchiveModel(serverDB, userId);
+
+    // No statement to run, so the empty list must not reach the database.
+    expect(await model.unarchiveMany([])).toEqual([]);
+  });
+
+  it("cannot touch another user's task", async () => {
+    const task = await new TaskModel(serverDB, otherUserId).create({ instruction: 'Not mine' });
+
+    expect(await new TaskArchiveModel(serverDB, userId).archive(task.id)).toBeNull();
+    expect(await new TaskArchiveModel(serverDB, userId).unarchive(task.id)).toBeNull();
+  });
+
+  it('restores only the tasks stamped with the given archive time', async () => {
+    const tasks = new TaskModel(serverDB, userId);
+    const model = new TaskArchiveModel(serverDB, userId);
+    // A goal archiving itself passes its own stamp instead of `now()`.
+    const goalArchivedAt = sql`'2026-11-01T00:00:00Z'::timestamptz`;
+    const withGoal = await tasks.create({ instruction: 'Archived with its goal' });
+    const onItsOwn = await tasks.create({ instruction: 'Archived on its own' });
+
+    await model.archiveMany([withGoal.id], { at: goalArchivedAt });
+    await model.archive(onItsOwn.id);
+
+    const restored = await model.unarchiveMany([withGoal.id, onItsOwn.id], {
+      onlyArchivedAt: goalArchivedAt,
+    });
+
+    expect(restored.map((task) => task.id)).toEqual([withGoal.id]);
+    expect(restored[0].archivedAt).toBeNull();
+    // The task archived on its own keeps its archive.
+    const [kept] = await serverDB.select().from(tasksTable).where(eq(tasksTable.id, onItsOwn.id));
+    expect(kept.archivedAt).toBeInstanceOf(Date);
+  });
+});

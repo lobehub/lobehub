@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   entriesByPrefix: vi.fn(),
   get: vi.fn(),
   initialize: vi.fn(),
+  listCollections: vi.fn(),
   set: vi.fn(),
 }));
 
@@ -31,6 +32,7 @@ describe('createElectronLocalDatabaseAdapter', () => {
     vi.clearAllMocks();
 
     mocks.initialize.mockResolvedValue(undefined);
+    mocks.listCollections.mockResolvedValue([{ entryCount: 2, name: 'cache' }]);
     mocks.get.mockImplementation(async ({ collection, key }: DesktopLocalDatabaseKey) =>
       records.get(recordKey(collection, key)),
     );
@@ -90,5 +92,6 @@ describe('createElectronLocalDatabaseAdapter', () => {
       { key: 'scope::1', value: { id: 1 } },
       { key: 'scope::2', value: { id: 2 } },
     ]);
+    await expect(adapter.listCollections()).resolves.toEqual([{ entryCount: 2, name: 'cache' }]);
   });
 });

@@ -3,7 +3,11 @@ import { kebabCase } from 'es-toolkit';
 import { pinyin } from 'pinyin-pro';
 
 const PROJECT_SLUG_REGEX = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const PROJECT_IDENTIFIER_LENGTH = 4;
+
+/** Mirrors the `max(100)` on `projectSlugInput` in the project router. */
+export const PROJECT_SLUG_MAX_LENGTH = 100;
+
+const boundSlug = (slug: string) => slug.slice(0, PROJECT_SLUG_MAX_LENGTH).replace(/-+$/, '');
 
 export interface CreateProjectDraft {
   identifier: string;
@@ -12,30 +16,21 @@ export interface CreateProjectDraft {
 }
 
 export interface ProjectFieldSuggestions {
-  identifier: string;
   slug: string;
 }
 
 export const getProjectFieldSuggestions = (name: string): ProjectFieldSuggestions => {
   const normalizedName = name.trim();
-  if (!normalizedName) return { identifier: '', slug: '' };
+  if (!normalizedName) return { slug: '' };
 
   const transliteratedName = pinyin(normalizedName, {
     nonZh: 'consecutive',
     toneType: 'none',
     type: 'array',
   }).join(' ');
-  const slug = kebabCase(transliteratedName).replaceAll(/[^a-z0-9-]/g, '');
-  const parts = slug.split('-').filter(Boolean);
-  const initials = parts.map((part) => part[0]).join('');
-  const compactName = parts.join('');
-  const identifierSource = initials.length >= 3 ? initials : compactName;
-  const identifier = identifierSource
-    .slice(0, PROJECT_IDENTIFIER_LENGTH)
-    .padEnd(3, 'x')
-    .toUpperCase();
+  const slug = boundSlug(kebabCase(transliteratedName).replaceAll(/[^a-z0-9-]/g, ''));
 
-  return { identifier, slug };
+  return { slug };
 };
 
 export const isProjectIdentifierValid = (identifier: string) =>
@@ -43,7 +38,10 @@ export const isProjectIdentifierValid = (identifier: string) =>
 
 export const isProjectSlugValid = (slug: string) => {
   const normalizedSlug = slug.trim().toLowerCase();
-  return !normalizedSlug || PROJECT_SLUG_REGEX.test(normalizedSlug);
+  return (
+    !normalizedSlug ||
+    (normalizedSlug.length <= PROJECT_SLUG_MAX_LENGTH && PROJECT_SLUG_REGEX.test(normalizedSlug))
+  );
 };
 
 export const getCreateProjectInput = (draft: CreateProjectDraft) => {
@@ -51,9 +49,39 @@ export const getCreateProjectInput = (draft: CreateProjectDraft) => {
   const name = draft.name.trim();
   const slug = draft.slug.trim().toLowerCase();
 
-  if (!name || !isProjectIdentifierValid(identifier) || !isProjectSlugValid(slug)) {
+  // The identifier is optional; left empty, tasks keep the default prefix.
+  if (!name || (identifier && !isProjectIdentifierValid(identifier)) || !isProjectSlugValid(slug)) {
     return null;
   }
 
-  return { identifier, name, ...(slug ? { slug } : {}) };
+  return { name, ...(identifier ? { identifier } : {}), ...(slug ? { slug } : {}) };
 };
+
+/** Lead a new project with an agent created for it, or with an existing one. */
+export type MainAgentMode = 'dedicated' | 'existing';
+
+/**
+ * Every new project starts with an agent of its own. Reusing an agent is an
+ * explicit pick in the modal and is not carried over to the next project.
+ */
+export const DEFAULT_MAIN_AGENT_MODE: MainAgentMode = 'dedicated';
+
+export interface CreateProjectExtras {
+  avatar?: string;
+  /** The picked agent; only sent when the project reuses an existing agent. */
+  mainAgentId?: string;
+  mainAgentMode: MainAgentMode;
+}
+
+/**
+ * Leaving `coordinatorAgentId` out is what makes the server create an agent
+ * for the project, named after it and wearing its avatar.
+ */
+export const buildCreateProjectRequest = (
+  input: NonNullable<ReturnType<typeof getCreateProjectInput>>,
+  { avatar, mainAgentId, mainAgentMode }: CreateProjectExtras,
+) => ({
+  ...input,
+  ...(avatar ? { avatar } : {}),
+  ...(mainAgentMode === 'existing' && mainAgentId ? { coordinatorAgentId: mainAgentId } : {}),
+});

@@ -1,19 +1,53 @@
 import { type LobeToolManifest } from '@lobechat/context-engine';
 import { CacheRevalidate, CacheTag } from '@lobechat/types';
-import { MarketSDK, type OrgRef, orgRefToPathSegment } from '@lobehub/market-sdk';
+import {
+  MarketSDK,
+  type OrgRef,
+  orgRefToPathSegment,
+  type RunBuildInToolsContext,
+} from '@lobehub/market-sdk';
 import debug from 'debug';
 import { type NextRequest } from 'next/server';
+import pMap from 'p-map';
 
 import { type TrustedClientUserInfo } from '@/libs/trusted-client';
 import { generateTrustedClientToken, getTrustedClientTokenForSession } from '@/libs/trusted-client';
+import { redisService } from '@/server/services/redis';
+import {
+  createSandboxStorageClient,
+  type SandboxStorageClient,
+} from '@/server/services/sandbox/storageFiles';
+import { getToolAccessDeniedError } from '@/server/services/toolExecution/errorClassification';
 
-import { listSkillToolsWithLiveFallback } from './listSkillToolsWithLiveFallback';
+import {
+  listSkillToolsWithLiveFallback,
+  type SkillToolsClient,
+} from './listSkillToolsWithLiveFallback';
 
 const log = debug('lobe-server:market-service');
 
 const MARKET_BASE_URL = process.env.MARKET_BASE_URL || 'https://market.lobehub.com';
+/** Applies to `listConnections` and to each provider's tool-list request. */
 export const LOBEHUB_SKILL_DISCOVERY_TIMEOUT_MS = 3_000;
+/** Max providers whose tool lists are fetched at once during discovery. */
+export const LOBEHUB_SKILL_DISCOVERY_CONCURRENCY = 5;
 export const LOBEHUB_SKILL_EXECUTION_TIMEOUT_MS = 120_000;
+
+/**
+ * Provider display names for skill manifests. `connection.providerName` is the
+ * *user's* display name on that provider (e.g. "LiJian" instead of "Linear"),
+ * not the provider's own name. Static map — importing LOBEHUB_SKILL_PROVIDERS
+ * pulls in react-icons (client-side only). Keep in sync with lobehubSkill.ts.
+ */
+const LOBEHUB_SKILL_PROVIDER_LABELS: Record<string, string> = {
+  github: 'GitHub',
+  linear: 'Linear',
+  microsoft: 'Outlook Calendar',
+  notion: 'Notion',
+  posthog: 'PostHog',
+  twitter: 'X',
+  vercel: 'Vercel',
+};
 
 // ============================== Helper Functions ==============================
 
@@ -129,9 +163,16 @@ export class MarketService {
 
   private readonly oauthProxyHeaders: Record<string, string>;
 
+  /**
+   * Who the cached skill tool lists belong to. A service built without a user
+   * (M2M credentials, a bare trusted token) has no scope and skips the cache.
+   */
+  private readonly skillCacheScope?: string;
+
   constructor(options: MarketServiceOptions = {}) {
     const { accessToken, userInfo, clientCredentials, trustedClientToken, ownerAccountId } =
       options;
+    this.skillCacheScope = userInfo?.userId;
 
     // Use provided trustedClientToken or generate from userInfo
     const resolvedTrustedClientToken =
@@ -374,12 +415,9 @@ export class MarketService {
   /**
    * List available tools for a provider
    */
-  async listSkillTools(providerId: string) {
+  async listSkillTools(providerId: string, options?: { timeoutMs?: number }) {
     return listSkillToolsWithLiveFallback(
-      this.market.skills as {
-        listLiveTools?: (providerId: string) => Promise<any>;
-        listTools: (providerId: string) => Promise<any>;
-      },
+      this.market.skills as SkillToolsClient,
       providerId,
       (error) => {
         log(
@@ -388,6 +426,33 @@ export class MarketService {
           error,
         );
       },
+      options?.timeoutMs,
+    );
+  }
+
+  /**
+   * The live tool list of one connected skill, remembered per connection for
+   * ten minutes.
+   *
+   * Discovery runs on every send and `tools/live` is a round trip to the
+   * provider's MCP server (150ms for GitHub, up to a second for Notion) for
+   * an answer that changes when the provider ships tools, not per turn. The
+   * key carries the connection's identity (`createdAt`, provider user), so a
+   * re-connected skill starts from a fresh read; an empty or failed list is
+   * never remembered. The connection list itself stays live so a newly
+   * connected skill shows up on the next send.
+   */
+  private async listSkillToolsForConnection(
+    connection: { createdAt?: string; providerUserId?: string },
+    providerId: string,
+  ) {
+    const read = () =>
+      this.listSkillTools(providerId, { timeoutMs: LOBEHUB_SKILL_DISCOVERY_TIMEOUT_MS });
+    if (!this.skillCacheScope) return read();
+
+    return redisService.skillTools.remember(
+      { connection, providerId, userId: this.skillCacheScope },
+      read,
     );
   }
 
@@ -426,14 +491,10 @@ export class MarketService {
   /**
    * Export file from sandbox to upload URL
    */
-  async exportFile(params: { path: string; topicId: string; uploadUrl: string; userId: string }) {
-    const { path, uploadUrl, topicId, userId } = params;
+  async exportFile(params: { path: string; uploadUrl: string }, context: RunBuildInToolsContext) {
+    const { path, uploadUrl } = params;
 
-    return this.market.plugins.runBuildInTool(
-      'exportFile',
-      { path, uploadUrl },
-      { topicId, userId },
-    );
+    return this.market.plugins.runBuildInTool('exportFile', { path, uploadUrl }, context);
   }
 
   /**
@@ -632,10 +693,10 @@ export class MarketService {
   /**
    * Get skill categories
    */
-  async getSkillCategories() {
-    log('getSkillCategories');
+  async getSkillCategories(params?: { locale?: string; q?: string }) {
+    log('getSkillCategories: %O', params);
 
-    return this.market.marketSkills.getCategories();
+    return this.market.marketSkills.getCategories(params);
   }
 
   /**
@@ -687,6 +748,9 @@ export class MarketService {
         }
 
         const message = responseError?.message || dataMessage || 'LobeHub Skill call failed';
+        const denial = getToolAccessDeniedError(responseError, message);
+        if (denial)
+          return { content: JSON.stringify({ error: denial }), error: denial, success: false };
 
         return {
           content: message,
@@ -719,6 +783,27 @@ export class MarketService {
       // Extract it so the content is not empty on failure.
       const errorBody = (err as any).errorBody;
       const skillError = errorBody?.error;
+      const denial = getToolAccessDeniedError(error, err.message);
+      if (denial)
+        return { content: JSON.stringify({ error: denial }), error: denial, success: false };
+
+      // Market's auth middleware answers with a flat OAuth-style body, e.g.
+      // `{ error: 'invalid_trust_token', error_description: 'Token expired' }`.
+      // Keep the description so the model can tell an expired token from a
+      // revoked authorization, and the code so callers can react to it.
+      if (typeof skillError === 'string') {
+        const description =
+          typeof errorBody.error_description === 'string' ? errorBody.error_description : undefined;
+        return {
+          content: JSON.stringify({ error: skillError, error_description: description }),
+          error: {
+            code: skillError,
+            message: description ? `${skillError}: ${description}` : skillError,
+          },
+          success: false,
+        };
+      }
+
       const content = skillError ? JSON.stringify(skillError) : err.message;
 
       return {
@@ -738,14 +823,27 @@ export class MarketService {
    * Fetch LobeHub Skills manifests from Market API
    * Gets user's connected skills and builds tool manifests for agent execution
    *
+   * @param options.onError - Called for each failure the method absorbs: a
+   * provider whose tools could not be listed (with its `providerId`), or the
+   * connection lookup itself (without one). Lets callers tell degraded
+   * discovery apart from a user with no connected skills.
+   * @param options.providerIds - Only build manifests for these providers. The
+   * tool list of any other connection is never requested.
    * @returns Array of tool manifests for connected skills
    */
-  async getLobehubSkillManifests(): Promise<LobeToolManifest[]> {
+  async getLobehubSkillManifests(options?: {
+    onError?: (error: unknown, providerId?: string) => void;
+    providerIds?: string[];
+  }): Promise<LobeToolManifest[]> {
     try {
       // 1. Get user's connected skills
-      const { connections } = await this.market.connect.listConnections({
+      const { connections: allConnections } = await this.market.connect.listConnections({
         signal: AbortSignal.timeout(LOBEHUB_SKILL_DISCOVERY_TIMEOUT_MS),
       });
+      const providerIds = options?.providerIds && new Set(options.providerIds);
+      const connections = providerIds
+        ? allConnections?.filter((connection) => providerIds.has((connection as any).providerId))
+        : allConnections;
       if (!connections || connections.length === 0) {
         log('getLobehubSkillManifests: no connected skills found');
         return [];
@@ -753,69 +851,63 @@ export class MarketService {
 
       log('getLobehubSkillManifests: found %d connected skills', connections.length);
 
-      // 2. Fetch tools for each connection and build manifests
-      const manifests: LobeToolManifest[] = [];
-
-      for (const connection of connections) {
-        try {
+      // 2. Fetch tools for connections concurrently (bounded). This runs on the
+      // execAgent send path, so one slow provider must not serialize the rest;
+      // pMap keeps the manifests in connection order.
+      const manifests = await pMap(
+        connections,
+        async (connection): Promise<LobeToolManifest | undefined> => {
           // Connection returns providerId (e.g., 'twitter', 'linear'), not numeric id
           const providerId = (connection as any).providerId;
-          if (!providerId) {
-            log('getLobehubSkillManifests: connection missing providerId: %O', connection);
-            continue;
+          try {
+            if (!providerId) {
+              log('getLobehubSkillManifests: connection missing providerId: %O', connection);
+              return;
+            }
+            const icon = (connection as any).icon;
+            const providerLabel = LOBEHUB_SKILL_PROVIDER_LABELS[providerId] || providerId;
+
+            const { tools, instruction } = await this.listSkillToolsForConnection(
+              connection,
+              providerId,
+            );
+            if (!tools || tools.length === 0) return;
+
+            const manifest: LobeToolManifest = {
+              api: tools.map((tool: any) => ({
+                description: tool.description || '',
+                name: tool.name,
+                parameters: tool.inputSchema || { properties: {}, type: 'object' },
+              })),
+              identifier: providerId,
+              meta: {
+                avatar: icon || '🔗',
+                description: `LobeHub Skill: ${providerLabel}`,
+                tags: ['lobehub-skill', providerId],
+                title: providerLabel,
+              },
+              systemRole: instruction || undefined,
+              type: 'builtin',
+            };
+
+            log(
+              'getLobehubSkillManifests: built manifest for %s with %d tools',
+              providerId,
+              tools.length,
+            );
+            return manifest;
+          } catch (error) {
+            log('getLobehubSkillManifests: failed to fetch tools for connection: %O', error);
+            options?.onError?.(error, providerId);
           }
-          const icon = (connection as any).icon;
+        },
+        { concurrency: LOBEHUB_SKILL_DISCOVERY_CONCURRENCY },
+      );
 
-          // Look up the provider's display name from the static registry.
-          // connection.providerName is the *user's* display name on that provider,
-          // NOT the provider's own name (e.g., "LiJian" instead of "Linear").
-          // Static label map — avoids importing LOBEHUB_SKILL_PROVIDERS which
-          // pulls in react-icons (client-side only). Keep in sync with lobehubSkill.ts.
-          const PROVIDER_LABELS: Record<string, string> = {
-            github: 'GitHub',
-            linear: 'Linear',
-            microsoft: 'Outlook Calendar',
-            notion: 'Notion',
-            posthog: 'PostHog',
-            twitter: 'X',
-            vercel: 'Vercel',
-          };
-          const providerLabel = PROVIDER_LABELS[providerId] || providerId;
-
-          const { tools, instruction } = await this.listSkillTools(providerId);
-          if (!tools || tools.length === 0) continue;
-
-          const manifest: LobeToolManifest = {
-            api: tools.map((tool: any) => ({
-              description: tool.description || '',
-              name: tool.name,
-              parameters: tool.inputSchema || { properties: {}, type: 'object' },
-            })),
-            identifier: providerId,
-            meta: {
-              avatar: icon || '🔗',
-              description: `LobeHub Skill: ${providerLabel}`,
-              tags: ['lobehub-skill', providerId],
-              title: providerLabel,
-            },
-            systemRole: instruction || undefined,
-            type: 'builtin',
-          };
-
-          manifests.push(manifest);
-          log(
-            'getLobehubSkillManifests: built manifest for %s with %d tools',
-            providerId,
-            tools.length,
-          );
-        } catch (error) {
-          log('getLobehubSkillManifests: failed to fetch tools for connection: %O', error);
-        }
-      }
-
-      return manifests;
+      return manifests.filter((manifest): manifest is LobeToolManifest => !!manifest);
     } catch (error) {
       log('getLobehubSkillManifests: error fetching skills: %O', error);
+      options?.onError?.(error);
       return [];
     }
   }
@@ -901,6 +993,21 @@ export class MarketService {
     const result = await response.json();
     log('uploadCredFile success: fileHashId=%s', result.fileHashId);
     return result;
+  }
+
+  /**
+   * Client for the persistent sandbox workspace's file API.
+   *
+   * Not on the SDK yet, so it is hand-written against the same endpoints; it
+   * lives in its own module and only borrows this service's auth headers, so
+   * replacing it with the generated client later is a deletion. The workspace it
+   * addresses is always the one the caller's signed entitlement names.
+   */
+  getSandboxStorageClient(): SandboxStorageClient {
+    return createSandboxStorageClient({
+      baseURL: MARKET_BASE_URL,
+      headers: this.oauthProxyHeaders,
+    });
   }
 
   // ============================== Direct SDK Access ==============================

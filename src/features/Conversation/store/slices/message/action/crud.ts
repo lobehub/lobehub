@@ -1,10 +1,8 @@
 import {
-  type AssistantContentBlock,
   type ChatImageItem,
   type ChatMessageError,
   type ChatMessagePluginError,
   type ChatToolPayload,
-  type ChatToolPayloadWithResult,
   type ChatVideoItem,
   type CreateMessageParams,
   type GroundingSearch,
@@ -19,6 +17,8 @@ import isEqual from 'fast-deep-equal';
 import { type StateCreator } from 'zustand';
 
 import { messageService } from '@/services/message';
+import { useChatStore } from '@/store/chat';
+import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import { type Store as ConversationStore } from '../../../action';
 import { isSameConversationContext } from '../../../utils/contextGuard';
@@ -151,11 +151,14 @@ export interface MessageCRUDAction {
    * @param toolCallId - The tool call ID (stable identifier from AI response)
    * @param value - The new arguments value
    * @param replace - If true, replace arguments entirely; if false, merge with existing
+   * @param options.refresh - Set false to keep the local rows instead of loading the server's
+   *   after the write (they would carry back a decision the server has not claimed yet)
    */
   updatePluginArguments: <T = any>(
     toolCallId: string,
     value: T,
     replace?: boolean,
+    options?: { refresh?: boolean },
   ) => Promise<void>;
 
   /**
@@ -202,8 +205,13 @@ export const messageCRUDSlice: StateCreator<
 
   // ===== Create ===== //
   createMessage: async (params) => {
-    const { context, internal_dispatchMessage, replaceMessages, internal_toggleMessageLoading } =
-      get();
+    const {
+      context,
+      internal_dispatchMessage,
+      replaceMessages,
+      internal_toggleMessageLoading,
+      transcriptSource,
+    } = get();
 
     // Create temp message for optimistic update
     const tempId = get().createTempMessage(params);
@@ -216,30 +224,51 @@ export const messageCRUDSlice: StateCreator<
         topicId: context.topicId ?? undefined,
       });
 
-      // Replace with server response
-      if (!isSameConversationContext(context, get().context)) return undefined;
-      replaceMessages(result.messages, { expectedContext: context });
+      // Settle in the context the temp row was created in, even if the user
+      // switched conversations while the request was in flight: the chat
+      // bucket for that context still holds the optimistic row.
+      const stillCurrent = isSameConversationContext(context, get().context);
+      // The conversation may have been deleted while the create was pending.
+      // A late response must not recreate its transcript.
+      const targetExists =
+        transcriptSource !== 'chat' ||
+        !!useChatStore.getState().dbMessagesMap[messageMapKey(context)];
 
+      if (targetExists) {
+        if (stillCurrent) {
+          replaceMessages(result.messages, { expectedContext: context });
+        } else if (transcriptSource === 'chat') {
+          // Don't route through the Conversation store here: it would sync the
+          // conversation now on screen from that other bucket.
+          useChatStore.getState().replaceMessages(result.messages, { context });
+        }
+      }
       internal_toggleMessageLoading(false, tempId);
 
-      return result.id;
+      return stillCurrent ? result.id : undefined;
     } catch (e) {
-      if (!isSameConversationContext(context, get().context)) return undefined;
-
       internal_toggleMessageLoading(false, tempId);
 
-      // Update temp message with error
-      internal_dispatchMessage({
-        id: tempId,
-        type: 'updateMessage',
-        value: {
-          error: {
-            body: e,
-            message: (e as Error).message,
-            type: ChatErrorType.CreateMessageError,
-          },
+      const value = {
+        error: {
+          body: e,
+          message: (e as Error).message,
+          type: ChatErrorType.CreateMessageError,
         },
-      });
+      };
+
+      if (transcriptSource === 'chat') {
+        // Target the captured context directly: the Conversation store's
+        // dispatch would otherwise write the error into the new conversation.
+        useChatStore
+          .getState()
+          .internal_dispatchMessage(
+            { id: tempId, type: 'updateMessage', value },
+            { conversationContext: context },
+          );
+      } else if (isSameConversationContext(context, get().context)) {
+        internal_dispatchMessage({ id: tempId, type: 'updateMessage', value });
+      }
 
       return undefined;
     }
@@ -249,11 +278,14 @@ export const messageCRUDSlice: StateCreator<
     const { internal_dispatchMessage } = get();
 
     const tempId = 'tmp_' + nanoid();
-    internal_dispatchMessage({
-      id: tempId,
-      type: 'createMessage',
-      value: params,
-    });
+    internal_dispatchMessage(
+      {
+        id: tempId,
+        type: 'createMessage',
+        value: params,
+      },
+      { creationOrigin: 'client' },
+    );
 
     return tempId;
   },
@@ -299,25 +331,9 @@ export const messageCRUDSlice: StateCreator<
     const state = get();
     const { internal_dispatchMessage, replaceMessages, context } = state;
 
-    const message = dataSelectors.getDisplayMessageById(id)(state);
-    if (!message) return;
+    if (!dataSelectors.getDisplayMessageById(id)(state)) return;
 
-    let ids = [message.id];
-
-    // Handle assistantGroup and supervisor messages: delete all child blocks and tool results
-    if ((message.role === 'assistantGroup' || message.role === 'supervisor') && message.children) {
-      const childIds = message.children.map((child: AssistantContentBlock) => child.id);
-      ids = ids.concat(childIds);
-
-      // Collect all tool result IDs from children
-      const toolResultIds = message.children.flatMap((child: AssistantContentBlock) => {
-        if (!child.tools) return [];
-        return child.tools
-          .filter((tool: ChatToolPayloadWithResult) => tool.result?.id)
-          .map((tool: ChatToolPayloadWithResult) => tool.result!.id);
-      });
-      ids = ids.concat(toolResultIds);
-    }
+    const ids = dataSelectors.deletableRowMessageIds(id)(state);
 
     // Optimistic update
     internal_dispatchMessage({ ids, type: 'deleteMessages' });
@@ -539,7 +555,7 @@ export const messageCRUDSlice: StateCreator<
     }
   },
 
-  updatePluginArguments: async (toolCallId, value, replace = false) => {
+  updatePluginArguments: async (toolCallId, value, replace = false, options) => {
     const { internal_dispatchMessage, replaceMessages, context } = get();
 
     // Find previous arguments from either tool message or parent's tools array
@@ -604,7 +620,7 @@ export const messageCRUDSlice: StateCreator<
     // Create the update promise - backend handles all cases using toolCallId
     const updatePromise = (async () => {
       const result = await messageService.updateToolArguments(toolCallId, nextValue, context);
-      if (result?.success && result.messages) {
+      if (options?.refresh !== false && result?.success && result.messages) {
         replaceMessages(result.messages, { expectedContext: context });
       }
     })();

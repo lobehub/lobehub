@@ -1,28 +1,43 @@
 'use client';
 
-import { Center } from '@lobehub/ui';
+import { Outlet } from 'react-router';
 
+import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import AsyncError from '@/components/AsyncError';
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
-import { AcceptanceWorkspace } from '@/features/Acceptance';
+import { RouteLoading } from '@/components/Skeleton/RouteSegment';
+import { AcceptanceRouteBaseContext } from '@/features/Acceptance';
+import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
 import { useCurrentProjectDetail, useProjectStore } from '@/store/project';
 
-const ProjectAcceptance = () => {
+import { getProjectAcceptancePath } from '../Layout/navigation';
+
+/**
+ * `project/:projectId/acceptance` layout: the project's full-width list at the
+ * index, one acceptance below it. Every acceptance link rendered inside points
+ * back into this section rather than at the standalone `/acceptance` pages.
+ */
+const ProjectAcceptanceLayout = () => {
   const { projectId } = useActiveRouteParams<{ projectId: string }>();
+  const activeWorkspaceSlug = useActiveWorkspaceSlug();
+  // The persisted project paints on the first frame; the hook only syncs it.
   const detail = useCurrentProjectDetail(projectId);
-  const detailSWR = useProjectStore((state) => state.useFetchProjectDetail)(projectId);
+  const { error, isHydrated, isValidating, revalidate } = useProjectStore(
+    (s) => s.useFetchProjectDetail,
+  )(projectId);
 
-  if (detailSWR.error)
-    return <AsyncError error={detailSWR.error} variant={'page'} onRetry={detailSWR.mutate} />;
-  if (!detail)
-    return (
-      <Center height={'100%'} width={'100%'}>
-        <NeuralNetworkLoading />
-      </Center>
-    );
+  if (!detail && (!isHydrated || isValidating)) return <RouteLoading />;
+  if (error && !detail)
+    return <AsyncError error={error} variant={'page'} onRetry={() => void revalidate()} />;
+  if (!detail || !projectId) return null;
 
-  return <AcceptanceWorkspace projectId={detail.project.id} />;
+  return (
+    <AcceptanceRouteBaseContext
+      value={buildWorkspaceAwarePath(getProjectAcceptancePath(projectId), activeWorkspaceSlug)}
+    >
+      <Outlet />
+    </AcceptanceRouteBaseContext>
+  );
 };
 
-export default ProjectAcceptance;
+export default ProjectAcceptanceLayout;

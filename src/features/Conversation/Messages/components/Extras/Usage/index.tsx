@@ -4,14 +4,16 @@ import {
 } from '@lobechat/heterogeneous-agents';
 import type { ModelPerformance, ModelUsage } from '@lobechat/types';
 import { unwrapServerDefaultHeterogeneousModel } from '@lobechat/types';
-import { ModelIcon } from '@lobehub/icons';
+import { formatUsd } from '@lobechat/utils';
 import { Center, Flexbox, Icon, Tooltip } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
-import { CircleDollarSignIcon } from 'lucide-react';
+import { CoinsIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { ModelIcon } from '@/components/LobeIcons';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
@@ -23,18 +25,18 @@ import { formatNumber } from '@/utils/format';
 import { contextSelectors, useConversationStore } from '../../../../store';
 import TokenDetail from './UsageDetail';
 
-export const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    font-size: 12px;
-    color: ${cssVar.colorTextQuaternary};
-  `,
-}));
+export const styles = stylex.create({
+  container: {
+    fontSize: '12px',
+    color: cssVar.colorTextQuaternary,
+    fontVariantNumeric: 'tabular-nums',
+    whiteSpace: 'nowrap',
+  },
+});
 
 // Cheap messages don't need a cost callout — only surface it once it's
 // expensive enough to matter.
 const MIN_DISPLAY_COST = 0.2;
-
-const formatCost = (cost: number) => cost.toFixed(2);
 
 interface UsageProps {
   model: string;
@@ -87,7 +89,7 @@ const Usage = memo<UsageProps>(({ model, usage, performance, provider }) => {
     <Flexbox
       horizontal
       align={'center'}
-      className={styles.container}
+      className={stylex.props(styles.container).className}
       gap={12}
       justify={'space-between'}
     >
@@ -140,11 +142,22 @@ const Usage = memo<UsageProps>(({ model, usage, performance, provider }) => {
             usage={usage}
           />
         )}
+        {/* CLI subscription credits (e.g. Qoder) — the CLI reports these instead
+            of token counts, so without them the footer would show no usage at
+            all. Not LobeHub 积分 and not USD, hence the separate label. */}
+        {!!usage?.credits && (
+          <Tooltip title={t('messages.tokenDetails.cliCredits.tooltip')}>
+            <Center horizontal gap={2}>
+              <Icon icon={CoinsIcon} />
+              {t('messages.tokenDetails.cliCredits.title', {
+                value: formatNumber(usage.credits, 2),
+              })}
+            </Center>
+          </Tooltip>
+        )}
+        {/* The `$` already says what the number is, so no coin icon beside it */}
         {!isShowCredit && !!usage?.cost && usage.cost >= MIN_DISPLAY_COST && (
-          <Center horizontal gap={2}>
-            <Icon icon={CircleDollarSignIcon} />
-            {formatCost(usage.cost)}
-          </Center>
+          <span>{formatUsd(usage.cost)}</span>
         )}
       </Center>
     </Flexbox>

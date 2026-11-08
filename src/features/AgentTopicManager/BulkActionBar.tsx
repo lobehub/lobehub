@@ -1,17 +1,19 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { ActionIcon, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
-import { Archive, Star, Trash2, X } from 'lucide-react';
-import { memo, useCallback } from 'react';
+import { ActionIcon, createStaticStyles, cssVar, Flexbox, Text } from '@lobehub/ui';
+import { Archive, ArchiveRestore, FolderInput, Pin, Trash2, X } from 'lucide-react';
+import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { confirmRemoveTopic } from '@/features/DeleteTopicConfirm';
+import { openAssociateTopicModal } from '@/features/Projects/WorkingDirectories/AssociateTopicModal';
+import { usePermission } from '@/hooks/usePermission';
 import { useChatStore } from '@/store/chat';
+import type { ChatTopic } from '@/types/topic';
 
 import MoveToAgentButton from './MoveToAgentButton';
 import { useTopicsViewStore } from './store';
+import { areAllTopicsArchived } from './utils';
 
 const styles = createStaticStyles(({ css }) => ({
   bar: css`
@@ -44,15 +46,27 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-const BulkActionBar = memo(() => {
+interface BulkActionBarProps {
+  topics: ChatTopic[];
+}
+
+const BulkActionBar = memo<BulkActionBarProps>(({ topics }) => {
   const { t } = useTranslation('topic');
 
+  const { allowed: canEditTopic } = usePermission('edit_own_content');
+  const activeAgentId = useChatStore((s) => s.activeAgentId);
   const selectedIds = useTopicsViewStore((s) => s.selectedIds);
   const exitSelectMode = useTopicsViewStore((s) => s.exitSelectMode);
 
   const favoriteTopic = useChatStore((s) => s.favoriteTopic);
   const updateTopicStatus = useChatStore((s) => s.updateTopicStatus);
   const removeTopic = useChatStore((s) => s.removeTopic);
+  const unmarkTopicCompleted = useChatStore((s) => s.unmarkTopicCompleted);
+
+  const allArchived = useMemo(
+    () => areAllTopicsArchived(topics, selectedIds),
+    [topics, selectedIds],
+  );
 
   const handleBatchFavorite = useCallback(async () => {
     await Promise.all(selectedIds.map((id) => favoriteTopic(id, true)));
@@ -67,6 +81,11 @@ const BulkActionBar = memo(() => {
     );
     exitSelectMode();
   }, [selectedIds, updateTopicStatus, exitSelectMode]);
+
+  const handleBatchUnarchive = useCallback(async () => {
+    await Promise.all(selectedIds.map((id) => unmarkTopicCompleted(id)));
+    exitSelectMode();
+  }, [selectedIds, unmarkTopicCompleted, exitSelectMode]);
 
   const handleBatchDelete = useCallback(() => {
     void confirmRemoveTopic({
@@ -94,18 +113,36 @@ const BulkActionBar = memo(() => {
           {t('management.bulk.selectedCount', { count: selectedIds.length })}
         </Text>
         <ActionIcon
-          icon={Star}
+          icon={Pin}
           size={'small'}
-          title={t('management.bulk.favorite')}
+          title={t('management.bulk.pin')}
           onClick={handleBatchFavorite}
         />
-        <ActionIcon
-          icon={Archive}
-          size={'small'}
-          title={t('management.bulk.archive')}
-          onClick={handleBatchArchive}
-        />
+        {allArchived ? (
+          <ActionIcon
+            icon={ArchiveRestore}
+            size={'small'}
+            title={t('management.bulk.unarchive')}
+            onClick={handleBatchUnarchive}
+          />
+        ) : (
+          <ActionIcon
+            icon={Archive}
+            size={'small'}
+            title={t('management.bulk.archive')}
+            onClick={handleBatchArchive}
+          />
+        )}
         <MoveToAgentButton />
+        {selectedIds.length === 1 && canEditTopic && (
+          <ActionIcon
+            aria-label={t('directories.bind', { ns: 'project' })}
+            icon={FolderInput}
+            size="small"
+            title={t('directories.bind', { ns: 'project' })}
+            onClick={() => openAssociateTopicModal(selectedIds[0], activeAgentId)}
+          />
+        )}
         <ActionIcon
           icon={Trash2}
           size={'small'}

@@ -1,9 +1,10 @@
 import { type PlanDocument, type PlanRuntimeService } from '@lobechat/builtin-tool-lobe-agent';
-import { AGENT_PLAN_FILE_TYPE } from '@lobechat/const';
+import { AGENT_DOCUMENT_SOURCE_TYPE, AGENT_PLAN_FILE_TYPE } from '@lobechat/const';
 import { type LobeChatDatabase } from '@lobechat/database';
 
 import { DocumentModel } from '@/database/models/document';
 import { TopicDocumentModel } from '@/database/models/topicDocument';
+import { assertDocumentWriteWithinLimit } from '@/server/services/document/writeLimit';
 
 /**
  * Build a server-side `PlanRuntimeService` backed by the application database.
@@ -47,22 +48,34 @@ export const createServerPlanRuntimeService = (
 
   return {
     createPlan: async ({ topicId, goal, description, content }) => {
+      await assertDocumentWriteWithinLimit({
+        charCount: content.length,
+        source: 'agent',
+        userId,
+        workspaceId,
+      });
+
       const doc = await documentModel.create({
         content,
         description,
         fileType: AGENT_PLAN_FILE_TYPE,
         source: `lobe-agent:${topicId}`,
-        sourceType: 'api',
+        // A plan is a machine-generated artifact; 'api' would make it
+        // indistinguishable from a user-authored Page in resource listings.
+        sourceType: AGENT_DOCUMENT_SOURCE_TYPE,
         title: goal,
         totalCharCount: content.length,
         totalLineCount: content.split('\n').length,
         // Private-agent plans stay in the owner's private Pages; public
         // agents' plans stay visible to the workspace. When null (no agent
-        // context resolvable), fall through to `DocumentModel.create`'s
-        // existing `sourceType='api'` fallback (→ private in workspace mode).
+        // context resolvable) default workspace plans to private — the
+        // `sourceType='api'` fallback in `DocumentModel.create` that used to
+        // cover this no longer applies to 'agent' rows.
         ...(callerAgentVisibility === 'private' || callerAgentVisibility === 'public'
           ? { visibility: callerAgentVisibility }
-          : {}),
+          : workspaceId
+            ? { visibility: 'private' as const }
+            : {}),
       });
 
       await topicDocumentModel.associate({ documentId: doc.id, topicId });
@@ -87,6 +100,14 @@ export const createServerPlanRuntimeService = (
       if (goal !== undefined) updateData.title = goal;
       if (description !== undefined) updateData.description = description;
       if (content !== undefined) {
+        const existing = await documentModel.findById(id);
+        await assertDocumentWriteWithinLimit({
+          charCount: content.length,
+          previousCharCount: existing?.content?.length ?? 0,
+          source: 'agent',
+          userId,
+          workspaceId,
+        });
         updateData.content = content;
         updateData.totalCharCount = content.length;
         updateData.totalLineCount = content.split('\n').length;

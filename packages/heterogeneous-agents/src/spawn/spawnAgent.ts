@@ -1,21 +1,34 @@
 import type { ChildProcess } from 'node:child_process';
-import { spawn } from 'node:child_process';
-import path from 'node:path';
-import { PassThrough } from 'node:stream';
+import { platform } from 'node:os';
 
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
+import { spawnManaged } from '@lobechat/utils/managedProcess';
 
+import { ClaudeCodeAdapter } from '../adapters/claudeCode';
 import type { AskUserBridge } from '../askUser/AskUserBridge';
 import { resolveHeterogeneousAgentCommand } from '../config';
+import {
+  spawnCopilotAcpAgent,
+  spawnCursorAcpAgent,
+  spawnDevinAcpAgent,
+  spawnDroidAcpAgent,
+  spawnGrokAcpAgent,
+  spawnTraeAcpAgent,
+} from './acpSpawnAgent';
 import { AgentStreamPipeline, type UploadHeterogeneousImage } from './agentStreamPipeline';
-import { isPathLikeCommand, resolveCliSpawnPlan } from './cliSpawn';
+import { ClaudeCodeLiveInput } from './claudeCodeLiveInput';
+import { readClaudeCodeSessionCost } from './claudeCodeSessionCost';
+import { resolveCliSpawnPlan } from './cliSpawn';
 import { readCodexSessionModel, resolveCodexInitialModel } from './codexModel';
-import { buildCursorAcpPrompt, CursorAcpSession } from './cursorAcpSession';
-import { buildDroidAcpPrompt, DroidAcpSession } from './droidAcpSession';
-import { buildGrokAcpPrompt, GrokAcpSession } from './grokAcpSession';
+import {
+  buildCodexLobeHubContextArgs,
+  type CodexJwtFile,
+  createCodexJwtFile,
+} from './codexShellEnv';
 import type { AgentPromptInput, BuildAgentInputOptions } from './input';
 import { buildAgentInput } from './input';
-import { buildTraeAcpPrompt, TraeAcpSession } from './traeAcpSession';
+import { prepareClaudeCodeLobeHubCli } from './lobeHubCliPlugin';
+import { getHeterogeneousAgentPresetEnv } from './presetEnv';
 import { assertSpawnableWorkingDirectory } from './workingDirectory';
 
 export interface SpawnAgentOptions {
@@ -29,8 +42,15 @@ export interface SpawnAgentOptions {
    * path or is wrapped by a launcher.
    */
   command?: string;
+  /**
+   * Version of the CLI being spawned, when the caller detected it. Claude Code
+   * gets the `lh` guide as a skill only on a version known to load one.
+   */
+  commandVersion?: string;
   /** Working directory for the spawned child. Defaults to `process.cwd()`. */
   cwd?: string;
+  /** Create a dedicated Unix process group. Disable beneath a detached wrapper. */
+  detached?: boolean;
   /** Extra environment variables merged on top of `process.env`. */
   env?: Record<string, string>;
   /** Extra CLI arguments appended after the agent's preset flags. */
@@ -51,6 +71,12 @@ export interface SpawnAgentOptions {
    */
   inputOptions?: BuildAgentInputOptions;
   /**
+   * (Claude Code only) Keep stdin open while the session can still use input,
+   * exposing `sendUserMessage` / `interruptTurn` on the handle. Runtime end is
+   * then reported once at process exit instead of at every `result`.
+   */
+  liveInput?: boolean;
+  /**
    * Optional tee for the child's RAW stdout bytes, invoked synchronously for
    * every chunk BEFORE the adapter sees it. The pipeline still consumes stdout
    * normally — this is a pure side-channel. `lh hetero exec --raw-dump` wires
@@ -66,6 +92,8 @@ export interface SpawnAgentOptions {
    * events still carry the conventional shape.
    */
   operationId: string;
+  /** (Devin ACP only) Global `--permission-mode` value, placed before `acp`. */
+  permissionMode?: string;
   /**
    * User prompt. A plain string is sugar for a single text block; the array
    * form supports mixed text + image content blocks (URL / path / base64).
@@ -101,13 +129,34 @@ export interface SpawnAgentHandle {
    */
   exit: Promise<{ code: number | null; signal: NodeJS.Signals | null }>;
   /**
-   * Send a signal to the child. On Unix, the child is spawned with
-   * `detached: true` so the whole process group can be signaled via
-   * `process.kill(-pid, signal)`; this helper does that automatically.
+   * Notify a session transport of host-initiated cancellation at the protocol
+   * level (ACP `session/cancel`, RPC abort). Present only on session
+   * transports — absent on one-shot CLI spawns where `kill` is the only
+   * cancel channel. ACP SIGTERM closes the session without resending the
+   * already-delivered signal; SIGINT retains protocol cancellation and its
+   * grace timeout. SIGKILL remains a host-requested force-kill escalation.
+   */
+  interrupt?: (signal?: NodeJS.Signals) => void;
+  /**
+   * (Claude Code `liveInput` only) Stop the current turn without ending the
+   * process, so background tasks keep running. False once input has closed.
+   */
+  interruptTurn?: () => boolean;
+  /**
+   * Send a signal to the child. A dedicated Unix process group is signaled as
+   * a tree; inherited-group children receive a direct signal because their
+   * outer wrapper owns group-level cancellation.
    */
   kill: (signal?: NodeJS.Signals) => void;
   /** Spawned child PID, undefined if spawn failed pre-PID. */
   pid: number | undefined;
+  /**
+   * (Claude Code `liveInput` only) Deliver a user message into the running
+   * session; Claude Code reads it at its next tool boundary, or starts a turn
+   * for it when idle. Resolves false once input has closed — the caller then
+   * runs the message as a new turn instead.
+   */
+  sendUserMessage?: (prompt: AgentPromptInput, options?: { uuid?: string }) => Promise<boolean>;
   /**
    * The agent's native session id, extracted from the `system:init` event.
    * Available after the `events` async iterable has been fully consumed.
@@ -208,7 +257,6 @@ export const AMP_BASE_ARGS = [
 ] as const;
 
 export const OPENCODE_BASE_ARGS = ['run', '--format', 'json', '--thinking', '--auto'] as const;
-export const PI_BASE_ARGS = ['--mode', 'json'] as const;
 export const KIMI_CODE_BASE_ARGS = ['--output-format', 'stream-json'] as const;
 export const QODER_BASE_ARGS = [
   '-p',
@@ -226,12 +274,16 @@ const hasAnyFlag = (args: string[], flags: readonly string[]) =>
 
 interface BuildSpawnArgsParams {
   agentType: string;
+  /** (Codex only) `-c` overrides placed before `extraArgs` so callers can still override them. */
+  configArgs?: string[];
   /** Extra CLI arguments appended after the agent's preset flags. */
   extraArgs: string[];
   /** (Claude Code only) Stream `--include-partial-messages` deltas. */
   includePartialMessages: boolean;
   /** Per-agent input args produced by `buildAgentInput` (e.g. Codex `--image`). */
   inputArgs: string[];
+  /** (Claude Code only) Replay consumed user messages for live input. */
+  liveInput?: boolean;
   /** Native session id for resume; undefined for fresh runs. */
   resumeSessionId: string | undefined;
 }
@@ -240,10 +292,12 @@ const buildClaudeCodeArgs = ({
   extraArgs,
   includePartialMessages,
   inputArgs,
+  liveInput,
   resumeSessionId,
 }: BuildSpawnArgsParams) => [
   ...CLAUDE_CODE_BASE_ARGS,
   ...(includePartialMessages ? ['--include-partial-messages'] : []),
+  ...(liveInput ? ['--replay-user-messages'] : []),
   ...CLAUDE_CODE_PERMISSION_ARGS(),
   ...(resumeSessionId ? ['--resume', resumeSessionId] : []),
   ...inputArgs,
@@ -265,11 +319,22 @@ const buildCodeBuddyArgs = ({
   ...extraArgs,
 ];
 
-const buildCodexArgs = ({ extraArgs, inputArgs, resumeSessionId }: BuildSpawnArgsParams) => {
+const buildCodexArgs = ({
+  configArgs = [],
+  extraArgs,
+  inputArgs,
+  resumeSessionId,
+}: BuildSpawnArgsParams) => {
   const executionModeArgs = hasAnyFlag(extraArgs, CODEX_EXECUTION_MODE_FLAGS)
     ? []
     : [...CODEX_DEFAULT_EXECUTION_ARGS];
-  const optionArgs = [...CODEX_REQUIRED_ARGS, ...executionModeArgs, ...inputArgs, ...extraArgs];
+  const optionArgs = [
+    ...CODEX_REQUIRED_ARGS,
+    ...executionModeArgs,
+    ...inputArgs,
+    ...configArgs,
+    ...extraArgs,
+  ];
 
   return resumeSessionId
     ? ['exec', 'resume', ...optionArgs, resumeSessionId, '-']
@@ -291,12 +356,13 @@ const buildOpenCodeArgs = ({ extraArgs, inputArgs, resumeSessionId }: BuildSpawn
   ...extraArgs,
 ];
 
-const buildPiArgs = ({ extraArgs, inputArgs, resumeSessionId }: BuildSpawnArgsParams) => [
-  ...PI_BASE_ARGS,
-  ...(resumeSessionId ? ['--session-id', resumeSessionId] : []),
-  ...inputArgs,
-  ...extraArgs,
-];
+const buildPiArgs = (_params: BuildSpawnArgsParams): never => {
+  // pi runs exclusively over the RPC transport (PiRpcSession /
+  // createPiRpcAgentHandle). Reaching the legacy json spawn is a bug.
+  throw new Error(
+    'pi runs over the RPC transport only — use PiRpcSession / createPiRpcAgentHandle',
+  );
+};
 
 const buildKimiCodeArgs = ({ extraArgs, inputArgs, resumeSessionId }: BuildSpawnArgsParams) => [
   ...KIMI_CODE_BASE_ARGS,
@@ -354,14 +420,14 @@ const buildSpawnArgs = (params: BuildSpawnArgsParams): string[] => {
   }
 };
 
-const killProcessTree = (proc: ChildProcess, signal: NodeJS.Signals): void => {
+const killProcessTree = (proc: ChildProcess, signal: NodeJS.Signals, detached: boolean): void => {
   if (!proc.pid || proc.killed) return;
 
   // On Windows the spawn `detached` flag has different semantics; fall back
   // to a direct signal. Tree-kill via `taskkill` is what the desktop
   // controller does for end-user CC, but the CLI's primary use case is
   // sandbox + Unix dev terminals, so keep this minimal.
-  if (process.platform === 'win32') {
+  if (platform() === 'win32') {
     try {
       proc.kill(signal);
     } catch {
@@ -370,237 +436,20 @@ const killProcessTree = (proc: ChildProcess, signal: NodeJS.Signals): void => {
     return;
   }
 
-  try {
-    process.kill(-proc.pid, signal);
-  } catch {
+  if (detached) {
     try {
-      proc.kill(signal);
+      process.kill(-proc.pid, signal);
+      return;
     } catch {
-      // already gone
+      // Fall through to a direct signal when the process group is gone.
     }
   }
-};
 
-/** Guarded raw-stdout tee: diagnostic sink failures must not affect the ACP run. */
-const teeAcpRawStdout =
-  (onRawStdout?: (chunk: Buffer) => void) =>
-  (line: string): void => {
-    if (!onRawStdout) return;
-    try {
-      onRawStdout(Buffer.from(line));
-    } catch {
-      // raw dump is diagnostic-only; never let it disrupt the run
-    }
-  };
-
-/**
- * Bridge a bidirectional ACP session onto the ordinary `SpawnAgentHandle`
- * contract shared by the one-shot CLI spawns.
- *
- * Exit/error policy (uniform for every ACP agent):
- * - Host kills resolve `exit` as `{ code: null, signal }`.
- * - ACP request failures are first adapted into a terminal error event and
- *   then reject the session's run() promise. Once that structured event is
- *   queued, the iterable ends normally so callers can apply their error
- *   policy; transport failures with no terminal event still throw from the
- *   iterator.
- */
-const createAcpSpawnBridge = () => {
-  const stderr = new PassThrough();
-  const queue: AgentStreamEvent[] = [];
-  let emittedTerminalError = false;
-  let hostSignal: NodeJS.Signals | null = null;
-  let streamEnded = false;
-  let streamError: Error | undefined;
-  let wakeup: (() => void) | undefined;
-
-  const wake = () => {
-    const resolve = wakeup;
-    wakeup = undefined;
-    resolve?.();
-  };
-  const getHostExit = (): { code: null; signal: NodeJS.Signals } | undefined =>
-    hostSignal ? { code: null, signal: hostSignal } : undefined;
-
-  const onEvents = (events: AgentStreamEvent[]): void => {
-    if (events.some(({ type }) => type === 'error')) emittedTerminalError = true;
-    queue.push(...events);
-    wake();
-  };
-  const onStderr = (data: string): void => {
-    stderr.write(data);
-  };
-
-  const events: AsyncIterable<AgentStreamEvent> = {
-    [Symbol.asyncIterator]() {
-      return {
-        async next(): Promise<IteratorResult<AgentStreamEvent>> {
-          while (true) {
-            const event = queue.shift();
-            if (event) return { done: false, value: event };
-            if (streamError) throw streamError;
-            if (streamEnded) return { done: true, value: undefined };
-            await new Promise<void>((resolve) => {
-              wakeup = resolve;
-            });
-          }
-        },
-      };
-    },
-  };
-
-  const attach = (session: {
-    close: (signal?: NodeJS.Signals) => void;
-    interrupt: () => void;
-    run: () => Promise<void>;
-  }): Pick<SpawnAgentHandle, 'exit' | 'kill'> => {
-    const exit: SpawnAgentHandle['exit'] = session
-      .run()
-      .then(() => getHostExit() ?? { code: 0, signal: null })
-      .catch((error) => {
-        const hostExit = getHostExit();
-        if (hostExit) return hostExit;
-
-        if (!emittedTerminalError) {
-          streamError = error instanceof Error ? error : new Error(String(error));
-        }
-        return { code: 1, signal: null };
-      })
-      .finally(() => {
-        streamEnded = true;
-        stderr.end();
-        wake();
-      });
-
-    const kill = (signal: NodeJS.Signals = 'SIGINT'): void => {
-      hostSignal = signal;
-      if (signal === 'SIGINT') session.interrupt();
-      else session.close(signal);
-    };
-    return { exit, kill };
-  };
-
-  return { attach, events, onEvents, onStderr, stderr };
-};
-
-const spawnGrokAcpAgent = async (
-  options: SpawnAgentOptions,
-  command: string,
-  cwd: string,
-): Promise<SpawnAgentHandle> => {
-  const prompt = await buildGrokAcpPrompt(options.prompt, options.inputOptions);
-  const bridge = createAcpSpawnBridge();
-  const session = new GrokAcpSession({
-    args: options.extraArgs ?? [],
-    clientVersion: 'lobehub-cli',
-    commandPath: command,
-    cwd,
-    env: { ...process.env, ...options.env },
-    onEvents: bridge.onEvents,
-    onRawMessage: teeAcpRawStdout(options.onRawStdout),
-    onRuntimeStatus: () => {},
-    onSessionId: () => {},
-    onStderr: bridge.onStderr,
-    operationId: options.operationId,
-    prompt,
-    resumeSessionId: options.resumeSessionId,
-    sessionId: options.operationId,
-  });
-  const { exit, kill } = bridge.attach(session);
-
-  return {
-    events: bridge.events,
-    exit,
-    kill,
-    get pid() {
-      return session.pid;
-    },
-    get sessionId() {
-      return session.sessionId;
-    },
-    stderr: bridge.stderr,
-  };
-};
-
-const spawnCursorAcpAgent = async (
-  options: SpawnAgentOptions,
-  command: string,
-  cwd: string,
-): Promise<SpawnAgentHandle> => {
-  const prompt = buildCursorAcpPrompt(options.prompt);
-  const bridge = createAcpSpawnBridge();
-  const session = new CursorAcpSession({
-    args: options.extraArgs ?? [],
-    askUserBridge: options.askUserBridge,
-    clientVersion: 'lobehub-cli',
-    commandPath: command,
-    cwd,
-    env: { ...process.env, ...options.env },
-    onEvents: bridge.onEvents,
-    onRawMessage: teeAcpRawStdout(options.onRawStdout),
-    onRuntimeStatus: () => {},
-    onSessionId: () => {},
-    onStderr: bridge.onStderr,
-    operationId: options.operationId,
-    prompt,
-    resumeSessionId: options.resumeSessionId,
-    sessionId: options.operationId,
-  });
-  const { exit, kill } = bridge.attach(session);
-
-  return {
-    events: bridge.events,
-    exit,
-    kill,
-    get pid() {
-      return session.pid;
-    },
-    get sessionId() {
-      return session.sessionId;
-    },
-    stderr: bridge.stderr,
-  };
-};
-
-const spawnDroidAcpAgent = async (
-  options: SpawnAgentOptions,
-  command: string,
-  cwd: string,
-): Promise<SpawnAgentHandle> => {
-  const prompt = await buildDroidAcpPrompt(options.prompt, options.inputOptions);
-  const bridge = createAcpSpawnBridge();
-  const session = new DroidAcpSession({
-    args: options.extraArgs ?? [],
-    askUserBridge: options.askUserBridge,
-    clientVersion: 'lobehub-cli',
-    commandPath: command,
-    cwd,
-    env: { ...process.env, ...options.env },
-    initialModel: options.initialModel,
-    onEvents: bridge.onEvents,
-    onRawMessage: teeAcpRawStdout(options.onRawStdout),
-    onRuntimeStatus: () => {},
-    onSessionId: () => {},
-    onStderr: bridge.onStderr,
-    operationId: options.operationId,
-    prompt,
-    resumeSessionId: options.resumeSessionId,
-    sessionId: options.operationId,
-  });
-  const { exit, kill } = bridge.attach(session);
-
-  return {
-    events: bridge.events,
-    exit,
-    kill,
-    get pid() {
-      return session.pid;
-    },
-    get sessionId() {
-      return session.nativeSessionId;
-    },
-    stderr: bridge.stderr,
-  };
+  try {
+    proc.kill(signal);
+  } catch {
+    // already gone
+  }
 };
 
 /**
@@ -624,6 +473,12 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
   const command = resolveHeterogeneousAgentCommand(options.agentType, options.command);
   const cwd = options.cwd || process.cwd();
   assertSpawnableWorkingDirectory(cwd);
+  if (options.agentType === 'copilot') {
+    return spawnCopilotAcpAgent(options, command, cwd);
+  }
+  if (options.agentType === 'devin') {
+    return spawnDevinAcpAgent(options, command, cwd);
+  }
   if (options.agentType === 'grok-build') {
     return spawnGrokAcpAgent(options, command, cwd);
   }
@@ -634,19 +489,66 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
     return spawnDroidAcpAgent(options, command, cwd);
   }
 
-  const inputPlan = await buildAgentInput(options.agentType, options.prompt, options.inputOptions);
+  // A run answering a LobeHub conversation (`lh hetero exec --topic`) gets the
+  // `lh` guide as a Claude Code skill rather than in the user's turn. The
+  // caller's env, not the inherited one: a standalone run nested inside some
+  // other conversation is not answering it.
+  const lobeHubCli =
+    options.agentType === 'claude-code' && options.env?.LOBEHUB_TOPIC_ID
+      ? await prepareClaudeCodeLobeHubCli(options.prompt, options.extraArgs, {
+          resumed: Boolean(options.resumeSessionId),
+          version: options.commandVersion,
+        })
+      : { args: [], prompt: options.prompt };
+  const promptPlan = await buildAgentInput(
+    options.agentType,
+    lobeHubCli.prompt,
+    options.inputOptions,
+  );
+  const inputPlan = { ...promptPlan, args: [...lobeHubCli.args, ...promptPlan.args] };
+  const childEnv: NodeJS.ProcessEnv = {
+    ...process.env,
+    ...getHeterogeneousAgentPresetEnv(options.agentType),
+    ...options.env,
+  };
+  // Codex builds each shell command's env from `[shell_environment_policy]`,
+  // not from its own process env, so a user's `inherit = "core"` strips the
+  // run context `lh` needs. Forward it as `shell_environment_policy.set.*`
+  // overrides; the JWT travels as a 0600 file path, never in argv.
+  const codexJwtFile: CodexJwtFile | undefined =
+    options.agentType === 'codex' && childEnv.LOBEHUB_JWT
+      ? await createCodexJwtFile(childEnv.LOBEHUB_JWT)
+      : undefined;
+  try {
+    return await spawnCliAgent(options, command, cwd, inputPlan, childEnv, codexJwtFile);
+  } catch (error) {
+    await codexJwtFile?.cleanup();
+    throw error;
+  }
+};
+
+/** One-shot JSONL CLI spawn; `spawnAgent` owns the Codex JWT file around it. */
+const spawnCliAgent = async (
+  options: SpawnAgentOptions,
+  command: string,
+  cwd: string,
+  inputPlan: Awaited<ReturnType<typeof buildAgentInput>>,
+  childEnv: NodeJS.ProcessEnv,
+  codexJwtFile: CodexJwtFile | undefined,
+): Promise<SpawnAgentHandle> => {
+  const liveInput = options.agentType === 'claude-code' && options.liveInput === true;
   const args = buildSpawnArgs({
     agentType: options.agentType,
+    configArgs:
+      options.agentType === 'codex'
+        ? [...buildCodexLobeHubContextArgs(childEnv), ...(codexJwtFile?.args ?? [])]
+        : undefined,
     extraArgs: options.extraArgs ?? [],
     includePartialMessages: options.includePartialMessages ?? false,
     inputArgs: inputPlan.args,
+    liveInput,
     resumeSessionId: options.resumeSessionId,
   });
-  const childEnv = {
-    ...process.env,
-    ...(options.agentType === 'codebuddy' ? { CODEBUDDY_CODE_DISABLE_BACKGROUND_TASKS: '1' } : {}),
-    ...options.env,
-  };
   const initialModel =
     options.agentType === 'codex'
       ? (await resolveCodexInitialModel({ args, env: childEnv }))?.model
@@ -656,21 +558,46 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
       ? await readCodexSessionModel(options.resumeSessionId, { env: childEnv })
       : undefined;
   const initialCumulativeUsage = resumedCodexSession?.cumulativeUsage;
+  const initialSessionCostUsd =
+    options.agentType === 'claude-code' && options.resumeSessionId
+      ? await readClaudeCodeSessionCost({
+          configDir: childEnv.CLAUDE_CONFIG_DIR,
+          cwd,
+          // Resolve from the child's environment: an overridden HOME moves the
+          // transcript the CLI resumes from.
+          home: childEnv.HOME,
+          sessionId: options.resumeSessionId,
+        })
+      : undefined;
 
   const cliSpawnPlan = await resolveCliSpawnPlan(command, args);
-  const proc = spawn(cliSpawnPlan.command, cliSpawnPlan.args, {
+  const detached = platform() !== 'win32' && (options.detached ?? true);
+  const startedAt = Date.now();
+  const proc = spawnManaged(cliSpawnPlan.command, cliSpawnPlan.args, {
     cwd,
-    detached: process.platform !== 'win32',
+    detached,
     env: childEnv,
     stdio: ['pipe', 'pipe', 'pipe'],
   });
 
   const pipeline = new AgentStreamPipeline({
+    // A live session can run more turns after its first `result`, so the
+    // runtime ends once, at process exit, and the turn a background task's
+    // completion opens is grouped under the tool that started it.
+    adapter: liveInput
+      ? new ClaudeCodeAdapter({
+          runtimeEndStrategy: 'on-transport-close',
+          signalBackgroundTaskCompletion: true,
+        })
+      : undefined,
     agentType: options.agentType,
     cwd,
+    env: childEnv,
     initialCumulativeUsage,
     initialModel,
+    initialSessionCostUsd,
     operationId: options.operationId,
+    startedAt,
     uploadImage: options.uploadImage,
   });
   const stdout = proc.stdout!;
@@ -682,6 +609,7 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
   // dependency.
   const queue: AgentStreamEvent[] = [];
   let killedByUs = false;
+  let sawErrorEvent = false;
   let streamEnded = false;
   let streamError: Error | undefined;
   let wakeup: (() => void) | undefined;
@@ -709,8 +637,15 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
       });
     },
   );
+  if (codexJwtFile) {
+    const removeJwtFile = () => codexJwtFile.cleanup();
+    void exit.then(removeJwtFile, removeJwtFile);
+  }
 
-  if (proc.stdin) {
+  const live = liveInput && proc.stdin ? new ClaudeCodeLiveInput(proc.stdin) : undefined;
+  if (live) {
+    live.send(inputPlan.stdin);
+  } else if (proc.stdin) {
     proc.stdin.write(inputPlan.stdin, () => {
       proc.stdin?.end();
     });
@@ -731,6 +666,7 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
     pipelineQueue = pipelineQueue.then(async () => {
       try {
         const events = await pipeline.push(chunk);
+        sawErrorEvent ||= events.some((event) => event.type === 'error');
         for (const event of events) queue.push(event);
         wake();
       } catch (err) {
@@ -745,10 +681,29 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
     pipelineQueue = pipelineQueue.then(async () => {
       try {
         const events = await pipeline.flush();
+        live?.finish();
+        const { code, signal } = await exit;
+        if (code === 0 && !killedByUs) events.push(...pipeline.validateCompletion());
+        sawErrorEvent ||= events.some((event) => event.type === 'error');
         for (const event of events) queue.push(event);
-        const { code } = await exit;
-        if (code === 0 && !killedByUs) {
-          for (const event of pipeline.validateCompletion()) queue.push(event);
+        // Only a clean exit after a finished turn ends the run here: a crash
+        // after a result is a failure, not a completion. Print mode exits 1
+        // when its last turn was an error result, which an interrupt is.
+        const lastTurn = live?.lastTurn;
+        const cleanExit =
+          code === 0 || (lastTurn?.aborted === true && code === 1 && signal === null);
+        if (lastTurn && cleanExit && !killedByUs && !sawErrorEvent) {
+          const end = lastTurn.aborted
+            ? { kind: 'aborted', reason: 'interrupted', terminalReason: lastTurn.terminalReason }
+            : { reason: 'complete' };
+          for (const event of pipeline.completeRuntime({ ...end, transport: 'cli-live' }))
+            queue.push(event);
+        }
+        // Kimi Code reports usage only via its on-disk session wire log, so
+        // it can only be collected now that the process has exited. The hook
+        // is a no-op for every other agent type.
+        for (const event of await pipeline.collectPostRunUsage({ env: childEnv })) {
+          queue.push(event);
         }
       } catch (err) {
         streamError = err instanceof Error ? err : new Error(String(err));
@@ -770,6 +725,7 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
         // raw dump is diagnostic-only; never let it disrupt the run
       }
     }
+    live?.observe(chunk);
     enqueuePush(chunk);
   });
   stdout.on('end', enqueueFlush);
@@ -806,9 +762,18 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
   return {
     events,
     exit,
+    ...(live && {
+      interruptTurn: () => live.interrupt(),
+      sendUserMessage: async (prompt: AgentPromptInput, sendOptions?: { uuid?: string }) => {
+        if (!live.isOpen) return false;
+        const plan = await buildAgentInput('claude-code', prompt, options.inputOptions);
+        return live.send(plan.stdin, sendOptions?.uuid);
+      },
+    }),
     kill: (signal: NodeJS.Signals = 'SIGINT') => {
       killedByUs = true;
-      killProcessTree(proc, signal);
+      live?.close();
+      killProcessTree(proc, signal, detached);
     },
     pid: proc.pid,
     get sessionId() {
@@ -818,56 +783,4 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
   };
 };
 
-/** Spawn TRAE's bidirectional ACP runtime behind the ordinary SpawnAgentHandle contract. */
-export const spawnTraeAcpAgent = async (options: SpawnAgentOptions): Promise<SpawnAgentHandle> => {
-  const requestedCommand = resolveHeterogeneousAgentCommand('trae', options.command);
-  const cwd = options.cwd || process.cwd();
-  assertSpawnableWorkingDirectory(cwd);
-  const command =
-    isPathLikeCommand(requestedCommand) && !path.isAbsolute(requestedCommand)
-      ? path.resolve(cwd, requestedCommand)
-      : requestedCommand;
-  const childEnv = { ...process.env, ...options.env };
-  const { detectHeterogeneousCliCommand } = await import('./resolveCliCommand');
-  const commandStatus = await detectHeterogeneousCliCommand('trae', command, childEnv);
-  if (!commandStatus.available || !commandStatus.path) {
-    throw new Error(`TRAE command does not expose the required ACP runtime: ${requestedCommand}`);
-  }
-
-  const prompt = await buildTraeAcpPrompt(options.prompt, options.inputOptions);
-  const bridge = createAcpSpawnBridge();
-  const session = new TraeAcpSession({
-    args: options.extraArgs ?? [],
-    clientVersion: '1.0.0',
-    commandPath: commandStatus.path,
-    cwd,
-    env: {
-      ...childEnv,
-      ...(commandStatus.resolvedPathEnv ? { PATH: commandStatus.resolvedPathEnv } : {}),
-    },
-    initialModel: options.initialModel,
-    onEvents: bridge.onEvents,
-    onRawMessage: teeAcpRawStdout(options.onRawStdout),
-    onRuntimeStatus: () => {},
-    onSessionId: () => {},
-    onStderr: bridge.onStderr,
-    operationId: options.operationId,
-    prompt,
-    resumeSessionId: options.resumeSessionId,
-    sessionId: options.operationId,
-  });
-  const { exit, kill } = bridge.attach(session);
-
-  return {
-    events: bridge.events,
-    exit,
-    kill,
-    get pid() {
-      return session.pid;
-    },
-    get sessionId() {
-      return session.nativeSessionId;
-    },
-    stderr: bridge.stderr,
-  };
-};
+export { spawnTraeAcpAgent } from './acpSpawnAgent';

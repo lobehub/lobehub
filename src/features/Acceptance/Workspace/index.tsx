@@ -1,21 +1,23 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
-import { ActionIcon, Drawer } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
-import { Menu, PanelLeftOpen } from 'lucide-react';
+import { ActionIcon, createStaticStyles, cssVar, Drawer, Flexbox, Icon } from '@lobehub/ui';
+import { Menu, PanelLeftOpen, Pin } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Outlet, useNavigate, useParams, useSearchParams } from 'react-router';
+import { Outlet, useParams, useSearchParams } from 'react-router';
 
 import { ShellTopBar } from '@/features/PageShell';
 import { RouteMetaBridge } from '@/features/RouteMeta';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useUserStore } from '@/store/user';
+import { authSelectors } from '@/store/user/selectors';
 
 import { useAcceptanceList } from '../hooks';
 import { acceptanceHomePath } from '../Viewer/routes';
 import AcceptanceListPanel from './AcceptanceListPanel';
 import AcceptanceOnboarding from './AcceptanceOnboarding';
 import { useAcceptanceProjectActionItems } from './AcceptanceProjectActions';
+import AcceptanceScopeSwitcher from './AcceptanceScopeSwitcher';
 import { useReportPanelExpand } from './useReportPanelExpand';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -80,7 +82,8 @@ interface AcceptanceWorkspaceProps {
 
 const AcceptanceWorkspace = memo<AcceptanceWorkspaceProps>(({ projectId }) => {
   const { t } = useTranslation('verify');
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
+  const isSignedIn = useUserStore(authSelectors.isLogin);
   const panel = useReportPanelExpand();
   const projectActionItems = useAcceptanceProjectActionItems();
   const { acceptanceId, checkId } = useParams<{ acceptanceId: string; checkId: string }>();
@@ -89,31 +92,36 @@ const AcceptanceWorkspace = memo<AcceptanceWorkspaceProps>(({ projectId }) => {
 
   /**
    * Inside a project the workspace is already wearing the `(main)` shell's
-   * chrome, so it keeps its inline rail. Only the standalone `/acceptance`
-   * route — registered outside `(main)`, with nothing above it — grows a top
-   * bar of its own, and there the list becomes a drawer so a record can own
-   * the full width without the collection having to disappear to give it.
+   * chrome, so it keeps its inline rail. The standalone `/acceptance` route —
+   * registered outside `(main)`, with nothing above it — grows a top bar of
+   * its own and keeps the list in a drawer, so a record can own the full width
+   * without the collection disappearing. On a wide viewport the drawer can be
+   * pinned into that same rail (its header then carries back + title);
+   * collapsing the rail hands the list back to the drawer.
    */
   const standalone = !projectId;
-  const showList = !hasFocusedCheck;
+  // Public report readers must not mount the private collection: its 401 would
+  // trigger the global sign-in redirect, even though the report is public.
+  const showList = !!isSignedIn && !hasFocusedCheck;
+  const listInDrawer = standalone && (!isSignedIn || panel.isNarrow || !panel.pinned);
   const [listOpen, setListOpen] = useState(false);
-  // Picking a row is what the drawer was opened to cause; once the route has
-  // changed the drawer has nothing left to do.
+  // Picking a row is what the drawer was opened for; once the route has moved
+  // on (or the rail has taken over) the drawer has nothing left to do.
   useEffect(() => {
     setListOpen(false);
-  }, [acceptanceId]);
+  }, [acceptanceId, listInDrawer]);
 
   const {
     data: allAcceptances,
     error,
     isLoading,
-  } = useAcceptanceList(standalone ? !acceptanceId : showList, {
+  } = useAcceptanceList(!!isSignedIn && (standalone ? !acceptanceId : showList), {
     filter: 'all',
     projectId,
   });
   const isFirstUse = shouldShowAcceptanceOnboarding({
     data: allAcceptances,
-    enabled: standalone ? !acceptanceId : showList && !projectId,
+    enabled: !!isSignedIn && (standalone ? !acceptanceId : showList && !projectId),
     error,
     hasDeepLink: Boolean(acceptanceId),
     isLoading,
@@ -121,14 +129,27 @@ const AcceptanceWorkspace = memo<AcceptanceWorkspaceProps>(({ projectId }) => {
 
   const topBar = standalone ? (
     <ShellTopBar
+      scope={isSignedIn ? <AcceptanceScopeSwitcher /> : undefined}
       title={t('acceptance.workspace.title')}
       titleExtra={
-        <ActionIcon
-          icon={Menu}
-          size={'small'}
-          title={t('acceptance.shell.menu')}
-          onClick={() => setListOpen(true)}
-        />
+        isSignedIn && (
+          <>
+            <ActionIcon
+              icon={Menu}
+              size={'small'}
+              title={t('acceptance.shell.menu')}
+              onClick={() => setListOpen(true)}
+            />
+            {!panel.isNarrow && (
+              <ActionIcon
+                icon={Pin}
+                size={'small'}
+                title={t('workspace.pin')}
+                onClick={() => panel.setExpand(true)}
+              />
+            )}
+          </>
+        )
       }
       onBack={() => navigate(acceptanceHomePath())}
     />
@@ -149,7 +170,7 @@ const AcceptanceWorkspace = memo<AcceptanceWorkspaceProps>(({ projectId }) => {
     );
   }
 
-  if (!standalone)
+  if (!listInDrawer)
     return (
       <Flexbox horizontal height={'100dvh'} style={{ overflow: 'hidden' }} width={'100%'}>
         <RouteMetaBridge />
@@ -181,18 +202,20 @@ const AcceptanceWorkspace = memo<AcceptanceWorkspaceProps>(({ projectId }) => {
     <Flexbox height={'100dvh'} style={{ overflow: 'hidden' }} width={'100%'}>
       <RouteMetaBridge />
       {topBar}
-      <Drawer
-        noHeader
-        closable={false}
-        containerMaxWidth={'100%'}
-        open={listOpen}
-        placement={'left'}
-        styles={{ bodyContent: { height: '100%', minHeight: 0, overflow: 'hidden', padding: 0 } }}
-        width={'min(360px, 88vw)'}
-        onClose={() => setListOpen(false)}
-      >
-        <AcceptanceListPanel hosted {...panel} projectActionItems={projectActionItems} />
-      </Drawer>
+      {isSignedIn && (
+        <Drawer
+          noHeader
+          closable={false}
+          containerMaxWidth={'100%'}
+          open={listOpen}
+          placement={'left'}
+          styles={{ bodyContent: { height: '100%', minHeight: 0, overflow: 'hidden', padding: 0 } }}
+          width={'min(360px, 88vw)'}
+          onClose={() => setListOpen(false)}
+        >
+          <AcceptanceListPanel hosted {...panel} projectActionItems={projectActionItems} />
+        </Drawer>
+      )}
       <Flexbox horizontal flex={1} style={{ minHeight: 0 }} width={'100%'}>
         <div className={styles.main}>
           <Outlet />

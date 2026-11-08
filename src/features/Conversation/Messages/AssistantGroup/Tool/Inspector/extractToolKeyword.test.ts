@@ -28,10 +28,14 @@ describe('extractToolKeyword', () => {
       );
     });
 
-    it('prefers command over the model-written description', () => {
+    it('prefers the model-written description over command fragments', () => {
       expect(
         extractToolKeyword({ command: 'ls -la', description: 'List files in current directory' }),
-      ).toBe('ls');
+      ).toBe('List files in current directory');
+    });
+
+    it('falls back to the command program when no description exists', () => {
+      expect(extractToolKeyword({ command: 'ls -la' })).toBe('ls');
     });
   });
 
@@ -42,10 +46,9 @@ describe('extractToolKeyword', () => {
       );
     });
 
-    it('truncates long queries', () => {
+    it('keeps long queries intact for CSS truncation', () => {
       const query = 'a'.repeat(50);
-      const keyword = extractToolKeyword({ query });
-      expect(keyword).toBe('a'.repeat(32) + '…');
+      expect(extractToolKeyword({ query })).toBe(query);
     });
   });
 

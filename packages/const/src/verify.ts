@@ -72,6 +72,28 @@ export const verifyRunStatuses = [
 export type VerifyRunStatus = (typeof verifyRunStatuses)[number];
 
 /**
+ * A draft round only describes what will be verified: nothing has executed and
+ * nobody has decided. Drafts follow the live plan and are reused by the next
+ * plan or ingest instead of consuming another round number.
+ *
+ * A replay is excluded: it is pinned to the source round's frozen definition, so
+ * it must not follow later graph edits or absorb another flow. Only the newest
+ * round can be the open draft — an older one left behind by a replay is an
+ * abandoned ledger position, so callers check the latest round rather than
+ * searching the whole chain.
+ */
+export const isDraftVerifyRun = (run: {
+  metadata?: { replayOfRunId?: string } | null;
+  planConfirmedAt?: Date | string | null;
+  status?: string | null;
+  userDecision?: string | null;
+}): boolean =>
+  run.status === 'planned' &&
+  !run.planConfirmedAt &&
+  !run.userDecision &&
+  !run.metadata?.replayOfRunId;
+
+/**
  * What produced a verification session.
  * - agent:         verifying a real Agent Run (`verify_runs.operation_id` set)
  * - agent-testing: a standalone session ingested from the agent-testing harness
@@ -153,7 +175,7 @@ const PROGRAMMATIC_TEST_PATTERNS: RegExp[] = [
   /\b(?:npm|pnpm|yarn|bun|bunx)\s+run\s+check\b/i,
   // static analysis / build / CI gates
   /\btype[\s-]?check(?:s|ing)?\b/i,
-  /\b(?:tsc|tsgo|eslint|stylelint|prettier|biome|ruff|mypy|clippy)\b/i,
+  /\b(?:tsc|tsrs|eslint|stylelint|prettier|biome|ruff|mypy|clippy)\b/i,
   /\blint(?:s|ing)?\b/i,
   /\bcompiles?\s+(?:cleanly|without errors)\b/i,
   /\bbuild\s+(?:pass(?:es|ed)?|succeed(?:s|ed)?|(?:is\s+)?(?:green|clean))\b/i,
@@ -162,6 +184,34 @@ const PROGRAMMATIC_TEST_PATTERNS: RegExp[] = [
   // Chinese
   /单元测试|单测|集成测试|回归测试|类型检查|类型校验|测试覆盖率|代码覆盖率|静态检查|测试用例全部通过/,
 ];
+
+/**
+ * Round statuses past which a dispute can no longer change anything: the round
+ * has been judged (or handed to a repair round) and its Task driven, so a waiver
+ * written there would only rewrite metadata under a settled verdict.
+ */
+export const DISPUTE_SETTLED_RUN_STATUSES = [
+  'delivered',
+  'errored',
+  'failed',
+  'passed',
+  'repairing',
+] as const satisfies readonly VerifyRunStatus[];
+
+/** Why a builder disputes a check; see `VerifyCheckDisputeKind` in `@lobechat/types`. */
+export const VERIFY_DISPUTE_KINDS = ['invalid_criterion', 'missed_evidence'] as const;
+
+/**
+ * Whether a panel upheld the builder's `invalid_criterion` dispute on this check
+ * result, which waives it: the rollup, the Goal review and the failure summary
+ * stop counting it against the delivery. Takes the raw metadata bag so every
+ * layer reads the same field.
+ */
+export const isCheckWaivedByDispute = (metadata: unknown): boolean => {
+  const dispute = (metadata as { dispute?: { arbitration?: { outcome?: string }; kind?: string } })
+    ?.dispute;
+  return dispute?.kind === 'invalid_criterion' && dispute.arbitration?.outcome === 'upheld';
+};
 
 /**
  * Stored title of the synthesized holistic fallback check (one broad agent
@@ -198,8 +248,27 @@ export const PROGRAMMATIC_TEST_CHECK_HINT =
  * is not coupled to task-only workflows: a future run can accept a topic,
  * document, artifact, release, etc. without another schema reshape.
  */
-export const acceptanceSubjectTypes = ['task', 'topic', 'document', 'standalone'] as const;
+/**
+ * `goal_gate`: a Goal's decision gate — a human decision a batch is held on
+ * (the release review), reviewed with its evidence like any delivery.
+ */
+export const acceptanceSubjectTypes = [
+  'task',
+  'topic',
+  'document',
+  'standalone',
+  'goal_gate',
+  'site',
+] as const;
 export type AcceptanceSubjectType = (typeof acceptanceSubjectTypes)[number];
+// A site's standing review is created only with the site itself, never through the generic acceptance API.
+export const creatableAcceptanceSubjectTypes = [
+  'task',
+  'topic',
+  'document',
+  'standalone',
+  'goal_gate',
+] as const;
 
 /**
  * Business-level acceptance state. Check-level and run-level verdicts stay in the
@@ -208,12 +277,23 @@ export type AcceptanceSubjectType = (typeof acceptanceSubjectTypes)[number];
  */
 /**
  * Who can see a verify artifact (a run's report page, an acceptance page)
- * beyond its creator. Personal-scope rows default to `public` (the page is
- * meant to be linked from PRs / reports); workspace-scope rows default to
- * `private` (org data stays member-gated until deliberately opened up).
+ * beyond its creator:
+ *
+ * - `public` — anyone holding the link.
+ * - `private` — the creator and members of the row's own workspace. In a
+ *   workspace this is "shared with the team", the default there.
+ * - `owner` — the creator alone, even inside a workspace.
+ *
+ * Personal-scope rows default to `public` (the page is meant to be linked from
+ * PRs / reports); workspace-scope rows default to `private`, so org data reaches
+ * every member without leaking past the workspace.
  */
-export const verifyVisibilities = ['private', 'public'] as const;
+export const verifyVisibilities = ['private', 'public', 'owner'] as const;
 export type VerifyVisibility = (typeof verifyVisibilities)[number];
+
+/** Whether a member of the row's workspace (not its creator) may read it. */
+export const isWorkspaceReadableVisibility = (visibility: VerifyVisibility) =>
+  visibility !== 'owner';
 
 export const acceptanceVisibilities = verifyVisibilities;
 export type AcceptanceVisibility = VerifyVisibility;
@@ -261,8 +341,16 @@ export type AcceptanceRejectIntent = (typeof acceptanceRejectIntents)[number];
 
 /** What an automated reviewer proposes for a check. Deliberately narrower than
  *  the human's vocabulary: a model never proposes `ignore`, which is a statement
- *  about the reviewer's priorities rather than about the delivery. */
-export const reviewPredictionActions = ['accept', 'reject'] as const;
+ *  about the reviewer's priorities rather than about the delivery.
+ *
+ *  `unjudgeable` is NOT a softer `reject`. It means the criterion asks for
+ *  something no reader can confirm — re-running the delivered scripts, building,
+ *  driving a live system — so no capture could ever settle it and another
+ *  delivery attempt is wasted. Thin or missing evidence stays a `reject`,
+ *  because a builder can fix that. The two are separate values because folding
+ *  them together made "the delivery fell short" and "this reviewer cannot decide"
+ *  indistinguishable in the agreement statistics. */
+export const reviewPredictionActions = ['accept', 'reject', 'unjudgeable'] as const;
 export type ReviewPredictionAction = (typeof reviewPredictionActions)[number];
 
 /**
@@ -327,8 +415,119 @@ export const verifyEvidenceTypes = [
   'markdown',
   'dom_snapshot',
   'transcript',
+  // One command execution: a readable text payload plus structured execution
+  // facts, provenance and stdout / stderr / recording artifacts in metadata.
+  'terminal',
 ] as const;
 export type VerifyEvidenceType = (typeof verifyEvidenceTypes)[number];
+
+/** The part of a criterion's `requiredEvidence` entry the coverage gate reads. */
+export interface RequiredEvidenceCoverageSpec {
+  scope?: 'deliverable' | 'run_evidence' | 'task_artifacts';
+  type: VerifyEvidenceType;
+}
+
+/**
+ * Same-medium types that also satisfy a declared requirement. The gate checks
+ * that an artifact of the right medium exists; whether it proves the criterion
+ * is the judge's call. Without this, a recording uploaded as `video` against a
+ * `gif` requirement, or a CLI log uploaded as `text` against `transcript`,
+ * failed every repair round on a label while the judge never saw the artifact.
+ * A GIF is a run of screenshots, and judges receive it as a frame sheet (see
+ * `renderGifFrameSheet`), so it also answers a `screenshot` requirement — a GIF
+ * uploaded as `screenshot` is stored as `gif`, which otherwise failed the gate
+ * on the very artifact it asked for. `dom_snapshot` and `audio` have no
+ * substitute.
+ */
+const EVIDENCE_SATISFIED_BY: Partial<Record<VerifyEvidenceType, VerifyEvidenceType[]>> = {
+  gif: ['video'],
+  markdown: ['text', 'transcript'],
+  screenshot: ['gif'],
+  text: ['markdown', 'transcript'],
+  transcript: ['text', 'markdown'],
+  video: ['gif'],
+};
+
+/**
+ * Read the (optional) evidence requirement a criterion declares on its config.
+ * Evidence-driven criteria list the artifact types they need under
+ * `verifierConfig.requiredEvidence`; everything else returns undefined.
+ */
+export const readRequiredEvidence = <T extends RequiredEvidenceCoverageSpec>(
+  config: Record<string, unknown> | undefined | null,
+): T[] | undefined => {
+  const raw = config?.requiredEvidence;
+  return Array.isArray(raw) ? (raw as T[]) : undefined;
+};
+
+/**
+ * Which required evidence types are still missing for a criterion — pure, so the
+ * structural gate is unit-testable without a database. Returns `[]` when the
+ * item declares no evidence requirement (nothing to gate on).
+ */
+export const coverageGaps = (
+  required: RequiredEvidenceCoverageSpec[] | undefined,
+  evidence: { type: VerifyEvidenceType }[],
+): VerifyEvidenceType[] => {
+  if (!required?.length) return [];
+  const present = new Set(evidence.map((e) => e.type));
+  return [...new Set(required.map((r) => r.type))].filter(
+    (t) => !present.has(t) && !EVIDENCE_SATISFIED_BY[t]?.some((alt) => present.has(alt)),
+  );
+};
+
+/**
+ * Run-evidence types a criterion still misses. `deliverable` / `task_artifacts`
+ * requirements are resolved by the verifier from the operation's documents and
+ * files, so only `run_evidence` must exist as verify_evidence rows. This is the
+ * one coverage rule shared by the builder handoff, the CLI's publish report and
+ * the structural gate: when they disagree, a builder that already evidenced a
+ * criterion is treated as missing evidence.
+ */
+export const runEvidenceGaps = (
+  config: Record<string, unknown> | undefined | null,
+  evidence: { type: VerifyEvidenceType }[],
+): VerifyEvidenceType[] =>
+  coverageGaps(
+    readRequiredEvidence(config)?.filter((spec) => !spec.scope || spec.scope === 'run_evidence'),
+    evidence,
+  );
+/**
+ * Evidence whose payload is text a reader or model can take in directly. A
+ * `terminal` evidence belongs here because its payload is the text fallback of
+ * the execution, written for exactly the readers that have no player.
+ */
+export const verifyTextEvidenceTypes: ReadonlySet<string> = new Set([
+  'dom_snapshot',
+  'markdown',
+  'terminal',
+  'text',
+  'transcript',
+]);
+
+/**
+ * Every stored file an evidence row references: its own payload file, plus —
+ * for a `terminal` evidence — the stdout / stderr / output / recording files its
+ * record names. Anything that follows evidence to its files (library hiding,
+ * permanent purge) must use this, or those artifacts outlive their evidence.
+ * Reads ids leniently; the record itself was validated when it was stored.
+ */
+export const verifyEvidenceFileIds = (evidence: {
+  fileId?: string | null;
+  metadata?: unknown;
+  type: string;
+}): string[] => {
+  const ids = evidence.fileId ? [evidence.fileId] : [];
+  if (evidence.type !== 'terminal') return ids;
+  const artifacts = (evidence.metadata as { terminal?: { artifacts?: unknown } } | null | undefined)
+    ?.terminal?.artifacts;
+  if (!artifacts || typeof artifacts !== 'object') return ids;
+  for (const artifact of Object.values(artifacts as Record<string, unknown>)) {
+    const fileId = (artifact as { fileId?: unknown } | null)?.fileId;
+    if (typeof fileId === 'string' && fileId.length > 0) ids.push(fileId);
+  }
+  return [...new Set(ids)];
+};
 
 /** Who / what captured an evidence artifact (provenance). */
 export const verifyEvidenceCapturedBy = [
@@ -340,6 +539,106 @@ export const verifyEvidenceCapturedBy = [
   'llm_judge',
 ] as const;
 export type VerifyEvidenceCapturedBy = (typeof verifyEvidenceCapturedBy)[number];
+
+/**
+ * How an agent marker on a video reads.
+ *
+ * - step:  an action the agent performed, logged while driving the recording
+ * - check: something the agent verified on this frame — a claim for the reviewer
+ *   to audit, never a pass
+ * - flag:  an anomaly the agent noticed and judged harmless, disclosed so the
+ *   reviewer can disagree
+ */
+export const verifyEvidenceChapterKinds = ['check', 'flag', 'step'] as const;
+export type VerifyEvidenceChapterKind = (typeof verifyEvidenceChapterKinds)[number];
+
+/** An agent-authored marker on a video evidence (`verify_evidence.metadata.chapters`). */
+export interface VerifyEvidenceChapter {
+  kind: VerifyEvidenceChapterKind;
+  /** Short name shown on the timeline; required for `step`. */
+  label?: string;
+  /** What the agent claims or noticed; required for `check` and `flag`. */
+  note?: string;
+  /** Seconds from the start of the video. */
+  t: number;
+}
+
+/** Upper bound on chapters per video — a timeline, not a transcript. */
+export const MAX_VERIFY_EVIDENCE_CHAPTERS = 100;
+
+const trimmedText = (value: unknown, max: number) =>
+  typeof value === 'string' && value.trim() ? value.trim().slice(0, max) : undefined;
+
+/**
+ * Read `chapters` from an evidence metadata bag (or a raw array), dropping
+ * malformed entries instead of failing: chapters guide the reviewer, so one bad
+ * marker must never cost the upload. Returns them sorted by time, or
+ * `undefined` when none survive.
+ */
+export const readEvidenceChapters = (value: unknown): VerifyEvidenceChapter[] | undefined => {
+  let raw: unknown;
+  if (Array.isArray(value)) raw = value;
+  else if (value && typeof value === 'object') raw = (value as { chapters?: unknown }).chapters;
+  if (!Array.isArray(raw)) return undefined;
+
+  const chapters: VerifyEvidenceChapter[] = [];
+  for (const entry of raw) {
+    if (!entry || typeof entry !== 'object') continue;
+    const { kind, label, note, t } = entry as Record<string, unknown>;
+    if (typeof t !== 'number' || !Number.isFinite(t) || t < 0) continue;
+    if (!verifyEvidenceChapterKinds.includes(kind as VerifyEvidenceChapterKind)) continue;
+    const chapter: VerifyEvidenceChapter = { kind: kind as VerifyEvidenceChapterKind, t };
+    const text = { label: trimmedText(label, 80), note: trimmedText(note, 500) };
+    if (chapter.kind === 'step' ? !text.label : !text.note) continue;
+    if (text.label) chapter.label = text.label;
+    if (text.note) chapter.note = text.note;
+    chapters.push(chapter);
+  }
+  if (chapters.length === 0) return undefined;
+  return chapters.sort((a, b) => a.t - b.t).slice(0, MAX_VERIFY_EVIDENCE_CHAPTERS);
+};
+
+/**
+ * Canonicalize the `chapters` key of an evidence metadata bag before it is
+ * stored: malformed markers are dropped, and chapters on anything but a video
+ * are removed (they have no timeline to sit on). Other keys pass through.
+ */
+export const normalizeEvidenceMetadata = (metadata: unknown, type: string): unknown => {
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return metadata;
+  // Only a `terminal` row may carry an execution record — on any other medium
+  // it would claim provenance no reader checks.
+  if (type !== 'terminal' && 'terminal' in metadata) {
+    const { terminal: _terminal, ...rest } = metadata as Record<string, unknown>;
+    return normalizeEvidenceMetadata(Object.keys(rest).length > 0 ? rest : null, type);
+  }
+  if (!('chapters' in metadata)) return metadata;
+  const { chapters: _chapters, ...rest } = metadata as Record<string, unknown>;
+  const chapters = type === 'video' ? readEvidenceChapters(metadata) : undefined;
+  if (chapters) return { ...rest, chapters };
+  return Object.keys(rest).length > 0 ? rest : null;
+};
+
+/**
+ * A video timestamp as `m:ss.cc` — a skeleton flash can last a handful of
+ * frames. Rounds to whole centiseconds first so 59.999s carries into the next
+ * minute (`1:00.00`) instead of reading `0:60.00`.
+ */
+export const formatVideoTimestamp = (seconds: number) => {
+  if (!Number.isFinite(seconds) || seconds < 0) return '0:00.00';
+  const centiseconds = Math.round(seconds * 100);
+  const minutes = Math.floor(centiseconds / 6000);
+  const rest = (centiseconds - minutes * 6000) / 100;
+  return `${minutes}:${rest.toFixed(2).padStart(5, '0')}`;
+};
+
+/**
+ * The whole frame. A reviewer note on a video that marks a moment or a span
+ * without circling an area carries this region.
+ */
+export const FULL_FRAME_RECT = { height: 1, width: 1, x: 0, y: 0 } as const;
+
+export const isFullFrameRect = (rect: { height: number; width: number; x: number; y: number }) =>
+  rect.x === 0 && rect.y === 0 && rect.width === 1 && rect.height === 1;
 
 /** Default cap on automatic repair rounds when a rubric doesn't override it. */
 export const DEFAULT_MAX_REPAIR_ROUNDS = 3;
@@ -354,7 +653,7 @@ export const DEFAULT_MAX_REPAIR_ROUNDS = 3;
  * (`tasks.config.verify.maxIterations`). Their product is the worst-case number
  * of agent runs a goal can pay for.
  */
-export const DEFAULT_GOAL_MAX_ROUNDS = 3;
+export const DEFAULT_GOAL_MAX_ROUNDS = 8;
 
 /** Bounds the round budget a goal may be created with. */
 export const GOAL_MAX_ROUNDS_RANGE = { max: 10, min: 2 } as const;

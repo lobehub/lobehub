@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  DeviceTransportErrorCode,
   describeGatewayRequestFailure,
   describeGatewayResponseFailure,
+  DeviceTransportErrorCode,
 } from './deviceTransportError';
 
 describe('describeGatewayResponseFailure', () => {
@@ -66,6 +66,22 @@ describe('describeGatewayResponseFailure', () => {
     );
   });
 
+  /** @example A workspace dispatch miss carries enough context for an outer agent to retry. */
+  it('describes a missing device with structured retryable scope data', () => {
+    const failure = describeGatewayResponseFailure(404, 'DEVICE_NOT_FOUND', 'tool call', {
+      deviceId: 'workspace-device-1',
+      workspaceId: 'workspace-1',
+    });
+
+    expect(failure.data).toEqual({
+      code: 'DEVICE_NOT_FOUND',
+      deviceId: 'workspace-device-1',
+      retryable: true,
+      scope: 'workspace',
+      workspaceId: 'workspace-1',
+    });
+  });
+
   it('names the operation that failed', () => {
     expect(describeGatewayResponseFailure(503, '', 'message API call').content).toContain(
       'message API call',
@@ -100,6 +116,35 @@ describe('describeGatewayResponseFailure', () => {
   });
 });
 
+describe('describeGatewayResponseFailure NO_CAPABLE_CONNECTION', () => {
+  it('says which client is needed instead of advising retries', () => {
+    const body = JSON.stringify({
+      channels: ['cli'],
+      clientKinds: ['desktop'],
+      error: 'NO_CAPABLE_CONNECTION',
+      success: false,
+    });
+
+    const failure = describeGatewayResponseFailure(503, body, 'tool call');
+
+    expect(failure.code).toBe(DeviceTransportErrorCode.NoCapableClient);
+    expect(failure.content).toContain('the LobeHub desktop app');
+    expect(failure.content).toContain('only cli is connected');
+    expect(failure.content).toContain('Nothing ran');
+    expect(failure.content).not.toContain('retry up to');
+    expect(failure.error).toBe(body);
+  });
+
+  it('keeps other 503 answers on the reconnect path', () => {
+    const failure = describeGatewayResponseFailure(
+      503,
+      JSON.stringify({ error: 'DEVICE_OFFLINE', success: false }),
+      'tool call',
+    );
+    expect(failure.code).toBe(DeviceTransportErrorCode.DeviceChannelUnavailable);
+  });
+});
+
 describe('describeGatewayRequestFailure', () => {
   it('treats a client-side abort like a 504 — the call may have landed', () => {
     const failure = describeGatewayRequestFailure(
@@ -116,13 +161,21 @@ describe('describeGatewayRequestFailure', () => {
 
   it('recognises the DOM AbortError name as well', () => {
     expect(
-      describeGatewayRequestFailure(Object.assign(new Error('aborted'), { name: 'AbortError' }), 'tool call')
-        .code,
+      describeGatewayRequestFailure(
+        Object.assign(new Error('aborted'), { name: 'AbortError' }),
+        'tool call',
+      ).code,
     ).toBe(DeviceTransportErrorCode.DeviceResponseTimeout);
   });
 
   it('reports a dead gateway host as an undelivered call', () => {
-    const failure = describeGatewayRequestFailure(new TypeError('fetch failed'), 'tool call');
+    // undici reports a refused connect as `fetch failed` with the code on `cause`.
+    const failure = describeGatewayRequestFailure(
+      Object.assign(new TypeError('fetch failed'), {
+        cause: { code: 'ECONNREFUSED', message: 'connect ECONNREFUSED 10.0.0.1:443' },
+      }),
+      'tool call',
+    );
 
     expect(failure.code).toBe(DeviceTransportErrorCode.GatewayUnreachable);
     expect(failure.content).toContain('never ran on the device');
@@ -147,11 +200,61 @@ describe('describeGatewayRequestFailure', () => {
     expect(failure.code).toBe(DeviceTransportErrorCode.GatewayUnreachable);
   });
 
+  it('recognises a failed DNS lookup and Bun connect failure as undelivered', () => {
+    expect(
+      describeGatewayRequestFailure(
+        Object.assign(new TypeError('fetch failed'), {
+          cause: { code: 'ENOTFOUND', message: 'getaddrinfo ENOTFOUND gateway.invalid' },
+        }),
+        'tool call',
+      ).code,
+    ).toBe(DeviceTransportErrorCode.GatewayUnreachable);
+    expect(
+      describeGatewayRequestFailure(
+        new TypeError('Unable to connect. Is the computer able to access the url?'),
+        'tool call',
+      ).code,
+    ).toBe(DeviceTransportErrorCode.GatewayUnreachable);
+  });
+
+  // The request had already reached the gateway when these connections dropped,
+  // so the gateway may have relayed it and the device may have run it. Saying
+  // "never ran" tells the model to repeat a write that already happened.
+  it.each([
+    ['undici reset (ECONNRESET)', { code: 'ECONNRESET', message: 'read ECONNRESET' }],
+    [
+      'undici peer close (UND_ERR_SOCKET)',
+      { code: 'UND_ERR_SOCKET', message: 'other side closed' },
+    ],
+  ])('does not claim a %s call never ran', (_label, cause) => {
+    const failure = describeGatewayRequestFailure(
+      Object.assign(new TypeError('fetch failed'), { cause }),
+      'tool call',
+    );
+
+    expect(failure.code).toBe(DeviceTransportErrorCode.GatewayError);
+    expect(failure.content).not.toContain('never ran');
+    expect(failure.content).toContain('unclear whether the device ran it');
+  });
+
+  it.each([
+    'socket hang up',
+    'The socket connection was closed unexpectedly. For more information, pass `verbose: true` in the second argument to fetch()',
+  ])('does not claim a dropped connection (%s) never ran', (message) => {
+    const failure = describeGatewayRequestFailure(new TypeError(message), 'tool call');
+
+    expect(failure.code).toBe(DeviceTransportErrorCode.GatewayError);
+    expect(failure.content).not.toContain('never ran');
+  });
+
   it('does not invent a cause for an unrecognised failure', () => {
     // The old copy claimed the gateway was unreachable for every rejection,
     // including ones (a malformed response body, say) that prove nothing about
     // whether the device ran the call.
-    const failure = describeGatewayRequestFailure(new Error('Unexpected token < in JSON'), 'tool call');
+    const failure = describeGatewayRequestFailure(
+      new Error('Unexpected token < in JSON'),
+      'tool call',
+    );
 
     expect(failure.code).toBe(DeviceTransportErrorCode.GatewayError);
     expect(failure.content).toContain('unclear whether the device ran it');

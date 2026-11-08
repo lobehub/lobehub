@@ -13,6 +13,7 @@ import { topicSelectors } from '@/store/chat/slices/topic/selectors';
 
 import { useAgentId } from '../../hooks/useAgentId';
 import { useChatInputResourceAccess } from '../../hooks/useChatInputResourceAccess';
+import { useTopicId } from '../../hooks/useTopicId';
 import { ModelCatalogSelector } from './ModelCatalogSelector';
 import SelectorMenu from './SelectorMenu';
 import { resolveSelectorShape } from './selectorView';
@@ -25,14 +26,21 @@ const HeteroModel = memo(() => {
     isEqual,
   );
   const { allowed: canCreateContent, reason } = usePermission('create_content');
-  // Model picks are topic-scoped once a topic exists; the remaining dimensions
-  // still write the shared heterogeneous-provider config.
+  // Model, effort and speed picks are topic-scoped once a topic exists; mode
+  // still writes the shared heterogeneous-provider config.
   const { canConfigureResource } = useChatInputResourceAccess();
   const enabled = canCreateContent && canConfigureResource;
   const patch = useHeteroProviderPatch({ agentId, enabled, provider });
-  const topicModel = useChatStore(topicSelectors.activeTopicModel);
+  // Model, effort and speed pins follow this composer's topic once one exists
+  // (see `useTopicId`), never the global active topic.
+  const topicId = useTopicId();
+  const topicScoped = !!topicId;
+  const topicPin = useChatStore(
+    (s) => (topicId ? topicSelectors.getTopicHeteroPinById(topicId)(s) : undefined),
+    isEqual,
+  );
   const effectiveProvider = provider
-    ? applyTopicModelToHeterogeneousProvider(provider, topicModel)
+    ? applyTopicModelToHeterogeneousProvider(provider, topicPin)
     : undefined;
 
   const shape = resolveSelectorShape(effectiveProvider, enabled);
@@ -58,6 +66,8 @@ const HeteroModel = memo(() => {
       patch={patch}
       permissionReason={reason}
       provider={effectiveProvider}
+      topicPin={topicPin}
+      topicScoped={topicScoped}
     />
   );
 });

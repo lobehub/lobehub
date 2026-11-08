@@ -2,21 +2,27 @@
 
 import { getLobehubSkillProviderById } from '@lobechat/const';
 import { agentDisplayName } from '@lobechat/types';
-import { Markdown, Tooltip } from '@lobehub/ui';
-import { Avatar, Button, confirmModal, Skeleton, toast } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { Avatar, Button, confirmModal, Markdown, Skeleton, toast, Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
 import { Plus, SquareArrowOutUpRight, Trash2, Unplug, Wrench } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { lazy, memo, Suspense, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import useSWR from 'swr';
 
 import { ConnectorDetail, CustomConnectorModal } from '@/features/Connectors';
 import { useSkillConnect } from '@/features/SkillStore/SkillList/LobeHub/useSkillConnect';
 import { usePermission } from '@/hooks/usePermission';
 import { useResourceManageable } from '@/hooks/useResourceManageable';
 import { useToolStore } from '@/store/tool';
-import { builtinToolSelectors, lobehubSkillStoreSelectors } from '@/store/tool/selectors';
+import {
+  agentSkillsSelectors,
+  builtinToolSelectors,
+  lobehubSkillStoreSelectors,
+} from '@/store/tool/selectors';
+import { loadBuiltinSkill } from '@/store/tool/slices/builtin/loadBuiltinSkills';
 import { connectorSelectors } from '@/store/tool/slices/connector';
 import { pluginSelectors } from '@/store/tool/slices/plugin/selectors';
 
@@ -36,47 +42,36 @@ export type ToolDetailType =
   | 'mcp-connector'
   | 'plugin';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  description: css`
-    margin-block-start: 8px;
-    font-size: 13px;
-    line-height: 1.6;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  header: css`
-    display: flex;
-    gap: 12px;
-    align-items: flex-start;
-    justify-content: space-between;
-
-    padding-block: 20px 16px;
-    padding-inline: 24px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  name: css`
-    font-size: 16px;
-    font-weight: 600;
-    color: ${cssVar.colorText};
-  `,
-  noPermissions: css`
-    padding: 24px;
-    font-size: 14px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  noPermissionsHeader: css`
-    display: flex;
-    gap: 12px;
-    align-items: center;
-    justify-content: space-between;
-
-    margin-block-end: 8px;
-  `,
-  noPermissionsTitle: css`
-    font-size: 16px;
-    font-weight: 600;
-    color: ${cssVar.colorText};
-  `,
-}));
+const styles = stylex.create({
+  description: {
+    marginBlockStart: '8px',
+    fontSize: '13px',
+    lineHeight: 1.6,
+    color: cssVar.colorTextSecondary,
+  },
+  header: {
+    display: 'flex',
+    gap: '12px',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    paddingBlockStart: '20px',
+    paddingBlockEnd: '16px',
+    paddingInline: '24px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+  name: { fontSize: '16px', fontWeight: 600, color: cssVar.colorText },
+  noPermissions: { padding: '24px', fontSize: '14px', color: cssVar.colorTextTertiary },
+  noPermissionsHeader: {
+    display: 'flex',
+    gap: '12px',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBlockEnd: '8px',
+  },
+  noPermissionsTitle: { fontSize: '16px', fontWeight: 600, color: cssVar.colorText },
+});
 
 interface SkillDetailProps {
   identifier: string;
@@ -201,7 +196,10 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete }) => {
   // Creator attribution for the row-level manage gate: agent skills carry it
   // on the skill row; connector-backed types on the connector row.
   const agentSkillRow = useToolStore(
-    (s) => (s.agentSkills || []).find((sk) => sk.id === identifier || sk.identifier === identifier),
+    (s) =>
+      agentSkillsSelectors
+        .getAgentSkills(s)
+        .find((sk) => sk.id === identifier || sk.identifier === identifier),
     isEqual,
   );
   const canManage = useResourceManageable(
@@ -252,6 +250,11 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete }) => {
     isEqual,
   );
   const isBuiltinInstalled = useToolStore(builtinToolSelectors.isBuiltinToolInstalled(identifier));
+  const { data: builtinSkillContent } = useSWR(
+    builtinSkill ? ['builtin-skill-content', identifier] : null,
+    async () => (await loadBuiltinSkill(identifier))?.content,
+    { revalidateOnFocus: false },
+  );
 
   const isConnectorType =
     type === 'builtin' ||
@@ -336,7 +339,9 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete }) => {
           notifyUninstallError(error);
         }
       },
-      title: t('store.actions.confirmUninstall'),
+      content: t('store.actions.confirmUninstall'),
+      okText: t('store.actions.uninstall'),
+      title: t('store.actions.uninstall'),
     });
   };
 
@@ -351,7 +356,9 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete }) => {
           notifyUninstallError(error);
         }
       },
-      title: t('store.actions.confirmUninstall'),
+      content: t('store.actions.confirmUninstall'),
+      okText: t('store.actions.uninstall'),
+      title: t('store.actions.uninstall'),
     });
   };
 
@@ -363,7 +370,7 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete }) => {
         <div
           style={{
             alignItems: 'center',
-            borderBlockEnd: '1px solid var(--ant-color-border-secondary)',
+            borderBlockEnd: '1px solid var(--lobe-color-border-secondary)',
             display: 'flex',
             flexShrink: 0,
             justifyContent: 'flex-end',
@@ -433,13 +440,13 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete }) => {
   if (type === 'builtin-skill') {
     return (
       <div style={{ flex: 1, overflow: 'auto' }}>
-        <div className={styles.header}>
+        <div {...stylex.props(styles.header)}>
           <div style={{ alignItems: 'flex-start', display: 'flex', gap: 12 }}>
             {builtinSkill?.avatar && <Avatar avatar={builtinSkill.avatar} size={40} />}
             <div>
-              <div className={styles.name}>{builtinSkillTitle}</div>
+              <div {...stylex.props(styles.name)}>{builtinSkillTitle}</div>
               {builtinSkillDescription && (
-                <div className={styles.description}>{builtinSkillDescription}</div>
+                <div {...stylex.props(styles.description)}>{builtinSkillDescription}</div>
               )}
             </div>
           </div>
@@ -467,9 +474,9 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete }) => {
             )}
           </div>
         </div>
-        {builtinSkill?.content && (
+        {builtinSkillContent && (
           <div style={{ padding: '16px 24px' }}>
-            <Markdown variant="chat">{builtinSkill.content}</Markdown>
+            <Markdown variant="chat">{builtinSkillContent}</Markdown>
           </div>
         )}
       </div>
@@ -487,9 +494,9 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete }) => {
 
   if (noManifest || !connector) {
     return (
-      <div className={styles.noPermissions}>
-        <div className={styles.noPermissionsHeader}>
-          <div className={styles.noPermissionsTitle}>
+      <div {...stylex.props(styles.noPermissions)}>
+        <div {...stylex.props(styles.noPermissionsHeader)}>
+          <div {...stylex.props(styles.noPermissionsTitle)}>
             {type === 'lobehub-connector' ? lobehubLabel : noPermissionsTitle}
           </div>
           {canMigrateLegacy ? (

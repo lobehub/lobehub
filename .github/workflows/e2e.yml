@@ -1,9 +1,38 @@
 name: E2E CI
 
-on: [push, pull_request]
+on:
+  push:
+    branches:
+      - main
+      - canary
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - '.claude/**'
+      - '.github/ISSUE_TEMPLATE/**'
+      - '.github/workflows/claude*.yml'
+      - '.github/workflows/issue-*.yml'
+      - '.github/workflows/release*.yml'
+      - '.github/workflows/sync*.y*ml'
+      - '.github/workflows/auto-*.yml'
+      - '.github/workflows/manual-*.yml'
+      - '.github/workflows/bundle-analyzer.yml'
+  pull_request:
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - '.claude/**'
+      - '.github/ISSUE_TEMPLATE/**'
+      - '.github/workflows/claude*.yml'
+      - '.github/workflows/issue-*.yml'
+      - '.github/workflows/release*.yml'
+      - '.github/workflows/sync*.y*ml'
+      - '.github/workflows/auto-*.yml'
+      - '.github/workflows/manual-*.yml'
+      - '.github/workflows/bundle-analyzer.yml'
 
 permissions:
-  actions: write
+  actions: read
   contents: read
   pull-requests: write
 
@@ -12,9 +41,9 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # Same-repo PRs get their pull_request run skipped as a duplicate of the push run,
-  # so the size gates must also run on pushes to feature branches.
-  SIZE_GATE_ENABLED: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref != 'refs/heads/canary' && github.ref != 'refs/heads/main') }}
+  # Size gates run on every PR. Main/canary pushes run the full E2E job and publish
+  # their baselines, while the PR run owns the comparison gate.
+  SIZE_GATE_ENABLED: ${{ github.event_name == 'pull_request' }}
   APP_URL: http://localhost:3006
   DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
   DATABASE_DRIVER: node
@@ -28,24 +57,7 @@ env:
   S3_ENDPOINT: https://e2e-mock-s3.localhost
 
 jobs:
-  # Check for duplicate runs
-  check-duplicate-run:
-    name: Check Duplicate Run
-    runs-on: ubuntu-latest
-    outputs:
-      should_skip: ${{ steps.skip_check.outputs.should_skip }}
-    steps:
-      - id: skip_check
-        uses: fkirc/skip-duplicate-actions@v5
-        with:
-          concurrent_skipping: 'same_content_newer'
-          skip_after_successful_duplicate: 'true'
-          do_not_skip: '["workflow_dispatch", "schedule"]'
-
   e2e:
-    needs: check-duplicate-run
-    if: >-
-      github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary' || needs.check-duplicate-run.outputs.should_skip != 'true'
     name: Test Web App
     runs-on: ubuntu-latest
     services:
@@ -182,8 +194,17 @@ jobs:
         continue-on-error: true
         run: node .github/scripts/bundle-size-gate.cjs check --current size-report/entry-graph.json --baseline .size-baseline/entry-graph.json --label "First-screen static import graph (gzip)" --report size-report/report.md --floor 65536
 
+      - name: Upload size report with resolved dependency versions
+        if: ${{ !cancelled() && env.SIZE_GATE_ENABLED == 'true' }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: size-report
+          path: size-report/
+          retention-days: 30
+          if-no-files-found: ignore
+
       - name: Comment bundle size report on PR
-        if: always() && env.SIZE_GATE_ENABLED == 'true' && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)
+        if: ${{ !cancelled() && env.SIZE_GATE_ENABLED == 'true' && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository) }}
         uses: actions/github-script@v8
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}

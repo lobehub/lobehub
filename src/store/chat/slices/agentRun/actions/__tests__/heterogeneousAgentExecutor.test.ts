@@ -1,34 +1,48 @@
-/**
- * Tests for heterogeneousAgentExecutor DB persistence layer.
- *
- * Verifies the critical path: CC stream events → messageService DB writes.
- * Covers:
- *   - Tool 3-phase persistence (pre-register → create → backfill)
- *   - Tool result content updates
- *   - Multi-step assistant message creation with correct parentId chain
- *   - Content/reasoning/model/usage final writes
- *   - Sync snapshot + reset to prevent cross-step content contamination
- */
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
+/** CLI stream → tool persistence, turn chaining and final snapshot regression tests. */
 
 import type * as LobeChatConst from '@lobechat/const';
 import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ipc';
-import type { AgentEventAdapter } from '@lobechat/heterogeneous-agents';
-import { createAdapter } from '@lobechat/heterogeneous-agents';
 import type { ChatTopicMetadata, HeterogeneousProviderConfig } from '@lobechat/types';
 import { ThreadStatus } from '@lobechat/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useAiInfraStore } from '@/store/aiInfra';
 import { useChatStore } from '@/store/chat/store';
+import { useElectronStore } from '@/store/electron';
 import { useUserStore } from '@/store/user';
 
 import { createGatewayEventHandler } from '../transports/gateway/gatewayEventHandler';
-import type { HeterogeneousAgentExecutorParams } from '../transports/hetero/heterogeneousAgentExecutor';
 import { executeHeterogeneousAgent } from '../transports/hetero/heterogeneousAgentExecutor';
 import { resolveHeteroResume } from '../transports/hetero/heteroResume';
+import {
+  ccAssistant,
+  ccInit,
+  ccMessageDelta,
+  ccMessageStart,
+  ccResult,
+  ccSubagentSpawnResult,
+  ccSubagentText,
+  ccSubagentToolResult,
+  ccSubagentToolUse,
+  ccText,
+  ccThinking,
+  ccToolResult,
+  ccToolUse,
+  codexAgentMessage,
+  codexCommandCompleted,
+  codexCommandStarted,
+  codexSessionConfigured,
+  codexThreadStarted,
+  codexTodo,
+  codexTurnCompleted,
+  codexTurnStarted,
+  createMockStore,
+  defaultContext,
+  defaultParams,
+  flush,
+  flushFakeTimers,
+  setupIpcCapture,
+} from './heterogeneousAgentExecutor.testUtils';
 
 // ─── Mocks ───
 
@@ -41,7 +55,7 @@ const mockUpdateToolMessage = vi.fn();
 const mockGetMessages = vi.fn();
 
 const mockToastInfo = vi.fn();
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+vi.mock('@lobehub/ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   toast: { info: (...args: unknown[]) => mockToastInfo(...args) },
 }));
@@ -76,11 +90,13 @@ const mockStopSession = vi.fn();
 const mockCancelSession = vi.fn();
 const mockGetSessionInfo = vi.fn();
 const mockGetClaudeCodeIdentity = vi.fn(async (..._args: any[]) => null);
+const mockGetCodexQuota = vi.fn(async (..._args: any[]): Promise<unknown> => null);
 
 vi.mock('@/services/electron/heterogeneousAgent', () => ({
   heterogeneousAgentService: {
     cancelSession: (...args: unknown[]) => mockCancelSession(...args),
     getClaudeCodeIdentity: (...args: any[]) => mockGetClaudeCodeIdentity(...args),
+    getCodexQuota: (...args: any[]) => mockGetCodexQuota(...args),
     getSessionInfo: (...args: any[]) => mockGetSessionInfo(...args),
     sendPrompt: (...args: any[]) => mockSendPrompt(...args),
     startSession: (...args: any[]) => mockStartSession(...args),
@@ -102,10 +118,6 @@ vi.mock('@/services/agentQuota', () => ({
 // Gateway event handler — we spy on it but let it run (it calls getMessages)
 vi.mock('../transports/gateway/gatewayEventHandler', () => ({
   createGatewayEventHandler: vi.fn(() => vi.fn()),
-  // Faithful re-impl (the real one is unmocked to keep the import cycle out of
-  // this test): only 'interrupted' / 'waiting_for_async_tool' are non-clean.
-  isCompletedRuntimeEnd: (reason?: string | null) =>
-    reason !== 'interrupted' && reason !== 'waiting_for_async_tool',
 }));
 
 // isDesktop — defaults to `false` (matching the real test env / __ELECTRON__
@@ -128,391 +140,20 @@ vi.mock('@lobechat/const', async (importOriginal) => {
 // Desktop notification IPC — dynamically imported inside `notifyCompletion`.
 const mockShowNotification = vi.fn(async (..._args: any[]) => {});
 const mockSetBadgeCount = vi.fn(async (..._args: any[]) => {});
+const mockGetNotificationSoundFile = vi.fn(async (..._args: any[]) => undefined);
+const mockPlayCompletionSound = vi.fn(async (..._args: any[]) => {});
 vi.mock('@/services/electron/desktopNotification', () => ({
   desktopNotificationService: {
     setBadgeCount: (...args: any[]) => mockSetBadgeCount(...args),
     showNotification: (...args: any[]) => mockShowNotification(...args),
   },
 }));
-
-// ─── Helpers ───
-
-function setupIpcCapture() {
-  // Mock window.electron.ipcRenderer
-  const listeners = new Map<string, (...args: any[]) => void>();
-  (globalThis as any).window = {
-    electron: {
-      ipcRenderer: {
-        on: vi.fn((channel: string, handler: (...args: any[]) => void) => {
-          listeners.set(channel, handler);
-          return () => {
-            if (listeners.get(channel) === handler) listeners.delete(channel);
-          };
-        }),
-        // A separately bridged callback does not preserve the listener proxy identity.
-        removeListener: vi.fn(),
-      },
-    },
-  };
-
-  /**
-   * Per-IPC-session adapter — mimics the desktop main pipeline:
-   *   raw stdout JSON → adapter.adapt() → AgentStreamEvent → broadcast.
-   * Test fixtures still feed raw CC/Codex events, so the existing ~2.8k lines
-   * of stream-shape tests stay intact while the renderer's input boundary
-   * becomes the new `heteroAgentEvent` channel.
-   */
-  const adapters = new Map<string, AgentEventAdapter>();
-  /**
-   * IPC-session → agent type. Defaults to `claude-code` so tests that don't
-   * explicitly register codex still work; the multi-session resume test (and
-   * any codex-only suite) registers explicitly via `setAgentType`.
-   */
-  const sessionAgentType = new Map<string, string>();
-
-  const getAdapter = (sessionId: string) => {
-    if (!adapters.has(sessionId)) {
-      adapters.set(sessionId, createAdapter(sessionAgentType.get(sessionId) ?? 'claude-code'));
-    }
-    return adapters.get(sessionId)!;
-  };
-
-  return {
-    getListeners: () => listeners,
-    /** Register the agent type for an IPC session before emitting raw events. */
-    setAgentType: (sessionId: string, type: string) => {
-      sessionAgentType.set(sessionId, type);
-    },
-    /**
-     * Look up the underlying adapter for an IPC session — used by the
-     * `getSessionInfo` mock to mirror what main's `AgentStreamPipeline.sessionId`
-     * returns to the renderer's post-prompt session-id sync.
-     */
-    getAdapterSessionId: (sessionId: string) => adapters.get(sessionId)?.sessionId,
-    /**
-     * Simulate the desktop main's per-stdout-line forwarding: feed `raw`
-     * through the session's adapter, then broadcast each resulting
-     * `AgentStreamEvent` over the `heteroAgentEvent` channel.
-     */
-    emitRawLine: (sessionId: string, raw: any) => {
-      const handler = listeners.get('heteroAgentEvent');
-      const adapter = getAdapter(sessionId);
-      for (const event of adapter.adapt(raw)) {
-        handler?.(null, {
-          event: {
-            data: event.data,
-            operationId: defaultParams.operationId,
-            stepIndex: event.stepIndex,
-            timestamp: event.timestamp,
-            type: event.type,
-          },
-          sessionId,
-        });
-      }
-    },
-    /** Emit an already-adapted AgentStreamEvent, matching main-process bridge events. */
-    emitStreamEvent: (sessionId: string, event: Record<string, unknown>) => {
-      const handler = listeners.get('heteroAgentEvent');
-      handler?.(null, {
-        event: {
-          operationId: defaultParams.operationId,
-          stepIndex: 0,
-          timestamp: Date.now(),
-          ...event,
-        },
-        sessionId,
-      });
-    },
-    /** Simulate session completion */
-    emitComplete: (sessionId: string) => {
-      const handler = listeners.get('heteroAgentSessionComplete');
-      handler?.(null, { sessionId });
-    },
-    /** Simulate session error */
-    emitError: (sessionId: string, error: Record<string, unknown> | string) => {
-      const handler = listeners.get('heteroAgentSessionError');
-      handler?.(null, { error, sessionId });
-    },
-  };
-}
-
-function createMockStore(overrides: Record<string, any> = {}) {
-  // Hand out a fresh AbortController + monotonically increasing sub-op id
-  // for each subagent run, mirroring `startOperation`'s contract just
-  // enough that the executor can build dispatchers + completion calls.
-  let subOpCounter = 0;
-  const store = {
-    associateMessageWithOperation: vi.fn(),
-    completeOperation: vi.fn(),
-    dbMessagesMap: {},
-    drainQueuedMessages: vi.fn(() => []),
-    internal_dispatchMessage: vi.fn(),
-    internal_toggleToolCallingStreaming: vi.fn(),
-    markTopicUnread: vi.fn(),
-    operations: {
-      'op-1': {
-        context: { agentId: 'agent-1', scope: 'main', topicId: 'topic-1' },
-        metadata: { startTime: 0 },
-      },
-    } as Record<string, any>,
-    refreshMessages: vi.fn(async () => {}),
-    refreshThreads: vi.fn(async () => {}),
-    replaceMessages: vi.fn(),
-    sendMessage: vi.fn(async () => {}),
-    startOperation: vi.fn(() => {
-      subOpCounter += 1;
-      return {
-        abortController: new AbortController(),
-        operationId: `sub-op-${subOpCounter}`,
-      };
-    }),
-    updateTopicMetadata: vi.fn().mockResolvedValue(undefined),
-    ...overrides,
-  } as any;
-
-  if (!store.updateOperationMetadata) {
-    store.updateOperationMetadata = vi.fn((operationId: string, metadata: Record<string, any>) => {
-      const operation = store.operations[operationId];
-      if (!operation) return;
-      operation.metadata = {
-        ...operation.metadata,
-        ...metadata,
-      };
-    });
-  }
-
-  return store;
-}
-
-const defaultContext = {
-  agentId: 'agent-1',
-  scope: 'main' as const,
-  topicId: 'topic-1',
-};
-
-const defaultParams: HeterogeneousAgentExecutorParams = {
-  assistantMessageId: 'ast-initial',
-  context: defaultContext,
-  heterogeneousProvider: { command: 'claude', type: 'claude-code' as const },
-  message: 'test prompt',
-  operationId: 'op-1',
-};
-
-/** Flush async queues */
-const flush = async () => {
-  for (let i = 0; i < 10; i++) {
-    await new Promise((r) => setTimeout(r, 10));
-  }
-};
-
-const flushFakeTimers = async () => {
-  for (let i = 0; i < 10; i++) {
-    await vi.advanceTimersByTimeAsync(10);
-  }
-  await Promise.resolve();
-};
-
-// ─── CC stream-json event factories ───
-
-const ccInit = (sessionId = 'cc-sess-1') => ({
-  model: 'claude-sonnet-4-6',
-  session_id: sessionId,
-  subtype: 'init',
-  type: 'system',
-});
-
-const ccAssistant = (msgId: string, content: any[], extra?: { model?: string; usage?: any }) => ({
-  message: {
-    content,
-    id: msgId,
-    model: extra?.model || 'claude-sonnet-4-6',
-    role: 'assistant',
-    usage: extra?.usage,
+vi.mock('@/services/electron/completionSound', () => ({
+  completionSoundService: {
+    getNotificationSoundFile: (...args: any[]) => mockGetNotificationSoundFile(...args),
+    play: (...args: any[]) => mockPlayCompletionSound(...args),
   },
-  type: 'assistant',
-});
-
-const ccToolUse = (msgId: string, toolId: string, name: string, input: any = {}) =>
-  ccAssistant(msgId, [{ id: toolId, input, name, type: 'tool_use' }]);
-
-/**
- * CC subagent assistant event — carries `parent_tool_use_id` pointing back at
- * the outer `Task` tool_use. The adapter routes these through its subagent
- * handler which stamps `parentToolCallId` onto each tool payload.
- */
-const ccSubagentToolUse = (
-  msgId: string,
-  parentToolUseId: string,
-  toolId: string,
-  name: string,
-  input: any = {},
-) => ({
-  message: {
-    content: [{ id: toolId, input, name, type: 'tool_use' }],
-    id: msgId,
-    role: 'assistant',
-  },
-  parent_tool_use_id: parentToolUseId,
-  type: 'assistant',
-});
-
-/** Subagent assistant event with text content (closing summary-style turn). */
-const ccSubagentText = (msgId: string, parentToolUseId: string, text: string) => ({
-  message: {
-    content: [{ text, type: 'text' }],
-    id: msgId,
-    role: 'assistant',
-  },
-  parent_tool_use_id: parentToolUseId,
-  type: 'assistant',
-});
-
-/** The main-agent tool_result for a spawn tool_use (end of a subagent run). */
-const ccSubagentSpawnResult = (spawnToolUseId: string, finalText: string) => ({
-  message: {
-    content: [{ content: finalText, tool_use_id: spawnToolUseId, type: 'tool_result' }],
-    role: 'user',
-  },
-  type: 'user',
-});
-
-/**
- * Subagent INNER tool_result: a user event tagged with `parent_tool_use_id`,
- * which the adapter routes through its subagent path so the emitted
- * `tool_result` + `tool_end` events both carry the `subagent` peer field.
- */
-const ccSubagentToolResult = (
-  toolUseId: string,
-  parentToolUseId: string,
-  content: string,
-  isError = false,
-) => ({
-  message: {
-    content: [{ content, is_error: isError, tool_use_id: toolUseId, type: 'tool_result' }],
-    role: 'user',
-  },
-  parent_tool_use_id: parentToolUseId,
-  type: 'user',
-});
-
-const ccText = (msgId: string, text: string) => ccAssistant(msgId, [{ text, type: 'text' }]);
-
-const ccThinking = (msgId: string, thinking: string) =>
-  ccAssistant(msgId, [{ thinking, type: 'thinking' }]);
-
-const ccToolResult = (toolUseId: string, content: string, isError = false) => ({
-  message: {
-    content: [{ content, is_error: isError, tool_use_id: toolUseId, type: 'tool_result' }],
-    role: 'user',
-  },
-  type: 'user',
-});
-
-const ccResult = (isError = false, result = 'done') => ({
-  is_error: isError,
-  result,
-  type: 'result',
-});
-
-/**
- * `stream_event: message_start` — primes adapter's in-flight message.id so a
- * following `message_delta` (which has no message.id of its own) can attach
- * its authoritative usage to the correct turn.
- */
-const ccMessageStart = (msgId: string, model = 'claude-sonnet-4-6') => ({
-  event: { message: { id: msgId, model }, type: 'message_start' },
-  type: 'stream_event',
-});
-
-/**
- * `stream_event: message_delta` — the authoritative per-turn usage under
- * `--include-partial-messages` (CC's `assistant` events only echo a stale
- * message_start snapshot, so turn_metadata is driven off this event).
- */
-const ccMessageDelta = (usage: {
-  cache_creation_input_tokens?: number;
-  cache_read_input_tokens?: number;
-  input_tokens?: number;
-  output_tokens?: number;
-}) => ({
-  event: { type: 'message_delta', usage },
-  type: 'stream_event',
-});
-
-// ─── Codex JSONL event factories ───
-
-const codexThreadStarted = (threadId = 'codex-thread-1') => ({
-  thread_id: threadId,
-  type: 'thread.started',
-});
-
-const codexSessionConfigured = (model = 'gpt-5.5') => ({
-  model,
-  type: 'session_configured',
-});
-
-const codexTurnStarted = () => ({
-  type: 'turn.started',
-});
-
-const codexAgentMessage = (id: string, text: string) => ({
-  item: {
-    id,
-    text,
-    type: 'agent_message',
-  },
-  type: 'item.completed',
-});
-
-const codexCommandStarted = (id: string, command: string) => ({
-  item: {
-    aggregated_output: '',
-    command,
-    exit_code: null,
-    id,
-    status: 'in_progress',
-    type: 'command_execution',
-  },
-  type: 'item.started',
-});
-
-const codexCommandCompleted = (id: string, command: string, aggregatedOutput: string) => ({
-  item: {
-    aggregated_output: aggregatedOutput,
-    command,
-    exit_code: 0,
-    id,
-    status: 'completed',
-    type: 'command_execution',
-  },
-  type: 'item.completed',
-});
-
-const codexTodo = (
-  lifecycle: 'item.completed' | 'item.started' | 'item.updated',
-  completed: number,
-) => ({
-  item: {
-    id: 'todo-1',
-    items: [
-      { completed: completed >= 1, text: 'Inspect' },
-      { completed: completed >= 2, text: 'Implement' },
-      { completed: completed >= 3, text: 'Verify' },
-    ],
-    status: lifecycle === 'item.completed' ? 'completed' : 'in_progress',
-    type: 'todo_list',
-  },
-  type: lifecycle,
-});
-
-const codexTurnCompleted = (usage?: {
-  cached_input_tokens?: number;
-  input_tokens?: number;
-  output_tokens?: number;
-}) => ({
-  ...(usage ? { usage } : {}),
-  type: 'turn.completed',
-});
+}));
 
 // ─── Tests ───
 
@@ -521,10 +162,10 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockGetNotificationSoundFile.mockResolvedValue(undefined);
+    mockPlayCompletionSound.mockResolvedValue(undefined);
     ipc = setupIpcCapture();
-    // Register the IPC session's agent type from the params the executor
-    // hands to startSession, so the helper picks the right adapter when the
-    // test starts emitting raw events.
+    // The producer adapter follows the runtime selected by the executor.
     mockStartSession.mockImplementation(async (params: any) => {
       ipc.setAgentType('ipc-sess-1', params.agentType ?? 'claude-code');
       return {
@@ -535,13 +176,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
     mockSendPrompt.mockResolvedValue(undefined);
     mockStopSession.mockResolvedValue(undefined);
     mockCancelSession.mockResolvedValue(undefined);
-    // Mirror the desktop main: `getSessionInfo` returns whatever the producer
-    // pipeline's adapter has extracted from the JSONL stream so far. Tests
-    // that never emit an init / thread.started event get `agentSessionId:
-    // undefined`, matching pre-Phase-0 behavior where the renderer-side
-    // adapter never observed one either. The renderer service hands the raw
-    // sessionId string straight to the mock — it's the underlying IPC handler
-    // that wraps `{ sessionId }`, and that's stubbed here.
+    // Return only the native session id observed by the producer adapter.
     mockGetSessionInfo.mockImplementation(async (sessionId: string) => ({
       agentSessionId: ipc.getAdapterSessionId(sessionId),
     }));
@@ -663,6 +298,60 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
 
     return { get, store };
   }
+
+  it.each([
+    { provider: { command: 'pi', type: 'pi' }, expectedOperations: ['op-1', 'op-2'] },
+    {
+      provider: { command: '/custom/dsh', type: 'deepseek-harness' },
+      expectedOperations: ['op-1', 'op-2'],
+    },
+    { provider: { command: 'claude', type: 'claude-code' }, expectedOperations: ['op-1', 'op-2'] },
+    {
+      provider: { command: 'pi', env: { LOBEHUB_OPERATION_ID: 'user-override' }, type: 'pi' },
+      expectedOperations: ['user-override', 'user-override'],
+    },
+  ] satisfies {
+    provider: HeterogeneousProviderConfig;
+    expectedOperations: (string | undefined)[];
+  }[])(
+    'preserves each turn identity and user env overrides: $provider',
+    async ({ provider, expectedOperations }) => {
+      for (const operationId of ['op-1', 'op-2']) {
+        await runWithEvents(
+          [
+            () =>
+              ipc.emitStreamEvent('ipc-sess-1', {
+                data: { reason: 'complete' },
+                operationId,
+                type: 'agent_runtime_end',
+              }),
+          ],
+          {
+            params: { heterogeneousProvider: provider, operationId, workspaceId: 'ws-1' },
+            store: createMockStore({ topicDataMap: {} }),
+          },
+        );
+      }
+
+      const launches = mockStartSession.mock.calls.map(([params]) => params);
+      expect(launches).toEqual(
+        expectedOperations.map((operationId) =>
+          expect.objectContaining({
+            agentType: provider.type,
+            command: provider.command,
+            env: {
+              LOBEHUB_AGENT_ID: 'agent-1',
+              ...(operationId ? { LOBEHUB_OPERATION_ID: operationId } : {}),
+              LOBEHUB_TOPIC_ID: 'topic-1',
+              LOBEHUB_WORKSPACE_ID: 'ws-1',
+            }, // captured workspace, not live navigation
+          }),
+        ),
+      );
+      const sent = mockSendPrompt.mock.calls.map(([p]) => [p.operationId, p.workspaceId]);
+      expect(sent.flat()).toEqual(['op-1', 'ws-1', 'op-2', 'ws-1']);
+    },
+  );
 
   it('releases all IPC subscriptions after a run settles', async () => {
     await runWithEvents([ccInit(), ccResult()]);
@@ -1021,23 +710,6 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(lastToolUpdate[1].tools[0].result_msg_id).toBe(createdToolId);
     });
 
-    it('should deduplicate tool calls (idempotent)', async () => {
-      await runWithEvents([
-        ccInit(),
-        // Same tool_use id sent twice (CC can echo tool blocks)
-        ccToolUse('msg_01', 'toolu_1', 'Bash', { command: 'ls' }),
-        ccAssistant('msg_01', [
-          { id: 'toolu_1', input: { command: 'ls' }, name: 'Bash', type: 'tool_use' },
-        ]),
-        ccToolResult('toolu_1', 'output'),
-        ccResult(),
-      ]);
-
-      // Should only create ONE tool message despite two tool_use events with same id
-      const toolCreates = mockCreateMessage.mock.calls.filter(([p]: any) => p.role === 'tool');
-      expect(toolCreates.length).toBe(1);
-    });
-
     it('batches main message writes before tool_end reconciliation', async () => {
       await runWithEvents([
         ccInit(),
@@ -1066,91 +738,97 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(types.indexOf('updateToolMessage')).toBeGreaterThan(types.indexOf('createMessage'));
     });
 
-    it('replays an early AskUserQuestion intervention after the batched tool row exists', async () => {
-      const optimisticUpdateMessagePlugin = vi.fn(async () => {});
-      const updateTopicStatus = vi.fn(async () => {});
-      const store = createMockStore({
-        optimisticUpdateMessagePlugin,
-        updateTopicStatus,
-      });
-      const get = vi.fn(() => store);
-
-      let resolveSendPrompt!: () => void;
-      mockSendPrompt.mockReturnValue(
-        new Promise<void>((resolve) => {
-          resolveSendPrompt = resolve;
-        }),
-      );
-
-      const executorPromise = executeHeterogeneousAgent(get, defaultParams);
-      await flush();
-
-      ipc.emitRawLine('ipc-sess-1', ccInit());
-      ipc.emitStreamEvent('ipc-sess-1', {
-        data: {
-          apiName: 'askUserQuestion',
-          arguments: JSON.stringify({
-            questions: [
-              {
-                header: 'Scope',
-                options: [
-                  { description: 'Keep it narrow', label: 'Small' },
-                  { description: 'Do all of it', label: 'All' },
-                ],
-                question: 'How much should I do?',
-              },
-            ],
+    it.each([false, true])(
+      'keeps question ownership and closes its upstream tool (subagent=%s)',
+      async (subagent) => {
+        const optimisticUpdateMessagePlugin = vi.fn(async () => {});
+        const store = createMockStore({
+          optimisticUpdateMessagePlugin,
+          updateTopicStatus: vi.fn(),
+        });
+        let resolveSendPrompt!: () => void;
+        mockSendPrompt.mockReturnValue(
+          new Promise<void>((resolve) => {
+            resolveSendPrompt = resolve;
           }),
-          deadline: Date.now() + 300_000,
-          identifier: 'claude-code',
-          toolCallId: 'toolu_ask',
-        },
-        type: 'agent_intervention_request',
-      });
-      await flush();
-
-      expect(optimisticUpdateMessagePlugin).not.toHaveBeenCalled();
-
-      ipc.emitRawLine(
-        'ipc-sess-1',
-        ccToolUse('msg_ask', 'toolu_ask', 'mcp__lobe_cc__ask_user_question', {
+        );
+        const executorPromise = executeHeterogeneousAgent(() => store, defaultParams);
+        await flush();
+        ipc.emitRawLine('ipc-sess-1', ccInit());
+        const args = {
           questions: [
             {
               header: 'Scope',
-              options: [
-                { description: 'Keep it narrow', label: 'Small' },
-                { description: 'Do all of it', label: 'All' },
-              ],
+              options: [{ label: 'Small' }, { label: 'All' }],
               question: 'How much should I do?',
             },
           ],
-        }),
-      );
-      await flush();
-
-      const toolCreateIndex = mockCreateMessage.mock.calls.findIndex(
-        ([params]: any) => params.role === 'tool' && params.tool_call_id === 'toolu_ask',
-      );
-      expect(toolCreateIndex).toBeGreaterThanOrEqual(0);
-      expect(optimisticUpdateMessagePlugin).toHaveBeenCalledWith(
-        mockCreateMessage.mock.calls[toolCreateIndex][0].id,
-        { intervention: { status: 'pending' } },
-        { operationId: 'op-1' },
-      );
-      expect(mockCreateMessage.mock.invocationCallOrder[toolCreateIndex]).toBeLessThan(
-        optimisticUpdateMessagePlugin.mock.invocationCallOrder[0],
-      );
-      expect(updateTopicStatus).toHaveBeenCalledWith(
-        expect.objectContaining({ status: 'waitingForHuman', topicId: 'topic-1' }),
-      );
-
-      ipc.emitRawLine('ipc-sess-1', ccToolResult('toolu_ask', 'User answers:\n- Scope: Small'));
-      ipc.emitRawLine('ipc-sess-1', ccResult());
-      ipc.emitComplete('ipc-sess-1');
-      await flush();
-      resolveSendPrompt();
-      await executorPromise;
-    });
+        };
+        const child = { parentToolCallId: 'task-parent', subagentMessageId: 'child-turn' };
+        if (subagent) {
+          ipc.emitStreamEvent('ipc-sess-1', {
+            data: {
+              chunkType: 'tools_calling',
+              subagent: child,
+              toolsCalling: [
+                {
+                  apiName: 'askUserQuestion',
+                  arguments: JSON.stringify(args),
+                  id: 'toolu_ask',
+                  identifier: 'claude-code',
+                  type: 'default',
+                },
+              ],
+            },
+            type: 'stream_chunk',
+          });
+          await flush();
+        }
+        ipc.emitStreamEvent('ipc-sess-1', {
+          data: {
+            apiName: 'askUserQuestion',
+            arguments: JSON.stringify(args),
+            deadline: Date.now() + 300_000,
+            identifier: 'claude-code',
+            toolCallId: 'toolu_ask',
+          },
+          type: 'agent_intervention_request',
+        });
+        await flush();
+        const tools = mockCreateMessage.mock.calls.filter(
+          ([m]: any) => m.role === 'tool' && m.tool_call_id === 'toolu_ask',
+        );
+        expect(tools).toHaveLength(1);
+        const toolRow = tools[0][0];
+        const expectedContext = subagent
+          ? {
+              context: { ...defaultContext, scope: 'thread', threadId: toolRow.threadId },
+              operationId: 'op-1',
+            }
+          : { operationId: 'op-1' };
+        expect(subagent ? toolRow.threadId : !toolRow.threadId).toBeTruthy();
+        expect(optimisticUpdateMessagePlugin).toHaveBeenCalledWith(
+          toolRow.id,
+          { intervention: { status: 'pending' } },
+          expectedContext,
+        );
+        ipc.emitStreamEvent('ipc-sess-1', {
+          data: { content: 'done', ...(subagent && { subagent: child }), toolCallId: 'toolu_ask' },
+          type: 'tool_result',
+        });
+        await flush();
+        expect(optimisticUpdateMessagePlugin).toHaveBeenLastCalledWith(
+          toolRow.id,
+          { intervention: expect.objectContaining({ status: 'aborted' }) },
+          expectedContext,
+        );
+        ipc.emitRawLine('ipc-sess-1', ccResult());
+        ipc.emitComplete('ipc-sess-1');
+        await flush();
+        resolveSendPrompt();
+        await executorPromise;
+      },
+    );
   });
 
   // ────────────────────────────────────────────────────
@@ -1241,28 +919,6 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       // lands in DB with provider set from the start (no later backfill needed).
       expect(step2Assistant![0].provider).toBe('claude-code');
     });
-
-    it('should fall back to assistant parentId when step has no tools', async () => {
-      const ids: string[] = [];
-      mockCreateMessage.mockImplementation(async (params: any) => {
-        const id = `${params.role}-${ids.length}`;
-        ids.push(id);
-        return { id };
-      });
-
-      await runWithEvents([
-        ccInit(),
-        // Step 1: just text, no tools
-        ccText('msg_01', 'Let me think...'),
-        // Step 2: more text (new message.id, no tools in step 1)
-        ccText('msg_02', 'Here is the answer.'),
-        ccResult(),
-      ]);
-
-      // Step 2 assistant should have parentId = initial assistant (no tools to chain through)
-      const step2 = mockCreateMessage.mock.calls.find(([p]: any) => p.role === 'assistant');
-      expect(step2?.[0].parentId).toBe('ast-initial');
-    });
   });
 
   // ────────────────────────────────────────────────────
@@ -1270,6 +926,185 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
   // ────────────────────────────────────────────────────
 
   describe('final content writes (onComplete)', () => {
+    /**
+     * CC SDK mode keeps the transport open after `result`, so the terminal
+     * flush can land minutes later — but `visible_output_end` already lets the
+     * user send a follow-up, whose server response replaces the store. The
+     * final text must hit the DB before the UI is unlocked.
+     */
+    it('persists the final text before unlocking follow-ups on visible_output_end', async () => {
+      const store = createMockStore();
+      const get = vi.fn(() => store);
+
+      let resolveSendPrompt: () => void;
+      mockSendPrompt.mockReturnValue(
+        new Promise<void>((resolve) => {
+          resolveSendPrompt = resolve;
+        }),
+      );
+
+      const executorPromise = executeHeterogeneousAgent(get, defaultParams);
+      await flush();
+
+      ipc.emitStreamEvent('ipc-sess-1', {
+        data: { chunkType: 'text', content: 'final answer' },
+        type: 'stream_chunk',
+      });
+      ipc.emitStreamEvent('ipc-sess-1', { data: {}, type: 'visible_output_end' });
+      // Well inside the batcher's idle window: only an explicit flush lands the write.
+      await flush();
+
+      const contentWriteIndex = mockUpdateMessage.mock.calls.findIndex(
+        ([id, value]: any) => id === 'ast-initial' && value.content === 'final answer',
+      );
+      expect(contentWriteIndex).toBeGreaterThanOrEqual(0);
+
+      // The gateway handler (mocked here) is what flips `visibleLoadingDone`,
+      // so the forward must come after the durable write.
+      const handlerSpy = vi.mocked(createGatewayEventHandler).mock.results.at(-1)!
+        .value as ReturnType<typeof vi.fn>;
+      const unlockIndex = handlerSpy.mock.calls.findIndex(
+        ([event]: any) => event.type === 'visible_output_end',
+      );
+      expect(unlockIndex).toBeGreaterThanOrEqual(0);
+      expect(mockUpdateMessage.mock.invocationCallOrder[contentWriteIndex]).toBeLessThan(
+        handlerSpy.mock.invocationCallOrder[unlockIndex],
+      );
+
+      ipc.emitComplete('ipc-sess-1');
+      await flush();
+      resolveSendPrompt!();
+      await flush();
+      await executorPromise;
+      await flush();
+    });
+
+    /**
+     * `flush` resolves even when the write failed, and the terminal replay may
+     * be minutes away in CC SDK mode — retry once before unlocking follow-ups.
+     */
+    it('retries a failed final-text write before unlocking follow-ups on visible_output_end', async () => {
+      const store = createMockStore();
+      const get = vi.fn(() => store);
+
+      let failedOnce = false;
+      mockUpdateMessage.mockImplementation(async (_id: string, value: any) => {
+        if (value?.content === 'final answer' && !failedOnce) {
+          failedOnce = true;
+          throw new Error('transient write failure');
+        }
+      });
+
+      let resolveSendPrompt: () => void;
+      mockSendPrompt.mockReturnValue(
+        new Promise<void>((resolve) => {
+          resolveSendPrompt = resolve;
+        }),
+      );
+
+      const executorPromise = executeHeterogeneousAgent(get, defaultParams);
+      await flush();
+
+      ipc.emitStreamEvent('ipc-sess-1', {
+        data: { chunkType: 'text', content: 'final answer' },
+        type: 'stream_chunk',
+      });
+      ipc.emitStreamEvent('ipc-sess-1', { data: {}, type: 'visible_output_end' });
+      await flush();
+
+      const contentWrites = mockUpdateMessage.mock.calls
+        .map(([id, value]: any, index: number) => ({ id, index, value }))
+        .filter(({ id, value }) => id === 'ast-initial' && value.content === 'final answer');
+      expect(contentWrites).toHaveLength(2);
+
+      const handlerSpy = vi.mocked(createGatewayEventHandler).mock.results.at(-1)!
+        .value as ReturnType<typeof vi.fn>;
+      const unlockIndex = handlerSpy.mock.calls.findIndex(
+        ([event]: any) => event.type === 'visible_output_end',
+      );
+      expect(unlockIndex).toBeGreaterThanOrEqual(0);
+      expect(mockUpdateMessage.mock.invocationCallOrder[contentWrites[1].index]).toBeLessThan(
+        handlerSpy.mock.invocationCallOrder[unlockIndex],
+      );
+
+      ipc.emitComplete('ipc-sess-1');
+      await flush();
+      resolveSendPrompt!();
+      await flush();
+      await executorPromise;
+      await flush();
+    });
+
+    /**
+     * The final step's assistant row can fail to create in the same batch as
+     * its content patch. Patching before re-creating matches zero rows yet
+     * reports success, so creates must be replayed first.
+     */
+    it('replays a failed step create before its final-text patch on visible_output_end', async () => {
+      const store = createMockStore();
+      const get = vi.fn(() => store);
+
+      // Minimal table: an update against a missing row is a silent no-op, like the DB.
+      const rows = new Map<string, Record<string, any>>([['ast-initial', {}]]);
+      mockCreateMessage.mockImplementation(async (params: any) => {
+        rows.set(params.id, { ...params });
+        return { id: params.id };
+      });
+      mockUpdateMessage.mockImplementation(async (id: string, value: any) => {
+        if (rows.has(id)) rows.set(id, { ...rows.get(id), ...value });
+      });
+      const defaultBatchMutate = mockBatchMutate.getMockImplementation()!;
+      let failedOnce = false;
+      mockBatchMutate.mockImplementation(async (operations: any[]) => {
+        const createsStepAssistant = operations.some(
+          (operation) =>
+            operation.type === 'createMessage' &&
+            operation.message?.role === 'assistant' &&
+            operation.message?.id !== 'ast-initial',
+        );
+        if (createsStepAssistant && !failedOnce) {
+          failedOnce = true;
+          throw new Error('transient batch failure');
+        }
+        return defaultBatchMutate(operations);
+      });
+
+      let resolveSendPrompt: () => void;
+      mockSendPrompt.mockReturnValue(
+        new Promise<void>((resolve) => {
+          resolveSendPrompt = resolve;
+        }),
+      );
+
+      const executorPromise = executeHeterogeneousAgent(get, defaultParams);
+      await flush();
+
+      ipc.emitRawLine('ipc-sess-1', ccInit());
+      ipc.emitRawLine('ipc-sess-1', ccToolUse('msg_1', 'toolu_1', 'Bash', { command: 'ls' }));
+      ipc.emitRawLine('ipc-sess-1', ccToolResult('toolu_1', 'ok'));
+      ipc.emitRawLine('ipc-sess-1', ccText('msg_2', 'final answer'));
+      ipc.emitStreamEvent('ipc-sess-1', { data: {}, type: 'visible_output_end' });
+      await flush();
+
+      expect(failedOnce).toBe(true);
+      const handlerSpy = vi.mocked(createGatewayEventHandler).mock.results.at(-1)!
+        .value as ReturnType<typeof vi.fn>;
+      expect(
+        handlerSpy.mock.calls.some(([event]: any) => event.type === 'visible_output_end'),
+      ).toBe(true);
+      const stepAssistant = [...rows.entries()].find(
+        ([id, row]) => id !== 'ast-initial' && row.role === 'assistant',
+      );
+      expect(stepAssistant?.[1].content).toBe('final answer');
+
+      ipc.emitComplete('ipc-sess-1');
+      await flush();
+      resolveSendPrompt!();
+      await flush();
+      await executorPromise;
+      await flush();
+    });
+
     it('should write accumulated content + model + provider to the final assistant message', async () => {
       await runWithEvents([
         ccInit(),
@@ -1297,67 +1132,6 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       // provider is emitted by the CC adapter on turn_metadata so it rides
       // along with the final content/model write.
       expect(finalWrite![1].provider).toBe('claude-code');
-    });
-
-    it('persists the Grok prompt-result model with per-turn rather than aggregate usage', async () => {
-      await runWithEvents(
-        [
-          {
-            jsonrpc: '2.0',
-            method: 'session/update',
-            params: {
-              sessionId: 'grok-session',
-              update: {
-                content: { text: 'Grok answer', type: 'text' },
-                sessionUpdate: 'agent_message_chunk',
-              },
-            },
-          },
-          {
-            jsonrpc: '2.0',
-            method: 'x.ai/session_notification',
-            params: {
-              _meta: { eventId: 'grok-response-completed' },
-              sessionId: 'grok-session',
-              update: {
-                sessionUpdate: 'response_completed',
-                stop_reason: 'end_turn',
-                usage: { input_tokens: 10, output_tokens: 5 },
-              },
-            },
-          },
-          {
-            id: 5,
-            jsonrpc: '2.0',
-            result: {
-              _meta: {
-                modelId: 'grok-build',
-                usage: { inputTokens: 12, outputTokens: 4 },
-              },
-              stopReason: 'end_turn',
-            },
-          },
-        ],
-        {
-          params: {
-            heterogeneousProvider: { command: 'grok', type: 'grok-build' },
-          },
-        },
-      );
-
-      const modelWrite = mockUpdateMessage.mock.calls.find(
-        ([id, value]: any) => id === 'ast-initial' && value.model === 'grok-build' && value.usage,
-      );
-      expect(modelWrite).toBeDefined();
-      expect(modelWrite![1]).toMatchObject({
-        model: 'grok-build',
-        provider: 'grok-build',
-        usage: {
-          totalInputTokens: 10,
-          totalOutputTokens: 5,
-          totalTokens: 15,
-        },
-      });
     });
 
     // The run's first assistant already exists in `dbMessagesMap` before the
@@ -1655,6 +1429,64 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
   // ────────────────────────────────────────────────────
 
   describe('error handling', () => {
+    const authMetadata = {
+      attribution: 'user',
+      category: 'auth',
+      countAsFailure: false,
+      errorRef: 'H1001',
+      isFallback: false,
+      numericId: 1001,
+      retryable: false,
+      severity: 'warning',
+    };
+
+    const createExpectedAuthError = (rawAuthError: string) => ({
+      ...authMetadata,
+      body: expect.objectContaining({
+        agentType: 'claude-code',
+        code: HeterogeneousAgentSessionErrorCode.AuthRequired,
+        stderr: rawAuthError,
+      }),
+      message:
+        'Claude Code could not authenticate. Sign in again or refresh its credentials, then retry.',
+      type: 'AgentRuntimeError',
+    });
+
+    const createExpectedAuthErrorUpdate = (rawAuthError: string) => ({
+      id: 'ast-initial',
+      type: 'updateMessage',
+      value: {
+        content: '',
+        error: createExpectedAuthError(rawAuthError),
+      },
+    });
+
+    it('preserves structured quota fields for a flattened local CLI error', async () => {
+      const store = createMockStore();
+      mockSendPrompt.mockRejectedValueOnce({
+        message: "You've hit your weekly limit · resets 10pm (Asia/Shanghai)",
+      });
+      await executeHeterogeneousAgent(
+        vi.fn(() => store),
+        defaultParams,
+      );
+      await flush();
+      expect(mockUpdateMessageError).toHaveBeenCalledWith(
+        'ast-initial',
+        expect.objectContaining({
+          errorRef: 'H2001',
+          attribution: 'user',
+          retryable: false,
+          body: expect.objectContaining({
+            agentType: 'claude-code',
+            code: 'rate_limit',
+            details: { kind: 'usage_limit' },
+          }),
+        }),
+        expect.any(Object),
+      );
+    });
+
     it('should persist accumulated content on error', async () => {
       const store = createMockStore();
       const get = vi.fn(() => store);
@@ -1719,36 +1551,11 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(contentWrite).toBeUndefined();
       expect(mockUpdateMessageError).toHaveBeenCalledWith(
         'ast-initial',
-        {
-          body: expect.objectContaining({
-            agentType: 'claude-code',
-            code: HeterogeneousAgentSessionErrorCode.AuthRequired,
-            stderr: rawAuthError,
-          }),
-          message:
-            'Claude Code could not authenticate. Sign in again or refresh its credentials, then retry.',
-          type: 'AgentRuntimeError',
-        },
+        createExpectedAuthError(rawAuthError),
         expect.any(Object),
       );
       expect(store.internal_dispatchMessage).toHaveBeenCalledWith(
-        {
-          id: 'ast-initial',
-          type: 'updateMessage',
-          value: {
-            content: '',
-            error: {
-              body: expect.objectContaining({
-                agentType: 'claude-code',
-                code: HeterogeneousAgentSessionErrorCode.AuthRequired,
-                stderr: rawAuthError,
-              }),
-              message:
-                'Claude Code could not authenticate. Sign in again or refresh its credentials, then retry.',
-              type: 'AgentRuntimeError',
-            },
-          },
-        },
+        createExpectedAuthErrorUpdate(rawAuthError),
         { operationId: 'op-1' },
       );
     });
@@ -1770,36 +1577,11 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(contentWrite).toBeUndefined();
       expect(mockUpdateMessageError).toHaveBeenCalledWith(
         'ast-initial',
-        {
-          body: expect.objectContaining({
-            agentType: 'claude-code',
-            code: HeterogeneousAgentSessionErrorCode.AuthRequired,
-            stderr: rawAuthError,
-          }),
-          message:
-            'Claude Code could not authenticate. Sign in again or refresh its credentials, then retry.',
-          type: 'AgentRuntimeError',
-        },
+        createExpectedAuthError(rawAuthError),
         expect.any(Object),
       );
       expect(store.internal_dispatchMessage).toHaveBeenCalledWith(
-        {
-          id: 'ast-initial',
-          type: 'updateMessage',
-          value: {
-            content: '',
-            error: {
-              body: expect.objectContaining({
-                agentType: 'claude-code',
-                code: HeterogeneousAgentSessionErrorCode.AuthRequired,
-                stderr: rawAuthError,
-              }),
-              message:
-                'Claude Code could not authenticate. Sign in again or refresh its credentials, then retry.',
-              type: 'AgentRuntimeError',
-            },
-          },
-        },
+        createExpectedAuthErrorUpdate(rawAuthError),
         { operationId: 'op-1' },
       );
     });
@@ -1838,36 +1620,11 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(contentWrite).toBeUndefined();
       expect(mockUpdateMessageError).toHaveBeenCalledWith(
         'ast-initial',
-        {
-          body: expect.objectContaining({
-            agentType: 'claude-code',
-            code: HeterogeneousAgentSessionErrorCode.AuthRequired,
-            stderr: rawAuthError,
-          }),
-          message:
-            'Claude Code could not authenticate. Sign in again or refresh its credentials, then retry.',
-          type: 'AgentRuntimeError',
-        },
+        createExpectedAuthError(rawAuthError),
         expect.any(Object),
       );
       expect(store.internal_dispatchMessage).toHaveBeenCalledWith(
-        {
-          id: 'ast-initial',
-          type: 'updateMessage',
-          value: {
-            content: '',
-            error: {
-              body: expect.objectContaining({
-                agentType: 'claude-code',
-                code: HeterogeneousAgentSessionErrorCode.AuthRequired,
-                stderr: rawAuthError,
-              }),
-              message:
-                'Claude Code could not authenticate. Sign in again or refresh its credentials, then retry.',
-              type: 'AgentRuntimeError',
-            },
-          },
-        },
+        createExpectedAuthErrorUpdate(rawAuthError),
         { operationId: 'op-1' },
       );
     });
@@ -1958,7 +1715,15 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(mockUpdateMessageError).toHaveBeenCalledWith(
         'ast-initial',
         {
-          body: cliError,
+          attribution: 'user',
+          category: 'environment',
+          countAsFailure: false,
+          errorRef: 'H8001',
+          isFallback: false,
+          numericId: 8001,
+          retryable: false,
+          severity: 'warning',
+          body: { ...cliError, details: { kind: 'cli_not_found' } },
           message: 'Claude Code CLI was not found',
           type: 'AgentRuntimeError',
         },
@@ -1976,7 +1741,15 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
           type: 'updateMessage',
           value: {
             error: {
-              body: cliError,
+              attribution: 'user',
+              category: 'environment',
+              countAsFailure: false,
+              errorRef: 'H8001',
+              isFallback: false,
+              numericId: 8001,
+              retryable: false,
+              severity: 'warning',
+              body: { ...cliError, details: { kind: 'cli_not_found' } },
               message: 'Claude Code CLI was not found',
               type: 'AgentRuntimeError',
             },
@@ -1985,6 +1758,60 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
         { operationId: 'op-1' },
       );
       expect(store.completeOperation).toHaveBeenCalledWith('op-1');
+    });
+
+    it('forwards replayTranscript to sendPrompt and returns the replay outcome', async () => {
+      const store = createMockStore();
+      const get = vi.fn(() => store);
+      const ipc = setupIpcCapture();
+      mockSendPrompt.mockImplementationOnce(async (params: any) => {
+        // Desktop main streams the transcript and completes the session itself.
+        ipc.emitRawLine(params.sessionId, ccInit('cc-session-1'));
+        ipc.emitRawLine(params.sessionId, ccText('msg-1', 'replayed answer'));
+        ipc.emitRawLine(params.sessionId, ccResult());
+        ipc.emitComplete(params.sessionId);
+        return { replay: { complete: false, recordCount: 1 } };
+      });
+
+      const outcome = await executeHeterogeneousAgent(get, {
+        ...defaultParams,
+        replayTranscript: true,
+        resumeSessionId: 'cc-session-1',
+      });
+
+      expect(mockSendPrompt).toHaveBeenCalledWith(
+        expect.objectContaining({ replayTranscript: true, sessionId: 'ipc-sess-1' }),
+      );
+      expect(outcome).toEqual({ replay: { complete: false, recordCount: 1 } });
+    });
+
+    it('returns no outcome for a live run', async () => {
+      const store = createMockStore();
+      const get = vi.fn(() => store);
+      setupIpcCapture();
+
+      const outcome = await executeHeterogeneousAgent(get, defaultParams);
+
+      expect(mockSendPrompt.mock.calls[0][0].replayTranscript).toBeUndefined();
+      expect(outcome).toBeUndefined();
+    });
+
+    // regression: non-image attachments were dropped on the way to the CLI.
+    it('should append non-image attachments to the prompt as download links', async () => {
+      const store = createMockStore();
+      const get = vi.fn(() => store);
+      setupIpcCapture();
+
+      await executeHeterogeneousAgent(get, {
+        ...defaultParams,
+        attachedFiles: [
+          { fileType: 'text/markdown', name: 'svg.md', size: 2048, url: 'https://signed/svg.md' },
+        ],
+      });
+
+      const { prompt } = mockSendPrompt.mock.calls[0][0];
+      expect(prompt).toMatch(/^test prompt\n\n<attached_files>/);
+      expect(prompt).toContain('- svg.md (text/markdown, 2.0 KB): https://signed/svg.md');
     });
 
     it('should forward imageList to heterogeneousAgentService.sendPrompt for Codex runs', async () => {
@@ -2004,6 +1831,9 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
 
       expect(mockSendPrompt).toHaveBeenCalledWith({
         agentId: 'agent-1',
+        // Recorded in the in-flight ledger so restart recovery can scope to
+        // this run's own branch and workspace.
+        assistantMessageId: 'ast-initial',
         imageList,
         operationId: 'op-1',
         prompt: 'test prompt',
@@ -2011,6 +1841,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
         systemContext: undefined,
         // Keys the run's in-app browser session (`topic:<topicId>`) in the main process.
         topicId: 'topic-1',
+        workspaceId: undefined,
       });
     });
 
@@ -2040,6 +1871,80 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(resumedSystemContext).toBe('Follow the agent rules.');
       expect(resumedSystemContext).not.toContain('## Workspace');
       expect(resumedSystemContext).not.toContain('/Users/me/repo');
+    });
+
+    describe('edited topic replay', () => {
+      // Copied ancestry of an edited Codex topic: a tool round, then the edited prompt
+      // and this run's placeholder. The projected tool row cannot be restored here.
+      const editedRows = [
+        { content: 'Original question', id: 'u0', role: 'user' },
+        { content: '', id: 'a0', parentId: 'u0', role: 'assistant', tools: [{ id: 'call-1' }] },
+        { content: '', id: 't0', parentId: 'a0', payloadOmitted: true, role: 'tool' },
+        { content: 'Original answer', id: 'a1', parentId: 't0', role: 'assistant' },
+        { content: 'test prompt', id: 'u1', parentId: 'a1', role: 'user' },
+        { content: '...', id: 'ast-initial', parentId: 'u1', role: 'assistant' },
+      ];
+      const storeWith = (metadata: Record<string, unknown>) =>
+        createMockStore({
+          dbMessagesMap: { 'main_agent-1_topic-1': editedRows },
+          topicDataMap: { 'agent-1__main': { items: [{ id: 'topic-1', metadata }] } },
+        });
+      const codexParams = {
+        ...defaultParams,
+        heterogeneousProvider: { command: 'codex', type: 'codex' as const },
+      };
+
+      it('replays the copied ancestry when an edited topic starts without a native session', async () => {
+        // ROOT CAUSE:
+        // The edited topic copies history into the database but has no native
+        // session, so the local CLI started blank and lost the conversation.
+        const store = storeWith({ editedFrom: { messageId: 'u-source', topicId: 'source' } });
+
+        await executeHeterogeneousAgent(
+          vi.fn(() => store),
+          codexParams,
+        );
+
+        expect(mockSendPrompt.mock.calls[0][0].systemContext).toBe(
+          [
+            '<previous_conversation>',
+            '<user>\nOriginal question\n</user>',
+            '<assistant>\nOriginal answer\n</assistant>',
+            '</previous_conversation>',
+          ].join('\n'),
+        );
+      });
+
+      it('does not replay once the edited topic has its own native session', async () => {
+        const store = storeWith({ editedFrom: { messageId: 'u-source', topicId: 'source' } });
+
+        await executeHeterogeneousAgent(
+          vi.fn(() => store),
+          { ...codexParams, resumeSessionId: 'codex-thread-1' },
+        );
+
+        expect(mockSendPrompt.mock.calls[0][0].systemContext).toBeUndefined();
+      });
+
+      it.each([
+        ['codex', codexParams],
+        ['claude-code', defaultParams],
+      ])(
+        'leaves an ordinary fresh %s session without replay, even with an unrestorable tool row',
+        async (_type, params) => {
+          // A fresh session in an ordinary topic (new topic, cwd-change reset) keeps
+          // canary behavior: no history replay, no tool-payload restore, no throw.
+          const store = storeWith({});
+
+          await executeHeterogeneousAgent(
+            vi.fn(() => store),
+            params,
+          );
+
+          expect(mockSendPrompt).toHaveBeenCalledTimes(1);
+          expect(mockSendPrompt.mock.calls[0][0].systemContext).toBeUndefined();
+        },
+      );
     });
 
     it('should forward context selections as heterogeneous system context', async () => {
@@ -2073,59 +1978,6 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(systemContext).toContain('filePath="src/example.ts"');
       expect(systemContext).toContain('lines="7-7"');
       expect(systemContext).toContain('const answer = 42;');
-    });
-
-    it('should pass Claude Code model and thinking effort as spawn args', async () => {
-      const store = createMockStore();
-      const get = vi.fn(() => store);
-
-      await executeHeterogeneousAgent(get, {
-        ...defaultParams,
-        heterogeneousProvider: {
-          args: ['--verbose'],
-          command: 'claude',
-          effort: 'high',
-          model: 'opus',
-          type: 'claude-code' as const,
-        },
-      });
-
-      expect(mockStartSession).toHaveBeenCalledWith(
-        expect.objectContaining({
-          args: ['--verbose', '--model', 'opus', '--effort', 'high'],
-          agentType: 'claude-code',
-        }),
-      );
-    });
-
-    it('should pass Codex model and thinking effort as spawn args', async () => {
-      const store = createMockStore();
-      const get = vi.fn(() => store);
-
-      await executeHeterogeneousAgent(get, {
-        ...defaultParams,
-        heterogeneousProvider: {
-          args: ['--ask-for-approval', 'never'],
-          command: 'codex',
-          effort: 'xhigh',
-          model: 'gpt-5.5',
-          type: 'codex' as const,
-        },
-      });
-
-      expect(mockStartSession).toHaveBeenCalledWith(
-        expect.objectContaining({
-          agentType: 'codex',
-          args: [
-            '--ask-for-approval',
-            'never',
-            '--model',
-            'gpt-5.5',
-            '-c',
-            'model_reasoning_effort="xhigh"',
-          ],
-        }),
-      );
     });
 
     it('should pass the selected TRAE model through ACP instead of native args', async () => {
@@ -2180,6 +2032,29 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       );
     });
 
+    it('should pass the selected Devin model through ACP and native args', async () => {
+      const store = createMockStore();
+      const get = vi.fn(() => store);
+
+      await executeHeterogeneousAgent(get, {
+        ...defaultParams,
+        heterogeneousProvider: {
+          args: ['--agent-type', 'coding'],
+          command: 'devin',
+          model: 'claude-sonnet-4-6-thinking',
+          type: 'devin' as const,
+        },
+      });
+
+      expect(mockStartSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          agentType: 'devin',
+          args: ['--agent-type', 'coding', '--model', 'claude-sonnet-4-6-thinking'],
+          initialModel: 'claude-sonnet-4-6-thinking',
+        }),
+      );
+    });
+
     it('should execute a persisted legacy provider config without type', async () => {
       const store = createMockStore();
       const get = vi.fn(() => store);
@@ -2224,27 +2099,6 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
 
       expect(mockStartSession).toHaveBeenCalledWith(
         expect.objectContaining({ useCodexAppServer: true }),
-      );
-    });
-
-    it('should preserve Claude Code defaults when model and effort are not selected', async () => {
-      const store = createMockStore();
-      const get = vi.fn(() => store);
-
-      await executeHeterogeneousAgent(get, {
-        ...defaultParams,
-        heterogeneousProvider: {
-          args: ['--verbose'],
-          command: 'claude',
-          type: 'claude-code' as const,
-        },
-      });
-
-      expect(mockStartSession).toHaveBeenCalledWith(
-        expect.objectContaining({
-          args: ['--verbose'],
-          agentType: 'claude-code',
-        }),
       );
     });
 
@@ -2509,59 +2363,111 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       });
     });
 
-    it('persists a newly reported session id even when sendPrompt exits non-zero', async () => {
-      let topicMeta: ChatTopicMetadata = {};
+    // The session lives here, so the topic is pinned even before the store has this desktop's id.
+    it('pins the topic to this machine when it persists the session id', async () => {
+      const resolveDeviceId = vi
+        .spyOn(useElectronStore.getState(), 'resolveGatewayDeviceId')
+        .mockResolvedValue('this-desktop');
       const store = createMockStore({
-        topicDataMap: { 'agent-1__main': { items: [{ id: 'topic-1', metadata: topicMeta }] } },
+        topicDataMap: { 'agent-1__main': { items: [{ id: 'topic-1', metadata: {} }] } },
       });
-      store.updateTopicMetadata = vi.fn(async (_id: string, patch: Partial<ChatTopicMetadata>) => {
-        topicMeta = { ...topicMeta, ...patch };
-        store.topicDataMap['agent-1__main'].items[0].metadata = topicMeta;
-      });
+      store.updateTopicMetadata = vi.fn(async () => {});
       const get = vi.fn(() => store);
-      let rejectSendPrompt!: (reason?: unknown) => void;
-      mockSendPrompt.mockReturnValue(
-        new Promise<void>((_resolve, reject) => {
-          rejectSendPrompt = reject;
+      mockSendPrompt.mockImplementation(() => new Promise<void>(() => {}));
+
+      void executeHeterogeneousAgent(get, { ...defaultParams, workingDirectory: '/repo' });
+      await flush();
+      ipc.emitRawLine('ipc-sess-1', ccInit('cc-session-here'));
+      await flush();
+
+      expect(store.updateTopicMetadata).toHaveBeenCalledWith(
+        'topic-1',
+        expect.objectContaining({
+          boundDeviceId: 'this-desktop',
+          heteroSessionId: 'cc-session-here',
         }),
       );
-
-      const executorPromise = executeHeterogeneousAgent(get, {
-        ...defaultParams,
-        workingDirectory: '/repo',
-      });
-      await flush();
-
-      ipc.emitRawLine('ipc-sess-1', ccInit('cc-session-rate-limited'));
-      await flush();
-
-      expect(store.updateTopicMetadata).toHaveBeenCalledWith('topic-1', {
-        heteroSessionBindingKey: 'native:v1:claude-code',
-        heteroSessionBindingKeyByWorkingDirectory: {
-          '/repo': 'native:v1:claude-code',
-        },
-        heteroSessionId: 'cc-session-rate-limited',
-        heteroSessionIdByWorkingDirectory: {
-          '/repo': 'cc-session-rate-limited',
-        },
-        workingDirectory: '/repo',
-        workingDirectoryConfig: { path: '/repo' },
-      });
-
-      rejectSendPrompt(new Error('rate limit'));
-      await executorPromise;
-      await flush();
-
-      expect(
-        resolveHeteroResume(topicMeta, '/repo', {
-          currentBindingKey: 'native:v1:claude-code',
-        }),
-      ).toEqual({
-        cwdChanged: false,
-        resumeBindingKey: 'native:v1:claude-code',
-        resumeSessionId: 'cc-session-rate-limited',
-      });
+      resolveDeviceId.mockRestore();
     });
+
+    it.each(['claude-code', 'codex'] as const)(
+      'persists a newly reported %s session id even when sendPrompt exits non-zero',
+      async (agentType) => {
+        const nativeSessionId = `${agentType}-session-before-error`;
+        const bindingKey = `native:v1:${agentType}`;
+        let topicMeta: ChatTopicMetadata = {};
+        const store = createMockStore({
+          topicDataMap: { 'agent-1__main': { items: [{ id: 'topic-1', metadata: topicMeta }] } },
+        });
+        store.updateTopicMetadata = vi.fn(
+          async (_id: string, patch: Partial<ChatTopicMetadata>) => {
+            topicMeta = { ...topicMeta, ...patch };
+            store.topicDataMap['agent-1__main'].items[0].metadata = topicMeta;
+          },
+        );
+        const get = vi.fn(() => store);
+        let rejectSendPrompt!: (reason?: unknown) => void;
+        mockSendPrompt.mockReturnValue(
+          new Promise<void>((_resolve, reject) => {
+            rejectSendPrompt = reject;
+          }),
+        );
+
+        const executorPromise = executeHeterogeneousAgent(get, {
+          ...defaultParams,
+          heterogeneousProvider: {
+            command: agentType === 'codex' ? 'codex' : 'claude',
+            type: agentType,
+          },
+          workingDirectory: '/repo',
+        });
+        await flush();
+
+        if (agentType === 'codex') {
+          ipc.emitRawLine('ipc-sess-1', { thread_id: nativeSessionId, type: 'thread.started' });
+          ipc.emitRawLine('ipc-sess-1', { type: 'turn.started' });
+        } else {
+          ipc.emitRawLine('ipc-sess-1', ccInit(nativeSessionId));
+        }
+        await flush();
+
+        expect(store.updateTopicMetadata).toHaveBeenCalledWith('topic-1', {
+          heteroSessionBindingKey: bindingKey,
+          heteroSessionBindingKeyByWorkingDirectory: {
+            '/repo': bindingKey,
+          },
+          heteroSessionId: nativeSessionId,
+          heteroSessionIdByWorkingDirectory: {
+            '/repo': nativeSessionId,
+          },
+          workingDirectory: '/repo',
+          workingDirectoryConfig: { path: '/repo' },
+        });
+
+        if (agentType === 'codex') {
+          ipc.emitRawLine('ipc-sess-1', { message: 'Model not supported', type: 'error' });
+          ipc.emitRawLine('ipc-sess-1', {
+            error: { message: 'Model not supported' },
+            type: 'turn.failed',
+          });
+        }
+        rejectSendPrompt(new Error('Agent exited with code 1'));
+        await executorPromise;
+        await flush();
+
+        // A rejected send skips the finish-path IPC lookup; only the streamed ID can survive.
+        expect(mockGetSessionInfo).not.toHaveBeenCalled();
+        expect(
+          resolveHeteroResume(topicMeta, '/repo', {
+            currentBindingKey: bindingKey,
+          }),
+        ).toEqual({
+          cwdChanged: false,
+          resumeBindingKey: bindingKey,
+          resumeSessionId: nativeSessionId,
+        });
+      },
+    );
 
     // ────────────────────────────────────────────────────
     // Per-cwd session id lifecycle — executor keying primitive
@@ -2731,44 +2637,6 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
 
       releaseUpdate();
     });
-
-    it('replays a failed write-behind assistant create without blocking live step state', async () => {
-      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
-      mockCreateMessage.mockImplementation(async (p: any) => {
-        if (p.role === 'assistant') throw new Error('transient create failure');
-        return { id: p.id ?? `tool-${Date.now()}` };
-      });
-
-      try {
-        await runWithEvents([
-          ccInit(),
-          // Turn 1 on the seed assistant (ast-initial): text + tool + result.
-          ccText('msg_01', 'turn one'),
-          ccToolUse('msg_01', 't1', 'Bash', { command: 'ls' }),
-          ccToolResult('t1', 'ok'),
-          // Turn 2 (new message.id → step boundary): the new-assistant create
-          // is now write-behind, so live state advances immediately and a
-          // failed durable create is replayed after terminal flush.
-          ccToolUse('msg_02', 't2', 'Read', { file_path: '/a' }),
-          ccToolResult('t2', 'data'),
-          ccResult(),
-        ]);
-
-        const assistantCreateAttempts = mockCreateMessage.mock.calls.filter(
-          ([p]: any) => p.role === 'assistant',
-        );
-        expect(assistantCreateAttempts.length).toBeGreaterThanOrEqual(2);
-
-        const attemptedAssistantId = assistantCreateAttempts[0][0].id;
-        const t2Create = mockCreateMessage.mock.calls.find(
-          ([p]: any) => p.role === 'tool' && p.tool_call_id === 't2',
-        );
-        expect(t2Create).toBeDefined();
-        expect(t2Create![0].parentId).toBe(attemptedAssistantId);
-      } finally {
-        consoleError.mockRestore();
-      }
-    });
   });
 
   describe('Desktop IPC session lifecycle', () => {
@@ -2800,7 +2668,12 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
         const store = createMockStore();
         const get = vi.fn(() => store);
 
-        await expect(executeHeterogeneousAgent(get, defaultParams)).resolves.toBeUndefined();
+        // The run swallows its failure and persists a terminal error instead
+        // of throwing; the outcome is how a caller (restart recovery) tells
+        // that apart from a run that actually finished.
+        await expect(executeHeterogeneousAgent(get, defaultParams)).resolves.toEqual({
+          terminalError: true,
+        });
 
         expect(mockUpdateMessageError).toHaveBeenCalledWith(
           'ast-initial',
@@ -3100,97 +2973,6 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       ).toBe(true);
     });
 
-    it('should switch to a new assistant before persisting the next turn tool', async () => {
-      const idCounter = { assistant: 0, tool: 0 };
-      mockCreateMessage.mockImplementation(async (params: any) => {
-        if (params.role === 'tool') {
-          idCounter.tool += 1;
-          return { id: params.id ?? `tool-${idCounter.tool}` };
-        }
-
-        if (params.role === 'assistant') {
-          idCounter.assistant += 1;
-          return { id: params.id ?? `ast-new-${idCounter.assistant}` };
-        }
-
-        return { id: `created-${params.role}-${idCounter.assistant + idCounter.tool}` };
-      });
-
-      const toolsUpdates: Array<{ assistantId: string; toolIds: string[] }> = [];
-      mockUpdateMessage.mockImplementation(async (id: string, val: any) => {
-        if (val.tools) {
-          toolsUpdates.push({
-            assistantId: id,
-            toolIds: val.tools.map((tool: any) => tool.id),
-          });
-        }
-      });
-
-      await runWithEvents(
-        [
-          codexThreadStarted(),
-          codexTurnStarted(),
-          codexAgentMessage('item_0', 'Running the first command.'),
-          codexCommandStarted('item_1', '/bin/zsh -lc pwd'),
-          codexCommandCompleted('item_1', '/bin/zsh -lc pwd', '/repo\n'),
-          codexTurnCompleted({ input_tokens: 10, output_tokens: 3 }),
-          codexTurnStarted(),
-          codexAgentMessage('item_2', 'Running the second command.'),
-          codexCommandStarted('item_3', "/bin/zsh -lc 'git status --short'"),
-          codexCommandCompleted('item_3', "/bin/zsh -lc 'git status --short'", ' M src/file.ts\n'),
-          codexTurnCompleted({ input_tokens: 12, output_tokens: 4 }),
-        ],
-        {
-          params: {
-            heterogeneousProvider: { command: 'codex', type: 'codex' as const },
-          },
-        },
-      );
-
-      // The second turn opens exactly one new assistant (pre-allocated id).
-      const newAstId = mockCreateMessage.mock.calls.find(
-        ([params]: any) => params.role === 'assistant',
-      )![0].id;
-
-      // The second-turn assistant chains off the spine (turn 1's assistant,
-      // here the initial one), NOT turn 1's last tool.
-      const secondTurnAssistantCreate = mockCreateMessage.mock.calls.find(
-        ([params]: any) => params.role === 'assistant',
-      );
-      expect(secondTurnAssistantCreate?.[0]).toMatchObject({
-        parentId: 'ast-initial',
-        role: 'assistant',
-      });
-
-      const firstToolCreate = mockCreateMessage.mock.calls.find(
-        ([params]: any) => params.role === 'tool' && params.tool_call_id === 'item_1',
-      );
-      expect(firstToolCreate?.[0]).toMatchObject({
-        parentId: 'ast-initial',
-        role: 'tool',
-        tool_call_id: 'item_1',
-      });
-
-      const secondToolCreate = mockCreateMessage.mock.calls.find(
-        ([params]: any) => params.role === 'tool' && params.tool_call_id === 'item_3',
-      );
-      expect(secondToolCreate?.[0]).toMatchObject({
-        parentId: newAstId,
-        role: 'tool',
-        tool_call_id: 'item_3',
-      });
-
-      const firstTurnToolWrites = toolsUpdates.filter(
-        (update) => update.assistantId === 'ast-initial' && update.toolIds.includes('item_1'),
-      );
-      expect(firstTurnToolWrites.length).toBeGreaterThanOrEqual(1);
-
-      const secondTurnToolWrites = toolsUpdates.filter(
-        (update) => update.assistantId === newAstId && update.toolIds.includes('item_3'),
-      );
-      expect(secondTurnToolWrites.length).toBeGreaterThanOrEqual(1);
-    });
-
     it('does not leave a usage-only empty assistant when a final turn emits no agent_message', async () => {
       // Repro for the cloud "usage-only empty shell" symptom (e.g. topic
       // tpc_96sSE0Eb0DHw tail: assistant(tool call) -> tool result ->
@@ -3270,274 +3052,6 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       });
 
       expect(emptyShells).toEqual([]);
-    });
-
-    it('REPLAY real trace: item_43 final agent_message text must persist (not be dropped)', async () => {
-      // Replays the actual recorded Codex stdout for topic tpc_96sSE0Eb0DHw
-      // (heteroSessionId 019f3c84-…-d4059626cb19). In production, the final
-      // agent_message item_43 ("结果是：这不是 Codex raw…") was emitted by Codex
-      // and turn.completed carried usage (output_tokens=16372) that DID land on
-      // the shell assistant — but item_43's text never reached the DB. This
-      // replay checks whether the client executor reproduces that text loss.
-      const tracePath = path.join(
-        os.homedir(),
-        'Library/Application Support/LobeHub/lobehub-storage/heteroAgent/tracing/codex',
-        '20260707-202328-11c75f72-2a74-4545-b39f-bf3e089c2d01',
-        'stdout.jsonl',
-      );
-      if (!fs.existsSync(tracePath)) {
-        console.log('SKIP replay — trace not present:', tracePath);
-        return;
-      }
-
-      const raw = fs.readFileSync(tracePath, 'utf8');
-      const events = raw
-        .split(/\r?\n/)
-        .map((line) => line.trim())
-        .filter((line) => line.length > 0)
-        .map((line) => {
-          try {
-            return JSON.parse(line);
-          } catch {
-            return null;
-          }
-        })
-        .filter((v): v is Record<string, any> => v !== null);
-
-      const idCounter = { assistant: 0, tool: 0 };
-      mockCreateMessage.mockImplementation(async (params: any) => {
-        if (params.role === 'tool') {
-          idCounter.tool += 1;
-          return { id: params.id ?? `tool-${idCounter.tool}` };
-        }
-        if (params.role === 'assistant') {
-          idCounter.assistant += 1;
-          return { id: params.id ?? `ast-new-${idCounter.assistant}` };
-        }
-        return { id: `created-${params.role}` };
-      });
-
-      const contentByAssistant = new Map<string, string>();
-      mockUpdateMessage.mockImplementation(async (id: string, val: any) => {
-        if (typeof val.content === 'string') {
-          contentByAssistant.set(id, val.content);
-        }
-      });
-
-      await runWithEvents(events, {
-        params: { heterogeneousProvider: { command: 'codex', type: 'codex' as const } },
-      });
-
-      const assistantCreates = mockCreateMessage.mock.calls.filter(
-        ([params]: any) => params.role === 'assistant',
-      );
-
-      // item_43's final answer text MUST land on SOME assistant.
-      const allContent = [...contentByAssistant.values()].join('\n');
-      const hasItem43 = allContent.includes('结果');
-      const lastAssistantId = assistantCreates.at(-1)?.[0].id;
-      const lastAssistantContent = lastAssistantId
-        ? contentByAssistant.get(lastAssistantId)
-        : undefined;
-
-      console.log('REPLAY assistants=', assistantCreates.length, '| hasItem43Text=', hasItem43);
-
-      console.log(
-        'REPLAY last assistant=',
-        lastAssistantId,
-        '| contentLen=',
-        lastAssistantContent?.length ?? 0,
-      );
-
-      expect(hasItem43).toBe(true);
-    });
-
-    it('should forward cumulative tools_calling chunks for multiple Codex tools in one step', async () => {
-      await runWithEvents(
-        [
-          codexThreadStarted(),
-          codexTurnStarted(),
-          codexAgentMessage('item_0', 'Running the first checks.'),
-          codexCommandStarted('item_1', '/bin/zsh -lc pwd'),
-          codexCommandCompleted('item_1', '/bin/zsh -lc pwd', '/repo\n'),
-          codexCommandStarted('item_2', "/bin/zsh -lc 'git status --short'"),
-          codexCommandCompleted('item_2', "/bin/zsh -lc 'git status --short'", ' M src/file.ts\n'),
-          codexAgentMessage('item_3', 'Now I will inspect the commit details.'),
-          codexCommandStarted('item_4', "/bin/zsh -lc 'git show --stat --summary HEAD'"),
-          codexCommandCompleted(
-            'item_4',
-            "/bin/zsh -lc 'git show --stat --summary HEAD'",
-            ' src/file.ts | 1 +\n',
-          ),
-          codexTurnCompleted({ input_tokens: 10, output_tokens: 3 }),
-        ],
-        {
-          params: {
-            heterogeneousProvider: { command: 'codex', type: 'codex' as const },
-          },
-        },
-      );
-
-      const handlerSpy = vi.mocked(createGatewayEventHandler).mock.results[0]?.value as ReturnType<
-        typeof vi.fn
-      >;
-      expect(handlerSpy).toBeDefined();
-
-      const toolsCallingChunks = handlerSpy.mock.calls
-        .map((call) => call[0])
-        .filter(
-          (event: any) =>
-            event?.type === 'stream_chunk' && event.data?.chunkType === 'tools_calling',
-        );
-
-      expect(toolsCallingChunks).toHaveLength(3);
-      expect(toolsCallingChunks[0]?.data.toolsCalling.map((tool: any) => tool.id)).toEqual([
-        'item_1',
-      ]);
-      expect(toolsCallingChunks[1]?.data.toolsCalling.map((tool: any) => tool.id)).toEqual([
-        'item_1',
-        'item_2',
-      ]);
-      expect(toolsCallingChunks[2]?.data.toolsCalling.map((tool: any) => tool.id)).toEqual([
-        'item_4',
-      ]);
-    });
-
-    it('should cut new assistants for later agent_message items in the same Codex turn', async () => {
-      const idCounter = { assistant: 0, tool: 0 };
-      mockCreateMessage.mockImplementation(async (params: any) => {
-        if (params.role === 'tool') {
-          idCounter.tool += 1;
-          return { id: params.id ?? `tool-${idCounter.tool}` };
-        }
-
-        if (params.role === 'assistant') {
-          idCounter.assistant += 1;
-          return { id: params.id ?? `ast-new-${idCounter.assistant}` };
-        }
-
-        return { id: `created-${params.role}-${idCounter.assistant + idCounter.tool}` };
-      });
-
-      const toolsUpdates: Array<{ assistantId: string; toolIds: string[] }> = [];
-      const contentUpdates: Array<{ assistantId: string; content: string }> = [];
-      mockUpdateMessage.mockImplementation(async (id: string, val: any) => {
-        if (val.tools) {
-          toolsUpdates.push({
-            assistantId: id,
-            toolIds: val.tools.map((tool: any) => tool.id),
-          });
-        }
-        if (typeof val.content === 'string') {
-          contentUpdates.push({ assistantId: id, content: val.content });
-        }
-      });
-
-      await runWithEvents(
-        [
-          codexThreadStarted(),
-          codexTurnStarted(),
-          codexAgentMessage(
-            'item_0',
-            'Running the five read-only checks from the repo root exactly as requested.',
-          ),
-          codexCommandStarted('item_1', '/bin/zsh -lc pwd'),
-          codexCommandCompleted('item_1', '/bin/zsh -lc pwd', '/repo\n'),
-          codexCommandStarted('item_2', "/bin/zsh -lc 'git status --short'"),
-          codexCommandCompleted('item_2', "/bin/zsh -lc 'git status --short'", ' M src/file.ts\n'),
-          codexCommandStarted('item_3', "/bin/zsh -lc 'rg --files src | head -n 5'"),
-          codexCommandCompleted(
-            'item_3',
-            "/bin/zsh -lc 'rg --files src | head -n 5'",
-            'src/store/session/store.ts\n',
-          ),
-          codexAgentMessage(
-            'item_4',
-            'The workspace is dirty in a few files, but I am only collecting read-only outputs.',
-          ),
-          codexCommandStarted(
-            'item_5',
-            `/bin/zsh -lc 'rg -n "heterogeneousAgent" src apps packages | head -n 10'`,
-          ),
-          codexCommandCompleted(
-            'item_5',
-            `/bin/zsh -lc 'rg -n "heterogeneousAgent" src apps packages | head -n 10'`,
-            'apps/desktop/src/main/controllers/HeterogeneousAgentCtr.ts:18:import ...\n',
-          ),
-          codexCommandStarted(
-            'item_6',
-            `/bin/zsh -lc 'rg -n "tool_call_id|tool_calls" src packages | head -n 10'`,
-          ),
-          codexCommandCompleted(
-            'item_6',
-            `/bin/zsh -lc 'rg -n "tool_call_id|tool_calls" src packages | head -n 10'`,
-            'packages/agent-runtime/src/agents/GeneralChatAgent.ts:34:...\n',
-          ),
-          codexAgentMessage(
-            'item_7',
-            'Confirmed the repo root and the requested ripgrep checks returned matches.',
-          ),
-          codexTurnCompleted({
-            cached_input_tokens: 92672,
-            input_tokens: 107744,
-            output_tokens: 996,
-          }),
-        ],
-        {
-          params: {
-            heterogeneousProvider: { command: 'codex', type: 'codex' as const },
-          },
-        },
-      );
-
-      const assistantCreates = mockCreateMessage.mock.calls.filter(
-        ([params]: any) => params.role === 'assistant',
-      );
-      expect(assistantCreates).toHaveLength(2);
-      const newAst1 = assistantCreates[0]![0].id;
-      const newAst2 = assistantCreates[1]![0].id;
-      // The cut assistants chain along the spine (each off the previous
-      // non-tool main message), NOT off the preceding turn's last tool.
-      expect(assistantCreates[0]?.[0]).toMatchObject({
-        parentId: 'ast-initial',
-        role: 'assistant',
-      });
-      expect(assistantCreates[1]?.[0]).toMatchObject({
-        parentId: newAst1,
-        role: 'assistant',
-      });
-
-      const firstStepToolWrites = toolsUpdates.filter(
-        (update) =>
-          update.assistantId === 'ast-initial' &&
-          update.toolIds.includes('item_1') &&
-          update.toolIds.includes('item_2') &&
-          update.toolIds.includes('item_3'),
-      );
-      expect(firstStepToolWrites.length).toBeGreaterThanOrEqual(1);
-
-      const secondStepToolWrites = toolsUpdates.filter(
-        (update) =>
-          update.assistantId === newAst1 &&
-          update.toolIds.includes('item_5') &&
-          update.toolIds.includes('item_6'),
-      );
-      expect(secondStepToolWrites.length).toBeGreaterThanOrEqual(1);
-
-      const thirdStepToolWrites = toolsUpdates.filter(
-        (update) => update.assistantId === newAst2 && update.toolIds.length > 0,
-      );
-      expect(thirdStepToolWrites).toHaveLength(0);
-
-      expect(
-        contentUpdates.findLast((update) => update.assistantId === 'ast-initial')?.content,
-      ).toContain('Running the five read-only checks');
-      expect(
-        contentUpdates.findLast((update) => update.assistantId === newAst1)?.content,
-      ).toContain('The workspace is dirty in a few files');
-      expect(
-        contentUpdates.findLast((update) => update.assistantId === newAst2)?.content,
-      ).toContain('Confirmed the repo root');
     });
 
     it('replays the final Codex assistant content flush when the first terminal write reports success=false', async () => {
@@ -3736,70 +3250,6 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
      * The orphan happens when assistant2.tools[] does NOT contain
      * the git_diff entry, making the tool message appear orphaned in the UI.
      */
-    it('should register tools on the correct assistant in multi-turn tool execution', async () => {
-      const idCounter = { tool: 0, assistant: 0 };
-      mockCreateMessage.mockImplementation(async (params: any) => {
-        if (params.role === 'tool') {
-          idCounter.tool++;
-          return { id: params.id ?? `tool-${idCounter.tool}` };
-        }
-        idCounter.assistant++;
-        return { id: params.id ?? `ast-new-${idCounter.assistant}` };
-      });
-
-      // Track ALL updateMessage calls to inspect tools[] writes
-      const toolsUpdates: Array<{ assistantId: string; tools: any[] }> = [];
-      mockUpdateMessage.mockImplementation(async (id: string, val: any) => {
-        if (val.tools) {
-          toolsUpdates.push({ assistantId: id, tools: val.tools });
-        }
-      });
-
-      await runWithEvents([
-        ccInit(),
-        // Turn 1: text + Bash (git log) — same message.id
-        ccAssistant('msg_01', [
-          { text: '没有未提交的修改，看看已提交但未推送的变更：', type: 'text' },
-        ]),
-        ccToolUse('msg_01', 'toolu_gitlog', 'Bash', { command: 'git log canary..HEAD --oneline' }),
-        ccToolResult('toolu_gitlog', 'abc123 feat: something\ndef456 fix: another'),
-        // Turn 2: Bash (git diff) — NEW message.id → step boundary
-        ccToolUse('msg_02', 'toolu_gitdiff', 'Bash', { command: 'git diff --stat' }),
-        ccToolResult('toolu_gitdiff', ' file1.ts | 10 +\n file2.ts | 5 -'),
-        // Turn 3: text summary — NEW message.id → step boundary
-        ccText('msg_03', '当前分支有2个未推送的提交，修改了2个文件。'),
-        ccResult(),
-      ]);
-
-      // ── Verify: Turn 1 tool registered on ast-initial ──
-      const gitlogToolUpdates = toolsUpdates.filter(
-        (u) => u.assistantId === 'ast-initial' && u.tools.some((t: any) => t.id === 'toolu_gitlog'),
-      );
-      expect(gitlogToolUpdates.length).toBeGreaterThanOrEqual(1);
-
-      // Turn 2's assistant is the first newly-created assistant (pre-allocated id).
-      const step2AstId = mockCreateMessage.mock.calls.find(([p]: any) => p.role === 'assistant')![0]
-        .id;
-
-      // ── Verify: Turn 2 tool registered on the step-2 assistant ──
-      // This is the critical assertion — if this fails, the tool becomes orphaned
-      const gitdiffToolUpdates = toolsUpdates.filter(
-        (u) => u.assistantId === step2AstId && u.tools.some((t: any) => t.id === 'toolu_gitdiff'),
-      );
-      expect(gitdiffToolUpdates.length).toBeGreaterThanOrEqual(1);
-
-      // ── Verify: tool messages have correct parentId ──
-      const gitlogToolCreate = mockCreateMessage.mock.calls.find(
-        ([p]: any) => p.role === 'tool' && p.tool_call_id === 'toolu_gitlog',
-      );
-      expect(gitlogToolCreate![0].parentId).toBe('ast-initial');
-
-      const gitdiffToolCreate = mockCreateMessage.mock.calls.find(
-        ([p]: any) => p.role === 'tool' && p.tool_call_id === 'toolu_gitdiff',
-      );
-      expect(gitdiffToolCreate![0].parentId).toBe(step2AstId);
-    });
-
     it('should register tools on correct assistant when turn has ONLY tool_use (no text)', async () => {
       // Edge case: turn 2 has only a tool_use, no text. The step transition creates
       // a new assistant, then the tool_use must be registered on it (not the old one).
@@ -4017,273 +3467,6 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       for (const w of toolWrites) {
         expect(w.content).toBe('Let me check the file...');
       }
-    });
-  });
-
-  // ────────────────────────────────────────────────────
-  // Data-driven regression from real trace (regression.json)
-  // ────────────────────────────────────────────────────
-
-  describe('data-driven regression (133 events)', () => {
-    it('should have no orphan tools when replaying real CC trace', async () => {
-      // Load real trace data
-      const fs = await import('node:fs');
-      const tracePath = path.join(process.cwd(), 'regression.json');
-
-      let traceData: any[];
-      try {
-        traceData = JSON.parse(fs.readFileSync(tracePath, 'utf8'));
-      } catch {
-        // Skip if file doesn't exist (CI)
-        console.log('regression.json not found, skipping data-driven test');
-        return;
-      }
-
-      // Track all createMessage and updateMessage calls
-      const idCounter = { tool: 0, assistant: 0 };
-      mockCreateMessage.mockImplementation(async (params: any) => {
-        if (params.role === 'tool') {
-          idCounter.tool++;
-          return { id: params.id ?? `tool-${idCounter.tool}` };
-        }
-        idCounter.assistant++;
-        return { id: params.id ?? `ast-${idCounter.assistant}` };
-      });
-
-      // Collect tools[] writes per assistant
-      const toolsRegistry = new Map<string, Set<string>>();
-      mockUpdateMessage.mockImplementation(async (id: string, val: any) => {
-        if (val.tools && Array.isArray(val.tools)) {
-          if (!toolsRegistry.has(id)) toolsRegistry.set(id, new Set());
-          const set = toolsRegistry.get(id)!;
-          for (const t of val.tools) {
-            if (t.id) set.add(t.id);
-          }
-        }
-      });
-
-      // Collect tool messages: { tool_call_id → parentId (assistant) }
-      const toolMessages = new Map<string, string>();
-      const origCreate = mockCreateMessage.getMockImplementation()!;
-      mockCreateMessage.mockImplementation(async (params: any) => {
-        const result = await origCreate(params);
-        if (params.role === 'tool' && params.tool_call_id) {
-          toolMessages.set(params.tool_call_id, params.parentId);
-        }
-        return result;
-      });
-
-      // Extract raw lines from trace
-      const rawLines = traceData.map((entry: any) => entry.rawLine);
-
-      await runWithEvents(rawLines);
-
-      // ── Check for orphans ──
-      // An orphan is a tool message whose tool_call_id doesn't appear in ANY
-      // assistant's tools[] registry
-      const allRegisteredToolIds = new Set<string>();
-      for (const toolIds of toolsRegistry.values()) {
-        for (const id of toolIds) allRegisteredToolIds.add(id);
-      }
-
-      const orphans: string[] = [];
-      for (const [toolCallId, parentId] of toolMessages) {
-        if (!allRegisteredToolIds.has(toolCallId)) {
-          orphans.push(`tool_call_id=${toolCallId} parentId=${parentId}`);
-        }
-      }
-
-      if (orphans.length > 0) {
-        console.error('Orphan tools found:', orphans);
-      }
-      expect(orphans).toEqual([]);
-
-      // ── Sanity checks ──
-      // Should have created many tool messages (trace has ~60 tool calls)
-      expect(toolMessages.size).toBeGreaterThan(20);
-      // Should have many assistants
-      expect(idCounter.assistant).toBeGreaterThan(10);
-    });
-  });
-
-  // ────────────────────────────────────────────────────
-  // reproduction: Skill → ToolSearch → MCP tool
-  //
-  // Mirrors the exact trace from the user-reported screenshot where
-  // ToolSearch loads deferred MCP schemas before the MCP tool is called.
-  // Verifies tool_result content is persisted for ALL three tools so the
-  // UI stops showing "loading" after each tool completes.
-  // ────────────────────────────────────────────────────
-
-  describe('Skill → ToolSearch → MCP repro', () => {
-    it('persists tool_result content for Skill, ToolSearch, and the deferred MCP tool', async () => {
-      const idCounter = { tool: 0, assistant: 0 };
-      mockCreateMessage.mockImplementation(async (params: any) => {
-        if (params.role === 'tool') {
-          idCounter.tool++;
-          return { id: params.id ?? `tool-${idCounter.tool}` };
-        }
-        idCounter.assistant++;
-        return { id: params.id ?? `ast-new-${idCounter.assistant}` };
-      });
-
-      const schemaPayload =
-        '<functions><function>{"description":"Get a Linear issue","name":"mcp__linear-server__get_issue","parameters":{}}</function></functions>';
-
-      await runWithEvents([
-        ccInit(),
-        // Turn 1: Skill invocation
-        ccToolUse('msg_01', 'toolu_skill', 'Skill', { skill: 'linear' }),
-        ccToolResult('toolu_skill', 'Launching skill: linear'),
-        // Turn 2: ToolSearch with select: prefix (deferred schema fetch)
-        ccToolUse('msg_02', 'toolu_search', 'ToolSearch', {
-          query: 'select:mcp__linear-server__get_issue,mcp__linear-server__save_issue',
-          max_results: 3,
-        }),
-        ccToolResult('toolu_search', schemaPayload),
-        // Turn 3: the deferred MCP tool now callable
-        ccToolUse('msg_03', 'toolu_get_issue', 'mcp__linear-server__get_issue', {
-          id: '',
-        }),
-        ccToolResult('toolu_get_issue', '{"title":"resume error on topic switch"}'),
-        ccText('msg_04', 'done'),
-        ccResult(),
-      ]);
-
-      const toolIdOf = (callId: string) =>
-        mockCreateMessage.mock.calls.find(
-          ([p]: any) => p.role === 'tool' && p.tool_call_id === callId,
-        )![0].id;
-      const astCreates = mockCreateMessage.mock.calls.filter(([p]: any) => p.role === 'assistant');
-      const step2AstId = astCreates[0]![0].id;
-      const step3AstId = astCreates[1]![0].id;
-
-      // All three tool messages should have their content persisted.
-      const skillResult = mockUpdateToolMessage.mock.calls.find(
-        ([id]: any) => id === toolIdOf('toolu_skill'),
-      );
-      const searchResult = mockUpdateToolMessage.mock.calls.find(
-        ([id]: any) => id === toolIdOf('toolu_search'),
-      );
-      const getIssueResult = mockUpdateToolMessage.mock.calls.find(
-        ([id]: any) => id === toolIdOf('toolu_get_issue'),
-      );
-
-      expect(skillResult).toBeDefined();
-      expect(skillResult![1]).toMatchObject({ content: 'Launching skill: linear' });
-
-      expect(searchResult).toBeDefined();
-      expect(searchResult![1]).toMatchObject({ content: schemaPayload });
-      expect(searchResult![1].pluginError).toBeUndefined();
-
-      expect(getIssueResult).toBeDefined();
-      expect(getIssueResult![1]).toMatchObject({
-        content: '{"title":"resume error on topic switch"}',
-      });
-
-      // tools[] registry on each step should contain the right tool id so the
-      // UI can match tool messages to their assistant (no orphan warnings).
-      const skillRegister = mockUpdateMessage.mock.calls.find(
-        ([id, val]: any) =>
-          id === 'ast-initial' && val.tools?.some((t: any) => t.id === 'toolu_skill'),
-      );
-      expect(skillRegister).toBeDefined();
-
-      const searchRegister = mockUpdateMessage.mock.calls.find(
-        ([id, val]: any) =>
-          id === step2AstId && val.tools?.some((t: any) => t.id === 'toolu_search'),
-      );
-      expect(searchRegister).toBeDefined();
-
-      const getIssueRegister = mockUpdateMessage.mock.calls.find(
-        ([id, val]: any) =>
-          id === step3AstId && val.tools?.some((t: any) => t.id === 'toolu_get_issue'),
-      );
-      expect(getIssueRegister).toBeDefined();
-    });
-  });
-
-  // ────────────────────────────────────────────────────
-  // Full multi-step E2E
-  // ────────────────────────────────────────────────────
-
-  describe('full multi-step E2E', () => {
-    it('should produce correct DB write sequence for Read → Write → text flow', async () => {
-      const idCounter = { tool: 0, assistant: 0 };
-      mockCreateMessage.mockImplementation(async (params: any) => {
-        if (params.role === 'tool') {
-          idCounter.tool++;
-          return { id: params.id ?? `tool-${idCounter.tool}` };
-        }
-        idCounter.assistant++;
-        return { id: params.id ?? `ast-new-${idCounter.assistant}` };
-      });
-
-      await runWithEvents([
-        ccInit(),
-        // Turn 1: Read tool
-        ccAssistant('msg_01', [{ thinking: 'Need to read the file', type: 'thinking' }]),
-        ccToolUse('msg_01', 'toolu_read', 'Read', { file_path: '/src/app.ts' }),
-        ccToolResult('toolu_read', 'export default function App() {}'),
-        // Turn 2: Write tool (new message.id)
-        ccToolUse('msg_02', 'toolu_write', 'Write', { file_path: '/src/app.ts', content: 'fixed' }),
-        ccToolResult('toolu_write', 'File written'),
-        // Turn 3: final summary (new message.id)
-        ccText('msg_03', 'Fixed the bug in app.ts.'),
-        ccResult(),
-      ]);
-
-      // --- Verify DB write sequence ---
-
-      // 1. Tool message created for Read (parentId = initial assistant)
-      const readToolCreate = mockCreateMessage.mock.calls.find(
-        ([p]: any) => p.role === 'tool' && p.tool_call_id === 'toolu_read',
-      );
-      expect(readToolCreate![0].parentId).toBe('ast-initial');
-      expect(readToolCreate![0].plugin.apiName).toBe('Read');
-      const readToolId = readToolCreate![0].id;
-
-      // 2. Read tool result written (to the pre-allocated Read tool message id)
-      expect(mockUpdateToolMessage).toHaveBeenCalledWith(
-        readToolId,
-        expect.objectContaining({ content: 'export default function App() {}' }),
-        expect.any(Object),
-      );
-
-      // 3. Step 2 assistant created chained off the spine (the initial
-      // assistant), with the Read tool inline under step 1.
-      const step2Create = mockCreateMessage.mock.calls.find(
-        ([p]: any) => p.role === 'assistant' && p.parentId === 'ast-initial',
-      );
-      expect(step2Create).toBeDefined();
-
-      // 4. Write tool message created (parentId = step 2 assistant)
-      const writeToolCreate = mockCreateMessage.mock.calls.find(
-        ([p]: any) => p.role === 'tool' && p.tool_call_id === 'toolu_write',
-      );
-      expect(writeToolCreate).toBeDefined();
-      expect(writeToolCreate![0].parentId).toBe(step2Create![0].id);
-      const writeToolId = writeToolCreate![0].id;
-
-      // 5. Write tool result written
-      expect(mockUpdateToolMessage).toHaveBeenCalledWith(
-        writeToolId,
-        expect.objectContaining({ content: 'File written' }),
-        expect.any(Object),
-      );
-
-      // 6. Step 3 assistant created chained off the spine (step 2 assistant),
-      // with the Write tool inline under step 2.
-      const step3Create = mockCreateMessage.mock.calls.find(
-        ([p]: any) => p.role === 'assistant' && p.parentId === step2Create![0].id,
-      );
-      expect(step3Create).toBeDefined();
-
-      // 7. Final content written to the last assistant message
-      const finalContentWrite = mockUpdateMessage.mock.calls.find(
-        ([, val]: any) => val.content === 'Fixed the bug in app.ts.',
-      );
-      expect(finalContentWrite).toBeDefined();
     });
   });
 
@@ -4680,6 +3863,158 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
         provider: 'claude-code',
         usage: { input: 100, output: 20 },
       });
+    });
+
+    // Codex turns burn the same subscription-shaped quota as Claude's, so they
+    // ledger too — with reasoning output split into its own tier (it bills at
+    // the output rate but is priced separately) and no cache-write tier.
+    it('ledgers codex turn usage via agentQuotaService.recordUsage with the reasoning split', async () => {
+      await runWithEvents(
+        [
+          codexSessionConfigured('gpt-5.3-codex'),
+          codexThreadStarted(),
+          codexTurnStarted(),
+          codexAgentMessage('item_0', 'Done.'),
+          codexTurnCompleted({
+            cached_input_tokens: 400,
+            input_tokens: 1000,
+            output_tokens: 300,
+            reasoning_output_tokens: 100,
+          }),
+        ],
+        {
+          params: {
+            heterogeneousProvider: { command: 'codex', type: 'codex' as const },
+          },
+        },
+      );
+
+      const codexLedgerCall = mockRecordQuotaUsage.mock.calls.find(
+        ([p]: any) => p.provider === 'codex',
+      );
+      expect(codexLedgerCall).toBeDefined();
+      expect(codexLedgerCall![0]).toMatchObject({
+        model: 'gpt-5.3-codex',
+        provider: 'codex',
+        usage: { cacheRead: 400, input: 600, output: 200, reasoning: 100 },
+      });
+      expect(codexLedgerCall![0].usage.cacheWrite5m).toBeUndefined();
+    });
+
+    // Codex has no per-account spawn mapping, so attribution reads the live
+    // sampler identity of the login the run actually uses.
+    it('attributes codex ledger rows to the live codex login identity', async () => {
+      mockGetCodexQuota.mockResolvedValueOnce({
+        identity: { externalAccountId: 'chatgpt-acc-1' },
+      });
+
+      await runWithEvents(
+        [
+          codexSessionConfigured('gpt-5.3-codex'),
+          codexThreadStarted(),
+          codexTurnStarted(),
+          codexAgentMessage('item_0', 'Done.'),
+          codexTurnCompleted({ input_tokens: 100, output_tokens: 50 }),
+        ],
+        {
+          params: {
+            heterogeneousProvider: { command: 'codex', type: 'codex' as const },
+          },
+        },
+      );
+
+      const codexLedgerCall = mockRecordQuotaUsage.mock.calls.find(
+        ([p]: any) => p.provider === 'codex',
+      );
+      expect(codexLedgerCall).toBeDefined();
+      expect(codexLedgerCall![0].externalAccountId).toBe('chatgpt-acc-1');
+    });
+
+    // A fast first turn must not beat a slow sampler: the ledger row is
+    // permanent, so it waits for the identity read instead of landing
+    // unattributed (Codex review on PR #19770).
+    it('holds the codex ledger write until the sampler identity settles', async () => {
+      let resolveIdentity!: (value: unknown) => void;
+      mockGetCodexQuota.mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveIdentity = resolve;
+        }),
+      );
+
+      await runWithEvents(
+        [
+          codexSessionConfigured('gpt-5.3-codex'),
+          codexThreadStarted(),
+          codexTurnStarted(),
+          codexAgentMessage('item_0', 'Done.'),
+          codexTurnCompleted({ input_tokens: 100, output_tokens: 50 }),
+        ],
+        {
+          params: {
+            heterogeneousProvider: { command: 'codex', type: 'codex' as const },
+          },
+        },
+      );
+
+      // The turn already completed, but the identity read is still pending.
+      expect(mockRecordQuotaUsage).not.toHaveBeenCalled();
+
+      resolveIdentity({ identity: { externalAccountId: 'chatgpt-acc-slow' } });
+      await vi.waitFor(() => expect(mockRecordQuotaUsage).toHaveBeenCalled());
+      const codexLedgerCall = mockRecordQuotaUsage.mock.calls.find(
+        ([p]: any) => p.provider === 'codex',
+      );
+      expect(codexLedgerCall![0].externalAccountId).toBe('chatgpt-acc-slow');
+    });
+
+    // kimi-code must stay out of the ledger: its adapter emits no usage, and
+    // even if a usage-bearing turn_metadata event arrived, the gate only
+    // ledgers subscription-billed providers (claude-code, codex).
+    it('does NOT ledger kimi-code turn usage', async () => {
+      await runWithEvents(
+        [
+          () =>
+            ipc.emitStreamEvent('ipc-sess-1', {
+              data: {
+                model: 'kimi-k2.6',
+                phase: 'turn_metadata',
+                provider: 'kimi-code',
+                usage: {
+                  inputCacheMissTokens: 10,
+                  totalInputTokens: 10,
+                  totalOutputTokens: 5,
+                  totalTokens: 15,
+                },
+              },
+              type: 'step_complete',
+            }),
+        ],
+        {
+          params: {
+            heterogeneousProvider: { command: 'kimi', type: 'kimi-code' as const },
+          },
+        },
+      );
+
+      expect(mockRecordQuotaUsage).not.toHaveBeenCalled();
+    });
+
+    it('does NOT ledger usage during a transcript replay', async () => {
+      // A replay re-reads a turn the provider already billed, and its rows get
+      // fresh message ids — the server dedupes by message id, so ledgering
+      // again would double-count the same spend.
+      await runWithEvents(
+        [
+          ccInit(),
+          ccMessageStart('msg_01', 'claude-opus-4-6'),
+          ccAssistant('msg_01', [{ text: 'Hello', type: 'text' }], { model: 'claude-opus-4-6' }),
+          ccMessageDelta({ input_tokens: 100, output_tokens: 20 }),
+          ccResult(),
+        ],
+        { params: { replayTranscript: true, resumeSessionId: 'cc-session-1' } },
+      );
+
+      expect(mockRecordQuotaUsage).not.toHaveBeenCalled();
     });
 
     it('does NOT create a Thread when topicId is missing (non-topic-scoped run)', async () => {
@@ -5442,95 +4777,11 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
      * non-tool main message: the conversation chains user → asst → asst with
      * tools inline, and the reactive callbacks render as plain spine assistants.
      */
-    it('basic flow: each reactive step chains along the spine', async () => {
-      const idCounter = { tool: 0, assistant: 0 };
-      mockCreateMessage.mockImplementation(async (params: any) => {
-        if (params.role === 'tool') {
-          idCounter.tool++;
-          return { id: params.id ?? `tool-${idCounter.tool}` };
-        }
-        idCounter.assistant++;
-        return { id: params.id ?? `ast-new-${idCounter.assistant}` };
-      });
-
-      await runWithEvents([
-        ccInit(),
-        // Step 0: Monitor starts a long-running task
-        ccMessageStart('msg_01'),
-        ccToolUse('msg_01', 'toolu_mon_0', 'Monitor', {
-          shell: 'until curl localhost/health; do sleep 5; done',
-        }),
-        ccMessageDelta({ input_tokens: 100, output_tokens: 20 }),
-        ccToolResult('toolu_mon_0', 'Monitor started, task abc'),
-        // Step 1 (new msg id): CC reacts to Monitor stdout with Bash + new Monitor
-        ccMessageStart('msg_02'),
-        ccToolUse('msg_02', 'toolu_bash_1', 'Bash', { command: 'echo ok' }),
-        ccToolUse('msg_02', 'toolu_mon_1', 'Monitor', { shell: 'tail -f log' }),
-        ccMessageDelta({ input_tokens: 150, output_tokens: 30 }),
-        ccToolResult('toolu_bash_1', 'ok'),
-        ccToolResult('toolu_mon_1', 'Monitor started, task def'),
-        // Step 2 (new msg id)
-        ccMessageStart('msg_03'),
-        ccToolUse('msg_03', 'toolu_bash_2', 'Bash', { command: 'date' }),
-        ccMessageDelta({ input_tokens: 200, output_tokens: 40 }),
-        ccToolResult('toolu_bash_2', 'Mon Apr 21'),
-        ccResult(),
-      ]);
-
-      const assistantCreates = mockCreateMessage.mock.calls.filter(
-        ([p]: any) => p.role === 'assistant',
-      );
-      // Two new assistants (step 1 + step 2); step 0 uses ast-initial
-      expect(assistantCreates.length).toBe(2);
-
-      // Step 1 parent = the spine (initial assistant); its tools are inline.
-      expect(assistantCreates[0][0].parentId).toBe('ast-initial');
-      // Step 2 parent = the spine advanced to step 1's assistant.
-      expect(assistantCreates[1][0].parentId).toBe(assistantCreates[0][0].id);
-    });
-
     /**
      * regression: a toolless step in the middle keeps the spine linear.
      * The next step chains off the toolless assistant (the most recent
      * non-tool main message), so no message is orphaned.
      */
-    it('toolless middle step: spine stays linear through the toolless step', async () => {
-      const idCounter = { tool: 0, assistant: 0 };
-      mockCreateMessage.mockImplementation(async (params: any) => {
-        if (params.role === 'tool') {
-          idCounter.tool++;
-          return { id: params.id ?? `tool-${idCounter.tool}` };
-        }
-        idCounter.assistant++;
-        return { id: params.id ?? `ast-new-${idCounter.assistant}` };
-      });
-
-      await runWithEvents([
-        ccInit(),
-        // Step 0: Monitor
-        ccToolUse('msg_01', 'toolu_mon_0', 'Monitor', { shell: 'watch -n1 date' }),
-        ccToolResult('toolu_mon_0', 'Monitor started'),
-        // Step 1 (new msg id): TEXT ONLY — no tool_use
-        ccText('msg_02', 'Looks like it started. I will wait for output.'),
-        // Step 2 (new msg id): Monitor emits a line, CC reacts with Bash
-        ccToolUse('msg_03', 'toolu_bash_2', 'Bash', { command: 'echo reacting' }),
-        ccToolResult('toolu_bash_2', 'reacting'),
-        ccResult(),
-      ]);
-
-      const assistantCreates = mockCreateMessage.mock.calls.filter(
-        ([p]: any) => p.role === 'assistant',
-      );
-      expect(assistantCreates.length).toBe(2);
-
-      // Step 1 (toolless) parent = the spine (initial assistant).
-      expect(assistantCreates[0][0].parentId).toBe('ast-initial');
-
-      // Step 2 parent = step 1's assistant: the spine advances on the toolless
-      // step too, so the chain stays linear (no skip-back to a tool needed).
-      expect(assistantCreates[1][0].parentId).toBe(assistantCreates[0][0].id);
-    });
-
     /**
      * follow-up: N consecutive toolless steps (Monitor pushing
      * stdout line by line, each line triggering a new LLM call that only
@@ -6141,6 +5392,45 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(mockSetBadgeCount).not.toHaveBeenCalled();
     });
 
+    it('summarizes an audio-first topic after heterogeneous completion', async () => {
+      const messages = [
+        {
+          audioList: [{ alt: 'voice.webm', id: 'audio-1', url: 'https://example.com/voice.webm' }],
+          content: '',
+          id: 'user-1',
+          role: 'user',
+        },
+        {
+          children: [
+            {
+              content: 'Analyzing the recording.',
+              id: 'assistant-tool',
+              tools: [{ apiName: 'analyzeMedia', id: 'tool-1' }],
+            },
+            { content: 'The recording asks how to list files.', id: 'assistant-answer' },
+          ],
+          content: '',
+          id: 'assistant-group',
+          role: 'assistantGroup',
+        },
+      ];
+      const summaryTopicTitle = vi.fn().mockResolvedValue(undefined);
+      const store = createMockStore({
+        messagesMap: { 'main_agent-1_topic-1': messages },
+        summaryTopicTitle,
+        topicDataMap: {
+          'agent-1__main': {
+            items: [{ id: 'topic-1', title: 'defaultTitle' }],
+            total: 1,
+          },
+        },
+      });
+
+      await runToComplete(store, [ccInit(), ccText('msg_01', 'done'), ccResult()]);
+
+      expect(summaryTopicTitle).toHaveBeenCalledWith('topic-1', messages);
+    });
+
     // ── 2. metadata-save failure isolation (guarded) ──
     it('a rejected updateTopicMetadata is swallowed and no longer blocks the queue drain', async () => {
       // The metadata save
@@ -6291,18 +5581,20 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(store.drainQueuedMessages).not.toHaveBeenCalled();
     });
 
-    // ── 4. error terminal → no notification, no drain (the onError branch) ──
-    it('an error terminal fires NO completion notification and NO queue drain', async () => {
-      desktopFlag.value = true; // even on desktop, the error terminal must stay silent
+    // ── 4. error terminal → failure notification, no drain (the onError branch) ──
+    it('an error terminal fires a FAILURE notification and NO queue drain', async () => {
+      desktopFlag.value = true;
       const store = createMockStore({
         drainQueuedMessages: vi.fn(() => [{ content: 'queued', id: 'q1' }]),
       });
 
       await runToError(store);
 
-      // No completion signal on the error path (onComplete skips notifyCompletion
-      // when isErrorTerminal).
-      expect(mockShowNotification).not.toHaveBeenCalled();
+      // One failure banner, never the "finished" one (no completion badge).
+      expect(mockShowNotification).toHaveBeenCalledTimes(1);
+      expect(mockShowNotification).toHaveBeenCalledWith(
+        expect.objectContaining({ body: expect.stringContaining('the run failed') }),
+      );
       expect(mockSetBadgeCount).not.toHaveBeenCalled();
       // No queue drain on the error path (gated by terminalEvent?.type !== 'error').
       expect(store.drainQueuedMessages).not.toHaveBeenCalled();

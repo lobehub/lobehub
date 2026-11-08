@@ -6,8 +6,8 @@ a general macOS-automation asset, not tied to any one app or surface. Use it whe
 test needs to drive a native macOS app that is not reachable over CDP.
 
 macOS only. See also [record-app-screen.md](./record-app-screen.md) for capture and
-the screen-recording preflight (`scripts/check-screen-recording.sh`) before any
-OS-level capture.
+run `bash .agents/skills/acceptance/scripts/check-screen-recording.sh` before any
+OS-level capture. The preflight belongs to the installed acceptance skill.
 
 ## Core Patterns
 
@@ -198,5 +198,5 @@ screencapture /tmp/app-test.png
   layout.
 - **`entire contents` is extremely slow** — avoid for complex UIs; use screenshots.
 - **OS screenshots go BLACK when the display is asleep/locked/screensaver** — gate
-  with `scripts/check-screen-recording.sh` and keep the display awake with
+  with `bash .agents/skills/acceptance/scripts/check-screen-recording.sh` and keep the display awake with
   `caffeinate -dimsu &` for the whole capture run.

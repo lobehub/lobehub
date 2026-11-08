@@ -1,18 +1,26 @@
+import type * as Qstash from '@upstash/qstash';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { deliverWebhook, HookDispatcher } from '../HookDispatcher';
 import type { AgentHook, AgentHookEvent } from '../types';
 
+vi.mock('@/database/models/user', () => ({
+  UserModel: { getEmailsByIds: async () => [] },
+}));
+vi.mock('@/database/server', () => ({ getServerDB: async () => ({}) }));
 // Mock isQueueAgentRuntimeEnabled to control local vs production mode
 vi.mock('@/server/services/queue/impls', () => ({
-  isQueueAgentRuntimeEnabled: vi.fn(() => false), // Default: local mode
+  isQueueAgentRuntimeEnabled: vi.fn(function () {
+    return false;
+  }), // Default: local mode
 }));
 
 const mockPublishJSON = vi.hoisted(() => vi.fn());
 
 // Plain class (not vi.fn) so the file-level `vi.restoreAllMocks()` can't wipe
 // the implementation between tests.
-vi.mock('@upstash/qstash', () => ({
+vi.mock('@upstash/qstash', async (importOriginal) => ({
+  ...(await importOriginal<typeof Qstash>()),
   Client: class {
     publishJSON = mockPublishJSON;
   },
@@ -31,6 +39,17 @@ describe('HookDispatcher', () => {
     status: 'done',
     userId: 'user_test',
     ...overrides,
+  });
+
+  const makeToolCallContext = (): Parameters<HookDispatcher['dispatchBeforeToolCall']>[1] => ({
+    assistantMessageId: 'assistant-1',
+    executor: 'server',
+    toolCallId: 'native-call-1',
+    apiName: 'search',
+    args: {},
+    callIndex: 1,
+    identifier: 'twitter',
+    stepIndex: 0,
   });
 
   beforeEach(() => {
@@ -147,7 +166,7 @@ describe('HookDispatcher', () => {
     beforeEach(() => {
       vi.mocked(isQueueAgentRuntimeEnabled).mockReturnValue(true);
       // Mock global fetch
-      global.fetch = vi.fn().mockResolvedValue({ status: 200 });
+      global.fetch = vi.fn().mockImplementation(async () => new Response(''));
     });
 
     afterEach(() => {
@@ -273,7 +292,7 @@ describe('HookDispatcher', () => {
     const originalToken = process.env.QSTASH_TOKEN;
 
     beforeEach(() => {
-      global.fetch = vi.fn().mockResolvedValue({ status: 200 });
+      global.fetch = vi.fn().mockImplementation(async () => new Response(''));
       mockPublishJSON.mockReset();
       delete process.env.QSTASH_TOKEN;
     });
@@ -310,14 +329,39 @@ describe('HookDispatcher', () => {
           { delivery: 'qstash', fallback: 'none', url: 'https://example.com/hook' },
           { a: 1 },
         ),
-      ).rejects.toThrow('qstash down');
+      ).rejects.toThrow('network_error: QStash publish failed');
 
       expect(global.fetch).not.toHaveBeenCalled();
     });
 
+    it.each([false, true])(
+      'does not escalate an accepted large notification (queue=%s)',
+      async (queue) => {
+        vi.mocked(isQueueAgentRuntimeEnabled).mockReturnValue(queue);
+        vi.mocked(global.fetch).mockResolvedValueOnce(new Response('x'.repeat(100_000)));
+        dispatcher.register(operationId, [
+          {
+            id: 'critical-hook',
+            type: 'onComplete',
+            webhook: { fallback: 'none', url: 'https://example.com/critical' },
+          },
+        ]);
+
+        await expect(
+          dispatcher.dispatch(
+            operationId,
+            'onComplete',
+            makeEvent(),
+            dispatcher.getSerializedHooks(operationId),
+          ),
+        ).resolves.toBeUndefined();
+        expect(global.fetch).toHaveBeenCalledTimes(1);
+      },
+    );
+
     it('dispatch rejects a no-fallback delivery failure after delivering other hooks', async () => {
       vi.mocked(isQueueAgentRuntimeEnabled).mockReturnValue(true);
-      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(function () {});
 
       dispatcher.register(operationId, [
         {
@@ -342,8 +386,9 @@ describe('HookDispatcher', () => {
       // The failure is escalated to production logs, and the sibling webhook
       // still gets delivered.
       expect(consoleError).toHaveBeenCalledWith(
-        expect.stringContaining('critical-hook'),
-        expect.any(Error),
+        '[HookDispatcher] Critical webhook delivery failed',
+        { operationId, hookId: 'critical-hook', hookType: 'onComplete' },
+        expect.objectContaining({ code: 'configuration' }),
       );
       expect(global.fetch).toHaveBeenCalledWith(
         'https://example.com/normal',
@@ -373,6 +418,36 @@ describe('HookDispatcher', () => {
 
     it('should return undefined for unknown operation', () => {
       expect(dispatcher.getSerializedHooks('unknown')).toBeUndefined();
+    });
+  });
+
+  describe('canDeliver', () => {
+    it('answers per mode: a handler-only hook reaches nobody in queue mode', () => {
+      dispatcher.register(operationId, [
+        { handler: vi.fn(), id: 'local-only', type: 'onComplete' },
+      ]);
+
+      expect(dispatcher.canDeliver(operationId, 'onComplete')).toBe(true);
+
+      vi.mocked(isQueueAgentRuntimeEnabled).mockReturnValue(true);
+      expect(dispatcher.canDeliver(operationId, 'onComplete')).toBe(false);
+    });
+
+    it('counts a webhook hook in both modes', () => {
+      dispatcher.register(operationId, [
+        { handler: vi.fn(), id: 'with-webhook', type: 'onComplete', webhook: { url: '/api/hook' } },
+      ]);
+
+      expect(dispatcher.canDeliver(operationId, 'onComplete')).toBe(true);
+      vi.mocked(isQueueAgentRuntimeEnabled).mockReturnValue(true);
+      expect(dispatcher.canDeliver(operationId, 'onComplete')).toBe(true);
+    });
+
+    it('is false for another type, and for an operation with no hooks at all', () => {
+      dispatcher.register(operationId, [{ handler: vi.fn(), id: 'step', type: 'afterStep' }]);
+
+      expect(dispatcher.canDeliver(operationId, 'onComplete')).toBe(false);
+      expect(dispatcher.canDeliver('unknown', 'onComplete')).toBe(false);
     });
   });
 
@@ -439,13 +514,16 @@ describe('HookDispatcher', () => {
       await dispatcher.dispatch(operationId, 'onToolCallError', {
         apiName: 'search_tweets',
         args: { query: 'test' },
+        assistantMessageId: 'assistant-1',
         callIndex: 1,
         error: 'Network timeout',
+        executor: 'server',
         identifier: 'twitter',
         operationId,
         stepIndex: 2,
+        toolCallId: 'native-call-1',
         userId: 'user_test',
-      } as any);
+      });
 
       expect(handler).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -463,22 +541,23 @@ describe('HookDispatcher', () => {
       await dispatcher.dispatch(operationId, 'afterToolCall', {
         apiName: 'search_tweets',
         args: { query: 'test' },
+        assistantMessageId: 'assistant-1',
         callIndex: 1,
-        content: '{"tweets":[]}',
-        executionTimeMs: 150,
+        executor: 'server',
         identifier: 'twitter',
         mocked: false,
         operationId,
+        result: { content: '{"tweets":[]}', executionTime: 150, success: true },
         stepIndex: 1,
-        success: true,
+        toolCallId: 'native-call-1',
         userId: 'user_test',
-      } as any);
+      });
 
       expect(handler).toHaveBeenCalledWith(
         expect.objectContaining({
           apiName: 'search_tweets',
           identifier: 'twitter',
-          success: true,
+          result: expect.objectContaining({ success: true }),
         }),
       );
     });
@@ -486,13 +565,7 @@ describe('HookDispatcher', () => {
 
   describe('dispatchBeforeToolCall', () => {
     it('should return null when no beforeToolCall hooks registered', async () => {
-      const result = await dispatcher.dispatchBeforeToolCall(operationId, {
-        apiName: 'search',
-        args: {},
-        callIndex: 1,
-        identifier: 'twitter',
-        stepIndex: 0,
-      });
+      const result = await dispatcher.dispatchBeforeToolCall(operationId, makeToolCallContext());
       expect(result).toBeNull();
     });
 
@@ -508,6 +581,9 @@ describe('HookDispatcher', () => {
       ]);
 
       const result = await dispatcher.dispatchBeforeToolCall(operationId, {
+        assistantMessageId: 'assistant-1',
+        executor: 'server',
+        toolCallId: 'native-call-1',
         apiName: 'search',
         args: { query: 'test' },
         callIndex: 1,
@@ -532,13 +608,7 @@ describe('HookDispatcher', () => {
         },
       ]);
 
-      const result = await dispatcher.dispatchBeforeToolCall(operationId, {
-        apiName: 'search',
-        args: {},
-        callIndex: 1,
-        identifier: 'twitter',
-        stepIndex: 0,
-      });
+      const result = await dispatcher.dispatchBeforeToolCall(operationId, makeToolCallContext());
 
       expect(result).toBeNull();
     });
@@ -548,6 +618,9 @@ describe('HookDispatcher', () => {
       dispatcher.register(operationId, [{ handler, id: 'check-fields', type: 'beforeToolCall' }]);
 
       await dispatcher.dispatchBeforeToolCall(operationId, {
+        assistantMessageId: 'assistant-1',
+        executor: 'server',
+        toolCallId: 'native-call-1',
         apiName: 'post_tweet',
         args: { text: 'hello' },
         callIndex: 3,
@@ -579,13 +652,7 @@ describe('HookDispatcher', () => {
         },
       ]);
 
-      const result = await dispatcher.dispatchBeforeToolCall(operationId, {
-        apiName: 'search',
-        args: {},
-        callIndex: 1,
-        identifier: 'twitter',
-        stepIndex: 0,
-      });
+      const result = await dispatcher.dispatchBeforeToolCall(operationId, makeToolCallContext());
 
       expect(result).toBeNull();
     });
@@ -601,13 +668,7 @@ describe('HookDispatcher', () => {
       ]);
 
       await expect(
-        dispatcher.dispatchBeforeToolCall(operationId, {
-          apiName: 'search',
-          args: {},
-          callIndex: 1,
-          identifier: 'twitter',
-          stepIndex: 0,
-        }),
+        dispatcher.dispatchBeforeToolCall(operationId, makeToolCallContext()),
       ).resolves.toEqual({ isMocked: true, result });
     });
   });
@@ -745,13 +806,7 @@ describe('HookDispatcher', () => {
         },
       ]);
 
-      const result = await dispatcher.dispatchBeforeToolCall(operationId, {
-        apiName: 'search',
-        args: {},
-        callIndex: 1,
-        identifier: 'twitter',
-        stepIndex: 0,
-      });
+      const result = await dispatcher.dispatchBeforeToolCall(operationId, makeToolCallContext());
 
       expect(result).toEqual({
         isMocked: true,
@@ -773,13 +828,7 @@ describe('HookDispatcher', () => {
         },
         { handler: secondHandler, id: 'must-not-run', type: 'beforeToolCall' },
       ]);
-      const result = await dispatcher.dispatchBeforeToolCall(operationId, {
-        apiName: 'search',
-        args: {},
-        callIndex: 1,
-        identifier: 'twitter',
-        stepIndex: 0,
-      });
+      const result = await dispatcher.dispatchBeforeToolCall(operationId, makeToolCallContext());
       expect(result).toEqual({
         isMocked: true,
         result: { content: '{"first":true}', success: true },
@@ -800,13 +849,7 @@ describe('HookDispatcher', () => {
         },
       ]);
 
-      const result = await dispatcher.dispatchBeforeToolCall(operationId, {
-        apiName: 'search',
-        args: {},
-        callIndex: 1,
-        identifier: 'twitter',
-        stepIndex: 0,
-      });
+      const result = await dispatcher.dispatchBeforeToolCall(operationId, makeToolCallContext());
 
       expect(observeHandler).toHaveBeenCalled();
       expect(result).toEqual({
@@ -829,20 +872,9 @@ describe('HookDispatcher', () => {
       ]);
 
       // dispatchBeforeToolCall only runs in local mode
-      const result = await dispatcher.dispatchBeforeToolCall(operationId, {
-        apiName: 'search',
-        args: {},
-        callIndex: 1,
-        identifier: 'twitter',
-        stepIndex: 0,
-      });
+      const result = await dispatcher.dispatchBeforeToolCall(operationId, makeToolCallContext());
 
-      // In local mode this would return the mock, but hooks are still in-memory
-      // so it should still work (dispatchBeforeToolCall doesn't check queue mode)
-      expect(result).toEqual({
-        isMocked: true,
-        result: { content: '{"mocked":true}', success: true },
-      });
+      expect(result).toBeNull();
     });
 
     it('should not affect other hook types when beforeToolCall is registered', async () => {
@@ -862,13 +894,7 @@ describe('HookDispatcher', () => {
       ]);
 
       // beforeToolCall should not trigger afterStep or onComplete
-      await dispatcher.dispatchBeforeToolCall(operationId, {
-        apiName: 'search',
-        args: {},
-        callIndex: 1,
-        identifier: 'twitter',
-        stepIndex: 0,
-      });
+      await dispatcher.dispatchBeforeToolCall(operationId, makeToolCallContext());
 
       expect(afterStepHandler).not.toHaveBeenCalled();
       expect(onCompleteHandler).not.toHaveBeenCalled();
@@ -894,13 +920,7 @@ describe('HookDispatcher', () => {
         { handler: mockHandler, id: 'recovering', type: 'beforeToolCall' },
       ]);
 
-      const result = await dispatcher.dispatchBeforeToolCall(operationId, {
-        apiName: 'search',
-        args: {},
-        callIndex: 1,
-        identifier: 'twitter',
-        stepIndex: 0,
-      });
+      const result = await dispatcher.dispatchBeforeToolCall(operationId, makeToolCallContext());
 
       expect(mockHandler).toHaveBeenCalled();
       expect(result).toEqual({
@@ -1002,13 +1022,10 @@ describe('HookDispatcher', () => {
       ]);
 
       // Local mode: mock works
-      const localResult = await dispatcher.dispatchBeforeToolCall(operationId, {
-        apiName: 'search',
-        args: {},
-        callIndex: 1,
-        identifier: 'twitter',
-        stepIndex: 0,
-      });
+      const localResult = await dispatcher.dispatchBeforeToolCall(
+        operationId,
+        makeToolCallContext(),
+      );
       expect(localResult).toEqual({
         isMocked: true,
         result: { content: '{"mocked":true}', success: true },
@@ -1019,26 +1036,23 @@ describe('HookDispatcher', () => {
       // executes the step, this.hooks would be empty, so mock cannot fire.
       // This is by design — mock is local-only.
       const otherDispatcher = new HookDispatcher();
-      const remoteResult = await otherDispatcher.dispatchBeforeToolCall(operationId, {
-        apiName: 'search',
-        args: {},
-        callIndex: 1,
-        identifier: 'twitter',
-        stepIndex: 0,
-      });
+      const remoteResult = await otherDispatcher.dispatchBeforeToolCall(
+        operationId,
+        makeToolCallContext(),
+      );
       expect(remoteResult).toBeNull(); // No hooks registered → no mock
     });
 
     it('observation hooks should work in production mode via serializedHooks', async () => {
       vi.mocked(isQueueAgentRuntimeEnabled).mockReturnValue(true);
-      global.fetch = vi.fn().mockResolvedValue({ status: 200 });
+      global.fetch = vi.fn().mockImplementation(async () => new Response(''));
 
       dispatcher.register(operationId, [
         {
           handler: vi.fn(),
           id: 'tool-webhook',
           type: 'afterToolCall',
-          webhook: { url: 'https://example.com/afterToolCall' },
+          webhook: { url: 'https://example.com/afterToolCall', eventFields: ['result', 'mocked'] },
         },
       ]);
 
@@ -1051,13 +1065,14 @@ describe('HookDispatcher', () => {
           apiName: 'search',
           args: {},
           callIndex: 1,
-          content: 'result',
-          executionTimeMs: 100,
+          assistantMessageId: 'assistant-1',
+          executor: 'server',
+          toolCallId: 'native-call-1',
+          result: { content: 'result', executionTime: 100, success: true },
           identifier: 'twitter',
           mocked: false,
           operationId,
           stepIndex: 0,
-          success: true,
           userId: 'user_test',
         },
         serialized,
@@ -1065,7 +1080,15 @@ describe('HookDispatcher', () => {
 
       expect(global.fetch).toHaveBeenCalledWith(
         'https://example.com/afterToolCall',
-        expect.objectContaining({ method: 'POST' }),
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            result: { content: 'result', executionTime: 100, success: true },
+            mocked: false,
+            hookId: 'tool-webhook',
+            hookType: 'afterToolCall',
+          }),
+        }),
       );
     });
   });

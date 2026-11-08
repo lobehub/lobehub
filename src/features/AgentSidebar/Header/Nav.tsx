@@ -16,6 +16,7 @@ import urlJoin from 'url-join';
 
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
+import { useSelfLearningSurface } from '@/features/SelfLearning/SurfaceGate/useSelfLearningSurface';
 import { useActiveLocation } from '@/hooks/useActiveLocation';
 import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
 import { usePermission } from '@/hooks/usePermission';
@@ -29,6 +30,8 @@ import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfi
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
 
+import { isAgentProfileRoute } from './isAgentProfileRoute';
+
 const Nav = memo(() => {
   const { t } = useTranslation('chat');
   const { t: tTopic } = useTranslation('topic');
@@ -39,10 +42,7 @@ const Nav = memo(() => {
   // The profile entry now owns a group of sub-views — profile / channels /
   // statistics — switched by a Segmented in the page header, so all three keep
   // this entry lit instead of leaving the sidebar with nothing selected.
-  const isProfileActive =
-    pathname.includes('/profile') ||
-    pathname.includes('/channel') ||
-    pathname.endsWith('/statistics');
+  const isProfileActive = isAgentProfileRoute(pathname);
   const isGoalsActive = pathname.endsWith('/goals');
   // 下钻页 /self-evolving/:domainId 也算在这个入口下，否则点进去侧边栏就失焦了
   const isSelfLearningActive = pathname.includes('/self-evolving');
@@ -53,15 +53,19 @@ const Nav = memo(() => {
   const router = useQueryRoute();
   const { allowed: canCreateTopic } = usePermission('create_content');
   const { allowed: canEditContent } = usePermission('edit_own_content');
-  const { canEditResource, isAccessResolved } = useResourceAccess('agent', agentId);
+  const { canEditResource } = useResourceAccess('agent', agentId);
   const { isAgentEditable } = useServerConfigStore(featureFlagsSelectors);
   const toggleCommandMenu = useGlobalStore((s) => s.toggleCommandMenu);
-  const hideProfile = !isAgentEditable || !isAccessResolved || !canEditContent || !canEditResource;
+  // Only a server-confirmed edit denial hides the entry. `canEditResource` stays
+  // permissive while workspace access is loading, so the entry no longer drops
+  // out each time an agent is opened; the profile page itself is still guarded by
+  // `ResourceConfigAccessGate`.
+  const hideProfile = !isAgentEditable || !canEditContent || !canEditResource;
   const switchTopic = useChatStore((s) => s.switchTopic);
   const [openNewTopicOrSaveTopic] = useChatStore((s) => [s.openNewTopicOrSaveTopic]);
   const isNewTopicSendInFlight = useChatStore(topicSelectors.isNewTopicSendInFlight);
-  const enableTopicAcceptance = useUserStore(labPreferSelectors.enableTopicAcceptance);
-  const enableSelfLearning = useUserStore(labPreferSelectors.enableSelfLearning);
+  const enableGoals = useUserStore(labPreferSelectors.enableGoals);
+  const { enabled: enableSelfLearning } = useSelfLearningSurface();
 
   const { mutate } = useActionSWR(topicActionKeys.openNewOrSave(), openNewTopicOrSaveTopic);
   const handleNewTopic = () => {
@@ -121,7 +125,7 @@ const Nav = memo(() => {
           }}
         />
       )}
-      {enableTopicAcceptance && (
+      {enableGoals && (
         <NavItem
           active={isGoalsActive}
           icon={TargetIcon}

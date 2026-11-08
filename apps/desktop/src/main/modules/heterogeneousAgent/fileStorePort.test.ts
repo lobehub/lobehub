@@ -92,6 +92,17 @@ describe('createLambdaFileStorePort', () => {
     );
   });
 
+  it('exposes upload reservation cleanup through the lambda port', async () => {
+    vi.mocked(fetch).mockResolvedValue(trpcOk({ success: true }) as any);
+    const port = await createLambdaFileStorePort(auth);
+
+    await port!.abortS3Upload({ pathname: 'files/a/b.png' });
+
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe(
+      'https://cloud.lobehub.com/trpc/lambda/upload.abortS3Upload',
+    );
+  });
+
   it('surfaces a tRPC error envelope as a throw', async () => {
     vi.mocked(fetch).mockResolvedValue({
       json: async () => ({

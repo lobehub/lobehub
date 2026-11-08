@@ -1,7 +1,7 @@
 import { useToolRenderCapabilities } from '@lobechat/shared-tool-ui';
 import type { ChatMessagePluginError } from '@lobechat/types';
 import { Block, Empty, Flexbox } from '@lobehub/ui';
-import { Skeleton } from '@lobehub/ui/base-ui';
+import { Skeleton } from '@lobehub/ui';
 import { SearchIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

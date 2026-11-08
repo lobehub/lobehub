@@ -4,6 +4,14 @@ import { describe, expect, it } from 'vitest';
 
 import { transformResponseAPIToStream, transformResponseToStream } from './nonStreamToStream';
 
+const createInputOnlyUsage = () => ({
+  total_tokens: 5,
+  input_tokens: 5,
+  output_tokens: 0,
+  input_tokens_details: { audio_tokens: 0, cache_read_tokens: 0 },
+  output_tokens_details: { audio_tokens: 0, reasoning_tokens: 0 },
+});
+
 describe('nonStreamToStream', () => {
   describe('transformResponseToStream', () => {
     it('should transform ChatCompletion to stream events correctly', async () => {
@@ -433,13 +441,7 @@ describe('nonStreamToStream', () => {
             // Missing content property
           },
         ],
-        usage: {
-          total_tokens: 5,
-          input_tokens: 5,
-          output_tokens: 0,
-          input_tokens_details: { audio_tokens: 0, cache_read_tokens: 0 },
-          output_tokens_details: { audio_tokens: 0, reasoning_tokens: 0 },
-        },
+        usage: createInputOnlyUsage(),
         created: 1677652288,
         created_at: 1677652288,
         model: 'gpt-4o-realtime-preview',
@@ -457,6 +459,46 @@ describe('nonStreamToStream', () => {
 
       // Should only produce response.completed event, no text deltas
       expect(events).toEqual([
+        {
+          response: mockResponse,
+          sequence_number: 999,
+          type: 'response.completed',
+        },
+      ]);
+    });
+
+    it('should preserve function calls in a non-streaming response', async () => {
+      const functionCall = {
+        arguments: '{"description":"Check menus"}',
+        call_id: 'call_001',
+        id: 'fc_001',
+        name: 'lobe-agent____callSubAgent',
+        status: 'completed',
+        type: 'function_call',
+      };
+      const mockResponse = {
+        id: 'resp_tool_only',
+        output: [{ id: 'rs_001', summary: [], type: 'reasoning' }, functionCall],
+        status: 'completed',
+      } as unknown as OpenAI.Responses.Response;
+
+      const stream = transformResponseAPIToStream(mockResponse);
+      const reader = stream.getReader();
+      const events: OpenAI.Responses.ResponseStreamEvent[] = [];
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        events.push(value);
+      }
+
+      expect(events).toEqual([
+        {
+          item: functionCall,
+          output_index: 1,
+          sequence_number: 1,
+          type: 'response.output_item.added',
+        },
         {
           response: mockResponse,
           sequence_number: 999,
@@ -528,13 +570,7 @@ describe('nonStreamToStream', () => {
             ],
           },
         ],
-        usage: {
-          total_tokens: 5,
-          input_tokens: 5,
-          output_tokens: 0,
-          input_tokens_details: { audio_tokens: 0, cache_read_tokens: 0 },
-          output_tokens_details: { audio_tokens: 0, reasoning_tokens: 0 },
-        },
+        usage: createInputOnlyUsage(),
         created: 1677652288,
         created_at: 1677652288,
         model: 'gpt-4o-realtime-preview',
@@ -623,13 +659,7 @@ describe('nonStreamToStream', () => {
         status: 'completed',
         status_details: null,
         output: [],
-        usage: {
-          total_tokens: 5,
-          input_tokens: 5,
-          output_tokens: 0,
-          input_tokens_details: { audio_tokens: 0, cache_read_tokens: 0 },
-          output_tokens_details: { audio_tokens: 0, reasoning_tokens: 0 },
-        },
+        usage: createInputOnlyUsage(),
         created: 1677652288,
         created_at: 1677652288,
         model: 'gpt-4o-realtime-preview',
@@ -662,13 +692,7 @@ describe('nonStreamToStream', () => {
         status: 'completed',
         status_details: null,
         // output field is missing
-        usage: {
-          total_tokens: 5,
-          input_tokens: 5,
-          output_tokens: 0,
-          input_tokens_details: { audio_tokens: 0, cache_read_tokens: 0 },
-          output_tokens_details: { audio_tokens: 0, reasoning_tokens: 0 },
-        },
+        usage: createInputOnlyUsage(),
         created: 1677652288,
         created_at: 1677652288,
         model: 'gpt-4o-realtime-preview',

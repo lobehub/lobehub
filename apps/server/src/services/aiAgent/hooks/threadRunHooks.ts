@@ -1,4 +1,6 @@
 import type { AgentHookEvent, AgentState } from '@lobechat/agent-runtime';
+import { getLlmCallCount } from '@lobechat/agent-runtime';
+import type { ThreadMetadata } from '@lobechat/types';
 import { ThreadStatus } from '@lobechat/types';
 import debug from 'debug';
 
@@ -21,6 +23,35 @@ export function calculateTotalTokens(usage?: AgentState['usage']): number | unde
   if (!usage) return undefined;
   return usage.llm?.tokens?.total;
 }
+
+/**
+ * What a thread's metadata carries from one write and one run to the next.
+ * Every thread write replaces `metadata`, so each writer spreads these back
+ * in: the tool call that spawned the thread (how the UI tells a sub-agent
+ * from an ordinary thread), and the usage of earlier runs, which a follow-up
+ * run adds its own usage on top of.
+ */
+export type ThreadCarryOver = Pick<
+  ThreadMetadata,
+  | 'sourceToolCallId'
+  | 'totalCost'
+  | 'totalLlmCalls'
+  | 'totalMessages'
+  | 'totalTokens'
+  | 'totalToolCalls'
+>;
+
+export const pickThreadCarryOver = (metadata?: ThreadMetadata | null): ThreadCarryOver => ({
+  sourceToolCallId: metadata?.sourceToolCallId,
+  totalCost: metadata?.totalCost,
+  totalMessages: metadata?.totalMessages,
+  totalLlmCalls: metadata?.totalLlmCalls,
+  totalTokens: metadata?.totalTokens,
+  totalToolCalls: metadata?.totalToolCalls,
+});
+
+const addUsage = (baseline?: number, run?: number): number | undefined =>
+  baseline === undefined ? run : baseline + (run ?? 0);
 
 /**
  * Create step lifecycle callbacks for updating Thread metadata
@@ -58,6 +89,8 @@ export function createThreadMetadataCallbacks(
             operationId: state.operationId,
             startedAt,
             totalMessages: state.messages?.length ?? 0,
+            totalSteps: getLlmCallCount(state),
+            totalLlmCalls: getLlmCallCount(state),
             totalTokens: calculateTotalTokens(state.usage),
             totalToolCalls: accumulatedToolCalls,
           },
@@ -134,6 +167,8 @@ export function createThreadMetadataCallbacks(
             startedAt,
             totalCost: finalState.cost?.total,
             totalMessages: finalState.messages?.length ?? 0,
+            totalSteps: getLlmCallCount(finalState),
+            totalLlmCalls: getLlmCallCount(finalState),
             totalTokens: calculateTotalTokens(finalState.usage),
             totalToolCalls: accumulatedToolCalls,
           },
@@ -161,31 +196,37 @@ export function createThreadHooks(
   messageModel: MessageModel,
   threadId: string,
   startedAt: string,
-  sourceMessageId: string,
+  sourceMessageId: string | undefined,
   logScope: 'execSubAgent' | 'execVirtualSubAgent',
+  carryOver: ThreadCarryOver = {},
+  options: {
+    /**
+     * Copy the run's final answer into the source message. Off for background
+     * sub-agents, whose source message is the start receipt the parent already
+     * read — their answer is delivered as a separate message instead.
+     */
+    updateSourceMessage?: boolean;
+  } = {},
 ): AgentHook[] {
-  let accumulatedToolCalls = 0;
-
+  const { updateSourceMessage = true } = options;
   return [
     {
       handler: async (event: AgentHookEvent) => {
         const state = event.finalState;
         if (!state) return;
 
-        // Count tool calls from step result
-        const stepToolCalls = state.session?.toolCalls || 0;
-        if (stepToolCalls > accumulatedToolCalls) {
-          accumulatedToolCalls = stepToolCalls;
-        }
-
         try {
           await threadModel.update(threadId, {
             metadata: {
               operationId: event.operationId,
+              sourceToolCallId: carryOver.sourceToolCallId,
               startedAt,
+              totalCost: carryOver.totalCost,
               totalMessages: state.messages?.length ?? 0,
-              totalTokens: calculateTotalTokens(state.usage),
-              totalToolCalls: accumulatedToolCalls,
+              totalSteps: addUsage(carryOver.totalLlmCalls, getLlmCallCount(state)),
+              totalLlmCalls: addUsage(carryOver.totalLlmCalls, getLlmCallCount(state)),
+              totalTokens: addUsage(carryOver.totalTokens, calculateTotalTokens(state.usage)),
+              totalToolCalls: addUsage(carryOver.totalToolCalls, state.usage?.tools?.totalCalls),
             },
           });
         } catch (error) {
@@ -237,13 +278,14 @@ export function createThreadHooks(
         }
 
         try {
-          // Update source message with summary
+          // Bridged runs publish through result control; only standalone thread
+          // runs own a source-message summary write here.
           const lastAssistantMessage = finalState.messages
             ?.slice()
             .reverse()
             .find((m: { role: string }) => m.role === 'assistant');
 
-          if (lastAssistantMessage?.content) {
+          if (updateSourceMessage && sourceMessageId && lastAssistantMessage?.content) {
             await messageModel.update(sourceMessageId, {
               content: lastAssistantMessage.content,
             });
@@ -257,11 +299,17 @@ export function createThreadHooks(
               duration,
               error: formattedError,
               operationId: finalState.operationId,
+              sourceToolCallId: carryOver.sourceToolCallId,
               startedAt,
-              totalCost: finalState.cost?.total,
+              totalCost: addUsage(carryOver.totalCost, finalState.cost?.total),
               totalMessages: finalState.messages?.length ?? 0,
-              totalTokens: calculateTotalTokens(finalState.usage),
-              totalToolCalls: accumulatedToolCalls,
+              totalSteps: addUsage(carryOver.totalLlmCalls, getLlmCallCount(finalState)),
+              totalLlmCalls: addUsage(carryOver.totalLlmCalls, getLlmCallCount(finalState)),
+              totalTokens: addUsage(carryOver.totalTokens, calculateTotalTokens(finalState.usage)),
+              totalToolCalls: addUsage(
+                carryOver.totalToolCalls,
+                finalState.usage?.tools?.totalCalls,
+              ),
             },
             status,
           });
@@ -361,6 +409,11 @@ export function createGroupActionMemberBridgeHook(
   agentRuntimeService: AgentRuntimeService,
   params: {
     anchorMessageId: string;
+    /**
+     * Absolute member deadline (epoch ms). Carried in the serialized bridge so
+     * an approval continuation can re-arm the timeout watchdog.
+     */
+    deadlineAt?: number;
     expectedMembers: number;
     groupToolMessageId: string;
     mode: GroupActionMemberMode;
@@ -371,6 +424,7 @@ export function createGroupActionMemberBridgeHook(
 ): AgentHook {
   const {
     anchorMessageId,
+    deadlineAt,
     expectedMembers,
     groupToolMessageId,
     mode,
@@ -406,6 +460,7 @@ export function createGroupActionMemberBridgeHook(
     webhook: {
       body: {
         anchorMessageId,
+        ...(deadlineAt && { deadlineAt }),
         expectedMembers,
         groupToolMessageId,
         mode,

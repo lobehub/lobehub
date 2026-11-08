@@ -59,6 +59,14 @@ interface UploadFileToS3Options {
 }
 
 class UploadService {
+  releaseUpload = async (pathname: string) => {
+    try {
+      await lambdaClient.upload.abortS3Upload.mutate({ pathname });
+    } catch (error) {
+      console.error('Failed to clean S3 upload:', error);
+    }
+  };
+
   /**
    * uniform upload method for both server and client
    */
@@ -118,9 +126,10 @@ class UploadService {
     // Create file object
     const file = new File([blob], fileName, { type: mimeType });
 
+    const hash = await hashFile(file, options.abortController?.signal);
+
     // Use unified upload method
     const { data: metadata } = await this.uploadFileToS3(file, options);
-    const hash = await hashFile(file, options.abortController?.signal);
 
     return {
       fileType: mimeType,
@@ -181,6 +190,7 @@ class UploadService {
         );
       }
     } catch (error) {
+      await this.releaseUpload(uploadPathname);
       if (abortController?.signal.aborted) {
         onProgress?.('cancelled', { progress: 0, restTime: 0, speed: 0 });
       }
@@ -194,6 +204,51 @@ class UploadService {
     });
 
     return result;
+  };
+
+  /**
+   * PUT a file to a pre-signed URL someone else minted (the agent-share
+   * visitor path: `shareChat.createUploadUrl` reserves the key under the
+   * CREATOR's quota and hands back the URL). Single PUT only — callers cap the
+   * size below the multipart threshold. Reports progress in the same
+   * `FileUploadState` shape as {@link uploadToServerS3}; abort/cleanup of the
+   * reservation is the caller's job since only it knows which endpoint to hit.
+   */
+  uploadToPresignedUrl = async (
+    file: File,
+    url: string,
+    {
+      abortController,
+      onProgress,
+    }: {
+      abortController?: AbortController;
+      onProgress?: (status: FileUploadStatus, state: FileUploadState) => void;
+    } = {},
+  ): Promise<void> => {
+    const startTime = Date.now();
+
+    try {
+      await this.putBlob(
+        url,
+        file,
+        abortController?.signal,
+        (loaded) => {
+          onProgress?.('uploading', this.getUploadState(loaded, file.size, startTime));
+        },
+        file.type,
+      );
+    } catch (error) {
+      if (abortController?.signal.aborted) {
+        onProgress?.('cancelled', { progress: 0, restTime: 0, speed: 0 });
+      }
+      throw error;
+    }
+
+    onProgress?.('success', {
+      progress: 100,
+      restTime: 0,
+      speed: file.size / Math.max((Date.now() - startTime) / 1000, 0.001),
+    });
   };
 
   private getUploadState = (loaded: number, total: number, startTime: number): FileUploadState => {
@@ -251,14 +306,16 @@ class UploadService {
     signal: AbortSignal | undefined,
     onProgress: (loaded: number) => void,
   ): Promise<void> => {
-    const partSize = Math.max(MULTIPART_PART_SIZE, Math.ceil(file.size / MAX_MULTIPART_PARTS));
-    const partCount = Math.ceil(file.size / partSize);
     const parts: Array<{ etag: string; partNumber: number }> = [];
-    const { uploadId } = await lambdaClient.upload.createS3MultipartUpload.mutate({
+    const upload = await lambdaClient.upload.createS3MultipartUpload.mutate({
       contentType: file.type || undefined,
       pathname,
       size: file.size,
     });
+    const partSize =
+      upload.partSize ?? Math.max(MULTIPART_PART_SIZE, Math.ceil(file.size / MAX_MULTIPART_PARTS));
+    const partCount = Math.ceil(file.size / partSize);
+    const { uploadId } = upload;
 
     try {
       for (let partNumber = 1; partNumber <= partCount; partNumber++) {

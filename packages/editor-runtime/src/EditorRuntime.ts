@@ -2,7 +2,15 @@ import type { PageContentContext } from '@lobechat/prompts';
 import type { IEditor } from '@lobehub/editor';
 import { LITEXML_APPLY_COMMAND, LITEXML_MODIFY_COMMAND } from '@lobehub/editor/litexml-commands';
 import debug from 'debug';
+import { $setSelection, type LexicalEditor } from 'lexical';
 
+import {
+  describeLiteXMLEditStep,
+  findLiteXMLEditStepProblem,
+  indexLiteXMLDocument,
+  planLiteXMLEditSteps,
+} from './liteXMLEditPlan';
+import { findMalformedLiteXML } from './liteXMLWellFormed';
 import type {
   EditTitleArgs,
   EditTitleRuntimeResult,
@@ -19,10 +27,13 @@ import type {
 
 const log = debug('lobe:editor-runtime');
 
+/** Lexical commits an update on the next microtask; wait for it before reading back. */
+const nextMicrotask = () => new Promise<void>((resolve) => queueMicrotask(resolve));
+
 interface InspectableEditor {
   dataTypeMap?: Map<string, unknown> | Record<string, unknown>;
   editor?: unknown;
-  getLexicalEditor?: () => unknown | null;
+  getLexicalEditor?: () => LexicalEditor | null;
   plugins?: unknown[];
   pluginsInstances?: unknown[];
 }
@@ -185,55 +196,6 @@ export class EditorRuntime {
     } catch {
       return false;
     }
-  }
-
-  /**
-   * Apply a snapshot produced by the server-side PageAgent execution runtime
-   * onto the currently mounted editor. Skips persistence side-effects: the
-   * server already wrote the row, so calling `afterMutateHandler` here would
-   * loop the save path back through `commitEditorMutation`.
-   *
-   * `editorData` is the Lexical `SerializedEditorState` (or `null`/`undefined`
-   * when the server only changed metadata such as the title).
-   */
-  applyServerSnapshot(snapshot: {
-    content?: string;
-    editorData?: Record<string, unknown> | null;
-    title?: string;
-  }): boolean {
-    let applied = false;
-
-    if (this.editor && snapshot.editorData) {
-      try {
-        this.editor.setDocument('json', JSON.stringify(snapshot.editorData), { keepId: true });
-        applied = true;
-      } catch (error) {
-        log('[EditorRuntime] applyServerSnapshot:editorData failed', error);
-      }
-    } else if (this.editor && typeof snapshot.content === 'string') {
-      try {
-        this.editor.setDocument('markdown', snapshot.content, { keepId: true });
-        applied = true;
-      } catch (error) {
-        log('[EditorRuntime] applyServerSnapshot:markdown failed', error);
-      }
-    }
-
-    if (typeof snapshot.title === 'string' && this.titleSetter) {
-      try {
-        this.titleSetter(snapshot.title);
-        applied = true;
-      } catch (error) {
-        log('[EditorRuntime] applyServerSnapshot:title failed', error);
-      }
-    }
-
-    log('[EditorRuntime] applyServerSnapshot', {
-      applied,
-      hasEditorData: !!snapshot.editorData,
-      hasTitle: typeof snapshot.title === 'string',
-    });
-    return applied;
   }
 
   /**
@@ -441,7 +403,7 @@ export class EditorRuntime {
   // ==================== Unified Node Operations ====================
 
   /**
-   * Unified node operations API using LITEXML_MODIFY_COMMAND.
+   * Unified node operations API over the LiteXML editor commands.
    * Supports insert, modify, and remove operations in a single call.
    * @returns Raw result with results, successCount and totalCount
    */
@@ -475,72 +437,84 @@ export class EditorRuntime {
 
     log('Processing operations:', operations.length);
 
-    // Build the command payload for LITEXML_MODIFY_COMMAND
-    const commandPayload: Array<
-      | { action: 'insert'; afterId: string; litexml: string }
-      | { action: 'insert'; beforeId: string; litexml: string }
-      | { action: 'modify'; litexml: string | string[] }
-      | { action: 'remove'; id: string }
-    > = [];
-
-    const results: ModifyOperationResult[] = [];
-
-    for (const op of operations) {
-      try {
-        switch (op.action) {
-          case 'insert': {
-            if ('beforeId' in op) {
-              commandPayload.push({
-                action: 'insert',
-                beforeId: op.beforeId,
-                litexml: op.litexml,
-              });
-            } else if ('afterId' in op) {
-              commandPayload.push({
-                action: 'insert',
-                afterId: op.afterId,
-                litexml: op.litexml,
-              });
-            } else {
-              throw new Error(
-                `Insert operation requires either 'beforeId' or 'afterId'. Got: ${JSON.stringify(Object.keys(op))}.`,
-              );
-            }
-            results.push({ action: 'insert', success: true });
-            break;
-          }
-
-          case 'modify': {
-            commandPayload.push({
-              action: 'modify',
-              litexml: op.litexml,
-            });
-            results.push({ action: 'modify', success: true });
-            break;
-          }
-
-          case 'remove': {
-            commandPayload.push({
-              action: 'remove',
-              id: op.id,
-            });
-            results.push({ action: 'remove', success: true });
-            break;
-          }
-        }
-      } catch (error) {
-        const err = error as Error;
-        console.error('[modifyNodes] Error processing operation:', op.action, err.message);
-        results.push({ action: op.action, error: err.message, success: false });
-      }
-    }
-
     if (!hasDataSource(editor as InspectableEditor, 'litexml')) {
       throw new Error('modifyNodes failed: LiteXML data source is not ready.');
     }
 
-    log('Dispatching LiteXML modify batch with payload:', commandPayload);
-    editor.dispatchCommand(LITEXML_MODIFY_COMMAND, commandPayload);
+    // A selection over a node makes the LiteXML diff commands reject edits to
+    // it ("did not change the page"), e.g. the paragraph a user selected for
+    // "Ask Lobe AI". The agent edits by node id, so drop the selection first.
+    (editor as InspectableEditor)
+      .getLexicalEditor?.()
+      ?.update(() => $setSelection(null), { discrete: true });
+
+    const results: ModifyOperationResult[] = operations.map((op) => ({
+      action: op.action,
+      success: false,
+    }));
+    const readLiteXML = () => editor.getDocument('litexml') as unknown as string;
+
+    // Dispatch one step at a time and confirm each changed the page before
+    // reporting it: the editor drops operations with unknown ids (or that it
+    // cannot apply) without an error.
+    // A step may apply only part of one operation (a split `modify`), so an
+    // operation succeeds only when none of its steps failed. Once a step of an
+    // operation fails, its remaining steps are skipped; a failure after an
+    // earlier step of the same operation applied is reported as partial.
+    for (const step of planLiteXMLEditSteps(operations, indexLiteXMLDocument(readLiteXML()))) {
+      if (step.indexes.some((index) => results[index].error)) continue;
+
+      const fail = (error: string) => {
+        for (const index of step.indexes) {
+          const partiallyApplied = results[index].success;
+          results[index] = {
+            ...results[index],
+            error,
+            success: false,
+            ...(partiallyApplied && { partiallyApplied }),
+          };
+        }
+      };
+
+      try {
+        const { operation } = step;
+        if (operation.action === 'insert' && !('beforeId' in operation || 'afterId' in operation)) {
+          throw new Error(
+            `Insert operation requires either 'beforeId' or 'afterId'. Got: ${JSON.stringify(Object.keys(operation))}.`,
+          );
+        }
+
+        const before = readLiteXML();
+        const document = indexLiteXMLDocument(before);
+        const problem =
+          ('litexml' in operation && findMalformedLiteXML(operation.litexml)) ||
+          findLiteXMLEditStepProblem(operation, document);
+        if (problem)
+          throw new Error(`${describeLiteXMLEditStep(step, operations.length)}: ${problem}`);
+
+        log('Dispatching LiteXML operation:', operation);
+        editor.dispatchCommand(LITEXML_MODIFY_COMMAND, [operation]);
+        await nextMicrotask();
+
+        if (readLiteXML() === before) {
+          throw new Error(
+            `${describeLiteXMLEditStep(step, operations.length)} did not change the page; the editor rejected it.`,
+          );
+        }
+
+        for (const index of step.indexes) {
+          if (!results[index].error) results[index] = { ...results[index], success: true };
+        }
+      } catch (error) {
+        const err = error as Error;
+        console.error(
+          '[modifyNodes] Error processing operation:',
+          step.operation.action,
+          err.message,
+        );
+        fail(err.message);
+      }
+    }
 
     const successCount = results.filter((r) => r.success).length;
     const totalCount = results.length;

@@ -1,0 +1,197 @@
+'use client';
+
+import { ActionIcon, CodeDiff, CopyButton, Flexbox, ScrollShadow, TooltipGroup } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
+import { CheckCircle, FileText, Maximize2, Minimize2 } from 'lucide-react';
+import { memo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+
+const COLLAPSED_MAX_HEIGHT = 280;
+const INSPECTOR_CHECK_COLUMN = 24;
+
+/**
+ * Prompts are not files, so the "No newline at end of file" marker CodeDiff emits
+ * for content without a trailing newline is pure noise. Worse, when only one side
+ * ends with a newline the last line shows up as deleted + re-added. Normalising
+ * both sides to end with exactly one newline keeps the diff about the words.
+ */
+const withTrailingNewline = (value: string) =>
+  value === '' || value.endsWith('\n') ? value : `${value}\n`;
+
+const styles = stylex.create({
+  container: { overflow: 'hidden', width: '100%', minWidth: '0', fontSize: '13px' },
+  contentBox: {
+    overflow: 'hidden',
+    width: '100%',
+    minWidth: '0',
+    padding: '12px',
+    borderInlineStartWidth: '3px',
+    borderInlineStartStyle: 'solid',
+    borderInlineStartColor: cssVar.colorSuccess,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+  diff: { overflow: 'hidden', width: '100%', minWidth: '0' },
+  diffPanel: { borderRadius: '0' },
+  fileIcon: { flexShrink: 0, color: cssVar.colorTextTertiary },
+  promptContent: {
+    minWidth: '0',
+    fontSize: '13px',
+    lineHeight: 1.6,
+    color: cssVar.colorText,
+    wordBreak: 'break-word',
+    overflowWrap: 'anywhere',
+    whiteSpace: 'pre-wrap',
+  },
+  promptLabel: {
+    overflow: 'hidden',
+    minWidth: '0',
+    fontSize: '12px',
+    fontWeight: 500,
+    color: cssVar.colorTextSecondary,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  statusIcon: {
+    display: 'flex',
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '24px',
+    height: '24px',
+  },
+  statusRow: {
+    width: 'calc(100% - 12px)',
+    minWidth: '0',
+    marginInlineStart: '4px',
+    color: cssVar.colorSuccess,
+  },
+  statusText: {
+    overflow: 'hidden',
+    minWidth: '0',
+    fontWeight: 500,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+});
+
+export interface PromptDiffViewProps {
+  /**
+   * The prompt after the update. Empty string means the prompt was cleared.
+   */
+  newPrompt?: string;
+  /**
+   * The prompt before the update. `undefined` means the tool result predates
+   * `previousPrompt` being recorded, in which case only the new prompt is shown.
+   */
+  previousPrompt?: string;
+}
+
+const PromptDiffView = memo<PromptDiffViewProps>(({ newPrompt = '', previousPrompt }) => {
+  const { t } = useTranslation('plugin');
+  const [expanded, setExpanded] = useState(false);
+
+  const hasDiff = previousPrompt !== undefined && previousPrompt !== newPrompt;
+  const isUnchanged = previousPrompt !== undefined && previousPrompt === newPrompt;
+  const showPreview = !hasDiff && !isUnchanged && !!newPrompt;
+  const showContent = hasDiff || showPreview;
+  const canCopy = !!newPrompt;
+  const contentMaxHeight = expanded ? undefined : COLLAPSED_MAX_HEIGHT;
+
+  const statusKey = isUnchanged
+    ? 'builtins.lobe-agent-builder.render.updatePrompt.unchanged'
+    : newPrompt
+      ? 'builtins.lobe-agent-builder.render.updatePrompt.updated'
+      : 'builtins.lobe-agent-builder.render.updatePrompt.cleared';
+
+  const actions = (canCopy || showContent) && (
+    <TooltipGroup>
+      <Flexbox horizontal align={'center'} gap={2}>
+        {canCopy && (
+          <CopyButton
+            content={newPrompt}
+            size={'small'}
+            title={t('builtins.lobe-agent-builder.render.updatePrompt.copy')}
+          />
+        )}
+        {showContent && (
+          <ActionIcon
+            icon={expanded ? Minimize2 : Maximize2}
+            size={'small'}
+            title={t(
+              expanded
+                ? 'builtins.lobe-agent-builder.render.updatePrompt.collapse'
+                : 'builtins.lobe-agent-builder.render.updatePrompt.expand',
+            )}
+            onClick={() => setExpanded((value) => !value)}
+          />
+        )}
+      </Flexbox>
+    </TooltipGroup>
+  );
+
+  return (
+    <Flexbox className={stylex.props(styles.container).className} gap={8}>
+      <Flexbox
+        horizontal
+        align={'center'}
+        className={stylex.props(styles.statusRow).className}
+        distribution={'space-between'}
+        gap={8}
+      >
+        <Flexbox horizontal align={'center'} gap={6} style={{ minWidth: 0 }}>
+          <span {...stylex.props(styles.statusIcon)}>
+            <CheckCircle size={14} />
+          </span>
+          <span {...stylex.props(styles.statusText)}>{t(statusKey)}</span>
+        </Flexbox>
+        {actions}
+      </Flexbox>
+
+      {hasDiff && (
+        <ScrollShadow
+          className={stylex.props(styles.diff).className}
+          offset={12}
+          size={12}
+          style={{ maxHeight: contentMaxHeight }}
+        >
+          <CodeDiff
+            className={stylex.props(styles.diffPanel).className}
+            language={'markdown'}
+            newContent={withTrailingNewline(newPrompt)}
+            oldContent={withTrailingNewline(previousPrompt)}
+            showHeader={false}
+            variant={'borderless'}
+            viewMode={'unified'}
+          />
+        </ScrollShadow>
+      )}
+
+      {showPreview && (
+        <Flexbox className={stylex.props(styles.contentBox).className} gap={8}>
+          <Flexbox horizontal align={'center'} gap={6}>
+            <FileText className={stylex.props(styles.fileIcon).className} size={14} />
+            <span {...stylex.props(styles.promptLabel)}>
+              {t('builtins.lobe-agent-builder.render.updatePrompt.newPrompt', {
+                count: newPrompt.length,
+              })}
+            </span>
+          </Flexbox>
+          <ScrollShadow
+            className={stylex.props(styles.promptContent).className}
+            offset={12}
+            size={12}
+            style={{ maxHeight: contentMaxHeight }}
+          >
+            {newPrompt}
+          </ScrollShadow>
+        </Flexbox>
+      )}
+    </Flexbox>
+  );
+});
+
+PromptDiffView.displayName = 'PromptDiffView';
+
+export default PromptDiffView;

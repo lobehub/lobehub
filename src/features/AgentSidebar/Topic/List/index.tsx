@@ -5,7 +5,6 @@ import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
 
 import EmptyNavItem from '@/features/NavPanel/components/EmptyNavItem';
-import { useDeferredMount } from '@/hooks/useDeferredMount';
 import { useFetchActiveTopicDetail } from '@/hooks/useFetchActiveTopicDetail';
 import { useFetchChatTopics } from '@/hooks/useFetchChatTopics';
 import { usePermission } from '@/hooks/usePermission';
@@ -15,6 +14,8 @@ import { topicSelectors } from '@/store/chat/selectors';
 
 import AllTopicsDrawer from '../AllTopicsDrawer';
 import { useAgentTopicGroupMode } from '../hooks/useAgentTopicGroupMode';
+import ByAgentMode from '../TopicListContent/ByAgentMode';
+import ByDeviceMode from '../TopicListContent/ByDeviceMode';
 import ByProjectMode from '../TopicListContent/ByProjectMode';
 import ByStatusMode from '../TopicListContent/ByStatusMode';
 import ByTimeMode from '../TopicListContent/ByTimeMode';
@@ -39,13 +40,11 @@ const TopicList = memo(() => {
   useFetchChatTopics();
   useFetchActiveTopicDetail();
 
-  // Route transitions must paint instantly: the mount commit shows a skeleton
-  // frame and the real list renders in a deferred (interruptible) follow-up
-  // pass, off the navigation's critical path.
-  const listReady = useDeferredMount();
-
-  // Show skeleton when current session's topic data is not yet loaded
-  if (isUndefinedTopics || !listReady) return <TopicListSkeleton />;
+  // The agent route loader seeds this session's persisted page before the layout
+  // commits (`agentChatTopicListLoader`), so a frame painted here already has
+  // rows. The skeleton is left for the cases that genuinely have nothing
+  // persisted yet, or a storage read that never lands — never as a mount tax.
+  if (isUndefinedTopics) return <TopicListSkeleton />;
 
   return (
     <>
@@ -65,6 +64,10 @@ const TopicList = memo(() => {
         <ByProjectMode />
       ) : topicGroupMode === 'byStatus' ? (
         <ByStatusMode />
+      ) : topicGroupMode === 'byAgent' ? (
+        <ByAgentMode />
+      ) : topicGroupMode === 'byDevice' ? (
+        <ByDeviceMode />
       ) : (
         <ByTimeMode />
       )}

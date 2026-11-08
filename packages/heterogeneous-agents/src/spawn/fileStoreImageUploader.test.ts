@@ -7,6 +7,7 @@ const PNG_BASE64 = Buffer.from('fake-png-bytes').toString('base64');
 const PNG_HASH = '3c6ed5fc41c950bf0db531eb22f945467fb8d999f80d82ba27dcc9fd90add54d';
 
 const createPort = (overrides: Partial<FileStorePort> = {}): FileStorePort => ({
+  abortS3Upload: vi.fn().mockResolvedValue({ success: true }),
   checkFileHash: vi.fn().mockResolvedValue({ isExist: false }),
   createFile: vi.fn().mockResolvedValue({ id: 'file_1', url: 'https://cdn/x.png' }),
   createS3PreSignedUrl: vi.fn().mockResolvedValue('https://s3/presigned'),
@@ -22,7 +23,7 @@ describe('createFileStoreImageUploader', () => {
     vi.unstubAllGlobals();
   });
 
-  it('uploads the bytes to S3 and returns the created file reference', async () => {
+  it('uploads a tool-result image and returns its stored file reference', async () => {
     const port = createPort();
     const upload = createFileStoreImageUploader(async () => port);
 
@@ -40,15 +41,34 @@ describe('createFileStoreImageUploader', () => {
       pathname: expect.stringMatching(/^files\/\d{4}-\d{2}-\d{2}\/[a-f0-9]{64}\.png$/),
       size: Buffer.from(PNG_BASE64, 'base64').length,
     });
+    expect(port.checkFileHash).toHaveBeenCalledWith({ hash: PNG_HASH });
 
     const createFileInput = vi.mocked(port.createFile).mock.calls[0][0];
     expect(createFileInput).toMatchObject({
       fileType: 'image/png',
+      hash: PNG_HASH,
       name: 'cc-read-image.png',
       size: Buffer.from(PNG_BASE64, 'base64').length,
+      // Run tokens may create tool-result attachments outside a Task run.
+      source: 'tool-result',
     });
     // `url` is the S3 pathname, not the pre-signed URL.
     expect(createFileInput.url).toMatch(/^files\/\d{4}-\d{2}-\d{2}\/[a-f0-9]{64}\.png$/);
+    expect(createFileInput.metadata).not.toHaveProperty('width');
+    expect(createFileInput.metadata).not.toHaveProperty('ratio');
+  });
+
+  it('records the intrinsic size on the file metadata, matching the web uploader', async () => {
+    const port = createPort();
+    const upload = createFileStoreImageUploader(async () => port);
+
+    await upload({ data: PNG_BASE64, height: 800, mediaType: 'image/png', width: 1280 });
+
+    expect(vi.mocked(port.createFile).mock.calls[0][0].metadata).toMatchObject({
+      height: 800,
+      ratio: 1.6,
+      width: 1280,
+    });
   });
 
   it('reuses the stored object and skips the S3 PUT when the hash already exists', async () => {
@@ -62,16 +82,6 @@ describe('createFileStoreImageUploader', () => {
     expect(port.createS3PreSignedUrl).not.toHaveBeenCalled();
     expect(fetch).not.toHaveBeenCalled();
     expect(vi.mocked(port.createFile).mock.calls[0][0].url).toBe('files/old/abc.png');
-  });
-
-  it('hashes the decoded bytes so identical images dedup across runs', async () => {
-    const port = createPort();
-    const upload = createFileStoreImageUploader(async () => port);
-
-    await upload({ data: PNG_BASE64, mediaType: 'image/png' });
-
-    expect(port.checkFileHash).toHaveBeenCalledWith({ hash: PNG_HASH });
-    expect(vi.mocked(port.createFile).mock.calls[0][0].hash).toBe(PNG_HASH);
   });
 
   it('falls back to a png extension for an unknown media type', async () => {
@@ -101,6 +111,9 @@ describe('createFileStoreImageUploader', () => {
     await expect(upload({ data: PNG_BASE64, mediaType: 'image/png' })).rejects.toThrow(
       'Upload failed: 403 Forbidden',
     );
+    expect(port.abortS3Upload).toHaveBeenCalledWith({
+      pathname: expect.stringMatching(/^files\//),
+    });
     expect(port.createFile).not.toHaveBeenCalled();
   });
 });

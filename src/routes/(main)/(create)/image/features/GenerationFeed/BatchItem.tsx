@@ -1,10 +1,18 @@
 'use client';
 
 import { useAutoAnimate } from '@formkit/auto-animate/react';
-import { ModelIcon } from '@lobehub/icons';
-import { ActionIconGroup, Block, Flexbox, Grid, Image, Markdown } from '@lobehub/ui';
-import { Tag, Text, toast } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import {
+  ActionIconGroup,
+  Block,
+  createStaticStyles,
+  Flexbox,
+  Grid,
+  Image,
+  Markdown,
+  Tag,
+  Text,
+  toast,
+} from '@lobehub/ui';
 import dayjs from 'dayjs';
 import { omit } from 'es-toolkit/compat';
 import { CopyIcon, RotateCcwSquareIcon, Trash2 } from 'lucide-react';
@@ -14,6 +22,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import useRenderBusinessBatchItem from '@/business/client/hooks/useRenderBusinessBatchItem';
+import { ModelIcon } from '@/components/LobeIcons';
 import { GenerationInvalidAPIKey } from '@/routes/(main)/(create)/features/GenerationInput';
 import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { useImageStore } from '@/store/image';

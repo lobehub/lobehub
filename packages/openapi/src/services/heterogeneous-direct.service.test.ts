@@ -61,9 +61,49 @@ describe('heterogeneous direct invocation protocol', () => {
     vi.clearAllMocks();
   });
 
+  it.each([
+    { expected: 131_072, maxOutput: 131_072, requested: 262_144 },
+    { expected: 65_536, maxOutput: 65_536, requested: 262_144 },
+    { expected: 4096, maxOutput: 65_536, requested: 4096 },
+    { expected: 65_536, maxOutput: 65_536, requested: 65_536 },
+    { expected: 65_536, maxOutput: 65_536, requested: undefined },
+    { expected: 262_144, maxOutput: undefined, requested: 262_144 },
+  ])('bounds Kimi output by the selected model: $requested / $maxOutput', async (testCase) => {
+    const chat = vi.fn().mockResolvedValue(new Response('stream'));
+    vi.mocked(resolveServerDefaultHeterogeneousModel).mockResolvedValue({
+      deploymentName: 'deployed-model',
+      maxOutput: testCase.maxOutput,
+      model: 'catalog-model',
+      provider: 'lobehub',
+      supportsAdaptiveThinking: false,
+    });
+    vi.mocked(initModelRuntimeFromServerConfig).mockResolvedValue({
+      chat,
+    } as unknown as Awaited<ReturnType<typeof initModelRuntimeFromServerConfig>>);
+    const payload = normalizeAnthropicRequest(
+      { max_tokens: testCase.requested, messages: [{ content: 'hello', role: 'user' }] },
+      'lobehub-default',
+    );
+
+    await invokeServerDefaultModel({
+      agentType: 'kimi-code',
+      model: 'catalog-model',
+      payload,
+      signal: new AbortController().signal,
+      userId: 'user-1',
+    });
+
+    expect(chat.mock.calls[0][0]).toMatchObject({
+      max_tokens: testCase.expected,
+      model: 'deployed-model',
+    });
+    expect(payload.max_tokens).toBe(testCase.requested);
+  });
+
   it('preserves adaptive thinking through the Anthropic relay for a compatible model', async () => {
     const chat = vi.fn().mockResolvedValue(new Response('stream'));
     vi.mocked(resolveServerDefaultHeterogeneousModel).mockResolvedValue({
+      maxOutput: 8192,
       model: 'claude-sonnet-4-6',
       provider: 'lobehub',
       supportsAdaptiveThinking: true,
@@ -77,6 +117,7 @@ describe('heterogeneous direct invocation protocol', () => {
       model: 'claude-sonnet-4-6',
       payload: normalizeAnthropicRequest(
         {
+          max_tokens: 16_384,
           messages: [],
           model: 'lobehub-default',
           stream: true,
@@ -95,6 +136,7 @@ describe('heterogeneous direct invocation protocol', () => {
     );
     expect(chat).toHaveBeenCalledWith(
       expect.objectContaining({
+        max_tokens: 16_384,
         messages: [],
         model: 'claude-sonnet-4-6',
         stream: true,
@@ -247,6 +289,38 @@ describe('heterogeneous direct invocation protocol', () => {
     expect(runtimePayload).not.toHaveProperty('reasoning');
   });
 
+  it.each([
+    ['kimi-k3', 'chatCompletion'],
+    ['claude-sonnet-4-6', 'chatCompletion'],
+    ['gpt-6-sol', 'responses'],
+  ])('routes Codex model %s by its native API (%s), not an allowlist', async (model, apiMode) => {
+    const chat = vi.fn().mockResolvedValue(new Response('stream'));
+    vi.mocked(resolveServerDefaultHeterogeneousModel).mockResolvedValue({
+      model,
+      provider: 'lobehub',
+      supportsAdaptiveThinking: false,
+    });
+    vi.mocked(initModelRuntimeFromServerConfig).mockResolvedValue({
+      chat,
+    } as unknown as Awaited<ReturnType<typeof initModelRuntimeFromServerConfig>>);
+
+    await invokeServerDefaultModel({
+      agentType: 'codex',
+      model,
+      payload: {
+        apiMode: 'responses',
+        messages: [],
+        model: 'lobehub-default',
+        reasoning: { effort: 'high' },
+        stream: true,
+      },
+      signal: new AbortController().signal,
+      userId: 'user-1',
+    });
+
+    expect(chat.mock.calls[0][0]).toMatchObject({ apiMode, model });
+  });
+
   it('fails closed before runtime initialization for an unsupported direct protocol route', async () => {
     vi.mocked(resolveServerDefaultHeterogeneousModel).mockRejectedValue(
       new Error('unsupported agent/runtime pair'),
@@ -316,6 +390,177 @@ describe('heterogeneous direct invocation protocol', () => {
       role: 'tool',
       tool_call_id: 'call-1',
     });
+  });
+
+  it.each([
+    {
+      expected: 'Claude Code system prompt',
+      name: 'an array block preceded by an empty text block',
+      system: [
+        { text: '', type: 'text' },
+        {
+          text: 'x-anthropic-billing-header: cc_version=2.1.231; cc_entrypoint=sdk-cli;',
+          type: 'text',
+        },
+        { text: 'Claude Code system prompt', type: 'text' },
+      ],
+    },
+    {
+      expected: 'Claude Code system prompt',
+      name: 'a standalone array block',
+      system: [
+        {
+          text: 'x-anthropic-billing-header: cc_version=2.1.231; cc_entrypoint=sdk-cli;',
+          type: 'text',
+        },
+        { text: 'Claude Code system prompt', type: 'text' },
+      ],
+    },
+    {
+      expected: 'Claude Code system prompt',
+      name: 'a string followed by an LF blank line',
+      system:
+        'x-anthropic-billing-header: cc_version=2.1.231; cc_entrypoint=sdk-cli;\n\nClaude Code system prompt',
+    },
+    {
+      expected: 'Claude Code system prompt',
+      name: 'an array block followed by a CRLF blank line',
+      system: [
+        {
+          text: 'x-anthropic-billing-header: cc_version=2.1.231;\r\n\r\nClaude Code system prompt',
+          type: 'text',
+        },
+      ],
+    },
+    {
+      expected: undefined,
+      name: 'the entire system prompt',
+      system: 'x-anthropic-billing-header: cc_version=2.1.231;',
+    },
+  ])('strips the Claude Code billing attribution when it is $name', ({ expected, system }) => {
+    const payload = normalizeAnthropicRequest({ messages: [], system }, 'lobehub-default');
+
+    expect(payload.messages).toEqual(expected ? [{ content: expected, role: 'system' }] : []);
+  });
+
+  it('preserves non-leading Anthropic billing header text as user-authored system content', () => {
+    const system =
+      'Keep this text\nx-anthropic-billing-header: this non-leading occurrence is user content';
+    const payload = normalizeAnthropicRequest({ messages: [], system }, 'lobehub-default');
+
+    expect(payload.messages).toEqual([{ content: system, role: 'system' }]);
+  });
+
+  it('preserves an Anthropic billing header in a later system text block', () => {
+    const payload = normalizeAnthropicRequest(
+      {
+        messages: [],
+        system: [
+          { text: 'Keep this text\n', type: 'text' },
+          { text: 'x-anthropic-billing-header: this later block is user content', type: 'text' },
+        ],
+      },
+      'lobehub-default',
+    );
+
+    expect(payload.messages).toEqual([
+      {
+        content: 'Keep this text\nx-anthropic-billing-header: this later block is user content',
+        role: 'system',
+      },
+    ]);
+  });
+
+  it('unwraps a leading Claude Code system reminder for GPT relay models', () => {
+    const payload = normalizeAnthropicRequest(
+      {
+        messages: [
+          {
+            content: [
+              {
+                text: [
+                  '<system-reminder>',
+                  'As you answer the user, you can use the following context:',
+                  '# currentDate',
+                  "Today's date is 2026-09-05.",
+                  '</system-reminder>',
+                  '',
+                ].join('\r\n'),
+                type: 'text',
+              },
+              { text: 'Reply with exactly LOBEHUB_HETERO_SMOKE_OK.', type: 'text' },
+            ],
+            role: 'user',
+          },
+        ],
+      },
+      'lobehub-default',
+      { unwrapSystemReminders: true },
+    );
+
+    expect(payload.messages).toEqual([
+      {
+        content: [
+          '',
+          'As you answer the user, you can use the following context:',
+          '# currentDate',
+          "Today's date is 2026-09-05.",
+          '',
+          'Reply with exactly LOBEHUB_HETERO_SMOKE_OK.',
+        ].join('\r\n'),
+        role: 'user',
+      },
+    ]);
+  });
+
+  it('preserves system reminder markup unless unwrapping is explicitly enabled', () => {
+    const content = 'Preface\n<system-reminder>user-authored text</system-reminder>';
+    const payload = normalizeAnthropicRequest(
+      { messages: [{ content, role: 'user' }] },
+      'lobehub-default',
+      { unwrapSystemReminders: true },
+    );
+    const defaultPayload = normalizeAnthropicRequest(
+      {
+        messages: [
+          { content: '<system-reminder>Claude context</system-reminder>\n\nPrompt', role: 'user' },
+        ],
+      },
+      'lobehub-default',
+    );
+
+    expect(payload.messages).toEqual([{ content, role: 'user' }]);
+    expect(defaultPayload.messages).toEqual([
+      {
+        content: '<system-reminder>Claude context</system-reminder>\n\nPrompt',
+        role: 'user',
+      },
+    ]);
+  });
+
+  it('does not unwrap a system reminder in a later text block', () => {
+    const payload = normalizeAnthropicRequest(
+      {
+        messages: [
+          {
+            content: [
+              { text: 'User preface\n', type: 'text' },
+              { text: '<system-reminder>user-authored text</system-reminder>', type: 'text' },
+            ],
+            role: 'user',
+          },
+        ],
+      },
+      'lobehub-default',
+      { unwrapSystemReminders: true },
+    );
+
+    expect(payload.messages).toEqual([
+      {
+        content: 'User preface\n<system-reminder>user-authored text</system-reminder>',
+        role: 'user',
+      },
+    ]);
   });
 
   it('preserves Anthropic thinking history across tool rounds', () => {
@@ -905,6 +1150,94 @@ describe('heterogeneous direct invocation protocol', () => {
  * `API Error: 500 status code (no body)`, retried for 98 seconds.
  */
 describe('describeRelayFailure', () => {
+  it.each([
+    [{ errorType: 403, error: 'Access denied' }, 403, false],
+    [{ errorType: 'InvalidProviderAPIKey', error: { message: 'Key disabled' } }, 401, false],
+    [{ errorType: 'InvalidRequestFormat', error: { message: 'Bad input' } }, 400, false],
+    [
+      { errorType: 'ProviderBizError', error: { message: '400 max_tokens out of range' } },
+      400,
+      false,
+    ],
+    [{ errorType: 'ProviderBizError', error: { message: 'Field required' } }, 400, false],
+    [{ errorType: 'ProviderBizError', error: { status: 403, message: 'Denied' } }, 403, false],
+    [
+      {
+        errorType: 'ProviderBizError',
+        provider: 'google',
+        error: {
+          statusCode: 400,
+          message: 'Opaque rejection',
+          statusCodeText: '[400 Bad Request]',
+        },
+      },
+      400,
+      false,
+    ],
+    [
+      {
+        errorType: 'ProviderBizError',
+        provider: 'bedrock',
+        error: { body: { httpStatusCode: 422 }, message: 'Opaque rejection', type: 'Error' },
+      },
+      422,
+      false,
+    ],
+    [
+      {
+        errorType: 'ProviderBizError',
+        error: { body: { statusCode: 409 }, message: 'Opaque conflict' },
+      },
+      409,
+      true,
+    ],
+    [{ errorType: 'RateLimitExceeded', error: 'Slow down' }, 429, true],
+    [{ errorType: 'InsufficientQuota', error: 'Balance exhausted' }, 429, false],
+    [
+      { errorType: 'ProviderBizError', error: { status: 429, message: 'Insufficient quota' } },
+      429,
+      false,
+    ],
+    [
+      {
+        errorType: 'InvalidRequestFormat',
+        error: { status: 429, message: 'text content blocks must be non-empty' },
+      },
+      429,
+      false,
+    ],
+    [{ errorType: 'ProviderServiceUnavailable', error: 'Overloaded' }, 503, true],
+    [{ errorType: 'DatabasePersistError', error: 'Query failed' }, 500, false],
+    [{ errorType: 'AgentRuntimeError', error: 'Failed query: select 1' }, 500, false],
+    [{ errorType: 'ProviderBizError', error: 'Unrecognized upstream failure' }, 502, true],
+    [new Error('socket hang up'), 502, true],
+  ])('preserves status and retry semantics for %j', (error, status, retryable) => {
+    expect(describeRelayFailure(error)).toMatchObject({ retryable, status });
+  });
+
+  it.each([408, 409])('keeps coarse HTTP %s failures retryable', (status) => {
+    for (const error of [
+      { status, message: 'No details' },
+      { message: `${status} status code (no body)` },
+    ]) {
+      expect(describeRelayFailure({ error, errorType: 'ProviderBizError' })).toMatchObject({
+        retryable: true,
+        status,
+      });
+    }
+  });
+
+  it.each([408, 409, 429, 503])('prioritizes HTTP %s over inferred request errors', (status) => {
+    for (const errorType of ['ProviderBizError', 'UpstreamHttpError']) {
+      expect(
+        describeRelayFailure({
+          error: { status, message: 'text content blocks must be non-empty' },
+          errorType,
+        }),
+      ).toMatchObject({ retryable: true, status });
+    }
+  });
+
   it('carries the provider’s own words out of a runtime rejection', () => {
     expect(
       describeRelayFailure({
@@ -918,6 +1251,7 @@ describe('describeRelayFailure', () => {
     ).toEqual({
       message:
         '[volcengine] ProviderBizError: The parameter `type` specified in the request are not valid: invalid value adaptive.',
+      retryable: true,
       status: 502,
     });
   });
@@ -935,6 +1269,7 @@ describe('describeRelayFailure', () => {
   it('still says something for a plain Error', () => {
     expect(describeRelayFailure(new Error('socket hang up'))).toEqual({
       message: 'socket hang up',
+      retryable: true,
       status: 502,
     });
   });

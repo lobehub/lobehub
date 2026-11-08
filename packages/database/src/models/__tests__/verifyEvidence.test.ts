@@ -26,12 +26,14 @@ const operationId = 'verify-evidence-test-op';
 let checkResultId: string;
 let documentId: string;
 let fileId: string;
+let verifyRunId: string;
 
 beforeEach(async () => {
   await serverDB.delete(users);
   await serverDB.insert(users).values([{ id: userId }]);
   await new AgentOperationModel(serverDB, userId).recordStart({ operationId });
   const run = await new VerifyRunModel(serverDB, userId).ensureForOperation(operationId);
+  verifyRunId = run.id;
   const result = await new VerifyCheckResultModel(serverDB, userId).create({
     checkItemId: 'item-1',
     checkItemIndex: 0,
@@ -176,6 +178,44 @@ describe('VerifyEvidenceModel', () => {
     expect(rows.every((f) => f.source === 'acceptance')).toBe(true);
   });
 
+  it('stamps the stdout / stderr / recording files a terminal evidence references', async () => {
+    const model = new VerifyEvidenceModel(serverDB, userId);
+    const [stdout] = await serverDB
+      .insert(files)
+      .values({
+        fileType: 'text/plain',
+        name: 'stdout.txt',
+        size: 3,
+        url: 's3://ev/stdout',
+        userId,
+      })
+      .returning();
+    const [cast] = await serverDB
+      .insert(files)
+      .values({
+        fileType: 'application/octet-stream',
+        name: 'session.cast',
+        size: 9,
+        url: 's3://ev/cast',
+        userId,
+      })
+      .returning();
+
+    await model.create({
+      checkResultId,
+      content: '$ ls',
+      metadata: {
+        terminal: { artifacts: { cast: { fileId: cast.id }, stdout: { fileId: stdout.id } } },
+      },
+      type: 'terminal',
+    });
+
+    const rows = await serverDB.query.files.findMany({
+      where: (f, { inArray }) => inArray(f.id, [stdout.id, cast.id]),
+    });
+    expect(rows.map((f) => f.source)).toEqual(['acceptance', 'acceptance']);
+  });
+
   it('keeps an existing file source instead of overwriting it', async () => {
     const model = new VerifyEvidenceModel(serverDB, userId);
     const [generated] = await serverDB
@@ -234,5 +274,56 @@ describe('VerifyEvidenceModel', () => {
 
     await serverDB.delete(verifyCheckResults);
     expect(await model.listByCheckResult(checkResultId)).toHaveLength(0);
+  });
+});
+
+describe('VerifyEvidenceModel.listByRun', () => {
+  it('returns the run evidence with its check item id, scoped to the caller', async () => {
+    const model = new VerifyEvidenceModel(serverDB, userId);
+    await model.createMany([
+      { checkResultId, content: 'first', type: 'text' },
+      { checkResultId, content: 'second', type: 'dom_snapshot' },
+    ]);
+
+    const rows = await model.listByRun(verifyRunId);
+    expect(rows).toHaveLength(2);
+    expect([...rows.map((r) => r.content)].sort()).toEqual(['first', 'second']);
+    expect(rows.every((r) => r.checkItemId === 'item-1')).toBe(true);
+
+    const otherModel = new VerifyEvidenceModel(serverDB, 'someone-else');
+    expect(await otherModel.listByRun(verifyRunId)).toEqual([]);
+  });
+
+  it('returns nothing for a run with no evidence', async () => {
+    const model = new VerifyEvidenceModel(serverDB, userId);
+    await model.create({ checkResultId, content: 'x', type: 'text' });
+
+    expect(await model.listByRun('00000000-0000-0000-0000-000000000000')).toEqual([]);
+  });
+});
+
+describe('VerifyEvidenceModel.listByRuns', () => {
+  it('is a no-op for an empty run list', async () => {
+    const model = new VerifyEvidenceModel(serverDB, userId);
+    expect(await model.listByRuns([])).toEqual([]);
+  });
+
+  it('annotates every row with its check item and the round it came from', async () => {
+    const model = new VerifyEvidenceModel(serverDB, userId);
+    await model.create({ checkResultId, content: 'inline', type: 'text' });
+
+    const rows = await model.listByRuns([verifyRunId]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ checkItemId: 'item-1', content: 'inline', verifyRunId });
+
+    const otherModel = new VerifyEvidenceModel(serverDB, 'someone-else');
+    expect(await otherModel.listByRuns([verifyRunId])).toEqual([]);
+  });
+
+  it('returns nothing for runs without evidence', async () => {
+    const model = new VerifyEvidenceModel(serverDB, userId);
+    await model.create({ checkResultId, content: 'x', type: 'text' });
+
+    expect(await model.listByRuns(['00000000-0000-0000-0000-000000000000'])).toEqual([]);
   });
 });

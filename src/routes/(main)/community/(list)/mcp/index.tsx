@@ -4,8 +4,10 @@ import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
+import { RouteLoading } from '@/components/Skeleton/RouteSegment';
 import { useQuery } from '@/hooks/useQuery';
 import { useDiscoverStore } from '@/store/discover';
+import { mcpSelectors } from '@/store/discover/selectors';
 import { type McpQueryParams } from '@/types/discover';
 import { DiscoverTab, McpSorts } from '@/types/discover';
 
@@ -16,7 +18,7 @@ import List from './features/List';
 const McpPage = memo(() => {
   const { q, page, category, sort, order } = useQuery() as McpQueryParams;
   const useMcpList = useDiscoverStore((s) => s.useFetchMcpList);
-  const { data, error, mutate } = useMcpList({
+  const { error, isLoading, mutate, queryKey } = useMcpList({
     category,
     order,
     page,
@@ -24,6 +26,8 @@ const McpPage = memo(() => {
     q,
     sort: sort ?? McpSorts.Recommended,
   });
+  // The replica view of this query; the sync hook only reports the fetch flags.
+  const data = useDiscoverStore(mcpSelectors.mcpList(queryKey));
 
   const items = data?.items ?? [];
 
@@ -34,6 +38,8 @@ const McpPage = memo(() => {
       error={error}
       errorVariant={'page'}
       isEmpty={items.length === 0}
+      isLoading={isLoading}
+      loading={<RouteLoading />}
       onRetry={() => mutate()}
     >
       {data && (

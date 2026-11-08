@@ -6,10 +6,13 @@ import {
   AskUserQuestionView,
   DEFAULT_COUNTDOWN_MS,
   DRAFT_PLUGIN_STATE_KEY,
+  SUBMIT_ACK_TIMEOUT_MS,
   useAskUserForm,
 } from '@lobechat/shared-tool-ui/ask-user';
 import type { BuiltinInterventionProps } from '@lobechat/types';
-import { memo, useCallback } from 'react';
+import { Flexbox, Icon, Text } from '@lobehub/ui';
+import { CircleAlert } from 'lucide-react';
+import { memo, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useConversationStore } from '@/features/Conversation/store';
@@ -40,6 +43,23 @@ const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestio
     const msg = dataSelectors.getDbMessageById(messageId)(s);
     return (msg?.pluginState as { [DRAFT_PLUGIN_STATE_KEY]?: unknown })?.[DRAFT_PLUGIN_STATE_KEY];
   });
+  // The producer stamps its own ask-user deadline onto the durable tool row.
+  // Hand it to the form so the countdown tracks the clock that actually
+  // decides when the answer stops being deliverable, instead of restarting on
+  // every remount and outliving the blocked producer.
+  const deadlineAt = useConversationStore((s) => {
+    const msg = dataSelectors.getDbMessageById(messageId)(s);
+    const stored = (
+      msg?.pluginState as { heterogeneousIntervention?: { deadline?: unknown } } | undefined
+    )?.heterogeneousIntervention?.deadline;
+    return typeof stored === 'number' ? stored : undefined;
+  });
+  const context = useConversationStore((s) => s.context);
+  const checkQuestionSubmission = useChatStore((s) => s.checkQuestionSubmission);
+  const submissionPhase = useChatStore((s) => s.questionSubmissions[messageId]);
+  const resolving = useConversationStore(
+    (s) => dataSelectors.getDbMessageById(messageId)(s)?.pluginIntervention?.resolving === true,
+  );
   const setInterventionDraft = useChatStore((s) => s.setInterventionDraft);
   const writeDraft = useCallback(
     (draft: AskUserDraft) => setInterventionDraft(messageId, draft),
@@ -49,11 +69,25 @@ const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestio
   const form = useAskUserForm({
     args,
     countdownMs: DEFAULT_COUNTDOWN_MS,
+    deadlineAt,
     disabled,
     onInteractionAction,
     persistedDraft,
     writeDraft,
   });
+
+  // Stream events normally settle the card. Revalidate a missed ACK after
+  // remount or reconnect without asking the user to inspect runtime state.
+  useEffect(() => {
+    if (!resolving) return;
+    const reconcile = () => void checkQuestionSubmission(messageId, context);
+    const timer = window.setTimeout(reconcile, SUBMIT_ACK_TIMEOUT_MS);
+    window.addEventListener('online', reconcile);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener('online', reconcile);
+    };
+  }, [checkQuestionSubmission, context, messageId, resolving]);
 
   const labels = {
     customPlaceholder: t('claudeCode.askUserQuestion.customOption.placeholder'),
@@ -67,16 +101,26 @@ const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestio
     supplementEnter: t('claudeCode.askUserQuestion.supplement.enter'),
     supplementPlaceholder: t('claudeCode.askUserQuestion.supplement.placeholder'),
     timeExpired: t('claudeCode.askUserQuestion.timeExpired'),
+    timeExpiredNoAnswer: t('claudeCode.askUserQuestion.timeExpiredNoAnswer'),
     timeRemaining: (time: string) => t('claudeCode.askUserQuestion.timeRemaining', { time }),
   };
 
   return (
-    <AskUserQuestionView
-      {...form}
-      showCountdown
-      actionsPortalTarget={actionsPortalTarget}
-      labels={labels}
-    />
+    <Flexbox gap={8}>
+      {(form.submissionFailed ||
+        submissionPhase === 'failed' ||
+        submissionPhase === 'uncertain') && (
+        <Text fontSize={12} role="alert" type="danger">
+          <Icon icon={CircleAlert} size={14} /> {t('askUserQuestion.submitFailed')}
+        </Text>
+      )}
+      <AskUserQuestionView
+        {...form}
+        showCountdown
+        actionsPortalTarget={actionsPortalTarget}
+        labels={labels}
+      />
+    </Flexbox>
   );
 });
 

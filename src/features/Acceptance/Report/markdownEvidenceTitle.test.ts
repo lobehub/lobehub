@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { evidenceTitleFromMarkdown, resolveMarkdownEvidenceFold } from './MarkdownEvidence';
+import {
+  evidenceTitleFromMarkdown,
+  rendersAsMarkdown,
+  resolveMarkdownEvidenceFold,
+} from './MarkdownEvidence';
 
 describe('evidenceTitleFromMarkdown — the collapsed row label', () => {
   it('strips heading syntax so the first line reads as a sentence', () => {
@@ -67,5 +71,52 @@ describe('resolveMarkdownEvidenceFold — authored alt as the fold title', () =>
     const { fold, foldTitle } = resolveMarkdownEvidenceFold(DOC, '   ');
     expect(fold).toBe(true);
     expect(foldTitle).toBe('环境说明');
+  });
+});
+
+describe('evidence labels preserve artifact identity', () => {
+  it('uses the description instead of a JSON opening brace', () => {
+    expect(evidenceTitleFromMarkdown('{\n  "status": "done"\n}', 'Goal final state')).toBe(
+      'Goal final state',
+    );
+  });
+
+  it('keeps a file name when there is no meaningful description', () => {
+    expect(evidenceTitleFromMarkdown('{\n}', '  ', 'goal-final-state.json')).toBe(
+      'goal-final-state.json',
+    );
+  });
+
+  it('preserves markdown links as prose titles', () => {
+    expect(evidenceTitleFromMarkdown('[Report](https://example.com)')).toBe('Report');
+  });
+
+  it('labels legacy JSON objects and arrays without exposing raw payloads as titles', () => {
+    expect(evidenceTitleFromMarkdown('{\n  "status": "done"\n}')).toBe('JSON');
+    expect(evidenceTitleFromMarkdown('[{"id":"wk_123"}]')).toBe('JSON');
+  });
+});
+
+it('folds short JSON payloads behind a readable type label', () => {
+  expect(resolveMarkdownEvidenceFold('[{"id":"wk_123"}]')).toEqual({
+    fold: true,
+    foldTitle: 'JSON',
+  });
+});
+
+describe('rendersAsMarkdown — only a markdown document is rendered as prose', () => {
+  it('renders a captured transcript verbatim so its ### and - stay literal', () => {
+    expect(rendersAsMarkdown({ fileName: '04-confirmation.txt', type: 'text' })).toBe(false);
+    expect(rendersAsMarkdown({ fileName: 'server.log', type: 'text' })).toBe(false);
+    // No extension at all is the same case: nothing says it is markdown.
+    expect(rendersAsMarkdown({ fileName: 'transcript', type: 'text' })).toBe(false);
+    expect(rendersAsMarkdown({ type: 'text' })).toBe(false);
+  });
+
+  it('renders a markdown document as prose, by type or by extension', () => {
+    expect(rendersAsMarkdown({ fileName: 'findings.md', type: 'markdown' })).toBe(true);
+    expect(rendersAsMarkdown({ type: 'markdown' })).toBe(true);
+    // Uploaded as text but named .md — the name is the explicit signal.
+    expect(rendersAsMarkdown({ fileName: 'report.MARKDOWN', type: 'text' })).toBe(true);
   });
 });

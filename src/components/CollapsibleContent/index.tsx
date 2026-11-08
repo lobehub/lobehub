@@ -1,10 +1,13 @@
 'use client';
 
-import { createStaticStyles } from 'antd-style';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronDownIcon, ChevronUpIcon } from 'lucide-react';
 import type { CSSProperties, ReactNode } from 'react';
-import { memo, useRef } from 'react';
+import { memo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { REVEAL_IN_PAGE_EVENT, type RevealInPageEvent } from '@/utils/findInDom';
 
 import { useCollapsible } from './useCollapsible';
 
@@ -17,53 +20,31 @@ const FADE_RATIO = 0.2;
 // handful of extra pixels.
 const OVERFLOW_THRESHOLD = 32;
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    position: relative;
-    width: 100%;
-  `,
-  contentCollapsed: css`
-    overflow: hidden;
-
-    /* Fade height scales with the clamp — a fixed 48px would swallow most of a
-       three-line preview and leave the last line unreadable. */
-    mask-image: linear-gradient(to bottom, #000 calc(100% - var(--collapse-fade)), transparent);
-  `,
-  contentExpanded: css`
-    overflow: visible;
-  `,
-  toggleButton: css`
-    cursor: pointer;
-
-    display: inline-flex;
-    gap: 4px;
-    align-items: center;
-
-    block-size: 24px;
-    padding-inline: 10px;
-    border: none;
-    border-radius: 12px;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillQuaternary};
-
-    transition:
-      color 150ms ${cssVar.motionEaseOut},
-      background 150ms ${cssVar.motionEaseOut};
-
-    &:hover {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  toggleWrapper: css`
-    display: flex;
-    justify-content: center;
-    margin-block-start: 6px;
-  `,
-}));
+const styles = stylex.create({
+  container: { position: 'relative', width: '100%' },
+  contentCollapsed: {
+    overflow: 'hidden',
+    maskImage: 'linear-gradient(to bottom, #000 calc(100% - var(--collapse-fade)), transparent)',
+  },
+  contentExpanded: { overflow: 'visible' },
+  toggleButton: {
+    cursor: 'pointer',
+    display: 'inline-flex',
+    gap: '4px',
+    alignItems: 'center',
+    blockSize: '24px',
+    paddingInline: '10px',
+    borderStyle: 'none',
+    borderRadius: '12px',
+    fontSize: '12px',
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
+    backgroundColor: { 'default': cssVar.colorFillQuaternary, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': 'none', ':hover': 'none' },
+    transition: `color 150ms ${cssVar.motionEaseOut},
+      background 150ms ${cssVar.motionEaseOut}`,
+  },
+  toggleWrapper: { display: 'flex', justifyContent: 'center', marginBlockStart: '6px' },
+});
 
 interface CollapsibleContentProps {
   children: ReactNode;
@@ -106,6 +87,7 @@ const CollapsibleContent = memo<CollapsibleContentProps>(
     const contentRef = useRef<HTMLDivElement | null>(null);
 
     const {
+      expand,
       isCollapsed,
       maxHeight,
       shouldCollapse,
@@ -120,11 +102,27 @@ const CollapsibleContent = memo<CollapsibleContentProps>(
       overflowThreshold,
     });
 
+    // Find in page landed on text clipped by the clamp: open so it can be seen.
+    useEffect(() => {
+      const content = contentRef.current;
+      if (!content || !isCollapsed) return;
+      const handleReveal = (event: Event) => {
+        const { bottom } = (event as RevealInPageEvent).detail;
+        const fade = Math.min(DEFAULT_FADE_HEIGHT, maxHeight * FADE_RATIO);
+        // Text under the fade mask counts as hidden too.
+        if (bottom > content.getBoundingClientRect().bottom - fade) expand();
+      };
+      content.addEventListener(REVEAL_IN_PAGE_EVENT, handleReveal);
+      return () => content.removeEventListener(REVEAL_IN_PAGE_EVENT, handleReveal);
+    }, [expand, isCollapsed, maxHeight]);
+
     return (
-      <div className={styles.container}>
+      <div {...stylex.props(styles.container)}>
         <div
-          className={isCollapsed ? styles.contentCollapsed : styles.contentExpanded}
           ref={contentRef}
+          className={
+            stylex.props(isCollapsed ? styles.contentCollapsed : styles.contentExpanded).className
+          }
           style={
             isCollapsed
               ? ({
@@ -137,10 +135,10 @@ const CollapsibleContent = memo<CollapsibleContentProps>(
           {children}
         </div>
         {shouldCollapse && (
-          <div className={styles.toggleWrapper}>
+          <div {...stylex.props(styles.toggleWrapper)}>
             <button
               aria-expanded={!collapsed}
-              className={styles.toggleButton}
+              {...stylex.props(styles.toggleButton)}
               type="button"
               onClick={toggle}
             >

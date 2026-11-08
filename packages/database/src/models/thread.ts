@@ -1,6 +1,6 @@
-import type { CreateThreadParams } from '@lobechat/types';
+import type { CreateThreadParams, ThreadMetadata } from '@lobechat/types';
 import { RequestTrigger, ThreadStatus } from '@lobechat/types';
-import { and, desc, eq, notExists, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, notExists, sql } from 'drizzle-orm';
 
 import type { ThreadItem } from '../schemas';
 import { agentOperations, messages, threads } from '../schemas';
@@ -138,6 +138,8 @@ export class ThreadModel {
           // Internal Agent Signal and onboarding Understanding runs create
           // isolation threads that must stay out of the user-facing sub-agent
           // attachment list. Ordinary onboarding threads remain visible.
+          // Sub-agents of a task-result wakeup inherit its `task_callback`
+          // trigger: server-started follow-ups, kept out of the list the same way.
           notExists(
             this.db
               .select({ id: agentOperations.id })
@@ -145,7 +147,10 @@ export class ThreadModel {
               .where(
                 and(
                   eq(agentOperations.threadId, threads.id),
-                  eq(agentOperations.trigger, RequestTrigger.AgentSignal),
+                  inArray(agentOperations.trigger, [
+                    RequestTrigger.AgentSignal,
+                    RequestTrigger.TaskCallback,
+                  ]),
                 ),
               ),
           ),
@@ -161,6 +166,41 @@ export class ThreadModel {
     return this.db.query.threads.findFirst({
       where: and(eq(threads.id, id), this.ownership()),
     });
+  };
+
+  /**
+   * Compare-and-set an existing thread into `processing` for a new run.
+   *
+   * Succeeds only while the row still carries the `status` and
+   * `metadata.operationId` the caller validated, so two concurrent follow-ups
+   * to the same sub-agent thread cannot both start a run on it.
+   *
+   * @returns whether this caller won the claim
+   */
+  claimForRun = async (
+    id: string,
+    expected: { operationId?: string | null; status?: ThreadItem['status'] },
+    metadata: ThreadMetadata,
+  ): Promise<boolean> => {
+    const rows = await this.db
+      .update(threads)
+      .set({ metadata, status: ThreadStatus.Processing, updatedAt: new Date() })
+      .where(
+        and(
+          eq(threads.id, id),
+          this.ownership(),
+          expected.status ? eq(threads.status, expected.status) : isNull(threads.status),
+          // COALESCE instead of `IS NULL` on the extracted path: a bare jsonb null
+          // test breaks the planner once the table carries a pg_search index (see
+          // `__tests__/jsonbNullTest.test.ts`).
+          expected.operationId
+            ? sql`${threads.metadata} ->> 'operationId' = ${expected.operationId}`
+            : sql`COALESCE(${threads.metadata} ->> 'operationId', '') = ''`,
+        ),
+      )
+      .returning({ id: threads.id });
+
+    return rows.length > 0;
   };
 
   update = async (id: string, value: Partial<ThreadItem>) => {

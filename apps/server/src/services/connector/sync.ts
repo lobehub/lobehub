@@ -1,3 +1,5 @@
+import { buildMcpToolMetadata, getMcpToolVisibility } from '@lobechat/const/mcpApp';
+
 import type { ConnectorModel, DecryptedConnector } from '@/database/models/connector';
 import type { ConnectorToolModel } from '@/database/models/connectorTool';
 import type { ConnectorCredentials } from '@/database/schemas';
@@ -5,6 +7,7 @@ import { ConnectorMcpConnectionType, ConnectorStatus } from '@/database/schemas'
 import type { AuthConfig } from '@/libs/mcp';
 import { inferCrudType } from '@/libs/mcp/utils';
 import { mcpService } from '@/server/services/mcp';
+import { isMcpAppsEnabled } from '@/server/services/mcp/featureGate';
 
 import { ensureFreshConnectorToken } from './tokens';
 
@@ -13,7 +16,14 @@ export interface ConnectorToolSyncContext {
   connectorToolModel: ConnectorToolModel;
 }
 
-/** Build the MCP client connection params (with auth) from a connector row. */
+/**
+ * Build the MCP client connection params (with auth) from a connector row.
+ *
+ * Must match the params agent runs use (`buildConnectorManifests`): the MCP
+ * client session is cached by these params, so a view's resource read and
+ * tool calls only reach the session its tool ran on when they are equal.
+ * `name` is therefore the stable identifier, not the editable display name.
+ */
 export const buildConnectorMcpParams = (
   connector: DecryptedConnector,
 ): Parameters<typeof mcpService.listRawTools>[0] => {
@@ -23,7 +33,7 @@ export const buildConnectorMcpParams = (
       args: connector.mcpStdioConfig.args ?? [],
       command: connector.mcpStdioConfig.command,
       env: connector.mcpStdioConfig.env,
-      name: connector.name,
+      name: connector.identifier,
       type: 'stdio',
     };
   }
@@ -34,12 +44,11 @@ export const buildConnectorMcpParams = (
   // type. Merge them on top of any header-type credential headers (older rows
   // stored custom headers as a 'header' credential before this split).
   const customHeaders = connector.metadata?.customHeaders as Record<string, string> | undefined;
-  const mergedHeaders =
-    headers || customHeaders ? { ...headers, ...customHeaders } : undefined;
+  const mergedHeaders = headers || customHeaders ? { ...headers, ...customHeaders } : undefined;
   return {
     auth,
     headers: mergedHeaders,
-    name: connector.name,
+    name: connector.identifier,
     type: 'http',
     url: connector.mcpServerUrl,
   };
@@ -60,16 +69,11 @@ export const buildHttpAuthFromCredentials = (
 
   switch (credentials.type) {
     case 'oauth2': {
-      return {
-        auth: {
-          accessToken: credentials.accessToken,
-          clientId: undefined,
-          clientSecret: credentials.clientSecret,
-          refreshToken: credentials.refreshToken,
-          tokenExpiresAt: credentials.expiresAt,
-          type: 'oauth2',
-        },
-      };
+      // Only the access token: callers refresh it first (ensureFreshConnectorToken),
+      // and the MCP client sends nothing else. Refresh metadata here would also
+      // make these params, and so the cached MCP session, differ from the agent
+      // runtime's for the same connector.
+      return { auth: { accessToken: credentials.accessToken, type: 'oauth2' } };
     }
     case 'bearer': {
       return { auth: { token: credentials.token, type: 'bearer' } };
@@ -96,7 +100,8 @@ export const buildHttpAuthFromCredentials = (
  */
 export const syncConnectorToolsById = async (
   connectorId: string,
-  ctx: ConnectorToolSyncContext,
+  /** `userId` decides the `mcp_apps` flag: with it on, view-only tools are listed too. */
+  ctx: ConnectorToolSyncContext & { userId?: string | null },
 ): Promise<{ toolCount: number }> => {
   let connector = await ctx.connectorModel.findById(connectorId);
   if (!connector) throw new Error('Connector not found');
@@ -112,7 +117,11 @@ export const syncConnectorToolsById = async (
 
   let rawTools: Awaited<ReturnType<typeof mcpService.listRawTools>>;
   try {
-    rawTools = await mcpService.listRawTools(mcpParams);
+    // A server may list the tools only its views call just to a client
+    // announcing MCP Apps; they are synced, and kept from the model, all the same
+    rawTools = await mcpService.listRawTools(mcpParams, {
+      mcpApps: await isMcpAppsEnabled(ctx.userId),
+    });
   } catch (err) {
     await ctx.connectorModel.updateStatus(connectorId, ConnectorStatus.error);
     throw err;
@@ -122,6 +131,9 @@ export const syncConnectorToolsById = async (
     crudType: inferCrudType(t.name),
     description: t.description,
     inputSchema: t.inputSchema as Record<string, unknown>,
+    // Kept even for view-only tools: a view's call must find the tool synced,
+    // while the manifest build leaves it out of the model's tool list.
+    metadata: buildMcpToolMetadata(getMcpToolVisibility(t._meta)),
     toolName: t.name,
   }));
 

@@ -57,6 +57,16 @@ export interface BuiltinAgentRuntimeResult {
  * Runtime Context - context passed to runtime function
  */
 export interface RuntimeContext {
+  /**
+   * The agent's personal name as the user sees it (e.g. a renamed default
+   * assistant). Builtin system roles should introduce themselves by this name
+   * instead of the hardcoded product default.
+   */
+  agentName?: string;
+
+  /** The agent's role title ("Health Assistant"), shown alongside the name. */
+  agentTitle?: string;
+
   /** Document content for PageAgent */
   documentContent?: string;
 
@@ -71,6 +81,15 @@ export interface RuntimeContext {
 
   /** Plugins enabled for the agent */
   plugins?: string[];
+
+  /**
+   * The system role stored on the agent row, when the user customized it.
+   * Builtins whose runtime prompt is only a default the user may edit (the
+   * renameable inbox assistant) honor it; builtins whose prompt is the
+   * feature itself (page / task / supervisor) ignore it or embed it via
+   * their own context.
+   */
+  storedSystemRole?: string;
 
   /** Target agent config for AgentBuilder */
   targetAgentConfig?: LobeAgentConfig;

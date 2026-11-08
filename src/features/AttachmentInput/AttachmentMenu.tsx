@@ -1,9 +1,6 @@
 'use client';
 
-import { Icon } from '@lobehub/ui';
-import { ActionIcon } from '@lobehub/ui/base-ui';
-import { Upload } from 'antd';
-import { css, cx } from 'antd-style';
+import { ActionIcon, css, cx, Icon, Upload } from '@lobehub/ui';
 import { ChevronRight, FileUp, LibraryBig, PlusIcon, TypeIcon } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -48,13 +45,9 @@ const AttachmentMenu = memo<AttachmentMenuProps>(
               label: (
                 <Upload
                   multiple
-                  showUploadList={false}
-                  beforeUpload={(file, fileList) => {
-                    if (file === fileList.at(-1)) {
-                      setOpen(false);
-                      void onFiles(fileList);
-                    }
-                    return false;
+                  onFiles={(files) => {
+                    setOpen(false);
+                    void onFiles(files);
                   }}
                 >
                   <div className={cx(hotArea)}>

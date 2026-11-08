@@ -1,20 +1,26 @@
 import { CUSTOM_DOCUMENT_FILE_TYPE } from '@lobechat/const';
 import { Notion } from '@lobehub/icons';
-import { Center, FileTypeIcon, Flexbox, Icon } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { Upload } from 'antd';
-import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  Center,
+  createStaticStyles,
+  cssVar,
+  FileTypeIcon,
+  Flexbox,
+  Icon,
+  Text,
+  Upload,
+} from '@lobehub/ui';
 import { ArrowUpIcon, PlusIcon } from 'lucide-react';
 import React, { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import NavHeader from '@/features/NavHeader';
+import { docsPagePath } from '@/features/ResourceHome/paths';
 import useNotionImport from '@/features/ResourceManager/components/Header/hooks/useNotionImport';
 import { usePermission } from '@/hooks/usePermission';
 import { useFileStore } from '@/store/file';
-import { usePageStore } from '@/store/page';
+import { pageActions } from '@/store/page';
 import { DocumentSourceType } from '@/types/document';
-import { standardizeIdentifier } from '@/utils/identifier';
 
 const ICON_SIZE = 80;
 
@@ -79,21 +85,6 @@ const PageExplorerPlaceholder = memo<PageExplorerPlaceholderProps>(
     const { allowed: canCreate } = usePermission('create_content');
     const [isUploading, setIsUploading] = useState(false);
 
-    // Page-specific operations from pageStore
-    const [
-      createNewPage,
-      createOptimisticPage,
-      replaceTempPageWithReal,
-      setSelectedPageId,
-      fetchDocuments,
-    ] = usePageStore((s) => [
-      s.createNewPage,
-      s.createOptimisticPage,
-      s.replaceTempPageWithReal,
-      s.setSelectedPageId,
-      s.fetchDocuments,
-    ]);
-
     // File operations from FileStore (for uploads and notion import)
     const [createDocument] = useFileStore((s) => [s.createDocument]);
 
@@ -101,7 +92,7 @@ const PageExplorerPlaceholder = memo<PageExplorerPlaceholderProps>(
       createDocument,
       currentFolderId: null,
       libraryId: knowledgeBaseId ?? null,
-      refetchResources: fetchDocuments,
+      refetchResources: pageActions.refreshDocuments,
       t,
     });
 
@@ -119,14 +110,14 @@ const PageExplorerPlaceholder = memo<PageExplorerPlaceholderProps>(
 
       if (!content) {
         // For empty pages, use createNewPage which handles optimistic updates
-        await createNewPage(title);
+        await pageActions.createNewPage(title);
         return;
       }
 
       // For markdown uploads with content, use optimistic pattern similar to createNewPage
-      const tempPageId = createOptimisticPage(title);
+      const tempPageId = pageActions.createOptimisticPage(title);
       // Set selected page to temp ID immediately (with URL update disabled for temp IDs)
-      setSelectedPageId(tempPageId, false);
+      pageActions.setSelectedPageId(tempPageId, false);
 
       try {
         const newDoc = await createDocument({
@@ -156,20 +147,20 @@ const PageExplorerPlaceholder = memo<PageExplorerPlaceholderProps>(
         };
 
         // Replace optimistic with real
-        replaceTempPageWithReal(tempPageId, realPage);
+        pageActions.replaceTempPageWithReal(tempPageId, realPage);
         // Update selected page ID and URL to the real page
-        setSelectedPageId(newDoc.id);
+        pageActions.setSelectedPageId(newDoc.id);
       } catch (error) {
         console.error('Failed to create page:', error);
         // Remove temp document on error
-        usePageStore.getState().removeTempPage(tempPageId);
-        setSelectedPageId(null);
+        pageActions.removeTempPage(tempPageId);
+        pageActions.setSelectedPageId(null);
         throw error;
       }
     };
 
     const handleUploadFile = async (file: File) => {
-      if (!canCreate) return false;
+      if (!canCreate) return;
 
       try {
         setIsUploading(true);
@@ -186,7 +177,7 @@ const PageExplorerPlaceholder = memo<PageExplorerPlaceholderProps>(
           const fileName = file.name.replace(/\.(pdf|docx)$/i, '');
 
           // Create optimistic document but don't select it yet
-          const tempPageId = createOptimisticPage(fileName);
+          const tempPageId = pageActions.createOptimisticPage(fileName);
 
           try {
             // Upload file to server
@@ -226,19 +217,17 @@ const PageExplorerPlaceholder = memo<PageExplorerPlaceholderProps>(
             };
 
             // Replace optimistic with real document in the store
-            replaceTempPageWithReal(tempPageId, realPage);
+            pageActions.replaceTempPageWithReal(tempPageId, realPage);
 
             // Update selected page ID in store (with full ID including prefix)
-            setSelectedPageId(parsedDocument.id, false);
+            pageActions.setSelectedPageId(parsedDocument.id, false);
 
             // Update URL with stripped ID (without prefix)
-            const cleanId = standardizeIdentifier(parsedDocument.id);
-            const newPath = cleanId ? `/page/${cleanId}` : '/page';
-            window.history.replaceState({}, '', newPath);
+            window.history.replaceState({}, '', docsPagePath(parsedDocument.id));
           } catch (error) {
             console.error('Failed to upload and parse file:', error);
             // Remove temp document on error
-            usePageStore.getState().removeTempPage(tempPageId);
+            pageActions.removeTempPage(tempPageId);
             throw error;
           }
         }
@@ -247,8 +236,6 @@ const PageExplorerPlaceholder = memo<PageExplorerPlaceholderProps>(
       } finally {
         setIsUploading(false);
       }
-
-      return false; // Prevent default upload behavior
     };
 
     return (
@@ -282,10 +269,9 @@ const PageExplorerPlaceholder = memo<PageExplorerPlaceholderProps>(
             {/* Upload Files (PDF, DOCX, Markdown) */}
             <Upload
               accept=".md,.markdown,.pdf,.docx"
-              beforeUpload={handleUploadFile}
               disabled={!canCreate || isUploading}
               multiple={false}
-              showUploadList={false}
+              onFiles={([file]) => handleUploadFile(file)}
             >
               <Flexbox
                 className={styles.card}

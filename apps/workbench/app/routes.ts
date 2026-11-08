@@ -8,9 +8,10 @@ export default [
     route(':acceptanceId', 'routes/acceptanceDetail.tsx'),
     route(':acceptanceId/check/:checkId', 'routes/acceptanceDetailCheck.tsx'),
   ]),
+  // Retired report surface: old links redirect into Acceptance.
   route('verify', 'layouts/verifyNamespace.tsx', [
-    index('routes/verifyList.tsx'),
-    route(':runId', 'routes/verifyDetail.tsx'),
+    index('routes/verifyListRedirect.tsx'),
+    route(':runId', 'routes/verifyRunRedirect.tsx'),
   ]),
   route('*', 'routes/catchall.tsx'),
 ] satisfies RouteConfig;

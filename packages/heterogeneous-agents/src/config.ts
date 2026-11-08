@@ -4,12 +4,15 @@ import type {
   HeterogeneousAgentType,
   LocalHeterogeneousAgentDescriptor,
   LocalHeterogeneousAgentType,
+  LocalRuntimeHeterogeneousAgentDescriptor,
+  LocalRuntimeHeterogeneousAgentType,
   RemoteHeterogeneousAgentDescriptor,
   RemoteHeterogeneousAgentType,
 } from '@lobechat/types';
 import {
   HETEROGENEOUS_AGENT_CONFIGS,
   LOCAL_HETEROGENEOUS_AGENT_TYPES,
+  LOCAL_RUNTIME_HETEROGENEOUS_AGENT_CONFIGS,
   REMOTE_HETEROGENEOUS_AGENT_CONFIGS,
 } from '@lobechat/types';
 
@@ -19,12 +22,15 @@ export type {
   HeterogeneousAgentType,
   LocalHeterogeneousAgentDescriptor,
   LocalHeterogeneousAgentType,
+  LocalRuntimeHeterogeneousAgentDescriptor,
+  LocalRuntimeHeterogeneousAgentType,
   RemoteHeterogeneousAgentDescriptor,
   RemoteHeterogeneousAgentType,
 };
 export {
   HETEROGENEOUS_AGENT_CONFIGS,
   LOCAL_HETEROGENEOUS_AGENT_TYPES,
+  LOCAL_RUNTIME_HETEROGENEOUS_AGENT_CONFIGS,
   REMOTE_HETEROGENEOUS_AGENT_CONFIGS,
 };
 
@@ -37,12 +43,19 @@ const LOCAL_HETERO_TYPES = new Set<string>(LOCAL_HETEROGENEOUS_AGENT_TYPES);
 const REMOTE_HETERO_TYPES = new Set<string>(
   REMOTE_HETEROGENEOUS_AGENT_CONFIGS.map(({ type }) => type),
 );
+const LOCAL_RUNTIME_HETERO_TYPES = new Set<string>(
+  LOCAL_RUNTIME_HETEROGENEOUS_AGENT_CONFIGS.map(({ type }) => type),
+);
 
 export const isLocalHeterogeneousType = (type: string): type is LocalHeterogeneousAgentType =>
   LOCAL_HETERO_TYPES.has(type);
 
 export const isRemoteHeterogeneousType = (type: string): type is RemoteHeterogeneousAgentType =>
   REMOTE_HETERO_TYPES.has(type);
+
+export const isLocalRuntimeHeterogeneousType = (
+  type: string,
+): type is LocalRuntimeHeterogeneousAgentType => LOCAL_RUNTIME_HETERO_TYPES.has(type);
 
 export const getHeterogeneousAgentConfig = (type: string) =>
   HETEROGENEOUS_AGENT_CONFIGS.find((config) => config.type === type);
@@ -54,6 +67,17 @@ export const getHeterogeneousAgentConfigOrThrow = (
   if (!config) throw new Error(`Unknown local heterogeneous agent type: "${type}"`);
   return config;
 };
+
+const SESSION_INITIAL_MODEL_TYPES = new Set<string>([
+  'copilot',
+  'deepseek-harness',
+  'devin',
+  'droid',
+  'trae',
+]);
+
+export const usesHeterogeneousSessionInitialModel = (type: string): boolean =>
+  SESSION_INITIAL_MODEL_TYPES.has(type);
 
 export const resolveHeterogeneousAgentCommand = (type: string, command?: string): string => {
   const configuredCommand = command?.trim();
@@ -134,6 +158,7 @@ const ampDescriptor = getHeterogeneousAgentConfigOrThrow('amp');
 const claudeCodeDescriptor = getHeterogeneousAgentConfigOrThrow('claude-code');
 const codeBuddyDescriptor = getHeterogeneousAgentConfigOrThrow('codebuddy');
 const codexDescriptor = getHeterogeneousAgentConfigOrThrow('codex');
+const copilotDescriptor = getHeterogeneousAgentConfigOrThrow('copilot');
 const cursorDescriptor = getHeterogeneousAgentConfigOrThrow('cursor');
 const droidDescriptor = getHeterogeneousAgentConfigOrThrow('droid');
 const grokBuildDescriptor = getHeterogeneousAgentConfigOrThrow('grok-build');
@@ -149,6 +174,8 @@ export const CODEBUDDY_CLI_INSTALL_COMMANDS = codeBuddyDescriptor.install.comman
 export const CODEBUDDY_CLI_INSTALL_DOCS_URL = codeBuddyDescriptor.install.docsUrl;
 export const CODEX_CLI_INSTALL_COMMANDS = codexDescriptor.install.commands;
 export const CODEX_CLI_INSTALL_DOCS_URL = codexDescriptor.install.docsUrl;
+export const COPILOT_CLI_INSTALL_COMMANDS = copilotDescriptor.install.commands;
+export const COPILOT_CLI_INSTALL_DOCS_URL = copilotDescriptor.install.docsUrl;
 export const CURSOR_CLI_INSTALL_COMMANDS = cursorDescriptor.install.commands;
 export const CURSOR_CLI_INSTALL_DOCS_URL = cursorDescriptor.install.docsUrl;
 export const DROID_CLI_INSTALL_COMMANDS = droidDescriptor.install.commands;

@@ -1,5 +1,8 @@
+import { BRANDING_NAME } from '@lobechat/business-const';
+import { DEFAULT_TOOL_RESULT_MAX_LENGTH, truncateToolResult } from '@lobechat/prompts/toolResult';
 import { type ChatToolPayload } from '@lobechat/types';
-import { isLocalOrPrivateUrl, safeParseJSON } from '@lobechat/utils';
+import { safeParseJSON } from '@lobechat/utils';
+import { isDeviceOnlyMcpEndpoint } from '@lobechat/utils/mcpEndpoint';
 import debug from 'debug';
 
 import { ConnectorToolPermission } from '@/database/schemas';
@@ -14,18 +17,19 @@ import {
   getConnectorToolPermission,
 } from '@/libs/mcp/connectorPermissionCheck';
 import { deviceGateway } from '@/server/services/deviceGateway';
+import { resolveDeviceClientKind } from '@/server/services/deviceGateway/deviceChannels';
+import { resolveDeviceDispatchAuthorizationFailure } from '@/server/services/deviceGateway/dispatchAuthorization';
 import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDevices';
 import { contentBlocksToString } from '@/server/services/mcp/contentProcessor';
-import {
-  DEFAULT_TOOL_RESULT_MAX_LENGTH,
-  truncateToolResult,
-} from '@/server/utils/truncateToolResult';
+import { isMcpAppsEnabled } from '@/server/services/mcp/featureGate';
 
 import { DiscoverService } from '../discover';
 import { type MCPService } from '../mcp';
 import { type BuiltinToolsExecutor } from './builtin';
-import { classifyToolError } from './errorClassification';
+import { classifyToolError, getToolAccessDeniedError } from './errorClassification';
+import { buildMcpAuthorizationErrorContent, isMcpAuthorizationError } from './mcpAuthError';
 import { resolveRunWorkspaceId } from './serverRuntimes/resolveWorkspaceScope';
+import { withoutDeviceReplay } from './serverRuntimes/withoutDeviceReplay';
 import {
   type ToolExecutionContext,
   type ToolExecutionResult,
@@ -39,16 +43,33 @@ interface ToolExecutionServiceDeps {
   mcpService: MCPService;
 }
 
+/**
+ * Hard bound on the `error.message` of a failed tool call. The (already
+ * truncated) `content` is what the LLM reads; the error is metadata, so it
+ * never needs the full payload — and an unbounded one is dangerous: a tool
+ * that fails with megabytes of output (e.g. `rm -rf` on a read-only sandbox
+ * FS, one `cannot remove` line per file) rides the step's `nextContext` into
+ * the QStash publish body and blows the provider's 10 MB message quota, which
+ * fails the whole operation at the step boundary instead of just that one tool
+ * call. Deliberately NOT subject to `skipResultTruncation` — that opt-out is
+ * about the LLM context budget, this is a transport safety bound.
+ */
+const TOOL_ERROR_MESSAGE_MAX_LENGTH = 4000;
+
+const clampErrorMessage = (message: string | undefined): string | undefined =>
+  message === undefined ? undefined : truncateToolResult(message, TOOL_ERROR_MESSAGE_MAX_LENGTH);
+
 const normalizeExecutionError = (error: unknown, fallbackMessage: string) => {
   const normalized = classifyToolError(error || fallbackMessage);
-  const message = fallbackMessage || normalized.message;
+  // Classification reads the raw error above; only the carried copy is clamped.
+  const message = clampErrorMessage(fallbackMessage || normalized.message);
 
   if (error && typeof error === 'object') {
     if (error instanceof Error) {
       return {
         code: normalized.code,
         kind: normalized.kind,
-        message: error.message || message,
+        message: clampErrorMessage(error.message) || message,
         name: error.name,
       };
     }
@@ -58,16 +79,68 @@ const normalizeExecutionError = (error: unknown, fallbackMessage: string) => {
     return {
       ...plainError,
       code: (plainError.code as string | undefined) || normalized.code,
-      kind: normalized.kind,
-      message: (plainError.message as string | undefined) || message,
+      // A runtime may know that side effects already happened; retry keywords
+      // must not override its explicit refusal to replay the operation.
+      kind: plainError.kind === 'stop' ? 'stop' : normalized.kind,
+      message: clampErrorMessage(plainError.message as string | undefined) || message,
     };
   }
 
   if (typeof error === 'string') {
-    return { code: normalized.code, kind: normalized.kind, message: error };
+    return { code: normalized.code, kind: normalized.kind, message: clampErrorMessage(error) };
   }
 
   return { code: normalized.code, kind: normalized.kind, message };
+};
+
+/**
+ * Readable text for a thrown tool failure. Model runtimes reject with plain
+ * objects (e.g. `{ errorType: 'InsufficientBudgetForModel', error: { message } }`)
+ * that have no top-level `message`; reading only `.message` turned those into
+ * an undefined tool result, which the model then saw as `<empty_content>`.
+ */
+const getThrownErrorText = (error: unknown): string => {
+  if (typeof error === 'string') return error;
+  if (error instanceof Error) return error.message || error.name;
+  if (!error || typeof error !== 'object') return String(error);
+
+  const raw = error as {
+    error?: { message?: unknown };
+    errorType?: unknown;
+    message?: unknown;
+    type?: unknown;
+  };
+  const message = [raw.message, raw.error?.message].find(
+    (value): value is string => typeof value === 'string' && value.length > 0,
+  );
+  const errorType = [raw.errorType, raw.type].find(
+    (value): value is string => typeof value === 'string' && value.length > 0,
+  );
+
+  if (message && errorType) return `${errorType}: ${message}`;
+  if (message || errorType) return (message || errorType)!;
+
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return 'Unknown tool execution error';
+  }
+};
+
+/**
+ * What the model reads of a server MCP call. A result with an MCP App view
+ * gives its text only: MCP Apps keeps `structuredContent` and `_meta` for the
+ * view, out of model context. Any other result (no view, an error, a failed
+ * view lookup) keeps its serialized form, `structuredContent` included, but
+ * never `_meta`: protocol metadata, where an Apps-aware server keeps what only
+ * its views may see.
+ */
+const toModelContent = (result: any): string => {
+  if (result?.state?.mcpApp) return result.content;
+  if (!result?.state || typeof result.state !== 'object') return JSON.stringify(result);
+
+  const { _meta, ...state } = result.state;
+  return JSON.stringify({ ...result, state });
 };
 
 export class ToolExecutionService {
@@ -129,6 +202,13 @@ export class ToolExecutionService {
 
       const executionTime = Date.now() - startTime;
 
+      const denial = !data.success
+        ? getToolAccessDeniedError(data.errorData ?? data.error, data.content)
+        : undefined;
+      if (denial) {
+        data = { ...data, content: JSON.stringify({ error: denial }), error: denial };
+      }
+
       // Truncate result content to prevent context overflow
       // Use agent-specific config if provided, otherwise use default
       const truncatedContent = context.skipResultTruncation
@@ -152,7 +232,7 @@ export class ToolExecutionService {
         return {
           ...data,
           content: truncatedContent,
-          error: normalizeExecutionError(data.error, data.content),
+          error: normalizeExecutionError(data.errorData ?? data.error, data.content),
           executionTime,
         };
       }
@@ -167,11 +247,13 @@ export class ToolExecutionService {
     } catch (error) {
       const executionTime = Date.now() - startTime;
       log('Error executing tool %s:%s: %O', identifier, apiName, error);
-      const errorMessage = (error as Error).message;
+      const errorMessage = getThrownErrorText(error);
+      const denial = getToolAccessDeniedError(error, errorMessage);
+      const content = denial ? JSON.stringify({ error: denial }) : errorMessage;
 
       return {
-        content: context.skipResultTruncation ? errorMessage : truncateToolResult(errorMessage),
-        error: normalizeExecutionError(error, errorMessage),
+        content: context.skipResultTruncation ? content : truncateToolResult(content),
+        error: denial || normalizeExecutionError(error, errorMessage),
         executionTime,
         success: false,
       };
@@ -221,32 +303,49 @@ export class ToolExecutionService {
       mcpParams.type,
     );
 
+    const isDeviceOnlyMcp = isDeviceOnlyMcpEndpoint(mcpParams);
+
+    // Agent Share visitor runs execute with the CREATOR's identity, so a
+    // device-only MCP would access the creator's device or private network
+    // on a visitor's behalf. The tool-set gate already drops
+    // these manifests (`applyShareGateToToolSet`); this is the unbypassable
+    // dispatch-site check, mirroring `isShareBlockedBuiltinDispatch`.
+    if (context.agentShareVisitor && isDeviceOnlyMcp) {
+      log('Share gate blocked device-only MCP dispatch: %s:%s', identifier, apiName);
+      const message = `MCP server '${identifier}' runs on the agent owner's own machine and is not available in shared conversations.`;
+      return {
+        content: message,
+        error: { code: 'SHARE_GATE_BLOCKED', message },
+        success: false,
+      };
+    }
+
     try {
       // Check if this is a cloud MCP endpoint
       if (mcpParams.type === 'cloud') {
         return await this.executeCloudMCPTool(payload, context, mcpParams);
       }
 
-      // MCP servers only the user's machine can reach must not be called from
-      // the cloud: stdio (the binary lives on the user's machine) and
-      // localhost / private-network HTTP endpoints (the cloud's fetch can't
-      // reach them, #16533). When a device gateway is configured (cloud
-      // deployment), such calls MUST tunnel to a device — with no reachable
-      // device, fail fast with an actionable error instead of spawning the
-      // command / fetching the private URL on the server (the same rule the
-      // classic-path guard in connector exec enforces). Standalone Electron /
-      // self-host (no gateway) falls through to the in-process MCP service
-      // below, which legitimately runs on the user's machine or LAN.
-      const isDeviceOnlyMcp =
-        mcpParams.type === 'stdio' ||
-        (mcpParams.type === 'http' && isLocalOrPrivateUrl(mcpParams.url));
-      if (isDeviceOnlyMcp && deviceGateway.isConfigured) {
+      // Stdio must run on a desktop device. Without a configured gateway or a
+      // reachable device, fail instead of executing the command on the server.
+      // Private HTTP also uses the device when a gateway is configured, while
+      // self-hosted servers without one can still access their LAN over HTTP.
+      if (mcpParams.type === 'stdio' || (isDeviceOnlyMcp && deviceGateway.isConfigured)) {
+        if (!deviceGateway.isConfigured) {
+          const message = `MCP server '${identifier}' uses stdio and must run on a desktop device, but this server's device gateway is not configured. Configure a device gateway on the server and connect the desktop app on the machine that hosts this MCP server, then retry.`;
+          return {
+            content: message,
+            error: { code: 'MCP_GATEWAY_NOT_CONFIGURED', message },
+            success: false,
+          };
+        }
+
         const tunnelTarget = context.userId
           ? await this.resolveMcpTunnelTarget(context)
           : undefined;
         if (!tunnelTarget) {
           log('Device-only MCP %s:%s has no reachable device — failing fast', identifier, apiName);
-          const message = `MCP server '${identifier}' only your own machine can reach (stdio or local network). No online device was found to run it — open the LobeHub desktop app on the machine that hosts this MCP server, then retry.`;
+          const message = `MCP server '${identifier}' only your own machine can reach (stdio or local network). No online ${BRANDING_NAME} desktop app was found to run it (a device connected only through the \`lh connect\` CLI cannot run MCP servers) — open the ${BRANDING_NAME} desktop app on the machine that hosts this MCP server, then retry.`;
           return {
             content: message,
             error: { code: 'MCP_DEVICE_UNAVAILABLE', message },
@@ -256,22 +355,36 @@ export class ToolExecutionService {
         return await this.executeMcpViaDevice(payload, context, mcpParams, tunnelTarget);
       }
 
-      // For stdio (in-process) / http/sse types, use standard MCP service
+      // HTTP MCP endpoints can execute through the server-side MCP service.
       const result = await this.mcpService.callTool({
         argsStr: args,
         clientParams: mcpParams,
+        mcpApps: await isMcpAppsEnabled(context.userId),
         toolName: apiName,
       });
 
-      log('MCP tool execution successful for: %s:%s', identifier, apiName);
+      log('MCP tool execution completed for: %s:%s', identifier, apiName);
 
       return {
-        content: typeof result === 'string' ? result : JSON.stringify(result),
+        content: typeof result === 'string' ? result : toModelContent(result),
+        ...(result?.success === false
+          ? { error: { code: 'MCP_TOOL_ERROR', message: result.error?.message ?? result.content } }
+          : {}),
         state: typeof result === 'object' ? result : undefined,
-        success: true,
+        success: result?.success !== false,
       };
     } catch (error) {
       log('MCP tool execution failed for %s:%s: %O', identifier, apiName, error);
+      if (isMcpAuthorizationError(error)) {
+        const content = buildMcpAuthorizationErrorContent(identifier, {
+          isShareVisitor: !!context.agentShareVisitor,
+        });
+        return {
+          content,
+          error: { code: 'UNAUTHORIZED', message: (error as Error).message },
+          success: false,
+        };
+      }
       return {
         content: (error as Error).message,
         error: {
@@ -308,7 +421,18 @@ export class ToolExecutionService {
     // do (respects a personal-scope active device, recovers the agent's
     // workspace when the run context lost it).
     const workspaceId = await resolveRunWorkspaceId(context);
-    if (context.activeDeviceId) return { deviceId: context.activeDeviceId, workspaceId };
+    if (context.activeDeviceId) {
+      // Only the desktop app handles `mcp` tool calls; a device whose only
+      // live connection is `lh connect` answers them with `Unknown tool API`.
+      // Such an active device is skipped: personal runs fall through to the
+      // newest desktop device below, workspace runs fail closed.
+      const clientKind =
+        context.userId !== undefined
+          ? await resolveDeviceClientKind(context.userId, context.activeDeviceId, workspaceId)
+          : 'unknown';
+      if (clientKind !== 'cli-only') return { deviceId: context.activeDeviceId, workspaceId };
+      log('Active device %s is CLI-only; not tunneling MCP to it', context.activeDeviceId);
+    }
     // The implicit fallback is PERSONAL-scope only. In a workspace run the
     // connector may have been authorized by ANOTHER member, and tunneling its
     // params (stdio env / HTTP auth) to the caller's own newest device would
@@ -354,6 +478,21 @@ export class ToolExecutionService {
     target: { deviceId: string; workspaceId?: string },
   ): Promise<ToolExecutionResult> {
     const { identifier, apiName, arguments: args } = payload;
+
+    const authorizationError = await resolveDeviceDispatchAuthorizationFailure(
+      context.serverDB,
+      context.userId!,
+      target.deviceId,
+      target.workspaceId,
+    );
+    if (authorizationError) {
+      return {
+        content: 'The workspace device is no longer registered or visible for this run.',
+        error: 'DEVICE_NOT_FOUND',
+        errorData: authorizationError,
+        success: false,
+      };
+    }
 
     log(
       'Executing %s MCP tool via device: %s:%s (device=%s, workspace=%s)',
@@ -404,19 +543,27 @@ export class ToolExecutionService {
     );
 
     if (!result.success) {
-      return {
+      // The device may already be running the call, so never let the retry
+      // classifier replay it (see withoutDeviceReplay).
+      return withoutDeviceReplay({
         content: result.content,
-        error: {
+        error: result.errorData ?? {
           code: 'MCP_DEVICE_EXECUTION_ERROR',
           message: result.error || result.content,
         },
+        errorData: result.errorData,
         success: false,
-      };
+      });
     }
+
+    // An MCP App view is read and driven from the client that opens the
+    // conversation, not from the device that ran the tool, so a result from a
+    // device offers none.
+    const { mcpApp: _deviceView, ...state } = (result.state as Record<string, any>) ?? {};
 
     return {
       content: result.content,
-      state: (result.state as Record<string, any>) ?? undefined,
+      state: result.state ? state : undefined,
       success: true,
     };
   }

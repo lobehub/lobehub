@@ -59,7 +59,7 @@ describe('Task sidebar item', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'T-22 Hourly trend update' }));
 
-    expect(mocks.navigate).toHaveBeenCalledWith('/agent/agt_current/task/T-22');
+    expect(mocks.navigate).toHaveBeenCalledWith('/agent/agt_current/task/T-22/hourly-trend-update');
   });
 
   it('falls back to the global task detail route outside agent context', () => {
@@ -67,6 +67,6 @@ describe('Task sidebar item', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'T-22 Hourly trend update' }));
 
-    expect(mocks.navigate).toHaveBeenCalledWith('/task/T-22');
+    expect(mocks.navigate).toHaveBeenCalledWith('/task/T-22/hourly-trend-update');
   });
 });

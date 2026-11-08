@@ -1,9 +1,21 @@
 import { getBuiltinRender } from '@lobechat/builtin-tools/renders';
+import { isDesktop } from '@lobechat/const';
 import { type ChatPluginPayload } from '@lobechat/types';
+import { Flexbox, Skeleton } from '@lobehub/ui';
 import { memo } from 'react';
 
+import { useToolResultPayload } from '@/hooks/useToolResultPayload';
+import { canServeMcpAppHere, getMcpAppFromState, unwrapMcpToolState } from '@/libs/mcp/mcpApp';
+import dynamic from '@/libs/next/dynamic';
+import { useElectronStore } from '@/store/electron';
+import { electronGatewaySelectors } from '@/store/electron/selectors/gateway';
+import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
+
+import { dataSelectors, useConversationStore } from '../../../../../store';
 import CustomRender from './CustomRender';
 import { FallbackArgumentRender } from './FallbacktArgumentRender';
+
+const McpAppView = dynamic(() => import('@/features/MCPApp/McpAppView'), { ssr: false });
 
 interface ToolRenderProps {
   content: string;
@@ -17,26 +29,78 @@ interface ToolRenderProps {
 const ToolRender = memo<ToolRenderProps>(
   ({ showCustomToolRender, content, messageId, plugin, pluginState, toolCallId }) => {
     const hasCustomRender = !!getBuiltinRender(plugin?.identifier, plugin?.apiName);
+    const enableMcpApps = useServerConfigStore(serverConfigSelectors.enableMcpApps);
+    const [currentDeviceId, useFetchGatewayStableDeviceId] = useElectronStore((s) => [
+      electronGatewaySelectors.gatewayStableDeviceId(s),
+      s.useFetchGatewayStableDeviceId,
+    ]);
+
+    // Tools whose card renders the stored body — the read path projected it away
+    // and this component is where it comes back. Safe to fetch on mount: the
+    // whole detail only mounts when the row is expanded, so a conversation load
+    // asks for nothing.
+    const needsStoredPayload = useConversationStore(
+      (s) =>
+        !!messageId && dataSelectors.getDbMessageById(messageId)(s)?.payloadOmitted === 'render',
+    );
+    const { isLoading, payload } = useToolResultPayload(messageId, needsStoredPayload);
+
+    const resolvedContent = payload?.content ?? content;
+    const resolvedState = payload?.pluginState ?? pluginState;
+
+    // MCP Apps: the tool declared an interactive `ui://` view for its result
+    const mcpApp = enableMcpApps ? getMcpAppFromState(resolvedState) : undefined;
+    // A view from a desktop's local MCP process: learn whether this is that desktop
+    useFetchGatewayStableDeviceId(isDesktop && !!mcpApp?.deviceId);
+
+    const resolvingDevice = isDesktop && !!mcpApp?.deviceId && currentDeviceId === undefined;
+    if ((needsStoredPayload && isLoading && !payload) || resolvingDevice) {
+      return (
+        <Flexbox paddingBlock={8} width={'100%'}>
+          <Skeleton height={96} width={'100%'} />
+        </Flexbox>
+      );
+    }
 
     if (hasCustomRender && showCustomToolRender) {
       return (
         <CustomRender
-          content={content}
+          content={resolvedContent}
           messageId={messageId}
           plugin={plugin}
-          pluginState={pluginState}
+          pluginState={resolvedState}
           toolCallId={toolCallId}
         />
       );
     }
 
-    return (
+    const fallback = (
       <FallbackArgumentRender
-        content={content}
+        content={resolvedContent}
         requestArgs={plugin?.arguments}
         toolCallId={toolCallId}
       />
     );
+
+    // A view from another desktop's local MCP process would run here instead
+    if (mcpApp && canServeMcpAppHere(mcpApp, currentDeviceId) && showCustomToolRender && plugin) {
+      return (
+        <McpAppView
+          apiName={plugin.apiName}
+          arguments={plugin.arguments}
+          fallback={fallback}
+          identifier={plugin.identifier}
+          messageId={messageId}
+          resourceUri={mcpApp.resourceUri}
+          result={{ content: resolvedContent, state: unwrapMcpToolState(resolvedState) }}
+          server={mcpApp.server}
+          toolCallId={toolCallId}
+          onThisDevice={!!mcpApp.deviceId}
+        />
+      );
+    }
+
+    return fallback;
   },
 );
 

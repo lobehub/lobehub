@@ -7,7 +7,7 @@ import { useReportPanelExpand } from './useReportPanelExpand';
 
 const { mockUseResponsive } = vi.hoisted(() => ({ mockUseResponsive: vi.fn() }));
 
-vi.mock('antd-style', async (importOriginal) => {
+vi.mock('@lobehub/ui', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>;
   return { ...actual, useResponsive: mockUseResponsive };
 });

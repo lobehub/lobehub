@@ -1,9 +1,19 @@
 import { type LobeToolCustomPlugin } from '@lobechat/types';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  type Mock,
+  type MockInstance,
+  vi,
+} from 'vitest';
 
 import {
   buildConnectorPayloadFromLegacy,
   executeLegacyMigrationSave,
+  type MigrationSaveDeps,
 } from './legacyPluginMigration';
 
 /**
@@ -47,12 +57,6 @@ describe('buildConnectorPayloadFromLegacy', () => {
       expect(r.payload.credentials).toBeUndefined();
       expect(r.payload.sourceType).toBe('custom');
       expect(r.payload.identifier).toBe('grok-with-tavily');
-    });
-
-    it('preserves identifier (agentConfig.plugins references survive)', () => {
-      const r = buildConnectorPayloadFromLegacy(stdioPlugin);
-      if (!r.ok) throw new Error('expected ok');
-      expect(r.payload.identifier).toBe(stdioPlugin.identifier);
     });
   });
 
@@ -386,29 +390,37 @@ describe('executeLegacyMigrationSave', () => {
       type: 'customPlugin',
     }) as LobeToolCustomPlugin;
 
-  let createConnector: ReturnType<typeof vi.fn>;
-  let deleteConnector: ReturnType<typeof vi.fn>;
-  let hasExistingConnector: ReturnType<typeof vi.fn>;
-  let syncConnectorTools: ReturnType<typeof vi.fn>;
-  let uninstallCustomPlugin: ReturnType<typeof vi.fn>;
+  let createConnector: Mock<MigrationSaveDeps['createConnector']>;
+  let deleteConnector: Mock<MigrationSaveDeps['deleteConnector']>;
+  let hasExistingConnector: Mock<MigrationSaveDeps['hasExistingConnector']>;
+  let syncConnectorTools: Mock<MigrationSaveDeps['syncConnectorTools']>;
+  let uninstallCustomPlugin: Mock<MigrationSaveDeps['uninstallCustomPlugin']>;
   let calls: string[];
-  let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
+  let consoleErrorSpy: MockInstance<typeof console.error>;
+
+  const getMigrationDeps = (): MigrationSaveDeps => ({
+    createConnector,
+    deleteConnector,
+    hasExistingConnector,
+    syncConnectorTools,
+    uninstallCustomPlugin,
+  });
 
   beforeEach(() => {
     calls = [];
-    createConnector = vi.fn(async () => {
+    createConnector = vi.fn<MigrationSaveDeps['createConnector']>(async () => {
       calls.push('createConnector');
       return 'new-conn-id';
     });
-    deleteConnector = vi.fn(async () => {
+    deleteConnector = vi.fn<MigrationSaveDeps['deleteConnector']>(async () => {
       calls.push('deleteConnector');
     });
     // Default: no pre-existing connector (the common fresh-migration case).
-    hasExistingConnector = vi.fn(() => false);
-    syncConnectorTools = vi.fn(async () => {
+    hasExistingConnector = vi.fn<MigrationSaveDeps['hasExistingConnector']>(() => false);
+    syncConnectorTools = vi.fn<MigrationSaveDeps['syncConnectorTools']>(async () => {
       calls.push('syncConnectorTools');
     });
-    uninstallCustomPlugin = vi.fn(async () => {
+    uninstallCustomPlugin = vi.fn<MigrationSaveDeps['uninstallCustomPlugin']>(async () => {
       calls.push('uninstallCustomPlugin');
     });
     consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -419,13 +431,7 @@ describe('executeLegacyMigrationSave', () => {
   });
 
   it('runs create → sync → uninstall in exact order on the happy path', async () => {
-    const result = await executeLegacyMigrationSave(legacy(), legacy(), {
-      createConnector,
-      deleteConnector,
-      hasExistingConnector,
-      syncConnectorTools,
-      uninstallCustomPlugin,
-    });
+    const result = await executeLegacyMigrationSave(legacy(), legacy(), getMigrationDeps());
     expect(result).toEqual({ connectorId: 'new-conn-id', ok: true });
     expect(calls).toEqual(['createConnector', 'syncConnectorTools', 'uninstallCustomPlugin']);
   });
@@ -439,13 +445,7 @@ describe('executeLegacyMigrationSave', () => {
       type: 'customPlugin',
     } as LobeToolCustomPlugin;
 
-    await executeLegacyMigrationSave(legacy('agent-x'), value, {
-      createConnector,
-      deleteConnector,
-      hasExistingConnector,
-      syncConnectorTools,
-      uninstallCustomPlugin,
-    });
+    await executeLegacyMigrationSave(legacy('agent-x'), value, getMigrationDeps());
 
     const payload = createConnector.mock.calls[0][0];
     expect(payload.identifier).toBe('agent-x');
@@ -461,13 +461,11 @@ describe('executeLegacyMigrationSave', () => {
     // gets deleted under the OLD key, and `agentConfig.plugins[i]` matches
     // neither. The orchestrator must pin the create payload to the legacy
     // identifier regardless of what the form ended up with.
-    await executeLegacyMigrationSave(legacy('legacy-id'), legacy('renamed-in-form'), {
-      createConnector,
-      deleteConnector,
-      hasExistingConnector,
-      syncConnectorTools,
-      uninstallCustomPlugin,
-    });
+    await executeLegacyMigrationSave(
+      legacy('legacy-id'),
+      legacy('renamed-in-form'),
+      getMigrationDeps(),
+    );
 
     expect(createConnector).toHaveBeenCalledTimes(1);
     expect(createConnector.mock.calls[0][0].identifier).toBe('legacy-id');
@@ -481,13 +479,7 @@ describe('executeLegacyMigrationSave', () => {
       identifier: 'broken',
       type: 'customPlugin',
     } as LobeToolCustomPlugin;
-    const result = await executeLegacyMigrationSave(broken, broken, {
-      createConnector,
-      deleteConnector,
-      hasExistingConnector,
-      syncConnectorTools,
-      uninstallCustomPlugin,
-    });
+    const result = await executeLegacyMigrationSave(broken, broken, getMigrationDeps());
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.reason).toBe('no-endpoint');
@@ -499,13 +491,7 @@ describe('executeLegacyMigrationSave', () => {
   it('rethrows createConnector failure and leaves legacy plugin in place', async () => {
     createConnector.mockRejectedValueOnce(new Error('boom: bad network'));
     await expect(
-      executeLegacyMigrationSave(legacy(), legacy(), {
-        createConnector,
-        deleteConnector,
-        hasExistingConnector,
-        syncConnectorTools,
-        uninstallCustomPlugin,
-      }),
+      executeLegacyMigrationSave(legacy(), legacy(), getMigrationDeps()),
     ).rejects.toThrow('boom: bad network');
     expect(syncConnectorTools).not.toHaveBeenCalled();
     expect(uninstallCustomPlugin).not.toHaveBeenCalled();
@@ -520,13 +506,7 @@ describe('executeLegacyMigrationSave', () => {
     // can retry the save once the endpoint is healthy.
     syncConnectorTools.mockRejectedValueOnce(new Error('mcp tools/list timeout'));
     await expect(
-      executeLegacyMigrationSave(legacy(), legacy(), {
-        createConnector,
-        deleteConnector,
-        hasExistingConnector,
-        syncConnectorTools,
-        uninstallCustomPlugin,
-      }),
+      executeLegacyMigrationSave(legacy(), legacy(), getMigrationDeps()),
     ).rejects.toThrow('mcp tools/list timeout');
     // `syncConnectorTools` is invoked but its mock rejects without recording a
     // call, so `calls` shows create → rollback delete.
@@ -544,13 +524,7 @@ describe('executeLegacyMigrationSave', () => {
     hasExistingConnector.mockReturnValue(true);
     syncConnectorTools.mockRejectedValueOnce(new Error('mcp tools/list timeout'));
     await expect(
-      executeLegacyMigrationSave(legacy(), legacy(), {
-        createConnector,
-        deleteConnector,
-        hasExistingConnector,
-        syncConnectorTools,
-        uninstallCustomPlugin,
-      }),
+      executeLegacyMigrationSave(legacy(), legacy(), getMigrationDeps()),
     ).rejects.toThrow('mcp tools/list timeout');
     expect(deleteConnector).not.toHaveBeenCalled();
     expect(uninstallCustomPlugin).not.toHaveBeenCalled();
@@ -560,13 +534,7 @@ describe('executeLegacyMigrationSave', () => {
     syncConnectorTools.mockRejectedValueOnce(new Error('mcp tools/list timeout'));
     deleteConnector.mockRejectedValueOnce(new Error('rollback network error'));
     await expect(
-      executeLegacyMigrationSave(legacy(), legacy(), {
-        createConnector,
-        deleteConnector,
-        hasExistingConnector,
-        syncConnectorTools,
-        uninstallCustomPlugin,
-      }),
+      executeLegacyMigrationSave(legacy(), legacy(), getMigrationDeps()),
     ).rejects.toThrow('mcp tools/list timeout');
     expect(consoleErrorSpy).toHaveBeenCalledWith(
       '[connector-migration] rollback after failed sync failed',
@@ -577,13 +545,7 @@ describe('executeLegacyMigrationSave', () => {
 
   it('swallows uninstallCustomPlugin failure (connector is the source of truth)', async () => {
     uninstallCustomPlugin.mockRejectedValueOnce(new Error('legacy delete failed'));
-    const result = await executeLegacyMigrationSave(legacy(), legacy(), {
-      createConnector,
-      deleteConnector,
-      hasExistingConnector,
-      syncConnectorTools,
-      uninstallCustomPlugin,
-    });
+    const result = await executeLegacyMigrationSave(legacy(), legacy(), getMigrationDeps());
     // Migration is still considered SUCCESSFUL — the runtime dedupes by
     // identifier and the connector wins, so the leaked legacy row is harmless.
     // Sync succeeded, so the connector is NOT rolled back.
@@ -599,26 +561,14 @@ describe('executeLegacyMigrationSave', () => {
     // First attempt: sync fails → the created connector is rolled back.
     syncConnectorTools.mockRejectedValueOnce(new Error('first attempt fails'));
     await expect(
-      executeLegacyMigrationSave(legacy(), legacy(), {
-        createConnector,
-        deleteConnector,
-        hasExistingConnector,
-        syncConnectorTools,
-        uninstallCustomPlugin,
-      }),
+      executeLegacyMigrationSave(legacy(), legacy(), getMigrationDeps()),
     ).rejects.toThrow('first attempt fails');
     expect(calls).toEqual(['createConnector', 'deleteConnector']);
 
     // Reset call log; retry. Server-side `connector.create` is idempotent on
     // (user_id, identifier), so the second create is an UPDATE.
     calls.length = 0;
-    const result = await executeLegacyMigrationSave(legacy(), legacy(), {
-      createConnector,
-      deleteConnector,
-      hasExistingConnector,
-      syncConnectorTools,
-      uninstallCustomPlugin,
-    });
+    const result = await executeLegacyMigrationSave(legacy(), legacy(), getMigrationDeps());
     expect(result.ok).toBe(true);
     expect(calls).toEqual(['createConnector', 'syncConnectorTools', 'uninstallCustomPlugin']);
   });

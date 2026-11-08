@@ -1,4 +1,3 @@
-import { CUSTOM_DOCUMENT_FILE_TYPE } from '@lobechat/const';
 import { type DocumentItem } from '@lobechat/database/schemas';
 
 import { lambdaClient } from '@/libs/trpc/client';
@@ -14,6 +13,7 @@ import type {
   UpdateDocumentInput,
   UpdateDocumentOutput,
 } from '@/server/routers/lambda/_schema/documentHistory';
+import { workService } from '@/services/work';
 
 import { abortableRequest } from '../utils/abortableRequest';
 
@@ -131,6 +131,30 @@ export interface DocumentHistoryClientSurface {
 
 const autosavedOnceIds = new Set<string>();
 
+/**
+ * A deleted document leaves its Work history intact but changes every card
+ * that points at it into an orphan. Revalidate both ordinary Work caches and
+ * the mounted SWR Infinite galleries before the delete interaction settles.
+ */
+const refreshWorksAfterDocumentDelete = async () => {
+  const results = await Promise.allSettled([
+    workService.refreshAllConversations(),
+    workService.refreshWorkspaceLists(),
+  ]);
+
+  // The document is already deleted at this point. Cache refresh failures must
+  // not make callers roll the optimistic document state back to a row that no
+  // longer exists on the server, but every refresh still needs time to settle.
+  for (const result of results) {
+    if (result.status === 'rejected') {
+      console.error(
+        '[DocumentService] Failed to refresh Works after document deletion:',
+        result.reason,
+      );
+    }
+  }
+};
+
 export class DocumentService {
   async createDocument(params: CreateDocumentParams): Promise<DocumentItem> {
     return lambdaClient.document.createDocument.mutate(params);
@@ -141,10 +165,13 @@ export class DocumentService {
   }
 
   async queryDocuments(params?: {
+    creator?: 'others' | 'self';
     current?: number;
     fileTypes?: string[];
     pageSize?: number;
+    sortBy?: 'createdAt' | 'title' | 'updatedAt';
     sourceTypes?: string[];
+    standaloneOnly?: boolean;
   }): Promise<{ items: DocumentItem[]; total: number }> {
     return lambdaClient.document.queryDocuments.query(params);
   }
@@ -182,23 +209,6 @@ export class DocumentService {
     return serializeHistoryComparison(result);
   }
 
-  async getPageDocuments(pageSize: number = 20): Promise<DocumentItem[]> {
-    const result = await this.queryDocuments({
-      current: 0,
-      fileTypes: [CUSTOM_DOCUMENT_FILE_TYPE, 'application/pdf'],
-      pageSize,
-      sourceTypes: ['editor', 'file', 'api'],
-    });
-
-    return result.items
-      .filter(
-        (doc) =>
-          ['editor', 'file', 'api'].includes(doc.sourceType) &&
-          [CUSTOM_DOCUMENT_FILE_TYPE, 'application/pdf'].includes(doc.fileType),
-      )
-      .map((doc) => ({ ...doc, filename: doc.filename ?? doc.title ?? 'Untitled' }));
-  }
-
   async getDocumentById(id: string, uniqueKey?: string): Promise<DocumentItem | undefined> {
     if (uniqueKey) {
       // Use fixed key so switching documents cancels the previous request
@@ -213,10 +223,12 @@ export class DocumentService {
 
   async deleteDocument(id: string): Promise<void> {
     await lambdaClient.document.deleteDocument.mutate({ id });
+    await refreshWorksAfterDocumentDelete();
   }
 
   async deleteDocuments(ids: string[]): Promise<void> {
     await lambdaClient.document.deleteDocuments.mutate({ ids });
+    await refreshWorksAfterDocumentDelete();
   }
 
   async updateDocument(params: UpdateDocumentParams): Promise<UpdateDocumentOutput> {
@@ -232,6 +244,8 @@ export class DocumentService {
           ? result.savedAt.toISOString()
           : result.savedAt
         : undefined,
+      updatedAt:
+        result.updatedAt instanceof Date ? result.updatedAt.toISOString() : result.updatedAt,
     };
   }
 
@@ -258,6 +272,15 @@ export class DocumentService {
     return {
       savedAt: result.savedAt instanceof Date ? result.savedAt.toISOString() : result.savedAt,
     };
+  }
+
+  /** Store a page's live collaboration room as a version; false when it has no live room. */
+  async snapshotPageVersion(documentId: string, saveSource: 'manual'): Promise<boolean> {
+    const { recorded } = await lambdaClient.document.snapshotPageVersion.mutate({
+      documentId,
+      saveSource,
+    });
+    return recorded;
   }
 
   async transferDocument(

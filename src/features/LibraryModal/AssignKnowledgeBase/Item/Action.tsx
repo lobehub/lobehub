@@ -1,9 +1,10 @@
-import { DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
-import { ActionIcon, Button } from '@lobehub/ui/base-ui';
+import { ActionIcon, Button, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
 import { InfoIcon, MoreVerticalIcon, Trash2 } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
+import { buildFilePath, buildLibraryPath } from '@/features/ResourceManager/utils/resourcePath';
 import { useAgentStore } from '@/store/agent';
 import { useServerConfigStore } from '@/store/serverConfig';
 import { KnowledgeType } from '@/types/knowledgeBase';
@@ -18,6 +19,7 @@ const Actions = memo<ActionsProps>(({ id, type, enabled }) => {
   const { t } = useTranslation('chat');
 
   const mobile = useServerConfigStore((s) => s.isMobile);
+  const activeWorkspaceSlug = useActiveWorkspaceSlug();
   const [
     addFilesToAgent,
     addKnowledgeBasesToAgent,
@@ -63,12 +65,11 @@ const Actions = memo<ActionsProps>(({ id, type, enabled }) => {
               key: 'detail',
               label: t('knowledgeBase.library.action.detail'),
               onClick: () => {
-                if (type === KnowledgeType.KnowledgeBase) {
-                  window.open(`/resource/library/${id}`);
-                  return;
-                }
-
-                window.open(`/resource?file=${id}`);
+                window.open(
+                  type === KnowledgeType.KnowledgeBase
+                    ? buildLibraryPath(id, activeWorkspaceSlug)
+                    : buildFilePath(id, activeWorkspaceSlug),
+                );
               },
             },
             {

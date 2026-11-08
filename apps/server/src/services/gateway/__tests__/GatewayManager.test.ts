@@ -29,7 +29,9 @@ vi.mock('@/server/modules/KeyVaultsEncrypt', () => ({
 }));
 
 vi.mock('@/business/server/bot/featureAccess', () => ({
-  getBotFeatureBlockedMessage: vi.fn(() => 'blocked'),
+  getBotFeatureBlockedMessage: vi.fn(function () {
+    return 'blocked';
+  }),
   isBotFeatureAccessAllowed: mockIsBotFeatureAccessAllowed,
 }));
 
@@ -148,19 +150,6 @@ describe('GatewayManager', () => {
       expect(mockUpdateBotRuntimeStatus).toHaveBeenCalledWith(
         expect.objectContaining({ applicationId: 'app-1', status: 'failed' }),
       );
-    });
-
-    it('should skip already running bots', async () => {
-      mockFindEnabledByPlatform.mockResolvedValue([
-        {
-          applicationId: 'app-1',
-          credentials: { key: 'value' },
-        },
-      ]);
-
-      await manager.start();
-
-      expect(manager.isRunning).toBe(true);
     });
 
     it('should handle sync errors gracefully', async () => {

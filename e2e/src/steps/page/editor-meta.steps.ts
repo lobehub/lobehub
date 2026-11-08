@@ -4,10 +4,11 @@
  * Step definitions for Page editor title and emoji editing E2E tests
  */
 import { Given, Then, When } from '@cucumber/cucumber';
-import { expect } from '@playwright/test';
+import { expect, type Locator } from '@playwright/test';
 
 import type { CustomWorld } from '../../support/world';
 import { WAIT_TIMEOUT } from '../../support/world';
+import { openDocsHome } from './docs-home';
 
 async function waitForPageWorkspaceReady(world: CustomWorld): Promise<void> {
   const loadingSelectors = ['[aria-label="Loading"]', '.lobe-brand-loading'];
@@ -29,9 +30,12 @@ async function waitForPageWorkspaceReady(world: CustomWorld): Promise<void> {
     }
 
     const readyCandidates = [
+      // Pages live inside Docs now: the Docs home quick action renders a FilePlus2
+      // icon, while the sidebar section keeps the SquarePen one.
+      world.page.locator(':is(button, [role="button"]):has(svg.lucide-file-plus-2)').first(),
       world.page.locator(':is(button, [role="button"]):has(svg.lucide-square-pen)').first(),
       world.page.locator('input[placeholder*="Search"], input[placeholder*="搜索"]').first(),
-      world.page.locator('a[href^="/page/"]').first(),
+      world.page.locator('a[href*="/resource/page/"]').first(),
     ];
 
     for (const candidate of readyCandidates) {
@@ -50,6 +54,9 @@ async function clickNewPageButton(world: CustomWorld): Promise<void> {
   await waitForPageWorkspaceReady(world);
 
   const candidates = [
+    // Pages live inside Docs now: the home quick action renders a FilePlus2 icon,
+    // while the sidebar section keeps the SquarePen one.
+    world.page.locator(':is(button, [role="button"]):has(svg.lucide-file-plus-2)').first(),
     world.page.locator(':is(button, [role="button"]):has(svg.lucide-square-pen)').first(),
     world.page
       .locator('svg.lucide-square-pen')
@@ -83,8 +90,7 @@ Given('用户打开一个文稿编辑器', async function (this: CustomWorld) {
   console.log('   📍 Step: 创建并打开一个文稿...');
 
   // Navigate to page module
-  await this.page.goto('/page');
-  await this.page.waitForLoadState('domcontentloaded', { timeout: 15_000 });
+  await openDocsHome(this);
   await waitForPageWorkspaceReady(this);
 
   // Create a new page via UI
@@ -92,7 +98,7 @@ Given('用户打开一个文稿编辑器', async function (this: CustomWorld) {
   await this.page.waitForTimeout(1500);
 
   // Wait for navigation to page editor
-  await this.page.waitForURL(/\/page\/.+/, { timeout: WAIT_TIMEOUT });
+  await this.page.waitForURL(/\/resource\/page\/.+/, { timeout: WAIT_TIMEOUT });
   await this.page.waitForLoadState('domcontentloaded');
   await this.page.waitForTimeout(500);
 
@@ -103,14 +109,13 @@ Given('用户打开一个带有 Emoji 的文稿', async function (this: CustomWo
   console.log('   📍 Step: 创建并打开一个带 Emoji 的文稿...');
 
   // First create and open a page
-  await this.page.goto('/page');
-  await this.page.waitForLoadState('domcontentloaded', { timeout: 15_000 });
+  await openDocsHome(this);
   await waitForPageWorkspaceReady(this);
 
   await clickNewPageButton(this);
   await this.page.waitForTimeout(1500);
 
-  await this.page.waitForURL(/\/page\/.+/, { timeout: WAIT_TIMEOUT });
+  await this.page.waitForURL(/\/resource\/page\/.+/, { timeout: WAIT_TIMEOUT });
   await this.page.waitForLoadState('domcontentloaded');
   await this.page.waitForTimeout(500);
 
@@ -217,57 +222,9 @@ When('用户点击选择图标按钮', async function (this: CustomWorld) {
 When('用户选择一个 Emoji', async function (this: CustomWorld) {
   console.log('   📍 Step: 选择一个 Emoji...');
 
-  // Wait for emoji picker to be visible
-  await this.page.waitForTimeout(800);
-
-  // The emoji picker renders emojis as clickable span elements in a grid
-  // Look for emoji elements in the "Frequently used" or "Smileys & People" section
-  const emojiSelectors = [
-    // Emoji spans in the picker grid (matches emoji characters)
-    'span[style*="cursor: pointer"]',
-    'span[role="img"]',
-    '[data-emoji]',
-    // Emoji-mart style selectors
-    '.emoji-mart-emoji span',
-    'button[aria-label*="emoji"]',
-  ];
-
-  let clicked = false;
-  for (const selector of emojiSelectors) {
-    const emojis = this.page.locator(selector);
-    const count = await emojis.count();
-    console.log(`   📍 Debug: Found ${count} elements with selector "${selector}"`);
-    if (count > 0) {
-      // Click a random emoji (not the first to avoid default)
-      const index = Math.min(5, count - 1);
-      await emojis.nth(index).click();
-      clicked = true;
-      console.log(`   📍 Debug: Clicked emoji at index ${index}`);
-      break;
-    }
-  }
-
-  // Fallback: try to find any clickable element in the emoji popover
-  if (!clicked) {
-    console.log('   📍 Debug: Trying fallback - looking for emoji in popover');
-    const popover = this.page.locator('.ant-popover-inner, [class*="popover"]').first();
-    if ((await popover.count()) > 0) {
-      // Find spans that look like emojis (single character with emoji range)
-      const emojiSpans = popover.locator('span').filter({
-        hasText: /^\p{Emoji}$/u,
-      });
-      const count = await emojiSpans.count();
-      console.log(`   📍 Debug: Found ${count} emoji spans in popover`);
-      if (count > 0) {
-        await emojiSpans.nth(Math.min(5, count - 1)).click();
-        clicked = true;
-      }
-    }
-  }
-
-  if (!clicked) {
-    console.log('   ⚠️ Could not find emoji button, test may fail');
-  }
+  const emojiButton = this.page.locator('em-emoji-picker button[aria-posinset]').nth(5);
+  await emojiButton.waitFor({ state: 'visible', timeout: 10_000 });
+  await emojiButton.click();
 
   await this.page.waitForTimeout(1000);
 
@@ -277,11 +234,35 @@ When('用户选择一个 Emoji', async function (this: CustomWorld) {
 When('用户点击已有的 Emoji 图标', async function (this: CustomWorld) {
   console.log('   📍 Step: 点击已有的 Emoji 图标...');
 
-  // The emoji is displayed in an Avatar component with square shape
-  // Look for the emoji display element near the title
-  const emojiAvatar = this.page.locator('[class*="Avatar"]').first();
-  if ((await emojiAvatar.count()) > 0) {
-    await emojiAvatar.click();
+  // The setup step can leave the picker open over the title; a pointer aimed
+  // through it never lands on the emoji, so dismiss it first.
+  await this.page.keyboard.press('Escape');
+  await this.page.waitForTimeout(300);
+
+  // Docs lists every page in the sidebar with an Avatar for its emoji, so a
+  // bare `[class*="Avatar"]` matches a nav row instead of the editor's title.
+  // Take the first Avatar that is not inside a page link.
+  const avatars = this.page.locator('[class*="Avatar"]');
+  const avatarCount = await avatars.count();
+  let emojiAvatar: Locator | null = null;
+
+  for (let i = 0; i < avatarCount; i += 1) {
+    const candidate = avatars.nth(i);
+
+    const insideNavRow = await candidate.evaluate((node) =>
+      Boolean(node.closest('a[href*="/resource/page/"]')),
+    );
+
+    if (!insideNavRow) {
+      emojiAvatar = candidate;
+      break;
+    }
+  }
+
+  if (emojiAvatar) {
+    // Bounded: an unreachable target should fail the step fast instead of
+    // eating the whole 30s budget inside Playwright's default retry window.
+    await emojiAvatar.click({ timeout: 5000 });
   } else {
     // Fallback: look for span with emoji
     const emojiSpan = this.page
@@ -289,7 +270,7 @@ When('用户点击已有的 Emoji 图标', async function (this: CustomWorld) {
       .filter({ hasText: /^[\u{1F300}-\u{1F9FF}]$/u })
       .first();
     if ((await emojiSpan.count()) > 0) {
-      await emojiSpan.click();
+      await emojiSpan.click({ timeout: 5000 });
     }
   }
 

@@ -1,18 +1,13 @@
 'use client';
 
 import { type FileUploadState } from '@lobechat/types';
-import { Center, Flexbox, Icon } from '@lobehub/ui';
-import { Tag } from '@lobehub/ui/base-ui';
-import { Progress, Upload } from 'antd';
-import { createStaticStyles } from 'antd-style';
+import { Center, createStaticStyles, Flexbox, Icon, Progress, Tag, Upload } from '@lobehub/ui';
 import { CloudUpload, ImportIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { type DatasetPreset } from '../../config/datasetPresets';
 import { ROLE_COLORS } from './const';
-
-const { Dragger } = Upload;
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   // Preset summary panel — a single tonal card describing the chosen format.
@@ -27,13 +22,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   // Bold dropzone — the single primary action of this step.
   dragger: css`
-    .ant-upload-drag {
-      border-radius: ${cssVar.borderRadiusLG};
-      transition: border-color 0.15s ease;
+    border-radius: ${cssVar.borderRadiusLG};
+    transition: border-color 0.15s ease;
 
-      @media (prefers-reduced-motion: reduce) {
-        transition: none;
-      }
+    @media (prefers-reduced-motion: reduce) {
+      transition: none;
     }
   `,
   draggerContent: css`
@@ -191,16 +184,13 @@ const UploadStep = memo<UploadStepProps>(({ onFileSelect, loading, preset, uploa
         </Flexbox>
       )}
 
-      <Dragger
+      <Upload
+        dragger
         accept=".csv,.xlsx,.xls,.json,.jsonl"
         className={styles.dragger}
         disabled={loading}
         maxCount={1}
-        showUploadList={false}
-        beforeUpload={(file) => {
-          onFileSelect(file);
-          return false;
-        }}
+        onFiles={([file]) => onFileSelect(file)}
       >
         {loading ? (
           <Center className={styles.draggerContent} gap={16}>
@@ -223,7 +213,7 @@ const UploadStep = memo<UploadStepProps>(({ onFileSelect, loading, preset, uploa
             <p className={styles.hintText}>{t('dataset.import.upload.hint')}</p>
           </Center>
         )}
-      </Dragger>
+      </Upload>
     </Flexbox>
   );
 });

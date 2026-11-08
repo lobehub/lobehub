@@ -1,14 +1,12 @@
-import { stopPropagation, Tooltip } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cx } from 'antd-style';
+import { Button, createStaticStyles, cx, stopPropagation, Tooltip } from '@lobehub/ui';
 import { isNull } from 'es-toolkit/compat';
 import { FileBoxIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { isChunkingSupported } from '@/libs/document-loaders/loaderType';
 import { fileManagerSelectors, useFileStore } from '@/store/file';
 import { type AsyncTaskStatus, type IAsyncTaskError } from '@/types/asyncTask';
-import { isChunkingUnsupported } from '@/utils/isChunkingUnsupported';
 
 import ChunksBadge from '../../ListView/ListItem/ChunkTag';
 
@@ -106,7 +104,7 @@ const NoteFileItem = memo<NoteFileItemProps>(
       s.parseFilesToChunks,
     ]);
 
-    const isSupportedForChunking = !isChunkingUnsupported(fileType || '');
+    const isSupportedForChunking = isChunkingSupported({ fileType, name });
 
     const displayTitle = name || t('file:pageList.untitled');
     const emoji = metadata?.emoji;

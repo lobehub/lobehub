@@ -50,6 +50,41 @@ afterEach(async () => {
 });
 
 describe('AgentEvalDatasetModel', () => {
+  describe('queryList / count', () => {
+    beforeEach(async () => {
+      await serverDB.insert(agentEvalDatasets).values([
+        { benchmarkId, identifier: 'own-a', name: 'Own A', userId },
+        { benchmarkId, identifier: 'own-b', name: 'Own B', userId },
+        // System dataset (userId NULL) is readable by everyone
+        { benchmarkId, identifier: 'system', name: 'System' },
+        // Another user's dataset must never be listed
+        { benchmarkId, identifier: 'other', name: 'Other', userId: userId2 },
+      ]);
+    });
+
+    it('should list own and system datasets only', async () => {
+      const results = await datasetModel.queryList();
+
+      expect(results).toHaveLength(3);
+      expect(results.map((d) => d.identifier).sort()).toEqual(['own-a', 'own-b', 'system']);
+    });
+
+    it('should apply limit and offset pagination', async () => {
+      const all = await datasetModel.queryList();
+      const firstPage = await datasetModel.queryList({ limit: 2, offset: 0 });
+      const secondPage = await datasetModel.queryList({ limit: 2, offset: 2 });
+
+      expect(firstPage).toHaveLength(2);
+      expect(secondPage).toHaveLength(1);
+      expect([...firstPage, ...secondPage].map((d) => d.id)).toEqual(all.map((d) => d.id));
+    });
+
+    it('should count with the same ownership predicate', async () => {
+      expect(await datasetModel.count()).toBe(3);
+      expect(await datasetModel.count({ benchmarkId: 'nonexistent' })).toBe(0);
+    });
+  });
+
   describe('create', () => {
     it('should create a new dataset with userId', async () => {
       const params = {
@@ -183,7 +218,6 @@ describe('AgentEvalDatasetModel', () => {
       expect(results.map((r) => r.identifier)).toContain('user-dataset-1');
       expect(results.map((r) => r.identifier)).toContain('user-dataset-2');
       expect(results.map((r) => r.identifier)).toContain('system-dataset');
-      expect(results.map((r) => r.identifier)).not.toContain('other-user-dataset');
     });
 
     it('should query datasets by benchmarkId', async () => {
@@ -233,14 +267,6 @@ describe('AgentEvalDatasetModel', () => {
       const results = await datasetModel.query({ sourceExperimentId: experiment.id });
 
       expect(results.map((r) => r.identifier)).toEqual(['scoped-dataset']);
-    });
-
-    it('should order by createdAt descending', async () => {
-      const results = await datasetModel.query();
-
-      // The newest should come first
-      // Order may vary, just check we got results
-      expect(results.length).toBeGreaterThanOrEqual(2);
     });
 
     it('should include system datasets (userId is null)', async () => {

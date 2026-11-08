@@ -1,4 +1,4 @@
-import { isPlainRecord } from '@lobechat/utils';
+import { isPlainRecord } from '../../utils/object';
 
 const HIGH_SURROGATE_START = 0xd8_00;
 const HIGH_SURROGATE_END = 0xdb_ff;

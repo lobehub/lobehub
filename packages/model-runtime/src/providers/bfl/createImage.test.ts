@@ -2,11 +2,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { CreateImagePayload } from '../../types/image';
+import { clearReferenceImageCache } from '../../utils/referenceImageCache';
 import { createBflImage } from './createImage';
 import { BflStatusResponse } from './types';
 
 // Mock external dependencies
-vi.mock('@lobechat/utils', () => ({
+vi.mock('../../utils/imageToBase64', () => ({
   imageUrlToBase64: vi.fn(),
 }));
 
@@ -30,7 +31,18 @@ const mockOptions = {
   provider: 'bfl' as const,
 };
 
+const createTaskSubmissionResponse = () =>
+  ({
+    ok: true,
+    json: () =>
+      Promise.resolve({
+        id: 'task-123',
+        polling_url: 'https://api.bfl.ai/v1/get_result?id=task-123',
+      }),
+  }) as Response;
+
 beforeEach(() => {
+  clearReferenceImageCache();
   vi.clearAllMocks();
 });
 
@@ -45,14 +57,7 @@ describe('createBflImage', () => {
       const { asyncifyPolling } = await import('../../utils/asyncifyPolling');
       const mockAsyncifyPolling = vi.mocked(asyncifyPolling);
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () =>
-          Promise.resolve({
-            id: 'task-123',
-            polling_url: 'https://api.bfl.ai/v1/get_result?id=task-123',
-          }),
-      } as Response);
+      mockFetch.mockResolvedValueOnce(createTaskSubmissionResponse());
 
       mockAsyncifyPolling.mockResolvedValue({
         imageUrl: 'https://example.com/result.jpg',
@@ -99,14 +104,7 @@ describe('createBflImage', () => {
       const { asyncifyPolling } = await import('../../utils/asyncifyPolling');
       const mockAsyncifyPolling = vi.mocked(asyncifyPolling);
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () =>
-          Promise.resolve({
-            id: 'task-123',
-            polling_url: 'https://api.bfl.ai/v1/get_result?id=task-123',
-          }),
-      } as Response);
+      mockFetch.mockResolvedValueOnce(createTaskSubmissionResponse());
 
       mockAsyncifyPolling.mockResolvedValue({
         imageUrl: 'https://example.com/result.jpg',
@@ -141,14 +139,7 @@ describe('createBflImage', () => {
       const { asyncifyPolling } = await import('../../utils/asyncifyPolling');
       const mockAsyncifyPolling = vi.mocked(asyncifyPolling);
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () =>
-          Promise.resolve({
-            id: 'task-123',
-            polling_url: 'https://api.bfl.ai/v1/get_result?id=task-123',
-          }),
-      } as Response);
+      mockFetch.mockResolvedValueOnce(createTaskSubmissionResponse());
 
       mockAsyncifyPolling.mockResolvedValue({
         imageUrl: 'https://example.com/result.jpg',
@@ -187,7 +178,7 @@ describe('createBflImage', () => {
     it('should convert single imageUrl to image_prompt base64', async () => {
       // Arrange
       const { parseDataUri } = await import('../../utils/uriParser');
-      const { imageUrlToBase64 } = await import('@lobechat/utils');
+      const { imageUrlToBase64 } = await import('../../utils/imageToBase64');
       const { asyncifyPolling } = await import('../../utils/asyncifyPolling');
 
       const mockParseDataUri = vi.mocked(parseDataUri);
@@ -200,14 +191,7 @@ describe('createBflImage', () => {
         mimeType: 'image/jpeg',
       });
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () =>
-          Promise.resolve({
-            id: 'task-123',
-            polling_url: 'https://api.bfl.ai/v1/get_result?id=task-123',
-          }),
-      } as Response);
+      mockFetch.mockResolvedValueOnce(createTaskSubmissionResponse());
 
       mockAsyncifyPolling.mockResolvedValue({
         imageUrl: 'https://example.com/result.jpg',
@@ -255,14 +239,7 @@ describe('createBflImage', () => {
         mimeType: 'image/jpeg',
       });
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () =>
-          Promise.resolve({
-            id: 'task-123',
-            polling_url: 'https://api.bfl.ai/v1/get_result?id=task-123',
-          }),
-      } as Response);
+      mockFetch.mockResolvedValueOnce(createTaskSubmissionResponse());
 
       mockAsyncifyPolling.mockResolvedValue({
         imageUrl: 'https://example.com/result.jpg',
@@ -290,7 +267,7 @@ describe('createBflImage', () => {
     it('should convert multiple imageUrls for Kontext models', async () => {
       // Arrange
       const { parseDataUri } = await import('../../utils/uriParser');
-      const { imageUrlToBase64 } = await import('@lobechat/utils');
+      const { imageUrlToBase64 } = await import('../../utils/imageToBase64');
       const { asyncifyPolling } = await import('../../utils/asyncifyPolling');
 
       const mockParseDataUri = vi.mocked(parseDataUri);
@@ -303,14 +280,7 @@ describe('createBflImage', () => {
         .mockResolvedValueOnce({ base64: 'base64image2', mimeType: 'image/jpeg' })
         .mockResolvedValueOnce({ base64: 'base64image3', mimeType: 'image/jpeg' });
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () =>
-          Promise.resolve({
-            id: 'task-123',
-            polling_url: 'https://api.bfl.ai/v1/get_result?id=task-123',
-          }),
-      } as Response);
+      mockFetch.mockResolvedValueOnce(createTaskSubmissionResponse());
 
       mockAsyncifyPolling.mockResolvedValue({
         imageUrl: 'https://example.com/result.jpg',
@@ -350,7 +320,7 @@ describe('createBflImage', () => {
     it('should limit imageUrls to maximum 4 images', async () => {
       // Arrange
       const { parseDataUri } = await import('../../utils/uriParser');
-      const { imageUrlToBase64 } = await import('@lobechat/utils');
+      const { imageUrlToBase64 } = await import('../../utils/imageToBase64');
       const { asyncifyPolling } = await import('../../utils/asyncifyPolling');
 
       const mockParseDataUri = vi.mocked(parseDataUri);
@@ -364,14 +334,7 @@ describe('createBflImage', () => {
         .mockResolvedValueOnce({ base64: 'base64image3', mimeType: 'image/jpeg' })
         .mockResolvedValueOnce({ base64: 'base64image4', mimeType: 'image/jpeg' });
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () =>
-          Promise.resolve({
-            id: 'task-123',
-            polling_url: 'https://api.bfl.ai/v1/get_result?id=task-123',
-          }),
-      } as Response);
+      mockFetch.mockResolvedValueOnce(createTaskSubmissionResponse());
 
       mockAsyncifyPolling.mockResolvedValue({
         imageUrl: 'https://example.com/result.jpg',
@@ -420,14 +383,7 @@ describe('createBflImage', () => {
       const { asyncifyPolling } = await import('../../utils/asyncifyPolling');
       const mockAsyncifyPolling = vi.mocked(asyncifyPolling);
 
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: () =>
-          Promise.resolve({
-            id: 'task-123',
-            polling_url: 'https://api.bfl.ai/v1/get_result?id=task-123',
-          }),
-      } as Response);
+      mockFetch.mockResolvedValue(createTaskSubmissionResponse());
 
       mockAsyncifyPolling.mockResolvedValue({
         imageUrl: 'https://example.com/result.jpg',
@@ -525,14 +481,7 @@ describe('createBflImage', () => {
       const { asyncifyPolling } = await import('../../utils/asyncifyPolling');
       const mockAsyncifyPolling = vi.mocked(asyncifyPolling);
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () =>
-          Promise.resolve({
-            id: 'task-123',
-            polling_url: 'https://api.bfl.ai/v1/get_result?id=task-123',
-          }),
-      } as Response);
+      mockFetch.mockResolvedValueOnce(createTaskSubmissionResponse());
 
       // Mock the asyncifyPolling to call checkStatus with Ready status
       mockAsyncifyPolling.mockImplementation(async ({ checkStatus }) => {
@@ -571,14 +520,7 @@ describe('createBflImage', () => {
       const { asyncifyPolling } = await import('../../utils/asyncifyPolling');
       const mockAsyncifyPolling = vi.mocked(asyncifyPolling);
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () =>
-          Promise.resolve({
-            id: 'task-123',
-            polling_url: 'https://api.bfl.ai/v1/get_result?id=task-123',
-          }),
-      } as Response);
+      mockFetch.mockResolvedValueOnce(createTaskSubmissionResponse());
 
       mockAsyncifyPolling.mockImplementation(async ({ checkStatus }) => {
         const result = checkStatus({
@@ -613,14 +555,7 @@ describe('createBflImage', () => {
       const { asyncifyPolling } = await import('../../utils/asyncifyPolling');
       const mockAsyncifyPolling = vi.mocked(asyncifyPolling);
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () =>
-          Promise.resolve({
-            id: 'task-123',
-            polling_url: 'https://api.bfl.ai/v1/get_result?id=task-123',
-          }),
-      } as Response);
+      mockFetch.mockResolvedValueOnce(createTaskSubmissionResponse());
 
       const errorStatuses = [
         BflStatusResponse.Error,
@@ -663,14 +598,7 @@ describe('createBflImage', () => {
       const { asyncifyPolling } = await import('../../utils/asyncifyPolling');
       const mockAsyncifyPolling = vi.mocked(asyncifyPolling);
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () =>
-          Promise.resolve({
-            id: 'task-123',
-            polling_url: 'https://api.bfl.ai/v1/get_result?id=task-123',
-          }),
-      } as Response);
+      mockFetch.mockResolvedValueOnce(createTaskSubmissionResponse());
 
       mockAsyncifyPolling.mockImplementation(async ({ checkStatus }) => {
         const result = checkStatus({
@@ -704,14 +632,7 @@ describe('createBflImage', () => {
       const { asyncifyPolling } = await import('../../utils/asyncifyPolling');
       const mockAsyncifyPolling = vi.mocked(asyncifyPolling);
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () =>
-          Promise.resolve({
-            id: 'task-123',
-            polling_url: 'https://api.bfl.ai/v1/get_result?id=task-123',
-          }),
-      } as Response);
+      mockFetch.mockResolvedValueOnce(createTaskSubmissionResponse());
 
       mockAsyncifyPolling.mockImplementation(async ({ checkStatus }) => {
         // First call - Pending status

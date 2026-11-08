@@ -8,6 +8,10 @@ name: Release Desktop Canary
 #      (可带任意 gitmoji)
 #   2. 手动触发 (workflow_dispatch)
 #
+# core-only 优先:
+#   先跑 release-desktop-core-ota.yml；只有 shellAbi 变了或 stable 已追上当前壳版本
+#   (requires_full_release)、core 没有变化 (skipped)、手动 force_full 时才走全量打包。
+#
 # 并发策略:
 #   运行中的发布不会被后续 push 取消；等待队列仅保留最新一次运行
 #
@@ -15,6 +19,11 @@ name: Release Desktop Canary
 #   基于最新 stable tag 的 patch+1, postfix 为递增序号
 #   格式: X.Y.(Z+1)-canary.N
 #   例: 当前 tag v2.1.28 → v2.1.29-canary.1, 下次 → v2.1.29-canary.2
+#
+# macOS Sparkle 试点 (缺少任一 secret 时自动跳过，客户端回退 electron-updater):
+#   - SPARKLE_ED_PUBLIC_KEY: 打进 Info.plist 的 SUPublicEDKey
+#   - SPARKLE_ED_PRIVATE_KEY: `generate_keys -x` 导出的 base64 seed，用于签 appcast/delta
+#   发布 {channel}/appcast-{arch}.xml 与 {channel}/{version}/*.delta 到 S3
 # ============================================
 
 on:
@@ -25,6 +34,11 @@ on:
     inputs:
       force:
         description: 'Force build (skip commit message check)'
+        required: false
+        type: boolean
+        default: false
+      force_full:
+        description: 'Skip the core-only path and publish a full release'
         required: false
         type: boolean
         default: false
@@ -49,7 +63,7 @@ jobs:
     outputs:
       should_build: ${{ steps.check.outputs.should_build }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -83,22 +97,27 @@ jobs:
             echo "⏭️ Commit type is not style/feat/fix/perf/refactor/release, skipping: $commit_msg"
           fi
 
-  renderer-ota:
-    name: Publish Renderer OTA
+  # ============================================
+  # core-only 发布（壳未变时不打全量包）
+  # ============================================
+  core-ota:
+    name: Core OTA
     needs: [check-trigger]
-    if: needs.check-trigger.outputs.should_build == 'true'
-    uses: ./.github/workflows/release-desktop-renderer-ota.yml
+    if: needs.check-trigger.outputs.should_build == 'true' && !inputs.force_full
+    uses: ./.github/workflows/release-desktop-core-ota.yml
+    secrets: inherit
     with:
       channel: canary
-    secrets: inherit
 
   # ============================================
-  # OTA 无法覆盖当前 main 时，计算完整发布版本
+  # 计算版本号
   # ============================================
   calculate-version:
     name: Calculate Canary Version
-    needs: [check-trigger, renderer-ota]
-    if: needs.check-trigger.outputs.should_build == 'true' && (github.event_name == 'workflow_dispatch' || needs.renderer-ota.outputs.requires_full_release == 'true')
+    needs: [check-trigger, core-ota]
+    if: |
+      !cancelled() && needs.check-trigger.outputs.should_build == 'true' &&
+      (inputs.force_full || needs.core-ota.outputs.requires_full_release == 'true' || needs.core-ota.outputs.skipped == 'true')
     runs-on: ubuntu-latest
     outputs:
       cloud_ref: ${{ steps.cloud-ref.outputs.cloud_ref }}
@@ -106,7 +125,7 @@ jobs:
       version: ${{ steps.version.outputs.version }}
       tag: ${{ steps.version.outputs.tag }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -147,11 +166,19 @@ jobs:
           echo "✅ Canary version: ${version}"
           echo "🏷️ Tag: ${tag}"
 
+      - name: Create overlay token
+        id: overlay-token
+        uses: ./.github/actions/overlay-token
+        with:
+          app-id: ${{ vars.LOBEHUB_BOT_APP_ID }}
+          private-key: ${{ secrets.LOBEHUB_BOT_APP_PRIVATE_KEY }}
+          repository: ${{ vars.OVERLAY_REPOSITORY }}
+
       - name: Resolve Cloud revision
         id: cloud-ref
         env:
           CLOUD_REPOSITORY: ${{ vars.OVERLAY_REPOSITORY }}
-          CLOUD_TOKEN: ${{ secrets.LOBEHUB_CLOUD_TOKEN }}
+          CLOUD_TOKEN: ${{ steps.overlay-token.outputs.token }}
         run: |
           set -euo pipefail
           : "${CLOUD_REPOSITORY:?OVERLAY_REPOSITORY repository variable is not set}"
@@ -216,7 +243,6 @@ jobs:
             echo "| Platform | File |"
             echo "|----------|------|"
             echo "| macOS (Apple Silicon) | \`.dmg\` (arm64) |"
-            echo "| macOS (Intel) | \`.dmg\` (x64) |"
             echo "| Windows | \`.exe\` |"
             echo "| Linux | \`.AppImage\` / \`.deb\` |"
             echo "EOF"
@@ -228,10 +254,14 @@ jobs:
   test:
     name: Code quality check
     needs: [calculate-version]
+    # force_full skips core-ota, and a skipped ancestor skips every job on the default
+    # success() condition, even when calculate-version itself succeeded. Each job below
+    # therefore checks its direct dependencies explicitly.
+    if: ${{ !cancelled() && needs.calculate-version.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout base
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup environment
         uses: ./.github/actions/setup-env
@@ -249,24 +279,43 @@ jobs:
   # ============================================
   build:
     needs: [calculate-version, test]
+    if: ${{ !cancelled() && needs.calculate-version.result == 'success' && needs.test.result == 'success' }}
     name: Build Desktop App
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-15, macos-15-intel, windows-2025, ubuntu-latest]
+        os: [macos-15, windows-2025, ubuntu-latest]
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
+
+      - name: Create overlay token
+        id: overlay-token
+        uses: ./.github/actions/overlay-token
+        with:
+          app-id: ${{ vars.LOBEHUB_BOT_APP_ID }}
+          private-key: ${{ secrets.LOBEHUB_BOT_APP_PRIVATE_KEY }}
+          repository: ${{ vars.OVERLAY_REPOSITORY }}
 
       - name: Setup build environment
+        id: setup
         uses: ./.github/actions/desktop-build-setup
         with:
           cloud-ref: ${{ needs.calculate-version.outputs.cloud_ref }}
           cloud-repository: ${{ vars.OVERLAY_REPOSITORY }}
-          cloud-token: ${{ secrets.LOBEHUB_CLOUD_TOKEN }}
+          cloud-token: ${{ steps.overlay-token.outputs.token }}
           node-version: ${{ env.NODE_VERSION }}
 
+      - name: Resolve core seq
+        id: core_seq
+        uses: ./.github/actions/desktop-core-seq
+        with:
+          app-version: ${{ needs.calculate-version.outputs.version }}
+          channel: canary
+          update-server-url: ${{ secrets.UPDATE_SERVER_URL }}
+
       - name: Set package version
+        id: app_version
         run: npm run workflow:set-desktop-version ${{ needs.calculate-version.outputs.version }} canary
 
       # macOS 构建前清理 (修复 hdiutil 问题)
@@ -289,12 +338,15 @@ jobs:
 
       # macOS 构建
       - name: Build artifact on macOS
+        id: build_macos
         if: runner.os == 'macOS'
         run: npm run desktop:package:app
         env:
           UPDATE_CHANNEL: canary
           UPDATE_SERVER_URL: ${{ secrets.UPDATE_SERVER_URL }}
           RENDERER_OTA_PUBLIC_KEY: ${{ secrets.RENDERER_OTA_PUBLIC_KEY }}
+          CORE_SEQ: ${{ steps.core_seq.outputs.seq }}
+          SPARKLE_ED_PUBLIC_KEY: ${{ secrets.SPARKLE_ED_PUBLIC_KEY }}
           RELEASE_NOTES: ${{ needs.calculate-version.outputs.release_notes }}
           APP_URL: http://localhost:3015
           DATABASE_URL: 'postgresql://postgres@localhost:5432/postgres'
@@ -310,12 +362,14 @@ jobs:
 
       # Windows 构建
       - name: Build artifact on Windows
+        id: build_windows
         if: runner.os == 'Windows'
         run: npm run desktop:package:app
         env:
           UPDATE_CHANNEL: canary
           UPDATE_SERVER_URL: ${{ secrets.UPDATE_SERVER_URL }}
           RENDERER_OTA_PUBLIC_KEY: ${{ secrets.RENDERER_OTA_PUBLIC_KEY }}
+          CORE_SEQ: ${{ steps.core_seq.outputs.seq }}
           RELEASE_NOTES: ${{ needs.calculate-version.outputs.release_notes }}
           APP_URL: http://localhost:3015
           DATABASE_URL: 'postgresql://postgres@localhost:5432/postgres'
@@ -327,12 +381,14 @@ jobs:
 
       # Linux 构建
       - name: Build artifact on Linux
+        id: build_linux
         if: runner.os == 'Linux'
         run: npm run desktop:package:app
         env:
           UPDATE_CHANNEL: canary
           UPDATE_SERVER_URL: ${{ secrets.UPDATE_SERVER_URL }}
           RENDERER_OTA_PUBLIC_KEY: ${{ secrets.RENDERER_OTA_PUBLIC_KEY }}
+          CORE_SEQ: ${{ steps.core_seq.outputs.seq }}
           RELEASE_NOTES: ${{ needs.calculate-version.outputs.release_notes }}
           APP_URL: http://localhost:3015
           DATABASE_URL: 'postgresql://postgres@localhost:5432/postgres'
@@ -358,26 +414,36 @@ jobs:
           retention-days: 30
 
       - name: Upload artifacts
+        id: upload
         uses: ./.github/actions/desktop-upload-artifacts
         with:
           artifact-name: release-${{ matrix.os }}
-          renderer-ota-private-key: ${{ secrets.RENDERER_OTA_PRIVATE_KEY }}
-          renderer-ota-public-key: ${{ secrets.RENDERER_OTA_PUBLIC_KEY }}
+          update-server-url: ${{ secrets.UPDATE_SERVER_URL }}
+          core-signing-key: ${{ secrets.RENDERER_OTA_PRIVATE_KEY }}
           retention-days: 3
-          update-channel: canary
+
+      - name: Preserve desktop build diagnostics
+        if: always()
+        uses: ./.github/actions/desktop-ota-diagnostics
+        with:
+          kind: build
+          channel: canary
+          steps-json: ${{ toJSON(steps) }}
+          job-status: ${{ job.status }}
 
   # ============================================
   # 合并 macOS 多架构 latest-mac.yml 文件
   # ============================================
   merge-mac-files:
     needs: [build]
+    if: ${{ !cancelled() && needs.build.result == 'success' }}
     name: Merge macOS Release Files
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup environment
         uses: ./.github/actions/setup-env
@@ -417,11 +483,18 @@ jobs:
   # ============================================
   publish-release:
     needs: [merge-mac-files, calculate-version]
+    if: ${{ !cancelled() && needs.merge-mac-files.result == 'success' && needs.calculate-version.result == 'success' }}
     name: Publish Canary Release
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
+      - uses: actions/create-github-app-token@v2
+        id: app-token
+        with:
+          app-id: ${{ vars.LOBEHUB_BOT_APP_ID }}
+          private-key: ${{ secrets.LOBEHUB_BOT_APP_PRIVATE_KEY }}
+
       - name: Download merged artifacts
         uses: actions/download-artifact@v7
         with:
@@ -449,17 +522,26 @@ jobs:
             release/*.rpm*
             release/*.tar.gz*
         env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
 
   # ============================================
   # 发布到 S3 更新服务器
   # ============================================
   publish-s3:
     needs: [merge-mac-files, calculate-version]
+    if: ${{ !cancelled() && needs.merge-mac-files.result == 'success' && needs.calculate-version.result == 'success' }}
     name: Publish to S3
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/create-github-app-token@v2
+        id: app-token
+        with:
+          app-id: ${{ vars.LOBEHUB_BOT_APP_ID }}
+          private-key: ${{ secrets.LOBEHUB_BOT_APP_PRIVATE_KEY }}
+
+      - uses: actions/checkout@v7
+        with:
+          token: ${{ steps.app-token.outputs.token }}
       - uses: ./.github/actions/desktop-publish-s3
         with:
           channel: canary
@@ -472,20 +554,62 @@ jobs:
           s3-endpoint: ${{ secrets.UPDATE_S3_ENDPOINT }}
 
   # ============================================
+  # 发布 Sparkle appcast + delta（macOS 整包升级）
+  # 依赖 publish-s3：appcast 的 enclosure 指向 S3 上已经存在的 zip
+  # ============================================
+  publish-sparkle:
+    needs: [publish-s3, calculate-version]
+    if: ${{ !cancelled() && needs.publish-s3.result == 'success' && needs.calculate-version.result == 'success' }}
+    name: Publish Sparkle Appcast
+    runs-on: macos-15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+
+      - uses: ./.github/actions/desktop-publish-sparkle
+        with:
+          channel: canary
+          version: ${{ needs.calculate-version.outputs.version }}
+          server-url: ${{ secrets.UPDATE_SERVER_URL }}
+          ed-private-key: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+          release-notes: ${{ needs.calculate-version.outputs.release_notes }}
+          aws-access-key-id: ${{ secrets.UPDATE_AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.UPDATE_AWS_SECRET_ACCESS_KEY }}
+          s3-bucket: ${{ secrets.UPDATE_S3_BUCKET }}
+          s3-region: ${{ secrets.UPDATE_S3_REGION }}
+          s3-endpoint: ${{ secrets.UPDATE_S3_ENDPOINT }}
+
+  # ============================================
   # 清理旧的 Canary Releases (保留最近 7 个)
   # ============================================
   cleanup-old-canaries:
     needs: [publish-release, publish-s3]
+    if: ${{ !cancelled() && needs.publish-release.result == 'success' && needs.publish-s3.result == 'success' }}
     name: Cleanup Old Canary Releases
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/create-github-app-token@v2
+        id: app-token
+        with:
+          app-id: ${{ vars.LOBEHUB_BOT_APP_ID }}
+          private-key: ${{ secrets.LOBEHUB_BOT_APP_PRIVATE_KEY }}
+
+      - uses: actions/checkout@v7
+        with:
+          token: ${{ steps.app-token.outputs.token }}
 
       - name: Delete old canary GitHub releases
         uses: actions/github-script@v8
         with:
+          github-token: ${{ steps.app-token.outputs.token }}
           script: |
             const { data: releases } = await github.rest.repos.listReleases({
               owner: context.repo.owner,

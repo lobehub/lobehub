@@ -17,7 +17,8 @@
   },
   "dependencies": {
     "chat": "~4.38.0",
-    "mime": "^4.1.0"
+    "mime": "^4.1.0",
+    "silk-wasm": "^3.7.1"
   },
   "devDependencies": {
     "@types/node": "^24.13.2",

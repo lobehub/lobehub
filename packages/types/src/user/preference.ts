@@ -120,6 +120,14 @@ export interface WorkspaceUserPreference {
    *   ignored; nothing reads or writes this map.
    */
   sidebarPinnedOverrides?: Record<string /* itemId */, boolean>;
+  /**
+   * Topic sidebars list only the topics this member created.
+   *
+   * @deprecated The filter is a device-local, per-agent choice now
+   *   (`systemStatus.topicOnlyMineByAgent`). Existing values are ignored;
+   *   nothing reads or writes this key.
+   */
+  topicOnlyMine?: boolean;
 }
 
 export interface LobeUser {
@@ -134,6 +142,11 @@ export interface LobeUser {
 }
 
 export const UserGuideSchema = z.object({
+  /**
+   * Pages and Resources were merged into Docs; set once the notice is acknowledged
+   */
+  docsMerged: z.boolean().optional(),
+
   /**
    * Move the settings button to the avatar dropdown
    */
@@ -186,13 +199,20 @@ export const UserLabSchema = z.object({
    */
   enableImessage: z.boolean().optional(),
   /**
-   * enable markdown rendering in chat input editor
+   * @deprecated The chat input always uses the rich editor; paste conversion moved to
+   * `settings.general.enablePasteAutoConvert`. Kept so a write from an older released
+   * client is not stripped by the schema, and to seed that setting for users who had it off.
    */
   enableInputMarkdown: z.boolean().optional(),
   /**
    * enable selecting message text and adding it to the next conversation context
    */
   enableMessageTextSelectionActions: z.boolean().optional(),
+  /**
+   * @deprecated Integrations left Labs and is always shown. Kept so a write
+   * from an older released client is not stripped by the schema.
+   */
+  enableIntegrations: z.boolean().optional(),
   /**
    * show OAuth app management in personal and workspace settings
    */
@@ -202,7 +222,9 @@ export const UserLabSchema = z.object({
    */
   enableProjects: z.boolean().optional(),
   /**
-   * show the per-agent self-learning (expertise) page and its sidebar entry
+   * self-evolving: inject what was learned (the user's rules and each agent's own lessons) into
+   * runs, and show it under memory and on each agent's self-learning page. The former separate
+   * "my rules" switch (`enableMemoryRules`) is folded into this one.
    */
   enableSelfLearning: z.boolean().optional(),
   /**
@@ -212,13 +234,58 @@ export const UserLabSchema = z.object({
   /** Capture a conversation turn as an eval test case (developer-facing). */
   enableEvalCapture: z.boolean().optional(),
   /**
-   * enable the per-topic acceptance tray above the composer (author a topic's
-   * delivery checklist inline)
+   * show "Report a problem" in the topic menu, which sends where the topic is
+   * (its ids and the client environment) to the support team
+   */
+  enableTopicBugReport: z.boolean().optional(),
+  /**
+   * enable Goals: hand the agent a goal it plans into tasks, tracks and delivers
+   */
+  enableGoals: z.boolean().optional(),
+  /**
+   * @deprecated Renamed to `enableGoals`. Written alongside it, and read first,
+   * while older clients that only know this key are still around: their writes
+   * touch only this key, so it carries the latest choice.
    */
   enableTopicAcceptance: z.boolean().optional(),
+  /**
+   * expose a port on the working device through a tunnel link, so a dev server
+   * running there can be opened from this UI
+   */
+  enableDeviceTunnel: z.boolean().optional(),
 });
 
 export type UserLab = z.infer<typeof UserLabSchema>;
+
+/** Automation switches for the GitHub integration. Every switch defaults to on. */
+export interface GithubIntegrationPreference {
+  /** Merging a linked pull request accepts its acceptance. */
+  acceptOnMerge?: boolean;
+  /** Post a LobeHub comment (acceptance + conversation links) on pull requests in private repositories. Default on. */
+  commentOnPrivateRepositories?: boolean;
+  /** Same for public repositories. Default off: a public thread is not the place for internal links. */
+  commentOnPublicRepositories?: boolean;
+  /** A failing check wakes the agent that opened the pull request. */
+  wakeOnCiFailure?: boolean;
+  /** Review feedback (changes requested, comments) wakes the agent. */
+  wakeOnReview?: boolean;
+}
+
+export interface UserIntegrationPreference {
+  github?: GithubIntegrationPreference;
+}
+
+export const GithubIntegrationPreferenceSchema = z.object({
+  acceptOnMerge: z.boolean().optional(),
+  commentOnPrivateRepositories: z.boolean().optional(),
+  commentOnPublicRepositories: z.boolean().optional(),
+  wakeOnCiFailure: z.boolean().optional(),
+  wakeOnReview: z.boolean().optional(),
+});
+
+export const UserIntegrationPreferenceSchema = z.object({
+  github: GithubIntegrationPreferenceSchema.optional(),
+});
 
 export interface UserPreference {
   /** Last-used app for "Open working directory in…" split button. Empty/unknown values fall back to platform default. */
@@ -238,6 +305,12 @@ export interface UserPreference {
   /**
    * lab experimental features
    */
+  /**
+   * Per-integration automation switches, edited on Settings → Integrations.
+   * Absent keys mean "on": the closed loop is the default, the switch is the
+   * opt-out.
+   */
+  integration?: UserIntegrationPreference;
   lab?: UserLab;
   /**
    * Last active workspace id. Used on cloud to land the user back in the
@@ -245,6 +318,12 @@ export interface UserPreference {
    * context. Stored as id (not slug) so workspace renames don't invalidate it.
    */
   lastWorkspaceId?: string | null;
+  /**
+   * How a project's topic sidebar groups its topics. Kept apart from
+   * `topicGroupMode` because a project spans agents and devices: it defaults to
+   * grouping by agent, and its choice must not leak into single-agent lists.
+   */
+  projectTopicGroupMode?: TopicGroupMode;
   /**
    * Personal-mode counterpart of
    * {@link WorkspaceUserPreference.sidebarHiddenAgentIds}: agents/chat-groups
@@ -329,13 +408,19 @@ export const UserPreferenceSchema = z
     fontFamily: z.string().optional(),
     guide: UserGuideSchema.optional(),
     hideSyncAlert: z.boolean().optional(),
+    integration: UserIntegrationPreferenceSchema.optional(),
     lab: UserLabSchema.optional(),
     lastWorkspaceId: z.string().nullish(),
+    projectTopicGroupMode: z
+      .enum(['byTime', 'byProject', 'flat', 'byStatus', 'byAgent', 'byDevice'])
+      .optional(),
     sidebarHiddenAgentIds: z.array(z.string()).optional(),
     sidebarHiddenGroupIds: z.array(z.string()).optional(),
     terminalFontFamily: z.string().optional(),
     telemetry: z.boolean().nullable(),
-    topicGroupMode: z.enum(['byTime', 'byProject', 'flat', 'byStatus']).optional(),
+    topicGroupMode: z
+      .enum(['byTime', 'byProject', 'flat', 'byStatus', 'byAgent', 'byDevice'])
+      .optional(),
     topicIncludeCompleted: z.boolean().optional(),
     topicSortBy: z.enum(['createdAt', 'updatedAt']).optional(),
     useCmdEnterToSend: z.boolean().optional(),

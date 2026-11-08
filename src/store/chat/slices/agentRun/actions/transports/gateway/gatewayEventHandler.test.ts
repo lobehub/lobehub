@@ -50,6 +50,26 @@ const createStore = (dbMessagesMap: Record<string, UIChatMessage[]> = {}) =>
     updateOperationMetadata: vi.fn(),
   }) as unknown as ChatStore;
 
+const createDefaultHandler = (store: ChatStore, assistantMessageId: string) =>
+  createGatewayEventHandler(() => store, {
+    assistantMessageId,
+    context,
+    operationId: 'op-1',
+  });
+
+const createGatewayLifecycleHandler = (
+  store: ChatStore,
+  assistantMessageId: string,
+  lifecycle: unknown,
+) =>
+  createGatewayEventHandler(() => store, {
+    assistantMessageId,
+    context,
+    operationId: 'op-1',
+    runLifecycle: lifecycle as any,
+    runtimeType: 'gateway',
+  });
+
 // The handler enqueues work on an internal promise chain; flush the microtask
 // queue so async event handlers settle before assertions. Each `await` inside a
 // queued handler costs a tick, so keep this comfortably above the longest chain
@@ -115,11 +135,7 @@ describe('createGatewayEventHandler', () => {
 
   it('inserts the assistant shell locally when stream_start carries the message seed (new server)', async () => {
     const store = createStore();
-    const handler = createGatewayEventHandler(() => store, {
-      assistantMessageId: 'seed-msg',
-      context,
-      operationId: 'op-1',
-    });
+    const handler = createDefaultHandler(store, 'seed-msg');
 
     handler(
       makeEvent('stream_start', {
@@ -156,11 +172,7 @@ describe('createGatewayEventHandler', () => {
       .spyOn(messageService, 'getMessages')
       .mockResolvedValue([] as unknown as UIChatMessage[]);
     const store = createStore();
-    const handler = createGatewayEventHandler(() => store, {
-      assistantMessageId: 'seed-msg',
-      context,
-      operationId: 'op-1',
-    });
+    const handler = createDefaultHandler(store, 'seed-msg');
 
     handler(makeEvent('stream_start', { assistantMessage: { id: 'step2-msg' } }));
     await flush();
@@ -195,18 +207,18 @@ describe('createGatewayEventHandler', () => {
       .spyOn(messageService, 'getMessages')
       .mockResolvedValue([] as unknown as UIChatMessage[]);
     const store = createStore();
-    const handler = createGatewayEventHandler(() => store, {
-      assistantMessageId: 'seed-msg',
-      context,
-      operationId: 'op-1',
-    });
+    const handler = createDefaultHandler(store, 'seed-msg');
 
     handler(makeEvent('tool_end', { isSuccess: true, skipMessageFetch: true }));
     await flush();
 
     // Mid-stream tool_end refetches skip the Work-summary assembly and graft
     // previously rendered works back via `preserveWorks`.
-    expect(getMessages).toHaveBeenCalledWith({ ...context, skipWorks: true });
+    expect(getMessages).toHaveBeenCalledWith({
+      ...context,
+      projectToolPayloads: false,
+      skipWorks: true,
+    });
     expect(store.replaceMessages).toHaveBeenCalledWith([], { context, preserveWorks: true });
   });
 
@@ -254,11 +266,7 @@ describe('createGatewayEventHandler', () => {
       },
     );
 
-    const handler = createGatewayEventHandler(() => store, {
-      assistantMessageId: 'seed-msg',
-      context,
-      operationId: 'op-1',
-    });
+    const handler = createDefaultHandler(store, 'seed-msg');
 
     handler(
       makeEvent('stream_chunk', {
@@ -291,11 +299,7 @@ describe('createGatewayEventHandler', () => {
       .spyOn(messageService, 'getMessages')
       .mockResolvedValue([] as unknown as UIChatMessage[]);
     const store = createStore();
-    const handler = createGatewayEventHandler(() => store, {
-      assistantMessageId: 'seed-msg',
-      context,
-      operationId: 'op-1',
-    });
+    const handler = createDefaultHandler(store, 'seed-msg');
 
     handler(
       makeEvent('step_complete', {
@@ -338,11 +342,7 @@ describe('createGatewayEventHandler', () => {
         store.dbMessagesMap[key] = messages;
       },
     );
-    const handler = createGatewayEventHandler(() => store, {
-      assistantMessageId: 'seed-msg',
-      context,
-      operationId: 'op-1',
-    });
+    const handler = createDefaultHandler(store, 'seed-msg');
 
     handler(
       makeEvent('stream_chunk', {
@@ -427,11 +427,7 @@ describe('createGatewayEventHandler', () => {
         store.dbMessagesMap[key] = messages;
       },
     );
-    const handler = createGatewayEventHandler(() => store, {
-      assistantMessageId: 'seed-msg',
-      context,
-      operationId: 'op-1',
-    });
+    const handler = createDefaultHandler(store, 'seed-msg');
 
     handler(
       makeEvent('stream_chunk', {
@@ -478,11 +474,7 @@ describe('createGatewayEventHandler', () => {
         } as UIChatMessage,
       ],
     });
-    const handler = createGatewayEventHandler(() => store, {
-      assistantMessageId: 'seed-msg',
-      context,
-      operationId: 'op-1',
-    });
+    const handler = createDefaultHandler(store, 'seed-msg');
 
     handler(
       makeEvent('stream_chunk', {
@@ -514,11 +506,7 @@ describe('createGatewayEventHandler', () => {
         store.dbMessagesMap[key] = messages;
       },
     );
-    const handler = createGatewayEventHandler(() => store, {
-      assistantMessageId: 'seed-msg',
-      context,
-      operationId: 'op-1',
-    });
+    const handler = createDefaultHandler(store, 'seed-msg');
 
     handler(
       makeEvent('stream_chunk', {
@@ -661,11 +649,7 @@ describe('createGatewayEventHandler', () => {
         store.dbMessagesMap[key] = messages;
       },
     );
-    const handler = createGatewayEventHandler(() => store, {
-      assistantMessageId: 'seed-msg',
-      context,
-      operationId: 'op-1',
-    });
+    const handler = createDefaultHandler(store, 'seed-msg');
 
     handler(
       makeEvent('stream_chunk', {
@@ -708,11 +692,7 @@ describe('createGatewayEventHandler', () => {
 
   it('ignores a sub-agent progress event with no tool message anchor', async () => {
     const store = createStore();
-    const handler = createGatewayEventHandler(() => store, {
-      assistantMessageId: 'seed-msg',
-      context,
-      operationId: 'op-1',
-    });
+    const handler = createDefaultHandler(store, 'seed-msg');
 
     handler(makeEvent('step_complete', { phase: 'subagent_progress', totalTokens: 10 }));
     await flush();
@@ -771,11 +751,7 @@ describe('createGatewayEventHandler', () => {
     const store = createStore({
       key: [{ content: 'existing', id: 'step2-msg', role: 'assistant' } as UIChatMessage],
     });
-    const handler = createGatewayEventHandler(() => store, {
-      assistantMessageId: 'seed-msg',
-      context,
-      operationId: 'op-1',
-    });
+    const handler = createDefaultHandler(store, 'seed-msg');
 
     handler(
       makeEvent('stream_start', {
@@ -789,11 +765,7 @@ describe('createGatewayEventHandler', () => {
 
   it('skips the visible_output_end hint while the assistant row is missing ', async () => {
     const store = createStore();
-    const handler = createGatewayEventHandler(() => store, {
-      assistantMessageId: 'missing-msg',
-      context,
-      operationId: 'op-1',
-    });
+    const handler = createDefaultHandler(store, 'missing-msg');
 
     handler(makeEvent('visible_output_end'));
     await flush();
@@ -805,11 +777,7 @@ describe('createGatewayEventHandler', () => {
     const store = createStore({
       key: [{ content: 'answer', id: 'answer-msg', role: 'assistant' } as UIChatMessage],
     });
-    const handler = createGatewayEventHandler(() => store, {
-      assistantMessageId: 'answer-msg',
-      context,
-      operationId: 'op-1',
-    });
+    const handler = createDefaultHandler(store, 'answer-msg');
 
     handler(makeEvent('visible_output_end'));
     await flush();
@@ -832,13 +800,7 @@ describe('createGatewayEventHandler', () => {
     vi.spyOn(messageService, 'getMessages').mockResolvedValue([] as unknown as UIChatMessage[]);
     const lifecycle = createLifecycle();
     const store = createStore();
-    const handler = createGatewayEventHandler(() => store, {
-      assistantMessageId: 'answer-msg',
-      context,
-      operationId: 'op-1',
-      runLifecycle: lifecycle as any,
-      runtimeType: 'gateway',
-    });
+    const handler = createGatewayLifecycleHandler(store, 'answer-msg', lifecycle);
 
     // Stream the report text so `accumulatedContent` (the optimistic in-memory
     // source) holds it, then end the run with no terminal uiMessages snapshot.
@@ -861,13 +823,7 @@ describe('createGatewayEventHandler', () => {
     vi.spyOn(messageService, 'getMessages').mockResolvedValue([] as unknown as UIChatMessage[]);
     const lifecycle = createLifecycle();
     const store = createStore();
-    const handler = createGatewayEventHandler(() => store, {
-      assistantMessageId: 'answer-msg',
-      context,
-      operationId: 'op-1',
-      runLifecycle: lifecycle as any,
-      runtimeType: 'gateway',
-    });
+    const handler = createGatewayLifecycleHandler(store, 'answer-msg', lifecycle);
 
     // The stream dropped the tail; the server-finalized snapshot has the whole
     // report, and the chat is reconciled to it — so must the notification be.
@@ -911,13 +867,7 @@ describe('createGatewayEventHandler', () => {
       },
     };
     store.operationsByContext = { [contextKey]: ['op-1', 'op-2'] };
-    const handler = createGatewayEventHandler(() => store, {
-      assistantMessageId: 'answer-msg',
-      context,
-      operationId: 'op-1',
-      runLifecycle: lifecycle as any,
-      runtimeType: 'gateway',
-    });
+    const handler = createGatewayLifecycleHandler(store, 'answer-msg', lifecycle);
 
     handler(
       makeEvent('agent_runtime_end', {
@@ -956,13 +906,7 @@ describe('createGatewayEventHandler', () => {
       },
     };
     store.operationsByContext = { [contextKey]: ['op-1', 'op-2'] };
-    const handler = createGatewayEventHandler(() => store, {
-      assistantMessageId: 'answer-msg',
-      context,
-      operationId: 'op-1',
-      runLifecycle: lifecycle as any,
-      runtimeType: 'gateway',
-    });
+    const handler = createGatewayLifecycleHandler(store, 'answer-msg', lifecycle);
     const getMessages = vi.spyOn(messageService, 'getMessages');
 
     handler(makeEvent('agent_runtime_end', { reason: 'completed' }));
@@ -997,13 +941,7 @@ describe('createGatewayEventHandler', () => {
       },
     };
     store.operationsByContext = { [contextKey]: ['op-1', 'op-member'] };
-    const handler = createGatewayEventHandler(() => store, {
-      assistantMessageId: 'answer-msg',
-      context,
-      operationId: 'op-1',
-      runLifecycle: lifecycle as any,
-      runtimeType: 'gateway',
-    });
+    const handler = createGatewayLifecycleHandler(store, 'answer-msg', lifecycle);
     const uiMessages = [
       { content: 'council result', id: 'answer-msg', role: 'assistant' },
     ] as unknown as UIChatMessage[];
@@ -1042,11 +980,7 @@ describe('createGatewayEventHandler', () => {
     );
 
     const store = createStore();
-    const handler = createGatewayEventHandler(() => store, {
-      assistantMessageId: 'asst-1',
-      context,
-      operationId: 'op-1',
-    });
+    const handler = createDefaultHandler(store, 'asst-1');
 
     handler(makeEvent('tool_end', { isSuccess: true }));
     await flush();
@@ -1064,6 +998,92 @@ describe('createGatewayEventHandler', () => {
     const lastCall = vi.mocked(store.replaceMessages).mock.calls.at(-1);
     expect(lastCall?.[0]).toEqual(nextStepSnapshot);
     expect(lastCall?.[0]).not.toEqual(staleSnapshot);
+  });
+
+  it('applies an in-sequence protocol-v2 message patch without a DB refetch', async () => {
+    const getMessages = vi.spyOn(messageService, 'getMessages');
+    const key = messageMapKey(context);
+    const current = [
+      { content: 'question', id: 'user-1', role: 'user' },
+      { content: 'draft', id: 'asst-1', role: 'assistant' },
+    ] as unknown as UIChatMessage[];
+    const settled = { ...current[1], content: 'settled' };
+    const tool = { content: 'result', id: 'tool-1', role: 'tool' } as UIChatMessage;
+    const store = createStore({ [key]: current });
+    const handler = createDefaultHandler(store, 'asst-1');
+
+    handler(
+      makeEvent('message_patch', {
+        deletes: [],
+        revision: 1,
+        upserts: [
+          { afterId: 'user-1', message: settled },
+          { afterId: 'asst-1', message: tool },
+        ],
+      }),
+    );
+
+    expect(store.replaceMessages).toHaveBeenCalledWith([current[0], settled, tool], {
+      action: 'gateway/message_patch',
+      context,
+      preserveWorks: true,
+    });
+    expect(getMessages).not.toHaveBeenCalled();
+  });
+
+  it('falls back to one DB reconciliation when a message patch revision is missing', async () => {
+    const recovered = [
+      { content: 'canonical', id: 'asst-1', role: 'assistant' },
+    ] as unknown as UIChatMessage[];
+    const getMessages = vi.spyOn(messageService, 'getMessages').mockResolvedValue(recovered);
+    const store = createStore();
+    const handler = createDefaultHandler(store, 'asst-1');
+
+    handler(makeEvent('message_patch', { deletes: [], revision: 2, upserts: [] }));
+    await flush();
+
+    expect(getMessages).toHaveBeenCalledWith({
+      ...context,
+      projectToolPayloads: false,
+      skipWorks: true,
+    });
+    expect(store.replaceMessages).toHaveBeenCalledWith(recovered, {
+      context,
+      preserveWorks: true,
+    });
+  });
+
+  it('settles a patched terminal event without downloading the full topic', async () => {
+    const getMessages = vi.spyOn(messageService, 'getMessages');
+    const key = messageMapKey(context);
+    const current = [
+      { content: 'draft', id: 'asst-1', role: 'assistant' },
+    ] as unknown as UIChatMessage[];
+    const settled = { ...current[0], content: 'settled' };
+    const store = createStore({ [key]: current });
+    vi.mocked(store.replaceMessages).mockImplementation((messages) => {
+      store.dbMessagesMap[key] = messages;
+    });
+    const handler = createDefaultHandler(store, 'asst-1');
+
+    handler(
+      makeEvent('message_patch', {
+        deletes: [],
+        revision: 1,
+        upserts: [{ afterId: null, message: settled }],
+      }),
+    );
+    handler(
+      makeEvent('agent_runtime_end', {
+        messagePatchMode: true,
+        messageRevision: 1,
+        reason: 'completed',
+      }),
+    );
+    await flush();
+
+    expect(store.dbMessagesMap[key]).toEqual([settled]);
+    expect(getMessages).not.toHaveBeenCalled();
   });
 
   // Hetero / old-server stream_start has no assistantMessage.id, so it
@@ -1092,11 +1112,7 @@ describe('createGatewayEventHandler', () => {
     );
 
     const store = createStore();
-    const handler = createGatewayEventHandler(() => store, {
-      assistantMessageId: 'asst-1',
-      context,
-      operationId: 'op-1',
-    });
+    const handler = createDefaultHandler(store, 'asst-1');
 
     handler(makeEvent('stream_start', { newStep: true }));
     await flush();
@@ -1115,13 +1131,7 @@ describe('createGatewayEventHandler', () => {
     vi.spyOn(messageService, 'getMessages').mockResolvedValue([] as unknown as UIChatMessage[]);
     const lifecycle = createLifecycle();
     const store = createStore();
-    const handler = createGatewayEventHandler(() => store, {
-      assistantMessageId: 'answer-msg',
-      context,
-      operationId: 'op-1',
-      runLifecycle: lifecycle as any,
-      runtimeType: 'gateway',
-    });
+    const handler = createGatewayLifecycleHandler(store, 'answer-msg', lifecycle);
 
     handler(makeEvent('stream_chunk', { chunkType: 'text', content: 'The final report.' }));
     handler(
@@ -1143,13 +1153,7 @@ describe('createGatewayEventHandler', () => {
     vi.spyOn(messageService, 'getMessages').mockResolvedValue([] as unknown as UIChatMessage[]);
     const lifecycle = createLifecycle();
     const store = createStore();
-    const handler = createGatewayEventHandler(() => store, {
-      assistantMessageId: 'answer-msg',
-      context,
-      operationId: 'op-1',
-      runLifecycle: lifecycle as any,
-      runtimeType: 'gateway',
-    });
+    const handler = createGatewayLifecycleHandler(store, 'answer-msg', lifecycle);
 
     handler(makeEvent('agent_runtime_end', { reason: 'completed' }));
     await flush();
@@ -1163,13 +1167,7 @@ describe('createGatewayEventHandler', () => {
     vi.spyOn(messageService, 'getMessages').mockResolvedValue([] as unknown as UIChatMessage[]);
     const lifecycle = createLifecycle();
     const store = createStore();
-    const handler = createGatewayEventHandler(() => store, {
-      assistantMessageId: 'answer-msg',
-      context,
-      operationId: 'op-1',
-      runLifecycle: lifecycle as any,
-      runtimeType: 'gateway',
-    });
+    const handler = createGatewayLifecycleHandler(store, 'answer-msg', lifecycle);
 
     handler(makeEvent('stream_chunk', { chunkType: 'text', content: 'partial' }));
     handler(makeEvent('agent_runtime_end', { reason: 'interrupted' }));
@@ -1282,7 +1280,11 @@ describe('createGatewayEventHandler', () => {
       }),
     );
     await flush();
-    expect(getMessages).toHaveBeenCalledWith({ ...context, skipWorks: true });
+    expect(getMessages).toHaveBeenCalledWith({
+      ...context,
+      projectToolPayloads: false,
+      skipWorks: true,
+    });
     expect(store.updateTopicStatus).toHaveBeenLastCalledWith(
       expect.objectContaining({ status: 'running', topicId: 'topic-1' }),
     );

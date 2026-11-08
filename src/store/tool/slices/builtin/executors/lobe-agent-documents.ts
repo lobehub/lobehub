@@ -81,6 +81,26 @@ const stashDocumentRegisterIntent = (input: {
   });
 };
 
+const toListedDocument = (d: {
+  childCount?: number;
+  documentId: string;
+  filename: string;
+  fileType: string;
+  id: string;
+  parentId: string | null;
+  title: string;
+  updatedAt: Date;
+}) => ({
+  childCount: d.childCount,
+  documentId: d.documentId,
+  filename: d.filename,
+  fileType: d.fileType,
+  id: d.id,
+  parentId: d.parentId,
+  title: d.title,
+  updatedAt: d.updatedAt,
+});
+
 const runtime = new AgentDocumentsExecutionRuntime(
   {
     copyDocument: async ({ agentId, id, newTitle, toolContext, trigger }) => {
@@ -131,6 +151,11 @@ const runtime = new AgentDocumentsExecutionRuntime(
       });
       return doc;
     },
+    createFolder: async ({ agentId, parentId, title }) => {
+      const result = await agentDocumentService.createFolderById({ agentId, parentId, title });
+      if (!result) throw new Error(`Failed to create folder "${title}".`);
+      return result;
+    },
     createTopicDocument: async ({
       agentId,
       content,
@@ -170,13 +195,9 @@ const runtime = new AgentDocumentsExecutionRuntime(
         includeArchivedToolResults: true,
         parentId,
         sourceType,
+        withChildCount: true,
       });
-      return docs.map((d) => ({
-        documentId: d.documentId,
-        filename: d.filename,
-        id: d.id,
-        title: d.title,
-      }));
+      return docs.map(toListedDocument);
     },
     listTopicDocuments: async ({ agentId, parentId, sourceType, topicId }) => {
       const docs = await agentDocumentService.listDocuments({
@@ -186,14 +207,12 @@ const runtime = new AgentDocumentsExecutionRuntime(
         scope: 'currentTopic',
         sourceType,
         topicId,
+        withChildCount: true,
       });
-      return docs.map((d) => ({
-        documentId: d.documentId,
-        filename: d.filename,
-        id: d.id,
-        title: d.title,
-      }));
+      return docs.map(toListedDocument);
     },
+    moveDocuments: async ({ agentId, ids, parentId }) =>
+      (await agentDocumentService.moveDocumentsById({ agentId, ids, parentId })) ?? [],
     modifyNodes: async ({ agentId, id, operations, toolContext, trigger }) => {
       const doc = await agentDocumentService.modifyNodes({
         agentId,
@@ -218,10 +237,10 @@ const runtime = new AgentDocumentsExecutionRuntime(
     // Delete stays a lambda side-effect (removeDocument drops the Work server-side);
     // it carries no cost, so it needs no cost-stamping defer. Keep the immediate
     // work-cache refresh so the sidebar drops the removed doc.
-    removeDocument: async ({ agentId, id, toolContext, trigger }) =>
+    removeDocument: async ({ agentId, id, toolContext, trigger, withChildren }) =>
       (
         await withWorkRefresh(
-          agentDocumentService.removeDocument({ agentId, id, toolContext, trigger }),
+          agentDocumentService.removeDocument({ agentId, id, toolContext, trigger, withChildren }),
           toolContext,
         )
       ).deleted,
@@ -279,11 +298,12 @@ const runtime = new AgentDocumentsExecutionRuntime(
     // Revalidate the documents list after the agent mutates it. `onAfterCall`
     // carries no agentId, so resolve the active chat agent — the one whose run
     // just produced the tool call. Covers the server-runtime path where the
-    // client service layer never invalidates.
-    onDocumentsMutated: async () => {
+    // client service layer never invalidates. A written `documentId` also
+    // revalidates the editor key so the open editor reconciles the server row.
+    onDocumentsMutated: async ({ documentId }) => {
       const agentId = useAgentStore.getState().activeAgentId;
-      if (!agentId) return;
-      await invalidateDocumentMutation({ agentId, cause: 'agent-document' });
+      if (!agentId && !documentId) return;
+      await invalidateDocumentMutation({ agentId, cause: 'agent-document', documentId });
     },
   },
 );

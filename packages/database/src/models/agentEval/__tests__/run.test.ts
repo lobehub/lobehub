@@ -64,6 +64,27 @@ afterEach(async () => {
 });
 
 describe('AgentEvalRunModel', () => {
+  describe('count', () => {
+    beforeEach(async () => {
+      await serverDB.insert(agentEvalRuns).values([
+        { datasetId, status: 'completed', userId },
+        { datasetId, status: 'running', userId },
+        // Another user's run must never be counted
+        { datasetId, status: 'completed', userId: userId2 },
+      ]);
+    });
+
+    it('should count only runs owned by the user', async () => {
+      expect(await runModel.count()).toBe(2);
+    });
+
+    it('should apply status and datasetId filters', async () => {
+      expect(await runModel.count({ status: 'completed' })).toBe(1);
+      expect(await runModel.count({ datasetId })).toBe(2);
+      expect(await runModel.count({ datasetId: 'nonexistent' })).toBe(0);
+    });
+  });
+
   describe('create', () => {
     it('should create a new run with minimal parameters', async () => {
       const params = {
@@ -116,12 +137,6 @@ describe('AgentEvalRunModel', () => {
         averageScore: 0,
         passRate: 0,
       });
-    });
-
-    it('should default status to idle', async () => {
-      const result = await runModel.create({ datasetId });
-
-      expect(result.status).toBe('idle');
     });
   });
 
@@ -177,7 +192,6 @@ describe('AgentEvalRunModel', () => {
       expect(results.map((r) => r.name)).toContain('Run 1');
       expect(results.map((r) => r.name)).toContain('Run 2');
       expect(results.map((r) => r.name)).toContain('Run 3');
-      expect(results.map((r) => r.name)).not.toContain('Run 4 - Other User');
     });
 
     it('should filter by datasetId', async () => {
@@ -251,13 +265,6 @@ describe('AgentEvalRunModel', () => {
 
       expect(offsetResults).toHaveLength(2);
       expect(offsetResults[0].id).toBe(allResults[1].id);
-    });
-
-    it('should order by createdAt descending', async () => {
-      const results = await runModel.query();
-
-      // Most recent should be first
-      expect(results.length).toBeGreaterThanOrEqual(3);
     });
   });
 

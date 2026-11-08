@@ -1,5 +1,6 @@
 import type {
   EvalBenchmarkRubric,
+  EvalCaseEnvironment,
   EvalConfig,
   EvalRunConfig,
   EvalRunMetrics,
@@ -7,7 +8,7 @@ import type {
   EvalTestCaseContent,
   EvalTestCaseMetadata,
 } from '@lobechat/types';
-import { isNotNull, isNull } from 'drizzle-orm';
+import { isNotNull, isNull, sql } from 'drizzle-orm';
 import {
   boolean,
   foreignKey,
@@ -19,6 +20,7 @@ import {
   real,
   text,
   uniqueIndex,
+  uuid,
 } from 'drizzle-orm/pg-core';
 
 import { idGenerator } from '../utils/idGenerator';
@@ -213,6 +215,49 @@ export type NewAgentEvalDataset = typeof agentEvalDatasets.$inferInsert;
 export type AgentEvalDatasetItem = typeof agentEvalDatasets.$inferSelect;
 
 // ============================================
+// 2b. agent_eval_environments (Reusable Case Environments)
+// ============================================
+/**
+ * The environment many cases share: the Agent setup (persona, tools, memory
+ * switch), the Memory fixture, the clock and the mock connectors. A case
+ * points at one through `environment_id`, so one environment can back five,
+ * ten or a hundred cases instead of each case carrying its own copy.
+ */
+export const agentEvalEnvironments = pgTable(
+  'agent_eval_environments',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+
+    // Nullable for system-owned rows; imported packages belong to their owner.
+    userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }),
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
+
+    /** Optional stable import handle, unique within its user or workspace scope. */
+    identifier: text('identifier'),
+    name: text('name').notNull(),
+    description: text('description'),
+
+    config: jsonb('config').$type<EvalCaseEnvironment>().notNull(),
+    metadata: jsonb('metadata').$type<Record<string, unknown>>(),
+
+    ...timestamps,
+  },
+  (t) => [
+    index('agent_eval_environments_user_id_idx').on(t.userId),
+    index('agent_eval_environments_workspace_id_idx').on(t.workspaceId),
+    uniqueIndex('agent_eval_environments_identifier_user_id_unique')
+      .on(t.identifier, t.userId)
+      .where(sql`${t.identifier} IS NOT NULL AND ${t.workspaceId} IS NULL`),
+    uniqueIndex('agent_eval_environments_identifier_workspace_id_unique')
+      .on(t.identifier, t.workspaceId)
+      .where(sql`${t.identifier} IS NOT NULL AND ${t.workspaceId} IS NOT NULL`),
+  ],
+);
+
+export type NewAgentEvalEnvironment = typeof agentEvalEnvironments.$inferInsert;
+export type AgentEvalEnvironmentItem = typeof agentEvalEnvironments.$inferSelect;
+
+// ============================================
 // 3. agent_eval_test_cases (Evaluation Test Cases)
 // ============================================
 export const agentEvalTestCases = pgTable(
@@ -222,14 +267,18 @@ export const agentEvalTestCases = pgTable(
       .$defaultFn(() => idGenerator('evalTestCases'))
       .primaryKey(),
 
-    userId: text('user_id')
-      .references(() => users.id, { onDelete: 'cascade' })
-      .notNull(),
+    // Nullable for system-owned rows; imported packages belong to their owner.
+    userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }),
     workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
 
     datasetId: text('dataset_id')
       .references(() => agentEvalDatasets.id, { onDelete: 'cascade' })
       .notNull(),
+
+    /** Shared runtime configuration; case content can override individual fields. */
+    environmentId: uuid('environment_id').references(() => agentEvalEnvironments.id, {
+      onDelete: 'set null',
+    }),
 
     content: jsonb('content').$type<EvalTestCaseContent>().notNull(),
 
@@ -245,6 +294,7 @@ export const agentEvalTestCases = pgTable(
   (t) => [
     index('agent_eval_test_cases_user_id_idx').on(t.userId),
     index('agent_eval_test_cases_dataset_id_idx').on(t.datasetId),
+    index('agent_eval_test_cases_environment_id_idx').on(t.environmentId),
     index('agent_eval_test_cases_sort_order_idx').on(t.sortOrder),
     index('agent_eval_test_cases_workspace_id_idx').on(t.workspaceId),
   ],

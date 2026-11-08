@@ -1,8 +1,5 @@
-import { Flexbox, Tooltip } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { type ProgressProps } from 'antd';
-import { Progress } from 'antd';
-import { cssVar } from 'antd-style';
+import type { ProgressProps } from '@lobehub/ui';
+import { cssVar, Flexbox, Progress, Text, Tooltip } from '@lobehub/ui';
 import { memo } from 'react';
 
 interface ProgressIconProps extends Omit<ProgressProps, 'percent'> {
@@ -16,9 +13,11 @@ const ProgressIcon = memo<ProgressIconProps>(({ showInfo, format, percent, ...re
     <Progress
       format={format}
       percent={percent}
+      segments={5}
       showInfo={false}
-      size={[2, 12]}
-      steps={5}
+      size={12}
+      style={{ flex: 'none', width: 18 }}
+      variant="segments"
       {...rest}
     />
   );

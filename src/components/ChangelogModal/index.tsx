@@ -1,16 +1,21 @@
 'use client';
 
-import { createModal } from '@lobehub/ui/base-ui';
+import { createModal } from '@lobehub/ui';
 import { t } from 'i18next';
 import { ArrowUpRightIcon } from 'lucide-react';
+import { lazy, Suspense } from 'react';
 
 import { CHANGELOG_URL } from '@/const/url';
 
-import ChangelogModalContent from './ChangelogModalContent';
+const ChangelogModalContent = lazy(() => import('./ChangelogModalContent'));
 
 export const openChangelogModal = () =>
   createModal({
-    content: <ChangelogModalContent />,
+    content: (
+      <Suspense fallback={null}>
+        <ChangelogModalContent />
+      </Suspense>
+    ),
     footer: null,
     maskClosable: true,
     styles: {

@@ -31,6 +31,10 @@ export type ChatPayloadForTransformStream = {
 export interface StreamContext {
   chunkIndex?: number;
   id: string;
+  /** Options used to price `usage.cost`, forwarded so hooks can reprice the same usage. */
+  pricingOptions?: ComputeChatCostOptions;
+  /** Latest USD charge the upstream provider reported in a chunk. Server-side only. */
+  providerReportedCost?: number;
   /**
    * As pplx citations is in every chunk, but we only need to return it once
    * this flag is used to check if the pplx citation is returned,and then not return it again.
@@ -78,31 +82,6 @@ export interface StreamContext {
   usage?: ModelUsage;
   usageMissingDiagnostics?: UsageMissingDiagnostics;
 }
-
-export const setOpenAIChatCompletionUsageMissingDiagnostics = (
-  streamContext: StreamContext,
-  payload: ChatPayloadForTransformStream | undefined,
-  {
-    finishReason,
-    responseId,
-  }: {
-    finishReason?: string | null;
-    responseId?: string;
-  },
-) => {
-  streamContext.usageMissingDiagnostics = {
-    apiMode: 'chat_completions',
-    chunkIndex: streamContext.chunkIndex,
-    finishReason,
-    hasUsageMetadata: false,
-    includeUsageRequested: payload?.includeUsageRequested,
-    model: payload?.model,
-    provider: payload?.provider,
-    responseId,
-    source: 'openai_chat_completions',
-    terminalEventType: 'chat.completion.chunk',
-  };
-};
 
 export interface StreamProtocolChunk {
   data: any;
@@ -409,14 +388,16 @@ export const createSSEProtocolTransformer = (
 
   return new TransformStream({
     flush(controller) {
-      // If the upstream closes without sending a terminal event, emit a final error event
+      // If the upstream closes without sending a terminal event, emit a final error event.
+      // The provider cut the response short; no chunk failed to parse, so this is not a
+      // `StreamChunkError`.
       if (requireTerminalEvent && !hasTerminalEvent) {
         const id = streamStack?.id || 'stream_end';
         const data = {
           body: { name: 'Stream parsing error', reason: 'unexpected_end' },
           message: 'Stream ended unexpectedly',
           name: 'Stream parsing error',
-          type: 'StreamChunkError',
+          type: AgentRuntimeErrorType.ProviderStreamInterrupted,
         };
         controller.enqueue(`id: ${id}\n`);
         controller.enqueue(`event: error\n`);
@@ -496,6 +477,9 @@ export function createCallbacksTransformer(
         ? undefined
         : options?.streamStack?.usageMissingDiagnostics;
       if (usageMissingDiagnostics) data.usageMissingDiagnostics = usageMissingDiagnostics;
+      const { pricingOptions, providerReportedCost } = options?.streamStack ?? {};
+      if (providerReportedCost !== undefined) data.providerReportedCost = providerReportedCost;
+      if (pricingOptions) data.pricingOptions = pricingOptions;
 
       if (callbacks.onCompletion) {
         await callbacks.onCompletion(data);
@@ -720,6 +704,30 @@ export const createSSEDataExtractor = () =>
 
 export const TOKEN_SPEED_CHUNK_ID = 'output_speed';
 
+const hasEffectiveOutput = (chunk: StreamProtocolChunk): boolean => {
+  switch (chunk.type) {
+    case 'base64_image':
+    case 'reasoning':
+    case 'text': {
+      return Boolean(chunk.data);
+    }
+    case 'content_part':
+    case 'reasoning_part': {
+      return Boolean((chunk.data as StreamPartChunkData | undefined)?.content);
+    }
+    case 'tool_calls': {
+      return (
+        (chunk.data as StreamToolCallChunkData[] | undefined)?.some(
+          (tool) => tool.function?.name || tool.function?.arguments,
+        ) ?? false
+      );
+    }
+    default: {
+      return false;
+    }
+  }
+};
+
 /**
  * Create a middleware to calculate the token generate speed
  * @requires createSSEProtocolTransformer
@@ -733,44 +741,34 @@ export const createTokenSpeedCalculator = (
   }: { enableStreaming?: boolean; inputStartAt?: number; streamStack?: StreamContext } = {},
 ) => {
   let outputStartAt: number | undefined;
+  let outputEndAt: number | undefined;
 
   const process = (chunk: StreamProtocolChunk) => {
     const result = [chunk];
-    // Set outputStartAt when receiving the first content chunk (for TTFT calculation)
-    // - text/reasoning: standard text output events
-    // - content_part/reasoning_part: multimodal output events used by Gemini 3+ models
-    //   which emit structured parts instead of plain text events
-    // - tool_calls: function calling output events
-    if (
-      !outputStartAt &&
-      (chunk.type === 'text' ||
-        chunk.type === 'reasoning' ||
-        chunk.type === 'content_part' ||
-        chunk.type === 'reasoning_part' ||
-        chunk.type === 'tool_calls')
-    ) {
-      outputStartAt = Date.now();
+    if (hasEffectiveOutput(chunk)) {
+      const now = Date.now();
+      outputStartAt ??= now;
+      outputEndAt = now;
     }
 
-    // if the chunk is the stop chunk, set as output finish
-    if (inputStartAt && outputStartAt && chunk.type === 'usage') {
+    if (inputStartAt !== undefined && outputStartAt !== undefined && chunk.type === 'usage') {
       // TPS should always include all generated tokens (including reasoning tokens)
       // because it measures generation speed, not just visible content
       const usage = chunk.data as ModelUsage;
       const outputTokens = usage?.totalOutputTokens ?? 0;
       const now = Date.now();
-      const elapsed = now - (enableStreaming ? outputStartAt : inputStartAt);
-      const duration = now - outputStartAt;
-      const latency = now - inputStartAt;
-      const ttft = outputStartAt - inputStartAt;
-      const tps = elapsed === 0 ? undefined : (outputTokens / elapsed) * 1000;
+      const duration = (outputEndAt ?? outputStartAt) - outputStartAt;
+      const tps =
+        enableStreaming && duration > 0 && outputTokens > 1
+          ? (outputTokens / duration) * 1000
+          : undefined;
 
       result.push({
         data: {
-          duration,
-          latency,
+          duration: enableStreaming ? duration : undefined,
+          latency: now - inputStartAt,
           tps,
-          ttft,
+          ttft: enableStreaming ? outputStartAt - inputStartAt : undefined,
         } as ModelPerformance,
         id: TOKEN_SPEED_CHUNK_ID,
         type: 'speed',

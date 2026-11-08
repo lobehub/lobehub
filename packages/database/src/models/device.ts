@@ -1,4 +1,5 @@
 import type { WorkingDirEntry } from '@lobechat/types';
+import { MANAGED_CLOUD_DEVICE_IDENTITY_SOURCE } from '@lobechat/types';
 import { and, desc, eq, isNotNull, isNull, ne, sql } from 'drizzle-orm';
 
 import type { DeviceItem } from '../schemas';
@@ -25,12 +26,49 @@ export class WorkspaceDevicePrivateConflictError extends Error {
   }
 }
 
+/**
+ * A registration named the `deviceId` of an existing managed cloud device.
+ * The platform owns that row — its identity and machine-reported fields come
+ * from the managed device provider, not from a client — so `register` and
+ * `registerWorkspaceDevice` leave it untouched and fail with this instead.
+ * Routers map it to a CONFLICT response.
+ */
+export class ManagedDeviceRegistrationConflictError extends Error {
+  constructor(deviceId: string) {
+    super(
+      `Device "${deviceId}" is a managed cloud device and cannot be registered by a client — use a different device id.`,
+    );
+    this.name = 'ManagedDeviceRegistrationConflictError';
+  }
+}
+
+/**
+ * Upsert guard for both registration paths: the conflict update applies only
+ * when the stored row is not a managed cloud device. Checked in the same
+ * statement as the write, so no registration racing a managed device's
+ * creation can overwrite it.
+ */
+const notManagedRow = ne(devices.identitySource, MANAGED_CLOUD_DEVICE_IDENTITY_SOURCE);
+
 export interface RegisterDeviceParams {
+  /** CPU architecture reported by the client (`process.arch`); optional for older clients. */
+  architecture?: string | null;
   deviceId: string;
   hostname?: string | null;
   identitySource: string;
+  /** Extensible client-reported info bag (app version, runtime versions, OS release). */
+  metadata?: Record<string, string> | null;
   platform?: string | null;
 }
+
+/**
+ * Re-registration merges the reported bag instead of replacing it: the desktop
+ * app (`appVersion`) and `lh connect` (`cliVersion`) share one row on the same
+ * machine, and whichever connects last must not erase the other's version.
+ * Keys a client reports again are overwritten; `undefined` leaves the bag alone.
+ */
+const mergeReportedMetadata = (metadata: RegisterDeviceParams['metadata']) =>
+  metadata ? sql`coalesce(${devices.metadata}, '{}'::jsonb) || excluded.metadata` : undefined;
 
 /** Columns the user owns — never overwritten by an auto-register upsert. */
 export interface UpdateDeviceParams {
@@ -95,31 +133,41 @@ export class DeviceModel {
    * Auto-register from desktop/CLI. Upserts on the (userId, deviceId) unique
    * index. On conflict only the machine-reported fields + lastSeenAt are
    * refreshed — friendlyName / defaultCwd / workingDirs are user-owned and
-   * must survive re-registration.
+   * must survive re-registration. A conflict with a managed cloud device
+   * changes nothing and throws {@link ManagedDeviceRegistrationConflictError}.
    */
   register = async (params: RegisterDeviceParams) => {
     const now = new Date();
     const [result] = await this.db
       .insert(devices)
       .values({
+        architecture: params.architecture,
         deviceId: params.deviceId,
         hostname: params.hostname,
         identitySource: params.identitySource,
+        metadata: params.metadata,
         lastSeenAt: now,
         platform: params.platform,
         userId: this.userId,
       })
       .onConflictDoUpdate({
         set: {
+          architecture: params.architecture,
           hostname: params.hostname,
           identitySource: params.identitySource,
           lastSeenAt: now,
+          metadata: mergeReportedMetadata(params.metadata),
           platform: params.platform,
         },
+        setWhere: notManagedRow,
         target: [devices.userId, devices.deviceId],
         targetWhere: sql`${devices.workspaceId} IS NULL`,
       })
       .returning();
+
+    // No row back means the conflict update was skipped: the id is taken by a
+    // managed cloud device.
+    if (!result) throw new ManagedDeviceRegistrationConflictError(params.deviceId);
 
     return result;
   };
@@ -128,7 +176,9 @@ export class DeviceModel {
    * Enroll a machine as a WORKSPACE device (admin-driven). Upserts on
    * `(userId, deviceId)` like {@link register}, but stamps `workspace_id` so the
    * row belongs to the workspace and surfaces to all its members. `userId`
-   * records the enrolling admin.
+   * records the enrolling admin. Like {@link register}, a conflict with a
+   * managed cloud device changes nothing and throws
+   * {@link ManagedDeviceRegistrationConflictError}.
    */
   /**
    * Fail closed when `deviceId` collides with ANOTHER member's PRIVATE
@@ -167,9 +217,11 @@ export class DeviceModel {
     const [result] = await this.db
       .insert(devices)
       .values({
+        architecture: params.architecture,
         deviceId: params.deviceId,
         hostname: params.hostname,
         identitySource: params.identitySource,
+        metadata: params.metadata,
         lastSeenAt: now,
         platform: params.platform,
         // Set for enrollments driven from the owner's personal device list —
@@ -203,16 +255,22 @@ export class DeviceModel {
       // `targetWhere`.
       .onConflictDoUpdate({
         set: {
+          architecture: params.architecture,
           hostname: params.hostname,
           identitySource: params.identitySource,
           lastSeenAt: now,
+          metadata: mergeReportedMetadata(params.metadata),
           platform: params.platform,
           visibility: params.visibility === 'public' ? 'public' : sql`${devices.visibility}`,
         },
+        setWhere: notManagedRow,
         target: [devices.workspaceId, devices.deviceId],
         targetWhere: sql`${devices.workspaceId} IS NOT NULL`,
       })
       .returning();
+
+    // Skipped conflict update: the id is taken by a managed cloud device.
+    if (!result) throw new ManagedDeviceRegistrationConflictError(params.deviceId);
 
     return result;
   };
@@ -292,6 +350,21 @@ export class DeviceModel {
     });
   };
 
+  /**
+   * The caller's PERSONAL row for a deviceId. Unlike `findByDeviceId`, never
+   * resolves to a workspace enrollment of the same machine, which may share the
+   * deviceId (the personal and workspace unique indexes are partial).
+   */
+  findPersonalByDeviceId = async (deviceId: string) => {
+    return this.db.query.devices.findFirst({
+      where: and(
+        eq(devices.userId, this.userId),
+        eq(devices.deviceId, deviceId),
+        isNull(devices.workspaceId),
+      ),
+    });
+  };
+
   update = async (deviceId: string, value: UpdateDeviceParams) => {
     return this.db
       .update(devices)
@@ -299,10 +372,40 @@ export class DeviceModel {
       .where(and(eq(devices.userId, this.userId), eq(devices.deviceId, deviceId)));
   };
 
-  delete = async (deviceId: string) => {
+  updateDeviceInfo = async (
+    deviceId: string,
+    value: Pick<RegisterDeviceParams, 'architecture' | 'hostname' | 'metadata' | 'platform'>,
+  ) => {
+    const [device] = await this.db
+      .update(devices)
+      .set({ ...value, updatedAt: new Date() })
+      .where(
+        and(
+          eq(devices.userId, this.userId),
+          eq(devices.deviceId, deviceId),
+          isNull(devices.workspaceId),
+          notManagedRow,
+        ),
+      )
+      .returning();
+    return device;
+  };
+
+  /**
+   * Remove a PERSONAL device. Workspace devices the user enrolled keep their
+   * rows; they go through `deleteWorkspaceDevice`. Returns the removed rows.
+   */
+  delete = async (deviceId: string): Promise<DeviceItem[]> => {
     return this.db
       .delete(devices)
-      .where(and(eq(devices.userId, this.userId), eq(devices.deviceId, deviceId)));
+      .where(
+        and(
+          eq(devices.userId, this.userId),
+          eq(devices.deviceId, deviceId),
+          isNull(devices.workspaceId),
+        ),
+      )
+      .returning();
   };
 
   /**
@@ -320,15 +423,44 @@ export class DeviceModel {
   };
 
   /**
+   * Read-modify-write a WORKSPACE device's `workingDirs` under a row lock, so
+   * concurrent members adding or removing one directory each cannot overwrite
+   * the other's change with a stale client snapshot. Returns the stored list,
+   * or `undefined` when the device is not in the current workspace.
+   */
+  mutateWorkspaceDeviceWorkingDirs = async (
+    deviceId: string,
+    mutate: (current: WorkingDirEntry[]) => WorkingDirEntry[],
+  ): Promise<WorkingDirEntry[] | undefined> => {
+    if (!this.workspaceId) return undefined;
+    const where = and(eq(devices.workspaceId, this.workspaceId), eq(devices.deviceId, deviceId));
+
+    return this.db.transaction(async (tx) => {
+      const [row] = await tx
+        .select({ workingDirs: devices.workingDirs })
+        .from(devices)
+        .where(where)
+        .for('update');
+      if (!row) return undefined;
+
+      const next = mutate(row.workingDirs ?? []);
+      await tx.update(devices).set({ updatedAt: new Date(), workingDirs: next }).where(where);
+      return next;
+    });
+  };
+
+  /**
    * Remove a WORKSPACE device, scoped by `workspace_id`. Permission
    * (workspace owner, or the enroller acting on their own device) is enforced
-   * at the router via `canEditWorkspaceDevice`.
+   * at the router via `canEditWorkspaceDevice`. Returns the removed rows, or
+   * `undefined` without a current workspace.
    */
-  deleteWorkspaceDevice = async (deviceId: string) => {
+  deleteWorkspaceDevice = async (deviceId: string): Promise<DeviceItem[] | undefined> => {
     if (!this.workspaceId) return;
     return this.db
       .delete(devices)
-      .where(and(eq(devices.workspaceId, this.workspaceId), eq(devices.deviceId, deviceId)));
+      .where(and(eq(devices.workspaceId, this.workspaceId), eq(devices.deviceId, deviceId)))
+      .returning();
   };
 
   /**
@@ -378,7 +510,13 @@ export class DeviceModel {
         userId: this.userId,
         visibility: params.visibility,
       })
-      .where(and(eq(devices.workspaceId, this.workspaceId), eq(devices.deviceId, deviceId)))
+      .where(
+        and(
+          eq(devices.workspaceId, this.workspaceId),
+          eq(devices.deviceId, deviceId),
+          notManagedRow,
+        ),
+      )
       .returning();
     return row;
   };

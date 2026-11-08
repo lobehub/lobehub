@@ -35,6 +35,9 @@ export const AgentManagementApiName = {
   /** Search agents (user's own and marketplace) */
   searchAgent: 'searchAgent',
 
+  /** Search MCP plugins in the marketplace */
+  searchMarketTools: 'searchMarketTools',
+
   /** Update an existing agent */
   updateAgent: 'updateAgent',
 
@@ -228,6 +231,10 @@ export interface AgentSearchItem {
    */
   isMarket?: boolean;
   /**
+   * User-facing display name; `title` is the agent's role
+   */
+  name?: string;
+  /**
    * Agent title
    */
   title?: string;
@@ -285,22 +292,15 @@ export interface CallAgentParams {
    */
   instruction: string;
   /**
-   * If true, execute as an async background task
+   * Start the agent and return right away instead of waiting for its reply,
+   * which reaches the caller later as a message from that agent.
    */
-  runAsTask?: boolean;
+  runInBackground?: boolean;
   /**
    * If true (and in a group context), skip calling supervisor after agent responds.
    * Only relevant when used within agent groups. Default: false
    */
   skipCallSupervisor?: boolean;
-  /**
-   * Task title (required when runAsTask is true)
-   */
-  taskTitle?: string;
-  /**
-   * Timeout in milliseconds for task execution (default: 1800000 = 30 minutes)
-   */
-  timeout?: number;
 }
 
 // ==================== Get Agent Detail ====================
@@ -377,6 +377,14 @@ export interface DuplicateAgentState {
    */
   success: boolean;
 }
+
+// ==================== Search Market Tools ====================
+
+export type {
+  MarketToolItem,
+  SearchMarketToolsParams,
+  SearchMarketToolsState,
+} from '@lobechat/agent-manager-runtime';
 
 // ==================== Install Plugin ====================
 

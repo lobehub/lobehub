@@ -37,7 +37,9 @@ const ResourcesSection = memo<ResourcesSectionProps>(({ deviceId, enabled = true
       flex={1}
       gap={16}
       paddingBlock={8}
-      paddingInline={'8px 12px'}
+      // The document tree's row fill spans the content edges, so it takes the
+      // header's 4px gutter: a selected row then lines up with the tabs above.
+      paddingInline={filter === 'documents' ? 4 : '8px 12px'}
       style={{ minHeight: 0 }}
     >
       {isHetero && workingDirectory && filter === 'skills' && (

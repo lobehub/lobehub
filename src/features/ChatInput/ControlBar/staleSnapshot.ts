@@ -14,6 +14,8 @@ export interface StaleSnapshotView {
   };
   /** True when the recorded checkout was a linked worktree, not the repo itself. */
   isWorktree: boolean;
+  /** What the chip shows: the recorded branch, else the dead checkout's name. */
+  label: string;
   pullRequest?: DeviceGitLinkedPullRequest;
   /**
    * Where "go back" lands, and whether it is offered at all. Present only when a
@@ -56,6 +58,7 @@ export const resolveStaleSnapshot = ({
       ? { key: 'workingDirectory.staleWorktreeSnapshot', values: { name: worktreeName } }
       : { key: 'workingDirectory.staleSnapshot' },
     isWorktree,
+    label: git.branch || getWorkingDirectoryName(worktreePath) || worktreePath,
     pullRequest: git.github?.pullRequest ?? undefined,
     ...(canReset
       ? { reset: { name: getWorkingDirectoryName(sourcePath), targetPath: sourcePath! } }

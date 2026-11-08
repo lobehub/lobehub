@@ -17,18 +17,24 @@ const {
 }));
 
 vi.mock('@/database/models/verifyRun', () => ({
-  VerifyRunModel: vi.fn().mockImplementation(() => ({
-    findByOperation: findRunByOperationMock,
-  })),
+  VerifyRunModel: vi.fn().mockImplementation(function () {
+    return {
+      findByOperation: findRunByOperationMock,
+    };
+  }),
 }));
 vi.mock('@/database/models/verifyCheckResult', () => ({
-  VerifyCheckResultModel: vi.fn().mockImplementation(() => ({
-    listByRun: listResultsByRunMock,
-    updateByCheckItem: updateByCheckItemMock,
-  })),
+  VerifyCheckResultModel: vi.fn().mockImplementation(function () {
+    return {
+      listByRun: listResultsByRunMock,
+      updateByCheckItem: updateByCheckItemMock,
+    };
+  }),
 }));
 vi.mock('../statusService', () => ({
-  VerifyStatusService: vi.fn().mockImplementation(() => ({ recompute: recomputeMock })),
+  VerifyStatusService: vi.fn().mockImplementation(function () {
+    return { recompute: recomputeMock };
+  }),
 }));
 vi.mock('../settle', () => ({
   finalizeVerifyRun: finalizeVerifyRunMock,
@@ -76,6 +82,22 @@ describe('settleVerifierCheckFromTerminal', () => {
     expect(written.verdict).toBeUndefined();
     expect(recomputeMock).toHaveBeenCalledWith('parent-op');
     expect(finalizeVerifyRunMock).toHaveBeenCalledWith(db, 'u', 'parent-op', {}, 'ws');
+  });
+
+  it('keeps the runtime error code beside the message so a credit refusal stays recognisable', async () => {
+    await settleVerifierCheckFromTerminal(db, 'u', {
+      checkItemId: 'check-1',
+      errorMessage: 'Budget exceeded',
+      errorType: 'InsufficientBudgetForModel',
+      parentOperationId: 'parent-op',
+      reason: 'error',
+      verifierOperationId: 'verifier-op',
+    });
+
+    expect(updateByCheckItemMock.mock.calls[0][2].toulmin).toEqual({
+      limitation:
+        'Verifier failed before submitting a verdict: Budget exceeded (InsufficientBudgetForModel)',
+    });
   });
 
   it('does not overwrite a result already written by submitVerifyResult', async () => {

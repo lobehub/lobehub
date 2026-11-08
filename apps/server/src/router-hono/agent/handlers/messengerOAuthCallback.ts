@@ -1,3 +1,4 @@
+import { BRANDING_NAME } from '@lobechat/business-const';
 import debug from 'debug';
 import type { Context } from 'hono';
 
@@ -75,7 +76,7 @@ export async function messengerOAuthCallback(c: Context): Promise<Response> {
   if (!config) {
     log('callback[%s]: messenger env not configured', platform);
     return new Response(
-      `${definition.name} messenger is not configured on this LobeHub deployment.`,
+      `${definition.name} messenger is not configured on this ${BRANDING_NAME} deployment.`,
       { status: 503 },
     );
   }
