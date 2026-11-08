@@ -32,7 +32,6 @@ const prefixes = {
   knowledgeBases: 'kb',
   memory: 'mem',
   messageGroups: 'mg',
-  meetings: 'mtg',
   messages: 'msg',
   metrics: 'mtr',
   plugins: 'plg',

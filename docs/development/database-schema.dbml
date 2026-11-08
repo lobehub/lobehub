@@ -2742,7 +2742,7 @@ table llm_generation_tracing {
 
 table meeting_minutes {
   id uuid [pk, not null, default: `gen_random_uuid()`]
-  meeting_id text [not null]
+  meeting_id uuid [not null]
   summary text
   chapters jsonb [not null, default: `[]`]
   decisions jsonb [not null, default: `[]`]
@@ -2762,7 +2762,7 @@ table meeting_minutes {
 
 table meeting_segments {
   id uuid [pk, not null, default: `gen_random_uuid()`]
-  meeting_id text [not null]
+  meeting_id uuid [not null]
   speaker_id uuid
   source text [not null]
   seq integer [not null]
@@ -2782,7 +2782,7 @@ table meeting_segments {
 
 table meeting_speakers {
   id uuid [pk, not null, default: `gen_random_uuid()`]
-  meeting_id text [not null]
+  meeting_id uuid [not null]
   label text [not null]
   display_name text
   accessed_at "timestamp with time zone" [not null, default: `now()`]
@@ -2795,7 +2795,7 @@ table meeting_speakers {
 }
 
 table meetings {
-  id text [pk, not null]
+  id uuid [pk, not null, default: `gen_random_uuid()`]
   user_id text [not null]
   workspace_id text
   title text [not null]

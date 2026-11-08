@@ -1,6 +1,6 @@
 CREATE TABLE IF NOT EXISTS "meeting_minutes" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"meeting_id" text NOT NULL,
+	"meeting_id" uuid NOT NULL,
 	"summary" text,
 	"chapters" jsonb DEFAULT '[]'::jsonb NOT NULL,
 	"decisions" jsonb DEFAULT '[]'::jsonb NOT NULL,
@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS "meeting_minutes" (
 --> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "meeting_segments" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"meeting_id" text NOT NULL,
+	"meeting_id" uuid NOT NULL,
 	"speaker_id" uuid,
 	"source" text NOT NULL,
 	"seq" integer NOT NULL,
@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS "meeting_segments" (
 --> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "meeting_speakers" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"meeting_id" text NOT NULL,
+	"meeting_id" uuid NOT NULL,
 	"label" text NOT NULL,
 	"display_name" text,
 	"accessed_at" timestamp with time zone DEFAULT now() NOT NULL,
@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS "meeting_speakers" (
 );
 --> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "meetings" (
-	"id" text PRIMARY KEY NOT NULL,
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"user_id" text NOT NULL,
 	"workspace_id" text,
 	"title" text NOT NULL,
