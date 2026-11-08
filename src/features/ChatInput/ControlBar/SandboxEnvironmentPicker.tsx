@@ -26,6 +26,7 @@ const styles = stylex.create({
     gap: 6,
     justifyContent: 'space-between',
     paddingBlock: 4,
+    paddingInline: 8,
   },
   headerTitle: {
     color: cssVar.colorTextTertiary,
@@ -36,6 +37,7 @@ const styles = stylex.create({
     color: cssVar.colorTextDescription,
     fontSize: 11,
     paddingBlockEnd: 4,
+    paddingInline: 8,
   },
   list: {
     maxHeight: 280,
@@ -52,10 +54,6 @@ const styles = stylex.create({
     gap: 3,
     padding: 0,
     transition: 'color 0.2s',
-  },
-  // Applied after the row's defaults through xstyle.
-  option: {
-    paddingInline: 0,
   },
 });
 
@@ -132,7 +130,6 @@ const SandboxEnvironmentPicker = memo<SandboxEnvironmentPickerProps>(({ onChange
         desc={t('sandboxEnvironment.noneDesc')}
         icon={<Icon icon={CircleSlashIcon} size={16} />}
         label={t('sandboxEnvironment.none')}
-        xstyle={styles.option}
         onClick={() => void select(undefined)}
       />
       <div {...stylex.props(styles.list)}>
@@ -143,7 +140,6 @@ const SandboxEnvironmentPicker = memo<SandboxEnvironmentPickerProps>(({ onChange
             icon={<Icon icon={PackageIcon} size={16} />}
             key={environment.id}
             label={environment.name}
-            xstyle={styles.option}
             onClick={() => void select(environment.id)}
           />
         ))}
