@@ -204,8 +204,14 @@ const BenchmarkHeader = memo<BenchmarkHeaderProps>(
               {hasCompletedRuns && topAgents.length > 0 && (
                 <Flexbox gap={6}>
                   {topAgents.map((agent, idx) => (
-                    <Flexbox horizontal align="center" justify="space-between" key={agent.name}>
-                      <Flexbox horizontal align="center" gap={8}>
+                    <Flexbox
+                      horizontal
+                      align="center"
+                      gap={8}
+                      justify="space-between"
+                      key={agent.name}
+                    >
+                      <Flexbox horizontal align="center" gap={8} style={{ minWidth: 0 }}>
                         <span
                           style={{
                             color: RANK_COLORS[idx] || RANK_COLORS[2],
@@ -219,10 +225,14 @@ const BenchmarkHeader = memo<BenchmarkHeaderProps>(
                           {idx + 1}
                         </span>
                         <span
+                          title={agent.name}
                           style={{
                             color: cssVar.colorText,
                             fontSize: cssVar.fontSize,
                             fontWeight: 500,
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
                           }}
                         >
                           {agent.name}
@@ -231,8 +241,10 @@ const BenchmarkHeader = memo<BenchmarkHeaderProps>(
                       <span
                         style={{
                           color: cssVar.colorTextSecondary,
+                          flex: 'none',
                           fontFamily: cssVar.fontFamilyCode,
                           fontSize: cssVar.fontSize,
+                          whiteSpace: 'nowrap',
                         }}
                       >
                         {(agent.avgPassRate * 100).toFixed(1)}%
