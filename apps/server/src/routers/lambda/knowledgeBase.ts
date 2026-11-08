@@ -14,11 +14,13 @@ import { DEDICATED_KNOWLEDGE_BASE_TYPES, DEFAULT_RESOURCE_ACCESS_LEVELS } from '
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { getServerFeatureFlagsStateFromRuntimeConfig } from '@/server/featureFlags';
+import { DocumentService } from '@/server/services/document';
 import { FileService } from '@/server/services/file';
 import {
   getWorkspaceScopedPermissionMatches,
   hasWorkspaceScopedPermission,
 } from '@/server/services/workspacePermission';
+import { after } from '@/server/utils/scheduleAfterResponse';
 import { type KnowledgeBaseItem } from '@/types/knowledgeBase';
 import { TransferErrorCode } from '@/types/transferError';
 
@@ -98,6 +100,7 @@ const knowledgeBaseProcedure = wsCompatProcedure.use(serverDatabase).use(async (
   return opts.next({
     ctx: {
       documentModel: new DocumentModel(ctx.serverDB, ctx.userId, wsId),
+      documentService: new DocumentService(ctx.serverDB, ctx.userId, wsId),
       fileModel: new FileModel(ctx.serverDB, ctx.userId, wsId),
       knowledgeBaseModel: new KnowledgeBaseModel(ctx.serverDB, ctx.userId, wsId),
     },
@@ -136,10 +139,12 @@ export const knowledgeBaseRouter = router({
       await assertKnowledgeItemsAccessible(ctx, input.ids);
 
       try {
-        return await ctx.knowledgeBaseModel.addFilesToKnowledgeBase(
+        const added = await ctx.knowledgeBaseModel.addFilesToKnowledgeBase(
           input.knowledgeBaseId,
           input.ids,
         );
+        after(() => ctx.documentService.ensureFilesParsed(input.ids));
+        return added;
       } catch (e: any) {
         // Check for PostgreSQL unique constraint violation (code 23505)
         const pgErrorCode = e?.cause?.cause?.code || e?.cause?.code || e?.code;

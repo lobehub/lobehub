@@ -64,6 +64,17 @@ vi.mock('@/server/routers/lambda/_helpers/knowledgeBaseAccess', () => ({
   getUseLevelKnowledgeBaseIds: vi.fn().mockResolvedValue([]),
 }));
 
+vi.mock('@/server/utils/scheduleAfterResponse', () => ({
+  after: (work: () => unknown) => work(),
+}));
+
+const mockEnsureFilesParsed = vi.fn();
+vi.mock('@/server/services/document', () => ({
+  DocumentService: vi.fn(function () {
+    return { ensureFilesParsed: mockEnsureFilesParsed };
+  }),
+}));
+
 vi.mock('@/database/models/document', () => ({
   DocumentModel: vi.fn(function () {
     return { findByIds: mockDocumentModelFindByIds };
@@ -233,6 +244,28 @@ describe('knowledgeBaseRouter', () => {
       await caller.addFilesToKnowledgeBase({ ids: ['file-1'], knowledgeBaseId: 'kb-1' });
 
       expect(mockKnowledgeBaseModelAddFiles).toHaveBeenCalledWith('kb-1', ['file-1']);
+    });
+
+    it('indexes added files for full-text search without waiting on embedding', async () => {
+      mockFileModelFindByIds.mockResolvedValue([{ id: 'file-1', visibility: 'public' }]);
+      mockDocumentModelFindByIds.mockResolvedValue([]);
+      mockKnowledgeBaseModelAddFiles.mockResolvedValue([{ fileId: 'file-1' }]);
+
+      await caller.addFilesToKnowledgeBase({ ids: ['file-1'], knowledgeBaseId: 'kb-1' });
+
+      expect(mockEnsureFilesParsed).toHaveBeenCalledWith(['file-1']);
+    });
+
+    it('does not index files when adding them fails', async () => {
+      mockFileModelFindByIds.mockResolvedValue([{ id: 'file-1', visibility: 'public' }]);
+      mockDocumentModelFindByIds.mockResolvedValue([]);
+      mockKnowledgeBaseModelAddFiles.mockRejectedValueOnce(new Error('insert failed'));
+
+      await expect(
+        caller.addFilesToKnowledgeBase({ ids: ['file-1'], knowledgeBaseId: 'kb-1' }),
+      ).rejects.toThrow('insert failed');
+
+      expect(mockEnsureFilesParsed).not.toHaveBeenCalled();
     });
 
     it('files a private resource into a shared library', async () => {

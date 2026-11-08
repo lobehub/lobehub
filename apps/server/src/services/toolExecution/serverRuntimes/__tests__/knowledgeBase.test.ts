@@ -5,7 +5,9 @@ import type { ToolExecutionContext } from '../../types';
 import { knowledgeBaseRuntime } from '../knowledgeBase';
 
 const mocks = vi.hoisted(() => ({
+  addFilesToKnowledgeBase: vi.fn(),
   createDocument: vi.fn(),
+  ensureFilesParsed: vi.fn(),
   getAgentAssignedKnowledge: vi.fn(),
   getEnabledKnowledgeBaseIds: vi.fn(),
   getEnabledKnowledgeBaseIdsForTask: vi.fn(),
@@ -28,11 +30,15 @@ vi.mock('@/database/models/project', () => ({
 }));
 
 vi.mock('@/database/models/file', () => ({ FileModel: vi.fn() }));
-vi.mock('@/database/models/knowledgeBase', () => ({ KnowledgeBaseModel: vi.fn() }));
+vi.mock('@/database/models/knowledgeBase', () => ({
+  KnowledgeBaseModel: vi.fn().mockImplementation(function () {
+    return { addFilesToKnowledgeBase: mocks.addFilesToKnowledgeBase };
+  }),
+}));
 vi.mock('@/database/repositories/knowledge', () => ({ KnowledgeRepo: vi.fn() }));
 vi.mock('@/server/services/document', () => ({
   DocumentService: vi.fn().mockImplementation(function () {
-    return { createDocument: mocks.createDocument };
+    return { createDocument: mocks.createDocument, ensureFilesParsed: mocks.ensureFilesParsed };
   }),
 }));
 vi.mock('@/server/services/file', () => ({ FileService: vi.fn() }));
@@ -146,5 +152,25 @@ describe('knowledgeBaseRuntime createDocument', () => {
         title: 'Launch checklist',
       }),
     );
+  });
+});
+
+describe('knowledgeBaseRuntime addFiles', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.addFilesToKnowledgeBase.mockResolvedValue([{ fileId: 'file_policy' }]);
+  });
+
+  it('has the file full-text searchable by the time the tool returns', async () => {
+    let parsed = false;
+    mocks.ensureFilesParsed.mockImplementation(async () => {
+      await Promise.resolve();
+      parsed = true;
+    });
+
+    await createRuntime().addFiles({ fileIds: ['file_policy'], knowledgeBaseId: 'kb_company' });
+
+    expect(mocks.ensureFilesParsed).toHaveBeenCalledWith(['file_policy']);
+    expect(parsed).toBe(true);
   });
 });

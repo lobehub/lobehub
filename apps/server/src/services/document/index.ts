@@ -16,11 +16,14 @@ import {
   ordinaryFileAccessScope,
   stripAgentShareDocumentProvenance,
 } from '@lobechat/types';
+import { isChunkingUnsupported } from '@lobechat/utils/isChunkingUnsupported';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import { and, eq, sql } from 'drizzle-orm';
 import isEqual from 'fast-deep-equal';
+import pMap from 'p-map';
 
+import { MAX_FILE_PARSE_SIZE } from '@/const/file';
 import { DocumentModel, type DocumentQuerySortBy } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
 import { KnowledgeBaseModel } from '@/database/models/knowledgeBase';
@@ -51,6 +54,8 @@ import type {
 import { assertDocumentWriteWithinLimit } from './writeLimit';
 
 const log = debug('lobe-chat:service:document');
+
+const ENSURE_FILES_PARSED_CONCURRENCY = 3;
 
 /**
  * Upper bound, in characters, of parsed file text stored in `documents.content`.
@@ -994,6 +999,35 @@ export class DocumentService {
    * transaction scoped, so a nested call would hold it until the outer
    * transaction commits instead of releasing it after the insert.
    */
+  /**
+   * Store the full text of files filed into a knowledge base, so they are full-text searchable
+   * without chunks or an embedding model. Best-effort: a file that cannot be parsed stays out of
+   * search but must not fail the caller, which has already filed it.
+   */
+  async ensureFilesParsed(ids: string[]): Promise<void> {
+    const fileIds = ids.filter((id) => !id.startsWith('docs_'));
+    if (fileIds.length === 0) return;
+
+    const parsableFiles = (await this.fileModel.findByIds(fileIds)).filter(
+      (file) =>
+        !isChunkingUnsupported(file.fileType) &&
+        file.size <= MAX_FILE_PARSE_SIZE &&
+        !file.url.startsWith('internal://'),
+    );
+
+    await pMap(
+      parsableFiles,
+      async (file) => {
+        try {
+          await this.parseFile(file.id);
+        } catch (error) {
+          console.warn(`[ensureFilesParsed] failed to parse file ${file.id}:`, error);
+        }
+      },
+      { concurrency: ENSURE_FILES_PARSED_CONCURRENCY },
+    );
+  }
+
   async parseFile(
     fileId: string,
     accessScope: FileAccessScope = ordinaryFileAccessScope,
@@ -1067,6 +1101,7 @@ export class DocumentService {
           title,
           totalCharCount: fileDocument.totalCharCount,
           totalLineCount: fileDocument.totalLineCount,
+          visibility: file.visibility,
         });
       });
 

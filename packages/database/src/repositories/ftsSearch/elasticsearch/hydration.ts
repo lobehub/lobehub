@@ -37,6 +37,7 @@ import { notShareVisitorMessage, notShareVisitorTopic } from '../../../utils/sha
 import { notTrashed } from '../../../utils/softDelete';
 import { notChannelTopic, notChannelTopicRef } from '../../../utils/topicVisibility';
 import { buildWorkspaceWhere } from '../../../utils/workspace';
+import { buildMatchSnippet } from '../snippet';
 import type {
   FtsSearchAgentResult,
   FtsSearchBackendScope,
@@ -660,6 +661,7 @@ export const hydrateKnowledgeBaseDocuments = async (
   scope: FtsSearchBackendScope,
   limit: number,
   knowledgeBaseIds: string[],
+  query: string,
 ): Promise<FtsSearchKnowledgeBaseDocumentHit[]> => {
   if (hits.length === 0 || knowledgeBaseIds.length === 0) return [];
 
@@ -709,7 +711,7 @@ export const hydrateKnowledgeBaseDocuments = async (
       ? []
       : await db
           .select({
-            content: documentContentPreview(KNOWLEDGE_BASE_DOCUMENT_SNIPPET_MAX_LENGTH),
+            content: documents.content,
             id: documents.id,
           })
           .from(documents)
@@ -728,7 +730,12 @@ export const hydrateKnowledgeBaseDocuments = async (
     fileId: row.fileId ?? undefined,
     knowledgeBaseId: row.matchingKnowledgeBaseId,
     relevance: row.relevance,
-    snippet: truncate(contentById.get(row.id), KNOWLEDGE_BASE_DOCUMENT_SNIPPET_MAX_LENGTH) ?? '',
+    snippet:
+      buildMatchSnippet(
+        contentById.get(row.id),
+        query,
+        KNOWLEDGE_BASE_DOCUMENT_SNIPPET_MAX_LENGTH,
+      ) ?? '',
     title: row.title || row.filename || 'Untitled',
     updatedAt: row.updatedAt,
   }));
