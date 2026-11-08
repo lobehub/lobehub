@@ -6,7 +6,7 @@ import {
   isLobeBenchMeta,
   type LobeBenchContender,
   pickPrimaryBenchmark,
-  upsertContenders,
+  withRanContenders,
 } from '@/features/LobeBench/lobeBench';
 import { useLobeBenchBenchmarks, useLobeBenchExperiments } from '@/features/LobeBench/useLobeBench';
 import { useEvalStore } from '@/store/eval';
@@ -25,13 +25,13 @@ export const useSavedContenders = () => {
   const saved = getBenchmarkMeta(benchmark).contenders;
 
   const contenders = useMemo(() => {
-    // Oldest experiment first, so the saved order (and names) win over reruns.
+    // Oldest experiment first; the saved list (with its edited names) wins over what they recorded.
     const ran = [...experiments]
       .reverse()
       .flatMap((experiment) =>
         isLobeBenchMeta(experiment.metadata) ? experiment.metadata.contenders : [],
       );
-    return upsertContenders(saved, ran);
+    return withRanContenders(saved, ran);
   }, [experiments, saved]);
 
   const save = useCallback(

@@ -24,7 +24,7 @@ import { runSelectors, testCaseSelectors, useEvalStore } from '@/store/eval';
 
 import TestCasePreviewPanel from '../../bench/[benchmarkId]/features/DatasetsTab/TestCasePreviewPanel';
 import TestCaseTable from '../../bench/[benchmarkId]/features/DatasetsTab/TestCaseTable';
-import { createRunCreateModal } from '../../bench/[benchmarkId]/features/RunCreateModal';
+import { useCreateRun } from '../../bench/[benchmarkId]/features/RunCreateModal/useCreateRun';
 import EmptyState from '../../bench/[benchmarkId]/features/RunsTab/EmptyState';
 import RunCard from '../../bench/[benchmarkId]/features/RunsTab/RunCard';
 import { createDatasetEditModal } from '../../features/DatasetEditModal';
@@ -121,6 +121,7 @@ const DatasetDetail = memo(() => {
   const benchmarkId: string | null =
     (dataset as { benchmarkId?: string | null })?.benchmarkId ?? null;
   useFetchDatasetRuns(datasetId);
+  const { createRun, lobeBench } = useCreateRun(benchmarkId ?? undefined);
 
   const sortedRuns = useMemo(
     () =>
@@ -364,15 +365,11 @@ const DatasetDetail = memo(() => {
                   <Button
                     icon={Plus}
                     size="small"
-                    onClick={() =>
-                      createRunCreateModal({
-                        benchmarkId: benchmarkId!,
-                        datasetId: datasetId!,
-                        datasetName: dataset.name,
-                      })
-                    }
+                    onClick={() => createRun({ id: datasetId!, name: dataset.name })}
                   >
-                    {t('dataset.detail.addRun')}
+                    {lobeBench
+                      ? t('lobeBench.benchmark.newExperiment')
+                      : t('dataset.detail.addRun')}
                   </Button>
                 </Flexbox>
                 {sortedRuns.length > 0 ? (
@@ -383,13 +380,8 @@ const DatasetDetail = memo(() => {
                   </Flexbox>
                 ) : (
                   <EmptyState
-                    onCreate={() =>
-                      createRunCreateModal({
-                        benchmarkId: benchmarkId!,
-                        datasetId: datasetId!,
-                        datasetName: dataset.name,
-                      })
-                    }
+                    createLabel={lobeBench ? t('lobeBench.benchmark.newExperiment') : undefined}
+                    onCreate={() => createRun({ id: datasetId!, name: dataset.name })}
                   />
                 )}
               </Flexbox>

@@ -183,6 +183,29 @@ describe('experiment draft validation', () => {
     ).toEqual({ ...initial('bench-1'), contenders: [contender] });
   });
 
+  it("keeps every contender setting, so a restored draft runs the model's newer reasoning effort", () => {
+    const gpt = {
+      ...contender,
+      chatConfig: { gpt6ReasoningEffort: 'high' as const },
+      name: 'GPT-6.1 Sol · reasoning high',
+    };
+    const deepseek = {
+      ...contender,
+      chatConfig: { deepseekV4GAReasoningEffort: 'max' as const },
+      id: 'contender-2',
+    };
+    const draft = { ...initial('bench-1'), contenders: [gpt, deepseek] };
+    expect(parseExperimentDraft(JSON.stringify(draft))).toEqual(draft);
+  });
+
+  it('drops chat settings a contender cannot carry', () => {
+    const stored = { ...contender, chatConfig: { enableReasoning: true, systemRole: 'x' } };
+    expect(
+      parseExperimentDraft(JSON.stringify({ ...initial('bench-1'), contenders: [stored] }))
+        ?.contenders[0].chatConfig,
+    ).toEqual({ enableReasoning: true });
+  });
+
   it('identifies missing cases and unavailable model capabilities without changing the draft', () => {
     const draft: ExperimentDraft = {
       ...initial('bench-1'),

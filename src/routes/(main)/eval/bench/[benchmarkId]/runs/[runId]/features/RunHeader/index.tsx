@@ -30,7 +30,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import AgentAvatar from '@/components/AgentAvatar';
-import { runBackPath } from '@/features/LobeBench/experimentNavigation';
+import { benchmarkDatasetPath, runBackPath } from '@/features/LobeBench/experimentNavigation';
 import { useIsLobeBenchBenchmark } from '@/features/LobeBench/useIsLobeBenchBenchmark';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
@@ -307,7 +307,7 @@ const RunHeader = memo<RunHeaderProps>(({ run, benchmarkId, hideStart }) => {
                 <WorkspaceLink
                   className={styles.datasetLink}
                   target="_blank"
-                  to={`/eval/bench/${benchmarkId}/datasets/${run.dataset.id}`}
+                  to={benchmarkDatasetPath(run.dataset.id, lobeBench)}
                 >
                   <span className={styles.metaItem}>{run.dataset.name}</span>
                 </WorkspaceLink>

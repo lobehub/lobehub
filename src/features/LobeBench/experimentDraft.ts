@@ -1,18 +1,23 @@
-import { AgentChatConfigSchema } from '@lobechat/types';
+import { type EvalRunChatConfig } from '@lobechat/types';
 import { z } from 'zod';
+
+import { CONTENDER_SETTING_KEYS } from '@/features/LobeBench/lobeBench';
 
 const modelSchema = z.object({ model: z.string().min(1), provider: z.string().min(1) });
 const contenderSchema = modelSchema.extend({
-  chatConfig: AgentChatConfigSchema.pick({
-    enableReasoning: true,
-    gpt5ReasoningEffort: true,
-    reasoningBudgetToken: true,
-    reasoningEffort: true,
-    textVerbosity: true,
-    thinking: true,
-    thinkingBudget: true,
-    thinkingLevel: true,
-  }).optional(),
+  // Every setting a contender can carry (each model's own reasoning-effort key
+  // included), so a restored draft runs what its name says; nothing else.
+  chatConfig: z
+    .record(z.string(), z.unknown())
+    .transform(
+      (config) =>
+        Object.fromEntries(
+          CONTENDER_SETTING_KEYS.filter(
+            (key) => config[key] !== undefined && config[key] !== null,
+          ).map((key) => [key, config[key]]),
+        ) as EvalRunChatConfig,
+    )
+    .optional(),
   id: z.string().min(1),
   name: z.string(),
   params: z

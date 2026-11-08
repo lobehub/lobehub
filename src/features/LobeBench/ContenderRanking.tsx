@@ -2,15 +2,16 @@
 
 import type { AgentEvalRunListItem } from '@lobechat/types';
 import { formatCost } from '@lobechat/utils';
-import { Block, Button, Flexbox, Select, Text, useTheme } from '@lobehub/ui';
+import { Block, Button, DropdownMenu, Flexbox, Select, Text, useTheme } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { Plus } from 'lucide-react';
+import { ChevronDown, Plus } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ModelIcon } from '@/components/LobeIcons';
 import {
+  contenderKeyOf,
   pickRankedSet,
   rankContenders,
   type RankedContender,
@@ -75,6 +76,8 @@ const ContenderRanking = ({ benchmarkId, runs, sets }: ContenderRankingProps) =>
   const theme = useTheme();
   const brands = useBrandCatalog();
   const [chosen, setChosen] = useState<string>();
+  // The contenders picked to compare (by setup); none picked shows them all.
+  const [compared, setCompared] = useState<string[]>([]);
 
   const rankings = useMemo(
     () => new Map(sets.map((set) => [set.id, rankContenders(runs, set)])),
@@ -99,7 +102,15 @@ const ContenderRanking = ({ benchmarkId, runs, sets }: ContenderRankingProps) =>
       .filter(Boolean)
       .join(' · ');
 
-  const rows: RankingBarRow[] = contenders.map((entry, index) => {
+  const ranked = contenders.map((entry, index) => ({
+    entry,
+    key: contenderKeyOf(entry.run),
+    rank: index + 1,
+  }));
+  // Only picks on this board count; with none, every contender shows.
+  const picked = compared.filter((key) => ranked.some((item) => item.key === key));
+  const shown = picked.length > 0 ? ranked.filter(({ key }) => picked.includes(key)) : ranked;
+  const rows: RankingBarRow[] = shown.map(({ entry, rank }) => {
     const model = modelOf(entry.run);
     const brand = findBrandColor(brands, model);
     const anyRate = entry.k > 1 && entry.total ? (entry.anyK ?? 0) / entry.total : undefined;
@@ -109,7 +120,8 @@ const ContenderRanking = ({ benchmarkId, runs, sets }: ContenderRankingProps) =>
       icon: model ? <ModelIcon model={model} size={20} /> : undefined,
       key: entry.run.id,
       name: entry.name,
-      rank: index + 1,
+      // Picking models to compare keeps each one's place on the full board.
+      rank,
       rate: entry.passRate,
       reach: anyRate,
       reachText:
@@ -161,21 +173,52 @@ const ContenderRanking = ({ benchmarkId, runs, sets }: ContenderRankingProps) =>
             {t('lobeBench.benchmark.rank.hint', { k: rankK })}
           </Text>
         </Flexbox>
-        {sets.length > 1 && (
-          <Select
-            size={'small'}
-            style={{ flex: 'none', width: 240 }}
-            value={set?.id}
-            options={sets.map((candidate) => ({
-              label: t('lobeBench.benchmark.rank.setOption', {
-                count: rankings.get(candidate.id)?.contenders.length ?? 0,
-                name: candidate.name,
-              }),
-              value: candidate.id,
-            }))}
-            onChange={(value) => setChosen(value as string)}
-          />
-        )}
+        <Flexbox horizontal gap={8} style={{ flex: 'none' }}>
+          {contenders.length > 1 && (
+            // A checklist behind one compact button: picked models never pile up as tags.
+            <DropdownMenu
+              placement={'bottomRight'}
+              items={[
+                {
+                  disabled: picked.length === 0,
+                  key: 'all',
+                  label: t('lobeBench.benchmark.rank.compare.reset'),
+                  onClick: () => setCompared([]),
+                },
+                { type: 'divider' as const },
+                ...ranked.map(({ entry, key, rank }) => ({
+                  checked: picked.includes(key),
+                  key,
+                  label: `#${rank} ${entry.name}`,
+                  onCheckedChange: (checked: boolean) =>
+                    setCompared(checked ? [...picked, key] : picked.filter((item) => item !== key)),
+                  type: 'checkbox' as const,
+                })),
+              ]}
+            >
+              <Button icon={ChevronDown} iconPosition={'end'} size={'small'}>
+                {picked.length > 0
+                  ? t('lobeBench.benchmark.rank.compare.some', { count: picked.length })
+                  : t('lobeBench.benchmark.rank.compare.all')}
+              </Button>
+            </DropdownMenu>
+          )}
+          {sets.length > 1 && (
+            <Select
+              size={'small'}
+              style={{ flex: 'none', width: 240 }}
+              value={set?.id}
+              options={sets.map((candidate) => ({
+                label: t('lobeBench.benchmark.rank.setOption', {
+                  count: rankings.get(candidate.id)?.contenders.length ?? 0,
+                  name: candidate.name,
+                }),
+                value: candidate.id,
+              }))}
+              onChange={(value) => setChosen(value as string)}
+            />
+          )}
+        </Flexbox>
       </Flexbox>
 
       {contenders.length === 0 ? (

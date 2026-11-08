@@ -18,7 +18,7 @@ import {
 } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { Plus, X } from 'lucide-react';
+import { Pencil, Plus, X } from 'lucide-react';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router';
@@ -55,6 +55,7 @@ import {
   type LobeBenchExperimentPart,
   pickPrimaryBenchmark,
   RANK_ATTEMPTS,
+  replaceContender,
   runStats,
   sameContender,
   settingsBenchmarkOf,
@@ -217,6 +218,21 @@ const NewExperiment = memo(() => {
   const frozen = starting || !!launch;
   const setContenders = (update: (list: LobeBenchContender[]) => LobeBenchContender[]) =>
     updateDraft((value) => ({ ...value, contenders: update(value.contenders) }));
+  // Renames or retunes a picked contender; one from the saved list keeps the edit for later experiments too.
+  const editContender = (contender: LobeBenchContender) =>
+    openContenderModal(
+      (edited) => {
+        setContenders((list) => replaceContender(list, edited));
+        const saved = replaceContender(savedContenders, edited);
+        if (saved === savedContenders) return;
+        saveContenders(saved).catch((error: unknown) =>
+          toast.error(error instanceof Error ? error.message : String(error)),
+        );
+      },
+      t('lobeBench.contenders.edit'),
+      t('lobeBench.contender.save.list'),
+      contender,
+    );
   // Only benchmarks are offered, each with the cases of all its datasets.
   const benchmarkOptions = useMemo(
     () =>
@@ -812,16 +828,24 @@ const NewExperiment = memo(() => {
                         : `${settings} · ${contender.model} · ${contender.provider}`}
                     </Text>
                   </Flexbox>
-                  <ActionIcon
-                    disabled={!draftReady || frozen}
-                    icon={X}
-                    size={'small'}
-                    style={{ flex: 'none' }}
-                    title={t('lobeBench.new.contenders.remove')}
-                    onClick={() =>
-                      setContenders((list) => list.filter((item) => item.id !== contender.id))
-                    }
-                  />
+                  <Flexbox horizontal gap={4} style={{ flex: 'none' }}>
+                    <ActionIcon
+                      disabled={!draftReady || frozen}
+                      icon={Pencil}
+                      size={'small'}
+                      title={t('lobeBench.contenders.edit')}
+                      onClick={() => editContender(contender)}
+                    />
+                    <ActionIcon
+                      disabled={!draftReady || frozen}
+                      icon={X}
+                      size={'small'}
+                      title={t('lobeBench.new.contenders.remove')}
+                      onClick={() =>
+                        setContenders((list) => list.filter((item) => item.id !== contender.id))
+                      }
+                    />
+                  </Flexbox>
                 </div>
               );
             })}

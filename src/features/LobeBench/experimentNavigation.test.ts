@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  benchmarkDatasetPath,
   benchmarkHomePath,
   benchmarkSidebarBackPath,
   experimentContextSuffix,
+  newExperimentPath,
   parseExperimentId,
   runBackPath,
 } from './experimentNavigation';
@@ -77,5 +79,24 @@ describe('back navigation from the Lab run page', () => {
     expect(benchmarkSidebarBackPath('b1', false)).toBe('/eval');
     expect(benchmarkHomePath('evb_1', true)).toBe('/eval/lobe-bench/benchmarks/evb_1');
     expect(benchmarkHomePath('b1', false)).toBe('/eval/bench/b1');
+  });
+
+  it("opens a benchmark sidebar's dataset on the benchmark's own side", () => {
+    expect(benchmarkDatasetPath('ds_1', true)).toBe('/eval/lobe-bench/datasets/ds_1');
+    expect(benchmarkDatasetPath('ds_1', false)).toBe('/eval/datasets/ds_1');
+  });
+});
+
+describe('newExperimentPath', () => {
+  it('opens the new experiment page on the named dataset', () => {
+    expect(newExperimentPath('ds_ZEmC8pJFtXVs')).toBe(
+      '/eval/lobe-bench/experiments/new?dataset=ds_ZEmC8pJFtXVs',
+    );
+  });
+
+  it('encodes the id and opens the plain page without one', () => {
+    expect(newExperimentPath('a&b')).toBe('/eval/lobe-bench/experiments/new?dataset=a%26b');
+    expect(newExperimentPath(undefined)).toBe('/eval/lobe-bench/experiments/new');
+    expect(newExperimentPath(null)).toBe('/eval/lobe-bench/experiments/new');
   });
 });

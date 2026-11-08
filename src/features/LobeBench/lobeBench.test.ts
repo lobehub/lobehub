@@ -20,6 +20,7 @@ import {
   orderDatasetsForPicker,
   pickDefaultDataset,
   rankableSetsOf,
+  replaceContender,
   runCaseCount,
   runCoversSet,
   runStats,
@@ -28,6 +29,7 @@ import {
   sortBenchmarks,
   stableJson,
   summarizeCaseResult,
+  withRanContenders,
 } from '@/features/LobeBench/lobeBench';
 
 describe('lobeBench helpers', () => {
@@ -479,5 +481,50 @@ describe('case selection', () => {
     const most = { config: { caseSelection: { caseIds: ['a'], mode: 'exclude' as const } } };
     expect([whole, all, some, most].map(isFullRun)).toEqual([true, true, false, false]);
     expect([whole, all, some, most].map((run) => runCaseCount(run, 30))).toEqual([30, 30, 2, 29]);
+  });
+});
+
+describe('withRanContenders', () => {
+  const flash = {
+    chatConfig: { enableReasoning: true },
+    id: 'c1',
+    model: 'deepseek/deepseek-v4.1-flash',
+    name: 'DeepSeek V4.1 Flash',
+    provider: 'openrouter',
+  };
+
+  it("keeps a renamed contender's new name over the copy an earlier experiment recorded", () => {
+    const renamed = { ...flash, name: 'DeepSeek V4.1 Flash · reasoning on' };
+    const list = withRanContenders([renamed], [{ ...flash, runId: 'run_1' }]);
+    expect(list).toEqual([renamed]);
+  });
+
+  it('adds what experiments ran that the saved list does not have, once', () => {
+    const haiku = {
+      id: 'c2',
+      model: 'anthropic/claude-haiku-5.5',
+      name: 'Claude Haiku 5.5',
+      provider: 'openrouter',
+    };
+    const list = withRanContenders(
+      [flash],
+      [haiku, { ...haiku, id: 'c3' }, { ...flash, id: 'c4' }],
+    );
+    expect(list.map((c) => c.id)).toEqual(['c1', 'c2']);
+  });
+});
+
+describe('replaceContender', () => {
+  const qwen = { id: 'q1', model: 'qwen4', name: ' · 推理 on', provider: 'custom' };
+  const other = { id: 'o1', model: 'glm-5.3-flash', name: 'GLM 5.3 Flash', provider: 'zhipu' };
+
+  it('renames a saved contender picked into an experiment, in the draft and the saved list', () => {
+    const edited = { ...qwen, name: 'Qwen4 · 推理 on' };
+    expect(replaceContender([other, qwen], edited)).toEqual([other, edited]);
+  });
+
+  it('leaves a list without that contender as it is', () => {
+    const list = [other];
+    expect(replaceContender(list, { ...qwen, name: 'Qwen4' })).toBe(list);
   });
 });

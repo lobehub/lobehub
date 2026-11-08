@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 import Sparkline from '../../../../features/Sparkline';
 import { formatDuration, formatDurationMinutes } from '../../../../utils';
 import BenchmarkTitleBar from './TitleBar';
+import { topPerformersOf } from './topPerformers';
 
 const RANK_COLORS = [cssVar.colorPrimary, cssVar.colorSuccess, cssVar.colorTextQuaternary];
 
@@ -71,26 +72,11 @@ const BenchmarkHeader = memo<BenchmarkHeaderProps>(
     const hasDatasets = datasets.length > 0;
     const hasCompletedRuns = completedRuns.length > 0;
 
-    // Top Agents: group by targetAgent, compute avg passRate, sort desc, take top 3
-    const topAgents = useMemo(() => {
-      if (!hasCompletedRuns) return [];
-      const agentMap = new Map<string, { name: string; passRates: number[] }>();
-      for (const run of completedRuns) {
-        const agentName = run.targetAgent?.title || run.targetAgent?.id || 'Unknown';
-        const agentId = run.targetAgentId || run.targetAgent?.id || agentName;
-        if (!agentMap.has(agentId)) {
-          agentMap.set(agentId, { name: agentName, passRates: [] });
-        }
-        agentMap.get(agentId)!.passRates.push(run.passRate ?? run.metrics?.passRate ?? 0);
-      }
-      return [...agentMap.entries()]
-        .map(([, v]) => ({
-          avgPassRate: v.passRates.reduce((a, b) => a + b, 0) / v.passRates.length,
-          name: v.name,
-        }))
-        .sort((a, b) => b.avgPassRate - a.avgPassRate)
-        .slice(0, 3);
-    }, [completedRuns, hasCompletedRuns]);
+    // Top performers: an Agent's runs, or a model contender's runs (Lobe Bench), by average pass rate.
+    const topAgents = useMemo(
+      () => (hasCompletedRuns ? topPerformersOf(completedRuns) : []),
+      [completedRuns, hasCompletedRuns],
+    );
 
     // Best agent for the summary line
     const bestAgent = topAgents.length > 0 ? topAgents[0] : null;

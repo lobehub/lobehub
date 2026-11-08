@@ -85,7 +85,8 @@ const ContenderForm = memo<ContenderFormProps>(({ initial, onSubmit, submitLabel
   });
   const settingsLabel =
     describeSettings(params, chatConfig, labels) || t('lobeBench.contender.settings.default');
-  const defaultName = target ? `${modelInfo?.displayName ?? target.model} · ${settingsLabel}` : '';
+  // A model with an empty display name (a custom provider's) is named by its id.
+  const defaultName = target ? `${modelInfo?.displayName || target.model} · ${settingsLabel}` : '';
 
   const submit = () => {
     if (!target) return;

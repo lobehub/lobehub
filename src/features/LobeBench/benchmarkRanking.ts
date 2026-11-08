@@ -49,7 +49,11 @@ export interface SetRanking {
 
 export const contenderName = (run: AgentEvalRunListItem) => {
   const config = (run.config ?? {}) as { model?: string };
-  return run.name || config.model || run.targetAgent?.title || run.targetAgent?.id || 'Unknown';
+  const name = run.name?.trim();
+  // Runs named before a model without a display name fell back to its id
+  // start with the settings alone ("· reasoning on"): put the model back.
+  if (name?.startsWith('·') && config.model) return `${config.model} ${name}`;
+  return name || config.model || run.targetAgent?.title || run.targetAgent?.id || 'Unknown';
 };
 
 /**

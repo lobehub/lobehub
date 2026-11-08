@@ -8,14 +8,17 @@ import type { ReactNode } from 'react';
 const ROW_HEIGHT = 44;
 const BAR_SIZE = 24;
 const GRID_TICKS = [25, 50, 75];
+/** Room right of the plot for the reach text that follows the longest bar. */
+const REACH_TEXT_ROOM = 120;
 
 const styles = stylex.create({
   root: { display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 },
   // One grid for every row, so the label column is as wide as the longest
-  // name (up to a cap) and every bar starts on the same axis.
+  // name (up to a cap), the ranked score sits right before its bar, and every
+  // bar starts on the same axis.
   rows: {
     display: 'grid',
-    gridTemplateColumns: 'fit-content(460px) minmax(120px, 1fr) max-content',
+    gridTemplateColumns: 'fit-content(460px) max-content minmax(160px, 1fr)',
     minWidth: 0,
   },
   row: {
@@ -81,6 +84,26 @@ const styles = stylex.create({
     borderLeftStyle: 'solid',
     borderLeftColor: cssVar.colorBorder,
   },
+  // The bars' 0..100% span: the track less room for the text after the bar.
+  plot: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    right: REACH_TEXT_ROOM,
+  },
+  reachText: (left: string) => ({
+    left: `calc(${left} + 8px)`,
+    position: 'absolute',
+    top: '50%',
+    transform: 'translateY(-50%)',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: 12,
+    fontVariantNumeric: 'tabular-nums',
+    lineHeight: 1.3,
+    color: cssVar.colorTextDescription,
+    whiteSpace: 'nowrap',
+  }),
   gridLine: (left: string) => ({
     left,
     pointerEvents: 'none',
@@ -114,12 +137,10 @@ const styles = stylex.create({
   }),
   score: {
     display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'flex-end',
-    justifyContent: 'center',
-    gap: 2,
-    minWidth: 72,
-    paddingInlineStart: 16,
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    minWidth: 48,
+    paddingInlineEnd: 12,
   },
   scoreMain: {
     fontFamily: cssVar.fontFamilyCode,
@@ -128,14 +149,6 @@ const styles = stylex.create({
     fontVariantNumeric: 'tabular-nums',
     lineHeight: 1.3,
     color: cssVar.colorText,
-  },
-  scoreSub: {
-    fontFamily: cssVar.fontFamilyCode,
-    fontSize: 12,
-    fontVariantNumeric: 'tabular-nums',
-    lineHeight: 1.3,
-    color: cssVar.colorTextDescription,
-    whiteSpace: 'nowrap',
   },
   legend: { display: 'flex', flexWrap: 'wrap', gap: 16 },
   legendItem: {
@@ -161,7 +174,7 @@ export interface RankingBarRow {
   rate: number;
   /** Where the bar would reach on a looser reading (pass@k); drawn as a faint extension. */
   reach?: number;
-  /** Short text for `reach`, under the score. */
+  /** Short text for `reach`, right after the end of the bar. */
   reachText?: string;
 }
 
@@ -175,8 +188,8 @@ interface RankingBarsProps {
 const percent = (rate: number) => Math.max(0, Math.min(100, rate * 100));
 
 /**
- * LobeBench's ranking anatomy (rank · icon · name and detail · brand-colored
- * bar · score), drawn here because the chart package's ranking chart cannot
+ * LobeBench's ranking anatomy (rank · icon · name and detail · ranked score ·
+ * brand-colored bar · reach text), drawn here because the chart package's ranking chart cannot
  * add the pass@k reach: the solid bar is the ranked pass rate (every attempt
  * passed), the faint extension of the same bar shows how far the model got
  * when any attempt counts, so the gap between the two is its flakiness.
@@ -206,18 +219,24 @@ const RankingBars = ({ legendRate, legendReach, onSelect, rows }: RankingBarsPro
                   {row.detail && <div {...stylex.props(styles.detail)}>{row.detail}</div>}
                 </div>
               </div>
-              <div {...stylex.props(styles.track)}>
-                {GRID_TICKS.map((tick) => (
-                  <div aria-hidden key={tick} {...stylex.props(styles.gridLine(`${tick}%`))} />
-                ))}
-                {reachPct > pct && (
-                  <div {...stylex.props(styles.reach(`${pct}%`, `${reachPct - pct}%`, fill))} />
-                )}
-                <div {...stylex.props(styles.bar(`${pct}%`, fill))} />
-              </div>
               <div {...stylex.props(styles.score)}>
                 <span {...stylex.props(styles.scoreMain)}>{Math.round(pct)}%</span>
-                {row.reachText && <span {...stylex.props(styles.scoreSub)}>{row.reachText}</span>}
+              </div>
+              <div {...stylex.props(styles.track)}>
+                <div {...stylex.props(styles.plot)}>
+                  {GRID_TICKS.map((tick) => (
+                    <div aria-hidden key={tick} {...stylex.props(styles.gridLine(`${tick}%`))} />
+                  ))}
+                  {reachPct > pct && (
+                    <div {...stylex.props(styles.reach(`${pct}%`, `${reachPct - pct}%`, fill))} />
+                  )}
+                  <div {...stylex.props(styles.bar(`${pct}%`, fill))} />
+                  {row.reachText && (
+                    <span {...stylex.props(styles.reachText(`${Math.max(pct, reachPct)}%`))}>
+                      {row.reachText}
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
           );

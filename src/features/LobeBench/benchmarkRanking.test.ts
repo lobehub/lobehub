@@ -54,6 +54,14 @@ describe('contenderName', () => {
     ).toBe('My Agent');
     expect(contenderName(run({ name: null }))).toBe('Unknown');
   });
+
+  it('puts the model back on a run named by its settings alone', () => {
+    expect(
+      contenderName(
+        run({ config: { model: 'qwen-latest-series-invite-1102' }, name: ' · 推理 on' }),
+      ),
+    ).toBe('qwen-latest-series-invite-1102 · 推理 on');
+  });
 });
 
 describe('rankContenders', () => {

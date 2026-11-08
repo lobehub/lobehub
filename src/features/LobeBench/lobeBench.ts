@@ -196,6 +196,34 @@ export const upsertContenders = (
   return list;
 };
 
+/**
+ * The saved list followed by the contenders past experiments ran that it does
+ * not have yet. A saved contender keeps its own name and settings: the copy an
+ * experiment recorded (same id) is from before any later edit.
+ */
+export const withRanContenders = (
+  saved: LobeBenchContender[] | undefined,
+  ran: LobeBenchContender[],
+): LobeBenchContender[] => {
+  const list = saved ?? [];
+  const extra = upsertContenders([], ran).filter(
+    (contender) => !list.some((item) => item.id === contender.id || sameContender(item, contender)),
+  );
+  return [...list, ...extra];
+};
+
+/**
+ * The list with a contender edited in place (same id); a list that does not
+ * hold it comes back as the same array, so a caller can tell nothing changed.
+ */
+export const replaceContender = (
+  list: LobeBenchContender[],
+  edited: LobeBenchContender,
+): LobeBenchContender[] =>
+  list.some((item) => item.id === edited.id)
+    ? list.map((item) => (item.id === edited.id ? edited : item))
+    : list;
+
 /** The datasets an experiment ran: its parts, or the one dataset an older experiment names. */
 export const experimentPartsOf = (meta: LobeBenchExperimentMeta): LobeBenchExperimentPart[] =>
   meta.parts?.length

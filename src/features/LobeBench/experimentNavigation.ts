@@ -35,3 +35,19 @@ export const benchmarkHomePath = (benchmarkId: string, lobeBench: boolean): stri
 /** Where the benchmark sidebar's back arrow leads: Lobe Bench's benchmark page, or the Lab's home. */
 export const benchmarkSidebarBackPath = (benchmarkId: string, lobeBench: boolean): string =>
   lobeBench ? benchmarkHomePath(benchmarkId, true) : '/eval';
+
+/**
+ * Where a benchmark sidebar's dataset opens: a Lobe Bench dataset in Lobe Bench,
+ * any other at its benchmark-free Lab address (not the legacy one that redirects there).
+ */
+export const benchmarkDatasetPath = (datasetId: string, lobeBench: boolean): string =>
+  lobeBench ? `${LOBE_BENCH_ROOT}/datasets/${datasetId}` : `/eval/datasets/${datasetId}`;
+
+/**
+ * Lobe Bench's one place to start an experiment, opened on a dataset's
+ * benchmark when one is named. Every "new run / new experiment" button for a
+ * Lobe Bench benchmark leads here, including those on the Evaluation Lab pages
+ * its runs open in, so an experiment always starts the same way.
+ */
+export const newExperimentPath = (datasetId?: string | null): string =>
+  `${LOBE_BENCH_ROOT}/experiments/new${datasetId ? `?${new URLSearchParams({ dataset: datasetId })}` : ''}`;
