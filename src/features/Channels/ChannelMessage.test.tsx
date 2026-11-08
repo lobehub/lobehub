@@ -6,18 +6,29 @@ import { render, screen } from '@testing-library/react';
 import { createElement, type ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
+import EntityLinkElement from '@/features/EntityLink/element';
+
 import { ChannelMessage } from './ChannelMessage';
+import { CHANNEL_MENTION_TAG } from './mentionMarkdown';
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ i18n: { language: 'en-US' }, t: (key: string) => key }),
 }));
 vi.mock('@/features/Conversation/ChatItem', () => ({
-  // Renders only the avatar slot, the way ChatItem hands it to customAvatarRender.
+  // Renders only the avatar and message slots, the way ChatItem hands them over.
   ChatItem: ({
     customAvatarRender,
+    message,
   }: {
     customAvatarRender: (a: unknown, n: ReactNode) => ReactNode;
-  }) => createElement('div', {}, customAvatarRender({}, createElement('img', { alt: 'avatar' }))),
+    message: ReactNode;
+  }) =>
+    createElement(
+      'div',
+      {},
+      customAvatarRender({}, createElement('img', { alt: 'avatar' })),
+      message,
+    ),
 }));
 vi.mock('@/features/AgentProfileCard/AgentProfilePopup', () => ({
   default: ({
@@ -42,7 +53,13 @@ vi.mock('@/features/AgentProfileCard/AgentProfilePopup', () => ({
       children,
     ),
 }));
-vi.mock('@/features/Conversation/Markdown', () => ({ default: () => null }));
+const markdownProps = vi.hoisted(() => ({ current: undefined as any }));
+vi.mock('@/features/Conversation/Markdown', () => ({
+  default: (props: unknown) => {
+    markdownProps.current = props;
+    return null;
+  },
+}));
 vi.mock('@/features/User/UserAvatar', () => ({ default: () => createElement('i', {}, 'me') }));
 vi.mock('@/store/user', () => ({
   useUserStore: (selector: (s: unknown) => unknown) => selector({}),
@@ -100,5 +117,25 @@ describe('ChannelMessage avatar', () => {
 
     expect(screen.queryByTestId('agent-profile-popup')).toBeNull();
     expect(screen.getByAltText('avatar')).toBeTruthy();
+  });
+});
+
+describe('ChannelMessage links', () => {
+  it('renders links through the entity-link element, alongside mention chips', () => {
+    render(
+      <ChannelMessage
+        detail={detail}
+        message={{
+          ...message({ avatar: null, id: 'agt_1', name: 'Sanjo', type: 'agent' }),
+          content: 'https://github.com/lobehub/lobehub/pull/22581',
+        }}
+      />,
+    );
+
+    expect(markdownProps.current.components[EntityLinkElement.tag]).toBe(
+      EntityLinkElement.Component,
+    );
+    expect(markdownProps.current.components[CHANNEL_MENTION_TAG]).toBeDefined();
+    expect(markdownProps.current.rehypePlugins).toContain(EntityLinkElement.rehypePlugin);
   });
 });
