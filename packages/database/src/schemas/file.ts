@@ -27,6 +27,7 @@ import {
   timestamptz,
   updatedAt,
 } from './_helpers';
+import { agents } from './agent';
 import { asyncTasks } from './asyncTask';
 import { users } from './user';
 import { workspaces } from './workspace';
@@ -161,6 +162,16 @@ export const documents = pgTable(
     workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
 
     /**
+     * Agent that created this document through a tool (e.g. notebook or
+     * knowledge base), used to separate agent output from user-authored
+     * documents. `NULL` means user-created, or that the creating agent has
+     * since been deleted.
+     */
+    createdByAgentId: text('created_by_agent_id').references((): AnyPgColumn => agents.id, {
+      onDelete: 'set null',
+    }),
+
+    /**
      * Visibility within the owning workspace. `public` (default) means every
      * workspace member can see the document; `private` constrains it to the
      * creator (`user_id`). Within a documents tree (folder/Page hierarchy) the
@@ -191,6 +202,9 @@ export const documents = pgTable(
     index('documents_file_id_idx').on(table.fileId),
     index('documents_parent_id_idx').on(table.parentId),
     index('documents_knowledge_base_id_idx').on(table.knowledgeBaseId),
+    index('documents_created_by_agent_id_idx')
+      .on(table.createdByAgentId)
+      .where(isNotNull(table.createdByAgentId)),
     uniqueIndex('documents_client_id_user_id_unique').on(table.clientId, table.userId),
     uniqueIndex('documents_slug_user_id_unique')
       .on(table.slug, table.userId)
