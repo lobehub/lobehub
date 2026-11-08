@@ -28,6 +28,49 @@ afterEach(async () => {
 const findThread = (id: string) => serverDB.query.threads.findFirst({ where: eq(threads.id, id) });
 
 describe('ThreadModel coverage', () => {
+  describe('settleRun', () => {
+    const insertThread = (id: string, status: ThreadStatus, operationId?: string) =>
+      serverDB.insert(threads).values({
+        id,
+        metadata: { operationId, startedAt: '2026-10-01T00:00:00.000Z' },
+        status,
+        topicId,
+        type: ThreadType.Isolation,
+        userId,
+      });
+    const value = {
+      metadata: { completedAt: '2026-10-01T00:01:00.000Z', operationId: 'op-1' },
+      status: ThreadStatus.Completed,
+    };
+
+    it('settles a processing thread owned by the run', async () => {
+      await insertThread('thread-settle-own', ThreadStatus.Processing, 'op-1');
+
+      expect(await threadModel.settleRun('thread-settle-own', 'op-1', value)).toBe(true);
+      expect(await findThread('thread-settle-own')).toMatchObject(value);
+    });
+
+    it('settles a processing thread whose operation id is not written yet', async () => {
+      await insertThread('thread-settle-early', ThreadStatus.Processing);
+
+      expect(await threadModel.settleRun('thread-settle-early', 'op-1', value)).toBe(true);
+    });
+
+    it('leaves a thread claimed by a later run open', async () => {
+      await insertThread('thread-settle-later', ThreadStatus.Processing, 'op-2');
+
+      expect(await threadModel.settleRun('thread-settle-later', 'op-1', value)).toBe(false);
+      expect((await findThread('thread-settle-later'))?.status).toBe(ThreadStatus.Processing);
+    });
+
+    it('does not overwrite a thread that is no longer processing', async () => {
+      await insertThread('thread-settle-cancelled', ThreadStatus.Cancel, 'op-1');
+
+      expect(await threadModel.settleRun('thread-settle-cancelled', 'op-1', value)).toBe(false);
+      expect((await findThread('thread-settle-cancelled'))?.status).toBe(ThreadStatus.Cancel);
+    });
+  });
+
   describe('claimForRun', () => {
     it('claims a thread that has no status yet when no status is expected', async () => {
       await serverDB.insert(threads).values({

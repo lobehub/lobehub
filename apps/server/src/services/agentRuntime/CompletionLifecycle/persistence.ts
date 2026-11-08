@@ -3,14 +3,16 @@
  * running mark, and the topic usage rollup.
  */
 import { getLlmCallCount, isParkedStatus } from '@lobechat/agent-runtime';
-import { type AgentOperationStatus, isAgentOperationInFlight } from '@lobechat/types';
+import { type AgentOperationStatus, isAgentOperationInFlight, ThreadStatus } from '@lobechat/types';
 import debug from 'debug';
 
 import type { ChildUsageRollup } from '@/database/models/agentOperation';
+import { ThreadModel } from '@/database/models/thread';
 import { TopicModel } from '@/database/models/topic';
 import { recomputeTopicUsage } from '@/database/models/topicUsage';
 import { buildFinalSnapshotKey } from '@/server/modules/AgentTracing';
 
+import { formatErrorForMetadata } from '../AgentRuntimeService/utils';
 import type { CompletionLifecycleDeps } from './types';
 
 const log = debug('lobe-server:completion-lifecycle');
@@ -63,6 +65,66 @@ export function statusForReason(
     default: {
       return 'done';
     }
+  }
+}
+
+const addUsage = (earlier?: number, run?: number): number | undefined =>
+  earlier === undefined ? run : earlier + (run ?? 0);
+
+const threadStatusForReason = (reason: string): ThreadStatus => {
+  if (reason === 'error') return ThreadStatus.Failed;
+  if (reason === 'interrupted') return ThreadStatus.Cancel;
+  return ThreadStatus.Completed;
+};
+
+/**
+ * Close the isolation thread of a run that reached its end.
+ *
+ * The in-memory thread hooks never run in queue mode, so without this write the
+ * thread stays `processing` and its task card spins forever. A run parked for
+ * approval is not over and keeps its thread open. Best-effort: a failed write
+ * must not cost the run its completion hooks.
+ */
+export async function settleRunThread(
+  deps: CompletionLifecycleDeps,
+  operationId: string,
+  state: any,
+  reason: string,
+): Promise<void> {
+  const threadId = state?.origin?.threadId;
+  if (!threadId || reason === 'waiting_for_human') return;
+
+  try {
+    const threadModel = new ThreadModel(
+      deps.serverDB,
+      state.origin.userId || deps.userId,
+      deps.workspaceId,
+    );
+    const thread = await threadModel.findById(threadId);
+    if (!thread) return;
+
+    const metadata = thread.metadata ?? {};
+    const startedAt = metadata.startedAt;
+    const llmCalls = getLlmCallCount(state);
+
+    await threadModel.settleRun(threadId, operationId, {
+      metadata: {
+        ...metadata,
+        completedAt: new Date().toISOString(),
+        duration: startedAt ? Date.now() - new Date(startedAt).getTime() : undefined,
+        error: formatErrorForMetadata(state.error),
+        operationId,
+        totalCost: addUsage(metadata.totalCost, state.cost?.total),
+        totalLlmCalls: addUsage(metadata.totalLlmCalls, llmCalls),
+        totalMessages: state.messages?.length ?? metadata.totalMessages,
+        totalSteps: addUsage(metadata.totalLlmCalls, llmCalls),
+        totalTokens: addUsage(metadata.totalTokens, state.usage?.llm?.tokens?.total),
+        totalToolCalls: addUsage(metadata.totalToolCalls, state.usage?.tools?.totalCalls),
+      },
+      status: threadStatusForReason(reason),
+    });
+  } catch (error) {
+    console.error('[CompletionLifecycle] settleRunThread failed', { error, operationId, threadId });
   }
 }
 

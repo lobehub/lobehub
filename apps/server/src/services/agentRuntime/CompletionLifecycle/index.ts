@@ -27,7 +27,7 @@ import {
 } from './intervention';
 import { buildLifecycleEvent, extractErrorMessage } from './lifecycleEvent';
 import { extractOutboundAttachments, extractTextFromMessageContent } from './messageContent';
-import { persistCompletion } from './persistence';
+import { persistCompletion, settleRunThread } from './persistence';
 import { recallUserOnCompletion } from './recall';
 import { emitSignalEvents, isAgentShareRun } from './signals';
 import type {
@@ -364,6 +364,9 @@ export class CompletionLifecycle {
       }
 
       if (isAsyncToolPark) return;
+
+      // Before the hooks, so a parent resumed by the bridge reads a closed thread.
+      await settleRunThread(this.deps(), operationId, state, reason);
 
       // The run tree no longer works, so its concurrency slot frees now rather
       // than when the lease lapses. A run parked on a human decision frees it

@@ -203,6 +203,37 @@ export class ThreadModel {
     return rows.length > 0;
   };
 
+  /**
+   * Compare-and-set a `processing` thread into the terminal status of its run.
+   *
+   * Only the run that owns the thread may settle it: a late completion of an
+   * earlier run must not close a follow-up run that has since claimed the same
+   * thread. The operation id is written after the run starts, so a run that
+   * ends before that write finds it empty and still owns the thread.
+   *
+   * @returns whether this caller settled the thread
+   */
+  settleRun = async (
+    id: string,
+    operationId: string,
+    value: { metadata: ThreadMetadata; status: ThreadStatus },
+  ): Promise<boolean> => {
+    const rows = await this.db
+      .update(threads)
+      .set({ ...value, updatedAt: new Date() })
+      .where(
+        and(
+          eq(threads.id, id),
+          this.ownership(),
+          eq(threads.status, ThreadStatus.Processing),
+          sql`COALESCE(${threads.metadata} ->> 'operationId', '') IN ('', ${operationId})`,
+        ),
+      )
+      .returning({ id: threads.id });
+
+    return rows.length > 0;
+  };
+
   update = async (id: string, value: Partial<ThreadItem>) => {
     return this.db
       .update(threads)
