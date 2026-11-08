@@ -54,7 +54,16 @@ export function useMemberEntries(detail: ChannelDetail) {
 }
 
 /** The same roster and member actions in the personal popover and workspace sidebar. */
-export function MemberList({ detail, onAction }: { detail: ChannelDetail; onAction?: () => void }) {
+export function MemberList({
+  detail,
+  onAction,
+  showDescription,
+}: {
+  detail: ChannelDetail;
+  onAction?: () => void;
+  /** Roomy layouts: who each member is under the name, with the status moved to the row's end. */
+  showDescription?: boolean;
+}) {
   const { t } = useTranslation('channel');
   const navigate = useWorkspaceAwareNavigate();
   const entries = useMemberEntries(detail);
@@ -69,12 +78,21 @@ export function MemberList({ detail, onAction }: { detail: ChannelDetail; onActi
             <Text ellipsis title={entry.name} weight={500}>
               {entry.name}
             </Text>
-            {entry.member.actorType === 'agent' ? (
+            {showDescription && entry.member.actorType === 'agent' ? (
+              entry.member.description && (
+                <Text ellipsis fontSize={12} title={entry.member.description} type="secondary">
+                  {entry.member.description}
+                </Text>
+              )
+            ) : entry.member.actorType === 'agent' ? (
               <ChannelStatus hideDot label={entry.label} tone={entry.tone} />
             ) : (
               <span {...stylex.props(styles.muted)}>{t('person')}</span>
             )}
           </Flexbox>
+          {showDescription && entry.member.actorType === 'agent' && (
+            <ChannelStatus hideDot label={entry.label} tone={entry.tone} />
+          )}
           {entry.member.agentId && entry.member.status === 'active' && manageable && (
             <ActionIcon
               aria-label={t('environment.editNamed', { name: entry.name })}

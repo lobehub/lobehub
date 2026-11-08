@@ -37,7 +37,7 @@ export function MembersSection({ detail }: { detail: ChannelDetail }) {
         )
       }
     >
-      <MemberList detail={detail} />
+      <MemberList showDescription detail={detail} />
     </FormCard>
   );
 }
