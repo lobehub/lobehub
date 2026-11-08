@@ -35,6 +35,7 @@ const styles = stylex.create({
     gap: 6,
     justifyContent: 'space-between',
     paddingBlock: 4,
+    paddingInline: 8,
   },
   headerInfo: {
     color: cssVar.colorTextQuaternary,
@@ -52,10 +53,6 @@ const styles = stylex.create({
     fontSize: 12,
     paddingBlock: 8,
     paddingInline: 8,
-  },
-  // Applied after the row's defaults through xstyle.
-  option: {
-    paddingInline: 0,
   },
   warning: {
     color: cssVar.colorWarning,
@@ -212,7 +209,6 @@ const SandboxDrivePicker = memo<SandboxDrivePickerProps>(
           desc={t('sandboxStorage.ephemeralDesc')}
           icon={<Icon icon={TimerIcon} size={16} />}
           label={t('sandboxStorage.ephemeral')}
-          xstyle={styles.option}
           onClick={() => void select({})}
         />
 
@@ -221,7 +217,6 @@ const SandboxDrivePicker = memo<SandboxDrivePickerProps>(
             active
             icon={<Icon icon={currentIcon} size={16} />}
             label={currentLabel}
-            xstyle={styles.option}
             desc={
               value.instanceId
                 ? t('sandboxDrive.environmentDesc')
@@ -243,7 +238,6 @@ const SandboxDrivePicker = memo<SandboxDrivePickerProps>(
             desc={t('sandboxDrive.browseDesc')}
             icon={<Icon icon={persistent ? FolderOpenIcon : HardDriveIcon} size={16} />}
             label={t(persistent ? 'sandboxDrive.browseOther' : 'sandboxDrive.browse')}
-            xstyle={styles.option}
             onClick={openBrowser}
           />
         )}
@@ -257,7 +251,6 @@ const SandboxDrivePicker = memo<SandboxDrivePickerProps>(
             icon={<Icon icon={FolderClockIcon} size={16} />}
             label={t('sandboxDrive.upsell')}
             tag={t('pro', { ns: 'common' })}
-            xstyle={styles.option}
             onClick={() => {
               setOpen(false);
               openSandboxStorageUpsell();
