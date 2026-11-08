@@ -291,6 +291,11 @@ export class StreamEventManager {
     }
   }
 
+  async deleteStreamEvents(operationId: string, eventIds: string[]): Promise<void> {
+    if (eventIds.length === 0) return;
+    await this.redis.xdel(`${this.STREAM_PREFIX}:${operationId}`, ...eventIds);
+  }
+
   /**
    * Publish stream content chunk
    */

@@ -45,6 +45,23 @@ describe('InMemoryStreamEventManager', () => {
     });
   });
 
+  describe('deleteStreamEvents', () => {
+    it('removes only the given events', async () => {
+      const first = await manager.publishStreamChunk('op-1', 0, {
+        chunkType: 'text',
+        content: 'a',
+      });
+      const second = await manager.publishStreamChunk('op-1', 0, {
+        chunkType: 'text',
+        content: 'b',
+      });
+
+      await manager.deleteStreamEvents('op-1', [first]);
+
+      expect(manager.getAllEvents('op-1').map((event) => event.id)).toEqual([second]);
+    });
+  });
+
   describe('readEventsOnce', () => {
     it("returns nothing but a tail cursor for '$' (from-now semantics)", async () => {
       await manager.publishStreamEvent('op-1', {

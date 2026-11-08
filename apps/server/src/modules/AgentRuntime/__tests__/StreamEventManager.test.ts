@@ -25,6 +25,7 @@ const mockRedis = {
   keys: vi.fn(),
   quit: vi.fn(),
   xadd: vi.fn(),
+  xdel: vi.fn(),
   xread: vi.fn(),
   xrevrange: vi.fn(),
   xrange: vi.fn(),
@@ -40,6 +41,20 @@ describe('StreamEventManager', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     streamManager = new StreamEventManager();
+  });
+
+  describe('deleteStreamEvents', () => {
+    it('removes the given entries from the operation stream', async () => {
+      await streamManager.deleteStreamEvents('op-1', ['1-0', '2-0']);
+
+      expect(mockRedis.xdel).toHaveBeenCalledWith('agent_runtime_stream:op-1', '1-0', '2-0');
+    });
+
+    it('skips the round trip when there is nothing to delete', async () => {
+      await streamManager.deleteStreamEvents('op-1', []);
+
+      expect(mockRedis.xdel).not.toHaveBeenCalled();
+    });
   });
 
   describe('publishAgentRuntimeInit', () => {

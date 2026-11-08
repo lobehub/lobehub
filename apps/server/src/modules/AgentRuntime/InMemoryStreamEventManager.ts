@@ -97,6 +97,16 @@ export class InMemoryStreamEventManager implements IStreamEventManager {
     return eventId;
   }
 
+  async deleteStreamEvents(operationId: string, eventIds: string[]): Promise<void> {
+    const stream = this.streams.get(operationId);
+    if (!stream || eventIds.length === 0) return;
+    const ids = new Set(eventIds);
+    this.streams.set(
+      operationId,
+      stream.filter((event) => !event.id || !ids.has(event.id)),
+    );
+  }
+
   async publishStreamChunk(
     operationId: string,
     stepIndex: number,
