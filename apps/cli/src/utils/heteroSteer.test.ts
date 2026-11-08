@@ -133,6 +133,28 @@ describe('withHeteroSteer', () => {
     expect(wait).toHaveBeenCalledTimes(1);
   });
 
+  it('stops polling, and never marks the run, when the server says it is not steerable', async () => {
+    const wait = vi.fn(async () => ({ message: null, steerable: false as const }));
+    const client = {
+      aiAgent: { returnHeteroSteer: { mutate: vi.fn() }, waitHeteroSteer: { mutate: wait } },
+    } as unknown as HeteroSteerClient;
+    const stream = createStream();
+
+    const out = collect(
+      withHeteroSteer(
+        { events: stream.events, sendUserMessage: async () => true },
+        { getTrpcClient: async () => client, operationId: 'op-child' },
+      ),
+    );
+    await vi.waitFor(() => expect(wait).toHaveBeenCalled());
+    await flush();
+    stream.push({ data: {}, type: 'stream_start' });
+    stream.end();
+
+    expect(await out).toEqual([{ data: {}, type: 'stream_start' }]);
+    expect(wait).toHaveBeenCalledTimes(1);
+  });
+
   it('passes events through without a server or a live session', async () => {
     const stream = createStream();
     stream.push(replay('uuid-prompt'));

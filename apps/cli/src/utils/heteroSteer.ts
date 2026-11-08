@@ -12,7 +12,11 @@ export interface HeteroSteerClient {
       mutate: (
         input: { blockMs?: number; operationId: string },
         options?: { signal?: AbortSignal },
-      ) => Promise<{ message: { content: string; messageId: string } | null }>;
+      ) => Promise<{
+        message: { content: string; messageId: string } | null;
+        /** `false` for a run the user does not type into (a child run): stop polling. */
+        steerable?: false;
+      }>;
     };
   };
 }
@@ -81,11 +85,13 @@ export async function* withHeteroSteer<E extends { data?: any; type: string }>(
     while (!abort.signal.aborted) {
       let message: { content: string; messageId: string } | null;
       try {
-        ({ message } = await client.aiAgent.waitHeteroSteer.mutate(
+        const res = await client.aiAgent.waitHeteroSteer.mutate(
           // The first poll answers at once, so the run is marked steerable early.
           supported ? { operationId } : { blockMs: 1, operationId },
           { signal: abort.signal },
-        ));
+        );
+        if (res.steerable === false) return;
+        message = res.message;
         supported = true;
       } catch (error) {
         if (abort.signal.aborted) return;

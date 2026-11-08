@@ -539,8 +539,11 @@ export const heteroRouter = router({
           message: 'Operation not found or not owned by the caller',
         });
       }
-      // A child run (group member, sub-agent) is not where the user types.
-      if (operation.parentOperationId || !operation.topicId) return { message: null };
+      // A child run (group member, sub-agent) is not where the user types. Say
+      // so, rather than answer an empty poll at once: the producer stops asking.
+      if (operation.parentOperationId || !operation.topicId) {
+        return { message: null, steerable: false as const };
+      }
 
       const storeCtx = {
         db: ctx.serverDB,
