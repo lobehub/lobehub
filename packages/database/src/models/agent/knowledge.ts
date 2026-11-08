@@ -1,6 +1,12 @@
 import { and, desc, eq, inArray, isNull, or } from 'drizzle-orm';
 
-import { agentsFiles, agentsKnowledgeBases, files, knowledgeBases } from '../../schemas';
+import {
+  agentsFiles,
+  agentsKnowledgeBases,
+  DEDICATED_KNOWLEDGE_BASE_TYPES,
+  files,
+  knowledgeBases,
+} from '../../schemas';
 import { isUserKnowledgeBase } from '../../utils/knowledgeBaseType';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../../utils/workspace';
 import { type AgentModelContext } from './context';
@@ -71,6 +77,18 @@ export const createAgentKnowledgeBase = async (
   knowledgeBaseId: string,
   enabled: boolean = true,
 ) => {
+  const [dedicated] = await ctx.db
+    .select({ id: knowledgeBases.id })
+    .from(knowledgeBases)
+    .where(
+      and(
+        eq(knowledgeBases.id, knowledgeBaseId),
+        inArray(knowledgeBases.type, [...DEDICATED_KNOWLEDGE_BASE_TYPES]),
+      ),
+    )
+    .limit(1);
+  if (dedicated) throw new Error('A dedicated knowledge base cannot be mounted');
+
   return ctx.db
     .insert(agentsKnowledgeBases)
     .values(

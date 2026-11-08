@@ -741,6 +741,7 @@ export class ProjectModel {
       .where(
         and(
           eq(knowledgeBases.id, input.knowledgeBaseId),
+          isUserKnowledgeBase(),
           buildWorkspaceWhere(
             { userId: this.userId, workspaceId: this.workspaceId },
             knowledgeBases,

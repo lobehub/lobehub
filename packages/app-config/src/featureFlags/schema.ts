@@ -73,6 +73,13 @@ export const FeatureFlagsSchema = z.object({
   mcp_apps: FeatureFlagValue.optional(),
 
   /**
+   * Rollout gate for moving an agent's documents into its dedicated knowledge
+   * base at runtime, and for showing those spaces in the library. Off: no space
+   * is created and existing ones stay hidden. Array values are user ids.
+   */
+  agent_knowledge_space: FeatureFlagValue.optional(),
+
+  /**
    * Trial gate for the rail layout: icon rail + one wrapped list column and
    * content, the IM-style Messages list (Lobe AI opens by default), Contacts,
    * the Tasks scope list and the agent profile side panel. Off keeps the
@@ -207,6 +214,7 @@ export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
 
   // Off until an admin publishes a user allowlist or flips it to true.
   mcp_apps: false,
+  agent_knowledge_space: false,
 
   // Off until an admin publishes a user allowlist or flips it to true.
   channel: false,
@@ -260,6 +268,11 @@ export const mapFeatureFlagsEnvToState = (
     enableLlmRelay: evaluateFeatureFlag(config.agent_llm_relay, userId, 'agent_llm_relay'),
     enableDashboard: evaluateFeatureFlag(config.dashboard, userId, 'dashboard'),
     enableMcpApps: evaluateFeatureFlag(config.mcp_apps, userId, 'mcp_apps'),
+    enableAgentKnowledgeSpace: evaluateFeatureFlag(
+      config.agent_knowledge_space,
+      userId,
+      'agent_knowledge_space',
+    ),
     enableImLayout: evaluateFeatureFlag(config.im_layout, userId, 'im_layout'),
     enableChannels: evaluateFeatureFlag(config.channel, userId, 'channel'),
     enableManagedCloudDevice: evaluateFeatureFlag(
