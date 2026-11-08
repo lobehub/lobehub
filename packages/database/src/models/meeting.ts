@@ -119,6 +119,8 @@ export class MeetingModel {
   }
 
   private async findManageable(id: string, db: LobeChatDatabase | Transaction = this.db) {
+    if (!isUuid(id)) return undefined;
+
     const [meeting] = await db
       .select()
       .from(meetings)
@@ -146,6 +148,8 @@ export class MeetingModel {
   }
 
   async findById(id: string) {
+    if (!isUuid(id)) return undefined;
+
     const [meeting] = await this.db
       .select()
       .from(meetings)
@@ -207,6 +211,8 @@ export class MeetingModel {
   }
 
   async rename(id: string, title: string) {
+    if (!isUuid(id)) return undefined;
+
     const [meeting] = await this.db
       .update(meetings)
       .set({ title, updatedAt: new Date() })
@@ -218,6 +224,8 @@ export class MeetingModel {
 
   /** Hard delete; speakers, segments and minutes cascade. Returns the removed row. */
   async delete(id: string) {
+    if (!isUuid(id)) return undefined;
+
     const [meeting] = await this.db
       .delete(meetings)
       .where(and(eq(meetings.id, id), this.manageable()))
@@ -425,6 +433,8 @@ export class MeetingModel {
   // ── Internals ──
 
   private async lockManageable(id: string, tx: Transaction): Promise<MeetingItem | undefined> {
+    if (!isUuid(id)) return undefined;
+
     const [meeting] = await tx
       .select()
       .from(meetings)

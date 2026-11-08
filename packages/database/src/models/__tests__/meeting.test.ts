@@ -51,7 +51,7 @@ describe('MeetingModel', () => {
     it('starts a personal meeting in recording status', async () => {
       const meeting = await personal.create({ ...base, language: 'zh' });
 
-      expect(meeting.id).toMatch(/^mtg_/);
+      expect(meeting.id).toMatch(/^[\da-f]{8}-[\da-f]{4}-/);
       expect(meeting).toMatchObject({
         language: 'zh',
         status: 'recording',
@@ -135,6 +135,20 @@ describe('MeetingModel', () => {
 
       expect((await member.getDetail(meeting.id))!.localAudioPath).toBeNull();
       expect((await member.list()).find((m) => m.id === meeting.id)!.localAudioPath).toBeNull();
+    });
+  });
+
+  describe('malformed ids', () => {
+    it('treats an id that is not a uuid as missing instead of failing the query', async () => {
+      const id = 'not-a-uuid';
+
+      expect(await personal.findById(id)).toBeUndefined();
+      expect(await personal.getDetail(id)).toBeUndefined();
+      expect(await personal.rename(id, 'x')).toBeUndefined();
+      expect(await personal.delete(id)).toBeUndefined();
+      expect(await personal.pause(id)).toBeUndefined();
+      expect(await personal.appendSegments(id, [])).toBeUndefined();
+      expect(await personal.renameSpeaker(id, crypto.randomUUID(), 'x')).toBeUndefined();
     });
   });
 
