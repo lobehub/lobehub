@@ -33,6 +33,7 @@ const insertRun = (id: string, values: Partial<typeof agentOperations.$inferInse
     id,
     startedAt: inWindow,
     status: 'running',
+    topicId: 'base-topic',
     updatedAt: inWindow,
     userId: teammate,
     workspaceId,
@@ -55,6 +56,7 @@ beforeEach(async () => {
     { id: 'public-agent', title: 'Public', userId: teammate, visibility: 'public', workspaceId },
     { id: 'private-agent', title: 'Secret', userId: owner, visibility: 'private', workspaceId },
   ]);
+  await serverDB.insert(topics).values({ id: 'base-topic', userId: teammate, workspaceId });
 });
 
 afterEach(async () => {
@@ -125,6 +127,12 @@ describe('AgentRunBoardModel.listRuns', () => {
     await insertRun('ok', { topicId: 'ok-topic' });
 
     expect(await ids()).toEqual(['ok']);
+  });
+
+  it('excludes a run whose topic was purged', async () => {
+    await insertRun('purged', { taskId: null, topicId: null });
+
+    expect(await ids()).toEqual([]);
   });
 
   it('excludes a run whose task-run snapshot was private', async () => {

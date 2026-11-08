@@ -146,10 +146,13 @@ export class AgentRunBoardModel {
       })
       .from(agentOperations)
       .innerJoin(agents, eq(agentOperations.agentId, agents.id))
+      // Inner on purpose: purging a private task or group nulls these references
+      // and drops its visibility snapshot, so a run without its topic can no
+      // longer prove it was ever public.
+      .innerJoin(topics, eq(agentOperations.topicId, topics.id))
       .leftJoin(chatGroups, eq(agentOperations.chatGroupId, chatGroups.id))
       .leftJoin(tasks, eq(agentOperations.taskId, tasks.id))
       .leftJoin(threads, eq(agentOperations.threadId, threads.id))
-      .leftJoin(topics, eq(agentOperations.topicId, topics.id))
       .where(
         and(
           eq(agentOperations.workspaceId, this.workspaceId),
