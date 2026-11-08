@@ -30,7 +30,7 @@
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "0.3.204",
-    "@anthropic-ai/sdk": "^0.93.0",
+    "@anthropic-ai/sdk": "^1.6.0",
     "@lobechat/agent-gateway-client": "workspace:*",
     "@lobechat/types": "workspace:*",
     "@lobechat/utils": "workspace:*",
