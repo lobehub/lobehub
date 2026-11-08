@@ -70,6 +70,20 @@ for all members in parallel before the decision model's deadline starts. If arbi
 returns an unusable answer, the members' own wakes still stand. A follow-up whose run stopped on a
 tool call (out of steps) fails; only a chosen silence, or no output at all, settles as `silent`.
 
+### Configuring and auditing it
+
+`channel.wakeConfig` reads the stored strategies and `channel.updateWakeConfig` replaces the
+channel's, or with `memberId` one member's (`null` resets to the defaults). Admins only. Input is
+validated strictly by `WakeConfigInputSchema`, the shape the bot settings parse, without a scheduler.
+A member's strategy lives beside its environment in `channel_members.config`; replacing either
+keeps the other.
+
+Every routed (non-fallback) message records one `signal_decisions` row per judged member, through
+the same `recordSignalDecision` as IM bots: source `lobehub`, type `channel.message.routed`,
+pipeline `channel-wake@1`, scope `lobehub:<channelId>:<memberId>`, filed under the member's Agent
+owner in the channel's workspace. Verdicts are the member's own rules plus the decision model's
+answer (`channel:routing`). `channel.listWakeDecisions` pages them in the bots' wake-record shape.
+
 ## Decisions and recovery
 
 A single `ModelRuntime.decide()` call asks a boolean question per eligible member. Probabilities

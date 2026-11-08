@@ -736,6 +736,7 @@ export default {
   'channel.records.column.score': 'Score',
   'channel.records.judge.addressed': 'Is it meant for the bot',
   'channel.records.judge.duty': 'Is it within its duties',
+  'channel.records.judge.routing': 'Should it be the one to answer',
   'channel.records.judge.allow': 'over the threshold',
   'channel.records.judge.deny': 'under the threshold',
   'channel.records.judge.hint': '{{judge}}: {{verdict}}',
