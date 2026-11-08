@@ -9,6 +9,8 @@ import { labPreferSelectors } from '@/store/user/selectors';
 
 import AgentConnectors from './AgentConnectors';
 import AgentGraphRuntime from './AgentGraphRuntime';
+import AgentIdentity from './AgentIdentity';
+import { useShowAgentIdentity } from './AgentIdentity/useShowAgentIdentity';
 import AgentOpening from './AgentOpening';
 
 export interface AgentSettingsContentProps {
@@ -19,12 +21,14 @@ export interface AgentSettingsContentProps {
 const AgentSettingsContent = memo<AgentSettingsContentProps>(({ tab, loadingSkeleton }) => {
   const loading = useAgentStore(agentSelectors.isAgentConfigLoading);
   const enableAgentGraphConfigLab = useUserStore(labPreferSelectors.enableAgentGraphConfig);
+  const showIdentity = useShowAgentIdentity();
 
   if (loading) return loadingSkeleton;
 
   return (
     <>
       {tab === ChatSettingsTabs.Opening && <AgentOpening />}
+      {showIdentity && tab === ChatSettingsTabs.Identity && <AgentIdentity />}
       {enableAgentGraphConfigLab && tab === ChatSettingsTabs.Graph && <AgentGraphRuntime />}
       {tab === ChatSettingsTabs.Connector && <AgentConnectors />}
     </>
