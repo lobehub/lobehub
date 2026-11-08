@@ -119,7 +119,9 @@ export function buildCreateInput(options: ConnectorAddOptions): {
     throw new Error('--token is only valid with --auth bearer.');
   }
   if (options.stdioCmd && authType !== 'none') {
-    throw new Error('stdio connectors do not support --auth; pass secrets via the command.');
+    throw new Error(
+      'stdio connectors do not support --auth. Their command, args and env are stored in plain text, so do not put secrets in them.',
+    );
   }
   if (options.stdioCmd && options.header?.length) {
     throw new Error('--header is only valid for HTTP connectors (--url).');
@@ -468,7 +470,7 @@ export function registerConnectorCommand(program: Command) {
         console.log(authorizationUrl);
         console.log(
           pc.dim(
-            `After authorizing, run: lh connector refresh ${input.identifier} to fetch tools.`,
+            `Tools sync automatically after authorization. If the page reports the sync failed, run: lh connector refresh ${input.identifier}`,
           ),
         );
         return;
