@@ -322,6 +322,13 @@ export const AgentRuntimeErrorType = {
   InvalidVertexCredentials: 'InvalidVertexCredentials',
   StreamChunkError: 'StreamChunkError',
   /**
+   * The provider closed the stream without a terminal event (no stop / usage /
+   * error), e.g. its connection dropped or its server gave up mid-response.
+   * Upstream-owned and transient, unlike `StreamChunkError`, which is a chunk
+   * the harness could not parse or process.
+   */
+  ProviderStreamInterrupted: 'ProviderStreamInterrupted',
+  /**
    * The model returned an empty completion — no text content, no tool calls,
    * and ~0 output tokens — typically after a stalled tool loop where it
    * effectively gives up. Retryable: re-issuing the same request usually

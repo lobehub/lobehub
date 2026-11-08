@@ -678,7 +678,7 @@ describe('createSSEProtocolTransformer', () => {
       body: { name: 'Stream parsing error', reason: 'unexpected_end' },
       message: 'Stream ended unexpectedly',
       name: 'Stream parsing error',
-      type: 'StreamChunkError',
+      type: 'ProviderStreamInterrupted',
     };
 
     expect(lastThree).toEqual([
