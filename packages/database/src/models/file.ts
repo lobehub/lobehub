@@ -866,17 +866,40 @@ export class FileModel {
   setVisibility = async (fileId: string, visibility: 'private' | 'public') => {
     const fromVisibility = visibility === 'public' ? 'private' : 'public';
 
-    return this.db
-      .update(files)
-      .set({ updatedAt: new Date(), visibility })
-      .where(
-        and(
-          eq(files.id, fileId),
-          this.ownership(),
-          eq(files.userId, this.userId),
-          eq(files.visibility, fromVisibility),
-        ),
-      );
+    return this.db.transaction(async (trx) => {
+      const updated = await trx
+        .update(files)
+        .set({ updatedAt: new Date(), visibility })
+        .where(
+          and(
+            eq(files.id, fileId),
+            this.ownership(),
+            eq(files.userId, this.userId),
+            eq(files.visibility, fromVisibility),
+          ),
+        )
+        .returning({ id: files.id });
+
+      // Text parsed from the file is searchable on its own, so it follows the file. Any member's
+      // read may have produced it, so this is not limited to the caller's rows.
+      if (updated.length > 0) {
+        await trx
+          .update(documents)
+          .set({ visibility })
+          .where(
+            and(
+              eq(documents.fileId, fileId),
+              eq(documents.sourceType, 'file'),
+              buildWorkspaceWhere(
+                { userId: this.userId, workspaceId: this.workspaceId },
+                documents,
+              ),
+            ),
+          );
+      }
+
+      return updated;
+    });
   };
 
   findByNames = async (fileNames: string[]) =>
