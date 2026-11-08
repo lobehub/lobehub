@@ -26,6 +26,7 @@ import {
   useSetMessageItemActionTypeContext,
 } from '../Contexts/message-action-context';
 import MessageWorks from '../MessageWorks';
+import DirectMentionProgress, { DirectMentionStatus } from './components/DirectMentionProgress';
 import InterruptedHint from './components/InterruptedHint';
 import MessageContent from './components/MessageContent';
 import ThreadExecutionSummary from './components/ThreadExecutionSummary';
@@ -62,6 +63,7 @@ const AssistantMessage = memo<AssistantMessageProps>(
       performance,
       usage,
       metadata,
+      taskDetail,
     } = item;
 
     const avatar = useAgentMeta(agentId);
@@ -120,6 +122,14 @@ const AssistantMessage = memo<AssistantMessageProps>(
       [id, index, setMessageItemActionElementPortialContext, setMessageItemActionTypeContext],
     );
 
+    // A direct @Agent reply still being written in its thread: show its live
+    // progress instead of an empty bubble until the answer lands here.
+    const processing = useConversationStore(messageStateSelectors.isMessageProcessing(id));
+    const runningThreadId =
+      processing && agentId && taskDetail?.threadId && (!content || content === LOADING_FLAT)
+        ? taskDetail.threadId
+        : undefined;
+
     const hasEmptyErrorMessage = Boolean(
       errorContent &&
       error &&
@@ -129,21 +139,21 @@ const AssistantMessage = memo<AssistantMessageProps>(
     return (
       <ChatItem
         showTitle
-        aboveMessage={<ThreadExecutionSummary messageId={id} />}
+        aboveMessage={runningThreadId ? undefined : <ThreadExecutionSummary messageId={id} />}
         // ChatItem renders this as the primary block when the message is empty,
         // or inside messageExtra (below the content) when the turn streamed
         // content before erroring — so don't gate it on empty content.
+        agentId={agentId ?? null}
         avatar={avatar}
         belowMessage={hasEmptyErrorMessage ? footerRender : undefined}
         customErrorRender={(error) => <ErrorMessageExtra data={item} error={error} />}
         editing={editing}
         error={errorContent && error ? errorContent : undefined}
         id={id}
-        loading={generating || isCreating}
+        loading={generating || isCreating || !!runningThreadId}
         message={message}
         placement={'left'}
-        time={createdAt}
-        titleAddon={<RefreshingIndicator messageId={id} />}
+        time={runningThreadId ? undefined : createdAt}
         actionAddon={
           reactions.length > 0 || (commentCount > 0 && commentTopicId) ? (
             <>
@@ -194,10 +204,25 @@ const AssistantMessage = memo<AssistantMessageProps>(
             {footerRender}
           </>
         }
+        titleAddon={
+          runningThreadId ? (
+            <DirectMentionStatus
+              startedAt={
+                taskDetail?.startedAt ? Date.parse(taskDetail.startedAt) : Number(createdAt)
+              }
+            />
+          ) : (
+            <RefreshingIndicator messageId={id} />
+          )
+        }
         onDoubleClick={onDoubleClick}
         onMouseEnter={onMouseEnter}
       >
-        <MessageContent {...item} />
+        {runningThreadId ? (
+          <DirectMentionProgress agentId={agentId!} messageId={id} threadId={runningThreadId} />
+        ) : (
+          <MessageContent {...item} />
+        )}
       </ChatItem>
     );
   },

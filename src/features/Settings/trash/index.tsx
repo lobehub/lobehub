@@ -9,18 +9,22 @@ import SettingHeader from '@/features/Settings/features/SettingHeader';
 import TrashList from './features/TrashList';
 
 interface PageProps {
+  /** Workspace bin: a public side shared by every member and a private side of one's own. */
+  isWorkspace?: boolean;
   showSettingHeader?: boolean;
 }
 
-const Page = ({ showSettingHeader = true }: PageProps) => {
+const Page = ({ isWorkspace, showSettingHeader = true }: PageProps) => {
   const { t } = useTranslation('setting');
 
   return (
     <>
       {showSettingHeader && <SettingHeader title={t('tab.trash')} />}
       <Flexbox gap={12}>
-        <Text type={'secondary'}>{t('trash.desc', { days: TRASH_RETENTION_DAYS })}</Text>
-        <TrashList />
+        <Text type={'secondary'}>
+          {t(isWorkspace ? 'trash.workspaceDesc' : 'trash.desc', { days: TRASH_RETENTION_DAYS })}
+        </Text>
+        <TrashList isWorkspace={isWorkspace} />
       </Flexbox>
     </>
   );

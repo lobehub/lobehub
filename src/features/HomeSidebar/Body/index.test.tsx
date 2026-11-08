@@ -12,11 +12,19 @@ interface MockGlobalState {
   updateSystemStatus: (patch: Partial<MockGlobalState['status']>) => void;
 }
 
+interface MockNavItem {
+  activeTab?: string;
+  key: string;
+  title: string;
+  url: string;
+}
+
 const mocks = vi.hoisted(() => ({
+  activeTab: 'home',
   globalState: undefined as unknown as MockGlobalState,
   navLayout: {
-    bottomMenuItems: [] as { key: string; title: string; url: string }[],
-    topNavItems: [] as { key: string; title: string; url: string }[],
+    bottomMenuItems: [] as MockNavItem[],
+    topNavItems: [] as MockNavItem[],
   },
   updateSystemStatus: vi.fn(),
 }));
@@ -26,8 +34,8 @@ vi.mock('@lobehub/ui', async (importOriginal) => {
   const factories: ((original: typeof importOriginal) => unknown)[] = [
     async (importOriginal) => ({
       ...(await importOriginal<object>()),
-      Flexbox: ({ children }: { children: React.ReactNode }) => (
-        <div data-testid="sidebar-body">{children}</div>
+      Flexbox: ({ children, flex }: { children: React.ReactNode; flex?: number }) => (
+        <div data-testid={flex ? 'sidebar-body' : 'sidebar-sections'}>{children}</div>
       ),
     }),
     async (importOriginal) => ({
@@ -64,11 +72,13 @@ vi.mock('react-router', () => ({
 }));
 
 vi.mock('@/features/NavPanel/components/NavItem', () => ({
-  default: ({ title }: { title: string }) => <div>{title}</div>,
+  default: ({ active, title }: { active?: boolean; title: string }) => (
+    <div data-active={active}>{title}</div>
+  ),
 }));
 
 vi.mock('@/hooks/useActiveTabKey', () => ({
-  useActiveTabKey: () => 'home',
+  useActiveTabKey: () => mocks.activeTab,
 }));
 
 vi.mock('@/hooks/useNavLayout', () => ({
@@ -81,6 +91,10 @@ vi.mock('@/utils/navigation', () => ({
 
 vi.mock('@/features/Home/Recents', () => ({
   default: ({ itemKey }: { itemKey: string }) => <div data-testid={`sidebar-item-${itemKey}`} />,
+}));
+
+vi.mock('@/features/Channels/ChannelList', () => ({
+  default: () => <div data-testid="sidebar-channels" />,
 }));
 
 vi.mock('./Agent', () => ({
@@ -100,6 +114,7 @@ vi.mock('@/store/global', () => ({
 }));
 
 beforeEach(() => {
+  mocks.activeTab = 'home';
   mocks.updateSystemStatus.mockReset();
   mocks.navLayout = {
     bottomMenuItems: [],
@@ -169,7 +184,8 @@ describe('Home sidebar body', () => {
 
     expect(spacerIndex).toBe(2);
     expect(children[0]).toHaveTextContent('Pages');
-    expect(children[1]).toHaveAttribute('data-testid', 'sidebar-accordion');
+    expect(children[1]).toContainElement(screen.getByTestId('sidebar-item-agent'));
+    expect(children[1]).toContainElement(screen.getByTestId('sidebar-channels'));
     expect(children[3]).toHaveTextContent('Image');
     expect(children[4]).toHaveTextContent('Tasks');
     expect(children[5]).toHaveTextContent('Resource');
@@ -187,9 +203,35 @@ describe('Home sidebar body', () => {
 
     const children = Array.from(screen.getByTestId('sidebar-body').children);
 
-    expect(children[0]).toHaveAttribute('data-testid', 'sidebar-accordion');
+    expect(children[0]).toContainElement(screen.getByTestId('sidebar-item-agent'));
+    expect(children[0]).toContainElement(screen.getByTestId('sidebar-channels'));
     expect(children[1]).toHaveAttribute('data-sidebar-bottom-spacer');
     expect(children[2]).toHaveTextContent('Image');
     expect(children[3]).toHaveTextContent('Tasks');
+  });
+
+  it('keeps Channels between adjacent sections in the same spacing group with its own accordion', () => {
+    mocks.globalState.status.sidebarItems = ['agent', 'recents'];
+
+    render(<Body />);
+
+    const children = Array.from(screen.getByTestId('sidebar-sections').children);
+
+    expect(children[0]).toContainElement(screen.getByTestId('sidebar-item-agent'));
+    expect(children[1]).toHaveAttribute('data-testid', 'sidebar-channels');
+    expect(children[2]).toContainElement(screen.getByTestId('sidebar-item-recents'));
+  });
+
+  // The Projects entry is keyed `project` like its sidebar layout id, but its page is `/projects`.
+  it('highlights the Projects link on the project list page', () => {
+    mocks.activeTab = 'projects';
+    mocks.navLayout.topNavItems = [
+      { activeTab: 'projects', key: 'project', title: 'Projects', url: '/projects' },
+    ];
+    mocks.globalState.status.sidebarItems = ['project', 'recents', 'agent'];
+
+    render(<Body />);
+
+    expect(screen.getByText('Projects')).toHaveAttribute('data-active', 'true');
   });
 });

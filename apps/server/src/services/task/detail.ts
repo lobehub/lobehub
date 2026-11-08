@@ -1,20 +1,22 @@
-import type {
-  TaskAssignmentKind,
-  TaskAutomationSnapshot,
-  TaskDetailActivity,
-  TaskDetailActivityAuthor,
-  TaskDetailData,
-  TaskDetailSubtask,
-  TaskDetailWorkspaceNode,
-  TaskStatus,
-  TaskTopicHandoff,
-  WorkspaceData,
+import {
+  agentDisplayName,
+  type TaskAssignmentKind,
+  type TaskAutomationSnapshot,
+  type TaskDetailActivity,
+  type TaskDetailActivityAuthor,
+  type TaskDetailData,
+  type TaskDetailSubtask,
+  type TaskDetailWorkspaceNode,
+  type TaskStatus,
+  type TaskTopicHandoff,
+  type WorkspaceData,
 } from '@lobechat/types';
 import pMap from 'p-map';
 
 import { AgentModel } from '@/database/models/agent';
 import { GoalGraphModel } from '@/database/models/goalGraph';
 import { TaskModel } from '@/database/models/task';
+import { TaskLabelModel } from '@/database/models/taskLabel';
 import { TaskTopicModel } from '@/database/models/taskTopic';
 import { UserModel } from '@/database/models/user';
 import { VerifyRunModel } from '@/database/models/verifyRun';
@@ -72,8 +74,8 @@ export class TaskDetailService {
     this.taskTopicModel = new TaskTopicModel(db, userId, workspaceId);
   }
 
-  async getTaskDetail(taskIdOrIdentifier: string): Promise<TaskDetailData | null> {
-    let task = await this.taskModel.resolve(taskIdOrIdentifier);
+  async getTaskDetail(taskId: string): Promise<TaskDetailData | null> {
+    let task = await this.taskModel.findById(taskId);
     if (!task) return null;
 
     // Auto-detect heartbeat timeout for running tasks before assembling detail.
@@ -82,7 +84,7 @@ export class TaskDetailService {
       if (elapsed > task.heartbeatTimeout) {
         await this.taskModel.updateStatus(task.id, 'paused', { error: 'Heartbeat timeout' });
         await this.taskTopicModel.timeoutRunning(task.id);
-        task = await this.taskModel.resolve(taskIdOrIdentifier);
+        task = await this.taskModel.findById(taskId);
         if (!task) return null;
       }
     }
@@ -106,6 +108,7 @@ export class TaskDetailService {
       workspace,
       acceptance,
       goal,
+      labels,
     ] = await Promise.all([
       this.taskModel.findAllDescendants(task.id),
       this.taskModel.getDependencies(task.id),
@@ -118,6 +121,7 @@ export class TaskDetailService {
       new GoalGraphModel(this.db, this.userId, this.workspaceId)
         .findGoalByTaskId(task.id)
         .catch(() => undefined),
+      new TaskLabelModel(this.db, this.userId, this.workspaceId).getTaskLabels(task.id),
     ]);
 
     // What the reader is shown, not what was written: a burst of edits to one
@@ -184,10 +188,10 @@ export class TaskDetailService {
 
     // Build dependency map for all descendants
     const idToIdentifier = new Map(allDescendants.map((s) => [s.id, s.identifier]));
-    const depMap = new Map<string, string>();
+    const depMap = new Map<string, { id: string; identifier: string }>();
     for (const dep of allDescendantDeps) {
       const depId = idToIdentifier.get(dep.dependsOnId);
-      if (depId) depMap.set(dep.taskId, depId);
+      if (depId) depMap.set(dep.taskId, { id: dep.dependsOnId, identifier: depId });
     }
 
     const runningTopicByTaskId = new Map<string, (typeof allDescendantTopics)[number]>();
@@ -236,11 +240,13 @@ export class TaskDetailService {
           ...(s.archivedAt ? { archivedAt: new Date(s.archivedAt).toISOString() } : {}),
           assigneeUserId: s.assigneeUserId,
           automationMode: s.automationMode,
-          blockedBy: depMap.get(s.id),
+          blockedBy: depMap.get(s.id)?.identifier,
+          blockedById: depMap.get(s.id)?.id,
           createdByUserId: s.createdByUserId,
           visibility: s.visibility,
           children: buildSubtaskTree(s.id),
           ...(s.heartbeatInterval != null ? { heartbeat: { interval: s.heartbeatInterval } } : {}),
+          id: s.id,
           identifier: s.identifier,
           name: s.name,
           priority: s.priority,
@@ -272,11 +278,17 @@ export class TaskDetailService {
     );
 
     // Resolve parent
-    let parent: { agentId: string | null; identifier: string; name: string | null } | null = null;
+    let parent: {
+      id: string;
+      agentId: string | null;
+      identifier: string;
+      name: string | null;
+    } | null = null;
     if (task.parentTaskId) {
       const parentTask = await this.taskModel.findById(task.parentTaskId);
       if (parentTask) {
         parent = {
+          id: parentTask.id,
           agentId: parentTask.assigneeAgentId,
           identifier: parentTask.identifier,
           name: parentTask.name,
@@ -501,6 +513,7 @@ export class TaskDetailService {
         const info = depIdToInfo.get(d.dependsOnId);
         return {
           dependsOn: info?.identifier ?? d.dependsOnId,
+          dependsOnId: d.dependsOnId,
           name: info?.name,
           type: d.type,
         };
@@ -513,6 +526,7 @@ export class TaskDetailService {
       id: task.id,
       identifier: task.identifier,
       instruction: task.instruction,
+      labels,
       name: task.name,
       parent,
       priority: task.priority,
@@ -546,11 +560,12 @@ export class TaskDetailService {
       UserModel.findByIds(this.db, [...userIds]),
     ]);
 
-    // Both display columns are nullable, so fall back to the other one the
-    // query already returns rather than letting a live participant render as
-    // nameless — the UI reserves its nameless labels for absent identities.
+    // An agent is labelled by its name, with `title` (its role) as the
+    // fallback — see `agentDisplayName`. Both columns are nullable, so a live
+    // participant never renders as nameless; the UI reserves its nameless
+    // labels for absent identities.
     for (const a of agentRows) {
-      map.set(a.id, { avatar: a.avatar, id: a.id, name: a.title || a.name, type: 'agent' });
+      map.set(a.id, { avatar: a.avatar, id: a.id, name: agentDisplayName(a), type: 'agent' });
     }
     for (const u of userRows) {
       map.set(u.id, { avatar: u.avatar, id: u.id, name: u.fullName || u.username, type: 'user' });

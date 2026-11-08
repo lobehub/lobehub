@@ -6,7 +6,7 @@ export {
 export { pruneReasoningPayload } from './core/contextBuilders/openai';
 export { mergeModelRuntimeHooks } from './core/mergeHooks';
 export type { ModelRuntimeHooks } from './core/ModelRuntime';
-export { ModelRuntime } from './core/ModelRuntime';
+export { describeGenerateObjectError, ModelRuntime } from './core/ModelRuntime';
 export { createOpenAICompatibleRuntime } from './core/openaiCompatibleFactory';
 export { StructuredOutputError } from './core/openaiCompatibleFactory/structuredOutput';
 export * from './core/RouterRuntime';
@@ -93,6 +93,7 @@ export { LobeZeroOneAI } from './providers/zeroone';
 export { LobeZhipuAI } from './providers/zhipu';
 export * from './types';
 export * from './types/error';
+export { awaitFirstResponseChunk } from './utils/awaitFirstResponseChunk';
 export { consumeStreamUntilDone } from './utils/consumeStream';
 export { AgentRuntimeError } from './utils/createError';
 export { getModelPropertyWithFallback } from './utils/getFallbackModelProperty';

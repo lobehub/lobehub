@@ -9,6 +9,13 @@ import type { AgentRuntimeType } from '../dispatch/agentDispatcher';
 import { buildRunLifecycle } from './buildRunLifecycle';
 import type { RunCompleteEvent, RunTerminalStatus, UserMessagePersistedEvent } from './types';
 
+const createDefaultTopicMap = () => ({
+  [topicMapKey({ agentId: 'a1' })]: {
+    items: [{ id: 't1', title: 'defaultTitle' }],
+    total: 1,
+  },
+});
+
 const agentSignalBridgeMock = vi.hoisted(() => ({
   emitClientAgentSignalSourceEvent: vi.fn().mockResolvedValue(undefined),
 }));
@@ -138,12 +145,7 @@ describe('buildRunLifecycle.completeRun — transport-driven disposition', () =>
     store.drainQueuedMessages = vi.fn(() => [{ content: 'follow up', id: 'q1' } as any]);
     store.queuedMessages = { [messageMapKey(CONTEXT)]: [{ content: 'follow up', id: 'q1' }] };
     store.messagesMap = { [messageMapKey(CONTEXT)]: messages } as any;
-    store.topicDataMap = {
-      [topicMapKey({ agentId: 'a1' })]: {
-        items: [{ id: 't1', title: 'defaultTitle' }],
-        total: 1,
-      },
-    } as any;
+    store.topicDataMap = createDefaultTopicMap() as any;
 
     const { requeued } = await lifecycle('client', get).completeRun(
       completeEvent('client', { runtimeStatus: 'done' }),
@@ -335,7 +337,7 @@ describe('buildRunLifecycle — sub-agent runs skip top-level effects', () => {
     expect(store.completeOperation).toHaveBeenCalledWith(OP);
   });
 
-  it('keeps the queue in place until the steered send takes it', async () => {
+  it('keeps the queue in place until the drained send takes it', async () => {
     vi.useFakeTimers();
     try {
       const { get, store } = makeStore();
@@ -365,7 +367,9 @@ describe('buildRunLifecycle — sub-agent runs skip top-level effects', () => {
       expect(sendMessage).toHaveBeenCalledWith(
         expect.objectContaining({
           message: 'queued',
-          metadata: expect.objectContaining({ scope: 'x', steer: true }),
+          // A drained follow-up opens a fresh turn: its metadata keeps what
+          // was queued, unmarked.
+          metadata: { scope: 'x' },
         }),
       );
     } finally {
@@ -490,12 +494,7 @@ describe('buildRunLifecycle.afterRunComplete — client desktop notification bod
     } as any;
     const messages = [voiceMessage, thisTurnAssistant];
     store.messagesMap = { [KEY]: messages } as any;
-    store.topicDataMap = {
-      [topicMapKey({ agentId: 'a1' })]: {
-        items: [{ id: 't1', title: 'defaultTitle' }],
-        total: 1,
-      },
-    } as any;
+    store.topicDataMap = createDefaultTopicMap() as any;
 
     await lifecycle('client', get).afterRunComplete(
       completeEvent('client', { runtimeStatus: 'done' }),
@@ -528,12 +527,7 @@ describe('buildRunLifecycle.afterRunComplete — client desktop notification bod
       },
     ];
     store.messagesMap = { [KEY]: messages } as any;
-    store.topicDataMap = {
-      [topicMapKey({ agentId: 'a1' })]: {
-        items: [{ id: 't1', title: 'defaultTitle' }],
-        total: 1,
-      },
-    } as any;
+    store.topicDataMap = createDefaultTopicMap() as any;
 
     await lifecycle('client', get).afterRunComplete(
       completeEvent('client', { runtimeStatus: 'done' }),
@@ -559,12 +553,7 @@ describe('buildRunLifecycle.afterRunComplete — client desktop notification bod
           { ...thisTurnAssistant, content: 'Partial reply' },
         ],
       } as any;
-      store.topicDataMap = {
-        [topicMapKey({ agentId: 'a1' })]: {
-          items: [{ id: 't1', title: 'defaultTitle' }],
-          total: 1,
-        },
-      } as any;
+      store.topicDataMap = createDefaultTopicMap() as any;
 
       await lifecycle('client', get).afterRunComplete(completeEvent('client', { runtimeStatus }));
 
@@ -578,12 +567,7 @@ describe('buildRunLifecycle.afterRunComplete — client desktop notification bod
     store.messagesMap = {
       [KEY]: [{ content: 'hello', id: 'u1', role: 'user' }, thisTurnAssistant],
     } as any;
-    store.topicDataMap = {
-      [topicMapKey({ agentId: 'a1' })]: {
-        items: [{ id: 't1', title: 'defaultTitle' }],
-        total: 1,
-      },
-    } as any;
+    store.topicDataMap = createDefaultTopicMap() as any;
 
     await lifecycle('client', get).afterRunComplete(
       completeEvent('client', { runtimeStatus: 'done' }),

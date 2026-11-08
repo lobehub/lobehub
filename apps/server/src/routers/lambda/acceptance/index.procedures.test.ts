@@ -50,6 +50,7 @@ function expected(): Array<
     ['remove', 'mutation', 13],
     ['removeBatch', 'mutation', 13],
     ['rename', 'mutation', 13],
+    ['requestRepair', 'mutation', 12],
     ['reviewChecks', 'mutation', 13],
     ['reviewFlowStep', 'mutation', 13],
     ['saveChecklist', 'mutation', 13],

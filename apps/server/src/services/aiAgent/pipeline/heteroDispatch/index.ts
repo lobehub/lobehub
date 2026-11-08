@@ -15,10 +15,11 @@ import {
 } from '@/server/modules/AgentRuntime/factory';
 import { CompletionLifecycle } from '@/server/services/agentRuntime/CompletionLifecycle';
 import { hookDispatcher } from '@/server/services/agentRuntime/hooks';
+import { findWakeableManagedDevices } from '@/server/services/deviceGateway/managedDeviceWake';
 
 import { supportsCloudHeterogeneousSandbox } from '../../helpers/heteroErrors';
 import type { ExecRunContext } from '../../types';
-import { dispatchToCliDevice } from './device';
+import { dispatchToCliDevice, dispatchToWakingCliDevice } from './device';
 import { prepareHeteroRun } from './prepare';
 import { dispatchToPlatformDevice } from './remote';
 import { spawnInCloudSandbox } from './sandbox';
@@ -81,7 +82,8 @@ export const dispatchHeteroAgent = async (
   const isRemoteHetero = isRemoteHeterogeneousType(heteroType);
   // Same structured shape as the built-in path (`op_{ts}_{agentId}_{topicId}_{rand}`)
   // so hetero ops aren't visually distinct bare nanoids in the trace/op tables.
-  const operationId = `op_${Date.now()}_${resolvedAgentId}_${topicId}_${nanoid(8)}`;
+  const operationId =
+    input.reservedOperationId ?? `op_${Date.now()}_${resolvedAgentId}_${topicId}_${nanoid(8)}`;
 
   // Retain only public configuration dimensions. CLI args and API credentials must
   // never be copied into topic metadata or an inspector response. The receipt
@@ -114,6 +116,7 @@ export const dispatchHeteroAgent = async (
     deps.userId,
     deps.workspaceId,
   ).recordStart({
+    requireReservation: !!input.reservedOperationId,
     agentId: persistAgentId,
     appContext: { ...appContext, sourceMessageId: userMessageId },
     chatGroupId: appContext?.groupId ?? null,
@@ -184,18 +187,40 @@ export const dispatchHeteroAgent = async (
   // Resolve CLI-device routing before persisting the marker. Cancellation
   // must address the same device even though local CLI agents use a different
   // dispatch transport from notify-based platform agents.
+  // A bound managed cloud device that is offline resolves to
+  // `device-wakeable`: it is woken and the dispatch waits for it.
+  const wakeableCliDevices =
+    !isRemoteHetero && canUseDevice
+      ? await findWakeableManagedDevices(
+          { db: deps.db, userId: deps.userId, workspaceId: deps.workspaceId },
+          [requestedDeviceId, agentConfig.agencyConfig?.boundDeviceId],
+        )
+      : [];
+  const cliPlanParams = {
+    agencyConfig: agentConfig.agencyConfig,
+    clientExecutionAvailable: false,
+    isHetero: true,
+    requestedDeviceId,
+    sandboxExecutionAvailable: supportsCloudHeterogeneousSandbox(heteroType),
+    trigger: requestTrigger,
+    wakeableDeviceIds: wakeableCliDevices.map((device) => device.deviceId),
+  };
   const deviceHeteroPlan = !isRemoteHetero
-    ? resolveExecutionPlan({
-        agencyConfig: agentConfig.agencyConfig,
-        canUseDevice,
-        isHetero: true,
-        clientExecutionAvailable: false,
-        requestedDeviceId,
-        sandboxExecutionAvailable: supportsCloudHeterogeneousSandbox(heteroType),
-        trigger: requestTrigger,
-      })
+    ? resolveExecutionPlan({ ...cliPlanParams, canUseDevice })
     : undefined;
-  const cliDeviceId = deviceHeteroPlan?.kind === 'device' ? deviceHeteroPlan.deviceId : undefined;
+  const cliDeviceId =
+    deviceHeteroPlan?.kind === 'device' || deviceHeteroPlan?.kind === 'device-wakeable'
+      ? deviceHeteroPlan.deviceId
+      : undefined;
+  // Whether the sandbox is a fallback for a sender denied the agent's device:
+  // with access the same request would have routed to a device. Lets a failed
+  // sandbox run tell the sender why it ran there instead.
+  const deviceAccessDenied =
+    deviceHeteroPlan?.kind === 'sandbox' &&
+    !canUseDevice &&
+    ['device', 'device-wakeable'].includes(
+      resolveExecutionPlan({ ...cliPlanParams, canUseDevice: true }).kind,
+    );
   const cliDeviceWorkspaceId = cliDeviceId
     ? await deps.resolveDeviceWorkspaceId(cliDeviceId)
     : undefined;
@@ -395,18 +420,38 @@ export const dispatchHeteroAgent = async (
     }
 
     const heteroPlan = deviceHeteroPlan!;
-    const failure =
-      heteroPlan.kind !== 'sandbox'
-        ? await dispatchToCliDevice(deps, run, {
-            agentConfig,
-            appContext,
-            cliDeviceWorkspaceId,
-            heteroPlan,
-            heteroType,
-            heterogeneousProvider,
-            prepared,
-          })
-        : await spawnInCloudSandbox(deps, run, { heteroType, prepared });
+    const cliDispatchParams = {
+      agentConfig,
+      appContext,
+      cliDeviceWorkspaceId,
+      heteroType,
+      heterogeneousProvider,
+      prepared,
+    };
+    let failure: ExecAgentResult | undefined;
+    switch (heteroPlan.kind) {
+      case 'sandbox': {
+        failure = await spawnInCloudSandbox(deps, run, {
+          deviceAccessDenied,
+          heteroType,
+          prepared,
+        });
+        break;
+      }
+      case 'device-wakeable': {
+        // Wakes the device and dispatches after the response, once it is
+        // online (or when the wait times out, through the offline handling).
+        failure = await dispatchToWakingCliDevice(deps, run, {
+          ...cliDispatchParams,
+          device: wakeableCliDevices.find((device) => device.deviceId === heteroPlan.deviceId)!,
+          heteroPlan,
+        });
+        break;
+      }
+      default: {
+        failure = await dispatchToCliDevice(deps, run, { ...cliDispatchParams, heteroPlan });
+      }
+    }
     if (failure) return failure;
   }
 

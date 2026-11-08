@@ -96,8 +96,26 @@ export interface CanvasWorkVersionMetadata {
   totalSize: number;
 }
 
+/**
+ * Storage one Canvas holds in the caller's file usage: every distinct blob
+ * registered under the canvas across all its versions. The canvas is the unit
+ * a user can free — its files only render together, so they are never listed
+ * or deleted one by one.
+ */
+export interface CanvasStorageItem {
+  canvasId: string;
+  fileCount: number;
+  /** `null` when the files outlived their Work (the save never registered one). */
+  title: string | null;
+  totalSize: number;
+  updatedAt: Date;
+  workId: string | null;
+}
+
 export interface WorkVersionMetadata {
   agentDocumentId?: string;
+  /** `external` GitHub PR Work — the branch the pull request merges into. */
+  baseBranch?: string;
   canvas?: CanvasWorkVersionMetadata;
   /**
    * `file` Work — the edited file's identity in the file store, when the entity
@@ -115,6 +133,12 @@ export interface WorkVersionMetadata {
   goalReport?: GoalReportMetadata;
   /** `goal_report` Work — the report as an HTML page: a `custom/html` document id. */
   goalReportPageId?: string;
+  /**
+   * `external` GitHub PR Work — the pull request's source branch as the tool
+   * named it: REST `head.ref` is the bare branch, while `gh --head` may carry
+   * `owner:branch` for a fork.
+   */
+  headBranch?: string;
   /** `file` Work — lines added by this version's edit (0 when the source tool reports none). */
   linesAdded?: number;
   /** `file` Work — lines deleted by this version's edit (0 when the source tool reports none). */
@@ -419,6 +443,8 @@ export interface RegisterCanvasWorkParams {
   cumulativeCost?: number | null;
   cumulativeUsage?: WorkVersionCumulativeUsage | null;
   description?: string | null;
+  /** Checked under the Work row lock; 0 means this must be the first version. */
+  expectedVersion?: number;
   messageId?: string | null;
   metadata: CanvasWorkVersionMetadata;
   rootOperationId?: string | null;
@@ -463,6 +489,12 @@ export interface RegisterExternalWorkParams {
   description?: string | null;
   identifier?: string | null;
   messageId?: string | null;
+  /**
+   * Provider facts outside the display columns (a PR's branches). With
+   * `patchFields`, keys merge over the current version's metadata, so an edit
+   * that names no branch keeps the one captured at create.
+   */
+  metadata?: WorkVersionMetadata | null;
   patchFields?: WorkDisplayField[];
   /**
    * Canonical resource identity (`owner/repo#number`, a linear id, …). Required:

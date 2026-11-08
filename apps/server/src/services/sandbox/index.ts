@@ -1,11 +1,13 @@
+export { isSandboxAvailableForUser } from './availability';
 export { isPathWithin, sandboxStorageBinding } from './binding';
+export { getSandboxProviderKind } from './deployment';
 export type { DriveAccess } from './driveAccess';
 export { createDriveAccess } from './driveAccess';
 export { driveFolderExists, forgetDriveFolders } from './driveFolder';
 export type { MemberDriveUsage } from './driveUsage';
 export { readDriveUsage } from './driveUsage';
 export { resolveSandboxStorageClaim } from './entitlement';
-export { createSandboxService, getSandboxProviderKind } from './factory';
+export { createSandboxService } from './factory';
 export { MarketSandboxProvider, ServerSandboxService } from './providers/market';
 export { OnlyboxesSandboxProvider } from './providers/onlyboxes';
 export { normalizeSandboxCommandResult, SandboxMiddlewareService } from './service';

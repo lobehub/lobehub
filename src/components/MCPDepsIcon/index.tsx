@@ -1,23 +1,21 @@
 'use client';
 
-import {
-  SiApachemaven,
-  SiBlender,
-  SiBun,
-  SiDeno,
-  SiDocker,
-  SiGit,
-  SiGo,
-  SiHelm,
-  SiKubernetes,
-  SiNodedotjs,
-  SiNpm,
-  SiPipx,
-  SiPnpm,
-  SiPython,
-  SiRust,
-  SiYarn,
-} from '@icons-pack/react-simple-icons';
+import SiApachemaven from '@icons-pack/react-simple-icons/icons/SiApachemaven';
+import SiBlender from '@icons-pack/react-simple-icons/icons/SiBlender';
+import SiBun from '@icons-pack/react-simple-icons/icons/SiBun';
+import SiDeno from '@icons-pack/react-simple-icons/icons/SiDeno';
+import SiDocker from '@icons-pack/react-simple-icons/icons/SiDocker';
+import SiGit from '@icons-pack/react-simple-icons/icons/SiGit';
+import SiGo from '@icons-pack/react-simple-icons/icons/SiGo';
+import SiHelm from '@icons-pack/react-simple-icons/icons/SiHelm';
+import SiKubernetes from '@icons-pack/react-simple-icons/icons/SiKubernetes';
+import SiNodedotjs from '@icons-pack/react-simple-icons/icons/SiNodedotjs';
+import SiNpm from '@icons-pack/react-simple-icons/icons/SiNpm';
+import SiPipx from '@icons-pack/react-simple-icons/icons/SiPipx';
+import SiPnpm from '@icons-pack/react-simple-icons/icons/SiPnpm';
+import SiPython from '@icons-pack/react-simple-icons/icons/SiPython';
+import SiRust from '@icons-pack/react-simple-icons/icons/SiRust';
+import SiYarn from '@icons-pack/react-simple-icons/icons/SiYarn';
 import { cssVar, Icon, Tooltip } from '@lobehub/ui';
 import { memo } from 'react';
 

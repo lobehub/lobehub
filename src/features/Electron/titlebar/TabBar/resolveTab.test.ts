@@ -62,6 +62,17 @@ describe('resolveTab', () => {
     expect(live.meta.avatarSeed).toBe('Alpha');
   });
 
+  it('carries the workspace avatar kind from the snapshot', () => {
+    const cold = resolveTab(
+      fixtureRoutes,
+      tab('/agent/abc', { avatarKind: 'workspace', title: 'Acme' }),
+      false,
+      t,
+    );
+    expect(cold.meta.avatarKind).toBe('workspace');
+    expect(cold.meta.avatar).toBeUndefined();
+  });
+
   it('active tab: a live null avatar hides the cached one', () => {
     const resolved = resolveTab(
       fixtureRoutes,

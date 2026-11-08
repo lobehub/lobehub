@@ -28,6 +28,33 @@ const request = (overrides: Partial<AgentInterventionRequestData> = {}) => ({
 });
 
 describe('sanitizeAgentInterventionRequestForReview', () => {
+  it('preserves a native Codex free-text question for durable Review', () => {
+    const sanitized = sanitizeAgentInterventionRequestForReview(
+      request({
+        arguments: JSON.stringify({
+          questions: [{ header: 'Database', options: [], question: 'Database name?' }],
+        }),
+        identifier: 'codex',
+        interactionKind: 'question',
+        provider: 'codex',
+      }),
+    );
+    expect(sanitized).toMatchObject({ identifier: 'codex', provider: 'codex' });
+    expect(JSON.parse(sanitized!.arguments).questions[0]).toEqual({
+      header: 'Database',
+      multiSelect: false,
+      options: [],
+      question: 'Database name?',
+    });
+  });
+  it('accepts an OpenCode question while retaining its producer identity', () => {
+    expect(
+      sanitizeAgentInterventionRequestForReview(
+        request({ identifier: 'opencode', interactionKind: 'question', provider: 'opencode' }),
+      ),
+    ).toMatchObject({ identifier: 'opencode', interactionKind: 'question', provider: 'opencode' });
+  });
+
   it('keeps only canonical review fields and exact provider option ids', () => {
     const sanitized = sanitizeAgentInterventionRequestForReview(request());
 

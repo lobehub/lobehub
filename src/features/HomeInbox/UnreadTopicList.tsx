@@ -2,7 +2,6 @@ import { AGENT_CHAT_TOPIC_URL } from '@lobechat/const';
 import type { ConversationContext } from '@lobechat/types';
 import { agentDisplayName } from '@lobechat/types';
 import {
-  Avatar,
   Button,
   createStaticStyles,
   cssVar,
@@ -16,6 +15,7 @@ import { ChevronDownIcon, ChevronRightIcon, MessageSquarePlus } from 'lucide-rea
 import { lazy, memo, Suspense, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AgentAvatar from '@/components/AgentAvatar';
 import UnreadDot from '@/components/UnreadDot';
 import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
 import { useEntityMarkdown } from '@/features/EntityLink';
@@ -190,7 +190,8 @@ const UnreadTopicItem = memo<UnreadTopicItemProps>(
         >
           {read ? <span className={styles.dotPlaceholder} /> : <UnreadDot />}
           {agent && (
-            <Avatar
+            <AgentAvatar
+              agentId={topic.agentId}
               avatar={agent.avatar}
               background={agent.backgroundColor}
               shape={'circle'}

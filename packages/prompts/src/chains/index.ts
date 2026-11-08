@@ -1,8 +1,11 @@
 export * from './abstractChunk';
 export * from './agentSignal/analyzeIntent';
 export * from './answerWithContext';
+export * from './botReplyOpener';
+export * from './botRetro';
 export * from './botWakeClassifier';
 export * from './builderSuggestion';
+export * from './channelRouting';
 export * from './compressContext';
 export * from './expertise';
 export * from './followUpAction';
@@ -28,3 +31,4 @@ export * from './topicAutoSummary';
 export * from './translate';
 export * from './understanding';
 export * from './verify';
+export * from './verifyDispute';

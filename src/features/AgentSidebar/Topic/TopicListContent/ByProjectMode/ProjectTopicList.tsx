@@ -11,6 +11,7 @@ import {
   cx,
   Flexbox,
   Icon,
+  Tag,
   Text,
 } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
@@ -23,6 +24,7 @@ import {
   TOPIC_GROUP_VISUALS,
   TOPIC_STATUS_VISUALS,
 } from '@/components/ExecutionStatus';
+import TailMarquee from '@/components/TailMarquee';
 import { projectDirectoryDeviceName } from '@/features/ChatInput/ControlBar/projectDeviceTargets';
 import EmptyNavItem from '@/features/NavPanel/components/EmptyNavItem';
 import { useAgentStore } from '@/store/agent';
@@ -30,6 +32,7 @@ import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
 import { deviceSelectors, useDeviceStore } from '@/store/device';
+import { useElectronStore } from '@/store/electron';
 import { type ProjectTopicSubGroupMode } from '@/store/global/initialState';
 import { type ProjectDirectory, useProjectDirectories } from '@/store/projectWorkingDirectory';
 import { useUserStore } from '@/store/user';
@@ -39,6 +42,7 @@ import { type ChatTopic, type GroupedTopic } from '@/types/topic';
 import TopicItem from '../../List/Item';
 import { formatTimeGroupId } from '../ByTimeMode/timeGroupTitle';
 import { indicatorStyles, useCollapsedIndicators } from './CollapsedIndicators';
+import { deviceCategoryKey, deviceDisplayName } from './deviceIdentity';
 import {
   DEVICE_SUB_GROUP_PREFIX,
   groupProjectTopics,
@@ -72,6 +76,7 @@ interface AgentPinnedRow {
 const renderTopic = (topic: ChatTopic, suppressAgentAvatar?: boolean) => (
   <TopicItem
     fav={topic.favorite}
+    hasGoal={topic.hasGoal}
     id={topic.id}
     key={topic.id}
     metadata={topic.metadata}
@@ -90,11 +95,22 @@ interface SubGroupItemProps {
   onStartInDirectory?: (projectWorkingDirectoryId: string) => void;
   startDirectoryId?: string;
   suppressAgentAvatar?: boolean;
+  /** Tells apart sections whose titles match, e.g. one machine's two device identities. */
+  tag?: string;
   title: string;
 }
 
 const SubGroupItem = memo<SubGroupItemProps>(
-  ({ expanded, group, icon, onStartInDirectory, startDirectoryId, suppressAgentAvatar, title }) => {
+  ({
+    expanded,
+    group,
+    icon,
+    onStartInDirectory,
+    startDirectoryId,
+    suppressAgentAvatar,
+    tag,
+    title,
+  }) => {
     const { t } = useTranslation('topic');
     const { t: tProject } = useTranslation('project');
     // A folded section keeps the project row's running / awaiting / failed
@@ -114,6 +130,21 @@ const SubGroupItem = memo<SubGroupItemProps>(
               <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
                 {title}
               </Text>
+              {tag && (
+                <Tag
+                  size={'small'}
+                  style={{
+                    color: cssVar.colorTextDescription,
+                    flex: '0 1 auto',
+                    fontSize: 10,
+                    maxWidth: '50%',
+                    minWidth: 0,
+                    overflow: 'hidden',
+                  }}
+                >
+                  <TailMarquee>{tag}</TailMarquee>
+                </Tag>
+              )}
             </Flexbox>
           </AccordionTrigger>
           {(startDirectoryId || hasIndicators) && (
@@ -166,7 +197,7 @@ const SubGroupItem = memo<SubGroupItemProps>(
 SubGroupItem.displayName = 'ProjectTopicSubGroupItem';
 
 interface ProjectTopicListProps {
-  /** The group's effective sub-group mode (folders never get `byDevice`). */
+  /** The group's effective sub-group mode (a folder gets `byDevice` only across machines). */
   mode: ProjectTopicSubGroupMode;
   /** Opens the new-topic composer staged on one project directory. */
   onStartInDirectory?: (projectWorkingDirectoryId: string) => void;
@@ -186,11 +217,13 @@ interface ProjectTopicListProps {
 const ProjectTopicList = memo<ProjectTopicListProps>((props) => {
   const { mode, onStartInDirectory, suppressAgentAvatar, topics } = props;
   const { t } = useTranslation('topic');
+  const { t: tChat } = useTranslation('chat');
   const topicSortBy = useUserStore(preferenceSelectors.topicSortBy);
   const field = topicSortBy === 'createdAt' ? 'createdAt' : 'updatedAt';
 
   useDeviceStore((s) => s.useFetchDevices)(mode === 'byDevice');
   const devices = useDeviceStore(deviceSelectors.deviceList);
+  const currentDeviceId = useElectronStore((s) => s.gatewayDeviceInfo?.deviceId);
   const directories = useProjectDirectories();
   // The shared row, not a topic-pinned config: a fixed target is the author's
   // setting, and it is what the server checks a start against.
@@ -268,11 +301,23 @@ const ProjectTopicList = memo<ProjectTopicListProps>((props) => {
       const deviceId = group.id.slice(DEVICE_SUB_GROUP_PREFIX.length);
       const directory = directories.find((item) => item.deviceId === deviceId);
       if (directory) return projectDirectoryDeviceName(directory, devices);
-      const device = devices.find((item) => item.deviceId === deviceId);
-      return device?.friendlyName || device?.hostname || deviceId;
+      return deviceDisplayName(deviceId, devices);
     },
     [mode, t, directories, devices],
   );
+
+  // Device sections sharing a name — one machine under its personal and its
+  // workspace identity — are told apart by their execution-environment category.
+  const getTag = (group: GroupedTopic, title: string, titles: string[]) => {
+    if (mode !== 'byDevice' || !group.id.startsWith(DEVICE_SUB_GROUP_PREFIX)) return;
+    if (titles.filter((item) => item === title).length < 2) return;
+    const key = deviceCategoryKey(
+      group.id.slice(DEVICE_SUB_GROUP_PREFIX.length),
+      devices,
+      currentDeviceId,
+    );
+    return key && tChat(key);
+  };
 
   // The directory a device section's "+" starts in: the one its newest topic
   // runs in, else any of the group's directories on that device.
@@ -310,6 +355,8 @@ const ProjectTopicList = memo<ProjectTopicListProps>((props) => {
     );
   }
 
+  const titles = groups.map(getTitle);
+
   return (
     <AccordionRoot
       indicatorPlacement="inline"
@@ -317,14 +364,15 @@ const ProjectTopicList = memo<ProjectTopicListProps>((props) => {
       value={expandedIds}
       onValueChange={handleExpandedChange}
     >
-      {groups.map((group) => (
+      {groups.map((group, index) => (
         <SubGroupItem
           expanded={!!expandedIds?.includes(group.id)}
           group={group}
           key={group.id}
           startDirectoryId={getStartDirectoryId(group)}
           suppressAgentAvatar={suppressAgentAvatar}
-          title={getTitle(group)}
+          tag={getTag(group, titles[index], titles)}
+          title={titles[index]}
           icon={
             mode === 'byStatus'
               ? STATUS_ICON[group.id]

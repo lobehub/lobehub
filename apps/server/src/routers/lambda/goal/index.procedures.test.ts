@@ -29,10 +29,12 @@ function expected(): Array<
     ['addNode', 'mutation', 13],
     ['advance', 'mutation', 13],
     ['answerClarifications', 'mutation', 13],
+    ['archive', 'mutation', 13],
     ['bindOperationTopic', 'mutation', 8],
     ['bindSubscription', 'mutation', 13],
     ['bindTopic', 'mutation', 13],
     ['close', 'mutation', 13],
+    ['copyGoalToWorkspace', 'mutation', 13],
     ['create', 'mutation', 13],
     ['createConversationGoal', 'mutation', 8],
     ['decide', 'mutation', 13],
@@ -66,6 +68,7 @@ function expected(): Array<
     ['setModel', 'mutation', 13],
     ['setTaskAgent', 'mutation', 13],
     ['setTaskModel', 'mutation', 13],
+    ['setVisibility', 'mutation', 13],
     ['start', 'mutation', 13],
     ['startOperation', 'mutation', 8],
     ['submitOperationPlan', 'mutation', 8],
@@ -76,6 +79,7 @@ function expected(): Array<
     ['tick', 'mutation', 13],
     ['updateRequirement', 'mutation', 13],
     ['updateSubscription', 'mutation', 13],
+    ['updateTitle', 'mutation', 13],
     ['wake', 'mutation', 13],
   ];
 }

@@ -33,6 +33,8 @@ export interface FileListItem {
   fileId?: string | null;
   fileType: string;
   finishEmbedding: boolean;
+  /** Whether any document or file sits under this row, so a page can expand like a folder. */
+  hasChildren?: boolean;
   id: string;
   /** Knowledge bases the row is filed into. */
   knowledgeBaseIds?: string[];

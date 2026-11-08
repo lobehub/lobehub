@@ -1,13 +1,10 @@
-import {
-  SiBun,
-  SiDocker,
-  SiNodedotjs,
-  SiNpm,
-  SiPnpm,
-  SiPython,
-} from '@icons-pack/react-simple-icons';
-import { Flexbox } from '@lobehub/ui';
-import { AutoComplete, type AutoCompleteProps } from '@lobehub/ui';
+import SiBun from '@icons-pack/react-simple-icons/icons/SiBun';
+import SiDocker from '@icons-pack/react-simple-icons/icons/SiDocker';
+import SiNodedotjs from '@icons-pack/react-simple-icons/icons/SiNodedotjs';
+import SiNpm from '@icons-pack/react-simple-icons/icons/SiNpm';
+import SiPnpm from '@icons-pack/react-simple-icons/icons/SiPnpm';
+import SiPython from '@icons-pack/react-simple-icons/icons/SiPython';
+import { AutoComplete, type AutoCompleteProps, Flexbox } from '@lobehub/ui';
 import { type FC } from 'react';
 import { memo } from 'react';
 

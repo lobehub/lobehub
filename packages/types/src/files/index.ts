@@ -24,8 +24,16 @@ export enum FileSource {
   /** Original upload owned by an agent's document tree rather than the resource library. */
   AgentDocument = 'agent-document',
   Canvas = 'canvas',
+  /** Attachment sent in a public agent's conversation; shared with the conversation, not the library. */
+  ChatAttachment = 'chat-attachment',
   ImageGeneration = 'image_generation',
   PageEditor = 'page-editor',
+  /**
+   * Image an agent's tool returned — a Claude Code `Read` on an image file —
+   * uploaded so the tool card can preview it. Owned by that message, not by
+   * the user's library.
+   */
+  ToolResult = 'tool-result',
   VideoGeneration = 'video_generation',
 }
 
@@ -45,6 +53,8 @@ export const LIBRARY_HIDDEN_FILE_SOURCES: FileSource[] = [
   FileSource.Acceptance,
   FileSource.AgentDocument,
   FileSource.Canvas,
+  FileSource.ToolResult,
+  FileSource.ChatAttachment,
 ];
 
 /** Sources a generation model wrote, as opposed to anything a human put there. */

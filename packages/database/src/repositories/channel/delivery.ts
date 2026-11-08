@@ -1,3 +1,4 @@
+import type { ChannelJobWake } from '@lobechat/types';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 
 import type {
@@ -14,6 +15,7 @@ import {
   channelThreads,
 } from '../../schemas';
 import type { Transaction } from '../../type';
+import { notTrashed } from '../../utils/softDelete';
 import { ChannelError } from './error';
 
 /** The Thread a message belongs to, or null for the main channel. */
@@ -27,9 +29,21 @@ export const findThread = async (
   const [thread] = await tx
     .select()
     .from(channelThreads)
-    .where(and(eq(channelThreads.channelId, channelId), eq(channelThreads.id, threadId)));
+    .where(
+      and(
+        eq(channelThreads.channelId, channelId),
+        eq(channelThreads.id, threadId),
+        notTrashed(channelThreads.isDeleted),
+      ),
+    );
   if (!thread) throw new ChannelError('NOT_FOUND', 'Thread not found');
 
+  return thread;
+};
+
+/** Rejects a write into an archived Thread; it stays readable until an admin unarchives it. */
+export const assertThreadOpen = (thread: ChannelThreadItem | null) => {
+  if (thread?.status === 'archived') throw new ChannelError('CONFLICT', 'Thread is archived');
   return thread;
 };
 
@@ -48,7 +62,7 @@ export const activeMembers = async (
     .where(
       and(
         eq(channelMembers.channelId, channelId),
-        eq(channelMembers.active, true),
+        eq(channelMembers.status, 'active'),
         inArray(channelMembers.id, unique),
       ),
     );
@@ -74,7 +88,7 @@ export const candidateAgents = async (
       and(
         eq(channelMembers.channelId, channelId),
         eq(channelMembers.actorType, 'agent'),
-        eq(channelMembers.active, true),
+        eq(channelMembers.status, 'active'),
       ),
     );
 
@@ -82,15 +96,35 @@ export const candidateAgents = async (
 };
 
 /**
- * Queues one job per Agent. Idempotent through the delivery key. Skips Agents whose
+ * The only Agent of a group with exactly one active person and one active Agent. Such a
+ * group needs no responder decision: every message the person sends goes to this Agent.
+ */
+export const pairedAgent = async (
+  tx: Transaction,
+  channelId: string,
+): Promise<ChannelMemberItem | undefined> => {
+  const members = await tx
+    .select()
+    .from(channelMembers)
+    .where(and(eq(channelMembers.channelId, channelId), eq(channelMembers.status, 'active')));
+  const agents = members.filter((member) => member.actorType === 'agent');
+
+  return agents.length === 1 && members.length === 2 ? agents[0] : undefined;
+};
+
+/**
+ * Queues one job per message and Agent member. Skips Agents whose
  * environment changed after the message, so a late route cannot run an old instruction
  * in a new directory. Returns the ids of the Agents that received a job.
+ *
+ * `wakes` records why each member was woken; a member without one owes an answer (`mention`).
  */
 export const deliver = async (
   tx: Transaction,
   message: ChannelMessageItem,
   agents: ChannelMemberItem[],
   requesterMemberId: string,
+  wakes?: Readonly<Record<string, ChannelJobWake>>,
 ): Promise<string[]> => {
   const recipients = agents.filter((agent) => agent.actorType === 'agent');
   if (!recipients.length) return [];
@@ -104,6 +138,7 @@ export const deliver = async (
         messageId: message.id,
         requesterMemberId,
         threadId: message.threadId,
+        wake: wakes?.[agent.id] ?? null,
       })),
     )
     .onConflictDoNothing();

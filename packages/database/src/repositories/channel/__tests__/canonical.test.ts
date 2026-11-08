@@ -47,7 +47,7 @@ const setup = async (config = nativeConfig) => {
     return (await execution.claim(team.channel.id, job.id, lease))!;
   };
   const finish = async ({ job }: Awaited<ReturnType<typeof claim>>) => {
-    await execution.accepted(team.channel.id, job.id, {});
+    await execution.accepted(team.channel.id, job.id);
     await execution.saveDraft(team.channel.id, job.id, 'Final answer');
     await execution.releaseWriter(team.channel.id, job.id);
   };
@@ -119,7 +119,7 @@ describe('canonical channel persistence', () => {
       (await execution.input(team.channel.id, second.job.id)).map((message) => message.content),
     ).toEqual(['Request 2']);
 
-    await execution.accepted(team.channel.id, first.job.id, {});
+    await execution.accepted(team.channel.id, first.job.id);
     await execution.fail(team.channel.id, first.job.id, { message: 'Late failure' });
     expect((await operationOf(first.job.operationId)).status).toBe('done');
     expect((await jobById(db, first.job.id)).status).toBe('completed');
@@ -158,23 +158,6 @@ describe('canonical channel persistence', () => {
     },
   );
 
-  it('merges the hetero resume id into the run topic metadata', async () => {
-    const team = await setup(deviceConfig());
-    const claim = await team.claim();
-    await db
-      .update(topics)
-      .set({ metadata: { model: 'preserved-model' } })
-      .where(eq(topics.id, claim.topic.id));
-
-    await execution.accepted(team.channel.id, claim.job.id, { nativeSessionId: 'cli-resume' });
-
-    const [topic] = await db.select().from(topics).where(eq(topics.id, claim.topic.id));
-    expect(topic.metadata).toMatchObject({
-      model: 'preserved-model',
-      heteroSessionId: 'cli-resume',
-    });
-  });
-
   it('does not create an operation for a blocked directory claim', async () => {
     const first = await setup(deviceConfig());
     await first.claim();
@@ -211,7 +194,7 @@ describe('canonical channel persistence', () => {
       .update(agentOperations)
       .set({ status: 'done', totalTokens: 42, traceS3Key: 'trace' })
       .where(eq(agentOperations.id, claim.job.operationId!));
-    await execution.accepted(team.channel.id, claim.job.id, {});
+    await execution.accepted(team.channel.id, claim.job.id);
     await execution.fail(team.channel.id, claim.job.id, { message: 'late' });
     expect(await jobById(db, claim.job.id)).toMatchObject({
       acceptedAt: expect.any(Date),

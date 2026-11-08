@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { BOT_WAKE_SETTING_KEYS } from '@/server/services/agentSignal/scenarios/botWake/config';
+import { schema as discordSchema } from '@/server/services/bot/platforms/discord/schema';
 import type { FieldSchema } from '@/server/services/bot/platforms/types';
+import { BOT_WAKE_SETTING_KEYS } from '@/server/services/conversationWake/config';
 
 import {
   extractSettingsDefaults,
@@ -11,6 +12,8 @@ import {
   mergeCredentialsForSave,
   mergeSettingsWithDefaults,
   shouldAdoptIncomingConfig,
+  withHeterogeneousWakeOff,
+  withNewBotReactionOff,
 } from './formState';
 
 const slackSchema: FieldSchema[] = [
@@ -321,5 +324,55 @@ describe('findOverLimitSettings', () => {
   it('ignores values that are not lists at all', () => {
     expect(findOverLimitSettings(listSchema, { allowChannels: '1,2,3' })).toEqual([]);
     expect(findOverLimitSettings(undefined, { allowChannels: [{ id: '1' }] })).toEqual([]);
+  });
+});
+
+describe('withHeterogeneousWakeOff', () => {
+  const schema = [
+    {
+      key: 'settings',
+      label: 'settings',
+      properties: [{ default: false, key: 'botWakeDisabled', label: 'x', type: 'boolean' }],
+      type: 'object',
+    },
+  ] as FieldSchema[];
+
+  it('starts the wake switch off, over the schema default', () => {
+    expect(
+      mergeSettingsWithDefaults(schema, withHeterogeneousWakeOff(schema, {})).botWakeDisabled,
+    ).toBe(true);
+  });
+
+  it('keeps a choice already made', () => {
+    const settings = { botWakeDisabled: false };
+
+    expect(withHeterogeneousWakeOff(schema, settings)).toBe(settings);
+  });
+
+  it('adds nothing on a platform without the switch', () => {
+    expect(withHeterogeneousWakeOff([], { charLimit: 2000 })).toEqual({ charLimit: 2000 });
+  });
+});
+
+describe('withNewBotReactionOff', () => {
+  it('starts a new bot with status reactions off, over the schema default', () => {
+    expect(
+      mergeSettingsWithDefaults(discordSchema, withNewBotReactionOff(discordSchema, {}))
+        .reactionMode,
+    ).toBe('none');
+  });
+
+  it('leaves the schema default on, which a saved bot without the field reads as', () => {
+    expect(extractSettingsDefaults(discordSchema).reactionMode).toBe('minimal');
+  });
+
+  it('keeps a mode the owner already picked', () => {
+    const settings = { reactionMode: 'full' };
+
+    expect(withNewBotReactionOff(discordSchema, settings)).toBe(settings);
+  });
+
+  it('adds nothing on a platform without status reactions', () => {
+    expect(withNewBotReactionOff(slackSchema, { charLimit: 2000 })).toEqual({ charLimit: 2000 });
   });
 });

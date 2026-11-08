@@ -42,6 +42,11 @@ export default defineConfig({
         // ships an empty `coverageConfigDefaults.exclude`, so without this
         // `_test_template.ts` / `_fixtures.ts` leak into the package totals.
         'src/**/__tests__/**',
+        // Scaffolding copied when a new model is added, never imported at
+        // runtime. The client-db coverage config already excludes it; keeping
+        // both configs on the same production surface avoids a copy-paste
+        // template counting against the package total.
+        'src/models/_template.ts',
       ],
       include: ['src/models/**/*.ts', 'src/server/**/*.ts'],
       provider: 'v8',

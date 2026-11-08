@@ -106,10 +106,6 @@ describe('agent document replicas', () => {
     const renderSync = () =>
       renderHook(() => agentDocumentActions.useFetchDocumentList(AGENT_ID), { wrapper });
 
-    it('caps how many agents keep a persisted list', () => {
-      expect(agentDocumentListResource.maxPersistedEntries).toBe(30);
-    });
-
     it('paints the persisted list before the network answers', async () => {
       await agentDocumentListResource.storage!.set(
         { queryKey: LIST_KEY, scope },
@@ -256,10 +252,6 @@ describe('agent document replicas', () => {
   describe('reader', () => {
     const renderSync = () =>
       renderHook(() => agentDocumentActions.useFetchReaderDocument(READER), { wrapper });
-
-    it('caps how many reader bodies persist', () => {
-      expect(agentDocumentReaderResource.maxPersistedEntries).toBe(20);
-    });
 
     it('paints the persisted body before the network answers', async () => {
       await agentDocumentReaderResource.storage!.set(

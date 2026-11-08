@@ -66,6 +66,9 @@ const exclude = [
   '**/apps/cli/**',
   '**/packages/**',
   '**/e2e/**',
+  // Opt-in local verification tooling, not app/server CI unit tests.
+  // Run with `bun run stylex:verify:test` instead.
+  '**/scripts/stylexMigration/verification/**',
 ];
 
 export default defineConfig({
@@ -278,6 +281,8 @@ export default defineConfig({
         ],
       },
     },
+    // Migrates PGlite once per run so each DB test file restores a snapshot.
+    globalSetup: join(__dirname, './packages/database/tests/pgliteSnapshot.globalSetup.ts'),
     setupFiles: join(__dirname, './tests/setup.ts'),
   },
 });

@@ -1,3 +1,4 @@
+import { FileTextIcon } from 'lucide-react';
 import type { RouteObject } from 'react-router';
 
 import { agentDocumentRouteMeta } from '@/features/AgentDocumentPage/routeMeta';
@@ -33,7 +34,13 @@ export const agentPageChildren: RouteObject[] = [
           () => import('@/routes/(main)/agent/docs'),
           'Desktop > Chat > DocumentsIndex',
         ),
-        handle: { meta: routeMeta({ Skeleton: NoRouteSkeleton }) },
+        handle: {
+          meta: routeMeta({
+            icon: FileTextIcon,
+            Skeleton: NoRouteSkeleton,
+            titleKey: 'navigation.document',
+          }),
+        },
         index: true,
       },
       {

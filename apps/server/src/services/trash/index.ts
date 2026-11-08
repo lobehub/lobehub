@@ -12,7 +12,7 @@ import debug from 'debug';
 import { TopicModel } from '@/database/models/topic';
 import { TrashModel } from '@/database/models/trash';
 import type { TrashItemRow } from '@/database/schemas';
-import type { LobeChatDatabase } from '@/database/type';
+import type { LobeChatDatabase, Transaction } from '@/database/type';
 import type { SoftDeleteOptions } from '@/database/utils/softDelete';
 import { FileService } from '@/server/services/file';
 
@@ -20,9 +20,12 @@ import {
   resolveTrashHandler,
   softDeleteAgent,
   softDeleteMessages,
+  softDeleteTasks,
+  type TaskTrashTarget,
   topicCascades,
   type TrashCascade,
   type TrashHandlerContext,
+  TrashPurgeBlockedError,
   TrashRestoreError,
 } from './handlers';
 
@@ -40,6 +43,12 @@ export interface TrashRestoreOutcome {
   restored: TrashItem[];
 }
 
+export interface TrashPurgeOutcome {
+  /** Registry ids whose handler refused for now; they stay in the bin. */
+  blocked: string[];
+  purged: number;
+}
+
 export interface TrashSweepOutcome {
   /** Roots that threw during purge — left in place for the next tick. */
   failed: number;
@@ -48,6 +57,33 @@ export interface TrashSweepOutcome {
   /** Roots hard-deleted this tick. */
   purged: number;
 }
+
+/**
+ * Trash tasks inside a transaction the caller already holds — the task delete
+ * paths decide under their own row locks (a run recording a topic takes the
+ * same lock) and must stamp + register before releasing them. Returns the ids
+ * actually moved to the bin; a task whose status changed since the caller
+ * decided is not among them.
+ */
+export const trashTasksInTransaction = async (
+  tx: Transaction,
+  scope: { userId: string; workspaceId?: string },
+  targets: TaskTrashTarget[],
+): Promise<string[]> => {
+  const db = tx as unknown as LobeChatDatabase;
+  const deletedAt = new Date();
+  const cascades = await softDeleteTasks(
+    { db, userId: scope.userId, workspaceId: scope.workspaceId },
+    targets,
+    { deletedAt },
+  );
+  await new TrashModel(db, scope.userId, scope.workspaceId).registerMany(
+    { cascades, deletedAt },
+    tx,
+  );
+  log('trashed %d task(s)', cascades.length);
+  return cascades.map((cascade) => cascade.root.resourceId);
+};
 
 /**
  * Recycle-bin orchestrator. Every user-facing "delete" of a trash-aware entity
@@ -209,6 +245,9 @@ export class TrashService {
   countByType = (filter?: Omit<TrashRootFilter, 'resourceType'>): Promise<TrashCountByType> =>
     this.trashModel.countByType(filter);
 
+  /** Registry ids among `ids` on the private side of the workspace bin. */
+  findPrivateIds = (ids: string[]): Promise<Set<string>> => this.trashModel.findPrivateIds(ids);
+
   findByIds = async (ids: string[]): Promise<TrashItem[]> =>
     (await this.trashModel.findByIds(ids)).map(this.toItem);
 
@@ -279,15 +318,25 @@ export class TrashService {
 
   // ─────────────────────────── purge (hard delete) ───────────────────────────
 
-  /** Permanently delete roots by registry id (their cascade goes with them). */
-  purge = async (itemIds: string[]): Promise<{ purged: number }> => {
+  /**
+   * Permanently delete roots by registry id (their cascade goes with them). A
+   * root its handler cannot delete yet is reported in `blocked` and left in the
+   * bin; it does not stop the others.
+   */
+  purge = async (itemIds: string[]): Promise<TrashPurgeOutcome> => {
     const roots = (await this.trashModel.findByIds(itemIds)).filter((row) => !row.rootId);
-    let purged = 0;
+    const outcome: TrashPurgeOutcome = { blocked: [], purged: 0 };
     for (const root of roots) {
-      await this.purgeRoot(root);
-      purged += 1;
+      try {
+        await this.purgeRoot(root);
+        outcome.purged += 1;
+      } catch (error) {
+        if (!(error instanceof TrashPurgeBlockedError)) throw error;
+        log('purge blocked for %s:%s — %s', root.resourceType, root.resourceId, error.message);
+        outcome.blocked.push(root.id);
+      }
     }
-    return { purged };
+    return outcome;
   };
 
   /**
@@ -300,21 +349,26 @@ export class TrashService {
    */
   emptyTrash = async (
     /**
-     * `deletedByUserId` restricts the sweep to roots this user trashed: a
-     * workspace non-owner may only empty their own items — filtered in the
-     * query, not on a page of results, so "empty trash" really does empty
+     * `deletedByUserId` restricts the sweep to roots this user trashed and
+     * `visibility` to one side of a workspace bin — filtered in the query,
+     * not on a page of results, so "empty trash" really does empty
      * everything it is allowed to.
      */
     filter?: TrashRootFilter,
-  ): Promise<{ hasMore: boolean; purged: number }> => {
+  ): Promise<{ blocked: number; hasMore: boolean; purged: number }> => {
     const ids = await this.trashModel.listAllRootIds({
       ...filter,
       limit: TRASH_EMPTY_BATCH_SIZE + 1,
     });
-    const { purged } = await this.purge(ids.slice(0, TRASH_EMPTY_BATCH_SIZE));
+    const { blocked, purged } = await this.purge(ids.slice(0, TRASH_EMPTY_BATCH_SIZE));
     // `purged === 0` with rows left means nothing in reach could be purged;
-    // stop instead of letting the client spin.
-    return { hasMore: ids.length > TRASH_EMPTY_BATCH_SIZE && purged > 0, purged };
+    // stop instead of letting the client spin. Blocked roots stay listed, so a
+    // later batch sees them again and only counts what it actually removed.
+    return {
+      blocked: blocked.length,
+      hasMore: ids.length > TRASH_EMPTY_BATCH_SIZE && purged > 0,
+      purged,
+    };
   };
 
   private purgeRoot = async (root: TrashItemRow) => {

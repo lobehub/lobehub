@@ -1,6 +1,6 @@
 'use client';
 
-import { Avatar, Button, Empty, Flexbox, Input, Select, Spin, TextArea } from '@lobehub/ui';
+import { Avatar, Button, Empty, Flexbox, Input, Select, Spin, TextArea, toast } from '@lobehub/ui';
 import { Form, useForm } from '@lobehub/ui/form';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
@@ -8,7 +8,8 @@ import { useMutation } from '@tanstack/react-query';
 import { type FC } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { type CredsApi } from '../useCredsApi';
+import { credErrorKey } from '../credError';
+import { createExtras, type CredsApi } from '../useCredsApi';
 
 const styles = stylex.create({
   connectionOption: { display: 'flex', gap: '8px', alignItems: 'center' },
@@ -66,7 +67,11 @@ const OAuthCredForm: FC<OAuthCredFormProps> = ({ credsApi, disabled, onBack, onS
         key: values.key,
         name: values.name,
         oauthConnectionId: values.oauthConnectionId,
+        ...createExtras(credsApi),
       });
+    },
+    onError: (error) => {
+      toast.error(t(credErrorKey(error, 'creds.errors.createFailed')));
     },
     onSuccess: () => {
       onSuccess();

@@ -1,7 +1,9 @@
+import { agentDisplayName } from '@lobechat/types';
 import { useMemo } from 'react';
 
 import { MAIN_SIDEBAR_EXCLUDE_TRIGGERS } from '@/const/topic';
 import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
+import { useLocalMachineDeviceIds } from '@/hooks/useLocalMachineDeviceIds';
 import { useTopicOnlyMine } from '@/hooks/useTopicOnlyMine';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
@@ -16,7 +18,12 @@ import { userProfileSelectors } from '@/store/user/selectors';
 import type { ChatTopic, GroupedTopic, TopicGroupMode, TopicSortBy } from '@/types/topic';
 import { filterTopics } from '@/utils/client/topic';
 
-import { useTopicListFilter, useTopicListReveal, useTopicListScope } from './TopicListScope';
+import {
+  type TopicListScopeAgent,
+  useTopicListFilter,
+  useTopicListReveal,
+  useTopicListScope,
+} from './TopicListScope';
 
 export const useScopedTopics = () => {
   const scope = useTopicListScope();
@@ -49,11 +56,30 @@ export const pinCoordinatorGroup = (groups: GroupedTopic[], coordinatorAgentId?:
   return [...rest.slice(0, leadIndex), groups[index], ...rest.slice(leadIndex)];
 };
 
+/**
+ * A project with no topic yet still shows its main agent's group, so starting
+ * the first topic reads the same as adding one later. Only when nothing is
+ * filtered: a filter that matches nothing keeps its own empty state.
+ */
+export const withCoordinatorGroup = (
+  groups: GroupedTopic[],
+  scope: { coordinatorAgent?: TopicListScopeAgent; coordinatorAgentId?: string } | null,
+): GroupedTopic[] =>
+  groups.length || !scope?.coordinatorAgentId
+    ? groups
+    : [
+        {
+          children: [],
+          id: `agent:${scope.coordinatorAgentId}`,
+          title: agentDisplayName(scope.coordinatorAgent),
+        },
+      ];
+
 export const useScopedTopic = (id?: string) =>
   useScopedTopics().topics?.find((topic) => topic.id === id);
 
 /**
- * Project topics arrive in full, so the workspace "only mine" filter applies on
+ * Project topics arrive in full, so the project's "only mine" filter applies on
  * the client: keep only the caller's rows when it is on.
  */
 export const useOnlyMineTopics = <T extends { userId?: string | null }>(topics: T[]): T[] => {
@@ -78,6 +104,7 @@ export const useScopedSidebarTopics = (
   const reveal = useTopicListReveal();
   const visibleLimit = pageSize + (reveal?.extraRows ?? 0);
   const running = useChatStore(operationSelectors.visiblyRunningTopicIds);
+  const localDeviceIds = useLocalMachineDeviceIds();
   const directories = useProjectDirectories(scope?.projectId);
   const filter = useTopicListFilter()?.filter;
   const filtering = !!(filter?.status || filter?.device);
@@ -116,9 +143,28 @@ export const useScopedSidebarTopics = (
   );
   const coordinatorAgentId = scope?.coordinatorAgentId;
   const groups = useMemo(() => {
-    const grouped = groupSidebarTopics(visible, groupMode, sortBy, running, directories);
-    return groupMode === 'byAgent' ? pinCoordinatorGroup(grouped, coordinatorAgentId) : grouped;
-  }, [visible, groupMode, sortBy, running, directories, coordinatorAgentId]);
+    const grouped = groupSidebarTopics(
+      visible,
+      groupMode,
+      sortBy,
+      running,
+      directories,
+      localDeviceIds,
+    );
+    if (groupMode !== 'byAgent') return grouped;
+    const pinned = pinCoordinatorGroup(grouped, coordinatorAgentId);
+    return filtering ? pinned : withCoordinatorGroup(pinned, scope);
+  }, [
+    visible,
+    groupMode,
+    sortBy,
+    running,
+    directories,
+    localDeviceIds,
+    coordinatorAgentId,
+    filtering,
+    scope,
+  ]);
   const hasMore =
     candidates.filtered.filter((topic) => includeCompleted || topic.status !== 'completed').length >
     visibleLimit;

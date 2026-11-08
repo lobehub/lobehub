@@ -40,6 +40,7 @@ import {
   followGoalAgent,
   goalOwnerTaskScope,
   graphAs,
+  privatizeProjectGoals,
   reassignUnfinishedTasks,
   resolveTaskAssignee,
   retireNodes,
@@ -48,8 +49,10 @@ import {
   setModel,
   setTaskAgent,
   setTaskModel,
+  setVisibility,
   stopFencedTasks,
   updateRequirement,
+  updateTitle,
 } from './editing';
 import {
   close,
@@ -290,6 +293,7 @@ export class GoalService {
       tickOnce: (...args) => self.tickOnce(...args),
       transitionStatus: (...args) => self.transitionStatus(...args),
       updateRequirement: (...args) => self.updateRequirement(...args),
+      updateTitle: (...args) => self.updateTitle(...args),
       get userId() {
         return self.userId;
       },
@@ -386,6 +390,8 @@ export class GoalService {
   updateRequirement = (...args: MethodArgs<typeof updateRequirement>) =>
     updateRequirement(this.context, ...args);
 
+  updateTitle = (...args: MethodArgs<typeof updateTitle>) => updateTitle(this.context, ...args);
+
   setAgent = (...args: MethodArgs<typeof setAgent>) => setAgent(this.context, ...args);
 
   private followGoalAgent = (...args: MethodArgs<typeof followGoalAgent>) =>
@@ -396,6 +402,10 @@ export class GoalService {
   setModel = (...args: MethodArgs<typeof setModel>) => setModel(this.context, ...args);
 
   setTaskModel = (...args: MethodArgs<typeof setTaskModel>) => setTaskModel(this.context, ...args);
+  setVisibility = (...args: MethodArgs<typeof setVisibility>) =>
+    setVisibility(this.context, ...args);
+  privatizeProjectGoals = (...args: MethodArgs<typeof privatizeProjectGoals>) =>
+    privatizeProjectGoals(this.context, ...args);
 
   private resolveTaskAssignee = (...args: MethodArgs<typeof resolveTaskAssignee>) =>
     resolveTaskAssignee(this.context, ...args);

@@ -5,6 +5,7 @@ import type {
   LLMRetryPolicy,
   LLMTrace,
   LLMTransport,
+  RuntimeMessageRef,
 } from '../transport';
 import type {
   AgentEvent,
@@ -274,6 +275,24 @@ const buildAssistantMessageSeed = (
 });
 
 /**
+ * A steer message the server joined into the running turn is created after
+ * the step's `step_start` snapshot, so the client has no copy of it. Ship it
+ * with `stream_start` (the preflight read already loaded it) so the client
+ * shows it above this step's reply instead of only after the step ends.
+ */
+const buildSteerParentSeed = (parent: RuntimeMessageRef | undefined) => {
+  if (parent?.role !== 'user' || !parent.metadata?.steer) return;
+
+  return {
+    content: parent.content ?? '',
+    id: parent.id,
+    metadata: parent.metadata,
+    parentId: parent.parentId ?? null,
+    role: 'user' as const,
+  };
+};
+
+/**
  * Package-owned `call_llm` executor entry point.
  *
  * The package prepares and finalizes the turn, including retry, interruption,
@@ -299,9 +318,10 @@ export const callLlm =
     }
 
     const parentId = llmPayload.parentId || llmPayload.parentMessageId;
+    let parentMessage: RuntimeMessageRef | undefined;
     if (parentId) {
-      const parentExists = await transports.messages.findById(parentId);
-      if (!parentExists) {
+      parentMessage = await transports.messages.findById(parentId);
+      if (!parentMessage) {
         const error = createConversationParentMissingError(parentId);
         await transports.stream.publishEvent({
           data: formatErrorEventData(error, 'parent_message_preflight'),
@@ -359,11 +379,13 @@ export const callLlm =
       ? ((await transports.messages.findById(existingAssistantMessageId)) ?? assistantMessage)
       : assistantMessage;
     const stepLabel = (instruction as { stepLabel?: string }).stepLabel;
+    const steerParentSeed = buildSteerParentSeed(parentMessage);
 
     await transports.stream.publishEvent({
       data: {
         assistantMessage: buildAssistantMessageSeed(assistantMessage, assistantMessageSeed),
         model,
+        ...(steerParentSeed && { parentMessage: steerParentSeed }),
         provider,
         ...(stepLabel && { stepLabel }),
       },

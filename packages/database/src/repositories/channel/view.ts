@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, getTableColumns, inArray, isNull, lt } from 'drizzle-orm';
+import { and, asc, desc, eq, getTableColumns, inArray, isNull, lt, sql } from 'drizzle-orm';
 
 import {
   agentOperations,
@@ -8,9 +8,11 @@ import {
   channelMessages,
   channelThreads,
   files as fileTable,
+  topics,
   users,
 } from '../../schemas';
 import type { Transaction } from '../../type';
+import { notTrashed } from '../../utils/softDelete';
 import { fileIdsByMessage } from './attachments';
 import { activeMembers } from './delivery';
 import { ChannelError } from './error';
@@ -58,16 +60,42 @@ const publicMessage = (row: MessageRow, fileIds: string[]) => {
 };
 
 /** Public projection only. Execution settings, drafts and internal messages never leave this boundary. */
+/**
+ * The Agent topic behind each published reply, for replies the viewer ran: the topic belongs to
+ * the requester, so other members never learn its id.
+ */
+const sourceTopicsByMessage = async (
+  tx: Transaction,
+  channelId: string,
+  messageIds: string[],
+  viewerUserId: string | undefined,
+) => {
+  if (!viewerUserId || !messageIds.length) return new Map<string, string>();
+  const rows = await tx
+    .select({ messageId: channelJobs.publishedMessageId, topicId: topics.id })
+    .from(channelJobs)
+    .innerJoin(topics, eq(topics.id, channelJobs.topicId))
+    .where(
+      and(
+        eq(channelJobs.channelId, channelId),
+        inArray(channelJobs.publishedMessageId, messageIds),
+        eq(topics.userId, viewerUserId),
+        notTrashed(topics.isDeleted),
+      ),
+    );
+  return new Map(rows.map((row) => [row.messageId!, row.topicId]));
+};
+
 export const readChannelView = async (
   tx: Transaction,
   channelId: string,
   options: { before?: number; limit?: number; threadId?: string | null } = {},
+  viewerUserId?: string,
 ) => {
   const limit = Math.max(1, Math.min(options.limit ?? 100, 100));
   const [members, reversed, threads, jobs] = await Promise.all([
     tx
       .select({
-        active: channelMembers.active,
         actorType: channelMembers.actorType,
         agentId: channelMembers.agentId,
         avatar: agents.avatar,
@@ -75,11 +103,13 @@ export const readChannelView = async (
         id: channelMembers.id,
         name: channelMembers.name,
         role: channelMembers.role,
+        status: channelMembers.status,
         userId: channelMembers.userId,
         userName: users.fullName,
         username: users.username,
         userAvatar: users.avatar,
         lastReadSequence: channelMembers.lastReadSequence,
+        joinedAt: channelMembers.createdAt,
       })
       .from(channelMembers)
       .leftJoin(users, eq(users.id, channelMembers.userId))
@@ -105,16 +135,20 @@ export const readChannelView = async (
     tx
       .select()
       .from(channelThreads)
-      .where(eq(channelThreads.channelId, channelId))
+      .where(and(eq(channelThreads.channelId, channelId), notTrashed(channelThreads.isDeleted)))
       .orderBy(asc(channelThreads.createdAt)),
     tx
       .select({
         id: channelJobs.id,
         memberId: channelJobs.memberId,
         messageId: channelJobs.messageId,
+        requesterMemberId: channelJobs.requesterMemberId,
         threadId: channelJobs.threadId,
         status: channelJobs.status,
         blockedCode: channelJobs.blockedCode,
+        // Only a bounded diagnostic message crosses the public boundary, never the raw error.
+        errorMessage: sql<string | null>`CASE WHEN ${channelJobs.status} = 'failed'
+          THEN left(${agentOperations.error}->>'message', 2000) ELSE NULL END`,
         writerHeld: channelJobs.writerHeld,
         operationStatus: agentOperations.status,
         createdAt: channelJobs.createdAt,
@@ -150,10 +184,39 @@ export const readChannelView = async (
         )
     : [];
   const page = reversed.slice(0, limit).reverse();
+  const quoteIds = [
+    ...new Set(
+      [...page, ...(rootMessage ? [rootMessage] : [])].flatMap((message) =>
+        message.replyToId ? [message.replyToId] : [],
+      ),
+    ),
+  ];
+  const quoted = quoteIds.length
+    ? await tx
+        .select(publicMessageColumns)
+        .from(channelMessages)
+        .leftJoin(users, eq(users.id, channelMessages.userId))
+        .leftJoin(agents, eq(agents.id, channelMessages.agentId))
+        .where(and(eq(channelMessages.channelId, channelId), inArray(channelMessages.id, quoteIds)))
+    : [];
+  const quotes = new Map(
+    quoted.map((row) => {
+      const { author, content, id, sequence, threadId } = publicMessage(row, []);
+      return [id, { author, content: content.slice(0, 240), id, sequence, threadId }] as const;
+    }),
+  );
   const files = await fileIdsByMessage(tx, [
     ...page.map((message) => message.id),
     ...(rootMessage ? [rootMessage.id] : []),
   ]);
+  const sourceTopics = await sourceTopicsByMessage(
+    tx,
+    channelId,
+    [...page, ...(rootMessage ? [rootMessage] : [])].flatMap((message) =>
+      message.routingStatus === 'reply' ? [message.id] : [],
+    ),
+    viewerUserId,
+  );
   const ids = [...new Set([...files.values()].flat())];
   const attachments = ids.length
     ? await tx
@@ -173,8 +236,18 @@ export const readChannelView = async (
     jobs,
     members,
     threads,
-    rootMessage: rootMessage ? publicMessage(rootMessage, files.get(rootMessage.id) ?? []) : null,
-    messages: page.map((message) => publicMessage(message, files.get(message.id) ?? [])),
+    rootMessage: rootMessage
+      ? {
+          ...publicMessage(rootMessage, files.get(rootMessage.id) ?? []),
+          sourceTopicId: sourceTopics.get(rootMessage.id) ?? null,
+          replyTo: rootMessage.replyToId ? (quotes.get(rootMessage.replyToId) ?? null) : null,
+        }
+      : null,
+    messages: page.map((message) => ({
+      ...publicMessage(message, files.get(message.id) ?? []),
+      sourceTopicId: sourceTopics.get(message.id) ?? null,
+      replyTo: message.replyToId ? (quotes.get(message.replyToId) ?? null) : null,
+    })),
   };
 };
 
@@ -182,7 +255,7 @@ export const readChannelView = async (
 export const createChannelThread = async (
   tx: Transaction,
   channelId: string,
-  input: { followerMemberIds: string[]; rootMessageId: string },
+  input: { followerMemberIds?: string[]; rootMessageId: string },
 ) => {
   const [root] = await tx
     .select()
@@ -195,14 +268,49 @@ export const createChannelThread = async (
   const [existing] = await tx
     .select()
     .from(channelThreads)
-    .where(and(eq(channelThreads.channelId, channelId), eq(channelThreads.rootMessageId, root.id)));
+    .where(
+      and(
+        eq(channelThreads.channelId, channelId),
+        eq(channelThreads.rootMessageId, root.id),
+        notTrashed(channelThreads.isDeleted),
+      ),
+    );
   if (existing) return existing;
-  const followers = await activeMembers(tx, channelId, [...new Set(input.followerMemberIds)]);
+  // Explicit selections are validated; inferred recipients may have left since the root.
+  const followers = input.followerMemberIds
+    ? await activeMembers(tx, channelId, input.followerMemberIds)
+    : root.recipientMemberIds.length
+      ? await tx
+          .select({ id: channelMembers.id })
+          .from(channelMembers)
+          .where(
+            and(
+              eq(channelMembers.channelId, channelId),
+              eq(channelMembers.status, 'active'),
+              inArray(channelMembers.id, root.recipientMemberIds),
+            ),
+          )
+      : [];
+  // An Agent reply has no recipients. Branching from it must still carry its author
+  // into the thread, without substituting a removed or rebound member's new Agent.
+  const authors = root.agentId
+    ? await tx
+        .select({ id: channelMembers.id })
+        .from(channelMembers)
+        .where(
+          and(
+            eq(channelMembers.channelId, channelId),
+            eq(channelMembers.agentId, root.agentId),
+            eq(channelMembers.actorType, 'agent'),
+            eq(channelMembers.status, 'active'),
+          ),
+        )
+    : [];
   const [thread] = await tx
     .insert(channelThreads)
     .values({
       channelId,
-      followerMemberIds: followers.map((member) => member.id),
+      followerMemberIds: [...new Set([...followers, ...authors].map((member) => member.id))],
       rootMessageId: root.id,
       rootSequence: root.sequence,
     })

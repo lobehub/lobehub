@@ -1,5 +1,5 @@
 import type { ChannelJobBlockCode, LobeAgentConfig } from '@lobechat/types';
-import { and, asc, eq, isNotNull, isNull, sql } from 'drizzle-orm';
+import { and, asc, eq, isNotNull, isNull, lt, or, sql } from 'drizzle-orm';
 import type { PartialDeep } from 'type-fest';
 
 import type { ChannelItem, ChannelJobItem, ChannelMemberItem, TopicItem } from '../../schemas';
@@ -9,10 +9,13 @@ import {
   channelMemberGrants,
   channelMembers,
   channelMessages,
+  channelThreads,
   devices,
 } from '../../schemas';
 import type { Transaction } from '../../type';
 import { createNanoId } from '../../utils/idGenerator';
+import { notTrashed } from '../../utils/softDelete';
+import { uniqueViolationConstraint } from '../../utils/uniqueViolation';
 import { resolveExecutionConfig } from './agent';
 import { findThread } from './delivery';
 import { buildManifest } from './manifest';
@@ -40,16 +43,6 @@ export interface ChannelClaim {
 
 const DIRECTORY_LOCK = 'channel_jobs_active_directory_unique';
 
-const uniqueViolation = (error: unknown): string | undefined => {
-  const pgError = error as {
-    cause?: { code?: string; constraint?: string };
-    code?: string;
-    constraint?: string;
-  };
-  const code = pgError.cause?.code ?? pgError.code;
-  return code === '23505' ? (pgError.cause?.constraint ?? pgError.constraint ?? '') : undefined;
-};
-
 /** Records why a queued job cannot start; clients read the code, never the text. */
 const block = async (
   tx: Transaction,
@@ -66,7 +59,7 @@ const block = async (
   await audit(tx, job.channelId, 'job_blocked', job.id, { code, reason });
 };
 
-/** Settles a job that must never run, e.g. its requester left or its environment changed. */
+/** Settles a job that must never run, e.g. its requester left or its branch was archived. */
 const cancel = async (tx: Transaction, job: ChannelJobItem, reason: string) => {
   await tx
     .update(channelJobs)
@@ -166,7 +159,7 @@ export const claimJob = async (
   jobId: string,
   options: ChannelClaimOptions,
 ): Promise<ChannelClaim | null> => {
-  if (channel.archived) return null;
+  if (channel.isDeleted) return null;
 
   const [job] = await tx
     .select()
@@ -180,6 +173,47 @@ export const claimJob = async (
     );
   if (!job) return null;
 
+  // Archiving stops the work it covers; a job queued against it must never start.
+  if (channel.status === 'archived') {
+    await cancel(tx, job, 'channel_archived');
+    return null;
+  }
+  const thread = await findThread(tx, channel.id, job.threadId);
+  if (thread?.status === 'archived') {
+    await cancel(tx, job, 'thread_archived');
+    return null;
+  }
+
+  const [request] = await tx
+    .select()
+    .from(channelMessages)
+    .where(eq(channelMessages.id, job.messageId));
+  // An earlier undecided message may still enqueue this member. Checking only jobs
+  // would let an explicit follow-up overtake it while another worker routes it.
+  const [pendingRoute] = await tx
+    .select({ id: channelMessages.id })
+    .from(channelMessages)
+    .leftJoin(channelThreads, eq(channelThreads.id, channelMessages.threadId))
+    .where(
+      and(
+        eq(channelMessages.channelId, channel.id),
+        eq(channelMessages.routingStatus, 'pending'),
+        lt(channelMessages.sequence, request.sequence),
+        or(
+          isNull(channelMessages.threadId),
+          and(
+            notTrashed(channelThreads.isDeleted),
+            sql`${channelThreads.followerMemberIds} @> ${JSON.stringify([job.memberId])}::jsonb`,
+          ),
+        ),
+      ),
+    )
+    .limit(1);
+  if (pendingRoute) {
+    await block(tx, job, 'member_busy', 'Waiting for an earlier routing decision');
+    return null;
+  }
+
   // Each member answers in message order.
   const [head] = await tx
     .select({ id: channelJobs.id })
@@ -188,12 +222,15 @@ export const claimJob = async (
     .where(and(eq(channelJobs.memberId, job.memberId), eq(channelJobs.status, 'queued')))
     .orderBy(asc(channelMessages.sequence), asc(channelJobs.createdAt))
     .limit(1);
-  if (head?.id !== job.id) return null;
+  if (head?.id !== job.id) {
+    await block(tx, job, 'member_busy', 'Waiting for an earlier reply from this Agent');
+    return null;
+  }
 
   const [member] = await tx
     .select()
     .from(channelMembers)
-    .where(and(eq(channelMembers.id, job.memberId), eq(channelMembers.active, true)));
+    .where(and(eq(channelMembers.id, job.memberId), eq(channelMembers.status, 'active')));
   if (!member?.config) return null;
 
   const [busy] = await tx
@@ -207,12 +244,11 @@ export const claimJob = async (
       ),
     )
     .limit(1);
-  if (busy) return null;
+  if (busy) {
+    await block(tx, job, 'member_busy', 'Waiting for an earlier reply from this Agent');
+    return null;
+  }
 
-  const [request] = await tx
-    .select()
-    .from(channelMessages)
-    .where(eq(channelMessages.id, job.messageId));
   // The requester is the execution identity; without them there is nobody to run as.
   const [requester] = await tx
     .select({ id: channelMembers.id, userId: channelMembers.userId })
@@ -221,7 +257,7 @@ export const claimJob = async (
       and(
         eq(channelMembers.id, job.requesterMemberId),
         eq(channelMembers.actorType, 'user'),
-        eq(channelMembers.active, true),
+        eq(channelMembers.status, 'active'),
         isNotNull(channelMembers.userId),
       ),
     );
@@ -242,6 +278,12 @@ export const claimJob = async (
     return null;
   }
 
+  // An external Agent runs on a device; its direct conversation can open before one is chosen.
+  if (executionConfig.runtime !== 'native' && !member.config?.deviceId) {
+    await block(tx, job, 'device_required', 'Choose a device for this Agent to run on');
+    return null;
+  }
+
   const blocked = (await deviceBlock(tx, channel, member)) ?? (await directoryBlock(tx, member));
   if (blocked) {
     await block(tx, job, blocked.code, blocked.reason);
@@ -257,15 +299,13 @@ export const claimJob = async (
     return null;
   }
 
-  const thread = await findThread(tx, channel.id, job.threadId);
-
   const now = new Date();
   let claimed: Omit<ChannelClaim, 'member'>;
   try {
     // A savepoint, so losing the directory race to another channel keeps this transaction
     // and leaves no topic or operation behind.
     claimed = await tx.transaction(async (savepoint) => {
-      const { topic, afterSequence } = await resolveTopic(
+      const topic = await resolveTopic(
         savepoint,
         channel,
         job,
@@ -274,8 +314,10 @@ export const claimJob = async (
         request.sequence,
         executionConfig,
       );
-      const manifest = buildManifest({ afterSequence, job, member, request, thread });
-      const operationId = `op_${createNanoId(16)()}`;
+      const manifest = buildManifest({ job, member, request, thread });
+      // Same shape as ordinary runs (`op_{ts}_{agentId}_{topicId}_{rand}`): trace storage
+      // derives the Agent and topic from the operation ID.
+      const operationId = `op_${Date.now()}_${member.agentId}_${topic.id}_${createNanoId(8)()}`;
       await savepoint.insert(agentOperations).values({
         id: operationId,
         userId: requester.userId!,
@@ -309,7 +351,7 @@ export const claimJob = async (
       return { job: updated, topic };
     });
   } catch (error) {
-    const constraint = uniqueViolation(error);
+    const constraint = uniqueViolationConstraint(error);
     if (constraint === undefined) throw error;
     if (constraint === DIRECTORY_LOCK)
       await block(tx, job, 'directory_locked', 'Another run is using this directory');

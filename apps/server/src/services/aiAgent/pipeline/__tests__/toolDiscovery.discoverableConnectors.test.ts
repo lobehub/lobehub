@@ -6,6 +6,14 @@ import { scheduleStaleConnectorToolsRefresh } from '@/server/services/connector/
 
 import { discoverTools } from '../toolDiscovery';
 
+const explicitConnectorInput = (toolId: string) => ({
+  context: { isExplicitActivation: true },
+  model: 'test-model',
+  provider: 'test-provider',
+  skipDefaultTools: true,
+  toolIds: [toolId],
+});
+
 vi.mock('@/business/client/model-bank/loadModels', () => ({
   loadModels: vi.fn().mockResolvedValue([]),
 }));
@@ -163,13 +171,7 @@ describe('discoverTools — unpinned custom MCP connectors', () => {
       const result = await run({ ...options, sourceType: 'marketplace' });
       expect(result.toolManifestMap[YINGMI]).toBeUndefined();
       expect(result.toolsResult.enabledToolIds).not.toContain(YINGMI);
-      const restored = result.toolsEngine!.generateToolsDetailed({
-        context: { isExplicitActivation: true },
-        model: 'test-model',
-        provider: 'test-provider',
-        skipDefaultTools: true,
-        toolIds: [YINGMI],
-      });
+      const restored = result.toolsEngine!.generateToolsDetailed(explicitConnectorInput(YINGMI));
       expect(restored.enabledToolIds).not.toContain(YINGMI);
     },
   );
@@ -196,26 +198,14 @@ describe('discoverTools — unpinned custom MCP connectors', () => {
       sourceType: 'marketplace',
     });
     expect(result.toolManifestMap[YINGMI]).toBeDefined();
-    const activated = result.toolsEngine!.generateToolsDetailed({
-      context: { isExplicitActivation: true },
-      model: 'test-model',
-      provider: 'test-provider',
-      skipDefaultTools: true,
-      toolIds: [YINGMI],
-    });
+    const activated = result.toolsEngine!.generateToolsDetailed(explicitConnectorInput(YINGMI));
     expect(activated.enabledToolIds).toContain(YINGMI);
   });
 
   it('keeps a completed marketplace install discoverable and explicitly activatable', async () => {
     const result = await run({ installed: true, sourceType: 'marketplace' });
     expect(result.toolManifestMap[YINGMI]).toBeDefined();
-    const activated = result.toolsEngine!.generateToolsDetailed({
-      context: { isExplicitActivation: true },
-      model: 'test-model',
-      provider: 'test-provider',
-      skipDefaultTools: true,
-      toolIds: [YINGMI],
-    });
+    const activated = result.toolsEngine!.generateToolsDetailed(explicitConnectorInput(YINGMI));
     expect(activated.enabledToolIds).toContain(YINGMI);
   });
 
@@ -238,13 +228,7 @@ describe('discoverTools — unpinned custom MCP connectors', () => {
 
     // The cross-turn restore in `operationPrep` re-checks historical
     // activations through the engine with explicit activation.
-    const restored = result.toolsEngine!.generateToolsDetailed({
-      context: { isExplicitActivation: true },
-      model: 'test-model',
-      provider: 'test-provider',
-      skipDefaultTools: true,
-      toolIds: [YINGMI],
-    });
+    const restored = result.toolsEngine!.generateToolsDetailed(explicitConnectorInput(YINGMI));
 
     expect(restored.enabledToolIds).toContain(YINGMI);
     // …and the wire name the model copies from history resolves again.
@@ -280,8 +264,10 @@ describe('discoverTools — unpinned custom MCP connectors', () => {
     // An activatable connector whose upstream tools changed must not keep
     // offering the old list until someone re-syncs it by hand.
     expect(scheduleStaleConnectorToolsRefresh).toHaveBeenCalledTimes(1);
-    const [connectors] = vi.mocked(scheduleStaleConnectorToolsRefresh).mock.calls[0];
+    const [connectors, , ctx] = vi.mocked(scheduleStaleConnectorToolsRefresh).mock.calls[0];
     expect(connectors.map((c) => c.identifier)).toContain(YINGMI);
+    // The refresh lists under the run's user, whose mcp_apps flag finds view-only tools
+    expect(ctx).toMatchObject({ userId: 'user-1' });
   });
 
   describe('share visitor run', () => {

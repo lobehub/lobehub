@@ -5,10 +5,12 @@ import {
   FilePenIcon,
   FilesIcon,
   FileText,
+  FolderIcon,
   HardDriveIcon,
   ImageIcon,
   LibraryBigIcon,
   Mic2,
+  ServerIcon,
   SquarePlay,
 } from 'lucide-react';
 import type { RouteObject } from 'react-router';
@@ -17,6 +19,10 @@ import { BusinessResourceRoutes } from '@/business/client/BusinessDesktopRoutes'
 import ResourceHomeSkeleton from '@/components/Skeleton/ResourceHome';
 import { createSurfaceSkeleton } from '@/components/Skeleton/Surface';
 import ResourceCategorySkeleton from '@/features/ResourceHome/Skeleton';
+import {
+  createDocsItemRouteMeta,
+  createLibraryRouteMeta,
+} from '@/features/ResourceManager/routeMeta';
 import { libraryTreeLoader } from '@/spa/router/libraryTreeLoader';
 import { routeMeta } from '@/spa/router/routeMeta';
 import { worksLoader } from '@/spa/router/worksLoader';
@@ -68,6 +74,22 @@ export const resourceRoute: RouteObject = {
         },
         ...BusinessResourceRoutes,
         ...resourceDriveRoutes,
+        // The cloud sandbox's drives, beside the file drive (moved out of settings).
+        {
+          element: dynamicElement(
+            () => import('@/routes/(main)/resource/(home)/sandbox-storage'),
+            'Desktop > Resource > Sandbox Storage',
+            { preloadId: 'resource' },
+          ),
+          handle: {
+            meta: routeMeta({
+              icon: ServerIcon,
+              Skeleton: createSurfaceSkeleton('list'),
+              titleKey: 'navigation.resourceSandboxStorage',
+            }),
+          },
+          path: 'sandbox-storage',
+        },
         {
           element: dynamicElement(
             () => import('@/routes/(main)/resource/(home)'),
@@ -120,7 +142,7 @@ export const resourceRoute: RouteObject = {
             `Desktop > Resource > Home > ${path}`,
             { preloadId: 'resource' },
           ),
-          handle: { meta: routeMeta({ icon, titleKey }) },
+          handle: { meta: createDocsItemRouteMeta(icon, titleKey) },
           path,
         })),
         // Legacy category paths (/resource/documents, /resource/all, …)
@@ -153,9 +175,7 @@ export const resourceRoute: RouteObject = {
             () => import('@/routes/(main)/resource/library'),
             'Desktop > Resource > Library',
           ),
-          handle: {
-            meta: routeMeta({ icon: LibraryBigIcon, titleKey: 'navigation.knowledgeBase' }),
-          },
+          handle: { meta: createLibraryRouteMeta({ icon: LibraryBigIcon }) },
           index: true,
         },
         {
@@ -164,22 +184,36 @@ export const resourceRoute: RouteObject = {
             'Desktop > Resource > Library > Permission',
           ),
           handle: {
-            meta: routeMeta({
+            meta: createLibraryRouteMeta({
               icon: LibraryBigIcon,
               Skeleton: createSurfaceSkeleton('form'),
-              titleKey: 'navigation.knowledgeBase',
             }),
           },
           path: 'permission',
         },
+        // A folder (`folder/<docs_id>`), page (`docs/<docs_id>`) or file
+        // (`file/<file_id>`) opened inside the library, all addressed by id.
+        ...(
+          [
+            { icon: FolderIcon, path: 'folder/:folderId' },
+            { icon: FilePenIcon, path: 'docs/:itemId' },
+            { icon: FilesIcon, path: 'file/:itemId' },
+          ] as const
+        ).map(({ icon, path }) => ({
+          element: dynamicElement(
+            () => import('@/routes/(main)/resource/library'),
+            `Desktop > Resource > Library > ${path}`,
+          ),
+          handle: { meta: createLibraryRouteMeta({ icon }) },
+          path,
+        })),
+        // Legacy folder links (`/resource/library/<id>/<folderSlug>`) redirect to `folder/<id>`.
         {
           element: dynamicElement(
             () => import('@/routes/(main)/resource/library/[slug]'),
             'Desktop > Resource > Library > Slug',
           ),
-          handle: {
-            meta: routeMeta({ icon: LibraryBigIcon, titleKey: 'navigation.knowledgeBase' }),
-          },
+          handle: { meta: createLibraryRouteMeta({ icon: LibraryBigIcon }) },
           path: ':slug',
         },
       ],

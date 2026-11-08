@@ -1,5 +1,7 @@
 import { CredsIdentifier } from '@lobechat/builtin-tool-creds';
-import { GoalIdentifier, isGoalPrompt } from '@lobechat/builtin-tool-goal';
+import { DashboardIdentifier, isDashboardIdentifier } from '@lobechat/builtin-tool-dashboard';
+import { GoalIdentifier, isGoalIdentifier, isGoalPrompt } from '@lobechat/builtin-tool-goal';
+import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
 import type { DeviceAttachment } from '@lobechat/builtin-tool-remote-device';
 import { generateSystemPrompt, RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
 import {
@@ -112,7 +114,7 @@ export const discoverTools = async (
     throwIfExecutionAborted,
     topicBoundDeviceId,
   } = input;
-  // Feature-flagged builtin tools (e.g. lobe-dashboard) leave the pool while
+  // Feature-flagged builtin tools (e.g. builtin-dashboard) leave the pool while
   // their flag is off for this user; a flag read failure keeps them out.
   const featureFlags = await getServerFeatureFlagsStateFromRuntimeConfig(deps.userId).catch(
     () => undefined,
@@ -163,7 +165,15 @@ export const discoverTools = async (
       ? [GoalIdentifier]
       : [
           ...new Set([
-            ...getActivePluginIds(agentConfig?.plugins),
+            // An agent that pinned the goal or dashboard tool before its
+            // rename still carries the legacy id; resolve it to the current one.
+            ...getActivePluginIds(agentConfig?.plugins).map((id) =>
+              isGoalIdentifier(id)
+                ? GoalIdentifier
+                : isDashboardIdentifier(id)
+                  ? DashboardIdentifier
+                  : id,
+            ),
             ...(additionalPluginIds || []),
             ...(selectedToolIds || []),
             ...(hasMentionedAgents ? ['lobe-agent-management'] : []),
@@ -332,6 +342,7 @@ export const discoverTools = async (
 
     hasAgentDocuments = await toolReads.agentDocuments;
     const hasOversizedFiles = await toolReads.oversizedFiles;
+    const hasIdentityAccount = await toolReads.hasIdentityAccount;
 
     log('execAgent: isBotConversation=%s', isBotConversation);
 
@@ -483,6 +494,7 @@ export const discoverTools = async (
       executionPlan,
       globalMemoryEnabled,
       hasEnabledKnowledgeBases,
+      hasIdentityAccount,
       hasOversizedFiles,
       isBotConversation,
       isGroupSupervisor,
@@ -565,6 +577,7 @@ export const discoverTools = async (
       ],
       lobehubSkills: activeLobehubSkillManifests,
       manifestContext,
+      pageScope: manifestContext?.scope === 'page' && pluginIds.includes(PageAgentIdentifier),
     });
     Object.assign(toolManifestMap, discovery.manifestMap);
     Object.assign(toolSourceMap, discovery.sourceMap);

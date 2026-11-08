@@ -34,6 +34,7 @@ import {
 } from '../hooks/useConversationScroll';
 import { useEarlierHistoryTrigger } from '../hooks/useEarlierHistoryTrigger';
 import { useLaterHistoryTrigger } from '../hooks/useLaterHistoryTrigger';
+import { useReadingAnchor } from '../hooks/useReadingAnchor';
 import { useSelectionMessageIds } from '../hooks/useSelectionMessageIds';
 import { type InitialScrollPosition, useTopicScrollPersist } from '../hooks/useTopicScrollPersist';
 import { resolveAutoScrollDetached } from '../utils/autoScrollFollow';
@@ -72,6 +73,8 @@ interface VirtualizedListProps {
   paging?: 'backward' | 'forward';
   /** Print the loaded transcript, without the app chrome, when the page prints. */
   printable?: boolean;
+  /** Reopen at the message the reader last had at the top of the viewport. */
+  rememberReadingPosition?: boolean;
 }
 
 /**
@@ -89,6 +92,7 @@ const VirtualizedList = memo<VirtualizedListProps>(
     messageDeepLink,
     paging,
     printable,
+    rememberReadingPosition,
   }) => {
     const isForward = paging === 'forward';
     const virtuaRef = useRef<VListHandle>(null);
@@ -113,7 +117,7 @@ const VirtualizedList = memo<VirtualizedListProps>(
     const { recordScroll } = useTopicScrollPersist({
       contextKey,
       containerRef,
-      dataSourceLength: dataSource.length,
+      dataSource,
       getScroller,
       headerOffset: LEADING_ROWS,
       initialPosition: isForward ? 'top' : initialScrollPosition,
@@ -168,6 +172,16 @@ const VirtualizedList = memo<VirtualizedListProps>(
       virtuaRef,
     });
     const historyTrigger = isForward ? laterHistory : earlierHistory;
+
+    const { onScroll: recordReadingAnchor } = useReadingAnchor({
+      contextKey,
+      dataSource,
+      enabled: !!rememberReadingPosition && !messageDeepLink,
+      getScroller,
+      headerOffset: LEADING_ROWS,
+      loadPage: isForward ? loadLaterMessages : loadEarlierMessages,
+      virtuaRef,
+    });
 
     const markUserScrollIntent = useCallback(() => {
       lastUserScrollIntentAtRef.current = Date.now();
@@ -281,6 +295,7 @@ const VirtualizedList = memo<VirtualizedListProps>(
 
         // Programmatic mount/restore scrolls carry no intent and never fetch.
         if (hasUserScrollIntent) historyTrigger.onUserScroll();
+        recordReadingAnchor(hasUserScrollIntent);
 
         const autoScrollDetached = resolveAutoScrollDetached({
           detached: storeApi.getState().autoScrollDetached,
@@ -305,6 +320,7 @@ const VirtualizedList = memo<VirtualizedListProps>(
       historyTrigger,
       markUserScrolling,
       onScrollOffset,
+      recordReadingAnchor,
       recordScroll,
       setActiveIndex,
       setScrollState,

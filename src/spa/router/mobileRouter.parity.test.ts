@@ -36,7 +36,11 @@ const resolvedPattern = (routes: RouteObject[], url: string) =>
 
 // Desktop surfaces mobile intentionally leaves out. They redirect home instead
 // of being read as a workspace slug.
-const MOBILE_UNSUPPORTED = [/^\/(acme\/)?eval(\/|$)/];
+const MOBILE_UNSUPPORTED = [
+  /^\/(acme\/)?eval(\/|$)/,
+  // Multi-agent Channels currently use the desktop home sidebar and conversation layout.
+  /^\/(acme\/)?channels(\/|$)/,
+];
 
 const desktopUrls = [...new Set(collectLeafPatterns(mainAreaMetaRoutes).map(toSampleUrl))]
   .filter((url) => url !== '/rest')
@@ -63,7 +67,8 @@ describe('mobile router parity with the desktop main area', () => {
       const matches = matchRoutes(mobileRoutes, url) ?? [];
       const isWorkspaceUrl = url.startsWith('/acme/');
 
-      expect(matches.at(-1)?.route.path).toBe('eval/*');
+      const surface = url.replace(/^\/acme\//, '/').split('/')[1];
+      expect(matches.at(-1)?.route.path).toBe(`${surface}/*`);
       expect(matches.some((match) => match.route.path === ':workspaceSlug')).toBe(isWorkspaceUrl);
     },
   );

@@ -108,7 +108,11 @@ describe('doc command', () => {
       await program.parseAsync(['node', 'test', 'doc', 'list', '--json']);
 
       expect(consoleSpy).toHaveBeenCalledWith(
-        JSON.stringify([{ ...docs[0], url: 'https://app.lobehub.com/page/doc1' }], null, 2),
+        JSON.stringify(
+          [{ ...docs[0], url: 'https://app.lobehub.com/resource/page/doc1' }],
+          null,
+          2,
+        ),
       );
     });
 
@@ -164,6 +168,117 @@ describe('doc command', () => {
         expect.objectContaining({ pageSize: 10 }),
       );
     });
+
+    it('should pass the page index and sort field through', async () => {
+      mockTrpcClient.document.queryDocuments.query.mockResolvedValue({ items: [], total: 0 });
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'doc',
+        'list',
+        '--page',
+        '2',
+        '--sort-by',
+        'createdAt',
+      ]);
+
+      expect(mockTrpcClient.document.queryDocuments.query).toHaveBeenCalledWith(
+        expect.objectContaining({ current: 2, pageSize: 30, sortBy: 'createdAt' }),
+      );
+    });
+
+    it('should point at the next page when a full page comes back', async () => {
+      mockTrpcClient.document.queryDocuments.query.mockResolvedValue({
+        items: [
+          { id: 'doc1', title: 'A' },
+          { id: 'doc2', title: 'B' },
+        ],
+        total: 5,
+      });
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'doc', 'list', '-L', '2']);
+
+      expect(log.info).toHaveBeenCalledWith(expect.stringContaining('next: --page 1'));
+    });
+
+    it('should walk every page with --all', async () => {
+      mockTrpcClient.document.queryDocuments.query.mockClear();
+      mockTrpcClient.document.queryDocuments.query
+        .mockResolvedValueOnce({
+          items: [
+            { id: 'doc1', title: 'A' },
+            { id: 'doc2', title: 'B' },
+          ],
+          total: 3,
+        })
+        .mockResolvedValueOnce({ items: [{ id: 'doc3', title: 'C' }], total: 3 });
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'doc', 'list', '-L', '2', '--all', '--json', 'id']);
+
+      expect(mockTrpcClient.document.queryDocuments.query).toHaveBeenCalledTimes(2);
+      expect(JSON.parse(consoleSpy.mock.calls[0][0])).toHaveLength(3);
+    });
+
+    it('should report truncation when --all reaches its page cap', async () => {
+      mockTrpcClient.document.queryDocuments.query.mockReset();
+      mockTrpcClient.document.queryDocuments.query.mockImplementation(async ({ current }: any) => ({
+        items: [{ id: `doc${current}`, title: 'A' }],
+        total: 5000,
+      }));
+      const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+      try {
+        const program = createProgram();
+        await program.parseAsync([
+          'node',
+          'test',
+          'doc',
+          'list',
+          '-L',
+          '1',
+          '--all',
+          '--json',
+          'id',
+        ]);
+
+        // The walk stops at the cap with 5000 of 5000 rows still outstanding,
+        // so the JSON stays valid but stderr has to say the list is incomplete.
+        expect(mockTrpcClient.document.queryDocuments.query).toHaveBeenCalledTimes(1000);
+        expect(JSON.parse(consoleSpy.mock.calls[0][0])).toHaveLength(1000);
+        expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('page cap'));
+        expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('1000 of 5000'));
+      } finally {
+        stderrSpy.mockRestore();
+      }
+    });
+
+    it('should not report a complete total when --all is capped in table mode', async () => {
+      mockTrpcClient.document.queryDocuments.query.mockReset();
+      mockTrpcClient.document.queryDocuments.query.mockImplementation(async ({ current }: any) => ({
+        items: [{ id: `doc${current}`, title: 'A' }],
+        total: 1200,
+      }));
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'doc', 'list', '-L', '1', '--all']);
+
+      expect(log.warn).toHaveBeenCalledWith(expect.stringContaining('incomplete'));
+      expect(log.info).not.toHaveBeenCalledWith(expect.stringContaining('(all pages)'));
+    });
+
+    it('should reject a page size above the server maximum', async () => {
+      mockTrpcClient.document.queryDocuments.query.mockClear();
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'doc', 'list', '-L', '500']);
+
+      expect(log.error).toHaveBeenCalledWith(expect.stringContaining('--limit'));
+      expect(mockTrpcClient.document.queryDocuments.query).not.toHaveBeenCalled();
+    });
   });
 
   // ── view ──────────────────────────────────────────────
@@ -213,7 +328,7 @@ describe('doc command', () => {
 
       expect(consoleSpy).toHaveBeenCalledWith(
         JSON.stringify(
-          { ...doc, url: 'https://app.lobehub.com/resource/library/kb1?file=doc1' },
+          { ...doc, url: 'https://app.lobehub.com/resource/library/kb1/file/doc1' },
           null,
           2,
         ),
@@ -680,7 +795,11 @@ describe('doc command', () => {
       await program.parseAsync(['node', 'test', 'doc', 'topic-docs', 'topic_123', '--json']);
 
       expect(consoleSpy).toHaveBeenCalledWith(
-        JSON.stringify([{ ...docs[0], url: 'https://app.lobehub.com/page/doc1' }], null, 2),
+        JSON.stringify(
+          [{ ...docs[0], url: 'https://app.lobehub.com/resource/page/doc1' }],
+          null,
+          2,
+        ),
       );
     });
 

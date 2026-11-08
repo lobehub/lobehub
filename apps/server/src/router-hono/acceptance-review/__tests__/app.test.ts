@@ -26,9 +26,9 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/database/core/db-adaptor', () => ({ getServerDB: async () => serverDB }));
 vi.mock('@/libs/oidc-provider/jwt', () => ({
   verifyAcceptanceReviewJWT: async (token: string) => {
-    const [userId, acceptanceId] = token.split('|');
+    const [userId, acceptanceId, acceptanceOrigin] = token.split('|');
     if (!acceptanceId) throw new Error('invalid');
-    return { acceptanceId, expiresAt: 2_000_000_000, userId };
+    return { acceptanceId, acceptanceOrigin, expiresAt: 2_000_000_000, userId };
   },
 }));
 vi.mock('@/server/services/file', () => ({
@@ -37,9 +37,9 @@ vi.mock('@/server/services/file', () => ({
     uploadFromBuffer = mocks.upload;
   },
 }));
-vi.mock('@/server/routers/lambda/_helpers/acceptanceRepairDispatch', async (importOriginal) => ({
+vi.mock('@/server/routers/lambda/_helpers/acceptanceFeedbackRepair', async (importOriginal) => ({
   ...(await importOriginal<object>()),
-  dispatchAcceptanceRepair: mocks.dispatch,
+  dispatchAcceptanceFeedbackRepair: mocks.dispatch,
 }));
 vi.mock('@/server/services/resourceEvents', async (importOriginal) => {
   const actual = await importOriginal<typeof ResourceEvents>();
@@ -167,6 +167,23 @@ describe('auth', () => {
   it('refuses a token that does not verify', async () => {
     const res = await app.request(`${BASE}/session`, { headers: { authorization: 'Bearer junk' } });
     expect(res.status).toBe(401);
+  });
+
+  it('only answers an origin-bound token from that origin', async () => {
+    const bound = (origin: string) =>
+      call(ownerId, '/session', {
+        headers: { origin },
+        target: `${acceptanceId}|https://preview.example.com`,
+      });
+    expect((await bound('https://preview.example.com')).status).toBe(200);
+    const elsewhere = await bound('https://evil.example');
+    expect(elsewhere.status).toBe(403);
+    expect(await elsewhere.json()).toMatchObject({ error: { code: 'FORBIDDEN' } });
+  });
+
+  it('keeps answering a legacy token that carries no origin, from any origin', async () => {
+    const res = await call(ownerId, '/session', { headers: { origin: 'https://evil.example' } });
+    expect(res.status).toBe(200);
   });
 
   it('hides an acceptance the user can no longer read', async () => {
@@ -384,12 +401,13 @@ describe('POST /decision', () => {
     });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ dispatched: false, status: 'rejected' });
-    // The repair runs the owner's agent, so it is dispatched as the owner.
+    // Run the owner's agent while keeping the visitor as the feedback author.
     expect(mocks.dispatch).toHaveBeenCalledWith(
       expect.objectContaining({ userId: ownerId }),
       expect.anything(),
       expect.objectContaining({ id: acceptanceId }),
       'still overlaps',
+      expect.objectContaining({ userId: visitorId }),
     );
   });
 

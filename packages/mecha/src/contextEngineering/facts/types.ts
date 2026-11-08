@@ -7,6 +7,7 @@ import type {
   OnboardingContext,
 } from '@lobechat/context-engine';
 import type {
+  AgentAccountContext,
   AgentShareVisitorContext,
   LobeAgentChatConfig,
   RuntimeMentionedAgent,
@@ -81,6 +82,8 @@ export interface ContextFactRequest {
   agent: {
     chatConfig?: LobeAgentChatConfig | null;
     description?: string | null;
+    /** Personal name the agent is addressed by; wins over `title` as its label. */
+    name?: string | null;
     slug?: string | null;
     title?: string | null;
   };
@@ -98,6 +101,8 @@ export interface ContextFactRequest {
   executionTarget?: string;
   /** Which connector families this deployment offers. */
   features: { composio: boolean; lobehubSkill: boolean };
+  /** Disable unsolicited workspace-agent inventory, not explicit discovery or delegation tools. */
+  includeRecentAgents?: boolean;
   /**
    * The run is a sub-agent (`origin.lineage.isSubAgent`). Nested agent
    * dispatch is rejected there, so no fact may invite delegation.
@@ -122,6 +127,14 @@ export interface ContextFactRequest {
  * fact" and never blocks the turn.
  */
 export interface ContextFactProviders {
+  /**
+   * An agent document by its `agent_documents.id`, or null when it is missing,
+   * belongs to another agent, or the caller may not read it.
+   */
+  findAgentDocument?: (
+    agentId: string,
+    documentId: string,
+  ) => Promise<{ content?: string | null; title?: string | null } | null | undefined>;
   /** A topic by id, or null when the caller may not see it. */
   findTopic?: (topicId: string) => Promise<TopicFacts | null | undefined>;
   /** The agent row the builder or group builder is editing. */
@@ -140,6 +153,11 @@ export interface ContextFactProviders {
   getWorkspaceContext?: (
     workspaceId?: string,
   ) => Promise<{ appUrl?: string; slug?: string } | undefined>;
+  /**
+   * The agent's own accounts and inbox, as first-class identity state. Absent
+   * on a host with no identity store.
+   */
+  listAgentAccountContext?: (agentId?: string) => Promise<AgentAccountContext | undefined>;
   /** Context documents attached to an agent. */
   listAgentDocuments?: (agentId: string) => Promise<AgentContextDocument[] | undefined>;
   /** Connector identifiers (Composio services, LobeHub skill providers) connected for the agent. */
@@ -153,7 +171,10 @@ export interface ContextFactProviders {
   /** Recently used agents, most recent first. */
   listRecentAgents?: (
     limit: number,
-  ) => Promise<{ description?: string | null; id: string; title?: string | null }[] | undefined>;
+  ) => Promise<
+    | { description?: string | null; id: string; name?: string | null; title?: string | null }[]
+    | undefined
+  >;
   /** Files synced into the topic's sandbox upload dir. */
   listSandboxFiles?: (topicId: string) => Promise<{ name: string; size?: number }[] | undefined>;
   /** Messages of a referenced topic, oldest first. */

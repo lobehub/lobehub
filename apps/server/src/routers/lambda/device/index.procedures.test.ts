@@ -62,6 +62,7 @@ function expected(): Array<
     ['gitPullRequestMergeContext', 'query', 12],
     ['gitWorkingTreeStatus', 'query', 12],
     ['installAppUpdate', 'mutation', 12],
+    ['listClaudeCodeMemory', 'query', 14],
     ['listDevices', 'query', 11],
     ['listGitBranches', 'query', 12],
     ['listGitRemoteBranches', 'query', 12],
@@ -101,6 +102,7 @@ function expected(): Array<
     ['updateDevice', 'mutation', 12],
     ['updateDeviceInfo', 'mutation', 12],
     ['updateWorkspaceDevice', 'mutation', 12],
+    ['wakeManagedDevice', 'mutation', 12],
     ['writeProjectFile', 'mutation', 15],
     ['writeTerminal', 'mutation', 12],
   ];

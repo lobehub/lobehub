@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import type { DeviceLocalFilePreviewFailure } from './deviceFilePreviewFailure';
+import type { ManagedDevicePhase } from './managedDevice';
 
 /** Structured context for an unavailable logical device. */
 export interface DeviceUnavailableErrorData {
@@ -184,7 +185,7 @@ export const getWorkingDirEffectivePath = (
   return entry.git?.activeWorktree || entry.path;
 };
 
-export { deriveWorktreePath } from './worktreePath';
+export { deriveWorktreePath, type DeriveWorktreePathOptions } from './worktreePath';
 
 export interface WorkingDirEntry extends WorkingDirConfig {
   /**
@@ -353,6 +354,14 @@ export interface DeviceListItem {
   hostname: string | null;
   identitySource: string | null;
   lastSeen: string;
+  /**
+   * Managed cloud devices only: the lifecycle phase the managed device
+   * provider reports, so a sleeping device reads as sleeping instead of as an
+   * offline machine. `undefined` for other devices, and for a managed device
+   * whose phase is unknown (provider unavailable or the device not in its
+   * answer).
+   */
+  managedPhase?: ManagedDevicePhase;
   /**
    * What the client reported about itself on its last connect — the desktop
    * app sends `appVersion` (plus runtime versions), the CLI `cliVersion`.
@@ -936,6 +945,39 @@ export interface DeviceListProjectSkillsResult {
   skills: DeviceProjectSkillItem[];
   /** Legacy source hint. Per-skill `scope` / `source` fields are authoritative. */
   source: ProjectSkillSource | null;
+}
+
+/** One Claude Code auto-memory file, from the `listClaudeCodeMemory` device RPC. */
+export interface DeviceClaudeCodeMemoryFile {
+  description?: string;
+  /** The `MEMORY.md` index Claude Code loads into every session. */
+  isIndex: boolean;
+  name: string;
+  /** Absolute path on the device. */
+  path: string;
+  /** Path within the memory directory, `/`-separated. */
+  relativePath: string;
+  size: number;
+  /** Frontmatter memory type: user / feedback / project / reference. */
+  type?: string;
+  updatedAt: number;
+}
+
+/** The agent env keys that move Claude Code's auto memory, sent with `listClaudeCodeMemory`. */
+export interface DeviceClaudeCodeMemoryRunEnv {
+  CLAUDE_CODE_PROJECT_DIR_NAME?: string;
+  CLAUDE_CONFIG_DIR?: string;
+}
+
+/**
+ * Claude Code's auto memory for a project on the device, returned by the
+ * `listClaudeCodeMemory` device RPC. Mirrors device-control's
+ * `ListClaudeCodeMemoryResult`.
+ */
+export interface DeviceListClaudeCodeMemoryResult {
+  files: DeviceClaudeCodeMemoryFile[];
+  /** `~/.claude/projects/<project key>/memory` on the device, present or not. */
+  memoryDir: string;
 }
 
 const gitLinkedPullRequestSchema = z.object({

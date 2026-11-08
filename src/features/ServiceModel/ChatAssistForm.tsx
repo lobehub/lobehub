@@ -8,7 +8,7 @@ import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
 import AutoSaveHint from '@/components/Editor/AutoSaveHint';
-import { RouteLoading } from '@/components/Skeleton/RouteSegment';
+import SettingsSectionSkeleton from '@/components/Skeleton/Settings/Section';
 import { FORM_STYLE } from '@/const/layoutTokens';
 import ModelSelect from '@/features/ModelSelect';
 import { SettingsSearchAnchor } from '@/features/SettingsSearch/anchor';
@@ -72,7 +72,7 @@ ChatAssistControl.displayName = 'ChatAssistControl';
 /**
  * The chat-assist entries of the service-model settings that stay personal
  * inside a workspace (follow-up chips, input completion). Unlike
- * `ModelAssignmentsForm`, nothing here is gated on workspace permissions:
+ * `ServiceModelForm`, nothing here is gated on workspace permissions:
  * every member configures their own.
  */
 const ChatAssistForm = memo(() => {
@@ -94,7 +94,20 @@ const ChatAssistForm = memo(() => {
           onRetry={() => refreshUserState()}
         />
       );
-    return <RouteLoading />;
+    // One filled group of the chat-assist rows, as in the settled form;
+    // `RouteLoading` nested a second padded container inside the settings one.
+    return (
+      <SettingsSectionSkeleton
+        groups={[
+          {
+            desc: t('chatPreference.assist.desc'),
+            labels: PERSONAL_SYSTEM_AGENT_KEYS.map((key) => t(`systemAgent.${key}.title`)),
+            rows: PERSONAL_SYSTEM_AGENT_KEYS.length,
+            title: t('chatPreference.assist.title'),
+          },
+        ]}
+      />
+    );
   }
 
   const items: FormFieldProps[] = PERSONAL_SYSTEM_AGENT_KEYS.map((key) => {

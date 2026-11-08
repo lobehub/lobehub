@@ -1,6 +1,8 @@
 'use client';
 
-import { Block, createStaticStyles, cssVar, Flexbox } from '@lobehub/ui';
+import { Block, Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import type { ReactNode } from 'react';
 
 import WideScreenContainer from '@/features/WideScreenContainer';
@@ -9,16 +11,21 @@ import type { RouteSkeletonProps } from '@/spa/router/routeMeta';
 import AgentProfileNavSkeleton from './AgentProfileNav';
 import SkeletonBar from './Bar';
 
-const styles = createStaticStyles(({ css }) => ({
-  notice: css`
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  tabs: css`
-    border-block-end: 1px solid ${cssVar.colorBorder};
-  `,
-}));
+const styles = stylex.create({
+  notice: {
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  tabs: {
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorder,
+  },
+});
 
 const SettingRowSkeleton = ({ control, index }: { control: 'switch' | 'input'; index: number }) => (
   <Flexbox horizontal align={'center'} gap={16} justify={'space-between'}>
@@ -65,7 +72,7 @@ export const AgentShareSettingsBodySkeleton = () => (
     <Flexbox
       horizontal
       align={'flex-start'}
-      className={styles.notice}
+      className={stylex.props(styles.notice).className}
       gap={12}
       padding={'12px 16px'}
     >
@@ -80,7 +87,7 @@ export const AgentShareSettingsBodySkeleton = () => (
       <SkeletonBar height={36} width={'100%'} />
     </SectionSkeleton>
     {/* Mirrors `ShareTabs`: two underline tabs on a hairline. */}
-    <Flexbox horizontal className={styles.tabs} gap={24} paddingBlock={10}>
+    <Flexbox horizontal className={stylex.props(styles.tabs).className} gap={24} paddingBlock={10}>
       <SkeletonBar height={14} width={64} />
       <SkeletonBar height={14} width={64} />
     </Flexbox>

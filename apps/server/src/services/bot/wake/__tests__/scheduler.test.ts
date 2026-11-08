@@ -11,6 +11,8 @@ const mocks = vi.hoisted(() => ({
     mutateScheduler: vi.fn(),
     recordBotSpoke: vi.fn(),
     recordSilentWake: vi.fn(),
+    recordStandDown: vi.fn(),
+    rememberMessages: vi.fn(),
   },
   isLocal: { value: false },
   scheduleMessage: vi.fn(),
@@ -74,17 +76,17 @@ describe('wake scheduler wiring', () => {
       {
         expected: true,
         name: 'switched on in the settings form with batching on',
-        settings: { botWakeEnabled: true, botWakeSchedulerMode: 'enforce' },
+        settings: { botWakeDisabled: false, botWakeSchedulerMode: 'enforce' },
       },
       {
         expected: false,
         name: 'switched on in the settings form, batching left off',
-        settings: { botWakeEnabled: true, botWakeSchedulerMode: 'off' },
+        settings: { botWakeDisabled: false, botWakeSchedulerMode: 'off' },
       },
       {
         expected: false,
         name: 'batching on in the settings form but bot-wake off',
-        settings: { botWakeEnabled: false, botWakeSchedulerMode: 'enforce' },
+        settings: { botWakeDisabled: true, botWakeSchedulerMode: 'enforce' },
       },
     ])('$name -> available=$expected', ({ expected, settings }) => {
       expect(!!resolveWakeScheduler('discord', 'app', settings)).toBe(expected);
@@ -161,8 +163,107 @@ describe('wake scheduler wiring', () => {
       expect(mocks.botWake.recordSilentWake).not.toHaveBeenCalled();
     });
 
-    it('does nothing for a bot without bot-wake', async () => {
-      await recordWakeRunOutcome({ ...base, settings: {}, spoke: true });
+    it('steps back from the thread it replied in for 30 minutes when the agent stood down', async () => {
+      const before = Date.now();
+      await recordWakeRunOutcome({ ...base, spoke: true, standDown: true });
+
+      // The thread only: the rest of the channel is not what the bot was told to leave.
+      expect(mocks.botWake.recordStandDown).toHaveBeenCalledWith(
+        'discord:app:g:c:t',
+        expect.any(Number),
+      );
+      const until = mocks.botWake.recordStandDown.mock.calls[0][1] as number;
+      expect(until - before).toBeGreaterThanOrEqual(30 * 60 * 1000);
+      expect(until - Date.now()).toBeLessThanOrEqual(30 * 60 * 1000);
+
+      mocks.botWake.recordStandDown.mockClear();
+      await recordWakeRunOutcome({ ...base, spoke: false, wakeKind: 'followup' });
+      await recordWakeRunOutcome({
+        ...base,
+        settings: { botWakeDisabled: true },
+        spoke: true,
+        standDown: true,
+      });
+      expect(mocks.botWake.recordStandDown).not.toHaveBeenCalled();
+    });
+
+    describe('what the bot said', () => {
+      const spoken = { id: 'op-1', text: 'Shipped it.' };
+
+      it('is kept in the shared log of the channel and the thread, as the bot', async () => {
+        await recordWakeRunOutcome({ ...base, spoke: true, spoken });
+
+        expect(mocks.botWake.rememberMessages).toHaveBeenCalledWith(
+          ['discord:g:c', 'discord:g:c:t'],
+          [
+            expect.objectContaining({
+              authorId: 'app',
+              id: 'bot:op-1',
+              isBot: true,
+              text: 'Shipped it.',
+            }),
+          ],
+        );
+      });
+
+      it('is kept in the shared log of a Feishu group', async () => {
+        await recordWakeRunOutcome({
+          ...base,
+          platform: 'feishu',
+          platformThreadId: 'feishu:group:oc_1',
+          spoke: true,
+          spoken,
+        });
+
+        expect(mocks.botWake.rememberMessages).toHaveBeenCalledWith(
+          ['feishu:group:oc_1'],
+          [expect.objectContaining({ id: 'bot:op-1', isBot: true })],
+        );
+      });
+
+      it.each([
+        { name: 'the bot stayed silent', input: { spoke: false, spoken } },
+        { name: 'there is no text to keep', input: { spoke: true, spoken: { id: 'op-1' } } },
+        {
+          name: 'it was a direct message',
+          input: { platformThreadId: 'discord:@me:dm1', spoke: true, spoken },
+        },
+        {
+          name: 'it was a Feishu direct message',
+          input: { platform: 'feishu', platformThreadId: 'feishu:p2p:oc_1', spoke: true, spoken },
+        },
+        { name: 'the platform has no log yet', input: { platform: 'slack', spoke: true, spoken } },
+      ])('is not kept when $name', async ({ input }) => {
+        await recordWakeRunOutcome({ ...base, ...input });
+
+        expect(mocks.botWake.rememberMessages).not.toHaveBeenCalled();
+      });
+
+      it('never fails the run bookkeeping when the log write fails', async () => {
+        mocks.botWake.rememberMessages.mockRejectedValueOnce(new Error('redis down'));
+        mocks.botWake.mutateScheduler.mockResolvedValue({ decisions: [], effects: [] });
+
+        await expect(
+          recordWakeRunOutcome({ ...base, settings: enabled, spoke: true, spoken }),
+        ).resolves.toBeUndefined();
+        expect(mocks.botWake.recordBotSpoke).toHaveBeenCalled();
+        expect(mocks.botWake.mutateScheduler).toHaveBeenCalled();
+      });
+
+      it('is not kept for a bot with bot-wake switched off', async () => {
+        await recordWakeRunOutcome({
+          ...base,
+          settings: { botWakeDisabled: true },
+          spoke: true,
+          spoken,
+        });
+
+        expect(mocks.botWake.rememberMessages).not.toHaveBeenCalled();
+      });
+    });
+
+    it('does nothing for a bot with bot-wake switched off', async () => {
+      await recordWakeRunOutcome({ ...base, settings: { botWakeDisabled: true }, spoke: true });
 
       expect(mocks.botWake.recordBotSpoke).not.toHaveBeenCalled();
     });
@@ -188,8 +289,8 @@ describe('wake scheduler wiring', () => {
 
     it('flushes with the bot’s current settings', async () => {
       mocks.botWake.mutateScheduler.mockResolvedValue({ decisions: [], effects: [] });
-      const load = vi.fn(async () => ({ settings: enabled, userId: 'owner' }));
-      await handleWakeFlush(payload, load, { rollout: async () => true });
+      const load = vi.fn(async () => ({ settings: enabled }));
+      await handleWakeFlush(payload, load);
 
       expect(load).toHaveBeenCalledWith('discord', 'app');
       expect(mocks.botWake.mutateScheduler).toHaveBeenCalledWith(
@@ -199,25 +300,17 @@ describe('wake scheduler wiring', () => {
     });
 
     it('does nothing once the owner switched the scheduler off or deleted the bot', async () => {
-      const rollout = async () => true;
-      await handleWakeFlush(
-        payload,
-        async () => ({ settings: { botWake: { enabled: true } }, userId: 'owner' }),
-        { rollout },
-      );
-      await handleWakeFlush(payload, async () => undefined, { rollout });
+      await handleWakeFlush(payload, async () => ({ settings: { botWake: { enabled: true } } }));
+      await handleWakeFlush(payload, async () => undefined);
 
       expect(mocks.botWake.mutateScheduler).not.toHaveBeenCalled();
     });
 
-    it('drops the parked batch instead of replaying it once the rollout is switched off', async () => {
-      const rollout = vi.fn(async () => false);
+    it('drops the parked batch instead of replaying it once the wake switch is turned off', async () => {
+      await handleWakeFlush(payload, async () => ({
+        settings: { botWake: { ...enabled.botWake, enabled: false } },
+      }));
 
-      await handleWakeFlush(payload, async () => ({ settings: enabled, userId: 'owner' }), {
-        rollout,
-      });
-
-      expect(rollout).toHaveBeenCalledWith('owner');
       expect(mocks.botWake.mutateScheduler).not.toHaveBeenCalled();
     });
   });

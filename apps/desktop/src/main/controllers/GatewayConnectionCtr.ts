@@ -214,7 +214,6 @@ export default class GatewayConnectionCtr extends ControllerModule {
     // Wire up agent run handler
     srv.setAgentRunHandler((request) =>
       executeGatewayAgentRun(request, {
-        getAccessToken: () => this.remoteServerConfigCtr.getAccessToken(),
         getServerUrl: () => this.remoteServerConfigCtr.getRemoteServerUrl(),
         heterogeneousAgentCtr: this.heterogeneousAgentCtr,
         platformTasks: this.platformTasks,
@@ -284,6 +283,16 @@ export default class GatewayConnectionCtr extends ControllerModule {
   @IpcMethod()
   async getStableDeviceId(): Promise<string | undefined> {
     return this.service.resolveCurrentDeviceId();
+  }
+
+  /**
+   * The id this machine holds as a device of `workspaceId` — derived locally,
+   * whether or not it is enrolled there — so the renderer can tell its own
+   * workspace device apart from other machines.
+   */
+  @IpcMethod()
+  async getWorkspaceDeviceId({ workspaceId }: { workspaceId: string }): Promise<string> {
+    return this.service.resolveWorkspaceDeviceId(workspaceId);
   }
 
   @IpcMethod()

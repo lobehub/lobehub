@@ -31,37 +31,44 @@ export const setDragLabelPreview = (
   document.body.append(ghost);
   event.dataTransfer.setDragImage(ghost, 0, 0);
 
+  // Neutral elevated card (OS-style drag chip), offset to the cursor's lower
+  // right so it never covers the drop target under the pointer.
+  const position = (x: number, y: number) => `translate(${x + 12}px, ${y + 12}px)`;
   const preview = document.createElement('div');
   Object.assign(preview.style, {
     alignItems: 'center',
     background: resolveCssVar(cssVar.colorBgElevated, host),
-    border: `1px solid ${resolveCssVar(cssVar.colorInfoBorder, host)}`,
-    borderRadius: '10px',
-    color: resolveCssVar(cssVar.colorInfo, host),
+    border: `1px solid ${resolveCssVar(cssVar.colorFill, host)}`,
+    borderRadius: '8px',
+    boxShadow: resolveCssVar(cssVar.boxShadowSecondary, host),
+    color: resolveCssVar(cssVar.colorText, host),
     display: 'inline-flex',
     fontSize: '13px',
-    gap: '8px',
+    fontWeight: '500',
+    gap: '6px',
     left: '0',
-    lineHeight: '1',
-    maxWidth: '280px',
-    padding: '8px 14px',
+    lineHeight: '20px',
+    maxWidth: '240px',
+    padding: '6px 12px',
     pointerEvents: 'none',
     position: 'fixed',
     top: '0',
-    transform: `translate(${event.clientX}px, ${event.clientY}px) translate(-50%, -100%)`,
+    transform: position(event.clientX, event.clientY),
     whiteSpace: 'nowrap',
     zIndex: '9999',
   });
 
   const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  icon.setAttribute('width', '16');
-  icon.setAttribute('height', '16');
+  icon.setAttribute('width', '14');
+  icon.setAttribute('height', '14');
   icon.setAttribute('viewBox', '0 0 24 24');
   icon.setAttribute('fill', 'none');
   icon.setAttribute('stroke', 'currentColor');
   icon.setAttribute('stroke-width', '2');
   icon.setAttribute('stroke-linecap', 'round');
   icon.setAttribute('stroke-linejoin', 'round');
+  icon.style.color = resolveCssVar(cssVar.colorTextSecondary, host);
+  icon.style.flex = 'none';
   icon.innerHTML = iconSvg;
   preview.append(icon);
 
@@ -73,7 +80,7 @@ export const setDragLabelPreview = (
   document.body.append(preview);
 
   const move = (dragEvent: DragEvent) => {
-    preview.style.transform = `translate(${dragEvent.clientX}px, ${dragEvent.clientY}px) translate(-50%, -100%)`;
+    preview.style.transform = position(dragEvent.clientX, dragEvent.clientY);
   };
   const cleanup = () => {
     document.removeEventListener('dragover', move);

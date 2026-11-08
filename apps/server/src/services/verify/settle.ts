@@ -5,6 +5,7 @@ import {
   VERIFICATION_OUT_OF_CREDITS_ERROR,
   VERIFICATION_UNJUDGEABLE_ERROR,
 } from '@lobechat/const/goal';
+import { isCheckWaivedByDispute } from '@lobechat/const/verify';
 import debug from 'debug';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
@@ -20,7 +21,7 @@ import { TaskResultBridgeService } from '@/server/services/taskResultBridge';
 
 import { AcceptanceService } from './acceptanceService';
 import { reviewGoalDelivery } from './goalReview';
-import { maybeAutoRepair } from './repairService';
+import { maybeAutoRepair, repairRejectedReview } from './repairService';
 import { VerifyReporterService } from './reporter';
 import { VerifyStatusService } from './statusService';
 import { attachTaskRunToAcceptance, resolveTaskAcceptance } from './taskAcceptance';
@@ -80,13 +81,14 @@ const MAX_REASON_CHARS = 300;
 export const describeVerifyFailure = (
   results: Pick<
     VerifyCheckResultItem,
-    'checkItemTitle' | 'required' | 'status' | 'suggestion' | 'toulmin' | 'verdict'
+    'checkItemTitle' | 'metadata' | 'required' | 'status' | 'suggestion' | 'toulmin' | 'verdict'
   >[],
   reviewFeedback?: string,
 ): string => {
   const failed = results.filter(
     (r) =>
       r.status !== 'errored' &&
+      !isCheckWaivedByDispute(r.metadata) &&
       (r.status === 'failed' || r.verdict === 'failed' || r.verdict === 'uncertain'),
   );
   // Only required checks gate the run. Optional failures stay out entirely —
@@ -200,6 +202,36 @@ export const driveTaskFromVerify = async (
       run.status === 'passed'
         ? await reviewGoalDelivery(db, userId, taskOperation.taskId, operationId, workspaceId)
         : undefined;
+
+    // A rejected check that can be repaired is fixed inside this round, by the
+    // same builder in the same topic, rather than pausing the Task into a whole
+    // new attempt. The repair round settles the Task when it finishes; this run's
+    // drive claim stays stamped so it is never driven twice.
+    if (
+      goalReview?.status === 'rejected' &&
+      goalReview.rejectedChecks?.length &&
+      !task.automationMode
+    ) {
+      const repair = await repairRejectedReview(
+        db,
+        userId,
+        operationId,
+        goalReview.rejectedChecks,
+        workspaceId,
+      ).catch((error) => {
+        log('verify-settle review repair failed for op %s: %O', operationId, error);
+        return null;
+      });
+      if (repair) {
+        log(
+          'acceptance review rejected → repairing op %s in round (%s)',
+          operationId,
+          repair.repairOperationId,
+        );
+        return;
+      }
+    }
+
     const outcome =
       goalReview?.status === 'rejected'
         ? 'failed'
@@ -335,7 +367,7 @@ export const driveTaskFromVerify = async (
               goalReview?.status === 'rejected' ? goalReview.feedback : undefined,
             )
           : outOfCredits
-            ? 'Verification could not run because the account is out of credits for the verifier model; the delivery was not evaluated. Top up credits, then retry.'
+            ? 'Verification could not run because the account is out of balance for the verifier model; the delivery was not evaluated. Top up, then retry.'
             : outcome === 'errored' || outcome === 'review_errored'
               ? 'Verification could not be completed due to an internal error; the delivery was not evaluated. Please retry or review it manually.'
               : outcome === 'unjudgeable'

@@ -1,5 +1,7 @@
 import { extractTodosFromMessages, normalizeTodosState } from '@lobechat/agent-runtime';
+import { AgentAccountIdentifier } from '@lobechat/builtin-tool-agent-account';
 import { AgentBuilderIdentifier } from '@lobechat/builtin-tool-agent-builder';
+import { AgentDocumentsIdentifier } from '@lobechat/builtin-tool-agent-documents';
 import { AgentManagementIdentifier } from '@lobechat/builtin-tool-agent-management';
 import {
   CloudSandboxIdentifier,
@@ -23,12 +25,15 @@ import { COMPOSIO_APP_TYPES } from '@lobechat/const';
 import {
   type AgentBuilderContext,
   type AgentManagementContext,
+  type DocumentReferenceItem,
   type GroupAgentBuilderContext,
   type PlanTodoConfig,
+  resolveDocumentReferences,
   resolveTopicReferences,
   type TopicReferenceItem,
   type WorkspaceContext,
 } from '@lobechat/context-engine';
+import { agentDisplayName } from '@lobechat/types';
 import debug from 'debug';
 import pMap from 'p-map';
 
@@ -114,6 +119,32 @@ const gatherTopicReferences = async (
             return (await listTopicMessages(topic)) ?? [];
           }
         : undefined,
+    ),
+  );
+};
+
+/**
+ * Resolve `<refer_document>` tags against the executing agent's documents. A
+ * share visitor never reads the creator's documents through a typed tag.
+ */
+const gatherDocumentReferences = async (
+  request: ContextFactRequest,
+  providers: ContextFactProviders,
+): Promise<DocumentReferenceItem[] | undefined> => {
+  // Client-side preprocessing may already have injected the references.
+  if (contains(request.messages, ['document_reference_context'])) return undefined;
+  if (!contains(request.messages, ['refer_document', 'refer\\_document'])) return undefined;
+  const agentId = request.agentId;
+  const { findAgentDocument } = providers;
+  if (request.shareVisitor || !agentId || !findAgentDocument) return undefined;
+
+  return attempt('documentReferences', () =>
+    resolveDocumentReferences(
+      request.messages as Array<{ content: string | unknown; role?: string }>,
+      (documentId) => findAgentDocument(agentId, documentId),
+      // Without the documents tool the agent cannot read an earlier-turn
+      // reference on demand, so keep inlining those too.
+      { inlineEarlierTurns: !request.enabledToolIds.includes(AgentDocumentsIdentifier) },
     ),
   );
 };
@@ -396,10 +427,14 @@ const gatherAgentManagementContext = async (
     // Self-management (updateAgent / installPlugin on itself) stays available
     // inside a sub-agent, so its own id is kept; only the delegation list goes.
     const currentAgent = request.agentId
-      ? { id: request.agentId, title: request.agent.title ?? undefined }
+      ? {
+          id: request.agentId,
+          name: request.agent.name ?? undefined,
+          title: request.agent.title ?? undefined,
+        }
       : undefined;
 
-    if (canDelegate) {
+    if (canDelegate && request.includeRecentAgents !== false) {
       const { listRecentAgents } = providers;
       const recent =
         (await attempt('recentAgents', () => listRecentAgents(AVAILABLE_AGENTS_LIMIT + 2))) ?? [];
@@ -410,6 +445,7 @@ const gatherAgentManagementContext = async (
         availableAgents: others.slice(0, AVAILABLE_AGENTS_LIMIT).map((a) => ({
           description: a.description ?? undefined,
           id: a.id,
+          name: a.name ?? undefined,
           title: a.title ?? 'Untitled',
         })),
         availableAgentsHasMore: others.length > AVAILABLE_AGENTS_LIMIT,
@@ -464,10 +500,24 @@ export const gatherContextFacts = async (
       attempt('agentDocuments', () =>
         docsAgentId ? providers.listAgentDocuments?.(docsAgentId) : undefined,
       ),
+    () =>
+      attempt('agentAccountContext', async () => {
+        const context = await providers.listAgentAccountContext?.(request.agentId);
+        // Whether this step can actually read or answer mail is decided by the
+        // final tool set (custom / goal / chat modes can exclude the account
+        // tool), so the identity block must not promise a tool that is absent.
+        return context
+          ? {
+              ...context,
+              toolAvailable: request.enabledToolIds.includes(AgentAccountIdentifier),
+            }
+          : context;
+      }),
     () => gatherAgentBuilderContext(request, providers),
     () => gatherAgentManagementContext(request, providers),
     () => gatherComposioServices(request, providers),
     () => gatherCredentials(request, providers),
+    () => gatherDocumentReferences(request, providers),
     () => gatherGroupAgentBuilderContext(request, providers),
     () => gatherOnboardingContext(request, providers),
     () => gatherPlanTodo(request, providers),
@@ -492,10 +542,12 @@ export const gatherContextFacts = async (
 
   const [
     agentDocuments,
+    agentAccountContext,
     agentBuilderContext,
     agentManagementContext,
     composioServicesList,
     credentials,
+    documentReferences,
     groupAgentBuilderContext,
     onboardingContext,
     planTodo,
@@ -510,8 +562,10 @@ export const gatherContextFacts = async (
   return {
     agentDocuments: agentDocuments?.length ? agentDocuments : undefined,
     step: {
+      agentAccountContext,
       agentBuilderContext,
       agentManagementContext,
+      documentReferences,
       groupAgentBuilderContext,
       onboardingContext,
       planTodo,
@@ -523,6 +577,7 @@ export const gatherContextFacts = async (
       CREDS_LIST: credentials ? generateCredsList(credentials) : '',
       agent_description: request.agent.description ?? '',
       agent_id: request.agentId ?? '',
+      agent_name: agentDisplayName(request.agent) ?? '',
       agent_title: request.agent.title ?? '',
       // A credential is reachable whenever the dedicated sandbox tool is
       // exposed for 'auto' (independent of device routing) or no device is

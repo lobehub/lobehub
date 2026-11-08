@@ -14,6 +14,7 @@ import {
 } from '../schemas/workspace';
 import type { LobeChatDatabase } from '../type';
 import { AGENT_TRANSFER_PENDING_OWNER_DELETE, AgentTransferJobModel } from './agentTransferJob';
+import { countOf } from './utils/rows';
 import { DEFAULT_TEAM_IDENTIFIER, deriveTeamIdentifier } from './workspaceTeam';
 
 export const getActiveWorkspaceMembershipRole = async (
@@ -218,7 +219,7 @@ export class WorkspaceModel {
       .select({ count: count() })
       .from(workspaceMembers)
       .where(and(eq(workspaceMembers.userId, this.userId), isNull(workspaceMembers.deletedAt)));
-    return result[0]?.count ?? 0;
+    return countOf(result, 'the workspace membership count');
   };
 
   listUserWorkspaces = async () => {
@@ -237,7 +238,9 @@ export class WorkspaceModel {
 
     return results.map((ws) => ({
       ...ws,
+      /* v8 ignore start -- unreachable: each workspace was selected via a membership row */
       role: memberships.find((m) => m.workspaceId === ws.id)?.role ?? 'viewer',
+      /* v8 ignore stop */
     }));
   };
 

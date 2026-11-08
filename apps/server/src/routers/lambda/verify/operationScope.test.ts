@@ -6,6 +6,7 @@ import { verifyRouter } from '.';
 
 const modelMocks = vi.hoisted(() => ({
   createEvidence: vi.fn(),
+  createManyEvidence: vi.fn(),
   findFileById: vi.fn(),
   findResultById: vi.fn(),
   findRunById: vi.fn(),
@@ -47,7 +48,7 @@ vi.mock('@/database/models/file', async (importOriginal) => {
 
 vi.mock('@/database/models/verifyEvidence', () => ({
   VerifyEvidenceModel: vi.fn(function () {
-    return { create: modelMocks.createEvidence };
+    return { create: modelMocks.createEvidence, createMany: modelMocks.createManyEvidence };
   }),
 }));
 
@@ -78,7 +79,7 @@ describe("verifyRouter with a run's operation token", () => {
   it('files evidence into its own round by operation id', async () => {
     modelMocks.findRunByOperation.mockResolvedValueOnce(ownRun);
     modelMocks.upsertByCheckItem.mockResolvedValueOnce({ id: 'result-1', verifyRunId: 'run-own' });
-    modelMocks.createEvidence.mockResolvedValueOnce({ id: 'evidence-1' });
+    modelMocks.createManyEvidence.mockResolvedValueOnce([{ id: 'evidence-1' }]);
 
     await createOperationCaller().submitCheckEvidence({
       checkItemId: 'item-1',
@@ -89,9 +90,9 @@ describe("verifyRouter with a run's operation token", () => {
     expect(modelMocks.upsertByCheckItem).toHaveBeenCalledWith(
       expect.objectContaining({ checkItemId: 'item-1', verifyRunId: 'run-own' }),
     );
-    expect(modelMocks.createEvidence).toHaveBeenCalledWith(
+    expect(modelMocks.createManyEvidence).toHaveBeenCalledWith([
       expect.objectContaining({ checkResultId: 'result-1', fileId: 'files-1' }),
-    );
+    ]);
   });
 
   it("refuses another operation's round, by operation id or by run id", async () => {
@@ -111,6 +112,21 @@ describe("verifyRouter with a run's operation token", () => {
       }),
     ).rejects.toMatchObject({ code: 'FORBIDDEN' });
 
+    expect(modelMocks.upsertByCheckItem).not.toHaveBeenCalled();
+  });
+
+  /** Regression: a token could dispute a check of another operation owned by the same principal. */
+  it("refuses to dispute another operation's round", async () => {
+    modelMocks.findRunByOperation.mockResolvedValueOnce(otherRun);
+
+    await expect(
+      createOperationCaller().disputeCheck({
+        checkItemId: 'item-1',
+        kind: 'invalid_criterion',
+        operationId: 'op_other',
+        reason: 'Out of scope',
+      }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
     expect(modelMocks.upsertByCheckItem).not.toHaveBeenCalled();
   });
 

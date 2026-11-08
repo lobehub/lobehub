@@ -370,6 +370,8 @@ export interface SearchAgentResult {
   avatar?: string;
   description?: string;
   id: string;
+  /** User-facing display name; `title` is the agent's role */
+  name?: string;
   title: string;
 }
 

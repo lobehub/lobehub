@@ -8,12 +8,15 @@ import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspace
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { useDocumentTransferMenuItem } from '@/business/client/hooks/useDocumentTransferMenuItem';
 import { isDesktop } from '@/const/version';
+import { useFavoriteMenuItem } from '@/features/Favorites';
+import { docsPagePath } from '@/features/ResourceHome/paths';
 import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { usePermission } from '@/hooks/usePermission';
 import { useElectronStore } from '@/store/electron';
 import { pageActions, pageSelectors, usePageStore } from '@/store/page';
+import { isTempPageId } from '@/store/page/projection';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
@@ -37,12 +40,10 @@ interface MenuClickInfo {
  * rename field with it — before anything can be typed, which is why "Rename"
  * appeared to do nothing. Close the handler over the row and stop the event.
  */
-const stopRowClick =
-  (run: () => void) =>
-  (info?: MenuClickInfo) => {
-    info?.domEvent?.stopPropagation();
-    run();
-  };
+const stopRowClick = (run: () => void) => (info?: MenuClickInfo) => {
+  info?.domEvent?.stopPropagation();
+  run();
+};
 
 /**
  * Business builds inject their own transfer entries (Move to a library, …).
@@ -71,6 +72,22 @@ export const useDropdownMenu = ({ pageId, toggleEditing }: ActionProps): (() => 
     transferLabel: t('pageEditor.menu.move', { ns: 'file' }),
   });
   const currentUserId = useUserStore(userProfileSelectors.userId);
+  // Same target as the open page's ⋯ menu (PageEditor/Header/useMenu), so both
+  // entries read and write one favorite. No hotkey: it toggles the open page,
+  // not a row in this list. A row still being created carries a client-minted
+  // id that the server row replaces, so it cannot be favorited until then.
+  const favoriteMenuItem = useFavoriteMenuItem(
+    document && !isTempPageId(pageId)
+      ? {
+          icon: document.metadata?.emoji ?? null,
+          path: `/page/${pageId}`,
+          targetId: pageId,
+          title: document.title || t('pageEditor.titlePlaceholder', { ns: 'file' }),
+          type: 'page',
+        }
+      : undefined,
+    { showHotkey: false },
+  );
 
   const isPrivate = document?.visibility === 'private';
   const isPublic = document?.visibility === 'public';
@@ -165,7 +182,7 @@ export const useDropdownMenu = ({ pageId, toggleEditing }: ActionProps): (() => 
                 key: 'openInNewTab',
                 label: t('pageList.actions.openInNewTab', { ns: 'file' }),
                 onClick: stopRowClick(() => {
-                  const url = buildWorkspaceAwarePath(`/page/${pageId}`, activeWorkspaceSlug);
+                  const url = buildWorkspaceAwarePath(docsPagePath(pageId), activeWorkspaceSlug);
                   addTab(url);
                   navigate(url, { escape: true });
                 }),
@@ -173,6 +190,7 @@ export const useDropdownMenu = ({ pageId, toggleEditing }: ActionProps): (() => 
               { type: 'divider' as const },
             ]
           : []),
+        ...(favoriteMenuItem ? wrapMenuItems([favoriteMenuItem]) : []),
         {
           disabled: !canEditPage,
           icon: <Icon icon={Pencil} />,
@@ -241,6 +259,7 @@ export const useDropdownMenu = ({ pageId, toggleEditing }: ActionProps): (() => 
       addTab,
       navigate,
       transferMenuItems,
+      favoriteMenuItem,
     ],
   );
 };

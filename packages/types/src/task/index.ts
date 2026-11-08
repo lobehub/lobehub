@@ -1,8 +1,11 @@
 import type { BriefArtifacts } from '../brief';
 import type { ChatFileItem } from '../message/ui/chat';
+import type { TaskLabelRef } from './label';
 
 export * from './archive';
 export * from './execution';
+export * from './label';
+export * from './listFilter';
 
 // ── Task type aliases ──
 
@@ -121,11 +124,21 @@ export interface TaskInstructionSynthesis {
 
 // ── Config types ──
 
+/** Stable identity with the label snapshot written to the legacy selection. */
+export interface CheckpointTaskRef {
+  id: string;
+  identifier: string;
+}
+
 export interface CheckpointConfig {
   onAgentRequest?: boolean;
   tasks?: {
+    /** Persisted identifiers for old readers; write boundaries accept TaskRefs. */
     afterIds?: string[];
+    afterTasks?: CheckpointTaskRef[];
+    /** Persisted identifiers for old readers; write boundaries accept TaskRefs. */
     beforeIds?: string[];
+    beforeTasks?: CheckpointTaskRef[];
   };
   topic?: {
     after?: boolean;
@@ -352,6 +365,8 @@ export interface TaskItem {
   id: string;
   identifier: string;
   instruction: string;
+  /** Labels on the task, attached by task list and detail reads. */
+  labels?: TaskLabelRef[];
   lastHeartbeatAt: Date | null;
   maxTopics: number | null;
   name: string | null;
@@ -442,10 +457,12 @@ export interface TaskDetailSubtask {
   assigneeUserId?: string | null;
   automationMode?: TaskAutomationMode | null;
   blockedBy?: string;
+  blockedById?: string;
   children?: TaskDetailSubtask[];
   /** Creator of the subtask; with `visibility`, gates who it can be assigned to. */
   createdByUserId?: string;
   heartbeat?: { interval?: number | null };
+  id?: string;
   identifier: string;
   name?: string | null;
   priority?: number | null;
@@ -615,7 +632,7 @@ export interface TaskDetailData {
   createdAt?: string;
   /** Creator of the task; used by the UI to gate creator-only actions (e.g. make private). */
   createdByUserId?: string | null;
-  dependencies?: Array<{ dependsOn: string; type: string }>;
+  dependencies?: Array<{ dependsOn: string; dependsOnId?: string; type: string }>;
   description?: string | null;
   /** Rich-editor JSON state for the instruction; preserves details markdown drops (image size, etc.). */
   editorData?: unknown;
@@ -636,8 +653,9 @@ export interface TaskDetailData {
   id?: string;
   identifier: string;
   instruction: string;
+  labels?: TaskLabelRef[];
   name?: string | null;
-  parent?: { agentId?: string | null; identifier: string; name: string | null } | null;
+  parent?: { id?: string; agentId?: string | null; identifier: string; name: string | null } | null;
   priority?: number | null;
   schedule?: {
     maxExecutions?: number | null;

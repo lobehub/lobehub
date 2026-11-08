@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { getTestDB } from '../../../core/getTestDB';
 import { agents, channelMembers, channelMessages, channels, users } from '../../../schemas';
 import { ChannelExecutionRepository, ChannelRepository } from '..';
+import { readManifestMessages } from '../manifest';
 import { createChannelFixture, jobsOf, lease } from './testUtils';
 
 const db = await getTestDB();
@@ -14,7 +15,7 @@ const execution = new ChannelExecutionRepository(db);
 beforeEach(fixture.setup);
 afterEach(fixture.cleanup);
 
-const sendInput = { content: 'Hello', requestKey: 'hello', routing: 'jev' as const };
+const sendInput = { content: 'Hello', requestKey: 'hello', routing: 'decision' as const };
 const createAgent = async (workspaceId: string | null = fixture.workspaceId) => {
   const [agent] = await db
     .insert(agents)
@@ -31,7 +32,7 @@ const publish = async (channelId: string, messageId: string) => {
   const [job] = await jobsOf(db, messageId);
   const claim = (await execution.claim(channelId, job.id, lease))!;
   expect(claim).not.toBeNull();
-  await execution.accepted(channelId, job.id, {});
+  await execution.accepted(channelId, job.id);
   await execution.saveDraft(channelId, job.id, 'Answer');
   const replyId = await execution.publish(channelId, job.id);
   await execution.releaseWriter(channelId, job.id);
@@ -39,6 +40,38 @@ const publish = async (channelId: string, messageId: string) => {
 };
 
 describe('direct Channel identity', () => {
+  it('finds the caller’s direct conversation with an Agent only in its own scope', async () => {
+    const agent = await createAgent();
+    const repository = new ChannelRepository(db, fixture.ownerId, fixture.workspaceId);
+    await expect(repository.findDirectAccess(agent.id)).resolves.toBeUndefined();
+
+    const { channel } = await repository.create({ agentId: agent.id, title: 'Direct' });
+    await expect(repository.findDirectAccess(agent.id)).resolves.toMatchObject({
+      channel: { id: channel.id },
+      member: { actorType: 'user', userId: fixture.ownerId },
+    });
+    await expect(
+      new ChannelRepository(db, fixture.ownerId, null).findDirectAccess(agent.id),
+    ).resolves.toBeUndefined();
+  });
+
+  it('lists each Channel with its newest main message and unread count', async () => {
+    const agent = await createAgent();
+    const repository = new ChannelRepository(db, fixture.ownerId, fixture.workspaceId);
+    const { channel } = await repository.create({ agentId: agent.id, title: 'Direct' });
+    expect((await repository.list()).find((item) => item.id === channel.id)).toMatchObject({
+      lastMessage: null,
+      unreadCount: 0,
+    });
+
+    await repository.send(channel.id, { ...sendInput, content: 'First', requestKey: 'first' });
+    await repository.send(channel.id, { ...sendInput, content: 'Second', requestKey: 'second' });
+    expect((await repository.list()).find((item) => item.id === channel.id)).toMatchObject({
+      lastMessage: { content: 'Second' },
+      unreadCount: 2,
+    });
+  });
+
   it.each([null, fixture.workspaceId])(
     'creates a private user/Agent conversation in scope %s',
     async (workspaceId) => {
@@ -110,6 +143,25 @@ describe('direct Channel identity', () => {
     });
     expect(personal.channel.id).not.toBe(first.channel.id);
     expect(personal.channel.workspaceId).toBeNull();
+  });
+
+  it('seats the bound Agent in the environment its caller resolved', async () => {
+    const agent = await createAgent(null);
+    const environment = {
+      deviceId: 'device-1',
+      deviceOwnerId: fixture.ownerId,
+      workingDirectory: '/repo',
+    };
+    const { channel } = await new ChannelRepository(db, fixture.ownerId).create({
+      agentConfig: environment,
+      agentId: agent.id,
+      title: 'Direct',
+    });
+    const [member] = await db
+      .select()
+      .from(channelMembers)
+      .where(and(eq(channelMembers.channelId, channel.id), eq(channelMembers.actorType, 'agent')));
+    expect(member).toMatchObject({ agentId: agent.id, config: environment });
   });
 
   it('keeps a group unbound even when it contains a single Agent', async () => {
@@ -193,8 +245,8 @@ describe('direct Channel identity', () => {
       mentions: [nextAgent.id],
     });
     const [nextJob] = await jobsOf(db, next.id);
-    await execution.claim(group.channel.id, nextJob.id, lease);
-    expect(await execution.input(group.channel.id, nextJob.id)).toEqual(
+    const nextClaim = (await execution.claim(group.channel.id, nextJob.id, lease))!;
+    expect(await readManifestMessages(db, group.channel.id, nextClaim.job.manifest!)).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           id: replyId,
@@ -230,7 +282,7 @@ describe('direct message sender references', () => {
       .update(channelMembers)
       .set({ agentId: replacement.id })
       .where(eq(channelMembers.id, member.id));
-    await execution.accepted(team.channel.id, job.id, {});
+    await execution.accepted(team.channel.id, job.id);
     await execution.saveDraft(team.channel.id, job.id, 'Original answer');
     const replyId = await execution.publish(team.channel.id, job.id);
     const [reply] = await db.select().from(channelMessages).where(eq(channelMessages.id, replyId));
@@ -266,7 +318,7 @@ describe('direct message sender references', () => {
       else
         await db
           .update(channelMembers)
-          .set({ active: false })
+          .set({ status: 'left' })
           .where(
             and(
               eq(channelMembers.channelId, team.channel.id),

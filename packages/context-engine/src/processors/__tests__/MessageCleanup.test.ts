@@ -18,18 +18,6 @@ describe('MessageCleanupProcessor', () => {
     },
   });
 
-  describe('constructor', () => {
-    it('should initialize with default options', () => {
-      const processor = new MessageCleanupProcessor();
-      expect(processor.name).toBe('MessageCleanupProcessor');
-    });
-
-    it('should initialize with custom options', () => {
-      const processor = new MessageCleanupProcessor({ debug: true });
-      expect(processor.name).toBe('MessageCleanupProcessor');
-    });
-  });
-
   describe('process', () => {
     it('should clean system messages', async () => {
       const processor = new MessageCleanupProcessor();

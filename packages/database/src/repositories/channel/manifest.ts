@@ -4,7 +4,7 @@ import {
   CHANNEL_DELETED_AGENT_NAME,
   CHANNEL_DELETED_USER_NAME,
 } from '@lobechat/types';
-import { and, asc, eq, gt, isNull, lte, notExists, or } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gt, isNull, lt, lte, ne, or } from 'drizzle-orm';
 
 import type {
   ChannelJobItem,
@@ -12,22 +12,20 @@ import type {
   ChannelMessageItem,
   ChannelThreadItem,
 } from '../../schemas';
-import { agents, channelJobs, channelMessages, users } from '../../schemas';
+import { agents, channelMessages, users } from '../../schemas';
 import type { LobeChatDatabase, Transaction } from '../../type';
 import { fileIdsByMessage } from './attachments';
 
-/** Freeze the new public input window; a fresh topic receives the full branch. */
+/** Freeze the public history cutoff and branch for this request. */
 export const buildManifest = (params: {
-  afterSequence: number;
   job: ChannelJobItem;
   member: ChannelMemberItem;
   request: ChannelMessageItem;
   thread: ChannelThreadItem | null;
 }): ChannelInputManifest => {
-  const { afterSequence, job, member, request, thread } = params;
+  const { job, member, request, thread } = params;
 
   return {
-    afterSequence,
     // Jobs inherit the request's branch, so the request itself always sorts last.
     cutoffSequence: request.sequence,
     requestMessageId: request.id,
@@ -49,11 +47,35 @@ const manifestScope = (channelId: string, manifest: ChannelInputManifest) => {
   return and(
     eq(channelMessages.channelId, channelId),
     lte(channelMessages.sequence, manifest.cutoffSequence),
-    gt(channelMessages.sequence, manifest.afterSequence),
     threadId
       ? or(eq(channelMessages.threadId, threadId), mainPrefix)
       : isNull(channelMessages.threadId),
   );
+};
+
+/**
+ * How many messages of a manifest's branch fall strictly between two sequences, without one id:
+ * what a run's recent context leaves out.
+ */
+export const countManifestMessages = async (
+  db: LobeChatDatabase | Transaction,
+  channelId: string,
+  manifest: ChannelInputManifest,
+  range: { afterSequence: number; beforeSequence: number; excludeId?: string | null },
+): Promise<number> => {
+  const [row] = await db
+    .select({ value: count() })
+    .from(channelMessages)
+    .where(
+      and(
+        manifestScope(channelId, manifest),
+        gt(channelMessages.sequence, range.afterSequence),
+        lt(channelMessages.sequence, range.beforeSequence),
+        range.excludeId ? ne(channelMessages.id, range.excludeId) : undefined,
+      ),
+    );
+
+  return row?.value ?? 0;
 };
 
 /**
@@ -66,27 +88,16 @@ export const readManifestMessages = async (
   db: LobeChatDatabase | Transaction,
   channelId: string,
   manifest: ChannelInputManifest,
-  topicId: string | null,
+  options: { beforeSequence?: number; limit?: number; messageId?: string } = {},
 ): Promise<ChannelContextMessage[]> => {
   const scope = and(
     manifestScope(channelId, manifest),
-    // A continued topic already contains its own answers. They may have been published
-    // after the next request was queued, so the input cursor alone cannot exclude them.
-    manifest.afterSequence > 0 && topicId
-      ? notExists(
-          db
-            .select({ id: channelJobs.id })
-            .from(channelJobs)
-            .where(
-              and(
-                eq(channelJobs.topicId, topicId),
-                eq(channelJobs.publishedMessageId, channelMessages.id),
-              ),
-            ),
-        )
-      : undefined,
+    options.beforeSequence === undefined
+      ? undefined
+      : lt(channelMessages.sequence, options.beforeSequence),
+    options.messageId ? eq(channelMessages.id, options.messageId) : undefined,
   );
-  const visible = await db
+  const query = db
     .select({
       agentId: channelMessages.agentId,
       agentName: agents.name,
@@ -98,16 +109,20 @@ export const readManifestMessages = async (
       content: channelMessages.content,
       id: channelMessages.id,
       sequence: channelMessages.sequence,
+      replyToId: channelMessages.replyToId,
       threadId: channelMessages.threadId,
     })
     .from(channelMessages)
     .leftJoin(users, eq(users.id, channelMessages.userId))
     .leftJoin(agents, eq(agents.id, channelMessages.agentId))
     .where(scope)
-    .orderBy(asc(channelMessages.sequence));
+    .orderBy(options.limit ? desc(channelMessages.sequence) : asc(channelMessages.sequence))
+    .$dynamic();
+  const visible = options.limit ? await query.limit(options.limit) : await query;
+  if (options.limit) visible.reverse();
   const attachments = await fileIdsByMessage(
     db,
-    db.select({ id: channelMessages.id }).from(channelMessages).where(scope),
+    visible.map((message) => message.id),
   );
 
   return visible.map((message) => {
@@ -126,6 +141,7 @@ export const readManifestMessages = async (
       ...(attachments.has(message.id) && { fileIds: attachments.get(message.id) }),
       id: message.id,
       sequence: message.sequence,
+      replyToId: message.replyToId,
       threadId: message.threadId,
     };
   });

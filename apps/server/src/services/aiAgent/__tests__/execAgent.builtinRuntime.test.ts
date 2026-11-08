@@ -1,6 +1,7 @@
 import { GeneralChatAgent, GraphAgent } from '@lobechat/agent-runtime';
 import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
 import { SELF_FEEDBACK_INTENT_IDENTIFIER } from '@lobechat/builtin-tool-self-iteration';
+import { promptAssistantName } from '@lobechat/const';
 import { RequestTrigger } from '@lobechat/types';
 import type * as ModelBankModule from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -11,6 +12,21 @@ import { enqueueAgentSignalSourceEvent } from '@/server/services/agentSignal';
 
 import { AiAgentService } from '../index';
 
+const runtimeAgentConfig = (chatConfig: Record<string, unknown>, id: string, slug: string) => ({
+  chatConfig,
+  id,
+  model: 'gpt-4',
+  plugins: [],
+  provider: 'openai',
+  slug,
+  systemRole: '',
+});
+
+const inboxRunInput = () => ({
+  agentId: 'agent-inbox',
+  prompt: 'Hello',
+});
+
 const {
   mockCreateOperation,
   mockGetAgentConfig,
@@ -19,6 +35,7 @@ const {
   mockGetModelMetadata,
   mockGetUserPreference,
   mockIsAgentSignalEnabledForUser,
+  mockIsSandboxAvailableForUser,
   mockMessageCreate,
   mockMessageQuery,
   mockResolveTask,
@@ -32,6 +49,7 @@ const {
   mockGetModelMetadata: vi.fn(),
   mockGetUserPreference: vi.fn(),
   mockIsAgentSignalEnabledForUser: vi.fn(),
+  mockIsSandboxAvailableForUser: vi.fn(),
   mockMessageCreate: vi.fn(),
   mockMessageQuery: vi.fn(),
   mockResolveTask: vi.fn(),
@@ -40,6 +58,10 @@ const {
     MULTIMODAL_UNDERSTANDING_MODEL: undefined as string | undefined,
     MULTIMODAL_UNDERSTANDING_PROVIDER: undefined as string | undefined,
   },
+}));
+
+vi.mock('@/server/services/sandbox/availability', () => ({
+  isSandboxAvailableForUser: mockIsSandboxAvailableForUser,
 }));
 
 vi.mock('@/envs/tools', () => ({
@@ -281,6 +303,7 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
     mockMessageCreate.mockResolvedValue({ id: 'msg-1' });
     mockMessageQuery.mockResolvedValue([]);
     mockIsAgentSignalEnabledForUser.mockResolvedValue(true);
+    mockIsSandboxAvailableForUser.mockResolvedValue(true);
     mockResolveTask.mockResolvedValue(null);
     mockToolState.enabledToolIds = [];
     mockGetInfoForAIGeneration.mockResolvedValue({
@@ -432,15 +455,14 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
       systemRole: '', // empty in DB
     });
 
-    await service.execAgent({
-      agentId: 'agent-inbox',
-      prompt: 'Hello',
-    });
+    await service.execAgent(inboxRunInput());
 
     // Verify createOperation was called with agentConfig containing the runtime systemRole
     expect(mockCreateOperation).toHaveBeenCalledTimes(1);
     const callArgs = mockCreateOperation.mock.calls[0][0];
-    expect(callArgs.agentConfig.systemRole).toContain('You are Lobe');
+    // Derived, not a literal: the assistant's name comes from the branding slot,
+    // so a hardcoded 'Lobe' here only passes on the upstream default.
+    expect(callArgs.agentConfig.systemRole).toContain(`You are ${promptAssistantName('Lobe')}`);
     // Model identity is injected by ModelInfoProvider now, not the `{{model}}`
     // template placeholder; `{{date}}` still proves the runtime template merged.
     expect(callArgs.agentConfig.systemRole).toContain('{{date}}');
@@ -486,10 +508,7 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
       systemRole: customSystemRole, // user has customized
     });
 
-    await service.execAgent({
-      agentId: 'agent-inbox',
-      prompt: 'Hello',
-    });
+    await service.execAgent(inboxRunInput());
 
     const callArgs = mockCreateOperation.mock.calls[0][0];
     expect(callArgs.agentConfig.systemRole).toBe(customSystemRole);
@@ -569,20 +588,9 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
   });
 
   it('should inject self-feedback intent tool for Lobe AI when user gate is enabled', async () => {
-    mockGetAgentConfig.mockResolvedValue({
-      chatConfig: {},
-      id: 'agent-inbox',
-      model: 'gpt-4',
-      plugins: [],
-      provider: 'openai',
-      slug: 'inbox',
-      systemRole: '',
-    });
+    mockGetAgentConfig.mockResolvedValue(runtimeAgentConfig({}, 'agent-inbox', 'inbox'));
 
-    await service.execAgent({
-      agentId: 'agent-inbox',
-      prompt: 'Hello',
-    });
+    await service.execAgent(inboxRunInput());
 
     const callArgs = mockCreateOperation.mock.calls[0][0];
     expect(callArgs.toolSet.enabledToolIds).toContain(SELF_FEEDBACK_INTENT_IDENTIFIER);
@@ -596,15 +604,7 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
    */
   it('decides the self-feedback intent tool from the preference the run already loaded', async () => {
     mockGetUserPreference.mockResolvedValue({ lab: { enableSelfLearning: true } });
-    mockGetAgentConfig.mockResolvedValue({
-      chatConfig: {},
-      id: 'agent-inbox',
-      model: 'gpt-4',
-      plugins: [],
-      provider: 'openai',
-      slug: 'inbox',
-      systemRole: '',
-    });
+    mockGetAgentConfig.mockResolvedValue(runtimeAgentConfig({}, 'agent-inbox', 'inbox'));
 
     await service.execAgent({ agentId: 'agent-inbox', prompt: 'Hello' });
 
@@ -638,15 +638,9 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
 
   it('should not inject self-feedback intent tool for any agent when Labs Self-evolving is off', async () => {
     mockIsAgentSignalEnabledForUser.mockResolvedValue(false);
-    mockGetAgentConfig.mockResolvedValue({
-      chatConfig: { selfIteration: { enabled: true } },
-      id: 'agent-custom',
-      model: 'gpt-4',
-      plugins: [],
-      provider: 'openai',
-      slug: 'custom-agent',
-      systemRole: '',
-    });
+    mockGetAgentConfig.mockResolvedValue(
+      runtimeAgentConfig({ selfIteration: { enabled: true } }, 'agent-custom', 'custom-agent'),
+    );
 
     await service.execAgent({ agentId: 'agent-custom', prompt: 'Hello' });
 
@@ -668,10 +662,7 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
       systemRole: '',
     });
 
-    await service.execAgent({
-      agentId: 'agent-inbox',
-      prompt: 'Hello',
-    });
+    await service.execAgent(inboxRunInput());
 
     const callArgs = mockCreateOperation.mock.calls[0][0];
     expect(callArgs.toolSet.enabledToolIds).toContain(SELF_FEEDBACK_INTENT_IDENTIFIER);
@@ -689,10 +680,7 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
       systemRole: '',
     });
 
-    await service.execAgent({
-      agentId: 'agent-inbox',
-      prompt: 'Hello',
-    });
+    await service.execAgent(inboxRunInput());
 
     const callArgs = mockCreateOperation.mock.calls[0][0];
     expect(callArgs.toolSet.enabledToolIds).toContain(SELF_FEEDBACK_INTENT_IDENTIFIER);
@@ -700,15 +688,9 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
   });
 
   it('should inject self-feedback intent tool for custom agents with agent self-iteration', async () => {
-    mockGetAgentConfig.mockResolvedValue({
-      chatConfig: { selfIteration: { enabled: true } },
-      id: 'agent-custom',
-      model: 'gpt-4',
-      plugins: [],
-      provider: 'openai',
-      slug: 'custom-agent',
-      systemRole: '',
-    });
+    mockGetAgentConfig.mockResolvedValue(
+      runtimeAgentConfig({ selfIteration: { enabled: true } }, 'agent-custom', 'custom-agent'),
+    );
 
     await service.execAgent({
       agentId: 'agent-custom',
@@ -792,6 +774,27 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
 
       expect(calls).toHaveLength(1);
     });
+  });
+
+  it('should leave the page agent out in page scope when no sandbox is available', async () => {
+    mockIsSandboxAvailableForUser.mockResolvedValue(false);
+    mockGetAgentConfig.mockResolvedValue({
+      chatConfig: {},
+      id: 'agent-custom',
+      model: 'gpt-4',
+      plugins: ['lobe-agent-documents'],
+      provider: 'openai',
+      systemRole: 'Custom role.',
+    });
+
+    await service.execAgent({
+      agentId: 'agent-custom',
+      appContext: { documentId: 'docs-1', scope: 'page', topicId: 'topic-1' },
+      prompt: 'Rewrite this page',
+    });
+
+    const callArgs = mockCreateOperation.mock.calls[0][0];
+    expect(callArgs.agentConfig.plugins).toEqual(['lobe-agent-documents']);
   });
 
   it('should inject page-agent runtime for regular agents in page scope', async () => {

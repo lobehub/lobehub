@@ -48,11 +48,17 @@ vi.mock('@/store/global', () => ({
     }),
 }));
 
+const deviceRows = vi.hoisted(() => [
+  { deviceId: 'device-2', friendlyName: 'Studio Linux', scope: 'personal' },
+  // This desktop (`device-1`) as a workspace device: same machine, own id.
+  { deviceId: 'device-1-ws', hostname: 'mocha-laptop', scope: 'workspace' },
+  { deviceId: 'device-1', hostname: 'mocha-laptop', scope: 'personal' },
+]);
 vi.mock('@/store/device', () => ({
   deviceSelectors: { deviceList: (s: { devices: unknown[] }) => s.devices },
   useDeviceStore: (selector: (state: object) => unknown) =>
     selector({
-      devices: [{ deviceId: 'device-2', friendlyName: 'Studio Linux' }],
+      devices: deviceRows,
       useFetchDevices: () => ({}),
     }),
 }));
@@ -88,11 +94,6 @@ vi.mock('@/helpers/agentWorkingDirectory', () => ({
 const openBindDirectoryModalMock = vi.hoisted(() => vi.fn());
 vi.mock('@/features/Projects/WorkingDirectories/BindDirectoryModal', () => ({
   openBindDirectoryModal: openBindDirectoryModalMock,
-}));
-
-const openProjectTopicModalMock = vi.hoisted(() => vi.fn());
-vi.mock('@/features/Projects/WorkingDirectories/StartDirectoryModal', () => ({
-  openProjectTopicModal: openProjectTopicModalMock,
 }));
 
 vi.mock('react-router', () => ({
@@ -327,6 +328,65 @@ describe('Project topic group item', () => {
     expect(await screen.findByText('topics.subGroup.byTime')).toBeTruthy();
     expect(screen.queryByText('topics.subGroup.byDevice')).toBeNull();
     expect(document.body.textContent).not.toContain('groupTitle.byDevice.unknown');
+  });
+
+  it("sections a folder by device once it merges this machine's two device identities", () => {
+    subGroupModeMock.value = 'byDevice';
+    const folder = (id: string, boundDeviceId: string) => ({
+      id,
+      metadata: { boundDeviceId, workingDirectory: '/tmp/x' },
+      title: id,
+    });
+    render(
+      <AccordionRoot defaultValue={['project:/tmp/x']}>
+        <GroupItem
+          expanded
+          group={{
+            children: [
+              folder('Desktop topic', 'device-1'),
+              folder('Shared topic', 'device-1-ws'),
+            ] as any,
+            id: 'project:/tmp/x',
+            title: 'x',
+          }}
+        />
+      </AccordionRoot>,
+    );
+
+    const text = document.body.textContent ?? '';
+    // Both sections are "mocha-laptop"; the category tells them apart.
+    expect(text.match(/mocha-laptop/g)).toHaveLength(2);
+    expect(text.indexOf('heteroAgent.executionTarget.local')).toBeLessThan(
+      text.indexOf('Desktop topic'),
+    );
+    expect(text.indexOf('Desktop topic')).toBeLessThan(
+      text.indexOf('heteroAgent.executionTarget.workspaceGroup'),
+    );
+    expect(text.indexOf('heteroAgent.executionTarget.workspaceGroup')).toBeLessThan(
+      text.indexOf('Shared topic'),
+    );
+  });
+
+  it('names the device of a folder that another machine also has', () => {
+    render(
+      <AccordionRoot>
+        <GroupItem
+          expanded
+          group={{
+            children: [
+              { id: 't1', metadata: { boundDeviceId: 'device-2', workingDirectory: '/tmp/x' } },
+            ] as any,
+            deviceId: 'device-2',
+            id: 'project:device-2:/tmp/x',
+            title: 'x',
+          }}
+        />
+      </AccordionRoot>,
+    );
+
+    expect(document.body.textContent).toContain(
+      'Studio Linux · heteroAgent.executionTarget.personalGroup',
+    );
   });
 
   it('archives only this group\'s merged-PR topics from the group "more" menu', async () => {
@@ -777,7 +837,6 @@ it('opens the plain new-topic composer when a merged project group spans multipl
   // composer control bar, so no modal may pop and no directory default may be
   // committed to the agent for a multi-machine merged group.
   directoryRows.length = 0;
-  openProjectTopicModalMock.mockClear();
   commitAgentDefaultMock.mockClear();
   switchTopicMock.mockClear();
   setPendingNewTopicDirectoryMock.mockClear();
@@ -838,7 +897,6 @@ it('opens the plain new-topic composer when a merged project group spans multipl
     </AccordionRoot>,
   );
   fireEvent.click(screen.getByRole('button', { name: 'directories.start' }));
-  expect(openProjectTopicModalMock).not.toHaveBeenCalled();
   expect(commitAgentDefaultMock).not.toHaveBeenCalled();
   expect(switchTopicMock).toHaveBeenCalledWith(null, { skipRefreshMessage: true });
   expect(routerPushMock).toHaveBeenCalledWith('/agent/agent-1');
@@ -853,7 +911,6 @@ it('opens the plain new-topic composer when a merged project group spans multipl
 
 it('keeps the legacy directory start when a project group has a single directory', async () => {
   directoryRows.length = 0;
-  openProjectTopicModalMock.mockClear();
   commitAgentDefaultMock.mockClear();
   commitAgentDefaultMock.mockResolvedValue(undefined);
   startTopicMock.mockClear();
@@ -892,7 +949,6 @@ it('keeps the legacy directory start when a project group has a single directory
   await expect.poll(() => commitAgentDefaultMock.mock.calls.length).toBe(1);
   expect(commitAgentDefaultMock).toHaveBeenCalledWith('/repo');
   expect(startTopicMock).not.toHaveBeenCalled();
-  expect(openProjectTopicModalMock).not.toHaveBeenCalled();
   expect(setPendingNewTopicDirectoryMock).toHaveBeenCalledWith({
     agentId: 'agent-1',
     projectWorkingDirectoryId: 'binding-single',

@@ -3,7 +3,7 @@ import type { RegisterCanvasWorkParams } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { agents, topics, workspaces } from '../../../schemas';
+import { agents, topics, works, workspaces } from '../../../schemas';
 import { WorkModel } from '..';
 import {
   agentId,
@@ -161,6 +161,34 @@ describe('WorkModel · canvas', () => {
     expect(await model.findCanvas('cvs_missing')).toBeNull();
   });
 
+  it('rejects a stale snapshot without changing the current canvas or its history', async () => {
+    const model = new WorkModel(serverDB, userId);
+    const first = await model.registerCanvas(params({ expectedVersion: 0 }));
+
+    await expect(
+      model.registerCanvas(params({ expectedVersion: 0, toolCallId: 'stale', title: 'Stale' })),
+    ).rejects.toThrow('Canvas version conflict');
+    expect((await model.findCanvas('cvs_cost'))?.work.title).toBe(params().title);
+    expect(await model.listVersions(first.id)).toHaveLength(1);
+  });
+
+  it('recovers an operation version even after a later version became current', async () => {
+    const model = new WorkModel(serverDB, userId);
+    await model.registerCanvas(params({ expectedVersion: 0 }));
+    await model.registerCanvas(params({ expectedVersion: 1, toolCallId: 'second' }));
+
+    const saved = await model.findCanvasVersionByToolCall('cvs_cost', 'call-canvas-1');
+    expect(saved?.version).toBe(1);
+    expect(
+      await new WorkModel(serverDB, userId2).findCanvasVersionByToolCall(
+        'cvs_cost',
+        'call-canvas-1',
+      ),
+    ).toBeNull();
+    await model.registerCanvas(params({ expectedVersion: 0 }));
+    expect((await model.findCanvas('cvs_cost'))?.version.version).toBe(2);
+  });
+
   it('reads a specific version of a canvas', async () => {
     const model = new WorkModel(serverDB, userId);
     const work = await model.registerCanvas(params());
@@ -226,6 +254,25 @@ describe('WorkModel · canvas', () => {
     expect((await model.findCanvas('cvs_cost'))?.work.url).toBe('https://cost.lobehub.sites');
   });
 
+  it('maps published deployment ids back to the canvases the caller can see', async () => {
+    const model = new WorkModel(serverDB, userId);
+    await model.registerCanvas(params());
+    await model.registerCanvas(params({ canvasId: 'cvs_draft', toolCallId: 'call-canvas-2' }));
+    await model.recordCanvasPublish('cvs_cost', {
+      deploymentId: 'dep_1',
+      publishedVersion: 1,
+      url: 'https://cost.lobehub.sites',
+    });
+
+    expect(await model.findCanvasIdsByDeploymentIds(['dep_1', 'dep_unknown'])).toEqual({
+      dep_1: 'cvs_cost',
+    });
+    expect(await model.findCanvasIdsByDeploymentIds([])).toEqual({});
+    expect(await new WorkModel(serverDB, userId2).findCanvasIdsByDeploymentIds(['dep_1'])).toEqual(
+      {},
+    );
+  });
+
   it('keeps the public link of a published canvas when a newer version is registered', async () => {
     const model = new WorkModel(serverDB, userId);
     await model.registerCanvas(params());
@@ -243,6 +290,48 @@ describe('WorkModel · canvas', () => {
       metadata: { canvasPublish: { deploymentId: 'dep_1', publishedVersion: 1 } },
       url: 'https://cost.lobehub.sites',
     });
+  });
+
+  it('resolves the canvas id behind a work id, owner only', async () => {
+    const model = new WorkModel(serverDB, userId);
+    const work = await model.registerCanvas(params());
+
+    expect(await model.findCanvasIdByWorkId(work.id)).toBe('cvs_cost');
+    expect(await new WorkModel(serverDB, userId2).findCanvasIdByWorkId(work.id)).toBeNull();
+    expect(await model.findCanvasIdByWorkId('wrk_missing')).toBeNull();
+  });
+
+  it('ignores a work of another type when resolving a canvas id', async () => {
+    const model = new WorkModel(serverDB, userId);
+    await serverDB.insert(works).values({
+      id: 'wrk_task_shaped',
+      resourceId: 'tsk_shaped',
+      resourceType: 'task',
+      toolIdentifier: 'lobe-task',
+      toolName: 'createTask',
+      type: 'task',
+      userId,
+      visibility: 'private',
+    });
+
+    expect(await model.findCanvasIdByWorkId('wrk_task_shaped')).toBeNull();
+  });
+
+  it('skips canvas works that captured no resource id when mapping deployments', async () => {
+    const model = new WorkModel(serverDB, userId);
+    await serverDB.insert(works).values({
+      id: 'wrk_canvas_orphan',
+      metadata: { canvasPublish: { deploymentId: 'dep_orphan', publishedVersion: 1 } },
+      resourceId: null,
+      resourceType: 'canvas',
+      toolIdentifier: 'lobe-canvas',
+      toolName: 'createCanvas',
+      type: 'canvas',
+      userId,
+      visibility: 'private',
+    });
+
+    expect(await model.findCanvasIdsByDeploymentIds(['dep_orphan'])).toEqual({});
   });
 
   it('only surfaces canvas works to clients that opted into newer work types', async () => {

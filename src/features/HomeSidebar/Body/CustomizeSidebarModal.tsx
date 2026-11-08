@@ -20,15 +20,19 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { createStaticStyles, cssVar, cx, Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import {
   ActionIcon,
   Button,
   createModal,
+  Flexbox,
+  Icon,
   type ModalInstance,
   Text,
+  Tooltip,
   useModalContext,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { t } from 'i18next';
 import { ArrowDownToLine, Eye, EyeOff, GripVertical, PinIcon, RotateCcw } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
@@ -68,8 +72,9 @@ const ALL_SIDEBAR_ITEMS: SidebarItemConfig[] = [
   { id: 'tasks', labelKey: 'tab.tasks', routeId: 'tasks' },
   { id: 'goals', labelKey: 'tab.goals', routeId: 'goals' },
   { id: 'dashboard', labelKey: 'tab.dashboard', routeId: 'dashboard' },
+  { id: 'favorites', labelKey: 'favorite.section' },
   { id: 'recents', labelKey: 'recents' },
-  { id: 'project', labelKey: 'project:sidebar.title' },
+  { id: 'project', labelKey: 'tab.projects', routeId: 'project' },
   { id: 'private', labelKey: 'navPanel.privateAgents' },
   { alwaysVisible: true, id: 'agent', labelKey: 'navPanel.agent' },
   { id: 'image', labelKey: 'tab.generation', routeId: 'image' },
@@ -132,46 +137,45 @@ const mergeAvailableSidebarItems = (
 // Styles
 // ---------------------------------------------------------------------------
 
-const styles = createStaticStyles(({ css }) => ({
-  accordionGroup: css`
-    margin-inline: -5px;
-    padding: 4px;
-    border: 1px dashed ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadius};
-  `,
-  item: css`
-    height: 40px;
-    padding-inline: 8px;
-    border-radius: ${cssVar.borderRadius};
-    transition: background 0.2s ease-in-out;
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  itemDragging: css`
-    opacity: 0;
-  `,
-  overlay: css`
-    height: 40px;
-    padding-inline: 8px;
-    border-radius: ${cssVar.borderRadius};
-
-    background: ${cssVar.colorBgElevated};
-    box-shadow: ${cssVar.boxShadowSecondary};
-  `,
-  spacerLine: css`
-    flex: 1;
-    block-size: 1px;
-    background: ${cssVar.colorBorderSecondary};
-  `,
-  footer: css`
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px;
-    padding-block-start: 16px;
-  `,
-}));
+const styles = stylex.create({
+  accordionGroup: {
+    marginInline: '-5px',
+    padding: '4px',
+    borderWidth: '1px',
+    borderStyle: 'dashed',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadius,
+  },
+  item: {
+    height: '40px',
+    paddingInline: '8px',
+    borderRadius: cssVar.borderRadius,
+    transition: 'background 0.2s ease-in-out',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  itemDragging: { opacity: 0 },
+  overlay: {
+    height: '40px',
+    paddingInline: '8px',
+    borderRadius: cssVar.borderRadius,
+    backgroundColor: cssVar.colorBgElevated,
+    backgroundImage: 'none',
+    boxShadow: cssVar.boxShadowSecondary,
+  },
+  spacerLine: {
+    flex: '1',
+    blockSize: '1px',
+    backgroundColor: cssVar.colorBorderSecondary,
+    backgroundImage: 'none',
+  },
+  footer: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+    gap: '8px',
+    paddingBlockStart: '16px',
+  },
+});
 
 // ---------------------------------------------------------------------------
 // SortableItem
@@ -208,10 +212,14 @@ const SortableItem = memo<{
     <Flexbox
       horizontal
       align={'center'}
-      className={isDragging ? cx(styles.item, styles.itemDragging) : styles.item}
       gap={4}
       justify={'space-between'}
       ref={setNodeRef}
+      className={
+        isDragging
+          ? stylex.props(styles.item, styles.itemDragging).className
+          : stylex.props(styles.item).className
+      }
       style={{
         opacity: isHidden && !isDragging ? 0.5 : undefined,
         transform: CSS.Translate.toString(transform),
@@ -264,9 +272,13 @@ const SpacerSortableItem = memo(() => {
     <Flexbox
       horizontal
       align={'center'}
-      className={isDragging ? cx(styles.item, styles.itemDragging) : styles.item}
       gap={8}
       ref={setNodeRef}
+      className={
+        isDragging
+          ? stylex.props(styles.item, styles.itemDragging).className
+          : stylex.props(styles.item).className
+      }
       style={{
         transform: CSS.Translate.toString(transform),
         transition,
@@ -281,11 +293,11 @@ const SpacerSortableItem = memo(() => {
         <Icon icon={GripVertical} size={14} style={{ color: cssVar.colorTextQuaternary }} />
       </Flexbox>
       <Icon icon={ArrowDownToLine} size={14} style={{ color: cssVar.colorTextQuaternary }} />
-      <div className={styles.spacerLine} />
+      <div {...stylex.props(styles.spacerLine)} />
       <Text style={{ fontSize: 12 }} type={'secondary'}>
         {t('navPanel.bottomDivider' as any)}
       </Text>
-      <div className={styles.spacerLine} />
+      <div {...stylex.props(styles.spacerLine)} />
     </Flexbox>
   );
 });
@@ -294,13 +306,13 @@ const BoundSpacerItem = memo(() => {
   const { t } = useTranslation('common');
 
   return (
-    <Flexbox horizontal align={'center'} className={styles.item} gap={8}>
+    <Flexbox horizontal align={'center'} className={stylex.props(styles.item).className} gap={8}>
       <Icon icon={ArrowDownToLine} size={14} style={{ color: cssVar.colorTextQuaternary }} />
-      <div className={styles.spacerLine} />
+      <div {...stylex.props(styles.spacerLine)} />
       <Text style={{ fontSize: 12 }} type={'secondary'}>
         {t('navPanel.bottomDivider' as any)}
       </Text>
-      <div className={styles.spacerLine} />
+      <div {...stylex.props(styles.spacerLine)} />
     </Flexbox>
   );
 });
@@ -316,7 +328,7 @@ const AccordionGroup = memo<{ children: React.ReactNode }>(({ children }) => {
 
   return (
     <div
-      className={styles.accordionGroup}
+      className={stylex.props(styles.accordionGroup).className}
       ref={setNodeRef}
       style={{
         transform: CSS.Translate.toString(transform),
@@ -340,7 +352,12 @@ const OverlayItem = memo<{ id: string }>(({ id }) => {
   // Accordion group overlay: render a compact representation
   if (id === ACCORDION_GROUP_ID) {
     return (
-      <Flexbox horizontal align={'center'} className={styles.overlay} gap={8}>
+      <Flexbox
+        horizontal
+        align={'center'}
+        className={stylex.props(styles.overlay).className}
+        gap={8}
+      >
         <Icon icon={GripVertical} size={14} style={{ color: cssVar.colorTextQuaternary }} />
         <Text>{t(agentLabelKey as any)}</Text>
         <Text type={'secondary'}>+ {t('recents' as any)}</Text>
@@ -350,7 +367,12 @@ const OverlayItem = memo<{ id: string }>(({ id }) => {
 
   if (isSpacer(id)) {
     return (
-      <Flexbox horizontal align={'center'} className={styles.overlay} gap={8}>
+      <Flexbox
+        horizontal
+        align={'center'}
+        className={stylex.props(styles.overlay).className}
+        gap={8}
+      >
         <Icon icon={GripVertical} size={14} style={{ color: cssVar.colorTextQuaternary }} />
         <Icon icon={ArrowDownToLine} size={14} style={{ color: cssVar.colorTextQuaternary }} />
         <Text style={{ fontSize: 12 }} type={'secondary'}>
@@ -366,7 +388,7 @@ const OverlayItem = memo<{ id: string }>(({ id }) => {
   const labelKey = item.id === 'agent' ? agentLabelKey : item.labelKey;
 
   return (
-    <Flexbox horizontal align={'center'} className={styles.overlay} gap={8}>
+    <Flexbox horizontal align={'center'} className={stylex.props(styles.overlay).className} gap={8}>
       <Icon icon={GripVertical} size={14} style={{ color: cssVar.colorTextQuaternary }} />
       {route?.icon && <Icon icon={route.icon} size={18} />}
       <Text>{t(labelKey as any)}</Text>
@@ -583,7 +605,7 @@ const CustomizeSidebarContent = memo(() => {
           document.body,
         )}
       </DndContext>
-      <div className={styles.footer}>
+      <div {...stylex.props(styles.footer)}>
         <Button
           block
           htmlType="button"

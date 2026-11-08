@@ -3,6 +3,10 @@
 import type { IEditor } from '@lobehub/editor';
 import type { EditorState as LobehubEditorState } from '@lobehub/editor/react';
 
+import type { SaveStatus } from '@/types/saveState';
+
+import type { DocumentCharLimitRefusal } from './charLimit';
+
 /**
  * Document source type - determines which service to use for persistence
  */
@@ -19,10 +23,27 @@ export type DocumentContentFormat = 'html' | 'markdown' | 'skillMarkdown';
  */
 export interface EditorContentState {
   /**
+   * Agent commands editing the stored page right now. Without a collaboration
+   * room the page is read-only meanwhile, so an edit typed in between can't be
+   * overwritten by, or overwrite, the agent's write.
+   */
+  agentEditing?: number;
+  /**
    * Whether auto-save is enabled for this document
    * Defaults to true. Set to false if the consumer handles saving themselves.
    */
   autoSave?: boolean;
+  /**
+   * Set when the last save was refused for exceeding the plan's per-document
+   * character limit. The body stays dirty and unsaved; cleared by the next
+   * successful save.
+   */
+  charLimitError?: DocumentCharLimitRefusal;
+  /**
+   * The body syncs through a live collaboration room, which persists it; local
+   * saves only carry metadata.
+   */
+  collab?: boolean;
   /**
    * Document content (markdown)
    */
@@ -31,11 +52,11 @@ export interface EditorContentState {
    * Content format used by the editor persistence pipeline.
    */
   contentFormat?: DocumentContentFormat;
+
   /**
    * Editor JSON data (BlockNote format)
    */
   editorData: any;
-
   /**
    * Whether there are unsaved changes
    */
@@ -74,7 +95,7 @@ export interface EditorContentState {
   /**
    * Current save status
    */
-  saveStatus: 'idle' | 'saving' | 'saved';
+  saveStatus: SaveStatus;
   /**
    * YAML frontmatter for SKILL.md documents. It is kept outside the rich Markdown editor because
    * the editor parses the closing `---` as a Setext heading underline and renders metadata as a giant heading.

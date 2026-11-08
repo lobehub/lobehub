@@ -200,4 +200,28 @@ describe('site review access', () => {
     );
     expect(await canRead(strangerId)).toBe(false);
   });
+
+  it('keeps an only-me project delivery from teammates and project admins', async () => {
+    await add(teammateId, 'admin');
+    const [acceptance] = await db
+      .insert(acceptances)
+      .values({
+        projectId,
+        subjectId: randomUUID(),
+        subjectType: 'standalone',
+        userId: ownerId,
+        visibility: 'owner',
+        workspaceId,
+      })
+      .returning();
+    const canRead = (userId: string) => canReadAcceptance({ serverDB: db, userId }, acceptance);
+
+    expect(await canRead(ownerId)).toBe(true);
+    expect(await canRead(teammateId)).toBe(false);
+    expect(await canRead(viewerId)).toBe(false);
+    await expect(resolveAcceptanceCommentAccess(db, teammateId, acceptance.id)).rejects.toThrow(
+      TRPCError,
+    );
+    await expect(resolveAcceptanceCommentAccess(db, ownerId, acceptance.id)).resolves.toBeTruthy();
+  });
 });

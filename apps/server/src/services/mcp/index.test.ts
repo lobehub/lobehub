@@ -1,10 +1,17 @@
 import { inspect } from 'node:util';
 
 import type * as LobeConst from '@lobechat/const';
-import { ErrorCode, McpError } from '@modelcontextprotocol/sdk/types.js';
+import { getMcpServerFingerprint } from '@lobechat/const/mcpApp';
+import {
+  ProtocolError,
+  ProtocolErrorCode,
+  SdkError,
+  SdkErrorCode,
+} from '@modelcontextprotocol/client';
 import { TRPCError } from '@trpc/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type * as McpModule from '@/libs/mcp';
 import { MCPClient, type MCPClientParams } from '@/libs/mcp';
 
 import { MCPService } from './index';
@@ -96,6 +103,7 @@ describe('MCPService stdio authorization', () => {
 
   it('rejects connector tool sync on the web before initializing a stdio client', async () => {
     await expect(new MCPService().listRawTools(stdioParams)).rejects.toMatchObject({
+      cause: { data: { code: 'StdioDesktopOnly' } },
       code: 'BAD_REQUEST',
       message: 'Stdio MCP type is not supported in web environment.',
     });
@@ -129,6 +137,37 @@ describe('MCPService stdio authorization', () => {
       }),
     ).resolves.toEqual([]);
     expect(MCPClient.prototype.initialize).toHaveBeenCalledOnce();
+  });
+});
+
+describe('MCPService MCP Apps sessions', () => {
+  const httpParams = { name: 'weather', type: 'http' as const, url: 'https://mcp.example.com' };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(MCPClient.prototype.callTool).mockResolvedValue({ content: [] });
+    vi.mocked(MCPClient.prototype.getToolUiResourceUri).mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('advertises MCP Apps only on sessions for users with the flag, cached apart', async () => {
+    const service = new MCPService();
+    const call = (mcpApps: boolean) =>
+      service.callTool({ argsStr: '{}', clientParams: httpParams, mcpApps, toolName: 'forecast' });
+
+    await call(false);
+    await call(true);
+    await call(false);
+    await call(true);
+
+    // One session per capability set, each reused
+    expect(MCPClient).toHaveBeenCalledTimes(2);
+    expect(MCPClient).toHaveBeenNthCalledWith(1, httpParams, { mcpApps: false });
+    expect(MCPClient).toHaveBeenNthCalledWith(2, httpParams, { mcpApps: true });
+    expect(MCPClient.prototype.getToolUiResourceUri).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -200,6 +239,23 @@ describe('MCPService log redaction', () => {
     expect(logOutput).toContain("name: 'Error'");
   });
 
+  it.each([
+    ['AUTHORIZATION_ERROR', 'FORBIDDEN'],
+    ['INITIALIZATION_TIMEOUT', 'TIMEOUT'],
+    ['CONNECTION_FAILED', 'SERVICE_UNAVAILABLE'],
+  ] as const)('exposes %s without an HTTP 500 or retry', async (type, code) => {
+    // The module is auto-mocked in this suite; retain the actual error contract.
+    const actual = await vi.importActual<typeof McpModule>('@/libs/mcp');
+    vi.mocked(MCPClient.prototype.initialize).mockRejectedValueOnce(
+      actual.createMCPError(type, 'MCP connection needs attention'),
+    );
+    await expect(new MCPService().listRawTools(sensitiveHttpParams)).rejects.toMatchObject({
+      code,
+      message: 'MCP connection needs attention',
+    });
+    expect(MCPClient.prototype.initialize).toHaveBeenCalledOnce();
+  });
+
   it('redacts stdio environment variables from rejected server operations', async () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
 
@@ -224,6 +280,7 @@ describe('MCPService log redaction', () => {
       callTool: vi.fn().mockResolvedValue({
         content: [{ text: 'tool-result-secret', type: 'text' }],
       }),
+      getToolUiResourceUri: vi.fn().mockResolvedValue(undefined),
     };
     vi.spyOn(service as any, 'getClient').mockResolvedValue(mockClient);
 
@@ -255,6 +312,10 @@ describe('MCPService', () => {
     // 创建 mock 客户端
     mockClient = {
       callTool: vi.fn(),
+      getToolUiResourceUri: vi.fn().mockResolvedValue(undefined),
+      isToolCallableByApp: vi.fn().mockResolvedValue(true),
+      isToolHiddenFromModel: vi.fn().mockResolvedValue(false),
+      listManifests: vi.fn(),
       listPrompts: vi.fn(),
       listResources: vi.fn(),
       listTools: vi.fn(),
@@ -262,6 +323,65 @@ describe('MCPService', () => {
 
     // Mock getClient 方法返回 mock 客户端
     getClientSpy = vi.spyOn(mcpService as any, 'getClient').mockResolvedValue(mockClient);
+  });
+
+  describe('manifest discovery with MCP Apps', () => {
+    it('discovers on a session announcing MCP Apps when asked, so view-only tools are found', async () => {
+      mockClient.listTools.mockResolvedValue([]);
+      mockClient.listManifests.mockResolvedValue({ tools: [] });
+
+      await mcpService.getStreamableMcpServerManifest(
+        'srv',
+        'https://mcp.example.com',
+        undefined,
+        undefined,
+        undefined,
+        { mcpApps: true },
+      );
+      await mcpService.getStdioMcpServerManifest({ command: 'srv', name: 'srv' }, undefined, {
+        mcpApps: true,
+      });
+
+      expect(getClientSpy).toHaveBeenNthCalledWith(1, expect.anything(), false, { mcpApps: true });
+      expect(getClientSpy).toHaveBeenNthCalledWith(2, expect.anything(), false, { mcpApps: true });
+    });
+  });
+
+  describe('manifest descriptions', () => {
+    it.each(['My server description'])(
+      'keeps stdio descriptions as metadata (%s)',
+      async (description) => {
+        mockClient.listManifests.mockResolvedValue({
+          prompts: undefined,
+          resources: undefined,
+          tools: [{ inputSchema: { type: 'object' }, name: 'hello' }],
+        });
+
+        const manifest = await mcpService.getStdioMcpServerManifest(
+          { command: 'test-command', name: 'tools-only' },
+          { description },
+        );
+
+        expect(manifest.api).toHaveLength(1);
+        expect(manifest.meta.description).toBe(description);
+      },
+    );
+
+    it.each(['My server description'])(
+      'keeps HTTP descriptions as metadata (%s)',
+      async (description) => {
+        mockClient.listTools.mockResolvedValue([]);
+
+        const manifest = await mcpService.getStreamableMcpServerManifest(
+          'empty-server',
+          'https://mcp.example.com',
+          { description },
+        );
+
+        expect(manifest.api).toEqual([]);
+        expect(manifest.meta.description).toBe(description);
+      },
+    );
   });
 
   describe('callTool', () => {
@@ -417,9 +537,152 @@ describe('MCPService', () => {
         argsStr: '{}',
       });
 
+      expect(result.error?.message).toBe('Error occurred');
       expect(result.content).toBe('Error occurred');
-      expect(result.success).toBe(true);
+      expect(result.success).toBe(false);
       expect(result.state).toEqual(errorResult);
+    });
+
+    it('should attach the MCP App resource for tools that declare a ui:// resource', async () => {
+      mockClient.getToolUiResourceUri.mockResolvedValue('ui://weather/view.html');
+      mockClient.callTool.mockResolvedValue({
+        content: [{ type: 'text', text: 'sunny' }],
+        isError: false,
+      });
+
+      const result = await mcpService.callTool({
+        clientParams: mockParams,
+        mcpApps: true,
+        toolName: 'weather',
+        argsStr: '{}',
+      });
+
+      expect(getClientSpy).toHaveBeenCalledWith(mockParams, false, { mcpApps: true });
+      expect(mockClient.getToolUiResourceUri).toHaveBeenCalledWith('weather');
+      // With the server it may be read back from
+      expect(result.state.mcpApp).toEqual({
+        resourceUri: 'ui://weather/view.html',
+        server: await getMcpServerFingerprint(mockParams),
+      });
+    });
+
+    it("runs a view's call to a tool whose visibility includes the app", async () => {
+      mockClient.callTool.mockResolvedValue({
+        content: [{ type: 'text', text: 'sunny' }],
+        isError: false,
+      });
+
+      const result = await mcpService.callTool({
+        argsStr: '{}',
+        clientParams: mockParams,
+        fromApp: true,
+        mcpApps: true,
+        toolName: 'weather',
+      });
+
+      expect(mockClient.isToolCallableByApp).toHaveBeenCalledWith('weather');
+      expect(mockClient.callTool).toHaveBeenCalledWith('weather', {});
+      expect(result.success).toBe(true);
+    });
+
+    it("refuses a view's call to a tool kept from views, without running it", async () => {
+      mockClient.isToolCallableByApp.mockResolvedValue(false);
+
+      const result = await mcpService.callTool({
+        argsStr: '{}',
+        clientParams: mockParams,
+        fromApp: true,
+        mcpApps: true,
+        toolName: 'delete_all',
+      });
+
+      expect(mockClient.callTool).not.toHaveBeenCalled();
+      expect(result.success).toBe(false);
+      expect(result.state.isError).toBe(true);
+    });
+
+    it('refuses a model call to a tool only its views may call, without running it', async () => {
+      mockClient.isToolHiddenFromModel.mockResolvedValue(true);
+
+      const result = await mcpService.callTool({
+        argsStr: '{}',
+        clientParams: mockParams,
+        mcpApps: true,
+        toolName: 'load_page',
+      });
+
+      expect(mockClient.isToolHiddenFromModel).toHaveBeenCalledWith('load_page');
+      expect(mockClient.callTool).not.toHaveBeenCalled();
+      expect(result.success).toBe(false);
+    });
+
+    it("returns a view the tool's own media, not the chat's uploaded copies", async () => {
+      const image = { data: 'aGVsbG8=', mimeType: 'image/png', type: 'image' };
+      mockClient.callTool.mockResolvedValue({ content: [image], isError: false });
+      const processContentBlocks = vi.fn(async (blocks: any[]) =>
+        blocks.map((block) => ({ ...block, data: 'https://files.example.com/a.png' })),
+      );
+
+      const result = await mcpService.callTool({
+        argsStr: '{}',
+        clientParams: mockParams,
+        fromApp: true,
+        mcpApps: true,
+        processContentBlocks,
+        toolName: 'snapshot',
+      });
+
+      expect(processContentBlocks).not.toHaveBeenCalled();
+      expect(result.state.content).toEqual([image]);
+    });
+
+    it("refuses a view's call while the mcp_apps flag is off", async () => {
+      const result = await mcpService.callTool({
+        argsStr: '{}',
+        clientParams: mockParams,
+        fromApp: true,
+        toolName: 'weather',
+      });
+
+      expect(mockClient.isToolCallableByApp).not.toHaveBeenCalled();
+      expect(mockClient.callTool).not.toHaveBeenCalled();
+      expect(result.success).toBe(false);
+    });
+
+    it('should neither look up nor attach a view while the mcp_apps flag is off', async () => {
+      mockClient.getToolUiResourceUri.mockResolvedValue('ui://weather/view.html');
+      mockClient.callTool.mockResolvedValue({
+        content: [{ type: 'text', text: 'sunny' }],
+        isError: false,
+      });
+
+      const result = await mcpService.callTool({
+        clientParams: mockParams,
+        toolName: 'weather',
+        argsStr: '{}',
+      });
+
+      // A session without the MCP Apps capability, and no listTools round trip
+      expect(getClientSpy).toHaveBeenCalledWith(mockParams, false, { mcpApps: false });
+      expect(mockClient.getToolUiResourceUri).not.toHaveBeenCalled();
+      expect(result.state.mcpApp).toBeUndefined();
+    });
+
+    it('should not attach the MCP App resource to error results', async () => {
+      mockClient.getToolUiResourceUri.mockResolvedValue('ui://weather/view.html');
+      mockClient.callTool.mockResolvedValue({
+        content: [{ type: 'text', text: 'boom' }],
+        isError: true,
+      });
+
+      const result = await mcpService.callTool({
+        clientParams: mockParams,
+        mcpApps: true,
+        toolName: 'weather',
+        argsStr: '{}',
+      });
+
+      expect(result.state.mcpApp).toBeUndefined();
     });
 
     it('should throw TRPCError when client throws error', async () => {
@@ -472,8 +735,8 @@ describe('MCPService', () => {
       expect(result.success).toBe(true);
       expect(mockClient.callTool).toHaveBeenCalledTimes(2);
       // Retry must drop the cached client: first attempt skipCache=false, retry skipCache=true
-      expect(getClientSpy).toHaveBeenNthCalledWith(1, mockParams, false);
-      expect(getClientSpy).toHaveBeenNthCalledWith(2, mockParams, true);
+      expect(getClientSpy).toHaveBeenNthCalledWith(1, mockParams, false, { mcpApps: false });
+      expect(getClientSpy).toHaveBeenNthCalledWith(2, mockParams, true, { mcpApps: false });
     });
 
     it('should retry up to 3 times for NoValidSessionId error', async () => {
@@ -490,8 +753,8 @@ describe('MCPService', () => {
       expect(mockClient.callTool).toHaveBeenCalledTimes(4);
     });
 
-    it('should NOT retry tool-level McpError and return it as a failed tool result', async () => {
-      const mcpError = new McpError(ErrorCode.InvalidParams, 'tool blew up');
+    it('should NOT retry tool-level ProtocolError and return it as a failed tool result', async () => {
+      const mcpError = new ProtocolError(ProtocolErrorCode.InvalidParams, 'tool blew up');
       mockClient.callTool.mockRejectedValue(mcpError);
 
       const result = await mcpService.callTool({
@@ -503,9 +766,24 @@ describe('MCPService', () => {
       expect(result.success).toBe(false);
       expect(result.error).toBe(mcpError);
       expect(result.state.isError).toBe(true);
-      // McpError is a tool result, not a session error → must not retry
+      // ProtocolError is a tool result, not a session error → must not retry
       expect(mockClient.callTool).toHaveBeenCalledTimes(1);
     });
+
+    it.each([SdkErrorCode.RequestTimeout, SdkErrorCode.ConnectionClosed])(
+      'returns SDK %s as a failed result without retry',
+      async (code) => {
+        const error = new SdkError(code, 'transport failed');
+        mockClient.callTool.mockRejectedValue(error);
+        const result = await mcpService.callTool({
+          clientParams: mockParams,
+          toolName: 'testTool',
+          argsStr: '{}',
+        });
+        expect(result).toMatchObject({ success: false, error, state: { isError: true } });
+        expect(mockClient.callTool).toHaveBeenCalledTimes(1);
+      },
+    );
 
     it('should bail immediately on client initialization failure without retrying', async () => {
       // getClient throws (e.g. bad URL/token, stdio spawn error) — not a stale session
@@ -522,6 +800,55 @@ describe('MCPService', () => {
       // Must NOT respawn/re-auth on init failure
       expect(getClientSpy).toHaveBeenCalledTimes(1);
       expect(mockClient.callTool).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('readUiResource', () => {
+    const mockParams = { name: 'test-mcp', type: 'http' as const, url: 'https://example.com/mcp' };
+
+    it('reads ui:// resources through the client', async () => {
+      const resource = { contents: [{ text: '<html></html>', uri: 'ui://app' }] };
+      mockClient.readResource = vi.fn().mockResolvedValue(resource);
+
+      await expect(mcpService.readUiResource(mockParams, 'ui://app')).resolves.toEqual(resource);
+      expect(mockClient.readResource).toHaveBeenCalledWith('ui://app');
+      // The session that advertised MCP Apps, like the call that stored the view
+      expect(getClientSpy).toHaveBeenCalledWith(mockParams, false, { mcpApps: true });
+    });
+
+    it("falls back to the resource's listing entry for the view's metadata", async () => {
+      const csp = { connectDomains: ['https://api.example.com'] };
+      mockClient.readResource = vi
+        .fn()
+        .mockResolvedValue({ contents: [{ text: '<html />', uri: 'ui://app' }] });
+      mockClient.listResources = vi
+        .fn()
+        .mockResolvedValue([{ _meta: { ui: { csp } }, name: 'app', uri: 'ui://app' }]);
+
+      const result = await mcpService.readUiResource(mockParams, 'ui://app');
+
+      // Without it the CSP would block every domain the app declared
+      expect(result.contents[0]._meta).toEqual({ ui: { csp } });
+    });
+
+    it("doesn't list resources when the read declares the view's metadata", async () => {
+      const own = { _meta: { ui: { prefersBorder: false } }, text: '<html />', uri: 'ui://app' };
+      mockClient.readResource = vi.fn().mockResolvedValue({ contents: [own] });
+      mockClient.listResources = vi.fn();
+
+      await expect(mcpService.readUiResource(mockParams, 'ui://app')).resolves.toEqual({
+        contents: [own],
+      });
+      expect(mockClient.listResources).not.toHaveBeenCalled();
+    });
+
+    it('rejects non-ui:// URIs without touching the server', async () => {
+      mockClient.readResource = vi.fn();
+
+      await expect(mcpService.readUiResource(mockParams, 'file:///etc/passwd')).rejects.toThrow(
+        TRPCError,
+      );
+      expect(mockClient.readResource).not.toHaveBeenCalled();
     });
   });
 
@@ -679,7 +1006,7 @@ describe('MCPService', () => {
 
       expect(result).toEqual(resources);
       expect(mockClient.listResources).toHaveBeenCalledTimes(2);
-      expect(getClientSpy).toHaveBeenNthCalledWith(2, mockParams, true);
+      expect(getClientSpy).toHaveBeenNthCalledWith(2, mockParams, true, { mcpApps: false });
     });
 
     it('should throw TRPCError on other errors without retry', async () => {
@@ -707,7 +1034,7 @@ describe('MCPService', () => {
 
       expect(result).toEqual(prompts);
       expect(mockClient.listPrompts).toHaveBeenCalledTimes(2);
-      expect(getClientSpy).toHaveBeenNthCalledWith(2, mockParams, true);
+      expect(getClientSpy).toHaveBeenNthCalledWith(2, mockParams, true, { mcpApps: false });
     });
 
     it('should throw TRPCError on other errors without retry', async () => {

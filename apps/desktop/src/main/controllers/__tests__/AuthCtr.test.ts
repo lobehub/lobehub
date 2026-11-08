@@ -8,6 +8,52 @@ import type { App } from '@/core/App';
 import AuthCtr from '../AuthCtr';
 import RemoteServerConfigCtr from '../RemoteServerConfigCtr';
 
+const createCloudAuthConfig = (): DataSyncConfig => ({
+  active: false,
+  storageMode: 'cloud',
+});
+
+const createTokenResponse = () => ({
+  status: 200,
+  ok: true,
+  json: () =>
+    Promise.resolve({
+      access_token: 'new-access-token',
+      refresh_token: 'new-refresh-token',
+      expires_in: 3600,
+    }),
+  text: () => Promise.resolve('mock response'),
+  clone: () => ({
+    json: () =>
+      Promise.resolve({
+        access_token: 'new-access-token',
+        refresh_token: 'new-refresh-token',
+        expires_in: 3600,
+      }),
+  }),
+});
+
+const createAuthCodeResponse = () => ({
+  status: 200,
+  ok: true,
+  json: () =>
+    Promise.resolve({
+      success: true,
+      data: {
+        payload: {
+          code: 'mock-auth-code',
+          state: 'mock-random-2', // Second randomBytes call is for state
+        },
+      },
+    }),
+  text: () => Promise.resolve('mock response'),
+});
+
+const createMissingAuthResponse = () => ({
+  status: 404,
+  ok: false,
+});
+
 const { ipcMainHandleMock } = vi.hoisted(() => ({
   ipcMainHandleMock: vi.fn(),
 }));
@@ -142,15 +188,9 @@ describe('AuthCtr', () => {
   describe('Basic functionality', () => {
     describe('requestAuthorization', () => {
       it('should generate PKCE parameters and open authorization URL', async () => {
-        const config: DataSyncConfig = {
-          active: false,
-          storageMode: 'cloud',
-        };
+        const config: DataSyncConfig = createCloudAuthConfig();
 
-        mockFetch.mockResolvedValue({
-          status: 404,
-          ok: false,
-        });
+        mockFetch.mockResolvedValue(createMissingAuthResponse());
 
         const result = await authCtr.requestAuthorization(config);
 
@@ -171,15 +211,9 @@ describe('AuthCtr', () => {
       });
 
       it('should start polling after authorization request', async () => {
-        const config: DataSyncConfig = {
-          active: false,
-          storageMode: 'cloud',
-        };
+        const config: DataSyncConfig = createCloudAuthConfig();
 
-        mockFetch.mockResolvedValue({
-          status: 404,
-          ok: false,
-        });
+        mockFetch.mockResolvedValue(createMissingAuthResponse());
 
         const result = await authCtr.requestAuthorization(config);
         expect(result.success).toBe(true);
@@ -206,10 +240,7 @@ describe('AuthCtr', () => {
           remoteServerUrl: 'https://my-custom-server.com',
         };
 
-        mockFetch.mockResolvedValue({
-          status: 404,
-          ok: false,
-        });
+        mockFetch.mockResolvedValue(createMissingAuthResponse());
 
         await authCtr.requestAuthorization(config);
 
@@ -220,10 +251,7 @@ describe('AuthCtr', () => {
       });
 
       it('should handle authorization request error gracefully', async () => {
-        const config: DataSyncConfig = {
-          active: false,
-          storageMode: 'cloud',
-        };
+        const config: DataSyncConfig = createCloudAuthConfig();
 
         vi.mocked(shell.openExternal).mockRejectedValue(new Error('Failed to open browser'));
 
@@ -236,15 +264,9 @@ describe('AuthCtr', () => {
 
     describe('polling mechanism', () => {
       it('should poll every 3 seconds', async () => {
-        const config: DataSyncConfig = {
-          active: false,
-          storageMode: 'cloud',
-        };
+        const config: DataSyncConfig = createCloudAuthConfig();
 
-        mockFetch.mockResolvedValue({
-          status: 404,
-          ok: false,
-        });
+        mockFetch.mockResolvedValue(createMissingAuthResponse());
 
         await authCtr.requestAuthorization(config);
 
@@ -266,10 +288,7 @@ describe('AuthCtr', () => {
       });
 
       it('should stop polling when credentials are received', async () => {
-        const config: DataSyncConfig = {
-          active: false,
-          storageMode: 'cloud',
-        };
+        const config: DataSyncConfig = createCloudAuthConfig();
 
         let pollCount = 0;
         mockFetch.mockImplementation((url: string) => {
@@ -279,51 +298,16 @@ describe('AuthCtr', () => {
           if (urlObj.pathname.includes('/oidc/handoff')) {
             pollCount++;
             if (pollCount >= 3) {
-              return Promise.resolve({
-                status: 200,
-                ok: true,
-                json: () =>
-                  Promise.resolve({
-                    success: true,
-                    data: {
-                      payload: {
-                        code: 'mock-auth-code',
-                        state: 'mock-random-2', // Second randomBytes call is for state
-                      },
-                    },
-                  }),
-                text: () => Promise.resolve('mock response'),
-              });
+              return Promise.resolve(createAuthCodeResponse());
             }
           }
 
           // Token exchange endpoint
           if (urlObj.pathname.includes('/oidc/token')) {
-            return Promise.resolve({
-              status: 200,
-              ok: true,
-              json: () =>
-                Promise.resolve({
-                  access_token: 'new-access-token',
-                  refresh_token: 'new-refresh-token',
-                  expires_in: 3600,
-                }),
-              text: () => Promise.resolve('mock response'),
-              clone: () => ({
-                json: () =>
-                  Promise.resolve({
-                    access_token: 'new-access-token',
-                    refresh_token: 'new-refresh-token',
-                    expires_in: 3600,
-                  }),
-              }),
-            });
+            return Promise.resolve(createTokenResponse());
           }
 
-          return Promise.resolve({
-            status: 404,
-            ok: false,
-          });
+          return Promise.resolve(createMissingAuthResponse());
         });
 
         await authCtr.requestAuthorization(config);
@@ -339,52 +323,17 @@ describe('AuthCtr', () => {
       });
 
       it('should broadcast authorizationSuccessful when credentials are exchanged', async () => {
-        const config: DataSyncConfig = {
-          active: false,
-          storageMode: 'cloud',
-        };
+        const config: DataSyncConfig = createCloudAuthConfig();
 
         mockFetch.mockImplementation((url: string) => {
           const urlObj = new URL(url);
 
           if (urlObj.pathname.includes('/oidc/handoff')) {
-            return Promise.resolve({
-              status: 200,
-              ok: true,
-              json: () =>
-                Promise.resolve({
-                  success: true,
-                  data: {
-                    payload: {
-                      code: 'mock-auth-code',
-                      state: 'mock-random-2', // Second randomBytes call is for state
-                    },
-                  },
-                }),
-              text: () => Promise.resolve('mock response'),
-            });
+            return Promise.resolve(createAuthCodeResponse());
           }
 
           if (urlObj.pathname.includes('/oidc/token')) {
-            return Promise.resolve({
-              status: 200,
-              ok: true,
-              json: () =>
-                Promise.resolve({
-                  access_token: 'new-access-token',
-                  refresh_token: 'new-refresh-token',
-                  expires_in: 3600,
-                }),
-              text: () => Promise.resolve('mock response'),
-              clone: () => ({
-                json: () =>
-                  Promise.resolve({
-                    access_token: 'new-access-token',
-                    refresh_token: 'new-refresh-token',
-                    expires_in: 3600,
-                  }),
-              }),
-            });
+            return Promise.resolve(createTokenResponse());
           }
 
           return Promise.resolve({ status: 404, ok: false });
@@ -441,10 +390,7 @@ describe('AuthCtr', () => {
       });
 
       it('should validate state parameter and reject mismatched state', async () => {
-        const config: DataSyncConfig = {
-          active: false,
-          storageMode: 'cloud',
-        };
+        const config: DataSyncConfig = createCloudAuthConfig();
 
         mockFetch.mockImplementation((url: string) => {
           const urlObj = new URL(url);
@@ -483,52 +429,17 @@ describe('AuthCtr', () => {
 
     describe('token refresh', () => {
       it('should start auto-refresh after successful authorization', async () => {
-        const config: DataSyncConfig = {
-          active: false,
-          storageMode: 'cloud',
-        };
+        const config: DataSyncConfig = createCloudAuthConfig();
 
         mockFetch.mockImplementation((url: string) => {
           const urlObj = new URL(url);
 
           if (urlObj.pathname.includes('/oidc/handoff')) {
-            return Promise.resolve({
-              status: 200,
-              ok: true,
-              json: () =>
-                Promise.resolve({
-                  success: true,
-                  data: {
-                    payload: {
-                      code: 'mock-auth-code',
-                      state: 'mock-random-2', // Second randomBytes call is for state
-                    },
-                  },
-                }),
-              text: () => Promise.resolve('mock response'),
-            });
+            return Promise.resolve(createAuthCodeResponse());
           }
 
           if (urlObj.pathname.includes('/oidc/token')) {
-            return Promise.resolve({
-              status: 200,
-              ok: true,
-              json: () =>
-                Promise.resolve({
-                  access_token: 'new-access-token',
-                  refresh_token: 'new-refresh-token',
-                  expires_in: 3600,
-                }),
-              text: () => Promise.resolve('mock response'),
-              clone: () => ({
-                json: () =>
-                  Promise.resolve({
-                    access_token: 'new-access-token',
-                    refresh_token: 'new-refresh-token',
-                    expires_in: 3600,
-                  }),
-              }),
-            });
+            return Promise.resolve(createTokenResponse());
           }
 
           return Promise.resolve({ status: 404, ok: false });
@@ -556,16 +467,10 @@ describe('AuthCtr', () => {
 
   describe('Scenario: Authorization Timeout and Retry', () => {
     it('Step 1: User requests authorization but does not complete it within 5 minutes', async () => {
-      const config: DataSyncConfig = {
-        active: false,
-        storageMode: 'cloud',
-      };
+      const config: DataSyncConfig = createCloudAuthConfig();
 
       // Mock: User never completes authorization, so polling always returns 404
-      mockFetch.mockResolvedValue({
-        status: 404,
-        ok: false,
-      });
+      mockFetch.mockResolvedValue(createMissingAuthResponse());
 
       // User clicks "Connect to Cloud" button
       await authCtr.requestAuthorization(config);
@@ -588,15 +493,9 @@ describe('AuthCtr', () => {
     });
 
     it('Step 2: User clicks retry button after previous attempt', async () => {
-      const config: DataSyncConfig = {
-        active: false,
-        storageMode: 'cloud',
-      };
+      const config: DataSyncConfig = createCloudAuthConfig();
 
-      mockFetch.mockResolvedValue({
-        status: 404,
-        ok: false,
-      });
+      mockFetch.mockResolvedValue(createMissingAuthResponse());
 
       // First attempt
       await authCtr.requestAuthorization(config);
@@ -618,10 +517,7 @@ describe('AuthCtr', () => {
     });
 
     it('Step 3: Retry generates new state parameter (not reusing old state)', async () => {
-      const config: DataSyncConfig = {
-        active: false,
-        storageMode: 'cloud',
-      };
+      const config: DataSyncConfig = createCloudAuthConfig();
 
       const capturedStates: string[] = [];
 
@@ -656,10 +552,7 @@ describe('AuthCtr', () => {
     });
 
     it('Step 4: User completes authorization on retry successfully', async () => {
-      const config: DataSyncConfig = {
-        active: false,
-        storageMode: 'cloud',
-      };
+      const config: DataSyncConfig = createCloudAuthConfig();
 
       // First attempt - incomplete
       mockFetch.mockResolvedValue({ status: 404, ok: false });
@@ -731,10 +624,7 @@ describe('AuthCtr', () => {
     });
 
     it('Edge case: Rapid retry clicks should not create multiple polling intervals', async () => {
-      const config: DataSyncConfig = {
-        active: false,
-        storageMode: 'cloud',
-      };
+      const config: DataSyncConfig = createCloudAuthConfig();
 
       mockFetch.mockResolvedValue({ status: 404, ok: false });
 

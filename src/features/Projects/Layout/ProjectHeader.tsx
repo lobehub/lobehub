@@ -3,6 +3,7 @@
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { FavoriteButton } from '@/features/Favorites';
 import SideBarHeaderLayout from '@/features/NavPanel/SideBarHeaderLayout';
 import {
   SidebarHeaderSelectPopover,
@@ -11,13 +12,14 @@ import {
 import type { SwitcherItem } from '@/features/NavPanel/switcher/switcherItems';
 import SwitcherMenu from '@/features/NavPanel/switcher/SwitcherMenu';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import type { ProjectDetail } from '@/store/project';
+import type { ProjectListItem } from '@/store/project';
 import { useLoadedProjectList, useProjectStore } from '@/store/project';
 
+import { projectFavoriteTarget } from '../projectFavorite';
 import { resolveProjectListState } from '../projectListState';
 
 interface ProjectHeaderProps {
-  project?: ProjectDetail['project'];
+  project?: ProjectListItem;
 }
 
 const ProjectHeader = memo<ProjectHeaderProps>(({ project }) => {
@@ -49,6 +51,7 @@ const ProjectHeader = memo<ProjectHeaderProps>(({ project }) => {
   return (
     <SideBarHeaderLayout
       backTo="/"
+      right={project && <FavoriteButton {...projectFavoriteTarget(project)} />}
       left={
         <SidebarHeaderSelectPopover
           content={

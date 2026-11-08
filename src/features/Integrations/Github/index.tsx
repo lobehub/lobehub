@@ -7,7 +7,6 @@ import {
   createStaticStyles,
   Flexbox,
   Icon,
-  Skeleton,
   Text,
   toast,
 } from '@lobehub/ui';
@@ -19,8 +18,10 @@ import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspace
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import AsyncError from '@/components/AsyncError';
 import { useAppOrigin } from '@/hooks/useAppOrigin';
+import { usePermission } from '@/hooks/usePermission';
 import { scmService } from '@/services/scm';
 
+import { IntegrationConnectionsSkeleton } from '../Skeleton';
 import { useGithubIntegration } from '../useGithubIntegration';
 import Automation from './Automation';
 import Connections from './Connections';
@@ -101,6 +102,8 @@ const GithubIntegration = memo<GithubIntegrationProps>(({ onBack }) => {
   const workspaceSlug = useActiveWorkspaceSlug();
   const workspaceId = useActiveWorkspaceId();
   const scope = workspaceSlug ? 'workspace' : 'personal';
+  // The server only lets members and up bind or remove a workspace connection.
+  const { allowed: canWrite, reason: blockedReason } = usePermission('create_content');
   const data = useGithubIntegration();
 
   useEffect(() => {
@@ -152,7 +155,7 @@ const GithubIntegration = memo<GithubIntegrationProps>(({ onBack }) => {
 
   const { config, identity, installations } = data;
   const installHref =
-    config?.enabled && config.installPath
+    canWrite && config?.enabled && config.installPath
       ? buildGithubInstallHref(config.installPath, { appOrigin, workspaceId, workspaceSlug })
       : undefined;
 
@@ -220,9 +223,10 @@ const GithubIntegration = memo<GithubIntegrationProps>(({ onBack }) => {
       ) : null}
 
       {data.isInitialLoading ? (
-        <Skeleton height={96} />
+        <IntegrationConnectionsSkeleton title={t('github.connections.title')} />
       ) : (
         <Connections
+          blockedReason={blockedReason}
           configured={!!config?.enabled}
           installHref={installHref}
           installations={installations}

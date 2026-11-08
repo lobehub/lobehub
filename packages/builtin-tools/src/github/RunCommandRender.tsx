@@ -1,9 +1,9 @@
 'use client';
 
 import type { BuiltinRenderProps } from '@lobechat/types';
-import { Flexbox, Highlighter } from '@lobehub/ui';
-import { Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { Flexbox, Highlighter, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo, useMemo } from 'react';
 
 import {
@@ -14,24 +14,12 @@ import {
   tryParseJson,
 } from './utils';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  exitCode: css`
-    margin-inline-start: 8px;
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-  `,
-  exitCodeError: css`
-    color: ${cssVar.colorError};
-  `,
-  exitCodeSuccess: css`
-    color: ${cssVar.colorSuccess};
-  `,
-  sectionLabel: css`
-    margin-block-end: 4px;
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-}));
+const styles = stylex.create({
+  exitCode: { marginInlineStart: '8px', fontFamily: cssVar.fontFamilyCode, fontSize: '12px' },
+  exitCodeError: { color: cssVar.colorError },
+  exitCodeSuccess: { color: cssVar.colorSuccess },
+  sectionLabel: { marginBlockEnd: '4px', fontSize: '12px', color: cssVar.colorTextSecondary },
+});
 
 const GithubRunCommandRender = memo<
   BuiltinRenderProps<GithubRunCommandArgs, GithubRunCommandState>
@@ -58,12 +46,12 @@ const GithubRunCommandRender = memo<
     <Flexbox gap={12}>
       {normalized && (
         <div>
-          <Text className={styles.sectionLabel}>
+          <Text className={stylex.props(styles.sectionLabel).className}>
             Command
             {success !== undefined && (
               <span
-                className={`${styles.exitCode} ${
-                  success ? styles.exitCodeSuccess : styles.exitCodeError
+                className={`${stylex.props(styles.exitCode).className} ${
+                  stylex.props(success ? styles.exitCodeSuccess : styles.exitCodeError).className
                 }`}
               >
                 exit {exitCode ?? (success ? 0 : 1)}
@@ -83,7 +71,7 @@ const GithubRunCommandRender = memo<
       )}
       {outputBody && (
         <div>
-          <Text className={styles.sectionLabel}>Output</Text>
+          <Text className={stylex.props(styles.sectionLabel).className}>Output</Text>
           <Highlighter
             wrap
             language={outputLanguage}
@@ -97,7 +85,10 @@ const GithubRunCommandRender = memo<
       )}
       {stderr && (
         <div>
-          <Text className={styles.sectionLabel} style={{ color: cssVar.colorError }}>
+          <Text
+            className={stylex.props(styles.sectionLabel).className}
+            style={{ color: cssVar.colorError }}
+          >
             Stderr
           </Text>
           <Highlighter

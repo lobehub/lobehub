@@ -5,11 +5,20 @@ import isEqual from 'fast-deep-equal';
 import type { ChannelItem, ChannelJobItem, ChannelMemberItem } from '../../schemas';
 import { agentOperations, channelJobs, topics } from '../../schemas';
 import type { Transaction } from '../../type';
+import { CHANNEL_TOPIC_TRIGGER } from '../../utils/topicVisibility';
 
 // Matches Bot AgentBridgeService: check on the next request, never expire guild Threads.
 const TOPIC_STALE_THRESHOLD = 4 * 60 * 60 * 1000;
 
-/** Resolve continuation from the source-side job history, without Channel fields on topics. */
+/**
+ * Resolve continuation from the source-side job history, without Channel fields on topics.
+ *
+ * One topic per member, requester and branch (the main timeline or a Thread). The requester is
+ * the run's execution identity: the topic is theirs, and it holds what their runs did with
+ * their credentials, devices and tool results. Sharing it with another requester's run would
+ * hand that private transcript to someone else, so a member's work for other people reaches
+ * this topic only as public replies (marked `self` in the prompt).
+ */
 export const resolveTopic = async (
   tx: Transaction,
   channel: ChannelItem,
@@ -56,7 +65,7 @@ export const resolveTopic = async (
     !topic.isDeleted &&
     (job.threadId || Date.now() - topic.updatedAt.getTime() <= TOPIC_STALE_THRESHOLD)
   ) {
-    return { afterSequence: prior.manifest.cutoffSequence, topic };
+    return topic;
   }
 
   const [created] = await tx
@@ -64,10 +73,10 @@ export const resolveTopic = async (
     .values({
       agentId: member.agentId,
       mode: 'default',
-      trigger: 'channel',
+      trigger: CHANNEL_TOPIC_TRIGGER,
       userId,
       workspaceId: channel.workspaceId,
     })
     .returning();
-  return { afterSequence: 0, topic: created };
+  return created;
 };

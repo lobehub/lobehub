@@ -19,6 +19,18 @@ const message = (content: string) =>
   ({ content, createdAt: 0, id: 'm', role: 'user', updatedAt: 0 }) as never;
 
 describe('gatherContextFacts', () => {
+  it('tells the agent its name, not only its title', async () => {
+    const named = await gatherContextFacts(
+      request({ agent: { description: '', name: 'Nasa', title: 'Shadow Arvin' } }),
+      {},
+    );
+    const unnamed = await gatherContextFacts(request(), {});
+
+    expect(named.variables).toMatchObject({ agent_name: 'Nasa', agent_title: 'Shadow Arvin' });
+    // Without a name the label is the title, the same as the product shows.
+    expect(unnamed.variables).toMatchObject({ agent_name: 'Helper', agent_title: 'Helper' });
+  });
+
   it('yields no facts and never throws when the host provides nothing', async () => {
     const facts = await gatherContextFacts(request(), {});
 
@@ -135,6 +147,61 @@ describe('gatherContextFacts', () => {
     });
   });
 
+  describe('document references', () => {
+    it('resolves referenced documents against the executing agent', async () => {
+      const findAgentDocument = vi.fn(async (_agentId: string, documentId: string) =>
+        documentId === 'doc-1' ? { content: 'Voice rules', title: 'Voice' } : null,
+      );
+
+      const facts = await gatherContextFacts(
+        request({
+          messages: [
+            message(
+              'Use <refer_document name="Voice" id="doc-1" /> and <refer_document name="X" id="doc-2" />',
+            ),
+          ],
+        }),
+        { findAgentDocument },
+      );
+
+      expect(findAgentDocument).toHaveBeenCalledWith('agt_1', 'doc-1');
+      expect(facts.step.documentReferences).toEqual([
+        { content: 'Voice rules', documentId: 'doc-1', title: 'Voice' },
+        { documentId: 'doc-2', title: 'X' },
+      ]);
+    });
+
+    it('lists earlier-turn references without a lookup only when the documents tool can read them', async () => {
+      const findAgentDocument = vi.fn(async () => ({ content: 'Voice rules' }));
+      const messages = [message('<refer_document name="Voice" id="doc-1" />'), message('Next')];
+
+      const withTool = await gatherContextFacts(
+        request({ enabledToolIds: ['lobe-agent-documents'], messages }),
+        { findAgentDocument },
+      );
+      expect(withTool.step.documentReferences).toEqual([
+        { documentId: 'doc-1', earlierTurn: true, title: 'Voice' },
+      ]);
+      expect(findAgentDocument).not.toHaveBeenCalled();
+
+      const withoutTool = await gatherContextFacts(request({ messages }), { findAgentDocument });
+      expect(withoutTool.step.documentReferences).toEqual([
+        { content: 'Voice rules', documentId: 'doc-1', title: 'Voice' },
+      ]);
+    });
+
+    it('skips the lookup when no message references a document', async () => {
+      const findAgentDocument = vi.fn();
+
+      const facts = await gatherContextFacts(request({ messages: [message('hello')] }), {
+        findAgentDocument,
+      });
+
+      expect(facts.step.documentReferences).toBeUndefined();
+      expect(findAgentDocument).not.toHaveBeenCalled();
+    });
+  });
+
   describe('share visitor gates', () => {
     const visitor = { agentId: 'agt_1', visitorUserId: 'visitor_1' };
 
@@ -184,6 +251,21 @@ describe('gatherContextFacts', () => {
       const summaries = facts.step.topicReferences?.map((r) => r.summary) ?? [];
       expect(summaries).toContain('my summary');
       expect(summaries).not.toContain('creator secret');
+    });
+
+    it('never resolves document references for a visitor', async () => {
+      const findAgentDocument = vi.fn(async () => ({ content: 'creator secret', title: 'Doc' }));
+
+      const facts = await gatherContextFacts(
+        request({
+          messages: [message('<refer_document name="Doc" id="doc-1" />')],
+          shareVisitor: visitor,
+        }),
+        { findAgentDocument },
+      );
+
+      expect(facts.step.documentReferences).toBeUndefined();
+      expect(findAgentDocument).not.toHaveBeenCalled();
     });
 
     it('never enumerates the owner’s agents, providers or plugins for a visitor', async () => {
@@ -265,6 +347,43 @@ describe('gatherContextFacts', () => {
       expect(ctx.availableAgentsHasMore).toBe(true);
       expect(ctx.currentAgent).toEqual({ id: 'agt_1', title: 'Helper' });
       expect(ctx.availablePlugins).toBeUndefined();
+    });
+
+    it.each([{ enabledToolIds: [] }, { enabledToolIds: ['lobe-agent-management'] }])(
+      'omits unsolicited recent agents without disabling self-management or explicit mentions ($enabledToolIds)',
+      async ({ enabledToolIds }) => {
+        const listRecentAgents = vi.fn(async () => recent);
+        const mentionedAgents = [{ id: 'agt_9', name: 'Nine' }];
+        const facts = await gatherContextFacts(
+          request({ enabledToolIds, includeRecentAgents: false, mentionedAgents }),
+          {
+            listEnabledProviders: async () => [{ id: 'openai', models: [], name: 'OpenAI' }],
+            listRecentAgents,
+          },
+        );
+
+        const ctx = facts.step.agentManagementContext!;
+        expect(listRecentAgents).not.toHaveBeenCalled();
+        expect(ctx.availableAgents).toBeUndefined();
+        expect(ctx.availableAgentsHasMore).toBeUndefined();
+        expect(ctx.currentAgent).toEqual({ id: 'agt_1', title: 'Helper' });
+        expect(ctx.mentionedAgents).toEqual(mentionedAgents);
+        if (enabledToolIds.length)
+          expect(ctx.availableProviders).toEqual([{ id: 'openai', models: [], name: 'OpenAI' }]);
+      },
+    );
+
+    it('carries each agent’s name beside its title, for itself and the others', async () => {
+      const facts = await gatherContextFacts(
+        request({ agent: { name: 'Nasa', title: 'Shadow Arvin' } }),
+        { listRecentAgents: async () => [{ id: 'agt_2', name: 'Tiko', title: 'Reviewer' }] },
+      );
+
+      const ctx = facts.step.agentManagementContext!;
+      expect(ctx.currentAgent).toStrictEqual({ id: 'agt_1', name: 'Nasa', title: 'Shadow Arvin' });
+      expect(ctx.availableAgents).toStrictEqual([
+        { description: undefined, id: 'agt_2', name: 'Tiko', title: 'Reviewer' },
+      ]);
     });
 
     it('adds providers and the plugin catalog only when the tool is enabled', async () => {

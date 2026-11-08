@@ -18,6 +18,7 @@ export type ComposerRunRequest = Pick<
   | 'acceptsFileWorks'
   | 'acceptsMemberRuntimeEnd'
   | 'agentId'
+  | 'agentSender'
   | 'appContext'
   | 'autoStart'
   | 'clientIds'
@@ -31,7 +32,9 @@ export type ComposerRunRequest = Pick<
   | 'mentionedAgents'
   | 'parentMessageId'
   | 'prompt'
+  | 'queuedSuccessor'
   | 'replacesOperationId'
+  | 'requireDevice'
   | 'resumeApproval'
   | 'resumeApprovals'
   | 'resumeToolResult'
@@ -40,6 +43,7 @@ export type ComposerRunRequest = Pick<
   | 'slug'
   | 'sourceOperationId'
   | 'steer'
+  | 'title'
   | 'trigger'
   | 'userInterventionConfig'
   | 'userMessage'
@@ -48,7 +52,7 @@ export type ComposerRunRequest = Pick<
 };
 
 export interface ComposerRunContext {
-  aiAgentService: Pick<AiAgentService, 'execAgent' | 'interruptTask'>;
+  aiAgentService: Pick<AiAgentService, 'execAgent' | 'interruptTask' | 'isOperationInterrupted'>;
   /** Server-derived request provenance; never client-passable. */
   clientIp?: string;
   db: LobeChatDatabase;
@@ -83,8 +87,20 @@ export const startComposerRun = async (ctx: ComposerRunContext, input: ComposerR
   // keeps the finished state of the run it replied to, `cancelTopic` refuses
   // to stop the live one, and the detail page stops polling for it.
   const topicRunService = new TopicRunService(ctx.db, ctx.userId, ctx.workspaceId ?? undefined);
+  //
+  // A follow-up sent while the Task's run is still live replaces that run, so
+  // it takes the run row over from it rather than reopening a settled one —
+  // the replaced run ends `interrupted`, which never settles the row itself.
   const topicRun = appContext?.topicId
-    ? await topicRunService.resolveOwnableRun(appContext.topicId)
+    ? await topicRunService.resolveOwnableRun(appContext.topicId, {
+        replacesOperationId: input.replacesOperationId,
+        // A queued follow-up sent "now" stops the run itself before this
+        // start, and clears the topic marker: the run still reads `running`
+        // here but has already been asked to stop.
+        isStopRequested: (operationId) => ctx.aiAgentService.isOperationInterrupted(operationId),
+        supersedeLiveRun: ctx.supersedeLiveRun ?? true,
+        threadId: appContext.threadId,
+      })
     : undefined;
   // Recorded on the operation-created boundary and acted on once the
   // dispatch has returned.
@@ -114,6 +130,7 @@ export const startComposerRun = async (ctx: ComposerRunContext, input: ComposerR
     // intentionally not part of the client-passable input schema.
     clientIp: ctx.clientIp,
     deviceId: input.deviceId,
+    requireDevice: input.requireDevice,
     localDeviceId: input.localDeviceId,
     existingMessageIds: input.existingMessageIds,
     ...(topicRun && {
@@ -143,6 +160,7 @@ export const startComposerRun = async (ctx: ComposerRunContext, input: ComposerR
     mentionedAgents: input.mentionedAgents,
     parentMessageId,
     prompt: input.prompt,
+    queuedSuccessor: input.queuedSuccessor,
     replacesOperationId: input.replacesOperationId,
     // When parentMessageId is provided, this is a regeneration/continue or a
     // human-approval resume — either way, skip user message creation.
@@ -153,8 +171,10 @@ export const startComposerRun = async (ctx: ComposerRunContext, input: ComposerR
     selectedSkillIds: input.selectedSkillIds,
     selectedToolIds: input.selectedToolIds,
     slug: input.slug,
+    agentSender: input.agentSender,
     sourceOperationId: input.sourceOperationId,
     steer: input.steer,
+    title: input.title,
     trigger: input.trigger ?? RequestTrigger.Chat,
     userAgent: ctx.userAgent,
     userInterventionConfig: input.userInterventionConfig,

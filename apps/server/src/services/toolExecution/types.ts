@@ -3,6 +3,7 @@ import { type LobeChatDatabase } from '@lobechat/database';
 import {
   type AgentShareVisitorContext,
   type ChatToolPayload,
+  type ChatTopicBotContext,
   type ClientSecretPayload,
   type DeviceUnavailableErrorData,
   type ExecSubAgentParams,
@@ -215,6 +216,13 @@ export interface ToolExecutionContext {
    * `messageId`.
    */
   assistantMessageId?: string;
+  /**
+   * Who started this run from an IM conversation (`state.principal.actor.bot`): the platform
+   * sender of the message the run answers and whether they are the bot's owner. Built per inbound
+   * message by the bot / messenger routers, so it names the current speaker, not whoever opened
+   * the topic. Absent outside bot conversations.
+   */
+  botContext?: ChatTopicBotContext;
   /** Originating request IP propagated through the operation metadata. */
   clientIp?: string;
   /**

@@ -7,6 +7,7 @@ import type { TaskModel } from '@/database/models/task';
 import type { LobeChatDatabase } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
 import { assertAssigneeAgentBelongsToUser } from '@/server/services/task/patchValidation';
+import { resolveTaskOrThrow } from '@/server/services/task/utils';
 import {
   extractCommentMentionedUserIds,
   filterActiveWorkspaceMemberIds,
@@ -14,7 +15,7 @@ import {
 } from '@/server/utils/commentMentions';
 import { after } from '@/server/utils/scheduleAfterResponse';
 
-import { resolveOrThrow, taskProcedureWrite } from './procedures';
+import { taskProcedureWrite } from './procedures';
 
 /**
  * Recipients of a new comment on a task. A member comment pings the creator
@@ -123,7 +124,7 @@ export const commentsRouter = router({
     .mutation(async ({ input, ctx }) => {
       try {
         const model = ctx.taskModel;
-        const task = await resolveOrThrow(model, input.id);
+        const task = await resolveTaskOrThrow(model, input.id);
         await assertAssigneeAgentBelongsToUser(
           ctx.serverDB,
           { userId: ctx.userId, workspaceId: ctx.workspaceId ?? undefined },

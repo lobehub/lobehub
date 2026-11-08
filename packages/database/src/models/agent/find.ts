@@ -221,7 +221,7 @@ export const getAgentVisibilityMeta = async (
   return {
     slug: row.slug,
     userId: row.userId,
-    visibility: (row.visibility as 'private' | 'public' | null) ?? 'public',
+    visibility: row.visibility,
   };
 };
 
@@ -259,11 +259,15 @@ export const getAgentByMarketIdentifier = async (
 /**
  * Get an agent by the forkedFromIdentifier stored in params
  * @param forkedFromIdentifier - The source agent's market identifier
+ * @param options.virtual - Look among hidden copies (a Market agent run from an
+ *   @ mention) instead of installed agents. An installed lookup never matches a
+ *   hidden copy, so mentioning an agent never counts as installing it.
  * @returns agent id if exists, null otherwise
  */
 export const getAgentByForkedFromIdentifier = async (
   ctx: AgentModelContext,
   forkedFromIdentifier: string,
+  { virtual = false }: { virtual?: boolean } = {},
 ): Promise<string | null> => {
   const result = await ctx.db.query.agents.findFirst({
     columns: { id: true },
@@ -271,6 +275,7 @@ export const getAgentByForkedFromIdentifier = async (
     where: and(
       ctx.ownership(),
       sql`${agents.params}->>'forkedFromIdentifier' = ${forkedFromIdentifier}`,
+      sql`coalesce(${agents.virtual}, false) = ${virtual}`,
     ),
   });
   return result?.id ?? null;

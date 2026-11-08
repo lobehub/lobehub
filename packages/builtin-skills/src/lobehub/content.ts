@@ -9,6 +9,7 @@ Treat them as common knowledge — you never need to call any tool to discover t
 | Field | Value |
 |-------|-------|
 | Agent ID | \`{{agent_id}}\` |
+| Agent Name | {{agent_name}} |
 | Agent Title | {{agent_title}} |
 | Agent Description | {{agent_description}} |
 | Topic ID | \`{{topic_id}}\` |
@@ -53,6 +54,7 @@ run commands.
 | \`lh doc\` | Document management (create, parse, organize) | \`references/doc\` |
 | \`lh kb\` | Knowledge base management (create, upload, organize) | \`references/kb\` |
 | \`lh file\` | File management | \`references/file\` |
+| \`lh artifact\` | Publish local HTML or Canvas, with persistent bindings and retry recovery | \`references/artifact\` |
 | \`lh memory\` | User memory management (identity, activity, preference) | \`references/memory\` |
 | \`lh search\` / \`lh recall\` | Search local resources or the web / recall past work in a time window | \`references/search\` |
 | \`lh gen\` | Content generation (text, image, video, TTS, ASR) | \`references/generate\` |
@@ -62,14 +64,14 @@ run commands.
 | \`lh skill\` | Skill management (install, create, manage) | \`references/skill\` |
 | \`lh model\` | AI model management | \`references/model\` |
 | \`lh provider\` | AI provider management | \`references/provider\` |
-| \`lh plugin\` | Plugin management | \`references/plugin\` |
+| \`lh legacy-plugin\` | Legacy 1.0 plugin management | \`references/plugin\` |
 | \`lh bot\` | Bot integration management (Discord, Slack, Telegram, etc.) | \`references/bot\` |
 | \`lh widget\` / \`lh dashboard\` | Monitoring widgets (sandboxed scripts) and the dashboards they sit on | \`references/dashboard\` |
 | \`lh eval\` | Evaluation workflow management | \`references/eval\` |
-| \`lh whoami\` / \`lh usage\` / \`lh user\` / \`lh migrate\` | Account, usage, settings and imports (top-level commands, not a \`config\` module) | \`references/config\` |
+| \`lh whoami\` / \`lh usage\` / \`lh user\` / \`lh notification\` / \`lh migrate\` | Account, usage, settings, notification settings and imports (top-level commands, not a \`config\` module) | \`references/config\` |
 
 Covered by their own skills, so activate the skill instead of reading a reference here:
-\`lh task\` inside a task run (\`task\` skill), \`lh artifact\` (\`artifacts\` skill) and
+\`lh task\` inside a task run (\`task\` skill) and
 \`lh acceptance\` (\`acceptance\` skill).
 
 # Workspace scope
@@ -112,8 +114,8 @@ lh message search "deployment issue" --since 7d
 # Recall everything about a topic from last week (messages, topics, goals, pages)
 lh recall "replica" --since 2026-10-12 --until 2026-10-18
 
-# Generate an image
-lh gen image "a sunset over mountains" -m dall-e-3
+# Generate an image (omit -m/-p to use the same default model as the web image page)
+lh gen image "a sunset over mountains"
 
 # Run an agent
 lh agent run -a <agentId> -p "Summarize today's tasks"

@@ -1,15 +1,9 @@
 'use client';
 
-import {
-  Button,
-  createStaticStyles,
-  DropdownMenu,
-  Flexbox,
-  Icon,
-  Text,
-  Tooltip,
-} from '@lobehub/ui';
+import { Button, DropdownMenu, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
 import { GithubIcon } from '@lobehub/ui/icons';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { FileArchive, Grid2x2Plus, Link, Store } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -24,51 +18,60 @@ import { useConnectorManageable } from '@/hooks/useConnectorManagePolicy';
 import ConnectorManagePolicy from './ConnectorManagePolicy';
 import { type ToolDetailType } from './SkillDetail';
 import SkillList, { type SkillViewMode } from './SkillList';
+import { SkillListVariantProvider } from './SkillListRow';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  body: css`
-    overflow-y: auto;
-    flex: 1;
-    padding-block: 4px;
-    padding-inline: 8px;
-  `,
-  header: css`
-    display: flex;
-    flex-shrink: 0;
-    gap: 8px;
-    align-items: center;
-    justify-content: space-between;
-
-    height: 42px;
-    padding-inline: 16px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  root: css`
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-
-    width: 300px;
-    min-width: 260px;
-    border-inline-end: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  tooltipAnchor: css`
-    display: inline-flex;
-  `,
-}));
+const styles = stylex.create({
+  body: { overflowY: 'auto', flex: '1', paddingBlock: '4px', paddingInline: '8px' },
+  pageBody: { paddingBlockStart: '0', paddingBlockEnd: '24px', paddingInline: '0' },
+  pageHeader: {
+    display: 'flex',
+    flexShrink: 0,
+    gap: '16px',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBlockStart: '24px',
+    paddingBlockEnd: '4px',
+    paddingInline: '12px',
+  },
+  header: {
+    display: 'flex',
+    flexShrink: 0,
+    gap: '8px',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    height: '42px',
+    paddingInline: '16px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+  root: {
+    overflowY: 'auto',
+    display: 'flex',
+    flexDirection: 'column',
+    width: '300px',
+    minWidth: '260px',
+    borderInlineEndWidth: '1px',
+    borderInlineEndStyle: 'solid',
+    borderInlineEndColor: cssVar.colorBorderSecondary,
+  },
+  tooltipAnchor: { display: 'inline-flex' },
+});
 
 interface LeftPanelProps {
   /** Fill the page instead of sitting as a 300px column beside the detail (mobile). */
   fullWidth?: boolean;
   onDeleteSelected: () => void;
   onSelect: (identifier: string, type: ToolDetailType) => void;
+  /** Render as the page-level list a row opens a second-level detail from. */
+  page?: boolean;
   selectedIdentifier?: string;
   viewMode: SkillViewMode;
 }
 
 const LeftPanel = memo<LeftPanelProps>(
-  ({ fullWidth, onDeleteSelected, onSelect, selectedIdentifier, viewMode }) => {
-    const { t } = useTranslation('setting');
+  ({ fullWidth, onDeleteSelected, onSelect, page, selectedIdentifier, viewMode }) => {
+    const { t } = useTranslation(['setting', 'tool']);
     const [showAddConnector, setShowAddConnector] = useState(false);
 
     const handleOpenStore = useCallback(() => {
@@ -78,14 +81,69 @@ const LeftPanel = memo<LeftPanelProps>(
     const isConnectorView = viewMode === 'connector';
     // Adding a workspace connector follows the same member policy as editing one.
     const { canManage: canAddConnector, isPending: isPolicyPending } = useConnectorManageable();
+    const addConnectorTitle = t('connector.add.title', {
+      defaultValue: 'Add Custom Connector',
+      ns: 'tool',
+    });
+    const isConnectorPage = page && isConnectorView;
+
+    if (isConnectorPage)
+      return (
+        <SkillListVariantProvider value={'page'}>
+          {/* The shared navigation header carries the title; the page actions
+              share the intro row so they line up with the list below. */}
+          <div {...stylex.props(styles.pageHeader)}>
+            <Text type={'secondary'}>{t('skillView.connectorsDesc')}</Text>
+            <Flexbox horizontal flex={'none'} gap={8}>
+              <Tooltip title={t('skillStore.title')}>
+                <Button
+                  aria-label={t('skillStore.title')}
+                  icon={<Icon icon={Store} />}
+                  onClick={handleOpenStore}
+                />
+              </Tooltip>
+              <Tooltip
+                title={
+                  canAddConnector || isPolicyPending
+                    ? undefined
+                    : t('tools.connectorFeedback.manageOnly')
+                }
+              >
+                {/* Disabled buttons swallow hover events; the wrapper anchors the tooltip. */}
+                <span {...stylex.props(styles.tooltipAnchor)}>
+                  <Button
+                    disabled={!canAddConnector}
+                    icon={Grid2x2Plus}
+                    onClick={() => setShowAddConnector(true)}
+                  >
+                    {addConnectorTitle}
+                  </Button>
+                </span>
+              </Tooltip>
+            </Flexbox>
+          </div>
+          <ConnectorManagePolicy variant={'page'} />
+          <div {...stylex.props(styles.pageBody)}>
+            <SkillList
+              viewMode={viewMode}
+              onDeleteSelected={onDeleteSelected}
+              onSelect={onSelect}
+            />
+          </div>
+          <CustomConnectorModal
+            open={showAddConnector}
+            onClose={() => setShowAddConnector(false)}
+          />
+        </SkillListVariantProvider>
+      );
 
     return (
       <>
         <div
-          className={styles.root}
+          className={stylex.props(styles.root).className}
           style={fullWidth ? { borderInlineEnd: 'none', width: '100%' } : undefined}
         >
-          <div className={styles.header}>
+          <div {...stylex.props(styles.header)}>
             <Text strong style={{ fontSize: 14 }}>
               {isConnectorView
                 ? t('skillView.connectors', 'Connectors')
@@ -98,15 +156,12 @@ const LeftPanel = memo<LeftPanelProps>(
                 <Tooltip
                   title={
                     canAddConnector || isPolicyPending
-                      ? t('connector.add.title', {
-                          defaultValue: 'Add Custom Connector',
-                          ns: 'tool',
-                        })
+                      ? addConnectorTitle
                       : t('tools.connectorFeedback.manageOnly')
                   }
                 >
                   {/* Disabled buttons swallow hover events; the wrapper anchors the tooltip. */}
-                  <span className={styles.tooltipAnchor}>
+                  <span {...stylex.props(styles.tooltipAnchor)}>
                     <Button
                       disabled={!canAddConnector}
                       icon={Grid2x2Plus}
@@ -171,7 +226,7 @@ const LeftPanel = memo<LeftPanelProps>(
 
           {isConnectorView && <ConnectorManagePolicy />}
 
-          <div className={styles.body}>
+          <div {...stylex.props(styles.body)}>
             <SkillList
               selectedIdentifier={selectedIdentifier}
               viewMode={viewMode}

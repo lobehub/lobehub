@@ -1,6 +1,11 @@
 import { UserInteractionApiName } from '@lobechat/builtin-tool-user-interaction';
 import { buildTaskRunPrompt, type TaskRunPromptGoalLoop } from '@lobechat/prompts';
-import type { TaskItem, TaskTopicHandoff, WorkspaceData } from '@lobechat/types';
+import type {
+  TaskItem,
+  TaskTopicHandoff,
+  VerifyCheckResultMetadata,
+  WorkspaceData,
+} from '@lobechat/types';
 
 import { AcceptanceModel } from '@/database/models/acceptance';
 import type { BriefModel } from '@/database/models/brief';
@@ -199,13 +204,32 @@ const resolveGoalLoopContext = async (
       return inherited.sort((a, b) => b.round - a.round)[0];
     };
 
-    const failed = ((last.plan ?? []) as PlanItem[]).flatMap((item) => {
+    // A ruling binds the check, not the round it was filed in: the next attempt
+    // must know which checks it may stop chasing and which it lost a dispute on.
+    const rulings = new Map<string, 'overruled' | 'upheld'>();
+    for (const result of results) {
+      const outcome = (result.metadata as VerifyCheckResultMetadata | null)?.dispute?.arbitration
+        ?.outcome;
+      if (outcome !== 'overruled' && outcome !== 'upheld') continue;
+      const id = logicalByCheckItem.get(result.checkItemId) ?? result.checkItemId;
+      // Overruled is final, so it wins over an older upheld ruling.
+      if (rulings.get(id) !== 'overruled') rulings.set(id, outcome);
+    }
+
+    const plan = (last.plan ?? []) as PlanItem[];
+    const failed = plan.flatMap((item) => {
+      if (rulings.get(logicalId(item)) === 'upheld') return [];
       const r = judgedFor(logicalId(item))?.result;
       if (!r || (r.status !== 'failed' && r.verdict !== 'failed' && r.verdict !== 'uncertain'))
         return [];
       return [{ title: item.title, why: r.suggestion || r.toulmin?.reasoning || undefined }];
     });
     if (failed.length > 0) context.failedChecks = failed.slice(0, MAX_GOAL_FAILED_CHECKS);
+    const disputeRulings = plan.flatMap((item) => {
+      const outcome = rulings.get(logicalId(item));
+      return outcome ? [{ outcome, title: item.title }] : [];
+    });
+    if (disputeRulings.length > 0) context.disputeRulings = disputeRulings;
     return context;
   } catch {
     return context;
@@ -299,10 +323,11 @@ export async function buildTaskPrompt(
       ? await taskModel.getDependenciesByTaskIds(subtaskIds).catch(() => [])
       : [];
   const subtaskIdToIdentifier = new Map(subtasks.map((s: any) => [s.id, s.identifier]));
-  const subtaskDepMap = new Map<string, string>();
+  const subtaskDepMap = new Map<string, { id: string; identifier: string }>();
   for (const dep of subtaskDeps as any[]) {
     const depIdentifier = subtaskIdToIdentifier.get(dep.dependsOnId);
-    if (depIdentifier) subtaskDepMap.set(dep.taskId, depIdentifier);
+    if (depIdentifier)
+      subtaskDepMap.set(dep.taskId, { id: dep.dependsOnId, identifier: depIdentifier });
   }
 
   const depTaskIds = [...new Set(dependencies.map((d: any) => d.dependsOnId))];
@@ -312,11 +337,14 @@ export async function buildTaskPrompt(
   let parentIdentifier: string | null = null;
   let parentTaskContext:
     | {
+        id: string;
         identifier: string;
         instruction: string;
         name?: string | null;
         subtasks?: Array<{
           blockedBy?: string;
+          blockedById?: string;
+          id: string;
           identifier: string;
           name?: string | null;
           priority?: number | null;
@@ -336,18 +364,21 @@ export async function buildTaskPrompt(
           ? await taskModel.getDependenciesByTaskIds(siblingIds).catch(() => [])
           : [];
       const siblingIdToIdentifier = new Map(siblings.map((s: any) => [s.id, s.identifier]));
-      const siblingDepMap = new Map<string, string>();
+      const siblingDepMap = new Map<string, { id: string; identifier: string }>();
       for (const dep of siblingDeps as any[]) {
         const depId = siblingIdToIdentifier.get(dep.dependsOnId);
-        if (depId) siblingDepMap.set(dep.taskId, depId);
+        if (depId) siblingDepMap.set(dep.taskId, { id: dep.dependsOnId, identifier: depId });
       }
 
       parentTaskContext = {
+        id: parent.id,
         identifier: parent.identifier,
         instruction: parent.instruction,
         name: parent.name,
         subtasks: siblings.map((s: any) => ({
-          blockedBy: siblingDepMap.get(s.id),
+          id: s.id,
+          blockedBy: siblingDepMap.get(s.id)?.identifier,
+          blockedById: siblingDepMap.get(s.id)?.id,
           identifier: s.identifier,
           name: s.name,
           priority: s.priority,
@@ -461,6 +492,7 @@ export async function buildTaskPrompt(
       automationMode: task.automationMode,
       dependencies: dependencies.map((d: any) => ({
         dependsOn: depIdToIdentifier.get(d.dependsOnId) ?? d.dependsOnId,
+        dependsOnId: d.dependsOnId,
         type: d.type,
       })),
       description: task.description,
@@ -471,6 +503,7 @@ export async function buildTaskPrompt(
       instruction: task.instruction,
       name: task.name,
       parentIdentifier,
+      parentTaskId: task.parentTaskId,
       priority: task.priority,
       review: taskModel.getReviewConfig(task) as any,
       schedulePattern: task.schedulePattern,
@@ -485,7 +518,9 @@ export async function buildTaskPrompt(
           }
         : undefined,
       subtasks: subtasks.map((s: any) => ({
-        blockedBy: subtaskDepMap.get(s.id),
+        id: s.id,
+        blockedBy: subtaskDepMap.get(s.id)?.identifier,
+        blockedById: subtaskDepMap.get(s.id)?.id,
         identifier: s.identifier,
         name: s.name,
         priority: s.priority,

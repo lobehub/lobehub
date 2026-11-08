@@ -150,3 +150,39 @@ describe('AiGenerationService.generateObject with a device-only provider', () =>
     ).rejects.toMatchObject({ error: { reason: 'no_executor' } });
   });
 });
+
+describe('AiGenerationService.decide', () => {
+  const decide = vi.fn();
+  const initSpy = vi.spyOn(ModelRuntimeModule, 'initModelRuntimeFromDB');
+
+  beforeEach(() => {
+    decide.mockReset();
+    initSpy.mockReset();
+    resolveProviderRelay.mockReset();
+    initSpy.mockResolvedValue({ decide } as any);
+  });
+
+  it('calls the decision model from the server, never through the device relay', async () => {
+    const response = { answers: { ok: { probability: 0.9, type: 'boolean' } }, model: 'jev' };
+    decide.mockResolvedValue(response);
+    const questions = { ok: { instructions: 'Is it ok?', type: 'boolean' as const } };
+
+    const ai = new AiGenerationService({} as any, 'user-1', 'ws-1');
+    const result = await ai.decide(
+      { model: 'jev-1.14.0', provider: 'lobehub', questions, state: 'state' },
+      { metadata: { trigger: RequestTrigger.Cli }, tracing: { scenario: 'replay' } },
+    );
+
+    expect(resolveProviderRelay).not.toHaveBeenCalled();
+    expect(initSpy).toHaveBeenCalledWith({}, 'user-1', 'lobehub', 'ws-1');
+    expect(decide).toHaveBeenCalledWith(
+      { model: 'jev-1.14.0', questions, state: 'state' },
+      {
+        metadata: { trigger: RequestTrigger.Cli },
+        signal: undefined,
+        tracing: { scenario: 'replay' },
+      },
+    );
+    expect(result).toBe(response);
+  });
+});

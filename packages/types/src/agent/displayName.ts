@@ -91,3 +91,28 @@ export const agentSecondaryDisplayName = (
 
   return role;
 };
+
+/**
+ * The label an agent is introduced by in a prompt: its name, with the role behind it when there is
+ * one worth adding — "Nasa (Shadow Arvin)". A prompt that only carries the title makes a named
+ * agent answer "I'm not Nasa, I'm Shadow Arvin" when people call it by name.
+ *
+ * Built from {@link agentDisplayName} and {@link agentSecondaryDisplayName}, so the agent names
+ * itself the way the product labels it.
+ */
+export function agentIdentityLabel(agent: AgentNameFields | null | undefined): string | undefined;
+export function agentIdentityLabel(
+  agent: AgentNameFields | null | undefined,
+  fallback: string,
+): string;
+export function agentIdentityLabel(
+  agent: AgentNameFields | null | undefined,
+  fallback?: string,
+): string | undefined {
+  const primary = agentDisplayName(agent);
+  if (!primary) return fallback;
+
+  const role = agentSecondaryDisplayName(agent);
+
+  return role ? `${primary} (${role})` : primary;
+}

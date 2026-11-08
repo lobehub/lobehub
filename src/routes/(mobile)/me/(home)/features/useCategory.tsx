@@ -1,5 +1,5 @@
 import { LOBE_CHAT_CLOUD, UTM_SOURCE } from '@lobechat/business-const';
-import { DOWNLOAD_URL, OFFICIAL_URL } from '@lobechat/const';
+import { DOCUMENTS, DOWNLOAD_URL, FEEDBACK, OFFICIAL_URL } from '@lobechat/const';
 import {
   Book,
   CircleUserRound,
@@ -16,7 +16,6 @@ import { useNavigate } from 'react-router';
 import useBusinessMeCells from '@/business/client/features/User/useBusinessMeCells';
 import { type CellProps } from '@/components/Cell';
 import { openChangelogModal } from '@/components/ChangelogModal';
-import { DOCUMENTS, FEEDBACK } from '@/const/index';
 import { usePlatform } from '@/hooks/usePlatform';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';

@@ -1,4 +1,8 @@
+import type { NotificationSettings } from '@lobechat/types';
+
 import { NotificationModel } from '@/database/models/notification';
+import { UserModel } from '@/database/models/user';
+import { WorkspaceUserSettingsModel } from '@/database/models/workspaceUserSettings';
 import type { LobeChatDatabase } from '@/database/type';
 import {
   type InboxCountContext,
@@ -9,7 +13,7 @@ import {
 
 import { BaseService } from '../common/base.service';
 import type { ServiceResult } from '../types';
-import type { NotificationListQuery } from '../types/notification.type';
+import type { NotificationListQuery, NotificationSettingsScope } from '../types/notification.type';
 
 /**
  * Notifications REST service.
@@ -72,5 +76,31 @@ export class NotificationRestService extends BaseService {
 
   async archiveAll(): ServiceResult<unknown> {
     return this.notificationModel.archiveAll();
+  }
+
+  async getSettings(scope: NotificationSettingsScope): ServiceResult<NotificationSettings> {
+    if (scope === 'personal') return new UserModel(this.db, this.userId).getNotificationSetting();
+    return (await this.workspaceSettingsModel().getPreference()).notification ?? {};
+  }
+
+  /** Merge `patch` over the stored settings of `scope` and return the result. */
+  async updateSettings(
+    scope: NotificationSettingsScope,
+    patch: NotificationSettings,
+  ): ServiceResult<NotificationSettings> {
+    if (scope === 'personal') {
+      return new UserModel(this.db, this.userId).mergeNotificationSetting(patch);
+    }
+    const row = await this.workspaceSettingsModel().updatePreference({ notification: patch });
+    return row?.preference?.notification ?? {};
+  }
+
+  private workspaceSettingsModel(): WorkspaceUserSettingsModel {
+    if (!this.workspaceId) {
+      throw this.createValidationError(
+        'Workspace notification settings need an X-Workspace-Id header',
+      );
+    }
+    return new WorkspaceUserSettingsModel(this.db, this.userId, this.workspaceId);
   }
 }

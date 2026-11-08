@@ -45,6 +45,8 @@ export class UserSettingsActionImpl {
    * requests could commit out of order and leave an older list in the DB.
    */
   #toolChannelsWrite: Promise<unknown> = Promise.resolve();
+  /** Tail of the in-flight `replaceServiceModelSettings` writes, kept in call order. */
+  #serviceModelWrite: Promise<unknown> = Promise.resolve();
 
   /** Latest queued write per personal system-agent entry; see updatePersonalSystemAgent. */
   readonly #personalSystemAgentWrites = new Map<PersonalSystemAgentKey, Promise<unknown>>();
@@ -105,6 +107,43 @@ export class UserSettingsActionImpl {
     this.#set({ updateSettingsSignal: newSignal }, false, 'signalForUpdateSettings');
 
     return newSignal;
+  };
+
+  /**
+   * Replace the Service Model columns with exactly the given stored values.
+   * Unlike `setSettings`, which can only merge, this can drop keys: removing a
+   * slot's model is how a slot goes back to following its tier or the system
+   * recommendation. The server replaces these jsonb columns wholesale.
+   */
+  replaceServiceModelSettings = async (
+    columns: Pick<PartialDeep<UserSettings>, 'defaultAgent' | 'systemAgent'>,
+  ): Promise<void> => {
+    this.#set(
+      { settings: { ...this.#get().settings, ...columns } },
+      false,
+      'optimistic_replaceServiceModelSettings',
+    );
+
+    // A failed earlier write must not block later ones; its caller still
+    // receives the rejection through its own `write` promise.
+    const write = this.#serviceModelWrite
+      .catch(() => {})
+      .then(() => userService.updateUserSettings(columns));
+    this.#serviceModelWrite = write;
+
+    try {
+      await write;
+    } catch (error) {
+      // Drop the unsaved optimistic value; the caller keeps the rejection for retry.
+      await this.#get()
+        .refreshUserState()
+        .catch(() => {});
+      throw error;
+    }
+    for (const key of Object.keys(columns)) this.#pendingSettingKeys.delete(key);
+    // Only the latest write refreshes: an intermediate refresh would pull a
+    // value that a queued write is about to replace.
+    if (this.#serviceModelWrite === write) await this.#get().refreshUserState();
   };
 
   resetSettings = async (): Promise<void> => {

@@ -2,8 +2,9 @@ import { createStaticStyles, Flexbox, PreviewGroup, ScrollShadow } from '@lobehu
 import isEqual from 'fast-deep-equal';
 import { memo } from 'react';
 
+import { useChatInputUploadKey } from '@/features/ChatInput/hooks/useChatInputUpload';
 import { useChatInputStore } from '@/features/ChatInput/store';
-import { filesSelectors, useFileStore } from '@/store/file';
+import { fileChatSelectors, useFileStore } from '@/store/file';
 
 import FileItem from './FileItem';
 
@@ -16,7 +17,8 @@ const styles = createStaticStyles(({ css }) => ({
 
 const FilePreview = memo(() => {
   const expand = useChatInputStore((s) => s.expand);
-  const list = useFileStore(filesSelectors.chatUploadFileList, isEqual);
+  const contextKey = useChatInputUploadKey();
+  const list = useFileStore(fileChatSelectors.chatUploadFileList(contextKey), isEqual);
   if (!list || list?.length === 0) return null;
 
   return (

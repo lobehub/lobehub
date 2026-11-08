@@ -24,6 +24,17 @@ export type SetupLinkLabel =
   | 'openSlackApp';
 
 export interface SetupStep {
+  /**
+   * Done before "save and connect" even though it asks for no credential: Discord's
+   * invite only needs the app ID, and a bot in no server fails the connection test.
+   */
+  beforeConnect?: boolean;
+  /**
+   * Keys of the credential fields this step is about (`applicationId`, or a key
+   * under `credentials`; `extras` is the platform's helper under them). While a bot is being set up they are filled in right
+   * under the step; a saved bot keeps them in its credentials group instead.
+   */
+  fields?: string[];
   /** i18n: `channel.quickSetup.<guide>.<key>.title` / `.desc` (agent namespace). */
   key: string;
   link?: { href: string; label: SetupLinkLabel };
@@ -64,7 +75,11 @@ export const getSetupGuide = (
         guide: 'feishu',
         scanToCreate: true,
         steps: [
-          { key: 'create', link: { href: FEISHU_CONSOLE_URL[platformId], label: 'openConsole' } },
+          {
+            key: 'create',
+            fields: ['applicationId', 'appSecret'],
+            link: { href: FEISHU_CONSOLE_URL[platformId], label: 'openConsole' },
+          },
           { key: 'bot' },
           { key: 'events' },
           { key: 'publish' },
@@ -84,8 +99,16 @@ export const getSetupGuide = (
               label: 'createSlackApp',
             },
           },
-          { key: 'install', link: { href: appPage('oauth'), label: 'openSlackApp' } },
-          { key: 'tokens', link: { href: appPage('general'), label: 'openSlackApp' } },
+          {
+            key: 'install',
+            fields: ['botToken'],
+            link: { href: appPage('oauth'), label: 'openSlackApp' },
+          },
+          {
+            key: 'tokens',
+            fields: ['applicationId', 'signingSecret', 'appToken'],
+            link: { href: appPage('general'), label: 'openSlackApp' },
+          },
         ],
       };
     }
@@ -94,15 +117,17 @@ export const getSetupGuide = (
         guide: 'discord',
         steps: [
           { key: 'create', link: { href: DISCORD_DEVELOPER_PORTAL_URL, label: 'openConsole' } },
-          { key: 'credentials' },
+          { key: 'credentials', fields: ['applicationId', 'publicKey'] },
           {
             key: 'bot',
+            fields: ['botToken'],
             link: {
               href: appId ? buildDiscordBotPageUrl(appId) : DISCORD_DEVELOPER_PORTAL_URL,
               label: 'openBotSettings',
             },
           },
           {
+            beforeConnect: true,
             key: 'invite',
             link: appId ? { href: buildDiscordInviteUrl(appId), label: 'inviteBot' } : undefined,
             needsApplicationId: !appId,
@@ -115,7 +140,7 @@ export const getSetupGuide = (
         guide: 'telegram',
         steps: [
           { key: 'botfather', link: { href: TELEGRAM_BOTFATHER_URL, label: 'openBotFather' } },
-          { key: 'token' },
+          { key: 'token', fields: ['botToken'] },
           { key: 'privacy' },
         ],
       };
@@ -125,7 +150,7 @@ export const getSetupGuide = (
         guide: 'qq',
         steps: [
           { key: 'create', link: { href: QQ_BOT_CONSOLE_URL, label: 'openConsole' } },
-          { key: 'credentials' },
+          { key: 'credentials', fields: ['applicationId', 'appSecret'] },
         ],
       };
     }
@@ -140,7 +165,13 @@ export const getSetupGuide = (
             key: 'messagingApi',
             link: { href: LINE_ACCOUNT_MANAGER_URL, label: 'openLineAccountManager' },
           },
-          { key: 'credentials', link: { href: LINE_CONSOLE_URL, label: 'openConsole' } },
+          {
+            key: 'credentials',
+            // `extras` is the platform's helper button ("Fetch from LINE"), which fills the
+            // destination user ID from the access token, so it follows the fields it needs.
+            fields: ['channelAccessToken', 'channelSecret', 'applicationId', 'extras'],
+            link: { href: LINE_CONSOLE_URL, label: 'openConsole' },
+          },
           { key: 'webhook' },
         ],
       };
@@ -149,4 +180,24 @@ export const getSetupGuide = (
       return undefined;
     }
   }
+};
+
+/**
+ * Credential field keys a platform's setup steps fill in place. Empty for a
+ * platform without a guide, so its credentials stay in one group.
+ */
+export const getInlineFieldKeys = (platformId: string): Set<string> =>
+  new Set(
+    (getSetupGuide(platformId, { appName: '' })?.steps ?? []).flatMap((step) => step.fields ?? []),
+  );
+
+/**
+ * Where the "save and connect" step goes: right after the last step that asks for a credential
+ * or is marked `beforeConnect`, since everything after it (turning on a webhook, subscribing to
+ * events) needs the bot to be saved and running. A guide whose steps ask for nothing gets it at
+ * the end.
+ */
+export const connectStepIndex = (steps: SetupStep[]): number => {
+  const last = steps.findLastIndex((step) => step.beforeConnect || (step.fields?.length ?? 0) > 0);
+  return last === -1 ? steps.length : last + 1;
 };

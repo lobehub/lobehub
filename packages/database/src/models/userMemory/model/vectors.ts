@@ -1,3 +1,11 @@
+import type {
+  UserMemoryActivityInsert,
+  UserMemoryContextInsert,
+  UserMemoryExperienceInsert,
+  UserMemoryIdentityInsert,
+  UserMemoryInsert,
+  UserMemoryPreferenceInsert,
+} from '@lobechat/types';
 import { and, eq } from 'drizzle-orm';
 
 import {
@@ -34,7 +42,7 @@ export const updateUserMemoryVectors = async (
   id: string,
   vectors: UpdateUserMemoryVectorsParams,
 ): Promise<void> => {
-  const vectorUpdates: Partial<typeof userMemories.$inferInsert> = {};
+  const vectorUpdates: Partial<UserMemoryInsert> = {};
   if (vectors.detailsVector1024 !== undefined) {
     vectorUpdates.detailsVector1024 = vectors.detailsVector1024;
   }
@@ -60,7 +68,7 @@ export const updateContextVectors = async (
   id: string,
   vectors: UpdateContextVectorsParams,
 ): Promise<void> => {
-  const vectorUpdates: Partial<typeof userMemoriesContexts.$inferInsert> = {};
+  const vectorUpdates: Partial<UserMemoryContextInsert> = {};
   if (vectors.descriptionVector !== undefined) {
     vectorUpdates.descriptionVector = vectors.descriptionVector;
   }
@@ -82,7 +90,7 @@ export const updatePreferenceVectors = async (
   id: string,
   vectors: UpdatePreferenceVectorsParams,
 ): Promise<void> => {
-  const vectorUpdates: Partial<typeof userMemoriesPreferences.$inferInsert> = {};
+  const vectorUpdates: Partial<UserMemoryPreferenceInsert> = {};
   if (vectors.conclusionDirectivesVector !== undefined) {
     vectorUpdates.conclusionDirectivesVector = vectors.conclusionDirectivesVector;
   }
@@ -105,7 +113,7 @@ export const updateIdentityVectors = async (
   id: string,
   vectors: UpdateIdentityVectorsParams,
 ): Promise<void> => {
-  const vectorUpdates: Partial<typeof userMemoriesIdentities.$inferInsert> = {};
+  const vectorUpdates: Partial<UserMemoryIdentityInsert> = {};
   if (vectors.descriptionVector !== undefined) {
     vectorUpdates.descriptionVector = vectors.descriptionVector;
   }
@@ -128,7 +136,7 @@ export const updateExperienceVectors = async (
   id: string,
   vectors: UpdateExperienceVectorsParams,
 ): Promise<void> => {
-  const vectorUpdates: Partial<typeof userMemoriesExperiences.$inferInsert> = {};
+  const vectorUpdates: Partial<UserMemoryExperienceInsert> = {};
   if (vectors.actionVector !== undefined) {
     vectorUpdates.actionVector = vectors.actionVector;
   }
@@ -157,7 +165,7 @@ export const updateActivityVectors = async (
   id: string,
   vectors: { feedbackVector?: number[] | null; narrativeVector?: number[] | null },
 ): Promise<void> => {
-  const vectorUpdates: Partial<typeof userMemoriesActivities.$inferInsert> = {};
+  const vectorUpdates: Partial<UserMemoryActivityInsert> = {};
   if (vectors.feedbackVector !== undefined) {
     vectorUpdates.feedbackVector = vectors.feedbackVector;
   }

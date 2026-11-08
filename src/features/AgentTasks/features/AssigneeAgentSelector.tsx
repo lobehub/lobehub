@@ -1,23 +1,38 @@
-import { DEFAULT_INBOX_AVATAR } from '@lobechat/const';
 import { agentDisplayName } from '@lobechat/types';
-import { createStaticStyles, cssVar, Flexbox, Icon, Popover, Text, Tooltip } from '@lobehub/ui';
-import isEqual from 'fast-deep-equal';
-import { UserRoundX } from 'lucide-react';
+import {
+  confirmModal,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Icon,
+  Popover,
+  Text,
+  Tooltip,
+} from '@lobehub/ui';
+import { ChevronDown, ChevronRight, UserRoundX } from 'lucide-react';
 import type { CSSProperties, KeyboardEvent, ReactNode } from 'react';
 import { memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { type SidebarAgentItem } from '@/database/repositories/home';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import AgentItem from '@/features/PageEditor/Copilot/AgentSelector/AgentItem';
-import { useFetchAgentList } from '@/hooks/useFetchAgentList';
+import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
 import { usePermission } from '@/hooks/usePermission';
-import { useAgentStore } from '@/store/agent';
-import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
-import { useHomeStore } from '@/store/home';
-import { homeAgentListSelectors } from '@/store/home/selectors';
+import { useGlobalStore } from '@/store/global';
 import { useTaskStore } from '@/store/task';
+import { useUserStore } from '@/store/user';
+import { userProfileSelectors } from '@/store/user/selectors';
+
+import {
+  filterAssigneeSections,
+  matchesAssigneeSearch,
+  pickRecentAssignees,
+  shouldOfferPrivateAgents,
+} from './assigneeAgentSections';
+import { useAssigneeAgentScopes } from './useAssigneeAgentScopes';
 
 interface AssigneeAgentSelectorProps {
   /** Offer the "unassigned" option; off where an owner is required. */
@@ -30,6 +45,11 @@ interface AssigneeAgentSelectorProps {
   /** Why `disabled` holds; defaults to the running-Task explanation. */
   disabledReason?: string;
   onChange?: (agentId: string | null) => void;
+  /**
+   * The task's creator. On a public task, lets its creator pick a private
+   * agent: confirming makes the task private first, then assigns it.
+   */
+  taskCreatorId?: string | null;
   taskIdentifier?: string;
   taskVisibility?: 'private' | 'public' | null;
 }
@@ -37,6 +57,20 @@ interface AssigneeAgentSelectorProps {
 type AgentOption =
   | { key: 'unassigned'; kind: 'unassigned' }
   | { agent: SidebarAgentItem; key: string; kind: 'agent' };
+
+type PickerRow =
+  | { kind: 'option'; option: AgentOption }
+  | { key: string; kind: 'scope'; title: string }
+  | {
+      collapsed: boolean;
+      collapsible: boolean;
+      count: number;
+      id: string;
+      kind: 'section';
+      title: string;
+    };
+
+const RECENT_SECTION_ID = 'recent';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   searchInput: css`
@@ -53,6 +87,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     background: transparent;
     outline: none;
 
+    /* The global focus ring would box the whole popover top; the divider takes its place. */
+    &:focus-visible {
+      border-block-end-color: ${cssVar.colorPrimary};
+    }
+
     &::placeholder {
       color: ${cssVar.colorTextPlaceholder};
     }
@@ -65,12 +104,42 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     line-height: 1.4;
     color: ${cssVar.colorTextTertiary};
   `,
-}));
+  sectionToggle: css`
+    cursor: pointer;
 
-const matchesSearch = (agent: SidebarAgentItem, query: string) =>
-  [agentDisplayName(agent), agent.title].some((label) =>
-    (label ?? '').toLowerCase().includes(query),
-  );
+    display: flex;
+    gap: 4px;
+    align-items: center;
+
+    width: 100%;
+    padding-block: 4px;
+    padding-inline: 4px 8px;
+    border: none;
+    border-radius: ${cssVar.borderRadiusSM};
+
+    font-family: inherit;
+    font-size: 12px;
+    line-height: 1.4;
+    color: ${cssVar.colorTextTertiary};
+    text-align: start;
+
+    background: transparent;
+
+    &:hover {
+      color: ${cssVar.colorTextSecondary};
+      background: ${cssVar.colorFillTertiary};
+    }
+  `,
+  sectionToggleTitle: css`
+    overflow: hidden;
+    flex: 1;
+
+    min-width: 0;
+
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  `,
+}));
 
 const triggerStyle: CSSProperties = {
   alignItems: 'center',
@@ -95,6 +164,7 @@ const AssigneeAgentSelector = memo<AssigneeAgentSelectorProps>(
     disabled,
     disabledReason,
     onChange,
+    taskCreatorId,
     taskIdentifier,
     taskVisibility,
   }) => {
@@ -104,127 +174,224 @@ const AssigneeAgentSelector = memo<AssigneeAgentSelectorProps>(
     const [search, setSearch] = useState('');
     const [activeIndex, setActiveIndex] = useState(0);
     const listRef = useRef<HTMLDivElement>(null);
+    const keyboardMovedRef = useRef(false);
 
     const updateTask = useTaskStore((s) => s.updateTask);
-    const pinnedAgents = useHomeStore(homeAgentListSelectors.pinnedAgents, isEqual);
-    const agentGroups = useHomeStore(homeAgentListSelectors.agentGroups, isEqual);
-    const ungroupedAgents = useHomeStore(homeAgentListSelectors.ungroupedAgents, isEqual);
-    const privateAgentGroups = useHomeStore(homeAgentListSelectors.privateAgentGroups, isEqual);
-    const privatePinnedAgents = useHomeStore(homeAgentListSelectors.privatePinnedAgents, isEqual);
-    const privateUngroupedAgents = useHomeStore(
-      homeAgentListSelectors.privateUngroupedAgents,
-      isEqual,
-    );
-    const hasPrivateAgents = useHomeStore(homeAgentListSelectors.hasPrivateAgents);
-    const isAgentListInit = useHomeStore(homeAgentListSelectors.isAgentListInit);
+    const updateTaskVisibility = useTaskStore((s) => s.updateTaskVisibility);
+    const currentUserId = useUserStore(userProfileSelectors.userId);
+    const collapsedGroups = useGlobalStore((s) => s.status.assigneeAgentSelectorCollapsedGroups);
+    const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
+    const workspaceId = useActiveWorkspaceId();
 
-    const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
-    const inboxMeta = useAgentStore((s) =>
-      inboxAgentId ? agentSelectors.getAgentMetaById(inboxAgentId)(s) : undefined,
-    );
+    const {
+      offer: offerPrivateAgents,
+      privatizes: offerPrivateOnPublic,
+      takesOver,
+    } = shouldOfferPrivateAgents({
+      currentUserId,
+      hasOnChange: !!onChange,
+      taskCreatorId,
+      taskIdentifier,
+      taskVisibility,
+      workspaceId,
+    });
 
-    useFetchAgentList();
-
-    const workspaceAgents = useMemo<SidebarAgentItem[]>(() => {
-      const groupedItems = agentGroups.flatMap((group) => group.items);
-      const available = [...pinnedAgents, ...groupedItems, ...ungroupedAgents].filter(
-        (agent) => agent.type === 'agent',
-      );
-      const hasInbox = available.some((agent) => agent.id === inboxAgentId);
-
-      if (inboxAgentId && !hasInbox) {
-        return [
-          {
-            avatar: inboxMeta?.avatar || DEFAULT_INBOX_AVATAR,
-            description: null,
-            id: inboxAgentId,
-            pinned: false,
-            title: agentDisplayName(inboxMeta, t('inbox.title', { ns: 'chat' })),
-            type: 'agent' as const,
-            updatedAt: new Date(),
-          },
-          ...available,
-        ];
-      }
-
-      return available;
-    }, [pinnedAgents, agentGroups, ungroupedAgents, inboxAgentId, inboxMeta, t]);
-
-    const privateAgents = useMemo<SidebarAgentItem[]>(() => {
-      if (taskVisibility === 'public') return [];
-      const groupedItems = privateAgentGroups.flatMap((group) => group.items);
-      return [...privatePinnedAgents, ...groupedItems, ...privateUngroupedAgents].filter(
-        (agent) => agent.type === 'agent',
-      );
-    }, [privateAgentGroups, privatePinnedAgents, privateUngroupedAgents, taskVisibility]);
+    const { inboxAgent, isAgentListInit, privateAgentIds, recentIds, rememberAssignee, scopes } =
+      useAssigneeAgentScopes({
+        offerPrivate: offerPrivateAgents,
+        privateTitle: takesOver
+          ? t('taskManager.agentSelector.privateGroupTakesOver', { ns: 'topic' })
+          : offerPrivateOnPublic
+            ? t('taskManager.agentSelector.privateGroupMakesPrivate', { ns: 'topic' })
+            : t('taskManager.agentSelector.privateGroup', { ns: 'topic' }),
+      });
 
     const query = search.trim().toLowerCase();
-    const filteredPrivate = useMemo(
-      () => (query ? privateAgents.filter((agent) => matchesSearch(agent, query)) : privateAgents),
-      [privateAgents, query],
-    );
-    const filteredWorkspace = useMemo(
+    const recentAgents = useMemo(
       () =>
-        query ? workspaceAgents.filter((agent) => matchesSearch(agent, query)) : workspaceAgents,
-      [workspaceAgents, query],
+        query
+          ? []
+          : // A standalone inbox already has its own row above Recent; offering
+            // it here too would list it twice.
+            pickRecentAssignees(
+              recentIds,
+              scopes.flatMap((scope) => scope.sections.flatMap((section) => section.agents)),
+            ),
+      [query, recentIds, scopes],
     );
 
     const unassignedLabel = t('taskList.unassigned', { ns: 'chat' });
     const showUnassigned =
       allowUnassigned && (!query || unassignedLabel.toLowerCase().includes(query));
-    const flatOptions = useMemo<AgentOption[]>(
-      () => [
-        ...(showUnassigned ? [{ key: 'unassigned', kind: 'unassigned' } as const] : []),
-        ...filteredPrivate.map(
-          (agent) => ({ agent, key: `agent:${agent.id}`, kind: 'agent' }) as const,
-        ),
-        ...filteredWorkspace.map(
-          (agent) => ({ agent, key: `agent:${agent.id}`, kind: 'agent' }) as const,
-        ),
-      ],
-      [filteredPrivate, filteredWorkspace, showUnassigned],
+
+    // One ordered list of headers and options; the options alone drive the
+    // keyboard. An agent can sit in both Recent and its group, so option keys
+    // carry the section id.
+    const rows = useMemo<PickerRow[]>(() => {
+      const result: PickerRow[] = [];
+      const pushAgents = (sectionId: string, agents: SidebarAgentItem[]) => {
+        for (const agent of agents)
+          result.push({
+            kind: 'option',
+            option: { agent, key: `${sectionId}:${agent.id}`, kind: 'agent' },
+          });
+      };
+
+      if (showUnassigned)
+        result.push({ kind: 'option', option: { key: 'unassigned', kind: 'unassigned' } });
+      if (inboxAgent && (!query || matchesAssigneeSearch(inboxAgent, query)))
+        pushAgents('inbox', [inboxAgent]);
+
+      if (recentAgents.length > 0) {
+        result.push({
+          collapsed: false,
+          collapsible: false,
+          count: recentAgents.length,
+          id: RECENT_SECTION_ID,
+          kind: 'section',
+          title: t('taskManager.agentSelector.recentGroup', { ns: 'topic' }),
+        });
+        pushAgents(RECENT_SECTION_ID, recentAgents);
+      }
+
+      for (const scope of scopes) {
+        const sections = filterAssigneeSections(scope.sections, query);
+        if (sections.length === 0) continue;
+        if (scope.title) result.push({ key: scope.id, kind: 'scope', title: scope.title });
+
+        for (const section of sections) {
+          // A search reaches into folded groups, otherwise a match would hide.
+          const collapsed = section.collapsible && !query && !!collapsedGroups?.[section.id];
+          if (section.title)
+            result.push({
+              collapsed,
+              // While searching every match shows, so there is nothing to fold.
+              collapsible: section.collapsible && !query,
+              count: section.agents.length,
+              id: section.id,
+              kind: 'section',
+              title: section.title,
+            });
+          if (!collapsed) pushAgents(section.id, section.agents);
+        }
+      }
+
+      return result;
+    }, [collapsedGroups, inboxAgent, query, recentAgents, scopes, showUnassigned, t]);
+
+    const flatOptions = useMemo(
+      () => rows.flatMap((row) => (row.kind === 'option' ? [row.option] : ([] as AgentOption[]))),
+      [rows],
     );
-    const selectedKey = currentAgentId ? `agent:${currentAgentId}` : 'unassigned';
+
+    const toggleSection = useCallback(
+      (sectionId: string, collapsed: boolean) =>
+        updateSystemStatus({ assigneeAgentSelectorCollapsedGroups: { [sectionId]: !collapsed } }),
+      [updateSystemStatus],
+    );
 
     useEffect(() => {
       if (query) {
         setActiveIndex(0);
         return;
       }
-      const selectedIndex = flatOptions.findIndex((option) => option.key === selectedKey);
+      const selectedIndex = flatOptions.findIndex((option) =>
+        option.kind === 'agent' ? option.agent.id === currentAgentId : !currentAgentId,
+      );
       setActiveIndex(selectedIndex >= 0 ? selectedIndex : 0);
-    }, [flatOptions, query, selectedKey]);
+    }, [currentAgentId, flatOptions, query]);
+
+    const assignAgent = useCallback(
+      (agentId: string | null, agent?: SidebarAgentItem) => {
+        if (agentId) rememberAssignee(agentId);
+        if (onChange) {
+          onChange(agentId);
+          return;
+        }
+        if (!taskIdentifier) return;
+        return updateTask(
+          taskIdentifier,
+          { assigneeAgentId: agentId },
+          // The picker is the one place that already holds the chosen agent's
+          // display metadata, so it hands it over for the optimistic feed row.
+          {
+            optimisticAssignee: agent
+              ? {
+                  // A group agent carries a member-avatar list; the feed row
+                  // only knows how to draw a single image.
+                  avatar: typeof agent.avatar === 'string' ? agent.avatar : null,
+                  id: agent.id,
+                  name: agentDisplayName(agent),
+                  type: 'agent',
+                }
+              : undefined,
+          },
+        );
+      },
+      [onChange, rememberAssignee, taskIdentifier, updateTask],
+    );
 
     const handleAgentChange = useCallback(
       (agentId: string | null, agent?: SidebarAgentItem) => {
         if (!canEditTask || agentId === (currentAgentId ?? null)) return;
         setKey((value) => value + 1);
         setSearch('');
-        if (onChange) {
-          onChange(agentId);
+
+        if (!offerPrivateOnPublic || !taskIdentifier || !agentId || !privateAgentIds.has(agentId)) {
+          void assignAgent(agentId, agent);
           return;
         }
-        if (taskIdentifier)
-          void updateTask(
-            taskIdentifier,
-            { assigneeAgentId: agentId },
-            // The picker is the one place that already holds the chosen agent's
-            // display metadata, so it hands it over for the optimistic feed row.
-            {
-              optimisticAssignee: agent
-                ? {
-                    // A group agent carries a member-avatar list; the feed row
-                    // only knows how to draw a single image.
-                    avatar: typeof agent.avatar === 'string' ? agent.avatar : null,
-                    id: agent.id,
-                    name: agentDisplayName(agent),
-                    type: 'agent',
-                  }
-                : undefined,
-            },
-          );
+
+        // The task goes private before the private agent is assigned; if that
+        // fails, the store has already explained why and nothing is assigned.
+        // Someone else's task becomes the picker's own private task.
+        const copy = takesOver
+          ? {
+              hint: t('taskManager.agentSelector.takeOverConfirm.hint', { ns: 'topic' }),
+              ok: t('taskManager.agentSelector.takeOverConfirm.ok', { ns: 'topic' }),
+              title: t('taskManager.agentSelector.takeOverConfirm.title', { ns: 'topic' }),
+            }
+          : {
+              hint: t('taskManager.agentSelector.makePrivateConfirm.hint', { ns: 'topic' }),
+              ok: t('taskManager.agentSelector.makePrivateConfirm.ok', { ns: 'topic' }),
+              title: t('taskManager.agentSelector.makePrivateConfirm.title', { ns: 'topic' }),
+            };
+        confirmModal({
+          cancelText: t('cancel', { ns: 'common' }),
+          content: (
+            <>
+              <VisibilityConfirmContent variant="makePrivate" />
+              <div style={{ marginTop: 8, opacity: 0.7 }}>{copy.hint}</div>
+            </>
+          ),
+          okButtonProps: { danger: true },
+          okText: copy.ok,
+          onOk: async () => {
+            try {
+              await (takesOver
+                ? updateTaskVisibility(taskIdentifier, 'private', { takeOwnership: true })
+                : updateTaskVisibility(taskIdentifier, 'private'));
+            } catch {
+              // The store action already surfaced a targeted toast; swallow so
+              // the confirm modal doesn't bubble a second error to base-ui.
+              return;
+            }
+            await assignAgent(agentId, agent);
+          },
+          title: copy.title,
+        });
       },
-      [canEditTask, currentAgentId, onChange, taskIdentifier, updateTask],
+      [
+        assignAgent,
+        canEditTask,
+        currentAgentId,
+        offerPrivateOnPublic,
+        privateAgentIds,
+        t,
+        takesOver,
+        taskIdentifier,
+        updateTaskVisibility,
+      ],
     );
 
     const handleSelect = useCallback(
@@ -240,9 +407,11 @@ const AssigneeAgentSelector = memo<AssigneeAgentSelectorProps>(
         if (flatOptions.length === 0) return;
         if (event.key === 'ArrowDown') {
           event.preventDefault();
+          keyboardMovedRef.current = true;
           setActiveIndex((index) => (index + 1) % flatOptions.length);
         } else if (event.key === 'ArrowUp') {
           event.preventDefault();
+          keyboardMovedRef.current = true;
           setActiveIndex((index) => (index - 1 + flatOptions.length) % flatOptions.length);
         } else if (event.key === 'Enter') {
           event.preventDefault();
@@ -253,7 +422,11 @@ const AssigneeAgentSelector = memo<AssigneeAgentSelectorProps>(
       [activeIndex, flatOptions, handleSelect],
     );
 
+    // Follow the highlight only when the arrow keys moved it. Folding a group
+    // shifts every index after it, and scrolling then jumped the list away.
     useEffect(() => {
+      if (!keyboardMovedRef.current) return;
+      keyboardMovedRef.current = false;
       const active = listRef.current?.querySelector<HTMLElement>(
         `[data-assignee-index="${activeIndex}"]`,
       );
@@ -267,10 +440,16 @@ const AssigneeAgentSelector = memo<AssigneeAgentSelectorProps>(
     const renderOption = (option: AgentOption) => {
       const optionIndex = optionIndexByKey.get(option.key) ?? 0;
       const active = optionIndex === activeIndex;
+      const agentTitle =
+        option.kind === 'agent'
+          ? agentDisplayName(option.agent, t('untitledAgent', { ns: 'chat' }))
+          : undefined;
       return (
         <div
           data-assignee-index={optionIndex}
           key={option.key}
+          // Long names truncate; the native tooltip keeps similar ones apart.
+          title={agentTitle}
           onMouseEnter={() => setActiveIndex(optionIndex)}
         >
           {option.kind === 'agent' ? (
@@ -278,7 +457,7 @@ const AssigneeAgentSelector = memo<AssigneeAgentSelectorProps>(
               active={active}
               agent={option.agent}
               agentId={option.agent.id}
-              agentTitle={agentDisplayName(option.agent, t('untitledAgent', { ns: 'chat' }))}
+              agentTitle={agentTitle ?? ''}
               avatar={option.agent.avatar}
               onAgentChange={() => handleSelect(option)}
               onClose={() => setKey((value) => value + 1)}
@@ -293,6 +472,37 @@ const AssigneeAgentSelector = memo<AssigneeAgentSelectorProps>(
             />
           )}
         </div>
+      );
+    };
+
+    const renderRow = (row: PickerRow) => {
+      if (row.kind === 'option') return renderOption(row.option);
+      if (row.kind === 'scope')
+        return (
+          <div className={styles.sectionHeader} key={`scope:${row.key}`}>
+            {row.title}
+          </div>
+        );
+      if (!row.collapsible)
+        return (
+          <div className={styles.sectionHeader} key={`section:${row.id}`}>
+            {row.title}
+          </div>
+        );
+      return (
+        <button
+          aria-expanded={!row.collapsed}
+          className={styles.sectionToggle}
+          key={`section:${row.id}`}
+          type={'button'}
+          onClick={() => toggleSection(row.id, row.collapsed)}
+          // Keep focus in the search box so the arrow keys still move the list.
+          onMouseDown={(event) => event.preventDefault()}
+        >
+          <Icon icon={row.collapsed ? ChevronRight : ChevronDown} size={14} />
+          <span className={styles.sectionToggleTitle}>{row.title}</span>
+          {row.collapsed && <span>{row.count}</span>}
+        </button>
       );
     };
 
@@ -322,7 +532,7 @@ const AssigneeAgentSelector = memo<AssigneeAgentSelectorProps>(
         disabled={blocked}
         key={key}
         placement={'bottomLeft'}
-        styles={{ content: { padding: 0, width: 260 } }}
+        styles={{ content: { padding: 0, width: 320 } }}
         trigger={'click'}
         content={
           <Suspense fallback={<SkeletonList rows={6} />}>
@@ -336,7 +546,7 @@ const AssigneeAgentSelector = memo<AssigneeAgentSelectorProps>(
                   onChange={(event) => setSearch(event.target.value)}
                   onKeyDown={handleSearchKeyDown}
                 />
-                {flatOptions.length === 0 ? (
+                {rows.length === 0 ? (
                   <Flexbox align={'center'} justify={'center'} padding={16}>
                     <Text fontSize={12} type={'secondary'}>
                       {t('taskList.assigneeSearch.agentEmpty', { ns: 'chat' })}
@@ -349,29 +559,7 @@ const AssigneeAgentSelector = memo<AssigneeAgentSelectorProps>(
                     ref={listRef}
                     style={{ maxHeight: '50vh', overflowY: 'auto', width: '100%' }}
                   >
-                    {showUnassigned && renderOption({ key: 'unassigned', kind: 'unassigned' })}
-                    {filteredPrivate.length > 0 && (
-                      <>
-                        <div className={styles.sectionHeader}>
-                          {t('taskManager.agentSelector.privateGroup', { ns: 'topic' })}
-                        </div>
-                        {filteredPrivate.map((agent) =>
-                          renderOption({ agent, key: `agent:${agent.id}`, kind: 'agent' }),
-                        )}
-                      </>
-                    )}
-                    {filteredWorkspace.length > 0 && (
-                      <>
-                        {hasPrivateAgents && (
-                          <div className={styles.sectionHeader}>
-                            {t('taskManager.agentSelector.workspaceGroup', { ns: 'topic' })}
-                          </div>
-                        )}
-                        {filteredWorkspace.map((agent) =>
-                          renderOption({ agent, key: `agent:${agent.id}`, kind: 'agent' }),
-                        )}
-                      </>
-                    )}
+                    {rows.map(renderRow)}
                   </Flexbox>
                 )}
               </Flexbox>

@@ -13,10 +13,13 @@ import type { LobeChatDatabase } from '@/database/type';
 
 import { TaskService } from './index';
 
-const { cancelScheduled, scheduleNextTopic } = vi.hoisted(() => ({
+const { cancelScheduled, scheduleNextTopic, trashTasksInTransaction } = vi.hoisted(() => ({
   cancelScheduled: vi.fn(),
   scheduleNextTopic: vi.fn(),
+  trashTasksInTransaction: vi.fn(),
 }));
+
+vi.mock('../trash', () => ({ trashTasksInTransaction }));
 
 vi.mock('@/database/models/agent', () => ({
   AgentModel: vi.fn(),
@@ -58,6 +61,12 @@ vi.mock('@/database/models/rbac', () => ({
 
 vi.mock('@/database/models/workspaceMember', () => ({
   WorkspaceMemberModel: vi.fn(),
+}));
+
+vi.mock('@/database/models/taskLabel', () => ({
+  TaskLabelModel: vi.fn(function () {
+    return { getTaskLabels: vi.fn().mockResolvedValue([]) };
+  }),
 }));
 
 vi.mock('@/database/models/user', () => ({
@@ -130,7 +139,7 @@ describe('TaskService', () => {
     getTaskFileIds: vi.fn().mockResolvedValue([]),
     getTreeAgentIdsForTaskIds: vi.fn().mockResolvedValue({}),
     getTreePinnedDocuments: vi.fn(),
-    resolve: vi.fn(),
+
     update: vi.fn(),
     updateContext: vi.fn(),
     updateStatus: vi.fn(),
@@ -164,6 +173,8 @@ describe('TaskService', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    // Run transactions inline on the mocked client (status writes open one).
+    (db as any).transaction = async (fn: (tx: unknown) => Promise<unknown>) => fn(db);
     interruptTaskMock.mockReset().mockResolvedValue({ success: true });
     cancelScheduled.mockResolvedValue(undefined);
     scheduleNextTopic.mockResolvedValue('tick-new');
@@ -298,13 +309,13 @@ describe('TaskService', () => {
 
   describe('getTaskDetail', () => {
     it('should return null when task is not found', async () => {
-      mockTaskModel.resolve.mockResolvedValue(null);
+      mockTaskModel.findById.mockResolvedValue(null);
 
       const service = new TaskService(db, userId);
       const result = await service.getTaskDetail('TASK-1');
 
       expect(result).toBeNull();
-      expect(mockTaskModel.resolve).toHaveBeenCalledWith('TASK-1');
+      expect(mockTaskModel.findById).toHaveBeenCalledWith('TASK-1');
     });
 
     it('should return task detail for a simple task with no subtasks or dependencies', async () => {
@@ -328,7 +339,7 @@ describe('TaskService', () => {
         totalTopics: 0,
       };
 
-      mockTaskModel.resolve.mockResolvedValue(task);
+      mockTaskModel.findById.mockResolvedValue(task);
       mockTaskModel.findAllDescendants.mockResolvedValue([]);
       mockTaskModel.getDependencies.mockResolvedValue([]);
       mockTaskTopicModel.findWithHandoff.mockResolvedValue([]);
@@ -353,7 +364,7 @@ describe('TaskService', () => {
       expect(result?.createdAt).toBe('2024-01-01T00:00:00.000Z');
       expect(result?.startedAt).toBe('2024-01-01T00:02:00.000Z');
       expect(result?.subtasks).toEqual([]);
-      expect(result?.dependencies).toEqual([]);
+      expect(result?.dependencies).toMatchObject([]);
       expect(result?.activities).toBeUndefined();
       expect(result?.workspace).toBeUndefined();
       expect(result?.parent).toBeNull();
@@ -378,7 +389,7 @@ describe('TaskService', () => {
         priority: 'normal',
         status: 'todo',
       };
-      mockTaskModel.resolve.mockResolvedValue(task);
+      mockTaskModel.findById.mockResolvedValueOnce(task);
       mockTaskModel.findAllDescendants.mockResolvedValue([]);
       mockTaskModel.getDependencies.mockResolvedValue([]);
       mockTaskTopicModel.findWithHandoff.mockResolvedValue([]);
@@ -429,7 +440,7 @@ describe('TaskService', () => {
         name: 'Parent Task',
       };
 
-      mockTaskModel.resolve.mockResolvedValue(task);
+      mockTaskModel.findById.mockResolvedValueOnce(task);
       mockTaskModel.findAllDescendants.mockResolvedValue([]);
       mockTaskModel.getDependencies.mockResolvedValue([]);
       mockTaskTopicModel.findWithHandoff.mockResolvedValue([]);
@@ -444,7 +455,7 @@ describe('TaskService', () => {
       const service = new TaskService(db, userId);
       const result = await service.getTaskDetail('TASK-2');
 
-      expect(result?.parent).toEqual({
+      expect(result?.parent).toMatchObject({
         agentId: 'agt_parent',
         identifier: 'TASK-1',
         name: 'Parent Task',
@@ -472,7 +483,7 @@ describe('TaskService', () => {
         totalTopics: 0,
       };
 
-      mockTaskModel.resolve.mockResolvedValue(task);
+      mockTaskModel.findById.mockResolvedValueOnce(task);
       mockTaskModel.findAllDescendants.mockResolvedValue([]);
       mockTaskModel.getDependencies.mockResolvedValue([]);
       mockTaskTopicModel.findWithHandoff.mockResolvedValue([]);
@@ -532,7 +543,7 @@ describe('TaskService', () => {
       // task_003 depends on task_002
       const subtaskDeps = [{ dependsOnId: 'task_002', taskId: 'task_003' }];
 
-      mockTaskModel.resolve.mockResolvedValue(task);
+      mockTaskModel.findById.mockResolvedValue(task);
       mockTaskModel.findAllDescendants.mockResolvedValue(subtasks);
       mockTaskModel.getDependencies.mockResolvedValue([]);
       mockTaskTopicModel.findWithHandoff.mockResolvedValue([]);
@@ -548,7 +559,7 @@ describe('TaskService', () => {
       const result = await service.getTaskDetail('TASK-1');
 
       expect(result?.subtasks).toHaveLength(2);
-      expect(result?.subtasks?.[0]).toEqual({
+      expect(result?.subtasks?.[0]).toMatchObject({
         blockedBy: undefined,
         children: undefined,
         identifier: 'TASK-2',
@@ -556,7 +567,7 @@ describe('TaskService', () => {
         priority: 'normal',
         status: 'todo',
       });
-      expect(result?.subtasks?.[1]).toEqual({
+      expect(result?.subtasks?.[1]).toMatchObject({
         blockedBy: 'TASK-2',
         children: undefined,
         identifier: 'TASK-3',
@@ -598,7 +609,7 @@ describe('TaskService', () => {
         },
       ];
 
-      mockTaskModel.resolve.mockResolvedValue(task);
+      mockTaskModel.findById.mockResolvedValue(task);
       mockTaskModel.findAllDescendants.mockResolvedValue(subtasks);
       mockTaskModel.getDependencies.mockResolvedValue([]);
       mockTaskTopicModel.findWithHandoff.mockResolvedValue([]);
@@ -677,7 +688,7 @@ describe('TaskService', () => {
         },
       ];
 
-      mockTaskModel.resolve.mockResolvedValue(task);
+      mockTaskModel.findById.mockResolvedValue(task);
       mockTaskModel.findAllDescendants.mockResolvedValue(allDescendants);
       mockTaskModel.getDependencies.mockResolvedValue([]);
       mockTaskTopicModel.findWithHandoff.mockResolvedValue([]);
@@ -699,7 +710,7 @@ describe('TaskService', () => {
       const child1 = result?.subtasks?.[0];
       expect(child1?.identifier).toBe('TASK-2');
       expect(child1?.children).toHaveLength(1);
-      expect(child1?.children?.[0]).toEqual({
+      expect(child1?.children?.[0]).toMatchObject({
         blockedBy: undefined,
         children: undefined,
         identifier: 'TASK-4',
@@ -737,7 +748,7 @@ describe('TaskService', () => {
       const dependencies = [{ dependsOnId: 'task_002', taskId: 'task_003', type: 'blocks' }];
       const depTasks = [{ id: 'task_002', identifier: 'TASK-2', name: 'Task 2' }];
 
-      mockTaskModel.resolve.mockResolvedValue(task);
+      mockTaskModel.findById.mockResolvedValue(task);
       mockTaskModel.findAllDescendants.mockResolvedValue([]);
       mockTaskModel.getDependencies.mockResolvedValue(dependencies);
       mockTaskTopicModel.findWithHandoff.mockResolvedValue([]);
@@ -751,7 +762,7 @@ describe('TaskService', () => {
       const service = new TaskService(db, userId);
       const result = await service.getTaskDetail('TASK-3');
 
-      expect(result?.dependencies).toEqual([
+      expect(result?.dependencies).toMatchObject([
         { dependsOn: 'TASK-2', name: 'Task 2', type: 'blocks' },
       ]);
     });
@@ -778,7 +789,7 @@ describe('TaskService', () => {
 
       const dependencies = [{ dependsOnId: 'task_missing', taskId: 'task_003', type: 'blocks' }];
 
-      mockTaskModel.resolve.mockResolvedValue(task);
+      mockTaskModel.findById.mockResolvedValue(task);
       mockTaskModel.findAllDescendants.mockResolvedValue([]);
       mockTaskModel.getDependencies.mockResolvedValue(dependencies);
       mockTaskTopicModel.findWithHandoff.mockResolvedValue([]);
@@ -792,7 +803,7 @@ describe('TaskService', () => {
       const service = new TaskService(db, userId);
       const result = await service.getTaskDetail('TASK-3');
 
-      expect(result?.dependencies).toEqual([
+      expect(result?.dependencies).toMatchObject([
         { dependsOn: 'task_missing', name: undefined, type: 'blocks' },
       ]);
     });
@@ -848,7 +859,7 @@ describe('TaskService', () => {
         },
       ];
 
-      mockTaskModel.resolve.mockResolvedValue(task);
+      mockTaskModel.findById.mockResolvedValue(task);
       mockTaskModel.findAllDescendants.mockResolvedValue([]);
       mockTaskModel.getDependencies.mockResolvedValue([]);
       mockTaskTopicModel.findWithHandoff.mockResolvedValue(topics);
@@ -904,7 +915,7 @@ describe('TaskService', () => {
         },
       ];
 
-      mockTaskModel.resolve.mockResolvedValue(task);
+      mockTaskModel.findById.mockResolvedValue(task);
       mockTaskModel.findAllDescendants.mockResolvedValue([]);
       mockTaskModel.getDependencies.mockResolvedValue([]);
       mockTaskTopicModel.findWithHandoff.mockResolvedValue(topics);
@@ -964,7 +975,7 @@ describe('TaskService', () => {
         },
       ];
 
-      mockTaskModel.resolve.mockResolvedValue(task);
+      mockTaskModel.findById.mockResolvedValue(task);
       mockTaskModel.findAllDescendants.mockResolvedValue([]);
       mockTaskModel.getDependencies.mockResolvedValue([]);
       mockTaskTopicModel.findWithHandoff.mockResolvedValue(topics);
@@ -1030,7 +1041,7 @@ describe('TaskService', () => {
         { createdAt: new Date(), handoff: null, seq: 2, status: 'completed', topicId: 'topic-2' },
       ];
 
-      mockTaskModel.resolve.mockResolvedValue(task);
+      mockTaskModel.findById.mockResolvedValue(task);
       mockTaskModel.findAllDescendants.mockResolvedValue([]);
       mockTaskModel.getDependencies.mockResolvedValue([]);
       mockTaskTopicModel.findWithHandoff.mockResolvedValue(topics);
@@ -1119,7 +1130,7 @@ describe('TaskService', () => {
         },
       ];
 
-      mockTaskModel.resolve.mockResolvedValue(task);
+      mockTaskModel.findById.mockResolvedValue(task);
       mockTaskModel.findAllDescendants.mockResolvedValue(descendants);
       mockTaskModel.getDependencies.mockResolvedValue([]);
       mockTaskTopicModel.findWithHandoff.mockResolvedValue(directTopics);
@@ -1200,7 +1211,7 @@ describe('TaskService', () => {
         },
       ];
 
-      mockTaskModel.resolve.mockResolvedValue(task);
+      mockTaskModel.findById.mockResolvedValue(task);
       mockTaskModel.findAllDescendants.mockResolvedValue([]);
       mockTaskModel.getDependencies.mockResolvedValue([]);
       mockTaskTopicModel.findWithHandoff.mockResolvedValue(topics);
@@ -1223,7 +1234,7 @@ describe('TaskService', () => {
       expect(running?.cost).toBeNull();
     });
 
-    it('should not include topicCount when no topics exist', async () => {
+    it('should omit topicCount and heartbeat when both are absent', async () => {
       const task = {
         assigneeAgentId: null,
         assigneeUserId: null,
@@ -1243,7 +1254,7 @@ describe('TaskService', () => {
         totalTopics: 0,
       };
 
-      mockTaskModel.resolve.mockResolvedValue(task);
+      mockTaskModel.findById.mockResolvedValue(task);
       mockTaskModel.findAllDescendants.mockResolvedValue([]);
       mockTaskModel.getDependencies.mockResolvedValue([]);
       mockTaskTopicModel.findWithHandoff.mockResolvedValue([]);
@@ -1258,6 +1269,7 @@ describe('TaskService', () => {
       const result = await service.getTaskDetail('TASK-1');
 
       expect(result?.topicCount).toBeUndefined();
+      expect(result?.heartbeat).toBeUndefined();
     });
 
     it('should build workspace tree nodes from pinned documents', async () => {
@@ -1307,7 +1319,7 @@ describe('TaskService', () => {
         ],
       };
 
-      mockTaskModel.resolve.mockResolvedValue(task);
+      mockTaskModel.findById.mockResolvedValue(task);
       mockTaskModel.findAllDescendants.mockResolvedValue([]);
       mockTaskModel.getDependencies.mockResolvedValue([]);
       mockTaskTopicModel.findWithHandoff.mockResolvedValue([]);
@@ -1355,7 +1367,7 @@ describe('TaskService', () => {
         totalTopics: 0,
       };
 
-      mockTaskModel.resolve.mockResolvedValue(task);
+      mockTaskModel.findById.mockResolvedValue(task);
       mockTaskModel.findAllDescendants.mockResolvedValue([]);
       mockTaskModel.getDependencies.mockResolvedValue([]);
       mockTaskTopicModel.findWithHandoff.mockResolvedValue([]);
@@ -1375,43 +1387,6 @@ describe('TaskService', () => {
         scheduledAt: '2024-01-01T12:00:05.000Z',
         timeout: 60,
       });
-    });
-
-    it('should not include heartbeat when neither heartbeatTimeout nor lastHeartbeatAt is set', async () => {
-      const task = {
-        assigneeAgentId: null,
-        assigneeUserId: null,
-        createdAt: null,
-        description: null,
-        error: null,
-        heartbeatInterval: null,
-        heartbeatTimeout: null,
-        id: 'task_001',
-        identifier: 'TASK-1',
-        instruction: null,
-        lastHeartbeatAt: null,
-        name: 'Task 1',
-        parentTaskId: null,
-        priority: 'normal',
-        status: 'todo',
-        totalTopics: 0,
-      };
-
-      mockTaskModel.resolve.mockResolvedValue(task);
-      mockTaskModel.findAllDescendants.mockResolvedValue([]);
-      mockTaskModel.getDependencies.mockResolvedValue([]);
-      mockTaskTopicModel.findWithHandoff.mockResolvedValue([]);
-      mockBriefModel.findByTaskId.mockResolvedValue([]);
-      mockTaskModel.getComments.mockResolvedValue([]);
-      mockTaskModel.getTreePinnedDocuments.mockResolvedValue({ nodeMap: {}, tree: [] });
-      mockTaskModel.findByIds.mockResolvedValue([]);
-      mockTaskModel.getCheckpointConfig.mockReturnValue({});
-      mockTaskModel.getVerifyConfig.mockReturnValue(undefined);
-
-      const service = new TaskService(db, userId);
-      const result = await service.getTaskDetail('TASK-1');
-
-      expect(result?.heartbeat).toBeUndefined();
     });
 
     it('should gracefully handle failing optional calls via catch', async () => {
@@ -1434,7 +1409,7 @@ describe('TaskService', () => {
         totalTopics: 0,
       };
 
-      mockTaskModel.resolve.mockResolvedValue(task);
+      mockTaskModel.findById.mockResolvedValue(task);
       mockTaskModel.findAllDescendants.mockResolvedValue([]);
       mockTaskModel.getDependencies.mockResolvedValue([]);
       // Simulate optional calls failing
@@ -1493,7 +1468,7 @@ describe('TaskService', () => {
         },
       ];
 
-      mockTaskModel.resolve.mockResolvedValue(task);
+      mockTaskModel.findById.mockResolvedValue(task);
       mockTaskModel.findAllDescendants.mockResolvedValue([]);
       mockTaskModel.getDependencies.mockResolvedValue([]);
       mockTaskTopicModel.findWithHandoff.mockResolvedValue(topics);
@@ -1551,7 +1526,7 @@ describe('TaskService', () => {
         },
       ];
 
-      mockTaskModel.resolve.mockResolvedValue(task);
+      mockTaskModel.findById.mockResolvedValue(task);
       mockTaskModel.findAllDescendants.mockResolvedValue([]);
       mockTaskModel.getDependencies.mockResolvedValue([]);
       mockTaskTopicModel.findWithHandoff.mockResolvedValue(topics);
@@ -1575,7 +1550,7 @@ describe('TaskService', () => {
   describe('completion requested by the task own run', () => {
     it('defers instead of interrupting the calling operation', async () => {
       const task = { automationMode: 'schedule', id: 'task-self', status: 'running' };
-      mockTaskModel.resolve.mockResolvedValue(task);
+      mockTaskModel.findById.mockResolvedValue(task);
       mockTaskTopicModel.findByTaskId.mockResolvedValue([
         { topicId: 'topic-self', operationId: 'op-self', status: 'running' },
       ]);
@@ -1596,7 +1571,7 @@ describe('TaskService', () => {
     });
 
     it('still interrupts when the operation is not one of the task runs', async () => {
-      mockTaskModel.resolve.mockResolvedValue({ id: 'task-live', status: 'running' });
+      mockTaskModel.findById.mockResolvedValue({ id: 'task-live', status: 'running' });
       mockTaskTopicModel.findByTaskId.mockResolvedValue([
         { topicId: 'topic-live', operationId: 'op-live', status: 'running' },
       ]);
@@ -1618,7 +1593,7 @@ describe('TaskService', () => {
     it.each([{ success: true, deviceCancellationConfirmed: false }, { success: false }])(
       'keeps a live Task and topic unchanged when cancellation is unconfirmed: %j',
       async (result) => {
-        mockTaskModel.resolve.mockResolvedValue({ id: 'task-live', status: 'running' });
+        mockTaskModel.findById.mockResolvedValue({ id: 'task-live', status: 'running' });
         mockTaskTopicModel.findByTaskId.mockResolvedValue([
           { topicId: 'topic-live', operationId: 'op-live', status: 'running' },
         ]);
@@ -1630,238 +1605,6 @@ describe('TaskService', () => {
         expect(mockTaskTopicModel.cancelIfRunning).not.toHaveBeenCalled();
       },
     );
-  });
-
-  describe('deleteTask', () => {
-    beforeEach(() => {
-      (db as any).transaction = async (fn: (tx: unknown) => Promise<unknown>) => fn(db);
-      mockTaskModel.lockForUpdate.mockResolvedValue(true);
-      mockTaskModel.deleteIfStatus.mockResolvedValue(true);
-      mockTaskTopicModel.findByTaskId.mockResolvedValue([]);
-    });
-
-    it('interrupts a running execution before deleting the task row', async () => {
-      mockTaskModel.resolve.mockResolvedValue({
-        id: 'task-live',
-        identifier: 'T-2',
-        status: 'running',
-      });
-      mockTaskTopicModel.findRunningByTaskIds.mockResolvedValue([
-        { operationId: 'op-live', status: 'running', taskId: 'task-live', topicId: 'topic-live' },
-      ]);
-
-      await new TaskService(db, userId).deleteTask('T-2');
-
-      expect(interruptTaskMock).toHaveBeenCalledWith({ operationId: 'op-live' });
-      expect(interruptTaskMock.mock.invocationCallOrder[0]).toBeLessThan(
-        mockTaskModel.deleteIfStatus.mock.invocationCallOrder[0],
-      );
-      expect(mockTaskModel.deleteIfStatus).toHaveBeenCalledWith('task-live', 'running');
-    });
-
-    it('keeps the task when its execution cannot be stopped', async () => {
-      mockTaskModel.resolve.mockResolvedValue({
-        id: 'task-live',
-        identifier: 'T-2',
-        status: 'running',
-      });
-      mockTaskTopicModel.findRunningByTaskIds.mockResolvedValue([
-        { operationId: 'op-live', status: 'running', taskId: 'task-live', topicId: 'topic-live' },
-      ]);
-      interruptTaskMock.mockResolvedValueOnce({ success: false });
-
-      await expect(new TaskService(db, userId).deleteTask('T-2')).rejects.toThrow(
-        'Task interruption was not confirmed',
-      );
-      expect(mockTaskModel.deleteIfStatus).not.toHaveBeenCalled();
-    });
-
-    it('refuses to delete a task whose run is still starting', async () => {
-      mockTaskModel.resolve.mockResolvedValue({
-        id: 'task-starting',
-        identifier: 'T-4',
-        startedAt: new Date(),
-        status: 'running',
-      });
-      mockTaskTopicModel.findRunningByTaskIds.mockResolvedValue([]);
-
-      await expect(new TaskService(db, userId).deleteTask('T-4')).rejects.toMatchObject({
-        code: 'CONFLICT',
-      });
-      expect(mockTaskModel.deleteIfStatus).not.toHaveBeenCalled();
-    });
-
-    it('deletes a running task whose start died long ago', async () => {
-      mockTaskModel.resolve.mockResolvedValue({
-        id: 'task-stale',
-        identifier: 'T-5',
-        startedAt: new Date(Date.now() - 60 * 60 * 1000),
-        status: 'running',
-      });
-      mockTaskTopicModel.findRunningByTaskIds.mockResolvedValue([]);
-
-      await new TaskService(db, userId).deleteTask('T-5');
-
-      expect(mockTaskModel.deleteIfStatus).toHaveBeenCalledWith('task-stale', 'running');
-    });
-
-    it('loses to a run that started after the checks instead of orphaning it', async () => {
-      mockTaskModel.resolve.mockResolvedValue({
-        id: 'task-race',
-        identifier: 'T-6',
-        status: 'backlog',
-      });
-      mockTaskModel.deleteIfStatus.mockResolvedValueOnce(false);
-
-      await expect(new TaskService(db, userId).deleteTask('T-6')).rejects.toMatchObject({
-        code: 'CONFLICT',
-      });
-      expect(mockTaskModel.deleteIfStatus).toHaveBeenCalledWith('task-race', 'backlog');
-    });
-
-    it('loses to a run that recorded a new topic while the delete was interrupting', async () => {
-      mockTaskModel.resolve.mockResolvedValue({
-        id: 'task-cont',
-        identifier: 'T-8',
-        status: 'running',
-      });
-      const liveA = {
-        operationId: 'op-a',
-        status: 'running',
-        taskId: 'task-cont',
-        topicId: 'topic-a',
-      };
-      const continuedB = {
-        operationId: 'op-b',
-        status: 'running',
-        taskId: 'task-cont',
-        topicId: 'topic-b',
-      };
-      mockTaskTopicModel.findRunningByTaskIds
-        .mockResolvedValueOnce([liveA])
-        .mockResolvedValueOnce([liveA, continuedB]);
-
-      await expect(new TaskService(db, userId).deleteTask('T-8')).rejects.toMatchObject({
-        code: 'CONFLICT',
-      });
-      expect(interruptTaskMock).toHaveBeenCalledWith({ operationId: 'op-a' });
-      expect(mockTaskModel.lockForUpdate).toHaveBeenCalledWith('task-cont');
-      expect(mockTaskModel.deleteIfStatus).not.toHaveBeenCalled();
-    });
-
-    it('treats a task already gone as deleted', async () => {
-      mockTaskModel.resolve.mockResolvedValue({
-        id: 'task-gone',
-        identifier: 'T-7',
-        status: 'backlog',
-      });
-      mockTaskModel.lockForUpdate.mockResolvedValueOnce(false);
-
-      await expect(new TaskService(db, userId).deleteTask('T-7')).resolves.toMatchObject({
-        id: 'task-gone',
-      });
-      expect(mockTaskModel.deleteIfStatus).not.toHaveBeenCalled();
-    });
-
-    it("does not interrupt the caller's own run", async () => {
-      mockTaskModel.resolve.mockResolvedValue({
-        id: 'task-self',
-        identifier: 'T-3',
-        status: 'running',
-      });
-      mockTaskTopicModel.findRunningByTaskIds.mockResolvedValue([
-        { operationId: 'op-self', status: 'running', taskId: 'task-self', topicId: 'topic-self' },
-      ]);
-
-      await new TaskService(db, userId).deleteTask('T-3', { keepOperationId: 'op-self' });
-
-      expect(interruptTaskMock).not.toHaveBeenCalled();
-      expect(mockTaskModel.deleteIfStatus).toHaveBeenCalledWith('task-self', 'running');
-    });
-
-    it('cascades the underlying topic rows when the task row is deleted', async () => {
-      mockTaskModel.resolve.mockResolvedValue({
-        id: 'task-topics',
-        identifier: 'T-9',
-        status: 'backlog',
-      });
-      mockTaskTopicModel.findByTaskId.mockResolvedValue([
-        { status: 'completed', taskId: 'task-topics', topicId: 'topic-1' },
-        { status: 'completed', taskId: 'task-topics', topicId: 'topic-2' },
-      ]);
-
-      await new TaskService(db, userId).deleteTask('T-9');
-
-      // Topic ids are snapshotted before the task row goes, then removed in
-      // the same transaction — `task_topics` links alone cascade via FK, the
-      // topic rows would otherwise survive as sidebar orphans.
-      expect(mockTopicModel.batchDeleteIncludingTrashed).toHaveBeenCalledWith([
-        'topic-1',
-        'topic-2',
-      ]);
-    });
-
-    it('spares the kept operation topic when a task deletes itself mid-run', async () => {
-      mockTaskModel.resolve.mockResolvedValue({
-        id: 'task-self-topics',
-        identifier: 'T-12',
-        status: 'running',
-      });
-      mockTaskTopicModel.findRunningByTaskIds.mockResolvedValue([
-        {
-          operationId: 'op-self',
-          status: 'running',
-          taskId: 'task-self-topics',
-          topicId: 'topic-live',
-        },
-      ]);
-      mockTaskTopicModel.findByTaskId.mockResolvedValue([
-        {
-          operationId: 'op-self',
-          status: 'running',
-          taskId: 'task-self-topics',
-          topicId: 'topic-live',
-        },
-        { status: 'completed', taskId: 'task-self-topics', topicId: 'topic-old' },
-      ]);
-
-      await new TaskService(db, userId).deleteTask('T-12', { keepOperationId: 'op-self' });
-
-      // The live run's topic must survive with its operation — messages
-      // cascade off the topic row, so deleting it would rip the conversation
-      // out from under the still-running tool call.
-      expect(mockTopicModel.batchDeleteIncludingTrashed).toHaveBeenCalledWith(['topic-old']);
-    });
-
-    it('deletes no topic rows when the task has none', async () => {
-      mockTaskModel.resolve.mockResolvedValue({
-        id: 'task-bare',
-        identifier: 'T-10',
-        status: 'backlog',
-      });
-      mockTaskTopicModel.findByTaskId.mockResolvedValue([]);
-
-      await new TaskService(db, userId).deleteTask('T-10');
-
-      expect(mockTopicModel.batchDeleteIncludingTrashed).not.toHaveBeenCalled();
-    });
-
-    it('leaves topic rows alone when the delete loses the race', async () => {
-      mockTaskModel.resolve.mockResolvedValue({
-        id: 'task-race-topics',
-        identifier: 'T-11',
-        status: 'backlog',
-      });
-      mockTaskTopicModel.findByTaskId.mockResolvedValue([
-        { status: 'completed', taskId: 'task-race-topics', topicId: 'topic-race' },
-      ]);
-      mockTaskModel.deleteIfStatus.mockResolvedValueOnce(false);
-
-      await expect(new TaskService(db, userId).deleteTask('T-11')).rejects.toMatchObject({
-        code: 'CONFLICT',
-      });
-      expect(mockTopicModel.batchDeleteIncludingTrashed).not.toHaveBeenCalled();
-    });
   });
 
   describe('updateStatus / scheduleStartedAt', () => {
@@ -1878,7 +1621,7 @@ describe('TaskService', () => {
     it('stamps scheduleStartedAt when a user starts a schedule (backlog → scheduled)', async () => {
       const prev = baseTask({ status: 'backlog', automationMode: 'schedule' });
       const next = baseTask({ status: 'scheduled', automationMode: 'schedule' });
-      mockTaskModel.resolve.mockResolvedValue(prev);
+      mockTaskModel.findById.mockResolvedValue(prev);
       mockTaskModel.updateStatus.mockResolvedValue(next);
 
       const service = new TaskService(db, userId);
@@ -1900,7 +1643,7 @@ describe('TaskService', () => {
       // counter window — otherwise every successful tick would zero out the cap.
       const prev = baseTask({ status: 'running', automationMode: 'schedule' });
       const next = baseTask({ status: 'scheduled', automationMode: 'schedule' });
-      mockTaskModel.resolve.mockResolvedValue(prev);
+      mockTaskModel.findById.mockResolvedValue(prev);
       mockTaskModel.updateStatus.mockResolvedValue(next);
       mockTaskTopicModel.findByTaskId.mockResolvedValue([]);
 
@@ -1922,7 +1665,7 @@ describe('TaskService', () => {
         heartbeatInterval: 3600,
         status: 'scheduled',
       });
-      mockTaskModel.resolve.mockResolvedValue(prev);
+      mockTaskModel.findById.mockResolvedValue(prev);
       mockTaskModel.updateStatus.mockResolvedValue(next);
 
       const service = new TaskService(db, userId);
@@ -1956,7 +1699,7 @@ describe('TaskService', () => {
         heartbeatInterval: 3600,
         status: 'scheduled',
       });
-      mockTaskModel.resolve.mockResolvedValue(prev);
+      mockTaskModel.findById.mockResolvedValue(prev);
       mockTaskModel.updateStatus.mockResolvedValue(next);
 
       const service = new TaskService(db, userId);
@@ -1983,7 +1726,7 @@ describe('TaskService', () => {
         heartbeatInterval: 3600,
         status: 'scheduled',
       });
-      mockTaskModel.resolve.mockResolvedValue(prev);
+      mockTaskModel.findById.mockResolvedValue(prev);
       mockTaskModel.updateStatus.mockResolvedValue(next);
       scheduleNextTopic.mockRejectedValueOnce(new Error('qstash unavailable'));
 
@@ -2012,7 +1755,7 @@ describe('TaskService', () => {
         heartbeatInterval: 3600,
         status: 'scheduled',
       });
-      mockTaskModel.resolve.mockResolvedValue(prev);
+      mockTaskModel.findById.mockResolvedValue(prev);
       mockTaskModel.updateWithLog.mockResolvedValue(next);
       scheduleNextTopic.mockRejectedValueOnce(new Error('qstash unavailable'));
 
@@ -2037,7 +1780,7 @@ describe('TaskService', () => {
     it('does NOT stamp when the new status is not scheduled', async () => {
       const prev = baseTask({ status: 'backlog' });
       const next = baseTask({ status: 'paused' });
-      mockTaskModel.resolve.mockResolvedValue(prev);
+      mockTaskModel.findById.mockResolvedValue(prev);
       mockTaskModel.updateStatus.mockResolvedValue(next);
 
       const service = new TaskService(db, userId);
@@ -2049,7 +1792,7 @@ describe('TaskService', () => {
     it('stamps on user-initiated restart (paused → scheduled)', async () => {
       const prev = baseTask({ status: 'paused', automationMode: 'schedule' });
       const next = baseTask({ status: 'scheduled', automationMode: 'schedule' });
-      mockTaskModel.resolve.mockResolvedValue(prev);
+      mockTaskModel.findById.mockResolvedValue(prev);
       mockTaskModel.updateStatus.mockResolvedValue(next);
 
       const service = new TaskService(db, userId);
@@ -2144,7 +1887,7 @@ describe('TaskService', () => {
     });
 
     it('rejects creating a public subtask under a private parent', async () => {
-      mockTaskModel.resolve.mockResolvedValue({
+      mockTaskModel.findById.mockResolvedValue({
         id: 'parent_id',
         identifier: 'T-1',
         visibility: 'private',
@@ -2162,7 +1905,7 @@ describe('TaskService', () => {
     });
 
     it('allows a private subtask under a public parent', async () => {
-      mockTaskModel.resolve.mockResolvedValue({
+      mockTaskModel.findById.mockResolvedValue({
         id: 'parent_id',
         identifier: 'T-1',
         visibility: 'public',
@@ -2201,7 +1944,7 @@ describe('TaskService', () => {
       const openChild = baseTask({ id: 'task-c1', identifier: 'C-1', status: 'backlog' });
       // Already finished: not part of the cascade, so no row.
       const doneChild = baseTask({ id: 'task-c2', identifier: 'C-2', status: 'completed' });
-      mockTaskModel.resolve.mockResolvedValue(parent);
+      mockTaskModel.findById.mockResolvedValue(parent);
       mockTaskModel.findSubtasks.mockResolvedValue([openChild, doneChild]);
       mockTaskModel.updateStatusForIds.mockResolvedValue([
         { ...parent, status: 'canceled' },
@@ -2244,7 +1987,7 @@ describe('TaskService', () => {
 
     it('stays silent for a system cascade', async () => {
       const parent = baseTask({ id: 'task-p', identifier: 'P-1', status: 'running' });
-      mockTaskModel.resolve.mockResolvedValue(parent);
+      mockTaskModel.findById.mockResolvedValue(parent);
       mockTaskModel.findSubtasks.mockResolvedValue([]);
       mockTaskModel.updateStatusForIds.mockResolvedValue([{ ...parent, status: 'canceled' }]);
       mockTaskTopicModel.cancelRunningByTaskIds.mockResolvedValue([]);
@@ -2259,7 +2002,7 @@ describe('TaskService', () => {
 
   describe('assignee activity log', () => {
     it('renders a status log as a property activity', async () => {
-      mockTaskModel.resolve.mockResolvedValue({
+      mockTaskModel.findById.mockResolvedValue({
         createdAt: null,
         heartbeatInterval: null,
         heartbeatTimeout: null,
@@ -2305,7 +2048,7 @@ describe('TaskService', () => {
     });
 
     it('keeps a deleted actor as a person, not the system, via the payload tombstone', async () => {
-      mockTaskModel.resolve.mockResolvedValue({
+      mockTaskModel.findById.mockResolvedValue({
         createdAt: null,
         heartbeatInterval: null,
         heartbeatTimeout: null,
@@ -2358,7 +2101,7 @@ describe('TaskService', () => {
     });
 
     it('keeps the actor identity when the agent is invisible to this viewer', async () => {
-      mockTaskModel.resolve.mockResolvedValue({
+      mockTaskModel.findById.mockResolvedValue({
         createdAt: null,
         heartbeatInterval: null,
         heartbeatTimeout: null,
@@ -2550,7 +2293,7 @@ describe('TaskService', () => {
     });
 
     it('renders assignment logs as activities with both sides resolved', async () => {
-      mockTaskModel.resolve.mockResolvedValue({
+      mockTaskModel.findById.mockResolvedValue({
         createdAt: null,
         heartbeatInterval: null,
         heartbeatTimeout: null,

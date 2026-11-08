@@ -17,13 +17,15 @@
     "./dynamicInterventionAudits": "./src/dynamicInterventionAudits.ts",
     "./featureGates": "./src/featureGates.ts",
     "./workRegistration": "./src/workRegistration.ts",
-    "./fileEditScan": "./src/fileEditScan/index.ts"
+    "./fileEditScan": "./src/fileEditScan/index.ts",
+    "./operationArtifacts": "./src/operationArtifacts/index.ts"
   },
   "main": "./src/index.ts",
   "dependencies": {
-    "@icons-pack/react-simple-icons": "^13.13.0",
+    "@icons-pack/react-simple-icons": "^13.15.1",
     "@lobechat/builtin-tool-acceptance-evidence": "workspace:*",
     "@lobechat/builtin-tool-activator": "workspace:*",
+    "@lobechat/builtin-tool-agent-account": "workspace:*",
     "@lobechat/builtin-tool-agent-builder": "workspace:*",
     "@lobechat/builtin-tool-agent-documents": "workspace:*",
     "@lobechat/builtin-tool-agent-management": "workspace:*",
@@ -33,6 +35,7 @@
     "@lobechat/builtin-tool-brief": "workspace:*",
     "@lobechat/builtin-tool-browser": "workspace:*",
     "@lobechat/builtin-tool-canvas": "workspace:*",
+    "@lobechat/builtin-tool-channel": "workspace:*",
     "@lobechat/builtin-tool-claude-code": "workspace:*",
     "@lobechat/builtin-tool-cloud-sandbox": "workspace:*",
     "@lobechat/builtin-tool-creds": "workspace:*",

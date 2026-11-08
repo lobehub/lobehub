@@ -6,6 +6,7 @@ import type { EnvironmentItem, NewEnvironment } from '../schemas';
 import { environments, users } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
+import { nonNull } from './utils/rows';
 
 export interface EnvironmentCreator {
   avatar: string | null;
@@ -282,16 +283,14 @@ export class EnvironmentModel {
 
     return rows.map(({ creatorAvatar, creatorFullName, creatorId, creatorUsername, ...row }) => ({
       ...row,
-      // The id is what says a creator was found; a deleted account leaves the
-      // join empty and the row keeps its place in the listing with no creator.
-      creator: creatorId
-        ? {
-            avatar: creatorAvatar,
-            fullName: creatorFullName,
-            id: creatorId,
-            username: creatorUsername,
-          }
-        : null,
+      // environments.user_id is NOT NULL with an on-delete-restrict FK to
+      // users, so the left join always finds the creator.
+      creator: {
+        avatar: creatorAvatar,
+        fullName: creatorFullName,
+        id: nonNull(creatorId, 'the environment creator (users.id)'),
+        username: creatorUsername,
+      },
     }));
   };
 

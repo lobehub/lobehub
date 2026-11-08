@@ -1,6 +1,6 @@
 'use client';
 
-import { cx, Flexbox, Icon, Popover, Skeleton, Text, toast, Tooltip } from '@lobehub/ui';
+import { Flexbox, Icon, Popover, Skeleton, Text, toast, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import {
@@ -53,7 +53,7 @@ const styles = stylex.create({
     paddingBlock: 8,
     paddingInline: 8,
   },
-  // StyleX longhands outrank the row's own emotion padding.
+  // Applied after the row's defaults through xstyle.
   option: {
     paddingInline: 0,
   },
@@ -61,8 +61,6 @@ const styles = stylex.create({
     color: cssVar.colorWarning,
   },
 });
-
-const optionClassName = stylex.props(styles.option).className;
 
 interface SandboxDrivePickerProps {
   /** Whether this plan includes a drive. Without one the menu offers the way to a plan. */
@@ -211,19 +209,19 @@ const SandboxDrivePicker = memo<SandboxDrivePickerProps>(
 
         <OptionRow
           active={!persistent}
-          className={optionClassName}
           desc={t('sandboxStorage.ephemeralDesc')}
           icon={<Icon icon={TimerIcon} size={16} />}
           label={t('sandboxStorage.ephemeral')}
+          xstyle={styles.option}
           onClick={() => void select({})}
         />
 
         {entitled && persistent && currentLabel && (
           <OptionRow
             active
-            className={optionClassName}
             icon={<Icon icon={currentIcon} size={16} />}
             label={currentLabel}
+            xstyle={styles.option}
             desc={
               value.instanceId
                 ? t('sandboxDrive.environmentDesc')
@@ -242,10 +240,10 @@ const SandboxDrivePicker = memo<SandboxDrivePickerProps>(
 
         {entitled && (
           <OptionRow
-            className={optionClassName}
             desc={t('sandboxDrive.browseDesc')}
             icon={<Icon icon={persistent ? FolderOpenIcon : HardDriveIcon} size={16} />}
             label={t(persistent ? 'sandboxDrive.browseOther' : 'sandboxDrive.browse')}
+            xstyle={styles.option}
             onClick={openBrowser}
           />
         )}
@@ -255,11 +253,11 @@ const SandboxDrivePicker = memo<SandboxDrivePickerProps>(
           // same list, in the same shape, so the row reads as one more place
           // files could go — and the tag says why it is not simply selectable.
           <OptionRow
-            className={optionClassName}
             desc={t('sandboxStorage.persistentUpsellDesc')}
             icon={<Icon icon={FolderClockIcon} size={16} />}
             label={t('sandboxDrive.upsell')}
             tag={t('pro', { ns: 'common' })}
+            xstyle={styles.option}
             onClick={() => {
               setOpen(false);
               openSandboxStorageUpsell();
@@ -286,16 +284,13 @@ const SandboxDrivePicker = memo<SandboxDrivePickerProps>(
           <Tooltip title={fallbackMessage}>
             <div
               data-testid={'sandbox-drive-chip'}
-              className={cx(
-                workingDirectoryChipStyles.chip,
-                fallback && stylex.props(styles.warning).className,
-              )}
+              {...stylex.props(workingDirectoryChipStyles.chip, fallback && styles.warning)}
             >
               {chipIcon}
               {resolving ? (
                 <Skeleton.Text rows={1} style={{ height: 12, width: 56 }} />
               ) : (
-                <span className={workingDirectoryChipStyles.label}>{chipLabel}</span>
+                <span {...stylex.props(workingDirectoryChipStyles.label)}>{chipLabel}</span>
               )}
               <Icon icon={ChevronDownIcon} size={12} />
             </div>

@@ -2,12 +2,15 @@
 
 import { inspectorTextStyles, shinyTextStyles } from '@lobechat/shared-tool-ui/styles';
 import type { BuiltinInspector, BuiltinInspectorProps } from '@lobechat/types';
-import { createStaticStyles, cx } from '@lobehub/ui';
+import { cx } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import type { LucideIcon } from 'lucide-react';
 import {
   Camera,
   Globe,
   Keyboard,
+  Monitor,
   MousePointerClick,
   MoveVertical,
   ScanText,
@@ -25,46 +28,42 @@ import {
   parseBrowserMcpApi,
 } from './browserMcpLabels';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  chip: css`
-    overflow: hidden;
-    display: inline-flex;
-    flex-shrink: 1;
-    gap: 6px;
-    align-items: center;
-
-    min-width: 0;
-    margin-inline-start: 6px;
-    padding-block: 2px;
-    padding-inline: 10px;
-    border-radius: 999px;
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  icon: css`
-    flex-shrink: 0;
-    color: ${cssVar.colorTextDescription};
-  `,
-  value: css`
-    overflow: hidden;
-
-    min-width: 0;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    color: ${cssVar.colorText};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-}));
+const styles = stylex.create({
+  chip: {
+    overflow: 'hidden',
+    display: 'inline-flex',
+    flexShrink: 1,
+    gap: '6px',
+    alignItems: 'center',
+    minWidth: '0',
+    marginInlineStart: '6px',
+    paddingBlock: '2px',
+    paddingInline: '10px',
+    borderRadius: '999px',
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+  icon: { flexShrink: 0, color: cssVar.colorTextDescription },
+  value: {
+    overflow: 'hidden',
+    minWidth: '0',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '12px',
+    color: cssVar.colorText,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+});
 
 interface BrowserMcpArgs {
   dx?: number;
   dy?: number;
+  height?: number;
   key?: string;
   ref?: string;
   text?: string;
   url?: string;
+  width?: number;
   x?: number;
   y?: number;
 }
@@ -77,6 +76,7 @@ const API_ICONS: Record<BrowserMcpApi, LucideIcon> = {
   readPage: ScanText,
   screenshot: Camera,
   scroll: MoveVertical,
+  setViewport: Monitor,
   snapshot: ScanText,
 };
 
@@ -115,6 +115,10 @@ const getChipValue = (api: BrowserMcpApi, args: BrowserMcpArgs): string => {
     case 'scroll': {
       return formatScroll(args);
     }
+    case 'setViewport': {
+      const { height, width } = args;
+      return typeof width === 'number' && typeof height === 'number' ? `${width}×${height}` : '';
+    }
     default: {
       return '';
     }
@@ -146,9 +150,9 @@ const BrowserMcpInspector = memo<BuiltinInspectorProps<BrowserMcpArgs>>(
           {value ? `${label}:` : label}
         </span>
         {value && (
-          <span className={styles.chip}>
-            <Icon className={styles.icon} size={14} />
-            <span className={styles.value}>{value}</span>
+          <span {...stylex.props(styles.chip)}>
+            <Icon className={stylex.props(styles.icon).className} size={14} />
+            <span {...stylex.props(styles.value)}>{value}</span>
           </span>
         )}
       </div>

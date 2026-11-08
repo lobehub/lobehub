@@ -74,6 +74,65 @@ describe('createGatewayEventHandler — stream lifecycle events', () => {
       );
     });
 
+    it('inserts a server-joined steer message ahead of the reply without a DB refetch', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+
+      handler(
+        makeEvent('stream_start', {
+          assistantMessage: { id: 'msg-step2', parentId: 'steer-1', role: 'assistant' },
+          parentMessage: {
+            content: 'why not the Feishu CLI',
+            id: 'steer-1',
+            metadata: { steer: true },
+            parentId: 'msg-step1',
+            role: 'user',
+          },
+        }),
+      );
+      await flush();
+
+      const created = vi
+        .mocked(store.internal_dispatchMessage)
+        .mock.calls.filter(([action]) => action.type === 'createMessage')
+        .map(([action]) => action);
+      expect(created).toEqual([
+        expect.objectContaining({
+          id: 'steer-1',
+          value: expect.objectContaining({
+            content: 'why not the Feishu CLI',
+            metadata: { steer: true },
+            parentId: 'msg-step1',
+            role: 'user',
+          }),
+        }),
+        expect.objectContaining({
+          id: 'msg-step2',
+          value: expect.objectContaining({ parentId: 'steer-1', role: 'assistant' }),
+        }),
+      ]);
+      expect(messageService.getMessages).not.toHaveBeenCalled();
+    });
+
+    it('does not insert the steer parent twice when the store already has it', async () => {
+      const store = createMockStore();
+      store.dbMessagesMap = { 'session_agent-1_topic-1': [{ id: 'steer-1', role: 'user' }] };
+      const handler = createHandler(store);
+
+      handler(
+        makeEvent('stream_start', {
+          assistantMessage: { id: 'msg-step2', parentId: 'steer-1', role: 'assistant' },
+          parentMessage: { content: 'x', id: 'steer-1', role: 'user' },
+        }),
+      );
+      await flush();
+
+      expect(store.internal_dispatchMessage).not.toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'steer-1', type: 'createMessage' }),
+        expect.anything(),
+      );
+    });
+
     it('should keep current ID if event data has no assistantMessage', async () => {
       const store = createMockStore();
       const handler = createHandler(store);
@@ -108,6 +167,34 @@ describe('createGatewayEventHandler — stream lifecycle events', () => {
         }),
         { operationId: 'op-1' },
       );
+    });
+
+    it('keeps a reconnect replay on each step row when hetero stream_start names it', async () => {
+      const store = createMockStore();
+      store.dbMessagesMap['main_agent-1_topic-1'] = [
+        { content: 'still waiting on CI', id: 'msg-step2', role: 'assistant' },
+        { content: 'final answer', id: 'msg-final', role: 'assistant' },
+      ];
+      // A reconnect anchors on `runningOperation.assistantMessageId` — the newest row.
+      const handler = createHandler(store, { assistantMessageId: 'msg-final' });
+
+      handler(makeEvent('stream_start', { assistantMessage: { id: 'msg-step2' }, newStep: true }));
+      handler(makeEvent('stream_chunk', { chunkType: 'text', content: 'still waiting on CI' }));
+      handler(makeEvent('stream_start', { assistantMessage: { id: 'msg-final' }, newStep: true }));
+      handler(makeEvent('stream_chunk', { chunkType: 'text', content: 'final answer' }));
+      await flush();
+
+      const contentWrites = vi
+        .mocked(store.internal_dispatchMessage)
+        .mock.calls.map(([action]: any[]) => action)
+        .filter((action) => action.type === 'updateMessage' && 'content' in action.value)
+        .map((action) => [action.id, action.value.content]);
+      expect(contentWrites).toEqual([
+        ['msg-step2', 'still waiting on CI'],
+        ['msg-final', 'final answer'],
+      ]);
+      // Both rows are already loaded, so the replay needs no DB round trip.
+      expect(messageService.getMessages).not.toHaveBeenCalled();
     });
 
     it('should reset accumulators on each stream_start', async () => {

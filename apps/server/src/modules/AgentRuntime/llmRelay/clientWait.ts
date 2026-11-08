@@ -1,4 +1,5 @@
 import type { AgentRunClientLlmWait, AgentRuntimeContext } from '@lobechat/agent-runtime';
+import { BRANDING_NAME } from '@lobechat/business-const';
 import type { ChatMessageError } from '@lobechat/types';
 import { AgentRuntimeErrorType } from '@lobechat/types';
 
@@ -85,7 +86,7 @@ export const buildClientLlmWaitMessageError = (wait: AgentRunClientLlmWait): Cha
     recoverable: true,
     waitingForClient: true,
   },
-  message: `Waiting for a LobeHub client that can reach ${wait.provider}`,
+  message: `Waiting for a ${BRANDING_NAME} client that can reach ${wait.provider}`,
   type: AgentRuntimeErrorType.ClientLlmExecutorUnavailable,
 });
 

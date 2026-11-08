@@ -24,13 +24,16 @@ export interface DirectoryBrowserProps {
   /** Above the address bar; the device wording when absent, nothing when `null`. */
   description?: ReactNode;
   error?: string;
-  /** Beside the footer's buttons — what a pick carries along, such as an environment. */
-  footerExtra?: ReactNode;
   loading: boolean;
   onCancel: () => void;
   /** Switch to typing a path; absent where a path cannot be typed. */
   onManual?: (path: string) => void;
   onSelect: (path: string) => void;
+  /**
+   * What a pick carries along, such as an environment: a row of its own above
+   * the footer, so the buttons stay on one line however long its labels run.
+   */
+  pickExtra?: ReactNode;
   source: DirectorySource;
 }
 
@@ -73,11 +76,11 @@ export const DirectoryBrowser = ({
   defaultPath,
   description,
   error: submitError,
-  footerExtra,
   loading,
   onCancel,
   onManual,
   onSelect,
+  pickExtra,
   source,
 }: DirectoryBrowserProps) => {
   const { t } = useTranslation('device');
@@ -263,6 +266,7 @@ export const DirectoryBrowser = ({
           </>
         )}
       </Flexbox>
+      {pickExtra}
       {submitError && <SubmitError detail={submitError} />}
       {blockedReason && canUseDirectory && (
         <Text fontSize={12} type={'warning'}>
@@ -278,7 +282,6 @@ export const DirectoryBrowser = ({
           <span />
         )}
         <Flexbox horizontal align={'center'} gap={8}>
-          {footerExtra}
           <Button disabled={loading} onClick={onCancel}>
             {tCommon('cancel')}
           </Button>

@@ -30,6 +30,14 @@ export const API_KEY_SCOPES = [
   API_KEY_FULL_ACCESS_SCOPE,
   'agent:read',
   'agent:write',
+  /**
+   * Writing an agent account's *credential* — a password, token or signing key
+   * that the account then authenticates with. Deliberately its own tier: an
+   * agent account is an identity asset, so "may manage the agent's accounts"
+   * must not imply "may install a secret into one". `agent:write` is still
+   * required alongside it, so this can only ever narrow, never widen.
+   */
+  'agent:credential:write',
   'eval:read',
   'eval:write',
   'chat:read',
@@ -175,8 +183,16 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   // the discussion on an acceptance follows the acceptance itself
   acceptanceComment: 'blocked',
   agent: rw('agent:read', 'agent:write'),
+  // an agent's identity assets (mail / wallet / service). Reading and
+  // managing accounts is ordinary agent read/write; installing a *credential*
+  // is separated onto `agent:credential:write` via
+  // `TRPC_PROCEDURE_EXTRA_SCOPES` below.
+  agentAccount: rw('agent:read', 'agent:write'),
   // bot channel wiring carries channel credentials
   agentBotProvider: 'blocked',
+  // a bot's wake records: channel message previews and the owner's marks, read through the same
+  // bot lookup as agentBotProvider
+  agentBotWake: 'blocked',
   agentDocument: rw('knowledge:read', 'knowledge:write'),
   agentEval: 'blocked',
   agentEvalExternal: 'blocked',
@@ -202,6 +218,9 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   // keys must not mint or manage keys
   apiKey: 'blocked',
   asr: { any: 'model:invoke' },
+  // `auth.getScope` only reports which scope the presented credential runs
+  // under, so any key — however narrow — can tell where its calls land
+  auth: 'open',
   artifactShare: rw('chat:read', null),
   // decrypts stored bot/messenger credentials and calls external channel APIs
   botMessage: 'blocked',
@@ -209,6 +228,8 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   // publish opens a public site from stored files; no key-based client drives canvases
   canvas: 'blocked',
   changelog: 'open',
+  // Sending wakes Agent runs on members' devices; no key-based client drives Channels yet
+  channel: 'blocked',
   chunk: rw('knowledge:read', 'knowledge:write'),
   comfyui: rw('model:read', 'model:write'),
   // third-party integrations hold external credentials
@@ -230,7 +251,12 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   expertise: rw('agent:read', 'agent:write'),
   // whole-account backup dump (settings incl. market tokens, providers, agents)
   exporter: 'blocked',
+  // Personal sidebar shortcuts, like other per-user preferences.
+  favorite: rw('user:read', 'user:write'),
   file: rw('file:read', 'file:write'),
+  // a link share opens one file to anyone holding the link — the same authority
+  // as the file itself
+  fileShare: rw('file:read', 'file:write'),
   followUpAction: rw('chat:read', 'chat:write'),
   generation: { any: 'model:invoke' },
   generationBatch: { any: 'model:invoke' },
@@ -297,6 +323,7 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   storageOverage: 'blocked',
   subscription: 'blocked',
   task: rw('agent:read', 'agent:write'),
+  taskLabel: rw('agent:read', 'agent:write'),
   taskTemplate: rw('agent:read', 'agent:write'),
   thread: rw('chat:read', 'chat:write'),
   topUp: 'blocked',
@@ -376,6 +403,10 @@ export const TRPC_PROCEDURE_EXTRA_SCOPES: Record<string, ApiKeyScope[]> = {
   'aiAgent.submitHeteroIntervention': AGENT_RUN_SCOPES,
   // lists the caller's whole knowledge-base/file inventory, not agent config
   'agent.getKnowledgeBasesAndFiles': ['file:read', 'knowledge:read'],
+  // installing or rotating an account credential is a write-only, high-risk act
+  // with no read-back: `agent:write` alone ("may manage this agent's accounts")
+  // must not be able to set a password/token on one.
+  'agentAccount.setCredential': ['agent:credential:write'],
   // notify's user/continue paths call `aiAgentService.execAgent` — another run entry
   'agentNotify.notify': AGENT_RUN_SCOPES,
   // signal triggers enqueue analyze-intent workflows whose judges call
@@ -438,6 +469,18 @@ export const TRPC_PROCEDURE_EXTRA_SCOPES: Record<string, ApiKeyScope[]> = {
 };
 
 /**
+ * Single procedures opened to restricted keys inside a namespace half that is
+ * otherwise closed to them (a `null` side of `rw`). The grant is the base scope
+ * for that one path; the rest of the namespace half stays blocked. Keep entries
+ * narrow and only for procedures that enforce their own authorization.
+ */
+export const TRPC_PROCEDURE_SCOPE_GRANTS: Record<string, ApiKeyScope> = {
+  // a member's workspace title and responsibilities — the procedure still
+  // requires self or Admin, while invite / remove / role changes stay closed
+  'workspaceMember.updateProfile': 'workspace:write',
+};
+
+/**
  * Nested sub-surfaces denied to restricted keys regardless of the parent
  * namespace rule. The namespace table only sees the first path segment, so
  * sensitive subrouters mounted inside an otherwise-scoped namespace must be
@@ -488,7 +531,8 @@ export const requiredApiKeyScopeForTrpc = (
   if (!rule || rule === 'blocked') return { blocked: true };
 
   const base =
-    rule === 'open' ? null : 'any' in rule ? rule.any : type === 'query' ? rule.read : rule.write;
+    TRPC_PROCEDURE_SCOPE_GRANTS[path] ??
+    (rule === 'open' ? null : 'any' in rule ? rule.any : type === 'query' ? rule.read : rule.write);
 
   // a namespace half with no scope grants nothing to restricted keys
   if (rule !== 'open' && !base) return { blocked: true };

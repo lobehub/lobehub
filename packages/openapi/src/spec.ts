@@ -1,7 +1,14 @@
+import {
+  AGENT_ACCOUNT_DIGEST_MINUTES_RANGE,
+  AGENT_ACCOUNT_PERSISTED_KINDS,
+  AGENT_ACCOUNT_STATUSES,
+  AGENT_ACCOUNT_WAKE_MODES,
+} from '@lobechat/types';
 import { API_KEY_PREFIX } from '@lobechat/utils/apiKey';
 import { generateSpecs } from 'hono-openapi';
 
 import { API_KEY_SCOPES } from '@/const/apiKeyScope';
+import type { AgentAccountView } from '@/database/models/agentAccount';
 
 import { evalResponseSchema } from './types/eval-response.type';
 
@@ -23,7 +30,86 @@ const nullableBoolean = { type: ['boolean', 'null'] } as const;
 const nullableNumber = { type: ['number', 'null'] } as const;
 const nullableObject = { additionalProperties: true, type: ['object', 'null'] } as const;
 
+/**
+ * Every field an account view carries. Typed against the view so a column added
+ * to it fails type-checking here rather than being silently dropped from the
+ * SDK — the schema sets `additionalProperties: false`, so a missing field also
+ * makes strict response validators reject real payloads.
+ */
+const agentAccountProperties = {
+  /** Last time the account was read or used — every account view carries it. */
+  accessedAt: dateTime,
+  agentId: { type: 'string' },
+  capabilities: {
+    additionalProperties: false,
+    properties: {
+      login: nullableBoolean,
+      receive: { type: 'boolean' },
+      send: { type: 'boolean' },
+      sign: nullableBoolean,
+    },
+    required: ['receive', 'send'],
+    type: 'object',
+  },
+  createdAt: dateTime,
+  credentialHint: nullableObject,
+  displayName: nullableString,
+  /** Whether a secret is installed. Never the secret itself. */
+  hasCredential: { type: 'boolean' },
+  id: { type: 'string' },
+  identifier: { type: 'string' },
+  // The persisted kinds, not just the creatable ones: an unfiltered read still
+  // returns retired-kind rows, and the response contract must not exclude a
+  // value the API actually returns.
+  kind: { enum: AGENT_ACCOUNT_PERSISTED_KINDS, type: 'string' },
+  metadata: nullableObject,
+  provider: { type: 'string' },
+  revokedAt: { ...dateTime, type: ['string', 'null'] },
+  // The owner's own settings. Stored JSON, so a field a later build adds may appear.
+  settings: {
+    additionalProperties: true,
+    properties: {
+      wake: {
+        additionalProperties: true,
+        properties: {
+          digestMinutes: {
+            maximum: AGENT_ACCOUNT_DIGEST_MINUTES_RANGE.max,
+            minimum: AGENT_ACCOUNT_DIGEST_MINUTES_RANGE.min,
+            type: 'integer',
+          },
+          mode: { enum: AGENT_ACCOUNT_WAKE_MODES, type: 'string' },
+          wakeSenders: { items: { type: 'string' }, type: 'array' },
+        },
+        type: 'object',
+      },
+    },
+    type: 'object',
+  },
+  status: { enum: AGENT_ACCOUNT_STATUSES, type: 'string' },
+  updatedAt: dateTime,
+  userId: { type: 'string' },
+  workspaceId: nullableString,
+} satisfies Record<keyof AgentAccountView, SchemaObject>;
+
 const resourceSchemas: Record<string, SchemaObject> = {
+  AgentAccount: {
+    additionalProperties: false,
+    properties: agentAccountProperties,
+    required: [
+      'id',
+      'agentId',
+      'kind',
+      'identifier',
+      'provider',
+      'status',
+      'capabilities',
+      'hasCredential',
+      'accessedAt',
+      'createdAt',
+      'updatedAt',
+    ],
+    type: 'object',
+  },
   ApiKey: {
     additionalProperties: false,
     properties: {
@@ -427,6 +513,19 @@ const resourceSchemas: Record<string, SchemaObject> = {
         required: ['since', 'until'],
         type: 'object',
       },
+      quota: {
+        additionalProperties: false,
+        properties: {
+          limit: nullableNumber,
+          remaining: nullableNumber,
+          resetsAt: { ...dateTime, type: ['string', 'null'] },
+          source: { enum: ['personal', 'workspace_pool', 'member_budget'], type: 'string' },
+          used: { type: 'number' },
+          usedRatio: nullableNumber,
+        },
+        required: ['limit', 'remaining', 'resetsAt', 'source', 'used', 'usedRatio'],
+        type: ['object', 'null'],
+      },
       remainingBalance: nullableNumber,
       scope: { enum: ['personal', 'workspace'], type: 'string' },
       spent: { type: 'number' },
@@ -449,6 +548,7 @@ const resourceSchemas: Record<string, SchemaObject> = {
       'currency',
       'daily',
       'period',
+      'quota',
       'remainingBalance',
       'scope',
       'spent',
@@ -486,6 +586,21 @@ const imMessageSchema: SchemaObject = {
     content: { type: 'string' },
     createdAt: dateTime,
     error: { type: 'boolean' },
+    files: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          id: { type: 'string' },
+          name: { type: 'string' },
+          fileType: { type: 'string' },
+          size: { type: 'number' },
+          url: { type: 'string' },
+        },
+        required: ['id', 'name', 'fileType', 'size', 'url'],
+      },
+    },
     id: { type: 'string' },
     role: { enum: ['assistant', 'user'], type: 'string' },
   },
@@ -560,6 +675,7 @@ const PERSONAL_AGENT_GROUPS = new Set(['goals', 'memories', 'notifications', 'si
 const CREATED_OPERATIONS = new Set([
   'POST agent-groups',
   'POST agents/{id}/duplicate',
+  'POST agents/{id}/accounts',
   'POST api-keys',
   'POST chat-groups',
   'POST eval/benchmarks',
@@ -710,6 +826,34 @@ const getSuccessSchema = (group: string, rest: string, method: string): SchemaOb
       required: ['deviceId', 'platform'],
       type: 'object',
     });
+  }
+
+  /**
+   * Agent identity assets: `/agents/{id}/accounts`. Every route answers with an
+   * `AgentAccount` (the collection GET wraps them), and none of them can carry
+   * a credential — the write-only sub-resource answers with the hint plus
+   * `hasCredential`, never the secret.
+   */
+  if (group === 'agents') {
+    if (rest === '{id}/accounts') {
+      if (method === 'get') {
+        return successEnvelope({
+          additionalProperties: false,
+          properties: {
+            accounts: { items: ref('AgentAccount'), type: 'array' },
+            total: { minimum: 0, type: 'integer' },
+          },
+          required: ['accounts', 'total'],
+          type: 'object',
+        });
+      }
+
+      return successEnvelope(ref('AgentAccount'));
+    }
+
+    if (rest === '{id}/accounts/{accountId}' || rest === '{id}/accounts/{accountId}/credential') {
+      return successEnvelope(ref('AgentAccount'));
+    }
   }
 
   const resource = groupResources[group];

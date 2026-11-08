@@ -44,6 +44,7 @@ export class CurrentRouteMetaActionImpl {
       currentRouteMetaUrl === url &&
       (currentRouteMeta === null) === (meta === null) &&
       currentRouteMeta?.avatar === meta?.avatar &&
+      currentRouteMeta?.avatarKind === meta?.avatarKind &&
       currentRouteMeta?.avatarSeed === meta?.avatarSeed &&
       currentRouteMeta?.backgroundColor === meta?.backgroundColor &&
       currentRouteMeta?.title === meta?.title

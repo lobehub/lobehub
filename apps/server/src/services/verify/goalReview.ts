@@ -1,5 +1,5 @@
-import { isDraftVerifyRun } from '@lobechat/const/verify';
-import type { VerifyRunMetadata } from '@lobechat/types';
+import { isCheckWaivedByDispute, isDraftVerifyRun } from '@lobechat/const/verify';
+import type { VerifyCheckResultMetadata, VerifyRunMetadata } from '@lobechat/types';
 
 import { GoalModel } from '@/database/models/goal';
 import { VerifyEvidenceModel } from '@/database/models/verifyEvidence';
@@ -119,6 +119,15 @@ export const reviewGoalDelivery = async (
 
     const predictor = new VerifyReviewPredictorService(db, userId, workspaceId);
     const feedback: string[] = [];
+    // Only a check this round itself answered can be repaired inside the round;
+    // one judged from an earlier round's result has no row here to re-open.
+    const rejectCheck = (check: (typeof checks)[number], reason: string) => {
+      if (check.result?.verifyRunId !== run.id) return;
+      (review.rejectedChecks ??= []).push({
+        checkItemId: check.result.checkItemId,
+        feedback: reason,
+      });
+    };
     // Checks are judged concurrently, so the aggregate has to be order
     // independent: take the most blocking outcome seen rather than letting the
     // last writer win. `rejected` outranks `unjudgeable` because one genuinely
@@ -136,6 +145,10 @@ export const reviewGoalDelivery = async (
       }
       if (check.result.userDecision === 'accepted' || check.result.userDecision === 'overridden')
         return;
+      // An explicit rejection outranks a panel waiver. `reviewChecks` accepts a
+      // per-check decision at any lifecycle state and writes `rejected` without
+      // clearing the dispute, so both can coexist: the user rejecting the check
+      // after its dispute was upheld must still block the delivery.
       if (check.result.userDecision === 'rejected') {
         escalate('rejected');
         feedback.push(
@@ -143,6 +156,8 @@ export const reviewGoalDelivery = async (
         );
         return;
       }
+      // A panel already ruled this check invalid for this delivery.
+      if (isCheckWaivedByDispute(check.result.metadata)) return;
       const modelConfig = await getModelConfig();
       if (!modelConfig) {
         escalate('errored');
@@ -152,9 +167,11 @@ export const reviewGoalDelivery = async (
         return;
       }
       const checkResultId = check.result.id;
+      const dispute = (check.result.metadata as VerifyCheckResultMetadata | null)?.dispute;
       const judge = () =>
         predictor
           .predict({
+            builderRebuttal: dispute?.kind === 'missed_evidence' ? dispute.reason : undefined,
             checkResultId,
             includeTextEvidence: true,
             instructionDocumentId: check.planItem?.documentId,
@@ -183,7 +200,10 @@ export const reviewGoalDelivery = async (
         // The criterion asks for something no reader can confirm. Re-delivering
         // cannot change that, so this must not read as a rejected delivery.
         escalate('unjudgeable');
-      } else escalate('rejected');
+      } else {
+        escalate('rejected');
+        rejectCheck(check, prediction.comment ?? 'Acceptance review rejected this check.');
+      }
       feedback.push(
         `${check.title}: ${prediction?.comment ?? prediction?.statusReason ?? 'Review could not reach a decision.'}`,
       );

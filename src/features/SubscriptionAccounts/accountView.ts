@@ -1,4 +1,5 @@
 import {
+  displayPlanTier,
   isSessionLimit,
   isWeeklyAllLimit,
   type QuotaDisplayReading,
@@ -91,6 +92,18 @@ export const deriveAccountView = (
   return { ...base, status: 'available' };
 };
 
+export type AccountWindowKey = 'session' | 'weekly';
+
+/**
+ * The windows the card draws a meter for. Before any reading both stay as
+ * placeholders; once the account reports, a window it does not have (Claude
+ * Ultra has no 5-hour limit) gets no meter rather than a permanently empty one.
+ */
+export const meterWindows = (view: Pick<AccountView, AccountWindowKey>): AccountWindowKey[] => {
+  if (!view.session && !view.weekly) return ['session', 'weekly'];
+  return (['session', 'weekly'] as const).filter((key) => !!view[key]);
+};
+
 const PROVIDER_ORDER: Record<string, number> = { 'claude-code': 0, 'codex': 1, 'kimi-code': 2 };
 
 /** Accounts in rotation first, then grouped by provider, then by name. */
@@ -113,12 +126,17 @@ export const sortAccounts = <
 
 /** Whether an account matches the search box: name, email or plan, case-insensitive. */
 export const matchesKeyword = (
-  account: { email?: string | null; label?: string | null; planTier?: string | null },
+  account: {
+    email?: string | null;
+    label?: string | null;
+    planTier?: string | null;
+    rateLimitTier?: string | null;
+  },
   keyword: string,
 ): boolean => {
   const needle = keyword.trim().toLowerCase();
   if (!needle) return true;
-  return [account.label, account.email, account.planTier].some((field) =>
+  return [account.label, account.email, displayPlanTier(account)].some((field) =>
     field?.toLowerCase().includes(needle),
   );
 };

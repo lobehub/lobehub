@@ -14,10 +14,13 @@ const testState = vi.hoisted(() => ({
   },
   chat: {
     activeTopicId: undefined as string | undefined,
+    pendingNewTopicDirectory: undefined as
+      { agentId: string; projectWorkingDirectoryId: string } | undefined,
     topic: undefined as ChatTopic | undefined,
     updateTopicMetadata: vi.fn(),
   },
   currentDeviceId: 'this-machine' as string | undefined,
+  updateDeviceCwd: vi.fn(),
   resolveGatewayDeviceId: vi.fn(async (): Promise<string | undefined> => undefined),
   effective: {
     agencyConfig: undefined as Record<string, unknown> | undefined,
@@ -48,7 +51,7 @@ vi.mock('@/store/chat/selectors', () => ({
 
 vi.mock('@/store/device', () => ({
   useDeviceStore: (selector: (s: { updateDeviceCwd: unknown }) => unknown) =>
-    selector({ updateDeviceCwd: vi.fn() }),
+    selector({ updateDeviceCwd: testState.updateDeviceCwd }),
 }));
 
 vi.mock('@/store/electron', () => ({
@@ -71,6 +74,7 @@ describe('useCommitWorkingDirectory — localTarget', () => {
     testState.agent.updateAgentConfigById = vi.fn();
     testState.agent.updateAgentRuntimeEnvConfigById = vi.fn();
     testState.chat.activeTopicId = undefined;
+    testState.chat.pendingNewTopicDirectory = undefined;
     testState.chat.topic = undefined;
     testState.chat.updateTopicMetadata = vi.fn();
     testState.currentDeviceId = 'this-machine';
@@ -79,6 +83,25 @@ describe('useCommitWorkingDirectory — localTarget', () => {
       isPreferenceLoading: false,
       workspaceScoped: false,
     };
+  });
+
+  it('refuses a worktree pick while a blank conversation is staged in a project directory', async () => {
+    // No topic yet, so the write would otherwise land on the agent default —
+    // a directory this conversation will not run in.
+    testState.agent.agencyConfig = { boundDeviceId: 'this-machine', executionTarget: 'device' };
+    testState.effective.agencyConfig = testState.agent.agencyConfig;
+    testState.chat.pendingNewTopicDirectory = {
+      agentId: 'agent-id',
+      projectWorkingDirectoryId: 'directory',
+    };
+
+    const { result } = renderHook(() => useCommitWorkingDirectory('agent-id'));
+    await expect(
+      result.current.commit({ path: '/repo', git: { activeWorktree: '/repo-worktree' } }),
+    ).rejects.toThrow();
+
+    expect(testState.agent.updateAgentConfigById).not.toHaveBeenCalled();
+    expect(testState.agent.updateAgentRuntimeEnvConfigById).not.toHaveBeenCalled();
   });
 
   it('keeps a project-bound source directory while allowing worktree selection', async () => {
@@ -133,6 +156,52 @@ describe('useCommitWorkingDirectory — localTarget', () => {
       { agencyConfig: { workingDirByDevice: { 'this-machine': { path: 'C:/work' } } } },
       { replaceWorkingDirDeviceIds: ['this-machine'] },
     );
+  });
+
+  it('records a local pick on this machine instead of the previous remote target', async () => {
+    testState.effective.agencyConfig = {
+      boundDeviceId: 'other-device',
+      executionTarget: 'device',
+    };
+    const { result } = renderHook(() => useCommitWorkingDirectory('agent-id'));
+
+    await result.current.commit({ path: '/local/repo' }, { localTarget: true });
+
+    expect(testState.updateDeviceCwd).toHaveBeenCalledWith(
+      'this-machine',
+      { path: '/local/repo' },
+      { setDefault: false },
+    );
+  });
+
+  it('records the picked folder on the same newly resolved device as the topic', async () => {
+    testState.currentDeviceId = undefined;
+    testState.chat.activeTopicId = 'topic';
+    testState.resolveGatewayDeviceId.mockResolvedValueOnce('resolved-device');
+    const { result } = renderHook(() => useCommitWorkingDirectory('agent-id'));
+
+    await result.current.commit({ path: '/repo' });
+
+    expect(testState.chat.updateTopicMetadata).toHaveBeenCalledWith(
+      'topic',
+      expect.objectContaining({ boundDeviceId: 'resolved-device', workingDirectory: '/repo' }),
+    );
+    expect(testState.updateDeviceCwd).toHaveBeenCalledWith(
+      'resolved-device',
+      { path: '/repo' },
+      { setDefault: false },
+    );
+  });
+
+  it('keeps the selection unchanged when saving the reusable directory fails', async () => {
+    testState.chat.activeTopicId = 'topic';
+    testState.updateDeviceCwd.mockRejectedValueOnce(new Error('save failed'));
+    const { result } = renderHook(() => useCommitWorkingDirectory('agent-id'));
+
+    await expect(result.current.commit({ path: '/repo' })).rejects.toThrow('save failed');
+
+    expect(testState.chat.updateTopicMetadata).not.toHaveBeenCalled();
+    expect(testState.agent.updateAgentConfigById).not.toHaveBeenCalled();
   });
 
   it('leaves ordinary writes routed by the resolved config', async () => {

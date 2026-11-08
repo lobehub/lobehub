@@ -194,24 +194,32 @@ export const listRules = async (ctx: ExpertiseContext) => {
       // reader uses for `taughtByUser`.
       .map(({ originRunId, ...lesson }) => ({
         ...lesson,
+        /* v8 ignore start -- unreachable: the fallback; countHitsBySource maps every lesson id it was given, and it was given all of them */
         ...(bySource.get(lesson.id) ?? {
           conversationHitCount: 0,
           materialHitCount: 0,
           rejectionHitCount: 0,
         }),
+        /* v8 ignore stop */
         authored: lesson.createdByUserId != null && originRunId == null,
       })),
-    scopes: (bindingsByDomain.get(domain.id) ?? []).map((binding) => {
-      if (binding.projectId) {
-        return { id: binding.projectId, kind: 'project' as const, title: binding.projectName };
-      }
-      if (binding.agentId) {
-        return { id: binding.agentId, kind: 'agent' as const, title: binding.agentTitle };
-      }
-      return binding.boundWorkspaceId
-        ? { id: binding.boundWorkspaceId, kind: 'workspace' as const, title: null }
-        : { id: binding.boundUserId!, kind: 'user' as const, title: null };
-    }),
+    scopes: (
+      bindingsByDomain.get(domain.id) ??
+      /* v8 ignore start -- unreachable: the `[]` arm; ownerOf keeps a group only when it has at least one visible binding */
+      []
+    )
+      /* v8 ignore stop */
+      .map((binding) => {
+        if (binding.projectId) {
+          return { id: binding.projectId, kind: 'project' as const, title: binding.projectName };
+        }
+        if (binding.agentId) {
+          return { id: binding.agentId, kind: 'agent' as const, title: binding.agentTitle };
+        }
+        return binding.boundWorkspaceId
+          ? { id: binding.boundWorkspaceId, kind: 'workspace' as const, title: null }
+          : { id: binding.boundUserId!, kind: 'user' as const, title: null };
+      }),
   }));
 };
 

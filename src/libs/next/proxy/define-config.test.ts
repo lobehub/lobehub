@@ -148,7 +148,8 @@ describe('OIDC protocol endpoints', () => {
     '/oidc/.well-known/openid-configuration',
     '/oidc/jwks',
     '/oidc/me',
-    '/oidc/review/callback?error=invalid_target&state=s',
+    '/oidc/acceptance/callback?error=invalid_target&state=s',
+    '/oauth/connector/client-metadata.json',
   ])('serves %s without sending an unauthenticated client to sign-in', async (path) => {
     const { getSession, response } = await callMiddleware(path);
 
@@ -174,6 +175,17 @@ describe('project deep links', () => {
       ).toBe(true);
       const rewrite = await run(`http://localhost:3010${path}`);
       expect(new URL(rewrite!).pathname).toMatch(new RegExp(`/spa/[^/]+${path}$`));
+    },
+  );
+});
+
+describe('channel deep links', () => {
+  it.each(['/channels', '/channels/chn_123'])(
+    'keeps %s reachable after a full page reload',
+    async (path) => {
+      const request = new NextRequest(`http://localhost:3010${path}`);
+      expect(createRouteMatcher(proxyConfig.matcher)(request)).toBe(true);
+      expect(new URL((await run(request.url))!).pathname).toMatch(new RegExp(`/spa/[^/]+${path}$`));
     },
   );
 });

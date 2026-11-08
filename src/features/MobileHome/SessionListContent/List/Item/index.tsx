@@ -27,6 +27,7 @@ const AgentItem = ({ item, groupId }: { item: SidebarAgentItem; groupId?: string
     <ListItem
       actions={<Actions groupId={groupId} item={item} setOpen={setOpen} />}
       active={item.type === 'group' ? activeGroupId === item.id : activeAgentId === item.id}
+      agentId={item.id}
       avatar={item.avatar || DEFAULT_AVATAR}
       avatarBackground={item.backgroundColor || undefined}
       date={item.updatedAt?.valueOf()}

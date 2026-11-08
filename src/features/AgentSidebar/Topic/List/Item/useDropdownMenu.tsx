@@ -16,8 +16,9 @@ import {
   PanelRight,
   PanelTop,
   PencilLine,
+  Pin,
+  PinOff,
   Share,
-  Star,
   Stethoscope,
   Trash,
   Wand2,
@@ -33,6 +34,7 @@ import { isDesktop } from '@/const/version';
 import { createMoveTopicsModal } from '@/features/AgentTopicManager/MoveTopicsModal';
 import { createTopicForwardModal } from '@/features/Conversation/MessageForward/TopicForwardModal';
 import { confirmRemoveTopic } from '@/features/DeleteTopicConfirm';
+import { useFavoriteMenuItem } from '@/features/Favorites';
 import { getProjectTopicPath } from '@/features/Projects/Layout/navigation';
 import { openShareModal } from '@/features/ShareModal';
 import { openTopicDoctorModal } from '@/features/TopicDoctorModal';
@@ -101,6 +103,21 @@ export const useTopicItemDropdownMenu = ({
   const appOrigin = useAppOrigin();
   const enableTopicBugReport = useUserStore(labPreferSelectors.enableTopicBugReport);
   const bugReportItem = useTopicBugReportMenuItem({ agentId: activeAgentId, topicId: id });
+  // Pin (`fav`) orders the topic list; a favorite adds the topic to the home
+  // sidebar's Favorites section. A topic still titled `...` is being named, so
+  // it waits for its real title before it can be added.
+  const favoriteMenuItem = useFavoriteMenuItem(
+    id && activeAgentId
+      ? {
+          path: AGENT_CHAT_TOPIC_URL(activeAgentId, id),
+          snapshotReady: !!title && title !== '...',
+          targetId: id,
+          title,
+          type: 'topic',
+        }
+      : undefined,
+    { showHotkey: false },
+  );
 
   const [
     autoRenameTopicTitle,
@@ -164,15 +181,16 @@ export const useTopicItemDropdownMenu = ({
       },
       {
         disabled: !canEditTopic,
-        icon: <Icon icon={Star} />,
+        icon: <Icon icon={fav ? PinOff : Pin} />,
         key: 'favorite',
-        label: fav ? t('actions.unfavorite') : t('actions.favorite'),
+        label: fav ? t('actions.unpin') : t('actions.pin'),
         onClick: async () => {
           await favoriteTopic(id, !fav);
           if (scope) await refresh();
         },
-        sfSymbol: fav ? 'star.slash' : 'star',
+        sfSymbol: fav ? 'pin.slash' : 'pin',
       },
+      ...(favoriteMenuItem ? [favoriteMenuItem] : []),
       {
         type: 'divider' as const,
       },
@@ -406,6 +424,7 @@ export const useTopicItemDropdownMenu = ({
     enableTopicBugReport,
     autoRenameTopicTitle,
     duplicateTopic,
+    favoriteMenuItem,
     favoriteTopic,
     toggleCompleted,
     removeTopic,

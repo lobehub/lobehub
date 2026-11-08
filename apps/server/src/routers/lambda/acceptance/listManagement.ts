@@ -17,6 +17,7 @@ import {
   previewAcceptancePurge,
   purgeAcceptance,
 } from '@/server/services/verify';
+import { acceptanceResponse } from '@/server/services/verify/acceptanceResponse';
 
 import { canReadAcceptance } from '../_helpers/acceptanceReadScope';
 import {
@@ -47,7 +48,9 @@ const acceptanceListFiltersSchema = z.object({
  * delete it. "Participated" rows are often someone else's, so the panel must
  * know which menus to offer instead of letting the write fail as NOT_FOUND.
  */
-const withManageFlag = async <T extends Pick<AcceptanceItem, 'id' | 'userId' | 'workspaceId'>>(
+const withManageFlag = async <
+  T extends Pick<AcceptanceItem, 'id' | 'userId' | 'visibility' | 'workspaceId'>,
+>(
   ctx: { serverDB: LobeChatDatabase; userId: string },
   rows: T[],
 ): Promise<Array<T & { canManage: boolean }>> => {
@@ -134,13 +137,19 @@ export const listManagementRouter = router({
     }),
   /**
    * Flip who can read the acceptance beyond its creator. Creation defaults are
-   * scope-dependent (personal → public, workspace → private); this is the
-   * deliberate override.
+   * scope-dependent (personal → public, workspace → private, i.e. the whole
+   * team); this is the deliberate override. Only the creator may make it
+   * `owner`: a teammate must not hide someone else's delivery from its team.
    */
   setVisibility: acceptanceWriteProcedure
     .input(z.object({ id: z.string(), visibility: z.enum(acceptanceVisibilities) }))
     .mutation(async ({ ctx, input }) => {
       const { acceptance, service } = await resolveAcceptanceForWrite(ctx, input.id);
+      if (input.visibility === 'owner' && acceptance.userId !== ctx.userId)
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'Only the creator can make an acceptance private',
+        });
 
       const updated = await service.acceptanceModel.update(acceptance.id, {
         visibility: input.visibility,
@@ -153,7 +162,7 @@ export const listManagementRouter = router({
         acceptance.userId,
         acceptance.workspaceId ?? undefined,
       ).setVisibilityByAcceptance(acceptance.id, input.visibility);
-      return updated;
+      return updated ? acceptanceResponse(updated) : updated;
     }),
   /**
    * Rename the acceptance in the caller's list — a display-title override kept
@@ -166,7 +175,10 @@ export const listManagementRouter = router({
     .mutation(async ({ ctx, input }) => {
       const { acceptance, service } = await resolveAcceptanceForWrite(ctx, input.id);
 
-      return service.acceptanceModel.patchMetadata(acceptance.id, { title: input.title });
+      const updated = await service.acceptanceModel.patchMetadata(acceptance.id, {
+        title: input.title,
+      });
+      return updated ? acceptanceResponse(updated) : updated;
     }),
   setProject: acceptanceWriteProcedure
     .input(z.object({ id: z.string(), projectId: z.string().nullable() }))
@@ -220,7 +232,7 @@ export const listManagementRouter = router({
       const rows =
         resolvableIds.length > 0
           ? await ctx.serverDB.query.acceptances.findMany({
-              columns: { id: true, userId: true, workspaceId: true },
+              columns: { id: true, userId: true, visibility: true, workspaceId: true },
               where: inArray(acceptances.id, resolvableIds),
             })
           : [];

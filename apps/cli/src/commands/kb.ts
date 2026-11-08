@@ -306,9 +306,7 @@ export function registerKbCommand(program: Command) {
           parentId: options.parent,
           title: options.title,
         });
-        const url = buildUrl(
-          `/resource/library/${encodeURIComponent(knowledgeBaseId)}?file=${encodeURIComponent((result as any).id)}`,
-        );
+        const url = buildUrl(resourcePath.document({ id: (result as any).id, knowledgeBaseId })!);
         console.log(`${pc.green('✓')} Created document ${pc.bold((result as any).id)}`);
         console.log(`${pc.bold('document')}: ${url}`);
       },

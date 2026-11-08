@@ -2,6 +2,7 @@ import type {
   AgentAccountCapabilities,
   AgentAccountCredentialHint,
   AgentAccountKind,
+  AgentAccountSettings,
   AgentAccountStatus,
 } from '@lobechat/types';
 import { sql } from 'drizzle-orm';
@@ -14,8 +15,8 @@ import { users } from './user';
 import { workspaces } from './workspace';
 
 /**
- * The identity assets an agent owns: its `mail` address, `phone` number,
- * `wallet`, or a third-party `service` login.
+ * The identity assets an agent owns: its `mail` address, a `wallet`, or a
+ * third-party `service` login.
  *
  * This is deliberately **not** `agent_bot_providers`. A bot provider models
  * "our bot inside someone else's platform" — the address belongs to the
@@ -60,7 +61,7 @@ export const agentAccounts = pgTable(
     /** Human label, e.g. "Work mailbox". */
     displayName: text('display_name'),
 
-    /** Who issues/owns this account: `agent-mail`, `linq`, `user`, … */
+    /** Who issues/owns this account: `agent-mail`, `user`, … */
     provider: text('provider').notNull(),
 
     status: text('status').$type<AgentAccountStatus>().notNull().default('provisioning'),
@@ -89,6 +90,13 @@ export const agentAccounts = pgTable(
 
     /** Provider-side non-secret handles (inboxId, chatId, walletId, …). */
     metadata: jsonb('metadata').$type<Record<string, unknown>>().default({}),
+
+    /**
+     * The owner's own settings for the account, such as its wake rules. Kept
+     * apart from `metadata`, which a managed provider owns and the owner may
+     * not rewrite.
+     */
+    settings: jsonb('settings').$type<AgentAccountSettings>().notNull().default({}),
 
     /** When the account was released. Kept for audit; the row is not deleted. */
     revokedAt: timestamptz('revoked_at'),

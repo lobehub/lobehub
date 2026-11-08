@@ -17,6 +17,7 @@ const mockRecordNoReplyLabel = vi.hoisted(() => vi.fn());
 const mockGenerateTopicTitle = vi.hoisted(() => vi.fn());
 const mockBotRouterReplay = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 const mockClearActiveThread = vi.hoisted(() => vi.fn());
+const mockRecordWakeRunOutcome = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 
 vi.mock('@/database/models/agentBotProvider', () => ({
   AgentBotProviderModel: {
@@ -66,6 +67,10 @@ vi.mock('@/server/services/messenger/platforms', () => ({
   messengerPlatformRegistry: { createBinder: vi.fn(), getPlatform: vi.fn() },
 }));
 vi.mock('../noReplyLabel', () => ({ recordNoReplyLabel: mockRecordNoReplyLabel }));
+vi.mock('../wake/scheduler', async (importOriginal) => ({
+  ...((await importOriginal()) as Record<string, unknown>),
+  recordWakeRunOutcome: mockRecordWakeRunOutcome,
+}));
 vi.mock('../platforms', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>;
   const client = {
@@ -172,6 +177,60 @@ describe('BotCallbackService no_reply (queue mode)', () => {
       expect(mockClearActiveThread).toHaveBeenCalledWith('discord:guild:channel');
       expect(mockBotRouterReplay).toHaveBeenCalledWith('discord', 'app-1', 'discord:guild:channel');
       expect(mockGenerateTopicTitle).not.toHaveBeenCalled();
+    });
+
+    // "nasa 就在这瞎捣乱": the agent acknowledges once and steps back from the thread.
+    it('stand-down: posts the acknowledgement without the marker and steps back from the thread', async () => {
+      await service.handleCallback(
+        body({
+          lastAssistantContent: '收到，我先退出这个讨论。\nSTAND_DOWN',
+          wakeKind: 'followup',
+        }),
+      );
+
+      expect(mockCreateMessage).toHaveBeenCalledTimes(1);
+      const posted = JSON.stringify(mockCreateMessage.mock.calls[0]);
+      expect(posted).toContain('收到，我先退出这个讨论。');
+      expect(posted).not.toContain('STAND_DOWN');
+      expect(mockRecordNoReplyLabel).not.toHaveBeenCalled();
+      expect(mockRecordWakeRunOutcome).toHaveBeenCalledWith(
+        expect.objectContaining({
+          platformThreadId: 'discord:guild:channel',
+          spoke: true,
+          spoken: { id: 'op-1', text: '收到，我先退出这个讨论。' },
+          standDown: true,
+        }),
+      );
+    });
+
+    it('stand-down in silence: posts nothing, labels it stand_down, and steps back', async () => {
+      for (const content of ['NO_REPLY:stand_down', 'STAND_DOWN']) {
+        vi.clearAllMocks();
+        await service.handleCallback(
+          body({ lastAssistantContent: content, wakeKind: 'followup' }),
+          { strictDelivery: true },
+        );
+
+        expect(mockCreateMessage).not.toHaveBeenCalled();
+        expect(mockRecordNoReplyLabel).toHaveBeenCalledWith(
+          expect.anything(),
+          expect.objectContaining({ noReply: { reason: 'stand_down' } }),
+        );
+        expect(mockRecordWakeRunOutcome).toHaveBeenCalledWith(
+          expect.objectContaining({ spoke: false, standDown: true }),
+        );
+      }
+    });
+
+    it('does not step back on a reply without the marker, or a run that failed', async () => {
+      await service.handleCallback(body({ lastAssistantContent: 'here is the fix' }));
+      await service.handleCallback(
+        body({ errorMessage: 'boom', lastAssistantContent: 'STAND_DOWN', reason: 'error' }),
+      );
+
+      for (const [input] of mockRecordWakeRunOutcome.mock.calls) {
+        expect(input.standDown).toBe(false);
+      }
     });
 
     it('followup with a real answer is delivered normally and not labelled', async () => {

@@ -35,6 +35,7 @@ export class MessageModel {
   findShareVisitorMessageIds: MessageLookupQueries['findShareVisitorMessageIds'];
   findByClientId: MessageLookupQueries['findByClientId'];
   findLatestAssistantMessageByThread: MessageLookupQueries['findLatestAssistantMessageByThread'];
+  findLatestUserTurnHop: MessageLookupQueries['findLatestUserTurnHop'];
   findVerifyMessageByOperationId: MessageLookupQueries['findVerifyMessageByOperationId'];
   findLatestAssistantByOperationId: MessageLookupQueries['findLatestAssistantByOperationId'];
   listLatestTurnAssistantContents: MessageLookupQueries['listLatestTurnAssistantContents'];
@@ -155,6 +156,7 @@ export class MessageModel {
     this.findShareVisitorMessageIds = lookups.findShareVisitorMessageIds;
     this.findByClientId = lookups.findByClientId;
     this.findLatestAssistantMessageByThread = lookups.findLatestAssistantMessageByThread;
+    this.findLatestUserTurnHop = lookups.findLatestUserTurnHop;
     this.findVerifyMessageByOperationId = lookups.findVerifyMessageByOperationId;
     this.findLatestAssistantByOperationId = lookups.findLatestAssistantByOperationId;
     this.listLatestTurnAssistantContents = lookups.listLatestTurnAssistantContents;

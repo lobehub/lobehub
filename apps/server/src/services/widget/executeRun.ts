@@ -1,4 +1,5 @@
 import type { WidgetOutput, WidgetRunError, WidgetRunFinalStatus } from '@lobechat/types';
+import { missingWidgetParams, parseWidgetOutput, widgetParamEnv } from '@lobechat/widget-spec';
 import debug from 'debug';
 
 import { WidgetModel } from '@/database/models/widget';
@@ -15,7 +16,6 @@ import {
   type WidgetCredentialScope,
 } from './credentials';
 import { recordWidgetMetrics } from './metrics';
-import { parseWidgetOutput } from './outputContract';
 import { redactSecrets, sanitizeStream } from './redact';
 import { isWidgetSandboxBusy, WidgetSandboxError, type WidgetSandboxRunner } from './sandbox/types';
 import { busyDeferralDeadline, runWithBusyRetry } from './sandboxBusy';
@@ -95,6 +95,18 @@ const runInSandbox = async (
   const resolveEnv = deps.resolveEnv ?? resolveWidgetEnv;
   const allow = manifest?.network?.allow ?? [];
 
+  const missingParams = missingWidgetParams(manifest?.params);
+  if (missingParams.length > 0) {
+    return {
+      env: {},
+      error: {
+        code: 'MISSING_PARAM',
+        message: `Set ${missingParams.map((param) => param.label ?? param.name).join(', ')} before running this widget`,
+      },
+      status: 'failed',
+    };
+  }
+
   let env: Record<string, string>;
   let inject: ResolvedWidgetEnv['inject'];
   try {
@@ -138,7 +150,9 @@ const runInSandbox = async (
     deps.runner.run({
       // The widget's owner (or its workspace) pays for and is rate limited on the run.
       actor: { userId: widget.userId, workspaceId: widget.workspaceId },
-      env,
+      // Params are settings, not secrets: they reach the script but stay out
+      // of `env`, the set every log and error message is redacted against.
+      env: { ...widgetParamEnv(manifest?.params), ...env },
       network: { allow, ...(inject.length > 0 ? { inject } : {}) },
       runtime: version.runtime,
       script: version.script,

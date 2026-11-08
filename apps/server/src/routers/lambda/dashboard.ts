@@ -1,4 +1,8 @@
-import { DASHBOARD_TITLE_MAX_LENGTH, DashboardApiName } from '@lobechat/builtin-tool-dashboard';
+import {
+  DASHBOARD_DESCRIPTION_MAX_LENGTH,
+  DASHBOARD_TITLE_MAX_LENGTH,
+  DashboardApiName,
+} from '@lobechat/builtin-tool-dashboard';
 import { DashboardExecutionRuntime } from '@lobechat/builtin-tool-dashboard/executionRuntime';
 import { DASHBOARD_VISIBILITIES } from '@lobechat/types';
 import { z } from 'zod';
@@ -92,7 +96,7 @@ export const dashboardRouter = router({
     .input(
       z.object({
         agentId: z.string().nullish(),
-        description: z.string().max(2000).nullish(),
+        description: z.string().max(DASHBOARD_DESCRIPTION_MAX_LENGTH).nullish(),
         icon: z.string().max(100).nullish(),
         metadata,
         projectId: z.string().nullish(),
@@ -194,7 +198,7 @@ export const dashboardRouter = router({
   }),
 
   /**
-   * Execute one `lobe-dashboard` tool call for an agent run driven by the
+   * Execute one `builtin-dashboard` tool call for an agent run driven by the
    * client runtime. The server agent runtime executes the same runtime and
    * service in-process; both scope created widgets to the conversation's
    * agent and (for a project topic) project. Publishing still requires the
@@ -255,7 +259,7 @@ export const dashboardRouter = router({
       z.object({
         id: uuid,
         value: z.object({
-          description: z.string().max(2000).nullish(),
+          description: z.string().max(DASHBOARD_DESCRIPTION_MAX_LENGTH).nullish(),
           icon: z.string().max(100).nullish(),
           metadata,
           sortOrder: z.number().int().optional(),

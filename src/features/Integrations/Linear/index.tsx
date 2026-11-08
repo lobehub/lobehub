@@ -1,6 +1,6 @@
 'use client';
 
-import { createStaticStyles, Flexbox, Icon, Skeleton, Text, toast } from '@lobehub/ui';
+import { createStaticStyles, Flexbox, Icon, Text, toast } from '@lobehub/ui';
 import { ArrowLeftIcon, BookOpenIcon } from 'lucide-react';
 import { memo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -9,7 +9,9 @@ import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspace
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import AsyncError from '@/components/AsyncError';
 import { useAppOrigin } from '@/hooks/useAppOrigin';
+import { usePermission } from '@/hooks/usePermission';
 
+import { IntegrationConnectionsSkeleton } from '../Skeleton';
 import { useLinearIntegration } from '../useLinearIntegration';
 import Connections from './Connections';
 import { LINEAR_INTEGRATION } from './definition';
@@ -79,6 +81,8 @@ const LinearIntegration = memo<LinearIntegrationProps>(({ onBack }) => {
   const workspaceSlug = useActiveWorkspaceSlug();
   const workspaceId = useActiveWorkspaceId();
   const scope = workspaceSlug ? 'workspace' : 'personal';
+  // The server only lets members and up bind or remove a workspace connection.
+  const { allowed: canWrite, reason: blockedReason } = usePermission('create_content');
   const data = useLinearIntegration();
 
   useEffect(() => {
@@ -104,7 +108,7 @@ const LinearIntegration = memo<LinearIntegrationProps>(({ onBack }) => {
 
   const { config, connections } = data;
   const installHref =
-    config?.enabled && config.installPath
+    canWrite && config?.enabled && config.installPath
       ? buildLinearInstallHref(config.installPath, { appOrigin, workspaceId, workspaceSlug })
       : undefined;
   const BrandIcon = LINEAR_INTEGRATION.icon;
@@ -140,9 +144,10 @@ const LinearIntegration = memo<LinearIntegrationProps>(({ onBack }) => {
       </Flexbox>
 
       {data.isInitialLoading ? (
-        <Skeleton height={96} />
+        <IntegrationConnectionsSkeleton title={t('linear.connections.title')} />
       ) : (
         <Connections
+          blockedReason={blockedReason}
           configured={!!config?.enabled}
           connections={connections}
           installHref={installHref}
