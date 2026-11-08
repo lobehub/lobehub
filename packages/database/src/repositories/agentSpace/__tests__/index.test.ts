@@ -14,6 +14,7 @@ import {
   SKILL_MANAGEMENT_SOURCE,
   SKILL_MANAGEMENT_SOURCE_TYPE,
   users,
+  workspaces,
 } from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
 import { AgentSpaceRepository } from '../index';
@@ -112,6 +113,63 @@ describe('AgentSpaceRepository', () => {
         .values({ agentId, knowledgeBaseId: 'kb-mounted', userId });
 
       await expect(repository.findId(agentId)).resolves.toBeUndefined();
+    });
+  });
+
+  describe('list', () => {
+    it('returns only the spaces of agents the caller can see, with agent identity', async () => {
+      const spaceId = await repository.ensure(agentId);
+      await db.insert(knowledgeBases).values({ id: 'kb-plain', name: 'Plain', userId });
+      await db
+        .insert(agentsKnowledgeBases)
+        .values({ agentId, knowledgeBaseId: 'kb-plain', userId });
+
+      await expect(repository.list()).resolves.toMatchObject([
+        { agentId, id: spaceId, title: 'Writer' },
+      ]);
+      await expect(new AgentSpaceRepository(db, otherUserId).list()).resolves.toEqual([]);
+    });
+  });
+
+  describe('list in a workspace', () => {
+    it('hides a public agent whose space is still private to its creator', async () => {
+      const workspaceId = 'ws-agent-space';
+      await db.insert(workspaces).values({
+        id: workspaceId,
+        name: 'Team',
+        primaryOwnerId: userId,
+        slug: 'agent-space-team',
+      });
+      await db.insert(agents).values({
+        id: 'agt_space_ws',
+        title: 'Team agent',
+        userId,
+        visibility: 'public',
+        workspaceId,
+      });
+      await db.insert(knowledgeBases).values({
+        id: 'kb-private-space',
+        name: 'Team agent',
+        settings: { owner: { id: 'agt_space_ws', type: 'agent' } },
+        type: 'agent',
+        userId,
+        visibility: 'private',
+        workspaceId,
+      });
+      await db.insert(agentsKnowledgeBases).values({
+        agentId: 'agt_space_ws',
+        enabled: false,
+        knowledgeBaseId: 'kb-private-space',
+        userId,
+        workspaceId,
+      });
+
+      await expect(new AgentSpaceRepository(db, userId, workspaceId).list()).resolves.toHaveLength(
+        1,
+      );
+      await expect(new AgentSpaceRepository(db, otherUserId, workspaceId).list()).resolves.toEqual(
+        [],
+      );
     });
   });
 
