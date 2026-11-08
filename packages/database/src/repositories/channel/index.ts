@@ -24,6 +24,8 @@ import {
 import { findThread } from './delivery';
 import { ChannelError } from './error';
 import { addChannelUser, channelUserCandidates, newChannelUserCandidates } from './people';
+import type { ChannelAgentPostInput } from './post';
+import { postAgentMessage } from './post';
 import { retryRouting } from './routing';
 import type { ChannelSendInput } from './send';
 import { sendMessage } from './send';
@@ -44,6 +46,7 @@ export type { ChannelErrorCode } from './error';
 export { ChannelError } from './error';
 export { ChannelExecutionRepository } from './execution';
 export { ChannelHistoryRepository } from './history';
+export type { ChannelAgentPostInput } from './post';
 export type { AppliedChannelRouting, ChannelRoutingDecision } from './routing';
 export type { ChannelSendInput } from './send';
 export type { ChannelStopScope } from './stop';
@@ -506,6 +509,16 @@ export class ChannelRepository {
 
       return fn(tx, access);
     });
+
+  /**
+   * Posts what an Agent member wrote outside any job into a Channel the caller belongs to.
+   * See {@link postAgentMessage}.
+   */
+  postAgentMessage = async (
+    channelId: string,
+    input: ChannelAgentPostInput,
+  ): Promise<ChannelMessageItem> =>
+    this.write(channelId, (tx) => postAgentMessage(tx, channelId, input));
 
   /** Posts a message as the caller. See {@link sendMessage} for routing. */
   send = async (channelId: string, input: ChannelSendInput): Promise<ChannelMessageItem> =>
