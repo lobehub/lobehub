@@ -7,6 +7,7 @@ export * from './agentHookResponse';
 export * from './agentMail';
 export * from './agentOperation';
 export * from './agentQuota';
+export * from './agentRunBoard';
 export * from './aiChat';
 export * from './aiProvider';
 export * from './apiKey';

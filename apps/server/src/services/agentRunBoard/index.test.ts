@@ -1,0 +1,186 @@
+// @vitest-environment node
+import { describe, expect, it } from 'vitest';
+
+import type { AgentRunBoardRow } from '@/database/models/agentRunBoard';
+
+import { buildAgentRunBoard, classifyRun } from './index';
+
+const generatedAt = new Date('2026-11-08T12:00:00Z');
+const now = generatedAt.getTime();
+const windowStart = new Date('2026-11-08T06:00:00Z');
+const minutesAgo = (m: number) => new Date(now - m * 60_000);
+
+const row = (overrides: Partial<AgentRunBoardRow> = {}): AgentRunBoardRow => ({
+  agentAvatar: null,
+  agentBackgroundColor: null,
+  agentId: 'a1',
+  agentTitle: 'Agent',
+  completedAt: null,
+  createdAt: minutesAgo(30),
+  errorMessage: null,
+  errorType: null,
+  heteroType: null,
+  id: 'op',
+  interventions: [],
+  model: 'm',
+  startedAt: minutesAgo(30),
+  status: 'running',
+  taskName: null,
+  threadTitle: null,
+  topicId: 't',
+  topicTitle: 'Topic',
+  trigger: 'chat',
+  updatedAt: minutesAgo(1),
+  userId: 'teammate',
+  ...overrides,
+});
+
+const intervention = (overrides = {}) => ({
+  canonicalToolKey: 'stripe.refund',
+  createdAt: minutesAgo(14),
+  deadline: minutesAgo(-60),
+  operationId: 'op',
+  status: 'pending',
+  userId: 'teammate',
+  ...overrides,
+});
+
+describe('classifyRun', () => {
+  it('treats a running row with a frozen lease as stopped', () => {
+    expect(classifyRun(row(), now)).toBe('running');
+    expect(classifyRun(row({ updatedAt: minutesAgo(6) }), now)).toBe('stopped');
+  });
+
+  it('gives heterogeneous runs the longer silence window', () => {
+    expect(classifyRun(row({ heteroType: 'claude-code', updatedAt: minutesAgo(30) }), now)).toBe(
+      'running',
+    );
+  });
+
+  it('needs a human while an ask is pending or no intervention row exists', () => {
+    const waiting = { status: 'waiting_for_human' as const, updatedAt: minutesAgo(20) };
+    expect(classifyRun(row({ ...waiting, interventions: [intervention()] }), now)).toBe(
+      'needs_human',
+    );
+    expect(classifyRun(row(waiting), now)).toBe('needs_human');
+  });
+
+  it('stops counting an ask that expired or was answered', () => {
+    const waiting = { status: 'waiting_for_human' as const, updatedAt: minutesAgo(20) };
+    expect(
+      classifyRun(
+        row({ ...waiting, interventions: [intervention({ deadline: minutesAgo(1) })] }),
+        now,
+      ),
+    ).toBe('stopped');
+    expect(
+      classifyRun(
+        row({
+          interventions: [intervention({ status: 'resolved' })],
+          status: 'waiting_for_human',
+          updatedAt: minutesAgo(1),
+        }),
+        now,
+      ),
+    ).toBe('running');
+  });
+
+  it('skips reserved idle rows and maps terminal statuses', () => {
+    expect(classifyRun(row({ status: 'idle' }), now)).toBeNull();
+    expect(classifyRun(row({ status: 'abandoned' }), now)).toBe('failed');
+    expect(classifyRun(row({ status: 'interrupted' }), now)).toBe('stopped');
+  });
+});
+
+describe('buildAgentRunBoard', () => {
+  const build = (rows: AgentRunBoardRow[], viewerId = 'me') =>
+    buildAgentRunBoard({ generatedAt, rows, viewerId, windowStart });
+
+  it('groups by agent and counts each status', () => {
+    const board = build([
+      row({ id: '1' }),
+      row({ completedAt: minutesAgo(2), id: '2', status: 'done' }),
+      row({ agentId: 'a2', completedAt: minutesAgo(3), id: '3', status: 'error' }),
+    ]);
+
+    expect(board.summary).toEqual({ done: 1, failed: 1, needsHuman: 0, running: 1 });
+    expect(board.lanes.map((l) => l.agentId)).toEqual(['a2', 'a1']);
+    expect(board.lanes[1].runs).toHaveLength(2);
+  });
+
+  it('puts the asks the viewer can answer first, then the longest wait', () => {
+    const waiting = { status: 'waiting_for_human' as const, updatedAt: minutesAgo(1) };
+    const board = build([
+      row({
+        ...waiting,
+        id: 'older-team',
+        interventions: [intervention({ createdAt: minutesAgo(50), operationId: 'older-team' })],
+      }),
+      row({
+        ...waiting,
+        id: 'mine',
+        interventions: [intervention({ operationId: 'mine', userId: 'me' })],
+      }),
+    ]);
+
+    expect(board.attention.map((a) => [a.operationId, a.isMine])).toEqual([
+      ['mine', true],
+      ['older-team', false],
+    ]);
+    expect(board.attention[0].detail).toBe('stripe.refund');
+  });
+
+  it('prefers the task title and truncates failure detail', () => {
+    const board = build([
+      row({
+        completedAt: minutesAgo(1),
+        errorMessage: 'x'.repeat(500),
+        status: 'error',
+        taskName: 'Refund',
+      }),
+    ]);
+
+    expect(board.attention[0].title).toBe('Refund');
+    expect(board.attention[0].detail).toHaveLength(200);
+  });
+
+  it('drops a dead run whose lease froze before the window', () => {
+    const board = build([row({ createdAt: minutesAgo(600), updatedAt: minutesAgo(500) })]);
+
+    expect(board.lanes).toEqual([]);
+    expect(board.summary.running).toBe(0);
+  });
+
+  it('counts started runs per slice, from every run rather than the capped lanes', () => {
+    const rows = Array.from({ length: 33 }, (_, i) => row({ agentId: `a${i}`, id: `${i}` }));
+    const board = build([
+      ...rows,
+      row({ completedAt: minutesAgo(1), id: 'old', startedAt: minutesAgo(600), status: 'done' }),
+      row({ id: 'dead', updatedAt: minutesAgo(10) }),
+    ]);
+
+    expect(board.activity).toHaveLength(24);
+    expect(board.activity.at(-2)?.running).toBe(33);
+    expect(board.activity[0].done).toBe(1);
+    expect(board.activity.reduce((sum, b) => sum + b.running + b.done, 0)).toBe(34);
+  });
+
+  it('uses 5-minute slices for the one-hour window', () => {
+    const board = buildAgentRunBoard({
+      generatedAt,
+      rows: [],
+      viewerId: 'me',
+      windowStart: minutesAgo(60),
+    });
+
+    expect(board.activity).toHaveLength(12);
+  });
+
+  it('caps lanes and reports how many were left out', () => {
+    const rows = Array.from({ length: 33 }, (_, i) => row({ agentId: `a${i}`, id: `${i}` }));
+    const board = build(rows);
+
+    expect(board.lanes).toHaveLength(30);
+    expect(board.hiddenLaneCount).toBe(3);
+  });
+});
