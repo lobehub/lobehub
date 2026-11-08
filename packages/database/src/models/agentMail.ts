@@ -255,6 +255,33 @@ export class AgentMailModel {
     return row;
   };
 
+  /**
+   * Whether the agent sent mail in this thread to `address` (as a `To` or `Cc`
+   * recipient). Unscoped: the inbound edge asks before any user is known.
+   */
+  static hasSentInThreadTo = async (
+    db: LobeChatDatabase,
+    params: { accountId: string; address: string; threadKey: string },
+  ): Promise<boolean> => {
+    const [row] = await db
+      .select({ id: agentMails.id })
+      .from(agentMails)
+      .where(
+        and(
+          eq(agentMails.accountId, params.accountId),
+          eq(agentMails.threadKey, params.threadKey),
+          eq(agentMails.direction, 'outbound'),
+          sql`exists (
+            select 1 from jsonb_array_elements(${agentMails.to} || ${agentMails.cc}) as recipient
+            where lower(recipient->>'address') = ${normalizeMailAddress(params.address)}
+          )`,
+        ),
+      )
+      .limit(1);
+
+    return !!row;
+  };
+
   /** One account's thread, oldest first — both what arrived and what the agent sent. */
   listThread = async (params: { accountId: string; threadKey: string }): Promise<AgentMailItem[]> =>
     this.db
