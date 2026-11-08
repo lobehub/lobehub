@@ -95,7 +95,7 @@
   "directories.boundTip": "该目录属于项目（{{path}}）。切换设备即可改用该设备上的项目目录。",
   "directories.chooseAgent": "选择 Agent",
   "directories.conversations": "已有话题",
-  "directories.coordinator": "项目协调 Agent",
+  "directories.coordinator": "主管",
   "directories.createProject": "创建项目",
   "directories.currentFolder": "当前文件夹",
   "directories.detectRepository": "识别 GitHub 仓库",
