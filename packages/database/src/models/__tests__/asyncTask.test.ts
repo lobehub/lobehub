@@ -209,6 +209,43 @@ describe('AsyncTaskModel', () => {
     });
   });
 
+  describe('findOldestActiveByMetadata', () => {
+    const createTask = (type: AsyncTaskType, status: AsyncTaskStatus, meetingId: string) =>
+      asyncTaskModel.create({ metadata: { meetingId }, status, type });
+
+    it('returns the earliest unfinished task carrying the metadata', async () => {
+      const first = await createTask(AsyncTaskType.MeetingRefine, AsyncTaskStatus.Processing, 'm1');
+      await new Promise((resolve) => setTimeout(resolve, 2));
+      await createTask(AsyncTaskType.MeetingMinutes, AsyncTaskStatus.Pending, 'm1');
+
+      const task = await asyncTaskModel.findOldestActiveByMetadata(
+        [AsyncTaskType.MeetingRefine, AsyncTaskType.MeetingMinutes],
+        { meetingId: 'm1' },
+      );
+
+      expect(task?.id).toBe(first);
+    });
+
+    it('skips finished tasks, other metadata, other types and other users', async () => {
+      await createTask(AsyncTaskType.MeetingRefine, AsyncTaskStatus.Success, 'm1');
+      await createTask(AsyncTaskType.MeetingRefine, AsyncTaskStatus.Pending, 'm2');
+      await createTask(AsyncTaskType.Chunking, AsyncTaskStatus.Pending, 'm1');
+      const otherUserId = 'async-task-other-user';
+      await serverDB.insert(users).values({ id: otherUserId });
+      await new AsyncTaskModel(serverDB, otherUserId).create({
+        metadata: { meetingId: 'm1' },
+        status: AsyncTaskStatus.Pending,
+        type: AsyncTaskType.MeetingRefine,
+      });
+
+      const task = await asyncTaskModel.findOldestActiveByMetadata([AsyncTaskType.MeetingRefine], {
+        meetingId: 'm1',
+      });
+
+      expect(task).toBeUndefined();
+    });
+  });
+
   describe('findActiveByType', () => {
     it('should find active tasks with Pending status', async () => {
       await serverDB.insert(asyncTasks).values({

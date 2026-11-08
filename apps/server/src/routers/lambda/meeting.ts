@@ -1,6 +1,8 @@
 import {
   FileSource,
   MEETING_ACTION_ITEM_STATUSES,
+  MEETING_ASSIGNEE_TYPES,
+  MEETING_ERROR_CODES,
   MEETING_LANGUAGES,
   MEETING_PLATFORMS,
   MEETING_REALTIME_PROVIDERS,
@@ -22,6 +24,13 @@ import { MeetingModel, MeetingStateError } from '@/database/models/meeting';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { FileService } from '@/server/services/file';
+import {
+  MAX_LIVE_CHUNK_BASE64_CHARS,
+  MeetingMinutesService,
+  MeetingTranscriptionError,
+  MeetingTranscriptionService,
+} from '@/server/services/meeting';
+import { MeetingJobService } from '@/server/services/meeting/startJob';
 
 import { assertFileNotInRestrictedKnowledgeBase } from './_helpers/knowledgeBaseAccess';
 
@@ -34,7 +43,10 @@ const meetingProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) 
       documentModel: new DocumentModel(ctx.serverDB, ctx.userId, workspaceId),
       fileModel: new FileModel(ctx.serverDB, ctx.userId, workspaceId),
       fileService: new FileService(ctx.serverDB, ctx.userId, workspaceId),
+      meetingJobs: new MeetingJobService(ctx.serverDB, ctx.userId, workspaceId),
       meetingModel: new MeetingModel(ctx.serverDB, ctx.userId, workspaceId),
+      minutesService: new MeetingMinutesService(ctx.serverDB, ctx.userId, workspaceId),
+      transcriptionService: new MeetingTranscriptionService(ctx.serverDB, ctx.userId, workspaceId),
     },
   });
 });
@@ -50,6 +62,8 @@ const MAX_OFFSET_MS = 24 * 60 * 60 * 1000;
 const MAX_SEGMENTS_PER_APPEND = 500;
 
 const idInput = z.object({ id: z.string().min(1) });
+/** Segments in one on-device refine result: ~8 h of speech at a few seconds per segment. */
+const MAX_LOCAL_REFINE_SEGMENTS = 10_000;
 const title = z.string().trim().min(1).max(255);
 const offsetMs = z.number().int().min(0).max(MAX_OFFSET_MS);
 
@@ -67,19 +81,38 @@ const segmentInput = z
     path: ['endMs'],
   });
 
+const localRefineSegment = z
+  .object({
+    endMs: offsetMs,
+    speakerLabel: z.string().trim().min(1).max(64).nullish(),
+    startMs: offsetMs,
+    text: z.string().max(10_000),
+  })
+  .refine((segment) => segment.endMs >= segment.startMs, {
+    message: 'endMs must not be before startMs',
+    path: ['endMs'],
+  });
+
 const segmentIds = z.array(z.string()).max(200);
+
+const assigneeRef = z.object({ id: z.string().min(1), type: z.enum(MEETING_ASSIGNEE_TYPES) });
+/** `YYYY-MM-DD`, the only deadline format minutes store. */
+const dueDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
 const minutesInput = z.object({
   actionItems: z
     .array(
       z.object({
+        assignee: assigneeRef.extend({ name: z.string().max(255) }).optional(),
         assigneeHint: z.string().max(255).optional(),
         dueDate: z.string().max(64).optional(),
         id: z.string().min(1).max(64),
         segmentIds,
         speakerLabel: z.string().max(64).optional(),
+        startMs: offsetMs.optional(),
         status: z.enum(MEETING_ACTION_ITEM_STATUSES),
         taskId: z.string().max(64).optional(),
+        taskIdentifier: z.string().max(64).optional(),
         text: z.string().min(1).max(2000),
       }),
     )
@@ -105,6 +138,18 @@ const minutesInput = z.object({
   model: z.string().max(255).nullish(),
   summary: z.string().max(20_000).nullish(),
 });
+
+/** HTTP-ish class of each transcription failure; the code itself travels as the message. */
+const TRANSCRIPTION_ERROR_STATUS = {
+  audio_missing: 'BAD_REQUEST',
+  audio_unsupported: 'BAD_REQUEST',
+  provider_not_configured: 'PRECONDITION_FAILED',
+  provider_unavailable: 'SERVICE_UNAVAILABLE',
+  quota_exceeded: 'TOO_MANY_REQUESTS',
+  summarization_failed: 'INTERNAL_SERVER_ERROR',
+  transcript_empty: 'BAD_REQUEST',
+  transcription_failed: 'INTERNAL_SERVER_ERROR',
+} as const;
 
 const notFound = () => new TRPCError({ code: 'NOT_FOUND', message: 'Meeting not found' });
 
@@ -242,6 +287,170 @@ export const meetingRouter = router({
     }
   }),
 
+  /**
+   * Start transcribing the stored recording end to end with speakers and
+   * timestamps, replacing any earlier refined transcript, then writing the
+   * minutes. Also the retry after `failed`. Runs as a background job, so this
+   * returns at once with the meeting in `transcribing`; follow its status with
+   * `detail`. It ends `ready`, or `failed` with `error.code` naming the fix
+   * (`provider_not_configured`, `quota_exceeded`, …). Starting a job that is
+   * already running returns that job.
+   */
+  refine: meetingWriteProcedure.input(idInput).mutation(async ({ ctx, input }) => {
+    try {
+      const job = await ctx.meetingJobs.startRefine(input.id);
+      if (!job) throw notFound();
+      return { data: job.meeting, message: 'Refine started', success: true, taskId: job.taskId };
+    } catch (error) {
+      fail(error, 'refine');
+    }
+  }),
+
+  /**
+   * Desktop local mode: the device that holds the recording reports its own
+   * refine pass — `start` (meeting → `transcribing`), `complete` with the
+   * diarized transcript (then the minutes are written in the background, as
+   * after `refine`), or `fail`. Only text reaches the server; the audio stays
+   * on the device.
+   */
+  refineLocal: meetingWriteProcedure
+    .input(
+      z.discriminatedUnion('stage', [
+        z.object({ id: z.string().min(1), stage: z.literal('start') }),
+        z.object({
+          id: z.string().min(1),
+          segments: z.array(localRefineSegment).max(MAX_LOCAL_REFINE_SEGMENTS),
+          stage: z.literal('complete'),
+        }),
+        z.object({
+          code: z.enum(MEETING_ERROR_CODES),
+          id: z.string().min(1),
+          message: z.string().max(2000).optional(),
+          stage: z.literal('fail'),
+        }),
+      ]),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const service = ctx.transcriptionService;
+        if (input.stage === 'complete') {
+          if (!(await service.completeLocalRefine(input.id, input.segments))) throw notFound();
+          const job = await ctx.meetingJobs.startMinutes(input.id);
+          if (!job) throw notFound();
+          return { data: job.meeting, message: 'Local refine saved', success: true };
+        }
+
+        const data =
+          input.stage === 'start'
+            ? await service.startLocalRefine(input.id)
+            : await service.failLocalRefine(input.id, {
+                code: input.code,
+                message: input.message,
+              });
+        if (!data) throw notFound();
+        return { data, message: 'Local refine saved', success: true };
+      } catch (error) {
+        fail(error, 'refine');
+      }
+    }),
+
+  /**
+   * Draft one slice of a live recording where no realtime gateway is deployed
+   * and store it as realtime segment `seq` (retries replace, never duplicate).
+   * Errors carry the meeting error code as their message.
+   */
+  transcribeLive: meetingWriteProcedure
+    .input(
+      z
+        .object({
+          audioBase64: z.string().min(1).max(MAX_LIVE_CHUNK_BASE64_CHARS),
+          endMs: offsetMs,
+          meetingId: z.string().min(1),
+          seq: z.number().int().min(0),
+          startMs: offsetMs,
+        })
+        .refine((value) => value.endMs >= value.startMs, {
+          message: 'endMs must not be before startMs',
+          path: ['endMs'],
+        }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const data = await ctx.transcriptionService.transcribeLiveChunk(input);
+        if (!data) throw notFound();
+        return { data, success: true };
+      } catch (error) {
+        if (error instanceof MeetingTranscriptionError) {
+          throw new TRPCError({
+            cause: error,
+            code: TRANSCRIPTION_ERROR_STATUS[error.code],
+            message: error.code,
+          });
+        }
+        fail(error, 'transcribe');
+      }
+    }),
+
+  /** Members and agents an action item can be assigned to, for the confirmation list. */
+  assigneeCandidates: meetingProcedure.query(async ({ ctx }) => {
+    try {
+      const candidates = await ctx.minutesService.listAssigneeCandidates();
+      return {
+        data: candidates.map(({ avatar, id, name, type }) => ({ avatar, id, name, type })),
+        success: true,
+      };
+    } catch (error) {
+      fail(error, 'list assignees of');
+    }
+  }),
+
+  /**
+   * Turn confirmed action items into LobeHub tasks with the text, assignee
+   * and deadline the user confirmed. Created tasks are linked back into the
+   * minutes; items that failed are reported and stay suggested for a retry.
+   */
+  createTasks: meetingWriteProcedure
+    .input(
+      z.object({
+        items: z
+          .array(
+            z.object({
+              assignee: assigneeRef.nullish(),
+              dueDate: dueDate.nullish(),
+              id: z.string().min(1).max(64),
+              text: z.string().trim().min(1).max(2000),
+            }),
+          )
+          .min(1)
+          .max(100),
+        meetingId: z.string().min(1),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const data = await ctx.minutesService.createTasks(input.meetingId, input.items);
+        if (!data) throw notFound();
+        return { data, message: 'Tasks created', success: true };
+      } catch (error) {
+        fail(error, 'create tasks from');
+      }
+    }),
+
+  /**
+   * (Re)generate the minutes from the final transcript in a background job.
+   * Returns at once with the meeting in `summarizing`; it ends `ready`, with
+   * `error.stage = 'minutes'` when generation failed.
+   */
+  generateMinutes: meetingWriteProcedure.input(idInput).mutation(async ({ ctx, input }) => {
+    try {
+      const job = await ctx.meetingJobs.startMinutes(input.id);
+      if (!job) throw notFound();
+      return { data: job.meeting, message: 'Minutes started', success: true, taskId: job.taskId };
+    } catch (error) {
+      fail(error, 'generate minutes of');
+    }
+  }),
+
   /** Delete the meeting, its transcript and minutes, and reclaim its uploaded audio. */
   delete: meetingWriteProcedure.input(idInput).mutation(async ({ ctx, input }) => {
     try {
@@ -272,6 +481,9 @@ export const meetingRouter = router({
       try {
         const meeting = await ctx.meetingModel.getDetail(input.id, { source: input.source });
         if (!meeting) throw notFound();
+
+        const expired = await ctx.meetingJobs.expireStaleJob(meeting);
+        if (expired) Object.assign(meeting, { error: expired.error, status: expired.status });
 
         // The upload stays private to the creator, but the recording belongs to
         // the meeting: a member who can read a public meeting may play it. The
@@ -363,7 +575,11 @@ export const meetingRouter = router({
       }
     }),
 
-  /** Name a diarized speaker; `null` falls back to the speaker label. */
+  /**
+   * Name a diarized speaker; `null` falls back to the speaker label. Suggested
+   * to-dos owned by that speaker are assigned to the member or agent the name
+   * matches.
+   */
   renameSpeaker: meetingWriteProcedure
     .input(
       z.object({
@@ -380,6 +596,12 @@ export const meetingRouter = router({
           input.displayName,
         );
         if (!data) throw new TRPCError({ code: 'NOT_FOUND', message: 'Speaker not found' });
+
+        // Naming a speaker is how a to-do the minutes gave to "S3" reaches a member or agent.
+        await ctx.minutesService
+          .assignSpeakerItems(input.meetingId, data.label, input.displayName)
+          .catch((error) => console.error('[meeting:renameSpeaker] assignees not updated', error));
+
         return { data, message: 'Speaker renamed', success: true };
       } catch (error) {
         fail(error, 'rename speaker of');

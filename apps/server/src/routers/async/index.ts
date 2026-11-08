@@ -4,6 +4,7 @@ import { documentRouter } from './document';
 import { fileRouter } from './file';
 import { imageRouter } from './image';
 import { linearRouter } from './linear';
+import { meetingRouter } from './meeting';
 import { ragEvalRouter } from './ragEval';
 import { videoRouter } from './video';
 
@@ -13,6 +14,7 @@ export const asyncRouter = router({
   healthcheck: publicProcedure.query(() => "i'm live!"),
   image: imageRouter,
   linear: linearRouter,
+  meeting: meetingRouter,
   ragEval: ragEvalRouter,
   video: videoRouter,
 });
