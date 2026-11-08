@@ -301,6 +301,11 @@ export interface ChannelListItem {
   lastMessage?: { content: string; createdAt: Date } | null;
   /** The project the channel is grouped under; null for a standalone channel. */
   projectId: string | null;
+  /**
+   * Main-conversation replies still pending (queued, running, or stopping), so a list row can
+   * show them without loading the conversation; set by the Channel list.
+   */
+  replyJobs?: ChannelReplyJob[];
   sequence: number;
   status: ChannelStatus;
   title: string;
@@ -369,6 +374,12 @@ export interface ChannelPublicJob {
   threadId: string | null;
   writerHeld: boolean;
 }
+
+/** A pending reply in the fields its status is derived from. */
+export type ChannelReplyJob = Pick<
+  ChannelPublicJob,
+  'blockedCode' | 'id' | 'memberId' | 'publicationRevoked' | 'status' | 'threadId' | 'writerHeld'
+>;
 
 export interface ChannelPublicThread {
   followerMemberIds: string[];
