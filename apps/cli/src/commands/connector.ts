@@ -353,6 +353,7 @@ function fail(error: unknown, note?: string): never {
 export function registerConnectorCommand(program: Command) {
   const connector = program
     .command('connector')
+    .alias('mcp')
     .description('Manage MCP connectors (user connectors and their synced tools)');
 
   // ── list ──────────────────────────────────────────────

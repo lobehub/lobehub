@@ -325,6 +325,25 @@ describe('connector command', () => {
     });
   });
 
+  describe('mcp alias', () => {
+    it('routes `mcp` to the connector command', async () => {
+      const program = createProgram();
+      const connector = program.commands.find((c) => c.name() === 'connector');
+
+      expect(connector?.aliases()).toContain('mcp');
+
+      mockTrpcClient.connector.list.query.mockResolvedValue([
+        { id: ID, identifier: 'deepwiki', tools: [{}] },
+      ]);
+      await program.parseAsync(['node', 'test', 'mcp', 'list', '--json', 'identifier,toolCount']);
+
+      expect(mockTrpcClient.connector.list.query).toHaveBeenCalledTimes(1);
+      expect(consoleSpy).toHaveBeenCalledWith(
+        JSON.stringify([{ identifier: 'deepwiki', toolCount: 1 }], null, 2),
+      );
+    });
+  });
+
   describe('add', () => {
     beforeEach(() => {
       mockTrpcClient.connector.list.query.mockResolvedValue([]);
