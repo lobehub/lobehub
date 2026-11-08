@@ -70,7 +70,7 @@ export function MemberList({ detail, onAction }: { detail: ChannelDetail; onActi
               {entry.name}
             </Text>
             {entry.member.actorType === 'agent' ? (
-              <ChannelStatus label={entry.label} tone={entry.tone} />
+              <ChannelStatus hideDot label={entry.label} tone={entry.tone} />
             ) : (
               <span {...stylex.props(styles.muted)}>{t('person')}</span>
             )}

@@ -12,6 +12,8 @@ interface FormCardProps {
   /** Beside the title, for an action on the card's whole content rather than a commit. */
   headerAction?: ReactNode;
   hint?: ReactNode;
+  /** No frame, for content that is already a list of its own rows. */
+  plain?: boolean;
   title: string;
 }
 
@@ -23,11 +25,12 @@ export function FormCard({
   description,
   headerAction,
   hint,
+  plain,
   title,
 }: FormCardProps) {
   return (
-    <section {...stylex.props(styles.card, danger && styles.dangerCard)}>
-      <div {...stylex.props(styles.body)}>
+    <section {...stylex.props(styles.card, danger && styles.dangerCard, plain && styles.plainCard)}>
+      <div {...stylex.props(styles.body, plain && styles.plainBody)}>
         <Flexbox horizontal align="flex-start" gap={16} justify="space-between">
           <div>
             <Text as="h3" fontSize={18} style={{ margin: 0 }} weight={600}>

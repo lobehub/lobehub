@@ -69,14 +69,12 @@ function EnabledChannelSettings() {
         >
           {detail && channel && (
             <Flexbox gap={24} {...stylex.props(settingsStyles.content)}>
-              <div {...stylex.props(settingsStyles.tabBar)}>
-                <Tabs
-                  activeKey={tab}
-                  items={tabs.map((key) => ({ key, label: t(`settings.tab.${key}`) }))}
-                  variant="point"
-                  onChange={(key) => setSearchParams({ tab: key }, { replace: true })}
-                />
-              </div>
+              <Tabs
+                activeKey={tab}
+                items={tabs.map((key) => ({ key, label: t(`settings.tab.${key}`) }))}
+                variant="square"
+                onChange={(key) => setSearchParams({ tab: key }, { replace: true })}
+              />
               {/* Kept mounted so switching tabs does not discard a draft. */}
               <div hidden={tab !== 'general'} key={`general:${channel.id}`}>
                 <GeneralSection channel={channel} />

@@ -15,6 +15,7 @@ export function MembersSection({ detail }: { detail: ChannelDetail }) {
 
   return (
     <FormCard
+      plain
       description={t('settings.members.description')}
       title={t('membersCount', { count: entries.length })}
       headerAction={

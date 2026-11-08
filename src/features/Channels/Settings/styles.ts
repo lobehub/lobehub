@@ -14,11 +14,6 @@ export const settingsStyles = stylex.create({
     paddingBlock: 24,
     paddingInline: 24,
   },
-  tabBar: {
-    borderBlockEndWidth: 1,
-    borderBlockEndStyle: 'solid',
-    borderBlockEndColor: cssVar.colorBorderSecondary,
-  },
   card: {
     overflow: 'hidden',
     borderWidth: 1,
@@ -26,6 +21,15 @@ export const settingsStyles = stylex.create({
     borderColor: cssVar.colorBorderSecondary,
     borderRadius: 12,
     backgroundColor: cssVar.colorBgContainer,
+  },
+  plainCard: {
+    overflow: 'visible',
+    borderWidth: 0,
+    borderRadius: 0,
+    backgroundColor: 'transparent',
+  },
+  plainBody: {
+    padding: 0,
   },
   dangerCard: {
     borderColor: cssVar.colorErrorBorder,
