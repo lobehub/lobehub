@@ -3,12 +3,13 @@ import type { InvokeModelWithResponseStreamResponse } from '@aws-sdk/client-bedr
 import type { ChatStreamCallbacks } from '../../../types';
 import { nanoid } from '../../../utils/uuid';
 import { transformAnthropicStream } from '../anthropic';
-import type { StreamContext } from '../protocol';
 import {
-  createCallbacksTransformer,
-  createSSEProtocolTransformer,
-  createTokenSpeedCalculator,
-} from '../protocol';
+  createEventCallbacksTransformer,
+  createModelEventTransformer,
+  createSSEEncoder,
+} from '../events';
+import type { StreamContext } from '../protocol';
+import { createTokenSpeedCalculator } from '../protocol';
 import { createBedrockStream } from './common';
 
 export const AWSBedrockClaudeStream = (
@@ -38,7 +39,8 @@ export const AWSBedrockClaudeStream = (
     )
     .pipeThrough(
       // Same Messages event contract as `AnthropicStream`: closing without a terminal event is a truncation.
-      createSSEProtocolTransformer((c) => c, streamStack, { requireTerminalEvent: true }),
+      createModelEventTransformer((c) => c, streamStack, { requireTerminalEvent: true }),
     )
-    .pipeThrough(createCallbacksTransformer(options?.callbacks, { streamStack }));
+    .pipeThrough(createEventCallbacksTransformer(options?.callbacks, { streamStack }))
+    .pipeThrough(createSSEEncoder());
 };
