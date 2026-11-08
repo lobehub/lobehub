@@ -503,16 +503,9 @@ export function createCallbacksTransformer(
       }
       // if the message is a data chunk, handle the callback
       else if (chunk.startsWith('data:')) {
-        // `base64_image` payloads are raw data-URIs (`data:image/png;base64,...`)
-        // and `reasoning_response_item` payloads carry arbitrary model-authored
-        // summary text — both can contain `data:` themselves, which the legacy
-        // `split('data:')[1]` corrupts (it splits on the embedded marker too).
-        // Strip only the leading field marker for those types; every other event
-        // type keeps the original split path unchanged for compatibility.
-        const content =
-          currentType === 'base64_image' || currentType === 'reasoning_response_item'
-            ? chunk.slice('data:'.length).trim()
-            : chunk.split('data:')[1].trim();
+        // Strip only the leading field marker: any payload can contain `data:` itself
+        // (model text, tool arguments, data URIs).
+        const content = chunk.slice('data:'.length).trim();
 
         const data = safeParseJSON(content) as any;
 
