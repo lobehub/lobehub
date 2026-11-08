@@ -300,7 +300,7 @@ export const execAgentTurn = async (
     userId: deps.userId,
   });
   await claimRunFee(runFee, {
-    hold: shouldHoldRunFee(params, { agentConfig, workspaceId: deps.workspaceId }),
+    hold: shouldHoldRunFee(params, { workspaceId: deps.workspaceId }),
     userId: deps.userId,
   });
 
@@ -527,7 +527,7 @@ export const execAgentTurn = async (
   };
 
   if (isHeteroAgent) {
-    return dispatchHeteroAgent(
+    const heteroResult = await dispatchHeteroAgent(
       {
         bindTopicWorkingDirectory: (p) =>
           bindTopicWorkingDirectory({ topicModel: deps.topicModel }, p),
@@ -552,7 +552,12 @@ export const execAgentTurn = async (
         maxSteps,
         memberDeviceOverride,
         operationTaskId,
-        onOperationCreated: params.onOperationCreated,
+        // The hetero run settles its fee on `heteroFinish` under this id, so the
+        // fee moves to it as soon as the durable operation row exists.
+        onOperationCreated: async (operationId) => {
+          await bindRunFee(runFee, deps.userId, operationId);
+          await params.onOperationCreated?.(operationId);
+        },
         reservedOperationId: params.reservedOperationId,
         parentOperationId,
         pinnedHeterogeneousTopicModel: turn.pinnedHeterogeneousTopicModel,
@@ -564,6 +569,12 @@ export const execAgentTurn = async (
         topicStartOwnerOperationId: params.topicStartOwnerOperationId,
       },
     );
+    // A returned dispatch is the run's from here: `heteroFinish` settles a
+    // started run and a refused dispatch settles its error through the same
+    // completion, so neither gives the fee back here. A dispatch that throws
+    // leaves it unstarted, and `execAgent` releases the fee.
+    runFee.handedOff = true;
+    return heteroResult;
   }
 
   // 4. Fetch user settings (memory config + timezone)
