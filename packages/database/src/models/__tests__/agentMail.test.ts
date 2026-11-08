@@ -132,7 +132,10 @@ describe('AgentMailModel', () => {
 
     // Plain words and short or single-kind runs are not secrets.
     expect(
-      await model.findSecretRepeatedFromOtherSender({ ...window, compactText: 'signincodeservice' }),
+      await model.findSecretRepeatedFromOtherSender({
+        ...window,
+        compactText: 'signincodeservice',
+      }),
     ).toBeUndefined();
     // Mail from the reply's own recipient is never another sender's secret.
     expect(
@@ -141,6 +144,18 @@ describe('AgentMailModel', () => {
         compactText: 'ab12cd',
         recipient: 'login@service.com',
       }),
+    ).toBeUndefined();
+  });
+
+  it('answers no secret when there is nothing to look for', async () => {
+    const model = new AgentMailModel(serverDB, userId);
+    const window = { agentId, recipient: 'friend@example.com', since: new Date(0) };
+
+    // An empty candidate list has no secret to find, and an empty outgoing text
+    // cannot repeat one — both short-circuit before touching the mail log.
+    expect(await model.findTextFromOtherSender({ ...window, candidates: [] })).toBeUndefined();
+    expect(
+      await model.findSecretRepeatedFromOtherSender({ ...window, compactText: '' }),
     ).toBeUndefined();
   });
 
