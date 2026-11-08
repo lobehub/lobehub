@@ -50,6 +50,11 @@ const log = debug('lobe-server:memory:consolidation');
 export const CLASSIFY_BATCH = 20;
 /** Memories per synthesis call; larger domains are synthesized in time-ordered chunks. */
 export const SYNTH_CHUNK = 40;
+/**
+ * Domain keys per merge call. A call over 600+ keys took about 3 minutes, long enough for QStash to
+ * count the delivery as failed, redeliver it, and end the whole run once retries ran out.
+ */
+export const NORMALIZE_BATCH = 80;
 /** The online step shows the model this many recalled contexts plus the most recently active. */
 const ROUTE_TOP_CONTEXTS = 30;
 const ROUTE_RECENT_CONTEXTS = 10;
@@ -322,6 +327,35 @@ export class MemoryConsolidationService {
     return this.model.markRouted(this.runId, routes);
   }
 }
+
+/** Split domain counts into merge batches, sorted by key so similar domains share a batch. */
+export const batchDomains = (
+  counts: Record<string, number>,
+  size = NORMALIZE_BATCH,
+): Record<string, number>[] => {
+  const keys = Object.entries(counts).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  const batches: Record<string, number>[] = [];
+  for (let i = 0; i < keys.length; i += size)
+    batches.push(Object.fromEntries(keys.slice(i, i + size)));
+  return batches;
+};
+
+/** Domain counts after one merge round; keys the round left out stay as they are. */
+export const applyDomainRound = (
+  counts: Record<string, number>,
+  round: Record<string, string>,
+): Record<string, number> => {
+  const out: Record<string, number> = {};
+  for (const [key, count] of Object.entries(counts)) {
+    const merged = round[key] ?? key;
+    out[merged] = (out[merged] ?? 0) + count;
+  }
+  return out;
+};
+
+/** Follow a domain through every merge round to its final name. */
+export const resolveDomain = (key: string, rounds: Record<string, string>[]) =>
+  rounds.reduce((current, round) => round[current] ?? current, key);
 
 /** Turn a synthesis result into context plans, keeping only members from `allowed`. */
 export const toContextPlans = (
