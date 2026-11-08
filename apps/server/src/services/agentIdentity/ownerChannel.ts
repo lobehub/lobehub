@@ -21,7 +21,14 @@ export const INBOX_REPORT_WEBHOOK = '/api/agent/webhooks/inbox-report';
  * Where the result goes, told to the woken agent. A run nobody watches would otherwise end in a
  * topic its owner never opens.
  */
-export const OWNER_CHANNEL_INSTRUCTION = `Your final answer is posted to your owner in your direct Channel with them, so write it to them. If nothing here needs them, answer exactly ${BOT_NO_REPLY_TOKEN} and nothing will be posted.`;
+export const OWNER_CHANNEL_INSTRUCTION = `Your final answer is posted to your owner in your direct Channel with them, so write it to them. If nothing here needs them, answer exactly ${BOT_NO_REPLY_TOKEN} and nothing will be posted. You cannot send mail from this run: a send is refused. If a reply is warranted, put the draft in your answer for your owner to approve.`;
+
+/**
+ * A woken run has nobody watching it, so it must end rather than park on an approval: a parked
+ * segment would settle this report's hook with no answer, and its continuation would not carry it.
+ * A call that needs the owner comes back to the agent as refused.
+ */
+export const INBOX_RUN_INTERVENTION = { approvalMode: 'headless' } as const;
 
 export type OwnerChannelReportResult =
   | 'no-account'

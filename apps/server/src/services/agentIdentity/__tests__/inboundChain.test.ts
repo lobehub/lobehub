@@ -326,6 +326,8 @@ describe('Agent inbound webhook — end to end over the real route', () => {
     const [ownSentence, instruction, fenced] = prompt.split('\n\n');
     // The run reports to its owner's Channel; that sentence is ours too.
     expect(instruction).toContain('direct Channel');
+    // Nobody watches this run: it must end, not park on an approval its report would miss.
+    expect(agentCalls[0].execAgent.userInterventionConfig).toEqual({ approvalMode: 'headless' });
     expect(agentCalls[0].execAgent.hooks).toEqual([
       expect.objectContaining({ id: `agent-inbox-report:${accountId}`, type: 'onComplete' }),
     ]);

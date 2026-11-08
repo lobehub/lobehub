@@ -9,7 +9,11 @@ import { AiAgentService } from '@/server/services/aiAgent';
 import { TopicStartReservationError } from '@/server/services/aiAgent/topicStartReservation';
 
 import type { AgentInboundWakeInput, AgentInboundWaker } from './inbound';
-import { createOwnerChannelReportHook, OWNER_CHANNEL_INSTRUCTION } from './ownerChannel';
+import {
+  createOwnerChannelReportHook,
+  INBOX_RUN_INTERVENTION,
+  OWNER_CHANNEL_INSTRUCTION,
+} from './ownerChannel';
 import { fenceUntrustedInbox, toUntrustedInboxEntry } from './untrusted';
 
 /** Body budget for the wake prompt; the full text stays readable through the tool. */
@@ -62,6 +66,7 @@ export const createAgentInboundWaker = (db: LobeChatDatabase): AgentInboundWaker
         hooks: [createOwnerChannelReportHook(db, account.id)],
         prompt: buildInboundPrompt(account, message),
         trigger: RequestTrigger.Inbox,
+        userInterventionConfig: INBOX_RUN_INTERVENTION,
       });
 
     /**
