@@ -1,4 +1,4 @@
-import { Flexbox, Tag, Text } from '@lobehub/ui';
+import { cssVar, Flexbox, Tag, Text } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { useSize } from 'ahooks';
 import { Hash } from 'lucide-react';
@@ -70,7 +70,7 @@ function EnabledChannelPage() {
         left={
           <Flexbox horizontal align="center" gap={8}>
             {/* A direct conversation is titled by its Agent's name alone, like an IM chat. */}
-            {!directAgent && <Hash size={18} />}
+            {!directAgent && <Hash color={cssVar.colorTextDescription} size={16} />}
             <Text ellipsis weight={500}>
               {detail?.channel.title || t('title')}
             </Text>
