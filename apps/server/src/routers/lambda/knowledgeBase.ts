@@ -9,7 +9,7 @@ import { DocumentModel } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
 import { KnowledgeBaseModel } from '@/database/models/knowledgeBase';
 import { ResourcePermissionModel } from '@/database/models/resourcePermission';
-import { DEFAULT_RESOURCE_ACCESS_LEVELS } from '@/database/schemas';
+import { DEDICATED_KNOWLEDGE_BASE_TYPES, DEFAULT_RESOURCE_ACCESS_LEVELS } from '@/database/schemas';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { FileService } from '@/server/services/file';
@@ -101,6 +101,16 @@ const knowledgeBaseProcedure = wsCompatProcedure.use(serverDatabase).use(async (
     },
   });
 });
+
+/** A dedicated space follows its agent or project; it is never removed or moved on its own. */
+const assertNotDedicatedKnowledgeBase = (knowledgeBase: { type: string | null }) => {
+  if ((DEDICATED_KNOWLEDGE_BASE_TYPES as readonly (string | null)[]).includes(knowledgeBase.type)) {
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message: 'This knowledge base belongs to an agent or project',
+    });
+  }
+};
 
 export const knowledgeBaseRouter = router({
   addFilesToKnowledgeBase: knowledgeBaseProcedure
@@ -386,6 +396,7 @@ export const knowledgeBaseRouter = router({
       const existing = await ctx.knowledgeBaseModel.findById(input.id);
       if (!existing)
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Knowledge base not found' });
+      assertNotDedicatedKnowledgeBase(existing);
       await assertKnowledgeBaseBrowsable(ctx, input.id, {
         userId: existing.userId,
         visibility: existing.visibility ?? null,
@@ -432,6 +443,7 @@ export const knowledgeBaseRouter = router({
           message: 'Knowledge base not found',
         });
       }
+      assertNotDedicatedKnowledgeBase(knowledgeBase);
       assertWorkspaceRowManageable(ctx, knowledgeBase.userId, 'knowledge base');
       // The transfer rehomes every linked file/document — a non-owner member
       // must not move teammates' rows along with their own KB.

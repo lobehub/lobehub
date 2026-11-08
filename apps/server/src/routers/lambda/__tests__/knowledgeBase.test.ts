@@ -261,6 +261,18 @@ describe('knowledgeBaseRouter', () => {
         expect.any(Boolean),
       );
     });
+
+    it("refuses to delete an agent's dedicated space", async () => {
+      mockKnowledgeBaseModelFindById.mockResolvedValue({
+        ...publicMemberKnowledgeBase(),
+        type: 'agent',
+      });
+
+      await expect(caller.removeKnowledgeBase({ id: 'kb-1' })).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+      });
+      expect(mockKnowledgeBaseModelDeleteWithFiles).not.toHaveBeenCalled();
+    });
   });
 
   describe('transferKnowledgeBase', () => {
