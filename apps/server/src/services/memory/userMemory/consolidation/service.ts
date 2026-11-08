@@ -328,15 +328,25 @@ export class MemoryConsolidationService {
   }
 }
 
-/** Split domain counts into merge batches, sorted by key so similar domains share a batch. */
+/**
+ * Split domain counts into merge batches, sorted by key so similar domains share a batch.
+ *
+ * `offset` rotates the sorted list before splitting, which moves the batch boundaries. Keys that
+ * were cut apart by a boundary — and so could never be compared in the same call — land together
+ * once the boundaries move.
+ */
 export const batchDomains = (
   counts: Record<string, number>,
   size = NORMALIZE_BATCH,
+  offset = 0,
 ): Record<string, number>[] => {
   const keys = Object.entries(counts).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  if (keys.length === 0) return [];
+  const start = offset % keys.length;
+  const ordered = start === 0 ? keys : [...keys.slice(start), ...keys.slice(0, start)];
   const batches: Record<string, number>[] = [];
-  for (let i = 0; i < keys.length; i += size)
-    batches.push(Object.fromEntries(keys.slice(i, i + size)));
+  for (let i = 0; i < ordered.length; i += size)
+    batches.push(Object.fromEntries(ordered.slice(i, i + size)));
   return batches;
 };
 
@@ -356,6 +366,58 @@ export const applyDomainRound = (
 /** Follow a domain through every merge round to its final name. */
 export const resolveDomain = (key: string, rounds: Record<string, string>[]) =>
   rounds.reduce((current, round) => round[current] ?? current, key);
+
+/** Merge rounds one normalization may spend before it accepts the mapping it has built. */
+export const NORMALIZE_MAX_ROUNDS = 4;
+/** Half a batch: the smallest rotation that re-pairs the keys a batch boundary cut apart. */
+const BOUNDARY_SHIFT = Math.ceil(NORMALIZE_BATCH / 2);
+
+/**
+ * Merge domain names in batch-sized calls until one call has seen every name, or until a round
+ * that used a moved batch split also merges nothing.
+ *
+ * One round without a merge is not convergence: two spellings of one domain (`project/task` and
+ * `project/tasks`) that sit on opposite sides of a batch boundary never meet, and neither batch
+ * shrinks. So the boundaries are moved once before the mapping is accepted as final.
+ */
+export const mergeDomainRounds = async (
+  counts: Record<string, number>,
+  merge: (
+    round: number,
+    batch: number,
+    counts: Record<string, number>,
+  ) => Promise<Record<string, string>>,
+  maxRounds = NORMALIZE_MAX_ROUNDS,
+): Promise<Record<string, string>[]> => {
+  const rounds: Record<string, string>[] = [];
+  let current = counts;
+  let shift = 0;
+  for (let round = 0; round < maxRounds; round += 1) {
+    const batches = batchDomains(current, NORMALIZE_BATCH, shift);
+    if (batches.length === 0) break;
+    const merged: Record<string, string> = {};
+    for (const [batch, keys] of batches.entries()) {
+      // A lone key has nothing to merge with here; a moved split pairs it with its neighbours.
+      if (Object.keys(keys).length <= 1) continue;
+      Object.assign(merged, await merge(round, batch, keys));
+    }
+    const next = applyDomainRound(current, merged);
+    rounds.push(merged);
+    const shrank = Object.keys(next).length < Object.keys(current).length;
+    current = next;
+    // One call has now seen every name, so no alias can still be split across batches.
+    if (batches.length <= 1) break;
+    if (shrank) {
+      shift = 0;
+      continue;
+    }
+    // This split found nothing to merge. Only a round with moved boundaries can tell a real
+    // absence of aliases from aliases hiding on either side of a boundary.
+    if (shift !== 0) break;
+    shift = BOUNDARY_SHIFT;
+  }
+  return rounds;
+};
 
 /** Turn a synthesis result into context plans, keeping only members from `allowed`. */
 export const toContextPlans = (

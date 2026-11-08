@@ -8,9 +8,9 @@ import {
 import { getServerDB } from '@/database/server';
 import {
   applyDomainRound,
-  batchDomains,
   CLASSIFY_BATCH,
   MemoryConsolidationService,
+  mergeDomainRounds,
   resolveDomain,
   SYNTH_CHUNK,
   toContextPlans,
@@ -21,7 +21,6 @@ import { checkGuard, ensureWorkflowStarted } from './runGuard';
 
 const WORKFLOW_PATH = 'api/workflows/memory-user-memory/pipelines/consolidation/run';
 const ROUTE_BATCH = 10;
-const NORMALIZE_MAX_ROUNDS = 4;
 
 const payloadSchema = z.object({
   /** `revert` undoes the run `revertRunId` instead of consolidating. */
@@ -147,30 +146,21 @@ export const consolidationHandler = async (context: WorkflowContext) => {
       domainCounts[e.key] = (domainCounts[e.key] ?? 0) + e.count;
     }
     const hasNewDomains = Object.keys(domainCounts).some((key) => !saved[key]);
-    const rounds: Record<string, string>[] = [saved];
-    let current = applyDomainRound(domainCounts, saved);
     // Small merge calls, then again over their results until one call has seen every name, so
     // the same domain cannot keep two spellings from two batches.
-    for (let round = 0; hasNewDomains && round < NORMALIZE_MAX_ROUNDS; round += 1) {
-      const batches = batchDomains(current);
-      const merged: Record<string, string> = {};
-      for (const [b, batch] of batches.entries())
-        Object.assign(
-          merged,
-          await runStep(context, `${STEP}:normalize:${round}:${b}`, () =>
-            service().normalizeDomains(batch),
+    const domainRounds: Record<string, string>[] = [saved];
+    if (hasNewDomains)
+      domainRounds.push(
+        ...(await mergeDomainRounds(applyDomainRound(domainCounts, saved), (round, batch, counts) =>
+          runStep(context, `${STEP}:normalize:${round}:${batch}`, () =>
+            service().normalizeDomains(counts),
           ),
-        );
-      const next = applyDomainRound(current, merged);
-      rounds.push(merged);
-      const shrank = Object.keys(next).length < Object.keys(current).length;
-      current = next;
-      if (batches.length <= 1 || !shrank) break;
-    }
+        )),
+      );
     // Keeps the `normalize` step name: the DC console reads the final mapping from it.
     const domainMap = await runStep(context, `${STEP}:normalize`, async () => {
       const map = Object.fromEntries(
-        Object.keys(domainCounts).map((key) => [key, resolveDomain(key, rounds)]),
+        Object.keys(domainCounts).map((key) => [key, resolveDomain(key, domainRounds)]),
       );
       if (hasNewDomains) await service().model.saveQueueDomains(origin, map);
       return map;
