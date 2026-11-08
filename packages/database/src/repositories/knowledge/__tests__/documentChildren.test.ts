@@ -116,4 +116,12 @@ describe('agent space listing', () => {
     expect(ids).toContain('agent-note');
     expect(ids).not.toContain('.tool-results');
   });
+
+  it("keeps a user's own folder that happens to share the archive name", async () => {
+    await serverDB.insert(documents).values(page('.tool-results', { fileType: 'custom/folder' }));
+
+    const ids = (await knowledgeRepo.query({ knowledgeBaseId: kbId })).map(({ id }) => id);
+
+    expect(ids).toContain('.tool-results');
+  });
 });

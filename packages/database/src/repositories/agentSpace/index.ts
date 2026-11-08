@@ -85,6 +85,11 @@ export class AgentSpaceRepository {
       .where(
         and(
           buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, agents),
+          // A space keeps its own visibility, so listing it needs access to both.
+          buildWorkspaceWhere(
+            { userId: this.userId, workspaceId: this.workspaceId },
+            knowledgeBases,
+          ),
           eq(knowledgeBases.type, AGENT_SPACE_TYPE),
           sql`${knowledgeBases.settings} -> 'owner' ->> 'id' = ${agents.id}`,
         ),
