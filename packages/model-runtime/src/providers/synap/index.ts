@@ -6,7 +6,7 @@ import { processMultiProviderModelList } from '../../utils/modelParse';
 import type { SynapModelCard } from './type';
 
 const fetchSynapModels = async () => {
-  const response = await fetch('https://synap.linkrra.com/v1/models');
+  const response = await fetch('https://synap402.com/v1/models');
   if (!response.ok) {
     throw new Error(`Synap models API request failed with status ${response.status}`);
   }
@@ -16,7 +16,7 @@ const fetchSynapModels = async () => {
 };
 
 export const params = {
-  baseURL: 'https://synap.linkrra.com/v1',
+  baseURL: 'https://synap402.com/v1',
   debug: {
     chatCompletion: () => process.env.DEBUG_SYNAP_CHAT_COMPLETION === '1',
   },

@@ -21,7 +21,7 @@ describe('params', () => {
   });
 
   it('points at the public gateway', () => {
-    expect(params.baseURL).toBe('https://synap.linkrra.com/v1');
+    expect(params.baseURL).toBe('https://synap402.com/v1');
   });
 
   it('turns debug output on only when asked', () => {
@@ -53,7 +53,7 @@ describe('the model list Synap serves', () => {
   it('fetches the public catalogue, no API key needed', async () => {
     await params.models();
 
-    expect(fetch).toHaveBeenCalledWith('https://synap.linkrra.com/v1/models');
+    expect(fetch).toHaveBeenCalledWith('https://synap402.com/v1/models');
   });
 
   it('throws when the gateway does not answer', async () => {

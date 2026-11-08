@@ -10,22 +10,22 @@ tags:
 
 # 在 LobeHub 中使用 Synap
 
-[Synap](https://synap.linkrra.com) 是一个面向开源权重模型的网关。你可以直接选择某个模型及其价格，也可以使用 `synap-v1` 自动路由到能胜任任务的最便宜模型 —— 按实际运行的那个模型计费。每一次请求发出前都会先核对零数据保留白名单；无法保证零保留的服务商会被直接拒绝，而不是被使用。
+[Synap](https://synap402.com) 是一个面向开源权重模型的网关。你可以直接选择某个模型及其价格，也可以使用 `synap-v1` 自动路由到能胜任任务的最便宜模型 —— 按实际运行的那个模型计费。每一次请求发出前都会先核对零数据保留白名单；无法保证零保留的服务商会被直接拒绝，而不是被使用。
 
 本文档将指导你如何在 LobeHub 中使用 Synap：
 
 <Steps>
   ### 步骤一：获取 Synap API 密钥
 
-  - 前往 [synap.linkrra.com/login.html](https://synap.linkrra.com/login.html) 用 Google 账号登录 —— 仅此一步即可解锁每日免费额度，无需绑卡。
-  - 在[账户页面](https://synap.linkrra.com/account.html#keys)创建一个密钥，密钥以 `sk-pool-` 开头。
-  - 如果需要使用免费额度之外的模型，可在[价格页面](https://synap.linkrra.com/pricing.html#payg)充值（信用卡最低 $10，TON 或 USDC 最低 $1）。充值额度永不过期。
+  - 前往 [synap402.com/login.html](https://synap402.com/login.html) 用 Google 账号登录 —— 仅此一步即可解锁每日免费额度，无需绑卡。
+  - 在[账户页面](https://synap402.com/account.html#keys)创建一个密钥，密钥以 `sk-pool-` 开头。
+  - 如果需要使用免费额度之外的模型，可在[价格页面](https://synap402.com/pricing.html#payg)充值（信用卡最低 $10，TON 或 USDC 最低 $1）。充值额度永不过期。
 
   ### 步骤二：在 LobeHub 中配置 Synap
 
   - 打开**应用设置 → AI 服务商**，找到 `Synap`。
   - 启用该服务商，填入上一步创建的 API 密钥。
-  - 点击**获取模型列表**读取 Synap 当前的模型目录，或查看 [synap.linkrra.com/models.html](https://synap.linkrra.com/models.html) 获取完整的模型与价格列表。
+  - 点击**获取模型列表**读取 Synap 当前的模型目录，或查看 [synap402.com/models.html](https://synap402.com/models.html) 获取完整的模型与价格列表。
   - 启用你需要的模型。
 
   <Callout type={'info'}>
@@ -35,7 +35,7 @@ tags:
 
 ## 免费额度
 
-只需用 Google 账号登录，即可在 `qwen3-coder-30b` 上获得每天 100,000 token 的免费额度，无需绑卡，也没有试用期限制 —— 具体限制见 [synap.linkrra.com/free.html](https://synap.linkrra.com/free.html)。免费密钥请求免费额度之外的模型时，会收到带充值链接的 402 响应，而不会产生意外扣费。
+只需用 Google 账号登录，即可在 `qwen3-coder-30b` 上获得每天 100,000 token 的免费额度，无需绑卡，也没有试用期限制 —— 具体限制见 [synap402.com/free.html](https://synap402.com/free.html)。免费密钥请求免费额度之外的模型时，会收到带充值链接的 402 响应，而不会产生意外扣费。
 
 ## 零数据保留
 
@@ -45,7 +45,7 @@ Synap 在每一次请求发出前，都会在代码层面核对零数据保留�
 
 **对话请求返回 402**
 
-该密钥处于免费额度，所选模型超出了每日免费额度范围。可以切换到免费模型（`qwen3-coder-30b`），或在[价格页面](https://synap.linkrra.com/pricing.html#payg)充值。
+该密钥处于免费额度，所选模型超出了每日免费额度范围。可以切换到免费模型（`qwen3-coder-30b`），或在[价格页面](https://synap402.com/pricing.html#payg)充值。
 
 **启用服务商后缺少某个模型**
 

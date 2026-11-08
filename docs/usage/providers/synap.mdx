@@ -11,22 +11,22 @@ tags:
 
 # Using Synap in LobeHub
 
-[Synap](https://synap.linkrra.com) is a gateway for open-weight models. Pick a model and its price directly, or use `synap-v1` to route to the cheapest model that can do the job — billed at the price of whichever model actually ran. Every request is checked against a zero-data-retention allowlist before it leaves; a provider that cannot guarantee that is refused rather than used.
+[Synap](https://synap402.com) is a gateway for open-weight models. Pick a model and its price directly, or use `synap-v1` to route to the cheapest model that can do the job — billed at the price of whichever model actually ran. Every request is checked against a zero-data-retention allowlist before it leaves; a provider that cannot guarantee that is refused rather than used.
 
 This guide walks through using Synap in LobeHub:
 
 <Steps>
   ### Step 1: Get a Synap API key
 
-  - Sign in with Google at [synap.linkrra.com/login.html](https://synap.linkrra.com/login.html) — this alone unlocks a free daily allowance, no card required.
-  - Create a key on your [account page](https://synap.linkrra.com/account.html#keys). It starts with `sk-pool-`.
-  - To use models beyond the free tier, buy credits from the [pricing page](https://synap.linkrra.com/pricing.html#payg) (from $10 by card, $1 in TON or USDC). Credits never expire.
+  - Sign in with Google at [synap402.com/login.html](https://synap402.com/login.html) — this alone unlocks a free daily allowance, no card required.
+  - Create a key on your [account page](https://synap402.com/account.html#keys). It starts with `sk-pool-`.
+  - To use models beyond the free tier, buy credits from the [pricing page](https://synap402.com/pricing.html#payg) (from $10 by card, $1 in TON or USDC). Credits never expire.
 
   ### Step 2: Configure Synap in LobeHub
 
   - Open **Settings → AI Provider** and find `Synap`.
   - Enable the provider and paste in the API key from Step 1.
-  - Click **Fetch Models** to read Synap's current catalogue, or check [synap.linkrra.com/models.html](https://synap.linkrra.com/models.html) for the full list and prices.
+  - Click **Fetch Models** to read Synap's current catalogue, or check [synap402.com/models.html](https://synap402.com/models.html) for the full list and prices.
   - Enable the models you want to use.
 
   <Callout type={'info'}>
@@ -36,7 +36,7 @@ This guide walks through using Synap in LobeHub:
 
 ## Free tier
 
-Signing in with Google is enough to get 100,000 tokens a day, with no card and no trial clock. The free allowance covers the cheapest models in the catalogue (today `gpt-oss-20b`), which is also the model LobeHub's connectivity check uses — see [synap.linkrra.com/free.html](https://synap.linkrra.com/free.html) for the exact limits. A free key that asks for a model outside the free tier gets a 402 with a top-up link, never a surprise charge.
+Signing in with Google is enough to get 100,000 tokens a day, with no card and no trial clock. The free allowance covers the cheapest models in the catalogue (today `gpt-oss-20b`), which is also the model LobeHub's connectivity check uses — see [synap402.com/free.html](https://synap402.com/free.html) for the exact limits. A free key that asks for a model outside the free tier gets a 402 with a top-up link, never a surprise charge.
 
 ## Zero data retention
 
@@ -46,7 +46,7 @@ Synap checks every outbound request in code against a zero-data-retention allowl
 
 **A chat request returns 402**
 
-The key is on the free tier and the selected model is outside its daily allowance. Either switch to a cheaper model that the free allowance covers, or add credits on the [pricing page](https://synap.linkrra.com/pricing.html#payg).
+The key is on the free tier and the selected model is outside its daily allowance. Either switch to a cheaper model that the free allowance covers, or add credits on the [pricing page](https://synap402.com/pricing.html#payg).
 
 **A model is missing after enabling the provider**
 
