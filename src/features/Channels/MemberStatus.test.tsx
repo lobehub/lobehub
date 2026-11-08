@@ -88,3 +88,11 @@ describe('MemberStatus in a direct conversation', () => {
     expect(menuKeys()).not.toContain('environment');
   });
 });
+
+describe('MemberStatus in a group Channel', () => {
+  it('offers every Channel action in the header menu', () => {
+    render(createElement(MemberStatus, { detail: detail({ agentId: null }) }));
+
+    expect(menuKeys()).toEqual(['rename', 'copyId', 'archive', 'delete']);
+  });
+});

@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useCloseOnNavigate } from '@/hooks/useCloseOnNavigate';
+import { sx } from '@/styles/sx';
 
 import { openChannelAgentEnvironment } from './AgentEnvironment';
 import { canInviteMembers } from './channelAccess';
@@ -115,9 +116,17 @@ export function MemberStatus({
             type="text"
             {...stylex.props(statusStyles.memberButton)}
           >
-            {entries.slice(0, MAX_VISIBLE).map((entry) => (
-              <StatusAvatar entry={entry} key={entry.member.id} size={24} />
-            ))}
+            <span {...stylex.props(statusStyles.memberStack)}>
+              {entries.slice(0, MAX_VISIBLE).map((entry, index) => (
+                // Earlier avatars sit on top, or each one would cover the previous status dot.
+                <span
+                  key={entry.member.id}
+                  {...sx(statusStyles.memberStackItem, { zIndex: MAX_VISIBLE - index })}
+                >
+                  <StatusAvatar entry={entry} size={20} />
+                </span>
+              ))}
+            </span>
             {overflow > 0 && <span {...stylex.props(styles.muted)}>+{overflow}</span>}
           </Button>
         </Popover>
@@ -144,16 +153,14 @@ export function MemberStatus({
           }
         />
       )}
-      {direct && (
-        <DropdownMenu items={directMenu()}>
-          <ActionIcon
-            aria-label={t('more', { ns: 'common' })}
-            icon={MoreHorizontal}
-            size="small"
-            title={t('more', { ns: 'common' })}
-          />
-        </DropdownMenu>
-      )}
+      <DropdownMenu items={direct ? directMenu() : channelMenu(channel)}>
+        <ActionIcon
+          aria-label={t('more', { ns: 'common' })}
+          icon={MoreHorizontal}
+          size="small"
+          title={t('more', { ns: 'common' })}
+        />
+      </DropdownMenu>
     </Flexbox>
   );
 }
