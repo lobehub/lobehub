@@ -11,6 +11,16 @@ export const acceptanceChecksLayout = {
   maxWidth: 920,
 } as const;
 
+/** The checklist's measure with the column's own padding added back, so the
+ * content inside lands on exactly that width. The header always uses it: the
+ * title and tabs must stay put when the reader switches tabs. */
+export const acceptanceReadingColumnMaxWidth =
+  acceptanceChecksLayout.maxWidth + 2 * acceptanceContentLayout.paddingInline;
+
+/** Only the discussion has an aside to make room for. */
+export const getAcceptanceBodyMaxWidth = (tab: string) =>
+  tab === 'discussion' ? acceptanceContentLayout.maxWidth : acceptanceReadingColumnMaxWidth;
+
 export const acceptanceFocusedLayout = {
   contentPaddingBlock: '32px 24px',
   headerGap: 8,
