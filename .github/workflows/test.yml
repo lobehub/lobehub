@@ -311,7 +311,7 @@ jobs:
         working-directory: apps/desktop
 
       - name: Upload Desktop App Coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./apps/desktop/coverage/lcov.info
@@ -455,7 +455,7 @@ jobs:
 
       - name: Upload App Coverage to Codecov
         if: needs.test-app.result == 'success'
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage-shards/coverage-app-1/lcov.info,./coverage-shards/coverage-app-2/lcov.info,./coverage-shards/coverage-app-3/lcov.info
@@ -472,7 +472,7 @@ jobs:
 
       - name: Upload Server Coverage to Codecov
         if: needs.test-server.result == 'success'
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage-shards/coverage-server-1/lcov.info,./coverage-shards/coverage-server-2/lcov.info,./coverage-shards/coverage-server-3/lcov.info
@@ -526,7 +526,7 @@ jobs:
           APP_URL: https://home.com
 
       - name: Upload Database coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./packages/database/coverage/lcov.info
