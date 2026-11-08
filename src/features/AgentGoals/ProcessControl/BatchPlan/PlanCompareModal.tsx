@@ -14,12 +14,13 @@ import { t } from 'i18next';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AsyncError from '@/components/AsyncError';
 import Loading from '@/components/Loading/CircleLoading';
 import { DIFF_OPTIONS, withTrailingNewline } from '@/features/Dashboard/WidgetDetail/diffContent';
 import { parseSkillMarkdownFrontmatter } from '@/utils/skillMarkdown';
 
 import type { PlanVersion } from './planVersion';
-import { useSkillVersion } from './skillVersions';
+import { unreadableVersions, useSkillVersion } from './skillVersions';
 
 const styles = createStaticStyles(({ css }) => ({
   bar: css`
@@ -57,9 +58,13 @@ interface PlanCompareProps {
 
 /** One side of the diff: a skill version read from its archive, else the round's text. */
 const useBody = (skillId: string | undefined, versions: PlanVersion[], revision: number) => {
-  const { data } = useSkillVersion(skillId, revision);
+  const { data, error, mutate } = useSkillVersion(skillId, revision);
   const content = data?.content ?? versions.find((v) => v.revision === revision)?.content;
-  return content === undefined ? undefined : parseSkillMarkdownFrontmatter(content).body;
+  return {
+    body: content === undefined ? undefined : parseSkillMarkdownFrontmatter(content).body,
+    error,
+    retry: mutate,
+  };
 };
 
 /** Two versions of a batch's plan, side by side as a diff, each one pickable. */
@@ -75,6 +80,7 @@ const PlanCompare = memo<PlanCompareProps>(({ base, skillId, target, versions })
   }));
   const before = useBody(skillId, versions, from);
   const after = useBody(skillId, versions, to);
+  const failed = unreadableVersions([before, after]);
 
   return (
     <div data-plan-compare className={styles.root}>
@@ -96,16 +102,23 @@ const PlanCompare = memo<PlanCompareProps>(({ base, skillId, target, versions })
         />
       </Flexbox>
       <div className={styles.body}>
-        {before === undefined || after === undefined ? (
+        {failed.length > 0 ? (
+          <AsyncError
+            error={failed[0].error}
+            onRetry={() => {
+              for (const side of failed) void side.retry();
+            }}
+          />
+        ) : before.body === undefined || after.body === undefined ? (
           <Loading />
-        ) : before.trim() === after.trim() ? (
+        ) : before.body.trim() === after.body.trim() ? (
           <Text type={'secondary'}>{t('goalBatch.planPanel.same', { base: from })}</Text>
         ) : (
           <CodeDiff
             diffOptions={DIFF_OPTIONS}
             language={'markdown'}
-            newContent={withTrailingNewline(after)}
-            oldContent={withTrailingNewline(before)}
+            newContent={withTrailingNewline(after.body)}
+            oldContent={withTrailingNewline(before.body)}
             showHeader={false}
             viewMode={'unified'}
           />

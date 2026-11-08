@@ -12,3 +12,10 @@ export const useSkillVersion = (skillId: string | undefined, version: number | u
     () => userSkillService.getVersion(skillId!, version!),
     { revalidateOnFocus: false, revalidateOnReconnect: false },
   );
+
+/**
+ * The versions that failed to read and have nothing to show. Pending ones are
+ * not among them, and neither is one whose text is already there.
+ */
+export const unreadableVersions = <T extends { body?: string; error?: unknown }>(versions: T[]) =>
+  versions.filter((version) => version.body === undefined && !!version.error);
