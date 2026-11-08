@@ -97,6 +97,14 @@ const styles = stylex.create({
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
   },
+  hint: {
+    overflow: 'hidden',
+    minWidth: '0',
+    fontSize: '11px',
+    color: cssVar.colorTextDescription,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
   tag: {
     flex: 'none',
     paddingBlock: '0',
@@ -114,12 +122,16 @@ export interface OptionRowProps {
   active?: boolean;
   /** The row opens a second level, so it ends in an arrow instead of a check. */
   arrow?: boolean;
+  /** A ready-made mark beside the title, shown as it is rather than in a neutral pill. */
+  badge?: ReactNode;
   /** A dense row for long lists: no icon frame, so its icon lines up with the menu's text. */
   compact?: boolean;
   desc?: ReactNode;
   disabled?: boolean;
   /** Trailing action, kept live while the row itself is disabled. */
   extra?: ReactNode;
+  /** A short muted note beside the title, such as the owner/name of a repository. */
+  hint?: ReactNode;
   icon: ReactNode;
   label: ReactNode;
   onClick: () => void;
@@ -132,7 +144,22 @@ export interface OptionRowProps {
 }
 
 const OptionRow = memo<OptionRowProps>(
-  ({ active, arrow, compact, desc, disabled, extra, icon, label, onClick, tag, tags, xstyle }) => (
+  ({
+    active,
+    arrow,
+    badge,
+    compact,
+    desc,
+    disabled,
+    extra,
+    hint,
+    icon,
+    label,
+    onClick,
+    tag,
+    tags,
+    xstyle,
+  }) => (
     <div
       onClick={() => {
         if (!disabled) onClick();
@@ -158,6 +185,8 @@ const OptionRow = memo<OptionRowProps>(
       <div {...stylex.props(styles.optionMeta, disabled && styles.dimmed)}>
         <Flexbox horizontal align={'center'} gap={6}>
           <span {...stylex.props(styles.optionTitle)}>{label}</span>
+          {hint ? <span {...stylex.props(styles.hint)}>{hint}</span> : null}
+          {badge}
           {tag ? <span {...stylex.props(styles.tag)}>{tag}</span> : null}
           {tags?.map((item, index) => (
             <span key={index} {...stylex.props(styles.tag)}>

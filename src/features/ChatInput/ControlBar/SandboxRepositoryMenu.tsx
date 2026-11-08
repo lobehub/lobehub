@@ -1,14 +1,16 @@
 'use client';
 
+import type { EnvironmentConfiguration } from '@lobechat/types';
 import { Github } from '@lobehub/icons';
-import { Button, Flexbox, Icon, Switch, Text } from '@lobehub/ui';
+import { Button, Flexbox, Icon, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { PlusIcon, SettingsIcon } from 'lucide-react';
-import { memo, useState } from 'react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import OptionRow from './OptionRow';
+import { repositorySlug } from './sandboxEnvironmentOptions';
 
 const styles = stylex.create({
   header: {
@@ -27,14 +29,6 @@ const styles = stylex.create({
     paddingInline: '8px',
     fontSize: '12px',
     color: cssVar.colorTextDescription,
-  },
-  keep: {
-    display: 'flex',
-    gap: '12px',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingBlock: '8px',
-    paddingInline: '8px',
   },
   list: {
     maxHeight: '280px',
@@ -56,25 +50,21 @@ const styles = stylex.create({
 });
 
 export interface SandboxRepositoryOption {
+  configuration?: Pick<EnvironmentConfiguration, 'sources'> | null;
   description?: string | null;
   id: string;
   name: string;
 }
 
 interface SandboxRepositoryMenuProps {
-  /** The plan includes a drive, so a repository's clone can be kept on it. */
-  canKeep: boolean;
   environments: SandboxRepositoryOption[];
   failed: boolean;
-  /** Whether the current pick is a clone kept on the drive. */
-  kept: boolean;
   loaded: boolean;
   onAdd: () => void;
   /** Closes the whole work-location menu; a final pick leaves it. */
   onClose: () => void;
   onManage: () => void;
-  /** Resolves to whether the pick was saved. */
-  onPick: (environment: SandboxRepositoryOption, keep: boolean) => Promise<boolean>;
+  onPick: (environment: SandboxRepositoryOption) => Promise<void>;
   onRetry: () => void;
   selectedId?: string;
 }
@@ -84,30 +74,8 @@ interface SandboxRepositoryMenuProps {
  * can work on, and the way to add one without leaving the composer.
  */
 const SandboxRepositoryMenu = memo<SandboxRepositoryMenuProps>(
-  ({
-    canKeep,
-    environments,
-    failed,
-    kept,
-    loaded,
-    onAdd,
-    onClose,
-    onManage,
-    onPick,
-    onRetry,
-    selectedId,
-  }) => {
+  ({ environments, failed, loaded, onAdd, onClose, onManage, onPick, onRetry, selectedId }) => {
     const { t } = useTranslation('chat');
-    const [keep, setKeep] = useState(kept);
-    const selected = environments.find((environment) => environment.id === selectedId);
-
-    const toggleKeep = async (next: boolean) => {
-      setKeep(next);
-      // With a repository picked the switch moves it now, and the menu stays:
-      // the person is still looking at the choice they just changed.
-      if (selected && !(await onPick(selected, next))) setKeep(!next);
-    };
-
     return (
       <Flexbox gap={2} style={{ maxWidth: 360, minWidth: 280 }}>
         <div {...stylex.props(styles.header)}>
@@ -125,12 +93,13 @@ const SandboxRepositoryMenu = memo<SandboxRepositoryMenuProps>(
               compact
               active={environment.id === selectedId}
               desc={environment.description || undefined}
+              hint={repositorySlug(environment)}
               icon={<Github size={16} />}
               key={environment.id}
               label={environment.name}
               onClick={() => {
                 onClose();
-                void onPick(environment, keep);
+                void onPick(environment);
               }}
             />
           ))}
@@ -156,20 +125,6 @@ const SandboxRepositoryMenu = memo<SandboxRepositoryMenuProps>(
           label={t('sandboxEnvironment.add')}
           onClick={onAdd}
         />
-
-        {canKeep && (
-          <div {...stylex.props(styles.keep)}>
-            <Flexbox gap={1}>
-              <Text fontSize={13} weight={500}>
-                {t('sandboxEnvironment.keep')}
-              </Text>
-              <Text fontSize={11} type={'secondary'}>
-                {t('sandboxEnvironment.keepDesc')}
-              </Text>
-            </Flexbox>
-            <Switch checked={keep} size={'small'} onChange={(next) => void toggleKeep(next)} />
-          </div>
-        )}
       </Flexbox>
     );
   },

@@ -1,14 +1,13 @@
 'use client';
 
+import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { Github } from '@lobehub/icons';
-import { Flexbox, Icon, Popover, Skeleton, Text, toast, Tooltip } from '@lobehub/ui';
+import { Flexbox, Icon, Popover, Skeleton, Tag, Text, toast, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import {
   ChevronDownIcon,
-  FolderClockIcon,
   FolderIcon,
-  FolderOpenIcon,
   HardDriveIcon,
   InfoIcon,
   PackageIcon,
@@ -31,11 +30,8 @@ import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 
 import OptionRow from './OptionRow';
-import {
-  environmentChipState,
-  pickableEnvironments,
-  repositorySelection,
-} from './sandboxEnvironmentOptions';
+import SandboxDriveMenu from './SandboxDriveMenu';
+import { environmentChipState, pickableEnvironments } from './sandboxEnvironmentOptions';
 import SandboxRepositoryMenu, { type SandboxRepositoryOption } from './SandboxRepositoryMenu';
 import { isPersistentSelection, type SandboxSelection } from './useSandboxPlacement';
 import { workingDirectoryChipStyles } from './workingDirectoryChipStyles';
@@ -70,6 +66,16 @@ const styles = stylex.create({
     color: cssVar.colorWarning,
   },
 });
+
+/**
+ * A submenu's list can arrive after it opens. Left to size itself, its positioner
+ * keeps the size it was first measured at, so the popup would grow off the screen
+ * instead of being placed again.
+ */
+const SUBMENU_STYLES = {
+  content: { padding: 4 },
+  root: { height: 'auto', width: 'auto' },
+};
 
 interface SandboxDrivePickerProps {
   /** Whether this plan includes a drive. Without one the menu offers the way to a plan. */
@@ -179,22 +185,15 @@ const SandboxDrivePicker = memo<SandboxDrivePickerProps>(
       }
     };
 
-    const pickRepository = async (environment: SandboxRepositoryOption, keep: boolean) => {
+    // A repository is only cloned into an empty folder, so it never inherits the
+    // folder the conversation was on: it starts in a temporary sandbox.
+    const pickRepository = async (environment: SandboxRepositoryOption) => {
       try {
-        const selection = repositorySelection(environment, { keep, workspaceId });
-        // A kept clone needs a folder that exists before the run resolves it.
-        if (selection.workingDirectory)
-          await sandboxStorageService.createDirectory({
-            drive: selection.drive,
-            path: selection.workingDirectory,
-          });
-        await onChange(selection);
+        await onChange({ environmentId: environment.id });
         void revalidatePlacement();
-        return true;
       } catch {
         // The topic kept its place; said rather than left looking changed.
         toast.error(t('sandboxEnvironment.saveFailed'));
-        return false;
       }
     };
 
@@ -205,7 +204,7 @@ const SandboxDrivePicker = memo<SandboxDrivePickerProps>(
         sharedAgent ? 'public' : undefined,
         async (created) => {
           await refreshEnvironments();
-          if (created?.id) await pickRepository(created, false);
+          if (created?.id) await pickRepository(created);
         },
         t('sandboxEnvironment.add'),
       );
@@ -235,14 +234,9 @@ const SandboxDrivePicker = memo<SandboxDrivePickerProps>(
           ? folderName(value.workingDirectory)
           : undefined;
     const currentIcon = value.instanceId ? PackageIcon : FolderIcon;
-    const showFolderRow = persistent && !onRepository;
+    const showFolder = persistent && !onRepository;
 
     const fallbackMessage = fallback ? t(`sandboxDrive.fallback.${fallback}`) : undefined;
-    // In a workspace a folder path means nothing without its drive.
-    const driveName = workspaceId
-      ? t(`workingDirectory.drive.drives.${value.drive ?? 'public'}`, { ns: 'device' })
-      : undefined;
-
     const chipIcon = fallback ? (
       <Icon icon={TriangleAlertIcon} size={14} />
     ) : onRepository ? (
@@ -286,67 +280,71 @@ const SandboxDrivePicker = memo<SandboxDrivePickerProps>(
         )}
 
         <OptionRow
+          compact
           active={!persistent && !onRepository}
           icon={<Icon icon={TimerIcon} size={16} />}
           label={t('sandboxStorage.ephemeral')}
           onClick={() => void select({})}
         />
 
-        {entitled && showFolderRow && currentLabel && (
-          <OptionRow
-            active
-            icon={<Icon icon={currentIcon} size={16} />}
-            label={currentLabel}
-            desc={
-              value.instanceId
-                ? t('sandboxDrive.environmentDesc')
-                : driveName
-                  ? t('sandboxDrive.folderOnDriveDesc', {
-                      drive: driveName,
-                      path: value.workingDirectory === '.' ? '/' : `/${value.workingDirectory}`,
-                    })
-                  : t('sandboxDrive.folderDesc', {
-                      path: value.workingDirectory === '.' ? '/' : `/${value.workingDirectory}`,
-                    })
-            }
-            onClick={() => setOpen(false)}
-          />
-        )}
-
-        {entitled && (
-          <OptionRow
-            icon={<Icon icon={persistent ? FolderOpenIcon : HardDriveIcon} size={16} />}
-            label={t(persistent ? 'sandboxDrive.browseOther' : 'sandboxDrive.browse')}
-            onClick={openBrowser}
-          />
-        )}
-
-        {!entitled && (
-          // The drive is part of a plan this account is not on. Offered in the
-          // same list, in the same shape, so the row reads as one more place
-          // files could go — and the tag says why it is not simply selectable.
-          <OptionRow
-            icon={<Icon icon={FolderClockIcon} size={16} />}
-            label={t('sandboxDrive.upsell')}
-            tag={t('pro', { ns: 'common' })}
-            onClick={() => {
-              setOpen(false);
-              openSandboxStorageUpsell();
-            }}
-          />
-        )}
+        {ENABLE_BUSINESS_FEATURES &&
+          (entitled ? (
+            <Popover
+              arrow={false}
+              closeDelay={150}
+              placement={'rightBottom'}
+              styles={SUBMENU_STYLES}
+              trigger={['hover', 'click']}
+              content={
+                <SandboxDriveMenu
+                  selectedLabel={showFolder ? currentLabel : undefined}
+                  selectedPath={showFolder ? value.workingDirectory : undefined}
+                  onBrowse={openBrowser}
+                  onPick={(folder) => void select(folder)}
+                />
+              }
+            >
+              <div data-testid={'sandbox-drive-row'}>
+                <OptionRow
+                  arrow
+                  compact
+                  active={showFolder}
+                  icon={<Icon icon={HardDriveIcon} size={16} />}
+                  label={t('sandboxDrive.title')}
+                  onClick={() => {}}
+                />
+              </div>
+            </Popover>
+          ) : (
+            // The drive is part of a plan this account is not on. Offered in the
+            // same list, in the same shape, so the row reads as one more place
+            // files could go — and the tag says why it is not simply selectable.
+            <OptionRow
+              compact
+              icon={<Icon icon={HardDriveIcon} size={16} />}
+              label={t('sandboxDrive.title')}
+              badge={
+                <Tag color={'gold'} size={'small'} style={{ borderRadius: 999, paddingInline: 8 }}>
+                  {t('pro', { ns: 'common' })}
+                </Tag>
+              }
+              onClick={() => {
+                setOpen(false);
+                openSandboxStorageUpsell();
+              }}
+            />
+          ))}
 
         <Popover
           arrow={false}
           closeDelay={150}
-          placement={'rightTop'}
+          placement={'rightBottom'}
+          styles={SUBMENU_STYLES}
           trigger={['hover', 'click']}
           content={
             <SandboxRepositoryMenu
-              canKeep={entitled}
               environments={environments}
               failed={!!environmentsError}
-              kept={onRepository && persistent}
               loaded={!!environmentList}
               selectedId={value.environmentId}
               onAdd={addRepository}
@@ -363,6 +361,7 @@ const SandboxDrivePicker = memo<SandboxDrivePickerProps>(
           <div data-testid={'sandbox-repository-row'}>
             <OptionRow
               arrow
+              compact
               active={onRepository}
               icon={<Github size={16} />}
               label={t('sandboxEnvironment.title')}
@@ -383,6 +382,7 @@ const SandboxDrivePicker = memo<SandboxDrivePickerProps>(
         content={content}
         open={open}
         placement={'topLeft'}
+        styles={{ content: { padding: 4 } }}
         trigger={'click'}
         onOpenChange={setOpen}
       >

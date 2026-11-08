@@ -3,8 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   environmentChipState,
   pickableEnvironments,
-  repositoryFolder,
-  repositorySelection,
+  repositorySlug,
 } from './sandboxEnvironmentOptions';
 
 const environments = [
@@ -51,39 +50,23 @@ describe('environmentChipState', () => {
   });
 });
 
-describe('repositoryFolder', () => {
-  it('keeps a plain repository name', () => {
-    expect(repositoryFolder('lobe.id')).toBe('repos/lobe.id');
+describe('repositorySlug', () => {
+  const withUrl = (url: string) => ({
+    configuration: { sources: [{ kind: 'git' as const, url }] },
   });
 
-  it('cannot climb out of the repos folder', () => {
-    expect(repositoryFolder('../../etc')).toBe('repos/etc');
+  it('reads owner/name from a repository URL', () => {
+    expect(repositorySlug(withUrl('https://github.com/lobehub/lobehub'))).toBe('lobehub/lobehub');
   });
 
-  it('keeps non-latin names and falls back when nothing is left', () => {
-    expect(repositoryFolder('前端 仓库')).toBe('repos/前端-仓库');
-    expect(repositoryFolder('...')).toBe('repos/repository');
-  });
-});
-
-describe('repositorySelection', () => {
-  const environment = { id: 'env_1', name: 'lobehub' };
-
-  it('starts in a temporary sandbox when the clone is not kept', () => {
-    expect(repositorySelection(environment, { keep: false })).toEqual({ environmentId: 'env_1' });
-  });
-
-  it('never reuses the folder the conversation was on when kept', () => {
-    expect(repositorySelection(environment, { keep: true })).toEqual({
-      drive: undefined,
-      environmentId: 'env_1',
-      workingDirectory: 'repos/lobehub',
-    });
-  });
-
-  it('keeps a workspace clone on the personal drive', () => {
-    expect(repositorySelection(environment, { keep: true, workspaceId: 'ws_1' }).drive).toBe(
-      'personal',
+  it('drops a .git suffix', () => {
+    expect(repositorySlug(withUrl('https://github.com/lobehub/lobe.id.git'))).toBe(
+      'lobehub/lobe.id',
     );
+  });
+
+  it('says nothing without a parsable source', () => {
+    expect(repositorySlug({ configuration: null })).toBeUndefined();
+    expect(repositorySlug(withUrl('not a url'))).toBeUndefined();
   });
 });
