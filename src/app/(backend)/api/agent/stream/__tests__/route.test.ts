@@ -141,6 +141,68 @@ describe('/api/agent/stream route', () => {
       expect(mockStreamEventManager.getStreamHistory).not.toHaveBeenCalled();
     });
 
+    it('should return the stream when an API key reads its own workspace operation', async () => {
+      mockCreateLambdaContext.mockResolvedValue({
+        apiKeyScopes: null,
+        userId: OWNER_USER_ID,
+        workspaceId: 'workspace-1',
+      });
+      mockAgentStateManager.getOperationMetadata.mockResolvedValue({
+        userId: OWNER_USER_ID,
+        workspaceId: 'workspace-1',
+      });
+
+      const request = new NextRequest(
+        'https://test.com/api/agent/stream?operationId=test-operation',
+      );
+      const response = await GET(request);
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get('Content-Type')).toBe('text/event-stream');
+    });
+
+    it('should return the stream when a personal API key reads a personal operation', async () => {
+      mockCreateLambdaContext.mockResolvedValue({
+        apiKeyScopes: null,
+        userId: OWNER_USER_ID,
+        workspaceId: null,
+      });
+      mockAgentStateManager.getOperationMetadata.mockResolvedValue({
+        userId: OWNER_USER_ID,
+        workspaceId: null,
+      });
+
+      const request = new NextRequest(
+        'https://test.com/api/agent/stream?operationId=test-operation',
+      );
+      const response = await GET(request);
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get('Content-Type')).toBe('text/event-stream');
+    });
+
+    it('should return 404 when a personal API key reads a workspace operation', async () => {
+      mockCreateLambdaContext.mockResolvedValue({
+        apiKeyScopes: null,
+        userId: OWNER_USER_ID,
+        workspaceId: null,
+      });
+      mockAgentStateManager.getOperationMetadata.mockResolvedValue({
+        userId: OWNER_USER_ID,
+        workspaceId: 'workspace-1',
+      });
+
+      const request = new NextRequest(
+        'https://test.com/api/agent/stream?operationId=test-operation',
+      );
+      const response = await GET(request);
+
+      expect(response.status).toBe(404);
+      const data = await response.json();
+      expect(data.error).toBe('operation_not_found');
+      expect(mockStreamEventManager.getStreamHistory).not.toHaveBeenCalled();
+    });
+
     it('should return 404 for a share-visitor operation even when the caller is the visitor', async () => {
       mockCreateLambdaContext.mockResolvedValue({ userId: 'visitor-user' });
       mockAgentStateManager.getOperationMetadata.mockResolvedValue({
