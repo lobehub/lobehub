@@ -37,7 +37,7 @@ import {
   moveConversationTo,
 } from './conversation';
 import { decideFailedTurn } from './failedTurn';
-import { budgetBlocked, managerUsage, reviewFeedback } from './planningInputs';
+import { budgetBlocked, managerUsage, reviewFeedback, verifiedTasks } from './planningInputs';
 import type { GoalPlan } from './planSchema';
 import { submitPlan } from './submit';
 import {
@@ -619,6 +619,7 @@ export class GoalManagerService {
       // dated before a turn that did not see it; at worst it is shown as new twice.
       const startedAt = new Date().toISOString();
       const reviews = await reviewFeedback(this.ctx, current, db);
+      const verified = await verifiedTasks(this.ctx, current, db);
       const next: GoalManagerState = {
         ...(problem
           ? {
@@ -660,6 +661,7 @@ export class GoalManagerService {
         modelOverride: goalModelOverride(fresh.config),
         earlierFeedback: listed.filter((n) => !isNew(n)).map(note),
         newFeedback: listed.filter(isNew).map(note),
+        verifiedTasks: verified,
         omittedFeedback: {
           earlier: omitted.filter((n) => !isNew(n)).length,
           new: omitted.filter(isNew).length,
@@ -695,6 +697,7 @@ export class GoalManagerService {
           newFeedback: claimed.newFeedback,
           omittedFeedback: claimed.omittedFeedback,
           earlierFeedback: claimed.earlierFeedback,
+          verifiedTasks: claimed.verifiedTasks,
           problem: problem?.reason,
           problemKind: problem?.kind,
           continuation:
