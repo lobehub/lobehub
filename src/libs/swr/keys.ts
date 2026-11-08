@@ -47,6 +47,10 @@ export const channelKeys = {
     (channelId: string, memberId: string) =>
       ['channel:agentEnvironment', channelId, memberId] as const,
   ),
+  wakeConfig: def(
+    'channel:wakeConfig',
+    (channelId: string) => ['channel:wakeConfig', channelId] as const,
+  ),
   userCandidates: def(
     'channel:userCandidates',
     (channelId: string | undefined, search: string) =>

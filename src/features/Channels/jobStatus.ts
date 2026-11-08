@@ -10,6 +10,12 @@ export const channelJobStatus = (job: ChannelReplyJob) =>
         : 'status.preparing'
       : (`status.${job.status}` as const);
 
+/** On a member's own row, a running reply is described by what the Agent is doing. */
+export const memberJobStatus = (job: ChannelReplyJob) => {
+  const status = channelJobStatus(job);
+  return status === 'status.running' ? ('status.working' as const) : status;
+};
+
 /** Colour family of a status: working blue, attention amber, error red, settled grey. */
 export type ChannelStatusTone = 'attention' | 'done' | 'error' | 'quiet' | 'working';
 

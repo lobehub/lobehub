@@ -2,12 +2,13 @@ import { CHANNEL_URL } from '@lobechat/const';
 import type { ChannelDetail } from '@lobechat/types';
 import { ActionIcon, Button, DropdownMenu, Flexbox, Popover, Text } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
-import { Bot, FolderCog, MoreHorizontal, UserPlus, Users } from 'lucide-react';
+import { Bot, FolderCog, MoreHorizontal, Settings, UserPlus, Users } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useCloseOnNavigate } from '@/hooks/useCloseOnNavigate';
+import { sx } from '@/styles/sx';
 
 import { openChannelAgentEnvironment } from './AgentEnvironment';
 import { canInviteMembers } from './channelAccess';
@@ -20,8 +21,11 @@ import { useChannelMenu } from './useChannelMenu';
 /** Header avatars before the rest fold into a count; the list shows everyone. */
 const MAX_VISIBLE = 5;
 
-/** Channel actions a direct conversation keeps; renaming would drift from the Agent's name. */
-const DIRECT_MENU_KEYS = new Set(['copyId', 'archive', 'unarchive', 'delete']);
+/**
+ * Channel actions a direct conversation keeps. It is the chat with one Agent, so it cannot be
+ * renamed, archived or trashed; `unarchive` only frees one that was archived earlier.
+ */
+const DIRECT_MENU_KEYS = new Set(['copyId', 'unarchive']);
 
 /**
  * Members as avatars with live status dots. One click lists everyone by name, because
@@ -74,9 +78,26 @@ export function MemberStatus({
           { type: 'divider' as const },
         ]
       : []),
+    // Keyed items only: the menu's own dividers separate actions a direct conversation does not have.
     ...channelMenu(channel).filter(
-      (item) => !('key' in item) || DIRECT_MENU_KEYS.has(String(item.key)),
+      (item) => 'key' in item && DIRECT_MENU_KEYS.has(String(item.key)),
     ),
+  ];
+
+  // Managing a group lives on its settings page; deleting it is not one click from the header.
+  const groupMenu = () => [
+    ...channelMenu(channel).filter((item) => 'key' in item && item.key === 'copyId'),
+    ...(channel.canDelete
+      ? [
+          { type: 'divider' as const },
+          {
+            icon: Settings,
+            key: 'settings',
+            label: t('settings.title'),
+            onClick: () => navigate(`${CHANNEL_URL(channel.id, null, channel.projectId)}/settings`),
+          },
+        ]
+      : []),
   ];
 
   return (
@@ -115,9 +136,17 @@ export function MemberStatus({
             type="text"
             {...stylex.props(statusStyles.memberButton)}
           >
-            {entries.slice(0, MAX_VISIBLE).map((entry) => (
-              <StatusAvatar entry={entry} key={entry.member.id} size={24} />
-            ))}
+            <span {...stylex.props(statusStyles.memberStack)}>
+              {entries.slice(0, MAX_VISIBLE).map((entry, index) => (
+                // Earlier avatars sit on top, or each one would cover the previous status dot.
+                <span
+                  key={entry.member.id}
+                  {...sx(statusStyles.memberStackItem, { zIndex: MAX_VISIBLE - index })}
+                >
+                  <StatusAvatar entry={entry} size={20} />
+                </span>
+              ))}
+            </span>
             {overflow > 0 && <span {...stylex.props(styles.muted)}>+{overflow}</span>}
           </Button>
         </Popover>
@@ -144,16 +173,14 @@ export function MemberStatus({
           }
         />
       )}
-      {direct && (
-        <DropdownMenu items={directMenu()}>
-          <ActionIcon
-            aria-label={t('more', { ns: 'common' })}
-            icon={MoreHorizontal}
-            size="small"
-            title={t('more', { ns: 'common' })}
-          />
-        </DropdownMenu>
-      )}
+      <DropdownMenu items={direct ? directMenu() : groupMenu()}>
+        <ActionIcon
+          aria-label={t('more', { ns: 'common' })}
+          icon={MoreHorizontal}
+          size="small"
+          title={t('more', { ns: 'common' })}
+        />
+      </DropdownMenu>
     </Flexbox>
   );
 }

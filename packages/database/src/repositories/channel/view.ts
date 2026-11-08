@@ -99,7 +99,10 @@ export const readChannelView = async (
         actorType: channelMembers.actorType,
         agentId: channelMembers.agentId,
         avatar: agents.avatar,
-        description: channelMembers.description,
+        // The same fallback routing uses: a Channel-specific description, else the Agent's own.
+        description: sql<
+          string | null
+        >`coalesce(nullif(${channelMembers.description}, ''), ${agents.description})`,
         id: channelMembers.id,
         name: channelMembers.name,
         role: channelMembers.role,

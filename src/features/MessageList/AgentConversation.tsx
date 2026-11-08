@@ -21,14 +21,13 @@ import { type Conversation } from './conversations';
 import { AVATAR_SIZE } from './style';
 import { useAgentConversationLink } from './useAgentConversationLink';
 
-/** The direct Channel's own conversation actions, next to the Agent's own menu. */
-const CONVERSATION_ACTION_KEYS = new Set(['archive', 'unarchive', 'delete']);
+/** The direct Channel's own conversation action, next to the Agent's own menu. */
+const CONVERSATION_ACTION_KEYS = new Set(['unarchive']);
 
 /**
- * A row that opens a direct Channel *is* that conversation, so the Channel's archive and
- * trash actions belong on the row: without them, archiving or trashing the conversation
- * means opening it first, and the Agent's Delete removes the Agent instead. Keys are
- * prefixed so they cannot collide with the Agent's own `delete`.
+ * A direct Channel is the chat with one Agent, so it cannot be archived or trashed. The row only
+ * frees one that was archived earlier. Keys are prefixed so they cannot collide with the Agent's
+ * own menu.
  */
 const conversationActions = (menu: DropdownItem[]): DropdownItem[] =>
   menu.flatMap((item) => {

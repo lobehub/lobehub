@@ -7,10 +7,18 @@ import {
   directAvatarState,
   directReplyStatus,
   memberCurrentJob,
+  memberJobStatus,
   replyActivityJobs,
   replyAvatarState,
   unresolvedFailures,
 } from './jobStatus';
+
+describe('memberJobStatus', () => {
+  it('words a running reply as work and leaves other statuses alone', () => {
+    expect(memberJobStatus({ status: 'running' } as never)).toBe('status.working');
+    expect(memberJobStatus({ status: 'queued' } as never)).toBe('status.preparing');
+  });
+});
 
 describe('Channel task status', () => {
   const job = (patch: Partial<ChannelPublicJob>) =>
