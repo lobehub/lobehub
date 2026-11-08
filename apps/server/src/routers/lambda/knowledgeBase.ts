@@ -397,7 +397,14 @@ export const knowledgeBaseRouter = router({
     );
     if (!enableAgentKnowledgeSpace) return [];
 
-    return new AgentSpaceRepository(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined).list();
+    const spaces = await new AgentSpaceRepository(
+      ctx.serverDB,
+      ctx.userId,
+      ctx.workspaceId ?? undefined,
+    ).list();
+
+    // Same rule as the library list: a card must open for whoever can see it.
+    return filterRestrictedKnowledgeBases(ctx, spaces);
   }),
 
   removeKnowledgeBase: knowledgeBaseProcedure

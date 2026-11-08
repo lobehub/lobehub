@@ -15,6 +15,7 @@ const routerMocks = vi.hoisted(() => ({
   assertKnowledgeBaseBrowsable: vi.fn(),
   assertCanPerformResourceAction: vi.fn(),
   businessFileTransferStorageCheck: vi.fn(),
+  filterRestrictedKnowledgeBases: vi.fn(async (_ctx: unknown, items: unknown) => items),
   hasWorkspaceScopedPermission: vi.fn(),
 }));
 
@@ -59,7 +60,7 @@ vi.mock('@/server/routers/lambda/_helpers/knowledgeBaseAccess', () => ({
   assertContentsNotInRestrictedKnowledgeBase:
     routerMocks.assertContentsNotInRestrictedKnowledgeBase,
   assertKnowledgeBaseBrowsable: routerMocks.assertKnowledgeBaseBrowsable,
-  filterRestrictedKnowledgeBases: vi.fn(async (_ctx, items) => items),
+  filterRestrictedKnowledgeBases: routerMocks.filterRestrictedKnowledgeBases,
   getUseLevelKnowledgeBaseIds: vi.fn().mockResolvedValue([]),
 }));
 
@@ -273,6 +274,16 @@ describe('knowledgeBaseRouter', () => {
     it('lists agent spaces once the flag is on', async () => {
       agentSpaceMocks.flags.mockResolvedValue({ enableAgentKnowledgeSpace: true });
       agentSpaceMocks.list.mockResolvedValue([{ id: 'kb-agent' }]);
+
+      await expect(caller.getAgentSpaces()).resolves.toEqual([{ id: 'kb-agent' }]);
+    });
+
+    it('drops spaces the caller is restricted from browsing', async () => {
+      agentSpaceMocks.flags.mockResolvedValue({ enableAgentKnowledgeSpace: true });
+      agentSpaceMocks.list.mockResolvedValue([{ id: 'kb-agent' }, { id: 'kb-restricted' }]);
+      routerMocks.filterRestrictedKnowledgeBases.mockImplementationOnce(async (_ctx, items) =>
+        (items as { id: string }[]).filter((item) => item.id !== 'kb-restricted'),
+      );
 
       await expect(caller.getAgentSpaces()).resolves.toEqual([{ id: 'kb-agent' }]);
     });
