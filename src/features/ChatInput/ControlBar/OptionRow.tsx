@@ -3,7 +3,7 @@
 import { Flexbox, Icon } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { CheckIcon } from 'lucide-react';
+import { CheckIcon, ChevronRightIcon } from 'lucide-react';
 import { memo, type ReactNode } from 'react';
 
 /**
@@ -55,6 +55,7 @@ const styles = stylex.create({
     backgroundColor: { 'default': null, ':hover': 'transparent' },
     backgroundImage: { 'default': null, ':hover': 'none' },
   },
+  optionCompact: { gap: '8px', paddingBlock: '6px' },
   /* Dims the row's own content rather than the row. Its trailing action is the
      way OUT of that state — dimming it would read as "also unavailable" — and
      opacity on the row cannot be undone by a child, so the action is left out
@@ -74,6 +75,12 @@ const styles = stylex.create({
     color: cssVar.colorText,
     backgroundColor: cssVar.colorBgElevated,
     backgroundImage: 'none',
+  },
+  optionIconCompact: {
+    width: '16px',
+    height: '16px',
+    borderStyle: 'none',
+    backgroundColor: 'transparent',
   },
   optionMeta: {
     display: 'flex',
@@ -105,6 +112,10 @@ const styles = stylex.create({
 
 export interface OptionRowProps {
   active?: boolean;
+  /** The row opens a second level, so it ends in an arrow instead of a check. */
+  arrow?: boolean;
+  /** A dense row for long lists: no icon frame, so its icon lines up with the menu's text. */
+  compact?: boolean;
   desc?: ReactNode;
   disabled?: boolean;
   /** Trailing action, kept live while the row itself is disabled. */
@@ -121,20 +132,29 @@ export interface OptionRowProps {
 }
 
 const OptionRow = memo<OptionRowProps>(
-  ({ active, desc, disabled, extra, icon, label, onClick, tag, tags, xstyle }) => (
+  ({ active, arrow, compact, desc, disabled, extra, icon, label, onClick, tag, tags, xstyle }) => (
     <div
       onClick={() => {
         if (!disabled) onClick();
       }}
       {...stylex.props(
         styles.option,
+        compact && styles.optionCompact,
         active && styles.optionActive,
         disabled && styles.optionDisabled,
         active && disabled && styles.optionActiveDisabled,
         xstyle,
       )}
     >
-      <div {...stylex.props(styles.optionIcon, disabled && styles.dimmed)}>{icon}</div>
+      <div
+        {...stylex.props(
+          styles.optionIcon,
+          compact && styles.optionIconCompact,
+          disabled && styles.dimmed,
+        )}
+      >
+        {icon}
+      </div>
       <div {...stylex.props(styles.optionMeta, disabled && styles.dimmed)}>
         <Flexbox horizontal align={'center'} gap={6}>
           <span {...stylex.props(styles.optionTitle)}>{label}</span>
@@ -158,7 +178,8 @@ const OptionRow = memo<OptionRowProps>(
           {extra}
         </div>
       ) : null}
-      {active ? (
+      {arrow ? <Icon icon={ChevronRightIcon} size={14} /> : null}
+      {active && !arrow ? (
         <Icon
           className={stylex.props(styles.check, disabled && styles.dimmed).className}
           icon={CheckIcon}

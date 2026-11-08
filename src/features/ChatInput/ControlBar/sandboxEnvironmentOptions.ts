@@ -41,3 +41,30 @@ export const environmentChipState = ({
 
   return failed ? { kind: 'loadFailed' } : { kind: 'loading' };
 };
+
+/** Where a repository's clone is kept on the drive, one folder per repository. */
+export const repositoryFolder = (name: string) => {
+  const folder = name
+    .trim()
+    .replaceAll(/[^\p{L}\p{N}._-]+/gu, '-')
+    .replace(/^[.-]+/, '');
+
+  return `repos/${folder || 'repository'}`;
+};
+
+/**
+ * The selection a picked repository makes. A repository is only cloned into an
+ * empty folder, so it never inherits the folder the conversation was on: it
+ * starts in a temporary sandbox, or in its own folder when the clone is kept.
+ */
+export const repositorySelection = (
+  environment: { id: string; name: string },
+  { keep, workspaceId }: { keep: boolean; workspaceId?: string | null },
+) =>
+  keep
+    ? {
+        drive: workspaceId ? ('personal' as const) : undefined,
+        environmentId: environment.id,
+        workingDirectory: repositoryFolder(environment.name),
+      }
+    : { environmentId: environment.id };
