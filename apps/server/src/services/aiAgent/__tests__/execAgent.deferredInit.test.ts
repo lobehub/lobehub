@@ -21,9 +21,11 @@ const {
   mockFindShareById,
   mockQueryTree,
   mockAppEnv,
+  mockFeatureFlags,
   mockTopicFindById,
 } = vi.hoisted(() => ({
   mockAppEnv: {} as Record<string, unknown>,
+  mockFeatureFlags: vi.fn(),
   mockCreateOperation: vi.fn(),
   mockFindShareById: vi.fn(),
   mockQueryTree: vi.fn(),
@@ -42,6 +44,10 @@ vi.mock('@/envs/app', async (importOriginal) => {
     }),
   };
 });
+
+vi.mock('@/server/featureFlags', () => ({
+  getServerFeatureFlagsStateFromRuntimeConfig: mockFeatureFlags,
+}));
 
 vi.mock('@/database/models/agentShare', () => ({
   AgentShareModel: {
@@ -244,6 +250,7 @@ describe('AiAgentService.runDeferredInit - parity with the send path', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     rows.clear();
+    mockFeatureFlags.mockResolvedValue({});
     let nextId = 0;
     mockMessageCreate.mockImplementation(async (params: any, id?: string) => {
       const row = { ...params, id: id ?? `msg-${++nextId}` };
@@ -357,12 +364,11 @@ describe('AiAgentService.runDeferredInit - parity with the send path', () => {
 
   describe('a send inside the rollout', () => {
     beforeEach(() => {
-      mockAppEnv.AGENT_RUNTIME_DEFERRED_INIT = userId;
+      mockFeatureFlags.mockResolvedValue({ enableDeferredInit: true });
       mockAppEnv.enableQueueAgentRuntime = true;
     });
 
     afterEach(() => {
-      delete mockAppEnv.AGENT_RUNTIME_DEFERRED_INIT;
       delete mockAppEnv.enableQueueAgentRuntime;
     });
 

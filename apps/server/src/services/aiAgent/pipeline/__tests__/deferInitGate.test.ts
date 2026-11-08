@@ -1,26 +1,7 @@
 import { RequestTrigger } from '@lobechat/types';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import {
-  type DeferInitInput,
-  isDeferredInitRolledOut,
-  shouldDeferOperationInit,
-} from '../deferInitGate';
-
-describe('isDeferredInitRolledOut', () => {
-  it.each([undefined, '', '  '])('is off when the setting is %j', (setting) => {
-    expect(isDeferredInitRolledOut(setting, 'user-1')).toBe(false);
-  });
-
-  it('covers everyone with *', () => {
-    expect(isDeferredInitRolledOut('*', 'user-1')).toBe(true);
-  });
-
-  it('matches whole ids in a comma-separated list', () => {
-    expect(isDeferredInitRolledOut('user-2, user-1', 'user-1')).toBe(true);
-    expect(isDeferredInitRolledOut('user-10', 'user-1')).toBe(false);
-  });
-});
+import { type DeferInitInput, shouldDeferOperationInit } from '../deferInitGate';
 
 describe('shouldDeferOperationInit', () => {
   const plainSend: DeferInitInput = {
@@ -28,22 +9,34 @@ describe('shouldDeferOperationInit', () => {
     hasOrchestration: false,
     queueRuntimeEnabled: true,
     request: { runAttachments: {} } as DeferInitInput['request'],
-    rolledOut: true,
     trigger: RequestTrigger.Chat,
   };
 
-  it('defers a plain chat send', () => {
-    expect(shouldDeferOperationInit(plainSend)).toBe(true);
+  const flagOn = async () => true;
+
+  it('defers a plain chat send once the flag is on', async () => {
+    await expect(shouldDeferOperationInit(plainSend, flagOn)).resolves.toBe(true);
+  });
+
+  it('keeps the init synchronous while the flag is off', async () => {
+    await expect(shouldDeferOperationInit(plainSend, async () => false)).resolves.toBe(false);
+  });
+
+  it('does not read the flag for a run that could never defer', async () => {
+    const isEnabled = vi.fn(flagOn);
+    await shouldDeferOperationInit({ ...plainSend, autoStart: false }, isEnabled);
+    expect(isEnabled).not.toHaveBeenCalled();
   });
 
   it.each<[string, Partial<DeferInitInput>]>([
-    ['outside the rollout', { rolledOut: false }],
     ['no queue runtime', { queueRuntimeEnabled: false }],
     ['no auto-start', { autoStart: false }],
     ['an orchestrated run', { hasOrchestration: true }],
     ['a non-chat trigger', { trigger: 'cron' }],
-  ])('keeps the init synchronous for %s', (_, override) => {
-    expect(shouldDeferOperationInit({ ...plainSend, ...override })).toBe(false);
+  ])('keeps the init synchronous for %s', async (_, override) => {
+    await expect(shouldDeferOperationInit({ ...plainSend, ...override }, flagOn)).resolves.toBe(
+      false,
+    );
   });
 
   it.each([
@@ -54,12 +47,15 @@ describe('shouldDeferOperationInit', () => {
     ['a tool result', { resumeToolResult: {} }],
     ['a fixed device', { isFixedDeviceTarget: true }],
     ['a required device', { requireDevice: true }],
-  ])('keeps the init synchronous for %s', (_, request) => {
-    expect(
-      shouldDeferOperationInit({
-        ...plainSend,
-        request: { ...plainSend.request, ...request } as DeferInitInput['request'],
-      }),
-    ).toBe(false);
+  ])('keeps the init synchronous for %s', async (_, request) => {
+    await expect(
+      shouldDeferOperationInit(
+        {
+          ...plainSend,
+          request: { ...plainSend.request, ...request } as DeferInitInput['request'],
+        },
+        flagOn,
+      ),
+    ).resolves.toBe(false);
   });
 });

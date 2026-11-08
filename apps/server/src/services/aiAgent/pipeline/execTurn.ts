@@ -31,7 +31,7 @@ import { assertAgentRelayHop } from '../sourceAttribution';
 import type { ExecRunContext, InternalExecAgentParams } from '../types';
 import type { ApprovalClaimState } from './approvalResume';
 import { claimApprovalResume, tryReuseInterventionContinuation } from './approvalResume';
-import { isDeferredInitRolledOut, shouldDeferOperationInit } from './deferInitGate';
+import { isDeferredInitEnabled, shouldDeferOperationInit } from './deferInitGate';
 import { dispatchHeteroAgent } from './heteroDispatch';
 import {
   buildOperationInitRequest,
@@ -657,29 +657,31 @@ export const execAgentTurn = async (
   });
 
   // A plain chat send returns here and leaves the init to the step-0 worker.
-  const deferInit = shouldDeferOperationInit({
-    autoStart,
-    hasOrchestration: !!(
-      appContext?.agentSignal ||
-      appContext?.groupId ||
-      appContext?.isSubAgent ||
-      botContext ||
-      botPlatformContext ||
-      continuationOperationId ||
-      discordContext ||
-      evalContext ||
-      evalRuntime ||
-      params.llmExecutor ||
-      params.reservedOperationId ||
-      params.topicStartOwnerOperationId ||
-      parentOperationId ||
-      shareGate
-    ),
-    queueRuntimeEnabled: appEnv.enableQueueAgentRuntime === true,
-    request: initRequest,
-    rolledOut: isDeferredInitRolledOut(appEnv.AGENT_RUNTIME_DEFERRED_INIT, deps.userId),
-    trigger,
-  });
+  const deferInit = await shouldDeferOperationInit(
+    {
+      autoStart,
+      hasOrchestration: !!(
+        appContext?.agentSignal ||
+        appContext?.groupId ||
+        appContext?.isSubAgent ||
+        botContext ||
+        botPlatformContext ||
+        continuationOperationId ||
+        discordContext ||
+        evalContext ||
+        evalRuntime ||
+        params.llmExecutor ||
+        params.reservedOperationId ||
+        params.topicStartOwnerOperationId ||
+        parentOperationId ||
+        shareGate
+      ),
+      queueRuntimeEnabled: appEnv.enableQueueAgentRuntime === true,
+      request: initRequest,
+      trigger,
+    },
+    () => isDeferredInitEnabled(deps.userId),
+  );
   const init: StartOperationInit = deferInit
     ? { pendingRequest: toPersistedInitRequest(initRequest) }
     : await traceSendStage('operation_init', () =>

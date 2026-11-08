@@ -1,15 +1,12 @@
 import type { AgentRunInitRequest } from '@lobechat/types';
 import { RequestTrigger } from '@lobechat/types';
 
-/** Whether this user is inside the deferred-init rollout (see `AGENT_RUNTIME_DEFERRED_INIT`). */
-export const isDeferredInitRolledOut = (setting: string | undefined, userId: string): boolean => {
-  const value = setting?.trim();
-  if (!value) return false;
-  if (value === '*') return true;
-  return value
-    .split(',')
-    .map((id) => id.trim())
-    .includes(userId);
+import { getServerFeatureFlagsStateFromRuntimeConfig } from '@/server/featureFlags';
+
+/** A flag that cannot be read keeps the send on the synchronous init. */
+export const isDeferredInitEnabled = async (userId: string): Promise<boolean> => {
+  const flags = await getServerFeatureFlagsStateFromRuntimeConfig(userId).catch(() => undefined);
+  return flags?.enableDeferredInit === true;
 };
 
 export interface DeferInitInput {
@@ -19,7 +16,6 @@ export interface DeferInitInput {
   hasOrchestration: boolean;
   queueRuntimeEnabled: boolean;
   request: AgentRunInitRequest;
-  rolledOut: boolean;
   trigger?: string;
 }
 
@@ -30,16 +26,13 @@ export interface DeferInitInput {
  * resume dispatches against a prepared state, a fixed or required device has to
  * fail synchronously rather than after the caller was told the message was
  * sent, and an inline runtime has no step-0 worker to hand the init to.
+ *
+ * The flag is read last, so runs that could never defer pay no read for it.
  */
-export const shouldDeferOperationInit = ({
-  autoStart,
-  hasOrchestration,
-  queueRuntimeEnabled,
-  request,
-  rolledOut,
-  trigger,
-}: DeferInitInput): boolean =>
-  rolledOut &&
+export const shouldDeferOperationInit = async (
+  { autoStart, hasOrchestration, queueRuntimeEnabled, request, trigger }: DeferInitInput,
+  isEnabled: () => Promise<boolean>,
+): Promise<boolean> =>
   queueRuntimeEnabled &&
   autoStart &&
   !hasOrchestration &&
@@ -50,4 +43,5 @@ export const shouldDeferOperationInit = ({
   !request.resumeFromHistory &&
   !request.resumeToolResult &&
   !request.isFixedDeviceTarget &&
-  !request.requireDevice;
+  !request.requireDevice &&
+  (await isEnabled());
