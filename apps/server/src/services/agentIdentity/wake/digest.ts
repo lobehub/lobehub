@@ -132,7 +132,8 @@ export type DigestFlushResult =
  * A flush may arrive more than once; the claim on each item makes a second one find nothing. A run
  * that fails to start gives its items back, books the next window's flush and throws, so QStash
  * retries this one and, should every retry fail, the next window tries again instead of the
- * messages waiting for an unrelated delivery.
+ * messages waiting for an unrelated delivery. A full batch whose follow-up booking fails throws
+ * too: the batch itself is done, and the retry finishes the leftover mail.
  */
 export const runDigestFlush = async (
   db: LobeChatDatabase,
@@ -190,10 +191,17 @@ export const runDigestFlush = async (
     );
   }
 
+  // A full batch means mail is still waiting, and only this booking would come for it: nobody
+  // writes to the account again just to book one. Fail the flush rather than acknowledge it, so
+  // QStash retries — the batch above is already stamped, so the retry takes the leftover mail,
+  // runs it and books its own follow-up instead of leaving it unread.
   if (ids.length === DIGEST_BATCH_LIMIT) {
-    await scheduleDigestFlush(account.id, Date.now() + DIGEST_FOLLOW_UP_MS).catch((error) =>
-      console.error('[mailDigest] booking the follow-up flush for %s failed:', account.id, error),
-    );
+    try {
+      await scheduleDigestFlush(account.id, Date.now() + DIGEST_FOLLOW_UP_MS);
+    } catch (error) {
+      console.error('[mailDigest] booking the follow-up flush for %s failed:', account.id, error);
+      throw error instanceof Error ? error : new Error(String(error));
+    }
   }
 
   log('started a digest run for %d message(s) of account %s', ids.length, account.id);

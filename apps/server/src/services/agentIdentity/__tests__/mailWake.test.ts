@@ -63,13 +63,17 @@ vi.mock('@/server/services/aiAgent', () => ({
   },
 }));
 
-const queue = vi.hoisted(() => ({ local: false, scheduled: [] as any[] }));
+const queue = vi.hoisted(() => ({ failNext: 0, local: false, scheduled: [] as any[] }));
 vi.mock('@/server/services/queue', () => ({
   QueueService: class {
     isLocalExecution() {
       return queue.local;
     }
     async scheduleMessage(message: any) {
+      if (queue.failNext > 0) {
+        queue.failNext -= 1;
+        throw new Error('queue unavailable');
+      }
       queue.scheduled.push(message);
       return `msg_${queue.scheduled.length}`;
     }
@@ -189,6 +193,7 @@ beforeEach(async () => {
   runs.length = 0;
   runFailure.next = undefined;
   queue.local = false;
+  queue.failNext = 0;
   queue.scheduled.length = 0;
   qstash.valid = true;
   mails.clear();
@@ -614,6 +619,33 @@ describe('mail digest flush — a full batch', () => {
     expect(followUp.delay).toBeLessThanOrEqual(60_000);
 
     await flush(followUp.payload);
+    expect(runs).toHaveLength(2);
+    expect(runs[1].params.prompt).toContain('1 message arrived');
+  });
+
+  it('fails the flush so QStash retries the leftover when the follow-up cannot be booked', async () => {
+    const { DIGEST_BATCH_LIMIT } = await import('../wake/digest');
+    await setWake({ mode: 'on' });
+    for (let i = 0; i <= DIGEST_BATCH_LIMIT; i++) {
+      await deliver(`m_stuck_${i}`, {
+        from: `sender${i}@example.org`,
+        messageId: `<stuck-${i}@example.org>`,
+        subject: `Stuck ${i}`,
+      });
+    }
+    const [window] = queue.scheduled;
+    queue.failNext = 1;
+
+    const failed = await flush(window.payload);
+
+    // Acknowledging the flush here would leave the rest unread until someone writes again, so the
+    // flush reports the failure instead; the batch it did run keeps its messages.
+    expect(failed.status).toBe(500);
+    expect(runs).toHaveLength(1);
+    expect((await inboxRows()).filter((row) => row.readAt === null)).toHaveLength(1);
+
+    const retried = await flush(window.payload);
+    expect(retried.status).toBe(200);
     expect(runs).toHaveLength(2);
     expect(runs[1].params.prompt).toContain('1 message arrived');
   });
