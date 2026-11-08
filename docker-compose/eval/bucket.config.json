@@ -9,23 +9,8 @@
       },
       "Action": ["s3:GetObject"],
       "NotAction": [],
-      "Resource": ["arn:aws:s3:::lobe/*"],
-      "NotResource": [],
+      "NotResource": ["arn:aws:s3:::lobe/llm-generation-tracing/*"],
       "Condition": {}
-    },
-    {
-      "Sid": "KeepLLMGenerationTracingPrivate",
-      "Effect": "Deny",
-      "Principal": {
-        "AWS": ["*"]
-      },
-      "Action": ["s3:GetObject"],
-      "Resource": ["arn:aws:s3:::lobe/llm-generation-tracing/*"],
-      "Condition": {
-        "StringEquals": {
-          "aws:PrincipalType": "Anonymous"
-        }
-      }
     }
   ],
   "Version": "2012-10-17"

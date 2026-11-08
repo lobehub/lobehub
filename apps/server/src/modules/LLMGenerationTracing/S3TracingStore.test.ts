@@ -1,4 +1,6 @@
 // @vitest-environment node
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { promisify } from 'node:util';
 import { zstdCompress, zstdDecompress } from 'node:zlib';
 
@@ -96,5 +98,29 @@ describe('S3TracingStore.get', () => {
     const store = new S3TracingStore();
     getFileByteArray.mockRejectedValueOnce(new Error('NoSuchKey'));
     expect(await store.get('missing')).toBeNull();
+  });
+});
+
+describe('bundled RustFS bucket policies', () => {
+  const tracingKey = buildTracingKey(samplePayload());
+
+  it.each(['deploy', 'dev', 'eval'])('keeps %s tracing objects off the public grant', (stack) => {
+    const { Statement } = JSON.parse(
+      readFileSync(
+        path.resolve(
+          import.meta.dirname,
+          `../../../../../docker-compose/${stack}/bucket.config.json`,
+        ),
+        'utf8',
+      ),
+    );
+
+    expect(Statement).toHaveLength(1);
+    expect(Statement[0].Effect).toBe('Allow');
+    // A blanket Deny also blocks the server's signed reads, and RustFS rejects
+    // the whole policy when it is scoped with `aws:PrincipalType`.
+    expect(Statement[0].Condition).toEqual({});
+    expect(Statement[0].Resource).toBeUndefined();
+    expect(Statement[0].NotResource).toEqual([`arn:aws:s3:::lobe/${tracingKey.split('/')[0]}/*`]);
   });
 });
