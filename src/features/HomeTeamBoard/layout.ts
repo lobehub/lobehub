@@ -9,10 +9,9 @@ import type {
 export const MIN_BAR_PERCENT = 0.8;
 /** Past this an agent stops growing; the rest are counted. */
 export const MAX_TOPIC_ROWS = 5;
-/** The window fills the first 4/5 of the axis; the rest is room for what comes next. */
-const FUTURE_RATIO = 1 / 4;
-const TICKS_PER_PAST = 4;
-const TICK_COUNT = 5;
+/** The window fills the first 90% of the axis; the rest is room for what comes next. */
+const FUTURE_RATIO = 1 / 9;
+const TICKS_PER_PAST = 3;
 /** A title starting past this would run out of room, so it hangs left of its bar's end. */
 const LABEL_FLIP_PERCENT = 55;
 /** Which of the axis ticks is the present. */
@@ -51,7 +50,7 @@ export interface LaneLayout {
   rows: TopicRow[];
 }
 
-/** The present sits at 4/5 of the axis, leaving the rest for time still to come. */
+/** The present sits at 90% of the axis, leaving the rest for time still to come. */
 export const resolveAxisEnd = (windowStart: Date, now: Date) =>
   new Date(now.getTime() + (now.getTime() - windowStart.getTime()) * FUTURE_RATIO);
 
@@ -182,15 +181,19 @@ export const buildHourCells = (lanes: AgentRunBoardLane[], now: Date): HourCell[
   return cells;
 };
 
-/** Evenly spaced times along the axis, with the present at {@link NOW_TICK_INDEX}. */
+/** Where a time falls along the axis, as a percentage. */
+export const axisPercent = (time: Date, windowStart: Date, now: Date) =>
+  toPercent(time.getTime(), windowStart.getTime(), resolveAxisEnd(windowStart, now).getTime());
+
+/** Evenly spaced times up to the present, which is {@link NOW_TICK_INDEX}. */
 export const buildAxisTicks = (windowStart: Date, now: Date): Date[] => {
   const start = windowStart.getTime();
   const step = (now.getTime() - start) / TICKS_PER_PAST;
 
-  return Array.from({ length: TICK_COUNT + 1 }, (_, i) => new Date(start + step * i));
+  return Array.from({ length: TICKS_PER_PAST + 1 }, (_, i) => new Date(start + step * i));
 };
 
-/** Empty slices after the present, so the chart shares the timeline's 4/5 axis. */
+/** Empty slices after the present, so the chart ends about where the timeline's present sits. */
 export const extendActivityWithFuture = (
   activity: AgentRunBoardActivityBucket[],
 ): AgentRunBoardActivityBucket[] => {

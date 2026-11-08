@@ -6,6 +6,7 @@ import {
   agentInterventions,
   agentOperations,
   agents,
+  messages,
   tasks,
   taskTopics,
   topics,
@@ -208,9 +209,37 @@ describe('AgentRunBoardModel.listRuns', () => {
 
     expect(row.interventions).toHaveLength(1);
     expect(row.interventions[0]).toMatchObject({
-      canonicalToolKey: 'stripe.refund',
       status: 'pending',
       userId: teammate,
     });
+  });
+});
+
+describe('AgentRunBoardModel.listTopicIdsWithUserMessages', () => {
+  it('finds topics where the member wrote, ignoring assistant turns and other members', async () => {
+    await serverDB.insert(topics).values([
+      { id: 't-wrote', userId: teammate, workspaceId },
+      { id: 't-assistant', userId: teammate, workspaceId },
+      { id: 't-other', userId: teammate, workspaceId },
+    ]);
+    await serverDB.insert(messages).values([
+      { content: 'hi', id: 'm1', role: 'user', topicId: 't-wrote', userId: owner, workspaceId },
+      {
+        content: 'ok',
+        id: 'm2',
+        role: 'assistant',
+        topicId: 't-assistant',
+        userId: owner,
+        workspaceId,
+      },
+      { content: 'x', id: 'm3', role: 'user', topicId: 't-other', userId: teammate, workspaceId },
+    ]);
+
+    const model = new AgentRunBoardModel(serverDB, workspaceId);
+
+    expect(
+      await model.listTopicIdsWithUserMessages(['t-wrote', 't-assistant', 't-other'], owner),
+    ).toEqual(['t-wrote']);
+    expect(await model.listTopicIdsWithUserMessages([], owner)).toEqual([]);
   });
 });

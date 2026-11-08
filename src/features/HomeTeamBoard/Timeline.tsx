@@ -12,6 +12,7 @@ import AuthorChip from '@/features/HomeInbox/AuthorChip';
 import { sx } from '@/styles/sx';
 
 import {
+  axisPercent,
   buildAxisTicks,
   formatDuration,
   layoutLaneTopics,
@@ -24,6 +25,11 @@ import { RUN_STATUS_VISUALS } from './statusVisuals';
 import { useOpenRunDrawer } from './useOpenRunDrawer';
 
 const BAR_HEIGHT = 22;
+
+const shineSweep = stylex.keyframes({
+  from: { transform: 'translateX(-100%)' },
+  to: { transform: 'translateX(250%)' },
+});
 
 const styles = stylex.create({
   agent: { paddingBlock: 6 },
@@ -85,7 +91,6 @@ const styles = stylex.create({
     transform: 'translateX(-50%)',
     whiteSpace: 'nowrap',
   },
-  tickEnd: { transform: 'translateX(-100%)' },
   tickStart: { transform: 'none' },
   barLabel: {
     alignItems: 'center',
@@ -106,12 +111,46 @@ const styles = stylex.create({
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
   },
-  segment: { display: 'block', height: '100%' },
+  askMark: { borderInlineStartStyle: 'solid', borderInlineStartWidth: 2, boxSizing: 'border-box' },
+  segment: { display: 'block', height: '100%', overflow: 'hidden', position: 'relative' },
+  live: { borderInlineEndStyle: 'solid', borderInlineEndWidth: 2, boxSizing: 'border-box' },
+  shine: {
+    animationDuration: '2.4s',
+    animationIterationCount: 'infinite',
+    animationName: { 'default': shineSweep, '@media (prefers-reduced-motion: reduce)': 'none' },
+    animationTimingFunction: 'ease-in-out',
+    bottom: 0,
+    display: 'block',
+    left: 0,
+    position: 'absolute',
+    top: 0,
+    width: '40%',
+  },
   track: { flexGrow: 1, height: 28, minWidth: 0, position: 'relative' },
 });
 
-const tint = (status: AgentRunBoardRunStatus) =>
-  `color-mix(in srgb, ${RUN_STATUS_VISUALS[status].color} 32%, transparent)`;
+const mix = (status: AgentRunBoardRunStatus, percent: number) =>
+  `color-mix(in srgb, ${RUN_STATUS_VISUALS[status].color} ${percent}%, transparent)`;
+
+const tint = (status: AgentRunBoardRunStatus) => mix(status, 32);
+
+/** Live work: fills toward its leading edge, with a light sweeping across it. */
+const LiveSegment = () => (
+  <span
+    data-testid={'team-board-run-live'}
+    {...sx(styles.segment, styles.live, {
+      backgroundImage: `linear-gradient(to right, ${mix('running', 8)}, ${mix('running', 45)})`,
+      borderInlineEndColor: RUN_STATUS_VISUALS.running.color,
+      flexGrow: 1,
+    })}
+  >
+    <span
+      {...sx(styles.shine, {
+        backgroundImage: `linear-gradient(to right, transparent, ${mix('running', 55)}, transparent)`,
+      })}
+    />
+  </span>
+);
 
 const Bar = ({
   agentId,
@@ -166,12 +205,29 @@ const Bar = ({
           <span
             data-testid={'team-board-run-before-ask'}
             {...sx(styles.segment, {
-              backgroundColor: tint('running'),
+              backgroundImage: `linear-gradient(to right, ${mix('running', 10)}, ${mix('running', 38)})`,
               flexBasis: `${runningShare}%`,
             })}
           />
         )}
-        <span {...sx(styles.segment, { backgroundColor: tint(run.status), flexGrow: 1 })} />
+        {run.status === 'running' ? (
+          <LiveSegment />
+        ) : (
+          <span
+            {...sx(
+              styles.segment,
+              runningShare !== null && styles.askMark,
+              {
+                backgroundColor:
+                  run.status === 'needs_human' ? mix('needs_human', 62) : tint(run.status),
+                flexGrow: 1,
+              },
+              runningShare !== null && {
+                borderInlineStartColor: RUN_STATUS_VISUALS.needs_human.color,
+              },
+            )}
+          />
+        )}
       </button>
     </Tooltip>
   );
@@ -266,7 +322,7 @@ const Timeline = ({ board }: { board: AgentRunBoardData }) => {
   const { t } = useTranslation('home');
   const { generatedAt, hiddenLaneCount, lanes, windowStart } = board;
   const ticks = buildAxisTicks(windowStart, generatedAt);
-  const tickPercent = (index: number) => `${(index / (ticks.length - 1)) * 100}%`;
+  const tickPercent = (index: number) => `${axisPercent(ticks[index], windowStart, generatedAt)}%`;
 
   return (
     <div {...stylex.props(styles.card)}>
@@ -274,12 +330,9 @@ const Timeline = ({ board }: { board: AgentRunBoardData }) => {
         {ticks.map((tick, index) => (
           <span
             key={tick.getTime()}
-            {...sx(
-              styles.tick,
-              index === 0 && styles.tickStart,
-              index === ticks.length - 1 && styles.tickEnd,
-              { insetInlineStart: tickPercent(index) },
-            )}
+            {...sx(styles.tick, index === 0 && styles.tickStart, {
+              insetInlineStart: tickPercent(index),
+            })}
           >
             {index === NOW_TICK_INDEX ? t('team.axis.now') : dayjs(tick).format('HH:mm')}
           </span>

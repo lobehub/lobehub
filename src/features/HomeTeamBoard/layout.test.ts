@@ -2,6 +2,7 @@ import type { AgentRunBoardRun } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
 import {
+  axisPercent,
   buildAxisTicks,
   buildHourCells,
   extendActivityWithFuture,
@@ -41,14 +42,15 @@ describe('layoutLaneTopics', () => {
   it('positions a run as percentages and extends a live run to the end', () => {
     const { rows } = layoutLaneTopics([run('a', 30, null)], start, end);
 
-    expect(rows[0].runs[0]).toMatchObject({ left: 40, width: 40 });
+    expect(rows[0].runs[0].left).toBeCloseTo(45);
+    expect(rows[0].runs[0].width).toBeCloseTo(45);
   });
 
   it('clamps a run that began before the window', () => {
     const { rows } = layoutLaneTopics([run('a', -30, 6)], start, end);
 
     expect(rows[0].runs[0].left).toBe(0);
-    expect(rows[0].runs[0].width).toBe(8);
+    expect(rows[0].runs[0].width).toBeCloseTo(9);
   });
 
   it('gives concurrent topics their own rows and lines up turns of one topic', () => {
@@ -102,7 +104,7 @@ describe('layoutLaneTopics', () => {
       end,
     );
 
-    expect(rows[0].runs[0].runningShare).toBe(75);
+    expect(rows[0].runs[0].runningShare).toBeCloseTo(75);
     expect(rows[0].startedBy).toBe('u');
   });
 
@@ -110,7 +112,7 @@ describe('layoutLaneTopics', () => {
     const { rows } = layoutLaneTopics([run('a', 60, 60)], start, end);
 
     expect(rows[0].runs[0].width).toBe(MIN_BAR_PERCENT);
-    expect(rows[0].runs[0].left).toBe(80);
+    expect(rows[0].runs[0].left).toBeCloseTo(90);
   });
 });
 
@@ -173,17 +175,18 @@ describe('buildHourCells', () => {
 });
 
 describe('buildAxisTicks', () => {
-  it('puts the present at 4/5 of the axis', () => {
+  it('puts the present at 90% of the axis', () => {
     const ticks = buildAxisTicks(start, end);
 
-    expect(ticks).toHaveLength(6);
+    expect(ticks).toHaveLength(4);
+    expect(axisPercent(ticks[NOW_TICK_INDEX], start, end)).toBeCloseTo(90);
     expect(ticks[0]).toEqual(start);
     expect(ticks[NOW_TICK_INDEX]).toEqual(end);
   });
 });
 
 describe('extendActivityWithFuture', () => {
-  it('appends empty slices for the last 1/5 of the axis', () => {
+  it('appends empty slices after the present', () => {
     const empty = { done: 0, failed: 0, needsHuman: 0, running: 0 };
     const activity = Array.from({ length: 12 }, (_, i) => ({
       ...empty,
@@ -192,7 +195,7 @@ describe('extendActivityWithFuture', () => {
     }));
     const extended = extendActivityWithFuture(activity);
 
-    expect(extended).toHaveLength(15);
+    expect(extended).toHaveLength(13);
     expect(extended[12]).toEqual({ ...empty, startedAt: at(60) });
   });
 });

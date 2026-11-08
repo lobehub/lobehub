@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { AgentRunBoardRow } from '@/database/models/agentRunBoard';
 
-import { buildAgentRunBoard, classifyRun } from './index';
+import { buildAgentRunBoard, classifyRun, filterInvolvedRuns } from './index';
 
 const generatedAt = new Date('2026-11-08T12:00:00Z');
 const now = generatedAt.getTime();
@@ -37,7 +37,6 @@ const row = (overrides: Partial<AgentRunBoardRow> = {}): AgentRunBoardRow => ({
 });
 
 const intervention = (overrides = {}) => ({
-  canonicalToolKey: 'stripe.refund',
   createdAt: minutesAgo(14),
   deadline: minutesAgo(-60),
   operationId: 'op',
@@ -128,7 +127,8 @@ describe('buildAgentRunBoard', () => {
       ['mine', true],
       ['older-team', false],
     ]);
-    expect(board.attention[0].detail).toBe('stripe.refund');
+    // Internal tool keys mean nothing to the person who has to act.
+    expect(board.attention[0].detail).toBeNull();
     const older = board.lanes[0].runs.find((run) => run.id === 'older-team');
     expect(older?.waitingSince).toEqual(minutesAgo(50));
     expect(board.lanes[0].ownerUserId).toBe('owner');
@@ -199,5 +199,23 @@ describe('buildAgentRunBoard', () => {
 
     expect(board.lanes).toHaveLength(30);
     expect(board.hiddenLaneCount).toBe(3);
+  });
+});
+
+describe('filterInvolvedRuns', () => {
+  it('keeps runs the viewer started, spoke in or must approve', () => {
+    const rows = [
+      row({ id: 'started', userId: 'me' }),
+      row({ id: 'spoke', topicId: 'spoken' }),
+      row({ id: 'approve', interventions: [intervention({ userId: 'me' })] }),
+      row({ id: 'unrelated' }),
+      row({ id: 'no-topic', topicId: null }),
+    ];
+
+    expect(filterInvolvedRuns(rows, 'me', new Set(['spoken'])).map((r) => r.id)).toEqual([
+      'started',
+      'spoke',
+      'approve',
+    ]);
   });
 });

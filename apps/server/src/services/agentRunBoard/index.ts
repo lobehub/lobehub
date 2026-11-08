@@ -134,7 +134,7 @@ const toNeedsHuman = (
 
   return {
     ...attentionBase(row, viewerId),
-    detail: first?.canonicalToolKey ?? null,
+    detail: null,
     isMine: ownerUserId === viewerId,
     kind: 'needs_human',
     ownerUserId,
@@ -186,6 +186,19 @@ const buildActivity = (
 
   return buckets;
 };
+
+/** Runs the viewer started, spoke in (`spokenTopicIds`), or is asked to approve. */
+export const filterInvolvedRuns = (
+  rows: AgentRunBoardRow[],
+  viewerId: string,
+  spokenTopicIds: ReadonlySet<string>,
+) =>
+  rows.filter(
+    (row) =>
+      row.userId === viewerId ||
+      (row.topicId !== null && spokenTopicIds.has(row.topicId)) ||
+      row.interventions.some((intervention) => intervention.userId === viewerId),
+  );
 
 export const buildAgentRunBoard = ({
   generatedAt,

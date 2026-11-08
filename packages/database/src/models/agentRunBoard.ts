@@ -6,6 +6,7 @@ import {
   agentOperations,
   agents,
   chatGroups,
+  messages,
   tasks,
   taskTopics,
   topics,
@@ -48,7 +49,6 @@ export interface AgentRunBoardRow {
 }
 
 export interface AgentRunBoardInterventionRow {
-  canonicalToolKey: string | null;
   createdAt: Date;
   deadline: Date;
   operationId: string;
@@ -102,7 +102,6 @@ export class AgentRunBoardModel {
 
     const interventions = await this.db
       .select({
-        canonicalToolKey: agentInterventions.canonicalToolKey,
         createdAt: agentInterventions.createdAt,
         deadline: agentInterventions.deadline,
         operationId: agentInterventions.operationId,
@@ -115,6 +114,25 @@ export class AgentRunBoardModel {
     const byOperation = Map.groupBy(interventions, (i) => i.operationId);
 
     return rows.map((row) => ({ ...row, interventions: byOperation.get(row.id) ?? [] }));
+  };
+
+  /** Of these topics, the ones where this member wrote at least one message. */
+  listTopicIdsWithUserMessages = async (topicIds: string[], userId: string): Promise<string[]> => {
+    if (topicIds.length === 0) return [];
+
+    const rows = await this.db
+      .selectDistinct({ topicId: messages.topicId })
+      .from(messages)
+      .where(
+        and(
+          inArray(messages.topicId, topicIds),
+          eq(messages.userId, userId),
+          eq(messages.role, 'user'),
+          eq(messages.workspaceId, this.workspaceId),
+        ),
+      );
+
+    return rows.flatMap(({ topicId }) => (topicId ? [topicId] : []));
   };
 
   private selectRuns = async (condition: ReturnType<typeof and>, limit: number) => {
