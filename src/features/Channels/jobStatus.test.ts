@@ -4,9 +4,11 @@ import { describe, expect, it } from 'vitest';
 import {
   channelJobStatus,
   channelJobTone,
+  directAvatarState,
   directReplyStatus,
   memberCurrentJob,
   replyActivityJobs,
+  replyAvatarState,
   unresolvedFailures,
 } from './jobStatus';
 
@@ -172,5 +174,70 @@ describe('directReplyStatus', () => {
   it('ignores thread replies and settled conversations', () => {
     expect(directReplyStatus(detail([job({ threadId: 'thr_1' })]))).toBeNull();
     expect(directReplyStatus(detail([job({ status: 'completed' })]))).toBeNull();
+  });
+});
+
+describe('directAvatarState', () => {
+  const job = (patch: Partial<ChannelPublicJob> = {}) =>
+    ({
+      id: 'job_1',
+      memberId: 'mem_cook',
+      publicationRevoked: false,
+      status: 'running',
+      threadId: null,
+      writerHeld: false,
+      ...patch,
+    }) as ChannelPublicJob;
+  const detail = (jobs: ChannelPublicJob[], messages: unknown[] = []) =>
+    ({ channel: { agentId: 'agt_cook', id: 'chn_cook' }, jobs, members: [], messages }) as never;
+
+  it('works while the Agent writes its reply', () => {
+    expect(directAvatarState(detail([job()]))).toBe('working');
+  });
+
+  it('thinks while a message is routed or the reply is prepared', () => {
+    expect(directAvatarState(detail([], [{ routingStatus: 'pending' }]))).toBe('thinking');
+    expect(directAvatarState(detail([job({ blockedCode: undefined, status: 'queued' })]))).toBe(
+      'thinking',
+    );
+  });
+
+  it('waits when the reply is blocked or stopping', () => {
+    expect(
+      directAvatarState(detail([job({ blockedCode: 'device_offline', status: 'queued' })])),
+    ).toBe('waiting');
+    expect(
+      directAvatarState(
+        detail([job({ publicationRevoked: true, status: 'cancelled', writerHeld: true })]),
+      ),
+    ).toBe('waiting');
+  });
+
+  it('stays idle once the conversation settles', () => {
+    expect(directAvatarState(detail([job({ status: 'completed' })]))).toBeUndefined();
+    expect(directAvatarState(detail([job({ threadId: 'thr_1' })]))).toBeUndefined();
+  });
+});
+
+describe('replyAvatarState', () => {
+  const job = (patch: Partial<ChannelPublicJob> = {}) =>
+    ({
+      blockedCode: null,
+      id: 'job_1',
+      memberId: 'mem_cook',
+      publicationRevoked: false,
+      status: 'running',
+      threadId: null,
+      writerHeld: true,
+      ...patch,
+    }) as ChannelPublicJob;
+
+  it('prefers the running reply over a queued one of the same Agent', () => {
+    expect(replyAvatarState([job({ id: 'next', status: 'queued' }), job()])).toBe('working');
+  });
+
+  it('ignores settled replies and stays idle without any', () => {
+    expect(replyAvatarState([job({ status: 'failed', writerHeld: false })])).toBeUndefined();
+    expect(replyAvatarState([])).toBeUndefined();
   });
 });

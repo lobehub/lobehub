@@ -6,11 +6,13 @@ import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AgentAvatar from '@/components/AgentAvatar';
+import { directAvatarState, replyAvatarState } from '@/features/Channels/jobStatus';
 import { useChannelMenu } from '@/features/Channels/useChannelMenu';
 import { useAgentDropdownMenu } from '@/features/HomeSidebar/Body/Agent/List/AgentItem/useDropdownMenu';
 import { usePreservedAgentUrl } from '@/features/HomeSidebar/Body/Agent/List/usePreservedAgentUrl';
 import { useAgentModal } from '@/features/HomeSidebar/Body/Agent/ModalProvider';
 import { usePrefetchAgent } from '@/hooks/usePrefetchAgent';
+import { channelSelectors, useChannelStore } from '@/store/channel';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
 
@@ -47,11 +49,24 @@ const AgentConversation = memo<AgentConversationProps>(({ active, conversation }
   const { t } = useTranslation('chat');
   const { openCreateGroupModal } = useAgentModal();
   const prefetchAgent = usePrefetchAgent();
-  const running = useChatStore(operationSelectors.isAgentVisiblyRunning(id));
+  const chatRunning = useChatStore(operationSelectors.isAgentVisiblyRunning(id));
   const agentUrl = usePreservedAgentUrl(id);
   const { onClick, url } = useAgentConversationLink(id, agentUrl);
   const channelMenu = useChannelMenu();
   const directChannel = conversation.channel;
+  // A direct Channel replies through Channel jobs, not chat operations. The open conversation's
+  // view is polled while it works, so it is fresher than the list; any other cached view may be
+  // stale, so other rows read the jobs the list carries.
+  const replyState = useChannelStore((s) => {
+    if (!directChannel) return;
+    const detail = active
+      ? channelSelectors.detail({ channelId: directChannel.id, threadId: null })(s)
+      : undefined;
+    return detail ? directAvatarState(detail) : replyAvatarState(directChannel.replyJobs ?? []);
+  });
+  // A blocked or stopping reply is not running; the avatar alone shows it is waiting.
+  const running = chatRunning || replyState === 'working' || replyState === 'thinking';
+  const avatarState = replyState ?? (chatRunning ? 'working' : undefined);
   const title = agentDisplayName(item, t('untitledAgent'));
   const avatarSrc = typeof avatar === 'string' ? avatar : undefined;
 
@@ -103,10 +118,12 @@ const AgentConversation = memo<AgentConversationProps>(({ active, conversation }
         // image or emoji, else the character generated from its id.
         <AgentAvatar
           agentId={id}
+          animated={!!avatarState}
           avatar={avatarSrc}
           background={backgroundColor || undefined}
           name={title}
           size={AVATAR_SIZE}
+          state={avatarState}
         />
       }
       onClick={onClick}
