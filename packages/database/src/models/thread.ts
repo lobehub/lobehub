@@ -204,6 +204,20 @@ export class ThreadModel {
   };
 
   /**
+   * Record the operation id of a run that just started. The run is scheduled
+   * before its id is known here, so it may already have settled the thread;
+   * that metadata holds its final usage and error and must not be replaced.
+   */
+  attachRunOperation = async (id: string, metadata: ThreadMetadata) => {
+    return this.db
+      .update(threads)
+      .set({ metadata, updatedAt: new Date() })
+      .where(
+        and(eq(threads.id, id), this.ownership(), eq(threads.status, ThreadStatus.Processing)),
+      );
+  };
+
+  /**
    * Compare-and-set a `processing` thread into the terminal status of its run.
    *
    * `value.metadata.startedAt` must be the value the caller read: every claim

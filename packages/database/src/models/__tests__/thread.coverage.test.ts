@@ -28,6 +28,37 @@ afterEach(async () => {
 const findThread = (id: string) => serverDB.query.threads.findFirst({ where: eq(threads.id, id) });
 
 describe('ThreadModel coverage', () => {
+  describe('attachRunOperation', () => {
+    const insertThread = (id: string, status: ThreadStatus) =>
+      serverDB.insert(threads).values({
+        id,
+        metadata: { completedAt: '2026-10-01T00:01:00.000Z', totalTokens: 15 },
+        status,
+        topicId,
+        type: ThreadType.Isolation,
+        userId,
+      });
+
+    it('records the operation id on a processing thread', async () => {
+      await insertThread('thread-attach-live', ThreadStatus.Processing);
+
+      await threadModel.attachRunOperation('thread-attach-live', { operationId: 'op-1' });
+
+      expect((await findThread('thread-attach-live'))?.metadata).toEqual({ operationId: 'op-1' });
+    });
+
+    it('keeps the metadata of a run that already settled', async () => {
+      await insertThread('thread-attach-settled', ThreadStatus.Completed);
+
+      await threadModel.attachRunOperation('thread-attach-settled', { operationId: 'op-1' });
+
+      expect((await findThread('thread-attach-settled'))?.metadata).toMatchObject({
+        completedAt: '2026-10-01T00:01:00.000Z',
+        totalTokens: 15,
+      });
+    });
+  });
+
   describe('settleRun', () => {
     const insertThread = (id: string, status: ThreadStatus, operationId?: string) =>
       serverDB.insert(threads).values({

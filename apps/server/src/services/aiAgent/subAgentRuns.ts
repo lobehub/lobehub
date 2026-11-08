@@ -418,8 +418,10 @@ export const execAgentThreadRun = async (
   );
 
   // 5. Store operationId in Thread metadata
-  await deps.threadModel.update(thread.id, {
-    metadata: { ...carryOver, operationId: result.operationId, startedAt },
+  await deps.threadModel.attachRunOperation(thread.id, {
+    ...carryOver,
+    operationId: result.operationId,
+    startedAt,
   });
 
   // 6. If operation failed to start, update thread status
