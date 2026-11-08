@@ -60,6 +60,19 @@ describe('spawnAgent preset env', () => {
     expect(env.MCP_CONNECTION_NONBLOCKING).toBe('false');
   });
 
+  // `claude -p` defaults to the `sdk-cli` entrypoint, whose usage weighs about
+  // twice as much against the subscription's 5-hour window.
+  it('runs Claude Code under the lobehub entrypoint', async () => {
+    vi.stubEnv('CLAUDE_CODE_ENTRYPOINT', 'cli');
+    vi.stubEnv('CLAUDE_CODE_DISABLE_TERMINAL_TITLE', undefined);
+
+    const env = await spawnClaudeCode();
+
+    expect(env.CLAUDE_CODE_ENTRYPOINT).toBe('lobehub');
+    // A non-`sdk-cli` entrypoint otherwise spends an extra request naming the session.
+    expect(env.CLAUDE_CODE_DISABLE_TERMINAL_TITLE).toBe('1');
+  });
+
   it('lets an agent-configured env override the preset', async () => {
     const env = await spawnClaudeCode({ MCP_CONNECTION_NONBLOCKING: 'true' });
 
