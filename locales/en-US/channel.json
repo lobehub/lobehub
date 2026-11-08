@@ -216,6 +216,7 @@
   "status.running": "Replying…",
   "status.silent": "Stayed quiet",
   "status.stopping": "Stopping · waiting for execution to end",
+  "status.working": "Working…",
   "stopReply": "Stop reply",
   "submit": "Create",
   "thread": "Thread",

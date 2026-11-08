@@ -139,6 +139,7 @@ export default {
   'status.stopping': 'Stopping · waiting for execution to end',
   'status.preparing': 'Preparing…',
   'status.running': 'Replying…',
+  'status.working': 'Working…',
   'status.completed': 'Replied',
   'status.failed': 'Reply failed',
   'status.cancelled': 'Stopped',

@@ -302,6 +302,9 @@ export const statusStyles = stylex.create({
     // Emoji avatars are transparent; without a fill the neighbour shows through.
     backgroundColor: cssVar.colorBgContainer,
   },
+  memberWorking: {
+    color: cssVar.colorWarning,
+  },
   memberAvatar: {
     position: 'relative',
     display: 'inline-flex',
