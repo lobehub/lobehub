@@ -10,8 +10,12 @@ import { namesObjectBuiltIn } from '../skill/packageFiles';
  * the skill's scripts, and what the review reads a version back from.
  */
 
-/** Every entry carries this time, so the same package always zips to the same bytes. */
-const FIXED_MTIME = new Date('1980-01-01T00:00:00Z');
+/**
+ * Every entry carries this time, so the same package always zips to the same
+ * bytes. Local, because the zip stores local calendar fields: a UTC instant
+ * reads as 1979 west of UTC, which the zip refuses.
+ */
+const fixedMtime = () => new Date(1980, 0, 1);
 
 export interface SkillArchiveEntry {
   /** Text, or the bytes of a binary file. */
@@ -32,12 +36,13 @@ export const packSkillArchive = (skillMd: string, entries: SkillArchiveEntry[]) 
   const unsafe = entries.find((entry) => namesObjectBuiltIn(entry.path));
   if (unsafe) throw new Error(`Skill file path ${unsafe.path} names an object built-in`);
   const encoder = new TextEncoder();
+  const mtime = fixedMtime();
   const tree: Record<string, [Uint8Array, { mtime: Date }]> = {
-    [SKILL_INDEX_FILENAME]: [encoder.encode(skillMd), { mtime: FIXED_MTIME }],
+    [SKILL_INDEX_FILENAME]: [encoder.encode(skillMd), { mtime }],
   };
   for (const entry of [...entries].sort((a, b) => a.path.localeCompare(b.path))) {
     const data = typeof entry.data === 'string' ? encoder.encode(entry.data) : entry.data;
-    tree[entry.path] = [data, { mtime: FIXED_MTIME }];
+    tree[entry.path] = [data, { mtime }];
   }
   const bytes = zipSync(tree);
   return { bytes, hash: sha256(bytes) };

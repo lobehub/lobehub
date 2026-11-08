@@ -3,6 +3,21 @@ import { describe, expect, it } from 'vitest';
 import { packSkillArchive, unpackSkillArchive } from './archive';
 
 describe('skill archive', () => {
+  // The zip stores local calendar fields and refuses years before 1980, so its
+  // timestamp has to read as 1980 on a server west of UTC too.
+  it('packs to the same bytes whatever the server timezone', () => {
+    const original = process.env.TZ;
+    try {
+      process.env.TZ = 'UTC';
+      const utc = packSkillArchive('# plan', []);
+      process.env.TZ = 'America/New_York';
+      expect(packSkillArchive('# plan', []).hash).toBe(utc.hash);
+    } finally {
+      if (original === undefined) delete process.env.TZ;
+      else process.env.TZ = original;
+    }
+  });
+
   // Named by its hash in storage: the same package published twice is one object.
   it('zips the same package to the same bytes, whatever order its files come in', () => {
     const a = packSkillArchive('# plan', [
