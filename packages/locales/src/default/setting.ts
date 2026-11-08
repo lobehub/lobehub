@@ -1519,6 +1519,7 @@ export default {
   'settingModel.params.title': 'Advanced Parameters',
   'settingModel.params.panel.advanced': 'Advanced Settings',
   'settingModel.params.panel.agentTitle': 'Agent Advanced Settings',
+  'settingModel.params.panel.chatMode': 'Mode',
   'settingModel.params.panel.contextCompression': 'Auto-compress Context',
   'settingModel.params.panel.creativity': 'Creativity',
   'settingModel.params.panel.historyLimit': 'Limit History Messages',
