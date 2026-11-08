@@ -569,7 +569,7 @@ describe('spawnAgent', () => {
     await expect(handle.exit).resolves.toEqual({ code: 0, signal: null });
 
     expect(spawnCalls[0]).toMatchObject({
-      args: ['--model', 'sonnet', '--mode', 'plan', 'acp'],
+      args: ['--model', 'sonnet', '--mode', 'plan', '--force', 'acp'],
       command: 'agent',
     });
     expect(fake.requests.map(({ method }) => method).filter(Boolean)).toEqual([
