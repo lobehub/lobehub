@@ -4,8 +4,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   OPPORTUNISTIC_SWEEP_INTERVAL_MS,
   OPPORTUNISTIC_SWEEP_SLOT_KEY,
+  OPPORTUNISTIC_VERIFY_SWEEP_INTERVAL_MS,
+  OPPORTUNISTIC_VERIFY_SWEEP_SLOT_KEY,
   runOpportunisticSweep,
   scheduleOpportunisticStaleSweep,
+  scheduleOpportunisticVerifySweep,
 } from '../opportunisticSweep';
 
 const sweepMock = vi.fn().mockResolvedValue({ abandoned: 0, redriven: 1 });
@@ -13,6 +16,11 @@ vi.mock('../StaleOperationReaper', () => ({
   StaleOperationReaper: vi.fn().mockImplementation(function () {
     return { sweep: sweepMock };
   }),
+}));
+
+const verifySweepMock = vi.fn().mockResolvedValue({ abandoned: [], redriven: [], settled: [] });
+vi.mock('@/server/services/verify/sweep', () => ({
+  sweepStuckVerifyRuns: (...args: any[]) => verifySweepMock(...args),
 }));
 
 const getServerDBMock = vi.fn().mockResolvedValue({ db: 'server' });
@@ -149,5 +157,57 @@ describe('scheduleOpportunisticStaleSweep', () => {
 
     await expect(flush()).resolves.toBeUndefined();
     expect(sweepMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('scheduleOpportunisticVerifySweep', () => {
+  beforeEach(() => {
+    afterQueue.length = 0;
+    verifySweepMock.mockReset().mockResolvedValue({ abandoned: [], redriven: [], settled: [] });
+    redisSetMock.mockReset().mockResolvedValue('OK');
+    redisClient = { set: redisSetMock };
+  });
+
+  const flush = async () => {
+    const pending = [...afterQueue];
+    afterQueue.length = 0;
+    await Promise.all(pending.map((work) => work()));
+  };
+
+  it('claims its own slot and sweeps stranded verification rounds', async () => {
+    // Its route expects a QStash Schedule no deployment registers, so the step
+    // path is the only thing that ever runs this sweep.
+    scheduleOpportunisticVerifySweep();
+    await flush();
+
+    expect(redisSetMock).toHaveBeenCalledWith(
+      OPPORTUNISTIC_VERIFY_SWEEP_SLOT_KEY,
+      expect.any(String),
+      'PX',
+      OPPORTUNISTIC_VERIFY_SWEEP_INTERVAL_MS,
+      'NX',
+    );
+    expect(OPPORTUNISTIC_VERIFY_SWEEP_SLOT_KEY).not.toBe(OPPORTUNISTIC_SWEEP_SLOT_KEY);
+    expect(verifySweepMock).toHaveBeenCalledWith({ db: 'server' });
+  });
+
+  it('skips the sweep while its slot TTL is still held', async () => {
+    redisSetMock.mockResolvedValue(null);
+
+    scheduleOpportunisticVerifySweep();
+    await flush();
+
+    expect(verifySweepMock).not.toHaveBeenCalled();
+  });
+
+  it('never rejects when the sweep throws', async () => {
+    verifySweepMock.mockRejectedValue(new Error('pg down'));
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    scheduleOpportunisticVerifySweep();
+
+    await expect(flush()).resolves.toBeUndefined();
+    expect(consoleError).toHaveBeenCalled();
+    consoleError.mockRestore();
   });
 });
