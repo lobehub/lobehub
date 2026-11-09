@@ -4,6 +4,7 @@ import debug from 'debug';
 
 import type { PreSignedUpload } from '@/server/modules/S3';
 
+import { isPathWithin } from './binding';
 import type { SandboxService } from './types';
 
 const log = debug('lobe-server:sandbox:drive-download');
@@ -53,8 +54,9 @@ const RESULT_MARKER = 'LOBE_DRIVE_DOWNLOAD_RESULT ';
  * Packs (a folder) or takes as it is (a file) one path on the drive and PUTs it
  * to the upload URL, from inside a sandbox session the drive is mounted in.
  *
- * The working directory is the drive's root, which is what every relative
- * path here is resolved against. Other members and sandboxes may be changing
+ * The working directory is the drive's root, or on a shared storage the
+ * folder the session was narrowed to, and every relative path here is
+ * resolved against it. Other members and sandboxes may be changing
  * the drive while this runs, so nothing is checked by name and then read by
  * name: the target is opened one component at a time beneath the root with
  * `O_NOFOLLOW`, a folder is walked with `os.fwalk` (directory descriptors, no
@@ -96,8 +98,22 @@ def is_hidden(rel):
     return any(within(rel, entry) for entry in hidden)
 
 target = posixpath.normpath(params["path"])
-if target in ("", ".") or target.startswith("/") or target == ".." or target.startswith("../") or is_hidden(target):
+# "." is the working directory itself. It is a target only when the session was
+# narrowed to the folder being downloaded, which then names the archive;
+# otherwise the working directory is the drive's root, never packed whole.
+whole = target == "." and bool(params.get("archiveName"))
+if not whole and (target in ("", ".") or target.startswith("/") or target == ".." or target.startswith("../")):
     done(ok=False, code="NOT_FOUND")
+if is_hidden(target):
+    done(ok=False, code="NOT_FOUND")
+archive_root = params.get("archiveName") or posixpath.basename(target)
+
+def child(rel, name):
+    return name if rel == "." else posixpath.join(rel, name)
+
+def archive_name(rel):
+    inner = posixpath.relpath(rel, target)
+    return archive_root if inner == "." else posixpath.join(archive_root, inner)
 
 root_fd = os.open(".", os.O_RDONLY | os.O_DIRECTORY)
 
@@ -115,7 +131,7 @@ def open_beneath(rel):
         os.close(fd)
 
 try:
-    target_fd = open_beneath(target)
+    target_fd = os.dup(root_fd) if whole else open_beneath(target)
 except OSError as error:
     done(ok=False, code="NOT_FOUND" if error.errno in NOT_THERE else "READ_FAILED")
 
@@ -129,14 +145,14 @@ def walk():
     """The folder's directories, each with its regular files' (name, stat), hidden ones left out."""
     for current, dirnames, filenames, dir_fd in os.fwalk(".", dir_fd=target_fd, follow_symlinks=False, onerror=raise_error):
         sub = posixpath.normpath(current)
-        rel = target if sub == "." else posixpath.join(target, sub)
-        dirnames[:] = sorted(name for name in dirnames if not is_hidden(posixpath.join(rel, name)))
+        rel = target if sub == "." else child(target, sub)
+        dirnames[:] = sorted(name for name in dirnames if not is_hidden(child(rel, name)))
         files = []
         for name in sorted(filenames):
             try:
                 info = os.stat(name, dir_fd=dir_fd, follow_symlinks=False)
             except OSError as error:
-                read_failed(posixpath.join(rel, name), error)
+                read_failed(child(rel, name), error)
             # Links and special files are not content of the folder.
             if stat.S_ISREG(info.st_mode):
                 files.append((name, info))
@@ -167,7 +183,6 @@ try:
         except OSError as error:
             read_failed(target, error)
 
-        base = posixpath.dirname(target)
         handle, cleanup = tempfile.mkstemp(dir="/tmp" if os.path.isdir("/tmp") else None, suffix=".zip")
         os.close(handle)
         # The drive can change between the two walks, so the ceilings hold
@@ -184,11 +199,11 @@ try:
                 for rel, dirnames, files, dir_fd in walk():
                     packed_entries += 1
                     over_limit()
-                    name = posixpath.relpath(rel, base) if base else rel
+                    name = archive_name(rel)
                     if not files and not dirnames:
                         archive.writestr(zip_info(name + "/", os.fstat(dir_fd)), b"")
                     for file_name, _ in files:
-                        path = posixpath.join(rel, file_name)
+                        path = child(rel, file_name)
                         try:
                             fd = os.open(file_name, NOFOLLOW, dir_fd=dir_fd)
                         except OSError as error:
@@ -270,13 +285,20 @@ finally:
 `;
 
 export interface DriveDownloadCommandParams {
+  /**
+   * The name the archive's entries sit under. Set when the session's working
+   * directory is the folder being downloaded, so `path` is `.` and has no name
+   * of its own; without it `.` is refused, since the working directory is
+   * then the drive's root.
+   */
+  archiveName?: string;
   /** Refuse a folder instead of packing it — a preview shows one file. */
   fileOnly?: boolean;
   /** Paths, relative to the drive's root, that must not end up in the download. */
   hidden: string[];
   maxBytes: number;
   maxFiles: number;
-  /** Relative to the drive's root. */
+  /** Relative to the session's working directory. */
   path: string;
   uploadHeaders?: Record<string, string>;
   uploadUrl: string;
@@ -288,6 +310,7 @@ export interface DriveDownloadCommandParams {
  * path or a URL contains is ever parsed by the shell.
  */
 export const buildDriveDownloadCommand = ({
+  archiveName,
   fileOnly,
   hidden,
   maxBytes,
@@ -298,6 +321,7 @@ export const buildDriveDownloadCommand = ({
 }: DriveDownloadCommandParams) => {
   const payload = Buffer.from(
     JSON.stringify({
+      archiveName,
       fileOnly: fileOnly || undefined,
       headers: uploadHeaders,
       hidden,
@@ -357,6 +381,23 @@ export const driveDownloadFileName = (path: string, kind: 'directory' | 'file') 
   return kind === 'directory' ? `${name}.zip` : name;
 };
 
+/**
+ * The folder a download from a shared storage — a workspace's public drive —
+ * runs in: the top-level folder the path lies in.
+ *
+ * The execution plane refuses a drive session on a shared storage that selects
+ * no folder (its root holds every member's folders and private environment
+ * directories side by side), so such a download must name one with
+ * `sandboxCwd`, and it can then see nothing outside it.
+ */
+export const driveDownloadFolder = (path: string) => path.split('/')[0];
+
+/** `path` as seen from `folder`, `.` being the folder itself; `undefined` when outside it. */
+const relativeTo = (path: string, folder: string) => {
+  if (!isPathWithin(path, folder)) return;
+  return path === folder ? '.' : path.slice(folder.length + 1);
+};
+
 export interface PrepareDriveDownloadParams {
   fileService: {
     createDownloadUrl: (url: string, fileName: string, expiresIn?: number) => Promise<string>;
@@ -369,6 +410,13 @@ export interface PrepareDriveDownloadParams {
     deleteFiles: (keys: string[]) => Promise<unknown>;
     listFileKeys: (prefix: string, limit?: number) => Promise<string[]>;
   };
+  /**
+   * The folder, relative to the drive's root, the sandbox session was narrowed
+   * to with `sandboxCwd` — see {@link driveDownloadFolder}. Absent when the
+   * session works at the drive's root. `path` and `hidden` stay relative to
+   * the root either way.
+   */
+  folder?: string;
   hidden: string[];
   now?: Date;
   path: string;
@@ -431,6 +479,7 @@ const sweepExpiredDownloads = async (
  */
 export const prepareDriveDownload = async ({
   fileService,
+  folder,
   hidden,
   now = new Date(),
   path,
@@ -438,6 +487,11 @@ export const prepareDriveDownload = async ({
   sandbox,
 }: PrepareDriveDownloadParams) => {
   if (!sandbox.capabilities.shell) throw new DriveDownloadError('DOWNLOAD_UNAVAILABLE');
+
+  // What the script reads, from the session's working directory.
+  const target = folder ? relativeTo(path, folder) : path;
+  if (target === undefined) throw new DriveDownloadError('PATH_NOT_FOUND');
+  const targetHidden = folder ? hidden.flatMap((entry) => relativeTo(entry, folder) ?? []) : hidden;
 
   const key = `${DRIVE_DOWNLOAD_PREFIX}${dayOf(now)}/${randomUUID()}`;
   // Private whatever the bucket's default ACL: a copy of someone's drive is
@@ -449,11 +503,12 @@ export const prepareDriveDownload = async ({
   try {
     const result = await sandbox.callTool('runCommand', {
       command: buildDriveDownloadCommand({
+        archiveName: target === '.' ? driveDownloadFolder(path) : undefined,
         fileOnly: purpose === 'preview',
-        hidden,
+        hidden: targetHidden,
         maxBytes: DRIVE_DOWNLOAD_MAX_BYTES,
         maxFiles: DRIVE_DOWNLOAD_MAX_FILES,
-        path,
+        path: target,
         uploadHeaders: upload.headers,
         uploadUrl: upload.url,
       }),

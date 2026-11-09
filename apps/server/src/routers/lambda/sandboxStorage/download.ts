@@ -7,15 +7,22 @@ import { createSandboxService } from '@/server/services/sandbox';
 import {
   type DriveCopyPurpose,
   DriveDownloadError,
+  driveDownloadFolder,
   prepareDriveDownload,
 } from '@/server/services/sandbox/driveDownload';
+import { SandboxStorageFilesError } from '@/server/services/sandbox/storageFiles';
 
-import { assertReadable, resolveDriveScope } from './driveScope';
-import { instanceProcedure } from './procedures';
+import { assertReadable, isPublicDrive, resolveDriveScope } from './driveScope';
+import { instanceProcedure, mapStorageError, type SandboxStorageClient } from './procedures';
 import { driveSchema, relativePathSchema } from './schemas';
 
+/**
+ * `DOWNLOAD_FAILED` is a 500, not the 502 a failed upstream would suggest:
+ * the edge in front of the app replaces a 502's body with its own error page,
+ * so the client could no longer read the code and said "unreadable response".
+ */
 const ERROR_CODES: Record<DriveDownloadError['code'], TRPCError['code']> = {
-  DOWNLOAD_FAILED: 'BAD_GATEWAY',
+  DOWNLOAD_FAILED: 'INTERNAL_SERVER_ERROR',
   DOWNLOAD_TOO_LARGE: 'PAYLOAD_TOO_LARGE',
   DOWNLOAD_UNAVAILABLE: 'NOT_IMPLEMENTED',
   PATH_NOT_FOUND: 'NOT_FOUND',
@@ -40,6 +47,23 @@ export const driveDownloadTopicId = (storageKey: string) => `sandbox-drive-downl
  * A mutation, not a query: it starts a sandbox session and writes an object
  * to storage, and a refetch-on-focus must never repeat that.
  */
+/**
+ * Refuses a download whose folder is not on the drive, before a session is
+ * started in it: the execution plane creates a missing working directory
+ * (`mkdir -p` then `cd`), so a stale listing or a guessed name would leave an
+ * empty folder at the public drive's root for every member to see.
+ */
+const assertFolderExists = async (client: SandboxStorageClient, folder: string) => {
+  try {
+    await client.listFiles({ path: folder });
+  } catch (error) {
+    if (error instanceof SandboxStorageFilesError && error.status === 404) {
+      throw new TRPCError({ code: 'NOT_FOUND', message: 'PATH_NOT_FOUND' });
+    }
+    mapStorageError(error);
+  }
+};
+
 const copyProcedure = (purpose: DriveCopyPurpose) =>
   instanceProcedure
     .input(z.object({ drive: driveSchema, path: relativePathSchema }))
@@ -47,8 +71,14 @@ const copyProcedure = (purpose: DriveCopyPurpose) =>
       const scope = await resolveDriveScope(ctx);
       assertReadable(input.path, scope);
 
+      // The public drive is a shared storage, whose root the execution plane
+      // will not run a drive session at; it is narrowed to the path's folder.
+      const folder = isPublicDrive(ctx) ? driveDownloadFolder(input.path) : undefined;
+      if (folder) await assertFolderExists(scope.client, folder);
+
       const sandbox = createSandboxService({
         marketService: ctx.marketService,
+        sandboxCwd: folder,
         sandboxMode: 'drive',
         topicId: driveDownloadTopicId(ctx.claim.key),
         userId: ctx.userId,
@@ -57,6 +87,7 @@ const copyProcedure = (purpose: DriveCopyPurpose) =>
       try {
         return await prepareDriveDownload({
           fileService: new FileService(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined),
+          folder,
           hidden: scope.hidden,
           path: input.path,
           purpose,

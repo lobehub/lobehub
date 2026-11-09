@@ -603,6 +603,11 @@ describe('drive usage', () => {
 });
 
 describe('downloading from the drive', () => {
+  beforeEach(() => {
+    // The folder a public download is narrowed to exists unless a case says otherwise.
+    plane.listFiles.mockResolvedValue({ entries: [], path: '', truncated: false });
+  });
+
   const answer = (result: object) =>
     downloads.callTool.mockResolvedValue({
       result: { exitCode: 0, stdout: `LOBE_DRIVE_DOWNLOAD_RESULT ${JSON.stringify(result)}\n` },
@@ -624,14 +629,51 @@ describe('downloading from the drive', () => {
 
     expect(result).toMatchObject({ fileName: 'projects.zip', kind: 'directory', size: 7 });
     expect(result.url).toMatch(/^https:\/\/files\/sandbox-drive-downloads\/.+\?as=projects\.zip$/);
+    // The public drive is a shared storage: the execution plane refuses a
+    // drive session at its root, so the session is narrowed to the folder.
     expect(downloads.createSandboxService).toHaveBeenCalledWith(
       expect.objectContaining({
+        sandboxCwd: 'projects',
         sandboxMode: 'drive',
         topicId: `sandbox-drive-download:${STORAGE_KEY}`,
         userId: memberId,
       }),
     );
-    expect(packed()).toMatchObject({ hidden: ['projects/secret'], path: 'projects' });
+    expect(packed()).toMatchObject({ archiveName: 'projects', hidden: ['secret'], path: '.' });
+  });
+
+  it('narrows a nested public path to its top-level folder', async () => {
+    answer({ contentType: 'text/plain', kind: 'file', ok: true, size: 3 });
+
+    await drive(memberId).prepareDownload({ drive: 'public', path: 'projects/app/notes.txt' });
+
+    expect(downloads.createSandboxService).toHaveBeenCalledWith(
+      expect.objectContaining({ sandboxCwd: 'projects' }),
+    );
+    expect(packed()).toMatchObject({ hidden: [], path: 'app/notes.txt' });
+  });
+
+  it('refuses a public folder that is not there without starting a session in it', async () => {
+    plane.listFiles.mockRejectedValue(notFound());
+
+    await expect(
+      drive(memberId).prepareDownload({ drive: 'public', path: 'gone/report.pdf' }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND', message: 'PATH_NOT_FOUND' });
+    expect(plane.listFiles).toHaveBeenCalledWith(expect.objectContaining({ path: 'gone' }));
+    expect(downloads.createSandboxService).not.toHaveBeenCalled();
+    expect(downloads.callTool).not.toHaveBeenCalled();
+  });
+
+  it('answers a failed download as a 500 whose code the client can read', async () => {
+    downloads.callTool.mockResolvedValue({
+      error: { message: 'A drive on a shared storage must select a folder with sandboxCwd' },
+      result: null,
+      success: false,
+    });
+
+    await expect(
+      drive(memberId).prepareDownload({ drive: 'public', path: 'projects' }),
+    ).rejects.toMatchObject({ code: 'INTERNAL_SERVER_ERROR', message: 'DOWNLOAD_FAILED' });
   });
 
   it("downloads from the caller's own personal drive", async () => {
@@ -640,7 +682,10 @@ describe('downloading from the drive', () => {
     await drive(memberId).prepareDownload({ drive: 'personal', path: 'notes.txt' });
 
     expect(downloads.createSandboxService).toHaveBeenCalledWith(
-      expect.objectContaining({ topicId: `sandbox-drive-download:${personalKey(memberId)}` }),
+      expect.objectContaining({
+        sandboxCwd: undefined,
+        topicId: `sandbox-drive-download:${personalKey(memberId)}`,
+      }),
     );
     expect(packed()).toMatchObject({ hidden: [], path: 'notes.txt' });
   });
@@ -670,7 +715,10 @@ describe('downloading from the drive', () => {
 
     expect(result).toMatchObject({ contentType: 'image/png', fileName: 'a.png', kind: 'file' });
     expect(result.url).toMatch(/^https:\/\/files\/sandbox-drive-downloads\/.+\?inline$/);
-    expect(packed()).toMatchObject({ fileOnly: true, path: 'shots/a.png' });
+    expect(downloads.createSandboxService).toHaveBeenCalledWith(
+      expect.objectContaining({ sandboxCwd: 'shots' }),
+    );
+    expect(packed()).toMatchObject({ fileOnly: true, path: 'a.png' });
   });
 
   it('refuses to preview a hidden directory, and a folder in a code the client translates', async () => {

@@ -74,6 +74,9 @@ describe.skipIf(!hasPython)('the drive download script', () => {
   const run = (
     target: string,
     options: {
+      archiveName?: string;
+      /** The session's working directory, relative to the drive's root. */
+      cwd?: string;
       fileOnly?: boolean;
       hidden?: string[];
       maxBytes?: number;
@@ -82,6 +85,7 @@ describe.skipIf(!hasPython)('the drive download script', () => {
     } = {},
   ) => {
     const command = buildDriveDownloadCommand({
+      archiveName: options.archiveName,
       fileOnly: options.fileOnly,
       hidden: options.hidden ?? [],
       maxBytes: options.maxBytes ?? DRIVE_DOWNLOAD_MAX_BYTES,
@@ -92,7 +96,9 @@ describe.skipIf(!hasPython)('the drive download script', () => {
     });
     // Asynchronously, so the server in this process can answer the upload.
     return new Promise<ReturnType<typeof parseDriveDownloadOutput>>((resolve, reject) => {
-      const child = spawn('sh', ['-c', command], { cwd: root });
+      const child = spawn('sh', ['-c', command], {
+        cwd: options.cwd ? path.join(root, options.cwd) : root,
+      });
       let stdout = '';
       child.stdout.on('data', (chunk: Buffer) => (stdout += chunk.toString()));
       child.on('error', reject);
@@ -136,6 +142,25 @@ describe.skipIf(!hasPython)('the drive download script', () => {
       'project/empty/',
       'project/src/index.ts',
     ]);
+  });
+
+  it('zips the folder a session was narrowed to, under the name it is given', async () => {
+    const outcome = await run('.', { archiveName: 'project', cwd: 'project', hidden: ['private'] });
+
+    expect(outcome).toMatchObject({ contentType: 'application/zip', kind: 'directory', ok: true });
+    expect(zipEntries(received[0].body)).toEqual([
+      'project/README.md',
+      'project/empty/',
+      'project/src/index.ts',
+    ]);
+  });
+
+  it('never packs the working directory without a name for it, nor one that is hidden', async () => {
+    await expect(run('.')).resolves.toEqual({ code: 'NOT_FOUND', ok: false });
+    await expect(
+      run('.', { archiveName: 'project', cwd: 'project', hidden: ['.'] }),
+    ).resolves.toEqual({ code: 'NOT_FOUND', ok: false });
+    expect(received).toHaveLength(0);
   });
 
   it('refuses a path that leads out of the drive, a hidden one, and one that is not there', async () => {
@@ -304,6 +329,58 @@ describe('prepareDriveDownload', () => {
       path: 'project',
       uploadUrl: `https://upload/${key}`,
     });
+  });
+
+  it('reads relative to the folder the session was narrowed to', async () => {
+    const answer =
+      'LOBE_DRIVE_DOWNLOAD_RESULT {"ok":true,"kind":"directory","size":1,"contentType":"application/zip"}';
+    const payloadOf = (sandbox: ReturnType<typeof sandboxAnswering>) => {
+      const [, params] = sandbox.callTool.mock.calls[0] as unknown as [string, any];
+      const payload = /LOBE_DRIVE_DOWNLOAD='([^']+)'/.exec(params.command)![1];
+      return JSON.parse(Buffer.from(payload, 'base64').toString('utf8'));
+    };
+
+    const whole = sandboxAnswering(answer);
+    await expect(
+      prepareDriveDownload({
+        fileService,
+        folder: 'project',
+        hidden: ['project/private', 'other/private'],
+        path: 'project',
+        sandbox: whole,
+      }),
+    ).resolves.toMatchObject({ fileName: 'project.zip' });
+    expect(payloadOf(whole)).toMatchObject({
+      archiveName: 'project',
+      hidden: ['private'],
+      path: '.',
+    });
+
+    const nested = sandboxAnswering(answer);
+    await expect(
+      prepareDriveDownload({
+        fileService,
+        folder: 'project',
+        hidden: ['project/src/private'],
+        path: 'project/src',
+        sandbox: nested,
+      }),
+    ).resolves.toMatchObject({ fileName: 'src.zip' });
+    const nestedPayload = payloadOf(nested);
+    expect(nestedPayload).toMatchObject({ hidden: ['src/private'], path: 'src' });
+    expect(nestedPayload.archiveName).toBeUndefined();
+
+    const outside = sandboxAnswering(answer);
+    await expect(
+      prepareDriveDownload({
+        fileService,
+        folder: 'project',
+        hidden: [],
+        path: 'other',
+        sandbox: outside,
+      }),
+    ).rejects.toMatchObject({ code: 'PATH_NOT_FOUND' });
+    expect(outside.callTool).not.toHaveBeenCalled();
   });
 
   it('answers a preview with an inline link, and tells the script to refuse a folder', async () => {
