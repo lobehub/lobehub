@@ -877,6 +877,7 @@
   "goalProcess.decision.viewRun": "查看任务",
   "goalProcess.decisions.chosen": "已选",
   "goalProcess.decisions.effect.fail": "目标失败",
+  "goalProcess.decisions.effect.hold": "暂停目标，等你放行",
   "goalProcess.decisions.effect.retire": "退役这项任务",
   "goalProcess.decisions.effect.retry": "再跑一遍这项任务",
   "goalProcess.decisions.empty": "这个目标还没有需要决策的事项。",

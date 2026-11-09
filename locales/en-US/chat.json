@@ -877,6 +877,7 @@
   "goalProcess.decision.viewRun": "Open task",
   "goalProcess.decisions.chosen": "Chosen",
   "goalProcess.decisions.effect.fail": "Fails the goal",
+  "goalProcess.decisions.effect.hold": "Holds the goal for you",
   "goalProcess.decisions.effect.retire": "Retires the task",
   "goalProcess.decisions.effect.retry": "Runs the task again",
   "goalProcess.decisions.empty": "No decision has been asked on this goal yet.",

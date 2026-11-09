@@ -253,7 +253,7 @@ const admissionHint: Record<string, string> = {
     'the Goal was started from its draft, which settled this turn; the next turn plans further work',
   turn_owner: 'this Goal has no matching planning turn',
   turn_settled: "this turn's run is no longer running",
-  wait_unsettled: 'unfinished work must be settled before waiting',
+  wait_unsettled: 'unfinished work must be settled first; to park it, escalate with a hold option',
   wait_until_past: 'the wait deadline is already in the past',
 };
 

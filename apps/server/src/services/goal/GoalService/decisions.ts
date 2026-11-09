@@ -39,7 +39,7 @@ const REOPENABLE_GOAL_STATUSES = new Set(['achieved', 'running']);
 const decisionOptionEffect = (
   option: GoalDecisionOption | undefined,
   sourceTitle?: string,
-): 'fail' | 'retire' | 'retry' | undefined => {
+): 'fail' | 'hold' | 'retire' | 'retry' | undefined => {
   if (!option) return undefined;
   if (option.effect) return option.effect;
   if (option.id === 'retry' || option.id === 'retire') return option.id;
@@ -255,19 +255,30 @@ export const decide = async (
   // the Goal failed, `retire` abandons it without one.
   const terminalAcceptance = source?.title === GOAL_ACCEPTANCE_TASK_TITLE;
   const terminalEffect = decisionOptionEffect(chosen, source?.title);
+  // `hold` keeps the Task, its node, its dependents and the budget as they
+  // are and parks the Goal on the person. Running again would only reach the
+  // same failed Task and spend another takeover or retry on it; paused, the
+  // coordinator dispatches nothing until they resume it by hand.
+  const hold = terminalEffect === 'hold';
   const nextStatus =
     terminalAcceptance && terminalEffect === 'fail'
       ? 'failed'
       : terminalAcceptance && terminalEffect === 'retire'
         ? 'canceled'
-        : 'running';
+        : hold
+          ? 'paused'
+          : 'running';
   // Serialized with `close`, which commits under this row lock: a goal that
   // ended while this answer was being written is left ended.
   await ctx.db.transaction(async (tx) => {
-    const current = await new GoalRepository(tx, ctx.userId, ctx.workspaceId).lockById(goalId);
+    const goals = new GoalRepository(tx, ctx.userId, ctx.workspaceId);
+    const current = await goals.lockById(goalId);
     if (!current || GOAL_ENDED_STATUSES.has(current.status)) return;
+    // The person chose the pause, so no automatic lift (a measurement or a
+    // retired node) may resume the Goal behind their back.
+    if (hold) await goals.updatePauseReason(goalId, 'user');
     if (current.status === nextStatus) return;
-    await new GoalRepository(tx, ctx.userId, ctx.workspaceId).updateStatus(goalId, nextStatus);
+    await goals.updateStatus(goalId, nextStatus);
     await new GoalGraphModel(tx, ctx.userId, ctx.workspaceId, {
       id: GOAL_COORDINATOR_ACTOR_ID,
       type: 'system',

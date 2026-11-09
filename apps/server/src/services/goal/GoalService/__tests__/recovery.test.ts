@@ -149,6 +149,33 @@ describe('GoalService', () => {
     );
   });
 
+  it('holds the failed task, its dependents and the goal on the person when they answer hold', async () => {
+    // Keeping the task meant answering retry, which sent it back to backlog
+    // and spent the budget again on every round of the same takeover.
+    const { decision, goalId, measure, service, summary } = await gatedWithDependent('Agent hold');
+    await new GoalGraphModel(serverDB, userId).updatePendingDecisionOptions(goalId, decision.id, [
+      { id: 'measure_again', label: 'Measure again', effect: 'retry' },
+      { id: 'wait_for_admin', label: 'Wait for the admin', effect: 'hold' },
+    ]);
+    const before = await service.graph(goalId);
+    const taskId = before.nodes.find((node) => node.id === measure.id)!.taskId!;
+
+    await service.decide(goalId, decision.id, 'wait_for_admin', 'Admin receipt pending');
+
+    const held = await service.graph(goalId);
+    expect(held.decisions[0]).toMatchObject({ resolvedOptionId: 'wait_for_admin' });
+    expect(held.goal.status).toBe('paused');
+    expect(held.goal.config?.pausedBy).toBe('user');
+    expect(held.nodes.find((node) => node.id === measure.id)?.status).toBe('waiting');
+    expect(held.nodes.find((node) => node.id === summary.id)?.status).not.toBe('retired');
+    expect((await new TaskModel(serverDB, userId).findById(taskId))?.status).toBe('paused');
+
+    const runTask = vi.spyOn(TaskRunnerService.prototype, 'runTask').mockResolvedValue({} as never);
+    const tick = await service.tick(goalId);
+    expect(tick.outcome).toBe('no_progress');
+    expect(runTask).not.toHaveBeenCalled();
+  });
+
   it('reports the effects a tick actually produced, not just its outcome', async () => {
     // The rollup counts gates and findings from these effects, so a branch that
     // forgets to report one reads as "no human was ever involved" — silently,
