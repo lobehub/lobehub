@@ -86,6 +86,9 @@ export const getLLMConfig = () => {
       AWS_SECRET_ACCESS_KEY: z.string().optional(),
       AWS_SESSION_TOKEN: z.string().optional(),
 
+      ENABLED_WATT: z.boolean(),
+      WATT_API_KEY: z.string().optional(),
+
       ENABLED_WENXIN: z.boolean(),
       WENXIN_API_KEY: z.string().optional(),
 
@@ -350,6 +353,9 @@ export const getLLMConfig = () => {
       AWS_ACCESS_KEY_ID: process.env.AWS_ACCESS_KEY_ID,
       AWS_SECRET_ACCESS_KEY: process.env.AWS_SECRET_ACCESS_KEY,
       AWS_SESSION_TOKEN: process.env.AWS_SESSION_TOKEN,
+
+      ENABLED_WATT: !!process.env.WATT_API_KEY,
+      WATT_API_KEY: process.env.WATT_API_KEY,
 
       ENABLED_WENXIN: !!process.env.WENXIN_API_KEY,
       WENXIN_API_KEY: process.env.WENXIN_API_KEY,

@@ -918,4 +918,21 @@ Connect to your own Unsloth Studio instance. See [Using Unsloth in LobeHub](/doc
 - Default: Unset; the browser sends the requests.
 - Example: `http://magpie.example.com:3425/v1`
 
+## Watt Cloud
+
+### `WATT_API_KEY`
+
+- Type: Required
+- Description: This is the API key you applied for in the Watt Cloud service
+- Default: -
+- Example: `sk-xxxxxx...xxxxxx`
+
+### `WATT_MODEL_LIST`
+
+- Type: Optional
+- Description: Used to control the model list, use `+` to add a model, use `-` to hide a model, use `model_name=displayName` to customize the display name of a model, separated by commas. Definition syntax rules see [model-list][model-list]
+- Default: `-`
+- Example: `-all,+GLM-5.1,+Kimi-K3`
+
+
 [model-list]: /docs/self-hosting/advanced/model-list
