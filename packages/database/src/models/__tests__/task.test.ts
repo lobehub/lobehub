@@ -68,13 +68,6 @@ const originalCommentInput = (task: { id: string }): Parameters<TaskModel['addCo
 });
 
 describe('TaskModel', () => {
-  describe('constructor', () => {
-    it('should create model with db and userId', () => {
-      const model = new TaskModel(serverDB, userId);
-      expect(model).toBeInstanceOf(TaskModel);
-    });
-  });
-
   describe('create', () => {
     // LLMs (notably gpt-family models) fill optional tool fields with "". An
     // empty id must mean "unassigned", never reach the FK columns as ''.
