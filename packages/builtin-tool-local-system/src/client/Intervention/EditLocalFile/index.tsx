@@ -12,10 +12,12 @@ import { LocalFile, LocalFolder } from '@/features/LocalFile';
 import { localFileService } from '@/services/electron/localFileService';
 
 import OutOfScopeWarning from '../OutOfScopeWarning';
+import { buildEditPreview } from './buildEditPreview';
 
 const EditLocalFile = memo<BuiltinInterventionProps<EditLocalFileParams>>(({ args }) => {
   const { t } = useTranslation('tool');
   const { base, dir } = path.parse(args.file_path);
+  const { old_string, new_string, replace_all } = args;
 
   // Fetch full file content
   const { data: fileData, isLoading } = useSWR(
@@ -33,22 +35,10 @@ const EditLocalFile = memo<BuiltinInterventionProps<EditLocalFileParams>>(({ arg
   // refused by the runtime, so previewing `String.replace`'s first-match result
   // would show the user a concrete diff to approve that can never be applied.
   // Count the matches and say so instead.
-  const { oldContent, newContent, matchCount } = useMemo(() => {
-    if (!fileData?.content) return { matchCount: 0, newContent: '', oldContent: '' };
-
-    const oldContent = fileData.content;
-    const matchCount = args.old_string ? oldContent.split(args.old_string).length - 1 : 0;
-
-    if (!args.replace_all && matchCount > 1) {
-      return { matchCount, newContent: oldContent, oldContent };
-    }
-
-    const newContent = args.replace_all
-      ? oldContent.replaceAll(args.old_string, args.new_string)
-      : oldContent.replace(args.old_string, args.new_string);
-
-    return { matchCount, newContent, oldContent };
-  }, [fileData?.content, args.old_string, args.new_string, args.replace_all]);
+  const { oldContent, newContent, matchCount } = useMemo(
+    () => buildEditPreview(fileData?.content, { new_string, old_string, replace_all }),
+    [fileData?.content, old_string, new_string, replace_all],
+  );
 
   const isAmbiguous = !args.replace_all && matchCount > 1;
 
