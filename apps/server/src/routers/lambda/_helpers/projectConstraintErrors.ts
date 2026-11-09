@@ -1,13 +1,14 @@
+import { PROJECT_DUPLICATE_IDENTIFIER, PROJECT_DUPLICATE_SLUG } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 
 import { getPostgresErrorField } from '../sandboxStorage/constraintErrors';
 
 /** Unique indexes on `projects`, by the field a person changes to resolve them. */
 const PROJECT_CONSTRAINT_MESSAGES: Record<string, string> = {
-  projects_identifier_user_id_unique: 'DUPLICATE_PROJECT_IDENTIFIER',
-  projects_identifier_workspace_id_unique: 'DUPLICATE_PROJECT_IDENTIFIER',
-  projects_slug_user_id_unique: 'DUPLICATE_PROJECT_SLUG',
-  projects_slug_workspace_id_unique: 'DUPLICATE_PROJECT_SLUG',
+  projects_identifier_user_id_unique: PROJECT_DUPLICATE_IDENTIFIER,
+  projects_identifier_workspace_id_unique: PROJECT_DUPLICATE_IDENTIFIER,
+  projects_slug_user_id_unique: PROJECT_DUPLICATE_SLUG,
+  projects_slug_workspace_id_unique: PROJECT_DUPLICATE_SLUG,
 };
 
 /**

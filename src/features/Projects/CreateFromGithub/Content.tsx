@@ -18,6 +18,7 @@ import { useProjectStore } from '@/store/project';
 
 import {
   getCreateProjectInput,
+  getProjectConflictField,
   getProjectFieldSuggestions,
   isProjectIdentifierValid,
 } from '../createProjectForm';
@@ -25,12 +26,6 @@ import MainAgentField from '../MainAgentField';
 import { useDefaultMainAgent } from '../useDefaultMainAgent';
 import { parseGithubRepository } from './githubRepository';
 import RepositoryList from './RepositoryList';
-
-/** Server codes for a taken slug or identifier; see `rethrowDuplicateProjectField`. */
-const DUPLICATE_FIELD = {
-  DUPLICATE_PROJECT_IDENTIFIER: 'identifier',
-  DUPLICATE_PROJECT_SLUG: 'name',
-} as const;
 
 interface FormState {
   /** Default branch of the picked repository; unknown for a pasted URL. */
@@ -118,10 +113,10 @@ const CreateFromGithubContent = () => {
       close();
       navigate(`/project/${project.slug ?? project.id}`);
     } catch (error) {
-      const duplicate =
-        error instanceof Error
-          ? DUPLICATE_FIELD[error.message as keyof typeof DUPLICATE_FIELD]
-          : undefined;
+      // A taken slug also comes back as a conflict; this dialog has no slug
+      // input, so it reports it on the name the slug is derived from.
+      const field = getProjectConflictField(error);
+      const duplicate = field === 'slug' ? 'name' : field;
       if (duplicate) {
         setForm((current) => ({ ...current, duplicate }));
       } else {

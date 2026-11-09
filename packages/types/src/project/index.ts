@@ -1,5 +1,19 @@
 export const PROJECT_IDENTIFIER_REGEX = /^[A-Z][A-Z0-9]{2,5}$/;
 
+/**
+ * `CONFLICT` messages for a taken project slug or identifier.
+ *
+ * The create router sends one of these as the tRPC error message, so a form can
+ * tell which field the conflict belongs to and mark that input instead of
+ * showing a generic failure.
+ */
+export const PROJECT_DUPLICATE_IDENTIFIER = 'DUPLICATE_PROJECT_IDENTIFIER';
+
+export const PROJECT_DUPLICATE_SLUG = 'DUPLICATE_PROJECT_SLUG';
+
+/** The field a person edits to resolve a duplicate project value. */
+export type ProjectDuplicateField = 'identifier' | 'slug';
+
 export const PROJECT_STATUSES = [
   'backlog',
   'active',
