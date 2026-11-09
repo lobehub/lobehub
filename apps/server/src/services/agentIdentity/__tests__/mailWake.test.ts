@@ -518,6 +518,7 @@ describe('mail digest flush', () => {
     expect(runs[0].params.hooks).toEqual([
       expect.objectContaining({ id: `agent-inbox-report:${accountId}`, type: 'onComplete' }),
     ]);
+    expect(runs[0].params.title).toBe('Agent workloads +1');
     expect(own).toContain('2 messages arrived');
     expect(own).not.toContain('launchdriftcloud');
     expect(fenced.startsWith('<untrusted_inbox>')).toBe(true);

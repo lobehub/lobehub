@@ -263,7 +263,7 @@ describe('HeterogeneousAgentService', () => {
         buildEvent('stream_chunk', 1, { chunkType: 'text', content: 'hi' }),
         buildEvent('tool_start', 2, { parentMessageId: 'asst-1' }),
         buildEvent('tool_result', 3, { toolCallId: 'tc-1' }),
-        buildEvent('agent_runtime_end', 4, { reason: 'success' }),
+        buildEvent('agent_runtime_end', 4, { reason: 'interrupted' }),
       ];
 
       await service.heteroIngest({
@@ -392,7 +392,7 @@ describe('HeterogeneousAgentService', () => {
       const events: AgentStreamEvent[] = [
         buildEvent('stream_start', 0, { assistantMessage: { id: 'asst-1' } }),
         buildEvent('stream_chunk', 1, { chunkType: 'text', content: 'hello' }),
-        buildEvent('agent_runtime_end', 2, { reason: 'success' }),
+        buildEvent('agent_runtime_end', 2, { reason: 'interrupted' }),
       ];
 
       await expect(

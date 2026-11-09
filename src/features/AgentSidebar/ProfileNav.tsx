@@ -1,11 +1,12 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
+import { Flexbox, Text } from '@lobehub/ui';
 import type { LucideIcon } from 'lucide-react';
 import {
   ChartColumnBigIcon,
   ChevronLeftIcon,
   FileUserIcon,
+  MailIcon,
   RadioTowerIcon,
   Share2Icon,
 } from 'lucide-react';
@@ -15,6 +16,7 @@ import urlJoin from 'url-join';
 import {
   type AgentProfileTab,
   buildAgentProfileTabPath,
+  groupAgentProfileTabOptions,
 } from '@/features/AgentProfileTabs/tabOptions';
 import { useAgentProfileTabOptions } from '@/features/AgentProfileTabs/useAgentProfileTabOptions';
 import NavItem from '@/features/NavPanel/components/NavItem';
@@ -27,6 +29,7 @@ import Agent from './Header/Agent';
 
 const TAB_ICONS: Record<AgentProfileTab, LucideIcon> = {
   channel: RadioTowerIcon,
+  mail: MailIcon,
   profile: FileUserIcon,
   share: Share2Icon,
   statistics: ChartColumnBigIcon,
@@ -46,15 +49,30 @@ const ProfileNav = ({ active }: ProfileNavProps) => {
   return (
     <SideBarLayout
       body={
-        <Flexbox gap={1} paddingInline={4}>
-          {options.map(({ label, value }) => (
-            <NavItem
-              active={value === active}
-              icon={TAB_ICONS[value]}
-              key={value}
-              title={label}
-              onClick={() => navigate(buildAgentProfileTabPath(agentId, value))}
-            />
+        <Flexbox gap={12} paddingInline={4}>
+          {groupAgentProfileTabOptions(options).map((group) => (
+            <Flexbox gap={1} key={group.key}>
+              {group.key === 'identity' && (
+                <Text
+                  ellipsis
+                  fontSize={12}
+                  style={{ paddingBlock: 4, paddingInline: 8 }}
+                  type={'secondary'}
+                  weight={500}
+                >
+                  {t('tab.group.identity')}
+                </Text>
+              )}
+              {group.options.map(({ label, value }) => (
+                <NavItem
+                  active={value === active}
+                  icon={TAB_ICONS[value]}
+                  key={value}
+                  title={label}
+                  onClick={() => navigate(buildAgentProfileTabPath(agentId, value))}
+                />
+              ))}
+            </Flexbox>
           ))}
         </Flexbox>
       }
