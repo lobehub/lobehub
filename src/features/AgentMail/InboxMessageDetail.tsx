@@ -13,7 +13,7 @@ import InlineError from './InlineError';
 
 dayjs.extend(relativeTime);
 
-export interface InboxMessageModalProps {
+export interface InboxMessageDetailProps {
   id: string;
 }
 
@@ -43,7 +43,7 @@ const formatAttachmentSize = (bytes?: number): string | undefined => {
   return `${Math.max(1, Math.round(bytes / 1024))} KB`;
 };
 
-const InboxMessageModal = memo<InboxMessageModalProps>(({ id }) => {
+const InboxMessageDetail = memo<InboxMessageDetailProps>(({ id }) => {
   const { t } = useTranslation('setting');
   const { data, error, isLoading, mutate } = useSWR(['agent-inbox-message', id], ([, messageId]) =>
     agentAccountService.getInboxMessage(messageId),
@@ -124,6 +124,6 @@ const InboxMessageModal = memo<InboxMessageModalProps>(({ id }) => {
   );
 });
 
-InboxMessageModal.displayName = 'AgentInboxMessageModal';
+InboxMessageDetail.displayName = 'AgentInboxMessageDetail';
 
-export default InboxMessageModal;
+export default InboxMessageDetail;

@@ -24,6 +24,10 @@ describe('buildAgentProfileTabPath', () => {
 });
 
 describe('getAgentProfileTab', () => {
+  it('keeps the mail tab active on an opened message', () => {
+    expect(getAgentProfileTab('/agent/agt_1/mail/msg_1')).toBe('mail');
+  });
+
   it.each([
     ['/agent/agt_1/profile', 'profile'],
     ['/agent/agt_1/mail', 'mail'],

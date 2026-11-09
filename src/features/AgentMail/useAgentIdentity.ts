@@ -1,4 +1,5 @@
 import type { AgentInboxMessageSummary } from '@lobechat/types';
+import { useState } from 'react';
 import useSWR from 'swr';
 import useSWRInfinite from 'swr/infinite';
 
@@ -22,24 +23,54 @@ export const useAgentAccounts = (agentId: string) =>
   useSWR(accountsKey(agentId), ([, id]) => agentAccountService.list({ agentId: id }));
 
 /**
- * What has arrived at those addresses, newest first.
+ * The mailbox being read, out of the addresses the agent still holds.
+ *
+ * Derived rather than stored as a fallback, so releasing the selected address
+ * lands on the next one without any bookkeeping.
+ */
+export const useMailbox = (agentId: string) => {
+  const { data, error, isLoading, mutate } = useAgentAccounts(agentId);
+  const [selectedId, select] = useState<string>();
+  const accounts = (data ?? []).filter((account) => account.status !== 'revoked');
+
+  return {
+    accounts,
+    current: accounts.find((account) => account.id === selectedId) ?? accounts[0],
+    data,
+    error,
+    isLoading,
+    mutate,
+    select,
+  };
+};
+
+export type Mailbox = ReturnType<typeof useMailbox>;
+
+/**
+ * What has arrived at one address, newest first (every address when none is given).
  *
  * Paged by a keyset cursor (the last row of the previous page), so every
  * request asks for one fixed-size page however far back the user scrolls,
  * and rows already on screen stay where they are.
  */
-export const useAgentInbox = (agentId: string) => {
+export const useAgentInbox = (agentId: string, accountId?: string) => {
   const inbox = useSWRInfinite(
     (pageIndex, previous: AgentInboxMessageSummary[] | null) => {
       if (!agentId) return null;
-      if (pageIndex === 0) return ['agent-inbox', agentId, null] as const;
+      if (pageIndex === 0) return ['agent-inbox', agentId, accountId, null] as const;
       const last = previous?.at(-1);
       // The previous page came back short: there is nothing older to ask for.
       if (!last || previous!.length < INBOX_PAGE_SIZE) return null;
-      return ['agent-inbox', agentId, { id: last.id, receivedAt: last.receivedAt }] as const;
+      return [
+        'agent-inbox',
+        agentId,
+        accountId,
+        { id: last.id, receivedAt: last.receivedAt },
+      ] as const;
     },
-    ([, id, before]) =>
+    ([, id, account, before]) =>
       agentAccountService.listInbox({
+        accountId: account,
         agentId: id,
         before: before ?? undefined,
         limit: INBOX_PAGE_SIZE,
@@ -66,9 +97,9 @@ export const useAgentInbox = (agentId: string) => {
  * The server's unread count. The list above stops at its current window, so
  * counting its unread dots would under-report a busy inbox.
  */
-export const useAgentInboxUnreadCount = (agentId: string) =>
+export const useAgentInboxUnreadCount = (agentId: string, accountId?: string) =>
   useSWR(
-    agentId ? ['agent-inbox-unread', agentId] : null,
-    ([, id]) => agentAccountService.getInboxUnreadCount(id),
+    agentId ? ['agent-inbox-unread', agentId, accountId] : null,
+    ([, id, account]) => agentAccountService.getInboxUnreadCount(id, account),
     { refreshInterval: INBOX_REFRESH_INTERVAL_MS },
   );

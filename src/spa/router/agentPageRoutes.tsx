@@ -85,7 +85,7 @@ export const agentPageChildren: RouteObject[] = [
   {
     element: dynamicElement(() => import('@/routes/(main)/agent/mail'), 'Desktop > Chat > Mail'),
     handle: { meta: agentMailRouteMeta },
-    path: 'mail',
+    path: 'mail/:messageId?',
   },
   {
     element: dynamicElement(
