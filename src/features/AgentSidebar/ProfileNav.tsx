@@ -1,6 +1,6 @@
 'use client';
 
-import { Flexbox, Text } from '@lobehub/ui';
+import { Button, Flexbox, Text } from '@lobehub/ui';
 import type { LucideIcon } from 'lucide-react';
 import {
   ChartColumnBigIcon,
@@ -83,11 +83,14 @@ const ProfileNav = ({ active }: ProfileNavProps) => {
           <SideBarHeaderLayout
             showBack={false}
             left={
-              <NavItem
+              <Button
                 icon={ChevronLeftIcon}
-                title={t('tab.backToChat')}
+                size={'small'}
+                type={'text'}
                 onClick={() => navigate(urlJoin('/agent', agentId))}
-              />
+              >
+                {t('tab.backToChat')}
+              </Button>
             }
           />
           <Flexbox paddingBlock={'0 8px'} paddingInline={6}>
