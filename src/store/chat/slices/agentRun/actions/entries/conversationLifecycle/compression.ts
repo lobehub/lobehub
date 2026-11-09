@@ -8,7 +8,7 @@ import { chatService } from '@/services/chat';
 import { messageService } from '@/services/message';
 import { getAgentStoreState } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
-import { dbMessageSelectors } from '@/store/chat/selectors';
+import { dbMessageSelectors, topicSelectors } from '@/store/chat/selectors';
 import { type ChatStore } from '@/store/chat/store';
 import {
   createPendingCompressedGroup,
@@ -98,8 +98,11 @@ export const executeContextCompression = async (
     get().replaceMessages(serverMessages, { context: context as any });
     get().associateMessageWithOperation(messageGroupId, operationId);
 
-    // 2. Generate summary via LLM
-    const { model, provider } = agentSelectors.getAgentConfigById(agentId)(getAgentStoreState());
+    // 2. Generate summary via LLM. Match the runtime's auto-compression model resolution: a model
+    // pinned to the topic wins over the agent default (see streamingExecutor).
+    const { model, provider } =
+      topicSelectors.getTopicModelById(topicId)(get()) ??
+      agentSelectors.getAgentConfigById(agentId)(getAgentStoreState());
     const compressionPayload = chainCompressContext(messagesToSummarize);
     let summaryContent = '';
     let summaryError: Error | undefined;

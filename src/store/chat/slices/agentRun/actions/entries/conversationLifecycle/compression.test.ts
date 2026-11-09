@@ -41,6 +41,7 @@ beforeEach(() => {
     useChatStore.setState({
       activeAgentId: agentId,
       activeTopicId: topicId,
+      topicDataMap: {},
       dbMessagesMap: { [key]: originalMessages },
       messagesMap: { [key]: originalMessages },
     });
@@ -175,5 +176,48 @@ describe('executeCompression', () => {
     });
     expect(messageService.cancelCompression).not.toHaveBeenCalled();
     expect(getMessageIds()).toEqual(['group-1']);
+  });
+
+  describe('summary model', () => {
+    const runWithSummary = async () => {
+      vi.spyOn(messageService, 'finalizeCompression').mockResolvedValue({ messages: [] });
+      const fetchSpy = vi
+        .spyOn(chatService, 'fetchPresetTaskResult')
+        .mockImplementation(async ({ onMessageHandle }) => {
+          onMessageHandle?.({ text: 'summary', type: 'text' });
+        });
+      await act(async () => {
+        await useChatStore.getState().executeCompression(context, '');
+      });
+      return fetchSpy.mock.calls[0][0].params;
+    };
+
+    it('uses the model pinned to the topic over the agent default', async () => {
+      act(() => {
+        useChatStore.setState({
+          topicDataMap: {
+            [agentId]: {
+              items: [{ id: topicId, model: 'claude-opus-4-8', provider: 'anthropic' }],
+            } as any,
+          },
+        });
+      });
+
+      const params = await runWithSummary();
+
+      expect(params).toMatchObject({ model: 'claude-opus-4-8', provider: 'anthropic' });
+    });
+
+    it('falls back to the agent default when the topic has no pinned model', async () => {
+      act(() => {
+        useChatStore.setState({
+          topicDataMap: { [agentId]: { items: [{ id: topicId }] } as any },
+        });
+      });
+
+      const params = await runWithSummary();
+
+      expect(params).toMatchObject({ model: 'gpt-4o-mini', provider: 'openai' });
+    });
   });
 });
