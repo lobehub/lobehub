@@ -50,6 +50,7 @@ export const usePageEditable = (): boolean => {
       hasEditPermission &&
       canEditResource &&
       collab.access === 'edit' &&
+      !collab.blocked &&
       (collab.status === 'synced' || collab.status === 'offline')
     );
   }

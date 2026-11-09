@@ -41,8 +41,16 @@ export interface PageCollabCharLimitRefusal {
 /** `doc_error` code the room sends when the server refuses its page for its length. */
 export const PAGE_ROOM_CHAR_LIMIT_CODE = 'char_limit_exceeded';
 
+export type PageCollabBlockedReason = 'deleted' | 'too_large';
+
+const BLOCKED_REASON: Record<string, PageCollabBlockedReason> = {
+  doc_deleted: 'deleted',
+  doc_too_large: 'too_large',
+};
+
 export interface PageCollabProviderEvents {
   onAccess?: (access: PageCollabAccess) => void;
+  onBlocked?: (reason: PageCollabBlockedReason) => void;
   onBootstrap?: () => void;
   /**
    * The server stored the room's page again after refusing it. A page already
@@ -389,6 +397,12 @@ export class PageCollabProvider extends Emitter {
           } else {
             console.warn('[PageCollabProvider] char limit refusal without a limit', message);
           }
+          return;
+        }
+        // Not a sync failure: retrying cannot help, the page stays read-only.
+        const blocked = BLOCKED_REASON[message.code];
+        if (blocked) {
+          this.events.onBlocked?.(blocked);
           return;
         }
         // A view-only member is still in the room; only their writes are refused.

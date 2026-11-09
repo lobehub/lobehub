@@ -368,4 +368,44 @@ describe('PageCollabProvider', () => {
     expect(onReset).toHaveBeenCalledOnce();
     expect(onReset).toHaveBeenCalledWith('bootstrap_conflict');
   });
+
+  it('reports a page at its size cap as blocked, staying in the room', () => {
+    const { deliver, mux, ready } = createMux();
+    const onBlocked = vi.fn();
+    const onStatus = vi.fn();
+    const provider = new PageCollabProvider('doc_1', new Y.Doc(), mux as any, {
+      onBlocked,
+      onStatus,
+    });
+
+    provider.connect();
+    ready();
+    deliver(synced());
+    deliver({
+      code: 'doc_too_large',
+      documentId: 'doc_1',
+      message: 'too large',
+      type: 'doc_error',
+    });
+
+    expect(onBlocked).toHaveBeenCalledWith('too_large');
+    expect(onStatus).not.toHaveBeenCalledWith('error');
+  });
+
+  it('reports a deleted page as blocked instead of a sync failure', () => {
+    const { deliver, mux, ready } = createMux();
+    const onBlocked = vi.fn();
+    const onFailure = vi.fn();
+    const provider = new PageCollabProvider('doc_1', new Y.Doc(), mux as any, {
+      onBlocked,
+      onFailure,
+    });
+
+    provider.connect();
+    ready();
+    deliver({ code: 'doc_deleted', documentId: 'doc_1', message: 'deleted', type: 'doc_error' });
+
+    expect(onBlocked).toHaveBeenCalledWith('deleted');
+    expect(onFailure).not.toHaveBeenCalled();
+  });
 });

@@ -37,6 +37,7 @@ export interface PublicState {
 
 export interface PageCollabState {
   access: 'edit' | 'view';
+  blocked?: 'deleted' | 'too_large';
   /** The room's body reached the editor; until then the page shows the stored copy. */
   bodyReady?: boolean;
   pending: number;
