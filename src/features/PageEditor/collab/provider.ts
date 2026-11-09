@@ -2,6 +2,7 @@ import type {
   DocumentChannel,
   GatewayMuxClient,
   GatewayMuxStatus,
+  MuxDocCapacity,
   MuxDocServerMessage,
 } from '@lobechat/agent-gateway-client';
 import * as Y from 'yjs';
@@ -52,6 +53,7 @@ export interface PageCollabProviderEvents {
   onAccess?: (access: PageCollabAccess) => void;
   onBlocked?: (reason: PageCollabBlockedReason) => void;
   onBootstrap?: () => void;
+  onCapacity?: (capacity: MuxDocCapacity) => void;
   /**
    * The server stored the room's page again after refusing it. A page already
    * over the limit is stored when it does not grow, so only the server knows.
@@ -323,6 +325,11 @@ export class PageCollabProvider extends Emitter {
     this.handleLocalUpdate(update, null);
   }
 
+  private reportCapacity(capacity: MuxDocCapacity) {
+    this.events.onCapacity?.(capacity);
+    if (capacity === 'full') this.events.onBlocked?.('too_large');
+  }
+
   private handleMessage = (message: MuxDocServerMessage) => {
     switch (message.type) {
       case 'doc_synced': {
@@ -342,6 +349,7 @@ export class PageCollabProvider extends Emitter {
           this.awareness.setLocalState(this.awareness.getLocalState());
         }
         this.resendPending();
+        if (message.capacity) this.reportCapacity(message.capacity);
         if (message.bootstrap || message.bootstrapped) {
           // The binding seeds an empty root as soon as it hears `sync`, before
           // the bootstrap below runs; that write is part of our bootstrap too.
@@ -374,6 +382,11 @@ export class PageCollabProvider extends Emitter {
 
       case 'doc_char_limit_cleared': {
         this.events.onCharLimitCleared?.();
+        return;
+      }
+
+      case 'doc_capacity': {
+        this.reportCapacity(message.capacity);
         return;
       }
 

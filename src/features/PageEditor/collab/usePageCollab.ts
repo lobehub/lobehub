@@ -89,6 +89,7 @@ export const usePageCollab = (documentId: string | undefined, onReset?: () => vo
     const provider = new PageCollabProvider(documentId!, doc, getGatewayMux({ gatewayUrl }), {
       onAccess: (access) => setCollab({ access }),
       onBlocked: (blocked) => setCollab({ blocked }),
+      onCapacity: (capacity) => setCollab({ capacity }),
       onBootstrap: () => {
         const editor = storeApi.getState().editor;
         if (editor) void useDocumentStore.getState().onEditorInit(editor, documentId!);

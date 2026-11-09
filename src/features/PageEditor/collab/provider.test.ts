@@ -408,4 +408,53 @@ describe('PageCollabProvider', () => {
     expect(onBlocked).toHaveBeenCalledWith('deleted');
     expect(onFailure).not.toHaveBeenCalled();
   });
+
+  describe('room capacity', () => {
+    const open = (events: Record<string, unknown>) => {
+      const harness = createMux();
+      new PageCollabProvider('doc_1', new Y.Doc(), harness.mux as any, events).connect();
+      harness.ready();
+      return harness;
+    };
+
+    it('opens a page the room already counts as full read-only, before anyone types', () => {
+      const onBlocked = vi.fn();
+      const { deliver } = open({ onBlocked });
+
+      deliver(synced({ capacity: 'full' }));
+
+      expect(onBlocked).toHaveBeenCalledWith('too_large');
+    });
+
+    it('reports how full the page is on sync and whenever the room says it changed', () => {
+      const onCapacity = vi.fn();
+      const { deliver } = open({ onCapacity });
+
+      deliver(synced({ capacity: 'near_full' }));
+      deliver({ capacity: 'ok', documentId: 'doc_1', type: 'doc_capacity' });
+
+      expect(onCapacity.mock.calls).toEqual([['near_full'], ['ok']]);
+    });
+
+    it('turns the page read-only when the room says it became full', () => {
+      const onBlocked = vi.fn();
+      const { deliver } = open({ onBlocked });
+
+      deliver(synced({ capacity: 'near_full' }));
+      deliver({ capacity: 'full', documentId: 'doc_1', type: 'doc_capacity' });
+
+      expect(onBlocked).toHaveBeenCalledWith('too_large');
+    });
+
+    it('reads a sync from a gateway that does not report capacity as no news', () => {
+      const onBlocked = vi.fn();
+      const onCapacity = vi.fn();
+      const { deliver } = open({ onBlocked, onCapacity });
+
+      deliver(synced());
+
+      expect(onCapacity).not.toHaveBeenCalled();
+      expect(onBlocked).not.toHaveBeenCalled();
+    });
+  });
 });

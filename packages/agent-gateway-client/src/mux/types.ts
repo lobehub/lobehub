@@ -60,12 +60,17 @@ export interface MuxDocAwarenessEntry {
   state: Record<string, unknown> | null;
 }
 
+/** How close the room's page is to its size cap; `full` refuses anything that adds content. */
+export type MuxDocCapacity = 'full' | 'near_full' | 'ok';
+
 export type MuxDocServerMessage =
   | {
       access: 'edit' | 'view';
       awareness?: MuxDocAwarenessEntry[];
       bootstrap: boolean;
       bootstrapped: boolean;
+      /** Absent from gateways that predate the size cap. */
+      capacity?: MuxDocCapacity;
       documentId: string;
       epoch: string;
       reset: boolean;
@@ -73,6 +78,7 @@ export type MuxDocServerMessage =
       update: string;
     }
   | { documentId: string; type: 'doc_update'; update: string }
+  | { capacity: MuxDocCapacity; documentId: string; type: 'doc_capacity' }
   | { documentId: string; seq: number; type: 'doc_ack' }
   /** The room's page is stored again after a `char_limit_exceeded` refusal. */
   | { documentId: string; type: 'doc_char_limit_cleared' }

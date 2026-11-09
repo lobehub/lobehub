@@ -339,6 +339,9 @@ export default {
   'pageEditor.collab.deleted.description':
     'It was deleted or moved out of this workspace. Return to the page list to keep working.',
   'pageEditor.collab.deleted.title': 'This page is no longer available here',
+  'pageEditor.collab.nearFull.description':
+    "It's close to its size limit. Remove content you no longer need, or move some of it to a new page.",
+  'pageEditor.collab.nearFull.title': 'This page is almost full',
   'pageEditor.collab.notSynced':
     'Your latest page edits are still syncing, so the Agent may not see them yet.',
   'pageEditor.collab.offlineRestore.content':

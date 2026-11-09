@@ -297,6 +297,8 @@
   "pageEditor.chooseIcon": "选择图标",
   "pageEditor.collab.deleted.description": "页面已被删除或移出此工作区。请返回页面列表继续工作。",
   "pageEditor.collab.deleted.title": "此页面已不在这里",
+  "pageEditor.collab.nearFull.description": "页面已接近大小上限。请删除不再需要的内容，或把部分内容移到新页面。",
+  "pageEditor.collab.nearFull.title": "此页面快满了",
   "pageEditor.collab.notSynced": "你最近的页面修改还在同步，Agent 可能暂时看不到。",
   "pageEditor.collab.offlineRestore.content": "离线期间页面已从服务器重新加载，你未同步的修改不在其中。要恢复你的版本吗？",
   "pageEditor.collab.offlineRestore.discard": "保留当前页面",
