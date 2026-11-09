@@ -7,6 +7,7 @@ import { sha256 } from 'js-sha256';
 
 import { serverDBEnv } from '@/config/db';
 import { FileModel } from '@/database/models/file';
+import { FileContentRepository } from '@/database/repositories/fileContent';
 import { type FileItem } from '@/database/schemas';
 import { appEnv } from '@/envs/app';
 import { TempFileManager } from '@/server/utils/tempFileManager';
@@ -43,6 +44,7 @@ export class FileService {
   private db: LobeChatDatabase;
 
   private userId: string;
+  private fileContentRepo: FileContentRepository;
   private fileModel: FileModel;
 
   private impl: FileServiceImpl;
@@ -50,6 +52,7 @@ export class FileService {
   constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.db = db;
     this.userId = userId;
+    this.fileContentRepo = new FileContentRepository(db, userId, workspaceId);
     this.fileModel = new FileModel(db, userId, workspaceId);
     this.impl = createFileServiceModule(db);
   }
@@ -302,6 +305,21 @@ export class FileService {
     });
 
     return id;
+  }
+
+  /**
+   * Sync the existing rows for a storage key whose object was just overwritten,
+   * so re-uploading one key keeps a single record. Resolves to `undefined` when
+   * the caller should create a record instead.
+   */
+  public async refreshFileRecordByUrl(
+    url: string,
+    params: { fileType: string; size: number },
+  ): Promise<{ fileId: string; url: string } | undefined> {
+    const fileId = await this.fileContentRepo.replaceStoredContent(url, params);
+    if (!fileId) return;
+
+    return { fileId, url: await this.getFileAccessUrl({ id: fileId, url }) };
   }
 
   /**
