@@ -38,7 +38,7 @@ export const htmlToMarkdown = (
 
   try {
     const document = window.document;
-    document.body.innerHTML = html;
+    document.write(html);
 
     let parsedContent: ReturnType<Readability<string>['parse']> = null;
     try {
