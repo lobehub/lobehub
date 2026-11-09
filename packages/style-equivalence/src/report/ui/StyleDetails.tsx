@@ -220,13 +220,15 @@ const SourceCompare = ({ styles: data }: { styles: ReviewView['styles'] }) => {
   ].sort();
   const usage = (side: 'base' | 'head') =>
     (data.usage[side] ?? ['（这一侧没有这个元素）']).join('\n');
+  const label = (side: 'base' | 'head', text: string) =>
+    data.counterpart === side ? `${text}：同一位置的元素，没有样式类` : text;
   return (
     <Flexbox gap={12}>
       <div {...stylex.props(styles.block)}>
         <div {...stylex.props(styles.group)}>JSX 用法</div>
         <div {...stylex.props(styles.panes)}>
-          <SourcePane label="改之前">{usage('base')}</SourcePane>
-          <SourcePane split label="改之后">
+          <SourcePane label={label('base', '改之前')}>{usage('base')}</SourcePane>
+          <SourcePane split label={label('head', '改之后')}>
             {usage('head')}
           </SourcePane>
         </div>

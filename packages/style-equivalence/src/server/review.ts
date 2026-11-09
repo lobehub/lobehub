@@ -47,6 +47,7 @@ interface CaseEntry {
 }
 
 interface CaseEvidence {
+  counterpart?: Sides<string>;
   declarations?: Partial<Record<'base' | 'head', Record<string, string>>>;
   elements?: Partial<
     Record<
@@ -123,12 +124,17 @@ const stylesOf = (
           moved,
         ).map(({ key, ...block }) => ({ ...block, standIn: standIns(evidence, layout).get(key) }))
       : [],
+    counterpart: (['base', 'head'] as const).find(
+      (side) => !evidence?.elements?.[side]?.length && evidence?.counterpart?.[side],
+    ),
     moved: groupMoved(moved),
     source,
     usage: Object.fromEntries(
       (['base', 'head'] as const).flatMap((side) => {
         const chain = evidence?.elements?.[side];
-        return chain?.length ? [[side, chain.map(usageOf)]] : [];
+        if (chain?.length) return [[side, chain.map(usageOf)]];
+        const counterpart = evidence?.counterpart?.[side];
+        return counterpart ? [[side, [counterpart]]] : [];
       }),
     ),
   };

@@ -200,6 +200,7 @@ export interface ReviewView {
       slot: string;
       standIn?: string;
     }>;
+    counterpart?: 'base' | 'head';
     moved: Record<
       string,
       Array<{ selectors: string[]; slot: string; tags: string[]; text: string }>

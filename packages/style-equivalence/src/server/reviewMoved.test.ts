@@ -61,6 +61,7 @@ beforeAll(async () => {
         },
       },
       [`${FILE}|unpaired:head:T#3`]: {
+        counterpart: { base: '<th>' },
         declarations: {
           head: { 'styles.cell': headTexts['styles.cell'], 'styles.th': headTexts['styles.th'] },
         },
@@ -79,6 +80,13 @@ beforeAll(async () => {
       },
     },
     items: [
+      {
+        category: 'unpaired',
+        file: FILE,
+        flags: ['UNPAIRED'],
+        hash: 'h3',
+        key: `${FILE}|unpaired:head:T#3`,
+      },
       {
         category: 'needs-signoff',
         file: FILE,
@@ -140,5 +148,12 @@ describe('caseReview with rules moved onto child elements', () => {
       },
       { selectors: ['th'], slot: 'styles.th', tags: ['th'], text: headTexts['styles.th'] },
     ]);
+  });
+
+  it('shows the unstyled same-position element on the side that has no class', async () => {
+    const { item } = await caseReview(stored, `${FILE}|unpaired:head:T#3`);
+
+    expect(item.styles.usage.base).toEqual(['<th>']);
+    expect(item.styles.counterpart).toBe('base');
   });
 });
