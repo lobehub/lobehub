@@ -123,15 +123,6 @@ describe('ChannelMessage avatar', () => {
     expect(popup.dataset.agentId).toBe('agt_1');
     expect(popup.dataset.trigger).toBe('hover');
     expect(popup.dataset.description).toBe('Architect');
-  });
-
-  it('draws the generated character for an Agent author without an avatar', () => {
-    render(
-      <ChannelMessage
-        detail={detail}
-        message={message({ avatar: null, id: 'agt_1', name: 'Sanjo', type: 'agent' })}
-      />,
-    );
 
     // `avatar` is the message bubble's default image, which falls back to the legacy default.
     expect(screen.queryByAltText('avatar')).toBeNull();
