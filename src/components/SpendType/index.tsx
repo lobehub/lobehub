@@ -3,6 +3,7 @@ import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import {
   AudioLines,
+  Bot,
   CircleDotDashed,
   Database,
   ImagePlus,
@@ -13,6 +14,7 @@ import {
 import { memo, type ReactNode } from 'react';
 
 const styles = stylex.create({
+  agentRun: { color: cssVar.geekblue },
   chat: { color: cssVar.colorInfo },
   embedding: { color: cssVar.purple },
   imageGeneration: { color: cssVar.colorSuccess },
@@ -22,6 +24,7 @@ const styles = stylex.create({
 });
 
 export type SpendTypeValue =
+  | 'agentRun'
   | 'chat'
   | 'embedding'
   | 'imageGeneration'
@@ -37,6 +40,9 @@ interface SpendTypeProps {
 
 const getIcon = (type: string) => {
   switch (type) {
+    case 'agentRun': {
+      return Bot;
+    }
     case 'chat': {
       return MessageSquareText;
     }

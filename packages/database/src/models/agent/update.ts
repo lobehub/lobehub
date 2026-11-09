@@ -342,12 +342,11 @@ export const updateConfig = async (
         enableGraphMode: legacyChatConfig.enableGraphMode,
       }),
     } as AgentItem['agencyConfig'];
-    /* v8 ignore next -- unreachable: this branch requires an object `data.chatConfig`, which `merge` copies into `mergedValue.chatConfig`, so the `?? {}` fallback never runs */
     const {
       graph: _legacyGraph,
       enableGraphMode: _legacyEnableGraphMode,
       ...restChatConfig
-    } = (mergedValue.chatConfig ?? {}) as Record<string, unknown>;
+    } = { ...mergedValue.chatConfig } as Record<string, unknown>;
     mergedValue.chatConfig = restChatConfig as AgentItem['chatConfig'];
   }
 
@@ -363,21 +362,6 @@ export const updateConfig = async (
   );
 
   await ctx.assertFixedExecutionTarget(agent.workspaceId, mergedValue.agencyConfig);
-
-  // Final cleanup: ensure no undefined or null values enter the database
-  if (mergedValue.params) {
-    const params = mergedValue.params as Record<string, any>;
-    Object.keys(params).forEach((key) => {
-      /* v8 ignore next -- unreachable: `updatedParams` drops incoming `undefined` keys and stored JSON cannot hold `undefined` */
-      if (params[key] === undefined) {
-        delete params[key];
-      }
-    });
-    /* v8 ignore next -- unreachable: `mergedValue.params` is only set when `updatedParams` has a key, and the loop above never deletes one */
-    if (Object.keys(params).length === 0) {
-      mergedValue.params = undefined;
-    }
-  }
 
   // Timestamp fields are left to Drizzle's $onUpdate.
   touchedColumns.delete('updatedAt');

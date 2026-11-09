@@ -56,7 +56,20 @@ describe('page edit hooks', () => {
 
     await executor.onAfterCall!({ ...call(), result: { success: true } } as any);
     expect(documentState.endAgentEdit).toHaveBeenCalledWith('doc_1');
-    expect(invalidateSpy).toHaveBeenCalledWith({ cause: 'document-service', documentId: 'doc_1' });
+    expect(invalidateSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ cause: 'document-service', documentId: 'doc_1' }),
+    );
+  });
+
+  it('reloads the resource copy of the page, which the page header takes its title from', async () => {
+    await withPageEditHooks(sandboxExecutor as any).onAfterCall!({
+      ...call(),
+      result: { success: true },
+    } as any);
+
+    expect(invalidateSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ documentId: 'doc_1', refreshResources: true }),
+    );
   });
 
   it('keeps the executor own hooks', async () => {

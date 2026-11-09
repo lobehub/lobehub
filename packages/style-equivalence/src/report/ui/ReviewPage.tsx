@@ -1,89 +1,58 @@
+import { Button, Empty, ScrollArea, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
+import { CheckCheck } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { fetchReview, postReview, type ReviewPayload } from '../api';
-import { completionText, keyAction, nextSelection } from '../review';
+import { completionText, hasRenderedDifference, keyAction, nextSelection } from '../review';
+import { PageState } from './PageState';
 import { ReviewBar } from './ReviewBar';
 import { ReviewItemView } from './ReviewItemView';
+import { ReviewProgress } from './ReviewProgress';
 import { ReviewQueue } from './ReviewQueue';
 import { ReworkPanel } from './ReworkPanel';
-import { RunBadge, useFollowRun } from './RunBadge';
+import { useFollowRun } from './RunBadge';
+import { TopBar } from './TopBar';
 
 const styles = stylex.create({
-  center: { color: cssVar.colorTextSecondary, fontSize: 14, padding: 40 },
-  done: { color: cssVar.colorTextSecondary, fontSize: 14, lineHeight: 1.8, padding: 40 },
-  main: { minHeight: 0, overflowY: 'auto', paddingBlock: 24, paddingInline: 32 },
+  content: { maxWidth: 1440, paddingBlock: 24, paddingInline: 32 },
+  layout: { display: 'grid', flex: '1', gridTemplateColumns: '288px minmax(0, 1fr)', minHeight: 0 },
+  main: { display: 'flex', flexDirection: 'column', minHeight: 0, minWidth: 0 },
   page: {
     backgroundColor: cssVar.colorBgLayout,
     color: cssVar.colorText,
-    display: 'grid',
-    fontFamily: cssVar.fontFamily,
+    display: 'flex',
+    flexDirection: 'column',
     fontVariantNumeric: 'tabular-nums',
-    gridTemplateColumns: '272px 1fr',
-    gridTemplateRows: 'auto 1fr auto',
     height: '100vh',
   },
-  pill: {
-    backgroundColor: cssVar.colorFillTertiary,
-    borderRadius: 999,
-    color: cssVar.colorTextSecondary,
-    fontSize: 12,
-    paddingBlock: 4,
-    paddingInline: 10,
-  },
-  pillBack: { backgroundColor: cssVar.colorErrorBg, color: cssVar.colorError },
-  pillOk: { backgroundColor: cssVar.colorSuccessBg, color: cssVar.colorSuccess },
   queue: {
     backgroundColor: cssVar.colorBgContainer,
     borderInlineEndColor: cssVar.colorBorderSecondary,
     borderInlineEndStyle: 'solid',
     borderInlineEndWidth: 1,
-    gridRowEnd: '4',
-    gridRowStart: '2',
+    height: '100%',
     minHeight: 0,
-    overflowY: 'auto',
   },
-  reworkButton: {
-    backgroundColor: cssVar.colorBgContainer,
-    borderColor: cssVar.colorBorder,
-    borderRadius: 8,
-    borderStyle: 'solid',
-    borderWidth: 1,
-    cursor: 'pointer',
-    fontFamily: 'inherit',
-    fontSize: 13,
-    height: 32,
-    paddingInline: 14,
-  },
-  sub: { color: cssVar.colorTextTertiary, fontSize: 13 },
-  top: {
-    alignItems: 'center',
-    backgroundColor: cssVar.colorBgContainer,
-    borderBlockEndColor: cssVar.colorBorderSecondary,
-    borderBlockEndStyle: 'solid',
-    borderBlockEndWidth: 1,
-    columnGap: 16,
-    display: 'flex',
-    gridColumnEnd: '-1',
-    gridColumnStart: '1',
-    paddingBlock: 12,
-    paddingInline: 20,
-  },
-  topEnd: { alignItems: 'center', columnGap: 10, display: 'flex', marginInlineStart: 'auto' },
+  scroll: { flex: '1', minHeight: 0, overflowY: 'auto' },
 });
 
 const isTyping = (target: EventTarget | null) =>
   target instanceof HTMLElement && ['INPUT', 'TEXTAREA'].includes(target.tagName);
 
-export const ReviewPage = () => {
+const inDialog = (target: EventTarget | null) =>
+  target instanceof Element && Boolean(target.closest('[role="dialog"]'));
+
+export const ReviewPage = ({ initialKey }: { initialKey?: string }) => {
   const [payload, setPayload] = useState<ReviewPayload>();
-  const [current, setCurrent] = useState<string>();
+  const [current, setCurrent] = useState<string | undefined>(initialKey);
   const [note, setNote] = useState('');
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<'pass' | 'rework'>();
   const [error, setError] = useState<string>();
   const [panel, setPanel] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(() => {
     fetchReview()
@@ -106,13 +75,16 @@ export const ReviewPage = () => {
     setCurrent(key);
     setNote('');
     setError(undefined);
+    scrollRef.current?.scrollTo({ top: 0 });
   }, []);
 
   const act = useCallback(
     async (action: 'pass' | 'rework') => {
       if (!item || busy) return;
-      if (action === 'rework' && !note.trim()) return void inputRef.current?.focus();
-      setBusy(true);
+      const needsNote =
+        action === 'rework' ? !hasRenderedDifference(item) : item.category === 'difference';
+      if (needsNote && !note.trim()) return void inputRef.current?.focus();
+      setBusy(action);
       try {
         const next = await postReview({ action, key: item.key, note });
         setPayload(next);
@@ -120,7 +92,7 @@ export const ReviewPage = () => {
       } catch (reason) {
         setError(reason instanceof Error ? reason.message : String(reason));
       } finally {
-        setBusy(false);
+        setBusy(undefined);
       }
     },
     [busy, item, note, select],
@@ -129,7 +101,7 @@ export const ReviewPage = () => {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (!payload || event.metaKey || event.ctrlKey || event.altKey) return;
-      const action = keyAction(event.key, isTyping(event.target));
+      const action = keyAction(event.key, isTyping(event.target), panel || inDialog(event.target));
       if (!action) return;
       event.preventDefault();
       const index = payload.items.findIndex((entry) => entry.key === current);
@@ -141,71 +113,78 @@ export const ReviewPage = () => {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [act, current, item, payload, select]);
+  }, [act, current, item, panel, payload, select]);
 
   if (!payload)
     return (
-      <div {...stylex.props(styles.center)}>
-        {error ? `读取失败：${error}` : '正在读取复查队列…'}
-      </div>
+      <PageState
+        error={error}
+        loading="正在读取复查队列…"
+        title="读取复查队列失败"
+        onRetry={() => {
+          setError(undefined);
+          load();
+        }}
+      />
     );
-  const { counts } = payload;
-  const open = counts.todo + counts.changed;
+  const index = payload.items.findIndex((entry) => entry.key === current);
   return (
     <div {...stylex.props(styles.page)}>
-      <header {...stylex.props(styles.top)}>
-        <b>
-          {payload.pr
-            ? `#${payload.pr.number} ${payload.pr.title}`
-            : `${payload.run.base.slice(0, 7)}..${payload.run.head.slice(0, 7)}`}
-        </b>
-        <span {...stylex.props(styles.sub)}>
-          工具已自动证明 {counts.proven} 条 · 剩 {payload.items.length} 条要你看
-        </span>
-        <RunBadge follow={payload.follow} />
-        <div {...stylex.props(styles.topEnd)}>
-          <span {...stylex.props(styles.pill, styles.pillOk)}>已通过 {counts.passed}</span>
-          <span {...stylex.props(styles.pill, styles.pillBack)}>已打回 {counts.reworked}</span>
-          <span {...stylex.props(styles.pill)}>待看 {open}</span>
-          {counts['waiting-agent'] > 0 && (
-            <span {...stylex.props(styles.pill)}>等 agent {counts['waiting-agent']}</span>
-          )}
-          <button
-            type="button"
-            onClick={() => setPanel(true)}
-            {...stylex.props(styles.reworkButton)}
-          >
-            查看打回（{counts.reworked}）
-          </button>
-        </div>
-      </header>
-      <aside {...stylex.props(styles.queue)}>
-        <ReviewQueue current={current} payload={payload} onSelect={select} />
-      </aside>
-      <main key={payload.run.runId} {...stylex.props(styles.main)}>
-        {item ? (
-          <ReviewItemView conditions={payload.conditions} item={item} />
-        ) : (
-          <div {...stylex.props(styles.done)}>
-            {completionText(counts, payload.verdict).map((line) => (
-              <div key={line}>{line}</div>
-            ))}
+      <TopBar
+        base={payload.run.base}
+        follow={payload.follow}
+        head={payload.run.head}
+        section="review"
+      />
+      <ReviewProgress payload={payload} onOpenReworked={() => setPanel(true)} />
+      <div {...stylex.props(styles.layout)}>
+        <aside aria-label="复查队列" {...stylex.props(styles.queue)}>
+          <ScrollArea disableContentFit style={{ height: '100%' }}>
+            <ReviewQueue current={current} payload={payload} onSelect={select} />
+          </ScrollArea>
+        </aside>
+        <main key={payload.run.runId} {...stylex.props(styles.main)}>
+          <div ref={scrollRef} {...stylex.props(styles.scroll)}>
+            <div {...stylex.props(styles.content)}>
+              {item ? (
+                <ReviewItemView conditions={payload.conditions} item={item} />
+              ) : (
+                <Empty
+                  icon={CheckCheck}
+                  title={completionText(payload.counts, payload.verdict)[0]}
+                  type="page"
+                  action={
+                    payload.counts.reworked > 0 && (
+                      <Button onClick={() => setPanel(true)}>查看打回的项</Button>
+                    )
+                  }
+                  description={completionText(payload.counts, payload.verdict)
+                    .slice(1)
+                    .map((line) => (
+                      <Text as="p" key={line} type="secondary">
+                        {line}
+                      </Text>
+                    ))}
+                />
+              )}
+            </div>
           </div>
-        )}
-      </main>
-      {item && (
-        <ReviewBar
-          busy={busy}
-          error={error}
-          inputRef={inputRef}
-          item={item}
-          note={note}
-          onNote={setNote}
-          onPass={() => void act('pass')}
-          onRework={() => void act('rework')}
-        />
-      )}
-      {panel && <ReworkPanel payload={payload} onClose={() => setPanel(false)} />}
+          {item && (
+            <ReviewBar
+              busy={busy}
+              error={error}
+              inputRef={inputRef}
+              item={item}
+              note={note}
+              position={`第 ${index + 1} / ${payload.items.length} 条`}
+              onNote={setNote}
+              onPass={() => void act('pass')}
+              onRework={() => void act('rework')}
+            />
+          )}
+        </main>
+      </div>
+      <ReworkPanel open={panel} payload={payload} onClose={() => setPanel(false)} />
     </div>
   );
 };

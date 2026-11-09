@@ -13,6 +13,7 @@ import { loadRun } from '../server/api';
 import { runStack } from '../stack';
 import { annotateList, applyNotes, latestRunForPr, type NoteInput, reworkList } from './review';
 import { formatStack, formatSummary } from './summary';
+import { uiBuildStale } from './uiBuild';
 
 const run = promisify(execFile);
 
@@ -144,9 +145,13 @@ const main = async () => {
       ? path.resolve(target)
       : path.join(recordsDir, target);
     if (!existsSync(path.join(runDir, 'run.json'))) throw new Error(`No stored run at ${runDir}`);
-    if (!existsSync(path.join(DEFAULT_UI_DIR, 'index.html'))) {
+    const packageDir = path.resolve(import.meta.dirname, '../..');
+    const uiSources = [
+      path.join(packageDir, 'src'),
+      path.join(packageDir, 'report.vite.config.ts'),
+    ];
+    if (await uiBuildStale(DEFAULT_UI_DIR, uiSources)) {
       console.log('Building the report UI…');
-      const packageDir = path.resolve(import.meta.dirname, '../..');
       await run('bunx', ['vite', 'build', '--config', 'report.vite.config.ts'], {
         cwd: packageDir,
         maxBuffer: 64 * 1024 ** 2,

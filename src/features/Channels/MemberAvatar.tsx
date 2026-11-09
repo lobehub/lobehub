@@ -13,7 +13,7 @@ export function MemberAvatar({ member, size }: { member: ChannelPublicMember; si
   const { t } = useTranslation('channel');
   const isSelf = useUserStore((s) => isCurrentUserMember(member, userProfileSelectors.userId(s)));
   const name = memberName(member, t('deletedMember'));
-  if (isSelf) return <UserAvatar size={size} />;
+  if (isSelf) return <UserAvatar shape={'circle'} size={size} />;
   if (member.actorType === 'agent')
     return (
       <AgentAvatar
@@ -25,5 +25,5 @@ export function MemberAvatar({ member, size }: { member: ChannelPublicMember; si
         title={name}
       />
     );
-  return <Avatar avatar={memberAvatar(member)} size={size} title={name} />;
+  return <Avatar avatar={memberAvatar(member)} shape={'circle'} size={size} title={name} />;
 }

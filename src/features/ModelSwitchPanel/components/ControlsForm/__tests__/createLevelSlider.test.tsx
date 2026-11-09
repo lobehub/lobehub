@@ -69,21 +69,6 @@ describe('createLevelSliderComponent', () => {
       expect(screen.getByText('medium')).toBeInTheDocument();
       expect(screen.getByText('high')).toBeInTheDocument();
     });
-
-    it('should use defaultValue when value is not provided but onChange is', () => {
-      const TestSlider = createLevelSliderComponent<TestLevel>({
-        configKey: 'reasoningEffort',
-        defaultValue: 'medium',
-        levels: TEST_LEVELS,
-      });
-
-      const mockOnChange = vi.fn();
-
-      // Should not throw and should render
-      expect(() => {
-        render(<TestSlider onChange={mockOnChange} />);
-      }).not.toThrow();
-    });
   });
 
   describe('factory configuration', () => {

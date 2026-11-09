@@ -9,6 +9,11 @@ import { useFileStore } from '@/store/file';
 interface UseUploadFilesOptions {
   /** The conversation's agent id. Decides whether the chat-only file-type whitelist applies. */
   agentId: string;
+  /**
+   * The composer the files land in (its `contextSelectionKey`). Without one
+   * there is no attachment list to show them, so nothing is uploaded.
+   */
+  contextKey?: string;
   model?: string;
   provider?: string;
 }
@@ -57,7 +62,7 @@ export const partitionFilesByMediaAbility = (
  * @returns handleUploadFiles - Callback to handle file uploads
  */
 export const useUploadFiles = (options: UseUploadFilesOptions) => {
-  const { agentId, model = '', provider = '' } = options;
+  const { agentId, contextKey, model = '', provider = '' } = options;
   const { t } = useTranslation('chat');
 
   const { canUploadImage, canUploadVideo, canUploadAudio } = useMediaUploadAbility(
@@ -70,7 +75,7 @@ export const useUploadFiles = (options: UseUploadFilesOptions) => {
 
   const handleUploadFiles = useCallback(
     async (files: File[]) => {
-      if (!canUpload) return;
+      if (!canUpload || !contextKey) return;
 
       // Filter out media files if the model cannot receive them directly or via fallback.
       const { accepted, rejected } = partitionFilesByMediaAbility(files, {
@@ -90,10 +95,19 @@ export const useUploadFiles = (options: UseUploadFilesOptions) => {
       }
 
       if (accepted.length > 0) {
-        uploadFiles(accepted, agentId);
+        uploadFiles(contextKey, accepted, agentId);
       }
     },
-    [agentId, canUpload, canUploadImage, canUploadVideo, canUploadAudio, t, uploadFiles],
+    [
+      agentId,
+      canUpload,
+      canUploadImage,
+      canUploadVideo,
+      canUploadAudio,
+      contextKey,
+      t,
+      uploadFiles,
+    ],
   );
 
   return { canUploadImage, canUploadVideo, canUploadAudio, handleUploadFiles };

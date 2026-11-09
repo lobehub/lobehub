@@ -210,6 +210,7 @@ import { registerBuiltinRenders } from './renders';
 import { registerBuiltinStreamings } from './streamings';
 import { TwitterIdentifier, TwitterInspectors } from './twitter';
 
+const COPILOT_IDENTIFIER = 'copilot';
 const DROID_IDENTIFIER = 'droid';
 const DEVIN_IDENTIFIER = 'devin';
 const QODER_IDENTIFIER = 'qoder';
@@ -274,6 +275,10 @@ export const registerBuiltinToolSurfaces = (): void => {
     [AgentDocumentsManifest.identifier]: AgentDocumentsRenders as Record<string, BuiltinRender>,
     [AgentManagementManifest.identifier]: AgentManagementRenders as Record<string, BuiltinRender>,
     [ClaudeCodeIdentifier]: ClaudeCodeRenders as Record<string, BuiltinRender>,
+    [COPILOT_IDENTIFIER]: {
+      execute: RunCommandRender as BuiltinRender,
+      [ClaudeCodeApiName.AskUserQuestion]: ClaudeCodeRenders[ClaudeCodeApiName.AskUserQuestion],
+    },
     [DROID_IDENTIFIER]: {
       [ClaudeCodeApiName.AskUserQuestion]: ClaudeCodeRenders[ClaudeCodeApiName.AskUserQuestion],
     },
@@ -320,6 +325,7 @@ export const registerBuiltinToolSurfaces = (): void => {
     [KIMI_CODE_IDENTIFIER]: KimiCodeRenders as Record<string, BuiltinRender>,
     codex: {
       ...CodexRenders,
+      [ClaudeCodeApiName.AskUserQuestion]: ClaudeCodeRenders[ClaudeCodeApiName.AskUserQuestion],
       command_execution: RunCommandRender as BuiltinRender,
     },
     [GithubIdentifier]: GithubRenders,
@@ -342,6 +348,12 @@ export const registerBuiltinToolSurfaces = (): void => {
       BuiltinInspector
     >,
     [ClaudeCodeIdentifier]: ClaudeCodeInspectors as Record<string, BuiltinInspector>,
+    [COPILOT_IDENTIFIER]: {
+      execute: createRunCommandInspector(
+        'builtins.lobe-local-system.apiName.runCommand',
+      ) as BuiltinInspector,
+      [ClaudeCodeApiName.AskUserQuestion]: ClaudeCodeInspectors[ClaudeCodeApiName.AskUserQuestion],
+    },
     [DROID_IDENTIFIER]: {
       [ClaudeCodeApiName.AskUserQuestion]: ClaudeCodeInspectors[ClaudeCodeApiName.AskUserQuestion],
     },
@@ -400,7 +412,10 @@ export const registerBuiltinToolSurfaces = (): void => {
     },
     [PI_IDENTIFIER]: heterogeneousCliInspectors,
     [KIMI_CODE_IDENTIFIER]: KimiCodeInspectors,
-    'codex': CodexInspectors,
+    'codex': {
+      ...CodexInspectors,
+      [ClaudeCodeApiName.AskUserQuestion]: ClaudeCodeInspectors[ClaudeCodeApiName.AskUserQuestion],
+    },
     [GithubIdentifier]: GithubInspectors,
     [LinearIdentifier]: LinearInspectors,
     [TwitterIdentifier]: TwitterInspectors,
@@ -447,6 +462,14 @@ export const registerBuiltinToolSurfaces = (): void => {
       BuiltinIntervention
     >,
     [ClaudeCodeIdentifier]: ClaudeCodeInterventions as Record<string, BuiltinIntervention>,
+    codex: {
+      [ClaudeCodeApiName.AskUserQuestion]:
+        ClaudeCodeInterventions[ClaudeCodeApiName.AskUserQuestion],
+    },
+    [COPILOT_IDENTIFIER]: {
+      [ClaudeCodeApiName.AskUserQuestion]:
+        ClaudeCodeInterventions[ClaudeCodeApiName.AskUserQuestion],
+    },
     [DROID_IDENTIFIER]: {
       [ClaudeCodeApiName.AskUserQuestion]:
         ClaudeCodeInterventions[ClaudeCodeApiName.AskUserQuestion],

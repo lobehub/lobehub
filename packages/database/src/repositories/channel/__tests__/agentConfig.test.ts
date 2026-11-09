@@ -23,7 +23,8 @@ afterEach(fixture.cleanup);
 describe('Channel Agent configuration', () => {
   it.each(['codex', 'claude-code'])('preserves the legacy model-only %s runtime', async (model) => {
     const team = await fixture.createTeamChannel();
-    const member = await fixture.addAgent(team.channel.id, 'Legacy Agent');
+    // An external runtime runs on a device, so the member has one.
+    const member = await fixture.addAgent(team.channel.id, 'Legacy Agent', deviceConfig());
     await db
       .update(agents)
       .set({ model, agencyConfig: null })

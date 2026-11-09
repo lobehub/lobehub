@@ -15,6 +15,25 @@ vi.mock('@/server/services/generation/latency', () => ({
     `${provider}\0${model}`,
 }));
 
+const createDeletedBatch = (id: string, prompt = 'Test prompt'): GenerationBatchItem => ({
+  id,
+  userId: 'test-user',
+  workspaceId: null,
+  generationTopicId: 'topic-1',
+  provider: 'test-provider',
+  model: 'test-model',
+  prompt,
+  width: 1024,
+  height: 1024,
+  ratio: null,
+  config: null,
+  accessedAt: new Date(),
+  deletedAt: null,
+  isDeleted: null,
+  createdAt: new Date(),
+  updatedAt: new Date(),
+});
+
 describe('generationBatchRouter', () => {
   const mockCtx = {
     userId: 'test-user',
@@ -61,24 +80,7 @@ describe('generationBatchRouter', () => {
 
   it('should delete generation batch without thumbnails', async () => {
     const mockBatchId = 'batch-123';
-    const mockDeletedBatch: GenerationBatchItem = {
-      id: mockBatchId,
-      userId: 'test-user',
-      workspaceId: null,
-      generationTopicId: 'topic-1',
-      provider: 'test-provider',
-      model: 'test-model',
-      prompt: 'Test prompt',
-      width: 1024,
-      height: 1024,
-      ratio: null,
-      config: null,
-      accessedAt: new Date(),
-      deletedAt: null,
-      isDeleted: null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
+    const mockDeletedBatch: GenerationBatchItem = createDeletedBatch(mockBatchId);
 
     const mockDelete = vi.fn().mockResolvedValue({
       deletedBatch: mockDeletedBatch,
@@ -110,24 +112,7 @@ describe('generationBatchRouter', () => {
   it('should delete generation batch with thumbnails', async () => {
     const mockBatchId = 'batch-123';
     const mockThumbnailUrls = ['thumb1.jpg', 'thumb2.jpg', 'thumb3.jpg'];
-    const mockDeletedBatch: GenerationBatchItem = {
-      id: mockBatchId,
-      userId: 'test-user',
-      workspaceId: null,
-      generationTopicId: 'topic-1',
-      provider: 'test-provider',
-      model: 'test-model',
-      prompt: 'Test prompt',
-      width: 1024,
-      height: 1024,
-      ratio: null,
-      config: null,
-      accessedAt: new Date(),
-      deletedAt: null,
-      isDeleted: null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
+    const mockDeletedBatch: GenerationBatchItem = createDeletedBatch(mockBatchId);
 
     const mockDelete = vi.fn().mockResolvedValue({
       deletedBatch: mockDeletedBatch,
@@ -159,24 +144,7 @@ describe('generationBatchRouter', () => {
   it('should still return deleted batch when thumbnail deletion fails', async () => {
     const mockBatchId = 'batch-123';
     const mockThumbnailUrls = ['thumb1.jpg', 'thumb2.jpg'];
-    const mockDeletedBatch: GenerationBatchItem = {
-      id: mockBatchId,
-      userId: 'test-user',
-      workspaceId: null,
-      generationTopicId: 'topic-1',
-      provider: 'test-provider',
-      model: 'test-model',
-      prompt: 'Test prompt',
-      width: 1024,
-      height: 1024,
-      ratio: null,
-      config: null,
-      accessedAt: new Date(),
-      deletedAt: null,
-      isDeleted: null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
+    const mockDeletedBatch: GenerationBatchItem = createDeletedBatch(mockBatchId);
 
     const mockDelete = vi.fn().mockResolvedValue({
       deletedBatch: mockDeletedBatch,
@@ -243,24 +211,10 @@ describe('generationBatchRouter', () => {
     const mockBatchId = 'batch-with-many-thumbnails';
     // Simulate a batch with many thumbnails
     const mockThumbnailUrls = Array.from({ length: 50 }, (_, i) => `thumb${i + 1}.jpg`);
-    const mockDeletedBatch: GenerationBatchItem = {
-      id: mockBatchId,
-      userId: 'test-user',
-      workspaceId: null,
-      generationTopicId: 'topic-1',
-      provider: 'test-provider',
-      model: 'test-model',
-      prompt: 'Batch with many generations',
-      width: 1024,
-      height: 1024,
-      ratio: null,
-      config: null,
-      accessedAt: new Date(),
-      deletedAt: null,
-      isDeleted: null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
+    const mockDeletedBatch: GenerationBatchItem = createDeletedBatch(
+      mockBatchId,
+      'Batch with many generations',
+    );
 
     const mockDelete = vi.fn().mockResolvedValue({
       deletedBatch: mockDeletedBatch,
@@ -325,24 +279,7 @@ describe('generationBatchRouter', () => {
   it('should handle partial thumbnail deletion failure gracefully', async () => {
     const mockBatchId = 'batch-123';
     const mockThumbnailUrls = ['thumb1.jpg', 'thumb2.jpg', 'thumb3.jpg'];
-    const mockDeletedBatch: GenerationBatchItem = {
-      id: mockBatchId,
-      userId: 'test-user',
-      workspaceId: null,
-      generationTopicId: 'topic-1',
-      provider: 'test-provider',
-      model: 'test-model',
-      prompt: 'Test prompt',
-      width: 1024,
-      height: 1024,
-      ratio: null,
-      config: null,
-      accessedAt: new Date(),
-      deletedAt: null,
-      isDeleted: null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
+    const mockDeletedBatch: GenerationBatchItem = createDeletedBatch(mockBatchId);
 
     const mockDelete = vi.fn().mockResolvedValue({
       deletedBatch: mockDeletedBatch,

@@ -35,6 +35,7 @@ function expected(): Array<
     ['deleteResult', 'mutation', 13],
     ['deleteRubric', 'mutation', 13],
     ['deleteRun', 'mutation', 13],
+    ['disputeCheck', 'mutation', 13],
     ['executeVerify', 'mutation', 13],
     ['forkRubricCriteria', 'mutation', 13],
     ['generateCriteria', 'mutation', 13],

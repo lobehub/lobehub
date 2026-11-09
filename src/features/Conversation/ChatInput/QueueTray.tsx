@@ -238,10 +238,10 @@ const QueueTray = memo(() => {
       editor?.focus();
       if (msg.filesPreview?.length) {
         const restored = reconstructUploadFilesFromQueue(msg.filesPreview);
-        dispatchChatUploadFileList({ files: restored, type: 'addFiles' });
+        dispatchChatUploadFileList(contextKey, { files: restored, type: 'addFiles' });
       }
     },
-    [dispatchChatUploadFileList, editor, withdraw],
+    [contextKey, dispatchChatUploadFileList, editor, withdraw],
   );
 
   // "Send now": cancel the currently running agent run for this context, then

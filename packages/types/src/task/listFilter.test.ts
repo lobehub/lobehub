@@ -186,3 +186,37 @@ describe('matchesTaskListFilter', () => {
     expect(matchesTaskListFilter(task(), { content: 'billing' }, NOW)).toBe(false);
   });
 });
+
+describe('matchesTaskListFilter label', () => {
+  const labeled = task({
+    labels: [
+      { id: 'bug', parentId: 'type' },
+      { id: 'fe', parentId: null },
+    ],
+  });
+  const unlabeled = task({ labels: [] });
+
+  it('matches a label, its group, or no labels', () => {
+    const is = (values: string[]) => ({ label: { operator: 'is' as const, values } });
+    expect(matchesTaskListFilter(labeled, is(['bug']), NOW)).toBe(true);
+    expect(matchesTaskListFilter(labeled, is(['type']), NOW)).toBe(true);
+    expect(matchesTaskListFilter(labeled, is(['other']), NOW)).toBe(false);
+    expect(matchesTaskListFilter(unlabeled, is([TASK_LIST_FILTER_NONE]), NOW)).toBe(true);
+    expect(matchesTaskListFilter(labeled, is([TASK_LIST_FILTER_NONE]), NOW)).toBe(false);
+    // a row without the field counts as unlabeled
+    expect(matchesTaskListFilter(task(), is([TASK_LIST_FILTER_NONE]), NOW)).toBe(true);
+  });
+
+  it('isNot excludes rows carrying any value', () => {
+    const isNot = (values: string[]) => ({ label: { operator: 'isNot' as const, values } });
+    expect(matchesTaskListFilter(labeled, isNot(['fe']), NOW)).toBe(false);
+    expect(matchesTaskListFilter(unlabeled, isNot(['fe']), NOW)).toBe(true);
+    expect(matchesTaskListFilter(labeled, isNot([TASK_LIST_FILTER_NONE]), NOW)).toBe(true);
+  });
+
+  it('normalizes the label set', () => {
+    expect(normalizeTaskListFilter({ label: { operator: 'is', values: ['b', 'a', 'b'] } })).toEqual(
+      { label: { operator: 'is', values: ['a', 'b'] } },
+    );
+  });
+});

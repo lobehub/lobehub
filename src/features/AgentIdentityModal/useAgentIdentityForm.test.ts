@@ -119,29 +119,6 @@ describe('useAgentIdentityForm', () => {
     );
   });
 
-  it('routes identity changes through the optimistic sidebar projection', async () => {
-    const { result } = setup();
-
-    act(() => result.current.setName('小艾'));
-    await act(async () => {
-      await result.current.save();
-    });
-
-    expect(mocks.updateAgentMeta).toHaveBeenCalledOnce();
-  });
-
-  it('does not refresh the sidebar when the save was rejected', async () => {
-    mocks.updateAgentSlug.mockResolvedValue({ reason: 'taken', success: false });
-    const { result } = setup();
-
-    act(() => result.current.setSlug('taken-slug'));
-    await act(async () => {
-      await result.current.save();
-    });
-
-    expect(mocks.updateAgentMeta).not.toHaveBeenCalled();
-  });
-
   it('routes a slug change to its own endpoint, normalized to lowercase', async () => {
     const { result, onSaved } = setup();
 

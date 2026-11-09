@@ -61,7 +61,20 @@ describe('GET /oidc/acceptance/callback', () => {
     expect(denied).not.toContain('alert');
   });
 
-  it('posts nothing when the code is not a site review code', async () => {
+  it('posts an acceptance code only to the preview origin bound into it', async () => {
+    findAuthorizationCodeResource.mockResolvedValue(
+      'urn:lobehub:acceptance:abc:https%3A%2F%2Fpr-12.preview.app',
+    );
+    const query = 'code=abc123&state=s';
+    expect(runPage(await (await call(query)).text(), query)).toEqual([
+      [
+        { code: 'abc123', state: 's', type: 'lobehub-acceptance:authorized' },
+        'https://pr-12.preview.app',
+      ],
+    ]);
+  });
+
+  it('posts nothing for a legacy acceptance code that names no origin', async () => {
     findAuthorizationCodeResource.mockResolvedValue('urn:lobehub:acceptance:abc');
     const html = await (await call('code=abc123&state=s')).text();
     expect(html).not.toContain('postMessage');
@@ -80,6 +93,9 @@ describe('GET /oidc/acceptance/callback', () => {
     ]);
     expect((await deny('error=invalid_target&state=s2'))[0][0]).toMatchObject({
       error: 'invalid_target',
+    });
+    expect((await deny('error=wrong_origin&state=s4'))[0][0]).toMatchObject({
+      error: 'wrong_origin',
     });
     expect((await deny('error=%3Cscript%3E&state=s3'))[0][0]).toMatchObject({
       error: 'error',

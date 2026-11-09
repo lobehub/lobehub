@@ -62,6 +62,7 @@ const renderChain = (chain: StyleElement[], context: ChainContext, depth = 0): s
   const attributes = [`data-synthetic-element=${JSON.stringify(element.id)}`];
   for (const [name, value] of Object.entries(element.literalProps))
     if (keepLiteral(name, substituted)) attributes.push(renderLiteral(name, value));
+  if (element.inlineStyle) attributes.push(`style={(${element.inlineStyle})}`);
   for (const [name, variable] of Object.entries(element.attributes ?? {}))
     attributes.push(`${name}={${variable}}`);
   const neutral: string[] = [];
@@ -89,6 +90,7 @@ const renderChain = (chain: StyleElement[], context: ChainContext, depth = 0): s
 const NEUTRAL = `const __neutral = (prop: string, value: unknown): any => {
   if (value == null || value === false) return null;
   if (typeof value === 'string') return <div data-synthetic-neutral={prop} className={value}>{${JSON.stringify(SAMPLE_TEXT)}}</div>;
+  if (typeof value === 'object' && /^styles\\.[^.]+$/.test(prop)) return <div data-synthetic-neutral={prop} style={value as any}>{${JSON.stringify(SAMPLE_TEXT)}}</div>;
   if (typeof value === 'object' && 'className' in (value as object)) return <div data-synthetic-neutral={prop} {...(value as object)}>{${JSON.stringify(SAMPLE_TEXT)}}</div>;
   if (typeof value === 'object') return Object.entries(value as Record<string, unknown>).map(([key, item]) => <div key={key} data-synthetic-slot={key}>{__neutral(prop + '.' + key, item)}</div>);
   return null;

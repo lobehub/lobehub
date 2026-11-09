@@ -60,8 +60,8 @@ const Contact = memo<{ active: boolean; item: SidebarAgentItem }>(({ active, ite
 
   return (
     <ConversationRow
+      singleLine
       active={active}
-      preview={item.description || undefined}
       title={title}
       url={isGroup ? `/group/${item.id}/profile` : `/agent/${item.id}/profile`}
       avatar={

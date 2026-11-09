@@ -262,7 +262,8 @@ const WechatDetail = memo<WechatDetailProps>(({ access, name, onBack }) => {
 
   if (data.error && data.isInitialLoading)
     return <AsyncError error={data.error} variant="block" onRetry={data.mutate} />;
-  if (data.isInitialLoading) return <IntegrationDetailSkeleton withNestedContent />;
+  if (data.isInitialLoading)
+    return <IntegrationDetailSkeleton withNestedContent platform={'wechat'} />;
 
   const link = data.links[0];
   const installation = data.installations[0];

@@ -562,6 +562,17 @@ export class MessageCollector {
   }
 
   /**
+   * Chain steps whose children continue the conversation after the group: the
+   * step the run ended on, plus every text-only wake-up. A wake-up is the last
+   * thing the user saw when it closes a run, so their next message hangs off it.
+   */
+  collectFollowUpHostIds(assistantChain: Message[], lastAssistant?: Message): string[] {
+    return assistantChain
+      .filter((assistant) => assistant === lastAssistant || isToollessSignalTurn(assistant))
+      .map((assistant) => assistant.id);
+  }
+
+  /**
    * User turns that interrupted a folded group at `assistant`, an intermediate
    * step whose next step in the chain is `next`. Branch selection among them
    * stays with the caller.
@@ -849,8 +860,9 @@ export class MessageCollector {
    * Return the final same-agent assistant that belongs inside this group and
    * can host what follows it. The child selected after that assistant can be
    * either a tool-hosted legacy continuation or a direct non-tool continuation
-   * in the current storage form. A text-only wake-up never hosts a follow-up,
-   * so a run ending on one keeps the step before it.
+   * in the current storage form. A text-only wake-up never hosts the run's next
+   * step, so a run ending on one keeps the step before it, unless the user
+   * replied to that wake-up.
    */
   private findLastAssistantNodeInGroup(idNode: IdNode, groupAgentId?: string): IdNode {
     // Iterative: a group's chain can be thousands of steps long.
@@ -859,10 +871,19 @@ export class MessageCollector {
     let nextNode = this.findChainContinuationNode(current, groupAgentId, pending);
     while (nextNode) {
       const nextMessage = this.messageMap.get(nextNode.id);
-      if (!nextMessage || !isToollessSignalTurn(nextMessage)) current = nextNode;
+      if (!nextMessage || !isToollessSignalTurn(nextMessage) || this.hasUserReply(nextNode)) {
+        current = nextNode;
+      }
       nextNode = this.findChainContinuationNode(nextNode, groupAgentId, pending);
     }
     return current;
+  }
+
+  private hasUserReply(idNode: IdNode): boolean {
+    return idNode.children.some((child) => {
+      const message = this.messageMap.get(child.id);
+      return message?.role === 'user' && !message.threadId;
+    });
   }
 
   /**

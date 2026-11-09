@@ -1,58 +1,49 @@
+import { Empty, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
+import { CheckCheck } from 'lucide-react';
 
 import type { ReviewPayload, ReviewState, ReviewView } from '../api';
 
 const styles = stylex.create({
   current: {
-    backgroundColor: cssVar.colorFillTertiary,
-    boxShadow: `inset 2px 0 ${cssVar.colorText}`,
+    backgroundColor: { ':hover': cssVar.colorFillSecondary, 'default': cssVar.colorFillSecondary },
     color: cssVar.colorText,
     fontWeight: 500,
   },
-  empty: { color: cssVar.colorTextTertiary, fontSize: 12, padding: 16 },
   file: {
-    color: cssVar.colorTextSecondary,
-    fontSize: 12,
-    fontWeight: 500,
-    paddingBlockStart: '10px',
-    paddingBlockEnd: '4px',
-    paddingInline: 16,
-    wordBreak: 'break-all',
+    paddingBlockEnd: 4,
+    paddingBlockStart: 12,
+    paddingInline: 8,
   },
-  hint: { color: cssVar.colorTextTertiary, fontSize: 11, marginInlineStart: 'auto' },
   item: {
-    alignItems: 'center',
-    backgroundColor: { ':hover': cssVar.colorFillQuaternary, 'default': 'transparent' },
+    alignItems: 'start',
+    backgroundColor: { ':hover': cssVar.colorFillTertiary, 'default': 'transparent' },
+    borderRadius: cssVar.borderRadius,
     borderStyle: 'none',
     color: cssVar.colorTextSecondary,
-    columnGap: 10,
+    columnGap: 8,
     cursor: 'pointer',
-    display: 'flex',
-    fontFamily: 'inherit',
-    fontSize: 13,
-    paddingBlock: 7,
-    paddingInline: 16,
+    display: 'grid',
+    font: 'inherit',
+    gridTemplateColumns: '8px minmax(0, 1fr) auto',
+    paddingBlock: 6,
+    paddingInline: 8,
     textAlign: 'start',
     width: '100%',
   },
-  mark: { borderRadius: '50%', flex: 'none', height: 8, marginInline: 4, width: 8 },
-  markChanged: { backgroundColor: cssVar.colorInfo },
-  markPassed: { backgroundColor: cssVar.colorSuccess },
-  markReworked: { backgroundColor: cssVar.colorError },
-  markTodo: { backgroundColor: cssVar.colorTextQuaternary },
-  markWaiting: { backgroundColor: cssVar.colorWarning },
-  resolved: { color: cssVar.colorTextTertiary, fontSize: 12, paddingBlock: 4, paddingInline: 16 },
-  root: { paddingBlock: 12 },
+  mark: { borderRadius: '50%', height: 8, marginBlockStart: 7, width: 8 },
+  root: { padding: 8 },
+  title: { overflowWrap: 'anywhere' },
 });
 
-const MARKS: Record<ReviewState, stylex.StyleXStyles> = {
-  'changed': styles.markChanged,
-  'passed': styles.markPassed,
-  'reworked': styles.markReworked,
-  'todo': styles.markTodo,
-  'waiting-agent': styles.markWaiting,
-};
+const marks = stylex.create({
+  'changed': { backgroundColor: cssVar.colorInfo },
+  'passed': { backgroundColor: cssVar.colorSuccess },
+  'reworked': { backgroundColor: cssVar.colorError },
+  'todo': { backgroundColor: cssVar.colorTextQuaternary },
+  'waiting-agent': { backgroundColor: cssVar.colorWarning },
+});
 
 const STATE_LABELS: Record<ReviewState, string> = {
   'changed': '已修改',
@@ -75,6 +66,10 @@ const byFile = (items: ReviewView[]) => {
 
 const shortFile = (file: string) => file.split('/').slice(-3).join('/');
 
+const scrollIntoView = (element: HTMLButtonElement | null) => {
+  element?.scrollIntoView({ block: 'nearest' });
+};
+
 export const ReviewQueue = ({
   current,
   onSelect,
@@ -85,16 +80,19 @@ export const ReviewQueue = ({
   payload: ReviewPayload;
 }) => (
   <nav aria-label="复查队列" {...stylex.props(styles.root)}>
-    {!payload.items.length && <div {...stylex.props(styles.empty)}>没有要你看的项。</div>}
+    {!payload.items.length && (
+      <Empty description="工具已证明的项不用人工看。" icon={CheckCheck} title="没有要你看的项" />
+    )}
     {byFile(payload.items).map(([file, items]) => (
       <div key={file}>
-        <div title={file} {...stylex.props(styles.file)}>
+        <Text ellipsis fontSize={12} title={file} type="secondary" {...stylex.props(styles.file)}>
           {shortFile(file)}
-        </div>
+        </Text>
         {items.map((item) => (
           <button
             aria-current={item.key === current ? 'true' : undefined}
             key={item.key}
+            ref={item.key === current ? scrollIntoView : undefined}
             type="button"
             onClick={() => onSelect(item.key)}
             {...stylex.props(styles.item, item.key === current && styles.current)}
@@ -102,21 +100,27 @@ export const ReviewQueue = ({
             <span
               aria-label={STATE_LABELS[item.state]}
               role="img"
-              {...stylex.props(styles.mark, MARKS[item.state])}
+              {...stylex.props(styles.mark, marks[item.state])}
             />
-            <span>{item.title}</span>
-            {HINTS[item.state] && <span {...stylex.props(styles.hint)}>{HINTS[item.state]}</span>}
+            <span {...stylex.props(styles.title)}>{item.title}</span>
+            {HINTS[item.state] && (
+              <Text fontSize={12} type="secondary">
+                {HINTS[item.state]}
+              </Text>
+            )}
           </button>
         ))}
       </div>
     ))}
     {payload.resolved.length > 0 && (
       <div>
-        <div {...stylex.props(styles.file)}>已解决</div>
+        <Text fontSize={12} type="secondary" {...stylex.props(styles.file)}>
+          已解决
+        </Text>
         {payload.resolved.map((entry) => (
-          <div key={entry.key} {...stylex.props(styles.resolved)}>
+          <Text fontSize={12} key={entry.key} type="secondary" {...stylex.props(styles.file)}>
             {entry.key.slice(entry.key.indexOf('|') + 1)}：{entry.note}
-          </div>
+          </Text>
         ))}
       </div>
     )}

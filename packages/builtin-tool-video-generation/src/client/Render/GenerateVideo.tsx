@@ -7,6 +7,7 @@ import * as stylex from '@stylexjs/stylex';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import MessageVideo from '@/components/MessageVideo';
 import { useClientDataSWR } from '@/libs/swr';
 import { videoKeys } from '@/libs/swr/keys';
 import { normalizeAsyncError } from '@/libs/swr/normalizeError';
@@ -31,6 +32,7 @@ const styles = stylex.create({
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: '180px',
+    padding: '12px',
     backgroundColor: cssVar.colorFillTertiary,
     backgroundImage: 'none',
   },
@@ -88,13 +90,6 @@ const styles = stylex.create({
     borderRadius: '999px',
     fontSize: '12px',
     color: cssVar.colorTextSecondary,
-    backgroundColor: cssVar.colorFillTertiary,
-    backgroundImage: 'none',
-  },
-  video: {
-    display: 'block',
-    width: '100%',
-    maxHeight: '560px',
     backgroundColor: cssVar.colorFillTertiary,
     backgroundImage: 'none',
   },
@@ -233,13 +228,7 @@ export const GenerateVideoRender = memo<
       </div>
       {url ? (
         <div {...stylex.props(styles.body)}>
-          <video
-            controls
-            {...stylex.props(styles.video)}
-            poster={poster}
-            preload={'metadata'}
-            src={url}
-          />
+          <MessageVideo maxHeight={560} poster={poster} src={url} />
         </div>
       ) : (
         <div {...stylex.props(styles.statusBody)}>

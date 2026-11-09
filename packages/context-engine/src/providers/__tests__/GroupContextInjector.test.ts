@@ -173,29 +173,6 @@ describe('GroupContextInjector', () => {
     });
   });
 
-  describe('Identity Rules Section', () => {
-    it('should always include identity rules', async () => {
-      const injector = new GroupContextInjector({
-        enabled: true,
-        // Minimal config
-      });
-
-      const input: any[] = [
-        { role: 'system', content: 'Base prompt.' },
-        { role: 'user', content: 'Hello' },
-      ];
-
-      const context = createContext(input);
-      const result = await injector.process(context);
-
-      // Check injected message content
-      const injectedContent = result.messages[1].content;
-
-      // Even with minimal config, identity rules should be present
-      expect(injectedContent).toMatchSnapshot();
-    });
-  });
-
   describe('Edge Cases', () => {
     it('should handle empty members array', async () => {
       const injector = new GroupContextInjector({

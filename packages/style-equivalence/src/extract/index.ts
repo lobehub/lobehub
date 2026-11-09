@@ -15,6 +15,7 @@ import {
   usageKinds,
   valueIdentifierNodes,
 } from './identifiers';
+import { applyRenderedStyle, renderedStyle, slotStylesOf } from './renderedStyle';
 import { classifyRules, classNamesIn, foreignClassNames } from './selectors';
 import { collectTables } from './tables';
 import { collectTopLevel } from './topLevel';
@@ -248,6 +249,7 @@ export const extractFile = (
       };
       let runtimeStyle: string | undefined;
       let styleExpr: string | undefined;
+      let inlineStyle: ReturnType<typeof renderedStyle>;
       let lastStyle = -1;
       let lastForeign = -1;
       for (const [position, attribute] of opening.attributes.properties.entries()) {
@@ -292,8 +294,10 @@ export const extractFile = (
         if (!ts.isJsxExpression(initializer) || !initializer.expression) continue;
         const expression = initializer.expression;
         if (name === 'icon' && isJsxNode(expression)) iconNode = expression;
-        if (referencesStyle(expression, name)) {
+        const slotStyles = slotStylesOf(name, opening.tagName.getText(ast), expression, top);
+        if (referencesStyle(expression, name) || slotStyles) {
           bindingOf(expression, name, false);
+          if (slotStyles && ts.isIdentifier(expression)) bindings.at(-1)!.expansion = slotStyles;
           continue;
         }
         const literal = literalOf(expression);
@@ -311,6 +315,7 @@ export const extractFile = (
           !(ts.isIdentifier(expression) && GLOBALS.has(expression.text))
         ) {
           styleExpr = expression.getText(ast).replaceAll(/\s+/g, ' ');
+          inlineStyle = renderedStyle(expression, top.importOf, GLOBALS);
           lastStyle = position;
           if (ts.isIdentifier(expression)) runtimeStyle = expression.text;
         }
@@ -340,6 +345,7 @@ export const extractFile = (
         for (const expression of expressions)
           for (const [name, list] of usageKinds(expression, names))
             kinds.set(name, [...(kinds.get(name) ?? []), ...list]);
+        if (inlineStyle) applyRenderedStyle(inlineStyle, top.require, names, kinds);
         for (const node of attributeNames)
           if (
             declaredLocally(node) ||
@@ -373,6 +379,7 @@ export const extractFile = (
           ...(Object.keys(attributes).length ? { attributes } : {}),
           ...(Object.keys(derivedConditions).length ? { derived: derivedConditions } : {}),
           ...(guards.length ? { guards } : {}),
+          ...(inlineStyle ? { inlineStyle: inlineStyle.text } : {}),
           owner,
           parent,
           ...(real ? { real } : {}),

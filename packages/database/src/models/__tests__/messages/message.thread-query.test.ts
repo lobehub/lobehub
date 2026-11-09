@@ -6,6 +6,60 @@ import { agents, messages, sessions, threads, topics, users } from '../../../sch
 import type { LobeChatDatabase } from '../../../type';
 import { MessageModel } from '../../message';
 
+const continuationThreads = (): (typeof threads.$inferInsert)[] => [
+  {
+    id: 'thread1',
+    userId,
+    topicId: 'topic1',
+    sourceMessageId: 'msg2',
+    type: 'continuation',
+  },
+];
+
+const firstMessage = (content: string): typeof messages.$inferInsert => ({
+  id: 'msg1',
+  userId,
+  sessionId: 'session1',
+  topicId: 'topic1',
+  threadId: null,
+  role: 'user',
+  content,
+  createdAt: new Date('2023-01-01'),
+});
+
+const sessionThreadMessage = (): typeof messages.$inferInsert => ({
+  id: 'thread-msg1',
+  userId,
+  sessionId: 'session1',
+  topicId: 'topic1',
+  threadId: 'thread1',
+  role: 'user',
+  content: 'thread message 1',
+  createdAt: new Date('2023-01-02T10:00:00'),
+});
+
+const agentThreadMessage = (): typeof messages.$inferInsert => ({
+  id: 'thread-msg1',
+  userId,
+  agentId: 'agent1',
+  topicId: 'topic1',
+  threadId: 'thread1',
+  role: 'user',
+  content: 'thread message 1',
+  createdAt: new Date('2023-01-02T10:00:00'),
+});
+
+const assistantThreadMessage = (): typeof messages.$inferInsert => ({
+  id: 'thread-msg2',
+  userId,
+  sessionId: 'session1',
+  topicId: 'topic1',
+  threadId: 'thread1',
+  role: 'assistant',
+  content: 'thread message 2',
+  createdAt: new Date('2023-01-02T11:00:00'),
+});
+
 const serverDB: LobeChatDatabase = await getTestDB();
 
 const userId = 'thread-query-test-user';
@@ -77,28 +131,11 @@ describe('MessageModel thread query', () => {
         await trx.insert(topics).values([{ id: 'topic1', sessionId: 'session1', userId }]);
 
         // Create thread with Continuation type
-        await trx.insert(threads).values([
-          {
-            id: 'thread1',
-            userId,
-            topicId: 'topic1',
-            sourceMessageId: 'msg2',
-            type: 'continuation',
-          },
-        ]);
+        await trx.insert(threads).values(continuationThreads());
 
         // Create main conversation messages (parent messages)
         await trx.insert(messages).values([
-          {
-            id: 'msg1',
-            userId,
-            sessionId: 'session1',
-            topicId: 'topic1',
-            threadId: null,
-            role: 'user',
-            content: 'first message',
-            createdAt: new Date('2023-01-01'),
-          },
+          firstMessage('first message'),
           {
             id: 'msg2',
             userId,
@@ -120,26 +157,8 @@ describe('MessageModel thread query', () => {
             createdAt: new Date('2023-01-03'),
           },
           // Thread messages
-          {
-            id: 'thread-msg1',
-            userId,
-            sessionId: 'session1',
-            topicId: 'topic1',
-            threadId: 'thread1',
-            role: 'user',
-            content: 'thread message 1',
-            createdAt: new Date('2023-01-02T10:00:00'),
-          },
-          {
-            id: 'thread-msg2',
-            userId,
-            sessionId: 'session1',
-            topicId: 'topic1',
-            threadId: 'thread1',
-            role: 'assistant',
-            content: 'thread message 2',
-            createdAt: new Date('2023-01-02T11:00:00'),
-          },
+          sessionThreadMessage(),
+          assistantThreadMessage(),
         ]);
       });
 
@@ -158,15 +177,7 @@ describe('MessageModel thread query', () => {
         await trx.insert(topics).values([{ id: 'topic1', sessionId: 'session1', userId }]);
 
         // Create thread with Continuation type
-        await trx.insert(threads).values([
-          {
-            id: 'thread1',
-            userId,
-            topicId: 'topic1',
-            sourceMessageId: 'msg2',
-            type: 'continuation',
-          },
-        ]);
+        await trx.insert(threads).values(continuationThreads());
 
         // Create main conversation messages (parent messages) with agentId
         await trx.insert(messages).values([
@@ -191,16 +202,7 @@ describe('MessageModel thread query', () => {
             createdAt: new Date('2023-01-02'),
           },
           // Thread messages
-          {
-            id: 'thread-msg1',
-            userId,
-            agentId: 'agent1',
-            topicId: 'topic1',
-            threadId: 'thread1',
-            role: 'user',
-            content: 'thread message 1',
-            createdAt: new Date('2023-01-02T10:00:00'),
-          },
+          agentThreadMessage(),
           {
             id: 'thread-msg2',
             userId,
@@ -235,15 +237,7 @@ describe('MessageModel thread query', () => {
         ]);
 
         // Create thread with Continuation type
-        await trx.insert(threads).values([
-          {
-            id: 'thread1',
-            userId,
-            topicId: 'topic1',
-            sourceMessageId: 'msg2',
-            type: 'continuation',
-          },
-        ]);
+        await trx.insert(threads).values(continuationThreads());
 
         // Create messages in topic1
         await trx.insert(messages).values([
@@ -268,16 +262,7 @@ describe('MessageModel thread query', () => {
             createdAt: new Date('2023-01-02'),
           },
           // Thread messages in topic1
-          {
-            id: 'thread-msg1',
-            userId,
-            agentId: 'agent1',
-            topicId: 'topic1',
-            threadId: 'thread1',
-            role: 'user',
-            content: 'thread message 1',
-            createdAt: new Date('2023-01-02T10:00:00'),
-          },
+          agentThreadMessage(),
           {
             id: 'delegated-thread-reply',
             userId,
@@ -339,16 +324,7 @@ describe('MessageModel thread query', () => {
 
         // Create main conversation messages
         await trx.insert(messages).values([
-          {
-            id: 'msg1',
-            userId,
-            sessionId: 'session1',
-            topicId: 'topic1',
-            threadId: null,
-            role: 'user',
-            content: 'first message',
-            createdAt: new Date('2023-01-01'),
-          },
+          firstMessage('first message'),
           {
             id: 'msg2',
             userId,
@@ -370,26 +346,8 @@ describe('MessageModel thread query', () => {
             createdAt: new Date('2023-01-03'),
           },
           // Thread messages
-          {
-            id: 'thread-msg1',
-            userId,
-            sessionId: 'session1',
-            topicId: 'topic1',
-            threadId: 'thread1',
-            role: 'user',
-            content: 'thread message 1',
-            createdAt: new Date('2023-01-02T10:00:00'),
-          },
-          {
-            id: 'thread-msg2',
-            userId,
-            sessionId: 'session1',
-            topicId: 'topic1',
-            threadId: 'thread1',
-            role: 'assistant',
-            content: 'thread message 2',
-            createdAt: new Date('2023-01-02T11:00:00'),
-          },
+          sessionThreadMessage(),
+          assistantThreadMessage(),
         ]);
       });
 
@@ -450,16 +408,7 @@ describe('MessageModel thread query', () => {
             createdAt: new Date('2023-01-03'),
           },
           // Thread messages
-          {
-            id: 'thread-msg1',
-            userId,
-            agentId: 'agent1',
-            topicId: 'topic1',
-            threadId: 'thread1',
-            role: 'user',
-            content: 'thread message 1',
-            createdAt: new Date('2023-01-02T10:00:00'),
-          },
+          agentThreadMessage(),
           {
             id: 'thread-msg2',
             userId,
@@ -538,28 +487,11 @@ describe('MessageModel thread query', () => {
         await trx.insert(topics).values([{ id: 'topic1', sessionId: 'session1', userId }]);
 
         // Create thread
-        await trx.insert(threads).values([
-          {
-            id: 'thread1',
-            userId,
-            topicId: 'topic1',
-            sourceMessageId: 'msg2',
-            type: 'continuation',
-          },
-        ]);
+        await trx.insert(threads).values(continuationThreads());
 
         // Insert messages in non-chronological order
         await trx.insert(messages).values([
-          {
-            id: 'thread-msg2',
-            userId,
-            sessionId: 'session1',
-            topicId: 'topic1',
-            threadId: 'thread1',
-            role: 'assistant',
-            content: 'thread message 2',
-            createdAt: new Date('2023-01-02T11:00:00'),
-          },
+          assistantThreadMessage(),
           {
             id: 'msg2',
             userId,
@@ -570,26 +502,8 @@ describe('MessageModel thread query', () => {
             content: 'source message',
             createdAt: new Date('2023-01-02'),
           },
-          {
-            id: 'thread-msg1',
-            userId,
-            sessionId: 'session1',
-            topicId: 'topic1',
-            threadId: 'thread1',
-            role: 'user',
-            content: 'thread message 1',
-            createdAt: new Date('2023-01-02T10:00:00'),
-          },
-          {
-            id: 'msg1',
-            userId,
-            sessionId: 'session1',
-            topicId: 'topic1',
-            threadId: null,
-            role: 'user',
-            content: 'first message',
-            createdAt: new Date('2023-01-01'),
-          },
+          sessionThreadMessage(),
+          firstMessage('first message'),
         ]);
       });
 
@@ -676,16 +590,7 @@ describe('MessageModel thread query', () => {
         await trx.insert(topics).values([{ id: 'topic1', sessionId: 'session1', userId }]);
 
         await trx.insert(messages).values([
-          {
-            id: 'msg1',
-            userId,
-            sessionId: 'session1',
-            topicId: 'topic1',
-            threadId: null,
-            role: 'user',
-            content: 'first',
-            createdAt: new Date('2023-01-01'),
-          },
+          firstMessage('first'),
           {
             id: 'msg2',
             userId,
@@ -775,16 +680,7 @@ describe('MessageModel thread query', () => {
         await trx.insert(topics).values([{ id: 'topic1', sessionId: 'session1', userId }]);
 
         await trx.insert(messages).values([
-          {
-            id: 'msg1',
-            userId,
-            sessionId: 'session1',
-            topicId: 'topic1',
-            threadId: null,
-            role: 'user',
-            content: 'first',
-            createdAt: new Date('2023-01-01'),
-          },
+          firstMessage('first'),
           {
             id: 'msg2',
             userId,
@@ -837,16 +733,7 @@ describe('MessageModel thread query', () => {
         ]);
 
         await trx.insert(messages).values([
-          {
-            id: 'msg1',
-            userId,
-            sessionId: 'session1',
-            topicId: 'topic1',
-            threadId: null,
-            role: 'user',
-            content: 'first',
-            createdAt: new Date('2023-01-01'),
-          },
+          firstMessage('first'),
           {
             id: 'msg2',
             userId,

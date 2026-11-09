@@ -93,47 +93,21 @@ describe('content search engine parity', () => {
           pattern: 'needle',
           scope: repo,
         } as GrepContentParams);
-        return [engine, [...r.matches].sort()] as const;
+        return [engine, r.matches] as const;
       }),
     );
 
     // `dist/` and `*.log` are gitignored and must go; the tracked `build/` must
     // stay, because only git decides what is build output — not the folder name.
     for (const [engine, matches] of results) {
-      expect(matches, `${engine} should honour .gitignore`).toEqual([
+      for (const match of matches) {
+        expect(path.isAbsolute(match), `${engine} returned a relative path: ${match}`).toBe(true);
+      }
+
+      expect([...matches].sort(), `${engine} should honour .gitignore`).toEqual([
         path.join(repo, 'build', 'entitlements.plist'),
         path.join(repo, 'src', 'a.ts'),
       ]);
-    }
-  }, 60_000);
-
-  it('does not hide a tracked directory whose name looks like build output', async () => {
-    // Regression: a hardcoded `!**/build/**` made every engine skip this file,
-    // even though git tracks it.
-    const tracked = path.join(repo, 'build', 'entitlements.plist');
-
-    for (const engine of engines) {
-      const r = await search(engine, {
-        output_mode: 'files_with_matches',
-        pattern: 'needle',
-        scope: repo,
-      } as GrepContentParams);
-
-      expect(r.matches, `${engine} hid a tracked build/ file`).toContain(tracked);
-    }
-  }, 60_000);
-
-  it('returns absolute paths from every engine', async () => {
-    for (const engine of engines) {
-      const r = await search(engine, {
-        output_mode: 'files_with_matches',
-        pattern: 'needle',
-        scope: repo,
-      } as GrepContentParams);
-
-      for (const match of r.matches) {
-        expect(path.isAbsolute(match), `${engine} returned a relative path: ${match}`).toBe(true);
-      }
     }
   }, 60_000);
 

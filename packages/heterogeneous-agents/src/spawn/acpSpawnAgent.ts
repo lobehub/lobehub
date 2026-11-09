@@ -5,6 +5,7 @@ import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 
 import { resolveHeterogeneousAgentCommand } from '../config';
 import { isPathLikeCommand } from './cliSpawn';
+import { buildCopilotAcpPrompt, CopilotAcpSession } from './copilotAcpSession';
 import { buildCursorAcpPrompt, CursorAcpSession } from './cursorAcpSession';
 import { buildDevinAcpPrompt, DevinAcpSession } from './devinAcpSession';
 import { buildDroidAcpPrompt, DroidAcpSession } from './droidAcpSession';
@@ -272,6 +273,35 @@ export const spawnDevinAcpAgent = async (
     initialModel: options.initialModel,
     onEvents: bridge.onEvents,
     permissionMode: options.permissionMode,
+    onRawMessage: teeAcpRawStdout(options.onRawStdout),
+    onRuntimeStatus: () => {},
+    onSessionId: () => {},
+    onStderr: bridge.onStderr,
+    operationId: options.operationId,
+    prompt,
+    resumeSessionId: options.resumeSessionId,
+    sessionId: options.operationId,
+  });
+  return createAcpSpawnHandle(bridge, session);
+};
+
+export const spawnCopilotAcpAgent = async (
+  options: SpawnAgentOptions,
+  command: string,
+  cwd: string,
+): Promise<SpawnAgentHandle> => {
+  const prompt = await buildCopilotAcpPrompt(options.prompt, options.inputOptions);
+  const bridge = createAcpSpawnBridge();
+  const session = new CopilotAcpSession({
+    args: options.extraArgs ?? [],
+    askUserBridge: options.askUserBridge,
+    clientVersion: 'lobehub-cli',
+    commandPath: command,
+    cwd,
+    detached: options.detached,
+    env: { ...process.env, ...options.env },
+    initialModel: options.initialModel,
+    onEvents: bridge.onEvents,
     onRawMessage: teeAcpRawStdout(options.onRawStdout),
     onRuntimeStatus: () => {},
     onSessionId: () => {},

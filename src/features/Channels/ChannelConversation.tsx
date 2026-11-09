@@ -11,10 +11,10 @@ import { ChannelConversationSkeleton } from '@/components/Skeleton/Channel';
 import { delayed } from '@/components/Skeleton/Delayed';
 import { createStore, Provider } from '@/features/Conversation/store';
 import WideScreenContainer from '@/features/WideScreenContainer';
-import { useActiveLocation } from '@/hooks/useActiveLocation';
 import { cacheScope } from '@/libs/replica';
-import { channelService } from '@/services/channel';
 import { channelActions, channelSelectors, useChannelStore } from '@/store/channel';
+import { useUserStore } from '@/store/user';
+import { userProfileSelectors } from '@/store/user/selectors';
 
 import { ArchivedNotice } from './ArchivedNotice';
 import { visibleChannelDetail } from './channelAccess';
@@ -22,12 +22,21 @@ import { ChannelMessage, ThreadRootMessage } from './ChannelMessage';
 import { Composer } from './Composer';
 import { JoinEventLine } from './JoinEventLine';
 import { channelJoinEvents, channelTimeline } from './joinEvents';
-import { channelTimeFormatters, presentChannelTimeline } from './messagePresentation';
+import { isCurrentUserMember } from './memberName';
+import {
+  channelDayLabel,
+  channelTimeFormatters,
+  presentChannelTimeline,
+} from './messagePresentation';
+import { presentOutgoingMessage, timelineTail } from './outgoing';
+import { OutgoingStatus } from './OutgoingStatus';
 import { ReplyActivity } from './ReplyActivity';
+import type { ReplyTopic } from './ReplyTopicPanel';
 import { styles } from './styles';
 import type { ChannelThreadDraft } from './threadDraft';
 import { useChannelEvents } from './useChannelEvents';
 import { channelDraftKey } from './useComposerDraft';
+import { useFollowSent } from './useFollowSent';
 import { type ChannelReplyTarget, useReplyTarget } from './useReplyTarget';
 
 interface ChannelConversationProps {
@@ -35,6 +44,7 @@ interface ChannelConversationProps {
   /** Mounted beside a thread panel that covers it, so keep it out of the tab order. */
   inert?: boolean;
   onOpenThread?: (threadId: string, toggle?: boolean) => void;
+  onOpenTopic?: (topic: ReplyTopic) => void;
   onStartThread?: (draft: ChannelThreadDraft) => void;
   threadId?: string | null;
 }
@@ -44,6 +54,7 @@ const Timeline = ({
   inert,
   threadId = null,
   onOpenThread,
+  onOpenTopic,
   onStartThread,
 }: ChannelConversationProps) => {
   const { t, i18n } = useTranslation('channel');
@@ -52,17 +63,7 @@ const Timeline = ({
   const reply = useReplyTarget(channelDraftKey(channelId, threadId));
   const [jumpTarget, setJumpTarget] = useState<ChannelReplyTarget | null>(null);
   const [highlighted, setHighlighted] = useState<string | null>(null);
-  const sending = useRef(false);
-  const mounted = useRef(false);
-  const location = useActiveLocation();
-  const currentLocation = useRef(location);
-  currentLocation.current = location;
-  useEffect(() => {
-    mounted.current = true;
-    return () => {
-      mounted.current = false;
-    };
-  }, []);
+  const followSent = useFollowSent(threadId, onOpenThread);
   useEffect(() => {
     if (!highlighted) return;
     const timer = setTimeout(() => setHighlighted(null), 1600);
@@ -72,9 +73,22 @@ const Timeline = ({
   const sync = channelActions.useFetchDetail(params);
   const cached = useChannelStore(channelSelectors.detail(params));
   const detail = visibleChannelDetail(cached, sync.error);
+  const scope = cacheScope.use();
+  useEffect(() => channelActions.restoreOutbox(scope), [scope]);
+  const userId = useUserStore(userProfileSelectors.userId);
+  const queued = useChannelStore(channelSelectors.outgoing(channelId, threadId));
+  // Sent from this tab and not on a loaded page yet; they follow the latest page only.
+  const outgoing = useMemo(() => {
+    if (!detail || before !== undefined) return [];
+    const member = detail.members.find((entry) => isCurrentUserMember(entry, userId));
+    return queued
+      .filter((entry) => entry.scope === scope)
+      .map((entry) => ({ entry, message: presentOutgoingMessage(entry, { member, userId }) }));
+  }, [before, detail, queued, scope, userId]);
+  const outgoingById = new Map(outgoing.map((item) => [item.message.id, item.entry]));
   const feedRef = useRef<HTMLDivElement>(null);
   const followLatest = useRef(true);
-  const lastMessageId = detail?.messages.at(-1)?.id;
+  const feedTail = timelineTail(detail?.messages, outgoing);
   const sequence = detail?.channel.sequence;
   useChannelEvents(params);
   const jumpToMessage = (target: ChannelReplyTarget) => {
@@ -95,26 +109,28 @@ const Timeline = ({
   useEffect(() => {
     const feed = feedRef.current;
     if (feed && followLatest.current && before === undefined) feed.scrollTop = feed.scrollHeight;
-  }, [lastMessageId, before]);
+  }, [feedTail, before]);
 
   useEffect(() => {
     if (threadId || sequence === undefined || before !== undefined) return;
-    void channelService
+    void channelActions
       .markRead(channelId, sequence)
       .catch((error: unknown) => console.error('Failed to mark Channel read', error));
   }, [channelId, threadId, sequence, before]);
 
   const activeMembers = detail?.members.filter((member) => member.status === 'active') ?? [];
   const thread = threadId ? detail?.threads.find((entry) => entry.id === threadId) : undefined;
-  const selectReply = (message: ChannelPublicMessage) => {
-    if (!sending.current) reply.select(message);
-  };
+  const selectReply = (message: ChannelPublicMessage) => reply.select(message);
   const channelArchived = detail?.channel.status === 'archived';
-  // Join lines belong to the main conversation; a thread starts from its root message.
+  const direct = !!detail?.channel.agentId;
+  // Join lines belong to the main conversation; a thread starts from its root message. A direct
+  // conversation reads like a chat with its Agent, so it has no "invited" lines at all.
   const timeline = detail
     ? channelTimeline(
-        detail.messages,
-        threadId ? [] : channelJoinEvents(detail.members),
+        outgoing.length
+          ? [...detail.messages, ...outgoing.map((item) => item.message)]
+          : detail.messages,
+        threadId || direct ? [] : channelJoinEvents(detail.members),
         !detail.hasMore && before === undefined,
       )
     : [];
@@ -154,7 +170,7 @@ const Timeline = ({
               }}
               {...stylex.props(styles.feed)}
             >
-              <WideScreenContainer fullWidth paddingInline={24}>
+              <WideScreenContainer fullWidth paddingInline={16}>
                 {(detail.hasMore || before !== undefined) && (
                   <Flexbox horizontal align="center" gap={8} justify="center" paddingBlock={8}>
                     <Button
@@ -188,10 +204,11 @@ const Timeline = ({
                     }
                   />
                 )}
+                {/* A new direct conversation starts blank, like an IM chat. */}
                 {!timeline.length &&
                   (threadId ? (
                     <p {...stylex.props(styles.muted)}>{t('threadEmpty')}</p>
-                  ) : (
+                  ) : direct ? null : (
                     <Empty icon={MessageSquare} title={t('conversationEmpty')} />
                   ))}
                 {presentChannelTimeline(timeline).map(({ item, date, startsDay, continuation }) => (
@@ -202,13 +219,34 @@ const Timeline = ({
                         role="separator"
                         {...stylex.props(styles.dateDivider)}
                       >
-                        <span {...stylex.props(styles.dateLine)} />
-                        <time dateTime={date.toISOString()}>{timeFormats.date.format(date)}</time>
-                        <span {...stylex.props(styles.dateLine)} />
+                        <time dateTime={date.toISOString()} title={timeFormats.date.format(date)}>
+                          {channelDayLabel(date, {
+                            locale: i18n.language,
+                            yesterday: t('date.yesterday'),
+                          })}
+                        </time>
                       </div>
                     )}
                     {item.kind === 'event' ? (
                       <JoinEventLine event={item.event} />
+                    ) : outgoingById.has(item.message.id) ? (
+                      <ChannelMessage
+                        continuation={continuation}
+                        message={item.message}
+                        pending={outgoingById.get(item.message.id)!.status === 'sending'}
+                        threadId={threadId}
+                        delivery={
+                          <OutgoingStatus
+                            message={outgoingById.get(item.message.id)!}
+                            onRetry={(failed) => followSent(channelActions.retrySend(failed))}
+                          />
+                        }
+                        detail={{
+                          ...detail,
+                          attachments: outgoingById.get(item.message.id)!.attachments,
+                        }}
+                        onJumpToMessage={jumpToMessage}
+                      />
                     ) : (
                       <ChannelMessage
                         continuation={continuation}
@@ -218,6 +256,7 @@ const Timeline = ({
                         threadId={threadId}
                         onJumpToMessage={jumpToMessage}
                         onOpenThread={onOpenThread}
+                        onOpenTopic={onOpenTopic}
                         onStartThread={channelArchived ? undefined : onStartThread}
                         onReply={
                           channelArchived || thread?.status === 'archived' ? undefined : selectReply
@@ -232,45 +271,27 @@ const Timeline = ({
               <ArchivedNotice channel={detail.channel} threadId={threadId} />
             ) : (
               <Composer
-                activity={<ReplyActivity detail={detail} threadId={threadId} />}
+                channel={detail.channel}
                 draftKey={channelDraftKey(channelId, threadId)}
                 key={channelDraftKey(channelId, threadId)}
                 members={activeMembers}
                 replyTarget={reply.target}
-                threadId={threadId}
+                activity={
+                  // A direct conversation shows its Agent's state beside the name in the header.
+                  direct && !threadId ? null : <ReplyActivity detail={detail} threadId={threadId} />
+                }
                 placeholder={
-                  threadId ? t('threadComposer') : t('composer', { name: detail.channel.title })
+                  threadId
+                    ? t('threadComposer')
+                    : t(direct ? 'directComposer' : 'composer', { name: detail.channel.title })
                 }
                 onCancelReply={() => reply.clear()}
-                onSend={async (content, mentions, requestKey, fileIds, replyToId) => {
-                  const sentReply = reply.snapshot();
-                  const sentLocation = currentLocation.current;
-                  const sentScope = cacheScope.get();
-                  sending.current = true;
-                  try {
-                    followLatest.current = true;
-                    const message = await channelActions.send({
-                      channelId,
-                      content,
-                      fileIds,
-                      mentions,
-                      requestKey,
-                      replyToId,
-                      threadId,
-                    });
-                    reply.clear(sentReply);
-                    if (
-                      mounted.current &&
-                      sentScope === cacheScope.get() &&
-                      sentLocation.pathname === currentLocation.current.pathname &&
-                      sentLocation.search === currentLocation.current.search
-                    ) {
-                      setBefore(undefined);
-                      if (!threadId && message.threadId) onOpenThread?.(message.threadId, false);
-                    }
-                  } finally {
-                    sending.current = false;
-                  }
+                onQueue={(message) => {
+                  // A reply picked while outsiders were being invited stays for the next message.
+                  if (reply.snapshot().target?.id === message.replyToId) reply.clear();
+                  followLatest.current = true;
+                  setBefore(undefined);
+                  followSent(channelActions.queueSend({ ...message, channelId, threadId }));
                 }}
               />
             )}

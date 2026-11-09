@@ -223,6 +223,18 @@ export const fetchReview = async (): Promise<ReviewPayload> => {
   return remember(await response.json());
 };
 
+export interface CaseReview {
+  conditions: string[];
+  item: ReviewView;
+  queued: boolean;
+}
+
+export const fetchCaseReview = async (key: string): Promise<CaseReview> => {
+  const response = await fetch(`/api/case/${encodeURIComponent(key)}/review`);
+  if (!response.ok) throw new Error(`/api/case review ${response.status}`);
+  return response.json();
+};
+
 export const postReview = async (body: {
   action: 'pass' | 'rework';
   key: string;

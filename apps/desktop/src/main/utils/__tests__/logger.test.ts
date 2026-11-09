@@ -6,6 +6,15 @@ import { getDesktopEnv } from '@/env';
 
 import { createLogger } from '../logger';
 
+const createLoggerEnv = (nodeEnv: 'development' | 'production' | undefined) => ({
+  NODE_ENV: nodeEnv,
+  DEBUG_VERBOSE: false,
+  DESKTOP_RENDERER_STATIC: false,
+  UPDATE_CHANNEL: undefined,
+  MCP_TOOL_TIMEOUT: 60000,
+  OFFICIAL_CLOUD_SERVER: 'https://lobechat.com',
+});
+
 // This suite exercises the real logger, so opt out of the global stub in
 // `__mocks__/setup.ts`.
 vi.unmock('@/utils/logger');
@@ -46,27 +55,13 @@ describe('logger', () => {
 
   beforeEach(() => {
     vi.mocked(debug).mockReturnValue(mockDebugLogger as any);
-    mockGetDesktopEnv.mockReturnValue({
-      NODE_ENV: undefined,
-      DEBUG_VERBOSE: false,
-      DESKTOP_RENDERER_STATIC: false,
-      UPDATE_CHANNEL: undefined,
-      MCP_TOOL_TIMEOUT: 60000,
-      OFFICIAL_CLOUD_SERVER: 'https://lobechat.com',
-    });
+    mockGetDesktopEnv.mockReturnValue(createLoggerEnv(undefined));
     vi.clearAllMocks();
   });
 
   afterEach(() => {
     // Reset to default state
-    mockGetDesktopEnv.mockReturnValue({
-      NODE_ENV: undefined,
-      DEBUG_VERBOSE: false,
-      DESKTOP_RENDERER_STATIC: false,
-      UPDATE_CHANNEL: undefined,
-      MCP_TOOL_TIMEOUT: 60000,
-      OFFICIAL_CLOUD_SERVER: 'https://lobechat.com',
-    });
+    mockGetDesktopEnv.mockReturnValue(createLoggerEnv(undefined));
   });
 
   describe('createLogger', () => {
@@ -111,14 +106,7 @@ describe('logger', () => {
 
   describe('logger.error', () => {
     it('should use electronLog.error in production', () => {
-      mockGetDesktopEnv.mockReturnValue({
-        NODE_ENV: 'production',
-        DEBUG_VERBOSE: false,
-        DESKTOP_RENDERER_STATIC: false,
-        UPDATE_CHANNEL: undefined,
-        MCP_TOOL_TIMEOUT: 60000,
-        OFFICIAL_CLOUD_SERVER: 'https://lobechat.com',
-      });
+      mockGetDesktopEnv.mockReturnValue(createLoggerEnv('production'));
       const logger = createLogger('test:error');
       logger.error('error message', { error: 'details' });
 
@@ -129,14 +117,7 @@ describe('logger', () => {
     });
 
     it('should use console.error in development', () => {
-      mockGetDesktopEnv.mockReturnValue({
-        NODE_ENV: 'development',
-        DEBUG_VERBOSE: false,
-        DESKTOP_RENDERER_STATIC: false,
-        UPDATE_CHANNEL: undefined,
-        MCP_TOOL_TIMEOUT: 60000,
-        OFFICIAL_CLOUD_SERVER: 'https://lobechat.com',
-      });
+      mockGetDesktopEnv.mockReturnValue(createLoggerEnv('development'));
       const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
       const logger = createLogger('test:error');
       logger.error('error message', { error: 'details' });
@@ -153,14 +134,7 @@ describe('logger', () => {
     // the production log file. `app.isPackaged` is what must gate persistence.
     it('should persist error/info/warn in a packaged build with no NODE_ENV', () => {
       mockApp.isPackaged = true;
-      mockGetDesktopEnv.mockReturnValue({
-        NODE_ENV: undefined,
-        DEBUG_VERBOSE: false,
-        DESKTOP_RENDERER_STATIC: false,
-        UPDATE_CHANNEL: undefined,
-        MCP_TOOL_TIMEOUT: 60000,
-        OFFICIAL_CLOUD_SERVER: 'https://lobechat.com',
-      });
+      mockGetDesktopEnv.mockReturnValue(createLoggerEnv(undefined));
 
       const logger = createLogger('test:packaged');
       logger.error('error message');
@@ -190,14 +164,7 @@ describe('logger', () => {
 
   describe('logger.info', () => {
     it('should use electronLog.info with namespace in production', () => {
-      mockGetDesktopEnv.mockReturnValue({
-        NODE_ENV: 'production',
-        DEBUG_VERBOSE: false,
-        DESKTOP_RENDERER_STATIC: false,
-        UPDATE_CHANNEL: undefined,
-        MCP_TOOL_TIMEOUT: 60000,
-        OFFICIAL_CLOUD_SERVER: 'https://lobechat.com',
-      });
+      mockGetDesktopEnv.mockReturnValue(createLoggerEnv('production'));
       const logger = createLogger('test:info');
       logger.info('info message', { data: 'value' });
 
@@ -208,14 +175,7 @@ describe('logger', () => {
     });
 
     it('should use debug logger in development', () => {
-      mockGetDesktopEnv.mockReturnValue({
-        NODE_ENV: 'development',
-        DEBUG_VERBOSE: false,
-        DESKTOP_RENDERER_STATIC: false,
-        UPDATE_CHANNEL: undefined,
-        MCP_TOOL_TIMEOUT: 60000,
-        OFFICIAL_CLOUD_SERVER: 'https://lobechat.com',
-      });
+      mockGetDesktopEnv.mockReturnValue(createLoggerEnv('development'));
       const logger = createLogger('test:info');
       logger.info('info message', { data: 'value' });
 
@@ -266,14 +226,7 @@ describe('logger', () => {
 
   describe('logger.warn', () => {
     it('should use electronLog.warn in production', () => {
-      mockGetDesktopEnv.mockReturnValue({
-        NODE_ENV: 'production',
-        DEBUG_VERBOSE: false,
-        DESKTOP_RENDERER_STATIC: false,
-        UPDATE_CHANNEL: undefined,
-        MCP_TOOL_TIMEOUT: 60000,
-        OFFICIAL_CLOUD_SERVER: 'https://lobechat.com',
-      });
+      mockGetDesktopEnv.mockReturnValue(createLoggerEnv('production'));
       const logger = createLogger('test:warn');
       logger.warn('warn message', { warning: 'details' });
 
@@ -284,14 +237,7 @@ describe('logger', () => {
     });
 
     it('should not use electronLog.warn in development', () => {
-      mockGetDesktopEnv.mockReturnValue({
-        NODE_ENV: 'development',
-        DEBUG_VERBOSE: false,
-        DESKTOP_RENDERER_STATIC: false,
-        UPDATE_CHANNEL: undefined,
-        MCP_TOOL_TIMEOUT: 60000,
-        OFFICIAL_CLOUD_SERVER: 'https://lobechat.com',
-      });
+      mockGetDesktopEnv.mockReturnValue(createLoggerEnv('development'));
       const logger = createLogger('test:warn');
       logger.warn('warn message');
 

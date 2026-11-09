@@ -2,6 +2,7 @@ import type { TaskItem } from '@lobechat/types';
 import { and, eq, inArray, ne, sql } from 'drizzle-orm';
 
 import { taskDependencies, tasks } from '../../schemas/task';
+import { notTrashed } from '../../utils/softDelete';
 import { depsOwnership, type TaskModelContext, taskOwnership } from './context';
 
 export const removeDependency = async (
@@ -56,6 +57,9 @@ export const areAllDependenciesCompleted = async (
         eq(taskDependencies.taskId, taskId),
         eq(taskDependencies.type, 'blocks'),
         ne(tasks.status, 'completed'),
+        // A dependency sitting in the recycle bin no longer blocks: it is
+        // treated as removed, the way the hard delete's FK cascade removed it.
+        notTrashed(tasks.isDeleted),
         depsOwnership(ctx),
       ),
     );
@@ -98,6 +102,9 @@ export const getUnlockedTasksForMany = async (
         inArray(taskDependencies.taskId, dependentIds),
         eq(taskDependencies.type, 'blocks'),
         ne(tasks.status, 'completed'),
+        // A dependency sitting in the recycle bin no longer blocks: it is
+        // treated as removed, the way the hard delete's FK cascade removed it.
+        notTrashed(tasks.isDeleted),
         depsOwnership(ctx),
       ),
     );

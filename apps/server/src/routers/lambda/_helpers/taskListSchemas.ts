@@ -40,6 +40,8 @@ export const taskListFilterSchema = z.object({
   content: z.string().trim().max(TASK_LIST_FILTER_CONTENT_MAX_LENGTH).optional(),
   createdAt: filterDate.optional(),
   creator: filterSet(filterId.refine((id) => id !== TASK_LIST_FILTER_NONE)).optional(),
+  // Label or label-group ids; `TASK_LIST_FILTER_NONE` = no labels.
+  label: filterSet(filterId).optional(),
   priority: filterSet(z.number().int().min(0).max(4)).optional(),
   project: filterSet(filterId).optional(),
   status: filterSet(z.enum(TASK_STATUSES)).optional(),
@@ -62,7 +64,9 @@ export const listSchema = z.object({
   filter: taskListFilterSchema.optional(),
   // Archived tasks are user-closed; lists leave them out unless asked.
   includeArchived: z.boolean().optional(),
-  limit: z.number().min(1).max(100).default(50),
+  // Up to 500: the Tasks list view walks the whole list page by page, and
+  // every page is a sequential round trip (refresh after each edit included).
+  limit: z.number().min(1).max(500).default(50),
   offset: z.number().min(0).default(0),
   // Which timestamp orders the page, newest first. Defaults to creation time.
   orderBy: z.enum(['createdAt', 'updatedAt']).optional(),
@@ -88,12 +92,14 @@ export const groupListSchema = z
     completedWithin: z.enum(TASK_COMPLETED_WINDOWS).optional(),
     excludeStatuses: z.array(z.enum(TASK_STATUSES)).max(10).optional(),
     filter: taskListFilterSchema.optional(),
-    groupBy: z.enum(['agent', 'assignee', 'member', 'priority']).optional(),
+    groupBy: z.enum(['agent', 'assignee', 'label', 'member', 'priority']).optional(),
     groups: z
       .array(
         z.object({
           key: z.string(),
-          limit: z.number().min(1).max(100).default(50),
+          // Up to 500: the Tasks list view walks the whole list page by page, and
+          // every page is a sequential round trip (refresh after each edit included).
+          limit: z.number().min(1).max(500).default(50),
           offset: z.number().min(0).default(0),
           statuses: z.array(z.string()).min(1).max(10),
         }),
@@ -102,6 +108,8 @@ export const groupListSchema = z
       .max(10)
       .optional(),
     includeArchived: z.boolean().optional(),
+    // The label group whose labels are the columns when `groupBy` is 'label'.
+    labelGroupId: z.string().min(1).max(64).optional(),
     parentIdentifier: z.string().trim().min(1).optional(),
     parentTaskId: z.string().trim().min(1).nullish(),
     projectId: z.string().optional(),
@@ -112,6 +120,9 @@ export const groupListSchema = z
   })
   .refine(({ groupBy, groups }) => Boolean(groupBy) !== Boolean(groups), {
     message: 'Provide either groups or groupBy',
+  })
+  .refine(({ groupBy, labelGroupId }) => groupBy !== 'label' || Boolean(labelGroupId), {
+    message: 'Grouping by label requires labelGroupId',
   });
 
 /** The model's `closedAfter` cut for a `completedWithin` window. */

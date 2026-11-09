@@ -2,9 +2,9 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { projectMembers, users, workspaceMembers, workspaces } from '../../schemas';
+import { ProjectRepository } from '../../repositories/project';
+import { projectMembers, projectSites, users, workspaceMembers, workspaces } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
-import { ProjectModel } from '../project';
 import { ProjectMemberModel, ProjectSiteModel } from '../projectReview';
 import { WorkspaceMemberModel } from '../workspaceMember';
 
@@ -13,7 +13,7 @@ const ownerId = 'project-review-owner';
 const guestId = 'project-review-guest';
 
 const createProject = () =>
-  new ProjectModel(serverDB, ownerId).create({ identifier: 'SITE', name: 'Fieldnotes' });
+  new ProjectRepository(serverDB, ownerId).create({ identifier: 'SITE', name: 'Fieldnotes' });
 
 beforeEach(async () => {
   await serverDB.delete(users);
@@ -68,6 +68,35 @@ describe('ProjectSiteModel', () => {
     await sites.delete(project.id, site.id);
     expect(await sites.listByProject(project.id)).toEqual([]);
   });
+
+  it('records when the site script was last seen, at most once an hour', async () => {
+    const project = await createProject();
+    const site = await sites.create({
+      name: 'Marketing site',
+      origins: ['https://fieldnotes.app'],
+      projectId: project.id,
+    });
+    expect(site.lastSeenAt).toBeNull();
+
+    expect(await sites.markSeen(site.id)).toBe(true);
+    const firstSeen = (await sites.findById(site.id))!.lastSeenAt;
+    expect(firstSeen).toBeInstanceOf(Date);
+
+    expect(await sites.markSeen(site.id)).toBe(false);
+    expect((await sites.findById(site.id))!.lastSeenAt).toEqual(firstSeen);
+
+    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+    await serverDB
+      .update(projectSites)
+      .set({ lastSeenAt: twoHoursAgo })
+      .where(eq(projectSites.id, site.id));
+    expect(await sites.markSeen(site.id)).toBe(true);
+    expect((await sites.findById(site.id))!.lastSeenAt!.getTime()).toBeGreaterThan(
+      twoHoursAgo.getTime(),
+    );
+
+    expect(await sites.markSeen('psite_missing')).toBe(false);
+  });
 });
 
 describe('ProjectMemberModel', () => {
@@ -90,7 +119,7 @@ describe('ProjectMemberModel', () => {
       { workspaceId, userId: guestId },
     ]);
     projectId = (
-      await new ProjectModel(serverDB, ownerId, workspaceId).create({
+      await new ProjectRepository(serverDB, ownerId, workspaceId).create({
         identifier: 'SITE',
         name: 'Fieldnotes',
       })

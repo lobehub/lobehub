@@ -1,7 +1,5 @@
 'use client';
 
-import { BRANDING_PROVIDER } from '@lobechat/business-const';
-import { CREDITS_PER_DOLLAR } from '@lobechat/const/currency';
 import { createStaticStyles, cx, Flexbox, Popover, Text } from '@lobehub/ui';
 import type { AiModelForSelect } from 'model-bank';
 import numeral from 'numeral';
@@ -11,8 +9,6 @@ import { useTranslation } from 'react-i18next';
 import { ModelIcon } from '@/components/LobeIcons';
 import NewModelBadge from '@/components/ModelSelect/NewModelBadge';
 import { useIsDark } from '@/hooks/useIsDark';
-import { useServerConfigStore } from '@/store/serverConfig';
-import { serverConfigSelectors } from '@/store/serverConfig/selectors';
 
 const POPOVER_MAX_WIDTH = 320;
 
@@ -35,6 +31,43 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
+interface GenerationPrice {
+  /** USD amount with at least two decimals, without the `$` (the locale copy carries it). */
+  amount: string;
+  key: `GenerationModelItem.creditsPer${'Image' | 'Video'}${'Approximate' | 'Exact'}`;
+}
+
+/**
+ * Pick which USD price a model shows: the exact one when the provider quotes it, otherwise the
+ * approximate one. Image and video, on every deployment, share the same localized copy.
+ */
+export const resolveGenerationPrice = ({
+  approxUsd,
+  exactUsd,
+  isVideo,
+}: {
+  approxUsd?: number;
+  exactUsd?: number;
+  isVideo: boolean;
+}): GenerationPrice | undefined => {
+  const kind = isVideo ? 'Video' : 'Image';
+
+  if (typeof exactUsd === 'number') {
+    return {
+      amount: numeral(exactUsd).format('0,0.00[000]'),
+      key: `GenerationModelItem.creditsPer${kind}Exact`,
+    };
+  }
+  if (typeof approxUsd === 'number') {
+    return {
+      amount: numeral(approxUsd).format('0,0.00[000]'),
+      key: `GenerationModelItem.creditsPer${kind}Approximate`,
+    };
+  }
+
+  return undefined;
+};
+
 export interface GenerationModelItemProps extends AiModelForSelect {
   /**
    * Which USD price fields to use: image uses approximatePricePerImage / pricePerImage; video uses approximatePricePerVideo / pricePerVideo.
@@ -42,7 +75,7 @@ export interface GenerationModelItemProps extends AiModelForSelect {
    */
   priceKind?: 'image' | 'video';
   /**
-   * Provider ID for determining price display format (when showPrice is true)
+   * @deprecated The price is shown the same way for every provider; kept so callers still type-check.
    */
   providerId?: string;
   /**
@@ -69,7 +102,6 @@ const GenerationModelItem = memo<GenerationModelItemProps>(
     description,
     pricePerImage,
     pricePerVideo,
-    providerId,
     showPopover = true,
     showBadge = true,
     showPrice = false,
@@ -78,54 +110,25 @@ const GenerationModelItem = memo<GenerationModelItemProps>(
   }) => {
     const isDarkMode = useIsDark();
     const { t } = useTranslation('components');
-    const enableBusinessFeatures = useServerConfigStore(
-      serverConfigSelectors.enableBusinessFeatures,
-    );
 
     const priceLabel = useMemo(() => {
       if (!showPrice) return undefined;
 
       const isVideo = priceKind === 'video';
-      const exactUsd = isVideo ? pricePerVideo : pricePerImage;
-      const approxUsd = isVideo ? approximatePricePerVideo : approximatePricePerImage;
+      const price = resolveGenerationPrice({
+        approxUsd: isVideo ? approximatePricePerVideo : approximatePricePerImage,
+        exactUsd: isVideo ? pricePerVideo : pricePerImage,
+        isVideo,
+      });
 
-      if (enableBusinessFeatures && providerId === BRANDING_PROVIDER) {
-        if (typeof exactUsd === 'number') {
-          const credits = exactUsd * CREDITS_PER_DOLLAR;
-          return t(
-            isVideo
-              ? 'GenerationModelItem.creditsPerVideoExact'
-              : 'GenerationModelItem.creditsPerImageExact',
-            { amount: numeral(credits).format('0,0') },
-          );
-        }
-        if (typeof approxUsd === 'number') {
-          const credits = approxUsd * CREDITS_PER_DOLLAR;
-          return t(
-            isVideo
-              ? 'GenerationModelItem.creditsPerVideoApproximate'
-              : 'GenerationModelItem.creditsPerImageApproximate',
-            { amount: numeral(credits).format('0,0') },
-          );
-        }
-      } else {
-        if (typeof exactUsd === 'number') {
-          return `${numeral(exactUsd).format('$0,0.00[000]')} / ${isVideo ? 'video' : 'image'}`;
-        }
-        if (typeof approxUsd === 'number') {
-          return `~ ${numeral(approxUsd).format('$0,0.00[000]')} / ${isVideo ? 'video' : 'image'}`;
-        }
-      }
-      return undefined;
+      return price ? t(price.key, { amount: price.amount }) : undefined;
     }, [
       showPrice,
       approximatePricePerImage,
       approximatePricePerVideo,
-      enableBusinessFeatures,
       pricePerImage,
       pricePerVideo,
       priceKind,
-      providerId,
       t,
     ]);
 

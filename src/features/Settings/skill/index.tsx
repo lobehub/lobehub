@@ -1,6 +1,6 @@
 'use client';
 
-import { ActionIcon, Button, Flexbox } from '@lobehub/ui';
+import { ActionIcon, Button, Flexbox, Text } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
 import { ArrowLeft, ChevronLeft } from 'lucide-react';
@@ -184,7 +184,9 @@ export const ToolSettings = memo<ToolSettingsProps>(({ viewMode }) => {
   if (stacked)
     return (
       <>
-        <NavHeader />
+        <NavHeader styles={{ center: { alignItems: 'center' } }}>
+          <Text weight={500}>{t('tab.connector', { ns: 'setting' })}</Text>
+        </NavHeader>
         <div {...stylex.props(styles.page)}>
           <div {...stylex.props(styles.pageBody)}>
             {stackedSelected ? (

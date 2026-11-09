@@ -37,6 +37,7 @@ import { deviceGateway } from '../deviceGateway';
 import { GoalCriteriaGeneratorService } from './criteriaGenerator';
 import { GoalService } from './index';
 import { decideFailedTurn, GoalManagerService, MAX_FAILED_MANAGER_TURNS } from './manager';
+import { withoutGoalReport } from './report';
 import * as scheduler from './scheduler';
 import { GoalStartService } from './start';
 import { answerDistill, pendingRelease as heldRelease } from './testUtils';
@@ -848,6 +849,34 @@ describe('CLI main Agent planning', () => {
 
     expect(vi.mocked(AiAgentService.prototype.execAgent)).toHaveBeenCalledTimes(1);
     expect((await model().findById(id))!.config!.managerState!.turns).toBe(turnsBefore);
+  });
+
+  it('claims the next turn on a Goal that carries a wrap-up report node', async () => {
+    // Regression: the coordinator hands the manager its report-free view, but the
+    // claim re-read the full graph and compared their snapshots. With a report
+    // node they never matched, so every advance answered "Another advance owns
+    // the planning turn" and queued itself again five seconds later, forever.
+    const { id, op } = await start();
+    await ops().recordCompletion(op.id, { status: 'done' });
+    expect((await service().tick(id)).outcome).toBe('advanced');
+    const reportNode = await new GoalGraphModel(db, userId).createNode(id, {
+      kind: 'task',
+      title: 'Write the Goal report',
+    });
+    const row = (await model().findById(id))!;
+    await db
+      .update(goals)
+      .set({ config: { ...row.config, report: { nodeId: reportNode.id } } as GoalConfig })
+      .where(eq(goals.id, id));
+    const turnsBefore = (await model().findById(id))!.config!.managerState!.turns;
+
+    const result = await manager().advance(withoutGoalReport(await service().graph(id)), {
+      mayStartTurn: true,
+    });
+
+    expect(result?.message).toBe('Main Agent dispatched with CLI planning access');
+    expect(vi.mocked(AiAgentService.prototype.execAgent)).toHaveBeenCalledTimes(2);
+    expect((await model().findById(id))!.config!.managerState!.turns).toBe(turnsBefore + 1);
   });
 
   it('opens the next planning turn in the new supervisor history after a handoff', async () => {

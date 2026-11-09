@@ -10,6 +10,15 @@ export interface ChannelAgentSelection {
   workingDirectory?: string;
 }
 
+/** The fields of a stored reply strategy this client edits; any others are written back as read. */
+export type ChannelWakeConfig = Record<string, unknown> & {
+  customInstructions?: string;
+  customInstructionsEnabled?: boolean;
+  duties?: Record<string, unknown> & { text?: string };
+  enabled?: boolean;
+  pace?: 'active' | 'balanced' | 'calm' | 'custom';
+};
+
 export interface ChannelViewParams {
   before?: number;
   channelId: string;
@@ -30,6 +39,11 @@ class ChannelService {
     memberId: string,
     environment: Pick<ChannelAgentSelection, 'deviceId' | 'workingDirectory'>,
   ) => lambdaClient.channel.updateAgentEnvironment.mutate({ channelId, environment, memberId });
+  wakeConfig = async (channelId: string) =>
+    (await lambdaClient.channel.wakeConfig.query({ channelId })).data;
+  /** Replaces the Channel's whole reply strategy; `null` returns it to the defaults. */
+  updateWakeConfig = (channelId: string, wake: ChannelWakeConfig | null) =>
+    lambdaClient.channel.updateWakeConfig.mutate({ channelId, wake });
   rename = (channelId: string, title: string) =>
     lambdaClient.channel.rename.mutate({ channelId, title });
   addUser = (channelId: string, userId: string) =>
@@ -51,6 +65,9 @@ class ChannelService {
     title: string;
     userIds: string[];
   }) => lambdaClient.channel.createGroupFromDirect.mutate(input);
+  /** The caller's direct Channel with an Agent, opened if missing; null when it cannot answer there. */
+  openDirect = async (input: { agentId: string; localDeviceId?: string }) =>
+    (await lambdaClient.channel.openDirect.mutate(input)).data;
   detail = async (params: ChannelViewParams): Promise<ChannelDetail> =>
     (await lambdaClient.channel.detail.query(params)).data;
   list = async (): Promise<ChannelListItem[]> => (await lambdaClient.channel.list.query()).data;

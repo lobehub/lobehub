@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   clearPortalStack: vi.fn(),
   confirmModal: vi.fn(),
   deleteTask: vi.fn(),
+  foreign: {} as Record<string, unknown>,
   openRenameModal: vi.fn(),
   refreshTaskDetail: vi.fn(),
   updateTask: vi.fn(),
@@ -15,6 +16,8 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@lobehub/ui', () => ({ confirmModal: mocks.confirmModal }));
 vi.mock('@/components/RenameModal', () => ({ openRenameModal: mocks.openRenameModal }));
+vi.mock('@/hooks/useAppOrigin', () => ({ useAppOrigin: () => 'https://app.lobehub.com' }));
+vi.mock('./useForeignTaskDetail', () => ({ useForeignTaskDetail: () => mocks.foreign }));
 vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ allowed: mocks.allowed }) }));
 vi.mock('@/features/AgentTasks/AgentTaskDetail/useTaskCopyActions', () => ({
   useTaskCopyActions: () => ({
@@ -40,6 +43,7 @@ describe('useTaskDetailMoreMenu', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.allowed = true;
+    mocks.foreign = {};
   });
 
   it('declares rename, copy link, copy id, refresh and delete', () => {
@@ -86,5 +90,26 @@ describe('useTaskDetailMoreMenu', () => {
 
     expect(result.current?.rename).toBeUndefined();
     expect(result.current?.delete).toBeUndefined();
+  });
+
+  it('offers only copy and refresh for a task from another workspace', () => {
+    const mutate = vi.fn();
+    mocks.foreign = {
+      data: { agentId: null, identifier: 'T-198', name: 'Ship it' },
+      mutate,
+      taskId: 'T-198',
+      workspace: { id: 'ws-1', slug: 'lobe-team' },
+    };
+    const { result } = renderHook(() => useTaskDetailMoreMenu());
+
+    // Rename/delete write through the active scope, where T-198 names another task.
+    expect(Object.keys(result.current!).sort()).toEqual(['copyId', 'copyLink', 'refresh']);
+    expect(result.current).toMatchObject({
+      copyId: 'T-198',
+      copyLink: 'https://app.lobehub.com/lobe-team/task/T-198/ship-it',
+    });
+    result.current!.refresh!();
+    expect(mutate).toHaveBeenCalledOnce();
+    expect(mocks.refreshTaskDetail).not.toHaveBeenCalled();
   });
 });

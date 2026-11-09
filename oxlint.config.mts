@@ -17,6 +17,17 @@ const [, uiRestrictedImportOptions] = restrictedImports.rules['no-restricted-imp
 
 const baseRestrictedImportOptions = {
   ...uiRestrictedImportOptions,
+  paths: [
+    ...uiRestrictedImportOptions.paths,
+    // Applies to tests and packages too: Vitest does not bundle, so a root import
+    // evaluates the whole re-export list in every test file that reaches it.
+    {
+      allowTypeImports: true,
+      message:
+        'The root entry re-exports every icon (~3,450 modules), which Vitest and the Vite dev server load one by one. Import each icon from "@icons-pack/react-simple-icons/icons/<Name>".',
+      name: '@icons-pack/react-simple-icons',
+    },
+  ],
   patterns: [
     ...(uiRestrictedImportOptions.patterns ?? []),
     {
@@ -616,8 +627,10 @@ export default defineConfig(
             'Home cold-path modules must not statically import ChatInput. Load an isolated editor entry with import().',
           // `hooks/useAgentModelSelection` reaches the store only through the
           // editor-free `store/apiContext`; Home model switches share its path.
+          // `draftStorage` is localStorage-only; a refused Home send hands its
+          // message to the conversation composer through it.
           regex:
-            '^@/features/ChatInput(?:$|/(?!(?:hooks/useAgentModelSelection|store/initialState|utils/contextSelections)$).+)',
+            '^@/features/ChatInput(?:$|/(?!(?:draftStorage|hooks/useAgentModelSelection|store/initialState|utils/contextSelections)$).+)',
         },
       ],
     }),

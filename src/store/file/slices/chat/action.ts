@@ -92,15 +92,45 @@ const getUploadErrorDescription = (error: unknown): string => {
     : t('upload.unknownError', { ns: 'error', reason: getErrorMessage(error) });
 };
 
+const EMPTY_CHAT_UPLOAD_FILE_LIST: UploadFileItem[] = [];
+
 export class FileActionImpl {
   readonly #get: () => FileStore;
   readonly #set: Setter;
+  /**
+   * The key each in-flight upload's chip currently lives under. A move
+   * (`moveChatUploadFileList`) updates it, so an upload keeps reporting to its
+   * own chip instead of resolving by id — a pending id is only the file name,
+   * and a same-named upload may appear under the old key later.
+   */
+  readonly #inFlightUploads = new Set<{ contextKey: string }>();
 
   constructor(set: Setter, get: () => FileStore, _api?: unknown) {
     void _api;
     this.#set = set;
     this.#get = get;
   }
+
+  #getChatUploadFileList = (contextKey: string): UploadFileItem[] =>
+    this.#get().chatUploadFileListByContext[contextKey] ?? EMPTY_CHAT_UPLOAD_FILE_LIST;
+
+  #setChatUploadFileList = (contextKey: string, list: UploadFileItem[], action: string): void => {
+    const currentMap = this.#get().chatUploadFileListByContext;
+
+    // Drop emptied buckets so conversations visited once don't pile up keys.
+    if (list.length === 0) {
+      if (!(contextKey in currentMap)) return;
+      const { [contextKey]: _removed, ...nextMap } = currentMap;
+      this.#set({ chatUploadFileListByContext: nextMap }, false, action);
+      return;
+    }
+
+    this.#set(
+      { chatUploadFileListByContext: { ...currentMap, [contextKey]: list } },
+      false,
+      action,
+    );
+  };
 
   addChatContextSelection = ({
     contextKey,
@@ -128,11 +158,11 @@ export class FileActionImpl {
     this.#set({ chatContextSelectionsByContext: nextMap }, false, n('clearChatContextSelections'));
   };
 
-  clearChatUploadFileList = (submittedIds?: string[]): void => {
-    const chatUploadFileList = submittedIds
-      ? this.#get().chatUploadFileList.filter((file) => !submittedIds.includes(file.id))
+  clearChatUploadFileList = (contextKey: string, submittedIds?: string[]): void => {
+    const next = submittedIds
+      ? this.#getChatUploadFileList(contextKey).filter((file) => !submittedIds.includes(file.id))
       : [];
-    this.#set({ chatUploadFileList }, false, n('clearChatUploadFileList'));
+    this.#setChatUploadFileList(contextKey, next, n('clearChatUploadFileList'));
   };
 
   /**
@@ -141,21 +171,57 @@ export class FileActionImpl {
    * up front). Items already in the list are skipped by id so a concurrent
    * draft does not end up with duplicates.
    */
-  restoreChatUploadFileList = (files: UploadFileItem[]): void => {
+  restoreChatUploadFileList = (contextKey: string, files: UploadFileItem[]): void => {
     if (files.length === 0) return;
 
-    const currentIds = new Set(this.#get().chatUploadFileList.map((file) => file.id));
+    const currentIds = new Set(this.#getChatUploadFileList(contextKey).map((file) => file.id));
     const restored = files.filter((file) => !currentIds.has(file.id));
     if (restored.length === 0) return;
 
-    this.#get().dispatchChatUploadFileList({ files: restored, type: 'addFiles' });
+    this.#get().dispatchChatUploadFileList(contextKey, { files: restored, type: 'addFiles' });
   };
 
-  dispatchChatUploadFileList = (payload: UploadFileListDispatch): void => {
-    const nextValue = uploadFileListReducer(this.#get().chatUploadFileList, payload);
-    if (nextValue === this.#get().chatUploadFileList) return;
+  dispatchChatUploadFileList = (contextKey: string, payload: UploadFileListDispatch): void => {
+    const current = this.#getChatUploadFileList(contextKey);
+    const nextValue = uploadFileListReducer(current, payload);
+    if (nextValue === current) return;
 
-    this.#set({ chatUploadFileList: nextValue }, false, `dispatchChatFileList/${payload.type}`);
+    this.#setChatUploadFileList(contextKey, nextValue, `dispatchChatFileList/${payload.type}`);
+  };
+
+  /** Upload half of `moveChatComposerAttachments`. */
+  moveChatUploadFileList = (fromContextKey: string, toContextKey: string): void => {
+    if (fromContextKey === toContextKey) return;
+
+    // Uploads still being prepared follow the composer even before their chip exists.
+    for (const upload of this.#inFlightUploads) {
+      if (upload.contextKey === fromContextKey) upload.contextKey = toContextKey;
+    }
+
+    const source = this.#getChatUploadFileList(fromContextKey);
+    if (source.length === 0) return;
+
+    const sourceIds = new Set(source.map((file) => file.id));
+    const target = this.#getChatUploadFileList(toContextKey).filter(
+      (file) => !sourceIds.has(file.id),
+    );
+    const { [fromContextKey]: _removed, ...nextMap } = this.#get().chatUploadFileListByContext;
+
+    this.#set(
+      { chatUploadFileListByContext: { ...nextMap, [toContextKey]: [...target, ...source] } },
+      false,
+      n('moveChatUploadFileList'),
+    );
+  };
+
+  /**
+   * Carry everything a composer has staged — context selections and uploads —
+   * to another key, e.g. when a blank conversation becomes a real topic
+   * mid-send, so the composer at the new key still shows them.
+   */
+  moveChatComposerAttachments = (fromContextKey: string, toContextKey: string): void => {
+    this.moveChatContextSelections(fromContextKey, toContextKey);
+    this.moveChatUploadFileList(fromContextKey, toContextKey);
   };
 
   moveChatContextSelections = (fromContextKey: string, toContextKey: string): void => {
@@ -215,14 +281,12 @@ export class FileActionImpl {
     );
   };
 
-  removeChatUploadFile = async (id: string): Promise<void> => {
-    const { chatUploadFileList, dispatchChatUploadFileList } = this.#get();
-
+  removeChatUploadFile = async (contextKey: string, id: string): Promise<void> => {
     // Restored entries reference an already-persisted file that still backs the
     // original message — only drop the draft item, never delete the file itself.
-    const item = chatUploadFileList.find((entry) => entry.id === id);
+    const item = this.#getChatUploadFileList(contextKey).find((entry) => entry.id === id);
 
-    dispatchChatUploadFileList({ id, type: 'removeFile' });
+    this.#get().dispatchChatUploadFileList(contextKey, { id, type: 'removeFile' });
 
     if (item?.skipRemoveFile) return;
 
@@ -240,13 +304,12 @@ export class FileActionImpl {
     await fileService.removeFile(id);
   };
 
-  retryChatUploadFile = async (id: string): Promise<void> => {
-    const { chatUploadFileList, dispatchChatUploadFileList } = this.#get();
-    const item = chatUploadFileList.find((file) => file.id === id);
+  retryChatUploadFile = async (contextKey: string, id: string): Promise<void> => {
+    const item = this.#getChatUploadFileList(contextKey).find((file) => file.id === id);
     if (!item?.agentId) return;
 
-    dispatchChatUploadFileList({ id, type: 'removeFile' });
-    await this.uploadChatFiles([item.file], item.agentId, { shareId: item.shareId });
+    this.#get().dispatchChatUploadFileList(contextKey, { id, type: 'removeFile' });
+    await this.uploadChatFiles(contextKey, [item.file], item.agentId, { shareId: item.shareId });
   };
 
   startAsyncTask = async (
@@ -288,12 +351,30 @@ export class FileActionImpl {
   };
 
   uploadChatFiles = async (
+    contextKey: string,
     rawFiles: File[],
     agentId: string,
     options: ChatUploadOptions = {},
   ): Promise<void> => {
-    const { dispatchChatUploadFileList } = this.#get();
     const { shareId } = options;
+    const upload = { contextKey };
+    this.#inFlightUploads.add(upload);
+    try {
+      await this.#uploadChatFilesTo(upload, rawFiles, agentId, shareId);
+    } finally {
+      this.#inFlightUploads.delete(upload);
+    }
+  };
+
+  #uploadChatFilesTo = async (
+    upload: { contextKey: string },
+    rawFiles: File[],
+    agentId: string,
+    shareId: string | undefined,
+  ): Promise<void> => {
+    // The chip may be handed to another key mid-upload; dispatch to wherever it is now.
+    const dispatchChatUploadFileList = (payload: UploadFileListDispatch) =>
+      this.#get().dispatchChatUploadFileList(upload.contextKey, payload);
     // 0. skip file in blacklist
     const filteredFiles = rawFiles.filter((file) => !FILE_UPLOAD_BLACKLIST.includes(file.name));
 
@@ -393,6 +474,7 @@ export class FileActionImpl {
               shareId,
             })
           : await this.#get().uploadWithProgress({
+              conversationAgentId: agentId,
               file,
               onStatusUpdate: dispatchChatUploadFileList,
             });

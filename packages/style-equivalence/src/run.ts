@@ -26,7 +26,7 @@ import { type CaseCategory, categorizeCase } from './verdict/categorize';
 
 const run = promisify(execFile);
 
-export const VERIFIER_VERSION = '2.13.0';
+export const VERIFIER_VERSION = '2.14.0';
 export const DEFAULT_MUTATIONS = 10;
 
 export interface RunOptions {

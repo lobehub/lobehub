@@ -8,6 +8,21 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { aiAgentRouter } from '../aiAgent';
 import { cleanupTestUser, createTestUser } from './integration/setup';
 
+const subAgentInput = (agentId: string, groupId: string, topicId: string) => ({
+  agentId,
+  groupId,
+  instruction: 'Test instruction',
+  parentMessageId: 'parent-msg-1',
+  topicId,
+});
+
+const subAgentLaunchResponse = () => ({
+  assistantMessageId: 'assistant-msg-1',
+  operationId: 'op-123',
+  success: true,
+  threadId: 'thread-123',
+});
+
 // Mock getServerDB to return our test database instance
 let testDB: LobeChatDatabase;
 vi.mock('@/database/core/db-adaptor', () => ({
@@ -107,22 +122,11 @@ describe('aiAgentRouter.execSubAgentTask', () => {
 
   describe('successful execution', () => {
     it('should call service method with correct parameters', async () => {
-      mockExecGroupSubAgentTask.mockResolvedValue({
-        assistantMessageId: 'assistant-msg-1',
-        operationId: 'op-123',
-        success: true,
-        threadId: 'thread-123',
-      });
+      mockExecGroupSubAgentTask.mockResolvedValue(subAgentLaunchResponse());
 
       const caller = aiAgentRouter.createCaller(createTestContext());
 
-      await caller.execSubAgentTask({
-        agentId: testAgentId,
-        groupId: testGroupId,
-        instruction: 'Test instruction',
-        parentMessageId: 'parent-msg-1',
-        topicId: testTopicId,
-      });
+      await caller.execSubAgentTask(subAgentInput(testAgentId, testGroupId, testTopicId));
 
       expect(mockExecGroupSubAgentTask).toHaveBeenCalledWith(
         {
@@ -165,12 +169,7 @@ describe('aiAgentRouter.execSubAgentTask', () => {
     });
 
     it('should pass parent operation metadata to the service', async () => {
-      mockExecGroupSubAgentTask.mockResolvedValue({
-        assistantMessageId: 'assistant-msg-1',
-        operationId: 'op-123',
-        success: true,
-        threadId: 'thread-123',
-      });
+      mockExecGroupSubAgentTask.mockResolvedValue(subAgentLaunchResponse());
       const caller = aiAgentRouter.createCaller(createTestContext());
 
       await caller.execSubAgentTask({
@@ -193,22 +192,13 @@ describe('aiAgentRouter.execSubAgentTask', () => {
     });
 
     it('should return result from service', async () => {
-      mockExecGroupSubAgentTask.mockResolvedValue({
-        assistantMessageId: 'assistant-msg-1',
-        operationId: 'op-123',
-        success: true,
-        threadId: 'thread-123',
-      });
+      mockExecGroupSubAgentTask.mockResolvedValue(subAgentLaunchResponse());
 
       const caller = aiAgentRouter.createCaller(createTestContext());
 
-      const result = await caller.execSubAgentTask({
-        agentId: testAgentId,
-        groupId: testGroupId,
-        instruction: 'Test instruction',
-        parentMessageId: 'parent-msg-1',
-        topicId: testTopicId,
-      });
+      const result = await caller.execSubAgentTask(
+        subAgentInput(testAgentId, testGroupId, testTopicId),
+      );
 
       expect(result).toEqual({
         assistantMessageId: 'assistant-msg-1',
@@ -219,12 +209,7 @@ describe('aiAgentRouter.execSubAgentTask', () => {
     });
 
     it('should pass timeout parameter when provided', async () => {
-      mockExecGroupSubAgentTask.mockResolvedValue({
-        assistantMessageId: 'assistant-msg-1',
-        operationId: 'op-123',
-        success: true,
-        threadId: 'thread-123',
-      });
+      mockExecGroupSubAgentTask.mockResolvedValue(subAgentLaunchResponse());
 
       const caller = aiAgentRouter.createCaller(createTestContext());
 
@@ -315,13 +300,7 @@ describe('aiAgentRouter.execSubAgentTask', () => {
       const caller = aiAgentRouter.createCaller(createTestContext());
 
       await expect(
-        caller.execSubAgentTask({
-          agentId: testAgentId,
-          groupId: testGroupId,
-          instruction: 'Test instruction',
-          parentMessageId: 'parent-msg-1',
-          topicId: testTopicId,
-        }),
+        caller.execSubAgentTask(subAgentInput(testAgentId, testGroupId, testTopicId)),
       ).rejects.toThrow('Agent not found');
     });
 
@@ -331,13 +310,7 @@ describe('aiAgentRouter.execSubAgentTask', () => {
       const caller = aiAgentRouter.createCaller(createTestContext());
 
       await expect(
-        caller.execSubAgentTask({
-          agentId: testAgentId,
-          groupId: testGroupId,
-          instruction: 'Test instruction',
-          parentMessageId: 'parent-msg-1',
-          topicId: testTopicId,
-        }),
+        caller.execSubAgentTask(subAgentInput(testAgentId, testGroupId, testTopicId)),
       ).rejects.toThrow('Failed to execute sub-agent task: Database connection failed');
     });
   });

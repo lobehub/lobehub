@@ -40,7 +40,7 @@
   "generation.editing.hint": "Beschreiben Sie, was geändert werden soll; alles andere bleibt gleich",
   "generation.editing.modelLocked": "Bearbeitungen behalten das Modell des Originalvideos bei",
   "generation.editing.title": "Bearbeitung V{{version}}",
-  "generation.freeQuota.exhausted": "🎁 Freikontingent aufgebraucht, es werden Credits verwendet",
+  "generation.freeQuota.exhausted": "🎁 Kostenlose Nutzung aufgebraucht. Videos verwenden jetzt Ihr Guthaben.",
   "generation.freeQuota.remaining": "🎁 {{remaining}} kostenlose Videos heute verfügbar",
   "generation.status.editing": "Bearbeitung wird generiert...",
   "generation.status.failed": "Erstellung fehlgeschlagen",

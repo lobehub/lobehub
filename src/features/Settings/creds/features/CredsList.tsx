@@ -10,7 +10,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useWorkspaces } from '@/business/client/hooks/useWorkspaces';
 import AsyncBoundary from '@/components/AsyncBoundary';
-import ListSkeleton from '@/components/ListSkeleton';
+import { CredsListSkeleton } from '@/components/Skeleton/Settings/tabs/Creds';
 import { usePermission } from '@/hooks/usePermission';
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
 
@@ -83,7 +83,7 @@ const CredsList: FC = () => {
           errorVariant={'block'}
           isEmpty={credentials.length === 0}
           isLoading={isLoading}
-          loading={<ListSkeleton paddingInline={0} />}
+          loading={<CredsListSkeleton />}
           empty={
             <Empty
               className={stylex.props(styles.empty).className}

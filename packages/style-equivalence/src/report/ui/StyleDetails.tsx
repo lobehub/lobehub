@@ -1,91 +1,77 @@
+import { Accordion, Flexbox, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 
 import type { ReviewView } from '../api';
 
-const mono = 'ui-monospace, SFMono-Regular, Menlo, monospace';
-
 const styles = stylex.create({
   block: {
     backgroundColor: cssVar.colorBgContainer,
     borderColor: cssVar.colorBorderSecondary,
-    borderRadius: 10,
+    borderRadius: cssVar.borderRadiusLG,
     borderStyle: 'solid',
     borderWidth: 1,
     overflow: 'hidden',
   },
   cell: {
-    borderBlockStartColor: cssVar.colorFillSecondary,
+    borderBlockStartColor: cssVar.colorBorderSecondary,
     borderBlockStartStyle: 'solid',
     borderBlockStartWidth: 1,
     paddingBlock: 8,
-    paddingInline: 14,
+    paddingInline: 12,
     verticalAlign: 'top',
   },
   code: {
     color: cssVar.colorText,
-    fontFamily: mono,
-    fontSize: 12.5,
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: cssVar.fontSizeSM,
     lineHeight: 1.7,
     margin: 0,
     overflowX: 'auto',
-    padding: 14,
+    padding: 12,
     whiteSpace: 'pre',
   },
   differs: { backgroundColor: cssVar.colorErrorBg },
-  empty: { color: cssVar.colorTextQuaternary },
   group: {
     backgroundColor: cssVar.colorFillQuaternary,
     color: cssVar.colorTextSecondary,
-    fontFamily: mono,
-    fontSize: 12.5,
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: cssVar.fontSizeSM,
     fontWeight: 600,
     paddingBlock: 8,
-    paddingInline: 14,
+    paddingInline: 12,
   },
   head: {
     backgroundColor: cssVar.colorFillQuaternary,
     color: cssVar.colorTextTertiary,
-    fontSize: 12,
+    fontSize: cssVar.fontSizeSM,
     fontWeight: 500,
-    paddingBlock: 10,
-    paddingInline: 14,
+    paddingBlock: 8,
+    paddingInline: 12,
     textAlign: 'start',
   },
-  heading: { fontSize: 15, fontWeight: 600, marginBlockEnd: 4, marginBlockStart: 32 },
-  label: { color: cssVar.colorTextSecondary, fontFamily: mono, fontSize: 12.5 },
   line: { display: 'block' },
-  moved: { color: cssVar.colorWarningText, fontSize: 12 },
-  no: { color: cssVar.colorError, fontSize: 12, whiteSpace: 'nowrap' },
-  ok: { color: cssVar.colorSuccess, fontSize: 12, whiteSpace: 'nowrap' },
+  mono: { color: cssVar.colorText, fontFamily: cssVar.fontFamilyCode, fontSize: cssVar.fontSizeSM },
   pane: { minWidth: 0 },
   paneHead: {
-    borderBlockEndColor: cssVar.colorFillSecondary,
+    borderBlockEndColor: cssVar.colorBorderSecondary,
     borderBlockEndStyle: 'solid',
     borderBlockEndWidth: 1,
     color: cssVar.colorTextTertiary,
-    fontSize: 12,
+    fontSize: cssVar.fontSizeSM,
     paddingBlock: 8,
-    paddingInline: 14,
+    paddingInline: 12,
   },
-  panes: { display: 'grid', gridTemplateColumns: '1fr 1fr' },
+  panes: { display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' },
   paneSplit: {
-    borderInlineStartColor: cssVar.colorFillSecondary,
+    borderInlineStartColor: cssVar.colorBorderSecondary,
     borderInlineStartStyle: 'solid',
     borderInlineStartWidth: 1,
   },
-  sources: { display: 'grid', rowGap: 14 },
-  standIn: {
-    color: cssVar.colorWarningText,
-    fontFamily: 'inherit',
-    fontSize: 12,
-    fontWeight: 400,
-    marginInlineStart: 10,
-  },
-  sub: { color: cssVar.colorTextTertiary, fontSize: 12.5, marginBlockEnd: 12 },
+  standIn: { fontFamily: cssVar.fontFamily, fontWeight: 400, marginInlineStart: 12 },
   swatch: (color: string) => ({
     backgroundColor: color,
-    borderColor: 'rgba(0, 0, 0, 0.08)',
+    borderColor: cssVar.colorBorder,
     borderRadius: 3,
     borderStyle: 'solid',
     borderWidth: 1,
@@ -95,8 +81,7 @@ const styles = stylex.create({
     verticalAlign: '-1px',
     width: 10,
   }),
-  table: { borderCollapse: 'collapse', fontSize: 13, width: '100%' },
-  value: { color: cssVar.colorText, fontFamily: mono, fontSize: 12.5 },
+  table: { borderCollapse: 'collapse', fontSize: cssVar.fontSizeSM, width: '100%' },
 });
 
 const COLOR_TOKEN = /:\s*(color[A-Z]\w*)$/;
@@ -120,8 +105,16 @@ const Lines = ({ label, lines }: { label: string; lines: string[] }) =>
       })}
     </>
   ) : (
-    <span {...stylex.props(styles.empty)}>没有写</span>
+    <Text fontSize={12} type="secondary">
+      没有写
+    </Text>
   );
+
+const RESULT = {
+  differs: { text: '不一样', type: 'danger' },
+  oneSided: { text: '只写在一边，渲染一致', type: 'warning' },
+  same: { text: '一致', type: 'success' },
+} as const;
 
 const DeclarationTable = ({ blocks }: { blocks: ReviewView['styles']['blocks'] }) => (
   <div {...stylex.props(styles.block)}>
@@ -140,33 +133,32 @@ const DeclarationTable = ({ blocks }: { blocks: ReviewView['styles']['blocks'] }
             <td colSpan={4} {...stylex.props(styles.group)}>
               {block.slot}
               {block.standIn && (
-                <span {...stylex.props(styles.standIn)}>
+                <Text as="span" fontSize={12} type="warning" {...stylex.props(styles.standIn)}>
                   按替身渲染：没有加载 {block.standIn}{' '}
                   自带的样式，这一块的「一致」只说明我们写的样式没变
-                </span>
+                </Text>
               )}
             </td>
           </tr>
-          {block.rows.map((row) => (
-            <tr key={row.label} {...stylex.props(row.differs && styles.differs)}>
-              <td {...stylex.props(styles.cell, styles.label)}>{row.label}</td>
-              <td {...stylex.props(styles.cell, styles.value)}>
-                <Lines label={row.label} lines={row.before} />
-              </td>
-              <td {...stylex.props(styles.cell, styles.value)}>
-                <Lines label={row.label} lines={row.after} />
-              </td>
-              <td {...stylex.props(styles.cell)}>
-                <span
-                  {...stylex.props(
-                    row.differs ? styles.no : row.oneSided ? styles.moved : styles.ok,
-                  )}
-                >
-                  {row.differs ? '不一样' : row.oneSided ? '只写在一边，渲染一致' : '一致'}
-                </span>
-              </td>
-            </tr>
-          ))}
+          {block.rows.map((row) => {
+            const result = RESULT[row.differs ? 'differs' : row.oneSided ? 'oneSided' : 'same'];
+            return (
+              <tr key={row.label} {...stylex.props(row.differs && styles.differs)}>
+                <td {...stylex.props(styles.cell, styles.mono)}>{row.label}</td>
+                <td {...stylex.props(styles.cell, styles.mono)}>
+                  <Lines label={row.label} lines={row.before} />
+                </td>
+                <td {...stylex.props(styles.cell, styles.mono)}>
+                  <Lines label={row.label} lines={row.after} />
+                </td>
+                <td {...stylex.props(styles.cell)}>
+                  <Text fontSize={12} type={result.type}>
+                    {result.text}
+                  </Text>
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       ))}
     </table>
@@ -195,7 +187,7 @@ const SourceCompare = ({ styles: data }: { styles: ReviewView['styles'] }) => {
   const usage = (side: 'base' | 'head') =>
     (data.usage[side] ?? ['（这一侧没有这个元素）']).join('\n');
   return (
-    <div {...stylex.props(styles.sources)}>
+    <Flexbox gap={12}>
       <div {...stylex.props(styles.block)}>
         <div {...stylex.props(styles.group)}>JSX 用法</div>
         <div {...stylex.props(styles.panes)}>
@@ -216,27 +208,30 @@ const SourceCompare = ({ styles: data }: { styles: ReviewView['styles'] }) => {
           </div>
         </div>
       ))}
-    </div>
+    </Flexbox>
   );
 };
 
-export const StyleDetails = ({ item }: { item: ReviewView }) => (
-  <>
-    {item.styles.blocks.length > 0 && (
-      <section>
-        <h2 {...stylex.props(styles.heading)}>样式对照</h2>
-        <div {...stylex.props(styles.sub)}>
-          两边都换成 CSS 属性名，按样式块对齐。渲染结果那一列来自截图比对，不是看代码猜的。
-        </div>
-        <DeclarationTable blocks={item.styles.blocks} />
-      </section>
-    )}
-    {Object.keys(item.styles.usage).length > 0 && (
-      <section>
-        <h2 {...stylex.props(styles.heading)}>源码对照</h2>
-        <div {...stylex.props(styles.sub)}>原文不截断，调试用。</div>
-        <SourceCompare styles={item.styles} />
-      </section>
-    )}
-  </>
-);
+export const StyleDetails = ({ item }: { item: ReviewView }) => {
+  const items = [
+    item.styles.blocks.length > 0 && {
+      children: (
+        <Flexbox gap={8}>
+          <Text fontSize={12} type="secondary">
+            两边都换成 CSS 属性名，按样式块对齐。渲染结果来自截图比对，不是看代码猜的。
+          </Text>
+          <DeclarationTable blocks={item.styles.blocks} />
+        </Flexbox>
+      ),
+      key: 'declarations',
+      title: '样式对照',
+    },
+    Object.keys(item.styles.usage).length > 0 && {
+      children: <SourceCompare styles={item.styles} />,
+      key: 'source',
+      title: '源码对照（原文不截断，调试用）',
+    },
+  ].filter((entry) => entry !== false);
+  if (!items.length) return null;
+  return <Accordion defaultValue={['declarations']} gap={8} items={items} variant="borderless" />;
+};

@@ -131,24 +131,37 @@ export const createToolMessage = async ({
 
 export const updateExistingToolMessage = async ({
   host,
+  ownedByTransport,
   result,
   resultBlocked,
   toolMessageId,
 }: {
   host: AgentRuntimeHost;
+  /**
+   * The transport handed this row back (`ToolRunExecution.toolMessageId`): it
+   * or the tool wrote the row's state during this call, and the result does not
+   * repeat it — a background sub-agent's placeholder holds the `background`
+   * flag its completion bridge and delivery look up. Merge into it instead of
+   * replacing. Rows the executor fills on its own (replayed or approval-resumed
+   * placeholders the transport did not return) keep the replace so their stale
+   * pending state does not survive.
+   */
+  ownedByTransport?: boolean;
   result: ToolRunResult;
   resultBlocked?: boolean;
   toolMessageId: string;
 }) => {
+  const blocked = isBlockedBeforeExecution(result) || resultBlocked === true;
   try {
     await host.transports.messages.updateToolMessage(toolMessageId, {
       content: result.content,
       metadata: toolResultMetadata(result),
       pluginError: result.error ?? null,
       pluginState: result.state ?? {},
-      replacePluginState: true,
+      // A withheld result must not leave the original output in the state.
+      replacePluginState: !ownedByTransport || blocked,
     });
-    if (isBlockedBeforeExecution(result) || resultBlocked) {
+    if (blocked) {
       await host.transports.messages.updateToolIntervention(toolMessageId, {
         rejectedReason: result.state?.reason,
         status: 'rejected',

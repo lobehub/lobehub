@@ -15,6 +15,8 @@ class ScmService {
     lambdaClient.scm.listChangeRequests.query(params);
 
   listInstallations = async () => lambdaClient.scm.listInstallations.query();
+
+  listRepositories = async () => lambdaClient.scm.listRepositories.query();
 }
 
 export const scmService = new ScmService();

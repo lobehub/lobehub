@@ -12,6 +12,10 @@ class KnowledgeBaseService {
     );
   };
 
+  getAgentSpaces = async () => {
+    return lambdaClient.knowledgeBase.getAgentSpaces.query();
+  };
+
   getKnowledgeBaseById = async (id: string) => {
     return lambdaClient.knowledgeBase.getKnowledgeBaseById.query({ id });
   };

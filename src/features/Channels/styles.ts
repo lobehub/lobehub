@@ -64,6 +64,8 @@ export const styles = stylex.create({
     },
   },
   highlightedMessage: { backgroundColor: cssVar.colorInfoBg },
+  /** A message still on its way shows faded instead of carrying a status line. */
+  pendingMessage: { opacity: 0.6 },
   messageAvatar: {
     position: 'absolute',
     insetBlockStart: 8,
@@ -96,18 +98,14 @@ export const styles = stylex.create({
       },
     },
   },
+  /** A plain centered date; a rule on each side read heavier than the messages it separates. */
   dateDivider: {
     display: 'flex',
     alignItems: 'center',
-    gap: 12,
+    justifyContent: 'center',
     paddingBlock: 12,
     fontSize: cssVar.fontSizeSM,
     color: cssVar.colorTextSecondary,
-  },
-  dateLine: {
-    flex: '1',
-    height: 1,
-    backgroundColor: cssVar.colorBorderSecondary,
   },
   /** Floats over the row's top-right corner while the row is hovered or focused. */
   messageToolbar: {
@@ -190,16 +188,20 @@ export const styles = stylex.create({
   composerRow: {
     display: 'flex',
     alignItems: 'flex-end',
-    gap: 4,
-    paddingBlock: 4,
-    paddingInline: 4,
+    gap: 8,
+    // 10px around the 28px buttons centers a single line in the 50px card.
+    minHeight: 48,
+    paddingBlock: 10,
+    paddingInline: 8,
   },
   composerEditor: {
     overflowY: 'auto',
     flex: '1',
     minWidth: 0,
     maxHeight: 240,
-    paddingBlock: 0,
+    // Buttons sit on the last line; glyphs ride high in the line box, so drop the
+    // text 1px to center it on the 28px icons beside it.
+    marginBlockEnd: -1,
   },
   /** Takes the composer's place while the channel or thread is archived. */
   archivedNotice: {
@@ -280,9 +282,28 @@ export const statusStyles = stylex.create({
   memberButton: {
     flex: 'none',
     gap: 4,
-    height: 32,
+    height: 28,
     paddingBlock: 4,
     paddingInline: 4,
+  },
+  memberStack: {
+    display: 'inline-flex',
+    alignItems: 'center',
+  },
+  memberStackItem: {
+    position: 'relative',
+    display: 'inline-flex',
+    flex: 'none',
+    marginInlineStart: { 'default': -6, ':first-child': 0 },
+    borderRadius: '50%',
+    outlineWidth: 2,
+    outlineStyle: 'solid',
+    outlineColor: cssVar.colorBgContainer,
+    // Emoji avatars are transparent; without a fill the neighbour shows through.
+    backgroundColor: cssVar.colorBgContainer,
+  },
+  memberWorking: {
+    color: cssVar.colorWarning,
   },
   memberAvatar: {
     position: 'relative',
@@ -331,6 +352,14 @@ export const activityStyles = stylex.create({
     height: 24,
     paddingInline: 4,
     color: cssVar.colorTextSecondary,
+  },
+  /** Beside the Agent's name in a direct conversation's header. */
+  header: {
+    color: cssVar.colorTextDescription,
+  },
+  headerButton: {
+    height: 22,
+    paddingInline: 4,
   },
   avatars: {
     display: 'inline-flex',

@@ -25,6 +25,7 @@ import { publicProcedure, router } from '@/libs/trpc/lambda';
 import { acceptanceRouter } from './acceptance';
 import { acceptanceCommentRouter } from './acceptanceComment';
 import { agentRouter } from './agent';
+import { agentAccountRouter } from './agentAccount';
 import { agentBotProviderRouter } from './agentBotProvider';
 import { agentBotWakeRouter } from './agentBotWake';
 import { agentDocumentRouter } from './agentDocument';
@@ -34,6 +35,7 @@ import { agentGroupRouter } from './agentGroup';
 import { agentLabelRouter } from './agentLabel';
 import { agentNotifyRouter } from './agentNotify';
 import { agentQuotaRouter } from './agentQuota';
+import { agentRunBoardRouter } from './agentRunBoard';
 import { agentShareRouter } from './agentShare';
 import { agentSignalRouter } from './agentSignal';
 import { agentSkillsRouter } from './agentSkills';
@@ -45,6 +47,7 @@ import { aiModelRouter } from './aiModel';
 import { aiProviderRouter } from './aiProvider';
 import { apiKeyRouter } from './apiKey';
 import { asrRouter } from './asr';
+import { authRouter } from './auth';
 import { botMessageRouter } from './botMessage';
 import { briefRouter } from './brief';
 import { canvasRouter } from './canvas';
@@ -80,6 +83,7 @@ import { knowledgeBaseRouter } from './knowledgeBase';
 import { linearRouter } from './linear';
 import { llmGenerationTracingRouter } from './llmGenerationTracing';
 import { marketRouter } from './market';
+import { meetingRouter } from './meeting';
 import { messageRouter } from './message';
 import { messengerRouter } from './messenger';
 import { metricRouter } from './metric';
@@ -104,6 +108,7 @@ import { sessionGroupRouter } from './sessionGroup';
 import { shareRouter } from './share';
 import { shareChatRouter } from './shareChat';
 import { taskRouter } from './task';
+import { taskLabelRouter } from './taskLabel';
 import { threadRouter } from './thread';
 import { topicRouter } from './topic';
 import { topicCommentRouter } from './topicComment';
@@ -126,6 +131,7 @@ export const lambdaRouter = router({
   acceptance: acceptanceRouter,
   acceptanceComment: acceptanceCommentRouter,
   agent: agentRouter,
+  agentAccount: agentAccountRouter,
   agentBotProvider: agentBotProviderRouter,
   agentBotWake: agentBotWakeRouter,
   agentNotify: agentNotifyRouter,
@@ -140,6 +146,7 @@ export const lambdaRouter = router({
   sandboxStorage: sandboxStorageRouter,
   agentTrace: agentTraceRouter,
   expertise: expertiseRouter,
+  agentRunBoard: agentRunBoardRouter,
   agentSignal: agentSignalRouter,
   agentSteerQueue: agentSteerQueueRouter,
   canvas: canvasRouter,
@@ -154,6 +161,7 @@ export const lambdaRouter = router({
   aiProvider: aiProviderRouter,
   apiKey: apiKeyRouter,
   asr: asrRouter,
+  auth: authRouter,
   tts: ttsRouter,
   chunk: chunkRouter,
   comfyui: comfyuiRouter,
@@ -185,6 +193,7 @@ export const lambdaRouter = router({
   linear: linearRouter,
   llmGenerationTracing: llmGenerationTracingRouter,
   market: marketRouter,
+  meeting: meetingRouter,
   message: messageRouter,
   messenger: messengerRouter,
   metric: metricRouter,
@@ -208,6 +217,7 @@ export const lambdaRouter = router({
   share: shareRouter,
   shareChat: shareChatRouter,
   task: taskRouter,
+  taskLabel: taskLabelRouter,
   thread: threadRouter,
   topic: topicRouter,
   trash: trashRouter,
