@@ -140,6 +140,40 @@ describe('AgentEvalRunModel', () => {
     });
   });
 
+  it('does not finalize over Stop, while allowing an explicit resume', async () => {
+    const run = await runModel.create({ datasetId, status: 'running' });
+    await runModel.update(run.id, { status: 'aborted' });
+    expect(await runModel.finalize(run.id, { status: 'completed' })).toBeUndefined();
+    expect((await runModel.findById(run.id))?.status).toBe('aborted');
+    await runModel.update(run.id, { status: 'running' });
+    expect(await runModel.finalize(run.id, { status: 'completed' })).toMatchObject({
+      status: 'completed',
+    });
+  });
+
+  it('keeps live progress from overwriting the metrics of a finalized run', async () => {
+    const run = await runModel.create({ datasetId, status: 'running' });
+    await runModel.updateProgress(run.id, {
+      failedCases: 1,
+      passedCases: 0,
+      totalCases: 2,
+    } as never);
+    expect((await runModel.findById(run.id))?.metrics).toMatchObject({ failedCases: 1 });
+    await runModel.finalize(run.id, {
+      metrics: { failedCases: 1, passedCases: 1, totalCases: 2 } as never,
+      status: 'completed',
+    });
+    // A progress write computed before finalization arrives late.
+    expect(
+      await runModel.updateProgress(run.id, {
+        failedCases: 1,
+        passedCases: 0,
+        totalCases: 2,
+      } as never),
+    ).toBeUndefined();
+    expect((await runModel.findById(run.id))?.metrics).toMatchObject({ passedCases: 1 });
+  });
+
   describe('query', () => {
     beforeEach(async () => {
       // Create another dataset

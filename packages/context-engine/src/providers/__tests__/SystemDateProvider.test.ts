@@ -33,6 +33,17 @@ describe('SystemDateProvider', () => {
     expect(result.metadata.systemDateInjected).toBe(true);
   });
 
+  it('renders a pinned clock instead of today', async () => {
+    const provider = new SystemDateProvider({ now: new Date('2026-07-21T00:00:00Z') });
+    const context = createContext([
+      { content: 'Hello', createdAt: Date.now(), id: '1', role: 'user', updatedAt: Date.now() },
+    ]);
+
+    const result = await provider.process(context);
+
+    expect(result.messages[0].content).toBe('Current date: 2026-07-21 (UTC)');
+  });
+
   it('should include timezone name when timezone is provided', async () => {
     const provider = new SystemDateProvider({ timezone: 'Asia/Shanghai' });
     const context = createContext([

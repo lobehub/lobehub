@@ -2,12 +2,14 @@ import { eq, sql } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
+import { AgentEvalExecutionRepo } from '../../../repositories/agentEvalExecution';
 import {
   agentEvalBenchmarks,
   agentEvalDatasets,
   agentEvalRuns,
   agentEvalRunTopics,
   agentEvalTestCases,
+  threads,
   topics,
   users,
 } from '../../../schemas';
@@ -128,6 +130,35 @@ afterEach(async () => {
 });
 
 describe('AgentEvalRunTopicModel', () => {
+  it.each([undefined, null, '', 'done', 'aborted'])(
+    'guards completion reason %s without conflating missing and stopped',
+    async (completionReason) => {
+      await runTopicModel.batchCreate([
+        {
+          runId,
+          topicId: topicId1,
+          testCaseId: testCaseId1,
+          status: 'running',
+          evalResult: {
+            executionId: 'current',
+            ...(completionReason !== undefined && { completionReason }),
+          } as any,
+        },
+      ]);
+      const updated = await runTopicModel.updateByRunAndTopic(runId, topicId1, { score: 1 });
+      const merged = await runTopicModel.mergeExecutionResult(runId, topicId1, 'current', {
+        operationId: 'operation',
+      });
+      if (completionReason === 'aborted') {
+        expect(updated).toBeUndefined();
+        expect(merged).toBeUndefined();
+      } else {
+        expect(updated?.score).toBe(1);
+        expect(merged?.evalResult?.operationId).toBe('operation');
+      }
+    },
+  );
+
   describe('batchCreate', () => {
     it('should create multiple run topics', async () => {
       const params = [
@@ -525,7 +556,10 @@ describe('AgentEvalRunTopicModel', () => {
         .where(eq(agentEvalRunTopics.topicId, topicId2));
 
       // Timeout = 20 min (1_200_000 ms)
-      const rows = await runTopicModel.batchMarkTimeout(runId, 1_200_000);
+      const rows = await new AgentEvalExecutionRepo(serverDB, userId).batchMarkTimeout(
+        runId,
+        1_200_000,
+      );
 
       expect(rows).toHaveLength(2); // topic1 (30min) and topic2 (25min) > 20min
 
@@ -551,7 +585,10 @@ describe('AgentEvalRunTopicModel', () => {
         .set({ createdAt: sql`NOW() - interval '30 minutes'` })
         .where(eq(agentEvalRunTopics.runId, runId));
 
-      const rows = await runTopicModel.batchMarkTimeout(runId, 1_200_000);
+      const rows = await new AgentEvalExecutionRepo(serverDB, userId).batchMarkTimeout(
+        runId,
+        1_200_000,
+      );
 
       expect(rows).toHaveLength(1); // only topic2 (running), not topic1 (passed)
 
@@ -581,7 +618,10 @@ describe('AgentEvalRunTopicModel', () => {
         .set({ createdAt: sql`NOW() - interval '30 minutes'` })
         .where(eq(agentEvalRunTopics.runId, runId));
 
-      const rows = await runTopicModel.batchMarkTimeout(runId, 1_200_000);
+      const rows = await new AgentEvalExecutionRepo(serverDB, userId).batchMarkTimeout(
+        runId,
+        1_200_000,
+      );
 
       // Only the running topic should be marked
       expect(rows).toHaveLength(1);
@@ -602,7 +642,10 @@ describe('AgentEvalRunTopicModel', () => {
         { userId, runId, topicId: topicId2, testCaseId: testCaseId2, status: 'running' },
       ]);
 
-      const rows = await runTopicModel.batchMarkTimeout(runId, 1_200_000);
+      const rows = await new AgentEvalExecutionRepo(serverDB, userId).batchMarkTimeout(
+        runId,
+        1_200_000,
+      );
 
       expect(rows).toHaveLength(0);
     });
@@ -633,7 +676,10 @@ describe('AgentEvalRunTopicModel', () => {
         .update(agentEvalRunTopics)
         .set({ createdAt: sql`NOW() - interval '30 minutes'` });
 
-      const rows = await runTopicModel.batchMarkTimeout(runId, 1_200_000);
+      const rows = await new AgentEvalExecutionRepo(serverDB, userId).batchMarkTimeout(
+        runId,
+        1_200_000,
+      );
 
       expect(rows).toHaveLength(1);
 
@@ -658,7 +704,7 @@ describe('AgentEvalRunTopicModel', () => {
         { userId, runId, topicId: topic3.id, testCaseId: testCaseId1, status: 'passed' },
       ]);
 
-      const rows = await runTopicModel.batchMarkAborted(runId);
+      const rows = await new AgentEvalExecutionRepo(serverDB, userId).batchMarkAborted(runId);
 
       expect(rows).toHaveLength(2); // pending + running, not passed
 
@@ -674,13 +720,59 @@ describe('AgentEvalRunTopicModel', () => {
       expect(aborted?.evalResult).toMatchObject({ error: 'Aborted' });
     });
 
+    it('preserves evidence and blocks stale writes until explicit resume', async () => {
+      const evidence = {
+        cost: 1,
+        error: 'original provider error',
+        operationId: 'root',
+        threads: [{ passed: true, status: 'passed' as const, threadId: 'one' }],
+      };
+      await runTopicModel.batchCreate([
+        {
+          runId,
+          topicId: topicId1,
+          testCaseId: testCaseId1,
+          status: 'running',
+          evalResult: evidence,
+        },
+      ]);
+      await new AgentEvalExecutionRepo(serverDB, userId).batchMarkAborted(runId);
+      expect(
+        await runTopicModel.updateByRunAndTopic(runId, topicId1, {
+          status: 'passed',
+          evalResult: { passAllK: true },
+        }),
+      ).toBeUndefined();
+      const stopped = await runTopicModel.findByRunAndTestCase(runId, testCaseId1);
+      expect(stopped?.evalResult).toEqual({
+        ...evidence,
+        completionReason: 'aborted',
+        executionId: expect.any(String),
+      });
+      expect(stopped).toMatchObject({ passed: null, score: null, status: 'error' });
+      expect(
+        await runTopicModel.updateByRunAndTopic(
+          runId,
+          topicId1,
+          { status: 'running', evalResult: null },
+          { allowAborted: true },
+        ),
+      ).toMatchObject({ status: 'running' });
+      expect(
+        await runTopicModel.updateByRunAndTopic(runId, topicId1, {
+          status: 'passed',
+          passed: true,
+        }),
+      ).toMatchObject({ status: 'passed' });
+    });
+
     it('should return empty array when no pending/running topics exist', async () => {
       await serverDB.insert(agentEvalRunTopics).values([
         { userId, runId, topicId: topicId1, testCaseId: testCaseId1, status: 'passed' },
         { userId, runId, topicId: topicId2, testCaseId: testCaseId2, status: 'failed' },
       ]);
 
-      const rows = await runTopicModel.batchMarkAborted(runId);
+      const rows = await new AgentEvalExecutionRepo(serverDB, userId).batchMarkAborted(runId);
 
       expect(rows).toHaveLength(0);
     });
@@ -706,7 +798,7 @@ describe('AgentEvalRunTopicModel', () => {
         },
       ]);
 
-      const rows = await runTopicModel.batchMarkAborted(runId);
+      const rows = await new AgentEvalExecutionRepo(serverDB, userId).batchMarkAborted(runId);
 
       expect(rows).toHaveLength(1);
 
@@ -714,6 +806,39 @@ describe('AgentEvalRunTopicModel', () => {
         where: eq(agentEvalRunTopics.topicId, otherTopic.id),
       });
       expect(otherRow.status).toBe('pending'); // unchanged
+    });
+  });
+
+  describe('updateThreadMetadata', () => {
+    it('merges attempt metadata and removes the keys it sets to undefined', async () => {
+      await runTopicModel.batchCreate([
+        { runId, topicId: topicId1, testCaseId: testCaseId1, status: 'running' },
+      ]);
+      const [thread] = await serverDB
+        .insert(threads)
+        .values({
+          metadata: { cost: 0.02, judgeError: 'rate limited', status: 'judge_error' } as any,
+          topicId: topicId1,
+          type: 'eval',
+          userId,
+        })
+        .returning();
+
+      expect(
+        await new AgentEvalExecutionRepo(serverDB, userId).updateThreadMetadata(
+          runId,
+          topicId1,
+          thread.id,
+          {
+            judgeError: undefined,
+            passed: true,
+            status: 'passed',
+          },
+        ),
+      ).toEqual({ id: thread.id });
+
+      const [saved] = await serverDB.select().from(threads).where(eq(threads.id, thread.id));
+      expect(saved.metadata).toEqual({ cost: 0.02, passed: true, status: 'passed' });
     });
   });
 
