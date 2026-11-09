@@ -101,6 +101,28 @@ const mistralChatModels: AIChatModelCard[] = [
       functionCall: true,
       vision: true,
     },
+    contextWindowTokens: 1_000_000,
+    description:
+      'Mistral Large 4 (Public Preview v26.10) is a state-of-the-art, open-weight, general-purpose multimodal model with a granular Mixture-of-Experts architecture. It features 52B active parameters and 1.05T total parameters.',
+    displayName: 'Mistral Large 4',
+    enabled: true,
+    family: 'mistral',
+    id: 'mistral-large-4',
+    pricing: {
+      units: [
+        { name: 'textInput', rate: 0.68, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.07, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 2.09, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-10-06',
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      vision: true,
+    },
     contextWindowTokens: 262_144,
     description:
       'Mistral Large 3, is a state-of-the-art, open-weight, general-purpose multimodal model with a granular Mixture-of-Experts architecture. It features 41B active parameters and 675B total parameters.',
