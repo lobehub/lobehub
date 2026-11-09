@@ -109,7 +109,11 @@ export const ActionMention = memo<ActionMentionProps>(
           onClick={handleClick}
           {...stylex.props(styles.actionTag, styles[styleKey], isClickable && styles.clickable)}
         >
-          <Icon icon={IconComponent} size={14} />
+          <Icon
+            className={stylex.props(styles.actionTagIcon).className}
+            icon={IconComponent}
+            size={14}
+          />
           <span {...stylex.props(styles.actionTagLabel)}>{label}</span>
         </span>
       </Tooltip>

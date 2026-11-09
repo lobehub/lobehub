@@ -64,7 +64,8 @@ run commands.
 | \`lh skill\` | Skill management (install, create, manage) | \`references/skill\` |
 | \`lh model\` | AI model management | \`references/model\` |
 | \`lh provider\` | AI provider management | \`references/provider\` |
-| \`lh plugin\` | Plugin management | \`references/plugin\` |
+| \`lh connector\` / \`lh mcp\` | MCP connectors: add an MCP server (URL or stdio), sync its tools, refresh, remove | \`references/connector\` |
+| \`lh legacy-plugin\` | Legacy 1.0 plugin management | \`references/plugin\` |
 | \`lh bot\` | Bot integration management (Discord, Slack, Telegram, etc.) | \`references/bot\` |
 | \`lh widget\` / \`lh dashboard\` | Monitoring widgets (sandboxed scripts) and the dashboards they sit on | \`references/dashboard\` |
 | \`lh eval\` | Evaluation workflow management | \`references/eval\` |
@@ -114,8 +115,8 @@ lh message search "deployment issue" --since 7d
 # Recall everything about a topic from last week (messages, topics, goals, pages)
 lh recall "replica" --since 2026-10-12 --until 2026-10-18
 
-# Generate an image
-lh gen image "a sunset over mountains" -m dall-e-3
+# Generate an image (omit -m/-p to use the same default model as the web image page)
+lh gen image "a sunset over mountains"
 
 # Run an agent
 lh agent run -a <agentId> -p "Summarize today's tasks"

@@ -10,19 +10,20 @@ import {
   useSensors,
 } from '@dnd-kit/core';
 import { matchesTaskListFilter, type TaskListFilter } from '@lobechat/types';
-import { Center, createStaticStyles, Empty, Flexbox } from '@lobehub/ui';
+import { Center, createStaticStyles, cssVar, Empty, Flexbox } from '@lobehub/ui';
 import { ClipboardCheckIcon } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
+import { useFetchTaskLabels } from '@/hooks/useFetchTaskLabels';
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useTaskStore } from '@/store/task';
-import { taskListSelectors } from '@/store/task/selectors';
+import { taskLabelSelectors, taskListSelectors } from '@/store/task/selectors';
 import type { TaskListItem } from '@/store/task/slices/list/initialState';
 import { saveToast } from '@/store/utils/saveToast';
 
@@ -37,13 +38,18 @@ import {
   findKanbanTask,
   getKanbanAssigneeUpdate,
   getKanbanColumnCreateDefaults,
+  getKanbanLabelPatch,
   getKanbanTaskPatch,
   moveTaskBetweenKanbanGroups,
   normalizeKanbanGroupBy,
 } from './kanbanBoardModel';
 import KanbanColumn, { COLUMN_I18N_KEYS, COLUMN_STATUS_ICON, COLUMN_WIDTH } from './KanbanColumn';
 import type { TaskListViewOptions } from './listViewOptions';
-import { getCompletedWithin, HIDDEN_WHEN_COMPLETED_STATUSES } from './listViewOptions';
+import {
+  getCompletedWithin,
+  HIDDEN_WHEN_COMPLETED_STATUSES,
+  isTaskLabelGroupBy,
+} from './listViewOptions';
 
 const styles = createStaticStyles(({ css }) => ({
   board: css`
@@ -83,12 +89,20 @@ const KanbanBoard = memo<KanbanBoardProps>((props) => {
   const excludeStatuses =
     options.completedTasks === 'none' ? HIDDEN_WHEN_COMPLETED_STATUSES : undefined;
 
+  // Label columns read their name and color from the registry.
+  const { error: labelsError, mutate: retryLabels } = useFetchTaskLabels();
+  const isLabelsInit = useTaskStore(taskLabelSelectors.isLabelsInit);
+
   const useFetchTaskGroupList = useTaskStore((s) => s.useFetchTaskGroupList);
   // Keep the sync handle for `error` + `mutate` (the error/Retry state) and the
   // `queryKey` the groups are read by.
   const { error, isLoading, mutate, queryKey } = useFetchTaskGroupList({
     ...buildKanbanGroupQuery({ agentId, excludeStatuses, groupBy, myTaskScope, projectId }),
     completedWithin: getCompletedWithin(options),
+    // A persisted label grouping may point at a deleted group; the page only
+    // drops it once the registry is known, so wait for that (or its failure)
+    // instead of sending one doomed request after every reload.
+    enabled: !isTaskLabelGroupBy(groupBy) || isLabelsInit,
     filter,
     includeArchived: options.showArchived,
   });
@@ -111,6 +125,7 @@ const KanbanBoard = memo<KanbanBoardProps>((props) => {
     });
   }, [filter, storedTaskGroups]);
   const updateTask = useTaskStore((s) => s.updateTask);
+  const setTaskLabels = useTaskStore((s) => s.setTaskLabels);
   const runTask = useTaskStore((s) => s.runTask);
   const refreshTaskList = useTaskStore((s) => s.refreshTaskList);
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
@@ -121,9 +136,11 @@ const KanbanBoard = memo<KanbanBoardProps>((props) => {
   const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
 
   const [activeTask, setActiveTask] = useState<TaskListItem | null>(null);
+  const taskLabels = useTaskStore(taskLabelSelectors.labels);
   const columns = useMemo(
     () => buildKanbanColumns(currentTaskGroups, groupBy),
-    [currentTaskGroups, groupBy],
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- registry changes rename label columns
+    [currentTaskGroups, groupBy, taskLabels],
   );
 
   const sensors = useSensors(
@@ -186,7 +203,12 @@ const KanbanBoard = memo<KanbanBoardProps>((props) => {
       if (!task) return;
       if (!column || !canDropTaskIntoKanbanColumn(task, groupBy, column)) return;
 
-      const patch = getKanbanTaskPatch(groupBy, column);
+      const labelPatch = isTaskLabelGroupBy(groupBy)
+        ? getKanbanLabelPatch(task, groupBy, column)
+        : undefined;
+      if (isTaskLabelGroupBy(groupBy) && !labelPatch) return;
+      const patch: Partial<TaskListItem> | undefined =
+        labelPatch ?? getKanbanTaskPatch(groupBy, column);
       if (!patch) return;
       const assigneeUpdate =
         groupBy === 'assignee' || groupBy === 'member'
@@ -221,6 +243,13 @@ const KanbanBoard = memo<KanbanBoardProps>((props) => {
           await updateTask(task.identifier, assigneeUpdate);
         } else if (groupBy === 'priority') {
           await updateTask(task.identifier, { priority: patch.priority ?? 0 });
+        } else if (labelPatch) {
+          // The store action toasts its own failure and reports it here.
+          const saved = await setTaskLabels(task.id, task.labels ?? [], labelPatch.labels);
+          if (!saved) {
+            move.rollback();
+            return;
+          }
         }
         move.commit();
       } catch {
@@ -236,6 +265,7 @@ const KanbanBoard = memo<KanbanBoardProps>((props) => {
       groupBy,
       queryKey,
       refreshTaskList,
+      setTaskLabels,
       startTask,
       updateTask,
     ],
@@ -375,10 +405,10 @@ const KanbanBoard = memo<KanbanBoardProps>((props) => {
         {activeTask ? (
           <div
             style={{
-              background: 'var(--lobe-color-bg-container, #fff)',
-              border: '1px solid var(--lobe-color-border-secondary, #f0f0f0)',
+              background: cssVar.colorBgContainer,
+              border: `1px solid ${cssVar.colorBorderSecondary}`,
               borderRadius: 8,
-              boxShadow: '0 6px 16px 0 rgba(0, 0, 0, 0.08), 0 3px 6px -4px rgba(0, 0, 0, 0.12)',
+              boxShadow: cssVar.boxShadowSecondary,
               cursor: 'grabbing',
               width: COLUMN_WIDTH - 8,
             }}
@@ -393,16 +423,20 @@ const KanbanBoard = memo<KanbanBoardProps>((props) => {
   // Error gated ahead of empty by AsyncBoundary so a failed fetch shows Retry
   // instead of the "no tasks" empty. `data` is the SWR result —
   // undefined until the first fetch settles.
+  // A label board needs the registry for its columns (names, colors, order);
+  // if that failed, show it here with its own Retry rather than raw label ids.
+  const registryError = isTaskLabelGroupBy(groupBy) && !isLabelsInit ? labelsError : undefined;
+  const boardError = registryError ?? error;
   return (
     <AsyncBoundary
       data={isTaskGroupListInit || undefined}
       empty={emptyState}
-      error={error}
+      error={boardError}
       errorVariant={'block'}
       isEmpty={totalTasks === 0}
-      isLoading={isLoading || (!isTaskGroupListInit && !error)}
+      isLoading={isLoading || (!isTaskGroupListInit && !boardError)}
       loading={skeletonBoard}
-      onRetry={() => mutate()}
+      onRetry={() => (registryError ? retryLabels() : mutate())}
     >
       {board}
     </AsyncBoundary>

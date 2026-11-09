@@ -4,6 +4,7 @@ export * from './agentEvalExperiment';
 export * from './agentEvalRun';
 export * from './benchmark';
 export * from './dataset';
+export * from './evalMemory';
 export * from './evaluation';
 export * from './ragas';
 export * from './rubric';

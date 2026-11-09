@@ -1,6 +1,7 @@
 import debug from 'debug';
 
 import {
+  compareStreamIds,
   type StreamChunkData,
   type StreamEvent,
   stripFinalStateInEventData,
@@ -97,6 +98,16 @@ export class InMemoryStreamEventManager implements IStreamEventManager {
     return eventId;
   }
 
+  async deleteStreamEvents(operationId: string, eventIds: string[]): Promise<void> {
+    const stream = this.streams.get(operationId);
+    if (!stream || eventIds.length === 0) return;
+    const ids = new Set(eventIds);
+    this.streams.set(
+      operationId,
+      stream.filter((event) => !event.id || !ids.has(event.id)),
+    );
+  }
+
   async publishStreamChunk(
     operationId: string,
     stepIndex: number,
@@ -156,17 +167,33 @@ export class InMemoryStreamEventManager implements IStreamEventManager {
   async getStreamHistoryPage(operationId: string, cursor = '0', limit = 200) {
     this.evictExpiredStreams();
     const stream = this.streams.get(operationId);
-    const index = cursor === '0' ? -1 : (stream?.findIndex((event) => event.id === cursor) ?? -1);
-    if (!stream || (cursor !== '0' && index < 0) || stream[0]?.type !== 'agent_runtime_init') {
-      return { available: false, events: [], hasMore: false, nextCursor: cursor };
-    }
-    const events = stream.slice(index + 1, index + 1 + limit);
+    const unavailable = { available: false, events: [], hasMore: false, nextCursor: cursor };
+    if (!stream || stream[0]?.type !== 'agent_runtime_init') return unavailable;
+    if (cursor === '0') return this.historyPage(stream, 0, limit, cursor);
+
+    const exact = stream.findIndex((event) => event.id === cursor);
+    if (exact >= 0) return this.historyPage(stream, exact + 1, limit, cursor);
+
+    // Mirror the Redis manager: a cursor removed by `deleteStreamEvents` sits
+    // after the init with a newer event following it; anything else is lost.
+    if (compareStreamIds(stream[0].id!, cursor) >= 0) return unavailable;
+    const next = this.indexAfter(stream, cursor);
+    return next < 0 ? unavailable : this.historyPage(stream, next, limit, cursor);
+  }
+
+  private historyPage(stream: StreamEvent[], start: number, limit: number, cursor: string) {
+    const events = stream.slice(start, start + limit);
     return {
       available: true,
       events,
-      hasMore: stream.length > index + 1 + limit,
+      hasMore: stream.length > start + limit,
       nextCursor: events.at(-1)?.id ?? cursor,
     };
+  }
+
+  /** Index of the first event newer than `cursor`, or -1. */
+  private indexAfter(stream: StreamEvent[], cursor: string): number {
+    return stream.findIndex((event) => !!event.id && compareStreamIds(event.id, cursor) > 0);
   }
 
   /**
@@ -188,8 +215,10 @@ export class InMemoryStreamEventManager implements IStreamEventManager {
       return { events: [], lastEventId: stream.at(-1)?.id ?? '0' };
     }
 
-    const idx = stream.findIndex((e) => e.id === lastEventId);
-    const events = idx >= 0 ? stream.slice(idx + 1) : stream.slice();
+    // Like XREAD: everything newer than the cursor, even if the cursor's own
+    // event was removed by `deleteStreamEvents`.
+    const idx = this.indexAfter(stream, lastEventId);
+    const events = idx >= 0 ? stream.slice(idx) : [];
     return { events, lastEventId: events.at(-1)?.id ?? lastEventId };
   }
 

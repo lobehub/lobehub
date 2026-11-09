@@ -52,6 +52,13 @@ import { usageTextColor, useDeviceMetricSeries } from './DeviceHealth/shared';
 import { UsageBar } from './DeviceHealth/UsageMeter';
 import { latestUsageView } from './DeviceHealth/viewState';
 import { getDeviceIcon, getPlatformLabel } from './getDeviceIcon';
+import {
+  getManagedDeviceStatus,
+  managedStatusBackground,
+  managedStatusColor,
+  managedStatusLabelKey,
+  presenceDotColor,
+} from './managedDeviceStatus';
 
 const styles = createStaticStyles(({ css }) => ({
   card: css`
@@ -247,6 +254,7 @@ const DeviceOverview = ({ canOperate, device }: DeviceOverviewProps) => {
   const online = channels.length > 0;
   // The persisted copy carries no channels: presence is unknown, not offline.
   const presenceUnknown = !!device.onlineUnknown;
+  const managedStatus = getManagedDeviceStatus(device);
 
   const newest = data?.points.at(-1);
   const cores = data?.cpuCount ?? null;
@@ -295,23 +303,33 @@ const DeviceOverview = ({ canOperate, device }: DeviceOverviewProps) => {
             <span
               className={styles.statusPill}
               style={{
-                background: online ? cssVar.colorSuccessBg : cssVar.colorFillTertiary,
-                color: online ? cssVar.colorSuccess : cssVar.colorTextSecondary,
+                background: managedStatus
+                  ? managedStatusBackground[managedStatus]
+                  : online
+                    ? cssVar.colorSuccessBg
+                    : cssVar.colorFillTertiary,
+                color: managedStatus
+                  ? managedStatusColor[managedStatus]
+                  : online
+                    ? cssVar.colorSuccess
+                    : cssVar.colorTextSecondary,
               }}
             >
               <span
                 style={{
-                  background: online ? cssVar.colorSuccess : cssVar.colorTextQuaternary,
+                  background: presenceDotColor(managedStatus, online),
                   borderRadius: '50%',
                   height: 6,
                   width: 6,
                 }}
               />
-              {presenceUnknown
-                ? t('devices.status.checking')
-                : online
-                  ? t('devices.status.online')
-                  : t('devices.status.offline')}
+              {managedStatus
+                ? t(managedStatusLabelKey[managedStatus])
+                : presenceUnknown
+                  ? t('devices.status.checking')
+                  : online
+                    ? t('devices.status.online')
+                    : t('devices.status.offline')}
             </span>
           </InfoRow>
           <InfoRow icon={MonitorIcon} label={t('devices.detail.os')}>

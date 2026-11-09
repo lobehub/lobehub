@@ -45,14 +45,20 @@ const readGatewayUrl = () => {
 export const usePageCollabEnabled = () => !!readGatewayUrl();
 
 /**
- * Whether this document edits through a room. A SKILL.md saves its frontmatter
- * alongside the body over HTTP, so it never joins one, which carries the body alone.
+ * Whether this document edits through a room. Only workspace pages do: a
+ * personal page has a single editor, so a room adds nothing but its costs. A
+ * SKILL.md saves its frontmatter alongside the body over HTTP, so it never joins
+ * one, which carries the body alone.
  */
 export const usePageCollabEligible = (documentId: string | undefined) => {
   const isSkillMarkdown = useDocumentStore((s) =>
     documentId ? s.documents[documentId]?.contentFormat === 'skillMarkdown' : false,
   );
-  return usePageCollabEnabled() && !!documentId && !isSkillMarkdown;
+  const isPersonalPage = useDocumentStore((s) => {
+    const document = documentId ? s.documentDetailMap[documentId]?.document : undefined;
+    return !!document && !document.workspaceId;
+  });
+  return usePageCollabEnabled() && !!documentId && !isSkillMarkdown && !isPersonalPage;
 };
 
 export const usePageCollab = (documentId: string | undefined, onReset?: () => void) => {
@@ -86,6 +92,10 @@ export const usePageCollab = (documentId: string | undefined, onReset?: () => vo
         const editor = storeApi.getState().editor;
         if (editor) void useDocumentStore.getState().onEditorInit(editor, documentId!);
       },
+      // Like a refused autosave: the banner and save status say it, without a toast.
+      onCharLimitExceeded: (refusal) =>
+        useDocumentStore.getState().setCharLimitRefusal(documentId!, refusal),
+      onCharLimitCleared: () => useDocumentStore.getState().clearCharLimitRefusal(documentId!),
       onPendingChange: (pending) => setCollab({ pending }),
       onReset: (reason) => {
         const editor = storeApi.getState().editor;

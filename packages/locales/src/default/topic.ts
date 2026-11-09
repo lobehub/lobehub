@@ -106,6 +106,7 @@ export default {
   'metaCard.detached': 'Detached HEAD at {{sha}}',
   'metaCard.goal': 'Linked goal',
   'metaCard.pr.closed': 'Closed',
+  'metaCard.pr.draft': 'Draft',
   'metaCard.pr.merged': 'Merged',
   'metaCard.pr.open': 'Open',
   'filter.allTopics': 'All',

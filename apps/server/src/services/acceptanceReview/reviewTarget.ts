@@ -1,9 +1,10 @@
-import { acceptanceIdFromReviewResource, siteReviewFromResource } from '@lobechat/const';
+import { acceptanceReviewFromResource, siteReviewFromResource } from '@lobechat/const';
 
 import type { LobeChatDatabase } from '@/database/type';
 import { findSiteForOrigin } from '@/server/services/projectReview/sites';
 
 import { resolveReviewAccess } from './access';
+import { latestPreviewOrigin } from './previewOrigin';
 import {
   findProjectReviewScope,
   type ProjectReviewRole,
@@ -11,7 +12,7 @@ import {
 } from './projectAccess';
 
 export type ReviewTarget =
-  | { allowed: false; kind: 'acceptance' }
+  | { allowed: false; kind: 'acceptance'; reason?: 'wrongOrigin' }
   | { allowed: false; kind: 'site'; origin?: string; reason: 'noAccess' | 'unregistered' }
   | { allowed: true; kind: 'acceptance'; title?: string }
   | {
@@ -53,10 +54,15 @@ export async function describeReviewTarget(
     };
   }
 
-  const acceptanceId = acceptanceIdFromReviewResource(indicator);
-  if (!userId || !acceptanceId) return { allowed: false, kind: 'acceptance' };
-  const access = await resolveReviewAccess(db, userId, acceptanceId);
+  const acceptance = acceptanceReviewFromResource(indicator);
+  if (!userId || !acceptance) return { allowed: false, kind: 'acceptance' };
+  const access = await resolveReviewAccess(db, userId, acceptance.acceptanceId);
   if (!access) return { allowed: false, kind: 'acceptance' };
+  if (
+    acceptance.origin &&
+    acceptance.origin !== (await latestPreviewOrigin(db, acceptance.acceptanceId))
+  )
+    return { allowed: false, kind: 'acceptance', reason: 'wrongOrigin' };
   return {
     allowed: true,
     kind: 'acceptance',

@@ -1,3 +1,4 @@
+import { FileTextIcon } from 'lucide-react';
 import type { RouteObject } from 'react-router';
 
 import { agentDocumentRouteMeta } from '@/features/AgentDocumentPage/routeMeta';
@@ -6,6 +7,7 @@ import { taskRouteMeta, tasksRouteMeta } from '@/features/AgentTasks/routeMeta';
 import {
   agentChannelDetailRouteMeta,
   agentChannelRouteMeta,
+  agentMailRouteMeta,
   agentPermissionRouteMeta,
   agentProfileRouteMeta,
   agentSelfLearningRouteMeta,
@@ -33,7 +35,13 @@ export const agentPageChildren: RouteObject[] = [
           () => import('@/routes/(main)/agent/docs'),
           'Desktop > Chat > DocumentsIndex',
         ),
-        handle: { meta: routeMeta({ Skeleton: NoRouteSkeleton }) },
+        handle: {
+          meta: routeMeta({
+            icon: FileTextIcon,
+            Skeleton: NoRouteSkeleton,
+            titleKey: 'navigation.document',
+          }),
+        },
         index: true,
       },
       {
@@ -73,6 +81,11 @@ export const agentPageChildren: RouteObject[] = [
     ),
     handle: { meta: agentProfileRouteMeta },
     path: 'profile',
+  },
+  {
+    element: dynamicElement(() => import('@/routes/(main)/agent/mail'), 'Desktop > Chat > Mail'),
+    handle: { meta: agentMailRouteMeta },
+    path: 'mail',
   },
   {
     element: dynamicElement(

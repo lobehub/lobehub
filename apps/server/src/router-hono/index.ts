@@ -2,6 +2,7 @@ import type { Context } from 'hono';
 import { Hono } from 'hono';
 
 import acceptanceReview from './acceptance-review';
+import device from './device';
 
 const app = new Hono();
 
@@ -22,6 +23,7 @@ app.get('/health', (c) =>
 app.all('/api/agent', (c) => fetchWith(c, () => import('./agent')));
 app.all('/api/agent/*', (c) => fetchWith(c, () => import('./agent')));
 app.all('/api/acceptance-review/*', (c) => acceptanceReview.fetch(c.req.raw));
+app.all('/api/device/managed/*', (c) => device.fetch(c.req.raw));
 app.all('/api/workflows', (c) => fetchWith(c, () => import('./workflows')));
 app.all('/api/workflows/*', (c) => fetchWith(c, () => import('./workflows')));
 

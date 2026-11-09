@@ -90,18 +90,6 @@ describe('isSuccessLikeCompletionReason', () => {
 });
 
 describe('CompletionLifecycle.extractErrorMessage', () => {
-  it('extracts message from ChatCompletionErrorPayload (InsufficientBudgetForModel)', () => {
-    const lifecycle = buildLifecycle();
-    const error = {
-      _responseBody: { provider: 'lobehub' },
-      error: { message: 'Budget exceeded' },
-      errorType: 'InsufficientBudgetForModel',
-      provider: 'lobehub',
-    };
-
-    expect(lifecycle.extractErrorMessage(error)).toBe('Budget exceeded');
-  });
-
   it('extracts message from ChatCompletionErrorPayload (InvalidProviderAPIKey)', () => {
     const lifecycle = buildLifecycle();
     const error = {

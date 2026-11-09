@@ -89,6 +89,11 @@ export interface OpenLocalFileEntry extends OpenLocalFileParams {
 export type GoalMetricKind =
   'budget' | 'duration' | 'findings' | 'lifecycle' | 'liveness' | 'tasks';
 
+export interface PortalTaskWorkspace {
+  id: string;
+  slug: string;
+}
+
 export type PortalViewData =
   | { type: PortalViewType.Home }
   | { goalId: string; type: PortalViewType.Goal }
@@ -119,7 +124,16 @@ export type PortalViewData =
   | { startMessageId?: string; threadId?: string; type: PortalViewType.Thread }
   | { topicId: string; type: PortalViewType.Topic }
   | { agentId: string; type: PortalViewType.GroupThread }
-  | { taskId: string; type: PortalViewType.TaskDetail }
+  | {
+      taskId: string;
+      type: PortalViewType.TaskDetail;
+      /**
+       * Set when the task lives in a workspace other than the active one. The
+       * panel then reads it through that workspace's scope, read-only, instead
+       * of the active-scope task store.
+       */
+      workspace?: PortalTaskWorkspace;
+    }
   | { taskId: string; type: PortalViewType.TaskResult }
   | {
       focusCommentId?: string;

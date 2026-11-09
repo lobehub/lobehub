@@ -58,45 +58,52 @@ afterEach(() => {
 });
 
 describe('settings useCategory', () => {
-  // Account-level settings (profile / appearance / hotkeys) form their own
-  // group so the workspace sidebar can mirror exactly this set; the General
-  // group keeps the personal-scoped data pages.
-  it('splits account-level tabs into a leading Account group', () => {
+  const groupKeys = (key: SettingsGroupKey, enableBusinessFeatures = false) => {
     const { result } = renderHook(() => useCategory(), {
-      wrapper: createWrapper(true),
+      wrapper: createWrapper(true, enableBusinessFeatures),
     });
-    const accountGroup = result.current.find((group) => group.key === SettingsGroupKey.Account);
-    const generalGroup = result.current.find((group) => group.key === SettingsGroupKey.General);
 
-    expect(result.current[0]?.key).toBe(SettingsGroupKey.Account);
-    expect(accountGroup?.items.map((item) => item.key)).toEqual([
+    return result.current.find((group) => group.key === key)?.items.map((item) => item.key);
+  };
+
+  it('orders groups with Plans & Billing right after Account', () => {
+    const { result } = renderHook(() => useCategory(), {
+      wrapper: createWrapper(true, true),
+    });
+
+    expect(result.current.map((group) => group.key)).toEqual([
+      SettingsGroupKey.Account,
+      SettingsGroupKey.Subscription,
+      SettingsGroupKey.Agent,
+      SettingsGroupKey.Connection,
+      SettingsGroupKey.Resource,
+      SettingsGroupKey.System,
+    ]);
+  });
+
+  it('keeps preferences, notifications and stats in the Account group', () => {
+    expect(groupKeys(SettingsGroupKey.Account, true)).toEqual([
       SettingsTabs.Profile,
       SettingsTabs.Appearance,
       SettingsTabs.Hotkey,
-      SettingsTabs.Integrations,
-    ]);
-    // Environments is there with no lab switch: a code environment is a
-    // definition, written down whether or not there is a drive to run it on.
-    expect(generalGroup?.items.map((item) => item.key)).toEqual([
+      SettingsTabs.Notification,
       SettingsTabs.Stats,
-      SettingsTabs.Devices,
-      SettingsTabs.Environments,
     ]);
-    expect(
-      result.current.find((group) => group.key === SettingsGroupKey.Agent)?.items.map((i) => i.key),
-    ).not.toContain(SettingsTabs.Messenger);
+  });
+
+  it('puts every outside service in the Connection group', () => {
+    expect(groupKeys(SettingsGroupKey.Connection, true)).toEqual([
+      SettingsTabs.Messenger,
+      SettingsTabs.Integrations,
+      SettingsTabs.Connector,
+      SettingsTabs.Creds,
+    ]);
   });
 
   // Messenger bots are LobeHub-operated and only configurable from the cloud
   // admin, so the tab is a dead end on self-hosted deployments.
-  it('shows Messenger in the Account group only with business features on', () => {
+  it('hides Messenger without business features', () => {
     expect(getItemKeys()).not.toContain(SettingsTabs.Messenger);
-
-    const { result } = renderHook(() => useCategory(), {
-      wrapper: createWrapper(true, true),
-    });
-    const accountGroup = result.current.find((group) => group.key === SettingsGroupKey.Account);
-    expect(accountGroup?.items.map((item) => item.key)).toContain(SettingsTabs.Messenger);
   });
 
   it('keeps Provider visible when provider settings are enabled', () => {
@@ -117,27 +124,39 @@ describe('settings useCategory', () => {
     expect(getItemKeys()).not.toContain(SettingsTabs.OAuthApps);
   });
 
-  it('shows Integrations in the Account group without any Labs flag', () => {
-    const { result } = renderHook(() => useCategory(), { wrapper: createWrapper(true) });
-    const accountGroup = result.current.find((group) => group.key === SettingsGroupKey.Account);
-    expect(accountGroup?.items.map((item) => item.key)).toContain(SettingsTabs.Integrations);
+  // The sandbox drives moved to Docs → Sandbox Storage; settings keep only the
+  // environment definitions.
+  it('keeps Environments in settings without a sandbox storage tab', () => {
+    const keys = groupKeys(SettingsGroupKey.Resource, true);
+    expect(keys).toContain(SettingsTabs.Environments);
+    expect(keys).not.toContain('drive');
   });
 
-  // The drives are what a persistent sandbox run keeps files on. Every Cloud
-  // account can reach them with no opt-in; a self-hosted deployment has no
-  // drive service, so it gets no tab.
-  it('shows Storage beside Environments wherever business features are on', () => {
-    expect(getItemKeys()).not.toContain(SettingsTabs.Drive);
+  it('lists API Key once when both of its flags are on', () => {
+    useUserStore.setState({
+      preference: {
+        ...initialUserStoreState.preference,
+        general: { ...initialUserStoreState.preference.general, isDevMode: true },
+      },
+    });
 
     const { result } = renderHook(() => useCategory(), {
-      wrapper: createWrapper(true, true),
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <Provider
+          createStore={() =>
+            initServerConfigStore({
+              featureFlags: { ...mapFeatureFlagsEnvToState({}), showApiKeyManage: true },
+              serverConfig: { aiProvider: {}, telemetry: {} },
+            })
+          }
+        >
+          {children}
+        </Provider>
+      ),
     });
-    const generalGroup = result.current.find((group) => group.key === SettingsGroupKey.General);
-    expect(generalGroup?.items.map((item) => item.key)).toEqual(
-      expect.arrayContaining([SettingsTabs.Environments, SettingsTabs.Drive]),
-    );
-    const keys = generalGroup!.items.map((item) => item.key);
-    expect(keys.indexOf(SettingsTabs.Drive)).toBe(keys.indexOf(SettingsTabs.Environments) + 1);
+    const keys = result.current.flatMap((group) => group.items.map((item) => item.key));
+
+    expect(keys.filter((key) => key === SettingsTabs.APIKey)).toHaveLength(1);
   });
 
   it('shows OAuth Apps when the Labs preference is enabled', () => {
@@ -151,10 +170,8 @@ describe('settings useCategory', () => {
     const { result } = renderHook(() => useCategory(), {
       wrapper: createWrapper(true),
     });
-    const developerGroup = result.current.find((group) => group.key === SettingsGroupKey.Developer);
     const systemGroup = result.current.find((group) => group.key === SettingsGroupKey.System);
 
-    expect(developerGroup?.items.map((item) => item.key)).toContain(SettingsTabs.OAuthApps);
-    expect(systemGroup?.items.map((item) => item.key)).not.toContain(SettingsTabs.OAuthApps);
+    expect(systemGroup?.items.map((item) => item.key)).toContain(SettingsTabs.OAuthApps);
   });
 });

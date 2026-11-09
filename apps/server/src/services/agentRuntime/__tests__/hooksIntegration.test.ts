@@ -34,6 +34,7 @@ vi.mock('@/server/modules/AgentRuntime', () => ({
       saveAgentState: vi.fn(),
       saveStepResult: vi.fn(),
       tryClaimStep: vi.fn().mockResolvedValue(true),
+      refreshStepLock: vi.fn().mockResolvedValue(true),
     };
   }),
   createStreamEventManager: vi.fn(function () {

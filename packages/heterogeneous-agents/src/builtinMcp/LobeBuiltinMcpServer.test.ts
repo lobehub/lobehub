@@ -3,11 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 
 import { AskUserBridge } from '../askUser/AskUserBridge';
-import {
-  ASK_USER_MCP_SERVER_NAME,
-  ASK_USER_TOOL_FULL_NAME,
-  ASK_USER_TOOL_NAME,
-} from '../askUser/constants';
+import { ASK_USER_TOOL_NAME } from '../askUser/constants';
 import { LobeBuiltinMcpServer } from './LobeBuiltinMcpServer';
 
 let server: LobeBuiltinMcpServer;
@@ -130,9 +126,6 @@ describe('LobeBuiltinMcpServer', () => {
         const list = await client.listTools();
         expect(list.tools).toHaveLength(1);
         expect(list.tools[0].name).toBe(ASK_USER_TOOL_NAME);
-        expect(ASK_USER_TOOL_FULL_NAME).toBe(
-          `mcp__${ASK_USER_MCP_SERVER_NAME}__${ASK_USER_TOOL_NAME}`,
-        );
       } finally {
         await client.close();
       }

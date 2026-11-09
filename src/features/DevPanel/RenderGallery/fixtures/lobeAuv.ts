@@ -25,7 +25,7 @@ export const lobeAuv = defineFixtures({
         label: 'Text input',
       },
       {
-        args: { argv: ['invoke', 'input.key', 'return'], reasoning: 'Submit the search' },
+        args: { argv: ['invoke', 'input.pressKeys', 'return'], reasoning: 'Submit the search' },
         label: 'Keyboard action',
       },
       {
@@ -33,7 +33,7 @@ export const lobeAuv = defineFixtures({
         label: 'Capture screen',
       },
       {
-        args: { argv: ['invoke', 'input.key', 'return', '--dry-run'] },
+        args: { argv: ['invoke', 'input.pressKeys', 'return', '--dry-run'] },
         label: 'Validate without input',
       },
       {

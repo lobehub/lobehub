@@ -68,6 +68,9 @@ export default {
   'directories.autoFileTopics': 'All {{count}} existing topics will be linked to this project.',
   'directories.topicsSkipped':
     'Directory linked. {{count}} topics were left out because they run in another directory or on another device, belong to another project, are still running, or no longer exist.',
+  'settings.createdAt': 'Created {{date}}',
+  'settings.creator': 'Creator',
+  'settings.creatorUnknown': 'Former member',
   'settings.general': 'General',
   'settings.logo': 'Logo',
   'settings.logoDescription': 'Shown in the project header, sidebar and switcher.',
@@ -90,7 +93,7 @@ export default {
   'directories.environmentName': 'Environment name',
   'directories.editEnvironment': 'Configure environment',
 
-  'directories.coordinator': 'Project coordinator',
+  'directories.coordinator': 'Lead',
   'directories.environment': 'Environment',
   'directories.newEnvironment': 'Create environment',
 
@@ -164,17 +167,19 @@ export default {
   'create.avatarHint': 'Pick an emoji or upload an image. You can also drop an image here.',
   'create.avatarInvalidType': 'Use a JPG, PNG, GIF, or WEBP image.',
   'create.avatarUploadFailed': "Couldn't upload the image. Try again.",
+  'create.blank': 'Blank project',
+  'create.fromGithub': 'From GitHub repository',
   'create.identifierDescription':
     'Replaces the task number prefix for this project, for example ACE. Leave it empty to use the default prefix.',
   'create.identifierInvalid': 'Use 3–6 uppercase letters or numbers, starting with a letter.',
   'create.identifierLabel': 'Identifier (optional)',
   'create.identifierPlaceholder': 'ACE',
+  'create.identifierTaken': 'Another project in this workspace already uses this identifier.',
   'create.mainAgentDedicatedDescription':
-    'Creates an agent named after the project, with its avatar and the Project label. It stays in your agents list. Your choice is reused next time.',
+    'Creates an agent named after the project, with its avatar and the Project label. It stays in your agents list.',
   'create.mainAgentDedicatedPlaceholder': 'Named after the project',
   'create.mainAgentDedicatedTag': 'New',
-  'create.mainAgentDescription':
-    'Manages this project’s conversations, tasks, and goals. Your choice is reused next time.',
+  'create.mainAgentDescription': 'Manages this project’s conversations, tasks, and goals.',
   'create.mainAgentLabel': 'Main agent',
   'create.mainAgentMode.dedicated': 'Create a dedicated agent',
   'create.mainAgentMode.existing': 'Use an existing agent',
@@ -185,7 +190,34 @@ export default {
   'create.slugInvalid': 'Use lowercase letters, numbers, and single hyphens only.',
   'create.slugLabel': 'Slug (optional)',
   'create.slugPlaceholder': 'my-project',
+  'create.slugTaken': 'Another project in this workspace already uses this link name.',
   'create.title': 'New project',
+  'createFromGithub.connect': 'Connect GitHub',
+  'createFromGithub.disconnected':
+    'Connect GitHub to choose from your repositories, or paste a public repository URL below.',
+  'createFromGithub.duplicateIdentifier':
+    'Another project already uses this identifier. Choose a different one.',
+  'createFromGithub.duplicateName':
+    'A project with this name already exists, including in the trash. Choose a different name.',
+  'createFromGithub.empty':
+    "The connected GitHub accounts haven't given LobeHub access to any repositories yet.",
+  'createFromGithub.environmentHint':
+    "The repository becomes this project's environment, so agents can check it out when they work on the project.",
+  'createFromGithub.loadFailed': "Couldn't load repositories from GitHub.",
+  'createFromGithub.manageAccess': 'Manage access',
+  'createFromGithub.private': 'Private',
+  'createFromGithub.repositoriesLabel': 'Your repositories',
+  'createFromGithub.searchEmpty': 'No matching repositories',
+  'createFromGithub.searchPlaceholder': 'Search repositories…',
+  'createFromGithub.title': 'New project from GitHub',
+  'createFromGithub.truncated':
+    "Only {{count}} repositories are listed. If yours isn't here, paste its URL below.",
+  'createFromGithub.unconfigured':
+    "GitHub isn't set up on this server. Paste a public repository URL below.",
+  'createFromGithub.urlInvalid':
+    'Enter a GitHub repository URL, such as https://github.com/owner/repo.',
+  'createFromGithub.urlLabel': 'Or paste a repository URL',
+  'createFromGithub.urlPlaceholder': 'https://github.com/owner/repo',
   'disabled.action': 'Enable in Labs',
   'disabled.title': 'Project workspaces are an Alpha experiment',
   'delete.confirm.continue': 'Delete project',
@@ -401,4 +433,36 @@ export default {
   'overview.mode.task': 'Task',
   'overview.sendFailed': 'Could not create the topic',
   'overview.taskPlaceholder': 'Describe the task to add to this project…',
+  'onboarding.dismiss': 'Hide checklist',
+  'onboarding.progress': '{{completed}}/{{total}} done',
+  'onboarding.title': 'Get started',
+  'review.sites.detectSeen': 'Last detected {{time}}',
+  'review.sites.detectWaiting': 'Not detected yet',
+  'review.sites.detectWaitingDescription':
+    "Put the line above in your site's <head> and deploy, then open any page of the site. This notice disappears once the script is detected.",
+  'review.sites.detectWaitingTitle': 'Waiting for the script to load for the first time',
+  'create.moreSettings': 'More settings (identifier, slug)',
+  'create.afterCreateHint':
+    "After it's created, the project home helps you connect code folders, sites and libraries.",
+  'onboarding.basics.importTasks.title': 'Bring in or create tasks',
+  'onboarding.basics.importTasks.create': 'New task',
+  'onboarding.basics.firstChat.title': 'Start a first chat with the main agent',
+  'onboarding.basics.firstChat.action': 'Start chatting',
+  'onboarding.basics.inviteMembers.title': 'Invite members',
+  'onboarding.basics.inviteMembers.action': 'Invite',
+  'onboarding.connect.title': 'Connect what you need',
+  'onboarding.connect.hint': 'Only what this project uses. Not counted in progress.',
+  'onboarding.connect.directory.title': 'Code folders',
+  'onboarding.connect.directory.description': 'Let chats work in the repo',
+  'onboarding.connect.directory.count': '{{count}} connected',
+  'onboarding.connect.site.title': 'Site review',
+  'onboarding.connect.site.description': 'Review right on the page',
+  'onboarding.connect.site.waiting': 'Waiting for the script',
+  'onboarding.connect.site.seen': 'Script detected',
+  'onboarding.connect.knowledge.title': 'Libraries',
+  'onboarding.connect.knowledge.description': 'Docs and references',
+  'onboarding.connect.knowledge.count': '{{count}} added',
+  'onboarding.connect.goal.title': 'Goals',
+  'onboarding.connect.goal.description': 'Set a goal you can sign off',
+  'onboarding.connect.goal.count': '{{count}} set',
 };

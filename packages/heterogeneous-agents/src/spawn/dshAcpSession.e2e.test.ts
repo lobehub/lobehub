@@ -80,9 +80,3 @@ describe.runIf(runnable)('spawnDshAcpSession — live harness', () => {
     expect(await readFile(path.join(cwd, 'proof.txt'), 'utf8')).toContain('dsh-e2e-proof');
   }, 240_000);
 });
-
-describe.skipIf(runnable)('spawnDshAcpSession — live harness (not runnable here)', () => {
-  it('needs DEEPSEEK_API_KEY and the dsh CLI', () => {
-    expect(runnable).toBe(false);
-  });
-});

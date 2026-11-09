@@ -62,6 +62,43 @@ describe('EnvironmentModel', () => {
     expect((await model.list())[0].name).toBe('Updated resource');
     await expect(other.save({ id: env.id, name: 'Denied' })).rejects.toThrow('access denied');
   });
+
+  describe('ensureForRepository', () => {
+    it('reuses the caller’s environment for the same repository', async () => {
+      const created = await model.ensureForRepository({
+        name: 'lobehub/lobehub',
+        repositoryUrl: 'https://github.com/lobehub/lobehub',
+      });
+      expect(created.configuration).toMatchObject({
+        kind: 'code',
+        sources: [{ kind: 'git', url: 'https://github.com/lobehub/lobehub' }],
+      });
+
+      const reused = await model.ensureForRepository({
+        name: 'anything',
+        repositoryUrl: 'git@github.com:lobehub/lobehub.git',
+      });
+      expect(reused.id).toBe(created.id);
+
+      // Another member's environment is never borrowed.
+      const theirs = await other.ensureForRepository({
+        name: 'lobehub/lobehub',
+        repositoryUrl: 'https://github.com/lobehub/lobehub',
+      });
+      expect(theirs.id).not.toBe(created.id);
+    });
+
+    it('suffixes the name when another environment already holds it', async () => {
+      await model.save({ name: 'lobehub/lobehub' });
+      await model.save({ name: 'lobehub/lobehub (2)' });
+
+      const env = await model.ensureForRepository({
+        name: 'lobehub/lobehub',
+        repositoryUrl: 'https://github.com/lobehub/lobehub',
+      });
+      expect(env.name).toBe('lobehub/lobehub (3)');
+    });
+  });
 });
 
 it('rejects credentials, clone options and non-repository URLs', () => {

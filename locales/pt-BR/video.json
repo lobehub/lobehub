@@ -40,7 +40,7 @@
   "generation.editing.hint": "Descreva o que mudar; todo o resto permanece o mesmo",
   "generation.editing.modelLocked": "As edições mantêm o modelo do vídeo original",
   "generation.editing.title": "Editando V{{version}}",
-  "generation.freeQuota.exhausted": "🎁 Cota gratuita esgotada, créditos serão consumidos",
+  "generation.freeQuota.exhausted": "🎁 O uso gratuito acabou. Agora os vídeos usam seu saldo.",
   "generation.freeQuota.remaining": "🎁 {{remaining}} vídeos gratuitos hoje",
   "generation.status.editing": "Gerando Edição...",
   "generation.status.failed": "Falha na Geração",

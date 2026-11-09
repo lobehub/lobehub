@@ -318,20 +318,6 @@ describe('LobeSearch1API - custom features', () => {
         expect.anything(),
       );
     });
-    it('should handle edge case temperature exactly at 2', async () => {
-      await instance.chat({
-        messages: [{ content: 'Hello', role: 'user' }],
-        model: 'gpt-4o-mini',
-        temperature: 2,
-      });
-
-      expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          temperature: undefined,
-        }),
-        expect.anything(),
-      );
-    });
 
     it('should handle negative presence_penalty', async () => {
       await instance.chat({
@@ -836,17 +822,6 @@ describe('LobeSearch1API - custom features', () => {
         vision: false,
         reasoning: false,
       });
-    });
-
-    it('should handle function call models correctly', async () => {
-      mockClient.models.list.mockResolvedValue({
-        data: [{ id: 'gpt-4o-mini' }],
-      });
-
-      const models = await params.models({ client: mockClient as any });
-
-      expect(models).toHaveLength(1);
-      expect(models[0].functionCall).toBe(true);
     });
 
     it('should handle models with whitespace in id', async () => {

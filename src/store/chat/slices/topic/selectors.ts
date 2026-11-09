@@ -279,6 +279,21 @@ const getTopicWorkingDirectory =
 const currentTopicWorkingDirectory = (s: ChatStoreState): string | undefined =>
   extractTopicWorkingDirectory(currentActiveTopic(s));
 
+/**
+ * Extract the device a topic's local files live on.
+ * `runningOperation.deviceId` wins over the pinned `boundDeviceId`, matching
+ * the server-side `getTopicDeviceId` used for topic listing.
+ */
+const extractTopicDeviceId = (topic: ChatTopic | undefined): string | undefined =>
+  topic?.metadata?.runningOperation?.deviceId ?? topic?.metadata?.boundDeviceId ?? undefined;
+
+/**
+ * Get the device the current topic's local files belong to.
+ * Undefined for a topic that ran on this machine, or never bound one.
+ */
+const currentTopicDeviceId = (s: ChatStoreState): string | undefined =>
+  extractTopicDeviceId(currentActiveTopic(s));
+
 const isCreatingTopic = (s: ChatStoreState) => s.creatingTopic;
 
 /**
@@ -381,11 +396,12 @@ const getGroupFn = (
   sortBy: TopicSortBy,
   loadingTopicIds?: ReadonlySet<string>,
   directories?: ReadonlyArray<TopicDeviceDirectory>,
+  localDeviceIds?: readonly string[],
 ) => {
   const field: 'createdAt' | 'updatedAt' = sortBy === 'createdAt' ? 'createdAt' : 'updatedAt';
   if (groupMode === 'byProject') {
     return (topics: ChatTopic[]) =>
-      groupTopicsByProject(topics, field).map((group) =>
+      groupTopicsByProject(topics, field, { localDeviceIds }).map((group) =>
         group.id === 'no-project'
           ? { ...group, title: t('groupTitle.byProject.noProject', { ns: 'topic' }) }
           : group,
@@ -407,7 +423,8 @@ const getGroupFn = (
   if (groupMode === 'byDevice') {
     // Device names resolve at render time from the directory and device
     // registries, so groups stay title-less here.
-    return (topics: ChatTopic[]) => groupTopicsByDevice(topics, field, directories);
+    return (topics: ChatTopic[]) =>
+      groupTopicsByDevice(topics, field, directories, { localDeviceIds });
   }
   return sortBy === 'updatedAt' ? groupTopicsByUpdatedTime : groupTopicsByTime;
 };
@@ -443,7 +460,13 @@ export const groupSidebarTopics = (
   sortBy: TopicSortBy,
   loadingTopicIds?: ReadonlySet<string>,
   directories?: ReadonlyArray<TopicDeviceDirectory>,
-) => buildGroupedTopics(topics, getGroupFn(groupMode, sortBy, loadingTopicIds, directories));
+  /** This machine's device identities (`useLocalMachineDeviceIds`), merged in byProject. */
+  localDeviceIds?: readonly string[],
+) =>
+  buildGroupedTopics(
+    topics,
+    getGroupFn(groupMode, sortBy, loadingTopicIds, directories, localDeviceIds),
+  );
 
 const groupedTopicsSelector =
   (groupFn: typeof groupTopicsByTime = groupTopicsByTime) =>
@@ -459,6 +482,7 @@ const groupedTopicsForSidebar =
     sortBy: TopicSortBy = 'updatedAt',
     groupMode: TopicGroupMode = 'byTime',
     includeCompleted = true,
+    localDeviceIds?: readonly string[],
   ) =>
   (s: ChatStoreState): GroupedTopic[] => {
     const limitedTopics = displayTopicsForSidebar(pageSize, sortBy, includeCompleted)(s);
@@ -469,7 +493,14 @@ const groupedTopicsForSidebar =
     // buckets straight from `topic.status`.
     const loadingTopicIds =
       groupMode === 'byStatus' ? operationSelectors.visiblyRunningTopicIds(s) : undefined;
-    return groupSidebarTopics(limitedTopics, groupMode, sortBy, loadingTopicIds);
+    return groupSidebarTopics(
+      limitedTopics,
+      groupMode,
+      sortBy,
+      loadingTopicIds,
+      undefined,
+      localDeviceIds,
+    );
   };
 
 const hasMoreTopics = (s: ChatStoreState): boolean => {
@@ -524,6 +555,7 @@ export const topicSelectors = {
   currentActiveTopicSummary,
   currentTopicCount,
   currentTopicData,
+  currentTopicDeviceId,
   currentTopicLength,
   currentTopicMetadata,
   currentTopicWorkingDirectory,

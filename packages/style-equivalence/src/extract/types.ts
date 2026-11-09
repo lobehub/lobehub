@@ -31,6 +31,7 @@ export interface StyleElement {
   guards?: string[];
   iconElement?: boolean | string;
   id: string;
+  inlineStyle?: string;
   literalProps: Record<string, LiteralValue>;
   owner: string;
   parent?: string;

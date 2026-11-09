@@ -3,6 +3,11 @@ import { describe, expect, it } from 'vitest';
 import {
   cellVerdict,
   completionText,
+  conditionName,
+  defaultReworkNote,
+  describeConditions,
+  groupDifferences,
+  hasRenderedDifference,
   hasScreenshots,
   keyAction,
   nextOpen,
@@ -56,6 +61,11 @@ describe('keyAction', () => {
 
   it('ignores every shortcut while the reviewer is typing', () => {
     for (const key of ['j', 'k', 'y', 'n']) expect(keyAction(key, true)).toBeUndefined();
+  });
+
+  it('ignores every shortcut while a panel covers the queue', () => {
+    for (const key of ['j', 'k', 'y', 'n']) expect(keyAction(key, false, true)).toBeUndefined();
+    expect(keyAction('j', false, false)).toBe('next');
   });
 });
 
@@ -231,5 +241,137 @@ describe('hasScreenshots', () => {
     expect(hasScreenshots({ category: 'needs-signoff', key: 'a.tsx|A#0' })).toBe(true);
     expect(hasScreenshots({ category: 'needs-signoff', key: 'a.tsx|file' })).toBe(false);
     expect(hasScreenshots({ category: 'blocking', key: 'a.tsx|A#0' })).toBe(false);
+  });
+});
+
+describe('groupDifferences', () => {
+  const entry = (condition: string, summary: string, label = '默认') => ({
+    combo: 0,
+    condition,
+    label,
+    summary: [summary],
+  });
+
+  it('folds conditions that show the same difference into one group, in first-seen order', () => {
+    const groups = groupDifferences([
+      entry('light/375/default', '颜色 红 → 蓝'),
+      entry('dark/375/default', '颜色 黑 → 白'),
+      entry('light/575/default', '颜色 红 → 蓝'),
+    ]);
+    expect(
+      groups.map((group) => [group.summary, group.entries.map((item) => item.condition)]),
+    ).toEqual([
+      [['颜色 红 → 蓝'], ['light/375/default', 'light/575/default']],
+      [['颜色 黑 → 白'], ['dark/375/default']],
+    ]);
+  });
+
+  it('keeps different combos apart even when the difference reads the same', () => {
+    const groups = groupDifferences([
+      entry('light/375/default', '间距 0 → 8px', 'online：否'),
+      entry('light/375/default', '间距 0 → 8px', 'online：是'),
+    ]);
+    expect(groups).toHaveLength(2);
+  });
+});
+
+describe('describeConditions', () => {
+  it('merges widths that share the same states into one line per theme', () => {
+    const labels = ['light/375', 'light/575'].flatMap((prefix) =>
+      ['default', 'hover-target'].map((state) => `${prefix}/${state}`),
+    );
+    expect(describeConditions([...labels, 'dark/375/default'])).toEqual([
+      '亮色 · 375、575（默认、hover）',
+      '暗色 · 375（默认）',
+    ]);
+  });
+
+  it('lists widths with different states separately', () => {
+    expect(
+      describeConditions([
+        'light/375/default',
+        'light/375/hover-target',
+        'light/575/default',
+        'light/768/default',
+        'light/768/hover-target',
+      ]),
+    ).toEqual(['亮色 · 375、768（默认、hover）；575（默认）']);
+  });
+
+  it('names a single condition for a tag', () => {
+    expect(conditionName('dark/1280/focus-visible')).toBe('暗色 1280 focus');
+    expect(conditionName('light/1280/default/rtl')).toBe('亮色 1280 RTL');
+  });
+});
+
+describe('rework reason', () => {
+  const view = (overrides: object = {}) => ({
+    category: 'needs-signoff',
+    comboDifferences: [] as Array<{ combo: number; condition: string; summary: string[] }>,
+    combos: [{ index: 0, label: '默认' }],
+    differingConditions: [] as string[],
+    summary: [] as string[],
+    ...overrides,
+  });
+
+  it('needs no typed reason only when the item has a rendered difference', () => {
+    expect(hasRenderedDifference(view({ category: 'difference' }))).toBe(true);
+    expect(hasRenderedDifference(view({ differingConditions: ['light/375/default'] }))).toBe(true);
+    expect(hasRenderedDifference(view())).toBe(false);
+    expect(hasRenderedDifference(view({ category: 'unpaired' }))).toBe(false);
+  });
+
+  it('records a single difference the way the screenshots read', () => {
+    const summary = ['文字颜色 rgb(102, 102, 102) → rgb(176, 176, 176)'];
+    expect(
+      defaultReworkNote(
+        view({
+          category: 'difference',
+          comboDifferences: [{ combo: 0, condition: 'light/1280/default', summary }],
+          summary,
+        }),
+      ),
+    ).toBe('不一样：文字颜色 rgb(102, 102, 102) → rgb(176, 176, 176)（亮色 1280 默认）');
+  });
+
+  it('counts conditions per distinct difference', () => {
+    const light = ['文字颜色 红 → 蓝'];
+    const dark = ['文字颜色 黑 → 白'];
+    expect(
+      defaultReworkNote(
+        view({
+          category: 'difference',
+          comboDifferences: [
+            { combo: 0, condition: 'light/375/default', summary: light },
+            { combo: 0, condition: 'light/575/default', summary: light },
+            { combo: 0, condition: 'dark/375/default', summary: dark },
+          ],
+        }),
+      ),
+    ).toBe('不一样：文字颜色 红 → 蓝（2 个条件）；文字颜色 黑 → 白（暗色 375 默认）');
+  });
+
+  it('names the combo when the element has several', () => {
+    expect(
+      defaultReworkNote(
+        view({
+          category: 'difference',
+          comboDifferences: [
+            { combo: 1, condition: 'light/1280/default', summary: ['边框 无 → 1px'] },
+          ],
+          combos: [
+            { index: 0, label: 'online：否' },
+            { index: 1, label: 'online：是' },
+          ],
+        }),
+      ),
+    ).toBe('不一样：online：是 · 边框 无 → 1px（亮色 1280 默认）');
+  });
+
+  it('falls back to the case summary and stays empty without a difference', () => {
+    expect(defaultReworkNote(view({ category: 'difference', summary: ['间距 0 → 8px'] }))).toBe(
+      '不一样：间距 0 → 8px',
+    );
+    expect(defaultReworkNote(view())).toBe('');
   });
 });

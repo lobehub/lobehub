@@ -16,6 +16,7 @@ const checkIcon = <Icon icon={CheckIcon} size={16} />;
 
 export interface SelectorOption<T extends string> {
   desc?: string;
+  disabled?: boolean;
   label: string;
   value: T;
 }
@@ -42,6 +43,7 @@ export const buildSelectorSubmenu = <T extends string>({
   children: options.map((option) => ({
     closeOnClick: false,
     desc: option.desc,
+    disabled: option.disabled,
     extra: current === option.value ? checkIcon : undefined,
     key: `${label}-${option.value}`,
     label: option.label,

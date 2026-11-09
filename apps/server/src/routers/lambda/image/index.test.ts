@@ -16,6 +16,7 @@ const {
   mockGenerationTopicFindById,
   mockFindUserById,
   mockGetAiProviderModelList,
+  mockGetAiProviderRuntimeState,
   mockInsertValues,
   mockIsLobeHubModelAvailable,
   mockResolveBusinessModelMapping,
@@ -32,6 +33,7 @@ const {
   mockGenerationTopicFindById: vi.fn(),
   mockFindUserById: vi.fn(),
   mockGetAiProviderModelList: vi.fn(),
+  mockGetAiProviderRuntimeState: vi.fn(),
   mockInsertValues: [] as unknown[],
   mockIsLobeHubModelAvailable: vi.fn(),
   mockResolveBusinessModelMapping: vi.fn(),
@@ -82,8 +84,16 @@ vi.mock('@/database/models/user', () => ({
 
 vi.mock('@/database/repositories/aiInfra', () => ({
   AiInfraRepos: vi.fn(function () {
-    return { getAiProviderModelList: mockGetAiProviderModelList };
+    return {
+      getAiProviderModelList: mockGetAiProviderModelList,
+      getAiProviderRuntimeState: mockGetAiProviderRuntimeState,
+    };
   }),
+}));
+
+// User scoping (hidden builtin models) is covered by the service's own tests
+vi.mock('@/server/services/aiProviderAccess', () => ({
+  getUserScopedAiProviderRuntimeState: (_userId: string, load: () => Promise<unknown>) => load(),
 }));
 
 vi.mock('@/server/globalConfig', () => ({
@@ -249,6 +259,68 @@ describe('imageRouter', () => {
   });
 
   describe('createImage', () => {
+    describe('default model selection', () => {
+      const imageModel = (providerId: string, id: string) => ({
+        abilities: {},
+        enabled: true,
+        id,
+        providerId,
+        type: 'image',
+      });
+
+      beforeEach(() => {
+        mockGetAiProviderRuntimeState.mockResolvedValue({
+          enabledAiModels: [
+            imageModel('openai', 'gpt-image-2'),
+            imageModel('lobehub', 'gpt-image-2'),
+            imageModel('lobehub', 'gemini-3.1-flash-image:image'),
+            { ...imageModel('lobehub', 'chat-model'), type: 'chat' },
+          ],
+          enabledImageAiProviders: [{ id: 'openai' }, { id: 'lobehub' }],
+        });
+      });
+
+      it('uses the image page default model when model and provider are omitted', async () => {
+        const caller = imageRouter.createCaller(createMockCtx());
+        await caller.createImage(createDefaultInput({ model: undefined, provider: undefined }));
+
+        expect(mockInsertValues[0]).toMatchObject({
+          model: 'gemini-3.1-flash-image:image',
+          provider: 'lobehub',
+        });
+        expect(mockChargeBeforeGenerate).toHaveBeenCalledWith(
+          expect.objectContaining({ model: 'gemini-3.1-flash-image:image', provider: 'lobehub' }),
+        );
+      });
+
+      it('uses the first enabled provider serving an explicit model', async () => {
+        const caller = imageRouter.createCaller(createMockCtx());
+        await caller.createImage(createDefaultInput({ model: 'gpt-image-2', provider: undefined }));
+
+        expect(mockInsertValues[0]).toMatchObject({ model: 'gpt-image-2', provider: 'openai' });
+      });
+
+      it('rejects before queueing when no enabled image model matches', async () => {
+        const caller = imageRouter.createCaller(createMockCtx());
+
+        await expect(
+          caller.createImage(createDefaultInput({ model: 'missing', provider: undefined })),
+        ).rejects.toThrow('No enabled image model matched missing.');
+        expect(mockServerDB.transaction).not.toHaveBeenCalled();
+      });
+
+      it('keeps an explicit model and provider without loading the runtime state', async () => {
+        const caller = imageRouter.createCaller(createMockCtx());
+        await caller.createImage(createDefaultInput());
+
+        expect(mockGetAiProviderRuntimeState).not.toHaveBeenCalled();
+        expect(mockInsertValues[0]).toMatchObject({
+          model: 'stable-diffusion',
+          provider: 'test-provider',
+        });
+      });
+    });
+
     it('should create image generation batch and generations successfully', async () => {
       const ctx = createMockCtx();
       const input = createDefaultInput();

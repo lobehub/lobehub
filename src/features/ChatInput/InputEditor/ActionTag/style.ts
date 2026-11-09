@@ -11,11 +11,14 @@ export const styles = stylex.create({
     userSelect: 'none',
     display: 'inline-flex',
     gap: '4px',
-    alignItems: 'center',
+    /* The label sets the tag's baseline, so it sits on the surrounding text's
+       baseline; an icon-first inline-flex would take the SVG's bottom edge. */
+    alignItems: 'baseline',
     // TAG_MARGIN_INLINE_END (../constants) — StyleX cannot fold an imported constant.
     marginInlineEnd: '4px',
     paddingInline: '2px',
   },
+  actionTagIcon: { alignSelf: 'center' },
   actionTagLabel: { fontWeight: 500 },
   agentSkillTag: {
     color: cssVar.colorSuccess,

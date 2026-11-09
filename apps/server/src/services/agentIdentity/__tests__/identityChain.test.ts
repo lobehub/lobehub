@@ -15,7 +15,6 @@ import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 
 import { AgentAccountService } from '../index';
 import { createAgentMailProvider } from '../providers/agentMail';
-import { createLinqProvider } from '../providers/linq';
 import { AgentAccountProviderRegistry } from '../registry';
 
 /**
@@ -138,15 +137,13 @@ beforeEach(async () => {
   await serverDB.insert(users).values({ id: userId });
   await serverDB.insert(agents).values({ id: agentId, userId });
 
-  const registry = new AgentAccountProviderRegistry()
-    .register(
-      createAgentMailProvider({
-        apiBaseUrl: mock.baseUrl,
-        apiKey: 'am_e2e',
-        webhookUrl: 'http://127.0.0.1/hook',
-      }),
-    )
-    .register(createLinqProvider({ apiKey: 'linq_e2e', fromNumbers: ['+15550002222'] }));
+  const registry = new AgentAccountProviderRegistry().register(
+    createAgentMailProvider({
+      apiBaseUrl: mock.baseUrl,
+      apiKey: 'am_e2e',
+      webhookUrl: 'http://127.0.0.1/hook',
+    }),
+  );
 
   service = new AgentAccountService(serverDB, userId, { gateKeeper, registry });
 });
@@ -157,7 +154,7 @@ afterEach(async () => {
 });
 
 describe('Agent identity chain — end to end over loopback', () => {
-  it('provisions, sends, receives and revokes across both providers', async () => {
+  it('provisions, sends, receives and revokes a mail account beside a mounted login', async () => {
     const transcript: string[] = [];
 
     // 1. Provision a mail account through the provider (real HTTP round trip).
@@ -176,12 +173,24 @@ describe('Agent identity chain — end to end over loopback', () => {
       kind: 'mail',
     });
 
-    // 2. Provision a phone account (Linq number comes from deployment config).
-    const phone = await service.provision({ agentId, provider: 'linq' });
+    // 2. Mount a user-provided login the agent already has (no provider call).
+    const login = await service.create({
+      agentId,
+      capabilities: { login: true, receive: false, send: false },
+      credential: { password: 'hunter2', username: 'toby-agent' },
+      identifier: 'toby-agent@github',
+      kind: 'service',
+      provider: 'user',
+    });
     transcript.push(
-      `2. provision(linq) -> ${phone.identifier} kind=${phone.kind} capabilities=${JSON.stringify(phone.capabilities)}`,
+      `2. create(user) -> ${login.identifier} kind=${login.kind} capabilities=${JSON.stringify(login.capabilities)}`,
     );
-    expect(phone).toMatchObject({ identifier: '+15550002222', kind: 'phone', provider: 'linq' });
+    expect(login).toMatchObject({
+      hasCredential: true,
+      identifier: 'toby-agent@github',
+      kind: 'service',
+      provider: 'user',
+    });
 
     // 3. Reads never carry the ciphertext; the credential is stated, not shown.
     const listed = await service.list({ agentId });

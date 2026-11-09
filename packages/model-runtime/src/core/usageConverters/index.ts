@@ -37,7 +37,10 @@ export {
   estimateOpenAIChatInputTokens,
   type EstimateOpenAIChatInputTokensOptions,
 } from './utils/estimateChatCost';
-export { resolveImageSinglePrice } from './utils/resolveImageSinglePrice';
+export {
+  type ImageSinglePriceParams,
+  resolveImageSinglePrice,
+} from './utils/resolveImageSinglePrice';
 export { resolveVideoSinglePrice } from './utils/resolveVideoSinglePrice';
 export {
   countVideoOutputTokens,

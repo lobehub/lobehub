@@ -7,18 +7,13 @@ import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import MessageVideo from '@/components/MessageVideo';
+
 import type { GetVideoGenerationStatusParams, GetVideoGenerationStatusState } from '../../types';
 
 const styles = stylex.create({
   body: { display: 'flex', flexDirection: 'column', gap: '8px', padding: '12px' },
   status: { fontFamily: cssVar.fontFamilyCode, fontSize: '12px', color: cssVar.colorTextSecondary },
-  video: {
-    width: '100%',
-    maxHeight: '560px',
-    borderRadius: '8px',
-    backgroundColor: cssVar.colorFillTertiary,
-    backgroundImage: 'none',
-  },
 });
 
 const getAssetUrl = (state?: GetVideoGenerationStatusState) => {
@@ -56,15 +51,7 @@ export const GetVideoGenerationStatusRender = memo<
         <Text as={'span'} className={stylex.props(styles.status).className}>
           {t(`builtins.lobe-video-generation.render.status.${pluginState.status}`)}
         </Text>
-        {url && (
-          <video
-            controls
-            {...stylex.props(styles.video)}
-            poster={getPosterUrl(pluginState)}
-            preload={'metadata'}
-            src={url}
-          />
-        )}
+        {url && <MessageVideo maxHeight={560} poster={getPosterUrl(pluginState)} src={url} />}
       </div>
     </Block>
   );

@@ -1,5 +1,6 @@
 import { getComposioAppByIdentifier } from '@lobechat/const';
 import { isFullAccessApiKey } from '@lobechat/const/apiKeyScope';
+import { buildMcpToolMetadata } from '@lobechat/const/mcpApp';
 import { upsertPluginMode } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
@@ -14,26 +15,29 @@ import { ConnectorToolModel } from '@/database/models/connectorTool';
 import { PluginModel } from '@/database/models/plugin';
 import { WorkspaceModel } from '@/database/models/workspace';
 import { WorkspaceAuditLogModel } from '@/database/models/workspaceAuditLog';
-import type { ConnectorMetadata, OIDCConfig } from '@/database/schemas';
+import type { OIDCConfig } from '@/database/schemas';
 import {
   ConnectorMcpConnectionType,
   ConnectorSourceType,
   ConnectorStatus,
   ConnectorToolPermission,
 } from '@/database/schemas';
-import type { LobeChatDatabase } from '@/database/type';
 import { getComposioClient } from '@/libs/composio';
 import { getMCPConnectionErrorType, inferCrudType } from '@/libs/mcp/utils';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
-import { callConnectorToolById, ConnectorToolCallError } from '@/server/services/connector/exec';
+import {
+  callConnectorToolById,
+  ConnectorToolCallError,
+  readConnectorUiResourceById,
+} from '@/server/services/connector/exec';
 import {
   buildAuthorizationUrl,
   discoverConnectorOAuth,
   getConnectorRedirectUri,
-  registerDynamicClient,
-  registeredAuthMethod,
+  resolveConnectorClient,
+  resolveConnectorOAuthScopes,
   toClientInformation,
 } from '@/server/services/connector/oauth';
 import {
@@ -41,17 +45,13 @@ import {
   saveConnectorOAuthState,
 } from '@/server/services/connector/stateStore';
 import { syncConnectorToolsById } from '@/server/services/connector/sync';
-import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermission';
 import {
   resolveConnectorAuthorizerId,
   resolveUserDisplayMap,
   withTrustedLinkedByUserId,
 } from '@/server/utils/connectorAttribution';
 
-import {
-  assertWorkspaceRowManageable,
-  isWorkspaceNonOwner,
-} from './_helpers/assertWorkspaceRowManageable';
+import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
 import {
   assertConnectorCredentialsManageable,
   assertConnectorMaintainable,
@@ -59,6 +59,7 @@ import {
   getConnectorMemberManage,
   isWorkspaceConnectorAdmin,
 } from './_helpers/connectorManagePolicy';
+import { upsertConnectorEntry } from './_helpers/upsertConnectorEntry';
 
 const connectorProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -67,6 +68,7 @@ const connectorProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts
   const wsId = ctx.workspaceId ?? undefined;
   return opts.next({
     ctx: {
+      agentModel: new AgentModel(ctx.serverDB, ctx.userId, wsId),
       connectorModel: new ConnectorModel(ctx.serverDB, ctx.userId, wsId, gateKeeper),
       connectorToolModel: new ConnectorToolModel(ctx.serverDB, ctx.userId, wsId),
       pluginModel: new PluginModel(ctx.serverDB, ctx.userId, wsId),
@@ -594,9 +596,9 @@ export const connectorRouter = router({
    * Begin the OAuth authorization-code flow for a custom MCP connector.
    *
    * Discovers the authorization server (RFC 9728 → RFC 8414), resolves the
-   * client (pre-registration when a client_id was provided, otherwise RFC 7591
-   * dynamic registration), persists the resolved OIDC config, and returns the
-   * authorize URL for the client to open. The PKCE verifier is stashed in Redis
+   * client (pre-registration when a client_id was provided, otherwise a Client
+   * ID Metadata Document or RFC 7591 dynamic registration), persists the
+   * resolved OIDC config, and returns the authorize URL for the client to open. The PKCE verifier is stashed in Redis
    * keyed by `state`; the callback route completes the exchange.
    */
   startOAuth: connectorWriteProcedure
@@ -617,38 +619,24 @@ export const connectorRouter = router({
       // Discovery and registration failures below are server-compatibility
       // problems the user must fix in their OAuth setup, not internal errors —
       // surface them as BAD_REQUEST with the reason so the form can show it.
-      const { authorizationServerUrl, metadata } = await discoverConnectorOAuth(
-        connector.mcpServerUrl,
-      ).catch((error: unknown) => {
-        throw new TRPCError({
-          cause: error,
-          code: 'BAD_REQUEST',
-          message: (error as Error)?.message ?? String(error),
-        });
-      });
-
-      // Default to the scopes advertised by the server when the user did not
-      // specify any — many MCP authorization servers reject (or issue a useless
-      // token for) a scope-less request.
-      const scopes =
-        existing.scopes && existing.scopes.length > 0 ? existing.scopes : metadata.scopes_supported;
-
-      // 2. Resolve the OAuth client: pre-registration vs. DCR.
-      let clientId = existing.clientId;
-      let clientSecret = existing.clientSecret;
-      let tokenEndpointAuthMethod = existing.tokenEndpointAuthMethod;
-      const scheme: OIDCConfig['scheme'] = clientId ? 'pre_registration' : 'dcr';
-
-      if (!clientId) {
-        if (!metadata.registration_endpoint) {
+      const discovery = await discoverConnectorOAuth(connector.mcpServerUrl).catch(
+        (error: unknown) => {
           throw new TRPCError({
+            cause: error,
             code: 'BAD_REQUEST',
-            message:
-              'This server does not support dynamic registration. Provide an OAuth Client ID in Advanced settings.',
+            message: (error as Error)?.message ?? String(error),
           });
-        }
-        const reg = await registerDynamicClient({
+        },
+      );
+
+      const { authorizationServerUrl, metadata } = discovery;
+      const scopes = resolveConnectorOAuthScopes({ discovery, existingScopes: existing.scopes });
+
+      // 2. Resolve the OAuth client: pre-registration, CIMD, then DCR.
+      const { clientId, clientSecret, scheme, tokenEndpointAuthMethod } =
+        await resolveConnectorClient({
           authorizationServerUrl,
+          existing,
           metadata,
           redirectUri,
           scopes,
@@ -656,13 +644,9 @@ export const connectorRouter = router({
           throw new TRPCError({
             cause: error,
             code: 'BAD_REQUEST',
-            message: `Dynamic client registration failed: ${(error as Error)?.message ?? String(error)}`,
+            message: (error as Error)?.message ?? String(error),
           });
         });
-        clientId = reg.client_id;
-        clientSecret = reg.client_secret ?? undefined;
-        tokenEndpointAuthMethod = registeredAuthMethod(reg, metadata);
-      }
 
       // 3. Persist the resolved config so the callback + refresh can reuse it.
       const resolvedOidc: OIDCConfig = {
@@ -828,8 +812,14 @@ export const connectorRouter = router({
   callTool: connectorWriteProcedure
     .input(
       z.object({
+        /** Resolve the identifier for this agent (agent-owned connector first). */
+        agentId: z.string().optional(),
         args: z.string().optional(),
+        /** An MCP App view's `tools/call`: only tools visible to the app run. */
+        fromApp: z.boolean().optional(),
         identifier: z.string().min(1),
+        /** With `fromApp`: the server the view came from (`getMcpServerFingerprint`). */
+        server: z.string().optional(),
         toolName: z.string().min(1),
       }),
     )
@@ -846,6 +836,30 @@ export const connectorRouter = router({
           code: 'INTERNAL_SERVER_ERROR',
           message: `Connector tool call failed: ${err?.message ?? 'unknown error'}`,
         });
+      }
+    }),
+
+  /**
+   * Read the MCP Apps `ui://` resource a connector tool result renders with.
+   */
+  readUiResource: connectorProcedure
+    .input(
+      z.object({
+        agentId: z.string().optional(),
+        identifier: z.string().min(1),
+        /** The server the result came from (`getMcpServerFingerprint`). */
+        server: z.string().min(1),
+        uri: z.string().startsWith('ui://'),
+      }),
+    )
+    .query(async ({ input, ctx }) => {
+      try {
+        return await readConnectorUiResourceById(input, ctx);
+      } catch (err: any) {
+        if (err instanceof ConnectorToolCallError) {
+          throw new TRPCError({ cause: err, code: err.code, message: err.message });
+        }
+        throw err;
       }
     }),
 
@@ -957,6 +971,8 @@ export const connectorRouter = router({
             description: z.string().optional(),
             inputSchema: z.record(z.string(), z.unknown()).optional(),
             toolName: z.string(),
+            /** The MCP tool's `_meta.ui.visibility`, when it declares one. */
+            visibility: z.array(z.string()).optional(),
           }),
         ),
       }),
@@ -971,6 +987,7 @@ export const connectorRouter = router({
         crudType: inferCrudType(t.toolName),
         description: t.description,
         inputSchema: t.inputSchema,
+        metadata: buildMcpToolMetadata(t.visibility),
         toolName: t.toolName,
       }));
 
@@ -1095,79 +1112,6 @@ export const connectorRouter = router({
 });
 
 // ── Private helpers ───────────────────────────────────────────────────────────
-
-/**
- * Create connector entry if not exists (or update metadata), return connectorId.
- *
- * These bootstrap syncs run whenever any member opens a shared skill's detail
- * panel, so an existing row created by someone else must not be rewritten by a
- * non-owner caller — the row is returned read-only (`writable: false`) and the
- * caller skips the tool upsert instead of throwing, keeping browsing intact.
- */
-async function upsertConnectorEntry(
-  ctx: {
-    connectorModel: ConnectorModel;
-    serverDB: LobeChatDatabase;
-    userId: string;
-    workspaceId?: string | null;
-    workspaceRole?: string;
-  },
-  params: {
-    avatar?: string;
-    composio?: ConnectorMetadata['composio'];
-    description?: string;
-    identifier: string;
-    name: string;
-    sourceType: string;
-  },
-): Promise<{ connectorId: string; writable: boolean }> {
-  const metadata: ConnectorMetadata = {};
-  if (params.description) metadata.description = params.description;
-  if (params.avatar) metadata.avatar = params.avatar;
-  if (params.composio) metadata.composio = params.composio;
-
-  // Viewers keep browse access: they resolve existing rows read-only below,
-  // but must never create or rewrite connector state. These bootstrap
-  // endpoints run without the RBAC middleware, so ctx.workspaceRole may be
-  // absent — a missing role must NOT be treated as writable; fall back to an
-  // explicit member-level permission check (viewers lack agent:update).
-  const canWrite = !ctx.workspaceId
-    ? true
-    : ctx.workspaceRole
-      ? ctx.workspaceRole !== 'viewer'
-      : await hasWorkspaceScopedPermission({
-          action: 'AGENT_UPDATE',
-          db: ctx.serverDB,
-          userId: ctx.userId,
-          workspaceId: ctx.workspaceId,
-        });
-
-  const existing = await ctx.connectorModel.queryByIdentifiers([params.identifier]);
-  if (existing.length > 0) {
-    const row = existing[0];
-    const writable = canWrite && (!isWorkspaceNonOwner(ctx) || row.userId === ctx.userId);
-    if (writable) {
-      // Preserve runtime-owned metadata (especially Composio account identity)
-      // while refreshing display fields from the latest plugin manifest.
-      await ctx.connectorModel.update(row.id, { metadata: { ...row.metadata, ...metadata } });
-    }
-    return { connectorId: row.id, writable };
-  }
-
-  if (!canWrite) {
-    throw new TRPCError({ code: 'FORBIDDEN', message: 'Viewers cannot install connectors' });
-  }
-
-  const created = await ctx.connectorModel.create({
-    identifier: params.identifier,
-    isEnabled: true,
-    metadata,
-    name: params.name,
-    sourceType: params.sourceType as any,
-    status: ConnectorStatus.connected,
-  });
-  return { connectorId: created.id, writable: true };
-}
 
 /** Map builtin manifest humanIntervention → default ConnectorToolPermission */
 function resolveDefaultPermission(humanIntervention: unknown): ConnectorToolPermission {

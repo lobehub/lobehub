@@ -1,5 +1,6 @@
 import type { LobeAgentAgencyConfig, LobeAgentConfig } from './agent';
 import { getWorkingDirEffectivePath } from './device';
+import type { BotWakeKind } from './signal';
 
 /**
  * Channel: a shared conversation where people and Agents talk together.
@@ -112,8 +113,22 @@ export interface ChannelMemberConfig {
    * creator, so a workspace channel can use another member's device after its owner approves.
    */
   deviceOwnerId?: string;
+  /**
+   * This member's own reply strategy, over the channel's `ChannelConfig.wake`. Parsed by the
+   * shared wake schema; never part of the execution environment.
+   */
+  wake?: Record<string, unknown>;
   /** Set only from a device's canonical-path acknowledgement before claiming work. */
   workingDirectory?: string;
+}
+
+/**
+ * Channel-wide settings a member configures and the server validates, unlike `ChannelMetadata`.
+ * Agent members can override them in `ChannelMemberConfig`; NULL means every default applies.
+ */
+export interface ChannelConfig {
+  /** How Agents decide to answer unaddressed messages; parsed by the shared wake schema. */
+  wake?: Record<string, unknown>;
 }
 
 /** Free-form member state that does not need its own column. */
@@ -167,13 +182,40 @@ export type ChannelRoutingMode = 'decision' | 'fallback';
  * - `completed`: the final reply was published.
  * - `failed`: ended without a publishable reply, or its execution failed or became unknown.
  * - `cancelled`: stopped, or it can never run (requester left, environment switched).
+ * - `silent`: a `followup` wake the Agent chose not to answer (`NO_REPLY`). Settled, not failed.
  */
-export type ChannelJobStatus = 'cancelled' | 'completed' | 'failed' | 'queued' | 'running';
+export type ChannelJobStatus =
+  'cancelled' | 'completed' | 'failed' | 'queued' | 'running' | 'silent';
+
+/**
+ * Why a job was woken, frozen when it is delivered.
+ *
+ * - `mention`: someone addressed the member (an @mention, a reply, the paired Agent of a direct
+ *   conversation) or routing chose it; it owes an answer.
+ * - `followup`: nobody addressed it; speaking is optional and it may end in `silent`.
+ *
+ * The details are what the woken Agent is told about the wake.
+ */
+export interface ChannelJobWake {
+  /** The message falls within the member's duties (`helpful`: it can settle an open question). */
+  duty?: { helpful?: boolean; matched?: string };
+  /** The member spoke here lately and this message followed. */
+  followup?: {
+    participants: { isBot: boolean; isOwner: boolean; name: string }[];
+    score?: number;
+  };
+  kind: BotWakeKind;
+  /** The message says the member's name without @-mentioning it. */
+  named?: boolean;
+  /** The rule that woke it, as the decision row records it. */
+  reason?: string;
+}
 
 /** Why a queued job cannot start yet. Typed so clients never infer it from error text. */
 export type ChannelJobBlockCode =
   | 'device_approval_pending'
   | 'device_offline'
+  | 'device_required'
   | 'directory_locked'
   | 'member_busy'
   | 'unavailable'
@@ -255,11 +297,22 @@ export interface ChannelListItem {
   canDelete: boolean;
   createdAt: Date;
   id: string;
+  /** The newest main-channel message, cut for a preview; set by the Channel list. */
+  lastMessage?: { content: string; createdAt: Date } | null;
   /** The project the channel is grouped under; null for a standalone channel. */
   projectId: string | null;
+  /**
+   * Main-conversation replies still pending (queued, running, or stopping), so a list row can
+   * show them without loading the conversation; set by the Channel list.
+   */
+  replyJobs?: ChannelReplyJob[];
   sequence: number;
   status: ChannelStatus;
   title: string;
+  /** Main-channel messages the caller has not read; set by the Channel list. */
+  unreadCount?: number;
+  /** Bumped by every new message, so it orders conversations by latest activity. */
+  updatedAt?: Date;
   workspaceId: string | null;
 }
 
@@ -301,6 +354,8 @@ export interface ChannelPublicMessage {
   replyToId: string | null;
   routingStatus: ChannelMessageRoutingStatus;
   sequence: number;
+  /** The Agent topic behind a reply, only when the viewer ran it (owns that topic). */
+  sourceTopicId?: string | null;
   threadId: string | null;
   userId: string | null;
 }
@@ -319,6 +374,12 @@ export interface ChannelPublicJob {
   threadId: string | null;
   writerHeld: boolean;
 }
+
+/** A pending reply in the fields its status is derived from. */
+export type ChannelReplyJob = Pick<
+  ChannelPublicJob,
+  'blockedCode' | 'id' | 'memberId' | 'publicationRevoked' | 'status' | 'threadId' | 'writerHeld'
+>;
 
 export interface ChannelPublicThread {
   followerMemberIds: string[];

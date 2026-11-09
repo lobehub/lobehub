@@ -27,6 +27,8 @@
   "openChatSettings.title": "チャット設定を開く",
   "openHotkeyHelper.desc": "すべてのショートカットキーの使用説明を表示する",
   "openHotkeyHelper.title": "ショートカットヘルプを開く",
+  "openTaskFilter.desc": "タスクページのフィルターメニューを開く",
+  "openTaskFilter.title": "タスクのフィルター",
   "prevTab.desc": "デスクトップアプリで前のタブに移動します。最初のタブに到達すると最後のタブに戻ります。",
   "prevTab.title": "前のタブ",
   "regenerateMessage.desc": "最後のメッセージを再生成します",

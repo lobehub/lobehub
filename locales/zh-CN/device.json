@@ -127,6 +127,7 @@
   "workingDirectory.refreshFolders": "刷新文件夹列表",
   "workingDirectory.refreshGitStatus": "刷新分支与 PR 状态",
   "workingDirectory.removeRecent": "从最近目录中移除",
+  "workingDirectory.removeRecentFailed": "无法移除此文件夹，请重试。",
   "workingDirectory.removeWorktreeAction": "删除 Worktree",
   "workingDirectory.removeWorktreeConfirm": "删除 Worktree“{{name}}”？这会移除该 worktree 目录，但保留其分支；如果仍有未提交更改，Git 会拒绝删除。",
   "workingDirectory.removeWorktreeFailed": "删除 Worktree 失败",

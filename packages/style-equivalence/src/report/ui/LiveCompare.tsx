@@ -1,3 +1,4 @@
+import { Segmented, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { useEffect, useState } from 'react';
@@ -10,12 +11,12 @@ import { type PropertyMode, propertyRows } from '../properties';
 const styles = stylex.create({
   controls: { columnGap: 8, display: 'flex', flexWrap: 'wrap', rowGap: 8 },
   frame: (width: number) => ({ borderStyle: 'none', display: 'block', height: 240, width }),
-  heading: { fontSize: 13.5, fontWeight: 600, marginBlock: 0 },
-  missing: { color: cssVar.colorTextTertiary, fontSize: 12, padding: 12 },
+  heading: { fontSize: cssVar.fontSize, fontWeight: 600, marginBlock: 0 },
+  missing: { padding: 12 },
   pane: {
     backgroundColor: cssVar.colorBgContainer,
     borderColor: cssVar.colorBorderSecondary,
-    borderRadius: 8,
+    borderRadius: cssVar.borderRadiusLG,
     borderStyle: 'solid',
     borderWidth: 1,
     overflow: 'hidden',
@@ -26,11 +27,11 @@ const styles = stylex.create({
     borderBlockEndWidth: 1,
     color: cssVar.colorTextSecondary,
     fontFamily: cssVar.fontFamilyCode,
-    fontSize: 11.5,
+    fontSize: cssVar.fontSizeSM,
     paddingBlock: 6,
-    paddingInline: 10,
+    paddingInline: 12,
   },
-  panes: { columnGap: 10, display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' },
+  panes: { columnGap: 12, display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' },
   root: { display: 'flex', flexDirection: 'column', rowGap: 12 },
   row: {
     borderBlockEndColor: cssVar.colorBorderSecondary,
@@ -39,36 +40,18 @@ const styles = stylex.create({
     columnGap: 8,
     display: 'grid',
     fontFamily: cssVar.fontFamilyCode,
-    fontSize: 11.5,
+    fontSize: cssVar.fontSizeSM,
     gridTemplateColumns: 'minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr) 20px',
-    paddingBlock: 5,
-    paddingInline: 10,
+    paddingBlock: 6,
+    paddingInline: 12,
   },
   rowBad: { backgroundColor: cssVar.colorErrorBg },
   rowHead: { color: cssVar.colorTextTertiary, fontFamily: cssVar.fontFamily },
-  segment: {
-    backgroundColor: { ':hover': cssVar.colorFillQuaternary, 'default': cssVar.colorBgContainer },
-    borderColor: cssVar.colorBorder,
-    borderRadius: 6,
-    borderStyle: 'solid',
-    borderWidth: 1,
-    color: cssVar.colorTextSecondary,
-    cursor: 'pointer',
-    fontFamily: 'inherit',
-    fontSize: 12,
-    height: 28,
-    paddingInline: 10,
-  },
-  segmentOn: {
-    backgroundColor: cssVar.colorFillTertiary,
-    color: cssVar.colorText,
-    fontWeight: 500,
-  },
   shot: { display: 'block', maxWidth: '100%' },
   table: {
     backgroundColor: cssVar.colorBgContainer,
     borderColor: cssVar.colorBorderSecondary,
-    borderRadius: 8,
+    borderRadius: cssVar.borderRadiusLG,
     borderStyle: 'solid',
     borderWidth: 1,
     overflow: 'hidden',
@@ -94,18 +77,15 @@ const Segment = <T extends string | number>({
   options: Array<[T, string]>;
   value: T;
 }) => (
-  <span {...stylex.props(styles.controls)}>
-    {options.map(([option, label]) => (
-      <button
-        key={String(option)}
-        type="button"
-        onClick={() => onChange(option)}
-        {...stylex.props(styles.segment, option === value && styles.segmentOn)}
-      >
-        {label}
-      </button>
-    ))}
-  </span>
+  <Segmented
+    options={options.map(([option, label]) => ({ label, value: String(option) }))}
+    size="small"
+    value={String(value)}
+    onChange={(next) => {
+      const match = options.find(([option]) => String(option) === next);
+      if (match) onChange(match[0]);
+    }}
+  />
 );
 
 const Pane = ({
@@ -246,14 +226,15 @@ export const LiveCompare = ({
           <span>head</span>
           <span />
         </div>
-        {error && <div {...stylex.props(styles.missing)}>读取失败：{error}</div>}
-        {!snapshot && !error && (
-          <div {...stylex.props(styles.missing)}>正在这个条件下重新采样…</div>
+        {!snapshot && (
+          <Text type={error ? 'danger' : 'secondary'} {...stylex.props(styles.missing)}>
+            {error ? `读取失败：${error}` : '正在这个条件下重新采样…'}
+          </Text>
         )}
         {snapshot && rows.length === 0 && (
-          <div {...stylex.props(styles.missing)}>
+          <Text type="secondary" {...stylex.props(styles.missing)}>
             {mode === 'diff' ? '这个条件下目标元素没有不同的属性。' : '没有可对照的属性。'}
-          </div>
+          </Text>
         )}
         {rows.map((row) => (
           <div
@@ -263,10 +244,10 @@ export const LiveCompare = ({
           >
             <span {...stylex.props(styles.value)}>{row.name}</span>
             <span title={row.base} {...stylex.props(styles.value)}>
-              {row.base ?? '—'}
+              {row.base ?? '--'}
             </span>
             <span title={row.head} {...stylex.props(styles.value)}>
-              {row.head ?? '—'}
+              {row.head ?? '--'}
             </span>
             <span>{MARKS[row.mark]}</span>
           </div>

@@ -599,6 +599,90 @@ it('keeps project directory bindings and device identities separate', () => {
   expect(groupTopicsByProject(topics, 'updatedAt')).toHaveLength(4);
 });
 
+describe('groupTopicsByProject on one machine with several device identities', () => {
+  const row = (id: string, updatedAt: number, boundDeviceId?: string): ChatTopic => ({
+    createdAt: updatedAt,
+    id,
+    metadata: { boundDeviceId, workingDirectory: '/home/me/workspaces/cpc' },
+    title: id,
+    updatedAt,
+  });
+
+  it('merges one folder used through both identities of this machine', () => {
+    const topics = [row('desk', 3, 'local-personal'), row('shared', 2, 'local-workspace')];
+
+    expect(
+      groupTopicsByProject(topics, 'updatedAt', {
+        localDeviceIds: ['local-personal', 'local-workspace'],
+      }),
+    ).toEqual([
+      {
+        children: [topics[0], topics[1]],
+        id: 'project:local-personal:/home/me/workspaces/cpc',
+        title: 'cpc',
+      },
+    ]);
+  });
+
+  it('keeps the folder of another machine apart, naming its device to tell them apart', () => {
+    const topics = [row('desk', 3, 'local-personal'), row('remote', 2, 'other-machine')];
+
+    expect(
+      groupTopicsByProject(topics, 'updatedAt', { localDeviceIds: ['local-personal'] }).map(
+        ({ deviceId, id, title }) => ({ deviceId, id, title }),
+      ),
+    ).toEqual([
+      {
+        deviceId: 'local-personal',
+        id: 'project:local-personal:/home/me/workspaces/cpc',
+        title: 'cpc',
+      },
+      {
+        deviceId: 'other-machine',
+        id: 'project:other-machine:/home/me/workspaces/cpc',
+        title: 'cpc',
+      },
+    ]);
+  });
+
+  it('names no device when the folder title is already unambiguous', () => {
+    const [group] = groupTopicsByProject([row('only', 1, 'other-machine')], 'updatedAt');
+
+    expect(group.title).toBe('cpc');
+    expect(group).not.toHaveProperty('deviceId');
+  });
+
+  it('keeps the short name when a project registers the same folder', () => {
+    const projectTopic: ChatTopic = {
+      ...row('project', 4, 'local-personal'),
+      projectId: 'pro_1',
+      projectWorkingDirectoryId: 'dir_1',
+    };
+    const topics = [projectTopic, row('desk', 3, 'local-personal'), row('remote', 2, 'other')];
+
+    expect(
+      groupTopicsByProject(topics, 'updatedAt').map(({ id, title }) => ({ id, title })),
+    ).toEqual([
+      { id: 'project-id:pro_1', title: 'cpc' },
+      { id: 'project:local-personal:/home/me/workspaces/cpc', title: 'cpc' },
+      { id: 'project:other:/home/me/workspaces/cpc', title: 'cpc' },
+    ]);
+  });
+
+  it('still lengthens the name of different folders that share a basename', () => {
+    const other: ChatTopic = {
+      ...row('elsewhere', 1, 'local-personal'),
+      metadata: { boundDeviceId: 'local-personal', workingDirectory: '/srv/cpc' },
+    };
+
+    expect(
+      groupTopicsByProject([row('desk', 3, 'local-personal'), other], 'updatedAt').map(
+        (group) => group.title,
+      ),
+    ).toEqual(['workspaces/cpc', 'srv/cpc']);
+  });
+});
+
 describe('groupTopicsByProject project merging', () => {
   const base = { createdAt: 0, title: 'Work', updatedAt: 0 };
 
@@ -912,6 +996,28 @@ describe('groupTopicsByDevice', () => {
 
     expect(groupTopicsByDevice(topics, 'updatedAt', [])).toEqual([
       { children: topics, id: 'no-device' },
+    ]);
+  });
+
+  it("merges this machine's device identities into one group under its first id", () => {
+    const topics = [
+      createRow('desk', 3, { metadata: { boundDeviceId: 'local-personal' } }),
+      createRow('shared', 2, { projectWorkingDirectoryId: 'dir-shared' }),
+      createRow('remote', 1, { metadata: { boundDeviceId: 'other-machine' } }),
+    ];
+
+    expect(
+      groupTopicsByDevice(
+        topics,
+        'updatedAt',
+        [{ deviceId: 'local-workspace', id: 'dir-shared' }],
+        {
+          localDeviceIds: ['local-personal', 'local-workspace'],
+        },
+      ),
+    ).toEqual([
+      { children: [topics[0], topics[1]], id: 'device:local-personal' },
+      { children: [topics[2]], id: 'device:other-machine' },
     ]);
   });
 

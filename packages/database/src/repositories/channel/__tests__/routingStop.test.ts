@@ -40,7 +40,7 @@ describe('routing write-back', () => {
         reason: 'Coder owns this code',
         status: 'assigned',
       }),
-    ).toBe(true);
+    ).toEqual({ recipients: [coder.id], status: 'assigned' });
 
     expect(await messageById(message.id)).toMatchObject({
       recipientMemberIds: [coder.id],
@@ -73,7 +73,7 @@ describe('routing write-back', () => {
       reason: 'Late',
       status: 'assigned',
     });
-    expect(late).toBe(false);
+    expect(late).toBeNull();
     expect(await jobsOf(db, message.id)).toEqual([]);
   });
 
@@ -179,7 +179,7 @@ describe('stop', () => {
         reason: 'Late',
         status: 'assigned',
       }),
-    ).toBe(false);
+    ).toBeNull();
     const [mainJob] = await jobsOf(db, root.id);
     const [threadJob] = await jobsOf(db, inThread.id);
     expect(mainJob.status).toBe('cancelled');

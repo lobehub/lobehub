@@ -60,6 +60,11 @@ export default {
   'docs.home.tabs.mine': 'Created by me',
   'docs.home.tabs.recent': 'Recently updated',
   'docs.home.tabs.shared': 'Shared with me',
+  'docs.library.agentSpaces.emptyDesc': "An Agent's documents appear here once you open that Agent",
+  'docs.library.agentSpaces.emptyTitle': 'No Agent knowledge bases yet',
+  'docs.library.agentSpaces.untitled': 'Untitled Agent',
+  'docs.library.tabs.agents': 'Agents',
+  'docs.library.tabs.mine': 'My knowledge bases',
   'docs.library.emptyDesc':
     'Gather related files and pages into a knowledge base to share them with your team and Agents',
   'docs.library.emptyTitle': 'No knowledge bases yet',
@@ -87,6 +92,7 @@ export default {
   'docs.section.drive': 'Drive',
   'docs.section.home': 'Home',
   'docs.section.library': 'Knowledge Bases',
+  'docs.section.sandboxStorage': 'Sandbox Storage',
   'docs.section.works': 'Works',
   'docs.sectionView.emptyFiltered': 'No pages match this filter',
   'docs.sectionView.filter': 'Show',
@@ -327,6 +333,8 @@ export default {
     'Saving will be refused once the page goes over the limit.',
   'pageEditor.charLimit.nearTitle':
     'This page has {{actual}} of {{limit}} characters allowed per page on your plan.',
+  'pageEditor.charLimit.overDescription':
+    'Changes cannot be saved while the page is over the limit. Shorten the page or upgrade your plan.',
   'pageEditor.chooseIcon': 'Choose Icon',
   'pageEditor.collab.notSynced':
     'Your latest page edits are still syncing, so the Agent may not see them yet.',

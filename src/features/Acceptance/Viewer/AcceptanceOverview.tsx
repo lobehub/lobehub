@@ -26,7 +26,11 @@ import AcceptanceShare from './Header/AcceptanceShare';
 import AcceptanceStatusControl from './Header/AcceptanceStatusControl';
 import type { AcceptanceTabKey } from './Header/AcceptanceTabs';
 import AcceptanceTabs from './Header/AcceptanceTabs';
-import { acceptanceChecksLayout, acceptanceContentLayout } from './layout';
+import {
+  acceptanceContentLayout,
+  acceptanceReadingColumnMaxWidth,
+  getAcceptanceBodyMaxWidth,
+} from './layout';
 import { flowPlanPhase } from './Plan/planReview';
 import AcceptanceDecision from './Review/AcceptanceDecision';
 import { AcceptanceRepair } from './Review/AcceptanceRepair';
@@ -44,11 +48,6 @@ const styles = createStaticStyles(({ css }) => ({
     @media (width <= 767px) {
       padding-inline: 16px;
     }
-  `,
-  checks: css`
-    width: 100%;
-    max-width: ${acceptanceChecksLayout.maxWidth}px;
-    margin-inline: auto;
   `,
   headerBand: css`
     flex: none;
@@ -100,11 +99,22 @@ export const AcceptanceOverview = ({
   return (
     <>
       <Flexbox className={styles.headerBand}>
-        <Flexbox className={styles.column} gap={12}>
+        <Flexbox
+          className={styles.column}
+          gap={12}
+          style={{ maxWidth: acceptanceReadingColumnMaxWidth }}
+        >
           {/* Sharing sits beside the identity, as on the workbench page. The
               control gates itself on the server's review capability, so a
-              reader without it sees nothing here. */}
-          <Flexbox horizontal align={'flex-start'} gap={16} justify={'space-between'}>
+              reader without it sees nothing here. The inline padding clears the
+              ledger's collapsed chip, which floats over this corner. */}
+          <Flexbox
+            horizontal
+            align={'flex-start'}
+            gap={16}
+            justify={'space-between'}
+            style={{ paddingInlineEnd: 24 }}
+          >
             <Flexbox flex={1} style={{ minWidth: 0 }}>
               <AcceptanceIdentity
                 focusSlot={<AcceptanceEnterFocus />}
@@ -145,7 +155,7 @@ export const AcceptanceOverview = ({
         className={styles.column}
         gap={16}
         paddingBlock={20}
-        style={tab === 'flow' ? { maxWidth: 1500 } : undefined}
+        style={{ maxWidth: tab === 'flow' ? 1500 : getAcceptanceBodyMaxWidth(tab) }}
       >
         {/* Deciding belongs where the evidence is. The discussion is a
             conversation; ending one there put the closing act under a thread
@@ -163,11 +173,11 @@ export const AcceptanceOverview = ({
         ) : tab === 'checks' && gateDossier ? (
           <GateReview dossier={gateDossier} />
         ) : tab === 'checks' ? (
-          <Flexbox className={styles.checks} gap={16}>
+          <>
             <AcceptanceCheckInventory toolbar={<AcceptanceCheckOwnerToolbar />} />
             <ReviewerApprovalBar />
             <AcceptanceDecision onDraftToComposer={onDraftToComposer} />
-          </Flexbox>
+          </>
         ) : (
           <AcceptanceResources />
         )}

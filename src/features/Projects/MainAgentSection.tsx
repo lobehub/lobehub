@@ -7,8 +7,8 @@ import { useTranslation } from 'react-i18next';
 
 import AgentAvatar from '@/components/AgentAvatar';
 
+import type { MainAgentMode } from './createProjectForm';
 import MainAgentField from './MainAgentField';
-import type { MainAgentMode } from './mainAgentStorage';
 
 const styles = stylex.create({
   preview: {

@@ -230,11 +230,17 @@ const resolveWorkspaceInit = async (
   params: {
     activeDeviceId: string | undefined;
     agencyConfig?: LobeAgentAgencyConfig;
+    /**
+     * The device is not online yet (a managed cloud device that is waking).
+     * The bound directory still resolves from the persisted rows, but the
+     * device is never scanned: only a cached scan is served.
+     */
+    deviceWaking?: boolean;
     topicId: string;
   },
 ): Promise<ResolvedWorkspaceInit> => {
   const empty: WorkspaceInitResult = { instructions: [], skills: [] };
-  const { activeDeviceId, agencyConfig, topicId } = params;
+  const { activeDeviceId, agencyConfig, deviceWaking, topicId } = params;
   if (!activeDeviceId) return { workspace: empty };
 
   try {
@@ -289,6 +295,8 @@ const resolveWorkspaceInit = async (
     const cached = workingDirs.find(
       (dir) => dir.path === boundCwd || getWorkingDirEffectivePath(dir) === boundCwd,
     );
+
+    if (deviceWaking) return { ...resolved, workspace: cached?.workspace ?? empty };
 
     if (isWorkspaceCacheFresh(cached, Date.now()) && cached?.workspace) {
       log('execAgent: reusing cached workspace init for %s', boundCwd);
@@ -735,9 +743,14 @@ export const prepareOperation = async (
   // re-gates on `activeDeviceId`). Only `location` (the absolute SKILL.md
   // path) flows through; the directory tree is enumerated lazily, keeping the
   // op-param payload small.
+  // A waking managed device is not bound yet (see `resolveDevicePlan`), but
+  // its directory is known from the persisted rows, and the run will reach it.
+  const wakingDeviceId =
+    executionPlan?.kind === 'device-wakeable' ? executionPlan.deviceId : undefined;
   const workspaceInit = await resolveWorkspaceInit(deps, {
-    activeDeviceId,
+    activeDeviceId: activeDeviceId ?? wakingDeviceId,
     agencyConfig: agentConfig.agencyConfig ?? undefined,
+    deviceWaking: !activeDeviceId && !!wakingDeviceId,
     topicId,
   });
 
@@ -760,7 +773,7 @@ export const prepareOperation = async (
     config: workspaceInit.boundCwdConfig,
     currentDeviceId: workspaceInit.topicDeviceId,
     currentWorkingDirectory: workspaceInit.topicWorkingDirectory,
-    deviceId: activeDeviceId,
+    deviceId: activeDeviceId ?? wakingDeviceId,
     topicId,
   });
 

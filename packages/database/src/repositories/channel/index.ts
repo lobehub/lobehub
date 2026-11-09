@@ -1,9 +1,15 @@
-import type { ChannelMemberConfig, ChannelMemberRole, ChannelVisibility } from '@lobechat/types';
-import { and, desc, eq, isNull, or } from 'drizzle-orm';
+import type {
+  ChannelMemberConfig,
+  ChannelMemberRole,
+  ChannelReplyJob,
+  ChannelVisibility,
+} from '@lobechat/types';
+import { and, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 
 import { TrashModel } from '../../models/trash';
 import type { ChannelItem, ChannelJobItem, ChannelMessageItem } from '../../schemas';
 import {
+  agents,
   channelJobs,
   channelMembers,
   channelMessages,
@@ -23,6 +29,8 @@ import {
 import { findThread } from './delivery';
 import { ChannelError } from './error';
 import { addChannelUser, channelUserCandidates, newChannelUserCandidates } from './people';
+import type { ChannelAgentPostInput } from './post';
+import { postAgentMessage } from './post';
 import { retryRouting } from './routing';
 import type { ChannelSendInput } from './send';
 import { sendMessage } from './send';
@@ -43,7 +51,8 @@ export type { ChannelErrorCode } from './error';
 export { ChannelError } from './error';
 export { ChannelExecutionRepository } from './execution';
 export { ChannelHistoryRepository } from './history';
-export type { ChannelRoutingDecision } from './routing';
+export type { ChannelAgentPostInput } from './post';
+export type { AppliedChannelRouting, ChannelRoutingDecision } from './routing';
 export type { ChannelSendInput } from './send';
 export type { ChannelStopScope } from './stop';
 export type { ChannelAccess, ChannelWriteOptions } from './types';
@@ -63,6 +72,15 @@ const hasRole = (role: ChannelMemberRole | null, minRole: ChannelMemberRole) =>
  * scope (personal, or the given workspace). Every write runs inside `write`, which holds the
  * `channels` row lock so mutations of one channel serialize in a transaction.
  */
+/** Characters of the latest message a Channel list item carries as its preview. */
+const LIST_PREVIEW_LENGTH = 200;
+
+/** A member config with its reply strategy set, or without one when `wake` is empty. */
+const withMemberWake = (
+  config: ChannelMemberConfig,
+  wake: Record<string, unknown> | null | undefined,
+): ChannelMemberConfig => (wake ? { ...config, wake } : config);
+
 export class ChannelRepository {
   private readonly workspaceId: string | null;
 
@@ -214,14 +232,104 @@ export class ChannelRepository {
     this.write(
       channelId,
       async (tx) => {
-        await requireAgentMember(tx, channelId, memberId);
+        const current = await requireAgentMember(tx, channelId, memberId);
         const [member] = await tx
           .update(channelMembers)
-          .set({ config: memberEnvironment(config) })
+          // The environment is replaced; the member's reply strategy is not part of it.
+          .set({ config: withMemberWake(memberEnvironment(config), current.config?.wake) })
           .where(eq(channelMembers.id, memberId))
           .returning();
         await audit(tx, channelId, 'member_environment_changed', memberId);
         return member;
+      },
+      { minRole: 'admin' },
+    );
+
+  /**
+   * The channel's reply strategy and each active Agent member's own, as stored (not parsed):
+   * `null` means the defaults apply. Validation belongs to the shared wake schema in the caller.
+   */
+  wakeConfig = async (channelId: string) =>
+    this.write(
+      channelId,
+      async (tx, { channel }) => {
+        const members = await tx
+          .select({ config: channelMembers.config, id: channelMembers.id })
+          .from(channelMembers)
+          .where(
+            and(
+              eq(channelMembers.channelId, channelId),
+              eq(channelMembers.actorType, 'agent'),
+              eq(channelMembers.status, 'active'),
+            ),
+          );
+        return {
+          channel: channel.config?.wake ?? null,
+          members: members.map((member) => ({
+            memberId: member.id,
+            wake: member.config?.wake ?? null,
+          })),
+        };
+      },
+      { minRole: 'admin' },
+    );
+
+  /**
+   * Whose records one Agent member's wake decisions are filed under: its Agent's owner, in the
+   * channel's workspace. `null` when the Agent has no owner left to file them under.
+   */
+  memberWakeRecordScope = async (channelId: string, memberId: string) =>
+    this.write(
+      channelId,
+      async (tx, { channel }) => {
+        const member = await requireAgentMember(tx, channelId, memberId);
+        const [agent] = await tx
+          .select({ userId: agents.userId })
+          .from(agents)
+          .where(eq(agents.id, member.agentId));
+        return agent?.userId ? { userId: agent.userId, workspaceId: channel.workspaceId } : null;
+      },
+      { minRole: 'admin' },
+    );
+
+  /** Replaces the channel's reply strategy; `null` returns it to the defaults. */
+  updateChannelWakeConfig = async (channelId: string, wake: Record<string, unknown> | null) =>
+    this.write(
+      channelId,
+      async (tx, { channel }) => {
+        const { wake: _previous, ...rest } = channel.config ?? {};
+        const config = wake ? { ...rest, wake } : rest;
+        const [updated] = await tx
+          .update(channels)
+          .set({ config: Object.keys(config).length ? config : null })
+          .where(eq(channels.id, channelId))
+          .returning();
+        await audit(tx, channelId, 'wake_config_changed', channelId, { reset: !wake });
+        return updated.config?.wake ?? null;
+      },
+      { minRole: 'admin' },
+    );
+
+  /**
+   * Replaces one Agent member's own reply strategy over the channel's; `null` removes it. Its
+   * environment is kept as it is.
+   */
+  updateMemberWakeConfig = async (
+    channelId: string,
+    memberId: string,
+    wake: Record<string, unknown> | null,
+  ) =>
+    this.write(
+      channelId,
+      async (tx) => {
+        const current = await requireAgentMember(tx, channelId, memberId);
+        const [member] = await tx
+          .update(channelMembers)
+          .set({ config: withMemberWake(memberEnvironment(current.config), wake) })
+          .where(eq(channelMembers.id, memberId))
+          .returning();
+        await audit(tx, channelId, 'member_wake_config_changed', memberId, { reset: !wake });
+        return member.config?.wake ?? null;
       },
       { minRole: 'admin' },
     );
@@ -268,7 +376,7 @@ export class ChannelRepository {
       async (tx, access) => {
         if (access.channel.isDeleted) throw new ChannelError('NOT_FOUND', 'Channel not found');
         const admin = hasRole(access.member.role, 'admin');
-        const view = await readChannelView(tx, channelId, options);
+        const view = await readChannelView(tx, channelId, options, this.userId);
         return {
           channel: { ...access.channel, canDelete: admin },
           ...view,
@@ -306,15 +414,98 @@ export class ChannelRepository {
    * Channels the caller belongs to in the current scope, newest first. Archived ones are
    * included with their `status`, so they stay readable outside the active list.
    */
-  list = async (): Promise<Array<ChannelItem & { canDelete: boolean }>> => {
+  list = async (): Promise<
+    Array<
+      ChannelItem & {
+        canDelete: boolean;
+        lastMessage: { content: string; createdAt: Date } | null;
+        replyJobs: ChannelReplyJob[];
+        unreadCount: number;
+      }
+    >
+  > => {
     const rows = await this.db
-      .select({ channel: channels, role: channelMembers.role })
+      .select({
+        channel: channels,
+        lastReadSequence: channelMembers.lastReadSequence,
+        role: channelMembers.role,
+      })
       .from(channels)
       .innerJoin(channelMembers, eq(channelMembers.channelId, channels.id))
       .where(and(this.membershipWhere(), notTrashed(channels.isDeleted)))
       .orderBy(desc(channels.createdAt));
 
-    return rows.map(({ channel, role }) => ({ ...channel, canDelete: hasRole(role, 'admin') }));
+    // The newest main-channel message of each, for a conversation-list preview.
+    const latest = rows.length
+      ? await this.db
+          .selectDistinctOn([channelMessages.channelId], {
+            channelId: channelMessages.channelId,
+            content: sql<string>`left(${channelMessages.content}, ${LIST_PREVIEW_LENGTH})`,
+            createdAt: channelMessages.createdAt,
+          })
+          .from(channelMessages)
+          .where(
+            and(
+              inArray(
+                channelMessages.channelId,
+                rows.map(({ channel }) => channel.id),
+              ),
+              isNull(channelMessages.threadId),
+            ),
+          )
+          .orderBy(channelMessages.channelId, desc(channelMessages.sequence))
+      : [];
+    const lastMessageOf = new Map(
+      latest.map(({ channelId, ...message }) => [channelId, message] as const),
+    );
+
+    // Main-conversation replies the list row shows as in progress: ones that can still publish,
+    // and stopped ones whose writer has not exited yet.
+    const pending = rows.length
+      ? await this.db
+          .select({
+            blockedCode: channelJobs.blockedCode,
+            channelId: channelJobs.channelId,
+            id: channelJobs.id,
+            memberId: channelJobs.memberId,
+            publicationRevoked: channelJobs.publicationRevoked,
+            status: channelJobs.status,
+            threadId: channelJobs.threadId,
+            writerHeld: channelJobs.writerHeld,
+          })
+          .from(channelJobs)
+          .where(
+            and(
+              inArray(
+                channelJobs.channelId,
+                rows.map(({ channel }) => channel.id),
+              ),
+              isNull(channelJobs.threadId),
+              or(
+                and(
+                  eq(channelJobs.publicationRevoked, false),
+                  inArray(channelJobs.status, ['queued', 'running']),
+                ),
+                and(eq(channelJobs.publicationRevoked, true), eq(channelJobs.writerHeld, true)),
+              ),
+            ),
+          )
+          .orderBy(desc(channelJobs.createdAt))
+      : [];
+    const replyJobsOf = new Map<string, ChannelReplyJob[]>();
+    for (const { channelId, ...job } of pending) {
+      const jobs = replyJobsOf.get(channelId) ?? [];
+      jobs.push(job);
+      replyJobsOf.set(channelId, jobs);
+    }
+
+    return rows.map(({ channel, lastReadSequence, role }) => ({
+      ...channel,
+      canDelete: hasRole(role, 'admin'),
+      lastMessage: lastMessageOf.get(channel.id) ?? null,
+      replyJobs: replyJobsOf.get(channel.id) ?? [],
+      unreadCount: Math.max(0, channel.sequence - (lastReadSequence ?? 0)),
+    }));
   };
 
   /** Read access. Returns undefined when the channel is missing or the caller is no member. */
@@ -328,6 +519,10 @@ export class ChannelRepository {
 
     return row;
   };
+
+  /** The caller's direct conversation with an Agent in this scope, trashed or not. */
+  findDirectAccess = (agentId: string): Promise<ChannelAccess | undefined> =>
+    this.findDirect(this.db, agentId);
 
   /**
    * Runs `fn` while holding the channel row lock, after checking that the caller is an
@@ -361,6 +556,16 @@ export class ChannelRepository {
 
       return fn(tx, access);
     });
+
+  /**
+   * Posts what an Agent member wrote outside any job into a Channel the caller belongs to.
+   * See {@link postAgentMessage}.
+   */
+  postAgentMessage = async (
+    channelId: string,
+    input: ChannelAgentPostInput,
+  ): Promise<ChannelMessageItem> =>
+    this.write(channelId, (tx) => postAgentMessage(tx, channelId, input));
 
   /** Posts a message as the caller. See {@link sendMessage} for routing. */
   send = async (channelId: string, input: ChannelSendInput): Promise<ChannelMessageItem> =>
@@ -562,7 +767,7 @@ export class ChannelRepository {
   };
 
   private findDirect = async (
-    tx: Transaction,
+    tx: LobeChatDatabase | Transaction,
     agentId: string,
   ): Promise<ChannelAccess | undefined> => {
     const [row] = await tx

@@ -38,3 +38,20 @@ export const statusFromRound = (
     }
   }
 };
+
+/**
+ * Acceptance states that retiring the task's goal node closes. A retired node's
+ * outcome is discarded, so nothing it is still waiting for — a sign-off, a
+ * first round, or rework after a reject — will come. A round still `verifying`
+ * / `repairing` is left to land; settling then closes it (recomputeStatus).
+ */
+export const ACCEPTANCE_STATUSES_CLOSED_BY_RETIREMENT = [
+  'pending',
+  'planned',
+  'delivered',
+  'errored',
+  'rejected',
+] as const satisfies readonly AcceptanceStatus[];
+
+export const isClosedByRetirement = (status: string): boolean =>
+  (ACCEPTANCE_STATUSES_CLOSED_BY_RETIREMENT as readonly string[]).includes(status);

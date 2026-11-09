@@ -29,6 +29,7 @@ function expected(): Array<
     ['addNode', 'mutation', 13],
     ['advance', 'mutation', 13],
     ['answerClarifications', 'mutation', 13],
+    ['archive', 'mutation', 13],
     ['bindOperationTopic', 'mutation', 8],
     ['bindSubscription', 'mutation', 13],
     ['bindTopic', 'mutation', 13],

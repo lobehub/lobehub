@@ -137,30 +137,35 @@ const isValidWorkingDirEntry = (entry: WorkingDirEntry): boolean =>
 type FolderEntry = { environmentId?: string; path: string; repoType?: 'git' | 'github' };
 
 /** This machine: browse the filesystem via the native Electron folder dialog. */
-const ChooseLocalFolderRow = memo<{ defaultPath?: string; onPick: (entry: FolderEntry) => void }>(
-  ({ defaultPath, onPick }) => {
-    const { t } = useTranslation('device');
-    const handleClick = async () => {
+const ChooseLocalFolderRow = memo<{
+  defaultPath?: string;
+  onPick: (entry: FolderEntry) => void | Promise<void>;
+}>(({ defaultPath, onPick }) => {
+  const { t } = useTranslation('device');
+  const handleClick = async () => {
+    try {
       const result = await electronSystemService.selectFolder({
         defaultPath: defaultPath || undefined,
         title: t('workingDirectory.selectFolder'),
       });
-      if (result) onPick({ path: result.path, repoType: result.repoType });
-    };
-    return (
-      <Flexbox
-        horizontal
-        align={'center'}
-        className={stylex.props(styles.chooseFolderItem).className}
-        gap={8}
-        onClick={handleClick}
-      >
-        <Icon icon={FolderOpenIcon} size={14} />
-        <span>{t('workingDirectory.chooseDifferentFolder')}</span>
-      </Flexbox>
-    );
-  },
-);
+      if (result) await onPick({ path: result.path, repoType: result.repoType });
+    } catch {
+      toast.error(t('workingDirectory.addFolderFailed'));
+    }
+  };
+  return (
+    <Flexbox
+      horizontal
+      align={'center'}
+      className={stylex.props(styles.chooseFolderItem).className}
+      gap={8}
+      onClick={handleClick}
+    >
+      <Icon icon={FolderOpenIcon} size={14} />
+      <span>{t('workingDirectory.chooseDifferentFolder')}</span>
+    </Flexbox>
+  );
+});
 ChooseLocalFolderRow.displayName = 'ChooseLocalFolderRow';
 
 /** Browse the target device through its directory RPC. */
@@ -320,27 +325,32 @@ const WorkingDirectoryPicker = memo<WorkingDirectoryPickerProps>(({ agentId }) =
     setOpen(false);
   };
 
-  const handleRemoveRecent = (e: React.MouseEvent, entry: WorkingDirEntry) => {
+  const handleRemoveRecent = async (e: React.MouseEvent, entry: WorkingDirEntry) => {
     e.stopPropagation();
     if (!targetDeviceId) return;
-    // Both remove and the undo re-add persist the *whole* `workingDirs` array, so
-    // an undo fired before the remove settles would race it — a late-finishing
-    // remove would clobber the re-added entry and the undo would silently fail.
-    // Chain the undo behind the remove promise so the re-add always writes last.
-    const removed = removeDeviceWorkingDir(targetDeviceId, entry.path);
-    toast.success({
-      actions: [
-        {
-          label: t('workingDirectory.undo'),
-          onClick: () =>
-            void removed.then(() => updateDeviceCwd(targetDeviceId, entry, { setDefault: false })),
-          variant: 'text',
-        },
-      ],
-      title: t('workingDirectory.removed', {
-        name: getWorkingDirectoryName(entry.path) ?? entry.path,
-      }),
-    });
+    try {
+      await removeDeviceWorkingDir(targetDeviceId, entry.path);
+      toast.success({
+        actions: [
+          {
+            label: t('workingDirectory.undo'),
+            onClick: async () => {
+              try {
+                await updateDeviceCwd(targetDeviceId, entry, { setDefault: false });
+              } catch {
+                toast.error(t('workingDirectory.addFolderFailed'));
+              }
+            },
+            variant: 'text',
+          },
+        ],
+        title: t('workingDirectory.removed', {
+          name: getWorkingDirectoryName(entry.path) ?? entry.path,
+        }),
+      });
+    } catch {
+      toast.error(t('workingDirectory.removeRecentFailed'));
+    }
   };
 
   const handleToggleDefault = async (
@@ -377,7 +387,9 @@ const WorkingDirectoryPicker = memo<WorkingDirectoryPickerProps>(({ agentId }) =
           stylex.props(stylex.defaultMarker(), styles.dirItem, isActive && styles.dirItemActive)
             .className
         }
-        onClick={() => void pick(entry)}
+        onClick={() =>
+          void pick(entry).catch(() => toast.error(t('workingDirectory.addFolderFailed')))
+        }
       >
         <DirIcon repoType={entry.repoType} />
         <Flexbox flex={1} style={{ minWidth: 0 }}>

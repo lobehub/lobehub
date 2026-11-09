@@ -17,6 +17,9 @@ vi.mock('@/features/HomeSidebar/Body/Agent/List/AgentGroupItem/useDropdownMenu',
     return () => [];
   },
 }));
+vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
+  useWorkspaceAwareNavigate: () => () => {},
+}));
 vi.mock('@/features/Workspace/WorkspaceLink', () => ({
   default: ({ ref, to: _to, ...rest }: { ref?: (el: HTMLElement | null) => void; to: string }) =>
     createElement('a', { ...rest, ref }),

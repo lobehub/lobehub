@@ -298,8 +298,9 @@ export class SkillParser {
   private repackSkillZip(skillMdContent: string, resources: Map<string, Buffer>): Promise<Buffer> {
     return new Promise((resolve, reject) => {
       // Use fixed timestamp (1980-01-01) for deterministic output
-      // ZIP format requires dates in 1980-2099 range
-      const fixedMtime = new Date('1980-01-01T00:00:00Z');
+      // ZIP format requires dates in 1980-2099 range and stores local time, so
+      // build the date in local time: a UTC midnight is still 1979 west of UTC.
+      const fixedMtime = new Date(1980, 0, 1);
 
       // Use Zippable format with fixed mtime for deterministic output
       const files: Record<string, [Uint8Array, { mtime: Date }]> = {
