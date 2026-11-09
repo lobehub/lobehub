@@ -207,3 +207,60 @@ describe('ssrfSafeFetch network boundary', () => {
     expect(requests).toEqual(['/redirect-private']);
   });
 });
+
+/**
+ * Lists may mix IPv4 and IPv6 CIDRs. An entry of the other address family is not a match;
+ * request-filtering-agent 3.2.1 reported it as "Invalid CIDR" on every lookup instead.
+ */
+describe('ssrfSafeFetch allow list with mixed address families', () => {
+  const listen = async (host: string) => {
+    const server = createServer((_req, res) => res.end('ok'));
+    await new Promise<void>((resolve) => server.listen(0, host, resolve));
+    const address = server.address();
+    if (!address || typeof address === 'string') throw new Error('TCP address required');
+    return {
+      close: () => new Promise<void>((resolve) => server.close(() => resolve())),
+      port: address.port,
+    };
+  };
+
+  const invalidCidrWarnings = (warn: { mock: { calls: unknown[][] } }) =>
+    warn.mock.calls.filter(([message]) => String(message).includes('Invalid CIDR'));
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it.each([
+    ['an IPv4 target', '127.0.0.1', '127.0.0.1'],
+    ['an IPv6 target', '::1', '[::1]'],
+  ])('allows %s listed by its own family without warning', async (_label, host, urlHost) => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const server = await listen(host);
+    try {
+      const response = await ssrfSafeFetch(`http://${urlHost}:${server.port}`, undefined, {
+        allowIPAddressList: ['fd00::/8', '127.0.0.0/8', '10.0.0.0/8', '::1/128'],
+      });
+      expect(await response.text()).toBe('ok');
+      expect(invalidCidrWarnings(warn)).toEqual([]);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('still blocks an IPv6 target that only IPv4 entries could have listed', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const server = await listen('::1');
+    try {
+      await expect(
+        ssrfSafeFetch(`http://[::1]:${server.port}`, undefined, {
+          allowIPAddressList: ['10.0.0.0/8', '192.168.0.0/16'],
+        }),
+      ).rejects.toThrow(/^SSRF blocked: /);
+      expect(invalidCidrWarnings(warn)).toEqual([]);
+    } finally {
+      await server.close();
+    }
+  });
+});

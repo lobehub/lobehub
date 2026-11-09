@@ -100,3 +100,4 @@ patchedDependencies:
   '@upstash/qstash': patches/@upstash__qstash.patch
   micromark@4.0.3: patches/micromark@4.0.3.patch
   micromark-extension-gfm-autolink-literal@2.1.0: patches/micromark-extension-gfm-autolink-literal@2.1.0.patch
+  request-filtering-agent@3.2.1: patches/request-filtering-agent@3.2.1.patch

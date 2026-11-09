@@ -1,0 +1,15 @@
+diff --git a/lib/request-filtering-agent.js b/lib/request-filtering-agent.js
+--- a/lib/request-filtering-agent.js
++++ b/lib/request-filtering-agent.js
+@@ -28,6 +28,11 @@
+             // if ipOrCIDR is a CIDR
+             try {
+                 const cidr = ipaddr.parseCIDR(ipOrCIDR);
++                // An entry of the other address family cannot match; ipaddr.match() throws for it,
++                // which was reported as an invalid CIDR on every lookup of a mixed IPv4/IPv6 list.
++                if (cidr[0].kind() !== targetAddress.parsed.kind()) {
++                    continue;
++                }
+                 if (targetAddress.parsed.match(cidr)) {
+                     return true;
+                 }
