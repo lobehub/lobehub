@@ -298,6 +298,17 @@ export const meetingRouter = router({
    */
   refine: meetingWriteProcedure.input(idInput).mutation(async ({ ctx, input }) => {
     try {
+      // Before `startRefine`: that call moves the meeting to `transcribing`, and a job
+      // whose recording is already out of reach would then close it as `failed`, taking
+      // the minutes with it. Refusing here leaves a `ready` meeting ready, so the caller
+      // can retry once the knowledge base is readable again. The worker keeps its own
+      // check for the bytes it actually streams.
+      const current = await ctx.meetingModel.findById(input.id);
+      if (!current) throw notFound();
+      if (current.audioFileId) {
+        await assertFileNotInRestrictedKnowledgeBase(ctx, current.audioFileId);
+      }
+
       const job = await ctx.meetingJobs.startRefine(input.id);
       if (!job) throw notFound();
       return { data: job.meeting, message: 'Refine started', success: true, taskId: job.taskId };
