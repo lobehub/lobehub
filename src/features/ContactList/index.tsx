@@ -1,6 +1,5 @@
 'use client';
 
-import { DEFAULT_AVATAR } from '@lobechat/const';
 import { agentDisplayName, type SidebarAgentItem } from '@lobechat/types';
 import {
   AccordionHeader,
@@ -20,8 +19,8 @@ import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
+import AgentAvatar from '@/components/AgentAvatar';
 import AsyncError from '@/components/AsyncError';
-import Avatar from '@/components/Avatar';
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import AgentGroupAvatar from '@/features/AgentGroupAvatar';
 import { AgentModalProvider } from '@/features/HomeSidebar/Body/Agent/ModalProvider';
@@ -73,12 +72,11 @@ const Contact = memo<{ active: boolean; item: SidebarAgentItem }>(({ active, ite
             size={AVATAR_SIZE}
           />
         ) : (
-          <Avatar
-            emojiScaleWithBackground
-            avatar={customAvatar || DEFAULT_AVATAR}
+          <AgentAvatar
+            agentId={item.id}
+            avatar={customAvatar}
             background={item.backgroundColor || undefined}
             name={title}
-            shape={'square'}
             size={AVATAR_SIZE}
           />
         )

@@ -24,7 +24,6 @@ import { useTranslation } from 'react-i18next';
 
 import AgentAvatar from '@/components/AgentAvatar';
 import ImperativeModal from '@/components/ImperativeModal';
-import { DEFAULT_AVATAR } from '@/const/meta';
 import GroupAvatar from '@/features/GroupAvatar';
 import ModelSelect from '@/features/ModelSelect';
 import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
@@ -123,8 +122,9 @@ const TemplateItem = memo<{
           avatars={template.members
             .filter((member) => member !== null && member !== undefined)
             .map((member) => ({
-              avatar: member.avatar || DEFAULT_AVATAR,
+              avatar: member.avatar || undefined,
               background: member.backgroundColor || undefined,
+              seed: member.title,
             }))}
         />
         <Flexbox flex={1} gap={2}>

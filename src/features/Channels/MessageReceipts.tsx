@@ -17,7 +17,7 @@ import { useOpenReplyAgent } from './useOpenReplyAgent';
 
 export interface ReplyEntry {
   agentId?: string | null;
-  avatar: string;
+  avatar?: string;
   job: ChannelPublicJob;
   name: string;
 }
