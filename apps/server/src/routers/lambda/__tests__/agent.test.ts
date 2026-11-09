@@ -761,7 +761,7 @@ describe('agentRouter', () => {
       expect(agentModelMock.setVisibility).not.toHaveBeenCalled();
     });
 
-    it('rejects promotion of another member agent even for a workspace owner', async () => {
+    it('rejects promotion when resource permission denies access to another member agent', async () => {
       agentModelMock.getAgentVisibilityMeta.mockResolvedValue({
         slug: null,
         userId: 'other-member',
@@ -772,24 +772,6 @@ describe('agentRouter', () => {
       );
 
       const caller = agentRouter.createCaller(wsCtx());
-      await expect(
-        caller.setAgentVisibility({ id: 'agent-1', visibility: 'public' }),
-      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
-      expect(agentModelMock.setVisibility).not.toHaveBeenCalled();
-    });
-
-    it('rejects promotion of another member agent for a plain member', async () => {
-      agentModelMock.getAgentVisibilityMeta.mockResolvedValue({
-        slug: null,
-        userId: 'other-member',
-        visibility: 'private',
-      });
-      vi.mocked(assertCanPerformResourceAction).mockRejectedValueOnce(
-        new TRPCError({ code: 'FORBIDDEN' }),
-      );
-
-      const caller = agentRouter.createCaller(wsCtx());
-
       await expect(
         caller.setAgentVisibility({ id: 'agent-1', visibility: 'public' }),
       ).rejects.toMatchObject({ code: 'FORBIDDEN' });

@@ -10,16 +10,18 @@ const toolCall = (args: string): ChatToolPayload[] =>
   [{ apiName: 'write', arguments: args, id: 'call_1', identifier: 'fs', type: 'default' }] as any;
 
 const createSink = () => {
-  const publishStreamChunk = vi.fn().mockResolvedValue('1-0');
+  let seq = 0;
+  const publishStreamChunk = vi.fn().mockImplementation(async () => `${++seq}-0`);
+  const deleteStreamEvents = vi.fn().mockResolvedValue(undefined);
   const ctx = {
     operationId: 'op-1',
     stepIndex: 0,
-    streamManager: { publishStreamChunk },
+    streamManager: { deleteStreamEvents, publishStreamChunk },
   } as unknown as RuntimeExecutorContext;
 
   const sink = new ServerCallLlmStreamSink({ ctx, events: [], operationLogId: 'op-1:0' });
 
-  return { publishStreamChunk, sink };
+  return { deleteStreamEvents, publishStreamChunk, sink };
 };
 
 /** The payload the Nth `publishStreamChunk` call carried. */
@@ -118,5 +120,68 @@ describe('ServerCallLlmStreamSink tools_calling throttle', () => {
 
     expect(publishStreamChunk).toHaveBeenCalledTimes(2);
     expect(publishedArgs(publishStreamChunk, 1)).toBe('complete');
+  });
+});
+
+// The throttle bounds how OFTEN a snapshot is stored, not how many: a slow model
+// writing a 30 KB tool argument for minutes still stored one ever-growing copy
+// per window, so a single call filled tens of MB of Redis (quadratic in the
+// argument length) until the stream's TTL expired.
+describe('ServerCallLlmStreamSink tools_calling stream retention', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('removes the superseded snapshot once a newer one is stored', async () => {
+    const { deleteStreamEvents, publishStreamChunk, sink } = createSink();
+
+    sink.queueToolsCalling(toolCall('a'));
+    await vi.advanceTimersByTimeAsync(THROTTLE_INTERVAL);
+    expect(deleteStreamEvents).not.toHaveBeenCalled();
+
+    sink.queueToolsCalling(toolCall('ab'));
+    await vi.advanceTimersByTimeAsync(THROTTLE_INTERVAL);
+    sink.queueToolsCalling(toolCall('abc'));
+    await sink.flushToolsCallingBuffer();
+
+    expect(publishStreamChunk).toHaveBeenCalledTimes(3);
+    expect(deleteStreamEvents.mock.calls).toEqual([
+      ['op-1', ['1-0']],
+      ['op-1', ['2-0']],
+    ]);
+  });
+
+  it('keeps the stored snapshot when the newer publish fails', async () => {
+    const { deleteStreamEvents, publishStreamChunk, sink } = createSink();
+
+    sink.queueToolsCalling(toolCall('a'));
+    await vi.advanceTimersByTimeAsync(THROTTLE_INTERVAL);
+
+    publishStreamChunk.mockRejectedValueOnce(new Error('redis down'));
+    sink.queueToolsCalling(toolCall('ab'));
+    await vi.advanceTimersByTimeAsync(THROTTLE_INTERVAL);
+
+    // Nothing newer landed, so '1-0' is still the only replayable snapshot.
+    expect(deleteStreamEvents).not.toHaveBeenCalled();
+
+    await sink.flushToolsCallingBuffer();
+
+    expect(deleteStreamEvents.mock.calls).toEqual([['op-1', ['1-0']]]);
+  });
+
+  it('does not fail the stream when removing a superseded snapshot fails', async () => {
+    const { deleteStreamEvents, publishStreamChunk, sink } = createSink();
+    deleteStreamEvents.mockRejectedValueOnce(new Error('xdel failed'));
+
+    sink.queueToolsCalling(toolCall('a'));
+    await sink.flushToolsCallingBuffer();
+    sink.queueToolsCalling(toolCall('ab'));
+
+    await expect(sink.flushToolsCallingBuffer()).resolves.toBeUndefined();
+    expect(publishStreamChunk).toHaveBeenCalledTimes(2);
   });
 });

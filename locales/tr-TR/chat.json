@@ -47,7 +47,6 @@
   "agentProfile.skills_one": "{{count}} beceri",
   "agentProfile.skills_other": "{{count}} beceri",
   "agentSender.sourceTopic": "Kaynak konu",
-  "agentSignal.receipts.agentSignalLabel": "Ajan Sinyali",
   "agentSignal.receipts.memory.detail": "Bunu gelecekteki yanıtlar için kaydettim",
   "agentSignal.receipts.memory.openInMemory": "Bellekte Aç",
   "agentSignal.receipts.memory.title": "Hafıza kaydedildi",

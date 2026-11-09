@@ -47,3 +47,23 @@ describe('countStats', () => {
     ).toEqual({ failed: 1, passed: 1, total: 4, uncertain: 1 });
   });
 });
+
+/**
+ * Regression: an upheld dispute let the run settle passed while the report still
+ * counted the waived check's failed verdict and persisted a failed report.
+ */
+describe('waived checks in the report rollup', () => {
+  const waived = r({
+    metadata: { dispute: { arbitration: { outcome: 'upheld' }, kind: 'invalid_criterion' } },
+    status: 'failed',
+    verdict: 'failed',
+  });
+
+  it('does not fail the report on a waived check', () => {
+    expect(rollupVerdict([r({}), waived])).toBe('passed');
+  });
+
+  it('leaves a waived check out of the statistics', () => {
+    expect(countStats([r({}), waived])).toEqual({ failed: 0, passed: 1, total: 1, uncertain: 0 });
+  });
+});

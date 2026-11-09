@@ -16,6 +16,7 @@ import {
   notAgentShareFileReference,
 } from '../../../utils/fileVisibility';
 import { normalizeInboxAgentMeta, normalizeInboxAgentTitle } from '../../../utils/inboxAgent';
+import { isUserKnowledgeBase } from '../../../utils/knowledgeBaseType';
 import { searchableMessageText } from '../../../utils/searchableMessage';
 import { notShareVisitorMessage, notShareVisitorTopic } from '../../../utils/shareVisitor';
 import { notChannelTopic, notChannelTopicRef } from '../../../utils/topicVisibility';
@@ -557,6 +558,7 @@ export async function searchKnowledgeBases(
     .where(
       and(
         context.scanScopeWhere(knowledgeBases),
+        isUserKnowledgeBase(),
         context.liftsExclusionFilter ? undefined : excludeIdsWhere(knowledgeBases.id),
         dialect.match(KNOWLEDGE_BASE_FIELDS, preparedQuery),
       ),

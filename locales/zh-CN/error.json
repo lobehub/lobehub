@@ -1,6 +1,8 @@
 {
   "asyncState.desc": "加载时出了点问题，请重试。",
+  "asyncState.hideDetails": "收起详情",
   "asyncState.metricLabel": "加载失败",
+  "asyncState.showDetails": "查看详情",
   "asyncState.title": "加载失败",
   "chatRequestBlocked.contactSupport": "联系客服",
   "chatRequestBlocked.description": "此请求被安全检查拦截。如果你认为这是误判，请联系客服申请解封。",

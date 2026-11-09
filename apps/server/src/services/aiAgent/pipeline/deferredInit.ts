@@ -13,6 +13,7 @@ import type { ExecRunContext } from '../types';
 import { type OperationInitDeps, runOperationInit } from './operationInit';
 import { resolveOperationInitSlots } from './operationInitSlots';
 import { createHistoryMessagesLoader } from './operationPrep';
+import { traceSendStage } from './sendTracing';
 
 const log = debug('lobe-server:ai-agent-service');
 
@@ -182,19 +183,21 @@ export const runDeferredOperationInit = async (
     },
   );
 
-  const { discovery, initialContext, prep } = await runOperationInit(
-    {
-      ...deps,
-      getMarketService: () => deps.getMarketService(ctx.runFacts),
-      loadHistoryMessages,
-      readFileContent: (fileId) => deps.readFileContent(fileId, ctx.shareGate),
-      // A Stop during the init is settled by the step once the init returns
-      // (`runPendingInit`), so the stages need no abort probe of their own.
-      throwIfExecutionAborted: async () => {},
-    },
-    ctx,
-    request,
-    operationId,
+  const { discovery, initialContext, prep } = await traceSendStage('operation_init', () =>
+    runOperationInit(
+      {
+        ...deps,
+        getMarketService: () => deps.getMarketService(ctx.runFacts),
+        loadHistoryMessages,
+        readFileContent: (fileId) => deps.readFileContent(fileId, ctx.shareGate),
+        // A Stop during the init is settled by the step once the init returns
+        // (`runPendingInit`), so the stages need no abort probe of their own.
+        throwIfExecutionAborted: async () => {},
+      },
+      ctx,
+      request,
+      operationId,
+    ),
   );
 
   const slots = await resolveOperationInitSlots({ discovery, initialContext, prep });

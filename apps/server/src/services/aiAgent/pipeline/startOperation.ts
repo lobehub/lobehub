@@ -9,7 +9,8 @@ import { isAbortError } from '@/server/services/agentRuntime/abort';
 
 import type { ExecRunContext, InternalExecAgentParams } from '../types';
 import type { ApprovalClaimState } from './approvalResume';
-import { resolveOperationInitSlots } from './operationInitSlots';
+import type { OperationInitRequest } from './operationInit';
+import { buildPendingInitSlots, resolveOperationInitSlots } from './operationInitSlots';
 import type { OperationPrepResult } from './operationPrep';
 import { traceStartStage } from './sendTracing';
 import type { ToolDiscoveryResult } from './toolDiscovery';
@@ -25,6 +26,16 @@ export interface StartOperationDeps {
   withholdGatewayToken: boolean;
   workspaceId?: string;
 }
+
+/** What the init produced, or the request the step-0 worker will run it from. */
+export type StartOperationInit =
+  | {
+      discovery: ToolDiscoveryResult;
+      /** Final runtime context — base prep context with 16b/16c overrides applied. */
+      initialContext: OperationPrepResult['initialContext'];
+      prep: OperationPrepResult;
+    }
+  | { pendingRequest: OperationInitRequest };
 
 export interface StartOperationInput {
   /** See {@link InternalExecAgentParams.acceptsFileWorks}. */
@@ -43,14 +54,12 @@ export interface StartOperationInput {
   /** Tri-state disabled plugin identifiers, kept on the world slot for the context rules. */
   disabledPluginIds?: string[];
   discordContext?: any;
-  discovery: ToolDiscoveryResult;
   enableExpertise: boolean;
   evalContext?: InternalExecAgentParams['evalContext'];
   evalRuntime?: InternalExecAgentParams['evalRuntime'];
   hooks?: InternalExecAgentParams['hooks'];
   includeFinalState?: boolean;
-  /** Final runtime context — base prep context with 16b/16c overrides applied. */
-  initialContext: OperationPrepResult['initialContext'];
+  init: StartOperationInit;
   initialLlmCalls?: number;
   initialStepCount?: number;
   /** Relay executor the calling client declared; lands on `state.host.llmExecutor`. */
@@ -66,7 +75,6 @@ export interface StartOperationInput {
   operationId: string;
   operationTaskId?: string;
   parentOperationId?: string;
-  prep: OperationPrepResult;
   providedApprovalResolutionRequestId?: string;
   queueRetries?: number;
   queueRetryDelay?: string;
@@ -123,19 +131,17 @@ export const startOperation = async (
     clientIp,
     disabledPluginIds,
     discordContext,
-    discovery,
     enableExpertise,
     evalContext,
     evalRuntime,
     hooks,
-    initialContext,
+    init,
     initialLlmCalls,
     initialStepCount,
     maxSteps,
     operationId,
     operationTaskId,
     parentOperationId,
-    prep,
     providedApprovalResolutionRequestId,
     queueRetries,
     queueRetryDelay,
@@ -155,14 +161,8 @@ export const startOperation = async (
     (appContext?.scope === 'group_agent_builder' ? appContext.editingGroupId : undefined) ||
     topicEditingGroupId;
 
-  log(
-    'execAgent: creating operation %s — agentDocuments=%d, knowledgeBases=%s, tools=%d, skills=%d',
-    operationId,
-    discovery.hasAgentDocuments ? 'yes' : 0,
-    discovery.hasEnabledKnowledgeBases,
-    discovery.tools?.length ?? 0,
-    prep.operationSkillSet?.skills?.length ?? 0,
-  );
+  const pendingInitRequest = 'pendingRequest' in init ? init.pendingRequest : undefined;
+  log('execAgent: creating operation %s (deferred init: %s)', operationId, !!pendingInitRequest);
 
   // Wrap in try-catch to handle operation startup failures (e.g., QStash unavailable)
   // If createOperation fails, we still have valid messages that need error info
@@ -199,13 +199,17 @@ export const startOperation = async (
     const inheritedEditingGroupId = approvalSourceOperationId
       ? await deps.agentRuntimeService.getOperationEditingGroupId(approvalSourceOperationId)
       : undefined;
-    const { modelCapabilities, ...initSlots } = await resolveOperationInitSlots({
-      discovery,
-      initialContext,
-      prep,
-    });
+    const { modelCapabilities, ...initSlots } =
+      'pendingRequest' in init
+        ? buildPendingInitSlots({
+            assistantMessageId,
+            operationId,
+            parentMessageId: userMessageId ?? parentMessageId ?? '',
+          })
+        : await resolveOperationInitSlots(init);
     const result = await deps.agentRuntimeService.createOperation({
       ...initSlots,
+      pendingInitRequest,
       acceptsFileWorks: fileWorksAccepted,
       acceptsMemberRuntimeEnd: memberRuntimeEndAccepted,
       clientProtocol: input.clientProtocol,

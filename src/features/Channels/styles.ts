@@ -64,6 +64,8 @@ export const styles = stylex.create({
     },
   },
   highlightedMessage: { backgroundColor: cssVar.colorInfoBg },
+  /** A message still on its way shows faded instead of carrying a status line. */
+  pendingMessage: { opacity: 0.6 },
   messageAvatar: {
     position: 'absolute',
     insetBlockStart: 8,
@@ -280,9 +282,28 @@ export const statusStyles = stylex.create({
   memberButton: {
     flex: 'none',
     gap: 4,
-    height: 32,
+    height: 28,
     paddingBlock: 4,
     paddingInline: 4,
+  },
+  memberStack: {
+    display: 'inline-flex',
+    alignItems: 'center',
+  },
+  memberStackItem: {
+    position: 'relative',
+    display: 'inline-flex',
+    flex: 'none',
+    marginInlineStart: { 'default': -6, ':first-child': 0 },
+    borderRadius: '50%',
+    outlineWidth: 2,
+    outlineStyle: 'solid',
+    outlineColor: cssVar.colorBgContainer,
+    // Emoji avatars are transparent; without a fill the neighbour shows through.
+    backgroundColor: cssVar.colorBgContainer,
+  },
+  memberWorking: {
+    color: cssVar.colorWarning,
   },
   memberAvatar: {
     position: 'relative',
@@ -331,6 +352,14 @@ export const activityStyles = stylex.create({
     height: 24,
     paddingInline: 4,
     color: cssVar.colorTextSecondary,
+  },
+  /** Beside the Agent's name in a direct conversation's header. */
+  header: {
+    color: cssVar.colorTextDescription,
+  },
+  headerButton: {
+    height: 22,
+    paddingInline: 4,
   },
   avatars: {
     display: 'inline-flex',
