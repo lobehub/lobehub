@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildAgentProfileTabOptions, buildAgentProfileTabPath } from './tabOptions';
+import {
+  buildAgentProfileTabOptions,
+  buildAgentProfileTabPath,
+  getAgentProfileTab,
+} from './tabOptions';
 
 const labels = {
   channel: 'tab.integration',
@@ -13,6 +17,24 @@ describe('buildAgentProfileTabPath', () => {
   it('builds the sub-route of the agent', () => {
     expect(buildAgentProfileTabPath('agt_1', 'statistics')).toBe('/agent/agt_1/statistics');
   });
+});
+
+describe('getAgentProfileTab', () => {
+  it.each([
+    ['/agent/agt_1/profile', 'profile'],
+    ['/agent/agt_1/channel/slack', 'channel'],
+    ['/acme/agent/agt_1/statistics/', 'statistics'],
+    ['/_dangerous_local_dev_proxy/acme/agent/agt_1/share', 'share'],
+  ])('maps %s to its tab', (pathname, tab) => {
+    expect(getAgentProfileTab(pathname)).toBe(tab);
+  });
+
+  it.each(['/agent/agt_1', '/agent/agt_1/tpc_1', '/agent/agt_1/share/extra', '/settings/profile'])(
+    'leaves %s outside the group',
+    (pathname) => {
+      expect(getAgentProfileTab(pathname)).toBeUndefined();
+    },
+  );
 });
 
 describe('buildAgentProfileTabOptions', () => {

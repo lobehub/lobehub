@@ -8,6 +8,7 @@ describe('isAgentProfileRoute', () => {
     '/agent/agt_1/channel',
     '/agent/agt_1/channel/slack',
     '/agent/agt_1/statistics',
+    '/agent/agt_1/share',
     '/acme/agent/agt_1/profile',
     '/acme/agent/agt_1/channel/slack',
     '/acme/agent/agt_1/statistics/',

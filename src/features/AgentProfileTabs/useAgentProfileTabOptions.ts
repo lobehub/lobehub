@@ -1,0 +1,45 @@
+import { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import { useAgentShareSupported } from '@/business/client/useAgentShareSupported';
+import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
+import { usePermission } from '@/hooks/usePermission';
+import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
+
+import { type AgentProfileTab, buildAgentProfileTabOptions } from './tabOptions';
+
+/** The profile-group entries this member may open, for any switcher of the group. */
+export const useAgentProfileTabOptions = (active: AgentProfileTab, agentId: string) => {
+  const { t } = useTranslation(['chat', 'common', 'spend']);
+
+  const { allowed: canEditContent } = usePermission('edit_own_content');
+  const { canEditResource, canManageResource, isAccessResolved } = useResourceAccess(
+    'agent',
+    agentId,
+  );
+  const { isAgentEditable } = useServerConfigStore(featureFlagsSelectors);
+
+  const canConfigure = !!isAgentEditable && isAccessResolved && canEditContent && canEditResource;
+  const canManageShare =
+    !!isAgentEditable && isAccessResolved && canEditContent && canManageResource;
+  const { visible: shareVisible } = useAgentShareSupported(agentId);
+
+  return useMemo(
+    () =>
+      buildAgentProfileTabOptions({
+        active,
+        canConfigure,
+        labels: {
+          channel: t('tab.integration'),
+          // Inside the profile group the whole surface *is* the agent profile,
+          // so the first entry is the "basic" tab, not "Agent Profile" again —
+          // that broader name stays on the sidebar entry that opens the group.
+          profile: t('tab.profileBasic'),
+          share: t('share', { ns: 'common' }),
+          statistics: t('usageStats.title', { ns: 'spend' }),
+        },
+        shareSupported: shareVisible === true && canManageShare,
+      }),
+    [active, canConfigure, canManageShare, shareVisible, t],
+  );
+};

@@ -1967,6 +1967,7 @@ export default {
   'supervisor.todoList.allComplete': 'All tasks completed',
   'supervisor.todoList.title': 'Tasks Completed',
   'tab.groupProfile': 'Group Profile',
+  'tab.backToChat': 'Back to chat',
   'tab.integration': 'IM Bots',
   'tab.profile': 'Agent Profile',
   'tab.profileBasic': 'Profile',
