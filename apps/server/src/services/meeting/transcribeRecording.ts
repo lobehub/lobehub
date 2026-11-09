@@ -1,4 +1,5 @@
 import type { ASRKnownSpeaker, ASRPayload, ASRResponse, ASRSegment } from '@lobechat/model-runtime';
+import pMap from 'p-map';
 
 import { MeetingTranscriptionError } from './errors';
 import type { AudioChunk, PcmAudio } from './wav';
@@ -52,23 +53,6 @@ interface ChunkResult {
 }
 
 /** Run `task` over `items` with at most `limit` in flight, keeping input order. */
-const mapWithLimit = async <T, R>(
-  items: T[],
-  limit: number,
-  task: (item: T, index: number) => Promise<R>,
-): Promise<R[]> => {
-  const results: R[] = Array.from({ length: items.length });
-  let next = 0;
-  const worker = async () => {
-    while (next < items.length) {
-      const index = next++;
-      results[index] = await task(items[index], index);
-    }
-  };
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
-  return results;
-};
-
 /**
  * Pick one clean sample per speaker of the first chunk, so later chunks label
  * the same voices with the same names instead of restarting at `A`.
@@ -224,15 +208,19 @@ export const transcribeRecording = async ({
     diarize && chunks.length > 1 ? pickKnownSpeakers(audio, first, firstLabelOf) : [];
   const knownNames = new Set(knownSpeakers.map((speaker) => speaker.name));
 
-  const rest = await mapWithLimit(chunks.slice(1), PARALLEL_CHUNKS, async (chunk, index) => {
-    const response = await sendChunk(
-      chunk,
-      index + 1,
-      knownSpeakers.length > 0 ? { knownSpeakers } : {},
-    );
-    report();
-    return { chunk, response } satisfies ChunkResult;
-  });
+  const rest = await pMap(
+    chunks.slice(1),
+    async (chunk, index) => {
+      const response = await sendChunk(
+        chunk,
+        index + 1,
+        knownSpeakers.length > 0 ? { knownSpeakers } : {},
+      );
+      report();
+      return { chunk, response } satisfies ChunkResult;
+    },
+    { concurrency: PARALLEL_CHUNKS },
+  );
 
   const segments = toSegments(first, audio.sampleRate, firstLabelOf);
   for (const result of rest) {

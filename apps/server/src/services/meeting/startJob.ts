@@ -1,4 +1,4 @@
-import type { MeetingJobMetadata } from '@lobechat/types';
+import type { MeetingJobMetadata, MeetingStatus } from '@lobechat/types';
 import {
   AsyncTaskError,
   AsyncTaskErrorType,
@@ -9,7 +9,6 @@ import { TRPCClientError } from '@trpc/client';
 
 import { AsyncTaskModel } from '@/database/models/asyncTask';
 import { MeetingModel } from '@/database/models/meeting';
-import type { MeetingItem } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { createAsyncCaller } from '@/server/routers/async';
 import { after } from '@/server/utils/scheduleAfterResponse';
@@ -63,7 +62,7 @@ export class MeetingJobService {
    * A worker killed by its host cannot report anything, so a reader polling the
    * meeting closes the job once it is stale. Returns the meeting when it changed.
    */
-  async expireStaleJob(meeting: Pick<MeetingItem, 'id' | 'status' | 'userId'>) {
+  async expireStaleJob(meeting: { id: string; status: MeetingStatus; userId: string }) {
     if (meeting.userId !== this.userId) return undefined;
     if (meeting.status !== 'transcribing' && meeting.status !== 'summarizing') return undefined;
 
@@ -91,10 +90,10 @@ export class MeetingJobService {
     });
   }
 
-  private async start(
+  private async start<T>(
     type: AsyncTaskType,
     meetingId: string,
-    begin: () => Promise<MeetingItem | undefined>,
+    begin: () => Promise<T | undefined>,
   ) {
     // First, so a caller who may not manage the meeting learns nothing about its jobs.
     const meeting = await begin();

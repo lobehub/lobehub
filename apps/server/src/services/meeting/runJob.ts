@@ -1,8 +1,8 @@
+import type { MeetingError, MeetingStatus } from '@lobechat/types';
 import { AsyncTaskError, AsyncTaskErrorType, AsyncTaskStatus } from '@lobechat/types';
 
 import { AsyncTaskModel } from '@/database/models/asyncTask';
 import { MeetingModel } from '@/database/models/meeting';
-import type { MeetingItem } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 
 import { toMeetingErrorMessage } from './errors';
@@ -21,7 +21,7 @@ export interface MeetingJobInput {
  */
 export const failMeetingStage = async (
   meetingModel: MeetingModel,
-  meeting: Pick<MeetingItem, 'id' | 'status'>,
+  meeting: { id: string; status: MeetingStatus },
   message: string,
 ) => {
   try {
@@ -50,7 +50,7 @@ const runJob = async (
   db: LobeChatDatabase,
   userId: string,
   { meetingId, taskId, workspaceId }: MeetingJobInput,
-  work: () => Promise<Pick<MeetingItem, 'error'> | undefined>,
+  work: () => Promise<{ error: MeetingError | null } | undefined>,
 ) => {
   const asyncTaskModel = new AsyncTaskModel(db, userId, workspaceId);
   const task = await asyncTaskModel.findById(taskId);
