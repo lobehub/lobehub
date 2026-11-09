@@ -337,8 +337,8 @@ export default {
     'Changes cannot be saved while the page is over the limit. Shorten the page or upgrade your plan.',
   'pageEditor.chooseIcon': 'Choose Icon',
   'pageEditor.collab.deleted.description':
-    'It can no longer be edited. Return to the page list to keep working.',
-  'pageEditor.collab.deleted.title': 'This page has been deleted',
+    'It was deleted or moved out of this workspace. Return to the page list to keep working.',
+  'pageEditor.collab.deleted.title': 'This page is no longer available here',
   'pageEditor.collab.notSynced':
     'Your latest page edits are still syncing, so the Agent may not see them yet.',
   'pageEditor.collab.offlineRestore.content':

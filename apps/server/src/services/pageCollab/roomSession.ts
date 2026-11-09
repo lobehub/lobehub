@@ -18,6 +18,7 @@ import {
   PageRoomConflictError,
   type PageRoomState,
 } from './roomClient';
+import { emptyEditorData } from './seed';
 import {
   historyAttributionOf,
   type PageSession,
@@ -151,10 +152,7 @@ export class RoomPageSessions implements PageSessions {
     const row = await this.documentService.getDocumentById(documentId);
     if (!row) throw new Error(`Page document not found: ${documentId}`);
 
-    const editorData = editorDataFromRow(row);
-    if (!editorData) return;
-
-    const seed = await openPageFork(undefined, editorData);
+    const seed = await openPageFork(undefined, editorDataFromRow(row) ?? emptyEditorData());
     if (row.title) seed.doc.getMap(PAGE_META_KEY).set('title', row.title);
     try {
       await room.pushUpdate(documentId, seed.diff(), { actor: 'bootstrap', bootstrap: true });

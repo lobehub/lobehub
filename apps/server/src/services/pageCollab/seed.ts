@@ -20,7 +20,7 @@ export interface PageRoomStatus {
 
 // The room asks for its seed once, so it is the only tree the page ever has;
 // an empty page still needs a root, or the next writer would create a second one.
-const emptyEditorData = (): SerializedEditor =>
+export const emptyEditorData = (): SerializedEditor =>
   ({
     root: {
       children: [
