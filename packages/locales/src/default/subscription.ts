@@ -687,6 +687,7 @@ export default {
   'plans.payonce.ok': 'Confirm selection',
   'plans.payonce.popconfirm':
     'After one-time payment, you can upgrade anytime, but downgrade requires waiting for expiration. Storage pay-as-you-go is not supported. Please confirm your selection.',
+  'plans.payonce.switchDuration': 'Switch to {{duration}}',
   'plans.payonce.tooltip':
     'One-time payment only supports upgrading to a higher tier or longer duration',
   'plans.payonce.upgradeCheckoutCredit':
@@ -698,6 +699,7 @@ export default {
     "Couldn't load your upgrade price. Checkout shows the final amount",
   'plans.payonce.upgradeHint.fullPrice': 'Full price. Replaces your current plan',
   'plans.payonce.upgradeHint.noProration': "Days left on your current plan aren't credited",
+  'plans.payonce.upgradeToYearly': 'Upgrade to yearly',
   'plans.plan.enterprise.contactSales': 'Contact sales',
   'plans.plan.enterprise.title': 'Enterprise',
   'plans.plan.free.desc': 'For first-time users',
