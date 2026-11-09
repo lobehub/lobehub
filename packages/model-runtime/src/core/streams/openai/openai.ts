@@ -73,6 +73,45 @@ const processMarkdownBase64Images = (text: string): { cleanedText: string; urls:
   return { cleanedText, urls };
 };
 
+// Reads the reasoning slice of a delta across the provider-specific field names
+const extractDeltaReasoning = (delta: OpenAI.ChatCompletionChunk.Choice.Delta): any => {
+  if ('reasoning_content' in delta) return delta.reasoning_content;
+  // Handle Github Copilot's reasoning format
+  if ('reasoning_text' in delta) return (delta as any).reasoning_text;
+  if ('reasoning' in delta) return delta.reasoning;
+  // Handle MiniMax M2 reasoning_details format (array of objects with text field)
+  if ('reasoning_details' in delta) {
+    const details = delta.reasoning_details;
+    if (Array.isArray(details)) {
+      return details
+        .filter((detail: any) => detail.text)
+        .map((detail: any) => detail.text)
+        .join('');
+    }
+    if (typeof details === 'string') {
+      return details;
+    }
+    if (typeof details === 'object' && details !== null && 'text' in details) {
+      return details.text;
+    }
+    // Fallback for unexpected types
+    return '';
+  }
+  // Handle content array format with thinking blocks (e.g. mistral AI Magistral model)
+  if ('content' in delta && Array.isArray(delta.content)) {
+    return delta.content
+      .filter((block: any) => block.type === 'thinking' && Array.isArray(block.thinking))
+      .map((block: any) =>
+        block.thinking
+          .filter((thinkItem: any) => thinkItem.type === 'text' && thinkItem.text)
+          .map((thinkItem: any) => thinkItem.text)
+          .join(''),
+      )
+      .join('');
+  }
+  return null;
+};
+
 const createContentFilterStreamError = (
   chunk: OpenAI.ChatCompletionChunk,
   finishReason: string,
@@ -200,7 +239,37 @@ const transformOpenAIStream = (
           throw new Error('Invalid tool call: function is null');
         }
 
-        return {
+        // A provider that batches several tokens into one SSE frame can put the tail of the
+        // reasoning and/or the head of the answer in the same delta as the first tool call.
+        // Emit them before the tool call in provider order (reasoning -> text -> tool_calls)
+        // instead of dropping them. The non-tool part runs through this same transformer so
+        // <think> splitting, citations and reasoning field variants behave as in any other
+        // frame; finish_reason and usage stay out of it, as they did before for this branch.
+        const leadingChunks: StreamProtocolChunk[] = [];
+        const reasoning = extractDeltaReasoning(item.delta);
+        const content = item.delta.content;
+        if (
+          (typeof reasoning === 'string' && reasoning) ||
+          (typeof content === 'string' && content)
+        ) {
+          const { tool_calls: _toolCalls, ...deltaWithoutTools } = item.delta;
+          const frameIndex = streamContext.chunkIndex;
+          // the nested call advances chunkIndex again; keep the frame counted once
+          streamContext.chunkIndex = frameIndex - 1;
+          const leading = transformOpenAIStream(
+            {
+              ...chunk,
+              choices: [{ ...item, delta: deltaWithoutTools, finish_reason: null }],
+              usage: undefined,
+            },
+            streamContext,
+            payload,
+          );
+          streamContext.chunkIndex = frameIndex;
+          leadingChunks.push(...(Array.isArray(leading) ? leading : [leading]));
+        }
+
+        const toolCallsChunk = {
           data: item.delta.tool_calls.map((value, mapIndex): StreamToolCallChunkData => {
             // Determine the actual tool index
             const toolIndex = typeof value.index !== 'undefined' ? value.index : mapIndex;
@@ -263,6 +332,8 @@ const transformOpenAIStream = (
           id: chunk.id,
           type: 'tool_calls',
         } as StreamProtocolToolCallChunk;
+
+        return leadingChunks.length > 0 ? [...leadingChunks, toolCallsChunk] : toolCallsChunk;
       }
     }
 
@@ -472,43 +543,7 @@ const transformOpenAIStream = (
     }
 
     if (item.delta) {
-      let reasoning_content = (() => {
-        if ('reasoning_content' in item.delta) return item.delta.reasoning_content;
-        // Handle Github Copilot's reasoning format
-        if ('reasoning_text' in item.delta) return (item.delta as any).reasoning_text;
-        if ('reasoning' in item.delta) return item.delta.reasoning;
-        // Handle MiniMax M2 reasoning_details format (array of objects with text field)
-        if ('reasoning_details' in item.delta) {
-          const details = item.delta.reasoning_details;
-          if (Array.isArray(details)) {
-            return details
-              .filter((detail: any) => detail.text)
-              .map((detail: any) => detail.text)
-              .join('');
-          }
-          if (typeof details === 'string') {
-            return details;
-          }
-          if (typeof details === 'object' && details !== null && 'text' in details) {
-            return details.text;
-          }
-          // Fallback for unexpected types
-          return '';
-        }
-        // Handle content array format with thinking blocks (e.g. mistral AI Magistral model)
-        if ('content' in item.delta && Array.isArray(item.delta.content)) {
-          return item.delta.content
-            .filter((block: any) => block.type === 'thinking' && Array.isArray(block.thinking))
-            .map((block: any) =>
-              block.thinking
-                .filter((thinkItem: any) => thinkItem.type === 'text' && thinkItem.text)
-                .map((thinkItem: any) => thinkItem.text)
-                .join(''),
-            )
-            .join('');
-        }
-        return null;
-      })();
+      let reasoning_content = extractDeltaReasoning(item.delta);
 
       let content = 'content' in item.delta ? item.delta.content : null;
 
