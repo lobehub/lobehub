@@ -65,10 +65,6 @@ vi.mock('@/database/models/document', () => ({
     return {};
   }),
 }));
-// The pinned plan model is runnable here; its fallback is covered in planModelConfig.test.ts.
-vi.mock('@/server/modules/ModelRuntime', () => ({
-  initModelRuntimeFromDB: vi.fn(async () => ({})),
-}));
 vi.mock('@/server/services/aiGeneration', () => ({
   AiGenerationService: vi.fn(function () {
     return { generateObject: generateObjectMock };
@@ -209,6 +205,22 @@ describe('verify plan generation model', () => {
       expect.objectContaining(VERIFY_PLAN_MODEL_CONFIG),
       expect.any(Object),
     );
+  });
+
+  it('falls back to the verify service model when the pinned provider has no key', async () => {
+    generateObjectMock
+      .mockRejectedValueOnce({ errorType: 'InvalidProviderAPIKey', provider: 'deepseek' })
+      .mockResolvedValueOnce({ criteria: [] });
+    getUserSettingsMock.mockResolvedValue({
+      systemAgent: { verify: { model: 'gpt-4o', provider: 'openai' } },
+    });
+
+    await new VerifyPlanGeneratorService(db, 'user-1').generateCriteria({ goal: 'Ship it' });
+
+    expect(generateObjectMock.mock.calls.map(([input]) => [input.provider, input.model])).toEqual([
+      [VERIFY_PLAN_MODEL_CONFIG.provider, VERIFY_PLAN_MODEL_CONFIG.model],
+      ['openai', 'gpt-4o'],
+    ]);
   });
 
   /**

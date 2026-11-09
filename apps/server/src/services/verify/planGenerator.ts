@@ -20,7 +20,7 @@ import type { VerifyCriterionItem } from '@/database/schemas/verify';
 import type { LobeChatDatabase } from '@/database/type';
 import { AiGenerationService } from '@/server/services/aiGeneration';
 
-import { resolveVerifyPlanModelConfig } from './planModelConfig';
+import { runOnVerifyPlanModel } from './planModelConfig';
 import { resolveVerifyResponseLanguage } from './responseLanguage';
 import { RawGeneratedCriteriaSchema } from './schema';
 
@@ -134,7 +134,6 @@ const criterionToCheckItem = (
 export class VerifyPlanGeneratorService {
   private readonly db: LobeChatDatabase;
   private readonly userId: string;
-  private readonly workspaceId?: string;
   private readonly criterionModel: VerifyCriterionModel;
   private readonly rubricModel: VerifyRubricModel;
   private readonly runModel: VerifyRunModel;
@@ -155,7 +154,6 @@ export class VerifyPlanGeneratorService {
   ) {
     this.db = db;
     this.userId = userId;
-    this.workspaceId = workspaceId;
     this.callerAgentVisibility = callerAgentVisibility;
     this.criterionModel = new VerifyCriterionModel(db, userId, workspaceId);
     this.rubricModel = new VerifyRubricModel(db, userId, workspaceId);
@@ -176,26 +174,30 @@ export class VerifyPlanGeneratorService {
     maxCriteria?: number;
   }): Promise<CriterionDraft[]> {
     const maxCriteria = params.maxCriteria ?? DEFAULT_MAX_AI_CRITERIA;
-    const raw = await new AiGenerationService(this.db, this.userId).generateObject(
-      {
-        ...chainVerifyPlan({
-          context: params.context,
-          goal: params.goal,
-          language: await resolveVerifyResponseLanguage(this.db, this.userId),
-          maxCriteria,
-        }),
-        ...(await resolveVerifyPlanModelConfig(this.db, this.userId, this.workspaceId)),
-        schema: GENERATED_CRITERIA_JSON_SCHEMA,
-        thinking: { type: 'disabled' },
-      },
-      {
-        metadata: { trigger: RequestTrigger.Verify },
-        tracing: {
-          promptVersion: VERIFY_PLAN_PROMPT_VERSION,
-          scenario: TRACING_SCENARIOS.VerifyPlanGen,
-          schemaName: GENERATED_CRITERIA_JSON_SCHEMA.name,
-        } satisfies TracingOptions,
-      },
+    const chain = chainVerifyPlan({
+      context: params.context,
+      goal: params.goal,
+      language: await resolveVerifyResponseLanguage(this.db, this.userId),
+      maxCriteria,
+    });
+    const ai = new AiGenerationService(this.db, this.userId);
+    const raw = await runOnVerifyPlanModel(this.db, this.userId, (modelConfig) =>
+      ai.generateObject(
+        {
+          ...chain,
+          ...modelConfig,
+          schema: GENERATED_CRITERIA_JSON_SCHEMA,
+          thinking: { type: 'disabled' },
+        },
+        {
+          metadata: { trigger: RequestTrigger.Verify },
+          tracing: {
+            promptVersion: VERIFY_PLAN_PROMPT_VERSION,
+            scenario: TRACING_SCENARIOS.VerifyPlanGen,
+            schemaName: GENERATED_CRITERIA_JSON_SCHEMA.name,
+          } satisfies TracingOptions,
+        },
+      ),
     );
 
     const parsed = RawGeneratedCriteriaSchema.safeParse(raw);
@@ -336,21 +338,23 @@ export class VerifyPlanGeneratorService {
     });
 
     const ai = new AiGenerationService(this.db, this.userId);
-    const raw = await ai.generateObject(
-      {
-        ...chain,
-        ...(await resolveVerifyPlanModelConfig(this.db, this.userId, this.workspaceId)),
-        schema: GENERATED_CRITERIA_JSON_SCHEMA,
-        thinking: { type: 'disabled' },
-      },
-      {
-        metadata: { trigger: RequestTrigger.Verify },
-        tracing: {
-          promptVersion: VERIFY_PLAN_PROMPT_VERSION,
-          scenario: TRACING_SCENARIOS.VerifyPlanGen,
-          schemaName: GENERATED_CRITERIA_JSON_SCHEMA.name,
-        } satisfies TracingOptions,
-      },
+    const raw = await runOnVerifyPlanModel(this.db, this.userId, (modelConfig) =>
+      ai.generateObject(
+        {
+          ...chain,
+          ...modelConfig,
+          schema: GENERATED_CRITERIA_JSON_SCHEMA,
+          thinking: { type: 'disabled' },
+        },
+        {
+          metadata: { trigger: RequestTrigger.Verify },
+          tracing: {
+            promptVersion: VERIFY_PLAN_PROMPT_VERSION,
+            scenario: TRACING_SCENARIOS.VerifyPlanGen,
+            schemaName: GENERATED_CRITERIA_JSON_SCHEMA.name,
+          } satisfies TracingOptions,
+        },
+      ),
     );
 
     const parsed = RawGeneratedCriteriaSchema.safeParse(raw);
