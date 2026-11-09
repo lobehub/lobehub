@@ -25,7 +25,7 @@ The panel itself is for browsing, filtering, and bulk actions. Per-topic actions
 ### Browse and Filter
 
 - **Status tabs** — **All / Active / Running / Archived** at the top show a count for each group. Click a tab to switch.
-- **Filters** — Click **Add filter** to add a filter, for example **Time** to show topics from a given period.
+- **Filters** — Narrow the list with filters such as **Trigger: Chat**, and click **Add filter** to add more, for example **Time** to show topics from a given period.
 - **Search** — Use the search box in the top-right to search the current Agent's topics.
 - **View** — Switch between **Card** and **List** views. The card view shows the title, a preview of the first message, message count, last update, and status. The list view shows the title, project, status, source, and update time.
 - **Sort** — Use **Sort** to order topics by update time, creation time, or title.
@@ -68,18 +68,11 @@ Available actions depend on the topic's state, your client, and your permissions
 
 ## Search and Organize Topics
 
-Open search in the topic list and enter a keyword to find a previous conversation.
+On the Agent's conversation page, click **Topics** in the left sidebar to open the Topics page, then enter a keyword in the **Search Topics** box in the top-right corner to find a previous conversation.
 
-![Search Topics in Conversation](/blog/assets3cdf933016e6f53bca12b8cedb17061f.webp)
+![Search Topics](/docs-images/usage/agent/topic-search.png)
 
-Use the list's organization and filter controls to choose a grouping mode:
-
-- **By status** — Group topics by states such as running, waiting for input, failed, and archived.
-- **By time** — Group topics into periods such as today, yesterday, this week, and this month.
-- **By project** — Group topics by their project or directory, with a separate group for those without one.
-- **Flat** — Show topics in one list without grouping.
-
-You can also sort by creation or update time and use **Show Archived** to control whether archived topics appear.
+To filter by status, trigger, or time, or to change the view and sort order, see "Browse and Filter" above.
 
 ### Archive
 
@@ -89,7 +82,9 @@ Choose **Archive** for a topic you want to keep but no longer need to see regula
 
 Choose **Favorite** to mark an important or frequently used topic for quick access in the favorites area. Choose **Unfavorite** to remove the mark without deleting the topic.
 
-![Favorite Topics](/blog/assets04d6fae3d9aa3c33697028f1cc9f4706.webp)
+You can also select one or more topics on the Topics page and click **Favorite** in the bulk action bar at the bottom.
+
+![Favorite Topics on the Topics Page](/docs-images/usage/agent/topic-favorite.png)
 
 ### Rename
 
@@ -164,14 +159,14 @@ Review the preview before exporting, including any system prompts, user messages
 
 Export the conversation as an image with the following options:
 
-- **Width mode** — Wide for desktop reading, narrow for mobile reading.
+- **Width** — Wide for desktop reading, narrow for mobile reading.
 - **Agent profile** — Optionally include role-setting content such as the system prompt.
 - **Footer** — Choose whether to include the information at the bottom.
-- **Image format** — JPG, PNG, SVG, or WEBP.
+- **Type** — JPG, PNG, SVG, or WEBP.
 
-Copy the image to the clipboard or download it to your device.
+Click **Copy image** to copy it to the clipboard, or **Download** to save it.
 
-<Image alt={'Screenshot Sharing'} src={'/blog/assets196d679bc7071abbf71f2a8566f05aa3.webp'} />
+<Image alt={'Screenshot Sharing'} src={'/docs-images/usage/agent/topic-export-image.png'} />
 
 ### Text Sharing
 
@@ -188,11 +183,11 @@ Copy the result to the clipboard or download a text file.
 
 ### PDF Sharing
 
-Export a PDF for reading, reporting, or archiving. As with text export, you can choose whether to include the Agent profile, message roles, user messages, and tool messages.
+Export a PDF for reading, reporting, or archiving. As with text export, you can choose whether to include **Agent profile**, **Message roles**, **User messages**, and **Skill messages**.
 
-Choose the content to include and select **Generate PDF**. Once it is ready, review the preview and select **Download PDF**. Regenerate the PDF after changing export options.
+Choose the content to include, preview the PDF in the dialog, and click **Download** to save it. The preview updates automatically when you change the options.
 
-<Image alt={'PDF Sharing'} src={'/blog/assets7dccdd4df55aede71001da649639437f.webp'} />
+<Image alt={'PDF Sharing'} src={'/docs-images/usage/agent/topic-export-pdf.png'} />
 
 ### JSON Sharing
 
