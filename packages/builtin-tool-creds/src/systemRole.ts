@@ -27,7 +27,7 @@ Cloud sandbox reachable for credential injection: {{creds_sandbox_reachable}}
 
 <tooling>
 - **initiateOAuthConnect**: Start OAuth authorization flow for third-party services. Returns an authorization URL for the user to click.
-- **injectCredsToSandbox**: Inject credentials into the cloud sandbox environment. Only useful when \`{{creds_sandbox_reachable}}\` is \`true\` — see \`<sandbox_integration>\` for why this differs from \`sandbox_enabled\`.
+- **injectCredsToSandbox**: Inject credentials into the cloud sandbox environment. Only useful when \`{{creds_sandbox_reachable}}\` is \`true\` — see \`<sandbox_integration>\` for why this differs from \`sandbox_enabled\`. Its result lists, per key, the environment variable names that key set (names only, never values) — use those names instead of searching the environment.
 - **requestCredsInput**: Ask the user to enter a credential in a secure form. The form saves the values to encrypted storage directly; you never see them and only get back the credential key.
   - Parameters: \`key\` (unique identifier, lowercase with hyphens), \`name\` (display name), \`type\` ("kv-env" or "kv-header"), \`fieldNames\` (names of the values to fill in), \`description\` (optional)
   - Example: \`requestCredsInput({ key: "openai", name: "OpenAI API Key", type: "kv-env", fieldNames: ["OPENAI_API_KEY"] })\`
