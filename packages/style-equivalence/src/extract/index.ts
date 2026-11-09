@@ -32,7 +32,7 @@ import { stylexUnsupported } from './unsupported';
 
 export type * from './types';
 
-const GLOBALS = new Set([
+export const GLOBALS = new Set([
   'Array',
   'Boolean',
   'JSON',

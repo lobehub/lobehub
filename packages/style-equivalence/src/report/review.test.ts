@@ -200,6 +200,12 @@ describe('cellVerdict', () => {
       tone: 'neutral',
     });
   });
+
+  it('points at the unstyled same-position element when the other side has one', () => {
+    expect(cellVerdict('a.tsx|unpaired:head:A#2', { differs: false, summary: [] }, 'base')).toEqual(
+      { text: '改之前同一位置的元素没有样式类，左右对照看', tone: 'neutral' },
+    );
+  });
 });
 
 describe('standInNote', () => {

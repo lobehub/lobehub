@@ -103,8 +103,17 @@ const TOOL_REASONS: Array<[RegExp, (count: string) => string]> = [
   ],
 ];
 
-export const cellVerdict = (key: string, cell: { differs: boolean; summary: string[] }) => {
+export const cellVerdict = (
+  key: string,
+  cell: { differs: boolean; summary: string[] },
+  counterpart?: 'base' | 'head',
+) => {
   const side = /\|unpaired:(base|head):/.exec(key)?.[1];
+  if (side && counterpart)
+    return {
+      text: `${counterpart === 'base' ? '改之前' : '改之后'}同一位置的元素没有样式类，左右对照看`,
+      tone: 'neutral' as const,
+    };
   if (side === 'head') return { text: '只有改之后，没有可对比的', tone: 'neutral' as const };
   if (side === 'base') return { text: '只有改之前，改之后不见了', tone: 'neutral' as const };
   return cell.differs

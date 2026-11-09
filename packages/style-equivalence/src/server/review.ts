@@ -1,6 +1,6 @@
 import type { StyleElement } from '../extract';
 import type { Combo } from '../plan/combos';
-import { chainOf, isIntrinsicTag, PASS_THROUGH_VARIABLES } from '../plan/planFile';
+import { chainOf, type FilePlan, isIntrinsicTag, PASS_THROUGH_VARIABLES } from '../plan/planFile';
 import { askSentence, comboLabel, differenceSummary } from '../report/plain';
 import { defaultReworkNote } from '../report/review';
 import { declarationBlocks } from '../review/declarations';
@@ -145,13 +145,18 @@ type Extractions = Record<string, Partial<Record<'base' | 'head', { elements: St
 export const standInsFor = (
   key: string,
   entry: Pick<CaseEntry, 'plan'> | undefined,
-  plans: Array<{ file: string; standIns?: Record<string, string[]> }>,
+  plans: Array<Pick<FilePlan, 'file' | 'standIns'> & Partial<Pick<FilePlan, 'unpaired'>>>,
 ): Sides<string[]> => {
   const unpaired = /^(.*)\|unpaired:(base|head):(.+)$/.exec(key);
   if (!unpaired) return entry?.plan.standIns ?? {};
   const [, file, side, id] = unpaired;
-  const tags = plans.find((plan) => plan.file === file)?.standIns?.[`${side}:${id}`];
-  return tags ? { [side]: tags } : {};
+  const plan = plans.find((item) => item.file === file);
+  const tags = plan?.standIns?.[`${side}:${id}`];
+  if (!tags) return {};
+  const mirrored = plan?.unpaired?.some(
+    (item) => item.side === side && item.elementId === id && item.counterpart,
+  );
+  return mirrored ? { base: tags, head: tags } : { [side]: tags };
 };
 
 const elementFor = (stored: StoredRun, key: string, entry: CaseEntry | undefined) => {
