@@ -33,6 +33,7 @@
     "./comfyui": "./src/aiModels/comfyui.ts",
     "./deepseek": "./src/aiModels/deepseek.ts",
     "./fal": "./src/aiModels/fal.ts",
+    "./fikra": "./src/aiModels/fikra.ts",
     "./fireworksai": "./src/aiModels/fireworksai.ts",
     "./giteeai": "./src/aiModels/giteeai.ts",
     "./github": "./src/aiModels/github.ts",
