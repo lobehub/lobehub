@@ -60,6 +60,7 @@ const meetingDetail = (visibility: 'private' | 'public') => ({
   minutes: { actionItems: [item('a'), item('b')] },
   segments: [],
   title: 'Quarterly review',
+  userId: 'user-1',
   visibility,
 });
 
@@ -95,6 +96,15 @@ describe('MeetingMinutesService.createTasks', () => {
 
     expect(createTask).toHaveBeenCalledTimes(1);
     expect(createTask.mock.calls[0][0]).not.toHaveProperty('visibility');
+  });
+
+  it("creates nothing from another member's public meeting", async () => {
+    getDetail.mockResolvedValue({ ...meetingDetail('public'), userId: 'someone-else' });
+
+    const result = await service().createTasks('meeting-1', [{ id: 'a', text: 'task a' }]);
+
+    expect(result).toBeUndefined();
+    expect(createTask).not.toHaveBeenCalled();
   });
 
   it('creates one task when a request repeats the same item id', async () => {

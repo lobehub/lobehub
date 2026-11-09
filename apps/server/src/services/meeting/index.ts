@@ -85,6 +85,7 @@ export class MeetingTranscriptionService {
       const { model, transcribe } = await this.createTranscriber();
       const segments = await transcribeRecording({
         ...audio,
+        durationMs: meeting.durationMs,
         language: toLanguage(meeting.language),
         model,
         onProgress: (done, total) => log('refine %s: chunk %d/%d', meetingId, done, total),

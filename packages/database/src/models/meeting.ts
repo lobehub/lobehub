@@ -479,8 +479,16 @@ export class MeetingModel {
     });
   }
 
-  /** Store the generated minutes and mark the meeting `ready`, in one transaction. */
-  async completeMinutes(id: string, input: SaveMeetingMinutesInput) {
+  /**
+   * Store the generated minutes and mark the meeting `ready`, in one transaction.
+   * `mergeActionItems` receives the action items stored at that moment, under the
+   * meeting's row lock, and returns the list to save.
+   */
+  async completeMinutes(
+    id: string,
+    input: SaveMeetingMinutesInput,
+    mergeActionItems?: (stored: MeetingActionItem[]) => MeetingActionItem[],
+  ) {
     return this.db.transaction(async (tx) => {
       const meeting = await this.lockManageable(id, tx);
       if (!meeting) return undefined;
@@ -488,11 +496,24 @@ export class MeetingModel {
         throw new MeetingStateError(meeting.status, 'complete the minutes of');
       }
 
+      let values = input;
+      if (mergeActionItems) {
+        const [stored] = await tx
+          .select({ actionItems: meetingMinutes.actionItems })
+          .from(meetingMinutes)
+          .where(eq(meetingMinutes.meetingId, id))
+          .limit(1);
+        values = { ...input, actionItems: mergeActionItems(stored?.actionItems ?? []) };
+      }
+
       const now = new Date();
       const [minutes] = await tx
         .insert(meetingMinutes)
-        .values({ ...input, meetingId: id })
-        .onConflictDoUpdate({ set: { ...input, updatedAt: now }, target: meetingMinutes.meetingId })
+        .values({ ...values, meetingId: id })
+        .onConflictDoUpdate({
+          set: { ...values, updatedAt: now },
+          target: meetingMinutes.meetingId,
+        })
         .returning();
 
       const [updated] = await tx

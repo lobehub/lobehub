@@ -351,6 +351,23 @@ describe('meeting minutes integration', () => {
     ]);
   });
 
+  it('keeps a task confirmed while the minutes are being regenerated', async () => {
+    const { id, owner } = await refinedMeeting();
+    const { data: detail } = await owner.detail({ id });
+    const [release] = detail!.minutes!.actionItems;
+    generateObject.mockImplementationOnce(async () => {
+      await owner.createTasks({ items: [{ id: release.id, text: release.text }], meetingId: id });
+      return generated;
+    });
+
+    await runMinutes(owner, id);
+
+    const { data: after } = await owner.detail({ id });
+    expect(after!.minutes!.actionItems.find((item) => item.id === release.id)).toMatchObject({
+      status: 'created',
+    });
+  });
+
   it('keeps the transcript ready and records the failure when minutes generation fails', async () => {
     generateObject.mockRejectedValueOnce({ errorType: AgentRuntimeErrorType.InsufficientQuota });
     const { id, owner, refined } = await refinedMeeting();

@@ -197,6 +197,22 @@ describe('transcribeRecording', () => {
     expect(segments).toEqual([{ endMs: 3000, speakerLabel: 'S1', startMs: 1000, text: 'hi' }]);
   });
 
+  it.each([
+    ['the recorder length', 90_000, 90_000],
+    ['a bound that fits the column', undefined, 86_400_000],
+  ])('ends an untimed non-WAV transcript at %s', async (_, durationMs, endMs) => {
+    const segments = await transcribeRecording({
+      bytes: new Uint8Array([1, 2, 3, 4]),
+      durationMs,
+      fileName: 'meeting.webm',
+      mimeType: 'audio/webm',
+      model: 'whisper-1',
+      transcribe: vi.fn(async () => ({ text: 'hello' })),
+    });
+
+    expect(segments).toEqual([{ endMs, startMs: 0, text: 'hello' }]);
+  });
+
   it('fails the whole pass when any chunk fails, so no speech is silently dropped', async () => {
     const audio = makeAudio(130, [[0, 130]]);
     let call = 0;

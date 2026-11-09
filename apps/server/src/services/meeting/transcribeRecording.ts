@@ -18,6 +18,8 @@ export type TranscribeFn = (payload: Omit<ASRPayload, 'model'>) => Promise<ASRRe
 
 export interface TranscribeRecordingInput {
   bytes: Uint8Array;
+  /** Length the recorder reported, for audio whose own length cannot be decoded here. */
+  durationMs?: number | null;
   fileName: string;
   /** ISO-639-1 code; omit to let the provider detect it. */
   language?: string;
@@ -38,6 +40,8 @@ const MAX_KNOWN_SPEAKERS = 4;
 const MIN_REFERENCE_MS = 2000;
 const MAX_REFERENCE_MS = 8000;
 const PARALLEL_CHUNKS = 3;
+/** Upper bound for a recording of unknown length: the longest meeting the API accepts. */
+const MAX_UNKNOWN_DURATION_MS = 24 * 60 * 60 * 1000;
 
 const isDiarizingModel = (model: string) => /diariz/i.test(model);
 
@@ -133,6 +137,7 @@ const toSegments = (
  */
 export const transcribeRecording = async ({
   bytes,
+  durationMs,
   fileName,
   language,
   maxChunkMs = DEFAULT_MAX_CHUNK_MS,
@@ -180,8 +185,9 @@ export const transcribeRecording = async ({
     const labels = new Map<string, string>();
     const labelOf = (label: string) =>
       labels.get(label) ?? labels.set(label, nextLabel()).get(label)!;
-    // Without decodable PCM the chunk spans the reported duration, or is open-ended.
-    const end = Math.round((response.duration ?? 0) * 1000) || Number.MAX_SAFE_INTEGER;
+    // Without decodable PCM the chunk spans what the provider or the recorder reported.
+    const end =
+      Math.round((response.duration ?? 0) * 1000) || durationMs || MAX_UNKNOWN_DURATION_MS;
     return toSegments({ chunk: { end, start: 0 }, response }, 1000, labelOf);
   }
 

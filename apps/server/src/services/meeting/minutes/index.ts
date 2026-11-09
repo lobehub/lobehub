@@ -181,16 +181,20 @@ export class MeetingMinutesService {
 
       // Items already turned into tasks survive a regeneration, so their links never break,
       // and a new suggestion citing the same passage as one of them is the same to-do again.
-      const kept = (detail.minutes?.actionItems ?? []).filter((item) => item.status === 'created');
-      const takenSegments = new Set(kept.flatMap((item) => item.segmentIds));
-      const fresh = minutes.actionItems.filter(
-        (item) => !item.segmentIds.some((id) => takenSegments.has(id)),
+      // Merged under the write lock: an item can be confirmed while the model is generating.
+      let fresh = minutes.actionItems;
+      const result = await this.meetingModel.completeMinutes(
+        meetingId,
+        { ...minutes, model: `${provider}/${model}` },
+        (stored) => {
+          const kept = stored.filter((item) => item.status === 'created');
+          const takenSegments = new Set(kept.flatMap((item) => item.segmentIds));
+          fresh = minutes.actionItems.filter(
+            (item) => !item.segmentIds.some((id) => takenSegments.has(id)),
+          );
+          return [...kept, ...fresh];
+        },
       );
-      const result = await this.meetingModel.completeMinutes(meetingId, {
-        ...minutes,
-        actionItems: [...kept, ...fresh],
-        model: `${provider}/${model}`,
-      });
       log('minutes %s: %d action items in %dms', meetingId, fresh.length, Date.now() - startedAt);
 
       const preference = await new UserModel(this.db, this.userId).getUserPreference();
@@ -301,7 +305,8 @@ export class MeetingMinutesService {
    */
   async createTasks(meetingId: string, items: CreateTasksItemInput[]) {
     const detail = await this.meetingModel.getDetail(meetingId);
-    if (!detail?.minutes) return undefined;
+    // Reading a public meeting is not enough: only its creator can link the tasks back.
+    if (!detail?.minutes || detail.userId !== this.userId) return undefined;
 
     const stored = new Map(detail.minutes.actionItems.map((item) => [item.id, item]));
     const isPrivate = detail.visibility === 'private';
