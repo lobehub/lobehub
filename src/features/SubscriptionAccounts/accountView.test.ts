@@ -115,4 +115,11 @@ describe('matchesKeyword', () => {
     expect(matchesKeyword(account, '  ')).toBe(true);
     expect(matchesKeyword(account, 'codex')).toBe(false);
   });
+
+  it('finds a Max 20x account by the Ultra name it is shown under', () => {
+    const ultra = { planTier: 'max', rateLimitTier: 'default_claude_max_20x' };
+
+    expect(matchesKeyword(ultra, 'ultra')).toBe(true);
+    expect(matchesKeyword(ultra, 'max')).toBe(false);
+  });
 });

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { BOT_WAKE_SETTING_KEYS } from '@/server/services/agentSignal/scenarios/botWake/config';
 import { botWakeFields } from '@/server/services/bot/platforms/botWakeFields';
 import type { FieldSchema } from '@/server/services/bot/platforms/types';
+import { BOT_WAKE_SETTING_KEYS } from '@/server/services/conversationWake/config';
 
 import {
   getSchemaFields,

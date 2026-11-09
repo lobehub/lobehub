@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => ({
   publishAgentRuntimeInit: vi.fn(),
   readDeviceSystemInfo: vi.fn(),
   recordStart: vi.fn(),
+  waitForVerifyPlan: vi.fn(),
   resolveDeviceDispatchAuthorizationFailure: vi.fn(),
   resolveSandboxSessionConfig: vi.fn(),
   scheduleTimedOutDispatchConfirmation: vi.fn(),
@@ -32,7 +33,11 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/server/services/agentRuntime/CompletionLifecycle', () => ({
   CompletionLifecycle: vi.fn().mockImplementation(function () {
-    return { completeOperation: mocks.completeOperation, recordStart: mocks.recordStart };
+    return {
+      completeOperation: mocks.completeOperation,
+      recordStart: mocks.recordStart,
+      waitForVerifyPlan: mocks.waitForVerifyPlan,
+    };
   }),
 }));
 
@@ -191,6 +196,7 @@ const finalizeParams = (fields: Record<string, unknown>) => ({
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.recordStart.mockResolvedValue(true);
+  mocks.waitForVerifyPlan.mockResolvedValue(undefined);
   mocks.signHeteroOperationJWT.mockResolvedValue('op-jwt');
   mocks.signUserJWT.mockResolvedValue('user-jwt');
   mocks.finalizeHeteroDispatchError.mockResolvedValue(true);
@@ -536,6 +542,35 @@ describe('dispatchHeteroAgent — local CLI agents', () => {
       heteroType: 'claude-code',
     });
     expect(result).toMatchObject({ status: 'created', success: true, token: 'user-jwt' });
+  });
+
+  // Regression: the plan was started without being waited for, so a dispatch that
+  // returned first lost it and the builder's `plan state` read null all run.
+  it('holds the dispatch until the verify plan has settled', async () => {
+    const { deps } = createDeps();
+    let settlePlan = () => {};
+    mocks.waitForVerifyPlan.mockReturnValue(
+      new Promise<void>((resolve) => {
+        settlePlan = resolve;
+      }),
+    );
+
+    const dispatch = dispatchHeteroAgent(
+      deps,
+      createCtx({
+        boundDeviceId: 'dev-1',
+        executionTarget: 'device',
+        heterogeneousProvider: { type: 'claude-code' },
+      }),
+      createInput('claude-code'),
+    );
+    await vi.waitFor(() => expect(mocks.waitForVerifyPlan).toHaveBeenCalled());
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(mocks.dispatchAgentRun).not.toHaveBeenCalled();
+
+    settlePlan();
+    await dispatch;
+    expect(mocks.dispatchAgentRun).toHaveBeenCalledTimes(1);
   });
 
   it('sends the Claude Code account the agent is routed to', async () => {

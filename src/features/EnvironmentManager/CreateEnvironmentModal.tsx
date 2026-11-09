@@ -183,12 +183,13 @@ CreateEnvironmentContent.displayName = 'CreateEnvironmentContent';
 export const openCreateEnvironmentModal = (
   visibility?: EnvironmentVisibility,
   onCreated?: (environment: CreatedEnvironment) => void,
+  title: string = translate('environments.create', { ns: 'setting' }),
 ) =>
   createModal({
     content: <CreateEnvironmentContent visibility={visibility} onCreated={onCreated} />,
     footer: null,
     maskClosable: true,
     styles: { content: { padding: 0 } },
-    title: translate('environments.create', { ns: 'setting' }),
+    title,
     width: 'min(90vw, 480px)',
   });

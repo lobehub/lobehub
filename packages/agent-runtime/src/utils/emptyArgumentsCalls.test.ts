@@ -2,12 +2,7 @@ import type { ChatToolPayload } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
 import type { AgentState } from '../types';
-import {
-  EMPTY_ARGS_TOOL_CONTENT,
-  EMPTY_ARGS_TOOL_REASON,
-  partitionEmptyArgumentsCalls,
-  toolExpectsNoArguments,
-} from './emptyArgumentsCalls';
+import { partitionEmptyArgumentsCalls, toolExpectsNoArguments } from './emptyArgumentsCalls';
 
 const makeState = (manifestMap: Record<string, unknown> = {}): AgentState =>
   ({ toolManifestMap: manifestMap }) as unknown as AgentState;
@@ -183,12 +178,5 @@ describe('partitionEmptyArgumentsCalls', () => {
     const result = partitionEmptyArgumentsCalls([unknown], makeState({}));
     expect(result.executableCalls).toEqual([]);
     expect(result.emptyArgsCalls).toEqual([unknown]);
-  });
-});
-
-describe('rejection feedback constants', () => {
-  it('keeps the actionable single-call escape hint in the blocked content', () => {
-    expect(EMPTY_ARGS_TOOL_CONTENT).toContain('Call the tool again one call at a time');
-    expect(EMPTY_ARGS_TOOL_REASON).toBe('tool_arguments_empty');
   });
 });

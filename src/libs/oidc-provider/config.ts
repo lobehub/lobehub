@@ -1,4 +1,11 @@
-import { ACCEPTANCE_CLIENT_ID, ACCEPTANCE_REVIEW_SCOPE } from '@lobechat/const';
+import { BRANDING_NAME } from '@lobechat/business-const';
+import {
+  ACCEPTANCE_CLIENT_ID,
+  ACCEPTANCE_EXTENSION_CLIENT_ID,
+  ACCEPTANCE_EXTENSION_IDS,
+  ACCEPTANCE_EXTENSION_SCOPE,
+  ACCEPTANCE_REVIEW_SCOPE,
+} from '@lobechat/const';
 import { type ClientMetadata } from 'oidc-provider';
 import urlJoin from 'url-join';
 
@@ -18,7 +25,7 @@ export const defaultClients: ClientMetadata[] = [
   {
     application_type: 'web',
     client_id: 'lobehub-desktop',
-    client_name: 'LobeHub Desktop',
+    client_name: `${BRANDING_NAME} Desktop`,
     // Only supports authorization code flow
     grant_types: ['authorization_code', 'refresh_token'],
 
@@ -46,7 +53,7 @@ export const defaultClients: ClientMetadata[] = [
   {
     application_type: 'native', // Mobile uses native type
     client_id: 'lobehub-mobile',
-    client_name: 'LobeHub Mobile',
+    client_name: `${BRANDING_NAME} Mobile`,
     // Supports authorization code flow and refresh token
     grant_types: ['authorization_code', 'refresh_token'],
     logo_uri: 'https://hub-apac-1.lobeobjects.space/docs/73f69adfa1b802a0e250f6ff9d62f70b.png',
@@ -92,6 +99,18 @@ export const defaultClients: ClientMetadata[] = [
   },
   {
     application_type: 'web',
+    client_id: ACCEPTANCE_EXTENSION_CLIENT_ID,
+    client_name: 'LobeHub Acceptance Extension',
+    grant_types: ['authorization_code', 'refresh_token'],
+    logo_uri: 'https://hub-apac-1.lobeobjects.space/lobehub-desktop-icon.png',
+    post_logout_redirect_uris: [],
+    redirect_uris: ACCEPTANCE_EXTENSION_IDS.map((id) => `https://${id}.chromiumapp.org/oidc`),
+    response_types: ['code'],
+    scope: `openid profile offline_access ${ACCEPTANCE_EXTENSION_SCOPE}`,
+    token_endpoint_auth_method: 'none',
+  },
+  {
+    application_type: 'web',
     client_id: 'lobehub-market',
     client_name: 'LobeHub Marketplace',
     grant_types: ['authorization_code', 'refresh_token'],
@@ -118,6 +137,7 @@ export const defaultScopes = [
   'email',
   'offline_access', // Allows obtaining refresh_token
   ACCEPTANCE_REVIEW_SCOPE,
+  ACCEPTANCE_EXTENSION_SCOPE,
 ];
 
 /**

@@ -8,6 +8,7 @@ import {
   Codex,
   Cursor,
   Devin,
+  GithubCopilot,
   Grok,
   Kimi,
   OpenCode,
@@ -38,6 +39,10 @@ const GUIDE_PRESENTATION_CONFIG = {
   'codex': {
     icon: Codex,
     translationPrefix: 'codexInstallGuide',
+  },
+  'copilot': {
+    icon: GithubCopilot,
+    translationPrefix: 'copilotInstallGuide',
   },
   'cursor': {
     icon: Cursor,

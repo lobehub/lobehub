@@ -1,9 +1,14 @@
 'use client';
 
-import './CommentItem.css';
-
 import { AgentIcon } from '@lobehub/icons';
-import { Avatar, Flexbox, Markdown, Text } from '@lobehub/ui';
+import {
+  Avatar,
+  // oxlint-disable-next-line stylex-migration/no-emotion-styles -- rendered Markdown elements get no className
+  createStaticStyles,
+  Flexbox,
+  Markdown,
+  Text,
+} from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import { media } from '@lobehub/ui/stylex/media.stylex';
 import * as stylex from '@stylexjs/stylex';
@@ -47,6 +52,35 @@ const styles = stylex.create({
     lineHeight: 1,
   },
 });
+
+const fallback = createStaticStyles(({ css }) => ({
+  content: css`
+    font-size: 16px;
+    line-height: 1.56;
+    color: var(--lobe-color-text-secondary);
+
+    p {
+      margin-block: 0;
+    }
+
+    p + p {
+      margin-block-start: 0.72em;
+    }
+
+    a {
+      color: var(--lobe-color-link);
+    }
+
+    strong {
+      font-weight: 600;
+      color: var(--lobe-color-text);
+    }
+
+    @media (width <= 575.98px) {
+      font-size: 15px;
+    }
+  `,
+}));
 
 const CommentItem = memo<{ item: SkillCommentItem }>(({ item }) => {
   const { i18n, t } = useTranslation('discover');
@@ -105,7 +139,7 @@ const CommentItem = memo<{ item: SkillCommentItem }>(({ item }) => {
         </Flexbox>
         <Text className={stylex.props(styles.date).className}>{createdAt}</Text>
       </Flexbox>
-      <Markdown className={'lobe-comment-item-3223608e-content'} variant={'chat'}>
+      <Markdown className={fallback.content} variant={'chat'}>
         {item.content}
       </Markdown>
     </Flexbox>

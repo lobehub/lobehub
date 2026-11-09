@@ -88,12 +88,6 @@ describe('MenuManager', () => {
 
       expect(mockBuildAndSetAppMenu).toHaveBeenCalledWith(options);
     });
-
-    it('should call buildAndSetAppMenu on platform implementation', () => {
-      menuManager.initialize();
-
-      expect(mockBuildAndSetAppMenu).toHaveBeenCalled();
-    });
   });
 
   describe('showContextMenu', () => {
@@ -177,13 +171,6 @@ describe('MenuManager', () => {
       expect(mockBuildTrayMenu).toHaveBeenCalled();
       expect(result).toBe(mockMenu);
     });
-
-    it('should return Menu instance', () => {
-      const result = menuManager.buildTrayMenu();
-
-      expect(result).toBeDefined();
-      expect(result).toBe(mockMenu);
-    });
   });
 
   describe('refreshMenus', () => {
@@ -202,12 +189,6 @@ describe('MenuManager', () => {
       expect(mockRefresh).toHaveBeenCalledWith(options);
       expect(result).toEqual({ success: true });
     });
-
-    it('should call refresh on platform implementation', () => {
-      menuManager.refreshMenus();
-
-      expect(mockRefresh).toHaveBeenCalled();
-    });
   });
 
   describe('rebuildAppMenu', () => {
@@ -225,12 +206,6 @@ describe('MenuManager', () => {
 
       expect(mockBuildAndSetAppMenu).toHaveBeenCalledWith(options);
       expect(result).toEqual({ success: true });
-    });
-
-    it('should call buildAndSetAppMenu on platform implementation', () => {
-      menuManager.rebuildAppMenu();
-
-      expect(mockBuildAndSetAppMenu).toHaveBeenCalled();
     });
   });
 

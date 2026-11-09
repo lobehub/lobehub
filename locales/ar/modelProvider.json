@@ -302,6 +302,7 @@
   "providerModels.item.modelConfig.video.title": "يدعم التعرف على الفيديو",
   "providerModels.item.modelConfig.vision.extra": "يُمكّن هذا الإعداد فقط من رفع الصور داخل التطبيق. يعتمد دعم التعرف على الصور على النموذج نفسه. يرجى اختباره.",
   "providerModels.item.modelConfig.vision.title": "دعم الرؤية",
+  "providerModels.item.pricing.audioOutputTokens": "المخرجات الصوتية ${{amount}}/مليون",
   "providerModels.item.pricing.image": "${{amount}}/صورة",
   "providerModels.item.pricing.inputCharts": "${{amount}}/مليون حرف",
   "providerModels.item.pricing.inputMinutes": "${{amount}}/دقيقة",

@@ -12,7 +12,7 @@ import debug from 'debug';
 import { TopicModel } from '@/database/models/topic';
 import { TrashModel } from '@/database/models/trash';
 import type { TrashItemRow } from '@/database/schemas';
-import type { LobeChatDatabase } from '@/database/type';
+import type { LobeChatDatabase, Transaction } from '@/database/type';
 import type { SoftDeleteOptions } from '@/database/utils/softDelete';
 import { FileService } from '@/server/services/file';
 
@@ -20,6 +20,8 @@ import {
   resolveTrashHandler,
   softDeleteAgent,
   softDeleteMessages,
+  softDeleteTasks,
+  type TaskTrashTarget,
   topicCascades,
   type TrashCascade,
   type TrashHandlerContext,
@@ -55,6 +57,33 @@ export interface TrashSweepOutcome {
   /** Roots hard-deleted this tick. */
   purged: number;
 }
+
+/**
+ * Trash tasks inside a transaction the caller already holds — the task delete
+ * paths decide under their own row locks (a run recording a topic takes the
+ * same lock) and must stamp + register before releasing them. Returns the ids
+ * actually moved to the bin; a task whose status changed since the caller
+ * decided is not among them.
+ */
+export const trashTasksInTransaction = async (
+  tx: Transaction,
+  scope: { userId: string; workspaceId?: string },
+  targets: TaskTrashTarget[],
+): Promise<string[]> => {
+  const db = tx as unknown as LobeChatDatabase;
+  const deletedAt = new Date();
+  const cascades = await softDeleteTasks(
+    { db, userId: scope.userId, workspaceId: scope.workspaceId },
+    targets,
+    { deletedAt },
+  );
+  await new TrashModel(db, scope.userId, scope.workspaceId).registerMany(
+    { cascades, deletedAt },
+    tx,
+  );
+  log('trashed %d task(s)', cascades.length);
+  return cascades.map((cascade) => cascade.root.resourceId);
+};
 
 /**
  * Recycle-bin orchestrator. Every user-facing "delete" of a trash-aware entity

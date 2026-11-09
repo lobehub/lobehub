@@ -30,6 +30,14 @@ export const API_KEY_SCOPES = [
   API_KEY_FULL_ACCESS_SCOPE,
   'agent:read',
   'agent:write',
+  /**
+   * Writing an agent account's *credential* — a password, token or signing key
+   * that the account then authenticates with. Deliberately its own tier: an
+   * agent account is an identity asset, so "may manage the agent's accounts"
+   * must not imply "may install a secret into one". `agent:write` is still
+   * required alongside it, so this can only ever narrow, never widen.
+   */
+  'agent:credential:write',
   'eval:read',
   'eval:write',
   'chat:read',
@@ -175,6 +183,11 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   // the discussion on an acceptance follows the acceptance itself
   acceptanceComment: 'blocked',
   agent: rw('agent:read', 'agent:write'),
+  // an agent's identity assets (mail / wallet / service). Reading and
+  // managing accounts is ordinary agent read/write; installing a *credential*
+  // is separated onto `agent:credential:write` via
+  // `TRPC_PROCEDURE_EXTRA_SCOPES` below.
+  agentAccount: rw('agent:read', 'agent:write'),
   // bot channel wiring carries channel credentials
   agentBotProvider: 'blocked',
   // a bot's wake records: channel message previews and the owner's marks, read through the same
@@ -197,6 +210,7 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   // memory, tool results — and `getSnapshotUrl` hands back a presigned URL that
   // needs no further auth, so a restricted key holding one would read past its
   // own scope. Same call as `llmGenerationTracing`.
+  agentRunBoard: 'blocked',
   agentTrace: 'blocked',
   aiAgent: rw('agent:read', 'agent:write'),
   aiChat: { any: 'model:invoke' },
@@ -205,6 +219,9 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   // keys must not mint or manage keys
   apiKey: 'blocked',
   asr: { any: 'model:invoke' },
+  // `auth.getScope` only reports which scope the presented credential runs
+  // under, so any key — however narrow — can tell where its calls land
+  auth: 'open',
   artifactShare: rw('chat:read', null),
   // decrypts stored bot/messenger credentials and calls external channel APIs
   botMessage: 'blocked',
@@ -262,6 +279,8 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   market: rw('agent:read', 'agent:write'),
   // tool execution inside a chat run
   mcp: { any: 'model:invoke' },
+  // recorded meetings: transcripts and minutes are conversation content
+  meeting: rw('chat:read', 'chat:write'),
   message: rw('chat:read', 'chat:write'),
   // IM channel management carries channel credentials
   messenger: 'blocked',
@@ -307,6 +326,7 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   storageOverage: 'blocked',
   subscription: 'blocked',
   task: rw('agent:read', 'agent:write'),
+  taskLabel: rw('agent:read', 'agent:write'),
   taskTemplate: rw('agent:read', 'agent:write'),
   thread: rw('chat:read', 'chat:write'),
   topUp: 'blocked',
@@ -386,6 +406,10 @@ export const TRPC_PROCEDURE_EXTRA_SCOPES: Record<string, ApiKeyScope[]> = {
   'aiAgent.submitHeteroIntervention': AGENT_RUN_SCOPES,
   // lists the caller's whole knowledge-base/file inventory, not agent config
   'agent.getKnowledgeBasesAndFiles': ['file:read', 'knowledge:read'],
+  // installing or rotating an account credential is a write-only, high-risk act
+  // with no read-back: `agent:write` alone ("may manage this agent's accounts")
+  // must not be able to set a password/token on one.
+  'agentAccount.setCredential': ['agent:credential:write'],
   // notify's user/continue paths call `aiAgentService.execAgent` — another run entry
   'agentNotify.notify': AGENT_RUN_SCOPES,
   // signal triggers enqueue analyze-intent workflows whose judges call

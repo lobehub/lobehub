@@ -315,10 +315,41 @@ describe('mergeBotSettingsForCreate', () => {
     ).toBe(true);
   });
 
-  it('leaves an ordinary agent created without settings as before', async () => {
-    expect(
-      await mergeBotSettingsForCreate(dbWith({}), 'agt', 'discord', undefined),
-    ).toBeUndefined();
+  it('writes the defaults for an ordinary agent created without settings, reactions off', async () => {
+    const settings = await mergeBotSettingsForCreate(dbWith({}), 'agt', 'discord', undefined);
+
+    expect(settings).toMatchObject({ botWakeDisabled: false, reactionMode: 'none' });
+  });
+
+  it('creates a bot with status reactions off when the caller did not choose', async () => {
+    const settings = await mergeBotSettingsForCreate(dbWith({}), 'agt', 'discord', {
+      dmPolicy: 'open',
+    });
+
+    expect(settings).toMatchObject({ dmPolicy: 'open', reactionMode: 'none' });
+  });
+
+  it('keeps the status reaction mode the caller chose', async () => {
+    const settings = await mergeBotSettingsForCreate(dbWith({}), 'agt', 'discord', {
+      reactionMode: 'full',
+    });
+
+    expect(settings?.reactionMode).toBe('full');
+  });
+
+  it('turns reactions off for a heterogeneous agent created without settings too', async () => {
+    const db = dbWith({ heterogeneousProvider: { type: 'claude-code' } });
+
+    expect(await mergeBotSettingsForCreate(db, 'agt', 'discord', undefined)).toMatchObject({
+      botWakeDisabled: true,
+      reactionMode: 'none',
+    });
+  });
+
+  it('adds no reaction mode on a platform without status reactions', async () => {
+    const settings = await mergeBotSettingsForCreate(dbWith({}), 'agt', 'wechat', {});
+
+    expect(settings).not.toHaveProperty('reactionMode');
   });
 
   it('keeps a heterogeneous agent opted in when the caller turned it on', async () => {
@@ -328,5 +359,17 @@ describe('mergeBotSettingsForCreate', () => {
     });
 
     expect(settings?.botWakeDisabled).toBe(false);
+  });
+});
+
+describe('status reactions of an existing bot', () => {
+  it('keep the stored mode on a partial update', () => {
+    expect(
+      mergeBotSettingsPatch('discord', { reactionMode: 'minimal' }, { charLimit: 1000 }),
+    ).toMatchObject({ charLimit: 1000, reactionMode: 'minimal' });
+  });
+
+  it('stay on for a row saved before the field existed', () => {
+    expect(mergeBotSettingsPatch('discord', {}, { charLimit: 1000 })?.reactionMode).toBe('minimal');
   });
 });

@@ -111,24 +111,24 @@ lh skill read-resource <id> <path>
 
 ---
 
-## Plugin Management (`lh plugin`)
+## Legacy Plugin Management (`lh legacy-plugin`)
 
-Install and manage plugins (external tool integrations).
+Install and manage legacy 1.0 plugins stored in `user_installed_plugins`. For MCP connectors, use `lh connector`.
 
 **Source**: `apps/cli/src/commands/plugin.ts`
 
-### `lh plugin list`
+### `lh legacy-plugin list`
 
 ```bash
-lh plugin list [--json [fields]]
+lh legacy-plugin list [--json [fields]]
 ```
 
 **Table columns**: ID, IDENTIFIER, TYPE, TITLE
 
-### `lh plugin install`
+### `lh legacy-plugin install`
 
 ```bash
-lh plugin install -i <id> --manifest <json> [--type <type>] [--settings <json>]
+lh legacy-plugin install -i <id> --manifest <json> [--type <type>] [--settings <json>]
 ```
 
 | Option                  | Description                | Required               |
@@ -138,16 +138,16 @@ lh plugin install -i <id> --manifest <json> [--type <type>] [--settings <json>]
 | `--type <type>`         | `plugin` or `customPlugin` | No (default: `plugin`) |
 | `--settings <json>`     | Plugin settings JSON       | No                     |
 
-### `lh plugin uninstall <id>`
+### `lh legacy-plugin uninstall <id>`
 
 ```bash
-lh plugin uninstall <id> [--yes]
+lh legacy-plugin uninstall <id> [--yes]
 ```
 
-### `lh plugin update <id>`
+### `lh legacy-plugin update <id>`
 
 Requires `--manifest` or `--settings` (at least one); errors if neither is specified.
 
 ```bash
-lh plugin update <id> [--manifest <json>] [--settings <json>]
+lh legacy-plugin update <id> [--manifest <json>] [--settings <json>]
 ```

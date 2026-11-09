@@ -47,10 +47,10 @@ const DotsLoading = memo<DotsLoadingProps>(({ size = 4, gap = 3, color, classNam
   } as CSSProperties;
 
   return (
-    <div {...sx([styles.container], className, { ...cssVars, ...style })}>
-      <div {...sx([styles.dot], undefined, { animationDelay: '0s' })} />
-      <div {...sx([styles.dot], undefined, { animationDelay: '0.15s' })} />
-      <div {...sx([styles.dot], undefined, { animationDelay: '0.3s' })} />
+    <div {...sx(styles.container, className, { ...cssVars, ...style })}>
+      <div {...sx(styles.dot, { animationDelay: '0s' })} />
+      <div {...sx(styles.dot, { animationDelay: '0.15s' })} />
+      <div {...sx(styles.dot, { animationDelay: '0.3s' })} />
     </div>
   );
 });

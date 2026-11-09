@@ -1,4 +1,9 @@
-import { PROJECT_IDENTIFIER_REGEX, PROJECT_STATUSES, PROJECT_VISIBILITIES } from '@lobechat/types';
+import {
+  PROJECT_DUPLICATE_IDENTIFIER,
+  PROJECT_IDENTIFIER_REGEX,
+  PROJECT_STATUSES,
+  PROJECT_VISIBILITIES,
+} from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -7,7 +12,12 @@ import {
   type WorkspaceRole,
   wsCompatProcedure,
 } from '@/business/server/trpc-middlewares/workspaceAuth';
-import { ProjectModel, type ProjectModelOptions } from '@/database/models/project';
+import {
+  ProjectIdentifierTakenError,
+  ProjectModel,
+  type ProjectModelOptions,
+} from '@/database/models/project';
+import { ProjectRepository } from '@/database/repositories/project';
 import { ProjectCoordinatorRepository } from '@/database/repositories/projectCoordinator';
 import type { LobeChatDatabase } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
@@ -15,6 +25,8 @@ import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { createDefaultChannel } from '@/server/services/channel/defaultChannel';
 import { GoalService } from '@/server/services/goal';
 import { assertCanPerformResourceAction } from '@/server/services/resourcePermission';
+
+import { rethrowDuplicateProjectField } from './_helpers/projectConstraintErrors';
 
 /**
  * Reads `workspaceRole` as an optional context field: the cloud workspace-auth
@@ -43,6 +55,7 @@ const projectProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) 
         options,
       ),
       projectModel: new ProjectModel(ctx.serverDB, ctx.userId, workspaceId, options),
+      projectRepo: new ProjectRepository(ctx.serverDB, ctx.userId, workspaceId),
     },
   });
 });
@@ -106,6 +119,12 @@ const knowledgeBaseBindingPatch = z.object({
 
 function mapProjectError(error: unknown, operation: string): never {
   if (error instanceof TRPCError) throw error;
+  // A duplicate identifier is a field-level problem the client renders next to
+  // the input; `CONFLICT` carries the machine-readable code the create forms key
+  // off, so they can mark the identifier rather than a generic failure.
+  if (error instanceof ProjectIdentifierTakenError) {
+    throw new TRPCError({ cause: error, code: 'CONFLICT', message: PROJECT_DUPLICATE_IDENTIFIER });
+  }
   const message = error instanceof Error ? error.message : `Failed to ${operation} project`;
   console.error(`[project:${operation}]`, error);
   throw new TRPCError({ cause: error, code: 'BAD_REQUEST', message });
@@ -180,6 +199,13 @@ export const projectRouter = router({
         description: z.string().optional(),
         identifier: projectIdentifierInput.optional(),
         name: z.string().min(1).max(255),
+        repository: z
+          .object({
+            defaultBranch: z.string().max(255).optional(),
+            name: z.string().trim().min(1).max(255),
+            url: z.string().min(1).max(2048),
+          })
+          .optional(),
         slug: projectSlugInput.optional(),
         visibility: z.enum(PROJECT_VISIBILITIES).optional(),
       }),
@@ -189,7 +215,13 @@ export const projectRouter = router({
         if (input.coordinatorAgentId) {
           await assertResourceUsable(ctx, 'agent', input.coordinatorAgentId);
         }
-        const project = await withMainAgent(ctx.projectModel, await ctx.projectModel.create(input));
+        // The repository owns the cross-aggregate transaction (main agent,
+        // coordinator link and the optional repository environment). A taken
+        // slug or identifier still surfaces as the field-level CONFLICT code.
+        const project = await withMainAgent(
+          ctx.projectModel,
+          await ctx.projectRepo.create(input).catch(rethrowDuplicateProjectField),
+        );
         await createDefaultChannel({
           agentId: project.coordinatorAgentId,
           db: ctx.serverDB,

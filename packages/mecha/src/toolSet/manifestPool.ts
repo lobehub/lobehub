@@ -1,3 +1,4 @@
+import { isSyncedMcpToolVisibleTo } from '@lobechat/const/mcpApp';
 import type { LobeToolManifest } from '@lobechat/context-engine';
 import type { BuiltinToolResolveContext, LobeBuiltinTool } from '@lobechat/types';
 import debug from 'debug';
@@ -13,6 +14,8 @@ export type ConnectorToolPermissions = Map<string, ConnectorToolPermissionValue 
 export interface ConnectorToolFacts {
   description?: string | null;
   inputSchema?: unknown;
+  /** Synced tool metadata; `visibility` is the MCP tool's `_meta.ui.visibility`. */
+  metadata?: Record<string, unknown> | null;
   permission?: ConnectorToolPermissionValue | string | null;
   toolName: string;
 }
@@ -63,17 +66,20 @@ export function patchManifestWithPermissions<M extends { api: readonly { name: s
 }
 
 /**
- * A connector's tools as one MCP manifest: every synced tool is listed
- * (disabled ones with the blocking description), permissions become
- * `humanIntervention`. Returns nothing for a disabled connector or one with no
- * synced tools — such a connector must not replace a same-named plugin while
- * contributing nothing to call.
+ * A connector's tools as one MCP manifest: every synced tool the model may
+ * see is listed (disabled ones with the blocking description), permissions
+ * become `humanIntervention`. Tools only views may call are left out. Returns
+ * nothing for a disabled connector or one with no tools for the model — such a
+ * connector must not replace a same-named plugin while contributing nothing
+ * to call.
  */
 export const buildConnectorManifest = (connector: ConnectorFacts): LobeToolManifest | undefined => {
   if (!connector.isEnabled) return undefined;
-  if (connector.tools.length === 0) return undefined;
 
-  const api = connector.tools.map((tool) => {
+  const modelTools = connector.tools.filter((tool) => isSyncedMcpToolVisibleTo(tool, 'model'));
+  if (modelTools.length === 0) return undefined;
+
+  const api = modelTools.map((tool) => {
     const parameters = (tool.inputSchema ?? { properties: {}, type: 'object' }) as Record<
       string,
       unknown

@@ -1,3 +1,4 @@
+import { isCheckWaivedByDispute } from '@lobechat/const/verify';
 import type { VerifyCheckItem, VerifyRunMetadata } from '@lobechat/types';
 
 import { AcceptanceModel } from '@/database/models/acceptance';
@@ -10,7 +11,10 @@ import type { LobeChatDatabase } from '@/database/type';
 export const REPEATED_FAILURE_LIMIT = 2;
 
 type StallRound = Pick<VerifyRunItem, 'createdAt' | 'id' | 'metadata' | 'plan' | 'status'>;
-type StallResult = Pick<VerifyCheckResultItem, 'checkItemId' | 'status' | 'verdict'>;
+type StallResult = Pick<VerifyCheckResultItem, 'checkItemId' | 'status' | 'verdict'> & {
+  /** Read for the dispute waiver: a check a panel waived no longer gates an attempt. */
+  metadata?: VerifyCheckResultItem['metadata'];
+};
 
 /**
  * What a delivered attempt fell short on, or `undefined` when it did not fail on
@@ -36,6 +40,11 @@ export const failureSignature = (round: StallRound, results: StallResult[]): str
     .filter((item) => item.required !== false)
     .filter((item) => {
       const result = resultByItem.get(item.id);
+      // An upheld dispute waives the check, so it stops gating the attempt. It
+      // must leave the signature too: otherwise a retry that only shrank the
+      // blocking set still reads like the attempt before it, and the Task goes
+      // to a person instead of spending the retry budget it just earned.
+      if (result && isCheckWaivedByDispute(result.metadata)) return false;
       return (result?.verdict ?? result?.status) !== 'passed';
     })
     // Named like the acceptance union names them: a generated first plan keeps

@@ -170,26 +170,5 @@ describe('LobeV0AI - custom features', () => {
 
       expect(mockClient.models.list).toHaveBeenCalledTimes(1);
     });
-
-    it('should pass correct client to processModelList', async () => {
-      const mockModelList = [
-        { id: 'gpt-4o', object: 'model' },
-        { id: 'gpt-4o-mini', object: 'model' },
-      ];
-
-      const mockClient = {
-        apiKey: 'test_api_key',
-        baseURL: 'https://api.v0.dev/v1',
-        models: {
-          list: vi.fn().mockResolvedValue({ data: mockModelList }),
-        },
-      } as any;
-
-      const models = await params.models!({ client: mockClient });
-
-      // Verify processModelList was called with correct parameters
-      expect(models).toBeDefined();
-      expect(Array.isArray(models)).toBe(true);
-    });
   });
 });

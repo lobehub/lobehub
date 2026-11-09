@@ -1,11 +1,21 @@
 'use client';
 
-import type { TaskExecutionConfig, TaskIntentAnalysis } from '@lobechat/types';
+import type { TaskExecutionConfig, TaskIntentAnalysis, TaskLabelRef } from '@lobechat/types';
 import { readTaskExecutionConfig, toTaskExecutionConfigPatch } from '@lobechat/types';
 import { useEditor } from '@lobehub/editor/react';
-import { ActionIcon, Block, Button, cssVar, DropdownMenu, Flexbox, Text, toast } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Block,
+  Button,
+  cssVar,
+  DropdownMenu,
+  Flexbox,
+  Icon,
+  Text,
+  toast,
+} from '@lobehub/ui';
 import { $getRoot } from 'lexical';
-import { ChevronDown, ChevronUp, Paperclip } from 'lucide-react';
+import { ChevronDown, ChevronUp, Paperclip, TagIcon } from 'lucide-react';
 import { type KeyboardEvent, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -17,11 +27,15 @@ import {
   getAttachmentFileIdsFromEditor,
   pickAndInsertAttachments,
 } from '@/features/EditorCanvas/editorAttachments';
+import { pickedLabelIds, resolveTaskLabelRefs } from '@/features/TaskLabels/labelPickerModel';
+import TaskLabelChips from '@/features/TaskLabels/TaskLabelChips';
+import TaskLabelPicker from '@/features/TaskLabels/TaskLabelPicker';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
 import { taskService } from '@/services/task';
 import { useGlobalStore } from '@/store/global';
-import { useTaskStore } from '@/store/task';
+import { getTaskStoreState, useTaskStore } from '@/store/task';
+import { taskLabelSelectors } from '@/store/task/selectors';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors, userProfileSelectors } from '@/store/user/selectors';
 import { shinyTextStyles } from '@/styles';
@@ -108,6 +122,12 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
     useDefaultMemberAssignee();
   const navigate = useWorkspaceAwareNavigate();
   const [priority, setPriority] = useState(0);
+  const [labels, setLabels] = useState<TaskLabelRef[]>([]);
+  const isLabelsInit = useTaskStore(taskLabelSelectors.isLabelsInit);
+  const labelRegistry = useTaskStore(taskLabelSelectors.labels);
+  // Label ids read from a draft before the registry loaded; resolved (and
+  // stale ones dropped) once it has.
+  const pendingDraftLabelIdsRef = useRef<string[] | undefined>(undefined);
   const [assigneeAgentId, setAssigneeAgentId] = useState<string | undefined>(agentId);
   // `undefined` follows the default (the creator); `null` is an explicit "unassigned".
   const [memberChoice, setMemberChoice] = useState<string | null | undefined>();
@@ -242,6 +262,10 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
     // hydration only — it must not keep the previous scope's selection).
     editor.cleanDocument?.();
     setPriority(0);
+    // Labels belong to a workspace: one picked in the previous scope would be a
+    // foreign id here and fail the create.
+    setLabels([]);
+    pendingDraftLabelIdsRef.current = undefined;
     setVisibility(defaultVisibility);
     setExecution(undefined);
     if (!lockAssignee) setAssigneeAgentId(agentId);
@@ -267,6 +291,16 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
         setMemberChoice(draft.assigneeUserId);
       }
       if (draft.visibility) setVisibility(draft.visibility);
+      const labelIds = Array.isArray(draft.labelIds)
+        ? draft.labelIds.filter((id): id is string => typeof id === 'string')
+        : [];
+      if (labelIds.length > 0) {
+        if (getTaskStoreState().taskLabelsInit) {
+          setLabels(resolveTaskLabelRefs(getTaskStoreState().taskLabels, labelIds));
+        } else {
+          pendingDraftLabelIdsRef.current = labelIds;
+        }
+      }
     } catch {
       /* ignore a malformed draft */
     }
@@ -281,6 +315,15 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
     isMembersLoading,
     lockAssignee,
   ]);
+
+  useEffect(() => {
+    const pending = pendingDraftLabelIdsRef.current;
+    if (!isLabelsInit || !pending?.length) return;
+    pendingDraftLabelIdsRef.current = undefined;
+    setLabels((current) =>
+      current.length > 0 ? current : resolveTaskLabelRefs(labelRegistry, pending),
+    );
+  }, [isLabelsInit, labelRegistry]);
 
   // Back the draft to storage on every change. Gated behind the restore pass so
   // the initial render can't clobber a just-read draft. Emptying the editor
@@ -300,6 +343,10 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
         // `undefined` (the whole selection is `undefined`) drops the key, so
         // an untouched composer writes the same draft shape as before.
         execution,
+        // While a restore waits for the registry, keep writing the ids it holds
+        // so a reload in that window does not drop them.
+        labelIds:
+          labels.length > 0 ? labels.map((label) => label.id) : pendingDraftLabelIdsRef.current,
         markdown,
         priority,
         visibility,
@@ -313,6 +360,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
     editor,
     execution,
     instruction,
+    labels,
     lockAssignee,
     memberChoice,
     priority,
@@ -343,6 +391,9 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
 
   const resetComposer = useCallback(() => {
     setPriority(0);
+    setLabels([]);
+    // A restore still waiting for the registry belongs to the draft just sent.
+    pendingDraftLabelIdsRef.current = undefined;
     setAssigneeAgentId(agentId);
     setMemberChoice(undefined);
     setInstruction('');
@@ -411,6 +462,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
           ...(execution ? { config: { execution: toTaskExecutionConfigPatch(execution) } } : {}),
           editorData: draft.editorJson,
           instruction: draft.instruction,
+          ...pickedLabelIds(labels, pendingDraftLabelIdsRef.current),
           name: draft.name,
           parentTaskId,
           priority: priority || undefined,
@@ -483,6 +535,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
       assigneeUserId,
       createTask,
       execution,
+      labels,
       navigate,
       onCreated,
       parentTaskId,
@@ -756,6 +809,28 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
                 </Text>
               </Block>
             </TaskPriorityTag>
+
+            <TaskLabelPicker value={labels} onChange={setLabels}>
+              <Block
+                clickable
+                horizontal
+                align="center"
+                gap={6}
+                height={24}
+                paddingBlock={3}
+                paddingInline={8}
+                variant={'borderless'}
+              >
+                {labels.length > 0 ? (
+                  <TaskLabelChips labels={labels} max={3} />
+                ) : (
+                  <>
+                    <Icon color={cssVar.colorTextDescription} icon={TagIcon} size={14} />
+                    <Text fontSize={12}>{t('taskLabel.label')}</Text>
+                  </>
+                )}
+              </Block>
+            </TaskLabelPicker>
 
             {activeWorkspaceId && (
               <AssigneeMemberSelector

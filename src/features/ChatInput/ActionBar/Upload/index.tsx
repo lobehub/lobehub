@@ -7,12 +7,12 @@ import { useTranslation } from 'react-i18next';
 import TipGuide from '@/components/TipGuide';
 import { useMediaUploadAbility } from '@/hooks/useMediaUploadAbility';
 import { usePermission } from '@/hooks/usePermission';
-import { useFileStore } from '@/store/file';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { preferenceSelectors } from '@/store/user/selectors';
 
 import { useAgentId } from '../../hooks/useAgentId';
+import { useChatInputUpload } from '../../hooks/useChatInputUpload';
 import { useEffectiveModel } from '../../hooks/useEffectiveModel';
 import { useLargeFileLocalPath } from '../../hooks/useLargeFileLocalPath';
 import { useChatInputStore } from '../../store';
@@ -40,7 +40,7 @@ const FileUpload = memo<FileUploadProps>(({ includeKnowledge = true }) => {
     (s) => featureFlagsSelectors(s).enableKnowledgeBase,
   );
 
-  const upload = useFileStore((s) => s.uploadChatFiles);
+  const upload = useChatInputUpload();
   const editor = useChatInputStore((s) => s.editor);
 
   const agentId = useAgentId();

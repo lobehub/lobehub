@@ -7,7 +7,7 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AutoSaveHint from '@/components/Editor/AutoSaveHint';
-import { SettingsSectionSkeleton } from '@/components/Skeleton';
+import { ChatAppearanceSectionSkeleton } from '@/components/Skeleton/Settings/tabs/Appearance';
 import { FORM_STYLE } from '@/const/layoutTokens';
 import { useSaveState } from '@/hooks/useSaveState';
 import { useUserStore } from '@/store/user';
@@ -27,7 +27,7 @@ const ChatAppearance = memo(() => {
   const [savingKey, setSavingKey] = useState<string>();
   const form = useForm();
 
-  if (!isUserStateInit) return <SettingsSectionSkeleton />;
+  if (!isUserStateInit) return <ChatAppearanceSectionSkeleton />;
 
   const handleChange = (key: string, value: any) => {
     setSavingKey(key);

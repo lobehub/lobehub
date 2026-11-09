@@ -868,6 +868,10 @@ export default class GatewayConnectionService extends ServiceModule {
     return { success: true };
   }
 
+  async resolveWorkspaceDeviceId(workspaceId: string): Promise<string> {
+    return (await this.resolveWorkspaceDeviceIdentity(workspaceId)).deviceId;
+  }
+
   /**
    * Identity for a WORKSPACE share connection. MUST stay byte-compatible with
    * the CLI's `resolveWorkspaceDeviceIdentity` (apps/cli/src/device/register.ts):

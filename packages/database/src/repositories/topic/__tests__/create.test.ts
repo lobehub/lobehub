@@ -37,6 +37,31 @@ describe('TopicRepository - create', () => {
   });
 
   describe('create', () => {
+    it('never moves a message that already belongs to another topic', async () => {
+      // A stale client bucket once sent another conversation's message ids as
+      // `topicMessageIds`; re-parenting them emptied that conversation.
+      await serverDB.insert(topics).values({ id: 'existing-topic', sessionId, userId });
+      await serverDB.insert(messages).values([
+        { id: 'loose-message', role: 'user', userId, sessionId },
+        { id: 'owned-message', role: 'user', userId, sessionId, topicId: 'existing-topic' },
+      ]);
+
+      await topicRepo.create(
+        { messages: ['loose-message', 'owned-message'], sessionId, title: 'New' },
+        'fresh-topic',
+      );
+
+      const rows = await serverDB
+        .select({ id: messages.id, topicId: messages.topicId })
+        .from(messages)
+        .where(inArray(messages.id, ['loose-message', 'owned-message']))
+        .orderBy(asc(messages.id));
+      expect(rows).toEqual([
+        { id: 'loose-message', topicId: 'fresh-topic' },
+        { id: 'owned-message', topicId: 'existing-topic' },
+      ]);
+    });
+
     it('should create a new topic and associate messages', async () => {
       const topicData = {
         title: 'New Topic',

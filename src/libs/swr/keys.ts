@@ -47,6 +47,10 @@ export const channelKeys = {
     (channelId: string, memberId: string) =>
       ['channel:agentEnvironment', channelId, memberId] as const,
   ),
+  wakeConfig: def(
+    'channel:wakeConfig',
+    (channelId: string) => ['channel:wakeConfig', channelId] as const,
+  ),
   userCandidates: def(
     'channel:userCandidates',
     (channelId: string | undefined, search: string) =>
@@ -425,6 +429,11 @@ export const deviceKeys = {
     workspaceId,
     deviceId,
   ]),
+  systemInfo: def('device:systemInfo', (workspaceId: string | null, deviceId: string) => [
+    'device:systemInfo',
+    workspaceId,
+    deviceId,
+  ]),
   browseDirectory: def(
     'device:browseDirectory',
     (workspaceId: string | null, deviceId: string, path?: string, cursor?: string) =>
@@ -543,6 +552,22 @@ export const fileKeys = {
 // header is `portal:` not `document:`.
 // =========================================================================
 
+// ---- MCP Apps (interactive tool result views) -----------------------------
+export const mcpAppKeys = {
+  resource: def(
+    'mcpApp:resource',
+    (
+      identifier: string,
+      uri: string,
+      {
+        agentId,
+        onThisDevice = false,
+        server,
+      }: { agentId?: string; onThisDevice?: boolean; server?: string },
+    ) => ['mcpApp:resource', identifier, uri, agentId ?? null, onThisDevice, server ?? null],
+  ),
+};
+
 // ---- api key (settings/apikey) -------------------------------------------
 export const apiKeyKeys = {
   list: def('apiKey:list', () => ['apiKey:list']),
@@ -612,6 +637,10 @@ export const scmKeys = {
   identity: def('scm:identity', (provider: string) => ['scm:identity', provider]),
   installations: def('scm:installations', (workspaceId: string | null | undefined) => [
     'scm:installations',
+    workspaceId ?? null,
+  ]),
+  repositories: def('scm:repositories', (workspaceId: string | null | undefined) => [
+    'scm:repositories',
     workspaceId ?? null,
   ]),
   wakeTarget: def('scm:wakeTarget', (topicId: string) => ['scm:wakeTarget', topicId]),
@@ -983,6 +1012,11 @@ export const electronKeys = {
   remoteServerConfig: def('electron:getRemoteServerConfig', () => [
     'electron:getRemoteServerConfig',
   ]),
+  /** This machine's derived device id in a workspace (local, no network). */
+  workspaceDeviceId: def('electron:getWorkspaceDeviceId', (workspaceId: string) => [
+    'electron:getWorkspaceDeviceId',
+    workspaceId,
+  ]),
 };
 
 /**
@@ -998,6 +1032,10 @@ export const matchDomain =
 /**
  * Aggregate registry — one entry point for every domain's keys.
  */
+export const taskLabelKeys = {
+  list: def('taskLabel:list', () => ['taskLabel:list'] as const),
+};
+
 export const swrKeys = {
   agent: agentConfigKeys,
   agentDocument: agentDocumentSWRKeys,
@@ -1037,6 +1075,7 @@ export const swrKeys = {
   serverConfig: serverConfigKeys,
   share: shareKeys,
   stats: statsKeys,
+  taskLabel: taskLabelKeys,
   thread: threadKeys,
   tool: toolKeys,
   topic: topicKeys,

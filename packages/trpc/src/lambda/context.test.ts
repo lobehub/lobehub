@@ -198,12 +198,6 @@ describe('createContextInner', () => {
     expect(context2.resHeaders).toBeInstanceOf(Headers);
   });
 
-  it('should always provide resHeaders', async () => {
-    const ctx = await createContextInner();
-
-    expect(ctx.resHeaders).toBeInstanceOf(Headers);
-  });
-
   it('should keep provided traceContext', async () => {
     const traceContext = { test: 'ctx' } as any;
     const ctx = await createContextInner({ traceContext });

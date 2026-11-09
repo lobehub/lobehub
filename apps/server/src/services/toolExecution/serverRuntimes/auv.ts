@@ -1,4 +1,5 @@
 import { AuvApiName, AuvIdentifier } from '@lobechat/builtin-tool-auv';
+import { BRANDING_NAME } from '@lobechat/business-const';
 import type { DeviceClient } from '@lobechat/types';
 
 import { deviceGateway } from '@/server/services/deviceGateway';
@@ -30,17 +31,17 @@ const buildUnverifiedDeviceResult = (
   const message =
     clientKind === 'cli-only'
       ? `The active device (${deviceId}) is connected only through ${CLI_WITHOUT_COMPUTER_USE}. ` +
-        `Nothing was run. Ask the user to open the LobeHub desktop app on that machine, or to ` +
+        `Nothing was run. Ask the user to open the ${BRANDING_NAME} desktop app on that machine, or to ` +
         `restart \`lh connect\` with \`--auv\`, then retry.`
       : clientKind === 'mixed'
         ? `Could not confirm that the active device (${deviceId}) can run Computer Use: the ` +
           `desktop app did not answer the capability check (${reason}), and the device also runs ` +
           `${CLI_WITHOUT_COMPUTER_USE}. Nothing was run. Retry shortly; if it keeps failing, ask ` +
-          `the user to check that the LobeHub desktop app is running and connected.`
+          `the user to check that the ${BRANDING_NAME} desktop app is running and connected.`
         : `Could not confirm that the active device (${deviceId}) can run Computer Use: it did ` +
           `not answer the capability check (${reason}). Nothing was run. The device may be busy ` +
           `or reconnecting — retry shortly, and if it keeps failing, ask the user to check that ` +
-          `the LobeHub desktop app is running and connected.`;
+          `the ${BRANDING_NAME} desktop app is running and connected.`;
   return {
     content: message,
     error: { code: COMPUTER_USE_DEVICE_UNAVAILABLE_ERROR_CODE, message },

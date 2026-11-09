@@ -1,4 +1,5 @@
 import { Flexbox } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { type PropsWithChildren } from 'react';
 
 import ProviderMenu from '../../ProviderMenu';
@@ -12,7 +13,7 @@ const Layout = ({
   onProviderSelect: (providerKey: string) => void;
 }) => {
   return (
-    <Flexbox horizontal className={styles.mainContainer} width={'100%'}>
+    <Flexbox horizontal className={stylex.props(styles.mainContainer).className} width={'100%'}>
       <ProviderMenu mobile={false} onProviderSelect={onProviderSelect} />
       <Container>{children}</Container>
     </Flexbox>

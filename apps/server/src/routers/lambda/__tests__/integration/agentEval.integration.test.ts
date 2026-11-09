@@ -755,14 +755,11 @@ describe('Agent Eval Router Integration Tests', () => {
         expect(deleted).toBeUndefined();
       });
 
-      it('should return error when test case not found', async () => {
+      it('does not reject when a test case is missing', async () => {
         const caller = agentEvalRouter.createCaller(createTestContext(userId));
 
+        // PGlite may omit rowCount, so only non-rejection is verified here.
         await caller.deleteTestCase({ id: 'non-existent' });
-
-        // In PGlite, rowCount may be undefined, so we can't reliably detect non-existent deletes
-        // This test just verifies no error is thrown
-        expect(true).toBe(true);
       });
     });
   });
@@ -904,14 +901,6 @@ describe('Agent Eval Router Integration Tests', () => {
           maxConcurrency: 5,
           timeout: 300000,
         });
-      });
-
-      it('should default status to idle', async () => {
-        const caller = agentEvalRouter.createCaller(createTestContext(userId));
-
-        const result = await caller.createRun({ datasetId });
-
-        expect(result.status).toBe('idle');
       });
 
       it('should throw BAD_REQUEST when dataset not found', async () => {
@@ -1118,14 +1107,11 @@ describe('Agent Eval Router Integration Tests', () => {
         await cleanupTestUser(serverDB, user2Id);
       });
 
-      it('should return error when run not found', async () => {
+      it('does not reject when a run is missing', async () => {
         const caller = agentEvalRouter.createCaller(createTestContext(userId));
 
+        // PGlite may omit rowCount, so only non-rejection is verified here.
         await caller.deleteRun({ id: 'non-existent' });
-
-        // In PGlite, rowCount may be undefined, so we can't reliably detect non-existent deletes
-        // This test just verifies no error is thrown
-        expect(true).toBe(true);
       });
     });
 

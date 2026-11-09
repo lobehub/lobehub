@@ -4,7 +4,7 @@ import {
   CHANNEL_DELETED_AGENT_NAME,
   CHANNEL_DELETED_USER_NAME,
 } from '@lobechat/types';
-import { and, asc, desc, eq, isNull, lt, lte, or } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gt, isNull, lt, lte, ne, or } from 'drizzle-orm';
 
 import type {
   ChannelJobItem,
@@ -51,6 +51,31 @@ const manifestScope = (channelId: string, manifest: ChannelInputManifest) => {
       ? or(eq(channelMessages.threadId, threadId), mainPrefix)
       : isNull(channelMessages.threadId),
   );
+};
+
+/**
+ * How many messages of a manifest's branch fall strictly between two sequences, without one id:
+ * what a run's recent context leaves out.
+ */
+export const countManifestMessages = async (
+  db: LobeChatDatabase | Transaction,
+  channelId: string,
+  manifest: ChannelInputManifest,
+  range: { afterSequence: number; beforeSequence: number; excludeId?: string | null },
+): Promise<number> => {
+  const [row] = await db
+    .select({ value: count() })
+    .from(channelMessages)
+    .where(
+      and(
+        manifestScope(channelId, manifest),
+        gt(channelMessages.sequence, range.afterSequence),
+        lt(channelMessages.sequence, range.beforeSequence),
+        range.excludeId ? ne(channelMessages.id, range.excludeId) : undefined,
+      ),
+    );
+
+  return row?.value ?? 0;
 };
 
 /**

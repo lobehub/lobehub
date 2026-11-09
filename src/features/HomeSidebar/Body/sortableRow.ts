@@ -21,9 +21,10 @@ export const suppressNextClick = () => {
   setTimeout(() => window.removeEventListener('click', swallow, { capture: true }), 0);
 };
 
-// Pressing on a row's own buttons (the ⋯ menu) must never pick the row up.
+// Pressing on a row's own buttons (the ⋯ menu, a star) must never pick the row
+// up. Rows that are not a NavItem mark their buttons with `data-row-action`.
 const startsOnRowAction = (event: Event) =>
-  event.target instanceof Element && !!event.target.closest('.nav-item-actions');
+  event.target instanceof Element && !!event.target.closest('.nav-item-actions, [data-row-action]');
 
 export class RowMouseSensor extends MouseSensor {
   static activators = [

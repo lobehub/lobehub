@@ -403,12 +403,13 @@ export class UserMemoryConsolidationModel {
    */
   listQueueEvidence = async (
     origin: string,
-  ): Promise<{ contextId: string | null; count: number; key: string }[]> => {
+  ): Promise<{ contextId: string | null; count: number; domain: string | null; key: string }[]> => {
     const queue = sql`${userMemories.metadata} -> 'consolidationQueue'`;
     return this.db
       .select({
         contextId: userMemoriesDossiers.contextId,
         count: sql<number>`count(*)::int`,
+        domain: sql<string | null>`${queue} ->> 'domain'`,
         key: sql<string>`${queue} ->> 'key'`,
       })
       .from(userMemories)
@@ -427,7 +428,26 @@ export class UserMemoryConsolidationModel {
           sql`${queue} ->> 'route' = 'evidence'`,
         ),
       )
-      .groupBy(userMemoriesDossiers.contextId, sql`${queue} ->> 'key'`);
+      .groupBy(userMemoriesDossiers.contextId, sql`${queue} ->> 'domain'`, sql`${queue} ->> 'key'`);
+  };
+
+  /** Remember merged domains on a queue lineage, so a resumed run does not merge them again. */
+  saveQueueDomains = async (origin: string, domains: Record<string, string>): Promise<void> => {
+    const queue = sql`${userMemories.metadata} -> 'consolidationQueue'`;
+    const map = sql`${JSON.stringify(domains)}::jsonb`;
+    await this.db
+      .update(userMemories)
+      .set({
+        metadata: sql`jsonb_set(${userMemories.metadata}, '{consolidationQueue,domain}', ${map} -> (${queue} ->> 'key'))`,
+      })
+      .where(
+        and(
+          eq(userMemories.userId, this.userId),
+          sql`COALESCE(${queue} ->> 'origin', ${queue} ->> 'runId') = ${origin}`,
+          sql`${queue} ->> 'route' = 'evidence'`,
+          sql`jsonb_exists(${map}, ${queue} ->> 'key')`,
+        ),
+      );
   };
 
   /** Mark legacy rows that consolidation saw but keeps in place (facts, preferences, noise). */

@@ -826,6 +826,21 @@ describe('LobeAzureOpenAI', () => {
       expect(arg).toHaveProperty('image');
     });
 
+    it('should send GIF output fields and keep the GIF MIME type', async () => {
+      const generateSpy = vi
+        .spyOn(instance['client'].images, 'generate')
+        .mockResolvedValue({ data: [{ b64_json: 'R0lGODlh' }], output_format: 'gif' } as any);
+
+      const res = await instance.createImage({
+        model: 'gpt-image-2.6-flare',
+        params: { frameCount: 4, frameDurationMs: 300, outputFormat: 'gif', prompt: 'gif' },
+      });
+
+      const arg = vi.mocked(generateSpy).mock.calls[0][0] as any;
+      expect(arg).toMatchObject({ frame_count: 4, frame_duration_ms: 300, output_format: 'gif' });
+      expect(res).toEqual({ imageUrl: 'data:image/gif;base64,R0lGODlh' });
+    });
+
     it('should not include image in generate options', async () => {
       const generateSpy = vi
         .spyOn(instance['client'].images, 'generate')

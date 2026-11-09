@@ -137,3 +137,11 @@ Source: the Channel composer audit checked internal asymmetry and button weight 
 Reply is the primary Channel message action. Replying to a person only posts a quoted message in the current feed, with no Agent dispatch or new thread, even if the text mentions Agents. Replying to an Agent on the main feed atomically creates/reuses a thread rooted at that Agent's answer and sends the continuation there. The target Agent and explicitly mentioned Agents participate; unrelated Agents do not join. Inside a thread, keep replies in that thread and retain existing participants. Opening or cancelling reply mode never persists an empty thread.
 
 Source: user correction of the proposed in-channel reply semantics (2026-10-31).
+
+## LOBE-UX-020 — Conversation day dividers follow WeChat, time included
+
+A Channel day divider stamps the first message of the day the way WeChat does: today is the time alone ("10:17"), not "今天"; earlier days are the day followed by the time ("昨天 01:36", "星期五 10:15", "11 月 7 日 10:15", "2025 年 11 月 7 日 10:15"). Days are calendar days in local time, not 24-hour spans. The full date stays in the hover title and the separator's accessible label.
+
+Enforcement: `src/features/Channels/messagePresentation.test.ts` (`channelDayLabel`) covers today, the yesterday boundary, weekdays, this year and earlier years in zh-CN and en-US.
+
+Source: user correction on PR #22556 (2026-11-08): "今天应该显示时间", after a first version labelled today as "今天".

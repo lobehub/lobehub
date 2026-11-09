@@ -9,6 +9,7 @@ const mockElectronIpc = {
     callTool: vi.fn(),
     getStreamableMcpServerManifest: vi.fn(),
     getStdioMcpServerManifest: vi.fn(),
+    listTools: vi.fn(),
     validMcpServerInstallable: vi.fn(),
   },
 };
@@ -20,6 +21,7 @@ const environment = vi.hoisted(() => ({
 
 vi.mock('@/store/serverConfig/store', () => ({
   getServerConfigStoreState: () => ({
+    featureFlags: { enableMcpApps: false },
     serverConfig: { deviceGatewayConfigured: environment.deviceGatewayConfigured },
   }),
 }));
@@ -105,6 +107,9 @@ describe('MCPService', () => {
     environment.isDesktop = false;
     environment.deviceGatewayConfigured = undefined;
     mockGetToolStoreState.mockReturnValue({});
+    // Like the real selectors: a lookup function that finds no plugin by default
+    mockPluginSelectors.getInstalledPluginById.mockReturnValue(() => undefined);
+    mockPluginSelectors.getCustomPluginById.mockReturnValue(() => undefined);
   });
 
   describe('invokeMcpToolCall', () => {
@@ -198,6 +203,8 @@ describe('MCPService', () => {
         expect(superjson.deserialize(mockElectronIpc.mcp.callTool.mock.calls[0][0])).toEqual({
           args: { path: 'test.txt' },
           env: detail.mcpStdioConfig.env,
+          // MCP Apps off for this user: the desktop session doesn't announce them
+          mcpApps: false,
           params: { command: 'node', args: ['mcp.js'], name: payload.identifier, type: 'stdio' },
           toolName: 'read_file',
         });
@@ -231,6 +238,11 @@ describe('MCPService', () => {
         { ...detail, isEnabled: false },
         { ...detail, tools: [] },
         { ...detail, tools: [{ toolName: 'read_file', permission: 'disabled' }] },
+        // Only its view may call it, and this call came from the model
+        {
+          ...detail,
+          tools: [{ metadata: { visibility: ['app'] }, permission: 'auto', toolName: 'read_file' }],
+        },
       ])('rejects a newly disabled connector or unavailable tool before IPC', async (current) => {
         const { lambdaClient } = await import('@/libs/trpc/client');
         vi.mocked(lambdaClient.connector.getForEdit.query).mockResolvedValue(current as never);
@@ -743,6 +755,21 @@ describe('MCPService', () => {
     });
   });
 
+  describe('listLocalMcpTools', () => {
+    it('returns every tool the desktop main process lists, with its visibility', async () => {
+      const tools = [{ inputSchema: { type: 'object' }, name: 'load_page', visibility: ['app'] }];
+      mockElectronIpc.mcp.listTools.mockResolvedValue(superjson.serialize(tools));
+      const input = { stdio: { command: 'dash-mcp', name: 'dash' } };
+
+      await expect(mcpService.listLocalMcpTools(input)).resolves.toEqual(tools);
+      expect(superjson.deserialize(mockElectronIpc.mcp.listTools.mock.calls[0][0])).toEqual({
+        ...input,
+        // MCP Apps off for this user: listed on a session that doesn't announce them
+        mcpApps: false,
+      });
+    });
+  });
+
   describe('getStdioMcpServerManifest', () => {
     it('should call ipc mcp.getStdioMcpServerManifest with stdio parameters', async () => {
       const mockManifest: ToolManifest = {
@@ -778,7 +805,11 @@ describe('MCPService', () => {
 
       expect(result).toEqual(mockManifest);
       const callArg = vi.mocked(mockElectronIpc.mcp.getStdioMcpServerManifest).mock.calls[0][0];
-      expect(superjson.deserialize(callArg as any)).toEqual({ ...stdioParams, metadata });
+      expect(superjson.deserialize(callArg as any)).toEqual({
+        ...stdioParams,
+        mcpApps: false,
+        metadata,
+      });
     });
 
     it('should handle abort signal for stdio manifest', async () => {
@@ -811,6 +842,7 @@ describe('MCPService', () => {
       const callArg = vi.mocked(mockElectronIpc.mcp.getStdioMcpServerManifest).mock.calls[0][0];
       expect(superjson.deserialize(callArg as any)).toEqual({
         ...stdioParams,
+        mcpApps: false,
         metadata: undefined,
       });
     });
@@ -843,6 +875,7 @@ describe('MCPService', () => {
       const callArg = vi.mocked(mockElectronIpc.mcp.getStdioMcpServerManifest).mock.calls[0][0];
       expect(superjson.deserialize(callArg as any)).toEqual({
         ...stdioParams,
+        mcpApps: false,
         metadata: undefined,
       });
     });

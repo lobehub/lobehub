@@ -203,9 +203,18 @@ describe('Cursor ACP helpers', () => {
     expect(buildCursorAcpArgs(['--model', 'composer-1.5'])).toEqual([
       '--model',
       'composer-1.5',
+      '--force',
       'acp',
     ]);
     expect(buildCursorAcpPrompt('hello')).toEqual([{ text: 'hello', type: 'text' }]);
+  });
+
+  it.each(['--force', '-f'])('does not duplicate an explicit %s flag', (flag) => {
+    expect(buildCursorAcpArgs([flag])).toEqual([flag, 'acp']);
+  });
+
+  it('still forces full access when only --yolo is given, which Cursor ACP does not read', () => {
+    expect(buildCursorAcpArgs(['--yolo'])).toEqual(['--yolo', '--force', 'acp']);
   });
 
   it('rejects image prompts instead of silently dropping them', () => {
@@ -232,7 +241,7 @@ describe('CursorAcpSession', () => {
 
     expect(spawnMock).toHaveBeenCalledWith(
       'agent',
-      ['--model', 'composer-1.5', 'acp'],
+      ['--model', 'composer-1.5', '--force', 'acp'],
       expect.objectContaining({ cwd: '/workspace', stdio: ['pipe', 'pipe', 'pipe'] }),
     );
     expect(fake.requests.map(({ method }) => method).filter(Boolean)).toEqual([

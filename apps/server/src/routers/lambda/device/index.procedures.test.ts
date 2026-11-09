@@ -102,6 +102,7 @@ function expected(): Array<
     ['updateDevice', 'mutation', 12],
     ['updateDeviceInfo', 'mutation', 12],
     ['updateWorkspaceDevice', 'mutation', 12],
+    ['wakeManagedDevice', 'mutation', 12],
     ['writeProjectFile', 'mutation', 15],
     ['writeTerminal', 'mutation', 12],
   ];

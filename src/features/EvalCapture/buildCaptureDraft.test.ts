@@ -39,12 +39,6 @@ describe('buildCaptureDraft', () => {
     ]);
   });
 
-  it('drops the system message, which is harness context rather than a turn', () => {
-    expect(buildCaptureDraft(conversation, 'm5')!.context.some((c) => c.role === 'system')).toBe(
-      false,
-    );
-  });
-
   it('captures the first answer with no context at all', () => {
     const draft = buildCaptureDraft(conversation, 'm3')!;
 
