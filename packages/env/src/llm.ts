@@ -232,6 +232,9 @@ export const getLLMConfig = () => {
       AIHUBMIX_API_KEY: z.string().optional(),
       AIHUBMIX_PROXY_URL: z.string().optional(),
 
+      ENABLED_AISTUPIDLEVEL: z.boolean(),
+      AISTUPIDLEVEL_API_KEY: z.string().optional(),
+
       ENABLED_NEWAPI: z.boolean(),
       NEWAPI_API_KEY: z.string().optional(),
       NEWAPI_PROXY_URL: z.string().optional(),
@@ -491,6 +494,9 @@ export const getLLMConfig = () => {
       ENABLED_AIHUBMIX: !!process.env.AIHUBMIX_API_KEY,
       AIHUBMIX_API_KEY: process.env.AIHUBMIX_API_KEY,
       AIHUBMIX_PROXY_URL: process.env.AIHUBMIX_PROXY_URL,
+
+      ENABLED_AISTUPIDLEVEL: !!process.env.AISTUPIDLEVEL_API_KEY,
+      AISTUPIDLEVEL_API_KEY: process.env.AISTUPIDLEVEL_API_KEY,
 
       ENABLED_NEWAPI: !!process.env.NEWAPI_API_KEY,
       NEWAPI_API_KEY: process.env.NEWAPI_API_KEY,
