@@ -5,7 +5,7 @@ import { appEnv } from '@/envs/app';
 export interface PageRoomState {
   bootstrapped: boolean;
   epoch: string;
-  /** Absent from a gateway that predates conditional server writes. */
+  // Absent from a gateway that predates conditional server writes.
   serverWriteSeq?: number;
   update: Uint8Array;
 }
@@ -17,7 +17,6 @@ export class PageRoomConflictError extends Error {
   }
 }
 
-/** Another server writer reached the room after this one read it. */
 export class PageRoomStaleBaseError extends Error {
   constructor() {
     super('Page room changed after this writer read it');
@@ -28,7 +27,6 @@ export class PageRoomStaleBaseError extends Error {
 export const PAGE_TOO_LARGE_MESSAGE =
   'This page is too large to store more content. Remove some content from the page, or ask support to trim its history.';
 
-/** The room is at its size cap and refuses updates that add content. */
 export class PageRoomTooLargeError extends TRPCError {
   constructor() {
     super({ code: 'PAYLOAD_TOO_LARGE', message: PAGE_TOO_LARGE_MESSAGE });
