@@ -42,6 +42,13 @@ vi.mock('@/libs/trpc/lambda/middleware', () => ({
     opts.next({ ctx: { ...opts.ctx, serverDB: opts.ctx.serverDB ?? {} } }),
 }));
 
+const activeGmailAuthConfig = () => ({
+  appSlug: 'GMAIL',
+  authConfigId: 'ac-gmail',
+  connectedAccountId: 'ca-gmail',
+  status: 'ACTIVE',
+});
+
 describe('connectorRouter.syncPluginTools — customPlugin guard', () => {
   let connectorModelMock: any;
   let connectorToolModelMock: any;
@@ -157,12 +164,7 @@ describe('connectorRouter.syncPluginTools — customPlugin guard', () => {
     pluginModelMock.findById.mockResolvedValueOnce({
       type: 'plugin',
       customParams: {
-        composio: {
-          appSlug: 'GMAIL',
-          authConfigId: 'ac-gmail',
-          connectedAccountId: 'ca-gmail',
-          status: 'ACTIVE',
-        },
+        composio: activeGmailAuthConfig(),
       },
       manifest: { api: [], meta: { title: 'Gmail' } },
     });
@@ -188,12 +190,7 @@ describe('connectorRouter.syncPluginTools — customPlugin guard', () => {
       {
         id: 'conn-existing',
         metadata: {
-          composio: {
-            appSlug: 'GMAIL',
-            authConfigId: 'ac-gmail',
-            connectedAccountId: 'ca-gmail',
-            status: 'ACTIVE',
-          },
+          composio: activeGmailAuthConfig(),
           mountedByAgentId: 'agent-1',
         },
         userId: 'user_test',
@@ -202,12 +199,7 @@ describe('connectorRouter.syncPluginTools — customPlugin guard', () => {
     pluginModelMock.findById.mockResolvedValueOnce({
       type: 'plugin',
       customParams: {
-        composio: {
-          appSlug: 'GMAIL',
-          authConfigId: 'ac-gmail',
-          connectedAccountId: 'ca-gmail',
-          status: 'ACTIVE',
-        },
+        composio: activeGmailAuthConfig(),
       },
       manifest: { api: [], meta: { description: 'Gmail tools', title: 'Gmail' } },
     });
