@@ -607,6 +607,26 @@ describe('Goal Supervisor integration', () => {
       expect(incidents.map((item) => item.status)).toEqual(['diagnosing']);
     });
 
+    it('backs off the poll the longer that diagnosis has been open', async () => {
+      const { goalId, taskId } = await pipelineFailureGoal();
+      await service().tick(goalId);
+      await failAgain(taskId);
+      const state = (await goalModel.findById(goalId))!.config!.supervisorState!;
+      await goalModel.updateSupervisorState(goalId, state.revision, {
+        ...state,
+        incidents: state.incidents.map((item) => ({
+          ...item,
+          createdAt: new Date(Date.now() - 5 * 60_000).toISOString(),
+        })),
+      });
+      vi.mocked(scheduler.scheduleGoalAdvance).mockClear();
+
+      await service().tick(goalId);
+
+      const [params] = vi.mocked(scheduler.scheduleGoalAdvance).mock.calls[0];
+      expect(params.delay).toBeGreaterThanOrEqual(30);
+    });
+
     it('escalates it once expired instead of rescheduling forever', async () => {
       const { goalId, taskId } = await pipelineFailureGoal();
       await service().tick(goalId);
