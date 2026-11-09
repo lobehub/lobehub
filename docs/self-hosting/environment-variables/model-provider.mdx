@@ -13,6 +13,24 @@ tags:
 
 When deploying LobeHub, a rich set of environment variables related to model service providers is provided, allowing you to easily define the model service providers to be enabled in LobeHub.
 
+## Ace Data Cloud
+
+### `ACEDATACLOUD_API_KEY`
+
+- Optional deployment key. Users can enter their own service API token in the Ace Data Cloud provider settings instead.
+- A non-empty key enables the provider for the server. `ENABLED_ACEDATACLOUD` is derived from the key, not a separate environment toggle.
+- Default: unset. Example: `your-ace-data-cloud-api-token`.
+
+### `ACEDATACLOUD_PROXY_URL`
+
+- Optional override of the OpenAI-compatible API base URL.
+- Default: `https://api.acedata.cloud/v1`. Do not append `/openai` or use a full completion path.
+
+### `ACEDATACLOUD_MODEL_LIST`
+
+- Optional shared model-list syntax, such as `+MODEL_ID` or `-all,+MODEL_ID`. Use IDs from the current catalog.
+- Default: no static model list; users fetch current models in provider settings.
+
 ## OpenAI
 
 ### `ENABLED_OPENAI`

@@ -18,3 +18,17 @@ describe('TypeSafe deployment credentials', () => {
     expect(getLLMConfig().ENABLED_TYPESAFE).toBe(false);
   });
 });
+
+describe('Ace Data Cloud deployment credentials', () => {
+  it('exposes an explicit Ace application key through the generic provider binding', () => {
+    vi.stubEnv('ACEDATACLOUD_API_KEY', 'dummy-ace-key');
+    const config = getLLMConfig();
+    expect(config.ENABLED_ACEDATACLOUD).toBe(true);
+    expect(config.ACEDATACLOUD_API_KEY).toBe('dummy-ace-key');
+  });
+
+  it.each([undefined, ''])('does not enable the server provider without a key (%s)', (key) => {
+    vi.stubEnv('ACEDATACLOUD_API_KEY', key);
+    expect(getLLMConfig().ENABLED_ACEDATACLOUD).toBe(false);
+  });
+});
