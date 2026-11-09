@@ -21,6 +21,7 @@ import {
   NOW_TICK_INDEX,
   type PlacedRun,
   resolveRowLabel,
+  resolveTopicSpan,
   type TopicRow,
 } from './layout';
 import { RUN_STATUS_VISUALS } from './statusVisuals';
@@ -62,6 +63,8 @@ const styles = stylex.create({
   },
   axis: { height: 20, position: 'relative' },
   bar: {
+    // A bare <button> paints the browser's gray under the translucent segments.
+    backgroundColor: 'transparent',
     borderRadius: 5,
     borderStyle: 'none',
     borderWidth: 0,
@@ -154,6 +157,14 @@ const styles = stylex.create({
     height: '100%',
     justifyContent: 'center',
   },
+  topicSpan: {
+    backgroundColor: cssVar.colorFillTertiary,
+    borderRadius: 5,
+    height: BAR_HEIGHT,
+    pointerEvents: 'none',
+    position: 'absolute',
+    top: 3,
+  },
   segment: { display: 'block', height: '100%', overflow: 'hidden', position: 'relative' },
   live: { borderInlineEndStyle: 'solid', borderInlineEndWidth: 2, boxSizing: 'border-box' },
   shine: {
@@ -174,7 +185,9 @@ const styles = stylex.create({
 const mix = (status: AgentRunBoardRunStatus, percent: number) =>
   `color-mix(in srgb, ${RUN_STATUS_VISUALS[status].color} ${percent}%, transparent)`;
 
-const tint = (status: AgentRunBoardRunStatus) => mix(status, 32);
+const tint = (status: AgentRunBoardRunStatus) =>
+  // Finished turns read as work done on the track, so they stay blue against the idle band.
+  status === 'done' ? `color-mix(in srgb, ${cssVar.colorInfo} 24%, transparent)` : mix(status, 32);
 
 /** Live work: fills toward its leading edge, with a light sweeping across it. */
 const LiveSegment = () => (
@@ -279,6 +292,22 @@ const Bar = ({
   );
 };
 
+/** One band per topic: bars are its working turns, the band showing between them its idle time. */
+const TopicSpanBand = ({ runs }: { runs: PlacedRun[] }) => {
+  const { endsWaiting, left, width } = resolveTopicSpan(runs);
+
+  return (
+    <span
+      aria-hidden
+      data-testid={'team-board-topic-span'}
+      {...sx(styles.topicSpan, {
+        insetInlineStart: `${left}%`,
+        width: endsWaiting ? `calc(${width}% + ${WAIT_MARK_WIDTH}px)` : `${width}%`,
+      })}
+    />
+  );
+};
+
 const RowLabel = ({ agentId, row, title }: { agentId: string; row: TopicRow; title: string }) => {
   const openDrawer = useOpenRunDrawer();
   const { anchor, offset, room } = resolveRowLabel(row.runs);
@@ -372,6 +401,7 @@ const Lane = ({
               {...stylex.props(styles.row)}
             >
               <div {...stylex.props(styles.track)}>
+                <TopicSpanBand runs={row.runs} />
                 {row.runs.map((placed) => (
                   <Bar
                     agentId={lane.agentId}
