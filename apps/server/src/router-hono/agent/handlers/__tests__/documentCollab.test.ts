@@ -1,12 +1,23 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { documentAccess, documentProjection } from '../documentCollab';
+import {
+  documentAccess,
+  documentProjection,
+  documentRoomStatus,
+  documentSeed,
+} from '../documentCollab';
 
-const { persistPageState, resolvePageAccess } = vi.hoisted(() => ({
-  persistPageState: vi.fn(),
-  resolvePageAccess: vi.fn(),
-}));
+const { buildPageSeed, getPageRoomStatus, persistPageState, resolvePageAccess } = vi.hoisted(
+  () => ({
+    buildPageSeed: vi.fn(),
+    getPageRoomStatus: vi.fn(),
+    persistPageState: vi.fn(),
+    resolvePageAccess: vi.fn(),
+  }),
+);
+
+vi.mock('@/server/services/pageCollab/seed', () => ({ buildPageSeed, getPageRoomStatus }));
 
 vi.mock('@/database/core/db-adaptor', () => ({ getServerDB: async () => ({}) }));
 
@@ -119,5 +130,66 @@ describe('documentProjection', () => {
       limit: 500_000,
       plan: 'plus',
     });
+  });
+});
+
+describe('documentSeed', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const seed = (documentId?: string) =>
+    documentSeed(buildContext({ query: documentId ? { documentId } : {} }));
+
+  it('requires a document', async () => {
+    expect((await seed()).status).toBe(400);
+  });
+
+  it('returns the seed as binary Yjs with the page workspace', async () => {
+    buildPageSeed.mockResolvedValue({
+      status: 'ok',
+      update: new Uint8Array([7, 8, 9]),
+      workspaceId: 'ws_1',
+    });
+
+    const res = await seed('doc_1');
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Content-Type')).toBe('application/octet-stream');
+    expect(res.headers.get('X-Workspace-Id')).toBe('ws_1');
+    expect(new Uint8Array(await res.arrayBuffer())).toEqual(new Uint8Array([7, 8, 9]));
+  });
+
+  it('answers 404 DOCUMENT_NOT_FOUND for a missing page', async () => {
+    buildPageSeed.mockResolvedValue({ status: 'not_found' });
+
+    const res = await seed('doc_1');
+
+    expect(res.status).toBe(404);
+    expect(await res.json()).toMatchObject({ code: 'DOCUMENT_NOT_FOUND' });
+  });
+
+  it('answers 403 ROOM_NOT_ALLOWED for a page outside any workspace', async () => {
+    buildPageSeed.mockResolvedValue({ status: 'not_allowed' });
+
+    const res = await seed('doc_1');
+
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({ code: 'ROOM_NOT_ALLOWED' });
+  });
+});
+
+describe('documentRoomStatus', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('requires a document', async () => {
+    expect((await documentRoomStatus(buildContext({ query: {} }))).status).toBe(400);
+  });
+
+  it('returns whether the page exists and is in a workspace', async () => {
+    getPageRoomStatus.mockResolvedValue({ exists: true, inWorkspace: false, workspaceId: null });
+
+    const res = await documentRoomStatus(buildContext({ query: { documentId: 'doc_1' } }));
+
+    expect(await res.json()).toEqual({ exists: true, inWorkspace: false, workspaceId: null });
+    expect(getPageRoomStatus).toHaveBeenCalledWith({}, 'doc_1');
   });
 });

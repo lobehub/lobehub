@@ -6,6 +6,7 @@ import { getDocumentCharLimitErrorData } from '@/server/services/document/writeL
 import { persistPageState, resolvePageAccess } from '@/server/services/pageCollab';
 import { PageProjectionRejectedError } from '@/server/services/pageCollab/persist';
 import { fromBase64 } from '@/server/services/pageCollab/roomClient';
+import { buildPageSeed, getPageRoomStatus } from '@/server/services/pageCollab/seed';
 
 const log = debug('lobe-server:agent:document-collab');
 
@@ -16,6 +17,29 @@ export async function documentAccess(c: Context): Promise<Response> {
 
   const access = await resolvePageAccess(await getServerDB(), userId, documentId);
   return c.json({ access });
+}
+
+export async function documentSeed(c: Context): Promise<Response> {
+  const documentId = c.req.query('documentId');
+  if (!documentId) return c.json({ code: 'INVALID', error: 'documentId is required' }, 400);
+
+  const seed = await buildPageSeed(await getServerDB(), documentId);
+  if (seed.status === 'not_found') {
+    return c.json({ code: 'DOCUMENT_NOT_FOUND', error: 'Document not found' }, 404);
+  }
+  if (seed.status === 'not_allowed') {
+    return c.json({ code: 'ROOM_NOT_ALLOWED', error: 'Only workspace pages have rooms' }, 403);
+  }
+  return new Response(seed.update, {
+    headers: { 'Content-Type': 'application/octet-stream', 'X-Workspace-Id': seed.workspaceId },
+  });
+}
+
+export async function documentRoomStatus(c: Context): Promise<Response> {
+  const documentId = c.req.query('documentId');
+  if (!documentId) return c.json({ code: 'INVALID', error: 'documentId is required' }, 400);
+
+  return c.json(await getPageRoomStatus(await getServerDB(), documentId));
 }
 
 export async function documentProjection(c: Context): Promise<Response> {
