@@ -15,6 +15,7 @@ export interface FailedSendDraft {
   id: string;
   message: string;
   pageSelections?: PageSelection[];
+  restored?: boolean;
 }
 
 export interface ChatMessageState {

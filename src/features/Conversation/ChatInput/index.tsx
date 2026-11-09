@@ -1,6 +1,7 @@
 'use client';
 
 import { type VoiceMessageRecording } from '@lobechat/types';
+import { nanoid } from '@lobechat/utils';
 import { type SlashOptions } from '@lobehub/editor';
 import {
   type ChatInputActionsProps,
@@ -413,7 +414,18 @@ const ChatInput = memo<ChatInputProps>(
           editorData,
           files: currentFileList,
           message,
-          onPreflightFailure: (editorRestored) => {
+          onPreflightFailure: (editorRestored, hasOperation) => {
+            if (hasOperation === false) {
+              useChatStore.getState().retainFailedSendDraft(contextKey, {
+                contextSelections: currentContextList,
+                editorData,
+                files: currentFileList,
+                id: nanoid(),
+                message,
+                pageSelections,
+              });
+              return;
+            }
             if (!editorRestored) return;
             const store = useFileStore.getState();
             // The composer was cleared up front; a send rejected before any
@@ -422,6 +434,16 @@ const ChatInput = memo<ChatInputProps>(
             // lifecycle restores on its own.
             store.restoreChatUploadFileList(currentFileList);
             store.restoreChatContextSelections(contextKey, currentContextList);
+          },
+          onBeforeSendFailure: () => {
+            useChatStore.getState().retainFailedSendDraft(contextKey, {
+              contextSelections: currentContextList,
+              editorData,
+              files: currentFileList,
+              id: nanoid(),
+              message,
+              pageSelections,
+            });
           },
           failedDraftContextSelections: currentContextList,
           onMessageAccepted: () => {

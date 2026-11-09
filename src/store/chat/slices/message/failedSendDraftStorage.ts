@@ -5,6 +5,7 @@ import type { FailedSendDraft } from './initialState';
 const STORAGE_KEY = 'lobehub:failed-send-drafts:v1';
 const MAX_DRAFTS = 32;
 const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+const MAX_STORAGE_BYTES = 200_000;
 
 type PersistedUploadFile = Omit<UploadFileItem, 'abortController' | 'file'> & {
   file?: { lastModified?: number; name: string; size?: number; type?: string };
@@ -23,7 +24,13 @@ const getStorage = (): Storage | undefined => {
 };
 
 const serializeFile = (file: UploadFileItem): PersistedUploadFile => {
-  const { abortController: _abortController, file: sourceFile, ...rest } = file;
+  const {
+    abortController: _abortController,
+    base64Url: _base64Url,
+    file: sourceFile,
+    previewUrl: _previewUrl,
+    ...rest
+  } = file;
   return {
     ...rest,
     file: sourceFile
@@ -109,7 +116,21 @@ export const persistFailedSendDrafts = (drafts: Record<string, FailedSendDraft[]
         })),
       ]),
     );
-    storage.setItem(STORAGE_KEY, JSON.stringify(persisted));
+    const serialized = JSON.stringify(persisted);
+    if (serialized.length <= MAX_STORAGE_BYTES) {
+      storage.setItem(STORAGE_KEY, serialized);
+      return;
+    }
+
+    const compacted = Object.fromEntries(
+      Object.entries(persisted).map(([contextKey, contextDrafts]) => [
+        contextKey,
+        contextDrafts.map(
+          ({ editorData: _editorData, pageSelections: _pageSelections, ...draft }) => draft,
+        ),
+      ]),
+    );
+    storage.setItem(STORAGE_KEY, JSON.stringify(compacted));
   } catch {
     // Storage can be unavailable or full; the in-memory recovery remains usable.
   }

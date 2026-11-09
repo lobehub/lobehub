@@ -26,6 +26,7 @@ export const useTaskFollowUpSubmit = ({
   const sendMessage = useConversationStore((s) => s.sendMessage);
   const conversationStore = useConversationStoreApi();
   const pending = useRef(false);
+  const failedDraftId = useRef<string | undefined>(undefined);
   const [submitting, setSubmitting] = useState(false);
 
   const handleSubmit = async () => {
@@ -51,19 +52,20 @@ export const useTaskFollowUpSubmit = ({
       if (recovered) return;
       recovered = true;
       const current = conversationStore.getState();
-      const restored =
+      if (
         current.editor === editor &&
         messageMapKey(current.context) === contextKey &&
         !!editor?.getLexicalEditor() &&
-        JSON.stringify(readDocument(editor, 'json')) === clearedDocument &&
+        JSON.stringify(readDocument(editor, 'json')) === clearedDocument
+      ) {
         restoreSendEditorState(editor, editorData, markdown);
-      if (!restored) {
-        useChatStore.getState().retainFailedSendDraft(contextKey, {
-          editorData,
-          id: nanoid(),
-          message: markdown,
-        });
       }
+      failedDraftId.current = nanoid();
+      useChatStore.getState().retainFailedSendDraft(contextKey, {
+        editorData,
+        id: failedDraftId.current,
+        message: markdown,
+      });
       toast.error(t('taskDetail.followUpFailed'));
     };
     try {
@@ -73,8 +75,15 @@ export const useTaskFollowUpSubmit = ({
         forceRuntime: 'gateway',
         message: markdown,
         onMessageAccepted: () => {
-          useChatStore.getState().removeFailedSendDraftByMessage(contextKey, markdown);
+          if (failedDraftId.current) {
+            useChatStore.getState().removeFailedSendDraft(contextKey, failedDraftId.current);
+            failedDraftId.current = undefined;
+          }
         },
+        onFailedSendDraftRetained: (id) => {
+          failedDraftId.current = id;
+        },
+        retainFailedDraftOnRestore: true,
         onBeforeSendFailure: recoverPreflight,
       });
     } catch {

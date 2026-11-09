@@ -163,6 +163,8 @@ describe('FeedbackInput', () => {
       message: 'why so slow',
       onBeforeSendFailure: expect.any(Function),
       onMessageAccepted: expect.any(Function),
+      onFailedSendDraftRetained: expect.any(Function),
+      retainFailedDraftOnRestore: true,
     });
   });
 });

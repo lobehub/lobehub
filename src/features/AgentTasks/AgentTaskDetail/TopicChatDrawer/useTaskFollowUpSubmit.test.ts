@@ -93,6 +93,8 @@ describe('useTaskFollowUpSubmit', () => {
       message: 'follow-up',
       onBeforeSendFailure: expect.any(Function),
       onMessageAccepted: expect.any(Function),
+      onFailedSendDraftRetained: expect.any(Function),
+      retainFailedDraftOnRestore: true,
     });
     expect(mocks.toastError).not.toHaveBeenCalled();
   });

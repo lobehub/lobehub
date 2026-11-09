@@ -17,6 +17,8 @@ export const recoverFailedSend = ({
   onPreflightFailure,
   operationId,
   retainFailedDraft,
+  retainFailedDraftOnRestore,
+  onFailedSendDraftRetained,
   files,
   contextSelections,
   pageSelections,
@@ -28,9 +30,11 @@ export const recoverFailedSend = ({
   get: () => ChatStore;
   isEditorCurrent: () => boolean;
   message: string;
-  onPreflightFailure?: (editorRestored?: boolean) => void;
+  onPreflightFailure?: (editorRestored?: boolean, hasOperation?: boolean) => void;
   operationId: string;
   retainFailedDraft: boolean;
+  retainFailedDraftOnRestore?: boolean;
+  onFailedSendDraftRetained?: (id: string) => void;
   files?: UploadFileItem[];
   contextSelections?: ChatContextContent[];
   pageSelections?: PageSelection[];
@@ -43,10 +47,10 @@ export const recoverFailedSend = ({
   store.updateOperationMetadata(operationId, {
     inputSendErrorMsg: error instanceof Error ? error.message : 'Unknown error',
   });
-  const editorData = get().operations[operationId]?.metadata.inputEditorTempState;
+  const editorData = get().operations[operationId]?.metadata.inputEditorTempState ?? undefined;
   const restored =
     isEditorCurrent() && restoreSendEditorState(editor, editorData, message, snapshot);
-  if (!restored && retainFailedDraft) {
+  if (retainFailedDraft && (!restored || retainFailedDraftOnRestore)) {
     store.retainFailedSendDraft(messageMapKey(context), {
       contextSelections,
       editorData,
@@ -55,8 +59,9 @@ export const recoverFailedSend = ({
       message,
       pageSelections,
     });
+    onFailedSendDraftRetained?.(operationId);
   }
-  onPreflightFailure?.(restored);
+  onPreflightFailure?.(restored, true);
 };
 
 export const createFailedSendRecovery =

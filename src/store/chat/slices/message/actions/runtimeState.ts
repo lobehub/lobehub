@@ -47,6 +47,20 @@ export class MessageRuntimeStateActionImpl {
     persistFailedSendDrafts(next);
   };
 
+  markFailedSendDraftRestored = (contextKey: string, id: string): void => {
+    const drafts = this.#get().failedSendDrafts;
+    const current = drafts[contextKey];
+    if (!current) return;
+    const next = {
+      ...drafts,
+      [contextKey]: current.map((draft) =>
+        draft.id === id ? { ...draft, restored: true } : draft,
+      ),
+    };
+    this.#set({ failedSendDrafts: next }, false, 'message/markFailedSendDraftRestored');
+    persistFailedSendDrafts(next);
+  };
+
   removeFailedSendDraftByMessage = (contextKey: string, message: string): void => {
     const drafts = this.#get().failedSendDrafts;
     const current = drafts[contextKey];

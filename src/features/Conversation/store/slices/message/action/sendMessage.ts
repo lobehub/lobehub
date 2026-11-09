@@ -28,7 +28,9 @@ export interface ConversationSendMessageParams extends Omit<
   failedDraftContextSelections?: ChatContextContent[];
   /** Recover a composer cleared before an asynchronous provider hook refuses the send. */
   onBeforeSendFailure?: (editorRestored?: boolean) => void;
-  onPreflightFailure?: (editorRestored?: boolean) => void;
+  onFailedSendDraftRetained?: (id: string) => void;
+  onPreflightFailure?: (editorRestored?: boolean, hasOperation?: boolean) => void;
+  retainFailedDraftOnRestore?: boolean;
 }
 
 /**
@@ -62,14 +64,14 @@ export const sendMessage = (
       try {
         result = await hooks.onBeforeSendMessage(sendParams);
       } catch (error) {
-        onBeforeSendFailure?.();
-        sendParams.onPreflightFailure?.();
+        onBeforeSendFailure?.(false);
+        sendParams.onPreflightFailure?.(false);
         throw error;
       }
       if (result === false) {
         console.info('[ConversationStore] sendMessage blocked by onBeforeSendMessage hook');
-        onBeforeSendFailure?.();
-        sendParams.onPreflightFailure?.();
+        onBeforeSendFailure?.(false);
+        sendParams.onPreflightFailure?.(false);
         return;
       }
 
@@ -106,6 +108,8 @@ export const sendMessage = (
       ...(messages ? { messages } : undefined),
       onTopicCreated: hooks.onTopicCreated,
       failedDraftContextSelections: params.failedDraftContextSelections,
+      onFailedSendDraftRetained: params.onFailedSendDraftRetained,
+      retainFailedDraftOnRestore: params.retainFailedDraftOnRestore,
     });
 
     // ===== Hook: onAfterMessageCreate =====

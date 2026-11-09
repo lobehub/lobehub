@@ -147,9 +147,6 @@ import { readSendEditorState } from './sendEditorState';
 import { showSendErrorInContext } from './sendErrorNotice';
 import { createFailedSendRecovery } from './sendFailureRecovery';
 
-/**
- * Extended params for sendMessage with context
- */
 export interface SendMessageWithContextParams extends SendMessageParams {
   context: ConversationContext;
   failedDraftContextSelections?: ChatContextContent[];
@@ -161,10 +158,9 @@ export interface SendMessageWithContextParams extends SendMessageParams {
    */
   inputEditor?: ChatInputEditor | null;
   inputEditorSnapshot?: { json: string | undefined };
-  /** A provider can reuse its editor for another conversation while a send is pending. */
   isInputEditorCurrent?: () => boolean;
-  /** Restore composer-owned context when sending fails before a message owns it. */
-  onPreflightFailure?: (editorRestored?: boolean) => void;
+  onFailedSendDraftRetained?: (id: string) => void;
+  onPreflightFailure?: (editorRestored?: boolean, hasOperation?: boolean) => void;
   /**
    * Called as soon as the backend reports a newly created topic id, so callers
    * with an isolated topic scope (e.g. Task Manager) can switch their UI to the
@@ -174,7 +170,7 @@ export interface SendMessageWithContextParams extends SendMessageParams {
    * own `switchTopic` handles the transition on the global chat store.
    */
   onTopicCreated?: (topicId: string) => void | Promise<void>;
-  /** Topic a new topic continues (a handoff): only its cwd carries over, never its CLI session. */
+  retainFailedDraftOnRestore?: boolean;
   sourceTopic?: SourceTopicDirectory;
 }
 
@@ -279,6 +275,8 @@ export class ConversationLifecycleActionImpl {
     context,
     contextSelections,
     failedDraftContextSelections,
+    retainFailedDraftOnRestore,
+    onFailedSendDraftRetained,
     inputEditor,
     inputEditorSnapshot,
     isInputEditorCurrent,
@@ -372,7 +370,7 @@ export class ConversationLifecycleActionImpl {
     const newThread = resolveNewThreadIntent(context);
 
     if (!ownerAgentId) {
-      onPreflightFailure?.();
+      onPreflightFailure?.(false, false);
       return;
     }
 
@@ -594,7 +592,7 @@ export class ConversationLifecycleActionImpl {
       (!!heterogeneousProvider || isLocalSystemEnabled);
     const localSystemToolSnapshots = canMaterializeLocalFiles
       ? await materializeLocalSystemToolSnapshots(localFileReferences).catch((error) => {
-          onPreflightFailure?.();
+          onPreflightFailure?.(false, false);
           throw error;
         })
       : [];
@@ -617,7 +615,7 @@ export class ConversationLifecycleActionImpl {
       message,
       selectedSkills,
     }).catch((error) => {
-      onPreflightFailure?.();
+      onPreflightFailure?.(false, false);
       throw error;
     });
     const enrichedSelectedTools = resolveSelectedToolsWithContent({
@@ -633,7 +631,7 @@ export class ConversationLifecycleActionImpl {
 
     // if message is empty or no files, then stop
     if (!message && !hasFile) {
-      onPreflightFailure?.();
+      onPreflightFailure?.(false, false);
       return;
     }
 
@@ -906,6 +904,8 @@ export class ConversationLifecycleActionImpl {
       files,
       contextSelections: failedDraftContextSelections,
       pageSelections,
+      retainFailedDraftOnRestore,
+      onFailedSendDraftRetained,
       snapshot: sendEditorSnapshot,
     });
     const restoreComposerAfterFailedSend = (error: unknown) => {
