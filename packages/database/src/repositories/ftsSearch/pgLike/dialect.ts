@@ -40,7 +40,15 @@ export const pgLikeDialect: PostgresFtsSearchDialect = {
     )})`;
   },
   partial: async (_db, _keyColumn, fields, query, ratio) => {
-    const terms = [...new Set(splitLikeTerms(query.trim()))];
+    // Terms are compared with ILIKE, so dedupe on the case-folded form: `Policy policy` is one
+    // term, otherwise a repeated word would satisfy two clauses and lift the floor on its own.
+    const seen = new Set<string>();
+    const terms = splitLikeTerms(query.trim()).filter((term) => {
+      const key = term.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
     if (terms.length < 2) return undefined;
 
     const presentInAnyField = terms.map((term) => {

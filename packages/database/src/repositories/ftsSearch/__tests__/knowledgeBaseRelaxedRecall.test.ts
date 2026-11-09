@@ -99,6 +99,14 @@ describe('pg_like partial matching', () => {
       [],
     );
   });
+
+  it('counts a repeated term once when its casing differs', async () => {
+    await insertDocument('one-word', 'policy');
+
+    await expect(
+      repo().searchKnowledgeBaseDocuments('Policy policy 上限', [knowledgeBaseId]),
+    ).resolves.toEqual([]);
+  });
 });
 
 describe.skipIf(!isServerDB)('pg_search partial matching', () => {
