@@ -149,7 +149,10 @@ export const planMachineRecovery = (params: {
             : `Usage limit: ${trimError(error)}. Retried ${retries} time(s) over ${spentFor} and the limit still applies. Check the plan or switch the agent to another account or provider`,
       };
     }
-    if (retries >= MAX_QUOTA_RETRIES) {
+    // The bound stops an automatic retry loop, not the wait a person asked for:
+    // the streak it counts predates their answer, so applying it here would
+    // reopen the decision they just made instead of holding for the reset.
+    if (!params.holdUntilReset && retries >= MAX_QUOTA_RETRIES) {
       return {
         action: 'gate',
         reason: `Usage limit: ${trimError(error)}. Retried ${retries} time(s) over ${spentFor} and the limit still applies. Check the plan or switch the agent to another account or provider`,

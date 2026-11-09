@@ -86,6 +86,38 @@ describe('planMachineRecovery', () => {
       expect(plan.action).toBe('wait');
     });
 
+    it('keeps holding when the retries were spent before a person chose to wait', () => {
+      // Six retries were spent on the streak a person then answered with "wait
+      // for the reset". That bound belongs to the automatic loop they overrode,
+      // so the wait has to survive it instead of reopening the gate at once.
+      const runs = Array.from({ length: 7 }, (_, i) =>
+        run(QUOTA_LIMITED_RUN_STATUS, new Date(FAILED_AT.getTime() - i * 3 * HOUR)),
+      );
+      const plan = planMachineRecovery({
+        error: SESSION_LIMIT,
+        holdUntilReset: true,
+        now: new Date(FAILED_AT.getTime() + MINUTE),
+        runs,
+        taskUpdatedAt: FAILED_AT,
+      });
+      expect(plan).toMatchObject({ action: 'wait', failedAt: FAILED_AT, failureClass: 'quota' });
+    });
+
+    it('restarts the authorized wait once its reset has passed', () => {
+      const runs = Array.from({ length: 7 }, (_, i) =>
+        run(QUOTA_LIMITED_RUN_STATUS, new Date(FAILED_AT.getTime() - i * 3 * HOUR)),
+      );
+      expect(
+        planMachineRecovery({
+          error: SESSION_LIMIT,
+          holdUntilReset: true,
+          now: new Date(RESET_AT.getTime() + 3 * MINUTE),
+          runs,
+          taskUpdatedAt: FAILED_AT,
+        }),
+      ).toEqual({ action: 'retry', failureClass: 'quota' });
+    });
+
     it('asks at once when the limit resets more than a day away', () => {
       const plan = planMachineRecovery({
         error: "You've hit your weekly limit · resets Oct 9, 5pm (America/New_York)",
