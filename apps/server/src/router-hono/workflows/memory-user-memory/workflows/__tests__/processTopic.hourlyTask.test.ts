@@ -139,6 +139,10 @@ describe('processTopicHandler hourly task behavior', () => {
 
     await processTopicHandler(context as never);
 
+    // The extraction steps stay in the sequence, so a ban during replay cannot shift it.
+    const steps = (context.run as ReturnType<typeof vi.fn>).mock.calls.map(([name]) => name);
+    expect(steps.some((name: string) => name.endsWith(':cepa'))).toBe(true);
+    expect(steps.some((name: string) => name.endsWith(':identity'))).toBe(true);
     expect(mocks.extractTopic).not.toHaveBeenCalled();
     expect(mocks.incrementProgress).toHaveBeenCalledWith('00000000-0000-4000-8000-000000000002');
   });
