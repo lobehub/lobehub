@@ -5,11 +5,9 @@ import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import useSWR from 'swr';
-
-import { agentAccountService } from '@/services/agentAccount';
 
 import InlineError from './InlineError';
+import { useInboxMessage } from './useAgentIdentity';
 
 dayjs.extend(relativeTime);
 
@@ -45,9 +43,7 @@ const formatAttachmentSize = (bytes?: number): string | undefined => {
 
 const InboxMessageDetail = memo<InboxMessageDetailProps>(({ id }) => {
   const { t } = useTranslation('setting');
-  const { data, error, isLoading, mutate } = useSWR(['agent-inbox-message', id], ([, messageId]) =>
-    agentAccountService.getInboxMessage(messageId),
-  );
+  const { data, error, isLoading, mutate } = useInboxMessage(id);
 
   // A failed read must say so: a skeleton that never resolves reads as "still
   // loading" forever.

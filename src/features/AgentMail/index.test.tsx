@@ -150,6 +150,23 @@ describe('AgentMail', () => {
     expect(service.getInboxUnreadCount).toHaveBeenCalledWith('agt_1', 'acc_b');
   });
 
+  it('restores the mailbox of a message opened straight from its URL', async () => {
+    service.getInboxMessage.mockResolvedValue({
+      ...row('msg_b', 'For B'),
+      accountId: 'acc_b',
+      attachments: [],
+      text: 'Full body of msg_b',
+      to: 'b@lobe.id',
+    });
+    page('/agent/agt_1/mail/msg_b');
+
+    expect(await screen.findByText('preview of For B')).toBeInTheDocument();
+    expect(screen.queryByText('preview of For A')).not.toBeInTheDocument();
+    expect(service.listInbox).not.toHaveBeenCalledWith(
+      expect.objectContaining({ accountId: 'acc_a' }),
+    );
+  });
+
   it('asks for confirmation before releasing the mailbox on screen', async () => {
     page();
 

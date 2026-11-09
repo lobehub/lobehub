@@ -43,13 +43,16 @@ interface AgentMailProps {
 const MailPage = ({ agentId, disabled }: AgentMailProps) => {
   const { messageId } = useParams<{ messageId?: string }>();
   const navigate = useWorkspaceAwareNavigate();
-  const mailbox = useMailbox(agentId);
+  const mailbox = useMailbox(agentId, messageId);
   const mobile = isMobileSurface();
   const mailPath = urlJoin('/agent', agentId, 'mail');
 
   // Moving between messages replaces the entry, so back leaves the mail page.
-  const openMessage = (id: string) =>
+  const openMessage = (id: string) => {
+    // Pinned so the opened message does not have to be read to know its mailbox.
+    mailbox.select(mailbox.current?.id);
     navigate(urlJoin(mailPath, id), { replace: Boolean(messageId) });
+  };
 
   const switchMailbox = (accountId: string) => {
     mailbox.select(accountId);

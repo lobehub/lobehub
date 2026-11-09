@@ -22,23 +22,32 @@ export const INBOX_REFRESH_INTERVAL_MS = 30_000;
 export const useAgentAccounts = (agentId: string) =>
   useSWR(accountsKey(agentId), ([, id]) => agentAccountService.list({ agentId: id }));
 
+/** One stored message, read by id rather than taken from a possibly stale list row. */
+export const useInboxMessage = (id?: string) =>
+  useSWR(id ? ['agent-inbox-message', id] : null, ([, messageId]) =>
+    agentAccountService.getInboxMessage(messageId),
+  );
+
 /**
  * The mailbox being read, out of the addresses the agent still holds.
  *
  * Derived rather than stored as a fallback, so releasing the selected address
- * lands on the next one without any bookkeeping.
+ * lands on the next one without any bookkeeping. Until the reader picks one, a
+ * message opened from its URL decides, so both panes show the same mailbox.
  */
-export const useMailbox = (agentId: string) => {
+export const useMailbox = (agentId: string, messageId?: string) => {
   const { data, error, isLoading, mutate } = useAgentAccounts(agentId);
   const [selectedId, select] = useState<string>();
+  const openMessage = useInboxMessage(selectedId ? undefined : messageId);
   const accounts = (data ?? []).filter((account) => account.status !== 'revoked');
+  const preferredId = selectedId ?? openMessage.data?.accountId;
 
   return {
     accounts,
-    current: accounts.find((account) => account.id === selectedId) ?? accounts[0],
-    data,
+    current: accounts.find((account) => account.id === preferredId) ?? accounts[0],
+    data: openMessage.isLoading ? undefined : data,
     error,
-    isLoading,
+    isLoading: isLoading || openMessage.isLoading,
     mutate,
     select,
   };
