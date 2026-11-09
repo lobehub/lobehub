@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { FileSource } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -75,5 +76,36 @@ describe('FileModel meeting audio references', () => {
 
     await expect(fileModel.deleteUnreferenced(id)).resolves.toBeUndefined();
     await expect(serverDB.select().from(files).where(eq(files.id, id))).resolves.toHaveLength(1);
+  });
+
+  it('findMeetingAudio reads a meeting recording through its creator only', async () => {
+    const [recording] = await serverDB
+      .insert(files)
+      .values({
+        fileType: 'audio/wav',
+        name: 'recording.wav',
+        size: 1,
+        source: FileSource.Meeting,
+        url: 'files/recording.wav',
+        userId,
+      })
+      .returning();
+    await recordWithAudio(recording.id);
+
+    await expect(fileModel.findMeetingAudio(recording.id, userId)).resolves.toMatchObject({
+      id: recording.id,
+    });
+    // Another member may listen through a public meeting, but never open the
+    // upload as if it were their own.
+    await expect(
+      fileModel.findMeetingAudio(recording.id, 'file-meeting-refs-other'),
+    ).resolves.toBeUndefined();
+  });
+
+  it('findMeetingAudio leaves an ordinary upload alone', async () => {
+    const id = await createFile('note.wav');
+    await recordWithAudio(id);
+
+    await expect(fileModel.findMeetingAudio(id, userId)).resolves.toBeUndefined();
   });
 });

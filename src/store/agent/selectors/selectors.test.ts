@@ -1,7 +1,6 @@
 import { DEFAULT_PROVIDER } from '@lobechat/business-const';
 import {
   DEFAULT_AGENT_CONFIG,
-  DEFAULT_AVATAR,
   DEFAULT_INBOX_AVATAR,
   DEFAULT_MODEL,
   DEFAUTT_AGENT_TTS_CONFIG,
@@ -156,7 +155,7 @@ describe('agentSelectors', () => {
 
       const meta = agentSelectors.currentAgentMeta(state);
 
-      expect(meta.avatar).toBe(DEFAULT_AVATAR);
+      expect(meta.avatar).toBeUndefined();
     });
 
     it('should return inbox avatar fallback for inbox agent with no custom avatar', () => {

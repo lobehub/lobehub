@@ -22,6 +22,7 @@ import {
 } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { AiAgentService } from '@/server/services/aiAgent';
+import { mockSkillStorage } from '@/server/services/userSkill/testUtils';
 
 import { GoalCriteriaGeneratorService } from './criteriaGenerator';
 import { GoalService } from './index';
@@ -32,6 +33,7 @@ const userId = 'goal-release-review-test-user';
 
 beforeEach(async () => {
   await serverDB.insert(users).values({ id: userId }).onConflictDoNothing();
+  mockSkillStorage();
 });
 
 afterEach(async () => {

@@ -1,18 +1,14 @@
 'use client';
 
 import { agentDisplayName } from '@lobechat/types';
-import { type DropdownItem } from '@lobehub/ui';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AgentAvatar from '@/components/AgentAvatar';
-import { directAvatarState, replyAvatarState } from '@/features/Channels/jobStatus';
-import { useChannelMenu } from '@/features/Channels/useChannelMenu';
 import { useAgentDropdownMenu } from '@/features/HomeSidebar/Body/Agent/List/AgentItem/useDropdownMenu';
 import { usePreservedAgentUrl } from '@/features/HomeSidebar/Body/Agent/List/usePreservedAgentUrl';
 import { useAgentModal } from '@/features/HomeSidebar/Body/Agent/ModalProvider';
 import { usePrefetchAgent } from '@/hooks/usePrefetchAgent';
-import { channelSelectors, useChannelStore } from '@/store/channel';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
 
@@ -20,22 +16,7 @@ import ConversationRow from './ConversationRow';
 import { type Conversation } from './conversations';
 import { AVATAR_SIZE } from './style';
 import { useAgentConversationLink } from './useAgentConversationLink';
-
-/** The direct Channel's own conversation action, next to the Agent's own menu. */
-const CONVERSATION_ACTION_KEYS = new Set(['unarchive']);
-
-/**
- * A direct Channel is the chat with one Agent, so it cannot be archived or trashed. The row only
- * frees one that was archived earlier. Keys are prefixed so they cannot collide with the Agent's
- * own menu.
- */
-const conversationActions = (menu: DropdownItem[]): DropdownItem[] =>
-  menu.flatMap((item) => {
-    if (!item || !('key' in item)) return [];
-    const key = String(item.key);
-    if (!CONVERSATION_ACTION_KEYS.has(key)) return [];
-    return [{ ...item, key: `channel-${key}` } as DropdownItem];
-  });
+import { useDirectChannelRow } from './useDirectChannelRow';
 
 interface AgentConversationProps {
   active: boolean;
@@ -51,18 +32,7 @@ const AgentConversation = memo<AgentConversationProps>(({ active, conversation }
   const chatRunning = useChatStore(operationSelectors.isAgentVisiblyRunning(id));
   const agentUrl = usePreservedAgentUrl(id);
   const { onClick, url } = useAgentConversationLink(id, agentUrl);
-  const channelMenu = useChannelMenu();
-  const directChannel = conversation.channel;
-  // A direct Channel replies through Channel jobs, not chat operations. The open conversation's
-  // view is polled while it works, so it is fresher than the list; any other cached view may be
-  // stale, so other rows read the jobs the list carries.
-  const replyState = useChannelStore((s) => {
-    if (!directChannel) return;
-    const detail = active
-      ? channelSelectors.detail({ channelId: directChannel.id, threadId: null })(s)
-      : undefined;
-    return detail ? directAvatarState(detail) : replyAvatarState(directChannel.replyJobs ?? []);
-  });
+  const { channelActions, replyState } = useDirectChannelRow(conversation.channel, active);
   const avatarState = replyState ?? (chatRunning ? 'working' : undefined);
   const title = agentDisplayName(item, t('untitledAgent'));
   const avatarSrc = typeof avatar === 'string' ? avatar : undefined;
@@ -91,12 +61,11 @@ const AgentConversation = memo<AgentConversationProps>(({ active, conversation }
   const menuItems = useMemo(
     () => () => {
       const agentItems = contextMenuItems();
-      if (!directChannel) return agentItems;
-      const items = conversationActions(channelMenu(directChannel));
+      const items = channelActions();
       if (items.length === 0) return agentItems;
       return [...agentItems, { type: 'divider' as const }, ...items];
     },
-    [channelMenu, contextMenuItems, directChannel],
+    [channelActions, contextMenuItems],
   );
 
   return (

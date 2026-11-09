@@ -180,6 +180,8 @@ export interface ChatTopicMetadata {
   editingGroupId?: string;
   /** Restored-history tail used as the source message for eval attempt threads. */
   evalHistoryTailMessageId?: string;
+  /** Immutable initial Memory hashes keyed by run/topic/thread attempt ID, including empty fixtures. */
+  evalMemoryFixtures?: Record<string, string>;
   /**
    * Scoped pointer to the currently active assistant message for a running
    * heterogeneous agent operation. Includes `operationId` so cold-start

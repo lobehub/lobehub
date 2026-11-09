@@ -515,9 +515,11 @@ describe('mail digest flush', () => {
     const [own, , instruction, fenced] = prompt.split('\n\n');
     expect(instruction).toContain('direct Channel');
     expect(runs[0].params.userInterventionConfig).toEqual({ approvalMode: 'headless' });
+    expect(runs[0].params.exclusivePluginIds).toEqual(['lobe-agent-account']);
     expect(runs[0].params.hooks).toEqual([
       expect.objectContaining({ id: `agent-inbox-report:${accountId}`, type: 'onComplete' }),
     ]);
+    expect(runs[0].params.title).toBe('Agent workloads +1');
     expect(own).toContain('2 messages arrived');
     expect(own).not.toContain('launchdriftcloud');
     expect(fenced.startsWith('<untrusted_inbox>')).toBe(true);

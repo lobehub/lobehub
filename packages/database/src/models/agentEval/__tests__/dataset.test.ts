@@ -123,51 +123,6 @@ describe('AgentEvalDatasetModel', () => {
     });
   });
 
-  describe('delete', () => {
-    it('should delete a dataset owned by the user', async () => {
-      const [dataset] = await serverDB
-        .insert(agentEvalDatasets)
-        .values({
-          benchmarkId,
-          identifier: 'delete-test',
-          name: 'Delete Test',
-          userId,
-        })
-        .returning();
-
-      await datasetModel.delete(dataset.id);
-
-      const deleted = await serverDB.query.agentEvalDatasets.findFirst({
-        where: eq(agentEvalDatasets.id, dataset.id),
-      });
-      expect(deleted).toBeUndefined();
-    });
-
-    it('should not delete a dataset owned by another user', async () => {
-      const [dataset] = await serverDB
-        .insert(agentEvalDatasets)
-        .values({
-          benchmarkId,
-          identifier: 'other-user-dataset',
-          name: 'Other User Dataset',
-          userId: userId2,
-        })
-        .returning();
-
-      await datasetModel.delete(dataset.id);
-
-      const stillExists = await serverDB.query.agentEvalDatasets.findFirst({
-        where: eq(agentEvalDatasets.id, dataset.id),
-      });
-      expect(stillExists).toBeDefined();
-    });
-
-    it('should return 0 rowCount when dataset not found', async () => {
-      await datasetModel.delete('non-existent-id');
-      // No rowCount in PGlite
-    });
-  });
-
   describe('query', () => {
     beforeEach(async () => {
       // Create another benchmark

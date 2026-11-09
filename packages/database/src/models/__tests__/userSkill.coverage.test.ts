@@ -39,6 +39,13 @@ const insertRow = async (values: Partial<typeof documents.$inferInsert> & { file
   return row;
 };
 
+/** The package a caller publishes alongside every create / revise. */
+const archiveFor = (name: string) => ({
+  fileHash: `hash-${name}`,
+  size: 1,
+  url: `skills/${name}.zip`,
+});
+
 beforeEach(async () => {
   await serverDB.delete(users).where(eq(users.id, userId));
   await serverDB.insert(users).values({ id: userId });
@@ -140,12 +147,14 @@ describe('UserSkillModel coverage', () => {
   describe('findAll', () => {
     it('loads every skill in the library with its body, ordered by name', async () => {
       const zeta = await model.create({
+        archive: archiveFor('zeta'),
         content: 'zeta body',
         description: 'z',
         name: 'zeta',
         title: 'Zeta',
       });
       const alpha = await model.create({
+        archive: archiveFor('alpha'),
         content: 'alpha body',
         description: 'a',
         files: [{ content: 'echo hi', path: 'scripts/run.sh' }],
@@ -171,7 +180,13 @@ describe('UserSkillModel coverage', () => {
 
   describe('findByNames', () => {
     it('returns an empty list for no names without reading the library', async () => {
-      await model.create({ content: 'body', description: 'd', name: 'present', title: 'Present' });
+      await model.create({
+        archive: archiveFor('present'),
+        content: 'body',
+        description: 'd',
+        name: 'present',
+        title: 'Present',
+      });
 
       expect(await model.findByNames([])).toEqual([]);
     });
@@ -185,7 +200,13 @@ describe('UserSkillModel coverage', () => {
         metadata: null,
       });
 
-      expect(await model.revise(bundle.id, { content: 'v2 body' })).toBe(2);
+      expect(
+        await model.revise(bundle.id, {
+          archive: archiveFor('legacy-v2'),
+          baseVersion: 1,
+          content: 'v2 body',
+        }),
+      ).toBe(2);
       expect(await model.findById(bundle.id)).toMatchObject({ version: 2 });
       expect((await model.listVersions(bundle.id)).map((v) => v.version)).toEqual([2]);
     });
@@ -194,11 +215,17 @@ describe('UserSkillModel coverage', () => {
   describe('listVersions', () => {
     it('reads a version row with no content or version number as empty / 0', async () => {
       const bundle = await insertRow({ fileType: SKILL_BUNDLE_FILE_TYPE, filename: 'versions' });
-      await model.revise(bundle.id, { content: 'v2 body' });
       const bare = await insertRow({
         content: null,
         fileType: SKILL_VERSION_FILE_TYPE,
         metadata: null,
+        parentId: bundle.id,
+      });
+      // A version written before archives: its SKILL.md lives on the row itself.
+      await insertRow({
+        content: 'v2 body',
+        fileType: SKILL_VERSION_FILE_TYPE,
+        metadata: { version: 2 },
         parentId: bundle.id,
       });
 

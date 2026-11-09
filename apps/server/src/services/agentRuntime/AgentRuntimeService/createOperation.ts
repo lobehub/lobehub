@@ -192,7 +192,12 @@ export async function createOperation(
         : undefined);
 
     const preInitState = buildPreInitState(params, { fileWorksAccepted, llmExecutor });
-    const initialState = applyOperationInitSlots(preInitState, pickOperationInitSlots(params));
+    // A deferred init leaves the turn's request on the state: its presence is
+    // what tells the step-0 worker the init is still owed. The placeholder
+    // context is saved too, so the stale-run reaper can redrive step 0.
+    const initialState = params.pendingInitRequest
+      ? { ...preInitState, initialContext, messages: [], request: params.pendingInitRequest }
+      : applyOperationInitSlots(preInitState, pickOperationInitSlots(params));
 
     // Use coordinator to create operation, automatically sends initialization event.
     // For an in-group broadcast/speak member, mirror its Gateway stream events

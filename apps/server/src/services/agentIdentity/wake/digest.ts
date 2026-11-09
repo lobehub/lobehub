@@ -14,9 +14,10 @@ import { agentSignalScopeFlowControl } from '@/server/workflows/agentSignal';
 import {
   createOwnerChannelReportHook,
   INBOX_RUN_INTERVENTION,
+  INBOX_RUN_PLUGIN_IDS,
   OWNER_CHANNEL_INSTRUCTION,
 } from '../ownerChannel';
-import { fenceUntrustedInbox, toUntrustedInboxEntry } from '../untrusted';
+import { buildInboxTopicTitle, fenceUntrustedInbox, toUntrustedInboxEntry } from '../untrusted';
 import type { ResolvedWakeConfig } from './config';
 import { resolveWakeConfig } from './config';
 
@@ -118,8 +119,10 @@ export const createDigestRunStarter =
     const result = await service.execAgent({
       agentId: account.agentId,
       appContext: { scope: 'agent' },
+      exclusivePluginIds: INBOX_RUN_PLUGIN_IDS,
       hooks: [createOwnerChannelReportHook(db, account.id)],
       prompt: buildDigestPrompt(account, messages),
+      title: buildInboxTopicTitle(messages),
       trigger: RequestTrigger.Inbox,
       userInterventionConfig: INBOX_RUN_INTERVENTION,
     });

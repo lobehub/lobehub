@@ -26,7 +26,7 @@ import { deviceGateway } from '@/server/services/deviceGateway';
 
 import { goalModelOverride } from '../modelConfig';
 import { countUnchargedRuns, DEFAULT_MANAGER_MAX_TURNS } from '../recoveryPolicy';
-import { scheduleGoalAdvance } from '../scheduler';
+import { goalPollDelay, scheduleGoalAdvance } from '../scheduler';
 import { recoveryEligibility } from '../supervisor/policy';
 import { GoalWaitService } from '../wait';
 import { assertOperationOwnsTurn, planAdmission } from './admission';
@@ -106,12 +106,17 @@ export class GoalManagerService {
       type: 'system',
     });
 
-  private wait = async (goalId: string, message: string): Promise<GoalTickResult> => {
+  private wait = async (
+    goalId: string,
+    message: string,
+    since?: string,
+  ): Promise<GoalTickResult> => {
     await scheduleGoalAdvance({
       goalId,
       userId: this.userId,
       workspaceId: this.workspaceId,
-      delay: 5,
+      delay: goalPollDelay(since),
+      poll: true,
     });
     return { goalId, outcome: 'waiting_external', message };
   };
@@ -316,7 +321,7 @@ export class GoalManagerService {
         (!operation || isAgentOperationInFlight(operation.status))
       ) {
         if (operation?.status === 'waiting_for_human') {
-          await this.wait(goal.id, 'Main Agent is waiting for a human decision');
+          await this.wait(goal.id, 'Main Agent is waiting for a human decision', state.startedAt);
           return {
             goalId: goal.id,
             outcome: 'waiting_human',
@@ -329,7 +334,7 @@ export class GoalManagerService {
             `Main Agent execution is unconfirmed or timed out; no replacement was dispatched. Once its run has ended, confirm and resume with: lh goal resume ${goal.id} --confirm-exit`,
           );
         }
-        return this.wait(goal.id, 'Waiting for main Agent CLI planning turn');
+        return this.wait(goal.id, 'Waiting for main Agent CLI planning turn', state.startedAt);
       }
       const failed = await this.db.transaction(async (db) => {
         const fresh = await new GoalRepository(db, this.userId, this.workspaceId).lockById(goal.id);

@@ -934,6 +934,7 @@ export class UserModel {
 
     // User memory defaults to enabled=true when user settings are missing.
     const memoryEnabledCondition = sql`COALESCE((${userSettings.memory} ->> 'enabled')::boolean, true) = true`;
+    const notBannedCondition = sql`COALESCE(${users.banned}, false) = false`;
     // Eligible users must have at least one topic with at least one user message.
     const hasChattedTopicCondition = sql`
       EXISTS (
@@ -955,11 +956,27 @@ export class UserModel {
       .from(users)
       .leftJoin(userSettings, eq(users.id, userSettings.id))
       .where(
-        and(cursorCondition, whitelistCondition, memoryEnabledCondition, hasChattedTopicCondition),
+        and(
+          cursorCondition,
+          whitelistCondition,
+          notBannedCondition,
+          memoryEnabledCondition,
+          hasChattedTopicCondition,
+        ),
       )
       .orderBy(asc(users.createdAt), asc(users.id));
 
     return options.limit !== undefined ? query.limit(options.limit) : query;
+  };
+
+  /** Whether the account is banned; background model work must stop for these users. */
+  static isBanned = async (db: LobeChatDatabase, userId: string): Promise<boolean> => {
+    const [row] = await db
+      .select({ banned: users.banned })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    return row?.banned === true;
   };
 
   /**
